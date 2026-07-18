@@ -15,7 +15,7 @@ vi.mock("@/lib/contador/pacote", async (importActual) => {
 
 import { GET } from "./route"
 import { requireContadorScope } from "@/lib/contador/scope"
-import { gerarPacoteContador, PacoteLimiteExcedidoError } from "@/lib/contador/pacote"
+import { gerarPacoteContador, PacoteLimiteExcedidoError, PacoteTimeoutError } from "@/lib/contador/pacote"
 import { competenciaAtual } from "@/lib/contador/competencia"
 
 const scopeOk = { ok: true, storeId: "loja-1", userId: "u1", permissaoFinanceiro: true } as const
@@ -129,6 +129,15 @@ describe("GET /api/contador/pacote — erros", () => {
     const body = await res.json()
     expect(body.mensagem).toBeTruthy()
     expect(JSON.stringify(body)).not.toContain("bytes_zip") // detalhe interno não vaza
+  })
+
+  it("timeout lógico → 503 com mensagem segura (GOAL 008C)", async () => {
+    vi.mocked(gerarPacoteContador).mockRejectedValue(new PacoteTimeoutError(30_000, "estourou o teto"))
+    const res = await GET(req("?c=2026-06"))
+    expect(res.status).toBe(503)
+    const body = await res.json()
+    expect(body.mensagem).toContain("tempo limite")
+    expect(JSON.stringify(body)).not.toMatch(/30000|estourou/) // detalhe interno não vaza
   })
 
   it("erro inesperado → 500 sem stack na resposta", async () => {

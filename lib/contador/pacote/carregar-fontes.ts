@@ -176,7 +176,62 @@ export type PacoteReaderClient = {
 /* ─────────────────────────── helpers ─────────────────────────── */
 
 const OBS_FALHA = "A leitura desta fonte falhou. Tente novamente; o pacote saiu parcial."
-const TAKE = MAX_REGISTROS_POR_FONTE + 1
+
+/**
+ * Tamanho de página da paginação por cursor. Pequeno o bastante para não materializar
+ * a fonte inteira de uma vez (a query de vendas ainda traz os itens aninhados), grande
+ * o bastante para manter o número de round-trips baixo no volume mensal esperado.
+ */
+const PAGE_SIZE_PACOTE = 500
+
+/** Cursor opaco de paginação — sempre o `id` (cuid único) da última linha da página. */
+type CursorPagina = string
+
+type PaginarFonteInput<T> = Readonly<{
+  /** Busca UMA página a partir do cursor (exclusivo); `tamanho` é o teto de linhas. */
+  buscarPagina: (cursor: CursorPagina | null, tamanho: number) => Promise<T[]>
+  /** Extrai o cursor estável (id) da última linha de uma página. */
+  extrairCursor: (linha: T) => CursorPagina
+  /** Teto de linhas acumuladas; buscamos até `maxRegistros + 1` para detectar excedente. */
+  maxRegistros: number
+  tamanhoPagina?: number
+}>
+
+/**
+ * Paginação real por páginas pequenas (cursor por id). Percorre a fonte página a página
+ * até esgotá-la (última página vem incompleta) ou até acumular `maxRegistros + 1` linhas
+ * (o `+1` é a sonda de excedente — o caller aplica `assertRegistrosFonte` sobre a saída,
+ * preservando a semântica do antigo `take: MAX + 1`). Nunca materializa mais que isso.
+ */
+export async function paginarFonte<T>(input: PaginarFonteInput<T>): Promise<T[]> {
+  const tamanhoPagina = Math.max(1, input.tamanhoPagina ?? PAGE_SIZE_PACOTE)
+  const teto = input.maxRegistros + 1
+  const acumulado: T[] = []
+  let cursor: CursorPagina | null = null
+  for (;;) {
+    const restante = teto - acumulado.length
+    if (restante <= 0) break
+    const tamanho = Math.min(tamanhoPagina, restante)
+    const pagina = await input.buscarPagina(cursor, tamanho)
+    if (pagina.length === 0) break
+    acumulado.push(...pagina)
+    if (pagina.length < tamanho) break // última página: fonte esgotada
+    cursor = input.extrairCursor(pagina[pagina.length - 1])
+  }
+  return acumulado
+}
+
+/** Argumentos de cursor do Prisma para a próxima página (id único + skip 1). */
+function argsCursor(cursor: CursorPagina | null): Record<string, unknown> {
+  return cursor ? { cursor: { id: cursor }, skip: 1 } : {}
+}
+
+const STATUS_VENDA_CANCELADA = "cancelada"
+
+/** Venda cancelada (status canônico `cancelada`; normaliza caixa/espaços por robustez). */
+function vendaCancelada(status: string | null | undefined): boolean {
+  return String(status ?? "").toLowerCase().trim() === STATUS_VENDA_CANCELADA
+}
 
 function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0
@@ -299,71 +354,119 @@ export async function carregarFontesPacoteComCliente(
   const noPeriodo = { gte: periodo.inicio, lt: periodo.fimExclusivo }
   const storeId = scope.storeId
 
+  // Cada fonte pagina de forma independente e concorrente (cursor por id + tiebreak);
+  // uma falha isolada NÃO cancela as demais (Promise.allSettled). Ordenação temporal com
+  // `id` como desempate torna o cursor determinístico mesmo com timestamps repetidos.
+  const MAX = MAX_REGISTROS_POR_FONTE
   const resultados = await Promise.allSettled([
-    cliente.venda.findMany({
-      where: { storeId, at: noPeriodo },
-      select: {
-        id: true,
-        pedidoId: true,
-        total: true,
-        status: true,
-        at: true,
-        payload: true,
-        itens: {
+    paginarFonte<VendaRaw>({
+      buscarPagina: (cursor, tamanho) =>
+        cliente.venda.findMany({
+          where: { storeId, at: noPeriodo },
           select: {
             id: true,
-            inventoryId: true,
-            nome: true,
-            quantidade: true,
-            precoUnitario: true,
-            lineTotal: true,
+            pedidoId: true,
+            total: true,
+            status: true,
+            at: true,
+            payload: true,
+            itens: {
+              select: {
+                id: true,
+                inventoryId: true,
+                nome: true,
+                quantidade: true,
+                precoUnitario: true,
+                lineTotal: true,
+              },
+            },
           },
-        },
-      },
-      orderBy: { at: "asc" },
-      take: TAKE,
+          orderBy: [{ at: "asc" }, { id: "asc" }],
+          take: tamanho,
+          ...argsCursor(cursor),
+        }),
+      extrairCursor: (v) => v.id,
+      maxRegistros: MAX,
     }),
-    cliente.devolucaoVenda.findMany({
-      where: { storeId, at: noPeriodo },
-      select: { id: true, localId: true, vendaLocalId: true, tipo: true, valorTotal: true, at: true },
-      orderBy: { at: "asc" },
-      take: TAKE,
+    paginarFonte<DevolucaoRaw>({
+      buscarPagina: (cursor, tamanho) =>
+        cliente.devolucaoVenda.findMany({
+          where: { storeId, at: noPeriodo },
+          select: { id: true, localId: true, vendaLocalId: true, tipo: true, valorTotal: true, at: true },
+          orderBy: [{ at: "asc" }, { id: "asc" }],
+          take: tamanho,
+          ...argsCursor(cursor),
+        }),
+      extrairCursor: (d) => d.id,
+      maxRegistros: MAX,
     }),
-    cliente.movimentacaoFinanceira.findMany({
-      where: { storeId, createdAt: noPeriodo },
-      select: { id: true, tipo: true, origem: true, valor: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-      take: TAKE,
+    paginarFonte<MovimentacaoRaw>({
+      buscarPagina: (cursor, tamanho) =>
+        cliente.movimentacaoFinanceira.findMany({
+          where: { storeId, createdAt: noPeriodo },
+          select: { id: true, tipo: true, origem: true, valor: true, createdAt: true },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take: tamanho,
+          ...argsCursor(cursor),
+        }),
+      extrairCursor: (m) => m.id,
+      maxRegistros: MAX,
     }),
-    cliente.contaReceberTitulo.findMany({
-      where: { storeId },
-      select: { id: true, valor: true, status: true, vencimento: true },
-      take: TAKE,
+    paginarFonte<TituloRaw>({
+      buscarPagina: (cursor, tamanho) =>
+        cliente.contaReceberTitulo.findMany({
+          where: { storeId },
+          select: { id: true, valor: true, status: true, vencimento: true },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take: tamanho,
+          ...argsCursor(cursor),
+        }),
+      extrairCursor: (t) => t.id,
+      maxRegistros: MAX,
     }),
-    cliente.contaPagarTitulo.findMany({
-      where: { storeId },
-      select: { id: true, valor: true, status: true, vencimento: true },
-      take: TAKE,
+    paginarFonte<TituloRaw>({
+      buscarPagina: (cursor, tamanho) =>
+        cliente.contaPagarTitulo.findMany({
+          where: { storeId },
+          select: { id: true, valor: true, status: true, vencimento: true },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take: tamanho,
+          ...argsCursor(cursor),
+        }),
+      extrairCursor: (t) => t.id,
+      maxRegistros: MAX,
     }),
-    cliente.sessaoCaixa.findMany({
-      where: { storeId, abertaEm: noPeriodo },
-      select: {
-        id: true,
-        status: true,
-        saldoInicial: true,
-        saldoFinal: true,
-        saldoContado: true,
-        abertaEm: true,
-        fechadaEm: true,
-      },
-      orderBy: { abertaEm: "asc" },
-      take: TAKE,
+    paginarFonte<SessaoRaw>({
+      buscarPagina: (cursor, tamanho) =>
+        cliente.sessaoCaixa.findMany({
+          where: { storeId, abertaEm: noPeriodo },
+          select: {
+            id: true,
+            status: true,
+            saldoInicial: true,
+            saldoFinal: true,
+            saldoContado: true,
+            abertaEm: true,
+            fechadaEm: true,
+          },
+          orderBy: [{ abertaEm: "asc" }, { id: "asc" }],
+          take: tamanho,
+          ...argsCursor(cursor),
+        }),
+      extrairCursor: (s) => s.id,
+      maxRegistros: MAX,
     }),
-    cliente.caixaOperacao.findMany({
-      where: { storeId, at: noPeriodo },
-      select: { id: true, sessaoId: true, tipo: true, valor: true, at: true },
-      orderBy: { at: "asc" },
-      take: TAKE,
+    paginarFonte<OperacaoRaw>({
+      buscarPagina: (cursor, tamanho) =>
+        cliente.caixaOperacao.findMany({
+          where: { storeId, at: noPeriodo },
+          select: { id: true, sessaoId: true, tipo: true, valor: true, at: true },
+          orderBy: [{ at: "asc" }, { id: "asc" }],
+          take: tamanho,
+          ...argsCursor(cursor),
+        }),
+      extrairCursor: (o) => o.id,
+      maxRegistros: MAX,
     }),
   ] as const)
 
@@ -389,6 +492,9 @@ export async function carregarFontesPacoteComCliente(
 
   // Lookup de Produto para códigos dos itens (dependente do sucesso de vendas).
   const produtoMap = new Map<string, string>()
+  // Marca se o lookup FALHOU: nesse caso os códigos ficam vazios e a fonte `itens`
+  // precisa sair `parcial` (honestidade de cobertura) — não silenciosa como antes.
+  let codigosProdutoIndisponiveis = false
   if (vendasRaw) {
     const invIds = Array.from(
       new Set(
@@ -407,7 +513,9 @@ export async function carregarFontesPacoteComCliente(
           if (idOk(p.id) && codigo) produtoMap.set(p.id, codigo)
         }
       } catch {
-        // Produto indisponível não invalida vendas: código do item fica vazio.
+        // Produto indisponível não invalida vendas: código do item fica vazio,
+        // porém a fonte `itens` passa a `parcial` (marcada abaixo).
+        codigosProdutoIndisponiveis = true
       }
     }
   }
@@ -430,18 +538,22 @@ export async function carregarFontesPacoteComCliente(
         rej += 1
         continue
       }
-      const totalBruto = arred(num(v.total))
-      const dev = arred(devPorVenda.get(v.pedidoId) ?? 0)
+      // Canceladas ficam listadas (marcadas pelo `status`) mas EXCLUÍDAS do faturamento:
+      // valores monetários zerados, coerente com a exclusão dos seus itens. O bruto das
+      // canceladas permanece informativo apenas no agregado (canceladasTotal do GOAL 006).
+      const cancelada = vendaCancelada(v.status)
+      const totalBruto = cancelada ? 0 : arred(num(v.total))
+      const dev = cancelada ? 0 : arred(devPorVenda.get(v.pedidoId) ?? 0)
       linhas.push({
         vendaId: v.id,
         numero: v.pedidoId ?? "",
         data: v.at instanceof Date ? v.at.toISOString() : String(v.at ?? ""),
         status: String(v.status ?? ""),
         totalBruto,
-        descontoInformativo: lerDiscountTotal(v.payload),
+        descontoInformativo: cancelada ? null : lerDiscountTotal(v.payload),
         devolucoes: dev,
-        totalLiquido: arred(Math.max(0, totalBruto - dev)),
-        formaPagamentoStatus: formaPagamentoStatus(v.payload, num(v.total)),
+        totalLiquido: cancelada ? 0 : arred(Math.max(0, totalBruto - dev)),
+        formaPagamentoStatus: cancelada ? "cancelada" : formaPagamentoStatus(v.payload, num(v.total)),
       })
     }
     assertRegistrosFonte("vendas", linhas.length)
@@ -456,7 +568,7 @@ export async function carregarFontesPacoteComCliente(
     let rej = 0
     const linhas: ItemDetalhe[] = []
     for (const v of vendasRaw) {
-      if (String(v.status ?? "").toLowerCase().trim() === "cancelada") continue
+      if (vendaCancelada(v.status)) continue
       for (const it of v.itens ?? []) {
         if (!idOk(it.id) || !idOk(v.id)) {
           rej += 1
@@ -478,7 +590,19 @@ export async function carregarFontesPacoteComCliente(
       }
     }
     assertRegistrosFonte("itens", linhas.length)
-    itens = { linhas, registros: linhas.length, ...estadoDe(rej, linhas.length) }
+    const base = estadoDe(rej, linhas.length)
+    if (codigosProdutoIndisponiveis) {
+      // Lookup de produto falhou: descrições/valores vieram, mas os códigos ficaram vazios.
+      const nota = "Códigos de produto indisponíveis: a leitura de produtos falhou; os códigos ficaram vazios."
+      itens = {
+        linhas,
+        registros: linhas.length,
+        estado: "parcial",
+        observacao: base.observacao ? `${base.observacao} ${nota}` : nota,
+      }
+    } else {
+      itens = { linhas, registros: linhas.length, ...base }
+    }
   }
 
   // ── devoluções ──
@@ -530,33 +654,46 @@ export async function carregarFontesPacoteComCliente(
     movimentacoes = { linhas, registros: linhas.length, ...estadoDe(rej, linhas.length) }
   }
 
-  // ── títulos (receber / pagar) ──
+  // ── títulos (receber / pagar) — posição atual, SÓ abertos com vencimento na competência ──
+  // Espelha a regra canônica do GOAL 006 (`agregarTitulos`): normaliza status → remove
+  // fechados → `parseVencimento` estrito → compara ano/mês → inclui só os correspondentes.
+  //   • fechado          → fora (nunca "aberto", nunca valor_aberto = 0);
+  //   • outro mês        → fora (pertence a outra competência; não rejeita, não vira parcial);
+  //   • aberto sem venc. → fora + cobertura rejeitada → fonte parcial.
   const mapTitulos = (raw: TituloRaw[] | null): FonteResultado<TituloDetalhe> => {
     if (!raw) return fonteIndisponivel<TituloDetalhe>()
     let rej = 0
+    let semVencimento = 0
     const linhas: TituloDetalhe[] = []
     for (const t of raw) {
       if (!idOk(t.id)) {
         rej += 1
         continue
       }
+      if (tituloFechado(String(t.status ?? ""))) continue
+      const venc = parseVencimento(String(t.vencimento ?? ""))
+      if (!venc) {
+        semVencimento += 1
+        continue
+      }
+      if (venc.ano !== competencia.ano || venc.mes !== competencia.mes) continue
       const original = arred(num(t.valor))
       linhas.push({
         tituloId: t.id,
         vencimento: String(t.vencimento ?? ""),
         status: String(t.status ?? ""),
         valorOriginal: original,
-        valorAberto: tituloFechado(String(t.status ?? "")) ? 0 : original,
-        disponibilidade: parseVencimento(String(t.vencimento ?? "")) ? "real" : "parcial",
+        valorAberto: original, // aberto por construção (fechados já foram descartados)
+        disponibilidade: "real", // vencimento válido e dentro da competência
       })
     }
     assertRegistrosFonte("titulos", linhas.length)
-    // Estado da fonte: parcial se algum título sem vencimento reconhecível (cobertura).
-    const semVenc = linhas.filter((l) => l.disponibilidade === "parcial").length
-    if (rej > 0 || semVenc > 0) {
+    if (rej > 0 || semVencimento > 0) {
       const partes: string[] = []
-      if (rej > 0) partes.push(`${rej} linha(s) rejeitada(s)`)
-      if (semVenc > 0) partes.push(`${semVenc} título(s) sem vencimento reconhecível`)
+      if (rej > 0) partes.push(`${rej} linha(s) rejeitada(s) por dado inválido`)
+      if (semVencimento > 0) {
+        partes.push(`${semVencimento} título(s) aberto(s) sem vencimento reconhecível ficaram fora`)
+      }
       return { linhas, registros: linhas.length, estado: "parcial", observacao: partes.join("; ") + "." }
     }
     return { linhas, registros: linhas.length, estado: "real" }

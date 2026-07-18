@@ -19,7 +19,11 @@ import {
 } from "@/lib/contador/competencia"
 import { requireContadorScope } from "@/lib/contador/scope"
 import type { FalhaEscopoContador } from "@/lib/contador/scope-core"
-import { gerarPacoteContador, PacoteLimiteExcedidoError } from "@/lib/contador/pacote"
+import {
+  gerarPacoteContador,
+  PacoteLimiteExcedidoError,
+  PacoteTimeoutError,
+} from "@/lib/contador/pacote"
 
 // jszip + Prisma exigem Node; o download é dinâmico e nunca cacheado.
 export const runtime = "nodejs"
@@ -122,6 +126,19 @@ export async function GET(req: Request) {
       return NextResponse.json(
         { ok: false, mensagem: "O pacote desta competência é grande demais para geração sob demanda." },
         { status: 413 },
+      )
+    }
+    if (e instanceof PacoteTimeoutError) {
+      logEvento("contador_pacote_timeout", {
+        storeId: escopo.storeId,
+        userId: escopo.userId,
+        competencia: compCodigo,
+        limiteMs: e.limiteMs,
+        duracaoMs: Date.now() - inicio,
+      })
+      return NextResponse.json(
+        { ok: false, mensagem: "A geração do pacote desta competência demorou mais que o tempo limite. Tente novamente em instantes." },
+        { status: 503 },
       )
     }
     logEvento("contador_pacote_falha", {
