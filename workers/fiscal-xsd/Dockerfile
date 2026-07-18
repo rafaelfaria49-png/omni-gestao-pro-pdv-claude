@@ -48,13 +48,16 @@ ENV NODE_ENV=production \
 # Debian com CVE corrigido, em versões pinadas, sem dist-upgrade e sem tocar outros
 # pacotes; índices apt removidos no mesmo layer.
 #   - libgnutls30=3.7.9-2+deb12u7  → CVE-2026-33845, CVE-2026-42010 (CRITICAL, preservado)
-#   - libcap2=1:2.66-4+deb12u3     → CVE-2026-4878 (HIGH). Versão corrigida do Bookworm
-#                                     (substitui 1:2.66-4+deb12u2+b2). Atualização exclusiva,
-#                                     sem dist-upgrade e sem wildcard de versão.
+#   - libcap2                      → CVE-2026-4878 (HIGH). Versão corrigida do Bookworm
+#                                     (substitui 1:2.66-4+deb12u2+b2). Versão-fonte Debian
+#                                     1:2.66-4+deb12u3; o binário amd64 disponível no Bookworm
+#                                     é 1:2.66-4+deb12u3+b1 (rebuild binário), que é o valor
+#                                     instalado. Atualização exclusiva, sem dist-upgrade,
+#                                     sem wildcard e sem atualização geral.
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends --only-upgrade \
        libgnutls30=3.7.9-2+deb12u7 \
-       libcap2=1:2.66-4+deb12u3 \
+       libcap2=1:2.66-4+deb12u3+b1 \
   && rm -rf /var/lib/apt/lists/*
 # Hardening de superfície de ataque (Trivy HIGH): remover os gerenciadores de pacote
 # não usados no runtime. O worker inicia apenas com `node /opt/fiscal-xsd/src/server.mjs`
