@@ -36,7 +36,9 @@ import {
   assertBytesDescompactados,
   assertBytesZip,
   assertPacoteSeguro,
+  executarComTimeoutLogico,
   sanitizarStoreIdParaArquivo,
+  TIMEOUT_LOGICO_MS,
 } from "./seguranca"
 import { ziparArquivos } from "./zip"
 import type { ArquivoPacote, ConteudoPacote, EstadoFonte, PacoteContador } from "./tipos"
@@ -114,9 +116,16 @@ export type GerarPacoteContadorInput = Readonly<{
 
 /**
  * Gera o pacote sob demanda: carga única detalhada → agregado + checklist → conteúdo → ZIP.
- * Nada é persistido. Lança `PacoteLimiteExcedidoError` se algum teto for excedido.
+ * Nada é persistido. Lança `PacoteLimiteExcedidoError` se algum teto for excedido e
+ * `PacoteTimeoutError` se a geração ultrapassar `TIMEOUT_LOGICO_MS` (teto lógico de duração).
  */
 export async function gerarPacoteContador(
+  input: GerarPacoteContadorInput,
+): Promise<PacoteContador> {
+  return executarComTimeoutLogico(() => gerarPacoteContadorInterno(input), TIMEOUT_LOGICO_MS)
+}
+
+async function gerarPacoteContadorInterno(
   input: GerarPacoteContadorInput,
 ): Promise<PacoteContador> {
   // Imports dinâmicos: só aqui o grafo toca Prisma (mantém o módulo testável sem banco).

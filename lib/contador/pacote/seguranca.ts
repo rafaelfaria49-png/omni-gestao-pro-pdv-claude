@@ -42,6 +42,55 @@ export class PacoteLimiteExcedidoError extends Error {
   }
 }
 
+/** Estouro do teto lógico de duração da geração (endpoint responde 503). */
+export class PacoteTimeoutError extends Error {
+  readonly limiteMs: number
+  constructor(limiteMs: number, message: string) {
+    super(message)
+    this.name = "PacoteTimeoutError"
+    this.limiteMs = limiteMs
+  }
+}
+
+/**
+ * Aplica o teto lógico de duração: corre a geração contra um timer. Se estourar antes
+ * de concluir, rejeita com `PacoteTimeoutError`. É "lógico" porque NÃO cancela as
+ * queries Prisma em andamento — apenas limita o tempo de resposta ao cliente.
+ *
+ * A promessa interna pode assentar depois do estouro; seus handlers já estão anexados
+ * (sem `unhandledRejection`) e o assentamento tardio é ignorado (`liquidado`). O timer é
+ * `unref`-ado quando possível para não segurar o event loop.
+ */
+export async function executarComTimeoutLogico<T>(
+  executar: () => Promise<T>,
+  limiteMs: number = TIMEOUT_LOGICO_MS,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let liquidado = false
+    const timer = setTimeout(() => {
+      if (liquidado) return
+      liquidado = true
+      reject(new PacoteTimeoutError(limiteMs, `A geração excedeu o teto lógico de ${limiteMs} ms.`))
+    }, limiteMs)
+    const comUnref = timer as unknown as { unref?: () => void }
+    if (typeof comUnref.unref === "function") comUnref.unref()
+    executar().then(
+      (valor) => {
+        if (liquidado) return
+        liquidado = true
+        clearTimeout(timer)
+        resolve(valor)
+      },
+      (erro) => {
+        if (liquidado) return
+        liquidado = true
+        clearTimeout(timer)
+        reject(erro)
+      },
+    )
+  })
+}
+
 /** SHA-256 (hex) do texto em UTF-8 — mesma codificação que o ZIP usa ao gravar a string. */
 export function sha256Hex(conteudo: string): string {
   return createHash("sha256").update(Buffer.from(conteudo, "utf8")).digest("hex")

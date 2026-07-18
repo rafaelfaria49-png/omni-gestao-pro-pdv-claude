@@ -207,10 +207,19 @@ describe("Pacote 008B — semântica das linhas", () => {
     expect(arq(conteudo, "03-CAIXA/operacoes.csv")).toContain("nao_classificado")
   })
 
-  it("título sem vencimento reconhecível → disponibilidade parcial (não vira vencido)", async () => {
+  it("títulos (GOAL 008C): aberto na competência entra como real; inválido fica fora e torna a fonte parcial", async () => {
     const { conteudo } = await montar()
     const cr = arq(conteudo, "02-FINANCEIRO/contas_receber.csv")
-    expect(cr).toContain("r2,data-invalida,pendente,99,99,parcial")
+    // r1 (2026-06-10, pendente) é aberto e da competência → entra como `real`.
+    expect(cr).toContain("r1,2026-06-10,pendente,30,30,real")
+    // r2 (vencimento inválido) NÃO entra mais no CSV (nem com valor_aberto=0).
+    expect(cr).not.toContain("r2")
+    expect(cr).not.toContain("data-invalida")
+    // A ausência é honesta: a fonte fica parcial e a observação chega ao manifesto.
+    const man = JSON.parse(arq(conteudo, "manifest.json"))
+    const fonteCR = man.fontes.find((f: { nome: string }) => f.nome === "contas_receber")
+    expect(fonteCR.estado).toBe("parcial")
+    expect(fonteCR.observacao).toContain("sem vencimento reconhecível")
   })
 })
 

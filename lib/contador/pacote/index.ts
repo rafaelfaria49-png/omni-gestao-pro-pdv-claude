@@ -13,6 +13,7 @@ export type {
 export {
   PacoteInseguroError,
   PacoteLimiteExcedidoError,
+  PacoteTimeoutError,
   sanitizarStoreIdParaArquivo,
 } from "./seguranca"
 export type {
