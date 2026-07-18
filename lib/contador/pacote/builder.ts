@@ -1,72 +1,106 @@
 /**
- * Contador HUB · Pacote do Contador — montagem e geração (GOAL 008).
+ * Contador HUB · Pacote do Contador — montagem e geração (GOAL 008 · 008B).
  *
- * `montarConteudoPacote` é PURO (sem IO/DB/ZIP): monta conteúdo + índice + manifesto e
- * aplica as guardas de segurança. `gerarPacoteContador` é o único ponto com IO: carrega
- * o DTO real (GOAL 006, read-only) sob demanda, deriva o checklist (GOAL 007) e compacta.
+ * `montarConteudoPacote` é PURO (sem IO/DB/ZIP): monta os 14 arquivos (conteúdo + INDICE +
+ * manifesto v1) e aplica as guardas de segurança. `gerarPacoteContador` é o único ponto com
+ * IO: carrega as fontes detalhadas UMA vez (`carregarFontesPacote`), deriva o DTO agregado
+ * (GOAL 006) e o checklist (GOAL 007) da MESMA carga, compacta e afere os limites.
  *
- * O import dos readers é DINÂMICO de propósito: mantém o grafo estático deste módulo
- * livre de Prisma, para que `montarConteudoPacote` seja testável sem banco.
+ * Imports de Prisma (via carregar-fontes/readers) são DINÂMICOS — o grafo estático deste
+ * módulo fica livre de Prisma, para `montarConteudoPacote` ser testável sem banco.
  */
-import { formatCompetencia, type Competencia } from "@/lib/contador/competencia"
+import {
+  formatCompetencia,
+  resolvePeriodoUtc,
+  type Competencia,
+} from "@/lib/contador/competencia"
 import { montarChecklistFechamento } from "@/lib/contador/fechamento"
 import type { ChecklistFechamento } from "@/lib/contador/fechamento"
 import type { ContadorDadosReais } from "@/lib/contador/readers/tipos"
 import type { ContadorScopeInterno } from "@/lib/contador/scope-core"
-import { montarArquivosConteudo, montarAvisos } from "./fontes"
+import type { FontesDetalhadasPacote } from "./carregar-fontes"
+import {
+  montarArquivosConteudo,
+  montarAvisos,
+  montarFontesManifesto,
+  montarItensNaoDisponiveis,
+  montarPendencias,
+} from "./fontes"
 import {
   descreverArquivos,
   montarManifesto,
   renderIndiceMd,
   serializarManifesto,
 } from "./manifest"
-import { assertPacoteSeguro } from "./seguranca"
+import {
+  assertBytesDescompactados,
+  assertBytesZip,
+  assertPacoteSeguro,
+  sanitizarStoreIdParaArquivo,
+} from "./seguranca"
 import { ziparArquivos } from "./zip"
-import type { ArquivoPacote, ConteudoPacote, PacoteContador } from "./tipos"
+import type { ArquivoPacote, ConteudoPacote, EstadoFonte, PacoteContador } from "./tipos"
 
 export type MontarConteudoPacoteInput = Readonly<{
+  detalhadas: FontesDetalhadasPacote
   dados: ContadorDadosReais
   checklist: ChecklistFechamento
   competencia: Competencia
   agora: Date
-  /** storeId da loja ativa — usado apenas na guarda anti-vazamento (não vai ao conteúdo). */
-  storeId?: string | null
+  storeId: string
+  userId: string
 }>
 
-/**
- * Monta o conteúdo completo do pacote (conteúdo + INDICE.md + manifest.json), já com
- * hashes e guardas aplicadas. Puro e determinístico para o mesmo input.
- */
+/** Monta o conteúdo completo (14 arquivos) com hashes e guardas. Puro/determinístico. */
 export function montarConteudoPacote(input: MontarConteudoPacoteInput): ConteudoPacote {
-  const { dados, checklist, competencia, agora } = input
+  const { detalhadas, dados, checklist, competencia, agora, storeId, userId } = input
+  const periodo = resolvePeriodoUtc(competencia)
+  const entrada = { detalhadas, dados, checklist, competencia, periodo, agora }
 
-  const conteudo = montarArquivosConteudo({ dados, checklist, competencia, agora })
-
+  const conteudo = montarArquivosConteudo(entrada)
   const descritoresConteudo = descreverArquivos(conteudo)
+
+  const fontes = montarFontesManifesto(detalhadas)
+  const estadoPorFonte = new Map<string, EstadoFonte>(fontes.map((f) => [f.nome, f.estado]))
+
   const indice: ArquivoPacote = {
-    caminho: "INDICE.md",
+    caminho: "00-LEIA-ME/indice.md",
     categoria: "indice",
-    descricao: "Índice com tamanho e hash (sha256) de cada arquivo.",
-    conteudo: renderIndiceMd(descritoresConteudo, competencia, agora),
+    fonte: "indice",
+    descricao: "Índice com finalidade, fonte, estado, registros, bytes e hash de cada arquivo.",
+    conteudo: renderIndiceMd(conteudo, descritoresConteudo, estadoPorFonte, competencia, agora),
   }
 
   const arquivosComIndice = [...conteudo, indice]
   const descritoresTodos = descreverArquivos(arquivosComIndice)
-  const avisos = montarAvisos(dados, checklist)
-  const manifesto = montarManifesto({ descritores: descritoresTodos, competencia, agora, avisos })
+
+  const manifesto = montarManifesto({
+    descritores: descritoresTodos,
+    fontes,
+    competencia,
+    periodo,
+    agora,
+    storeId,
+    userId,
+    pendencias: montarPendencias(entrada),
+    itensNaoDisponiveis: montarItensNaoDisponiveis(entrada),
+    avisos: montarAvisos(),
+  })
 
   const manifestoArquivo: ArquivoPacote = {
     caminho: "manifest.json",
     categoria: "manifesto",
+    fonte: "manifesto",
     descricao: "Manifesto v1 — raiz de integridade do pacote.",
     conteudo: serializarManifesto(manifesto),
   }
 
   const arquivos = [...arquivosComIndice, manifestoArquivo]
-  assertPacoteSeguro(arquivos, { storeId: input.storeId })
+  assertBytesDescompactados(arquivos)
+  assertPacoteSeguro(arquivos, { storeId })
 
   return {
-    nomeArquivo: `pacote-contador-${formatCompetencia(competencia)}.zip`,
+    nomeArquivo: `pacote-contador-${sanitizarStoreIdParaArquivo(storeId)}-${formatCompetencia(competencia)}.zip`,
     arquivos,
     manifesto,
   }
@@ -79,15 +113,18 @@ export type GerarPacoteContadorInput = Readonly<{
 }>
 
 /**
- * Gera o pacote sob demanda: carrega os dados reais (read-only) da competência, deriva
- * o checklist do GOAL 007 do mesmo DTO e compacta. Nada é persistido.
+ * Gera o pacote sob demanda: carga única detalhada → agregado + checklist → conteúdo → ZIP.
+ * Nada é persistido. Lança `PacoteLimiteExcedidoError` se algum teto for excedido.
  */
 export async function gerarPacoteContador(
   input: GerarPacoteContadorInput,
 ): Promise<PacoteContador> {
-  // Import dinâmico: só aqui o grafo toca Prisma (mantém o módulo testável sem banco).
-  const { construirDadosContador } = await import("@/lib/contador/readers")
-  const dados = await construirDadosContador(input.scope, input.competencia)
+  // Imports dinâmicos: só aqui o grafo toca Prisma (mantém o módulo testável sem banco).
+  const { carregarFontesPacote } = await import("./carregar-fontes")
+  const { montarDados } = await import("@/lib/contador/readers")
+
+  const detalhadas = await carregarFontesPacote({ scope: input.scope, competencia: input.competencia })
+  const dados = montarDados(detalhadas.agregado, input.competencia)
   const checklist = montarChecklistFechamento({
     dados,
     competencia: input.competencia,
@@ -95,17 +132,39 @@ export async function gerarPacoteContador(
   })
 
   const conteudo = montarConteudoPacote({
+    detalhadas,
     dados,
     checklist,
     competencia: input.competencia,
     agora: input.agora,
     storeId: input.scope.storeId,
+    userId: input.scope.userId,
   })
 
+  const bytesDescompactados = conteudo.arquivos.reduce(
+    (acc, a) => acc + Buffer.byteLength(a.conteudo, "utf8"),
+    0,
+  )
   const bytes = await ziparArquivos(conteudo.arquivos, input.agora)
+  assertBytesZip(bytes.byteLength)
+
+  const fontes = montarFontesManifesto(detalhadas)
+  const contagens: Record<string, number> = {}
+  for (const f of fontes) contagens[f.nome] = f.registros
+  const fontesParciais = fontes.filter((f) => f.estado === "parcial").map((f) => f.nome)
+  const fontesIndisponiveis = fontes.filter((f) => f.estado === "indisponivel").map((f) => f.nome)
+
   return {
     nomeArquivo: conteudo.nomeArquivo,
     bytes,
     manifesto: conteudo.manifesto,
+    metricas: {
+      bytesZip: bytes.byteLength,
+      bytesDescompactados,
+      arquivos: conteudo.arquivos.length,
+      contagens,
+      fontesParciais,
+      fontesIndisponiveis,
+    },
   }
 }

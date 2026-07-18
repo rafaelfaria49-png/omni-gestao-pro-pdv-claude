@@ -1,11 +1,13 @@
 /**
- * Contador HUB · Pacote do Contador — geração de CSV segura (puro, sem IO).
+ * Contador HUB · Pacote do Contador — geração de CSV RFC 4180 segura (puro, sem IO).
  *
- * GOAL 008. Convenção alinhada ao exportador financeiro do projeto:
- * - separador `;` (padrão de planilha pt-BR);
+ * GOAL 008 · 008B. Convenção RFC 4180:
+ * - separador VÍRGULA (`,`);
  * - aspas duplas escapadas por duplicação;
- * - BOM UTF-8 para o Excel reconhecer acentos;
- * - fim de linha CRLF.
+ * - campos com vírgula/aspas/CR/LF são citados;
+ * - BOM UTF-8 para o Excel reconhecer acentos (Unicode);
+ * - fim de linha CRLF;
+ * - ponto decimal; string ausente = célula vazia.
  *
  * Números são gerados por nós (fonte confiável) e NÃO passam pela neutralização de
  * fórmula — assim negativos legítimos (ex.: diferença de caixa) são preservados.
@@ -14,7 +16,7 @@
 import { neutralizarFormula } from "./seguranca"
 
 export const BOM_UTF8 = "﻿"
-const SEP = ";"
+const SEP = ","
 const EOL = "\r\n"
 
 /** Célula textual ou numérica de uma linha de CSV. */

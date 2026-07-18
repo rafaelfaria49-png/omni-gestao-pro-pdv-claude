@@ -1,49 +1,47 @@
 /**
- * Contador HUB · Pacote do Contador — índice e manifesto v1 (puro, sem IO/DB/ZIP).
+ * Contador HUB · Pacote do Contador — índice e manifesto v1 canônico (puro). GOAL 008B.
  *
- * GOAL 008. Calcula o descritor de integridade (bytes + sha256) de cada arquivo,
- * renderiza o `INDICE.md` humano e monta o `manifest.json` (raiz de integridade).
- *
- * O `manifest.json` lista TODOS os demais arquivos (inclusive `INDICE.md`), mas não
- * a si mesmo — é o vértice da árvore de hashes.
+ * `manifest.json` schema `omni.contador.pacote.manifest/v1`. É a raiz de integridade:
+ * lista hash/bytes de TODOS os demais arquivos (inclusive INDICE.md), nunca a si mesmo.
+ * `competencia.storeId` é o único lugar do pacote onde o storeId aparece.
+ * `geradoPor.id` é pseudônimo interno (hash curto do userId) — nunca e-mail/nome.
  */
-import { formatCompetencia, labelCompetencia, type Competencia } from "@/lib/contador/competencia"
+import {
+  formatCompetencia,
+  labelCompetencia,
+  type Competencia,
+  type PeriodoUtc,
+} from "@/lib/contador/competencia"
 import { bytesUtf8, sha256Hex } from "./seguranca"
 import type {
-  ArquivoManifesto,
+  ArquivoManifestoV1,
   ArquivoPacote,
-  CompetenciaManifesto,
-  ManifestoPacote,
+  EstadoFonte,
+  FonteManifestoV1,
+  ManifestoPacoteContadorV1,
 } from "./tipos"
 
-const DISCLAIMER_MANIFESTO =
-  "Pacote gerado sob demanda pelo Contador HUB. Não é fechamento oficial, snapshot, " +
-  "versão persistida nem apuração fiscal/contábil. Não inclui XML fiscal nesta fase. " +
-  "Reflete os dados vivos da competência no instante do download."
-
 /** Calcula bytes + sha256 de cada arquivo (ordem preservada). */
-export function descreverArquivos(arquivos: readonly ArquivoPacote[]): ArquivoManifesto[] {
+export function descreverArquivos(arquivos: readonly ArquivoPacote[]): ArquivoManifestoV1[] {
   return arquivos.map((a) => ({
     caminho: a.caminho,
-    descricao: a.descricao,
-    categoria: a.categoria,
     bytes: bytesUtf8(a.conteudo),
     sha256: sha256Hex(a.conteudo),
+    fonte: a.fonte,
+    ...(a.registros !== undefined ? { registros: a.registros } : {}),
   }))
 }
 
-function competenciaManifesto(competencia: Competencia): CompetenciaManifesto {
-  return {
-    ano: competencia.ano,
-    mes: competencia.mes,
-    codigo: formatCompetencia(competencia),
-    label: labelCompetencia(competencia),
-  }
+/** Identificador interno pseudônimo do gerador (nunca e-mail/nome). */
+export function geradoPorInterno(userId: string): { tipo: "interno"; id: string } {
+  return { tipo: "interno", id: `u_${sha256Hex(String(userId ?? "")).slice(0, 16)}` }
 }
 
-/** Renderiza o `INDICE.md` humano a partir dos descritores dos arquivos de conteúdo. */
+/** Renderiza o `INDICE.md` humano a partir dos arquivos de conteúdo. */
 export function renderIndiceMd(
-  descritores: readonly ArquivoManifesto[],
+  conteudo: readonly ArquivoPacote[],
+  descritores: readonly ArquivoManifestoV1[],
+  estadoPorFonte: ReadonlyMap<string, EstadoFonte>,
   competencia: Competencia,
   agora: Date,
 ): string {
@@ -53,51 +51,65 @@ export function renderIndiceMd(
     `- Competência: \`${formatCompetencia(competencia)}\``,
     `- Gerado em: ${agora.toISOString()}`,
     "",
-    "| Arquivo | Categoria | Descrição | Bytes | sha256 |",
-    "|---|---|---|---|---|",
+    "| Arquivo | Finalidade | Fonte | Estado | Registros | Bytes | sha256 |",
+    "|---|---|---|---|---|---|---|",
   ]
-  for (const d of descritores) {
-    // Escapa `|` na descrição para não quebrar a tabela Markdown.
-    const desc = d.descricao.replace(/\|/g, "\\|")
-    linhas.push(`| \`${d.caminho}\` | ${d.categoria} | ${desc} | ${d.bytes} | \`${d.sha256}\` |`)
+  for (let i = 0; i < conteudo.length; i++) {
+    const a = conteudo[i]
+    const d = descritores[i]
+    const estado = estadoPorFonte.get(a.fonte) ?? "—"
+    const registros = a.registros !== undefined ? String(a.registros) : "—"
+    const desc = a.descricao.replace(/\|/g, "\\|")
+    linhas.push(`| \`${a.caminho}\` | ${desc} | ${a.fonte} | ${estado} | ${registros} | ${d.bytes} | \`${d.sha256}\` |`)
   }
   linhas.push(
+    "| `00-LEIA-ME/indice.md` | Este índice | indice | — | — | — | (hash em manifest.json) |",
+    "| `manifest.json` | Raiz de integridade (v1) | manifesto | — | — | — | (não se auto-referencia) |",
     "",
-    "Os hashes acima cobrem todos os arquivos exceto o próprio `manifest.json`, que é a",
-    "raiz de integridade (versão 1) e lista os mesmos arquivos em formato JSON.",
+    "Os hashes acima cobrem os arquivos de conteúdo. O `manifest.json` é a raiz de",
+    "integridade e lista também o hash do próprio `00-LEIA-ME/indice.md`.",
     "",
   )
   return linhas.join("\n")
 }
 
-/** Monta o `manifest.json` (v1) listando cada arquivo com hash e tamanho. */
+/** Monta o `manifest.json` canônico v1. */
 export function montarManifesto(input: {
-  descritores: readonly ArquivoManifesto[]
+  descritores: readonly ArquivoManifestoV1[]
+  fontes: readonly FonteManifestoV1[]
   competencia: Competencia
+  periodo: PeriodoUtc
   agora: Date
+  storeId: string
+  userId: string
+  pendencias: readonly string[]
+  itensNaoDisponiveis: readonly string[]
   avisos: readonly string[]
-}): ManifestoPacote {
-  const { descritores, competencia, agora, avisos } = input
-  const csvs = descritores.filter((d) => d.categoria === "csv").length
-  const placeholders = descritores.filter((d) => d.categoria === "placeholder").length
+}): ManifestoPacoteContadorV1 {
   return {
-    schema: "omnigestao.contador.pacote",
-    versao: 1,
-    geradoEm: agora.toISOString(),
-    competencia: competenciaManifesto(competencia),
-    aplicacao: { nome: "OmniGestão Pro" },
-    contagem: {
-      arquivos: descritores.length,
-      csvs,
-      placeholders,
+    schema: "omni.contador.pacote.manifest/v1",
+    pacoteVersao: 1,
+    competencia: {
+      storeId: input.storeId,
+      ano: input.competencia.ano,
+      mes: input.competencia.mes,
+      timezone: "America/Sao_Paulo",
+      periodoUtc: {
+        inicio: input.periodo.inicio.toISOString(),
+        fimExclusivo: input.periodo.fimExclusivo.toISOString(),
+      },
     },
-    arquivos: descritores,
-    avisos,
-    disclaimer: DISCLAIMER_MANIFESTO,
+    geradoEm: input.agora.toISOString(),
+    geradoPor: geradoPorInterno(input.userId),
+    fontes: input.fontes,
+    arquivos: input.descritores,
+    pendencias: input.pendencias,
+    itensNaoDisponiveis: input.itensNaoDisponiveis,
+    avisos: input.avisos,
   }
 }
 
-/** Serializa o manifesto de forma estável (2 espaços) para o arquivo `manifest.json`. */
-export function serializarManifesto(manifesto: ManifestoPacote): string {
+/** Serializa o manifesto de forma estável (2 espaços) para `manifest.json`. */
+export function serializarManifesto(manifesto: ManifestoPacoteContadorV1): string {
   return JSON.stringify(manifesto, null, 2) + "\n"
 }
