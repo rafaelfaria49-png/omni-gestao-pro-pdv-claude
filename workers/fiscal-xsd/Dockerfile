@@ -44,13 +44,37 @@ ENV NODE_ENV=production \
     HOME=/tmp \
     TMPDIR=/tmp \
     PATH=/usr/local/bin:/usr/bin:/bin
-# Correção de supply chain (Trivy CRITICAL): CVE-2026-33845 e CVE-2026-42010.
-# Atualiza EXCLUSIVAMENTE libgnutls30 para a versão oficial corrigida do Debian
-# Bookworm (fonte gnutls28 3.7.9-2+deb12u7, via bookworm-security). Versão pinada,
-# sem dist-upgrade e sem tocar outros pacotes; índices apt removidos no mesmo layer.
+# Correção de supply chain (Trivy HIGH/CRITICAL): atualiza EXCLUSIVAMENTE os pacotes
+# Debian com CVE corrigido, em versões pinadas, sem dist-upgrade e sem tocar outros
+# pacotes; índices apt removidos no mesmo layer.
+#   - libgnutls30=3.7.9-2+deb12u7  → CVE-2026-33845, CVE-2026-42010 (CRITICAL, preservado)
+#   - libcap2                      → CVE-2026-4878 (HIGH). Versão corrigida do Bookworm
+#                                     (substitui 1:2.66-4+deb12u2+b2). Versão-fonte Debian
+#                                     1:2.66-4+deb12u3; o binário amd64 disponível no Bookworm
+#                                     é 1:2.66-4+deb12u3+b1 (rebuild binário), que é o valor
+#                                     instalado. Atualização exclusiva, sem dist-upgrade,
+#                                     sem wildcard e sem atualização geral.
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends --only-upgrade libgnutls30=3.7.9-2+deb12u7 \
+  && apt-get install --yes --no-install-recommends --only-upgrade \
+       libgnutls30=3.7.9-2+deb12u7 \
+       libcap2=1:2.66-4+deb12u3+b1 \
   && rm -rf /var/lib/apt/lists/*
+# Hardening de superfície de ataque (Trivy HIGH): remover os gerenciadores de pacote
+# não usados no runtime. O worker inicia apenas com `node /opt/fiscal-xsd/src/server.mjs`
+# e importa somente módulos node:*; npm/npx/yarn/corepack não são necessários e carregam
+# 12 CVEs HIGH herdados de /usr/local/lib/node_modules/npm/node_modules (cross-spawn,
+# glob, minimatch, sigstore, tar). Remoção explícita por caminho conhecido; o binário
+# node é preservado. Não atualiza npm e não executa npm install.
+RUN rm -rf \
+      /usr/local/lib/node_modules/npm \
+      /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm \
+      /usr/local/bin/npx \
+      /usr/local/bin/yarn \
+      /usr/local/bin/yarnpkg \
+      /usr/local/bin/corepack \
+      /opt/yarn-v* \
+  && node --version
 # O PATH endurecido acima omite /usr/sbin — groupadd/useradd exigem caminho absoluto
 # (ADR-0010: nenhuma dependência de binário implícito no PATH).
 RUN /usr/sbin/groupadd --gid 10001 fiscal-xsd \

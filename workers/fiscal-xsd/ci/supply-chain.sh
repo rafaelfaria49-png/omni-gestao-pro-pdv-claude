@@ -38,6 +38,11 @@ NODE_IMAGE="${NODE_IMAGE:-node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea9583
 NETWORK="${NETWORK:-fiscal-xsd-internal}"
 CONTAINER="${CONTAINER:-fiscal-xsd-worker-005a}"
 WORKER_URL="${WORKER_URL:-http://worker.internal:8080}"
+# Builder Buildx efêmero (driver docker-container) usado SOMENTE para exportar o
+# OCI archive no job conectado. Nome específico deste GOAL, sem caminho nem
+# segredo; criado e removido pelo próprio script. Não é identidade permanente do
+# artifact (o digest do manifest OCI é o que identifica a imagem).
+OCI_BUILDER="${OCI_BUILDER:-fiscal-xsd-oci-builder}"
 
 DOCKER_ARCHIVE="${DOCKER_ARCHIVE:-fiscal-xsd-worker-goal005a.docker.tar}"
 OCI_ARCHIVE="${OCI_ARCHIVE:-fiscal-xsd-worker-goal005a.oci.tar}"
@@ -52,6 +57,7 @@ LIBXML2_SOURCE_SHA256="78262a6e7ac170d6528ebfe2efccdf220191a5af6a6cd61ea4a9a9a50
 LIBXML2_PATCH_URL="https://github.com/GNOME/libxml2/commit/d3352554e4c1f052b914cda7b415d06b7eab5dfa.patch"
 LIBXML2_PATCH_SHA256="ab319bb46b2aeb5f4311a12676b6b3eed1d18fb47721ae6274a849d31b96fb7c"
 LIBGNUTLS_VERSION="3.7.9-2+deb12u7"
+LIBCAP2_VERSION="1:2.66-4+deb12u3+b1"
 XSD_PACKAGE="PL_010e_v1.02"
 XSD_LAYOUT="4.00"
 XSD_MODEL="65"
@@ -66,6 +72,95 @@ die()   { printf '::error::%s\n' "$*" >&2; exit 1; }
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
 
 ensure_out() { mkdir -p "${OUT_DIR}"; }
+
+# Valida a saída de `xmllint --version` contra o código canônico LIBXML_VERSION.
+# libxml2 2.15.3 => 21503 (major*10000 + minor*100 + patch).
+# Independente de idioma, acentuação, capitalização e de "libXML" vs "libxml2".
+# Não aceita a forma semântica "2.15.3" no lugar do código; exige exatamente 21503.
+assert_xmllint_libxml_version_code() {
+  local version_out="$1"
+  local expected="${EXPECTED_LIBXML_GATE}"
+  local first_line codes unique count reported
+
+  first_line="$(printf '%s\n' "${version_out}" | head -n 1)"
+  codes="$(printf '%s\n' "${first_line}" | grep -oE '[0-9]{5}' || true)"
+  if [[ -z "${codes}" ]]; then
+    die "xmllint reportou LIBXML_VERSION=ausente; esperado ${expected} (libxml2 ${LIBXML2_VERSION})."
+  fi
+  unique="$(printf '%s\n' "${codes}" | sort -u)"
+  count="$(printf '%s\n' "${unique}" | grep -c . || true)"
+  if [[ "${count}" -ne 1 ]]; then
+    die "xmllint reportou códigos LIBXML_VERSION conflitantes ($(printf '%s' "${unique}" | tr '\n' ' ')); esperado exatamente ${expected}."
+  fi
+  reported="$(printf '%s\n' "${unique}")"
+  [[ "${reported}" == "${expected}" ]] \
+    || die "xmllint reportou LIBXML_VERSION=${reported}; esperado ${expected} (libxml2 ${LIBXML2_VERSION})."
+  printf 'LIBXML_VERSION canônico confirmado: %s (libxml2 %s)\n' "${reported}" "${LIBXML2_VERSION}"
+}
+
+# Prova fail-closed de que o runtime foi endurecido (GOAL 005A FIX): binário node
+# preservado, entrypoint intacto, gerenciadores de pacote REMOVIDOS (npm/npx/yarn/
+# yarnpkg/corepack, diretórios globais e qualquer package.json sob o npm global) e os
+# pacotes Debian corrigidos em versão exata (libcap2 CVE-2026-4878; libgnutls30 pinado).
+# Qualquer ferramenta remanescente ou versão divergente ABORTA o pipeline — nunca vira
+# warning. Executa apenas inspeções read-only na própria imagem, como usuário 10001.
+assert_runtime_hardened() {
+  local node_version entrypoint libcap2_ver libgnutls_ver
+
+  node_version="$(
+    docker run --rm --entrypoint node "${IMAGE_TAG}" --version 2>&1
+  )" || die "Runtime não executa 'node --version' — binário node ausente/quebrado."
+  printf 'node runtime preservado: %s\n' "${node_version}"
+
+  entrypoint="$(docker image inspect "${IMAGE_TAG}" --format '{{json .Config.Entrypoint}}')"
+  printf '%s\n' "${entrypoint}" | grep --fixed-strings 'server.mjs' >/dev/null \
+    || die "Entrypoint do worker inesperado (esperado node .../server.mjs): ${entrypoint}"
+
+  # Ausência dos gerenciadores de pacote (comando no PATH, símbolo em disco e diretórios
+  # globais) e de qualquer package.json remanescente sob o npm global removido.
+  docker run --rm --entrypoint sh "${IMAGE_TAG}" -c '
+    set -eu
+    fail=0
+    for tool in npm npx yarn yarnpkg corepack; do
+      if command -v "$tool" >/dev/null 2>&1; then
+        echo "PRESENTE: comando $tool ainda resolve no PATH" >&2
+        fail=1
+      fi
+    done
+    for path in \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn \
+      /usr/local/bin/yarnpkg /usr/local/bin/corepack \
+      /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack; do
+      if [ -e "$path" ]; then
+        echo "PRESENTE: caminho $path ainda existe" >&2
+        fail=1
+      fi
+    done
+    if [ -d /usr/local/lib/node_modules ] \
+       && find /usr/local/lib/node_modules -name package.json -print -quit 2>/dev/null | grep -q .; then
+      echo "PRESENTE: package.json remanescente sob o npm global" >&2
+      fail=1
+    fi
+    command -v node >/dev/null 2>&1 || { echo "AUSENTE: node no runtime" >&2; fail=1; }
+    exit "$fail"
+  ' || die "Runtime ainda contém gerenciador de pacote (npm/npx/yarn/yarnpkg/corepack) ou package.json global remanescente."
+  printf 'gerenciadores de pacote ausentes: npm, npx, yarn, yarnpkg, corepack\n'
+
+  # Pacotes Debian corrigidos, versões exatas (fail-closed).
+  libcap2_ver="$(
+    docker run --rm --entrypoint dpkg-query "${IMAGE_TAG}" -W -f='${Version}' libcap2 2>/dev/null
+  )" || die "libcap2 ausente na imagem."
+  test "${libcap2_ver}" = "${LIBCAP2_VERSION}" \
+    || die "libcap2=${libcap2_ver}; esperado ${LIBCAP2_VERSION} (CVE-2026-4878)."
+  printf 'libcap2 confirmado: %s (CVE-2026-4878 corrigido)\n' "${libcap2_ver}"
+
+  libgnutls_ver="$(
+    docker run --rm --entrypoint dpkg-query "${IMAGE_TAG}" -W -f='${Version}' libgnutls30 2>/dev/null
+  )" || die "libgnutls30 ausente na imagem."
+  test "${libgnutls_ver}" = "${LIBGNUTLS_VERSION}" \
+    || die "libgnutls30=${libgnutls_ver}; esperado ${LIBGNUTLS_VERSION} (pin preservado)."
+  printf 'libgnutls30 confirmado: %s (pin preservado)\n' "${libgnutls_ver}"
+}
 
 # Digest determinístico dos insumos reais do build (o que o Dockerfile COPIA),
 # via git ls-files -s (modo + blob sha + path), estável e content-addressed.
@@ -148,12 +243,15 @@ mode_build() {
 mode_inspect() {
   log "Inspeção da imagem construída (xmllint, versão, gate, schemas, isolamento)"
   local version_out user entrypoint manifest_hash_line
-  version_out="$(docker run --rm --entrypoint /opt/fiscal-xsd/bin/xmllint "${IMAGE_TAG}" --version 2>&1)"
-  echo "${version_out}"
-  echo "${version_out}" | grep --fixed-strings "${EXPECTED_LIBXML_GATE}" \
-    || die "Gate libxml ${EXPECTED_LIBXML_GATE} não confirmado."
-  echo "${version_out}" | grep --fixed-strings "${LIBXML2_VERSION}" \
-    || die "xmllint não reportou libxml2 ${LIBXML2_VERSION}."
+  # LC_ALL=C reduz variação de idioma; o gate ainda extrai o código numérico
+  # (21503) para não depender de "Usando"/"Using" nem de "libXML"/"libxml2".
+  version_out="$(
+    docker run --rm -e LC_ALL=C \
+      --entrypoint /opt/fiscal-xsd/bin/xmllint \
+      "${IMAGE_TAG}" --version 2>&1
+  )" || die "Falha ao executar /opt/fiscal-xsd/bin/xmllint --version na imagem ${IMAGE_TAG}."
+  printf '%s\n' "${version_out}"
+  assert_xmllint_libxml_version_code "${version_out}"
 
   user="$(docker image inspect "${IMAGE_TAG}" --format '{{.Config.User}}')"
   test "${user}" = "10001:10001" || die "Usuário runtime não é 10001:10001 (obtido: ${user})."
@@ -176,6 +274,10 @@ mode_inspect() {
   docker image inspect "${IMAGE_TAG}" --format '{{json .Config.Env}}' \
     | grep -Eiq '(secret|token|password|senha|csc|certificad|api[_-]?key)' \
     && die "Env com padrão sensível detectada na imagem." || true
+
+  # Runtime endurecido: node preservado, package managers removidos, libcap2/libgnutls30
+  # corrigidos (fail-closed).
+  assert_runtime_hardened
   endlog
 }
 
@@ -189,17 +291,97 @@ mode_package() {
   docker save "${IMAGE_TAG}" -o "${OUT_DIR}/${DOCKER_ARCHIVE}"
   endlog
 
-  log "Exportar OCI archive real (buildx OCI, mesmos insumos pinados)"
+  # -------------------------------------------------------------------------
+  # O exportador OCI do buildx NÃO é suportado pelo driver `docker` padrão do
+  # runner ("The OCI exporter is not supported for the docker driver"). Cria-se
+  # um builder efêmero com driver `docker-container`, usado EXCLUSIVAMENTE para
+  # gerar o OCI archive. O primeiro build (mode_build, --load) — imagem
+  # inspecionada e escaneada pelo Trivy — permanece no builder padrão e já foi
+  # exportado acima como Docker archive. Sem push, sem registry, sem prune
+  # global; o builder é removido no cleanup.
+  # -------------------------------------------------------------------------
+  log "Preparar builder Buildx com driver docker-container (exportação OCI)"
+  docker buildx version
+  docker buildx rm "${OCI_BUILDER}" 2>/dev/null || true
+  docker buildx create --name "${OCI_BUILDER}" --driver docker-container
+  docker buildx inspect "${OCI_BUILDER}" --bootstrap
+
+  local oci_builder_inspect oci_builder_driver
+  oci_builder_inspect="$(docker buildx inspect "${OCI_BUILDER}")"
+  printf '%s\n' "${oci_builder_inspect}"
+  oci_builder_driver="$(
+    printf '%s\n' "${oci_builder_inspect}" \
+      | awk -F: '/^Driver:/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}'
+  )"
+  test "${oci_builder_driver}" = "docker-container" \
+    || die "Builder OCI não utiliza driver docker-container (obtido: '${oci_builder_driver}')."
+  printf 'Builder OCI confirmado: %s (driver=%s)\n' "${OCI_BUILDER}" "${oci_builder_driver}"
+
+  # Proveniência mínima e honesta do builder (driver + BuildKit image id). Nunca
+  # registra hostname, credencial, token, nem container id como identidade estável.
+  local oci_builder_ids oci_builder_container buildkit_image_id
+  oci_builder_ids="$(
+    docker ps --filter "label=com.docker.buildx.builder=${OCI_BUILDER}" \
+      --format '{{.ID}}' 2>/dev/null || true
+  )"
+  oci_builder_container="${oci_builder_ids%%$'\n'*}"
+  buildkit_image_id=""
+  if [[ -n "${oci_builder_container}" ]]; then
+    buildkit_image_id="$(docker inspect "${oci_builder_container}" --format '{{.Image}}' 2>/dev/null || true)"
+  fi
+  printf 'BuildKit image id: %s\n' "${buildkit_image_id:-<indisponível>}"
+  endlog
+
+  log "Exportar OCI archive real (builder docker-container explícito, mesmos insumos pinados)"
   DOCKER_BUILDKIT=1 docker buildx build \
+    --builder "${OCI_BUILDER}" \
+    --platform linux/amd64 \
     --file "${DOCKERFILE}" \
     --output "type=oci,dest=${OUT_DIR}/${OCI_ARCHIVE}" \
     --provenance=false \
+    --progress=plain \
     .
   endlog
 
-  # Digest do manifest a partir do índice OCI (não requer push a registry).
-  local oci_manifest_digest
-  oci_manifest_digest="$(tar -xOf "${OUT_DIR}/${OCI_ARCHIVE}" index.json | jq -r '.manifests[0].digest')"
+  log "Validar (fail-closed) que o resultado é um OCI archive real"
+  test -s "${OUT_DIR}/${OCI_ARCHIVE}" || die "OCI archive ausente ou vazio."
+  local oci_entries oci_layout layout_version
+  oci_entries="$(tar -tf "${OUT_DIR}/${OCI_ARCHIVE}")"
+  grep -Fxq 'oci-layout' <<<"${oci_entries}" || die "OCI archive sem 'oci-layout'."
+  grep -Fxq 'index.json' <<<"${oci_entries}" || die "OCI archive sem 'index.json'."
+  grep -Eq '^blobs/sha256/[a-f0-9]{64}$' <<<"${oci_entries}" \
+    || die "OCI archive sem blob 'blobs/sha256/<digest>'."
+  oci_layout="$(tar -xOf "${OUT_DIR}/${OCI_ARCHIVE}" oci-layout)"
+  layout_version="$(jq -r '.imageLayoutVersion' <<<"${oci_layout}")"
+  test "${layout_version}" = "1.0.0" \
+    || die "oci-layout imageLayoutVersion='${layout_version}'; esperado 1.0.0."
+
+  # Índice OCI: ao menos um manifest, digest sha256 de 64 hex, mediaType OCI e,
+  # quando serializada, plataforma linux/amd64. Não confundir com Docker archive.
+  local oci_index_json oci_manifest_count oci_manifest_digest oci_manifest_media_type oci_platform
+  oci_index_json="$(tar -xOf "${OUT_DIR}/${OCI_ARCHIVE}" index.json)"
+  oci_manifest_count="$(jq '.manifests | length' <<<"${oci_index_json}")"
+  test "${oci_manifest_count}" -ge 1 || die "OCI index.json sem manifests."
+  oci_manifest_digest="$(jq -r '.manifests[0].digest' <<<"${oci_index_json}")"
+  [[ "${oci_manifest_digest}" =~ ^sha256:[a-f0-9]{64}$ ]] \
+    || die "Digest do manifest OCI inválido: '${oci_manifest_digest}'."
+  oci_manifest_media_type="$(jq -r '.manifests[0].mediaType' <<<"${oci_index_json}")"
+  case "${oci_manifest_media_type}" in
+    application/vnd.oci.image.manifest.v1+json|application/vnd.oci.image.index.v1+json) : ;;
+    *) die "mediaType OCI inesperado no index: '${oci_manifest_media_type}'." ;;
+  esac
+  oci_platform="$(
+    jq -r '.manifests[0].platform // {} | if has("os") then "\(.os)/\(.architecture)" else "" end' \
+      <<<"${oci_index_json}"
+  )"
+  if [[ -n "${oci_platform}" ]]; then
+    test "${oci_platform}" = "linux/amd64" \
+      || die "Plataforma OCI serializada inesperada: '${oci_platform}'."
+  fi
+  printf 'OCI archive validado: layout=%s manifests=%s digest=%s mediaType=%s platform=%s\n' \
+    "${layout_version}" "${oci_manifest_count}" "${oci_manifest_digest}" \
+    "${oci_manifest_media_type}" "${oci_platform:-<não-serializada>}"
+  endlog
 
   log "Checksums (SHA256SUMS) e finalização de metadata"
   ( cd "${ROOT}" && sha256sum \
@@ -221,6 +403,8 @@ mode_package() {
 
   jq \
     --arg ociManifestDigest "${oci_manifest_digest}" \
+    --arg ociBuilderDriver "${oci_builder_driver}" \
+    --arg buildkitImageId "${buildkit_image_id}" \
     --arg dockerArchive "${DOCKER_ARCHIVE}" \
     --arg dockerArchiveSha256 "${docker_sha}" \
     --arg ociArchive "${OCI_ARCHIVE}" \
@@ -230,7 +414,10 @@ mode_package() {
     --arg trivy "${TRIVY_JSON}" \
     --arg trivySha256 "${trivy_sha}" \
     --arg schemaManifestSha256 "${schema_sha}" \
-    '. + {ociManifestDigest:$ociManifestDigest, dockerArchive:$dockerArchive,
+    '. + {ociManifestDigest:$ociManifestDigest,
+      ociBuilderDriver:$ociBuilderDriver,
+      buildkitImageId:(if $buildkitImageId == "" then null else $buildkitImageId end),
+      dockerArchive:$dockerArchive,
       dockerArchiveSha256:$dockerArchiveSha256, ociArchive:$ociArchive, ociArchiveSha256:$ociArchiveSha256,
       sbom:$sbom, sbomSha256:$sbomSha256, trivy:$trivy, trivySha256:$trivySha256,
       schemaManifestSha256:$schemaManifestSha256}' \
@@ -263,12 +450,22 @@ mode_verify_offline() {
   endlog
 
   log "Conferir xmllint/libxml2 e schema manifest na imagem carregada"
-  docker run --rm --entrypoint /opt/fiscal-xsd/bin/xmllint "${IMAGE_TAG}" --version 2>&1 \
-    | grep --fixed-strings "${EXPECTED_LIBXML_GATE}" || die "Gate libxml ausente na imagem carregada."
+  local loaded_version_out
+  loaded_version_out="$(
+    docker run --rm -e LC_ALL=C \
+      --entrypoint /opt/fiscal-xsd/bin/xmllint \
+      "${IMAGE_TAG}" --version 2>&1
+  )" || die "Falha ao executar xmllint --version na imagem carregada ${IMAGE_TAG}."
+  printf '%s\n' "${loaded_version_out}"
+  assert_xmllint_libxml_version_code "${loaded_version_out}"
   docker run --rm --entrypoint cat "${IMAGE_TAG}" /opt/fiscal-xsd/manifest/manifest.sha256 \
     | grep --fixed-strings "${EXPECTED_SCHEMA_MANIFEST_HASH}" || die "Schema manifest divergente na imagem carregada."
   test "$(docker image inspect "${IMAGE_TAG}" --format '{{.Config.User}}')" = "10001:10001" \
     || die "Imagem carregada não roda como 10001:10001."
+
+  # Runtime endurecido também na imagem carregada do archive: node preservado, package
+  # managers removidos, libcap2/libgnutls30 corrigidos (fail-closed).
+  assert_runtime_hardened
   endlog
 
   log "Criar rede sem egress e iniciar worker a partir do archive"
@@ -460,6 +657,9 @@ mode_cleanup() {
   docker rm --force "${CONTAINER}" 2>/dev/null || true
   docker network rm "${NETWORK}" 2>/dev/null || true
   docker image rm --force "${IMAGE_TAG}" 2>/dev/null || true
+  # Remove SOMENTE o builder efêmero deste GOAL (com seu container BuildKit).
+  # Funciona mesmo se a exportação OCI falhou ou se o builder nunca foi criado.
+  docker buildx rm "${OCI_BUILDER}" 2>/dev/null || true
   rm -f "${OUT_DIR}/ready.json" 2>/dev/null || true
   endlog
 }

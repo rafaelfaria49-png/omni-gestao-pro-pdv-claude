@@ -219,3 +219,43 @@ Pendência homônima **P-05** (“C14N interoperável”) = **FECHADA** via GOAL
 
 Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
 **GOAL-005 técnico não iniciado.**
+
+---
+
+## GOAL-005A — supply chain GitHub Actions do worker XSD (executado e aprovado na branch) · 19/07/2026
+
+**GOAL de registro:** `FISCAL-XSD-WORKER-GHA-SUPPLY-CHAIN-005A-REGISTER-APPROVED-BUNDLE`
+
+**GOAL técnico de supply chain:** `FISCAL-XSD-WORKER-GITHUB-ACTIONS-SUPPLY-CHAIN-005A`
+
+**Estado:** **executado e aprovado na branch** — **SUPPLY CHAIN GITHUB ACTIONS ENTREGUE NA BRANCH**
+
+**Não** é o GOAL-005 técnico (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`).
+
+| Campo | Valor |
+|---|---|
+| Branch | `work/fiscal-xsd-worker-gha-supply-chain-005a` |
+| Commit do run / bundle | `c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91` |
+| Workflow | Fiscal XSD Worker Supply Chain |
+| Run | `29669361609` (#5) · `success` · jobs 2/2 |
+| Artifact final | `fiscal-xsd-worker-offline-approved-c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91` |
+| Artifact ID | `8436826125` |
+| Artifact digest | `sha256:aa60526d6a57845305600424bc13b992015d510c636a0f7c9b99c70fa3e6291e` |
+| Lock materializado | `workers/fiscal-xsd/supply-chain.lock.json` |
+| Lock SHA-256 | `5402dca9cf37cb1c0892cb4458be78fa9f360f69e9ad2440770d55ed340266e8` |
+| Trivy | CRITICAL=0 · HIGH=0 |
+| Runtime | offline · `externalEgress=blocked-enforced` · non-root · read-only rootfs |
+| XSD tests | positive `passed` · negativos **7/7** · integration/security `passed` · timeout `enforced` |
+| Registry | não utilizado |
+| Binários no Git | 0 (somente lock textual + docs) |
+| Gates Fiscal globais | **nenhum fechado** (F4→F5 / G-F5 / G-F7 / G-F12 abertos) |
+| N6 / N7 | 0 / 0 |
+| Contador HUB | não alterado |
+| Emissão / SEFAZ / homologação / produção | **não** |
+
+Relatório:
+[`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](./FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md).
+
+**Próximo passo (não é emissão):** auditoria de merge-readiness do range completo da branch 005A
+contra a `origin/main` atual; somente depois PR e integração controlada. **005B ainda não
+iniciado.** GOAL-005 técnico permanece **PARCIAL**.
