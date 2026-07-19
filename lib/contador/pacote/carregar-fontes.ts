@@ -8,9 +8,12 @@
  *  - o DTO agregado do GOAL 006 (via `montarDados`, formato `FontesContador`, que precisa
  *    do `payload` das vendas — lido aqui e nunca serializado ao ZIP).
  *
- * Não chama `construirDadosContador` (evita uma segunda rodada de 7 queries). São 8 queries:
- * 7 fontes em `Promise.allSettled` + 1 lookup de Produto (códigos dos itens), dependente
- * do sucesso de vendas. Uma falha isolada NÃO cancela as demais e NÃO vaza stack/erro Prisma.
+ * Não chama `construirDadosContador` (evita uma segunda rodada de queries). A quantidade de
+ * queries é contabilizada dinamicamente por página e por lote de Produto (não há número fixo):
+ * 7 fontes paginadas por cursor em `Promise.allSettled` + N lotes de Produto (códigos dos itens,
+ * dependente do sucesso de vendas). Uma falha isolada NÃO cancela as demais e NÃO vaza stack/erro
+ * Prisma. O limite por fonte é aplicado às linhas CRUAS (antes de qualquer filtragem): `paginarFonte`
+ * lança `PacoteLimiteExcedidoError` ao detectar a linha MAX+1 — uma linha filtrável não burla o teto.
  */
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { resolvePeriodoUtc, type Competencia, type PeriodoUtc } from "@/lib/contador/competencia"
@@ -22,7 +25,7 @@ import {
   isOrigemEstorno,
   isOrigemTransferenciaInterna,
 } from "@/lib/financeiro/services/movimentacao-financeira-classify"
-import { assertRegistrosFonte, MAX_REGISTROS_POR_FONTE } from "./seguranca"
+import { assertRegistrosFonte, MAX_REGISTROS_POR_FONTE, PacoteLimiteExcedidoError } from "./seguranca"
 import type { EstadoFonte, FonteResultado } from "./tipos"
 
 /* ─────────────────────────── linhas detalhadas (saneadas) ─────────────────────────── */
@@ -184,24 +187,34 @@ const OBS_FALHA = "A leitura desta fonte falhou. Tente novamente; o pacote saiu 
  */
 const PAGE_SIZE_PACOTE = 500
 
+/**
+ * Tamanho máximo de IDs por consulta de Produto no lookup de códigos. O chunking evita um
+ * `id: { in: [...] }` gigante em uma única query; cada lote é UMA consulta contabilizada.
+ */
+export const PRODUTO_LOOKUP_CHUNK = 500
+
 /** Cursor opaco de paginação — sempre o `id` (cuid único) da última linha da página. */
 type CursorPagina = string
 
 type PaginarFonteInput<T> = Readonly<{
+  /** Nome lógico da fonte (para a mensagem de `PacoteLimiteExcedidoError`). */
+  nomeFonte: string
   /** Busca UMA página a partir do cursor (exclusivo); `tamanho` é o teto de linhas. */
   buscarPagina: (cursor: CursorPagina | null, tamanho: number) => Promise<T[]>
   /** Extrai o cursor estável (id) da última linha de uma página. */
   extrairCursor: (linha: T) => CursorPagina
-  /** Teto de linhas acumuladas; buscamos até `maxRegistros + 1` para detectar excedente. */
+  /** Teto de linhas CRUAS; ao detectar `maxRegistros + 1`, lança PacoteLimiteExcedidoError. */
   maxRegistros: number
   tamanhoPagina?: number
 }>
 
 /**
- * Paginação real por páginas pequenas (cursor por id). Percorre a fonte página a página
- * até esgotá-la (última página vem incompleta) ou até acumular `maxRegistros + 1` linhas
- * (o `+1` é a sonda de excedente — o caller aplica `assertRegistrosFonte` sobre a saída,
- * preservando a semântica do antigo `take: MAX + 1`). Nunca materializa mais que isso.
+ * Paginação real por páginas pequenas (cursor por id). Percorre a fonte página a página até
+ * esgotá-la (última página vem incompleta). O LIMITE por fonte é aplicado às linhas CRUAS,
+ * ANTES de qualquer filtragem: ao acumular `maxRegistros + 1` linhas (a `+1` é a sonda de
+ * excedente), lança `PacoteLimiteExcedidoError` — nunca devolve MAX+1 ao caller. Assim uma linha
+ * que seria filtrada (inválida, cancelada, de outro mês, título fechado) NÃO burla o teto.
+ * Nunca materializa mais que `maxRegistros + 1` linhas.
  */
 export async function paginarFonte<T>(input: PaginarFonteInput<T>): Promise<T[]> {
   const tamanhoPagina = Math.max(1, input.tamanhoPagina ?? PAGE_SIZE_PACOTE)
@@ -215,6 +228,12 @@ export async function paginarFonte<T>(input: PaginarFonteInput<T>): Promise<T[]>
     const pagina = await input.buscarPagina(cursor, tamanho)
     if (pagina.length === 0) break
     acumulado.push(...pagina)
+    if (acumulado.length > input.maxRegistros) {
+      throw new PacoteLimiteExcedidoError(
+        "registros_por_fonte",
+        `Fonte "${input.nomeFonte}" excedeu ${input.maxRegistros} registros na leitura da fonte crua.`,
+      )
+    }
     if (pagina.length < tamanho) break // última página: fonte esgotada
     cursor = input.extrairCursor(pagina[pagina.length - 1])
   }
@@ -350,127 +369,167 @@ export async function carregarFontesPacoteComCliente(
   periodo: PeriodoUtc,
   competencia: Competencia,
   cliente: PacoteReaderClient,
+  maxRegistros: number = MAX_REGISTROS_POR_FONTE,
 ): Promise<FontesDetalhadasPacote> {
   const noPeriodo = { gte: periodo.inicio, lt: periodo.fimExclusivo }
   const storeId = scope.storeId
 
+  // Contador central de queries por execução: TODA chamada real (cada página de cada fonte e
+  // cada lote de Produto) passa por aqui. O total devolvido é EXATAMENTE o nº de chamadas
+  // disparadas ao cliente injetado — sem estimativa. A chamada que falhar também é contada
+  // (o incremento acontece antes de invocar `fn`).
+  let totalQueries = 0
+  const contarQuery = <T>(fn: () => Promise<T>): Promise<T> => {
+    totalQueries += 1
+    return fn()
+  }
+
   // Cada fonte pagina de forma independente e concorrente (cursor por id + tiebreak);
   // uma falha isolada NÃO cancela as demais (Promise.allSettled). Ordenação temporal com
   // `id` como desempate torna o cursor determinístico mesmo com timestamps repetidos.
-  const MAX = MAX_REGISTROS_POR_FONTE
+  const MAX = Math.max(1, maxRegistros)
   const resultados = await Promise.allSettled([
     paginarFonte<VendaRaw>({
+      nomeFonte: "vendas",
       buscarPagina: (cursor, tamanho) =>
-        cliente.venda.findMany({
-          where: { storeId, at: noPeriodo },
-          select: {
-            id: true,
-            pedidoId: true,
-            total: true,
-            status: true,
-            at: true,
-            payload: true,
-            itens: {
-              select: {
-                id: true,
-                inventoryId: true,
-                nome: true,
-                quantidade: true,
-                precoUnitario: true,
-                lineTotal: true,
+        contarQuery(() =>
+          cliente.venda.findMany({
+            where: { storeId, at: noPeriodo },
+            select: {
+              id: true,
+              pedidoId: true,
+              total: true,
+              status: true,
+              at: true,
+              payload: true,
+              itens: {
+                select: {
+                  id: true,
+                  inventoryId: true,
+                  nome: true,
+                  quantidade: true,
+                  precoUnitario: true,
+                  lineTotal: true,
+                },
               },
             },
-          },
-          orderBy: [{ at: "asc" }, { id: "asc" }],
-          take: tamanho,
-          ...argsCursor(cursor),
-        }),
+            orderBy: [{ at: "asc" }, { id: "asc" }],
+            take: tamanho,
+            ...argsCursor(cursor),
+          }),
+        ),
       extrairCursor: (v) => v.id,
       maxRegistros: MAX,
     }),
     paginarFonte<DevolucaoRaw>({
+      nomeFonte: "devolucoes",
       buscarPagina: (cursor, tamanho) =>
-        cliente.devolucaoVenda.findMany({
-          where: { storeId, at: noPeriodo },
-          select: { id: true, localId: true, vendaLocalId: true, tipo: true, valorTotal: true, at: true },
-          orderBy: [{ at: "asc" }, { id: "asc" }],
-          take: tamanho,
-          ...argsCursor(cursor),
-        }),
+        contarQuery(() =>
+          cliente.devolucaoVenda.findMany({
+            where: { storeId, at: noPeriodo },
+            select: { id: true, localId: true, vendaLocalId: true, tipo: true, valorTotal: true, at: true },
+            orderBy: [{ at: "asc" }, { id: "asc" }],
+            take: tamanho,
+            ...argsCursor(cursor),
+          }),
+        ),
       extrairCursor: (d) => d.id,
       maxRegistros: MAX,
     }),
     paginarFonte<MovimentacaoRaw>({
+      nomeFonte: "movimentacoes",
       buscarPagina: (cursor, tamanho) =>
-        cliente.movimentacaoFinanceira.findMany({
-          where: { storeId, createdAt: noPeriodo },
-          select: { id: true, tipo: true, origem: true, valor: true, createdAt: true },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          take: tamanho,
-          ...argsCursor(cursor),
-        }),
+        contarQuery(() =>
+          cliente.movimentacaoFinanceira.findMany({
+            where: { storeId, createdAt: noPeriodo },
+            select: { id: true, tipo: true, origem: true, valor: true, createdAt: true },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            take: tamanho,
+            ...argsCursor(cursor),
+          }),
+        ),
       extrairCursor: (m) => m.id,
       maxRegistros: MAX,
     }),
     paginarFonte<TituloRaw>({
+      nomeFonte: "contas_receber",
       buscarPagina: (cursor, tamanho) =>
-        cliente.contaReceberTitulo.findMany({
-          where: { storeId },
-          select: { id: true, valor: true, status: true, vencimento: true },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          take: tamanho,
-          ...argsCursor(cursor),
-        }),
+        contarQuery(() =>
+          cliente.contaReceberTitulo.findMany({
+            where: { storeId },
+            select: { id: true, valor: true, status: true, vencimento: true },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            take: tamanho,
+            ...argsCursor(cursor),
+          }),
+        ),
       extrairCursor: (t) => t.id,
       maxRegistros: MAX,
     }),
     paginarFonte<TituloRaw>({
+      nomeFonte: "contas_pagar",
       buscarPagina: (cursor, tamanho) =>
-        cliente.contaPagarTitulo.findMany({
-          where: { storeId },
-          select: { id: true, valor: true, status: true, vencimento: true },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          take: tamanho,
-          ...argsCursor(cursor),
-        }),
+        contarQuery(() =>
+          cliente.contaPagarTitulo.findMany({
+            where: { storeId },
+            select: { id: true, valor: true, status: true, vencimento: true },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            take: tamanho,
+            ...argsCursor(cursor),
+          }),
+        ),
       extrairCursor: (t) => t.id,
       maxRegistros: MAX,
     }),
     paginarFonte<SessaoRaw>({
+      nomeFonte: "sessoes",
       buscarPagina: (cursor, tamanho) =>
-        cliente.sessaoCaixa.findMany({
-          where: { storeId, abertaEm: noPeriodo },
-          select: {
-            id: true,
-            status: true,
-            saldoInicial: true,
-            saldoFinal: true,
-            saldoContado: true,
-            abertaEm: true,
-            fechadaEm: true,
-          },
-          orderBy: [{ abertaEm: "asc" }, { id: "asc" }],
-          take: tamanho,
-          ...argsCursor(cursor),
-        }),
+        contarQuery(() =>
+          cliente.sessaoCaixa.findMany({
+            where: { storeId, abertaEm: noPeriodo },
+            select: {
+              id: true,
+              status: true,
+              saldoInicial: true,
+              saldoFinal: true,
+              saldoContado: true,
+              abertaEm: true,
+              fechadaEm: true,
+            },
+            orderBy: [{ abertaEm: "asc" }, { id: "asc" }],
+            take: tamanho,
+            ...argsCursor(cursor),
+          }),
+        ),
       extrairCursor: (s) => s.id,
       maxRegistros: MAX,
     }),
     paginarFonte<OperacaoRaw>({
+      nomeFonte: "operacoes",
       buscarPagina: (cursor, tamanho) =>
-        cliente.caixaOperacao.findMany({
-          where: { storeId, at: noPeriodo },
-          select: { id: true, sessaoId: true, tipo: true, valor: true, at: true },
-          orderBy: [{ at: "asc" }, { id: "asc" }],
-          take: tamanho,
-          ...argsCursor(cursor),
-        }),
+        contarQuery(() =>
+          cliente.caixaOperacao.findMany({
+            where: { storeId, at: noPeriodo },
+            select: { id: true, sessaoId: true, tipo: true, valor: true, at: true },
+            orderBy: [{ at: "asc" }, { id: "asc" }],
+            take: tamanho,
+            ...argsCursor(cursor),
+          }),
+        ),
       extrairCursor: (o) => o.id,
       maxRegistros: MAX,
     }),
   ] as const)
 
-  let totalQueries = 7
+  // Estouro de limite (linha crua MAX+1) é fail-closed → 413: `paginarFonte` lança
+  // PacoteLimiteExcedidoError, mas como cada fonte corre em allSettled (falha isolada vira
+  // "indisponível"), o estouro precisa ser RE-PROPAGADO em vez de degradar para indisponível.
+  for (const r of resultados) {
+    if (r.status === "rejected" && r.reason instanceof PacoteLimiteExcedidoError) {
+      throw r.reason
+    }
+  }
+
   const falhas: FonteContador[] = []
   const ok = <T>(r: PromiseSettledResult<T[]>): T[] | null => (r.status === "fulfilled" ? r.value : null)
 
@@ -490,32 +549,43 @@ export async function carregarFontesPacoteComCliente(
   if (!sessoesRaw) falhas.push("sessoes")
   if (!operacoesRaw) falhas.push("operacoes")
 
-  // Lookup de Produto para códigos dos itens (dependente do sucesso de vendas).
+  // Lookup de Produto para códigos dos itens (dependente do sucesso de vendas), em LOTES de até
+  // PRODUTO_LOOKUP_CHUNK ids — nenhum `id: { in: [...] }` recebe todos os ids de uma só vez.
   const produtoMap = new Map<string, string>()
-  // Marca se o lookup FALHOU: nesse caso os códigos ficam vazios e a fonte `itens`
-  // precisa sair `parcial` (honestidade de cobertura) — não silenciosa como antes.
-  let codigosProdutoIndisponiveis = false
+  // Ids cujo LOTE falhou tecnicamente: seus itens ficam sem código POR FALHA (≠ ausência
+  // legítima de match), o que torna a fonte `itens` `parcial`. A falha de um lote NÃO derruba
+  // os demais lotes nem contamina a fonte vendas.
+  const invIdsSemCodigoPorFalha = new Set<string>()
+  let lotesProdutoFalhos = 0
   if (vendasRaw) {
+    // Só itens de vendas NÃO canceladas alimentam os CSVs → o lookup ignora canceladas.
     const invIds = Array.from(
       new Set(
-        vendasRaw.flatMap((v) => v.itens).map((i) => i.inventoryId).filter((x): x is string => idOk(x)),
+        vendasRaw
+          .filter((v) => !vendaCancelada(v.status))
+          .flatMap((v) => v.itens)
+          .map((i) => i.inventoryId)
+          .filter((x): x is string => idOk(x)),
       ),
     )
-    if (invIds.length > 0) {
-      totalQueries += 1
+    for (let i = 0; i < invIds.length; i += PRODUTO_LOOKUP_CHUNK) {
+      const lote = invIds.slice(i, i + PRODUTO_LOOKUP_CHUNK)
       try {
-        const produtos = await cliente.produto.findMany({
-          where: { storeId, id: { in: invIds } },
-          select: { id: true, sku: true, barcode: true },
-        })
+        const produtos = await contarQuery(() =>
+          cliente.produto.findMany({
+            where: { storeId, id: { in: lote } },
+            select: { id: true, sku: true, barcode: true },
+          }),
+        )
         for (const p of produtos) {
           const codigo = (p.sku ?? p.barcode ?? "").trim()
           if (idOk(p.id) && codigo) produtoMap.set(p.id, codigo)
         }
       } catch {
-        // Produto indisponível não invalida vendas: código do item fica vazio,
-        // porém a fonte `itens` passa a `parcial` (marcada abaixo).
-        codigosProdutoIndisponiveis = true
+        // Lote indisponível: os ids deste lote ficam sem código e a fonte `itens` passa a
+        // `parcial` (marcada abaixo). Os demais lotes seguem aproveitados.
+        lotesProdutoFalhos += 1
+        for (const id of lote) invIdsSemCodigoPorFalha.add(id)
       }
     }
   }
@@ -526,7 +596,10 @@ export async function carregarFontesPacoteComCliente(
     if (idOk(d.vendaLocalId)) devPorVenda.set(d.vendaLocalId, (devPorVenda.get(d.vendaLocalId) ?? 0) + num(d.valorTotal))
   }
 
-  // ── vendas ──
+  // ── vendas (somente NÃO canceladas) ──
+  // GOAL 008D: canceladas ficam FORA dos CSVs detalhados (nenhuma linha, nem zerada). Seu bruto
+  // permanece informativo apenas no agregado (canceladasTotal/canceladasQuantidade do GOAL 006),
+  // derivado mais abaixo da carga crua intacta.
   let vendas: FonteResultado<VendaDetalhe>
   if (!vendasRaw) {
     vendas = fonteIndisponivel<VendaDetalhe>()
@@ -534,26 +607,23 @@ export async function carregarFontesPacoteComCliente(
     let rej = 0
     const linhas: VendaDetalhe[] = []
     for (const v of vendasRaw) {
+      if (vendaCancelada(v.status)) continue // cancelada: fora dos CSVs detalhados
       if (!idOk(v.id)) {
         rej += 1
         continue
       }
-      // Canceladas ficam listadas (marcadas pelo `status`) mas EXCLUÍDAS do faturamento:
-      // valores monetários zerados, coerente com a exclusão dos seus itens. O bruto das
-      // canceladas permanece informativo apenas no agregado (canceladasTotal do GOAL 006).
-      const cancelada = vendaCancelada(v.status)
-      const totalBruto = cancelada ? 0 : arred(num(v.total))
-      const dev = cancelada ? 0 : arred(devPorVenda.get(v.pedidoId) ?? 0)
+      const totalBruto = arred(num(v.total))
+      const dev = arred(devPorVenda.get(v.pedidoId) ?? 0)
       linhas.push({
         vendaId: v.id,
         numero: v.pedidoId ?? "",
         data: v.at instanceof Date ? v.at.toISOString() : String(v.at ?? ""),
         status: String(v.status ?? ""),
         totalBruto,
-        descontoInformativo: cancelada ? null : lerDiscountTotal(v.payload),
+        descontoInformativo: lerDiscountTotal(v.payload),
         devolucoes: dev,
-        totalLiquido: cancelada ? 0 : arred(Math.max(0, totalBruto - dev)),
-        formaPagamentoStatus: cancelada ? "cancelada" : formaPagamentoStatus(v.payload, num(v.total)),
+        totalLiquido: arred(Math.max(0, totalBruto - dev)),
+        formaPagamentoStatus: formaPagamentoStatus(v.payload, num(v.total)),
       })
     }
     assertRegistrosFonte("vendas", linhas.length)
@@ -566,6 +636,7 @@ export async function carregarFontesPacoteComCliente(
     itens = fonteIndisponivel<ItemDetalhe>()
   } else {
     let rej = 0
+    let itensSemCodigoPorFalha = 0
     const linhas: ItemDetalhe[] = []
     for (const v of vendasRaw) {
       if (vendaCancelada(v.status)) continue
@@ -574,13 +645,17 @@ export async function carregarFontesPacoteComCliente(
           rej += 1
           continue
         }
+        const inv = idOk(it.inventoryId) ? it.inventoryId : null
+        const codigo = inv ? (produtoMap.get(inv) ?? "") : ""
+        // Código vazio POR FALHA de lote (≠ ausência legítima de match) marca a parcialidade.
+        if (inv && codigo === "" && invIdsSemCodigoPorFalha.has(inv)) itensSemCodigoPorFalha += 1
         const qtd = num(it.quantidade)
         const unit = arred(num(it.precoUnitario))
         const totalItem = arred(num(it.lineTotal))
         linhas.push({
           vendaId: v.id,
           itemId: it.id,
-          produtoCodigo: idOk(it.inventoryId) ? (produtoMap.get(it.inventoryId) ?? "") : "",
+          produtoCodigo: codigo,
           produtoDescricao: String(it.nome ?? ""),
           quantidade: qtd,
           valorUnitario: unit,
@@ -591,9 +666,10 @@ export async function carregarFontesPacoteComCliente(
     }
     assertRegistrosFonte("itens", linhas.length)
     const base = estadoDe(rej, linhas.length)
-    if (codigosProdutoIndisponiveis) {
-      // Lookup de produto falhou: descrições/valores vieram, mas os códigos ficaram vazios.
-      const nota = "Códigos de produto indisponíveis: a leitura de produtos falhou; os códigos ficaram vazios."
+    if (lotesProdutoFalhos > 0) {
+      // Um ou mais lotes de Produto falharam: descrições/valores vieram, mas os códigos dos
+      // itens afetados ficaram vazios (ausência legítima de match NÃO entra nesta contagem).
+      const nota = `Código de produto indisponível para ${itensSemCodigoPorFalha} item(ns) devido à falha em ${lotesProdutoFalhos} lote(s) de consulta.`
       itens = {
         linhas,
         registros: linhas.length,

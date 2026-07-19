@@ -172,14 +172,17 @@ describe("Pacote 008B — colunas dos CSVs (cabeçalhos congelados)", () => {
 })
 
 describe("Pacote 008B — semântica das linhas", () => {
-  it("canceladas: listadas em vendas.csv (status=cancelada), fora do faturamento e sem itens", async () => {
-    const { conteudo } = await montar()
+  it("canceladas (008D): FORA de vendas.csv e itens.csv; faturamento e agregado preservam o informativo", async () => {
+    const { detalhadas, conteudo } = await montar()
     const vendas = arq(conteudo, "01-VENDAS/vendas.csv")
-    expect(vendas).toContain("VDA-2,")
-    expect(vendas).toContain(",cancelada,")
+    expect(vendas).not.toContain("VDA-2") // cancelada não entra no CSV detalhado (nem zerada)
+    expect(vendas).not.toContain("cancelada")
+    expect(vendas).toContain("VDA-1") // a concluída permanece
     const itens = arq(conteudo, "01-VENDAS/itens.csv")
     expect(itens).not.toContain("i2") // item da venda cancelada não entra
     expect(itens).toContain("i1")
+    // vendas detalhadas contêm somente a concluída:
+    expect(detalhadas.vendas.linhas.map((l) => l.numero)).toEqual(["VDA-1"])
     // faturamento autoritativo exclui cancelada (total = 100, não 180):
     const resumo = arq(conteudo, "00-LEIA-ME/resumo.md")
     expect(resumo).toContain("100,00")
@@ -256,7 +259,7 @@ describe("Pacote 008B — manifesto v1 canônico", () => {
     expect(man.fontes.map((f: { nome: string }) => f.nome)).toEqual([
       "vendas", "itens", "devolucoes", "movimentacoes", "contas_receber", "contas_pagar", "sessoes", "operacoes",
     ])
-    expect(man.fontes.find((f: { nome: string }) => f.nome === "vendas").registros).toBe(2)
+    expect(man.fontes.find((f: { nome: string }) => f.nome === "vendas").registros).toBe(1) // v2 cancelada fora (008D)
     const listados = man.arquivos.map((a: { caminho: string }) => a.caminho)
     expect(listados).not.toContain("manifest.json")
     expect(listados).toContain("00-LEIA-ME/indice.md")

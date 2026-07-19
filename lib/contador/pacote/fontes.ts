@@ -313,7 +313,7 @@ export function montarArquivosConteudo(entrada: EntradaConteudoPacote): ArquivoP
   return [
     { caminho: "00-LEIA-ME/resumo.md", categoria: "resumo", fonte: "resumo", descricao: "Resumo legível da competência.", conteudo: resumoMd(entrada) },
     { caminho: "00-LEIA-ME/pendencias.md", categoria: "pendencias", fonte: "pendencias", descricao: "Pendências, ausências e avisos.", conteudo: pendenciasMd(entrada) },
-    csvFonte("01-VENDAS/vendas.csv", "vendas", "Vendas da competência (canceladas marcadas; excluídas do faturamento).", csvVendas(d), d.vendas),
+    csvFonte("01-VENDAS/vendas.csv", "vendas", "Vendas não canceladas da competência (canceladas ficam só no agregado informativo).", csvVendas(d), d.vendas),
     csvFonte("01-VENDAS/itens.csv", "itens", "Itens das vendas não canceladas.", csvItens(d), d.itens),
     csvFonte("01-VENDAS/devolucoes.csv", "devolucoes", "Devoluções (pela data da devolução).", csvDevolucoes(d), d.devolucoes),
     csvFonte("02-FINANCEIRO/movimentacoes.csv", "movimentacoes", "Movimentações financeiras classificadas.", csvMovimentacoes(d), d.movimentacoes),

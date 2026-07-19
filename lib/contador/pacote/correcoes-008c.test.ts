@@ -6,8 +6,8 @@
  *  C2 — paginação real por cursor (não uma única query `take: MAX+1`);
  *  C3 — timeout lógico de duração efetivamente aplicado;
  *  C4 — falha do lookup de produtos marca a fonte `itens` como parcial (códigos vazios);
- *  C5 — venda cancelada listada mas fora do faturamento (valores zerados), coerente com
- *       a exclusão dos seus itens.
+ *  C5 — venda cancelada FORA dos CSVs detalhados (revisado no GOAL 008D: nem zerada); seu bruto
+ *       permanece apenas no agregado informativo (canceladasTotal do GOAL 006).
  *
  * As fontes são injetadas via `PacoteReaderClient`. A paridade de C1 é aferida contra o
  * DTO agregado do GOAL 006 (`montarDados`) derivado da MESMA carga.
@@ -21,7 +21,7 @@ import {
   paginarFonte,
   type PacoteReaderClient,
 } from "./carregar-fontes"
-import { executarComTimeoutLogico, PacoteTimeoutError } from "./seguranca"
+import { executarComTimeoutLogico, PacoteLimiteExcedidoError, PacoteTimeoutError } from "./seguranca"
 
 const competencia = { ano: 2026, mes: 6 }
 const periodo = resolvePeriodoUtc(competencia)
@@ -150,6 +150,7 @@ describe("C2 · paginarFonte percorre páginas por cursor", () => {
     const dados = Array.from({ length: 7 }, (_, k) => ({ id: `x${k}` }))
     let chamadas = 0
     const out = await paginarFonte({
+      nomeFonte: "teste",
       buscarPagina: async (cursor, tamanho) => {
         chamadas += 1
         const inicio = cursor ? dados.findIndex((d) => d.id === cursor) + 1 : 0
@@ -163,20 +164,23 @@ describe("C2 · paginarFonte percorre páginas por cursor", () => {
     expect(chamadas).toBe(3) // 3 + 3 + 1
   })
 
-  it("para exatamente em maxRegistros + 1 diante de fonte inesgotável (sonda de excedente)", async () => {
+  it("lança PacoteLimiteExcedidoError ao detectar a linha maxRegistros + 1 (limite na fonte crua, 008D)", async () => {
     let n = 0
-    const out = await paginarFonte({
-      buscarPagina: async (_cursor, tamanho) => Array.from({ length: tamanho }, () => ({ id: `y${n++}` })),
-      extrairCursor: (l) => l.id,
-      maxRegistros: 5,
-      tamanhoPagina: 2,
-    })
-    expect(out).toHaveLength(6) // maxRegistros + 1, jamais materializa mais
+    await expect(
+      paginarFonte({
+        nomeFonte: "teste",
+        buscarPagina: async (_cursor, tamanho) => Array.from({ length: tamanho }, () => ({ id: `y${n++}` })),
+        extrairCursor: (l) => l.id,
+        maxRegistros: 5,
+        tamanhoPagina: 2,
+      }),
+    ).rejects.toBeInstanceOf(PacoteLimiteExcedidoError)
   })
 
   it("página vazia inicial → retorna vazio sem segunda chamada", async () => {
     let chamadas = 0
     const out = await paginarFonte<{ id: string }>({
+      nomeFonte: "teste",
       buscarPagina: async () => {
         chamadas += 1
         return []
@@ -278,7 +282,8 @@ describe("C4 · lookup de produto", () => {
       }),
     )
     expect(d.itens.estado).toBe("parcial")
-    expect(d.itens.observacao).toContain("Códigos de produto indisponíveis")
+    // 008D: mensagem agora quantifica itens e lotes afetados pela falha.
+    expect(d.itens.observacao).toContain("Código de produto indisponível para 1 item(ns) devido à falha em 1 lote(s)")
     expect(d.itens.linhas.every((l) => l.produtoCodigo === "")).toBe(true)
     expect(d.vendas.estado).toBe("real") // vendas não é contaminada pela falha do produto
   })
@@ -298,8 +303,8 @@ describe("C4 · lookup de produto", () => {
 
 /* ═══════════════════════ C5 — venda cancelada fora do faturamento ═══════════════════════ */
 
-describe("C5 · venda cancelada", () => {
-  it("listada com valores zerados e forma 'cancelada'; itens excluídos; bruto informativo só no agregado", async () => {
+describe("C5 · venda cancelada (revisado no 008D — fora dos CSVs detalhados)", () => {
+  it("cancelada ausente das linhas de vendas e itens; agregado preserva o bruto informativo", async () => {
     const d = await carregar(
       clienteVazio({
         venda: {
@@ -327,13 +332,10 @@ describe("C5 · venda cancelada", () => {
       }),
     )
 
-    const cancelada = d.vendas.linhas.find((l) => l.vendaId === "v2")!
-    expect(cancelada.status).toBe("cancelada")
-    expect(cancelada.totalBruto).toBe(0)
-    expect(cancelada.totalLiquido).toBe(0)
-    expect(cancelada.devolucoes).toBe(0)
-    expect(cancelada.descontoInformativo).toBeNull()
-    expect(cancelada.formaPagamentoStatus).toBe("cancelada")
+    // cancelada NÃO aparece nas linhas detalhadas (nem zerada)
+    expect(d.vendas.linhas.map((l) => l.vendaId)).toEqual(["v1"])
+    expect(d.vendas.linhas.find((l) => l.vendaId === "v2")).toBeUndefined()
+    expect(d.vendas.registros).toBe(1)
 
     // itens da venda cancelada não entram
     expect(d.itens.linhas.map((l) => l.itemId)).toEqual(["i1"])
