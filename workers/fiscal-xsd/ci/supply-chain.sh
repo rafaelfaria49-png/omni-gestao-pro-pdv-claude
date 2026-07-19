@@ -38,6 +38,11 @@ NODE_IMAGE="${NODE_IMAGE:-node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea9583
 NETWORK="${NETWORK:-fiscal-xsd-internal}"
 CONTAINER="${CONTAINER:-fiscal-xsd-worker-005a}"
 WORKER_URL="${WORKER_URL:-http://worker.internal:8080}"
+# Builder Buildx efêmero (driver docker-container) usado SOMENTE para exportar o
+# OCI archive no job conectado. Nome específico deste GOAL, sem caminho nem
+# segredo; criado e removido pelo próprio script. Não é identidade permanente do
+# artifact (o digest do manifest OCI é o que identifica a imagem).
+OCI_BUILDER="${OCI_BUILDER:-fiscal-xsd-oci-builder}"
 
 DOCKER_ARCHIVE="${DOCKER_ARCHIVE:-fiscal-xsd-worker-goal005a.docker.tar}"
 OCI_ARCHIVE="${OCI_ARCHIVE:-fiscal-xsd-worker-goal005a.oci.tar}"
@@ -286,17 +291,97 @@ mode_package() {
   docker save "${IMAGE_TAG}" -o "${OUT_DIR}/${DOCKER_ARCHIVE}"
   endlog
 
-  log "Exportar OCI archive real (buildx OCI, mesmos insumos pinados)"
+  # -------------------------------------------------------------------------
+  # O exportador OCI do buildx NÃO é suportado pelo driver `docker` padrão do
+  # runner ("The OCI exporter is not supported for the docker driver"). Cria-se
+  # um builder efêmero com driver `docker-container`, usado EXCLUSIVAMENTE para
+  # gerar o OCI archive. O primeiro build (mode_build, --load) — imagem
+  # inspecionada e escaneada pelo Trivy — permanece no builder padrão e já foi
+  # exportado acima como Docker archive. Sem push, sem registry, sem prune
+  # global; o builder é removido no cleanup.
+  # -------------------------------------------------------------------------
+  log "Preparar builder Buildx com driver docker-container (exportação OCI)"
+  docker buildx version
+  docker buildx rm "${OCI_BUILDER}" 2>/dev/null || true
+  docker buildx create --name "${OCI_BUILDER}" --driver docker-container
+  docker buildx inspect "${OCI_BUILDER}" --bootstrap
+
+  local oci_builder_inspect oci_builder_driver
+  oci_builder_inspect="$(docker buildx inspect "${OCI_BUILDER}")"
+  printf '%s\n' "${oci_builder_inspect}"
+  oci_builder_driver="$(
+    printf '%s\n' "${oci_builder_inspect}" \
+      | awk -F: '/^Driver:/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}'
+  )"
+  test "${oci_builder_driver}" = "docker-container" \
+    || die "Builder OCI não utiliza driver docker-container (obtido: '${oci_builder_driver}')."
+  printf 'Builder OCI confirmado: %s (driver=%s)\n' "${OCI_BUILDER}" "${oci_builder_driver}"
+
+  # Proveniência mínima e honesta do builder (driver + BuildKit image id). Nunca
+  # registra hostname, credencial, token, nem container id como identidade estável.
+  local oci_builder_ids oci_builder_container buildkit_image_id
+  oci_builder_ids="$(
+    docker ps --filter "label=com.docker.buildx.builder=${OCI_BUILDER}" \
+      --format '{{.ID}}' 2>/dev/null || true
+  )"
+  oci_builder_container="${oci_builder_ids%%$'\n'*}"
+  buildkit_image_id=""
+  if [[ -n "${oci_builder_container}" ]]; then
+    buildkit_image_id="$(docker inspect "${oci_builder_container}" --format '{{.Image}}' 2>/dev/null || true)"
+  fi
+  printf 'BuildKit image id: %s\n' "${buildkit_image_id:-<indisponível>}"
+  endlog
+
+  log "Exportar OCI archive real (builder docker-container explícito, mesmos insumos pinados)"
   DOCKER_BUILDKIT=1 docker buildx build \
+    --builder "${OCI_BUILDER}" \
+    --platform linux/amd64 \
     --file "${DOCKERFILE}" \
     --output "type=oci,dest=${OUT_DIR}/${OCI_ARCHIVE}" \
     --provenance=false \
+    --progress=plain \
     .
   endlog
 
-  # Digest do manifest a partir do índice OCI (não requer push a registry).
-  local oci_manifest_digest
-  oci_manifest_digest="$(tar -xOf "${OUT_DIR}/${OCI_ARCHIVE}" index.json | jq -r '.manifests[0].digest')"
+  log "Validar (fail-closed) que o resultado é um OCI archive real"
+  test -s "${OUT_DIR}/${OCI_ARCHIVE}" || die "OCI archive ausente ou vazio."
+  local oci_entries oci_layout layout_version
+  oci_entries="$(tar -tf "${OUT_DIR}/${OCI_ARCHIVE}")"
+  grep -Fxq 'oci-layout' <<<"${oci_entries}" || die "OCI archive sem 'oci-layout'."
+  grep -Fxq 'index.json' <<<"${oci_entries}" || die "OCI archive sem 'index.json'."
+  grep -Eq '^blobs/sha256/[a-f0-9]{64}$' <<<"${oci_entries}" \
+    || die "OCI archive sem blob 'blobs/sha256/<digest>'."
+  oci_layout="$(tar -xOf "${OUT_DIR}/${OCI_ARCHIVE}" oci-layout)"
+  layout_version="$(jq -r '.imageLayoutVersion' <<<"${oci_layout}")"
+  test "${layout_version}" = "1.0.0" \
+    || die "oci-layout imageLayoutVersion='${layout_version}'; esperado 1.0.0."
+
+  # Índice OCI: ao menos um manifest, digest sha256 de 64 hex, mediaType OCI e,
+  # quando serializada, plataforma linux/amd64. Não confundir com Docker archive.
+  local oci_index_json oci_manifest_count oci_manifest_digest oci_manifest_media_type oci_platform
+  oci_index_json="$(tar -xOf "${OUT_DIR}/${OCI_ARCHIVE}" index.json)"
+  oci_manifest_count="$(jq '.manifests | length' <<<"${oci_index_json}")"
+  test "${oci_manifest_count}" -ge 1 || die "OCI index.json sem manifests."
+  oci_manifest_digest="$(jq -r '.manifests[0].digest' <<<"${oci_index_json}")"
+  [[ "${oci_manifest_digest}" =~ ^sha256:[a-f0-9]{64}$ ]] \
+    || die "Digest do manifest OCI inválido: '${oci_manifest_digest}'."
+  oci_manifest_media_type="$(jq -r '.manifests[0].mediaType' <<<"${oci_index_json}")"
+  case "${oci_manifest_media_type}" in
+    application/vnd.oci.image.manifest.v1+json|application/vnd.oci.image.index.v1+json) : ;;
+    *) die "mediaType OCI inesperado no index: '${oci_manifest_media_type}'." ;;
+  esac
+  oci_platform="$(
+    jq -r '.manifests[0].platform // {} | if has("os") then "\(.os)/\(.architecture)" else "" end' \
+      <<<"${oci_index_json}"
+  )"
+  if [[ -n "${oci_platform}" ]]; then
+    test "${oci_platform}" = "linux/amd64" \
+      || die "Plataforma OCI serializada inesperada: '${oci_platform}'."
+  fi
+  printf 'OCI archive validado: layout=%s manifests=%s digest=%s mediaType=%s platform=%s\n' \
+    "${layout_version}" "${oci_manifest_count}" "${oci_manifest_digest}" \
+    "${oci_manifest_media_type}" "${oci_platform:-<não-serializada>}"
+  endlog
 
   log "Checksums (SHA256SUMS) e finalização de metadata"
   ( cd "${ROOT}" && sha256sum \
@@ -318,6 +403,8 @@ mode_package() {
 
   jq \
     --arg ociManifestDigest "${oci_manifest_digest}" \
+    --arg ociBuilderDriver "${oci_builder_driver}" \
+    --arg buildkitImageId "${buildkit_image_id}" \
     --arg dockerArchive "${DOCKER_ARCHIVE}" \
     --arg dockerArchiveSha256 "${docker_sha}" \
     --arg ociArchive "${OCI_ARCHIVE}" \
@@ -327,7 +414,10 @@ mode_package() {
     --arg trivy "${TRIVY_JSON}" \
     --arg trivySha256 "${trivy_sha}" \
     --arg schemaManifestSha256 "${schema_sha}" \
-    '. + {ociManifestDigest:$ociManifestDigest, dockerArchive:$dockerArchive,
+    '. + {ociManifestDigest:$ociManifestDigest,
+      ociBuilderDriver:$ociBuilderDriver,
+      buildkitImageId:(if $buildkitImageId == "" then null else $buildkitImageId end),
+      dockerArchive:$dockerArchive,
       dockerArchiveSha256:$dockerArchiveSha256, ociArchive:$ociArchive, ociArchiveSha256:$ociArchiveSha256,
       sbom:$sbom, sbomSha256:$sbomSha256, trivy:$trivy, trivySha256:$trivySha256,
       schemaManifestSha256:$schemaManifestSha256}' \
@@ -567,6 +657,9 @@ mode_cleanup() {
   docker rm --force "${CONTAINER}" 2>/dev/null || true
   docker network rm "${NETWORK}" 2>/dev/null || true
   docker image rm --force "${IMAGE_TAG}" 2>/dev/null || true
+  # Remove SOMENTE o builder efêmero deste GOAL (com seu container BuildKit).
+  # Funciona mesmo se a exportação OCI falhou ou se o builder nunca foi criado.
+  docker buildx rm "${OCI_BUILDER}" 2>/dev/null || true
   rm -f "${OUT_DIR}/ready.json" 2>/dev/null || true
   endlog
 }
