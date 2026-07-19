@@ -4,7 +4,7 @@ hub: fiscal
 status: vivo
 owner: produto/arquitetura
 last_update: 2026-07-19
-sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005A supply chain offline ENTREGUE NA BRANCH; GOAL-005 técnico continua PARCIAL; 005B não iniciado; gate global F4→F5 aberto
+sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005A supply chain offline INTEGRADO NA MAIN (PR #12 / 2a7f102); GOAL-005 técnico continua PARCIAL; 005B não iniciado; gate global F4→F5 aberto
 ---
 
 # 🧾 Roadmap Fiscal — OmniGestão Pro
@@ -65,13 +65,16 @@ Contador HUB competência = **trilho distinto** read-only. **Não renumerar hist
 fechado; N6=0; N7=0. Fonte:
 [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
 
-**GOAL-005A** (`FISCAL-XSD-WORKER-GITHUB-ACTIONS-SUPPLY-CHAIN-005A`, 19/07/2026): **supply chain
-offline disponível** — imagem e bundle aprovados no run `29669361609` (commit `c0d4b00…`), lock
-materializado em `workers/fiscal-xsd/supply-chain.lock.json`, Trivy 0/0, runtime com egress
-bloqueado, testes XSD 7/7. **005A entregue na branch**
-`work/fiscal-xsd-worker-gha-supply-chain-005a` (ainda **sem** merge em main). **005B ainda não
-iniciado.** **GOAL-005 técnico permanece PARCIAL.** Relatório:
-[`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md).
+**GOAL-005A** (`FISCAL-XSD-WORKER-GITHUB-ACTIONS-SUPPLY-CHAIN-005A`, 19/07/2026): **integrado e
+fechado na main** (PR **#12**, merge commit `2a7f102ce7bb22b363cd6d24b17920d483182640`, head
+`d512794…`, branch de origem **preservada**). Bundle offline aprovado (run `29669361609`,
+commit `c0d4b00…`), lock versionado em `workers/fiscal-xsd/supply-chain.lock.json`, supply chain
+disponível, Trivy 0/0, runtime com egress bloqueado, testes XSD 7/7. **Nenhum gate Fiscal global
+fechado.** **005B ainda não iniciado.** **GOAL-005 técnico permanece PARCIAL.** Próximo passo
+exige definição e autorização **separadas** (não iniciar 005B automaticamente). Relatórios:
+[`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md)
+·
+[`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md).
 
 ---
 
@@ -207,23 +210,25 @@ integrado na `main` pelo PR #8 (merge `b307337`, implementação `3f8928c`); Cad
 `metadata.fiscal` canônica com o contrato existente; create/update/parcial não destrutivos;
 `fiscalRegime` só visual; Barcode/Cosmos com revisão humana; **N3 no eixo cadastro**; N6=0;
 N7=0; signer dormente; sem schema/migration; sem emissão/SEFAZ. GOAL-003 (C14N) e GOAL-002 (XSD)
-permanecem fechados. **GOAL-005A** (supply chain GHA do worker XSD): **entregue na branch**
-(run `29669361609`, lock materializado, bundle offline aprovado) — **sem** merge em main ainda.
-**GOAL-005 técnico** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`) **permanece PARCIAL**. **005B não
-iniciado.** Próximo passo: **auditoria de merge-readiness do range 005A vs `origin/main` atual**;
-somente depois PR e integração controlada. Homologação e produção **não** foram abertas.
+permanecem fechados. **GOAL-005A** (supply chain GHA do worker XSD): **integrado e fechado na
+main** pelo PR **#12** (merge `2a7f102`, head `d512794`; run `29669361609`, lock materializado,
+bundle offline aprovado, Trivy 0/0). **GOAL-005 técnico** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`)
+**permanece PARCIAL**. **005B não iniciado.** Próximo passo exige definição e autorização
+**separadas** — **não** iniciar 005B automaticamente. Homologação e produção **não** foram
+abertas. Gate Fiscal global **aberto**.
 
 ## 12. Status atual (1 parágrafo)
 
 A frente fiscal tem fundação dormente com **validação XSD oficial real** (worker B2, G-C2),
 **prova técnica externa de C14N/XMLDSig** (PR #6), **cadastro fiscal canônico do produto** também
-na porta Cadastros V2 (PR #8 / GOAL-004, N3) e **supply chain offline do worker XSD aprovada na
-branch 005A** (imagem/bundle/lock/Trivy 0/0/runtime sem egress — ainda fora da main). Schema,
+na porta Cadastros V2 (PR #8 / GOAL-004, N3) e **supply chain offline do worker XSD integrada na
+main** (PR #12 / GOAL-005A — imagem/bundle/lock/Trivy 0/0/runtime sem egress). Schema,
 identidade, guards, snapshot, tax-engine, XML, assinatura (RSA-SHA1), vault, provider stub,
 pipeline e numeração existem; o motor de emissão **não tem caller de venda**; banco fiscal vazio;
 `fiscalEnabled` inalcançável. O gate Fiscal **global** ainda **não** autoriza F5. **Cadastro
 canônico ≠ regra tributária ≠ XML ≠ assinatura ≠ transmissão ≠ homologação ≠ produção. N6=0 e
-N7=0.** GOAL-005 técnico continua **PARCIAL**. Sequência oficial em `docs/fiscal/`.
+N7=0.** GOAL-005 técnico continua **PARCIAL**; 005B **não iniciado**. Sequência oficial em
+`docs/fiscal/`.
 
 ## 13. Métricas de sucesso
 

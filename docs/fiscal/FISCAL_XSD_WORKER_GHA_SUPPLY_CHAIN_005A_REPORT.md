@@ -509,3 +509,39 @@ digest `sha256:aa60526d6a57845305600424bc13b992015d510c636a0f7c9b99c70fa3e6291e`
 
 **GOAL-005 técnico não entregue. Gate Fiscal global aberto. N6=0. N7=0. Contador HUB intocado.
 Registry não utilizado. Binários no Git: 0.**
+
+---
+
+## Adendo pós-merge
+
+> **Nota temporal:** o corpo deste relatório permanece como registro **histórico** do
+> fechamento na branch (`SUPPLY CHAIN GITHUB ACTIONS ENTREGUE NA BRANCH` na data do
+> registro). O estado **corrente** pós-integração é o deste adendo e do relatório
+> [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md`](./FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md).
+
+| Campo | Valor |
+|---|---|
+| PR | **#12** |
+| Título | `build(fiscal): integrar supply chain offline aprovada do worker XSD` |
+| State | `closed` · `merged=true` |
+| merged_at | `2026-07-19T15:08:52Z` |
+| Base | `main` |
+| Head | `work/fiscal-xsd-worker-gha-supply-chain-005a` |
+| Head SHA | `d51279461718508d94c534e9afe27232c73f0d6b` |
+| Merge commit | `2a7f102ce7bb22b363cd6d24b17920d483182640` |
+| Pais | `98e05dfe9aec224e5a7ea31f85bada19bed2913b` + `d51279461718508d94c534e9afe27232c73f0d6b` |
+| Método | merge commit (sem squash / sem rebase) |
+| Branch de origem | **preservada** (`origin/work/fiscal-xsd-worker-gha-supply-chain-005a` @ `d512794…`) |
+
+**Estado corrente:** **GOAL-005A INTEGRADO E FECHADO NA MAIN.**
+
+- Evidência técnica continua vinculada ao run `29669361609` e ao commit `c0d4b00…`.
+- Fechamento documental na branch continua vinculado a `d512794…`.
+- Integração na main = merge commit `2a7f102…`.
+- **GOAL-005 técnico continua PARCIAL.**
+- **005B não iniciado.**
+- **Gates Fiscais globais inalterados** (F4→F5 / G-F5 / G-F7 / G-F12 abertos).
+- **N6=0 · N7=0 · Contador HUB intocado.**
+
+Relatório pós-merge:
+[`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md`](./FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md).

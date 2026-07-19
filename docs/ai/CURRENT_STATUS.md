@@ -5,25 +5,24 @@
 
 ---
 
-## Fiscal — GOAL-004 FECHADO (main) + GOAL-005A ENTREGUE NA BRANCH + GOAL-005 PARCIAL · 19/07/2026
+## Fiscal — GOAL-004 FECHADO (main) + GOAL-005A FECHADO NA MAIN (PR #12) + GOAL-005 PARCIAL · 19/07/2026
 
 > Fontes: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
 > [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
 > [`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](../fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md) ·
 > [`FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`](../fiscal/FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md) ·
-> [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md).
+> [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md) ·
+> [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md).
 >
-> **PR #8** merge commit `b307337ce89535355d18cd9138e17f635f1c1bf5`
-> (parents `5b96df7…` + `3f8928c…`). Commit de implementação:
-> `3f8928c0d8dc7361b6282cbb2b225ae04ed8a501`.
+> **PR #8** merge `b307337…` (GOAL-004). **PR #12** merge
+> `2a7f102ce7bb22b363cd6d24b17920d483182640` (GOAL-005A; parents `98e05df…` + `d512794…`;
+> `merged_at` `2026-07-19T15:08:52Z`). `origin/main` contém `2a7f102…`.
 > **G-C1/G-C2 fechados** (reconciliação + XSD). **Critério C14N/XMLDSig do F4→F5 = FECHADO**
 > (GOAL-003). Gate Fiscal **global ABERTO** (inalterado). Sem homologação SEFAZ
 > (N6=0), sem produção (N7=0), sem emissão ativada. Signer **dormente**. Callers produtivos **0**.
-> GOAL-004 **FECHADO**. **GOAL-005A** (supply chain GHA worker XSD): **SUPPLY CHAIN GITHUB ACTIONS
-> ENTREGUE NA BRANCH** — run `29669361609`, commit `c0d4b00…`, artifact final aprovado, lock
-> materializado, Trivy 0/0, runtime offline sem egress, XSD 7/7. **Ainda sem merge em main.**
-> GOAL-005 técnico (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`) **continua PARCIAL**. **005B não
-> iniciado.** Nenhum gate global fechado. Contador HUB intocado.
+> GOAL-004 **FECHADO**. **GOAL-005A fechado na main** — run `29669361609`, commit `c0d4b00…`,
+> artifact `8436826125` aprovado, lock integrado, Trivy 0/0, runtime offline, XSD 7/7.
+> GOAL-005 técnico **continua PARCIAL**. **005B não iniciado.** Contador HUB intocado.
 > A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
 > fiscal.
 
@@ -79,30 +78,25 @@
   dry-run.
 - **Fonte:** [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
 
-### GOAL-005A — supply chain GHA do worker XSD (entregue na branch) · 19/07/2026
+### GOAL-005A — supply chain GHA do worker XSD (fechado na main) · 19/07/2026
 
-- **Estado:** **SUPPLY CHAIN GITHUB ACTIONS ENTREGUE NA BRANCH** (sem merge em main).
+- **Estado:** **integrado e fechado na main** (PR **#12** merged).
+- **Merge:** `2a7f102ce7bb22b363cd6d24b17920d483182640` · head `d512794…` · branch origem
+  preservada · método merge commit.
 - **Run:** `29669361609` (#5) · `success` · 2/2 jobs · commit `c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91`.
-- **Branch:** `work/fiscal-xsd-worker-gha-supply-chain-005a`.
-- **Artifact final:** `fiscal-xsd-worker-offline-approved-c0d4b00…` · ID `8436826125` ·
-  digest `sha256:aa60526d6a57845305600424bc13b992015d510c636a0f7c9b99c70fa3e6291e`.
-- **Lock:** `workers/fiscal-xsd/supply-chain.lock.json` (SHA-256
-  `5402dca9cf37cb1c0892cb4458be78fa9f360f69e9ad2440770d55ed340266e8`, byte-idêntico ao gerado).
-- **Evidências:** Docker/OCI archives · SBOM · Trivy **0 CRITICAL / 0 HIGH** · runtime
-  `blocked-enforced` · XSD positive `passed` · negativos **7/7**.
-- **Fora do Git:** archives, SBOM bruto, Trivy bruto, runtime/xsd JSON brutos.
-- **Registry / emissão / SEFAZ / Contador HUB:** não · não · não · não alterado.
-- **Gates:** nenhum gate Fiscal global fechado; nível não elevado; N6=0; N7=0.
-- **005B:** **não iniciado**.
-- **Próximo passo:** auditoria de merge-readiness do range completo da branch 005A contra
-  `origin/main` atual; somente depois PR e integração controlada. **Não** é emissão.
-- **Relatório:**
-  [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md).
+- **Artifact final:** `fiscal-xsd-worker-offline-approved-c0d4b00…` · ID `8436826125`.
+- **Lock:** integrado · SHA-256 `5402dca9cf37cb1c0892cb4458be78fa9f360f69e9ad2440770d55ed340266e8`.
+- **Evidências:** Trivy **0/0** · runtime offline · egress `blocked-enforced` · XSD **7/7**.
+- **Gates:** gate Fiscal global **aberto**; N6=0; N7=0; nenhum gate alterado por 005A.
+- **GOAL-005 técnico:** **PARCIAL** · **005B:** **não iniciado** · Contador HUB: intocado.
+- **Próximo passo:** definição/autorização separada se houver 005B; **não** é emissão.
+- **Relatórios:**
+  [`005A REPORT`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md) ·
+  [`005A POST-MERGE`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md).
 
-### Base prévia (inalterada por GOAL-004 / 005A de registro)
+### Base prévia (inalterada por GOAL-004 / 005A)
 
-- **Worker XSD:** B2 integrado; G-C2 **FECHADO**; N4 no eixo XSD; **bundle offline aprovado na
-  branch 005A**.
+- **Worker XSD:** B2 integrado; G-C2 **FECHADO**; N4 no eixo XSD; **bundle offline 005A na main**.
 - **Assinatura / C14N:** N4 no eixo C14N/XMLDSig; critério técnico F4→F5 **FECHADO** (GOAL-003).
 - **Signer:** **dormente** — zero callers de venda; dry-run/testes apenas.
 - **Runtime:** seis guards em rotas de correção/cancelamento. Snapshot, emissão, tax-engine, vault e
