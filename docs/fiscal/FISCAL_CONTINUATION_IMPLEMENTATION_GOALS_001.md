@@ -222,26 +222,37 @@ Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECON
 
 ---
 
-## GOAL-005A — supply chain GitHub Actions do worker XSD (executado e aprovado na branch) · 19/07/2026
+## GOAL-005A — supply chain GitHub Actions do worker XSD (integrado e fechado na main) · 19/07/2026
 
 **GOAL de registro:** `FISCAL-XSD-WORKER-GHA-SUPPLY-CHAIN-005A-REGISTER-APPROVED-BUNDLE`
 
 **GOAL técnico de supply chain:** `FISCAL-XSD-WORKER-GITHUB-ACTIONS-SUPPLY-CHAIN-005A`
 
-**Estado:** **executado e aprovado na branch** — **SUPPLY CHAIN GITHUB ACTIONS ENTREGUE NA BRANCH**
+**GOAL pós-merge:** `FISCAL-XSD-WORKER-GHA-SUPPLY-CHAIN-005A-POST-MERGE-CLOSURE`
+
+**Estado corrente:** **integrado e fechado na main** — **GOAL-005A INTEGRADO E FECHADO NA MAIN**
+(PR **#12** merged; merge commit `2a7f102…`). Fechamento técnico e documental **concluídos**.
+
+> **Histórico pré-merge (preservado):** na data do registro na branch, o estado era
+> “executado e aprovado na branch / SUPPLY CHAIN GITHUB ACTIONS ENTREGUE NA BRANCH”,
+> ainda sem merge — ver relatório 005A original e adendo pós-merge.
 
 **Não** é o GOAL-005 técnico (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`).
 
 | Campo | Valor |
 |---|---|
-| Branch | `work/fiscal-xsd-worker-gha-supply-chain-005a` |
+| PR | **#12** · `closed` · `merged=true` · merged_at `2026-07-19T15:08:52Z` |
+| Merge commit | `2a7f102ce7bb22b363cd6d24b17920d483182640` |
+| Pais do merge | `98e05dfe9aec224e5a7ea31f85bada19bed2913b` + `d51279461718508d94c534e9afe27232c73f0d6b` |
+| Método | merge commit (sem squash / sem rebase) |
+| Branch de origem | `work/fiscal-xsd-worker-gha-supply-chain-005a` — **preservada** @ `d512794…` |
 | Commit do run / bundle | `c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91` |
 | Workflow | Fiscal XSD Worker Supply Chain |
 | Run | `29669361609` (#5) · `success` · jobs 2/2 |
 | Artifact final | `fiscal-xsd-worker-offline-approved-c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91` |
 | Artifact ID | `8436826125` |
 | Artifact digest | `sha256:aa60526d6a57845305600424bc13b992015d510c636a0f7c9b99c70fa3e6291e` |
-| Lock materializado | `workers/fiscal-xsd/supply-chain.lock.json` |
+| Lock materializado | `workers/fiscal-xsd/supply-chain.lock.json` (integrado na main) |
 | Lock SHA-256 | `5402dca9cf37cb1c0892cb4458be78fa9f360f69e9ad2440770d55ed340266e8` |
 | Trivy | CRITICAL=0 · HIGH=0 |
 | Runtime | offline · `externalEgress=blocked-enforced` · non-root · read-only rootfs |
@@ -253,9 +264,13 @@ Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECON
 | Contador HUB | não alterado |
 | Emissão / SEFAZ / homologação / produção | **não** |
 
-Relatório:
-[`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](./FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md).
+Relatórios:
 
-**Próximo passo (não é emissão):** auditoria de merge-readiness do range completo da branch 005A
-contra a `origin/main` atual; somente depois PR e integração controlada. **005B ainda não
-iniciado.** GOAL-005 técnico permanece **PARCIAL**.
+- [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](./FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md)
+  (histórico + adendo pós-merge)
+- [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md`](./FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md)
+  (fechamento pós-merge)
+
+**Próximo passo (não é emissão):** auditoria de merge-readiness da branch documental do
+fechamento pós-merge (se aplicável); **não** iniciar **005B** sem definição e autorização
+separadas. **005B ainda não iniciado.** GOAL-005 técnico permanece **PARCIAL**.
