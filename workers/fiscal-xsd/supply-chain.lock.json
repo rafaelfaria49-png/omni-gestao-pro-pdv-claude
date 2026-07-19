@@ -1,0 +1,93 @@
+{
+  "goal": "FISCAL-XSD-WORKER-GITHUB-ACTIONS-SUPPLY-CHAIN-005A",
+  "version": "1.0.0",
+  "repositoryCommit": "c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91",
+  "dockerfileSha256": "c70e6261e834f961fefc1147805da71eab2fdcdd27480cc167e61ac301c007b1",
+  "buildContextSha256": "37047724e879076ab9982e8fc42b7885be6e2705efe605b1fd19de55ca98422b",
+  "actions": [
+    {
+      "action": "actions/checkout",
+      "sha": "9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+      "release": "v7.0.0",
+      "purpose": "checkout"
+    },
+    {
+      "action": "actions/setup-node",
+      "sha": "820762786026740c76f36085b0efc47a31fe5020",
+      "release": "v7.0.0",
+      "purpose": "node-toolchain"
+    },
+    {
+      "action": "actions/download-artifact",
+      "sha": "37930b1c2abaa49bbe596cd826c3c89aef350131",
+      "release": "v7.0.0",
+      "purpose": "download-artifact"
+    },
+    {
+      "action": "actions/upload-artifact",
+      "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+      "release": "v7.0.1",
+      "purpose": "upload-artifact"
+    },
+    {
+      "action": "anchore/sbom-action",
+      "sha": "e22c389904149dbc22b58101806040fa8d37a610",
+      "release": "v0.24.0",
+      "purpose": "sbom-cyclonedx"
+    },
+    {
+      "action": "aquasecurity/trivy-action",
+      "sha": "ed142fd0673e97e23eac54620cfb913e5ce36c25",
+      "release": "v0.36.0",
+      "purpose": "trivy-scan"
+    }
+  ],
+  "runner": "ubuntu-24.04",
+  "workflowRef": "refs/heads/work/fiscal-xsd-worker-gha-supply-chain-005a",
+  "runId": "29669361609",
+  "baseImages": [
+    "node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0"
+  ],
+  "libxml2": {
+    "version": "2.15.3",
+    "url": "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.3.tar.xz",
+    "sha256": "78262a6e7ac170d6528ebfe2efccdf220191a5af6a6cd61ea4a9a9a5042c7a07"
+  },
+  "patch": {
+    "url": "https://github.com/GNOME/libxml2/commit/d3352554e4c1f052b914cda7b415d06b7eab5dfa.patch",
+    "sha256": "ab319bb46b2aeb5f4311a12676b6b3eed1d18fb47721ae6274a849d31b96fb7c"
+  },
+  "libgnutls": "3.7.9-2+deb12u7",
+  "xsdPackage": "PL_010e_v1.02",
+  "layout": "4.00",
+  "model": "65",
+  "rootSchema": "nfe_v4.00.xsd",
+  "schemaManifestSha256": "fc42d03e1c4a676d5ea5fe813cd2941672caa18540856cac5208ccdff049cae1",
+  "imageTag": "fiscal-xsd-worker:pl010e-v1.02-libxml2-2.15.3-goal005a",
+  "imageId": "sha256:cc27c5d6a27c7f15d83fe2220075825b12711d77b6fcfde9744c42383cb485a6",
+  "ociManifestDigest": "sha256:40c28fd14c57a7d1ea35bd3b23683049345873cf0e65dc48143572e30536333c",
+  "platform": "linux/amd64",
+  "dockerArchiveSha256": "827e4b522b86ceeb242124e8477a4e12c23eeb4501988e0220abb88edd33af9c",
+  "ociArchiveSha256": "fef17c43204267b14c51443494f5daab233802cd2c73c2756b31b1b517be6d91",
+  "sbomSha256": "1b64a87b39351bb28e6ef8f1afb4932dd0aafb59002293f4fead40f94962c868",
+  "trivySha256": "ad532841d23e043624ce4ef695418e62781a1dc8168d208dd8eea3d49840fdb5",
+  "vulnerabilities": {
+    "critical": 0,
+    "high": 0
+  },
+  "runtimeExternalEgress": "blocked-enforced",
+  "realSecrets": 0,
+  "realData": 0,
+  "positiveResult": "passed",
+  "negativeResults": {
+    "missing_required": "rejected",
+    "unexpected_element": "rejected",
+    "invalid_order": "rejected",
+    "invalid_type": "rejected",
+    "wrong_namespace": "rejected",
+    "payload_over_limit": "rejected",
+    "timeout_fail_closed": "enforced-unit"
+  },
+  "negativesPassed": 7,
+  "negativesTotal": 7
+}
