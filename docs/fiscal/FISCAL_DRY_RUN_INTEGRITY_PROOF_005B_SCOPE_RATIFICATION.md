@@ -66,7 +66,7 @@ documento não estiver na `main`, o 005B permanece **definido, não iniciado**.
 
 | Campo | Valor |
 |---|---|
-| `origin/main` | `a40ff5cbbed9eb3bf8f0764ba3b63e75f78bdcd6` |
+| `origin/main` (base na abertura da ratificação) | `a40ff5cbbed9eb3bf8f0764ba3b63e75f78bdcd6` |
 | Tipo | merge commit (PR #13) |
 | Pais | `ab0b754e8b605b2d220be3f6610403bdcc483e0a` + `55d578e35264396081d082dc343ed99ca2c5ab2a` |
 | Conferida em | 20/07/2026, após `git fetch origin --prune` |
@@ -90,7 +90,7 @@ ou commit de implementação 005B. WIP externo de outras trilhas foi **preservad
 
 | Campo | Valor |
 |---|---|
-| Merge commit | `a40ff5cbbed9eb3bf8f0764ba3b63e75f78bdcd6` (é a própria `origin/main`) |
+| Merge commit | `a40ff5cbbed9eb3bf8f0764ba3b63e75f78bdcd6` (era a `origin/main` na abertura da ratificação; a `main` da integração A2 é `0a8d366861e1d7b59c742590c2f7b5f9f7e699d3`) |
 | Branch de origem | `docs/fiscal-xsd-005a-post-merge-closure` @ `55d578e…` |
 | Conteúdo | fechamento documental do 005A na `main` |
 
