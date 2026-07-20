@@ -274,3 +274,49 @@ Relatórios:
 **Próximo passo (não é emissão):** auditoria de merge-readiness da branch documental do
 fechamento pós-merge (se aplicável); **não** iniciar **005B** sem definição e autorização
 separadas. **005B ainda não iniciado.** GOAL-005 técnico permanece **PARCIAL**.
+
+> **Atualização 20/07/2026:** a definição e a autorização separadas exigidas acima foram
+> **emitidas** — ver a seção seguinte. **005B continua não iniciado.**
+
+## GOAL-005B — escopo ratificado (definido documentalmente, não iniciado) · 20/07/2026
+
+**GOAL técnico futuro:** `FISCAL-DRY-RUN-INTEGRITY-PROOF-005B` — “Integração do Worker XSD Real na
+Prova de Integridade do Dry-Run Fiscal”.
+
+**GOAL desta ratificação:** `FISCAL-DRY-RUN-INTEGRITY-PROOF-005B-SCOPE-RATIFICATION`.
+
+**Estado:** **DEFINIDO DOCUMENTALMENTE — NÃO INICIADO.** Nenhuma linha de código foi escrita,
+nenhum harness foi reaplicado, nenhum workflow foi criado, nenhum artifact foi baixado.
+
+| Campo | Valor |
+|---|---|
+| Auditoria de origem | `audit/fiscal-dry-run-005b-formal-audit` @ `818253b91ad33d96fdf004cbbc71b5a908e943dc` |
+| Classificação anterior | **B** — pronto após ajuste documental pequeno |
+| Classificação resultante | **A** — pronto para implementação **após integração** desta ratificação |
+| Decisão humana | **Caminho 2 — o 005B carrega o harness** |
+| Harness de origem | `work/fiscal-dry-run-integrity-proof-005` @ `d4dfcf15b600bf46f51c347e99656800d1ec201a` (**fora da `main`**) |
+| Arquivos do harness | **7** sob `tools/fiscal-dry-run-integrity-proof/` (confirmados por `git ls-tree`, não presumidos) |
+| Compatibilidade com a `main` | **COMPATÍVEL** — 10 contratos importados byte-idênticos; única ligação falsa é o composition-gate em `run.ts:45` |
+| Workflow futuro | `.github/workflows/fiscal-dry-run-integrity-proof.yml` (**dedicado**; não estender o 005A) |
+| Artifact consumido | `8436826125` · run `29669361609` · digest `sha256:aa60526d…` |
+| Expiração do artifact | **2026-07-26T01:59:00Z** — fail-closed; se expirado, GOAL separado de renovação do 005A |
+| Matriz XSD do 005B | **1 positivo + 8 negativos** (5 schema + malformado + payload + timeout) |
+| Exit codes | `0`–`4` preservados; composition-gate **nunca** retorna 0 |
+| Persistência / SEFAZ | **zero** / **zero** |
+| Gates humanos | H1–H8; nenhum assumido automaticamente (**H1 = integrar esta ratificação**) |
+
+**Caminho 2 — o que significa:** não se cria um GOAL separado só para publicar o harness. A entrega
+do 005B é **atômica**: reaplicação consciente do harness de `d4dfcf1` sobre a `main` atual +
+preservação dos eixos já verdes + workflow dedicado + consumo do bundle aprovado do 005A + execução
+real do `xmllint` + manifesto honesto + golden controlado + evidências e relatório.
+
+> **Contagem de negativos — não confundir camadas.** O registro do 005A acima (`negativos 7/7`)
+> permanece **correto e intocado**: é a matriz do **worker**, na CI de supply chain. A matriz do
+> **harness** do 005B é **8** negativos — os mesmos 7 **+ XML malformado**. Escopos distintos;
+> nunca declarar as duas contagens para o mesmo escopo.
+
+Relatório: [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005B_SCOPE_RATIFICATION.md`](./FISCAL_DRY_RUN_INTEGRITY_PROOF_005B_SCOPE_RATIFICATION.md).
+
+**Próximo passo:** auditoria de merge-readiness desta ratificação → integração na `main` (Gate H1)
+→ **somente então** iniciar a implementação técnica do 005B, em comando separado.
+**GOAL-005 técnico permanece PARCIAL.**

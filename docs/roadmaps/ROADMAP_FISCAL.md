@@ -3,8 +3,8 @@ title: Roadmap Fiscal (NFC-e/SAT/NF-e) — OmniGestão Pro
 hub: fiscal
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-07-19
-sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005A supply chain offline INTEGRADO NA MAIN (PR #12 / 2a7f102); GOAL-005 técnico continua PARCIAL; 005B não iniciado; gate global F4→F5 aberto
+last_update: 2026-07-20
+sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005A supply chain offline INTEGRADO NA MAIN (PR #12 / 2a7f102) e fechado documentalmente (PR #13 / a40ff5c); GOAL-005B com ESCOPO RATIFICADO pelo Caminho 2 (definido documentalmente, NÃO iniciado; artifact expira 2026-07-26); GOAL-005 técnico continua PARCIAL; gate global F4→F5 aberto
 ---
 
 # 🧾 Roadmap Fiscal — OmniGestão Pro
@@ -75,6 +75,25 @@ exige definição e autorização **separadas** (não iniciar 005B automaticamen
 [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md)
 ·
 [`FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md).
+
+**GOAL-005B — escopo ratificado** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005B-SCOPE-RATIFICATION`,
+20/07/2026): a definição e a autorização separadas exigidas acima foram **emitidas**. O GOAL técnico
+futuro é **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005B`** (“Integração do Worker XSD Real na Prova de
+Integridade do Dry-Run Fiscal”), **DEFINIDO DOCUMENTALMENTE — NÃO INICIADO**. Decisão humana:
+**Caminho 2** — o próprio 005B reaplica o harness de `d4dfcf1` (7 arquivos sob
+`tools/fiscal-dry-run-integrity-proof/`, hoje **fora da main**), cria **workflow dedicado**
+(`.github/workflows/fiscal-dry-run-integrity-proof.yml`) e integra o `xmllint` real. Auditoria de
+origem `818253b…` reclassificada de **B** para **A**, condicionada à integração desta ratificação
+(**Gate H1**). Compatibilidade com a `main` **comprovada**: os 10 contratos importados são
+byte-idênticos; a única ligação falsa é o composition-gate em `run.ts:45`; nenhum schema, worker ou
+Prisma precisa mudar. **Dependência do artifact:** bundle `8436826125` (run `29669361609`), consumo
+**fail-closed**, com **expiração em 2026-07-26T01:59:00Z** — se expirar, o 005B para e exige um GOAL
+**separado** de renovação do bundle 005A. Matriz do harness: **1 positivo + 8 negativos** (os 7 do
+worker **+ XML malformado** — camadas distintas, o `7/7` do 005A permanece correto). Zero emissão,
+zero persistência, zero SEFAZ. **Nenhum gate Fiscal fechado; N6=0; N7=0. GOAL-005 técnico permanece
+PARCIAL.** **Próximo passo: auditoria de merge-readiness desta ratificação**; a implementação
+técnica só começa após a integração na `main`. Fonte:
+[`FISCAL_DRY_RUN_INTEGRITY_PROOF_005B_SCOPE_RATIFICATION.md`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005B_SCOPE_RATIFICATION.md).
 
 ---
 
@@ -213,9 +232,12 @@ N7=0; signer dormente; sem schema/migration; sem emissão/SEFAZ. GOAL-003 (C14N)
 permanecem fechados. **GOAL-005A** (supply chain GHA do worker XSD): **integrado e fechado na
 main** pelo PR **#12** (merge `2a7f102`, head `d512794`; run `29669361609`, lock materializado,
 bundle offline aprovado, Trivy 0/0). **GOAL-005 técnico** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`)
-**permanece PARCIAL**. **005B não iniciado.** Próximo passo exige definição e autorização
-**separadas** — **não** iniciar 005B automaticamente. Homologação e produção **não** foram
-abertas. Gate Fiscal global **aberto**.
+**permanece PARCIAL**. **GOAL-005B: escopo RATIFICADO em 20/07/2026 pelo Caminho 2** — definição e
+autorização separadas **emitidas**; estado **DEFINIDO DOCUMENTALMENTE — NÃO INICIADO**; o 005B
+carregará o harness de `d4dfcf1`, com workflow dedicado e consumo fail-closed do bundle 005A
+(**expira 2026-07-26T01:59:00Z**). A implementação técnica só começa **após** a integração da
+ratificação na `main` (Gate H1). Homologação e produção **não** foram abertas. Gate Fiscal global
+**aberto**.
 
 ## 12. Status atual (1 parágrafo)
 
@@ -227,8 +249,9 @@ identidade, guards, snapshot, tax-engine, XML, assinatura (RSA-SHA1), vault, pro
 pipeline e numeração existem; o motor de emissão **não tem caller de venda**; banco fiscal vazio;
 `fiscalEnabled` inalcançável. O gate Fiscal **global** ainda **não** autoriza F5. **Cadastro
 canônico ≠ regra tributária ≠ XML ≠ assinatura ≠ transmissão ≠ homologação ≠ produção. N6=0 e
-N7=0.** GOAL-005 técnico continua **PARCIAL**; 005B **não iniciado**. Sequência oficial em
-`docs/fiscal/`.
+N7=0.** GOAL-005 técnico continua **PARCIAL**; 005B tem **escopo ratificado** (Caminho 2) mas
+permanece **NÃO INICIADO**, dependente da integração da ratificação e de artifact com validade até
+**2026-07-26**. Sequência oficial em `docs/fiscal/`.
 
 ## 13. Métricas de sucesso
 

@@ -174,3 +174,42 @@ segura de comandos é a mesma das notas acima: `git fetch origin --prune` → `g
 própria. Execução **offline**; nenhuma credencial; nenhum caller produtivo.
 
 Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
+
+## Nota — escopo do GOAL-005B ratificado (20/07/2026)
+
+Em 20/07/2026, o GOAL `FISCAL-DRY-RUN-INTEGRITY-PROOF-005B-SCOPE-RATIFICATION` ratificou
+documentalmente o escopo do **005B** pelo **Caminho 2** (o 005B carrega o harness). Esta nota
+**não reescreve** os comandos históricos acima; apenas registra a decisão e as travas de execução.
+
+- **Estado:** 005B **definido documentalmente, NÃO iniciado**. Nenhuma implementação técnica é
+  autorizada por esta nota.
+- **Próximo comando somente após integração documental.** A implementação do 005B só pode ser
+  iniciada depois que a ratificação estiver na `main` (**Gate H1**). Não iniciar com base na branch
+  documental.
+- **Implementação futura separada.** O comando de implementação do 005B é um comando **próprio**,
+  distinto desta ratificação e do 005A.
+
+**Artifact — fail-closed.** O workflow do 005B consome o bundle offline aprovado do 005A
+(artifact `8436826125`, run `29669361609`, digest `sha256:aa60526d…`). A identidade é **composta**:
+run ID + nome completo + head SHA + digest — não confiar só no ID nem só no nome. Se o artifact
+estiver **expirado, ausente, com nome/digest/conteúdo divergente, ou com hash diferente do lock**,
+o workflow deve terminar com **erro não-zero**. Proibido: reconstruir silenciosamente, substituir
+por imagem local, baixar imagem de registry, alterar o lock.
+
+**Fallback de renovação do 005A.** O artifact expira em **2026-07-26T01:59:00Z**. Se expirar antes
+da execução: (1) parar o 005B; (2) executar um GOAL **separado** de renovação controlada do bundle
+005A; (3) produzir novo run, artifact e lock; (4) integrar a renovação; (5) retomar o 005B.
+**Não** usar o workflow do 005B para renovar o 005A.
+
+**Gates humanos (H1–H8), nenhum automático:** H1 ratificação na `main` · H2 revisão de
+implementação/workflow antes do primeiro dispatch · H3 autorização manual de execução do workflow ·
+H4 autorização manual para regenerar manifesto/golden · H5 auditoria de evidências pós-run ·
+H6 merge-readiness · H7 PR e aprovação humana · H8 fechamento documental do GOAL-005.
+
+**Esteira segura (inalterada):** `git fetch origin --prune` → `git worktree add <worktree> -b
+<branch> origin/main` → pré-flight → allowlist literal → commit → push da branch própria.
+Proibições permanentes desta trilha: sem `git add .` / `git add -A` / `git commit -a`; sem reset,
+stash, rebase, cherry-pick, amend, merge, force-push ou push para `main`.
+
+Fonte: [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005B_SCOPE_RATIFICATION.md`](./FISCAL_DRY_RUN_INTEGRITY_PROOF_005B_SCOPE_RATIFICATION.md).
+**GOAL-005 técnico permanece PARCIAL. 005B não iniciado.**
