@@ -5,7 +5,7 @@
 
 ---
 
-## Fiscal — GOAL-004 FECHADO (main) + GOAL-005A FECHADO NA MAIN (PR #12) + GOAL-005 PARCIAL · 19/07/2026
+## Fiscal — GOAL-005A FECHADO NA MAIN (PR #12 + PR #13) + GOAL-005B ESCOPO RATIFICADO (não iniciado) + GOAL-005 PARCIAL · 20/07/2026
 
 > Fontes: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
 > [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
@@ -22,7 +22,11 @@
 > (N6=0), sem produção (N7=0), sem emissão ativada. Signer **dormente**. Callers produtivos **0**.
 > GOAL-004 **FECHADO**. **GOAL-005A fechado na main** — run `29669361609`, commit `c0d4b00…`,
 > artifact `8436826125` aprovado, lock integrado, Trivy 0/0, runtime offline, XSD 7/7.
-> GOAL-005 técnico **continua PARCIAL**. **005B não iniciado.** Contador HUB intocado.
+> **PR #13** merge `a40ff5cbbed9eb3bf8f0764ba3b63e75f78bdcd6` (fechamento documental do 005A;
+> parents `ab0b754…` + `55d578e…`) — é a `origin/main` corrente.
+> **GOAL-005B: escopo RATIFICADO em 20/07/2026 (Caminho 2) — DEFINIDO DOCUMENTALMENTE, NÃO
+> INICIADO**; ratificação ainda **pendente de integração** na `main`.
+> GOAL-005 técnico **continua PARCIAL**. Contador HUB intocado.
 > A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
 > fiscal.
 
@@ -88,13 +92,39 @@
 - **Lock:** integrado · SHA-256 `5402dca9cf37cb1c0892cb4458be78fa9f360f69e9ad2440770d55ed340266e8`.
 - **Evidências:** Trivy **0/0** · runtime offline · egress `blocked-enforced` · XSD **7/7**.
 - **Gates:** gate Fiscal global **aberto**; N6=0; N7=0; nenhum gate alterado por 005A.
-- **GOAL-005 técnico:** **PARCIAL** · **005B:** **não iniciado** · Contador HUB: intocado.
-- **Próximo passo:** definição/autorização separada se houver 005B; **não** é emissão.
+- **GOAL-005 técnico:** **PARCIAL** · Contador HUB: intocado.
+- **005B:** definição/autorização separada **emitida** em 20/07/2026 — ver seção seguinte.
 - **Relatórios:**
   [`005A REPORT`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_REPORT.md) ·
   [`005A POST-MERGE`](../fiscal/FISCAL_XSD_WORKER_GHA_SUPPLY_CHAIN_005A_POST_MERGE_CLOSURE.md).
 
-### Base prévia (inalterada por GOAL-004 / 005A)
+### GOAL-005B — escopo ratificado (definido documentalmente, NÃO iniciado) · 20/07/2026
+
+- **`main` contém o 005A:** `origin/main` = `a40ff5cbbed9eb3bf8f0764ba3b63e75f78bdcd6`
+  (PR **#12** técnico + PR **#13** documental). Worker e lock presentes e conferidos.
+- **005B auditado:** `audit/fiscal-dry-run-005b-formal-audit` @ `818253b…` — classificação **B**,
+  por dois pendentes **documentais**: escopo não ratificado e harness fora da `main`.
+- **Caminho 2 escolhido:** o **próprio 005B carrega o harness** (reaplicação consciente de
+  `d4dfcf15b600bf46f51c347e99656800d1ec201a`); não há GOAL separado só para publicar o harness.
+- **Compatibilidade comprovada:** os **10 contratos** que o harness importa são **byte-idênticos**
+  entre `d4dfcf1` e a `main`; a `main` não alterou `lib/fiscal/**` nem `package.json` desde o
+  merge-base `ccb8b0f`; a **única** ligação falsa é o composition-gate em `run.ts:45`. Nenhum
+  schema, worker ou Prisma precisa mudar.
+- **Harness:** **7 arquivos** sob `tools/fiscal-dry-run-integrity-proof/` (confirmados por
+  `git ls-tree`), hoje **fora da `main`**.
+- **Ratificação pendente de integração:** classe **A** condicionada ao **Gate H1** (este documento
+  na `main`). Enquanto não integrado, o 005B **não pode ser iniciado**.
+- **Implementação ainda não iniciada:** nenhum código escrito, nenhum workflow criado, nenhum
+  artifact baixado, nenhum Docker executado, manifesto e golden **intocados**.
+- **Dependência com prazo:** bundle `8436826125` (run `29669361609`) — consumo **fail-closed**,
+  **expira 2026-07-26T01:59:00Z**; se expirar, o 005B para e exige GOAL **separado** de renovação
+  do 005A.
+- **GOAL-005 técnico:** **PARCIAL** · **gate Fiscal global: ABERTO** · **N6=0** · **N7=0** ·
+  nenhum gate alterado · Contador HUB intocado · zero emissão/persistência/SEFAZ.
+- **Relatório:**
+  [`005B SCOPE RATIFICATION`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005B_SCOPE_RATIFICATION.md).
+
+### Base prévia (inalterada por GOAL-004 / 005A / 005B)
 
 - **Worker XSD:** B2 integrado; G-C2 **FECHADO**; N4 no eixo XSD; **bundle offline 005A na main**.
 - **Assinatura / C14N:** N4 no eixo C14N/XMLDSig; critério técnico F4→F5 **FECHADO** (GOAL-003).
