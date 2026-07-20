@@ -5,6 +5,36 @@
 
 ---
 
+## Contador HUB — Gate G2 APROVADO · Fase 0–1 concluída (GOALs 001–008 em main) · 19/07/2026
+
+> **Gate G2 aprovado por Rafael em 2026-07-19.** ADRs 001, 003, 004, 005, 006 marcadas como **Accepted** em [`CONTADOR_HUB_ADRS_PROPOSTOS_001.md`](../contador/CONTADOR_HUB_ADRS_PROPOSTOS_001.md) com data e emendas. Ajuste **G2-05 (PII)**: CPF, nome, telefone, e-mail, endereço, IMEI e observações **não incluídos por padrão** no domínio/eventos/pacote; **sem toggle automático no GOAL 009**; inclusão futura exige decisão explícita + permissão `p.hubs.contador` + justificativa + auditoria. Storage principal: **Supabase Storage** (alternativa: Vercel Blob; escolha física final no GOAL 010). Permissão dedicada `p.hubs.contador` aprovada para criação futura (antes do GOAL 010). **GOAL 009 somente após publicação validada deste fechamento em main.**
+
+### Estado real (confirmado por código em `origin/main`)
+
+| Bloco | Status | Evidência |
+|---|---|---|
+| Competência canônica `AAAA-MM` · tz `America/Sao_Paulo` · intervalo UTC semiaberto | ✅ real | `lib/contador/competencia.ts` (GOAL 005) |
+| Readers read-only (vendas, financeiro, caixa) · multi-loja · ACL via sessão | ✅ real | `lib/contador/readers/*`, `lib/contador/scope.ts` (GOAL 006) |
+| Visão Geral + relatórios básicos com dados reais | ✅ real | `app/dashboard/contador/page.tsx` (GOAL 006) |
+| Checklist de fechamento derivado · "Fechar" desabilitado | ✅ real (RO) | `lib/contador/fechamento/montar-checklist.ts` (GOAL 007) |
+| Pacote MVP sob demanda (ZIP + CSVs + manifesto v1 + sha256) · sem persistência | ✅ real (MVP) | `app/api/contador/pacote/route.ts` (GOAL 008) |
+| Domínio persistido (Competencia, Documento, Pacote, Comentario, Evento) | ❌ não existe | nenhum model `Contador*` no schema — GOAL 009 pendente |
+| Fechamento oficial com snapshot + versão | ❌ não existe | GOAL 012 pendente |
+| Portal externo v2 | ❌ não existe | GOALs 013–015 pendentes (G3) |
+| Documentos, Obrigações, Guias, Timeline, Permissões (UI) | 🟡 preview | aguardam GOALs 010–016 |
+
+### Planejamento (série 001 — publicada em `docs/contador/`)
+
+- [`CONTADOR_HUB_FABLE5_MASTERPLAN_001.md`](../contador/CONTADOR_HUB_FABLE5_MASTERPLAN_001.md) — masterplan Fable 5 (19 GOALs, 5 fases, gates G1–G4).
+- [`CONTADOR_HUB_IMPLEMENTATION_GOALS_001.md`](../contador/CONTADOR_HUB_IMPLEMENTATION_GOALS_001.md) — sequência, dependências, riscos por GOAL.
+- [`CONTADOR_HUB_COMMANDS_001.md`](../contador/CONTADOR_HUB_COMMANDS_001.md) — comandos prontos (1 por GOAL).
+- [`CONTADOR_HUB_ADRS_PROPOSTOS_001.md`](../contador/CONTADOR_HUB_ADRS_PROPOSTOS_001.md) — 8 ADRs (001/003/004/005/006 Accepted; 002/007/008 Proposed).
+- [`CONTADOR_HUB_DADOS_REAIS_READONLY_006.md`](../contador/CONTADOR_HUB_DADOS_REAIS_READONLY_006.md) — closure do GOAL 006.
+
+**Próximo:** GOAL 009 (migration núcleo aditiva) após publicação validada deste PR. Gates seguintes: **G3** após GOAL 013 (portal v2 + ADRs 002/008); **G4** antes do GOAL 019 (retirada do legado); ADR-007 antes do GOAL 018 (fiscal).
+
+---
+
 ## Fiscal — GOAL-004 FECHADO (main) + GOAL-005A FECHADO NA MAIN (PR #12) + GOAL-005 PARCIAL · 19/07/2026
 
 > Fontes: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
