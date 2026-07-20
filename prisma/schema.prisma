@@ -114,6 +114,10 @@ model Store {
   eventosFiscais           EventoFiscal[]
   fiscalEmissaoJobs        FiscalEmissaoJob[]
   fiscalLogs               FiscalLog[]
+  // ─── Contador HUB (GOAL 009 — aditivo; só relações inversas, sem coluna física) ──
+  contadorCompetencias     ContadorCompetencia[]
+  contadorDocumentos       ContadorDocumento[]
+  contadorEventos          ContadorEvento[]
 
   @@index([profile])
   @@map("stores")
@@ -2548,4 +2552,273 @@ model FiscalLog {
   @@index([storeId, createdAt])
   @@index([notaFiscalId])
   @@map("fiscal_logs")
+}
+
+// ─── Contador HUB — núcleo persistente (GOAL 009) ────────────────────────────
+//
+// Gate G2 (2026-07-19): ADR-CONTADOR-001/003/004/005/006 Accepted.
+// Domínio PRÓPRIO do HUB — nenhum dado operacional é duplicado aqui (ADR-006):
+// vendas/OS/financeiro seguem lidos read-only por `lib/contador/readers/*`.
+//
+// Ajuste G2-05 (PII): nenhum campo de dado pessoal de cliente (CPF, CNPJ de
+// cliente, nome, telefone, e-mail, endereço, IMEI, observação operacional) e
+// nenhum toggle de PII entram neste núcleo. Apenas IDs técnicos.
+//
+// `storageRef` é SEMPRE referência privada namespaced — NUNCA URL pública
+// (ADR-003). Storage físico só no GOAL 010.
+//
+// INTEGRIDADE COMPOSTA (GOAL 009-INTEGRIDADE-001): relações escopadas usam FKs
+// COMPOSTAS para que o banco — não o service — garanta que documento/evento não
+// cruzem loja e que comentário/versão não cruzem competência. Padrão multi-tenant
+// do Prisma: campos escalares (storeId/competenciaId) compartilhados entre relações.
+
+/** Estados PERSISTIDOS da competência (ADR-005). `reaberta` é transição auditada, não estado. */
+enum ContadorCompetenciaStatus {
+  ABERTA        @map("aberta")
+  ENVIADA       @map("enviada")
+  COM_PENDENCIA @map("com_pendencia")
+  FECHADA       @map("fechada")
+}
+
+/** Ciclo de vida de um item/documento (ADR-005). `vencido` é flag DERIVADA, nunca persistida. */
+enum ContadorItemStatus {
+  PENDENTE  @map("pendente")
+  ENVIADO   @map("enviado")
+  CONFERIDO @map("conferido")
+  RESOLVIDO @map("resolvido")
+}
+
+/** Categoria contábil do documento. */
+enum ContadorDocumentoCategoria {
+  FISCAL     @map("fiscal")
+  FINANCEIRO @map("financeiro")
+  FOLHA      @map("folha")
+  JURIDICO   @map("juridico")
+  OUTRO      @map("outro")
+}
+
+/**
+ * Competência mensal do Contador HUB — uma por loja/ano/mês.
+ *
+ * Viva enquanto `aberta`/`enviada`; o snapshot só é congelado no fechamento
+ * (GOAL 012) e NUNCA contém linhas operacionais detalhadas (ADR-001).
+ * Reabertura é transição auditada: incrementa `versao` e preserva snapshot e
+ * pacotes anteriores. Sem soft delete — competência não é excluída.
+ */
+model ContadorCompetencia {
+  id             String    @id @default(cuid())
+  storeId        String    @map("storeId")
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  ano            Int       @map("ano")
+  mes            Int       @map("mes")
+  status         ContadorCompetenciaStatus @default(ABERTA) @map("status")
+  /** Incrementada a cada reabertura auditada (ADR-005). Nasce em 1. */
+  versao         Int       @default(1) @map("versao")
+
+  /** Snapshot oficial congelado no fechamento (GOAL 012). Agregados — sem linhas operacionais nem PII. */
+  snapshot       Json?     @map("snapshot") @db.JsonB
+  snapshotHash   String?   @map("snapshotHash")
+
+  fechadaEm      DateTime? @map("fechadaEm")
+  fechadaPorId   String?   @map("fechadaPorId")
+  reabertaEm     DateTime? @map("reabertaEm")
+  reabertaPorId  String?   @map("reabertaPorId")
+  reabertaMotivo String?   @map("reabertaMotivo") @db.Text
+
+  createdAt      DateTime  @default(now()) @map("createdAt")
+  updatedAt      DateTime  @updatedAt @map("updatedAt")
+
+  documentos     ContadorDocumento[]
+  pacotes        ContadorPacote[]
+  comentarios    ContadorComentario[]
+  eventos        ContadorEvento[]
+
+  @@unique([storeId, ano, mes])
+  // Alvo das FKs compostas escopadas (documento/evento) — garante que competenciaId
+  // e storeId referenciem SEMPRE a mesma competência e a mesma loja.
+  @@unique([id, storeId])
+  @@index([storeId, status])
+  @@map("contador_competencias")
+}
+
+/**
+ * Metadados de um documento contábil da competência (ADR-003).
+ *
+ * O binário vive no storage (GOAL 010) — aqui só referência privada `storageRef`,
+ * nunca URL pública. Substituição NÃO sobrescreve: cria nova linha apontando a
+ * anterior por `versaoDeId`. Exclusão é SOFT (motivo obrigatório) e não remove o blob.
+ */
+model ContadorDocumento {
+  id             String    @id @default(cuid())
+  competenciaId  String    @map("competenciaId")
+  storeId        String    @map("storeId")
+  // FK COMPOSTA: (competenciaId, storeId) referencia a MESMA competência da MESMA loja.
+  // Impede documento com competenciaId da loja A e storeId da loja B (pina doc.storeId == competencia.storeId).
+  competencia    ContadorCompetencia @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
+  // FK direta à loja preservada (relação inversa em Store; storeId sempre válido).
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  categoria      ContadorDocumentoCategoria @map("categoria")
+  titulo         String    @map("titulo")
+  nomeArquivo    String    @map("nomeArquivo")
+  mime           String    @map("mime")
+  bytes          Int       @map("bytes")
+  /** Hash do conteúdo — metadado de integridade; verificação física é do GOAL 010. */
+  sha256         String    @map("sha256")
+  /** Caminho privado namespaced `contador/{storeId}/{aaaa-mm}/{docId}`. NUNCA URL pública. */
+  storageRef     String    @map("storageRef")
+
+  status         ContadorItemStatus @default(PENDENTE) @map("status")
+  vencimento     DateTime? @map("vencimento")
+
+  /** "interno" | "externo". `enviadoPorId` é ID técnico, nunca nome/e-mail. */
+  enviadoPorTipo String    @map("enviadoPorTipo")
+  enviadoPorId   String    @map("enviadoPorId")
+
+  /**
+   * Documento que esta linha substitui (versionamento append-only).
+   * FK COMPOSTA: (versaoDeId, competenciaId, storeId) referencia o predecessor pela
+   * MESMA competência e MESMA loja — impede substituir documento de outra competência ou loja.
+   */
+  versaoDeId     String?   @map("versaoDeId")
+  versaoDe       ContadorDocumento?  @relation("ContadorDocumentoVersao", fields: [versaoDeId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
+  versoes        ContadorDocumento[] @relation("ContadorDocumentoVersao")
+
+  excluidoEm     DateTime? @map("excluidoEm")
+  excluidoPorId  String?   @map("excluidoPorId")
+  excluidoMotivo String?   @map("excluidoMotivo") @db.Text
+
+  createdAt      DateTime  @default(now()) @map("createdAt")
+  updatedAt      DateTime  @updatedAt @map("updatedAt")
+
+  comentarios    ContadorComentario[]
+
+  // Alvo da FK composta do comentário (documento da MESMA competência).
+  @@unique([id, competenciaId])
+  // Alvo da FK composta de versão (predecessor da MESMA competência e loja).
+  @@unique([id, competenciaId, storeId])
+  @@index([competenciaId, categoria])
+  @@index([storeId, status])
+  @@index([sha256])
+  @@map("contador_documentos")
+}
+
+/**
+ * Versão OFICIAL do pacote da competência (ADR-004) — materializada só no GOAL 012.
+ *
+ * Versões anteriores NUNCA são sobrescritas: supersessão = nova versão auditada.
+ * `manifestoHash` = sha256 do `manifest.json` canônico (`omni.contador.pacote.manifest/v1`).
+ * O pacote MVP sob demanda (GOAL 008) permanece intocado e não grava aqui.
+ */
+model ContadorPacote {
+  id            String   @id @default(cuid())
+  competenciaId String   @map("competenciaId")
+  competencia   ContadorCompetencia @relation(fields: [competenciaId], references: [id], onDelete: Restrict)
+
+  versao        Int      @map("versao")
+  manifestoHash String   @map("manifestoHash")
+  /** Referência privada do ZIP no storage. NUNCA URL pública. */
+  storageRef    String   @map("storageRef")
+  bytes         Int      @map("bytes")
+
+  /** "interno" | "externo". `geradoPorId` é pseudônimo/ID técnico, nunca nome/e-mail. */
+  geradoPorTipo String   @map("geradoPorTipo")
+  geradoPorId   String   @map("geradoPorId")
+  geradoEm      DateTime @default(now()) @map("geradoEm")
+
+  itens         ContadorPacoteItem[]
+
+  @@unique([competenciaId, versao])
+  @@index([competenciaId, geradoEm])
+  @@map("contador_pacotes")
+}
+
+/**
+ * Índice consultável dos arquivos que compõem um pacote oficial (ADR-004).
+ * Espelha o `manifest.json` — só metadados (caminho relativo, bytes, hash, fonte).
+ * Nunca conteúdo de arquivo, nunca URL.
+ */
+model ContadorPacoteItem {
+  id       String @id @default(cuid())
+  pacoteId String @map("pacoteId")
+  pacote   ContadorPacote @relation(fields: [pacoteId], references: [id], onDelete: Cascade)
+
+  /** Caminho relativo dentro do ZIP (ex.: `financeiro/movimentacoes.csv`). */
+  caminho  String @map("caminho")
+  bytes    Int    @map("bytes")
+  sha256   String @map("sha256")
+  fonte    String @map("fonte")
+
+  @@unique([pacoteId, caminho])
+  @@index([pacoteId])
+  @@map("contador_pacote_itens")
+}
+
+/**
+ * Comentário do domínio contábil (competência e, opcionalmente, documento).
+ * Append-only no serviço: sem update/delete de rotina.
+ * `autorId` é ID técnico — nunca nome, e-mail ou telefone.
+ */
+model ContadorComentario {
+  id            String   @id @default(cuid())
+  competenciaId String   @map("competenciaId")
+  competencia   ContadorCompetencia @relation(fields: [competenciaId], references: [id], onDelete: Restrict)
+  documentoId   String?  @map("documentoId")
+  // FK COMPOSTA: (documentoId, competenciaId) exige que o documento pertença à MESMA
+  // competência do comentário. Impede comentário de uma competência apontar documento de outra.
+  documento     ContadorDocumento?  @relation(fields: [documentoId, competenciaId], references: [id, competenciaId], onDelete: Restrict)
+
+  /** "interno" | "externo". */
+  autorTipo     String   @map("autorTipo")
+  autorId       String   @map("autorId")
+  /** "interna" | "compartilhada". */
+  visibilidade  String   @map("visibilidade")
+  texto         String   @map("texto") @db.Text
+
+  createdAt     DateTime @default(now()) @map("createdAt")
+
+  @@index([competenciaId, createdAt])
+  @@index([documentoId, createdAt])
+  @@map("contador_comentarios")
+}
+
+/**
+ * Trilha APPEND-ONLY do Contador HUB.
+ *
+ * NUNCA editar nem deletar linhas deste model — correção se faz por NOVO evento.
+ * `metadata` (nome fixado pela emenda Accepted do Gate G2 — não usar `payload`)
+ * carrega apenas dados saneados: sem payload bruto de venda/OS, sem cookie, token,
+ * senha, stack, conteúdo de documento, URL assinada ou qualquer PII.
+ */
+model ContadorEvento {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  // FK direta à loja preservada — evento sem competência exige apenas storeId válido.
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  competenciaId String?  @map("competenciaId")
+  // FK COMPOSTA opcional: quando competenciaId existe, (competenciaId, storeId) deve pertencer
+  // à MESMA competência e MESMA loja. competenciaId nulo → FK não enforça (MATCH SIMPLE), evento sem competência permitido.
+  competencia   ContadorCompetencia? @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
+
+  tipo          String   @map("tipo")
+  /** "sistema" | "interno" | "externo". `atorId` é ID técnico, nunca nome/e-mail. */
+  atorTipo      String   @map("atorTipo")
+  atorId        String   @map("atorId")
+
+  entidade      String?  @map("entidade")
+  entidadeId    String?  @map("entidadeId")
+  origem        String?  @map("origem")
+  /** Metadados SANEADOS do evento. Sem PII, sem payload bruto, sem segredo. */
+  metadata      Json?    @map("metadata") @db.JsonB
+
+  ip            String?  @map("ip")
+  userAgent     String?  @map("userAgent")
+
+  createdAt     DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId, createdAt])
+  @@index([competenciaId, createdAt])
+  @@index([tipo])
+  @@map("contador_eventos")
 }
