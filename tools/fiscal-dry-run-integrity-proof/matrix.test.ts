@@ -216,6 +216,8 @@ realXsdSuite("FISCAL-DRY-RUN-INTEGRITY-PROOF-005B · matriz 1+8 contra o worker 
           xsd: matrix.positive.verification.xsd,
           status: matrix.positive.xsdStatus,
           workerReal: matrix.positive.xsdEvidence.workerReal,
+          // Diagnósticos normalizados e sanitizados do worker (sem XML/segredo) — visíveis se reprovar.
+          diagnostics: matrix.positive.xsdDiagnostics,
         },
         negatives: Object.fromEntries(
           Object.entries(matrix.negatives).map(([id, r]) => [
@@ -229,8 +231,16 @@ realXsdSuite("FISCAL-DRY-RUN-INTEGRITY-PROOF-005B · matriz 1+8 contra o worker 
   }, 180_000)
 
   it("positivo — XML assinado do harness aprovado no XSD oficial real", () => {
-    expect(matrix.positive.verification.xsd).toBe(true)
-    expect(matrix.positive.xsdStatus).toBe("xsd_ok")
+    // Se o positivo reprovar, mostra os diagnósticos normalizados do worker (já sanitizados —
+    // sem XML nem segredo) para acelerar o diagnóstico, em vez de só "expected false to be true".
+    const diagnostico =
+      `status=${matrix.positive.xsdStatus} · engine=${matrix.positive.xsdEngineName ?? "—"} · ` +
+      `workerReal=${matrix.positive.xsdEvidence.workerReal} · ` +
+      `diagnósticos=[${matrix.positive.xsdDiagnostics.join(" | ") || "nenhum"}]`
+    expect(matrix.positive.verification.xsd, `positivo reprovado no XSD real → ${diagnostico}`).toBe(
+      true,
+    )
+    expect(matrix.positive.xsdStatus, diagnostico).toBe("xsd_ok")
     expect(matrix.positive.xsdEvidence.kind).toBe("xmllint-worker")
     expect(matrix.positive.xsdEvidence.workerReal).toBe(true)
     expect(matrix.positive.xsdEvidence.realValidationPassed).toBe(true)

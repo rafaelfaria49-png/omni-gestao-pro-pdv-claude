@@ -158,6 +158,8 @@ export type IntegrityProofResult = {
   javaReport: JavaExternalReport | null
   xsdStatus: string
   xsdEngineName: string | null
+  /** Diagnósticos XSD normalizados e sanitizados do adapter/worker (nunca XML integral nem segredo). */
+  xsdDiagnostics: readonly string[]
   /** Artefatos efêmeros — NÃO serializar em manifesto (contêm XML). */
   artifacts: {
     unsignedXml: string
@@ -415,6 +417,8 @@ export async function runFiscalDryRunIntegrityProof(
     javaReport,
     xsdStatus: xsd.status,
     xsdEngineName: xsd.engine?.name ?? null,
+    // `xsd.violacoes` já vem sanitizado pelo worker (sem XML/segredo); mensagem como fallback.
+    xsdDiagnostics: xsd.violacoes.length > 0 ? xsd.violacoes : xsd.mensagem ? [xsd.mensagem] : [],
     artifacts: {
       unsignedXml,
       signedXml,
