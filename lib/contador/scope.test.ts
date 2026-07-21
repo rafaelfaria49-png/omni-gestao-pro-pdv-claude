@@ -17,7 +17,7 @@ describe("requireContadorScope", () => {
     cookiesMock.mockResolvedValue({ get: () => ({ value: "loja-ativa" }) })
   })
 
-  it("o gate server-side produz scope nominal com usuario, loja e permissao Financeiro", async () => {
+  it("o gate server-side produz scope nominal com usuario, loja e permissao Contador", async () => {
     authMock.mockResolvedValue({
       user: { id: "user-7", role: "ADMIN", storeAccess: "all" },
       expires: "2999-01-01",
@@ -27,7 +27,7 @@ describe("requireContadorScope", () => {
       ok: true,
       storeId: "loja-ativa",
       userId: "user-7",
-      permissaoFinanceiro: true,
+      permissaoContador: true,
     })
   })
 

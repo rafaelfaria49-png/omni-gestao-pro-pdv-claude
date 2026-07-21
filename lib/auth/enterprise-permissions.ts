@@ -28,6 +28,8 @@ export type EnterprisePermissions = {
     financeiro: boolean
     /** Central `/dashboard/relatorios` (vendas + inteligência; financeiro só com hub financeiro). */
     relatorios: boolean
+    /** Contador HUB (`/dashboard/contador`) — documentos, competências e pacote (GOAL 010). */
+    contador: boolean
   }
   /** Administração */
   admin: { masterConsole: boolean; unidades: boolean; configuracoes: boolean }
@@ -67,6 +69,7 @@ const FULL: EnterprisePermissions = {
     marketplace: true,
     financeiro: true,
     relatorios: true,
+    contador: true,
   },
   admin: { masterConsole: true, unidades: true, configuracoes: true },
   pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: true, devolucao: true },
@@ -131,6 +134,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
           marketplace: false,
           financeiro: false,
           relatorios: false,
+          contador: false,
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true },
@@ -160,6 +164,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
           marketplace: false,
           financeiro: false,
           relatorios: false,
+          contador: false,
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: false, fecharCaixa: false, cancelarVenda: false, devolucao: false },
@@ -190,6 +195,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
           marketplace: false,
           financeiro: false,
           relatorios: true,
+          contador: false,
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true },
