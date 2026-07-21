@@ -1,0 +1,59 @@
+{
+  "goal": "FISCAL-DRY-RUN-INTEGRITY-PROOF-005",
+  "proofVersion": "1",
+  "fixtureVersion": "1",
+  "proofState": "partial",
+  "blockingReasons": [
+    "XSD_WORKER_REAL_UNAVAILABLE"
+  ],
+  "clock": "2026-01-15T12:00:00.000Z",
+  "seed": "FISCAL-DRY-RUN-INTEGRITY-PROOF-005/v1",
+  "layout": "4.00",
+  "model": "65",
+  "xsdPackage": "PL_010e_v1.02",
+  "schemaPackagePath": "PL_010e_v1.02/NFe/nfe_v4.00.xsd",
+  "schemaManifestHash": "fc42d03e1c4a676d5ea5fe813cd2941672caa18540856cac5208ccdff049cae1",
+  "storeScope": {
+    "primary": "store-fiscal-proof-a",
+    "comparison": "store-fiscal-proof-b"
+  },
+  "hashes": {
+    "snapshotSha256": "efd6f54c362bddb781395514112ff3540418b868c854b1444b1122e8159bae2e",
+    "unsignedXmlSha256": "5773978497ce4d63db0ca3e945f1df1306204b871d760bbf66d7e48cc9ffd488",
+    "referencedNodeC14nSha256": "5126ad4885f1a6f843a3d8b8e59c3afac33591d199533b8afea82616172233f7",
+    "signedInfoSha256": "449cc741f4187087090610abcaaf13195ee8fc82a045d8b91511254919421b69",
+    "signedXmlSha256": "d9a3eead89deba74dbf2d6cf54db1562a3ef67c1b671e24a927d72127f3c84a2"
+  },
+  "signature": {
+    "canonicalizationMethod": "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
+    "signatureMethod": "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
+    "digestMethod": "http://www.w3.org/2000/09/xmldsig#sha1",
+    "digestValue": "C2JM/I4Y6H7n1G7YopYEiVLuASw="
+  },
+  "verification": {
+    "internal": true,
+    "externalJava17": true,
+    "xsd": false,
+    "xsdContract": true,
+    "xsdStatus": "composition-gate",
+    "xsdEngineName": "composition-gate",
+    "xsdEngineVersion": null,
+    "xsdWorkerReal": false,
+    "structural": true
+  },
+  "integrity": {
+    "deterministic": true,
+    "idempotent": true,
+    "tamperDetected": true,
+    "storeIsolation": true
+  },
+  "safety": {
+    "productiveCallers": 0,
+    "databaseWrites": 0,
+    "sefazCalls": 0,
+    "externalEgress": 0,
+    "realCredentials": 0,
+    "realData": 0
+  },
+  "referenciaIdPrefix": "NFe352"
+}

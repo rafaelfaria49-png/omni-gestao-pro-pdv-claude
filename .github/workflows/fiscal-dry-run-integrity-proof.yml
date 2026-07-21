@@ -1,0 +1,302 @@
+name: Fiscal Dry-Run Integrity Proof (005B)
+
+# GOAL FISCAL-DRY-RUN-INTEGRITY-PROOF-005B
+# Liga o worker XSD REAL (libxml2/xmllint, worker B2 aprovado no 005A) ao harness de dry-run do
+# GOAL-005 e prova, num runner isolado, a matriz 1 positivo + 8 negativos SEM egress externo, SEM
+# banco e SEM SEFAZ. Não constrói imagem (isso foi o 005A): CONSOME o bundle offline já aprovado
+# (run 29669361609 · artifact 8436826125), ancorado no lock byte-verificado
+# (workers/fiscal-xsd/supply-chain.lock.json = sha256 5402dca9…340266e8).
+#
+# Duas fases (dois jobs):
+#   verify-bundle (CONECTADA)  — localiza o artifact aprovado pelo run/nome/identidade, valida lock,
+#                                hashes e proveniência, falha se ausente/expirado/divergente e prepara
+#                                o bundle para a prova.
+#   proof-offline (PROVA)      — carrega o Docker archive aprovado, sobe o worker em rede Docker
+#                                `--internal`, roda o harness contra o worker real, bloqueia egress,
+#                                executa a verificação Java 17 e produz evidências/logs.
+#
+# NÃO eleva o manifesto golden ao estado completo: a elevação é um passo autorizado à parte (H4).
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_branch_override:
+        description: "Permitir execução fora da branch do GOAL-005B (uso futuro explicitamente autorizado)."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: fiscal-dry-run-integrity-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPECTED_REF: refs/heads/work/fiscal-dry-run-integrity-proof-005b
+  # Dependência aprovada do 005A (âncora = lock, não o artifact).
+  APPROVED_RUN_ID: "29669361609"
+  APPROVED_ARTIFACT_ID: "8436826125"
+  APPROVED_COMMIT: c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91
+  APPROVED_ARTIFACT_NAME: fiscal-xsd-worker-offline-approved-c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91
+  ARTIFACT_EXPIRES_AT: "2026-07-26T01:59:00Z"
+  LOCK_PATH: workers/fiscal-xsd/supply-chain.lock.json
+  LOCK_SHA256: 5402dca9cf37cb1c0892cb4458be78fa9f360f69e9ad2440770d55ed340266e8
+  DOCKER_ARCHIVE: fiscal-xsd-worker-goal005a.docker.tar
+  DOCKER_ARCHIVE_SHA256: 827e4b522b86ceeb242124e8477a4e12c23eeb4501988e0220abb88edd33af9c
+  IMAGE_TAG: fiscal-xsd-worker:pl010e-v1.02-libxml2-2.15.3-goal005a
+  IMAGE_ID: sha256:cc27c5d6a27c7f15d83fe2220075825b12711d77b6fcfde9744c42383cb485a6
+  SCHEMA_MANIFEST_SHA256: fc42d03e1c4a676d5ea5fe813cd2941672caa18540856cac5208ccdff049cae1
+  NODE_IMAGE: node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+  WORKER_URL: http://worker.internal:8080
+  NETWORK: fiscal-dry-run-proof-net
+  CONTAINER: fiscal-dry-run-worker-005b
+  BUNDLE_ARTIFACT: fiscal-dry-run-005b-bundle-${{ github.sha }}
+  EVIDENCE_ARTIFACT: fiscal-dry-run-005b-evidence-${{ github.sha }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify-bundle:
+    name: FASE CONECTADA — localizar e validar o bundle aprovado (lock, hashes, proveniência)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Guard de branch do GOAL
+        run: |
+          if [ "${GITHUB_REF}" != "${EXPECTED_REF}" ] && [ "${{ inputs.allow_branch_override }}" != "true" ]; then
+            echo "::error::Este workflow deve rodar em ${EXPECTED_REF} (ref atual: ${GITHUB_REF})."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Guard de expiração do artifact aprovado
+        run: |
+          now="$(date -u +%s)"
+          exp="$(date -u -d "${ARTIFACT_EXPIRES_AT}" +%s)"
+          if [ "${now}" -ge "${exp}" ]; then
+            echo "::error::Artifact aprovado (${APPROVED_ARTIFACT_ID}) expirou em ${ARTIFACT_EXPIRES_AT} — exige renovação do 005A antes de rodar o 005B."
+            exit 1
+          fi
+          echo "Artifact aprovado ainda válido (expira ${ARTIFACT_EXPIRES_AT})."
+
+      - name: Validar o lock âncora no repositório (SHA-256 + campos internos)
+        run: |
+          actual="$(sha256sum "${LOCK_PATH}" | cut -d' ' -f1)"
+          if [ "${actual}" != "${LOCK_SHA256}" ]; then
+            echo "::error::SHA-256 do lock (${actual}) diverge do esperado (${LOCK_SHA256})."
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            const lock = JSON.parse(fs.readFileSync(process.env.LOCK_PATH, "utf8"));
+            const must = (k, exp) => {
+              if (String(lock[k]) !== String(exp)) {
+                console.error("::error::lock." + k + "=" + lock[k] + " != " + exp);
+                process.exit(1);
+              }
+            };
+            must("runId", process.env.APPROVED_RUN_ID);
+            must("dockerArchiveSha256", process.env.DOCKER_ARCHIVE_SHA256);
+            must("imageId", process.env.IMAGE_ID);
+            must("repositoryCommit", process.env.APPROVED_COMMIT);
+            must("schemaManifestSha256", process.env.SCHEMA_MANIFEST_SHA256);
+            if (lock.runtimeExternalEgress !== "blocked-enforced") {
+              console.error("::error::lock.runtimeExternalEgress != blocked-enforced");
+              process.exit(1);
+            }
+            console.log("Lock âncora consistente: runId/dockerArchiveSha256/imageId/repositoryCommit/schema conferem.");
+          '
+
+      - name: Baixar o artifact aprovado do run do 005A
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ env.APPROVED_ARTIFACT_NAME }}
+          run-id: ${{ env.APPROVED_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: bundle
+
+      - name: Validar proveniência do bundle (Docker archive + lock gerado)
+        run: |
+          test -f "bundle/${DOCKER_ARCHIVE}" || { echo "::error::Docker archive ausente no bundle."; exit 1; }
+          dl="$(sha256sum "bundle/${DOCKER_ARCHIVE}" | cut -d' ' -f1)"
+          if [ "${dl}" != "${DOCKER_ARCHIVE_SHA256}" ]; then
+            echo "::error::SHA-256 do Docker archive baixado (${dl}) diverge do lock (${DOCKER_ARCHIVE_SHA256})."
+            exit 1
+          fi
+          echo "Docker archive confere com o lock (${DOCKER_ARCHIVE_SHA256})."
+          if [ -f bundle/supply-chain.lock.generated.json ]; then
+            gen="$(sha256sum bundle/supply-chain.lock.generated.json | cut -d' ' -f1)"
+            if [ "${gen}" != "${LOCK_SHA256}" ]; then
+              echo "::error::lock gerado no bundle (${gen}) não é byte-idêntico ao lock âncora (${LOCK_SHA256})."
+              exit 1
+            fi
+            echo "Lock gerado no bundle é byte-idêntico ao lock do repositório."
+          else
+            echo "::warning::supply-chain.lock.generated.json ausente no bundle — validação por Docker archive + lock do repo."
+          fi
+
+      - name: Preparar bundle para a fase de prova (Docker archive verificado)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.BUNDLE_ARTIFACT }}
+          path: |
+            bundle/${{ env.DOCKER_ARCHIVE }}
+          if-no-files-found: error
+          retention-days: 1
+
+  proof-offline:
+    name: FASE DE PROVA — worker real, egress bloqueado, matriz 1+8, verificação Java 17
+    runs-on: ubuntu-24.04
+    needs: verify-bundle
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (harness + manifesto + lock)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.20.2
+          cache: npm
+
+      - name: Selecionar Java 17 pré-instalado no runner (verificação externa do harness)
+        run: |
+          test -n "${JAVA_HOME_17_X64}" || { echo "::error::JAVA_HOME_17_X64 ausente no runner."; exit 1; }
+          echo "${JAVA_HOME_17_X64}/bin" >> "${GITHUB_PATH}"
+          echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> "${GITHUB_ENV}"
+
+      - name: Conferir Java 17
+        run: |
+          java -version
+          javac -version
+
+      - name: Instalar dependências do harness
+        run: npm ci --ignore-scripts
+
+      - name: Prisma generate (dependência do toolchain)
+        run: npx prisma generate
+
+      - name: Reverificar hashes dos artefatos XSD
+        run: npm run fiscal:xsd:verify-hashes
+
+      - name: Baixar bundle verificado (fase conectada)
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ env.BUNDLE_ARTIFACT }}
+          path: bundle
+
+      - name: Reconferir SHA-256 do Docker archive contra o lock
+        run: |
+          dl="$(sha256sum "bundle/${DOCKER_ARCHIVE}" | cut -d' ' -f1)"
+          if [ "${dl}" != "${DOCKER_ARCHIVE_SHA256}" ]; then
+            echo "::error::SHA-256 do Docker archive (${dl}) diverge do lock (${DOCKER_ARCHIVE_SHA256})."
+            exit 1
+          fi
+
+      - name: Carregar imagem do archive e conferir identidade
+        run: |
+          docker load --input "bundle/${DOCKER_ARCHIVE}"
+          loaded="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
+          if [ "${loaded}" != "${IMAGE_ID}" ]; then
+            echo "::error::Image ID carregado (${loaded}) diverge do lock (${IMAGE_ID})."
+            exit 1
+          fi
+          if [ "$(docker image inspect "${IMAGE_TAG}" --format '{{.Config.User}}')" != "10001:10001" ]; then
+            echo "::error::Imagem carregada não roda como 10001:10001."
+            exit 1
+          fi
+          echo "Imagem carregada confere (${IMAGE_ID}, user 10001:10001)."
+
+      - name: Subir worker em rede Docker --internal e provar readiness
+        run: |
+          mkdir -p out
+          docker network create --internal "${NETWORK}"
+          docker run --detach --name "${CONTAINER}" \
+            --network "${NETWORK}" \
+            --network-alias worker.internal \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=10001,gid=10001 \
+            --memory 768m --cpus 1 --pids-limit 64 \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            "${IMAGE_TAG}"
+          for _ in $(seq 1 30); do
+            if docker exec "${CONTAINER}" node -e "fetch('http://127.0.0.1:8080/ready').then(r=>r.ok?r.text():Promise.reject(new Error(String(r.status)))).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))" > out/ready.json; then
+              break
+            fi
+            sleep 1
+          done
+          cat out/ready.json; echo
+          grep -F '"libxml2Version":"2.15.3"' out/ready.json || { echo "::error::Readiness sem libxml2 2.15.3."; exit 1; }
+          grep -F "\"schemaManifestHash\":\"${SCHEMA_MANIFEST_SHA256}\"" out/ready.json || { echo "::error::Readiness sem schema manifest esperado."; exit 1; }
+
+      - name: Provar ZERO EGRESS externo (rede --internal + probes que devem falhar)
+        run: |
+          [ "$(docker network inspect "${NETWORK}" --format '{{.Internal}}')" = "true" ] || { echo "::error::Rede não é --internal."; exit 1; }
+          docker exec "${CONTAINER}" node -e "fetch('https://www.nfe.fazenda.gov.br',{signal:AbortSignal.timeout(3000)}).then(()=>process.exit(1)).catch(()=>process.exit(0))" \
+            || { echo "::error::Egress HTTP externo NÃO foi bloqueado."; exit 1; }
+          docker exec "${CONTAINER}" node -e "require('dns').promises.lookup('www.nfe.fazenda.gov.br').then(()=>process.exit(1)).catch(()=>process.exit(0))" \
+            || { echo "::error::Resolução DNS externa NÃO foi bloqueada."; exit 1; }
+
+      - name: PROVA (host) — pipeline XML + Java 17 + net-guard + manifesto parcial (composition-gate)
+        run: |
+          mkdir -p out
+          npx vitest run tools/fiscal-dry-run-integrity-proof/proof.test.ts 2>&1 | tee out/proof-host.log
+
+      - name: PROVA (worker real) — matriz 1+8 no container da rede --internal (Java-free)
+        run: |
+          mkdir -p out
+          docker pull "${NODE_IMAGE}"
+          docker run --rm \
+            --network "${NETWORK}" \
+            --volume "${PWD}":/workspace \
+            --workdir /workspace \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --env FISCAL_XSD_WORKER_URL="${WORKER_URL}" \
+            "${NODE_IMAGE}" \
+            sh -c 'npx vitest run tools/fiscal-dry-run-integrity-proof/matrix.test.ts' 2>&1 | tee out/matrix.log
+
+      - name: Garantir que o manifesto golden segue PARCIAL (não elevado neste workflow)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("tools/fiscal-dry-run-integrity-proof/evidence/manifest.json", "utf8"));
+            if (m.proofState !== "partial") { console.error("::error::manifesto elevado (proofState=" + m.proofState + ")"); process.exit(1); }
+            if (m.verification.xsd !== false) { console.error("::error::verification.xsd != false"); process.exit(1); }
+            if (!(m.blockingReasons || []).includes("XSD_WORKER_REAL_UNAVAILABLE")) { console.error("::error::blockingReasons sem XSD_WORKER_REAL_UNAVAILABLE"); process.exit(1); }
+            console.log("Manifesto golden segue PARCIAL — não elevado (elevação é o passo H4).");
+          '
+
+      - name: Healthcheck final do worker
+        run: |
+          docker exec "${CONTAINER}" node -e "fetch('http://127.0.0.1:8080/health').then(r=>r.json()).then(b=>process.exit(b.status==='ok'?0:1)).catch(()=>process.exit(1))" \
+            || { echo "::error::Healthcheck não saudável ao final."; exit 1; }
+
+      - name: Upload de evidências e logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.EVIDENCE_ARTIFACT }}
+          path: |
+            out/proof-host.log
+            out/matrix.log
+            out/ready.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Diagnóstico do worker em falha
+        if: failure()
+        run: docker logs "${CONTAINER}" || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f "${CONTAINER}" 2>/dev/null || true
+          docker network rm "${NETWORK}" 2>/dev/null || true

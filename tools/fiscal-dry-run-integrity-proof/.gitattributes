@@ -1,0 +1,4 @@
+# O manifesto golden (evidence/manifest.json) é comparado byte-a-byte pelos testes; os fontes do
+# harness usam "\n" literal. Forçar LF evita que um checkout Windows (core.autocrlf=true) converta
+# para CRLF e quebre a comparação do golden — o blob commitado é sempre LF.
+* text=auto eol=lf
