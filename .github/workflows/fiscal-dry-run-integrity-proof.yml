@@ -15,7 +15,10 @@ name: Fiscal Dry-Run Integrity Proof (005B)
 #                                `--internal`, roda o harness contra o worker real, bloqueia egress,
 #                                executa a verificação Java 17 e produz evidências/logs.
 #
-# NÃO eleva o manifesto golden ao estado completo: a elevação é um passo autorizado à parte (H4).
+# Por PADRÃO (H3) NÃO eleva o manifesto golden: apenas PROVA e exige que o golden siga PARCIAL.
+# A elevação (H4) é OPT-IN explícito e fail-closed — ver `elevate_manifest` + `elevation_confirmation`.
+# Mesmo no H4 o workflow NUNCA commita nem faz push: as permissões seguem somente leitura e o
+# manifesto completo sai apenas como ARTIFACT verificável, para adoção humana num passo à parte.
 
 on:
   workflow_dispatch:
@@ -25,6 +28,16 @@ on:
         required: false
         default: false
         type: boolean
+      elevate_manifest:
+        description: "H4 — elevar o manifesto ao estado completo (opt-in). Exige confirmação exata, ref=main e allow_branch_override=true."
+        required: false
+        default: false
+        type: boolean
+      elevation_confirmation:
+        description: "H4 — digite exatamente ELEVATE-GOAL-005B-H4 para autorizar a elevação."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -55,6 +68,16 @@ env:
   CONTAINER: fiscal-dry-run-worker-005b
   BUNDLE_ARTIFACT: fiscal-dry-run-005b-bundle-${{ github.sha }}
   EVIDENCE_ARTIFACT: fiscal-dry-run-005b-evidence-${{ github.sha }}
+  # --- H4 (elevação opt-in; inerte quando elevate_manifest=false) ---
+  ELEVATION_PHRASE: ELEVATE-GOAL-005B-H4
+  MANIFEST_PATH: tools/fiscal-dry-run-integrity-proof/evidence/manifest.json
+  # `tsx` é devDependency FIXADA (package.json + package-lock) e chega pelo `npm ci --ignore-scripts`
+  # do próprio harness: sem instalação dinâmica e sem executar script de instalação de terceiros.
+  # O executor da elevação roda offline (rede --internal), onde `npx tsx` não baixaria nada.
+  # Esta env é a versão ESPERADA e é conferida contra a instalada no smoke de transpilação.
+  TSX_VERSION: 4.23.1
+  H4_ARTIFACT: fiscal-dry-run-005b-h4-complete-manifest-${{ github.run_id }}
+  H4_DIAGNOSTICS_ARTIFACT: fiscal-dry-run-005b-h4-diagnostics-${{ github.run_id }}
 
 defaults:
   run:
@@ -72,6 +95,21 @@ jobs:
             echo "::error::Este workflow deve rodar em ${EXPECTED_REF} (ref atual: ${GITHUB_REF})."
             exit 1
           fi
+
+      # H4: barra a elevação mal autorizada ANTES de qualquer trabalho pesado (download do bundle).
+      # A frase de confirmação chega por `env` (nunca interpolada no corpo do shell) para não abrir
+      # vetor de injeção via input de texto controlado pelo operador.
+      - name: Gate de autorização H4 (fail-closed)
+        if: ${{ inputs.elevate_manifest }}
+        env:
+          ELEVATION_CONFIRMATION: ${{ inputs.elevation_confirmation }}
+        run: |
+          fail=0
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::H4 exige ref=refs/heads/main (atual: ${GITHUB_REF})."; fail=1; }
+          [ "${{ inputs.allow_branch_override }}" = "true" ] || { echo "::error::H4 exige allow_branch_override=true."; fail=1; }
+          [ "${ELEVATION_CONFIRMATION}" = "${ELEVATION_PHRASE}" ] || { echo "::error::elevation_confirmation não confere — deve ser exatamente ${ELEVATION_PHRASE}."; fail=1; }
+          [ "${fail}" -eq 0 ] || exit 1
+          echo "Autorização H4 confirmada (ref=main, override=true, confirmação exata)."
 
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -278,6 +316,293 @@ jobs:
         run: |
           docker exec "${CONTAINER}" node -e "fetch('http://127.0.0.1:8080/health').then(r=>r.json()).then(b=>process.exit(b.status==='ok'?0:1)).catch(()=>process.exit(1))" \
             || { echo "::error::Healthcheck não saudável ao final."; exit 1; }
+
+      # ══════════════════════════════════════════════════════════════════════════════════════
+      # H4 — ELEVAÇÃO OPT-IN DO MANIFESTO.
+      # Todos os passos abaixo só rodam com `elevate_manifest=true`. Com o default (false) são
+      # PULADOS e tudo acima permanece exatamente o fluxo H3 — inclusive a exigência de golden
+      # PARCIAL, que continua sendo a última palavra do H3.
+      # ══════════════════════════════════════════════════════════════════════════════════════
+
+      - name: H4 — reafirmar autorização e pré-condições (fail-closed)
+        if: ${{ inputs.elevate_manifest }}
+        env:
+          ELEVATION_CONFIRMATION: ${{ inputs.elevation_confirmation }}
+        run: |
+          fail=0
+          # Autorização (defesa em profundidade — o gate da fase conectada já barrou o caso trivial).
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::H4 exige ref=refs/heads/main (atual: ${GITHUB_REF})."; fail=1; }
+          [ "${{ inputs.allow_branch_override }}" = "true" ] || { echo "::error::H4 exige allow_branch_override=true."; fail=1; }
+          [ "${ELEVATION_CONFIRMATION}" = "${ELEVATION_PHRASE}" ] || { echo "::error::elevation_confirmation não confere."; fail=1; }
+          # Worker real pronto, com engine e schemas esperados.
+          [ -s out/ready.json ] || { echo "::error::readiness do worker ausente."; fail=1; }
+          grep -qF '"name":"xmllint"' out/ready.json || { echo "::error::readiness sem engine xmllint."; fail=1; }
+          grep -qF '"libxml2Version":"2.15.3"' out/ready.json || { echo "::error::readiness sem libxml2 2.15.3."; fail=1; }
+          grep -qF "\"schemaManifestHash\":\"${SCHEMA_MANIFEST_SHA256}\"" out/ready.json || { echo "::error::readiness sem schemaManifestHash esperado."; fail=1; }
+          # Rede interna e identidade da imagem (lock) confirmadas.
+          [ "$(docker network inspect "${NETWORK}" --format '{{.Internal}}')" = "true" ] || { echo "::error::rede não é --internal."; fail=1; }
+          [ "$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')" = "${IMAGE_ID}" ] || { echo "::error::image ID diverge do lock."; fail=1; }
+          # Matriz 1+8 verde: positivo aprovado, worker real e zero egress. O passo da matriz é
+          # obrigatório e já rodou; estes greps tornam a dependência explícita e auditável.
+          [ -s out/matrix.log ] || { echo "::error::log da matriz ausente."; fail=1; }
+          grep -qF '"status":"xsd_ok"' out/matrix.log || { echo "::error::matriz sem positivo xsd_ok."; fail=1; }
+          grep -qF '"workerReal":true' out/matrix.log || { echo "::error::matriz sem workerReal=true."; fail=1; }
+          grep -qF '"egressExternal":0' out/matrix.log || { echo "::error::matriz sem egressExternal=0."; fail=1; }
+          # Baseline: o golden versionado precisa estar PARCIAL antes de qualquer elevação.
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"));
+            if (m.proofState !== "partial" || m.verification.xsd !== false || m.verification.xsdWorkerReal !== false) {
+              console.error("::error::baseline do golden nao esta PARCIAL — elevacao abortada.");
+              process.exit(1);
+            }
+            console.log("Baseline PARCIAL confirmado antes da elevacao.");
+          ' || fail=1
+          [ "${fail}" -eq 0 ] || exit 1
+          echo "Pré-condições H4 satisfeitas."
+
+      - name: H4 — smoke real de transpilação do tsx (fixado; sem instalação dinâmica)
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          mkdir -p out out/h4-tsx-smoke
+          test -x node_modules/.bin/tsx \
+            || { echo "::error::tsx ausente — deve vir do npm ci --ignore-scripts (devDependency fixada)."; exit 1; }
+          installed="$(node -p "require('./node_modules/tsx/package.json').version")"
+          if [ "${installed}" != "${TSX_VERSION}" ]; then
+            echo "::error::tsx instalado (${installed}) diverge da versão fixada (${TSX_VERSION})."
+            exit 1
+          fi
+          # `enum` exige TRANSPILAÇÃO real — o modo strip-only do Node a rejeita. Isso prova que o
+          # binário do esbuild funciona mesmo com os scripts de instalação desligados.
+          cat > out/h4-tsx-smoke/smoke.ts <<'TS'
+          enum Gate { H4 = "H4" }
+          type Marker = { gate: Gate; ok: boolean }
+          const marker: Marker = { gate: Gate.H4, ok: true }
+          console.log(`H4_TSX_SMOKE_OK ${marker.gate} ${marker.ok}`)
+          TS
+          node_modules/.bin/tsx out/h4-tsx-smoke/smoke.ts 2>&1 | tee out/h4-tsx-smoke.log
+          grep -qF 'H4_TSX_SMOKE_OK H4 true' out/h4-tsx-smoke.log \
+            || { echo "::error::smoke de transpilação do tsx falhou."; exit 1; }
+
+      - name: H4 — provar Java 17 DENTRO do contêiner da elevação (JDK por bind-mount)
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          mkdir -p out out/h4-java-gate
+          cat > out/h4-java-gate/H4JavaGate.java <<'JAVA'
+          public class H4JavaGate {
+            public static void main(String[] args) {
+              System.out.println("H4_JAVA_GATE_OK " + System.getProperty("java.version"));
+            }
+          }
+          JAVA
+          # Mesma imagem, mesma rede --internal e mesmo bind-mount do JDK que a elevação usa: prova
+          # que o JDK do runner (Ubuntu) roda dentro do bookworm ANTES de gastar a elevação. Compila
+          # e EXECUTA uma classe mínima — `java -version` sozinho não provaria o javac.
+          docker run --rm \
+            --network "${NETWORK}" \
+            --volume "${PWD}/out/h4-java-gate":/gate \
+            --volume "${JAVA_HOME}":/opt/java17:ro \
+            --workdir /gate \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --env JAVA_HOME=/opt/java17 \
+            --env PATH=/opt/java17/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            "${NODE_IMAGE}" \
+            sh -c 'set -e; java -version; javac -version; javac --release 17 H4JavaGate.java; java -cp . H4JavaGate' \
+            2>&1 | tee out/h4-java-gate.log
+          grep -qF 'H4_JAVA_GATE_OK 17.' out/h4-java-gate.log \
+            || { echo "::error::gate Java 17 no contêiner não confirmou runtime 17."; exit 1; }
+
+      - name: H4 — elevar o manifesto (run.ts --update-manifest, worker real, rede --internal)
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          mkdir -p out
+          # Executor conectado SOMENTE à rede --internal do worker: sem rota externa, alcançando
+          # `worker.internal` pelo DNS do Docker. Nunca composition-gate — FISCAL_XSD_WORKER_URL real.
+          # O JDK 17 já validado do runner entra por bind-mount somente-leitura porque o harness exige
+          # verificação externa Java e a imagem Node não traz JDK.
+          docker run --rm \
+            --network "${NETWORK}" \
+            --volume "${PWD}":/workspace \
+            --volume "${JAVA_HOME}":/opt/java17:ro \
+            --workdir /workspace \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --env JAVA_HOME=/opt/java17 \
+            --env PATH=/opt/java17/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            --env FISCAL_XSD_WORKER_URL="${WORKER_URL}" \
+            "${NODE_IMAGE}" \
+            node_modules/.bin/tsx tools/fiscal-dry-run-integrity-proof/run.ts --update-manifest \
+            2>&1 | tee out/h4-elevation.log
+
+      - name: H4 — exigir manifesto COMPLETO (campos obrigatórios)
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"));
+            const v = m.verification || {};
+            const errs = [];
+            const eq = (path, actual, expected) => {
+              if (actual !== expected) errs.push(path + "=" + JSON.stringify(actual) + " != " + JSON.stringify(expected));
+            };
+            eq("proofState", m.proofState, "complete");
+            eq("verification.xsd", v.xsd, true);
+            eq("verification.xsdContract", v.xsdContract, true);
+            eq("verification.xsdStatus", v.xsdStatus, "approved-real");
+            eq("verification.xsdEngineName", v.xsdEngineName, "xmllint");
+            eq("verification.xsdWorkerReal", v.xsdWorkerReal, true);
+            if (!Array.isArray(m.blockingReasons) || m.blockingReasons.length !== 0) {
+              errs.push("blockingReasons nao vazio: " + JSON.stringify(m.blockingReasons));
+            }
+            if (errs.length) { for (const e of errs) console.error("::error::" + e); process.exit(1); }
+            console.log("Manifesto COMPLETO conforme exigido.");
+          '
+
+      - name: H4 — confirmar invariantes de hashes contra o golden do commit executado
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          mkdir -p out
+          git show "${GITHUB_SHA}:${MANIFEST_PATH}" > out/h4-baseline-manifest.json
+          node -e '
+            const fs = require("fs");
+            const base = JSON.parse(fs.readFileSync("out/h4-baseline-manifest.json", "utf8"));
+            const now = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"));
+            const keys = ["snapshotSha256","unsignedXmlSha256","referencedNodeC14nSha256","signedInfoSha256","signedXmlSha256"];
+            const errs = [];
+            for (const k of keys) {
+              if (base.hashes[k] !== now.hashes[k]) errs.push("hashes." + k + ": " + base.hashes[k] + " -> " + now.hashes[k]);
+            }
+            if (base.signature.digestValue !== now.signature.digestValue) {
+              errs.push("signature.digestValue: " + base.signature.digestValue + " -> " + now.signature.digestValue);
+            }
+            if (errs.length) { for (const e of errs) console.error("::error::invariante violada — " + e); process.exit(1); }
+            console.log("Invariantes preservadas: 5 hashes do fluxo XML + digestValue identicos ao golden parcial.");
+          '
+
+      - name: H4 — garantir que só o manifesto mudou no workspace
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          changed="$(git diff --name-only)"
+          echo "Arquivos versionados modificados: ${changed:-<nenhum>}"
+          if [ "${changed}" != "${MANIFEST_PATH}" ]; then
+            echo "::error::a elevação deve alterar exatamente ${MANIFEST_PATH} (alterados: ${changed:-<nenhum>})."
+            exit 1
+          fi
+
+      - name: H4 — re-executar o dry-run sem --update-manifest (exige exit code 0)
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          mkdir -p out
+          docker run --rm \
+            --network "${NETWORK}" \
+            --volume "${PWD}":/workspace \
+            --volume "${JAVA_HOME}":/opt/java17:ro \
+            --workdir /workspace \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --env JAVA_HOME=/opt/java17 \
+            --env PATH=/opt/java17/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            --env FISCAL_XSD_WORKER_URL="${WORKER_URL}" \
+            "${NODE_IMAGE}" \
+            node_modules/.bin/tsx tools/fiscal-dry-run-integrity-proof/run.ts \
+            2>&1 | tee out/h4-verify.log
+          echo "Dry-run de verificação saiu com exit 0 — manifesto completo é auto-consistente sob o worker real."
+
+      - name: H4 — montar evidências verificáveis (manifest.sha256, patch, h4-evidence.json)
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          mkdir -p out/h4
+          cp "${MANIFEST_PATH}" out/h4/manifest.json
+          ( cd out/h4 && sha256sum manifest.json > manifest.sha256 )
+          git diff -- "${MANIFEST_PATH}" > out/h4/manifest.patch
+          matrix_line="$(grep -o '{"event":"matrix_005b".*}' out/matrix.log | tail -1)"
+          [ -n "${matrix_line}" ] || { echo "::error::não foi possível extrair o JSON da matriz."; exit 1; }
+          java_runtime="$(java -version 2>&1 | head -1)"
+          MATRIX_JSON="${matrix_line}" JAVA_RUNTIME="${java_runtime}" node -e '
+            const fs = require("fs");
+            const manifest = JSON.parse(fs.readFileSync("out/h4/manifest.json", "utf8"));
+            const ready = JSON.parse(fs.readFileSync("out/ready.json", "utf8"));
+            const matrix = JSON.parse(process.env.MATRIX_JSON);
+            const negatives = matrix.negatives || {};
+            const evidence = {
+              goal: "FISCAL-DRY-RUN-INTEGRITY-PROOF-005B",
+              gate: "H4",
+              runId: process.env.GITHUB_RUN_ID,
+              commitSha: process.env.GITHUB_SHA,
+              ref: process.env.GITHUB_REF,
+              lockSha256: process.env.LOCK_SHA256,
+              dockerArchiveSha256: process.env.DOCKER_ARCHIVE_SHA256,
+              imageId: process.env.IMAGE_ID,
+              schemaManifestHash: ready.engine.schemaManifestHash,
+              engine: {
+                name: ready.engine.name,
+                version: ready.engine.xmllintVersion,
+                libxml2Version: ready.engine.libxml2Version,
+                binaryHash: ready.engine.binaryHash,
+              },
+              workerReal: matrix.positive.workerReal === true && manifest.verification.xsdWorkerReal === true,
+              positive: { xsd: matrix.positive.xsd, status: matrix.positive.status },
+              negatives: { count: Object.keys(negatives).length, expected: 8, detail: negatives },
+              java: { runtime: process.env.JAVA_RUNTIME, externalJava17: manifest.verification.externalJava17 },
+              zeroEgress: {
+                matrixEgressExternal: matrix.egressExternal,
+                manifestExternalEgress: manifest.safety.externalEgress,
+              },
+              databaseWrites: manifest.safety.databaseWrites,
+              sefazCalls: manifest.safety.sefazCalls,
+              manifest: {
+                proofState: manifest.proofState,
+                blockingReasons: manifest.blockingReasons,
+                verification: manifest.verification,
+                hashes: manifest.hashes,
+                signatureDigestValue: manifest.signature.digestValue,
+              },
+            };
+            const errs = [];
+            if (evidence.negatives.count !== 8) errs.push("negativos=" + evidence.negatives.count + " != 8");
+            if (evidence.positive.status !== "xsd_ok" || evidence.positive.xsd !== true) errs.push("positivo nao aprovado");
+            if (evidence.workerReal !== true) errs.push("workerReal != true");
+            if (evidence.engine.name !== "xmllint") errs.push("engine != xmllint");
+            if (evidence.databaseWrites !== 0) errs.push("databaseWrites != 0");
+            if (evidence.sefazCalls !== 0) errs.push("sefazCalls != 0");
+            if (evidence.zeroEgress.matrixEgressExternal !== 0 || evidence.zeroEgress.manifestExternalEgress !== 0) errs.push("egress externo != 0");
+            if (errs.length) { for (const e of errs) console.error("::error::" + e); process.exit(1); }
+            fs.writeFileSync("out/h4/h4-evidence.json", JSON.stringify(evidence, null, 2) + "\n");
+            console.log("h4-evidence.json montado e conferido.");
+          '
+
+      - name: H4 — upload do manifesto completo e das evidências (sem commit/push)
+        if: ${{ inputs.elevate_manifest }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.H4_ARTIFACT }}
+          path: |
+            out/h4/manifest.json
+            out/h4/manifest.sha256
+            out/h4/manifest.patch
+            out/h4/h4-evidence.json
+            out/h4-elevation.log
+            out/h4-verify.log
+          if-no-files-found: error
+          retention-days: 90
+
+      # Diagnóstico da elevação — publica os logs H4 MESMO QUANDO A ELEVAÇÃO FALHA (o artifact acima
+      # é fail-closed e não sai em falha). Só logs de gate/execução: versões, hashes e o JSON público
+      # do harness — sem XML, credencial, token ou dado fiscal. Um upload NUNCA converte falha em
+      # sucesso: a conclusão do job continua sendo a do passo que falhou.
+      - name: H4 — diagnóstico da elevação (sempre, inclusive em falha)
+        if: ${{ always() && inputs.elevate_manifest }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.H4_DIAGNOSTICS_ARTIFACT }}
+          path: |
+            out/h4-tsx-smoke.log
+            out/h4-java-gate.log
+            out/h4-elevation.log
+            out/h4-verify.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload de evidências e logs
         if: always()
