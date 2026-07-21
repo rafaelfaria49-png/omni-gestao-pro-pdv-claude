@@ -28,18 +28,18 @@ describe("avaliarAcessoContador (ACL multi-loja)", () => {
     expect(avaliarAcessoContador(s, "   ")).toEqual({ ok: false, motivo: "loja_ausente" })
   })
 
-  it('storeAccess="all" sem permissão Financeiro → sem_permissao', () => {
+  it('storeAccess="all" sem permissão Contador → sem_permissao', () => {
     const s = sessao({ storeAccess: "all", role: "VENDEDOR" } as Partial<Session["user"]>)
     expect(avaliarAcessoContador(s, "loja-9")).toEqual({ ok: false, motivo: "sem_permissao" })
   })
 
-  it('storeAccess="all" com permissão Financeiro segue o contrato real da plataforma', () => {
+  it('storeAccess="all" com permissão Contador segue o contrato real da plataforma', () => {
     const s = sessao({ storeAccess: "all", role: "ADMIN" } as Partial<Session["user"]>)
     expect(avaliarAcessoContador(s, "loja-9")).toEqual({
       ok: true,
       storeId: "loja-9",
       userId: "user-1",
-      permissaoFinanceiro: true,
+      permissaoContador: true,
     })
   })
 
@@ -54,7 +54,7 @@ describe("avaliarAcessoContador (ACL multi-loja)", () => {
       ok: true,
       storeId: "loja-2",
       userId: "user-1",
-      permissaoFinanceiro: true,
+      permissaoContador: true,
     })
   })
 

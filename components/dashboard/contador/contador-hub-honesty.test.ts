@@ -87,7 +87,8 @@ describe("Contador HUB — CTAs sem efeito real não podem parecer operacionais 
     const tags = hubSrc.match(JSX_TAG) ?? []
     const acaoTags = tags.filter((t) => /\bnoop\(|\bonNoop\(/.test(t))
     // Confirma que a varredura encontrou algo (evita passar "por vazio").
-    expect(acaoTags.length).toBeGreaterThanOrEqual(16)
+    // GOAL 010: a seção Documentos deixou de ser preview (removeu CTAs noop dela).
+    expect(acaoTags.length).toBeGreaterThanOrEqual(12)
     const semDisabled = acaoTags.filter((t) => !/\bdisabled\b/.test(t))
     expect(semDisabled, `CTA(s) sem "disabled": ${semDisabled.join(" | ")}`).toEqual([])
   })
@@ -112,8 +113,9 @@ describe("Contador HUB — CTAs sem efeito real não podem parecer operacionais 
   })
 
   it("'Ver' que abre o drawer ilustrativo foi rotulado como demonstração ('Ver exemplo')", () => {
+    // GOAL 010: Documentos virou real; o 'Ver exemplo' remanescente está em Obrigações.
     const occurrences = hubSrc.split("Ver exemplo").length - 1
-    expect(occurrences).toBeGreaterThanOrEqual(2)
+    expect(occurrences).toBeGreaterThanOrEqual(1)
   })
 })
 
@@ -127,14 +129,17 @@ describe("Contador HUB — valores sensíveis do preview seguem marcados como il
     expect(dataSrc).toMatch(/name: "Honorários do contador"[\s\S]*?preview: true/)
   })
 
-  it("Visão geral, Fechamento e Documentos têm PreviewBanner próprio (antes não tinham nenhum)", () => {
+  it("Visão geral e Fechamento têm PreviewBanner próprio; Documentos agora é REAL (GOAL 010)", () => {
     const renderVisaoIdx = hubSrc.indexOf("const renderVisao = ()")
     const renderFechamentoIdx = hubSrc.indexOf("const renderFechamento = ()")
-    const renderDocumentosIdx = hubSrc.indexOf("const docsFiltered =")
+    const renderDocumentosIdx = hubSrc.indexOf("const renderDocumentos = ()")
     const renderObrigacoesIdx = hubSrc.indexOf("const renderObrigacoes = ()")
     expect(hubSrc.slice(renderVisaoIdx, renderFechamentoIdx)).toContain("<PreviewBanner")
     expect(hubSrc.slice(renderFechamentoIdx, renderDocumentosIdx)).toContain("<PreviewBanner")
-    expect(hubSrc.slice(renderDocumentosIdx, renderObrigacoesIdx)).toContain("<PreviewBanner")
+    // A seção Documentos deixou de ser preview: renderiza o componente real, sem PreviewBanner.
+    const documentos = hubSrc.slice(renderDocumentosIdx, renderObrigacoesIdx)
+    expect(documentos).toContain("<ContadorDocumentosReal")
+    expect(documentos).not.toContain("<PreviewBanner")
   })
 })
 
@@ -182,7 +187,7 @@ describe("Contador HUB — navegação não afirma ações reais sobre dados est
     const renderVisaoIdx = hubSrc.indexOf("const renderVisao = ()")
     const renderFechamentoIdx = hubSrc.indexOf("const renderFechamento = ()")
     expect(hubSrc.slice(renderVisaoIdx, renderFechamentoIdx)).toContain("itens concluídos")
-    expect(hubSrc.slice(renderFechamentoIdx, hubSrc.indexOf("const docsFiltered"))).not.toContain(
+    expect(hubSrc.slice(renderFechamentoIdx, hubSrc.indexOf("const renderDocumentos = ()"))).not.toContain(
       "itens concluídos",
     )
   })
@@ -197,7 +202,7 @@ describe("Contador HUB — checklist de fechamento derivado (GOAL 007)", () => {
 
   it("CTA Fechar competência aponta para GOAL 012 e permanece disabled", () => {
     const renderFechamentoIdx = hubSrc.indexOf("const renderFechamento = ()")
-    const renderDocsIdx = hubSrc.indexOf("const docsFiltered =")
+    const renderDocsIdx = hubSrc.indexOf("const renderDocumentos = ()")
     const body = hubSrc.slice(renderFechamentoIdx, renderDocsIdx)
     expect(body).toContain("FECHAR_COMPETENCIA_TITLE")
     expect(body).toContain("disabled")
@@ -312,7 +317,7 @@ describe("Contador HUB — card ilustrativo Preview ≠ checklist real derivado 
 
   it("o checklist real derivado (seção Fechamento) não usa ProgressRing nem percentagem", () => {
     const renderFechamentoIdx = hubSrc.indexOf("const renderFechamento = ()")
-    const renderDocsIdx = hubSrc.indexOf("const docsFiltered =")
+    const renderDocsIdx = hubSrc.indexOf("const renderDocumentos = ()")
     const fechamento = hubSrc.slice(renderFechamentoIdx, renderDocsIdx)
     expect(fechamento).toContain("ContadorFechamentoChecklist")
     expect(fechamento).not.toContain("ProgressRing")

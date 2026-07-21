@@ -30,7 +30,7 @@ const competencia = { ano: 2026, mes: 6 }
 const periodo = resolvePeriodoUtc(competencia)
 const STORE = "loja-teste-42"
 const USER = "user-abc"
-const scope = { ok: true, storeId: STORE, userId: USER, permissaoFinanceiro: true } as unknown as ContadorScopeInterno
+const scope = { ok: true, storeId: STORE, userId: USER, permissaoContador: true } as unknown as ContadorScopeInterno
 
 const J = (d: string) => new Date(`2026-06-${d}T12:00:00.000Z`)
 

@@ -18,10 +18,11 @@
 | Visão Geral + relatórios básicos com dados reais | ✅ real | `app/dashboard/contador/page.tsx` (GOAL 006) |
 | Checklist de fechamento derivado · "Fechar" desabilitado | ✅ real (RO) | `lib/contador/fechamento/montar-checklist.ts` (GOAL 007) |
 | Pacote MVP sob demanda (ZIP + CSVs + manifesto v1 + sha256) · sem persistência | ✅ real (MVP) | `app/api/contador/pacote/route.ts` (GOAL 008) |
+| Documentos reais · upload privado Supabase (intent→PUT assinado→complete) · SHA-256 server · download assinado ≤300s · substituição versionada · soft delete · eventos | ✅ real | `lib/contador/documentos/*`, `app/api/contador/documentos/*`, `components/dashboard/contador/documentos/*` (GOAL 010) · permissão `hubs.contador` · requer bucket+secrets externos (`scripts/contador/setup-storage.mjs`) |
 | Domínio persistido (Competencia, Documento, Pacote, Comentario, Evento) | ❌ não existe | nenhum model `Contador*` no schema — GOAL 009 pendente |
 | Fechamento oficial com snapshot + versão | ❌ não existe | GOAL 012 pendente |
 | Portal externo v2 | ❌ não existe | GOALs 013–015 pendentes (G3) |
-| Documentos, Obrigações, Guias, Timeline, Permissões (UI) | 🟡 preview | aguardam GOALs 010–016 |
+| Obrigações, Guias, Timeline, Permissões (UI) | 🟡 preview | aguardam GOALs 011–016 |
 
 ### Planejamento (série 001 — publicada em `docs/contador/`)
 

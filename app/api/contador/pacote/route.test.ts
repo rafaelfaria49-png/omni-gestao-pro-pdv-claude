@@ -18,7 +18,7 @@ import { requireContadorScope } from "@/lib/contador/scope"
 import { gerarPacoteContador, PacoteLimiteExcedidoError, PacoteTimeoutError } from "@/lib/contador/pacote"
 import { competenciaAtual } from "@/lib/contador/competencia"
 
-const scopeOk = { ok: true, storeId: "loja-1", userId: "u1", permissaoFinanceiro: true } as const
+const scopeOk = { ok: true, storeId: "loja-1", userId: "u1", permissaoContador: true } as const
 
 const pacoteFake = {
   nomeArquivo: "pacote-contador-loja-1-2026-06.zip",

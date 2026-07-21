@@ -12,7 +12,7 @@ export type ContadorScopeInterno = Readonly<{
   ok: true
   storeId: string
   userId: string
-  permissaoFinanceiro: true
+  permissaoContador: true
   [CONTADOR_SCOPE_VALIDADO]: true
 }>
 
@@ -26,7 +26,7 @@ export type AvaliacaoAcessoContador =
       ok: true
       storeId: string
       userId: string
-      permissaoFinanceiro: true
+      permissaoContador: true
     }>
   | FalhaEscopoContador
 
@@ -43,10 +43,11 @@ export function avaliarAcessoContador(
   const storeId = (storeIdSelecionado ?? "").trim()
   if (!storeId) return { ok: false, motivo: "loja_ausente" }
   if (!canAccessStore(session, storeId)) return { ok: false, motivo: "sem_acesso_loja" }
-  if (!getPermissionsFromSession(session).hubs.financeiro) {
+  // Permissão DEDICADA do Contador HUB (GOAL 010). Não usa mais `hubs.financeiro`.
+  if (!getPermissionsFromSession(session).hubs.contador) {
     return { ok: false, motivo: "sem_permissao" }
   }
 
   // Decisao serializavel e ainda nao nominal; somente o gate com IO aplica o brand interno.
-  return Object.freeze({ ok: true, storeId, userId, permissaoFinanceiro: true })
+  return Object.freeze({ ok: true, storeId, userId, permissaoContador: true })
 }

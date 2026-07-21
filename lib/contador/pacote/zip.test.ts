@@ -35,7 +35,7 @@ describe("ziparArquivos", () => {
 describe("Pacote 008B — ZIP com estrutura fixa e integridade", () => {
   const competencia = { ano: 2026, mes: 6 }
   const periodo = resolvePeriodoUtc(competencia)
-  const scope = { ok: true, storeId: "loja-1", userId: "u1", permissaoFinanceiro: true } as unknown as ContadorScopeInterno
+  const scope = { ok: true, storeId: "loja-1", userId: "u1", permissaoContador: true } as unknown as ContadorScopeInterno
   const J = (d: string) => new Date(`2026-06-${d}T12:00:00.000Z`)
 
   const cliente: PacoteReaderClient = {

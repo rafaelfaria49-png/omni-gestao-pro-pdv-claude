@@ -61,9 +61,9 @@ import {
   PACOTE_INDISPONIVEL_TITLE,
   usePacoteDownload,
 } from "./contador-pacote-download"
+import { ContadorDocumentosReal } from "./documentos/contador-documentos-real"
 import {
   CONTADOR_SECTIONS,
-  DOCUMENTOS_ROWS,
   DOSSIES,
   DOSSIE_FILTERS,
   FOLHA_FUNCIONARIOS,
@@ -82,7 +82,6 @@ import {
   dossieRowMatches,
   type ChipVariant,
   type ContadorSectionId,
-  type DocSeg,
   type DossieFilter,
   type DossieOrigem,
 } from "./contador-preview-data"
@@ -266,7 +265,6 @@ export function ContadorHubPreview({
   const [active, setActive] = useState<ContadorSectionId>("visao")
   const [modo, setModo] = useState(false)
   const [dossieFilter, setDossieFilter] = useState<DossieFilter>("all")
-  const [docSeg, setDocSeg] = useState<DocSeg>("all")
   const [toast, setToast] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<{ kind: "doc" | "guia"; title: string } | null>(null)
 
@@ -527,96 +525,8 @@ export function ContadorHubPreview({
     </>
   )
 
-  /* ── seção: Documentos ── */
-  const docsFiltered = DOCUMENTOS_ROWS.filter((d) => docSeg === "all" || d.seg === docSeg)
-  const renderDocumentos = () => (
-    <>
-      <SectionHeader
-        title="Documentos"
-        desc={
-          <>
-            Arquivos trocados com o contador na competência de <b className="text-foreground">{compShort}</b>.
-          </>
-        }
-        actions={
-          <>
-            <div className="inline-flex rounded-lg border border-border bg-muted/60 p-0.5">
-              {(
-                [
-                  { id: "all", label: "Todos" },
-                  { id: "send", label: "A enviar" },
-                  { id: "recv", label: "Recebidos" },
-                ] as { id: DocSeg; label: string }[]
-              ).map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setDocSeg(s.id)}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-[12.5px] font-semibold transition-colors",
-                    docSeg === s.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-            <Btn variant="primary" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Anexar documento")}>
-              <Plus className="h-4 w-4" />
-              Anexar documento
-            </Btn>
-          </>
-        }
-      />
-      <PreviewBanner
-        title="Preview — documentos e valores ilustrativos."
-        text="Nomes, números de nota e valores desta lista são fictícios, para exemplificar o layout. Nenhum arquivo é enviado, recebido ou armazenado nesta fase."
-      />
-      <Card className="mt-4 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-[13px]">
-            <thead>
-              <Thead cols={["Documento", "Tipo", "Competência", "Status", "Ações"]} lastRight />
-            </thead>
-            <tbody>
-              {docsFiltered.map((d, i) => (
-                <tr key={i} className="border-b border-border/60 last:border-b-0 hover:bg-muted/40">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-4.5 w-4.5 shrink-0 text-muted-foreground" />
-                      <div>
-                        <span className="flex flex-wrap items-center gap-1.5 font-semibold text-foreground">
-                          {d.name}
-                          {d.preview ? <PreviewPill /> : null}
-                        </span>
-                        <span className="text-[11.5px] text-muted-foreground">{d.sub}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">{d.tipo}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{compCode}</td>
-                  <td className="px-4 py-3">
-                    <Chip variant={d.status.variant}>{d.status.label}</Chip>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {d.kind === "recv" ? (
-                      <Btn size="sm" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Baixar documento")}>
-                        Baixar
-                      </Btn>
-                    ) : (
-                      <Btn size="sm" onClick={() => openDrawer("doc", d.name)}>
-                        Ver exemplo
-                      </Btn>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </>
-  )
+  /* ── seção: Documentos (GOAL 010 — REAL: upload/listagem/download/exclusão) ── */
+  const renderDocumentos = () => <ContadorDocumentosReal competencia={competencia} />
 
   /* ── seção: Obrigações ── */
   const renderObrigacoes = () => (
