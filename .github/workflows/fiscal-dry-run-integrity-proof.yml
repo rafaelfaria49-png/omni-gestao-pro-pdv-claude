@@ -71,11 +71,13 @@ env:
   # --- H4 (elevação opt-in; inerte quando elevate_manifest=false) ---
   ELEVATION_PHRASE: ELEVATE-GOAL-005B-H4
   MANIFEST_PATH: tools/fiscal-dry-run-integrity-proof/evidence/manifest.json
-  # `tsx` NÃO é dependência do repo e o executor da elevação roda offline (rede --internal), onde
-  # `npx tsx` não conseguiria baixar nada. Por isso é provisionado no host, com versão fixada — a
-  # mesma já exercitada com este repositório e Node 20.20.2.
+  # `tsx` é devDependency FIXADA (package.json + package-lock) e chega pelo `npm ci --ignore-scripts`
+  # do próprio harness: sem instalação dinâmica e sem executar script de instalação de terceiros.
+  # O executor da elevação roda offline (rede --internal), onde `npx tsx` não baixaria nada.
+  # Esta env é a versão ESPERADA e é conferida contra a instalada no smoke de transpilação.
   TSX_VERSION: 4.23.1
   H4_ARTIFACT: fiscal-dry-run-005b-h4-complete-manifest-${{ github.run_id }}
+  H4_DIAGNOSTICS_ARTIFACT: fiscal-dry-run-005b-h4-diagnostics-${{ github.run_id }}
 
 defaults:
   run:
@@ -359,12 +361,57 @@ jobs:
           [ "${fail}" -eq 0 ] || exit 1
           echo "Pré-condições H4 satisfeitas."
 
-      - name: H4 — provisionar tsx no host (o executor da elevação roda offline)
+      - name: H4 — smoke real de transpilação do tsx (fixado; sem instalação dinâmica)
         if: ${{ inputs.elevate_manifest }}
         run: |
-          npm install --no-save --no-package-lock "tsx@${TSX_VERSION}"
-          test -x node_modules/.bin/tsx || { echo "::error::tsx não provisionado em node_modules/.bin/tsx."; exit 1; }
-          node_modules/.bin/tsx --version
+          mkdir -p out out/h4-tsx-smoke
+          test -x node_modules/.bin/tsx \
+            || { echo "::error::tsx ausente — deve vir do npm ci --ignore-scripts (devDependency fixada)."; exit 1; }
+          installed="$(node -p "require('./node_modules/tsx/package.json').version")"
+          if [ "${installed}" != "${TSX_VERSION}" ]; then
+            echo "::error::tsx instalado (${installed}) diverge da versão fixada (${TSX_VERSION})."
+            exit 1
+          fi
+          # `enum` exige TRANSPILAÇÃO real — o modo strip-only do Node a rejeita. Isso prova que o
+          # binário do esbuild funciona mesmo com os scripts de instalação desligados.
+          cat > out/h4-tsx-smoke/smoke.ts <<'TS'
+          enum Gate { H4 = "H4" }
+          type Marker = { gate: Gate; ok: boolean }
+          const marker: Marker = { gate: Gate.H4, ok: true }
+          console.log(`H4_TSX_SMOKE_OK ${marker.gate} ${marker.ok}`)
+          TS
+          node_modules/.bin/tsx out/h4-tsx-smoke/smoke.ts 2>&1 | tee out/h4-tsx-smoke.log
+          grep -qF 'H4_TSX_SMOKE_OK H4 true' out/h4-tsx-smoke.log \
+            || { echo "::error::smoke de transpilação do tsx falhou."; exit 1; }
+
+      - name: H4 — provar Java 17 DENTRO do contêiner da elevação (JDK por bind-mount)
+        if: ${{ inputs.elevate_manifest }}
+        run: |
+          mkdir -p out out/h4-java-gate
+          cat > out/h4-java-gate/H4JavaGate.java <<'JAVA'
+          public class H4JavaGate {
+            public static void main(String[] args) {
+              System.out.println("H4_JAVA_GATE_OK " + System.getProperty("java.version"));
+            }
+          }
+          JAVA
+          # Mesma imagem, mesma rede --internal e mesmo bind-mount do JDK que a elevação usa: prova
+          # que o JDK do runner (Ubuntu) roda dentro do bookworm ANTES de gastar a elevação. Compila
+          # e EXECUTA uma classe mínima — `java -version` sozinho não provaria o javac.
+          docker run --rm \
+            --network "${NETWORK}" \
+            --volume "${PWD}/out/h4-java-gate":/gate \
+            --volume "${JAVA_HOME}":/opt/java17:ro \
+            --workdir /gate \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --env JAVA_HOME=/opt/java17 \
+            --env PATH=/opt/java17/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            "${NODE_IMAGE}" \
+            sh -c 'set -e; java -version; javac -version; javac --release 17 H4JavaGate.java; java -cp . H4JavaGate' \
+            2>&1 | tee out/h4-java-gate.log
+          grep -qF 'H4_JAVA_GATE_OK 17.' out/h4-java-gate.log \
+            || { echo "::error::gate Java 17 no contêiner não confirmou runtime 17."; exit 1; }
 
       - name: H4 — elevar o manifesto (run.ts --update-manifest, worker real, rede --internal)
         if: ${{ inputs.elevate_manifest }}
@@ -539,6 +586,23 @@ jobs:
             out/h4-verify.log
           if-no-files-found: error
           retention-days: 90
+
+      # Diagnóstico da elevação — publica os logs H4 MESMO QUANDO A ELEVAÇÃO FALHA (o artifact acima
+      # é fail-closed e não sai em falha). Só logs de gate/execução: versões, hashes e o JSON público
+      # do harness — sem XML, credencial, token ou dado fiscal. Um upload NUNCA converte falha em
+      # sucesso: a conclusão do job continua sendo a do passo que falhou.
+      - name: H4 — diagnóstico da elevação (sempre, inclusive em falha)
+        if: ${{ always() && inputs.elevate_manifest }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.H4_DIAGNOSTICS_ARTIFACT }}
+          path: |
+            out/h4-tsx-smoke.log
+            out/h4-java-gate.log
+            out/h4-elevation.log
+            out/h4-verify.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload de evidências e logs
         if: always()

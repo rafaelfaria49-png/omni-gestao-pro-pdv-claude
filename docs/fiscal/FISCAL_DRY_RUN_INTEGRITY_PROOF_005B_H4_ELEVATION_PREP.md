@@ -1,11 +1,16 @@
 # FISCAL-DRY-RUN-INTEGRITY-PROOF-005B — Preparação do Gate H4 (elevação do manifesto)
 
-**Data:** 2026-07-20 · **Branch:** `work/fiscal-dry-run-005b-h4-elevation-prep` (base `origin/main` = `ecc494409ef857391427baf8ce73f0784eff59ce`)
+**Data:** 2026-07-20 (revisado 2026-07-21) · **Branch:** `work/fiscal-dry-run-005b-h4-elevation-prep` (base `origin/main` = `ecc494409ef857391427baf8ce73f0784eff59ce`)
 **Base de confiança:** Gate H3 aprovado no run [`29796176577`](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/29796176577) · worker artifact `8436826125` · lock `5402dca9…340266e8`
 
 > **Esta tarefa NÃO executou o workflow e NÃO alterou o manifesto golden versionado.**
 > O golden segue `proofState:"partial"`, `verification.xsd:false`, `xsdWorkerReal:false`,
 > `blockingReasons:["XSD_WORKER_REAL_UNAVAILABLE"]`.
+
+> **Revisão 2026-07-21 — achados B-1/B-2/B-3 da readiness RESOLVIDOS.** Ver
+> [`…_H4_ELEVATION_READINESS.md`](./FISCAL_DRY_RUN_INTEGRITY_PROOF_005B_H4_ELEVATION_READINESS.md)
+> (classificação **B**) e a **§11** deste documento. O manifesto golden **continua intacto** e
+> **nenhum `workflow_dispatch` foi executado**.
 
 ## 1. Arquitetura da elevação
 
@@ -23,7 +28,8 @@ Fluxo quando `elevate_manifest=true`:
    materializada: readiness com `xmllint`/libxml2 2.15.3/schemaManifestHash, rede `Internal=true`,
    `image ID` igual ao lock, e a matriz verde (`xsd_ok`, `workerReal:true`, `egressExternal:0`).
    Também exige que o **baseline do golden seja PARCIAL** — não se eleva a partir de estado incerto.
-4. **Provisionamento do `tsx` no host** (o executor da elevação roda offline; ver §9).
+4. **Smoke real de transpilação do `tsx`** (devDependency fixada, sem instalação dinâmica) e
+   **gate Java 17 dentro do contêiner** da elevação — ambos falham antes de qualquer escrita (§11).
 5. **Elevação:** `run.ts --update-manifest` dentro de um contêiner conectado **somente** à rede
    `--internal` do worker, com `FISCAL_XSD_WORKER_URL=http://worker.internal:8080` real.
    **Nunca composition-gate** — o adapter real é selecionado por ambiente (`resolveXsdAdapterFromEnv`).
@@ -97,6 +103,14 @@ Conteúdo:
 O próprio passo de montagem **falha** se negativos ≠ 8, positivo não aprovado, `workerReal != true`,
 engine ≠ `xmllint`, egress ≠ 0 ou `databaseWrites`/`sefazCalls` ≠ 0.
 
+**Artifact de diagnóstico (B-3).** Além do acima — que é *fail-closed* e **não sai quando a elevação
+falha** — há um segundo artifact `fiscal-dry-run-005b-h4-diagnostics-${{ github.run_id }}`
+(**retenção 14 dias**, `if: always() && inputs.elevate_manifest`, `if-no-files-found: ignore`) com
+`h4-tsx-smoke.log`, `h4-java-gate.log`, `h4-elevation.log` e `h4-verify.log`. São apenas logs de gate
+e execução (versões, hashes e o JSON público do harness) — **sem XML, credencial, token ou dado
+fiscal**. Um upload nunca converte falha em sucesso: a conclusão do job continua sendo a do passo que
+falhou.
+
 ## 6. Invariantes
 
 Comparados contra o golden **do commit executado** (`git show ${GITHUB_SHA}:…manifest.json`), que é o
@@ -124,17 +138,17 @@ posterior, a partir do artifact.
 |---|---|
 | YAML válido (parse `js-yaml`) | ✅ |
 | Inputs H4 (`elevate_manifest` boolean/default false; `elevation_confirmation` string) | ✅ |
-| Todos os passos H4 gated por `elevate_manifest` (10/10) | ✅ |
+| Todos os passos H4 gated por `elevate_manifest` (**11/11** após §11) | ✅ |
 | Nenhum passo H3 condicionado a `elevate_manifest` | ✅ |
 | Verificação de golden PARCIAL segue **incondicional** (H3 preservado) | ✅ |
 | Elevação usa worker real + rede `--internal`; nenhum uso de composition-gate | ✅ (2 invocações de `run.ts`, ambas com `FISCAL_XSD_WORKER_URL`) |
 | Permissões somente leitura; nenhum `git commit`/`push` no workflow | ✅ |
 | Nenhum segredo novo (apenas `GITHUB_TOKEN` já existente) | ✅ |
 | Nenhum dado fiscal real; nenhum acesso a banco/SEFAZ | ✅ (fixture sintética; `databaseWrites`/`sefazCalls` exigidos = 0) |
-| Diff **puramente aditivo** (262 inserções; única remoção = comentário de cabeçalho) | ✅ |
+| Diff do workflow vs `main`: **única remoção = comentário de cabeçalho** (H3 intocado) | ✅ |
+| Testes focados | ✅ **88 passed / 12 skipped** (ver §11) |
 | `git diff --check` | ✅ limpo |
-| Exatamente os arquivos autorizados | ✅ workflow + este relatório |
-| Testes focados | Nenhum aplicável: mudança é **workflow-only**. O harness (`tools/fiscal-dry-run-integrity-proof`, `lib/fiscal`, `workers/fiscal-xsd`) é **idêntico** entre `ce8b7b4` e a base `ecc4944`, estado em que a suíte foi verificada verde (88/12 skipped + 41/1 skipped) na auditoria de readiness. |
+| Exatamente os arquivos autorizados | ✅ workflow + este relatório (+ `package.json`/`package-lock.json` na revisão de §11) |
 | `workflow_dispatch` executado | ❌ **NÃO** — proibido nesta tarefa |
 | Manifesto golden versionado | ❌ **NÃO alterado** — segue `partial` |
 
@@ -143,16 +157,11 @@ posterior, a partir do artifact.
 1. **Workflow não executado.** O caminho H4 foi **escrito e validado estruturalmente**, mas nunca
    rodou de ponta a ponta. A primeira execução real é o teste de verdade — e é fail-closed, então
    falha em vez de elevar indevidamente.
-2. **JDK por bind-mount.** `run.ts` exige verificação externa Java 17, e a imagem Node fixada não traz
-   JDK. Monta-se o JDK já validado do runner (`${JAVA_HOME}` → `/opt/java17:ro`). Espera-se
-   compatibilidade (Temurin 17 linux-x64 sobre Debian bookworm, ambos glibc/x64), **mas isso só se
-   confirma na primeira execução**. Se falhar, a alternativa é uma imagem fixada com Node + JDK.
-3. **Provisionamento do `tsx`.** `tsx` não é dependência do repositório e o executor roda offline;
-   por isso é instalado no host antes do contêiner, com versão fixada (`4.23.1` — a mesma já
-   exercitada com este repo/Node 20.20.2), via `npm install --no-save --no-package-lock` (não altera
-   `package.json`/`package-lock.json`; `node_modules` é ignorado pelo git). Ainda assim é uma
-   dependência resolvida em tempo de execução: **recomenda-se promover `tsx` a devDependency fixada**
-   num passo autorizado à parte, para trazê-la ao `package-lock`.
+2. ~~**JDK por bind-mount** não provado dentro do bookworm.~~ **RESOLVIDO (B-2)** — há gate que
+   compila e executa uma classe Java mínima **dentro do contêiner da elevação**, antes do
+   `--update-manifest` (§11).
+3. ~~**Provisionamento dinâmico do `tsx`.**~~ **RESOLVIDO (B-1)** — `tsx` virou devDependency fixada
+   e a instalação dinâmica foi removida (§11).
 4. **Janela do artifact do 005A.** O bundle aprovado (`8436826125`) expira em `2026-07-26T01:59Z`; o
    workflow já falha explicitamente se expirado. A elevação precisa acontecer antes disso, ou o 005A
    precisa ser renovado.
@@ -172,3 +181,75 @@ elevation_confirmation = ELEVATE-GOAL-005B-H4
 
 e recolher o artifact `fiscal-dry-run-005b-h4-complete-manifest-<run_id>` para adoção do manifesto
 completo em passo humano subsequente.
+
+> **Atenção — a base mudou.** Quando esta branch foi criada, `origin/main` era `ecc4944` e o PR seria
+> fast-forward. Desde então a `main` avançou para `51c0108` (PR #18, Contador/Supabase), que **também
+> tocou `package.json` e `package-lock.json`**. A `main` mexeu em `dependencies`
+> (`@supabase/supabase-js`) e esta branch mexe em `devDependencies` (`tsx`) — regiões distintas, então
+> o merge tende a resolver sozinho. Se o `package-lock.json` conflitar, **não resolva à mão**:
+> aceite a versão da `main` e rode `npm install --package-lock-only --ignore-scripts`, conferindo
+> depois que `tsx@4.23.1` e `esbuild` seguem fixados.
+
+## 11. Resolução dos achados da readiness (B-1 · B-2 · B-3)
+
+Correções aplicadas em resposta à auditoria de readiness (classificação **B**). **Nenhuma toca o
+caminho H3**: contra a `main`, o workflow desta branch segue removendo **uma única linha — um
+comentário de cabeçalho**.
+
+### B-1 — `tsx` deixa de ser instalação dinâmica
+
+O passo que rodava `npm install --no-save --no-package-lock "tsx@${TSX_VERSION}"` foi **removido por
+completo**. Motivo do achado: aquele comando **não** passava `--ignore-scripts` (ao contrário do
+`npm ci --ignore-scripts` da mesma job) e portanto executava o `postinstall` do `esbuild` no host; e
+`tsx@4.23.1` depende de `esbuild` por **range** (`~0.28.0`), de modo que fixar o `tsx` não fixava
+quem de fato roda o script.
+
+Agora:
+
+- `tsx` é **devDependency exata** — `"tsx": "4.23.1"` em `package.json` (sem `^`/`~`);
+- o `package-lock.json` **fixa as versões resolvidas com integridade**: `tsx@4.23.1`,
+  `esbuild@0.28.1` e os pacotes de plataforma (inclusive `@esbuild/linux-x64@0.28.1`, o do runner);
+- o `tsx` chega pelo **`npm ci --ignore-scripts` já existente** (linha 219) — **nenhum script de
+  instalação de terceiros é executado**;
+- em vez de `tsx --version`, o gate agora é um **smoke de transpilação real**: gera um `.ts` com
+  `enum` (que o modo *strip-only* do Node **rejeita**) e exige a saída `H4_TSX_SMOKE_OK`. Isso prova
+  que o binário do `esbuild` funciona **mesmo sem `postinstall`** — que era exatamente o risco de
+  desligar os scripts. O passo também confere a versão instalada contra `TSX_VERSION`.
+
+O smoke roda **no host, antes do isolamento** — o executor da elevação está numa rede `--internal` e
+não conseguiria baixar nada.
+
+### B-2 — Java 17 provado dentro do contêiner
+
+Novo gate, **antes** do `--update-manifest`, usando **a mesma imagem, a mesma rede `--internal` e o
+mesmo bind-mount `${JAVA_HOME}` → `/opt/java17:ro`** da elevação, com `JAVA_HOME`/`PATH` idênticos.
+Ele roda `java -version`, `javac -version` e então **compila e executa** uma classe mínima
+(`H4JavaGate`), exigindo a saída `H4_JAVA_GATE_OK 17.`. Compilar **e** executar importa: `java
+-version` sozinho não provaria o `javac`, e `run.ts` usa os dois. Qualquer falha interrompe a
+elevação (`set -e` no contêiner + `pipefail` no passo), antes de qualquer escrita no manifesto.
+
+### B-3 — diagnóstico publicado mesmo em falha
+
+Ver §5: artifact `fiscal-dry-run-005b-h4-diagnostics-<run_id>`, 14 dias, `always()` restrito a
+`elevate_manifest`, com os quatro logs H4 e `if-no-files-found: ignore`.
+
+### Validações desta correção
+
+| Validação | Resultado |
+|---|---|
+| `npm ci --ignore-scripts` a partir do lock novo | ✅ 873 pacotes, exit 0 |
+| `tsx` presente após o `npm ci` (sem `postinstall`) | ✅ `tsx@4.23.1` · `esbuild@0.28.1` |
+| Smoke real de transpilação (`enum`) | ✅ `H4_TSX_SMOKE_OK H4 true`; o mesmo arquivo sob `node` puro falha com `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` |
+| Classe `H4JavaGate` gerada pelo heredoc | ✅ compila e executa (`javac 17.0.13` → `H4_JAVA_GATE_OK 17.0.13`) |
+| Scripts dos passos novos sob `bash -n` e sob `bash -eo pipefail` | ✅ |
+| Heredocs terminam em coluna 0 depois do *dedent* do YAML | ✅ verificado no YAML já parseado |
+| YAML válido (`js-yaml`) | ✅ 2 jobs · 8 + 30 passos · **11** gated por `elevate_manifest` |
+| Testes focados do harness | ✅ **88 passed / 12 skipped** (idêntico ao baseline) |
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `npm run build` | ✅ exit 0 |
+| `npm run lint` | ⚠️ vermelho **pré-existente** (105 erros/115 avisos em 87 arquivos) — **zero** em `lib/fiscal`, `tools/` ou `workers/`; este diff não contém nenhum arquivo que o ESLint processe |
+| `git diff --check` | ✅ limpo |
+| `npm install` dinâmico no workflow | ✅ **nenhum** |
+| `git commit`/`git push`/`contents: write` | ✅ **nenhum**; permissões seguem `contents: read` + `actions: read` |
+| Manifesto golden | ✅ **intacto** (`partial`/`xsd:false`/`xsdWorkerReal:false`) |
+| `workflow_dispatch` | ❌ **NÃO executado** |
