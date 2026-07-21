@@ -25,8 +25,10 @@ import {
   PROOF_SEED,
   STORE_PROOF_A,
   STORE_PROOF_B,
+  VER_PROC_MAX_LENGTH,
   assertSyntheticSafety,
   buildSyntheticSnapshot,
+  syntheticXmlContext,
 } from "./fixtures"
 import { verifySignedXmlExternalJava, cleanupTempDir } from "./java-external"
 import {
@@ -244,6 +246,23 @@ describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · positivas", () => {
     expect(primary.safety.realCredentials).toBe(0)
     expect(primary.safety.realData).toBe(0)
     expect(primary.safety.productiveCallers).toBe(0)
+  })
+
+  it("P-16 verProc respeita o maxLength(20) do XSD — regressão do positivo (005B)", () => {
+    // Regressão do defeito FISCAL-DRY-RUN-INTEGRITY-PROOF-005B: o positivo era reprovado pelo
+    // `xmllint` real (`xsd_invalido`) porque `<verProc>` tinha 25 chars e violava o facet
+    // `maxLength=20` do tipo XSD oficial (NFe v4.00). Este teste falha se o campo voltar a estourar.
+    const verProc = primary.artifacts.unsignedXml.match(/<verProc>([^<]*)<\/verProc>/)?.[1]
+    expect(verProc, "verProc ausente no XML gerado").toBeTruthy()
+    expect(
+      verProc!.length,
+      `verProc "${verProc}" excede o maxLength(${VER_PROC_MAX_LENGTH}) do XSD NFe 4.00`,
+    ).toBeLessThanOrEqual(VER_PROC_MAX_LENGTH)
+    // A origem do valor é a fixture sintética — mantê-la ≤ 20 impede a regressão na fonte.
+    const contextVerProc = syntheticXmlContext().versaoAplicativo
+    expect(contextVerProc).toBeTruthy()
+    expect(contextVerProc!.length).toBeLessThanOrEqual(VER_PROC_MAX_LENGTH)
+    expect(verProc).toBe(contextVerProc)
   })
 })
 
@@ -764,22 +783,25 @@ describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · honestidade da evidência XSD", 
   }, 30_000)
 
   it("XSD-H16 hashes criptográficos do XML permanecem os do GOAL-005", () => {
+    // Rebaselinados após a correção do `verProc` (fixture ≤ 20 chars) que tornou o positivo
+    // válido no `xmllint` real (005B). `snapshotSha256` é invariante — o snapshot não carrega
+    // `verProc`; só o fluxo XML (não assinado → C14N → SignedInfo → DigestValue → assinado) mudou.
     expect(primary.hashes.snapshotSha256).toBe(
       "efd6f54c362bddb781395514112ff3540418b868c854b1444b1122e8159bae2e",
     )
     expect(primary.hashes.unsignedXmlSha256).toBe(
-      "5773978497ce4d63db0ca3e945f1df1306204b871d760bbf66d7e48cc9ffd488",
+      "ca8adf9772fde2723d7e173511ae48b43a60103ef1b80412ba2e40418e91533f",
     )
     expect(primary.hashes.referencedNodeC14nSha256).toBe(
-      "5126ad4885f1a6f843a3d8b8e59c3afac33591d199533b8afea82616172233f7",
+      "5b2914270bb0363ad2ba61b3ac59af8f300bdac27d6faef2d40e0aa71b6cbe34",
     )
     expect(primary.hashes.signedInfoSha256).toBe(
-      "449cc741f4187087090610abcaaf13195ee8fc82a045d8b91511254919421b69",
+      "aa1d73a8c58f9bb1b6da172984579652120230cbe0ebcf2e1548a12603ce97b4",
     )
     expect(primary.hashes.signedXmlSha256).toBe(
-      "d9a3eead89deba74dbf2d6cf54db1562a3ef67c1b671e24a927d72127f3c84a2",
+      "da650b7053e1c7462780c43d248890b6da6c45c4f077408975e9f91acf43ccb9",
     )
-    expect(primary.signature.digestValue).toBe("C2JM/I4Y6H7n1G7YopYEiVLuASw=")
+    expect(primary.signature.digestValue).toBe("5U16o3plF2m+5in/+7nm4Zq9ZmM=")
   })
 
   it("XSD-H17 elevar o manifesto ao estado completo preserva os hashes do fluxo XML", () => {

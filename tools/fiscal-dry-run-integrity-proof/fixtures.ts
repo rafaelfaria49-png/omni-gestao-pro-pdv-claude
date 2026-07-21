@@ -118,14 +118,23 @@ export function buildSyntheticSnapshot(input: SyntheticFixtureInput): VendaFisca
   return result.snapshot
 }
 
-/** Contexto XML fixo (numeração de teste — nunca alocada em produção). */
+/** Comprimento máximo de `verProc` no XSD oficial NFC-e 4.00 (`TString` maxLength=20). */
+export const VER_PROC_MAX_LENGTH = 20
+
+/**
+ * Contexto XML fixo (numeração de teste — nunca alocada em produção).
+ *
+ * `versaoAplicativo` alimenta `<verProc>`, cujo tipo XSD impõe `maxLength=20`. O valor
+ * anterior ("OmniGestao-FiscalProof005", 25 chars) violava esse facet e fazia o `xmllint`
+ * real reprovar o positivo (`xsd_invalido`) no worker do 005B. Manter ≤ 20 caracteres.
+ */
 export function syntheticXmlContext(clockIso: string = PROOF_CLOCK_ISO): NfceXmlContext {
   return {
     serie: 1,
     numero: 1,
     dataEmissao: clockIso,
     naturezaOperacao: "VENDA SINTETICA SEM VALOR FISCAL",
-    versaoAplicativo: "OmniGestao-FiscalProof005",
+    versaoAplicativo: "OmniGestaoProof005",
   }
 }
 

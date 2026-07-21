@@ -19,16 +19,16 @@
   },
   "hashes": {
     "snapshotSha256": "efd6f54c362bddb781395514112ff3540418b868c854b1444b1122e8159bae2e",
-    "unsignedXmlSha256": "5773978497ce4d63db0ca3e945f1df1306204b871d760bbf66d7e48cc9ffd488",
-    "referencedNodeC14nSha256": "5126ad4885f1a6f843a3d8b8e59c3afac33591d199533b8afea82616172233f7",
-    "signedInfoSha256": "449cc741f4187087090610abcaaf13195ee8fc82a045d8b91511254919421b69",
-    "signedXmlSha256": "d9a3eead89deba74dbf2d6cf54db1562a3ef67c1b671e24a927d72127f3c84a2"
+    "unsignedXmlSha256": "ca8adf9772fde2723d7e173511ae48b43a60103ef1b80412ba2e40418e91533f",
+    "referencedNodeC14nSha256": "5b2914270bb0363ad2ba61b3ac59af8f300bdac27d6faef2d40e0aa71b6cbe34",
+    "signedInfoSha256": "aa1d73a8c58f9bb1b6da172984579652120230cbe0ebcf2e1548a12603ce97b4",
+    "signedXmlSha256": "da650b7053e1c7462780c43d248890b6da6c45c4f077408975e9f91acf43ccb9"
   },
   "signature": {
     "canonicalizationMethod": "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
     "signatureMethod": "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
     "digestMethod": "http://www.w3.org/2000/09/xmldsig#sha1",
-    "digestValue": "C2JM/I4Y6H7n1G7YopYEiVLuASw="
+    "digestValue": "5U16o3plF2m+5in/+7nm4Zq9ZmM="
   },
   "verification": {
     "internal": true,
