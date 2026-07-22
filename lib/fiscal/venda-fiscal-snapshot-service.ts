@@ -25,6 +25,11 @@ import {
   type SnapshotLojaInput,
   type VendaFiscalSnapshot,
 } from "./venda-fiscal-snapshot"
+import {
+  computeSnapshotHash,
+  SNAPSHOT_HASH_CONTRATO_VERSAO,
+  SNAPSHOT_HASH_ALGORITHM,
+} from "./venda-fiscal-snapshot-hash"
 
 export type CreateVendaFiscalSnapshotResult =
   | {
@@ -34,6 +39,10 @@ export type CreateVendaFiscalSnapshotResult =
       notaFiscalId: string
       localKey: string
       diagnostico: VendaFiscalSnapshot["diagnostico"] | null
+      /** Hash SHA-256 determinístico do snapshot (presente quando `created=true`). */
+      snapshotHash: string | null
+      /** Versão do contrato de hash canonização (presente quando `created=true`). */
+      hashContratoVersao: number | null
     }
   | {
       ok: false
@@ -73,15 +82,21 @@ export async function createVendaFiscalSnapshot(params: {
   // 1) Idempotência: já existe NotaFiscal vigente para esta venda? → não duplica.
   const existente = await prisma.notaFiscal.findFirst({
     where: { storeId, vendaId, vigente: true },
-    select: { id: true, localKey: true },
+    select: { id: true, localKey: true, snapshotPagamento: true },
   })
   if (existente) {
+    // Reextrai o hash persistido no JSONB (auditoria de imutabilidade — não recomputa).
+    const sp = asRecord(existente.snapshotPagamento)
+    const hashPersistido = typeof sp.hash === "string" ? sp.hash : null
+    const contratoVersao = typeof sp.hashContratoVersao === "number" ? sp.hashContratoVersao : null
     return {
       ok: true,
       created: false,
       notaFiscalId: existente.id,
       localKey: existente.localKey ?? resolveSnapshotLocalKey(storeId, vendaId),
       diagnostico: null,
+      snapshotHash: hashPersistido,
+      hashContratoVersao: contratoVersao,
     }
   }
 
@@ -225,14 +240,25 @@ export async function createVendaFiscalSnapshot(params: {
 
   const { snapshot, localKey } = built
 
+  // 6b) Hash determinístico do snapshot (SHA-256 canonizado, sem `geradoEm`).
+  //     Persistido no JSONB `snapshotPagamento.hash` — NÃO exige schema novo.
+  //     O hash é a assinatura de conteúdo do contrato congelado: idempotente e
+  //     imutável enquanto o snapshot não for reescrito (o serviço NÃO reescreve).
+  const snapshotHash = computeSnapshotHash(snapshot)
+
   // 7) Persiste UMA NotaFiscal RASCUNHO (dormente) + itens congelados, atômico.
   //    ambiente/modelo vêm das ENUMS da config (não da string do snapshot).
   // Tributação congelada (motor tax-engine, GOAL F2). Persistimos nos campos JÁ existentes:
   // ICMS por item + valor de tributos (Lei da Transparência) + total na nota; o detalhamento
   // completo (PIS/COFINS/situação/versão do motor) fica no JSONB `snapshotPagamento.tributacao`.
+  // Hash + versão do contrato de hash + algoritmo também no JSONB `snapshotPagamento`
+  // (campos novos no JSON, sem mudança de schema Prisma — apenas chaves adicionais).
   const snapshotPagamento = {
     versao: snapshot.versao,
     geradoEm: snapshot.geradoEm,
+    hash: snapshotHash,
+    hashAlgoritmo: SNAPSHOT_HASH_ALGORITHM,
+    hashContratoVersao: SNAPSHOT_HASH_CONTRATO_VERSAO,
     venda: snapshot.venda,
     totais: snapshot.totais,
     diagnostico: snapshot.diagnostico,
@@ -296,21 +322,34 @@ export async function createVendaFiscalSnapshot(params: {
       select: { id: true },
     })
 
-    return { ok: true, created: true, notaFiscalId: nota.id, localKey, diagnostico: snapshot.diagnostico }
+    return {
+      ok: true,
+      created: true,
+      notaFiscalId: nota.id,
+      localKey,
+      diagnostico: snapshot.diagnostico,
+      snapshotHash,
+      hashContratoVersao: SNAPSHOT_HASH_CONTRATO_VERSAO,
+    }
   } catch (e) {
     // Corrida: outra requisição criou a NotaFiscal vigente/localKey ao mesmo tempo.
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       const existing = await prisma.notaFiscal.findFirst({
         where: { storeId, vendaId, vigente: true },
-        select: { id: true, localKey: true },
+        select: { id: true, localKey: true, snapshotPagamento: true },
       })
       if (existing) {
+        const sp = asRecord(existing.snapshotPagamento)
+        const hashPersistido = typeof sp.hash === "string" ? sp.hash : null
+        const contratoVersao = typeof sp.hashContratoVersao === "number" ? sp.hashContratoVersao : null
         return {
           ok: true,
           created: false,
           notaFiscalId: existing.id,
           localKey: existing.localKey ?? localKey,
           diagnostico: null,
+          snapshotHash: hashPersistido,
+          hashContratoVersao: contratoVersao,
         }
       }
     }

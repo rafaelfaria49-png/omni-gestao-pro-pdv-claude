@@ -132,3 +132,65 @@ describe("createVendaFiscalSnapshot · caminho feliz grava tributos congelados",
     expect(trib.itens[0].icms.codigo).toBe("102")
   })
 })
+
+describe("createVendaFiscalSnapshot · hash determinístico + contrato (GOAL-005)", () => {
+  it("persiste hash SHA-256 + versão do contrato de hash no JSONB snapshotPagamento", async () => {
+    db.notaFindFirst.mockResolvedValueOnce(null)
+    db.vendaFindFirst.mockResolvedValueOnce(VENDA)
+    db.configFindUnique.mockResolvedValueOnce(CONFIG_SIMPLES)
+    db.produtoFindMany.mockResolvedValueOnce(PRODUTOS)
+    db.notaCreate.mockResolvedValueOnce({ id: "nf-1" })
+
+    const r = await createVendaFiscalSnapshot({ storeId: "loja-1", vendaId: "venda-1" })
+
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
+      expect(r.hashContratoVersao).toBe(1)
+    }
+
+    const data = db.notaCreate.mock.calls[0][0].data
+    // Hash + algoritmo + versão do contrato persistidos no JSONB (sem schema novo).
+    expect(data.snapshotPagamento.hash).toMatch(/^[0-9a-f]{64}$/)
+    expect(data.snapshotPagamento.hashAlgoritmo).toBe("sha256")
+    expect(data.snapshotPagamento.hashContratoVersao).toBe(1)
+    // Versão do snapshot (contrato do snapshot) também no JSONB.
+    expect(data.snapshotPagamento.versao).toBe(1)
+  })
+
+  it("nota vigente já existe → retorna hash persistido (não recomputa)", async () => {
+    const hashPersistido = "c".repeat(64)
+    db.notaFindFirst.mockResolvedValueOnce({
+      id: "nf-existente",
+      localKey: "nfce-snapshot:loja-1:venda-1",
+      snapshotPagamento: { hash: hashPersistido, hashContratoVersao: 1, versao: 1 },
+    })
+
+    const r = await createVendaFiscalSnapshot({ storeId: "loja-1", vendaId: "venda-1" })
+
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.created).toBe(false)
+      expect(r.snapshotHash).toBe(hashPersistido)
+      expect(r.hashContratoVersao).toBe(1)
+    }
+    expect(db.notaCreate).not.toHaveBeenCalled()
+  })
+
+  it("nota vigente sem hash histórico (snapshot pré-GOAL-005) → retorna hash null", async () => {
+    db.notaFindFirst.mockResolvedValueOnce({
+      id: "nf-antiga",
+      localKey: "nfce-snapshot:loja-1:venda-1",
+      snapshotPagamento: { versao: 1 }, // sem hash (pré-GOAL-005)
+    })
+
+    const r = await createVendaFiscalSnapshot({ storeId: "loja-1", vendaId: "venda-1" })
+
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.created).toBe(false)
+      expect(r.snapshotHash).toBe(null)
+      expect(r.hashContratoVersao).toBe(null)
+    }
+  })
+})
