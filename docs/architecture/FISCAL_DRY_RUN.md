@@ -168,3 +168,51 @@ nunca passaria. É o filtro barato antes do teste caro.
   `lib/fiscal/venda-fiscal-snapshot.ts` (`diagnostico`).
 - Segurança da assinatura: `docs/architecture/FISCAL_SECURITY.md`.
 - Plano/fases: `docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md` (gate entre F4 e F5; CI).
+
+---
+
+## 9. Gate executável de 11 itens (GOAL-007 — extensão, não substituição)
+
+> **Extensão** do §1–§8 (o histórico do dry-run permanece válido). A `AUDITORIA_FISCAL_RECONCILIACAO_CODIGO_001` (§9)
+> provou que o "dry-run verde" podia passar **sem comprovação real**. O **GOAL-007** redefine o critério de "verde"
+> por um **gate executável** — `runFiscalDryRunGate` (`lib/fiscal/dry-run/dry-run-gate.ts`). Decisão: **ADR-0013**
+> (ADR-P03). Matriz completa: `docs/fiscal/FISCAL_DRY_RUN_GATE_REPORT_001.md`.
+
+### 9.1 Regra
+
+O gate roda a esteira a seco em **modo gate** (numeração real de homologação — **`numeracaoPlaceholder` removido**)
+e produz 11 itens (`número · nome · status · autoridade · evidência · erro`). **Verde ⇔ 11/11 `aprovado`.** Um item
+pode ser `aprovado`, `reprovado` ou **`nao_auferivel`**; este último **nunca** conta como aprovado. **Nenhum item é
+aprovado por ausência de verificação; falha permanece falha.**
+
+### 9.2 Os 11 itens e suas autoridades
+
+| # | Item | Autoridade |
+|---|---|---|
+| 1 | Snapshot imutável válido | Contrato `VendaFiscalSnapshot` + deep-freeze |
+| 2 | Produto fiscal completo | Diagnóstico do snapshot (`getProdutoFiscal`, GOAL-004) |
+| 3 | XML estruturalmente correto | Builder NFC-e 4.00 + validação estrutural |
+| 4 | XSD oficial válido | **Worker XSD real** (`PL_010e_v1.02`) — G-C2 / ADR-0010 |
+| 5 | Assinatura válida | XMLDSig RSA-SHA1/SHA-1 — G-C3 / ADR-0011 |
+| 6 | Certificado de teste compatível | `EnvVault` + `validarCertificadoLoja` — GOAL-008 / ADR-0009 |
+| 7 | Numeração controlada real | `allocateFiscalNumber` (série homologação) — GOAL_008 |
+| 8 | Idempotência | localKey + numeração + bytes determinísticos |
+| 9 | Máquina de estados | Transições do pipeline a seco — GOAL_003 |
+| 10 | Artefatos e logs | Invariante `descartado` + varredura de segredos (sem persistência) |
+| 11 | Contrato do provider | `FiscalProvider` record/replay (Mock × Stub) — simulado |
+
+### 9.3 Fronteiras honestas
+
+- **Item 4** só é `aprovado` com o **worker XSD real provisionado**; em execução local pura fica `nao_auferivel`
+  (fail-closed) ⇒ 10/11 (não verde).
+- **CSOSN 500 sem fiação de ST** é **fail-closed** no item 3 (`st_incompleta`, ADR-0012) — a fiação end-to-end da ST
+  é **GOAL separado**.
+- **N4 auferível ≠ N6.** O gate **não** é homologação SEFAZ. A **concorrência plena da numeração** permanece no
+  **GOAL-010**.
+
+### 9.4 Como rodar
+
+```bash
+npm run test:fiscal-gate          # fiação dos 11 itens
+# item 4 REAL: injetar o adapter do worker XSD provisionado (FISCAL_XSD_WORKER_URL)
+```
