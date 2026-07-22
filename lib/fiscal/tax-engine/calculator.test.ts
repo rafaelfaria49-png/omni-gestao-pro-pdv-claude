@@ -222,10 +222,13 @@ describe("tax-engine · casos inválidos (ok=false)", () => {
     expect(r.errors.map((e) => e.code)).toContain("operacao_nao_suportada")
   })
 
-  it("CSOSN com ST (500) rejeitado", () => {
+  it("CSOSN 500 SEM identificação de ST rejeitado (fail-closed: st_incompleta)", () => {
+    // GOAL-006: 500 passou a ser SUPORTADO (substituído), mas exige identificação de ST retida;
+    // sem ela, o motor barra com st_incompleta (não mais csosn_nao_suportado). 500 COM ST e o
+    // bloqueio de 201/202/203/900 são cobertos em csosn-500.test.ts.
     const r = calculateTax(simples([{ quantidade: 1, valorUnitario: 10, csosn: "500" }]))
     expect(r.ok).toBe(false)
-    expect(r.errors.map((e) => e.code)).toContain("csosn_nao_suportado")
+    expect(r.errors.map((e) => e.code)).toContain("st_incompleta")
   })
 
   it("CFOP interestadual (6102) rejeitado", () => {

@@ -5,11 +5,12 @@
  * cálculo tributário. NÃO importa Prisma, Next, React, fetch nem estado global. Toda entrada vem
  * por parâmetro; toda saída é este objeto tipado. Determinístico (sem Date.now/Math.random).
  *
- * Escopo da F2 (NFC-e Simples Nacional B2C, conforme ROADMAP_FISCAL §8 / plano §3 F2):
+ * Escopo (NFC-e Simples Nacional B2C, conforme ROADMAP_FISCAL §8 / plano §3 F2 + GOAL-006):
  *   - Regime: Simples Nacional (e SN excesso de sublimite).
  *   - Operação: interna (mesma UF), consumidor final.
- *   - SEM ST, SEM DIFAL, SEM FCP, SEM IPI, SEM ISS (rejeitados de forma explícita pelos validators).
- * Tudo preparado para expansão (regime normal/CST, interestadual, ST) sem reescrever o contrato.
+ *   - ST: CSOSN 500 (ICMS já retido anteriormente — substituído) SUPORTADO; CSOSN 201/202/203/900
+ *     e DIFAL/FCP-próprio/IPI/ISS permanecem rejeitados de forma explícita pelos validators.
+ * Tudo preparado para expansão (regime normal/CST, interestadual) sem reescrever o contrato.
  */
 
 /** Versão do motor — congela a forma do resultado para snapshots/auditoria. */
@@ -36,6 +37,7 @@ export type TaxSituacao =
   | "nao_destacado" // Simples Nacional: imposto no DAS, não destacado na NFC-e (ex.: CSOSN 102)
   | "isento" // CSOSN 103/300/400 — isento/imune/não tributada
   | "com_credito_simples" // CSOSN 101 — permite crédito (pCredSN/vCredICMSSN), ICMS próprio não destacado
+  | "st" // CSOSN 500 — ICMS cobrado anteriormente por ST (substituído); ICMS próprio não destacado
 
 // ── Entrada ─────────────────────────────────────────────────────────────────────────────
 
@@ -66,6 +68,28 @@ export type TaxEngineItemInput = {
   pCredSN?: number
   aliquotaPis?: number
   aliquotaCofins?: number
+
+  /**
+   * Substituição Tributária já retida (CSOSN 500 — substituído). Valores CONGELADOS da nota de
+   * entrada / cadastro fiscal; o motor NÃO os inventa, apenas normaliza e ecoa. Todos opcionais.
+   * Mapeiam o grupo `ICMSSN500` do leiaute NFC-e 4.00 (ver rules.resolveIcmsST):
+   *   vBCSTRet/pST/vICMSSubstituto/vICMSSTRet + FCP-ST retido (vBCFCPSTRet/pFCPSTRet/vFCPSTRet).
+   */
+  vBCSTRet?: number
+  pST?: number
+  vICMSSubstituto?: number
+  vICMSSTRet?: number
+  vBCFCPSTRet?: number
+  pFCPSTRet?: number
+  vFCPSTRet?: number
+  /**
+   * ICMS Efetivo (NFC-e consumidor final — NT 2016.002/2018.005). Obrigatório em algumas UFs
+   * quando CSOSN 500 e indFinal=1. `vICMSEfet` é derivado de `vBCEfet × pICMSEfet` quando ausente.
+   */
+  pRedBCEfet?: number
+  vBCEfet?: number
+  pICMSEfet?: number
+  vICMSEfet?: number
 
   /** Lei da Transparência (IBPT) — % aproximado de tributos sobre o valor tributável. */
   aproximadoTributosPercent?: number
@@ -130,12 +154,35 @@ export type TaxComponentResult = {
   valor: number
 }
 
-/** Resultado do ICMS — pode carregar crédito do Simples (CSOSN 101). */
+/**
+ * Substituição Tributária congelada do item (CSOSN 500) — espelha o grupo `ICMSSN500` do leiaute
+ * NFC-e 4.00 + o grupo ICMS Efetivo. Valores em reais; percentuais em %. Todos normalizados
+ * (arredondados) a partir da entrada; o motor NÃO inventa base/valor de ST.
+ */
+export type TaxIcmsStFields = {
+  /** ST retido anteriormente (grupo ICMSSN500). */
+  vBCSTRet: number
+  pST: number
+  vICMSSubstituto: number
+  vICMSSTRet: number
+  vBCFCPSTRet: number
+  pFCPSTRet: number
+  vFCPSTRet: number
+  /** ICMS Efetivo (NT 2016.002/2018.005) — obrigatório em algumas UFs p/ NFC-e consumidor final. */
+  pRedBCEfet: number
+  vBCEfet: number
+  pICMSEfet: number
+  vICMSEfet: number
+}
+
+/** Resultado do ICMS — pode carregar crédito do Simples (CSOSN 101) ou ST retida (CSOSN 500). */
 export type TaxIcmsResult = TaxComponentResult & {
   /** % de crédito do Simples (CSOSN 101), quando aplicável. */
   pCredSN: number
   /** Valor do crédito do Simples (vCredICMSSN) — informativo; não compõe o total da nota. */
   valorCreditoSimples: number
+  /** Presente SOMENTE quando situacao === "st" (CSOSN 500). ICMS próprio segue não destacado. */
+  st?: TaxIcmsStFields
 }
 
 export type TaxEngineItemResult = {
@@ -188,6 +235,8 @@ export type TaxEngineErrorCode =
   | "destino_nao_suportado"
   | "operacao_nao_suportada" // ST/DIFAL/FCP/IPI/ISS sinalizados
   | "csosn_nao_suportado"
+  | "st_incompleta" // CSOSN 500 sem identificação mínima de ST retida (fail-closed)
+  | "origem_nao_suportada" // origem da mercadoria fora da matriz 0–8
   | "cfop_nao_suportado"
   | "item_invalido"
   | "desconto_maior_que_bruto"
