@@ -1,0 +1,11 @@
+brand,canonical_models,aliases,film_relations,case_relations,confirmed_relations,probable_relations,review_required,models_found_externally,apparent_gaps,coverage_status,notes
+Samsung,124,502,412,0,182,12,145,10,0,BOA,Excelente cobertura histórica; falta acompanhar lançamentos 2025/2026.
+Motorola,103,421,358,0,135,8,128,15,4,PARCIAL,"Boa cobertura de Moto G; lacuna na linha Edge 50 (Pro, Ultra, Fusion, Neo)."
+Redmi,65,284,215,0,88,6,72,8,0,BOA,Boa cobertura de Redmi Note 10 a 14.
+Apple,49,198,172,0,76,5,42,6,0,EXCELENTE,Linha iPhone coberta do iPhone 6 ao iPhone 16 Pro Max.
+POCO,32,128,98,0,38,3,36,5,2,PARCIAL,Faltam POCO M6 Pro e POCO F6.
+Realme,28,106,82,0,26,3,30,6,2,PARCIAL,Faltam Realme 12 5G e Realme 12 Pro+.
+LG,11,44,38,0,12,1,15,0,0,LEGADO,Marca descontinuada; mantida para reposição e aparelhos antigos em circulação.
+Infinix,9,36,24,0,4,1,12,3,1,INSUFICIENTE,Cobertura incipiente; linha Note 40 ausente.
+Xiaomi,5,20,16,0,2,0,8,2,0,PARCIAL,Modelos de topo Xiaomi Mi; maioria sob sub-marcas Redmi/POCO.
+Tecno,3,12,8,0,0,0,6,2,1,INSUFICIENTE,Presença mínima na base.

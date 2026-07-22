@@ -1,0 +1,430 @@
+model_id,brand,manufacturer,family,canonical_name,variant,connectivity,technical_code,regional_code,year,source_file,source_row,status,conflict,notes
+apple_iphone_11,Apple,Apple,iPhone,Apple iPhone 11,11,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,2,ativo,false,
+apple_iphone_11_pro,Apple,Apple,iPhone,Apple iPhone 11 Pro,11 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,3,ativo,false,
+apple_iphone_11_pro_max,Apple,Apple,iPhone,Apple iPhone 11 Pro Max,11 Pro Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,4,ativo,false,
+apple_iphone_12,Apple,Apple,iPhone,Apple iPhone 12,12,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,5,ativo,false,
+apple_iphone_12_mini,Apple,Apple,iPhone,Apple iPhone 12 Mini,12 Mini,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,6,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_12_pro,Apple,Apple,iPhone,Apple iPhone 12 Pro,12 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,7,ativo,false,
+apple_iphone_12_pro_max,Apple,Apple,iPhone,Apple iPhone 12 Pro Max,12 Pro Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,8,ativo,false,
+apple_iphone_13,Apple,Apple,iPhone,Apple iPhone 13,13,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,9,ativo,false,
+apple_iphone_13_mini,Apple,Apple,iPhone,Apple iPhone 13 Mini,13 Mini,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,10,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_13_pro,Apple,Apple,iPhone,Apple iPhone 13 Pro,13 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,11,ativo,false,
+apple_iphone_13_pro_max,Apple,Apple,iPhone,Apple iPhone 13 Pro Max,13 Pro Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,12,ativo,false,
+apple_iphone_14,Apple,Apple,iPhone,Apple iPhone 14,14,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,13,ativo,false,
+apple_iphone_14_plus,Apple,Apple,iPhone,Apple iPhone 14 Plus,14 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,14,ativo,false,
+apple_iphone_14_pro,Apple,Apple,iPhone,Apple iPhone 14 Pro,14 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,15,ativo,false,
+apple_iphone_14_pro_max,Apple,Apple,iPhone,Apple iPhone 14 Pro Max,14 Pro Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,16,ativo,false,
+apple_iphone_15,Apple,Apple,iPhone,Apple iPhone 15,15,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,17,ativo,false,
+apple_iphone_15_plus,Apple,Apple,iPhone,Apple iPhone 15 Plus,15 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,18,ativo,false,
+apple_iphone_15_pro,Apple,Apple,iPhone,Apple iPhone 15 Pro,15 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,19,ativo,false,
+apple_iphone_15_pro_max,Apple,Apple,iPhone,Apple iPhone 15 Pro Max,15 Pro Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,20,ativo,false,
+apple_iphone_16,Apple,Apple,iPhone,Apple iPhone 16,16,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,21,novo,false,
+apple_iphone_16_plus,Apple,Apple,iPhone,Apple iPhone 16 Plus,16 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,22,novo,false,
+apple_iphone_16_pro,Apple,Apple,iPhone,Apple iPhone 16 Pro,16 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,23,novo,false,
+apple_iphone_16_pro_max,Apple,Apple,iPhone,Apple iPhone 16 Pro Max,16 Pro Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,24,novo,false,
+apple_iphone_16e,Apple,Apple,iPhone,Apple iPhone 16e,16e,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,25,novo,false,
+apple_iphone_17,Apple,Apple,iPhone,Apple iPhone 17,17,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,26,novo,false,
+apple_iphone_17_air,Apple,Apple,iPhone,Apple iPhone 17 Air,17 Air,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,27,revisar,false,Nome divergente frente a iPhone Air; revisar nomenclatura antes de importar.
+apple_iphone_17_pro,Apple,Apple,iPhone,Apple iPhone 17 Pro,17 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,28,novo,false,
+apple_iphone_17_pro_max,Apple,Apple,iPhone,Apple iPhone 17 Pro Max,17 Pro Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,29,novo,false,
+apple_iphone_17e,Apple,Apple,iPhone,Apple iPhone 17e,17e,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,30,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_6_plus,Apple,Apple,iPhone,Apple iPhone 6 Plus,6 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,31,legado,false,
+apple_iphone_7,Apple,Apple,iPhone,Apple iPhone 7,7,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,32,legado,false,
+apple_iphone_7_branco,Apple,Apple,iPhone,Apple iPhone 7 Branco,7 Branco,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,33,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #231 iPhone 7/8 Branco.
+apple_iphone_7_plus,Apple,Apple,iPhone,Apple iPhone 7 Plus,7 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,34,legado,false,
+apple_iphone_7_plus_branco,Apple,Apple,iPhone,Apple iPhone 7 Plus Branco,7 Plus Branco,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,35,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #221 7 / 8 Plus P/B.
+apple_iphone_7_plus_preto,Apple,Apple,iPhone,Apple iPhone 7 Plus Preto,7 Plus Preto,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,36,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #221 7 / 8 Plus P/B.
+apple_iphone_7_preto,Apple,Apple,iPhone,Apple iPhone 7 Preto,7 Preto,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,37,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #232 iPhone 7/8 Preto.
+apple_iphone_8,Apple,Apple,iPhone,Apple iPhone 8,8,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,38,legado,false,
+apple_iphone_8_branco,Apple,Apple,iPhone,Apple iPhone 8 Branco,8 Branco,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,39,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #231 iPhone 7/8 Branco.
+apple_iphone_8_plus,Apple,Apple,iPhone,Apple iPhone 8 Plus,8 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,40,legado,false,
+apple_iphone_8_plus_branco,Apple,Apple,iPhone,Apple iPhone 8 Plus Branco,8 Plus Branco,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,41,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #221 7 / 8 Plus P/B.
+apple_iphone_8_plus_preto,Apple,Apple,iPhone,Apple iPhone 8 Plus Preto,8 Plus Preto,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,42,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #221 7 / 8 Plus P/B.
+apple_iphone_8_preto,Apple,Apple,iPhone,Apple iPhone 8 Preto,8 Preto,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,43,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #232 iPhone 7/8 Preto.
+apple_iphone_air,Apple,Apple,iPhone,Apple iPhone Air,Air,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,44,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_se_2020,Apple,Apple,iPhone,Apple iPhone SE 2020,SE 2020,NA,,,2020,docs/catalogo/seeds/device_models_seed_001.csv,45,legado,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_se_2022,Apple,Apple,iPhone,Apple iPhone SE 2022,SE 2022,NA,,,2022,docs/catalogo/seeds/device_models_seed_001.csv,46,legado,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_x,Apple,Apple,iPhone,Apple iPhone X,X,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,47,legado,false,
+apple_iphone_xr,Apple,Apple,iPhone,Apple iPhone XR,XR,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,48,legado,false,
+apple_iphone_xs,Apple,Apple,iPhone,Apple iPhone XS,XS,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,49,legado,false,
+apple_iphone_xs_max,Apple,Apple,iPhone,Apple iPhone XS Max,XS Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,50,legado,false,
+infinix_hot_play,Infinix,Infinix,Infinix Hot,Infinix Hot Play,Hot Play,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,51,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+infinix_smart_7,Infinix,Infinix,Infinix Smart,Infinix Smart 7,Smart 7,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,52,ativo,false,
+lg_k10_2017,LG,LG,LG K,LG K10 2017,K10 2017,NA,,,2017,docs/catalogo/seeds/device_models_seed_001.csv,53,legado,false,
+lg_k10_power,LG,LG,LG K,LG K10 Power,K10 Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,54,legado,false,
+lg_k11,LG,LG,LG K,LG K11,K11,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,55,legado,false,
+lg_k12,LG,LG,LG K,LG K12,K12,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,56,legado,false,
+lg_k12_prime,LG,LG,LG K,LG K12 Prime,K12 Prime,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,57,legado,false,
+lg_k22,LG,LG,LG K,LG K22,K22,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,58,legado,false,
+lg_k40s,LG,LG,LG K,LG K40S,K40S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,59,legado,false,
+lg_k41s,LG,LG,LG K,LG K41S,K41S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,60,legado,false,
+lg_k50s,LG,LG,LG K,LG K50S,K50S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,61,legado,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+lg_k51s,LG,LG,LG K,LG K51S,K51S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,62,legado,false,
+lg_k9,LG,LG,LG K,LG K9,K9,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,63,legado,false,
+motorola_edge_20,Motorola,Motorola,Moto Edge,Motorola Edge 20,Edge 20,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,64,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_edge_20_lite,Motorola,Motorola,Moto Edge,Motorola Edge 20 Lite,Edge 20 Lite,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,65,ativo,false,
+motorola_edge_20_pro,Motorola,Motorola,Moto Edge,Motorola Edge 20 Pro,Edge 20 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,66,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_edge_30,Motorola,Motorola,Moto Edge,Motorola Edge 30,Edge 30,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,67,ativo,false,
+motorola_edge_30_neo,Motorola,Motorola,Moto Edge,Motorola Edge 30 Neo,Edge 30 Neo,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,68,ativo,false,
+motorola_edge_30_pro,Motorola,Motorola,Moto Edge,Motorola Edge 30 Pro,Edge 30 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,69,ativo,false,
+motorola_edge_50_neo,Motorola,Motorola,Moto Edge,Motorola Edge 50 Neo,Edge 50 Neo,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,70,ativo,false,
+motorola_edge_60_neo,Motorola,Motorola,Moto Edge,Motorola Edge 60 Neo,Edge 60 Neo,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,71,ativo,false,
+motorola_edge_70,Motorola,Motorola,Moto Edge,Motorola Edge 70,Edge 70,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,72,ativo,false,
+motorola_edge_s,Motorola,Motorola,Moto Edge,Motorola Edge S,Edge S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,73,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e13,Motorola,Motorola,Moto E,Motorola Moto E13,E13,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,74,ativo,false,
+motorola_moto_e14,Motorola,Motorola,Moto E,Motorola Moto E14,E14,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,75,ativo,false,
+motorola_moto_e15,Motorola,Motorola,Moto E,Motorola Moto E15,E15,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,76,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e20,Motorola,Motorola,Moto E,Motorola Moto E20,E20,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,77,ativo,false,
+motorola_moto_e22,Motorola,Motorola,Moto E,Motorola Moto E22,E22,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,78,ativo,false,
+motorola_moto_e30,Motorola,Motorola,Moto E,Motorola Moto E30,E30,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,79,ativo,false,
+motorola_moto_e32,Motorola,Motorola,Moto E,Motorola Moto E32,E32,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,80,ativo,false,
+motorola_moto_e32s,Motorola,Motorola,Moto E,Motorola Moto E32S,E32S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,81,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e40,Motorola,Motorola,Moto E,Motorola Moto E40,E40,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,82,ativo,false,
+motorola_moto_e6_play,Motorola,Motorola,Moto E,Motorola Moto E6 Play,E6 Play,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,83,legado,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e6_plus,Motorola,Motorola,Moto E,Motorola Moto E6 Plus,E6 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,84,legado,false,
+motorola_moto_e6i,Motorola,Motorola,Moto E,Motorola Moto E6I,E6I,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,85,legado,false,
+motorola_moto_e6s,Motorola,Motorola,Moto E,Motorola Moto E6S,E6S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,86,legado,false,
+motorola_moto_e7,Motorola,Motorola,Moto E,Motorola Moto E7,E7,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,87,legado,false,
+motorola_moto_e7_play,Motorola,Motorola,Moto E,Motorola Moto E7 Play,E7 Play,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,88,legado,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e7_plus,Motorola,Motorola,Moto E,Motorola Moto E7 Plus,E7 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,89,legado,false,
+motorola_moto_e7_power,Motorola,Motorola,Moto E,Motorola Moto E7 Power,E7 Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,90,legado,false,
+motorola_moto_g_power,Motorola,Motorola,Moto G,Motorola Moto G Power,G Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,91,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g04,Motorola,Motorola,Moto G,Motorola Moto G04,G04,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,92,ativo,false,
+motorola_moto_g05,Motorola,Motorola,Moto G,Motorola Moto G05,G05,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,93,novo,false,
+motorola_moto_g06,Motorola,Motorola,Moto G,Motorola Moto G06,G06,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,94,ativo,false,
+motorola_moto_g10,Motorola,Motorola,Moto G,Motorola Moto G10,G10,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,95,ativo,false,
+motorola_moto_g10_play,Motorola,Motorola,Moto G,Motorola Moto G10 Play,G10 Play,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,96,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g100,Motorola,Motorola,Moto G,Motorola Moto G100,G100,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,97,ativo,false,
+motorola_moto_g13,Motorola,Motorola,Moto G,Motorola Moto G13,G13,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,98,ativo,false,
+motorola_moto_g14,Motorola,Motorola,Moto G,Motorola Moto G14,G14,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,99,ativo,false,
+motorola_moto_g15,Motorola,Motorola,Moto G,Motorola Moto G15,G15,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,100,novo,false,
+motorola_moto_g17,Motorola,Motorola,Moto G,Motorola Moto G17,G17,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,101,ativo,false,
+motorola_moto_g20,Motorola,Motorola,Moto G,Motorola Moto G20,G20,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,102,ativo,false,
+motorola_moto_g22,Motorola,Motorola,Moto G,Motorola Moto G22,G22,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,103,ativo,false,
+motorola_moto_g23,Motorola,Motorola,Moto G,Motorola Moto G23,G23,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,104,ativo,false,
+motorola_moto_g24,Motorola,Motorola,Moto G,Motorola Moto G24,G24,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,105,ativo,false,
+motorola_moto_g24_power,Motorola,Motorola,Moto G,Motorola Moto G24 Power,G24 Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,106,ativo,false,
+motorola_moto_g25,Motorola,Motorola,Moto G,Motorola Moto G25,G25,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,107,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g30,Motorola,Motorola,Moto G,Motorola Moto G30,G30,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,108,ativo,false,
+motorola_moto_g31,Motorola,Motorola,Moto G,Motorola Moto G31,G31,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,109,ativo,false,
+motorola_moto_g32,Motorola,Motorola,Moto G,Motorola Moto G32,G32,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,110,ativo,false,
+motorola_moto_g34,Motorola,Motorola,Moto G,Motorola Moto G34,G34,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,111,ativo,false,
+motorola_moto_g35,Motorola,Motorola,Moto G,Motorola Moto G35,G35,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,112,novo,false,
+motorola_moto_g36,Motorola,Motorola,Moto G,Motorola Moto G36,G36,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,113,ativo,false,
+motorola_moto_g40,Motorola,Motorola,Moto G,Motorola Moto G40,G40,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,114,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #96 G40 / G60.
+motorola_moto_g40_fusion,Motorola,Motorola,Moto G,Motorola Moto G40 Fusion,G40 Fusion,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,115,ativo,false,
+motorola_moto_g41,Motorola,Motorola,Moto G,Motorola Moto G41,G41,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,116,ativo,false,
+motorola_moto_g42,Motorola,Motorola,Moto G,Motorola Moto G42,G42,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,117,ativo,false,
+motorola_moto_g45,Motorola,Motorola,Moto G,Motorola Moto G45,G45,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,118,ativo,false,
+motorola_moto_g5,Motorola,Motorola,Moto G,Motorola Moto G5,G5,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,119,ativo,false,
+motorola_moto_g5_plus,Motorola,Motorola,Moto G,Motorola Moto G5 Plus,G5 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,120,ativo,false,
+motorola_moto_g50,Motorola,Motorola,Moto G,Motorola Moto G50,G50,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,121,ativo,false,
+motorola_moto_g51,Motorola,Motorola,Moto G,Motorola Moto G51,G51,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,122,ativo,false,
+motorola_moto_g52,Motorola,Motorola,Moto G,Motorola Moto G52,G52,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,123,ativo,false,
+motorola_moto_g53,Motorola,Motorola,Moto G,Motorola Moto G53,G53,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,124,ativo,false,
+motorola_moto_g54,Motorola,Motorola,Moto G,Motorola Moto G54,G54,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,125,ativo,false,
+motorola_moto_g55,Motorola,Motorola,Moto G,Motorola Moto G55,G55,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,126,ativo,false,
+motorola_moto_g56,Motorola,Motorola,Moto G,Motorola Moto G56,G56,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,127,novo,false,
+motorola_moto_g57,Motorola,Motorola,Moto G,Motorola Moto G57,G57,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,128,ativo,false,
+motorola_moto_g5s_plus,Motorola,Motorola,Moto G,Motorola Moto G5S Plus,G5S Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,129,ativo,false,
+motorola_moto_g6_play,Motorola,Motorola,Moto G,Motorola Moto G6 Play,G6 Play,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,130,ativo,false,
+motorola_moto_g60,Motorola,Motorola,Moto G,Motorola Moto G60,G60,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,131,ativo,false,
+motorola_moto_g60s,Motorola,Motorola,Moto G,Motorola Moto G60S,G60S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,132,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g62,Motorola,Motorola,Moto G,Motorola Moto G62,G62,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,133,ativo,false,
+motorola_moto_g64,Motorola,Motorola,Moto G,Motorola Moto G64,G64,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,134,ativo,false,
+motorola_moto_g7,Motorola,Motorola,Moto G,Motorola Moto G7,G7,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,135,ativo,false,
+motorola_moto_g7_play,Motorola,Motorola,Moto G,Motorola Moto G7 Play,G7 Play,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,136,ativo,false,
+motorola_moto_g7_plus,Motorola,Motorola,Moto G,Motorola Moto G7 Plus,G7 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,137,ativo,false,
+motorola_moto_g7_power,Motorola,Motorola,Moto G,Motorola Moto G7 Power,G7 Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,138,ativo,false,
+motorola_moto_g71,Motorola,Motorola,Moto G,Motorola Moto G71,G71,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,139,ativo,false,
+motorola_moto_g72,Motorola,Motorola,Moto G,Motorola Moto G72,G72,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,140,ativo,false,
+motorola_moto_g73,Motorola,Motorola,Moto G,Motorola Moto G73,G73,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,141,ativo,false,
+motorola_moto_g75,Motorola,Motorola,Moto G,Motorola Moto G75,G75,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,142,novo,false,
+motorola_moto_g77,Motorola,Motorola,Moto G,Motorola Moto G77,G77,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,143,ativo,false,
+motorola_moto_g8_play,Motorola,Motorola,Moto G,Motorola Moto G8 Play,G8 Play,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,144,ativo,false,
+motorola_moto_g8_plus,Motorola,Motorola,Moto G,Motorola Moto G8 Plus,G8 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,145,ativo,false,
+motorola_moto_g8_power,Motorola,Motorola,Moto G,Motorola Moto G8 Power,G8 Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,146,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g8_power_lite,Motorola,Motorola,Moto G,Motorola Moto G8 Power Lite,G8 Power Lite,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,147,ativo,false,
+motorola_moto_g82,Motorola,Motorola,Moto G,Motorola Moto G82,G82,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,148,ativo,false,
+motorola_moto_g84,Motorola,Motorola,Moto G,Motorola Moto G84,G84,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,149,ativo,false,
+motorola_moto_g86,Motorola,Motorola,Moto G,Motorola Moto G86,G86,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,150,novo,false,
+motorola_moto_g86_power,Motorola,Motorola,Moto G,Motorola Moto G86 Power,G86 Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,151,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g87,Motorola,Motorola,Moto G,Motorola Moto G87,G87,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,152,ativo,false,
+motorola_moto_g9,Motorola,Motorola,Moto G,Motorola Moto G9,G9,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,153,ativo,false,
+motorola_moto_g9_play,Motorola,Motorola,Moto G,Motorola Moto G9 Play,G9 Play,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,154,ativo,false,
+motorola_moto_g9_plus,Motorola,Motorola,Moto G,Motorola Moto G9 Plus,G9 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,155,ativo,false,
+motorola_moto_g9_power,Motorola,Motorola,Moto G,Motorola Moto G9 Power,G9 Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,156,ativo,false,
+motorola_moto_one_fusion,Motorola,Motorola,Motorola One,Motorola Moto One Fusion,One Fusion,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,157,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #1 Super grupo A02 / A03 / A12 / A13 / A23 / A70.
+motorola_moto_one_macro,Motorola,Motorola,Motorola One,Motorola Moto One Macro,One Macro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,158,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #5 Super grupo A20 / A30 / A50 / A30S / M31 / Redmi Note 7-8 / Moto G8.
+motorola_moto_one_zoom,Motorola,Motorola,Motorola One,Motorola Moto One Zoom,One Zoom,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,159,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #5 Super grupo A20 / A30 / A50 / A30S / M31 / Redmi Note 7-8 / Moto G8.
+motorola_one_fusion,Motorola,Motorola,Motorola One,Motorola One Fusion,One Fusion,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,160,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_one_fusion_plus,Motorola,Motorola,Motorola One,Motorola One Fusion Plus,One Fusion Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,161,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_one_hyper,Motorola,Motorola,Motorola One,Motorola One Hyper,One Hyper,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,162,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_one_macro,Motorola,Motorola,Motorola One,Motorola One Macro,One Macro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,163,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_one_vision,Motorola,Motorola,Motorola One,Motorola One Vision,One Vision,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,164,ativo,false,
+motorola_one_zoom,Motorola,Motorola,Motorola One,Motorola One Zoom,One Zoom,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,165,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_c3,POCO,POCO,POCO C,POCO C3,C3,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,166,ativo,false,
+poco_c40,POCO,POCO,POCO C,POCO C40,C40,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,167,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_c65,POCO,POCO,POCO C,POCO C65,C65,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,168,ativo,false,
+poco_c71,POCO,POCO,POCO C,POCO C71,C71,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,169,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_c75,POCO,POCO,POCO C,POCO C75,C75,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,170,novo,false,
+poco_f3,POCO,POCO,POCO F,POCO F3,F3,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,171,ativo,false,
+poco_f4,POCO,POCO,POCO F,POCO F4,F4,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,172,ativo,false,
+poco_f4_gt,POCO,POCO,POCO F,POCO F4 GT,F4 GT,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,173,ativo,false,
+poco_f5,POCO,POCO,POCO F,POCO F5,F5,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,174,ativo,false,
+poco_f5_pro,POCO,POCO,POCO F,POCO F5 Pro,F5 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,175,ativo,false,
+poco_m3,POCO,POCO,POCO M,POCO M3,M3,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,176,ativo,false,
+poco_m3_pro,POCO,POCO,POCO M,POCO M3 Pro,M3 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,177,ativo,false,
+poco_m4,POCO,POCO,POCO M,POCO M4,M4,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,178,ativo,false,
+poco_m4_pro,POCO,POCO,POCO M,POCO M4 Pro,M4 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,179,ativo,false,
+poco_m4_pro_4g,POCO,POCO,POCO M,POCO M4 Pro 4G,M4 Pro 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,180,ativo,false,
+poco_m4_pro_5g,POCO,POCO,POCO M,POCO M4 Pro 5G,M4 Pro 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,181,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_m5s,POCO,POCO,POCO M,POCO M5S,M5S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,182,ativo,false,
+poco_x3,POCO,POCO,POCO X,POCO X3,X3,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,183,ativo,false,
+poco_x3_gt,POCO,POCO,POCO X,POCO X3 GT,X3 GT,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,184,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_x3_nfc,POCO,POCO,POCO X,POCO X3 NFC,X3 NFC,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,185,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_x3_pro,POCO,POCO,POCO X,POCO X3 Pro,X3 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,186,ativo,false,
+poco_x4,POCO,POCO,POCO X,POCO X4,X4,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,187,ativo,false,
+poco_x4_gt,POCO,POCO,POCO X,POCO X4 GT,X4 GT,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,188,ativo,false,
+poco_x4_pro,POCO,POCO,POCO X,POCO X4 Pro,X4 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,189,ativo,false,
+poco_x5,POCO,POCO,POCO X,POCO X5,X5,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,190,ativo,false,
+poco_x5_pro,POCO,POCO,POCO X,POCO X5 Pro,X5 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,191,ativo,false,
+poco_x6,POCO,POCO,POCO X,POCO X6,X6,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,192,ativo,false,
+poco_x6_pro,POCO,POCO,POCO X,POCO X6 Pro,X6 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,193,ativo,false,
+poco_x7,POCO,POCO,POCO X,POCO X7,X7,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,194,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_x7_pro,POCO,POCO,POCO X,POCO X7 Pro,X7 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,195,novo,false,
+realme_c11,Realme,Realme,Realme C,Realme C11,C11,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,196,ativo,false,
+realme_c21y,Realme,Realme,Realme C,Realme C21Y,C21Y,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,197,ativo,false,
+realme_c25,Realme,Realme,Realme C,Realme C25,C25,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,198,ativo,false,
+realme_c30,Realme,Realme,Realme C,Realme C30,C30,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,199,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c30s,Realme,Realme,Realme C,Realme C30S,C30S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,200,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c33,Realme,Realme,Realme C,Realme C33,C33,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,201,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c35,Realme,Realme,Realme C,Realme C35,C35,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,202,ativo,false,
+realme_c51,Realme,Realme,Realme C,Realme C51,C51,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,203,ativo,false,
+realme_c53,Realme,Realme,Realme C,Realme C53,C53,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,204,ativo,false,
+realme_c55,Realme,Realme,Realme C,Realme C55,C55,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,205,ativo,false,
+realme_c61,Realme,Realme,Realme C,Realme C61,C61,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,206,ativo,false,
+realme_c63,Realme,Realme,Realme C,Realme C63,C63,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,207,ativo,false,
+realme_c63_5g,Realme,Realme,Realme C,Realme C63 5G,C63 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,208,ativo,false,
+realme_c65,Realme,Realme,Realme C,Realme C65,C65,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,209,ativo,false,
+realme_c67,Realme,Realme,Realme C,Realme C67,C67,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,210,ativo,false,
+realme_c67_5g,Realme,Realme,Realme C,Realme C67 5G,C67 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,211,ativo,false,
+realme_c71,Realme,Realme,Realme C,Realme C71,C71,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,212,novo,false,
+realme_c73,Realme,Realme,Realme C,Realme C73,C73,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,213,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c75,Realme,Realme,Realme C,Realme C75,C75,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,214,novo,false,
+realme_c75_5g,Realme,Realme,Realme C,Realme C75 5G,C75 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,215,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c75x,Realme,Realme,Realme C,Realme C75x,C75x,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,216,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c85,Realme,Realme,Realme C,Realme C85,C85,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,217,novo,false,
+realme_c85_pro,Realme,Realme,Realme C,Realme C85 Pro,C85 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,218,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_note_50,Realme,Realme,Realme Note,Realme Note 50,Note 50,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,219,ativo,false,
+realme_note_60,Realme,Realme,Realme Note,Realme Note 60,Note 60,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,220,ativo,false,
+realme_note_60x,Realme,Realme,Realme Note,Realme Note 60x,Note 60x,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,221,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_note_70,Realme,Realme,Realme Note,Realme Note 70,Note 70,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,222,novo,false,
+redmi_10,Redmi,Redmi,Redmi,Redmi 10,10,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,223,ativo,false,
+redmi_10_power,Redmi,Redmi,Redmi,Redmi 10 Power,10 Power,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,224,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_10a,Redmi,Redmi,Redmi,Redmi 10A,10A,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,225,ativo,false,
+redmi_10c,Redmi,Redmi,Redmi,Redmi 10C,10C,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,226,ativo,false,
+redmi_11a,Redmi,Redmi,Redmi,Redmi 11A,11A,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,227,ativo,false,
+redmi_12,Redmi,Redmi,Redmi,Redmi 12,12,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,228,ativo,false,
+redmi_12_4g,Redmi,Redmi,Redmi,Redmi 12 4G,12 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,229,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #175 Redmi 12 4G / 5G.
+redmi_12_5g,Redmi,Redmi,Redmi,Redmi 12 5G,12 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,230,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #175 Redmi 12 4G / 5G.
+redmi_12c,Redmi,Redmi,Redmi,Redmi 12C,12C,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,231,ativo,false,
+redmi_13,Redmi,Redmi,Redmi,Redmi 13,13,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,232,ativo,false,
+redmi_13_4g,Redmi,Redmi,Redmi,Redmi 13 4G,13 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,233,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_13c,Redmi,Redmi,Redmi,Redmi 13C,13C,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,234,ativo,false,
+redmi_14c,Redmi,Redmi,Redmi,Redmi 14C,14C,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,235,novo,false,
+redmi_14r,Redmi,Redmi,Redmi,Redmi 14R,14R,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,236,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_15,Redmi,Redmi,Redmi,Redmi 15,15,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,237,novo,false,
+redmi_15c,Redmi,Redmi,Redmi,Redmi 15C,15C,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,238,novo,false,
+redmi_8,Redmi,Redmi,Redmi,Redmi 8,8,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,239,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_8a,Redmi,Redmi,Redmi,Redmi 8A,8A,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,240,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_9,Redmi,Redmi,Redmi,Redmi 9,9,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,241,ativo,false,
+redmi_9a,Redmi,Redmi,Redmi,Redmi 9A,9A,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,242,ativo,false,
+redmi_9a_sport,Redmi,Redmi,Redmi,Redmi 9A Sport,9A Sport,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,243,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #1 Super grupo A02 / A03 / A12 / A13 / A23 / A70.
+redmi_9c,Redmi,Redmi,Redmi,Redmi 9C,9C,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,244,ativo,false,
+redmi_9i,Redmi,Redmi,Redmi,Redmi 9I,9I,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,245,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_9i_sport,Redmi,Redmi,Redmi,Redmi 9I Sport,9I Sport,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,246,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_9t,Redmi,Redmi,Redmi,Redmi 9T,9T,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,247,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_a2_plus,Redmi,Redmi,Redmi,Redmi A2 Plus,A2 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,248,ativo,false,
+redmi_a3,Redmi,Redmi,Redmi,Redmi A3,A3,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,249,ativo,false,
+redmi_a4,Redmi,Redmi,Redmi,Redmi A4,A4,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,250,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_a5,Redmi,Redmi,Redmi,Redmi A5,A5,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,251,novo,false,
+redmi_note_10,Redmi,Redmi,Redmi Note,Redmi Note 10,Note 10,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,252,ativo,false,
+redmi_note_10_4g,Redmi,Redmi,Redmi Note,Redmi Note 10 4G,Note 10 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,253,ativo,false,
+redmi_note_10_lite,Redmi,Redmi,Redmi Note,Redmi Note 10 Lite,Note 10 Lite,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,254,ativo,false,
+redmi_note_10_pro,Redmi,Redmi,Redmi Note,Redmi Note 10 Pro,Note 10 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,255,ativo,false,
+redmi_note_10s,Redmi,Redmi,Redmi Note,Redmi Note 10S,Note 10S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,256,ativo,false,
+redmi_note_11,Redmi,Redmi,Redmi Note,Redmi Note 11,Note 11,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,257,ativo,false,
+redmi_note_11_4g,Redmi,Redmi,Redmi Note,Redmi Note 11 4G,Note 11 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,258,ativo,false,
+redmi_note_11_pro,Redmi,Redmi,Redmi Note,Redmi Note 11 Pro,Note 11 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,259,ativo,false,
+redmi_note_11s,Redmi,Redmi,Redmi Note,Redmi Note 11S,Note 11S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,260,ativo,false,
+redmi_note_11t_5g,Redmi,Redmi,Redmi Note,Redmi Note 11T 5G,Note 11T 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,261,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_12,Redmi,Redmi,Redmi Note,Redmi Note 12,Note 12,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,262,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_12_4g,Redmi,Redmi,Redmi Note,Redmi Note 12 4G,Note 12 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,263,ativo,false,
+redmi_note_12_5g,Redmi,Redmi,Redmi Note,Redmi Note 12 5G,Note 12 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,264,ativo,false,
+redmi_note_12_pro,Redmi,Redmi,Redmi Note,Redmi Note 12 Pro,Note 12 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,265,ativo,false,
+redmi_note_12_pro_4g,Redmi,Redmi,Redmi Note,Redmi Note 12 Pro 4G,Note 12 Pro 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,266,ativo,false,
+redmi_note_12_pro_5g,Redmi,Redmi,Redmi Note,Redmi Note 12 Pro 5G,Note 12 Pro 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,267,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_12s,Redmi,Redmi,Redmi Note,Redmi Note 12S,Note 12S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,268,ativo,false,
+redmi_note_13,Redmi,Redmi,Redmi Note,Redmi Note 13,Note 13,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,269,ativo,false,
+redmi_note_13_4g,Redmi,Redmi,Redmi Note,Redmi Note 13 4G,Note 13 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,270,ativo,false,
+redmi_note_13_pro,Redmi,Redmi,Redmi Note,Redmi Note 13 Pro,Note 13 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,271,ativo,false,
+redmi_note_13_pro_4g,Redmi,Redmi,Redmi Note,Redmi Note 13 Pro 4G,Note 13 Pro 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,272,ativo,false,
+redmi_note_14,Redmi,Redmi,Redmi Note,Redmi Note 14,Note 14,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,273,novo,false,
+redmi_note_14_pro,Redmi,Redmi,Redmi Note,Redmi Note 14 Pro,Note 14 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,274,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_14_pro_plus,Redmi,Redmi,Redmi Note,Redmi Note 14 Pro Plus,Note 14 Pro Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,275,novo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_15_pro,Redmi,Redmi,Redmi Note,Redmi Note 15 Pro,Note 15 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,276,ativo,false,
+redmi_note_7,Redmi,Redmi,Redmi Note,Redmi Note 7,Note 7,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,277,ativo,false,
+redmi_note_7s,Redmi,Redmi,Redmi Note,Redmi Note 7S,Note 7S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,278,ativo,false,
+redmi_note_8,Redmi,Redmi,Redmi Note,Redmi Note 8,Note 8,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,279,ativo,false,
+redmi_note_8_pro,Redmi,Redmi,Redmi Note,Redmi Note 8 Pro,Note 8 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,280,ativo,false,
+redmi_note_9,Redmi,Redmi,Redmi Note,Redmi Note 9,Note 9,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,281,ativo,false,
+redmi_note_9_4g,Redmi,Redmi,Redmi Note,Redmi Note 9 4G,Note 9 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,282,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_9_5g,Redmi,Redmi,Redmi Note,Redmi Note 9 5G,Note 9 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,283,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_9_pro,Redmi,Redmi,Redmi Note,Redmi Note 9 Pro,Note 9 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,284,ativo,false,
+redmi_note_9_pro_max,Redmi,Redmi,Redmi Note,Redmi Note 9 Pro Max,Note 9 Pro Max,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,285,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_9s,Redmi,Redmi,Redmi Note,Redmi Note 9S,Note 9S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,286,ativo,false,
+redmi_x5,Redmi,Redmi,Redmi,Redmi X5,X5,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,287,revisar,false,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #170 X5 / Note 12 5G.
+samsung_galaxy_a01,Samsung,Samsung,Galaxy A,Samsung Galaxy A01,A01,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,288,ativo,false,
+samsung_galaxy_a01_core,Samsung,Samsung,Galaxy A,Samsung Galaxy A01 Core,A01 Core,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,289,ativo,false,
+samsung_galaxy_a02,Samsung,Samsung,Galaxy A,Samsung Galaxy A02,A02,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,290,ativo,false,
+samsung_galaxy_a02s,Samsung,Samsung,Galaxy A,Samsung Galaxy A02S,A02S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,291,ativo,false,
+samsung_galaxy_a03,Samsung,Samsung,Galaxy A,Samsung Galaxy A03,A03,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,292,ativo,false,
+samsung_galaxy_a03_core,Samsung,Samsung,Galaxy A,Samsung Galaxy A03 Core,A03 Core,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,293,ativo,false,
+samsung_galaxy_a03s,Samsung,Samsung,Galaxy A,Samsung Galaxy A03S,A03S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,294,ativo,false,
+samsung_galaxy_a04,Samsung,Samsung,Galaxy A,Samsung Galaxy A04,A04,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,295,ativo,false,
+samsung_galaxy_a04_core,Samsung,Samsung,Galaxy A,Samsung Galaxy A04 Core,A04 Core,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,296,ativo,false,
+samsung_galaxy_a04e,Samsung,Samsung,Galaxy A,Samsung Galaxy A04E,A04E,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,297,ativo,false,
+samsung_galaxy_a04s,Samsung,Samsung,Galaxy A,Samsung Galaxy A04S,A04S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,298,ativo,false,
+samsung_galaxy_a05,Samsung,Samsung,Galaxy A,Samsung Galaxy A05,A05,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,299,ativo,false,
+samsung_galaxy_a05s,Samsung,Samsung,Galaxy A,Samsung Galaxy A05S,A05S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,300,ativo,false,
+samsung_galaxy_a06,Samsung,Samsung,Galaxy A,Samsung Galaxy A06,A06,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,301,novo,false,
+samsung_galaxy_a07,Samsung,Samsung,Galaxy A,Samsung Galaxy A07,A07,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,302,novo,false,
+samsung_galaxy_a10,Samsung,Samsung,Galaxy A,Samsung Galaxy A10,A10,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,303,ativo,false,
+samsung_galaxy_a10s,Samsung,Samsung,Galaxy A,Samsung Galaxy A10S,A10S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,304,ativo,false,
+samsung_galaxy_a11,Samsung,Samsung,Galaxy A,Samsung Galaxy A11,A11,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,305,ativo,false,
+samsung_galaxy_a12,Samsung,Samsung,Galaxy A,Samsung Galaxy A12,A12,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,306,ativo,false,
+samsung_galaxy_a13,Samsung,Samsung,Galaxy A,Samsung Galaxy A13,A13,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,307,ativo,false,
+samsung_galaxy_a13_4g,Samsung,Samsung,Galaxy A,Samsung Galaxy A13 4G,A13 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,308,ativo,false,
+samsung_galaxy_a13_5g,Samsung,Samsung,Galaxy A,Samsung Galaxy A13 5G,A13 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,309,ativo,false,
+samsung_galaxy_a14,Samsung,Samsung,Galaxy A,Samsung Galaxy A14,A14,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,310,ativo,false,
+samsung_galaxy_a15,Samsung,Samsung,Galaxy A,Samsung Galaxy A15,A15,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,311,ativo,false,
+samsung_galaxy_a16,Samsung,Samsung,Galaxy A,Samsung Galaxy A16,A16,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,312,novo,false,
+samsung_galaxy_a17,Samsung,Samsung,Galaxy A,Samsung Galaxy A17,A17,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,313,novo,false,
+samsung_galaxy_a20,Samsung,Samsung,Galaxy A,Samsung Galaxy A20,A20,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,314,ativo,false,
+samsung_galaxy_a20s,Samsung,Samsung,Galaxy A,Samsung Galaxy A20S,A20S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,315,ativo,false,
+samsung_galaxy_a21,Samsung,Samsung,Galaxy A,Samsung Galaxy A21,A21,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,316,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a21s,Samsung,Samsung,Galaxy A,Samsung Galaxy A21S,A21S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,317,ativo,false,
+samsung_galaxy_a22_4g,Samsung,Samsung,Galaxy A,Samsung Galaxy A22 4G,A22 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,318,ativo,false,
+samsung_galaxy_a22_5g,Samsung,Samsung,Galaxy A,Samsung Galaxy A22 5G,A22 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,319,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a23,Samsung,Samsung,Galaxy A,Samsung Galaxy A23,A23,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,320,ativo,false,
+samsung_galaxy_a23_4g,Samsung,Samsung,Galaxy A,Samsung Galaxy A23 4G,A23 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,321,ativo,false,
+samsung_galaxy_a23_5g,Samsung,Samsung,Galaxy A,Samsung Galaxy A23 5G,A23 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,322,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a24,Samsung,Samsung,Galaxy A,Samsung Galaxy A24,A24,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,323,ativo,false,
+samsung_galaxy_a25,Samsung,Samsung,Galaxy A,Samsung Galaxy A25,A25,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,324,ativo,false,
+samsung_galaxy_a26,Samsung,Samsung,Galaxy A,Samsung Galaxy A26,A26,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,325,novo,false,
+samsung_galaxy_a30,Samsung,Samsung,Galaxy A,Samsung Galaxy A30,A30,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,326,ativo,false,
+samsung_galaxy_a30s,Samsung,Samsung,Galaxy A,Samsung Galaxy A30S,A30S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,327,ativo,false,
+samsung_galaxy_a31,Samsung,Samsung,Galaxy A,Samsung Galaxy A31,A31,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,328,ativo,false,
+samsung_galaxy_a32_4g,Samsung,Samsung,Galaxy A,Samsung Galaxy A32 4G,A32 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,329,ativo,false,
+samsung_galaxy_a32_5g,Samsung,Samsung,Galaxy A,Samsung Galaxy A32 5G,A32 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,330,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a33,Samsung,Samsung,Galaxy A,Samsung Galaxy A33,A33,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,331,ativo,false,
+samsung_galaxy_a34,Samsung,Samsung,Galaxy A,Samsung Galaxy A34,A34,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,332,ativo,false,
+samsung_galaxy_a35,Samsung,Samsung,Galaxy A,Samsung Galaxy A35,A35,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,333,ativo,false,
+samsung_galaxy_a36,Samsung,Samsung,Galaxy A,Samsung Galaxy A36,A36,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,334,novo,false,
+samsung_galaxy_a37,Samsung,Samsung,Galaxy A,Samsung Galaxy A37,A37,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,335,novo,false,
+samsung_galaxy_a42,Samsung,Samsung,Galaxy A,Samsung Galaxy A42,A42,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,336,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a50,Samsung,Samsung,Galaxy A,Samsung Galaxy A50,A50,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,337,ativo,false,
+samsung_galaxy_a50s,Samsung,Samsung,Galaxy A,Samsung Galaxy A50S,A50S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,338,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a51,Samsung,Samsung,Galaxy A,Samsung Galaxy A51,A51,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,339,ativo,false,
+samsung_galaxy_a52,Samsung,Samsung,Galaxy A,Samsung Galaxy A52,A52,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,340,ativo,false,
+samsung_galaxy_a52_5g,Samsung,Samsung,Galaxy A,Samsung Galaxy A52 5G,A52 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,341,ativo,false,
+samsung_galaxy_a52s,Samsung,Samsung,Galaxy A,Samsung Galaxy A52S,A52S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,342,ativo,false,
+samsung_galaxy_a53,Samsung,Samsung,Galaxy A,Samsung Galaxy A53,A53,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,343,ativo,false,
+samsung_galaxy_a54,Samsung,Samsung,Galaxy A,Samsung Galaxy A54,A54,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,344,ativo,false,
+samsung_galaxy_a55,Samsung,Samsung,Galaxy A,Samsung Galaxy A55,A55,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,345,ativo,false,
+samsung_galaxy_a56,Samsung,Samsung,Galaxy A,Samsung Galaxy A56,A56,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,346,novo,false,
+samsung_galaxy_a57,Samsung,Samsung,Galaxy A,Samsung Galaxy A57,A57,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,347,novo,false,
+samsung_galaxy_a70,Samsung,Samsung,Galaxy A,Samsung Galaxy A70,A70,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,348,ativo,false,
+samsung_galaxy_a71,Samsung,Samsung,Galaxy A,Samsung Galaxy A71,A71,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,349,ativo,false,
+samsung_galaxy_a72,Samsung,Samsung,Galaxy A,Samsung Galaxy A72,A72,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,350,ativo,false,
+samsung_galaxy_a73_5g,Samsung,Samsung,Galaxy A,Samsung Galaxy A73 5G,A73 5G,5G,,,,docs/catalogo/seeds/device_models_seed_001.csv,351,ativo,false,
+samsung_galaxy_a80,Samsung,Samsung,Galaxy A,Samsung Galaxy A80,A80,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,352,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a81,Samsung,Samsung,Galaxy A,Samsung Galaxy A81,A81,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,353,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_f16,Samsung,Samsung,Galaxy F,Samsung Galaxy F16,F16,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,354,novo,false,
+samsung_galaxy_f54,Samsung,Samsung,Galaxy F,Samsung Galaxy F54,F54,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,355,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_f62,Samsung,Samsung,Galaxy F,Samsung Galaxy F62,F62,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,356,ativo,false,
+samsung_galaxy_j2_prime,Samsung,Samsung,Galaxy J,Samsung Galaxy J2 Prime,J2 Prime,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,357,legado,false,
+samsung_galaxy_j4,Samsung,Samsung,Galaxy J,Samsung Galaxy J4,J4,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,358,legado,false,
+samsung_galaxy_j4_plus,Samsung,Samsung,Galaxy J,Samsung Galaxy J4 Plus,J4 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,359,legado,false,
+samsung_galaxy_j5_prime,Samsung,Samsung,Galaxy J,Samsung Galaxy J5 Prime,J5 Prime,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,360,legado,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_j5_pro,Samsung,Samsung,Galaxy J,Samsung Galaxy J5 Pro,J5 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,361,legado,false,
+samsung_galaxy_j7_prime,Samsung,Samsung,Galaxy J,Samsung Galaxy J7 Prime,J7 Prime,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,362,legado,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_j7_pro,Samsung,Samsung,Galaxy J,Samsung Galaxy J7 Pro,J7 Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,363,legado,false,
+samsung_galaxy_m02s,Samsung,Samsung,Galaxy M,Samsung Galaxy M02S,M02S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,364,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m11,Samsung,Samsung,Galaxy M,Samsung Galaxy M11,M11,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,365,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m12,Samsung,Samsung,Galaxy M,Samsung Galaxy M12,M12,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,366,ativo,false,
+samsung_galaxy_m13,Samsung,Samsung,Galaxy M,Samsung Galaxy M13,M13,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,367,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m14,Samsung,Samsung,Galaxy M,Samsung Galaxy M14,M14,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,368,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m15,Samsung,Samsung,Galaxy M,Samsung Galaxy M15,M15,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,369,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m16,Samsung,Samsung,Galaxy M,Samsung Galaxy M16,M16,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,370,novo,false,
+samsung_galaxy_m21,Samsung,Samsung,Galaxy M,Samsung Galaxy M21,M21,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,371,ativo,false,
+samsung_galaxy_m21s,Samsung,Samsung,Galaxy M,Samsung Galaxy M21S,M21S,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,372,ativo,false,
+samsung_galaxy_m22,Samsung,Samsung,Galaxy M,Samsung Galaxy M22,M22,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,373,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m23_4g,Samsung,Samsung,Galaxy M,Samsung Galaxy M23 4G,M23 4G,4G,,,,docs/catalogo/seeds/device_models_seed_001.csv,374,ativo,false,
+samsung_galaxy_m30,Samsung,Samsung,Galaxy M,Samsung Galaxy M30,M30,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,375,ativo,false,
+samsung_galaxy_m31,Samsung,Samsung,Galaxy M,Samsung Galaxy M31,M31,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,376,ativo,false,
+samsung_galaxy_m32,Samsung,Samsung,Galaxy M,Samsung Galaxy M32,M32,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,377,ativo,false,
+samsung_galaxy_m34,Samsung,Samsung,Galaxy M,Samsung Galaxy M34,M34,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,378,ativo,false,
+samsung_galaxy_m35,Samsung,Samsung,Galaxy M,Samsung Galaxy M35,M35,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,379,ativo,false,
+samsung_galaxy_m51,Samsung,Samsung,Galaxy M,Samsung Galaxy M51,M51,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,380,ativo,false,
+samsung_galaxy_m52,Samsung,Samsung,Galaxy M,Samsung Galaxy M52,M52,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,381,ativo,false,
+samsung_galaxy_m53,Samsung,Samsung,Galaxy M,Samsung Galaxy M53,M53,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,382,ativo,false,
+samsung_galaxy_m54,Samsung,Samsung,Galaxy M,Samsung Galaxy M54,M54,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,383,ativo,false,
+samsung_galaxy_m55,Samsung,Samsung,Galaxy M,Samsung Galaxy M55,M55,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,384,ativo,false,
+samsung_galaxy_m56,Samsung,Samsung,Galaxy M,Samsung Galaxy M56,M56,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,385,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m62,Samsung,Samsung,Galaxy M,Samsung Galaxy M62,M62,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,386,ativo,false,
+samsung_galaxy_note_10,Samsung,Samsung,Galaxy Note,Samsung Galaxy Note 10,Note 10,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,387,ativo,false,
+samsung_galaxy_note_10_lite,Samsung,Samsung,Galaxy Note,Samsung Galaxy Note 10 Lite,Note 10 Lite,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,388,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_note_9,Samsung,Samsung,Galaxy Note,Samsung Galaxy Note 9,Note 9,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,389,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_s20_fe,Samsung,Samsung,Galaxy S,Samsung Galaxy S20 FE,S20 FE,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,390,ativo,false,
+samsung_galaxy_s21,Samsung,Samsung,Galaxy S,Samsung Galaxy S21,S21,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,391,ativo,false,
+samsung_galaxy_s21_fe,Samsung,Samsung,Galaxy S,Samsung Galaxy S21 FE,S21 FE,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,392,ativo,false,
+samsung_galaxy_s21_plus,Samsung,Samsung,Galaxy S,Samsung Galaxy S21 Plus,S21 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,393,ativo,false,
+samsung_galaxy_s22,Samsung,Samsung,Galaxy S,Samsung Galaxy S22,S22,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,394,ativo,false,
+samsung_galaxy_s22_plus,Samsung,Samsung,Galaxy S,Samsung Galaxy S22 Plus,S22 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,395,ativo,false,
+samsung_galaxy_s22_ultra,Samsung,Samsung,Galaxy S,Samsung Galaxy S22 Ultra,S22 Ultra,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,396,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_s23,Samsung,Samsung,Galaxy S,Samsung Galaxy S23,S23,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,397,ativo,false,
+samsung_galaxy_s23_fe,Samsung,Samsung,Galaxy S,Samsung Galaxy S23 FE,S23 FE,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,398,ativo,false,
+samsung_galaxy_s23_plus,Samsung,Samsung,Galaxy S,Samsung Galaxy S23 Plus,S23 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,399,ativo,false,
+samsung_galaxy_s23_ultra,Samsung,Samsung,Galaxy S,Samsung Galaxy S23 Ultra,S23 Ultra,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,400,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_s24,Samsung,Samsung,Galaxy S,Samsung Galaxy S24,S24,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,401,ativo,false,
+samsung_galaxy_s24_fe,Samsung,Samsung,Galaxy S,Samsung Galaxy S24 FE,S24 FE,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,402,novo,false,
+samsung_galaxy_s24_plus,Samsung,Samsung,Galaxy S,Samsung Galaxy S24 Plus,S24 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,403,ativo,false,
+samsung_galaxy_s24_ultra,Samsung,Samsung,Galaxy S,Samsung Galaxy S24 Ultra,S24 Ultra,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,404,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_s25,Samsung,Samsung,Galaxy S,Samsung Galaxy S25,S25,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,405,ativo,false,
+samsung_galaxy_s25_fe,Samsung,Samsung,Galaxy S,Samsung Galaxy S25 FE,S25 FE,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,406,novo,false,
+samsung_galaxy_s25_plus,Samsung,Samsung,Galaxy S,Samsung Galaxy S25 Plus,S25 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,407,ativo,false,
+samsung_galaxy_s25_ultra,Samsung,Samsung,Galaxy S,Samsung Galaxy S25 Ultra,S25 Ultra,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,408,ativo,false,
+samsung_galaxy_s26,Samsung,Samsung,Galaxy S,Samsung Galaxy S26,S26,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,409,ativo,false,
+samsung_galaxy_s26_plus,Samsung,Samsung,Galaxy S,Samsung Galaxy S26 Plus,S26 Plus,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,410,ativo,false,
+samsung_galaxy_s26_ultra,Samsung,Samsung,Galaxy S,Samsung Galaxy S26 Ultra,S26 Ultra,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,411,ativo,false,
+tecno_spark_20,Tecno,Tecno,Tecno Spark,Tecno Spark 20,Spark 20,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,412,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+tecno_spark_20c,Tecno,Tecno,Tecno Spark,Tecno Spark 20C,Spark 20C,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,413,ativo,false,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+xiaomi_mi_10_lite,Xiaomi,Xiaomi,Mi,Xiaomi Mi 10 Lite,10 Lite,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,414,ativo,false,
+xiaomi_mi_11_lite,Xiaomi,Xiaomi,Mi,Xiaomi Mi 11 Lite,11 Lite,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,415,ativo,false,
+xiaomi_mi_12_lite,Xiaomi,Xiaomi,Mi,Xiaomi Mi 12 Lite,12 Lite,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,416,ativo,false,
+xiaomi_mi_13t,Xiaomi,Xiaomi,Mi,Xiaomi Mi 13T,13T,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,417,ativo,false,
+xiaomi_mi_13t_pro,Xiaomi,Xiaomi,Mi,Xiaomi Mi 13T Pro,13T Pro,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,418,ativo,false,
+infinix_hot_10,Infinix,Infinix,Infinix Hot,Infinix Hot 10,Hot 10,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,419,novo,false,Modelo base sem grupo; variantes Play/Lite/i possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_11,Infinix,Infinix,Infinix Hot,Infinix Hot 11,Hot 11,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,420,novo,false,Modelo base sem grupo; variantes Play/S possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_12,Infinix,Infinix,Infinix Hot,Infinix Hot 12,Hot 12,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,421,novo,false,Modelo base sem grupo; variantes Play/i/Pro possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_20,Infinix,Infinix,Infinix Hot,Infinix Hot 20,Hot 20,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,422,novo,false,Modelo base sem grupo; variantes 5G/i/Play possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_30,Infinix,Infinix,Infinix Hot,Infinix Hot 30,Hot 30,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,423,novo,false,Modelo base sem grupo; variantes i/Play possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_40,Infinix,Infinix,Infinix Hot,Infinix Hot 40,Hot 40,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,424,novo,false,Modelo base sem grupo; variantes i/Pro possuem frentes diferentes e devem permanecer explicitas.
+infinix_smart_8,Infinix,Infinix,Infinix Smart,Infinix Smart 8,Smart 8,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,425,novo,false,Modelo base sem grupo; Smart 8 HD permanece separado e sem agrupamento automatico.
+motorola_edge_40,Motorola,Motorola,Motorola Edge,Motorola Edge 40,Edge 40,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,426,novo,false,Tela pOLED com curvatura leve; pelicula especifica; nao agrupar automaticamente.
+poco_c55,POCO,POCO,POCO C,POCO C55,C55,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,427,novo,false,Gemeo de projeto do Redmi 12C; alias C55 exige contexto de marca.
+poco_m5,POCO,POCO,POCO M,POCO M5,M5,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,428,novo,false,Familia de tela ainda nao catalogada; pesquisar antes de agrupar; alias M5 exige contexto de marca.
+realme_c21,Realme,Realme,Realme C,Realme C21,C21,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,429,novo,false,Modelo da familia C11/C20/C21; compatibilidade permanece sujeita a teste seco.
+tecno_spark_10,Tecno,Tecno,Tecno Spark,Tecno Spark 10,Spark 10,NA,,,,docs/catalogo/seeds/device_models_seed_001.csv,430,novo,false,Modelo base sem grupo; variantes Pro/C possuem frentes diferentes e devem permanecer explicitas.
