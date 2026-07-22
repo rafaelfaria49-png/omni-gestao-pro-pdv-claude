@@ -27,3 +27,23 @@ export {
   type DryRunXsdStatus,
   type DryRunValidacaoEstrutural,
 } from "./dry-run.types"
+// GOAL-007 — Gate executável de 11 itens (redefinição do "dry-run verde").
+export {
+  runFiscalDryRunGate,
+  type RunFiscalDryRunGateOptions,
+  type GateFaultInjection,
+} from "./dry-run-gate"
+export {
+  DRY_RUN_GATE_REPORT_VERSAO,
+  DRY_RUN_GATE_TOTAL_ITENS,
+  type DryRunGateReport,
+  type DryRunGateItem,
+  type DryRunGateItemNumero,
+  type DryRunGateItemStatus,
+} from "./dry-run-gate.types"
+export {
+  gatePilotSnapshot,
+  gateProdutoIncompletoSnapshot,
+  gateCsosn500Snapshot,
+  GATE_PILOT_CNPJ,
+} from "./dry-run-gate-fixtures"
