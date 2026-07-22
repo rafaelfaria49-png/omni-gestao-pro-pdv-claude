@@ -39,3 +39,9 @@ export {
   XmlParseError,
   type C14nElement,
 } from "./c14n"
+// GOAL-008 — ponte Cofre → assinatura "a seco" (resolve o A1 do EnvVault e assina sintético).
+export {
+  drySignNfceFromVault,
+  type DrySignParams,
+  type DrySignResult,
+} from "./dry-sign-from-vault"
