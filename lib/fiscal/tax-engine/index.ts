@@ -5,7 +5,8 @@
  * devolve o cálculo tributário (ICMS/PIS/COFINS/base/total). Sem Prisma, Next, React, rede ou
  * estado. Determinístico e 100% testável. NÃO emite, NÃO gera XML, NÃO toca PDV/Caixa/Financeiro.
  *
- * Escopo F2: Simples Nacional · NFC-e · consumidor final · operação interna · sem ST/DIFAL/FCP/IPI/ISS.
+ * Escopo: Simples Nacional · NFC-e · consumidor final · interna · ST CSOSN 500 (substituído);
+ * sem DIFAL/FCP-próprio/IPI/ISS e sem CSOSN 201/202/203/900.
  */
 export { calculateTax } from "./calculator"
 export {
@@ -15,6 +16,8 @@ export {
   isSimplesRegime,
   isCsosnSuportado,
   isCsosnComST,
+  isCsosnStSuportado,
+  isCsosnStNaoSuportado,
   normalizeCsosn,
   CSOSN_DEFAULT_SIMPLES,
 } from "./rules"
@@ -45,6 +48,7 @@ export type {
   TaxEngineInput,
   TaxComponentResult,
   TaxIcmsResult,
+  TaxIcmsStFields,
   TaxEngineItemResult,
   TaxEngineTotais,
   TaxEngineErrorCode,

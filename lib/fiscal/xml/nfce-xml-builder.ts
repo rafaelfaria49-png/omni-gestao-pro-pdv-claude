@@ -11,7 +11,8 @@
  * pelo `NfceXmlContext` opcional; ausentes → PLACEHOLDER sinalizado como pendência (ver validação).
  *
  * Mapeamentos fiscais do baseline Simples Nacional NFC-e:
- *  - ICMS  → grupo `ICMSSN102` (CSOSN 102/103/300/400) ou `ICMSSN101` (CSOSN 101, crédito do Simples).
+ *  - ICMS  → grupo `ICMSSN102` (CSOSN 102/103/300/400), `ICMSSN101` (CSOSN 101, crédito do Simples)
+ *            ou `ICMSSN500` (CSOSN 500, ICMS já retido por ST — substituído; GOAL-006).
  *  - PIS   → grupo `PISOutr`    com CST 49 (recolhido no DAS, valores 0).
  *  - COFINS→ grupo `COFINSOutr` com CST 49.
  */
@@ -87,6 +88,16 @@ function buildIcmsNode(orig: string, trib: SnapshotItemTributos): XmlNode {
         leafRequired("pCredSN", dec4(trib.icms.pCredSN)),
         leafRequired("vCredICMSSN", dec2(trib.icms.valorCreditoSimples)),
       ]),
+    ])
+  }
+  if (csosn === "500") {
+    // CSOSN 500 — ICMS cobrado anteriormente por ST (substituído). Grupo ICMSSN500 (leiaute 4.00).
+    // ICMS próprio NÃO destacado; os campos condicionais de ST retido/ICMS efetivo entram quando o
+    // Snapshot passar a transportá-los (GOAL de fiação end-to-end). Enquanto isso, o motor barra a
+    // montante o CSOSN 500 sem identificação de ST (st_incompleta → tributacao pendente → validação
+    // do XML bloqueia), então nunca chega aqui um 500 "vazio" pelo fluxo real. Ver ADR-0012.
+    return group("ICMS", [
+      group("ICMSSN500", [leafRequired("orig", orig), leafRequired("CSOSN", "500")]),
     ])
   }
   // CSOSN 102/103/300/400 — sem destaque de ICMS (imposto no DAS). Grupo ICMSSN102.

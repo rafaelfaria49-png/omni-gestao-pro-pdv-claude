@@ -2,8 +2,9 @@
  * Validação de entrada do Motor Tributário (Tax Engine) — Fase F2. Pura, sem efeitos.
  *
  * Define a FRONTEIRA do escopo: rejeita explicitamente o que ainda não é suportado (regime
- * normal, interestadual, contribuinte, ST/DIFAL/FCP/IPI/ISS, CSOSN de ST). Erros bloqueiam o
- * cálculo (resultado `ok:false`); avisos são informativos e não bloqueiam.
+ * normal, interestadual, contribuinte, DIFAL/FCP-próprio/IPI/ISS, CSOSN 201/202/203/900, origem
+ * fora de 0–8). CSOSN 500 (ST substituído) é aceito, exigindo identificação mínima da ST retida
+ * (fail-closed). Erros bloqueiam o cálculo (`ok:false`); avisos são informativos e não bloqueiam.
  */
 import type {
   TaxEngineError,
@@ -11,7 +12,19 @@ import type {
   TaxEngineItemInput,
 } from "./types"
 import { isNonNegativeFinite, num, onlyDigits } from "./helpers"
-import { isCsosnComST, isCsosnSuportado, isSimplesRegime } from "./rules"
+import { isCsosnStNaoSuportado, isCsosnStSuportado, isCsosnSuportado, isSimplesRegime } from "./rules"
+
+/** Identificação MÍNIMA de ST retida presente no item (CSOSN 500 — fail-closed). */
+function temIdentificacaoSt(item: TaxEngineItemInput): boolean {
+  const pos = (v: number | undefined) => num(v) > 0
+  return (
+    pos(item.vICMSSubstituto) ||
+    pos(item.vICMSSTRet) ||
+    pos(item.vBCSTRet) ||
+    pos(item.vICMSEfet) ||
+    (pos(item.vBCEfet) && pos(item.pICMSEfet))
+  )
+}
 
 export type ValidationResult = {
   errors: TaxEngineError[]
@@ -163,17 +176,46 @@ function validateItem(item: TaxEngineItemInput, idx: number): TaxEngineError[] {
     )
   }
 
-  // CSOSN: precisa ser um dos suportados; ST é explicitamente barrado.
-  if (item.csosn != null && onlyDigits(item.csosn).length > 0) {
-    if (isCsosnComST(item.csosn)) {
+  // Origem da mercadoria: matriz 0–8 (um dígito). 9 e demais → fora da matriz suportada.
+  const origem = onlyDigits(item.origemMercadoria)
+  if (origem.length > 0) {
+    const d = Number(origem)
+    if (origem.length !== 1 || !(d >= 0 && d <= 8)) {
       out.push(
-        err("csosn_nao_suportado", `Item ${idx}: CSOSN ${onlyDigits(item.csosn)} envolve ST (fora do escopo F2).`, idx, "csosn"),
+        err("origem_nao_suportada", `Item ${idx}: origem "${origem}" fora da matriz suportada (use 0–8).`, idx, "origemMercadoria"),
       )
+    }
+  }
+
+  // CSOSN: precisa ser um dos suportados; 500 (ST substituído) é aceito; 201/202/203/900 barrados.
+  if (item.csosn != null && onlyDigits(item.csosn).length > 0) {
+    const csosn = onlyDigits(item.csosn)
+    if (isCsosnStNaoSuportado(item.csosn)) {
+      out.push(
+        err(
+          "csosn_nao_suportado",
+          `Item ${idx}: CSOSN ${csosn} (ST/antecipação) não suportado (use 500; 201/202/203/900 são trilha futura).`,
+          idx,
+          "csosn",
+        ),
+      )
+    } else if (isCsosnStSuportado(item.csosn)) {
+      // CSOSN 500 — exige identificação mínima da ST retida (fail-closed: nunca emite 500 "vazio").
+      if (!temIdentificacaoSt(item)) {
+        out.push(
+          err(
+            "st_incompleta",
+            `Item ${idx}: CSOSN 500 exige identificação de ST retida (informe vICMSSubstituto/vICMSSTRet/vBCSTRet ou ICMS efetivo vBCEfet+pICMSEfet).`,
+            idx,
+            "csosn",
+          ),
+        )
+      }
     } else if (!isCsosnSuportado(item.csosn)) {
       out.push(
         err(
           "csosn_nao_suportado",
-          `Item ${idx}: CSOSN ${onlyDigits(item.csosn)} não suportado na F2 (use 101/102/103/300/400).`,
+          `Item ${idx}: CSOSN ${csosn} não suportado (use 101/102/103/300/400 ou 500).`,
           idx,
           "csosn",
         ),

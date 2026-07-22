@@ -222,3 +222,20 @@ describe("buildNfceXmlResult · compatibilidade com o snapshot atual + numeraç�
     expect(r.chaveAcesso).toHaveLength(44)
   })
 })
+
+describe("buildNfceXml · CSOSN 500 (ST substituído) → grupo ICMSSN500 (GOAL-006)", () => {
+  it("item com CSOSN 500 na tributação congelada emite ICMSSN500, não ICMSSN102", () => {
+    // O mapeamento venda→snapshot ainda não transporta a ST (GOAL de fiação end-to-end); aqui
+    // forçamos a tributação congelada para CSOSN 500 para exercitar o ramo do builder.
+    const clone = JSON.parse(JSON.stringify(snap())) as VendaFiscalSnapshot
+    clone.tributacao!.itens[0].csosn = "500"
+    clone.tributacao!.itens[0].icms.codigo = "500"
+    clone.tributacao!.itens[0].icms.situacao = "st"
+    const xml = buildNfceXml(clone)
+    expect(xml).toContain("<ICMSSN500>")
+    expect(xml).toContain("<CSOSN>500</CSOSN>")
+    expect(xml).not.toContain("<ICMSSN102>")
+    // ICMS próprio segue não destacado no substituído
+    expect(xml).toContain("<vICMS>0.00</vICMS>")
+  })
+})

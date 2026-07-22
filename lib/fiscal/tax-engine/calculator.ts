@@ -90,7 +90,27 @@ export function calculateTax(input: TaxEngineInput): TaxEngineResult {
     const valorLiquido = roundMoney(valorBruto - desconto, cfg)
     const valorTributavel = roundMoney(valorBruto - desconto + frete + seguro + outrasDespesas, cfg)
 
-    const icms = resolveIcms({ regime, csosn: it.csosn, valorTributavel, pCredSN: it.pCredSN, cfg })
+    const icms = resolveIcms({
+      regime,
+      csosn: it.csosn,
+      valorTributavel,
+      pCredSN: it.pCredSN,
+      // ST retida (CSOSN 500) — repassada crua; rules.ts normaliza/ecoa (nunca inventa base).
+      st: {
+        vBCSTRet: it.vBCSTRet,
+        pST: it.pST,
+        vICMSSubstituto: it.vICMSSubstituto,
+        vICMSSTRet: it.vICMSSTRet,
+        vBCFCPSTRet: it.vBCFCPSTRet,
+        pFCPSTRet: it.pFCPSTRet,
+        vFCPSTRet: it.vFCPSTRet,
+        pRedBCEfet: it.pRedBCEfet,
+        vBCEfet: it.vBCEfet,
+        pICMSEfet: it.pICMSEfet,
+        vICMSEfet: it.vICMSEfet,
+      },
+      cfg,
+    })
     const pis = resolvePis({ regime, valorTributavel, cfg })
     const cofins = resolveCofins({ regime, valorTributavel, cfg })
 
@@ -100,6 +120,9 @@ export function calculateTax(input: TaxEngineInput): TaxEngineResult {
     const itemWarnings: string[] = []
     if (icms.situacao === "nao_destacado") {
       itemWarnings.push("ICMS não destacado (Simples Nacional — recolhido no DAS).")
+    }
+    if (icms.situacao === "st") {
+      itemWarnings.push("ICMS já retido por Substituição Tributária (CSOSN 500 — substituído).")
     }
 
     return {
