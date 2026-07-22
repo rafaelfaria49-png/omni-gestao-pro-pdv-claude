@@ -2,7 +2,7 @@
 title: Arquitetura — Índice oficial
 status: vivo
 owner: produto + Sonnet (técnico)
-last_update: 2026-05-27
+last_update: 2026-07-22
 ---
 
 # 🏗️ Arquitetura — Índice oficial
@@ -35,9 +35,9 @@ last_update: 2026-05-27
 | [`MODULARIZACAO.md`](./MODULARIZACAO.md) | Estratégia de modularização (placeholder) | 🟠 a expandir |
 | [`SIDEBAR_PAGE_ROUTES.md`](./SIDEBAR_PAGE_ROUTES.md) | Mapa de rotas e sidebar | ✅ vivo |
 | [`FISCAL_SCHEMA_DESIGN.md`](./FISCAL_SCHEMA_DESIGN.md) | Entidades fiscais (NFC-e/SAT/NF-e) + ER + campos | ✅ vivo |
-| [`NFCE_ARCHITECTURE.md`](./NFCE_ARCHITECTURE.md) | Pipeline de emissão NFC-e ponta a ponta | ✅ vivo |
+| [`NFCE_ARCHITECTURE.md`](./NFCE_ARCHITECTURE.md) | Pipeline NFC-e + SEFAZ direta; piloto Matriz RafaCell/SP (`tpAmb=2`) via `FiscalProvider` (ADR-0015/0016) | ✅ vivo |
 | [`FISCAL_EVENTS.md`](./FISCAL_EVENTS.md) | Eventos fiscais, fila, retry, dead-letter | ✅ vivo |
-| [`FISCAL_SECURITY.md`](./FISCAL_SECURITY.md) | Segredos fiscais (A1/CSC), cofre, rotação, auditoria | ✅ vivo |
+| [`FISCAL_SECURITY.md`](./FISCAL_SECURITY.md) | Segredos fiscais (A1/CSC), Supabase Vault/Storage (ADR-0014), envelope encryption, rotação e auditoria | ✅ vivo |
 | [`FISCAL_DRY_RUN.md`](./FISCAL_DRY_RUN.md) | Emissão a seco (validação sem transmissão) | ✅ vivo |
 
 ---

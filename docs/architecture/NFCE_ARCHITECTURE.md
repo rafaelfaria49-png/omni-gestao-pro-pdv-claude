@@ -3,8 +3,8 @@ title: NFCE_ARCHITECTURE — Arquitetura de emissão NFC-e (pipeline completo)
 hub: fiscal
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-06-24
-decidido_por: docs/decisions/ADR-0008-fiscal-architecture.md
+last_update: 2026-07-22
+decidido_por: docs/decisions/ADR-0008-fiscal-architecture.md + docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md + docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md
 governa_codigo: lib/fiscal/emission/*, lib/fiscal/provider/*, lib/fiscal/numbering/*
 ---
 
@@ -13,6 +13,10 @@ governa_codigo: lib/fiscal/emission/*, lib/fiscal/provider/*, lib/fiscal/numberi
 > **Documento oficial** do fluxo de emissão fiscal, ponta a ponta. É o `NFCE_ARCHITECTURE`
 > citado por `lib/fiscal/venda-fiscal-state-machine.ts:13` (§17/§18 → §6/§7 deste doc).
 > **Princípios:** `docs/decisions/ADR-0008-fiscal-architecture.md`.
+> **Provider inicial:** ADR-0015 — SEFAZ direta, exclusivamente em homologação, atrás de
+> `FiscalProvider`; gateway/PAA permanecem alternativas futuras.
+> **Escopo inicial:** ADR-0016 — somente Matriz RafaCell Assistec, Taguaí/SP, SEFAZ-SP,
+> NFC-e modelo 65 e `tpAmb=2`, identificada pelo `Store.id` real.
 > **Dados:** `docs/architecture/FISCAL_SCHEMA_DESIGN.md`.
 >
 > ⚠️ Hoje as etapas **Tributação → XML → Assinatura → SEFAZ → QR** são **simuladas** (`STUB`)
@@ -75,13 +79,15 @@ sequenceDiagram
   loop drenagem assíncrona
     Wk->>Job: lock (lockOwner, lockExpiresAt)
     Wk->>Pipe: runEmissionPipeline(input, ports)
-    Pipe->>Prov: validarConfiguracao / validarSnapshot / prepararEmissao
+    Pipe->>Pipe: snapshot / tributos
     Pipe->>Pipe: allocateNumero (série+número atômico)
+    Pipe->>Pipe: XML / XSD / assinatura
     Pipe->>Venda: setFiscalStatus(EMITINDO)
-    Pipe->>Prov: emitir(snapshot numerado)
-    Prov->>SEFAZ: transmite XML assinado
+    Pipe->>Prov: emitir(envelope XML assinado+validado)
+    Prov->>SEFAZ: SOAP/TLS via endpoint de homologação resolvido
     SEFAZ-->>Prov: cStat / xMotivo / protocolo
     Prov-->>Pipe: FiscalProviderResponse
+    Pipe->>Pipe: reconciliar + persistir protocolo/XML autorizado
     Pipe->>Venda: setFiscalStatus(AUTORIZADA|REJEITADA|EM_CONTINGENCIA)
     Pipe->>Job: CONCLUIDO | AGUARDANDO_RETRY
   end
@@ -103,6 +109,49 @@ Todas as etapas seguem o mesmo contrato conceitual (espelha `FiscalProviderRespo
 - **Falha:** normalizada (nunca exceção crua vazando); cada falha tem `errorCode` estável.
 - **Idempotência:** reexecutar uma etapa sobre o mesmo estado **não duplica** efeito.
 - **Trilha:** toda etapa grava `FiscalLog` (`acao`, `cStat`, `detalhe`) — sem segredo.
+
+### 3.1 Fronteira do provider real (ADR-0015)
+
+O OmniGestão é dono do snapshot, tributos, numeração, XML, XSD, assinatura, reconciliação e
+persistência legal. `FiscalProvider` é a porta de integração externa, não um segundo motor fiscal.
+
+Antes da primeira transmissão real, o contrato atual baseado em `FiscalProviderRequest`/snapshot
+deve evoluir para entregar ao provider um envelope imutável com XML assinado e validado, chave,
+ambiente, UF, versão e identificadores de idempotência/correlação. Nenhum tipo de domínio expõe
+SOAP, WSDL, URL ou peculiaridade de autorizador.
+
+```mermaid
+graph LR
+  Domain[Pipeline fiscal canônico] -->|XML assinado e validado| Port[FiscalProvider]
+  Port --> Adapter[SefazDiretoProvider]
+  Adapter --> Resolver[EndpointResolver UF + ambiente + serviço + versão]
+  Adapter --> Transport[SOAP Transport TLS/mTLS]
+  Transport --> Hom[SEFAZ-SP homologação / modelo 65 / tpAmb 2]
+  Gateway[Gateway / PAA futuro] -.outro adapter.-> Port
+```
+
+Na primeira integração, o adapter aceita somente `HOMOLOGACAO`/`tpAmb=2` e catálogo oficial de
+homologação. Qualquer ambiente/endpoint de produção falha antes da rede. Gateway e PAA não fazem
+parte do runtime inicial e não são fallback automático.
+
+### 3.2 Escopo e preflight da loja-piloto (ADR-0016)
+
+O piloto fica restrito ao registro `Store` real da Matriz RafaCell Assistec em Taguaí/SP. O valor
+literal do ID não aparece na arquitetura nem vira constante: deve ser carregado da relação real e
+permanecer idêntico em configuração fiscal, certificado, série, nota, job e contexto autorizado.
+Nome “Matriz”, posição na lista, ID historicamente conhecido ou `loja-1` nunca são fallback.
+
+Antes da rede, preflight server-side e fail-closed valida:
+
+- CNPJ, IE, razão social, endereço, município, código IBGE, UF e CRT/regime;
+- série ativa para `(storeId, modelo 65, HOMOLOGACAO)` e numeração atômica;
+- CSC de homologação e A1 de teste ativo/compatível, apenas por referência ao cofre;
+- `SEFAZ_DIRETO`, SEFAZ-SP, UF SP, NFC-e 65, `HOMOLOGACAO` e `tpAmb=2`;
+- snapshot, tributos, XML, XSD, assinatura, chave e idempotência consistentes.
+
+Ausência ou divergência bloqueia antes da rede. Demais lojas permanecem default-off e não herdam
+identidade, série, CSC, certificado, provider ou ambiente da Matriz. Fixtures e logs nunca recebem
+credenciais, CSC, certificado ou códigos reais.
 
 ---
 
@@ -172,20 +221,29 @@ Todas as etapas seguem o mesmo contrato conceitual (espelha `FiscalProviderRespo
 - **Idempotência:** `@@unique([storeId, dedupeKey])` — reenfileirar a mesma venda **não** duplica
   job; o pipeline é idempotente (AUTORIZADA → no-op; EMITINDO → no-op). Ver §7.
 
-### Etapa 7 — Transmissão SEFAZ ❌ (F5 — gap P0-4, Gate humano: provider)
-- **Entrada:** XML assinado + provider real (`SEFAZ_DIRETO` **ou** gateway).
-- **Processo (alvo):** `FiscalProvider.emitir` transmite (SOAP/REST por UF ou API do gateway).
-  Resolver troca a impl por `ConfiguracaoFiscalLoja.provider` (P5). **Só homologação até F11/F12.**
+### Etapa 7 — Transmissão SEFAZ ❌ (F5 — gap P0-4, Gate G-F5 resolvido pela ADR-0015)
+- **Entrada:** envelope imutável com XML assinado + XSD válido + chave/contexto canônico;
+  `SefazDiretoProvider` como primeiro provider real.
+- **Processo (alvo):** o provider traduz a operação canônica para o Web Service oficial de
+  homologação. Resolver interno escolhe autorizador/endpoint por `(UF, ambiente, modelo, serviço,
+  versão)`; o transporte encapsula SOAP, namespaces, TLS/mTLS, timeout e parsing. O domínio não
+  conhece URL, WSDL ou regra específica de UF.
+- **Ambiente:** exclusivamente `HOMOLOGACAO`/`tpAmb=2`; tentativa de produção falha antes da rede.
+- **Escopo:** somente Matriz RafaCell Assistec/Taguaí, UF SP, SEFAZ-SP e NFC-e modelo 65, sempre
+  pelo `storeId` real propagado no contexto; nenhuma outra loja herda a configuração.
 - **Saída:** `cStat`/`xMotivo`/`protocolo`/`dataAutorizacao` (Etapa 8).
 - **Falhas:** timeout/instabilidade → `EM_CONTINGENCIA` (recuperável); rejeição (cStat≠100) →
   `REJEITADA`; denegação → `DENEGADA`.
 - **Rollback:** não se "desfaz" transmissão; trata-se por **retry/contingência/evento**.
-- **Idempotência:** consulta por `chaveAcesso` antes de retransmitir evita duplicar autorização.
+- **Idempotência:** resultado incerto exige consulta por `chaveAcesso`/recibo antes de retransmitir.
+- **Alternativas futuras:** gateway, PAA ou provider alternativo entram como outro adapter e exigem
+  decisão explícita; não há fallback automático nesta homologação.
 
 ### Etapa 8 — Retorno + Persistência ❌ (F5)
 - **Entrada:** resposta da SEFAZ.
-- **Processo:** `interpretarEmissao` mapeia para `Venda.fiscalStatus` (ver §6) e grava o resultado
-  em `NotaFiscal` (chave/protocolo/cStat/xMotivo/`xmlAutorizado`/`status = AUTORIZADA`).
+- **Processo:** `interpretarEmissao` normaliza a resposta e mapeia para `Venda.fiscalStatus` (ver
+  §6). O pipeline reconcilia resultado incerto e grava chave, recibo/protocolo, `cStat`, `xMotivo`,
+  data/autorizador/versão, hash, XML assinado enviado e XML autorizado/protocolado imutável.
 - **Saída:** documento persistido; trilha em `FiscalLog` (`acao = emissao.resultado`, `cStat`).
 - **Falhas:** persistência parcial → o job permanece e reprocessa; consulta confirma se a SEFAZ
   autorizou mesmo sem termos persistido (evita duplicar).
@@ -275,6 +333,8 @@ operacionalmente** conforme `fiscalStatus` (gates `assert*` em 6 rotas `corrigir
 - Backoff via `proximaTentativaEm`; teto `maxTentativas` (default 5).
 - Lock com expiração (`lockExpiresAt`) → worker morto não trava o job.
 - Esgotou tentativas → **dead-letter** (`status = FALHA`) para inspeção/reprocessamento manual.
+- Timeout após envio não entra diretamente em retransmissão: primeiro consulta/reconcilia a chave
+  ou o recibo, porque a SEFAZ pode ter autorizado apesar da perda da resposta local.
 
 ### 7.3 Contingência
 - Timeout/SEFAZ fora → `EM_CONTINGENCIA` (venda) + `CONTINGENCIA` (nota) + `TipoEmissao.
@@ -310,6 +370,7 @@ operacionalmente** conforme `fiscalStatus` (gates `assert*` em 6 rotas `corrigir
 | Numeração | ✅ dormente | `numbering/*` (GOAL_008) |
 | Orquestração do pipeline | ✅ simulada | `emission/*` (GOAL_007) |
 | Provider (contrato + STUB) | ✅ | `provider/*` (GOAL_006) |
+| Decisão do provider inicial | ✅ arquitetura | ADR-0015 — SEFAZ direta, só homologação |
 | State machine | ✅ no-op | `venda-fiscal-state-machine.ts` (GOAL_003) |
 | Tributação | ❌ | F2 (P0-1) |
 | XML + chave | ❌ | F3 (P0-2) |
@@ -326,9 +387,14 @@ operacionalmente** conforme `fiscalStatus` (gates `assert*` em 6 rotas `corrigir
 ## 10. Referências
 
 - Princípios: `docs/decisions/ADR-0008-fiscal-architecture.md`.
+- Provider inicial: `docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md`.
+- Piloto SP/Matriz: `docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md`.
 - Dados: `docs/architecture/FISCAL_SCHEMA_DESIGN.md`.
 - Eventos: `docs/architecture/FISCAL_EVENTS.md` · Dry-Run: `docs/architecture/FISCAL_DRY_RUN.md`.
 - Segurança: `docs/architecture/FISCAL_SECURITY.md`.
 - Plano/fases: `docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md`.
 - Código: `lib/fiscal/emission/emission-pipeline.ts`, `provider/types.ts`, `numbering/*`,
   `venda-fiscal-state-machine.ts`, `venda-fiscal-snapshot.ts`.
+- Especificação oficial: [MOC NF-e/NFC-e](https://www.nfe.fazenda.gov.br/PORTAl/listaConteudo.aspx?tipoConteudo=ndIjl+iEFdE=)
+  e [Web Services de homologação](https://hom.nfe.fazenda.gov.br/portal/WebServices.aspx) do Portal NF-e.
+- Piloto SP: [portal NFC-e da SEFAZ-SP](https://portal.fazenda.sp.gov.br/servicos/nfce/).

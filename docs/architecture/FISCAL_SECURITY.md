@@ -3,9 +3,9 @@ title: FISCAL_SECURITY — Segurança do certificado A1, CSC e segredos fiscais
 hub: fiscal
 status: vivo
 owner: produto/arquitetura/seguranca
-last_update: 2026-06-24
-decidido_por: docs/decisions/ADR-0008-fiscal-architecture.md (P6 — segredo por referência) + docs/decisions/ADR-0009-fiscal-secret-vault.md (cofre)
-desbloqueia: docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md F4 (assinatura) — Gate G-F1 resolvido por ADR-0009
+last_update: 2026-07-22
+decidido_por: docs/decisions/ADR-0008-fiscal-architecture.md (P6) + docs/decisions/ADR-0009-fiscal-secret-vault.md (contrato) + docs/decisions/ADR-0014-supabase-vault-backend-kms-fiscal.md (produção) + docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md (escopo piloto)
+desbloqueia: docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md F4 (assinatura) — Gate G-F1 resolvido por ADR-0009 + ADR-0014
 ---
 
 # 🔐 FISCAL_SECURITY — Segurança dos segredos fiscais
@@ -14,10 +14,10 @@ desbloqueia: docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md F4 (assinatura) —
 > senha do `.pfx`, CSC (NFC-e) e token de gateway.
 > **Princípio fundador:** ADR-0008 **P6 — segredo só por referência**.
 >
-> ⚠️ **Este documento é arquitetura, não implementação.** Ele define *o que* deve ser garantido
-> e *quais opções* existem. A escolha concreta do cofre (Vault × KMS × env por loja) é uma
-> **decisão de ADR próprio** — a **Fase F1 [GATE HUMANO]** do `MASTER_FISCAL_EXECUTION_PLAN`.
-> **Nenhum `.pfx` real sobe antes desse ADR aprovado.** Nada aqui implementa cripto/cofre.
+> ⚠️ **Este documento é arquitetura, não implementação.** O contrato foi fixado na ADR-0009 e o
+> backend de produção foi fechado na ADR-0014: **Supabase Vault + Storage privado exclusivo do
+> Fiscal**, com envelope encryption. **Nenhum `.pfx` real sobe antes de GOAL de implementação e
+> provisionamento próprios.** Nada neste documento implementa cripto/cofre.
 
 ---
 
@@ -62,28 +62,54 @@ Mapeia o enum `CertificadoStatus`. Regras:
 
 ---
 
-## 3. Estratégia de armazenamento (DECIDIDA — `ADR-0009`)
+## 3. Estratégia de armazenamento (DECIDIDA — `ADR-0009` + `ADR-0014`)
 
-> ✅ **Decisão tomada** em `docs/decisions/ADR-0009-fiscal-secret-vault.md` (Gate G-F1 resolvido).
-> O schema é **agnóstico ao cofre**: `blobRef`/`senhaRef`/`cscTokenRef`/`providerTokenRef` são
-> apenas strings de referência opacas, resolvidas por **um port `FiscalSecretVault` server-side**.
-> **Piloto/homologação = opção C (env por loja);** **produção/escala = opção B (KMS + storage cifrado).**
-> Mesmo contrato nos dois — a virada não toca schema nem callers. As opções abaixo ficam como o
-> racional comparativo (matriz completa no ADR-0009 §3).
+> ✅ O schema é **agnóstico ao cofre**: `blobRef`/`senhaRef`/`cscTokenRef`/`providerTokenRef` são
+> referências opacas resolvidas pelo port server-side `FiscalSecretVault`.
+> **Piloto/homologação:** `EnvVault`, conforme ADR-0009 D2.
+> **Produção/escala:** `SupabaseVaultStorageVault`, conforme ADR-0014, substituindo a escolha
+> genérica da ADR-0009 D3. A troca de backend não muda schema nem callers.
 
-| Opção | Como funciona | Prós | Contras |
-|---|---|---|---|
-| **A) Supabase Vault** | Segredo no Vault do próprio Supabase; `*Ref` = id do secret | Já no stack; sem infra nova | Acoplado ao Supabase; granularidade/rotação a validar |
-| **B) KMS + storage cifrado** (ex.: cloud KMS + bucket privado) | `.pfx` cifrado em storage; chave no KMS; `blobRef` = path | Rotação de chave robusta; separação cofre × dado | Mais infra; custo; integração |
-| **C) Variável de ambiente por loja** | `*Ref` = nome da env (padrão WhatsApp `tokenEnvKey`, ADR-0006) | Simples; segue padrão existente; segredo fora do DB | Não escala p/ muitas lojas; rotação manual; deploy-bound |
-| **D) Cofre dedicado** (ex.: HashiCorp Vault) | Cofre externo com políticas/auditoria próprias | Mais completo (lease, rotação, audit nativo) | Maior complexidade operacional |
+### 3.1 Hierarquia criptográfica de produção
 
-**Decisão (ADR-0009):** **C (env por loja)** no piloto/homologação — espelha o padrão
-`tokenEnvKey` do WhatsApp (ADR-0006): `*Ref` guarda o **nome** da env; o segredo é lido
-server-side e nunca persistido. **B (KMS + storage cifrado, envelope encryption)** na
-produção/escala — separa o segredo do backup do banco, com rotação por loja. Ambos atrás do
-**mesmo port** `FiscalSecretVault` (`EnvVault` → `KmsStorageVault`), sem mudança de schema/callers.
-A opção 6 ("banco com `.pfx`/senha em coluna") é **proibida** (backup carrega segredo).
+| Camada | Local | Regra obrigatória |
+|---|---|---|
+| **Root key / KEK do projeto** | Sistemas protegidos do Supabase | Criada e gerenciada pelo Supabase; fora da aplicação e separada dos blobs fiscais. O runtime fiscal nunca a busca/exporta. |
+| **DEK** | Protegida como secret no Supabase Vault | Uma DEK aleatória e distinta **por segredo e por versão**; nunca global, por bucket, apenas por loja ou compartilhada entre lojas. |
+| **Ciphertext** | Bucket Supabase Storage privado exclusivo do Fiscal | Um objeto versionado por segredo; nenhum plaintext ou DEK no objeto. |
+| **Referência/metadados** | Schema de negócio (`*Ref`) | Apenas referência opaca, `storeId`, certificado/versão/finalidade e estado; nunca chave ou segredo. |
+
+O Vault protege a DEK com a chave do projeto; a DEK cifra o valor fiscal. Esse é o envelope
+encryption obrigatório. O bucket Fiscal, suas policies, grants, credenciais e roles de runtime
+**não são compartilhados com o Contador HUB**. Só o padrão técnico e a infraestrutura Supabase
+podem ser reutilizados.
+
+### 3.2 Vínculo criptográfico e isolamento
+
+Cada cifra autenticada usa AAD canônico e versionado com, no mínimo:
+
+```text
+storeId | certificadoId | versao | finalidadeFiscal | tipoSegredo | aadSchemaVersion
+```
+
+Qualquer divergência deve invalidar a autenticação antes de liberar plaintext. Para CSC/token sem
+certificado material, `certificadoId` usa o identificador canônico do vínculo fiscal definido para
+a versão. Path por `storeId`, policy e metadados são defesas adicionais; nenhum deles substitui AAD
+ou autorização server-side.
+
+### 3.3 Fronteiras de acesso
+
+- `anon`, `authenticated`, browser/cliente e código Edge exposto não acessam `vault.secrets`, a
+  view de segredos descriptografados, o bucket fiscal, a root key ou qualquer DEK/plaintext.
+- Somente o serviço fiscal server-side autorizado resolve o material, com role/credencial dedicada
+  e privilégio mínimo. Credencial administrativa ou `service_role` jamais vai ao cliente.
+- Contador HUB e qualquer serviço não fiscal não recebem policy, grant, função ou credencial do
+  cofre fiscal.
+- Não há resolução apenas por `blobRef`, enumeração cross-store ou fallback global/`loja-1`.
+
+AWS KMS ou Google Cloud KMS são evolução futura mediante nova ADR se houver requisito regulatório,
+HSM dedicado, BYOK/HYOK, custódia independente do Supabase ou requisito técnico não atendido. Não
+são fallback automático.
 
 > **Port único (a implementar na F4 — conceitual):**
 > ```
@@ -104,10 +130,14 @@ A opção 6 ("banco com `.pfx`/senha em coluna") é **proibida** (backup carrega
 
 ```mermaid
 graph LR
-  Cfg[ConfiguracaoFiscalLoja / CertificadoDigital] -->|*Ref| Cofre[(Cofre)]
-  Cofre -->|carrega só na assinatura| Sign[lib/fiscal/assinatura/* F4]
+  Cfg[ConfiguracaoFiscalLoja / CertificadoDigital] -->|*Ref + storeId + versão| Svc[Serviço fiscal server-side]
+  Svc -->|DEK protegida| Vault[(Supabase Vault)]
+  Svc -->|ciphertext| Bucket[(Bucket Fiscal privado)]
+  Svc -->|AAD autenticado; plaintext efêmero| Sign[Assinatura fiscal]
   Sign -->|usa em memória, descarta| XML[XML assinado]
   Sign -.NUNCA.-> Log[FiscalLog / logs / bundle]
+  Browser[Browser / Contador HUB] -.NEGADO.-> Vault
+  Browser -.NEGADO.-> Bucket
 ```
 
 Regras inegociáveis de runtime (a serem honradas na F4):
@@ -117,6 +147,9 @@ Regras inegociáveis de runtime (a serem honradas na F4):
 3. A assinatura roda **fora do client** (Node runtime, nunca Edge/browser).
 4. Falha de cofre/segredo produz erro **genérico** ("certificado indisponível"), sem expor causa
    que revele o segredo.
+5. O serviço valida autorização da loja, metadados, versão, finalidade e AAD antes de descriptografar.
+6. Falha de autorização, Vault, Storage, auditoria obrigatória ou autenticação criptográfica é
+   **fail-closed**: não assina, não emite e não tenta fallback.
 
 ---
 
@@ -124,13 +157,26 @@ Regras inegociáveis de runtime (a serem honradas na F4):
 
 | Segredo | Gatilho de rotação | Procedimento (alvo) |
 |---|---|---|
-| **A1** | Expiração anual / revogação | Upload do novo `.pfx` → valida → marca `ativo` → atualiza `certificadoAtivoId`. Documentos antigos permanecem (XML imutável). |
-| **Senha do `.pfx`** | Rotação do certificado | Acompanha a troca do A1 (novo `senhaRef`). |
-| **CSC** | Política da SEFAZ/UF ou suspeita de vazamento | Novo `cscId`/`cscTokenRef`; QRs antigos já autorizados continuam válidos (foram autorizados). |
-| **Token de gateway** | Política do gateway / incidente | Novo `providerTokenRef`; sem reemitir documentos. |
+| **A1** | Expiração anual / revogação | Nova versão, novo ciphertext e **nova DEK exclusiva** → valida → ativa atomicamente → atualiza `certificadoAtivoId`. Documentos antigos permanecem (XML imutável). |
+| **Senha do `.pfx`** | Rotação do certificado | Nova versão e **DEK própria**, diferente da DEK do `.pfx`; nunca sobrescreve a versão anterior. |
+| **CSC** | Política da SEFAZ/UF ou suspeita de vazamento | Novo `cscId`/`cscTokenRef`, nova versão e nova DEK; QRs já autorizados continuam válidos. |
+| **Token de gateway** | Política do gateway / incidente | Novo `providerTokenRef`, nova versão e nova DEK; sem reemitir documentos. |
 
 **Princípio:** rotacionar segredo **nunca** altera documento já autorizado (P4) — só muda o que
-será usado **daqui para frente**.
+será usado **daqui para frente**. Versões são imutáveis; é proibido atualizar um secret “in place”
+quando isso apagaria a identidade criptográfica da versão anterior.
+
+### 5.1 Revogação, remoção e recuperação
+
+- **Revogação:** bloqueia imediatamente novas resoluções/emissões antes da limpeza assíncrona.
+- **Remoção segura:** destrói a DEK protegida (crypto-shredding), remove o objeto pela API do
+  Storage, verifica a exclusão e mantém apenas tombstone/metadados não secretos para auditoria.
+  Excluir só a linha de metadados em `storage.objects` não remove o objeto físico.
+- **Recuperação:** Vault, Storage e metadados têm restore coordenado. O runbook cobre restore no
+  mesmo projeto, migração/restore em outro projeto, preservação administrativa da root key sem
+  passá-la pela aplicação, teste periódico e reemissão do A1 se a recuperação for impossível.
+- **Estados mínimos:** `PENDENTE_VALIDACAO`, `ATIVA`, `REVOGADA` e `REMOVIDA`; somente `ATIVA` pode
+  servir a uma nova emissão.
 
 ---
 
@@ -138,9 +184,14 @@ será usado **daqui para frente**.
 
 - **Em trânsito:** TLS para SEFAZ/gateway e para o cofre. A assinatura XMLDSig usa o A1
   (RSA-SHA1/SHA256 conforme layout) — isso é assinatura, não confidencialidade.
-- **Em repouso:** o `.pfx` mora cifrado no cofre (opção A/B/D) ou fora do DB (opção C). O banco
-  **nunca** guarda o segredo, então o backup do banco **não** carrega segredo.
-- **Chaves de cripto:** quando a opção usar KMS, a chave-mestra fica no KMS, nunca no app.
+- **Em repouso no piloto:** segredo fora das tabelas de negócio, em env de plataforma por loja,
+  conforme ADR-0009 D2.
+- **Em repouso em produção:** ciphertext no bucket Fiscal privado; DEK própria por segredo/versão,
+  protegida no Vault; root key gerenciada pelo Supabase fora da aplicação e separada do blob.
+- **Autenticidade/contexto:** AEAD + AAD canônico vincula `storeId`, `certificadoId`, versão,
+  finalidade fiscal, tipo de segredo e versão do schema de AAD.
+- **Backups:** tabelas de negócio e dumps nunca contêm plaintext. Backups do Vault contêm somente
+  secrets cifrados e precisam da root key correta; recuperação segue o runbook coordenado.
 
 ---
 
@@ -153,6 +204,17 @@ será usado **daqui para frente**.
 - **Princípio do menor privilégio:** só o serviço de assinatura (server, F4) resolve o segredo;
   o pipeline, o provider e a UI **nunca** o recebem (o provider trabalha só sobre snapshot — P3).
 - **Separação de papéis:** quem configura (admin) ≠ quem opera o PDV ≠ o processo que assina.
+- **Deny-by-default:** `anon`, `authenticated`, browser e módulos não fiscais não recebem grants
+  no Vault nem policies no bucket Fiscal; a view descriptografada não é uma API de aplicação.
+- **Separação de domínio:** Contador HUB não compartilha bucket, policy, role, função ou credencial
+  com o Fiscal.
+- **Credenciais poderosas:** chaves administrativas/`service_role` ficam fora do cliente e não
+  substituem o desenho de role fiscal dedicada e autorização por `storeId`.
+- **Piloto SP/Matriz:** o `storeId` é sempre lido do registro `Store` real e deve coincidir em
+  configuração, certificado, série, nota, job e contexto. Nome “Matriz”, primeira posição, literal
+  historicamente conhecido ou `loja-1` nunca são usados como fallback.
+- **Sem herança:** nenhuma outra loja recebe identidade fiscal, CSC, certificado, série, provider
+  ou ambiente da Matriz RafaCell; criação de loja/configuração permanece default-off.
 
 ---
 
@@ -160,10 +222,15 @@ será usado **daqui para frente**.
 
 - **`FiscalLog`** registra toda interação fiscal (montar/assinar/transmitir/consultar + `cStat`),
   com `operador` e `detalhe` — **sem** o segredo. Trilha append-only (nunca deletada).
-- **Eventos de segredo auditáveis:** upload de certificado (`uploadedBy`), troca de `ativo`,
-  rotação de CSC/token — registrar quem/quando.
+- **Eventos de segredo auditáveis:** criação, leitura/resolução, validação, ativação, rotação,
+  revogação, recuperação e remoção — registrar ator/serviço, operação, `storeId`, certificado,
+  versão, finalidade, resultado, correlation id e timestamp.
+- **Nunca auditar material sensível:** sem plaintext, chave, DEK, conteúdo cifrado ou AAD completo
+  que revele dados desnecessários.
 - **Verificação contínua (métrica ADR-0008 §6):** 0 ocorrências de `.pfx`/senha/CSC/token em
   log/bundle/coluna. Auditável por varredura (grep no `.next/static`, no schema e nos logs).
+- **Fail-closed da auditoria obrigatória:** se o evento de acesso exigido não puder ser persistido,
+  a resolução do segredo não prossegue.
 
 ---
 
@@ -171,12 +238,15 @@ será usado **daqui para frente**.
 
 | Ameaça | Vetor | Mitigação arquitetural |
 |---|---|---|
-| Vazamento de A1 | Backup do DB; log; bundle | Segredo fora do DB (`*Ref`); nunca logar; server-only (P6) |
+| Vazamento de A1 | Backup; log; bundle | Ciphertext no bucket Fiscal; DEK no Vault; root key fora da aplicação; nunca logar; server-only |
 | Emissão indevida | Acesso ao A1 por ator não-admin | Admin-only + menor privilégio + multi-loja estrito |
 | Forja de QR NFC-e | CSC vazado | CSC por referência; rotação; nunca em claro |
 | Sequestro de conta gateway | Token vazado | Token por referência; rotação; escopo por loja |
-| Cross-loja | Bug de escopo | `storeId` obrigatório em toda query (ADR-0003) |
+| Cross-loja | Bug de escopo/troca de blob | `storeId` na autorização, metadados, policy/path e AAD autenticado; sem fallback |
 | Segredo em erro/trace | Stack trace detalhado | Erros genéricos para falha de segredo; sanitização |
+| Movimento lateral do Contador HUB | Bucket/policy/credencial compartilhada | Recursos e permissões separados; apenas padrão técnico comum |
+| Cópia ou adulteração de ciphertext | Troca entre certificado/versão/finalidade | AEAD + AAD canônico; falha de autenticação é fail-closed |
+| Perda/incompatibilidade da root key | Restore/migração de projeto | Runbook coordenado, teste de restore e reemissão do A1 como último recurso |
 
 ---
 
@@ -187,8 +257,14 @@ Antes de mergear qualquer fase que toque segredo (F1, F4, F5):
 - [ ] Nenhum segredo em `FiscalLog.detalhe`, log de app, mensagem de erro ou bundle do cliente.
 - [ ] Assinatura roda **server-side** (Node), nunca Edge/browser.
 - [ ] Acesso a config/certificado é **admin-only** e escopado por `storeId`.
-- [ ] Rotação descrita e testável (sem afetar documento autorizado).
-- [ ] ADR do cofre (F1) aprovado **antes** de qualquer `.pfx` real.
+- [ ] Produção usa DEK distinta por segredo/versão e AAD com loja, certificado, versão e finalidade.
+- [ ] Bucket privado é exclusivo do Fiscal e não compartilha policies/permissões com Contador HUB.
+- [ ] `anon`, `authenticated` e browser não acessam Vault, plaintext, bucket, root key ou DEK.
+- [ ] Rotação, revogação, versionamento, remoção segura e recuperação estão descritos e testáveis.
+- [ ] Falhas de Vault/Storage/AAD/autorização/auditoria produzem fail-closed.
+- [ ] ADRs do cofre (ADR-0009 + ADR-0014) aprovadas **antes** de qualquer `.pfx` real.
+- [ ] Piloto resolve a Matriz pelo `Store.id` real e prova bloqueio de outra loja/UF/ambiente.
+- [ ] Nenhuma credencial, CSC, certificado ou código real aparece em docs, logs ou fixtures.
 - [ ] Varredura confirma 0 segredo em `.next/static` e no schema.
 
 ---
@@ -196,8 +272,13 @@ Antes de mergear qualquer fase que toque segredo (F1, F4, F5):
 ## 11. Referências
 
 - Princípio: `docs/decisions/ADR-0008-fiscal-architecture.md` (P6).
-- Decisão do cofre (a fazer): `MASTER_FISCAL_EXECUTION_PLAN.md` **F1 [GATE]** → ADR próprio.
+- Contrato do cofre/piloto: `docs/decisions/ADR-0009-fiscal-secret-vault.md`.
+- Backend de produção: `docs/decisions/ADR-0014-supabase-vault-backend-kms-fiscal.md`.
+- Escopo do piloto: `docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md`.
 - Padrão precedente de segredo por env: **ADR-0006** (WhatsApp `tokenEnvKey`).
+- Supabase Vault: <https://supabase.com/docs/guides/database/vault>.
+- Supabase Storage privado/RLS: <https://supabase.com/docs/guides/storage/buckets/fundamentals> e
+  <https://supabase.com/docs/guides/storage/security/access-control>.
 - Dados: `docs/architecture/FISCAL_SCHEMA_DESIGN.md` (`CertificadoDigital`, `ConfiguracaoFiscalLoja`).
 - Código: `lib/fiscal/guard-fiscal-admin.ts`, `lib/fiscal/fiscal-identity-service.ts`,
   `prisma/schema.prisma` (`blobRef`/`senhaRef`/`cscTokenRef`/`providerTokenRef`).

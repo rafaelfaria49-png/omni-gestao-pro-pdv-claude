@@ -3,8 +3,8 @@ title: Roadmap Fiscal (NFC-e/SAT/NF-e) — OmniGestão Pro
 hub: fiscal
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-07-20
-sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005A supply chain offline INTEGRADO NA MAIN (PR #12 / 2a7f102) e fechado documentalmente (PR #13 / a40ff5c); GOAL-005B com ESCOPO RATIFICADO pelo Caminho 2 (definido documentalmente, NÃO iniciado; artifact expira 2026-07-26); GOAL-005 técnico continua PARCIAL; gate global F4→F5 aberto
+last_update: 2026-07-22
+sprint_atual: GOAL-009 arquitetural — ADR-0014/0015/0016 aceitas; zero implementação, provisionamento ou produção
 ---
 
 # 🧾 Roadmap Fiscal — OmniGestão Pro
@@ -17,6 +17,17 @@ sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005A supply chain offline INTEGRADO
 > **Base factual:** `docs/audits/AUDITORIA_PRE_FISCAL_READINESS_v01.md`,
 > `docs/audits/AUDITORIA_FISCAL_GAPS_v01.md`. **Governa:**
 > `docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md`.
+
+## Atualização arquitetural — GOAL-009 (2026-07-22)
+
+- **ADR-0014:** Supabase Vault é o backend KMS de produção, com envelope encryption, DEK distinta
+  por segredo/versão, AAD e bucket privado exclusivo do Fiscal.
+- **ADR-0015:** a primeira integração externa será direta com a SEFAZ, exclusivamente em
+  homologação e atrás de `FiscalProvider`; gateway/PAA ficam como evolução possível.
+- **ADR-0016:** o primeiro piloto fica restrito à Matriz RafaCell Assistec em Taguaí/SP,
+  SEFAZ-SP, NFC-e modelo 65 e `tpAmb=2`, sempre pelo `Store.id` real.
+- Estas decisões são **documentais**: não implementam provider/cofre, não provisionam recursos,
+  não registram credenciais e não liberam produção nem qualquer outra loja.
 
 ## 0. Reconciliação vigente — 2026-07-16
 
@@ -105,7 +116,8 @@ documento fiscal válido na SEFAZ.
 
 ## 2. Objetivos
 
-1. Emitir **NFC-e autorizada** (cStat 100) em homologação para 1 loja-piloto.
+1. Emitir **NFC-e autorizada** (cStat 100) em homologação para a Matriz RafaCell Assistec,
+   Taguaí/SP, exclusivamente via SEFAZ-SP, modelo 65 e `tpAmb=2`.
 2. **Zero impacto** no tempo de fechamento da venda (emissão 100% assíncrona pós-commit).
 3. **Multi-loja real**: identidade/certificado/série/CSC por loja, habilitação loja-a-loja.
 4. **Segredo seguro**: certificado A1 e CSC nunca em claro nem no bundle do cliente.
@@ -126,6 +138,8 @@ documento fiscal válido na SEFAZ.
 
 - **Satélite desacoplado**: fila `FiscalEmissaoJob` com lock/retry/dedupe — o PDV só enfileira.
 - **Provider-agnóstico de fábrica**: trocar SEFAZ-direto ↔ gateway sem tocar o pipeline.
+- **Primeira integração definida:** SEFAZ direta somente em homologação, com SOAP/UF encapsulados
+  no adapter `FiscalProvider` (ADR-0015).
 - **Snapshot congelado**: o documento usa a foto fiscal do instante da venda, não dado vivo.
 - **Default-off + habilitação por loja**: adoção gradual sem risco para lojas não fiscais.
 
@@ -160,7 +174,9 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 
 ## 7. Backlog (granular, pronto para virar sprint)
 
-- [x] ADR: cofre de segredo do certificado A1 (Vault × KMS × env por loja) → **ADR-0009** (aceito).
+- [x] ADR: contrato do cofre e piloto por env → **ADR-0009** (aceita).
+- [x] ADR: backend KMS de produção → **ADR-0014** (Supabase Vault + Storage privado Fiscal,
+  envelope encryption e DEK por segredo/versão; aceita).
 - [x] `lib/fiscal/tax-engine/*`: motor Simples Nacional existente e testado (`ba0cc12`), **sem ST/CSOSN 500**.
 - [x] `lib/fiscal/xml/*`: builder `infNFe` 4.00 + chave existentes (`ba0cc12`).
 - [x] Worker XSD B2 + `validarXsd` real + pacote `PL_010e_v1.02` (merge `82c219c`, G-C2).
@@ -170,6 +186,10 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
   merge `b307337`); contrato `lib/produto-fiscal.ts` reutilizado; **N3 no eixo cadastro**;
   `fiscalRegime` não canônico; sem schema/migration/emissão.
 - [ ] `lib/fiscal/provider/<impl>`: provider real (homologação) registrado no resolver.
+- [x] Gate G-F5: primeira integração = **SEFAZ direta em homologação**, sem gateway/PAA →
+  ADR-0015.
+- [x] Gate G-F5.1: primeiro piloto = **Matriz RafaCell/Taguaí, SP, SEFAZ-SP, NFC-e 65,
+  `tpAmb=2`**, sempre pelo `Store.id` real e sem herança → ADR-0016.
 - [ ] `lib/fiscal/qrcode/*`: QR-Code NFC-e + URL consulta por UF/CSC.
 - [ ] Produtor pós-commit (enfileira `FiscalEmissaoJob`) + worker idempotente.
 - [ ] Reflexo de status fiscal no PDV/recibo (read-only).
@@ -187,7 +207,7 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 | **F3** XML | Gerar `infNFe` + chave | XML válido no XSD |
 | **F4** Assinatura | Assinar com A1 | XML assinado verificável; segredo nunca logado |
 | **Dry-Run** (gate) | Esteira a seco, sem transmitir (descarta XML) | Relatório de prontidão verde — critério de entrada da F5 |
-| **F5** SEFAZ `[GATE]` | Provider real + transmissão | Documento autorizado em homologação (cStat 100) |
+| **F5** SEFAZ-SP direta `[GATE ✅]` | Matriz real + preflight + adapter `FiscalProvider` em homologação | NFC-e 65 (`tpAmb=2`) autorizada; protocolo/XML persistidos; reconciliação idempotente |
 | **F6** QR-Code | QR + URL consulta | QR validado no portal SEFAZ homolog. |
 | **F7** Ativação `[GATE]` | Ligar emissão por fila (piloto) | Venda real (homolog.) → job → autoriza; PDV não trava |
 | **F8** DANFCE | Representação gráfica | DANFCE com QR sobre XML autorizado |
@@ -205,7 +225,7 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 | **PDV** | Origem da venda; ponto de enfileiramento pós-commit (não inline). |
 | **Estoque/Produto** | Identidade fiscal do item (NCM/CEST/CFOP/origem via `getProdutoFiscal`). |
 | **CRM/Cliente** | Destinatário (CPF/CNPJ + endereço estruturado para NFC-e nominal/NF-e). |
-| **Multi-loja** | Identidade/certificado/série/CSC por `storeId`; habilitação por loja. |
+| **Multi-loja** | Piloto somente Matriz por `Store.id` real; identidade/certificado/série/CSC próprios; sem fallback ou herança. |
 | **Infra/segredo** | Cofre para o A1/CSC (ADR F1) — bloqueia assinatura. |
 
 > Matriz de paralelismo: Fiscal **não deve** evoluir em paralelo com mudanças de contrato do
@@ -220,9 +240,14 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 | Vazamento de certificado/senha | Segurança | Segredo só por referência; cofre por ADR; nunca em log/bundle. |
 | Imposto calculado errado | Negócio/Legal | Começar por matriz mínima (SN B2C); testes; homologação ampla antes de produção. |
 | Ligar para todas as lojas de uma vez | Produto | Habilitação loja-a-loja; kill-switch `fiscalEnabled`. |
-| Divergência de layout por UF | Técnico | Provider-agnóstico; gateway como rota alternativa. |
+| Divergência de layout/endpoint por UF | Técnico | Resolver versionado no adapter SEFAZ; domínio canônico; gateway/PAA como alternativa futura por ADR. |
+| Envio acidental à produção | Legal/Operacional | Provider inicial aceita só `HOMOLOGACAO`/`tpAmb=2`; endpoint de produção bloqueado antes da rede. |
 
 ## 11. Sprint atual
+
+**GOAL-009 conclui somente a decisão arquitetural.** ADR-0014/0015/0016 estão aceitas; o cofre,
+o provider e os recursos Supabase/SEFAZ continuam não implementados e não provisionados. Produção,
+`tpAmb=1` e emissão fiscal real permanecem bloqueados.
 
 **GOAL-004 paridade `upsertProduto` (`FISCAL-PRODUTO-UPSERT-PARITY-004`) FECHADO em 16/07/2026** —
 integrado na `main` pelo PR #8 (merge `b307337`, implementação `3f8928c`); Cadastros V2 grava
@@ -253,6 +278,10 @@ N7=0.** GOAL-005 técnico continua **PARCIAL**; 005B tem **escopo ratificado** (
 permanece **NÃO INICIADO**, dependente da integração da ratificação e de artifact com validade até
 **2026-07-26**. Sequência oficial em `docs/fiscal/`.
 
+O Gate G-F5 está decidido arquiteturalmente pela ADR-0015, mas nenhuma chamada externa foi feita.
+O escopo de futura homologação é exclusivamente a Matriz/Taguaí via `Store.id` real (ADR-0016);
+demais lojas, UFs e qualquer produção permanecem fail-closed.
+
 ## 13. Métricas de sucesso
 
 - **Tempo extra na venda por causa do fiscal:** ~0 ms (emissão fora da transação).
@@ -263,8 +292,14 @@ permanece **NÃO INICIADO**, dependente da integração da ratificação e de ar
 
 ## 14. Blockers
 
-- **BL-FISCAL-1:** ✅ **RESOLVIDO** por `ADR-0009` (cofre de segredos: EnvVault piloto → KmsStorageVault produção). A implementação do cofre entra na F4 (assinatura).
-- **BL-FISCAL-2:** decisão provider (SEFAZ direto × gateway) → bloqueia transmissão (F5).
+- **BL-FISCAL-1:** ✅ **DECISÃO RESOLVIDA** por `ADR-0009` + `ADR-0014` (EnvVault piloto →
+  Supabase Vault + Storage privado exclusivo do Fiscal em produção). Implementação e
+  provisionamento permanecem bloqueios de execução.
+- **BL-FISCAL-2:** ✅ **DECISÃO RESOLVIDA** por `ADR-0015`: SEFAZ direta na homologação inicial;
+  gateway/PAA ficam como alternativas futuras.
+- **BL-FISCAL-3:** 🟡 **ESCOPO RESOLVIDO** por ADR-0016 (Matriz/Taguaí, SP, SEFAZ-SP, NFC-e 65,
+  `tpAmb=2`). Antes da F5 ainda faltam credenciamento confirmado e preflight completo da
+  configuração real, sem registrar valores nesta documentação.
 
 > Tracking vivo de blockers gerais: `docs/status/BLOCKERS.md`.
 
@@ -273,6 +308,9 @@ permanece **NÃO INICIADO**, dependente da integração da ratificação e de ar
 - Auditorias: `docs/audits/AUDITORIA_PRE_FISCAL_READINESS_v01.md`,
   `docs/audits/AUDITORIA_FISCAL_GAPS_v01.md`.
 - Plano mestre: `docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md`.
+- Decisões do GOAL-009: `docs/decisions/ADR-0014-supabase-vault-backend-kms-fiscal.md`,
+  `docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md` e
+  `docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md`.
 - Código vivo: `lib/fiscal/**`, `prisma/schema.prisma` (bloco fiscal ~L2075+),
   `app/api/fiscal/**`, `components/configuracoes-v3/.../FiscalSection.tsx`.
 - Commits da fundação: `32ae9c8`, `549513d`, `ca681ed`, `04ce54d`, `b5177cf`, `a206dce`,
