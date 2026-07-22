@@ -2,7 +2,7 @@
 title: Decisões Arquiteturais (ADRs) — OmniGestão Pro
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-06-24
+last_update: 2026-07-22
 ---
 
 # 🧭 Decisões Arquiteturais — Índice oficial
@@ -91,6 +91,10 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 | 0010 | Validação XSD fiscal em worker containerizado com `xmllint` provisionado (opção B2) | cross / fiscal | ✅ Aceita | 2026-07-14 | [`ADR-0010-validacao-xsd-worker-containerizado-xmllint-provisionado.md`](./ADR-0010-validacao-xsd-worker-containerizado-xmllint-provisionado.md) |
 | 0011 | Assinatura XMLDSig da NFC-e em RSA-SHA1/SHA-1 — **imposta** pelo schema oficial (`fixed`), confinada à assinatura fiscal | cross / fiscal | ✅ Aceita | 2026-07-14 | [`ADR-0011-assinatura-xmldsig-nfce-rsa-sha1-imposta-pelo-schema.md`](./ADR-0011-assinatura-xmldsig-nfce-rsa-sha1-imposta-pelo-schema.md) |
 | 0012 | Cobertura de ST no motor fiscal — CSOSN 500 (substituído) mínimo, matriz origem 0–8, fail-closed; 201/202/203/900 e CST bloqueados | cross / fiscal | ✅ Aceita | 2026-07-22 | [`ADR-0012-st-csosn-500-motor-tributario.md`](./ADR-0012-st-csosn-500-motor-tributario.md) |
+| 0013 | Redefinição do gate executável do dry-run fiscal — 11 itens auferíveis com autoridade e evidência | cross / fiscal | ✅ Aceita | 2026-07-22 | [`ADR-0013-redefinicao-gate-executavel-dry-run.md`](./ADR-0013-redefinicao-gate-executavel-dry-run.md) |
+| 0014 | Supabase Vault como backend KMS do cofre fiscal de produção (complementa ADR-0009 D3) | cross / fiscal | ✅ Aceita | 2026-07-22 | [`ADR-0014-supabase-vault-backend-kms-fiscal.md`](./ADR-0014-supabase-vault-backend-kms-fiscal.md) |
+| 0015 | Integração direta com a SEFAZ na homologação inicial (resolve Gate G-F5) | cross / fiscal | ✅ Aceita | 2026-07-22 | [`ADR-0015-sefaz-direta-homologacao-inicial.md`](./ADR-0015-sefaz-direta-homologacao-inicial.md) |
+| 0016 | SP e Matriz RafaCell como escopo da primeira homologação NFC-e (resolve Gate G-F5.1) | cross / fiscal | ✅ Aceita | 2026-07-22 | [`ADR-0016-piloto-homologacao-sp-matriz-rafacell.md`](./ADR-0016-piloto-homologacao-sp-matriz-rafacell.md) |
 
 > **Nota sobre o ADR legado:** `OS_ROUTE_OFICIAL.md` foi escrito antes desta convenção e não segue o template/naming atual. Mantido como histórico. Quando precisar ser referenciado, citar como **ADR-0001 (legado)**. Migração para o naming `ADR-0001-os-route-oficial.md` é uma tarefa **opcional** e exige autorização (renomear histórico pode quebrar links externos).
 
@@ -129,7 +133,7 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 - **Omni Agent:** —
 - **BI:** —
 - **Multi-loja:** ADR-0003 (eliminar fallback `loja-1`) · ADR-0006 (router WhatsApp — aceita) · ADR-0007 (modelo de depósitos — aceita)
-- **Fiscal:** ADR-0008 (arquitetura oficial do módulo Fiscal — aceita) · ADR-0009 (cofre de segredos fiscais — aceita) · ADR-0010 (validação XSD em worker containerizado — aceita) · ADR-0011 (assinatura XMLDSig em RSA-SHA1/SHA-1, imposta pelo schema — aceita) · ADR-0012 (ST/CSOSN 500 no motor tributário — aceita)
+- **Fiscal:** ADR-0008 (arquitetura oficial do módulo Fiscal — aceita) · ADR-0009 (contrato do cofre fiscal — aceita) · ADR-0010 (validação XSD em worker containerizado — aceita) · ADR-0011 (assinatura XMLDSig em RSA-SHA1/SHA-1, imposta pelo schema — aceita) · ADR-0012 (ST/CSOSN 500 no motor tributário — aceita) · ADR-0013 (gate executável do dry-run — aceita) · ADR-0014 (Supabase Vault em produção — aceita) · ADR-0015 (SEFAZ direta na homologação — aceita) · ADR-0016 (piloto Matriz/SP — aceita)
 - **Governança:** ADR-0002 (congelamento Skill Front Matter v1) · ADR-0004 (SAFE-lite modo padrão)
 
 ---

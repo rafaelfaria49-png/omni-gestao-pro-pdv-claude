@@ -1,7 +1,7 @@
 # MASTER FISCAL EXECUTION PLAN
 
 > **Documento de governança** da frente Fiscal do OmniGestão Pro.
-> **Data:** 2026-06-24 · **Versão:** 1.1 · **Estado:** Fase 1 (Arquitetura oficial) consolidada
+> **Data:** 2026-07-22 · **Versão:** 1.4 · **Estado:** Fase 1 (Arquitetura oficial) consolidada
 > **Citado por:** `prisma/schema.prisma:2077` (este é o doc que governa o schema fiscal).
 > **Base factual:** `docs/audits/AUDITORIA_PRE_FISCAL_READINESS_v01.md` +
 > `docs/audits/AUDITORIA_FISCAL_GAPS_v01.md`.
@@ -109,12 +109,13 @@ Cada fase é uma sprint pequena, com Gate humano antes de começar e antes de me
 
 ### FASE F1 — ADR do cofre de segredo `[GATE HUMANO OBRIGATÓRIO]` ✅
 - **Objetivo:** decidir onde mora o `.pfx` A1, a senha e o token CSC (Supabase Vault × KMS × env por loja).
-- **Entregue:** `docs/decisions/ADR-0009-fiscal-secret-vault.md` (aceita). **Decisão:** port único
-  `FiscalSecretVault` com backend **EnvVault** (env por loja) no piloto/homologação e
-  **KmsStorageVault** (envelope encryption + storage privado) na produção — mesmo contrato, sem
-  mudança de schema. `blobRef`/`senhaRef`/`cscTokenRef` = referências opacas resolvidas server-side.
+- **Entregue:** `ADR-0009` (contrato/piloto) + `ADR-0014` (backend de produção), ambas aceitas.
+  **Decisão:** port único `FiscalSecretVault`; **EnvVault** por loja no piloto/homologação e
+  **SupabaseVaultStorageVault** em produção, com envelope encryption, uma DEK por segredo/versão,
+  AAD vinculando loja/certificado/versão/finalidade e bucket privado exclusivo do Fiscal. Chave
+  mestra gerenciada pelo Supabase fora da aplicação; acesso somente pelo serviço fiscal server-side.
 - **Não fazer:** subir qualquer certificado real antes da implementação do vault (F4).
-- **DoD:** ADR aprovado pelo humano; sem código. **Gate G-F1 resolvido** → F4 destravada.
+- **DoD:** ADRs aprovadas pelo humano; sem código/provisionamento. **Gate G-F1 resolvido** → F4 destravada.
 
 ### FASE F2 — Motor de tributos NFC-e (Simples Nacional primeiro)
 - **Objetivo:** calcular CSOSN/CST, base, alíquota, total de tributos por item.
@@ -133,7 +134,8 @@ Cada fase é uma sprint pequena, com Gate humano antes de começar e antes de me
 - **Objetivo:** carregar A1 do cofre (F1) e assinar `infNFe`.
 - **Arquivos prováveis:** `lib/fiscal/assinatura/*`, adapter de cofre.
 - **Não fazer:** logar segredo; expor `.pfx`/senha; rodar no client.
-- **DoD:** XML assinado verificável; segredo nunca em log/trace; `tsc` limpo.
+- **DoD:** XML assinado verificável; segredo nunca em log/trace/client; isolamento por `storeId` e
+  fail-closed comprovados; `tsc` limpo. O adapter de produção continua bloqueado até GOAL próprio.
 
 ### GATE TÉCNICO — Dry-Run (entre F4 e F5) `[critério de entrada da F5]`
 - **Objetivo:** rodar a esteira inteira (snapshot→tributos→XML→assinatura simulada→validação XSD)
@@ -144,12 +146,23 @@ Cada fase é uma sprint pequena, com Gate humano antes de começar e antes de me
 - **DoD / critério de bloqueio:** **não se inicia a F5 sem Dry-Run verde** para os casos-alvo.
   Não recebe número próprio (evita renumerar F5–F12).
 
-### FASE F5 — Provider real + transmissão SEFAZ `[GATE HUMANO: decisão provider]`
-- **Objetivo:** implementar `FiscalProvider` real (SEFAZ direto **ou** gateway) e transmitir.
-- **Arquivos prováveis:** `lib/fiscal/provider/<impl>.ts` registrado no `resolver.ts`.
-- **Decisão de Gate:** SEFAZ direto vs gateway (Focus/PlugNotas/eNotas/NFE.io) — custo × esforço.
-- **Não fazer:** apontar para produção. **Só HOMOLOGAÇÃO** nesta fase.
-- **DoD:** documento autorizado em homologação SEFAZ (cStat 100) com chave/protocolo reais.
+### FASE F5 — Provider real + transmissão SEFAZ `[GATE G-F5 RESOLVIDO]`
+- **Objetivo:** implementar `SefazDiretoProvider` atrás do contrato `FiscalProvider` e transmitir
+  exclusivamente aos Web Services oficiais de homologação (ADR-0015).
+- **Escopo inicial:** exclusivamente o registro `Store` real da Matriz RafaCell Assistec em
+  Taguaí/SP, SEFAZ-SP, NFC-e modelo 65, `HOMOLOGACAO` e `tpAmb=2` (ADR-0016). Nenhum `storeId`
+  literal/fallback; nenhuma herança para outra loja.
+- **Arquivos prováveis:** adapter provider, resolver de endpoint por UF/ambiente/serviço/versão e
+  transporte SOAP/TLS server-side, sem detalhes de protocolo no domínio.
+- **Responsabilidade:** o OmniGestão executa snapshot, tributos, numeração, XML, XSD, assinatura,
+  transmissão, reconciliação e persistência do protocolo/XML autorizado. O provider recebe o XML
+  já assinado e validado; não recalcula domínio.
+- **Não fazer:** usar gateway/PAA, fallback automático ou endpoint de produção. **Só HOMOLOGAÇÃO**.
+- **Preflight:** antes da rede, validar por `storeId` real CNPJ, IE, razão social, endereço/IBGE/UF,
+  CRT/regime, série, CSC de homologação, A1 ativo/compatível e pipeline XML/XSD/assinatura. Qualquer
+  ausência/divergência é fail-closed; valores reais nunca entram em docs/logs/fixtures.
+- **DoD:** documento autorizado em homologação (`cStat = 100`) com protocolo e XML autorizado
+  imutável persistidos; resultado incerto reconciliado antes de retry; produção bloqueada antes da rede.
 
 ### FASE F6 — QR-Code NFC-e + URL de consulta (CSC)
 - **Objetivo:** gerar QR-Code conforme CSC e URL por UF/ambiente.
@@ -179,7 +192,10 @@ Cada fase é uma sprint pequena, com Gate humano antes de começar e antes de me
 - Bateria de casos contra SEFAZ homologação (todas as UFs-alvo, rejeições, denegação).
 
 ### FASE F12 — Produção `[GATE HUMANO FINAL]` (Roadmap #12)
-- Virada de `ambiente` para `PRODUCAO` **por loja**, com checklist e rollback imediato.
+- Antes da virada, implementar e validar o `SupabaseVaultStorageVault` conforme ADR-0014: DEK por
+  segredo/versão, AAD, bucket Fiscal exclusivo, separação do Contador HUB, auditoria, recuperação,
+  remoção segura e testes fail-closed/cross-store. Só então virar `ambiente` para `PRODUCAO`
+  **por loja**, com checklist e rollback imediato.
 
 ---
 
@@ -193,19 +209,19 @@ Cada fase é uma sprint pequena, com Gate humano antes de começar e antes de me
 |---|---|---|---|---|
 | **F0** Plano Mestre | — | 4 docs Fase 0 + `tsc` limpo; código intocado | — | `git revert` (só docs) |
 | **F0.1** Arquitetura oficial | — | ADR-0008 + 5 docs arquitetura + índices; sem código | — | `git revert` (só docs) |
-| **F1** ADR cofre ✅ | 🔒 G-F1 ✅ | **ADR-0009 aceito** (EnvVault piloto / KmsStorageVault produção) | — (resolvido) | `git revert` (só doc) |
+| **F1** ADR cofre ✅ | 🔒 G-F1 ✅ | **ADR-0009 + ADR-0014 aceitas** (EnvVault piloto / Supabase Vault + Storage produção) | — (resolvido) | `git revert` (só docs) |
 | **F2** Tributos | — | Função pura + testes (CSOSN 102/500, origem 0–8); `tsc` | Regime fora do escopo (só SN B2C) | `git revert` (aditivo) |
 | **F3** XML | — | XML válido no XSD homologação; testes de chave/DV | Sem tributos (F2) | `git revert` (aditivo) |
 | **F4** Assinatura | 🔒 depende G-F1 | XML assinado verificável; **segredo nunca logado** | Cofre indefinido (F1); segredo em log/bundle | `git revert` (aditivo) |
 | **Dry-Run** | técnico | Relatório de prontidão **verde** p/ casos-alvo | XSD inválido / pendência tributária | n/a (não transmite/persiste) |
-| **F5** SEFAZ | 🔒 G-F5 | Documento autorizado em homologação (cStat 100) | Dry-Run não-verde; provider não decidido | resolver→STUB / contingência |
+| **F5** SEFAZ direta SP | 🔒 G-F5 ✅ | Matriz real + preflight apto; protocolo/XML autorizado persistidos em homologação (`cStat=100`); reconciliação idempotente | Dry-Run não-verde; preflight/credenciamento incompleto; store/UF/modelo/ambiente divergente; qualquer produção | resolver→STUB; interromper chamadas externas |
 | **F6** QR-Code | — | QR validado no portal SEFAZ homologação | Sem autorizado (F5) | `git revert` (aditivo) |
 | **F7** Ativação por fila | 🔒 G-F7 | Venda real (homolog.) → job → autoriza; **PDV não trava**; rollback testado | **Emissão inline** (proibido); F2–F6 incompletos | `fiscalEnabled=false` (para de enfileirar) |
 | **F8** DANFCE | — | DANFCE com QR sobre **XML autorizado** | Sem autorizado (F5) | `git revert` (aditivo) |
 | **F9** Eventos | — | Evento autorizado + status refletido | Sem nota AUTORIZADA (F5) | `git revert` + evento não-emitido |
 | **F10** Contingência | — | Entra/sai de contingência; fila reprocessa | Sem F5 + política de retry | `git revert`; jobs reprocessam |
 | **F11** Homologação ampla | — | Casos felizes + rejeição/denegação verdes (por UF) | Qualquer caso-alvo falhando | manter em homologação |
-| **F12** Produção | 🔒 G-F12 | NFC-e autorizada em produção na loja-piloto | F11 incompleta; sem checklist/rollback | `ambiente=HOMOLOGACAO` + kill-switch |
+| **F12** Produção | 🔒 G-F12 | Cofre ADR-0014 validado + NFC-e autorizada em produção na loja-piloto | F11 incompleta; cofre sem recuperação/isolamento/fail-closed; sem checklist/rollback | `ambiente=HOMOLOGACAO` + kill-switch |
 
 > **Invariante transversal:** falha fiscal **nunca** desfaz a venda; XML autorizado **nunca** é
 > apagado (correção é por evento). Detalhe por princípio em `ADR-0008 §2` (P1–P7).
@@ -216,8 +232,9 @@ Cada fase é uma sprint pequena, com Gate humano antes de começar e antes de me
 
 | Gate | Antes de | Decisão do humano |
 |---|---|---|
-| G-F1 ✅ | Qualquer manuseio de certificado | Aprovar ADR do cofre de segredo → **resolvido: ADR-0009** |
-| G-F5 | Integração externa | SEFAZ direto vs gateway (custo/esforço) |
+| G-F1 ✅ | Qualquer manuseio de certificado | Aprovar contrato e backend do cofre → **resolvido: ADR-0009 + ADR-0014** |
+| G-F5 ✅ | Integração externa | **SEFAZ direta na homologação inicial**, atrás de `FiscalProvider` → ADR-0015 |
+| G-F5.1 ✅ | Escopo da primeira homologação | **Matriz RafaCell Assistec/Taguaí, SP, SEFAZ-SP, NFC-e 65, `tpAmb=2`** → ADR-0016 |
 | G-F7 | Ligar emissão | Aprovar ativação na loja-piloto (homologação) |
 | G-F12 | Produção | Aprovar virada `HOMOLOGACAO → PRODUCAO` por loja |
 
@@ -253,13 +270,19 @@ Toda fase fiscal só encerra com:
 
 ## 7. Estratégia de homologação
 
-1. **Provider STUB → Provider real (homologação)**: o `resolver.ts` troca a implementação
-   por `storeId.provider`; o STUB continua disponível para CI/testes.
+1. **Provider STUB → `SefazDiretoProvider` (homologação)**: o resolver troca a implementação por
+   `storeId.provider`; o STUB continua disponível para CI/testes. SOAP/UF ficam no adapter e no
+   resolver de endpoints, nunca no domínio.
 2. **Ambiente HOMOLOGACAO** fixo em `ConfiguracaoFiscalLoja.ambiente` até F12.
 3. **Loja-piloto única** habilitada (`fiscalEnabled = true`, ambiente homologação).
+   A loja é a Matriz RafaCell Assistec em Taguaí/SP e é identificada exclusivamente pelo
+   `Store.id` real propagado nas relações; nunca por constante, posição, nome ou fallback.
 4. Bateria de casos: autorização feliz, rejeição (cStat ≠ 100), denegação, timeout →
    contingência, cancelamento dentro/fora da janela, inutilização.
-5. Só após F11 verde, abre-se o Gate de produção.
+5. Timeout/resultado incerto exige consulta por chave/recibo antes de retransmissão.
+6. Gateway/PAA não participam da primeira homologação; são alternativas futuras por nova ADR.
+7. Só após F11 verde, abre-se o Gate de produção.
+8. Outras lojas/UFs só entram em etapa futura, uma a uma, após homologação completa da Matriz/SP.
 
 ---
 
@@ -278,6 +301,11 @@ Toda fase fiscal só encerra com:
 
 - Toda tabela fiscal já é escopada por `storeId` (sem `@default("loja-1")`, ADR-0003).
 - Identidade, certificado, série, CSC e provider são **por loja** (`ConfiguracaoFiscalLoja`).
+- Cofre de produção valida `storeId` na autorização, metadados, policy/path e AAD; DEKs nunca são
+  compartilhadas entre lojas, segredos ou versões.
+- No piloto, `Store.id` deve coincidir em configuração fiscal, certificado, série, nota, job e
+  contexto. Um valor com aparência legada lido do registro real não se transforma em fallback.
+- Nenhuma loja herda configuração fiscal, CSC, certificado, série, provider ou ambiente da Matriz.
 - Habilitação é **por loja**: piloto → ondas. Uma loja em produção não afeta as demais.
 - Numeração é por `(storeId, modelo, serie, ambiente)` — sem colisão entre lojas.
 
@@ -327,6 +355,9 @@ A fundação fiscal já existe; novas fases devem **evitar** mexer no schema. Se
   `docs/architecture/FISCAL_EVENTS.md`, `docs/architecture/FISCAL_SECURITY.md`,
   `docs/architecture/FISCAL_DRY_RUN.md`.
 - Cofre de segredos (F1, decidido): `docs/decisions/ADR-0009-fiscal-secret-vault.md`.
+- Backend KMS de produção (D3, decidido): `docs/decisions/ADR-0014-supabase-vault-backend-kms-fiscal.md`.
+- Provider inicial (G-F5, decidido): `docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md`.
+- Escopo do piloto (G-F5.1, decidido): `docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md`.
   - **Nota de nomenclatura:** o comentário `schema.prisma:2077` cita `FISCAL_SCHEMA_DESIGN_v01.md`
     e `venda-fiscal-state-machine.ts:13` cita `NFCE_ARCHITECTURE §17/§18`. Os docs oficiais foram
     criados **sem sufixo `_v01`** (versionamento via git/ADR, padrão do projeto). Os comentários
