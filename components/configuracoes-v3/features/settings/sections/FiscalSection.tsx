@@ -38,6 +38,8 @@ import {
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
+// Import direto do módulo PURO (evita puxar node-forge/node:crypto do barrel do cofre para o client).
+import { calcularAlertaVencimento } from "@/lib/fiscal/vault/certificado-alerta";
 
 const REGIME_OPTIONS: Array<{ value: string; label: string; crt: number }> = [
   { value: "SIMPLES_NACIONAL", label: "Simples Nacional", crt: 1 },
@@ -551,6 +553,13 @@ function FiscalSectionContent() {
                         <p className="text-sm font-semibold text-foreground">{c.apelido || c.titularCn || "Certificado"}</p>
                         <Badge variant={c.ativo ? "default" : "outline"}>{c.ativo ? "Ativo" : "Inativo"}</Badge>
                         <Badge variant="secondary">{c.tipo}</Badge>
+                        {(() => {
+                          const alerta = calcularAlertaVencimento(c.validoAte);
+                          if (alerta.nivel === "vencido") return <Badge variant="destructive">Vencido</Badge>;
+                          if (alerta.nivel === "critico") return <Badge variant="destructive">Vence em {alerta.diasRestantes}d</Badge>;
+                          if (alerta.nivel === "aviso") return <Badge variant="secondary">Vence em {alerta.diasRestantes}d</Badge>;
+                          return null;
+                        })()}
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {c.cnpjTitular ? `CNPJ ${c.cnpjTitular} · ` : ""}

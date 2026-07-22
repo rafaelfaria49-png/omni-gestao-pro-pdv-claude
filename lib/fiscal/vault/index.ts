@@ -15,3 +15,34 @@ export {
   type VaultRefKind,
 } from "./fiscal-secret-vault"
 export { EnvVault, createEnvVault, type EnvVaultOptions, type EnvLike } from "./env-vault"
+
+// GOAL-008 — leitor PKCS#12, validação do ciclo, alerta de vencimento e varredura de segredos.
+export {
+  loadPkcs12,
+  zeroBuffer,
+  Pkcs12ParseError,
+  type Pkcs12ParseCode,
+  type Pkcs12Material,
+  type Pkcs12Meta,
+} from "./pkcs12-loader"
+export {
+  validarCertificadoLoja,
+  type CertificadoValidacao,
+  type CertificadoValidacaoMotivo,
+  type CertificadoStatusValor,
+  type ValidarCertificadoParams,
+} from "./certificado-validacao"
+export {
+  calcularAlertaVencimento,
+  type VencimentoAlerta,
+  type VencimentoNivel,
+  type AlertaLimites,
+} from "./certificado-alerta"
+export {
+  scanForSecrets,
+  assertNoSecretLeak,
+  toSearchable,
+  SecretLeakError,
+  type SegredosEmJogo,
+  type SecretScanResultado,
+} from "./secret-scan"
