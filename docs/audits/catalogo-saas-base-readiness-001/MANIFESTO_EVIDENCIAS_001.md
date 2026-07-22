@@ -1,102 +1,88 @@
-# Manifesto de Evidências — CATALOGO-SAAS-PELICULAS-CAPINHAS-BASE-READINESS-001
+# Manifesto de Evidências — CATALOGO-SAAS-BASE-READINESS-001-METRICS-MVP-CORRECTIVE
 
 ## 1. IDENTIFICAÇÃO DO AMBIENTE E ISOLAMENTO
 
 - **Repositório:** `omni-gestao` (OmniGestão Pro)
 - **Caminho da Worktree Isolada:** `C:\Projetos\omni-gestao-catalogo-saas-readiness-001`
 - **Branch Dedicada:** `audit/catalogo-saas-base-readiness-001`
-- **Commit Base (`origin/main`):** `f010ba1b4a310a3a40ed00ddda8258b443ee5890`
-- **HEAD Local:** `f010ba1b4a310a3a40ed00ddda8258b443ee5890`
-- **Data/Hora Local da Análise:** `2026-07-22T15:45:35-03:00`
+- **Commit Base da Auditoria Original:** `38e643e8d2e825a07c13aa6e09fb5c6d32aa6c3d`
+- **Commit Base do Repositório (`origin/main`):** `f010ba1b4a310a3a40ed00ddda8258b443ee5890`
+- **Data/Hora Local da Reconciliação:** `2026-07-22T14:39:27-03:00`
 - **Estado do Repositório:** Worktree 100% isolada, limpa, sem contaminação com WIPs de outras sessões parallel.
 
 ---
 
-## 2. HASHES SHA-256 DAS FONTES PRIMÁRIAS E SEEDS INVESTIGADOS
+## 2. HASHES SHA-256 DOS ARTEFATOS NA PASTA AUTORIZADA
 
-| Arquivo / Fonte | Tamanho (Bytes) | Hash SHA-256 | Data/Commit Origem |
+| Arquivo / Artefato | Tamanho (Bytes) | Hash SHA-256 | Origem / Tipo |
 | :--- | :--- | :--- | :--- |
-| `docs/imports/catalogo/modelos_celulares_para_capinhas.xlsx` | 27.275 | `3fcbb7846506f3630f9a562916b7102e3b2e3bc01b44ecbd379d7d11f71f6540` | `3f867cb` (Thu Jul 9 2026) |
-| `docs/imports/catalogo/peliculas_3d_compativeis.html` | 107.437 | `1074e0d4bbbc6b3cbb7b2123d6a2f4cfdfb828751fa0ef846b0eb38eb8eb079c` | `3f867cb` (Thu Jul 9 2026) |
-| `docs/catalogo/seeds/device_models_seed_001.csv` | 44.821 | `dcd61ed2ee16d10c0e7fe7c2299bbcd31bb7bf3fd3eb92ebfc0bca1387d853e8` | `19c2589` (Thu Jul 9 2026) |
-| `docs/catalogo/seeds/device_aliases_seed_001.csv` | 107.391 | `ef205d8f6d7ddf9b33a5dd1caefef79ce41fb7bf771f251c888dcaadab7dc454` | `19c2589` (Thu Jul 9 2026) |
-| `docs/catalogo/seeds/device_compatibilities_seed_001.csv` | 179.917 | `94ff67d30d1f7be0174092d6e326c06a8f152d192cf2dc539828e67a0fecbf8c` | `19c2589` (Thu Jul 9 2026) |
-| `docs/catalogo/seeds/device_review_queue_seed_001.csv` | 74.453 | `c0ceb2a4726ef3faee5fbd0eaee7a7ea7aae7f6314ff94d4554b73fb47f9a888` | `19c2589` (Thu Jul 9 2026) |
-| `docs/catalogo/seeds/README_DEVICE_SEEDS_001.md` | 3.943 | `d3639c3ee622fa6908038c2b000ff73d9782e1caf237ab20a0e99e612838a5ab` | `19c2589` (Thu Jul 9 2026) |
-| `docs/catalogo/catalogo_gap_peliculas_capinhas_001.csv` | 133.598 | `30708a0977f475d62c7a9bc4b2ad607f317430ea7c785189460f17a5a0c66ce3` | `3f867cb` (Thu Jul 9 2026) |
-| `docs/catalogo/proposta_expansao_peliculas_fable_001_REVISADO.csv` | 15.890 | `221e53d04c5b6349983b00a4e54bc9064d8bfb2ddd9019180196e4b7cbfb8987` | `7cf356b` (Fri Jul 10 2026) |
-| `lib/catalogo-aparelhos/catalogo-loader.ts` | 1.964 | `aa07d78c4ca4d2a400011bc914eb72c0b64b7776fd590f62cb42838a523c3bfb` | `19c2589` (Thu Jul 9 2026) |
-| `lib/catalogo-aparelhos/catalogo-aparelhos.ts` | 11.776 | `7fb3f5b9a78e5e720f901e9dd4ff7007fceb8466a96883661371c1d6f5c50281` | `19c2589` (Thu Jul 9 2026) |
-| `lib/catalogo-aparelhos/peliculas.ts` | 10.173 | `d5c6b1c79e2039b63de65f74e9984b8b2eb073ce2d564b701f6bf1b9e83e1842` | `191f7f1` (Fri Jul 10 2026) |
-| `lib/catalogo-aparelhos/produto-metadata.ts` | 7.136 | `d21bca504c0ca1697aaefa569b8407fa8d434f0d32398cb729b92c94f1e7fa6c` | `19c2589` (Thu Jul 9 2026) |
-| `lib/catalogo-aparelhos/csv.ts` | 2.469 | `abb79d681fb93e09c2bc083958672de43f6ae9f648b268cc5ea352e75ccb3d65` | `19c2589` (Thu Jul 9 2026) |
-| `lib/catalogo-aparelhos/types.ts` | 3.583 | `01352be28f018c469e5afb3842eb8a7880ea3b27deb8e15bd460b45b6432b741` | `19c2589` (Thu Jul 9 2026) |
+| `RELATORIO_BASE_READINESS_001.md` | 14.283 | `2246826d2eb745ba4d7b2594da14dac52c90bc755fa140a5378dfd924f5f90e8` | Modificado (Relatório Reconciliado) |
+| `MANIFESTO_EVIDENCIAS_001.md` | 7.850 | *Este arquivo* | Modificado (Manifesto de Evidências) |
+| `MATRIZ_RECONCILIACAO_METRICAS_001.csv` | 5.857 | `9cc8894f6a44b1972b0053055b4e3f788add8d4e69b804da14d78d96b0b75ad1` | **Novo** (Matriz de Reconciliação) |
+| `PELICULAS_MVP_PUBLICAVEL_001.csv` | 771.606 | `c06b747a1b693cd906a2fde7efc01f4a9b2f94942ec37b26db93aad75daad635` | **Novo** (Elegibilidade para MVP) |
+| `DECISAO_MVP_INICIAL_001.md` | 5.061 | `07fa879fe90221d22637b4014797c033e950d3ec768183c6e38bb24670ab4b34` | **Novo** (Decisão de MVP) |
+| `INVENTARIO_FONTES_001.csv` | 3.686 | `50168aa569ec3cdbbf42e8944db4dfa1e8e5dcac2a8cd8305bac4a6115f27ac1` | Existente (Commit 38e643e) |
+| `MODELOS_CANONICOS_INVENTARIO_001.csv` | 66.979 | `c1b4513583d399284562eedeb301b576c93904f1456b5f54791819273171f8a7` | Existente (Commit 38e643e) |
+| `ALIASES_INVENTARIO_001.csv` | 365.250 | `4ca2a0b68422e4df043f3881a5f94550596e5c515617403278c554a9b2ed4bb7` | Existente (Commit 38e643e) |
+| `COMPATIBILIDADES_PELICULAS_INVENTARIO_001.csv` | 549.651 | `868f8bb148dc6a5991c7f29077f6ce624e76f2fffdd5640bf4bc06b25725d9fd` | Existente (Commit 38e643e) |
+| `COMPATIBILIDADES_CAPINHAS_INVENTARIO_001.csv` | 190 | `04bb47a8d2299cbc8ae18c1ae3231993b27ed783deeb837febce1373d8520ead` | Existente (Commit 38e643e) |
+| `FILA_REVISAO_001.csv` | 195.291 | `ba04443cc180935d55d49825da678de110c6e181744d90be55b06b2036dd20c0` | Existente (Commit 38e643e) |
+| `GAPS_MODELOS_MERCADO_001.csv` | 2.535 | `5b743413ebeac80cae2a4eabed0b3445202f928cdc5b0108d809862daba61043` | Existente (Commit 38e643e) |
+| `MATRIZ_COBERTURA_MARCAS_001.csv` | 1.091 | `f73c98e3d15624f487ce13a5b2ea6da10f405605053092a8d84770e0d7df13a5` | Existente (Commit 38e643e) |
 
 ---
 
-## 3. SCRIPTS E COMANDOS DE AUDITORIA UTILIZADOS
+## 3. SCRIPTS E COMANDOS UTILIZADOS NA RECONCILIAÇÃO
 
-Todos os scripts de auditoria foram executados via Node.js v24.14.1 e PowerShell no diretório de scratch da IDE (`C:\Users\rafae\.gemini\antigravity-ide\scratch\`), fora da árvore rastreada do Git.
-
-### 3.1 Varredura de Fontes no Repositório
+### 3.1 Script de Reconciliação das 1.443 Relações de Película
 ```javascript
-// C:\Users\rafae\.gemini\antigravity-ide\scratch\audit_sources.js
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { execSync } = require('child_process');
-
-const repoDir = 'C:\\Projetos\\omni-gestao-catalogo-saas-readiness-001';
-// Calcula tamanhos, SHA-256, commits git e linhas de cada arquivo de catálogo
+// C:\Users\rafae\.gemini\antigravity-ide\scratch\reconcile_relations.js
+// Avalia as 1.443 linhas técnicas do seed device_compatibilities_seed_001.csv:
+// 1.026 grupo_pelicula + 417 mesmo_modelo (source == target)
+// Calcula os 86.738 pares únicos cruzados combinatórios entre modelos distintos.
 ```
 
-### 3.2 Leitura do Arquivo Excel Legado
-```powershell
-# C:\Users\rafae\.gemini\antigravity-ide\scratch\read_xlsx.ps1
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$xlsxPath = "C:\Projetos\omni-gestao-catalogo-saas-readiness-001\docs\imports\catalogo\modelos_celulares_para_capinhas.xlsx"
-$zip = [System.IO.Compression.ZipFile]::OpenRead($xlsxPath)
-# Extrai sheetData e sharedStrings para verificar estrutura do inventário de capinhas
-```
-
-### 3.3 Análise Forense dos Seeds do Catálogo
+### 3.2 Script de Reconciliação dos Grupos 266 (HTML) vs 117 (Seed)
 ```javascript
-// C:\Users\rafae\.gemini\antigravity-ide\scratch\audit_seeds.js
-// Parser CSV tolerante a aspas e quebras de linha para validar:
-// 1. Contagem real de modelos canônicos e duplicidades de chaves
-// 2. Mapeamento de aliases, orfãos, ambíguos e duplicados
-// 3. Matriz de compatibilidade de películas e detecção de capinhas (0 encontradas)
-// 4. Fila de revisão e severidade dos problemas
+// C:\Users\rafae\.gemini\antigravity-ide\scratch\reconcile_groups.js
+// Avalia as 266 entradas na const DATA do HTML peliculas_3d_compativeis.html:
+// 171 modelos individuais + 95 grupos/supergrupos -> consolidados nos 117 grupos finais.
+```
+
+### 3.3 Script de Isolamento de Aliases e Colisões de Marca
+```javascript
+// C:\Users\rafae\.gemini\antigravity-ide\scratch\reconcile_aliases.js
+// Analisa os 1.751 aliases, isolando os 328 ambíguos, os 227 itens na fila de revisão
+// e as 21 strings únicas de alias que colidem entre marcas diferentes.
+```
+
+### 3.4 Script Gerador dos Artefatos Derivados
+```javascript
+// C:\Users\rafae\.gemini\antigravity-ide\scratch\generate_corrective_artifacts.js
+// Constrói os CSVs PELICULAS_MVP_PUBLICAVEL_001.csv e MATRIZ_RECONCILIACAO_METRICAS_001.csv.
 ```
 
 ---
 
-## 4. CRITÉRIOS DE NORMALIZAÇÃO E DEDUPLICAÇÃO
+## 4. FÓRMULAS E REGRAS DE CÁLCULO APLICADAS
 
-1. **Modelos Canônicos:** Identificados unicamente pela `model_key` (ex: `samsung_galaxy_s24`, `apple_iphone_16_pro_max`). Um modelo é considerado duplicado se `model_key` ou a combinação `brand + canonical_name` se repetir.
-2. **Tratamento de Variantes 4G/5G:** 4G e 5G são tratados estritamente como **modelos canônicos separados** quando houver divergência física de chassi, tela ou módulo de câmera (ex: `Samsung Galaxy A13 4G` vs `Samsung Galaxy A13 5G`).
-3. **Aliases Ambíguos:** Aliases como `"8"`, `"12"`, `"13"`, `"c55"` são sinalizados com `is_ambiguous = true` e `requires_brand_context = true` para forçar contexto de marca no motor de busca e evitar mapeamento incorreto entre fabricantes (ex: `Apple iPhone 8` vs `Redmi 8`).
-4. **Compatibilidades:** Relações físicas são idempotentes entre `source_model_key` e `target_model_key`. Grupos de película agregam modelos com o mesmo chassi frontal, mantendo status de validação (`confirmado_fornecedor`, `provavel_mercado`, `precisa_testar`).
+1. **Pares Únicos Cruzados Combinatórios:**
+   Para cada grupo de película composto por $N$ modelos únicos de celulares, a quantidade de pares de compatibilidade cruzada bi-direcional é dada por:
+   $$\text{Pares} = \frac{N \times (N - 1)}{2}$$
+   O somatório de todos os 117 grupos resulta em **86.738 pares únicos combinatórios**.
 
----
+2. **Reconciliação de Linhas Técnicas:**
+   $$\text{Linhas Totais (1.443)} = \text{Associações a Grupos (1.026)} + \text{Mesmo Modelo (417)}$$
 
-## 5. FONTES EXTERNAS CONSULTADAS E PESQUISA DE MERCADO
-
-- **Fabricantes (Fontes Primárias):**
-  - Motorola Brasil: Especificações técnicas linhas Moto G e Edge 50 (`motorola.com.br`)
-  - Samsung Brasil: Linhas Galaxy A, M, S (`samsung.com/br`)
-  - POCO Global / Xiaomi: Linhas POCO F, X, M e Redmi Note (`po.co/global`, `mi.com`)
-  - Realme Brasil: Linhas C e numeradas (`realme.com/br`)
-  - Infinix Brasil / Positivo: Linhas Hot e Note (`infinixmobiles.com.br`)
-- **Plataformas de Mercado (Fontes Públicas Secundárias):**
-  - Películas UTI / UTI das Películas (`peliculasuti.com.br`)
-  - Ofcell123 (`ofcell123.com.br`)
-  - Película Compatível (JFC Tecnologia / Google Play Store)
+3. **Elegibilidade para MVP de Películas:**
+   - `PUBLICAVEL_PADRAO`: `status == confirmado_fornecedor` (563 registros)
+   - `BETA_COM_AVISO`: `status == provavel_mercado` (39 registros)
+   - `NAO_PUBLICAVEL`: `status == precisa_testar` (841 registros)
 
 ---
 
-## 6. LIMITAÇÕES CONHECIDAS DA AUDITORIA
+## 5. LIMITAÇÕES DECLARADAS
 
-1. **Ausência de Banco Real:** A análise é restrita aos artefatos estáticos e arquivos de código no repositório Git, sem conexão a banco de dados em execução.
-2. **Capinhas Sem Evidência Física:** A base atual não possui nenhuma tabela ou seed de compatibilidade cruzada entre modelos de capinhas. Apenas uma lista de títulos sugeridos para cadastro de produtos existe.
-3. **Películas Pendentes de Bancada:** 841 das 1.443 relações de películas estão classificadas com baixa confiança (`precisa_testar`), necessitando validação física antes de comercialização comercial sem ressalvas.
+1. **Transformação Histórica Legada:** A consolidação exata das 266 entradas da fonte HTML para os 117 grupos finais do seed é declarada como `NAO_RECONSTRUIDO_COM_EVIDENCIA_COMPLETA` por ausência do script intermediário no repositório.
+2. **Capinhas Inexistentes:** A base física de compatibilidade de capinhas permanece em **0 registros** (o arquivo Excel é apenas cadastro unificado de aparelhos).
+3. **Teste de Bancada Local:** A métrica `confirmado_bancada` é declarada como **0** por ausência de registros de testes presenciais locais documentados.
