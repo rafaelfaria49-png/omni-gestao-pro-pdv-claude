@@ -5,7 +5,7 @@ status: vivo
 owner: produto/arquitetura
 last_update: 2026-07-22
 decidido_por: docs/decisions/ADR-0008-fiscal-architecture.md + docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md + docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md
-governa_codigo: lib/fiscal/emission/*, lib/fiscal/provider/*, lib/fiscal/numbering/*
+governa_codigo: lib/fiscal/emission/*, lib/fiscal/provider/*, lib/fiscal/numbering/*, lib/fiscal/queue/*
 ---
 
 # 🧾 NFCE_ARCHITECTURE — Pipeline de emissão NFC-e
@@ -19,8 +19,9 @@ governa_codigo: lib/fiscal/emission/*, lib/fiscal/provider/*, lib/fiscal/numberi
 > NFC-e modelo 65 e `tpAmb=2`, identificada pelo `Store.id` real.
 > **Dados:** `docs/architecture/FISCAL_SCHEMA_DESIGN.md`.
 >
-> ⚠️ Hoje as etapas **Tributação → XML → Assinatura → SEFAZ → QR** são **simuladas** (`STUB`)
-> e **sem chamador** no fluxo de venda. Este doc descreve a arquitetura-alvo e marca, em cada
+> ⚠️ Hoje as etapas **Tributação → XML → Assinatura → SEFAZ → QR** permanecem **simuladas** (`STUB`).
+> A solicitação já produz uma outbox transacional e o worker já invoca o pipeline somente com o
+> provider simulado. Este doc descreve a arquitetura-alvo e marca, em cada
 > etapa, o que **existe** vs o que é **fase futura** (F2–F12).
 
 ---
@@ -94,8 +95,9 @@ sequenceDiagram
   Pipe-->>PDV: reflexo read-only (status fiscal)
 ```
 
-> **Hoje:** os passos `Prod→Job`, `Wk→Job lock` e `Prov→SEFAZ` **não existem** (F7/F5). O que
-> está implementado e testado é o miolo `runEmissionPipeline` com provider **STUB** (sem rede).
+> **Hoje:** `Prod→Job` e `Wk→Job lock` estão implementados e testados no GOAL-011.
+> `Prov→SEFAZ` **não existe** (F5): o worker falha fechado fora de
+> `STUB_HOMOLOGACAO + NFC-e + HOMOLOGACAO`, sem rede.
 
 ---
 
@@ -207,19 +209,29 @@ credenciais, CSC, certificado ou códigos reais.
 - **Falhas:** schema inválido → não enfileira transmissão; volta para correção do snapshot.
 - **Rollback/Idempotência:** validação é pura sobre o XML; sem efeito.
 
-### Etapa 6 — Fila ✅ tabela / ❌ produtor+worker (F7 — gap P0-6)
-- **Entrada:** documento pronto (validado) + `FiscalEmissaoJob` enfileirado **pós-commit**.
-- **Processo (alvo):**
-  - **Produtor:** após a venda commitar (fora da transação), enfileira `EMISSAO` com `dedupeKey`.
-  - **Worker:** drena por `@@index([status, proximaTentativaEm])`, faz **lock**
-    (`lockOwner`/`lockedAt`/`lockExpiresAt`), chama `runEmissionPipeline`, atualiza o job.
-- **Saída:** job `CONCLUIDO` | `AGUARDANDO_RETRY` | `FALHA` (dead-letter ao esgotar `maxTentativas`).
-- **Falhas:** lock expira (worker morreu) → outro worker reassume após `lockExpiresAt`; SEFAZ
-  fora → `AGUARDANDO_RETRY` com backoff (`proximaTentativaEm`).
-- **Rollback:** desabilitar a loja (`fiscalEnabled = false`) **para de enfileirar**; jobs
-  pendentes ficam para reprocessar/cancelar. Falha fiscal **nunca** desfaz a venda (P1).
-- **Idempotência:** `@@unique([storeId, dedupeKey])` — reenfileirar a mesma venda **não** duplica
-  job; o pipeline é idempotente (AUTORIZADA → no-op; EMITINDO → no-op). Ver §7.
+### Etapa 6 — Fila ✅ produtor + worker simulado (GOAL-011)
+- **Entrada:** snapshot fiscal vigente e `FiscalEmissaoJob` de tipo `EMISSAO`.
+- **Produtor:** a rota de solicitação congela/reutiliza o snapshot e, em uma única transação,
+  cria por upsert a outbox e muda a venda de `NAO_FISCAL` para `PENDENTE`. A chave é
+  `fiscal:emissao:v1:venda:{vendaId}` dentro do escopo único `(storeId, dedupeKey)`.
+  A rota não chama emissão.
+- **Drenagem:** endpoint Node interno, fail-closed sem `FISCAL_QUEUE_INTERNAL_SECRET`, invoca lotes
+  limitados. Não há cron ou recurso externo provisionado neste GOAL.
+- **Lock:** seleção previsível por prioridade/próxima tentativa/criação/id e aquisição por
+  compare-and-swap. O lease usa `lockOwner`, `lockedAt`, `lockExpiresAt`, heartbeat e takeover
+  somente depois da expiração. Resultado e liberação exigem o mesmo owner e lease ainda válido.
+- **Retry:** erro transitório retorna a `PENDENTE` com backoff exponencial e teto; erro terminal
+  ou tentativa esgotada vai a `FALHA`. Erros persistidos são sanitizados, sem XML completo ou
+  campos sensíveis.
+- **Operação:** pausa global ou por `storeId`, cancelamento seguro, métricas e reprocessamento
+  manual de `FALHA` são server-side e auditados em `FiscalLog`. Reprocessar preserva tentativas
+  e concede no máximo uma nova tentativa explícita.
+- **Saída:** `CONCLUIDO`, `PENDENTE` para retry, `FALHA` (dead-letter) ou `CANCELADO`.
+- **Trava externa:** uma transmissão externa ambígua não pode ser repetida sem marcador de
+  consulta autorizadora. No GOAL-011 toda execução válida permanece simulada e marca
+  `externalTransmissionAttempted=false`.
+- **Idempotência:** `@@unique([storeId, dedupeKey])` impede job duplicado; o pipeline também
+  preserva `AUTORIZADA` como no-op. Ver §7.
 
 ### Etapa 7 — Transmissão SEFAZ ❌ (F5 — gap P0-4, Gate G-F5 resolvido pela ADR-0015)
 - **Entrada:** envelope imutável com XML assinado + XSD válido + chave/contexto canônico;
@@ -330,9 +342,12 @@ operacionalmente** conforme `fiscalStatus` (gates `assert*` em 6 rotas `corrigir
 | Evento | `@@unique([notaFiscalId, tipo, sequencia])` | Não duplica evento |
 
 ### 7.2 Retry (fila)
-- Backoff via `proximaTentativaEm`; teto `maxTentativas` (default 5).
+- Backoff exponencial determinístico via `proximaTentativaEm`, com teto de 30 minutos por padrão;
+  teto de tentativas `maxTentativas` (default 5).
 - Lock com expiração (`lockExpiresAt`) → worker morto não trava o job.
 - Esgotou tentativas → **dead-letter** (`status = FALHA`) para inspeção/reprocessamento manual.
+- Reprocessamento exige ator e motivo, preserva `tentativas` e concede uma tentativa explícita;
+  não existe loop automático infinito.
 - Timeout após envio não entra diretamente em retransmissão: primeiro consulta/reconcilia a chave
   ou o recibo, porque a SEFAZ pode ter autorizado apesar da perda da resposta local.
 
