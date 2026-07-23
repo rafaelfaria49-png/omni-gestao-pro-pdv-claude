@@ -112,7 +112,10 @@ async function processLease(input: {
     }
   }
 
-  const guard = canStartFiscalTransmission(job)
+  const guard =
+    job.tipo === "EMISSAO"
+      ? canStartFiscalTransmission(job)
+      : { allowed: true, reason: "operacao_sem_transmissao" }
   if (!guard.allowed) {
     const error = sanitizeFiscalQueueError(
       "Nova transmissão bloqueada: consulta autorizadora obrigatória.",
@@ -217,6 +220,7 @@ async function processLease(input: {
     code: execution.code,
     kind: execution.kind,
     externalTransmissionAttempted: execution.externalTransmissionAttempted,
+    detalhe: execution.detalhe,
   })
 
   if (execution.kind === "success") {
@@ -233,6 +237,45 @@ async function processLease(input: {
       takeover,
       tentativas: job.tentativas,
       mensagem: completed ? execution.mensagem : "Lock perdido ao concluir.",
+    }
+  }
+
+  if (execution.kind === "uncertain") {
+    if (!input.ports.waitForConsultation) {
+      const failed = await input.ports.fail({
+        job,
+        workerId: input.workerId,
+        now,
+        error: "Executor não oferece estacionamento para consulta obrigatória.",
+        payload,
+      })
+      return {
+        jobId: job.id,
+        storeId: job.storeId,
+        status: failed ? "falha" : "lock_perdido",
+        takeover,
+        tentativas: job.tentativas,
+        mensagem: failed
+          ? "Transmissão incerta bloqueada por ausência do port de consulta."
+          : "Lock perdido ao bloquear transmissão incerta.",
+      }
+    }
+    const waiting = await input.ports.waitForConsultation({
+      job,
+      workerId: input.workerId,
+      now,
+      error,
+      payload,
+    })
+    return {
+      jobId: job.id,
+      storeId: job.storeId,
+      status: waiting ? "consulta" : "lock_perdido",
+      takeover,
+      tentativas: job.tentativas,
+      mensagem: waiting
+        ? "Resultado incerto; retransmissão bloqueada até CONSULTA."
+        : "Lock perdido ao estacionar para consulta.",
     }
   }
 
@@ -304,6 +347,7 @@ export async function drainFiscalQueue(
     acquired: 0,
     completed: 0,
     retried: 0,
+    awaitingConsultation: 0,
     failed: 0,
     lockLost: 0,
     items: [],
@@ -337,6 +381,7 @@ export async function drainFiscalQueue(
     report.items.push(item)
     if (item.status === "concluido") report.completed += 1
     else if (item.status === "retry") report.retried += 1
+    else if (item.status === "consulta") report.awaitingConsultation += 1
     else if (item.status === "falha") report.failed += 1
     else report.lockLost += 1
   }

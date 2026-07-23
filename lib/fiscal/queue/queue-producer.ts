@@ -12,6 +12,7 @@ import { VENDA_FISCAL_SNAPSHOT_VERSAO } from "../venda-fiscal-snapshot"
 import { normalizeFiscalStatus } from "../venda-fiscal-state-machine"
 import { sanitizeFiscalQueueError } from "./queue-policy"
 
+/** Mantido em v1 para não criar um segundo job para vendas já deduplicadas no GOAL-011. */
 export const FISCAL_EMISSION_DEDUPE_VERSION = 1
 
 export function buildFiscalEmissionDedupeKey(vendaId: string): string {
@@ -241,7 +242,7 @@ export async function requestFiscalEmissionWithJob(
           proximaTentativaEm: requestedAt,
           dedupeKey,
           payload: {
-            version: 1,
+            version: 2,
             operation: "EMISSAO",
             requestedAt: requestedAt.toISOString(),
             requestedBy: operador,

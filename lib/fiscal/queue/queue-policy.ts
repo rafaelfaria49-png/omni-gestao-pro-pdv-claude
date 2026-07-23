@@ -37,9 +37,13 @@ export function calculateFiscalQueueBackoffMs(
 
 type TransmissionState = {
   startedAt?: string | null
+  lastStartedAt?: string | null
   completedAt?: string | null
   external?: boolean
   attempt?: number
+  uncertainAt?: string | null
+  consultationOutcome?: "AUTHORIZED" | "NOT_FOUND" | "REJECTED" | null
+  consultationCompletedAt?: string | null
   retryAuthorizedAt?: string | null
   retryAuthorizationConsumedAt?: string | null
 }
@@ -50,18 +54,22 @@ export function readTransmissionState(payload: FiscalQueuePayload | null): Trans
 }
 
 /**
- * Retry de transmissão externa é fail-closed: após tentativa ambígua, só uma consulta registrada
- * pode autorizar nova transmissão. Execução simulada (`external=false`) não cruza essa fronteira.
+ * Retry de transmissão ambígua é fail-closed: só CONSULTA=NOT_FOUND registrada pode
+ * autorizar uma única nova transmissão. A regra também vale para o stub de drill.
  */
 export function canStartFiscalTransmission(job: FiscalQueueJob): {
   allowed: boolean
   reason: string
 } {
   const transmission = readTransmissionState(job.payload)
-  if (!transmission.startedAt || transmission.completedAt || transmission.external !== true) {
-    return { allowed: true, reason: "sem_transmissao_externa_ambigua" }
+  if (!transmission.startedAt || transmission.completedAt || !transmission.uncertainAt) {
+    return { allowed: true, reason: "sem_transmissao_ambigua_pendente" }
   }
-  if (transmission.retryAuthorizedAt && !transmission.retryAuthorizationConsumedAt) {
+  if (
+    transmission.consultationOutcome === "NOT_FOUND" &&
+    transmission.retryAuthorizedAt &&
+    !transmission.retryAuthorizationConsumedAt
+  ) {
     return { allowed: true, reason: "consulta_autorizou_retry" }
   }
   return {
@@ -83,7 +91,8 @@ export function withTransmissionStarted(
     ...payload,
     transmission: {
       ...previous,
-      startedAt: now.toISOString(),
+      startedAt: previous.startedAt ?? now.toISOString(),
+      lastStartedAt: now.toISOString(),
       completedAt: null,
       external: false,
       attempt: job.tentativas,
@@ -99,23 +108,31 @@ export function withExecutionResult(
   input: {
     now: Date
     code: string
-    kind: "success" | "transient" | "terminal"
+    kind: "success" | "transient" | "terminal" | "uncertain"
     externalTransmissionAttempted: boolean
+    detalhe?: Record<string, unknown>
   },
 ): FiscalQueuePayload {
   const root = asRecord(payload)
   const transmission = readTransmissionState(root)
+  const executionDetail = asRecord(input.detalhe)
   return {
     ...root,
+    ...executionDetail,
     transmission: {
       ...transmission,
       external: input.externalTransmissionAttempted,
       completedAt: input.kind === "success" ? input.now.toISOString() : null,
+      uncertainAt:
+        input.kind === "uncertain"
+          ? input.now.toISOString()
+          : transmission.uncertainAt ?? null,
     },
     lastExecution: {
       at: input.now.toISOString(),
       code: input.code,
       kind: input.kind,
+      detalhe: executionDetail,
     },
   }
 }

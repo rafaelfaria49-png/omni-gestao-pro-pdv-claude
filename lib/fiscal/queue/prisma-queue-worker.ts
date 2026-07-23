@@ -7,6 +7,10 @@
 import { prisma } from "@/lib/prisma"
 import { emitirNotaFiscalVenda } from "../emission/emission-service"
 import type { EmissionOutcome } from "../emission/emission.types"
+import {
+  createUncertainStateJobExecutor,
+  type UncertainStateJobExecutorDependencies,
+} from "../emission/uncertain-state-job-executor"
 import type {
   FiscalQueueAuditEvent,
   FiscalQueueExecutionResult,
@@ -149,7 +153,7 @@ function eligibleWhere(now: Date, pausedStoreIds: string[]): Record<string, unkn
     ...(pausedStoreIds.length > 0 ? { storeId: { notIn: pausedStoreIds } } : {}),
     OR: [
       {
-        status: { in: ["PENDENTE", "AGUARDANDO_RETRY"] },
+        status: "PENDENTE",
         AND: [
           {
             OR: [
@@ -163,6 +167,14 @@ function eligibleWhere(now: Date, pausedStoreIds: string[]): Record<string, unkn
               { lockExpiresAt: { lte: now } },
             ],
           },
+        ],
+      },
+      {
+        status: "AGUARDANDO_RETRY",
+        proximaTentativaEm: { not: null, lte: now },
+        OR: [
+          { lockExpiresAt: null },
+          { lockExpiresAt: { lte: now } },
         ],
       },
       {
@@ -268,12 +280,13 @@ async function executeFiscalJob(
     vendaId: string
     operador?: string | null
   }) => Promise<EmissionOutcome>,
+  executeGoal012?: (job: FiscalQueueJob) => Promise<FiscalQueueExecutionResult>,
 ): Promise<FiscalQueueExecutionResult> {
-  if (job.tipo !== "EMISSAO") {
+  if (!["EMISSAO", "CONSULTA"].includes(job.tipo)) {
     return {
       kind: "terminal",
       code: "tipo_nao_suportado",
-      mensagem: `GOAL-011 processa somente EMISSAO; recebido ${job.tipo}.`,
+      mensagem: `GOAL-012 processa somente EMISSAO/CONSULTA; recebido ${job.tipo}.`,
       simulado: true,
       externalTransmissionAttempted: false,
     }
@@ -319,6 +332,21 @@ async function executeFiscalJob(
       simulado: true,
       externalTransmissionAttempted: false,
     }
+  }
+
+  const payloadVersion = Number(record(job.payload).version ?? 1)
+  if (job.tipo === "CONSULTA" || payloadVersion >= 2) {
+    if (!executeGoal012) {
+      return {
+        kind: "terminal",
+        code: "goal012_executor_nao_configurado",
+        mensagem:
+          "Executor seguro do GOAL-012 não configurado; transmissão bloqueada.",
+        simulado: true,
+        externalTransmissionAttempted: false,
+      }
+    }
+    return executeGoal012(job)
   }
 
   const outcome = await emit({
@@ -368,6 +396,7 @@ export function createPrismaFiscalQueueWorkerPorts(
     vendaId: string
     operador?: string | null
   }) => Promise<EmissionOutcome> = emitirNotaFiscalVenda,
+  executeGoal012?: (job: FiscalQueueJob) => Promise<FiscalQueueExecutionResult>,
 ): FiscalQueueWorkerPorts {
   return {
     readPauseSnapshot: () => readFiscalQueuePauseSnapshot(client),
@@ -459,7 +488,46 @@ export function createPrismaFiscalQueueWorkerPorts(
       }
       return updated.count === 1
     },
-    execute: (job) => executeFiscalJob(client, job, emit),
+    waitForConsultation: async ({ job, workerId, now, error, payload }) => {
+      const updated = await client.fiscalEmissaoJob.updateMany({
+        where: ownedLockWhere(job.id, workerId, now),
+        data: {
+          status: "AGUARDANDO_RETRY",
+          payload,
+          ultimoErro: error,
+          proximaTentativaEm: null,
+          lockOwner: null,
+          lockedAt: null,
+          lockExpiresAt: null,
+        },
+      })
+      if (updated.count === 1) {
+        await bestEffortAudit(client, {
+          job,
+          acao: "fiscal.queue.transmission.uncertain",
+          nivel: "WARN",
+          mensagem: "Resultado incerto; job estacionado até consulta deduplicada.",
+          detalhe: { workerId },
+        })
+      }
+      return updated.count === 1
+    },
+    execute: (job) => executeFiscalJob(client, job, emit, executeGoal012),
     audit: (event) => bestEffortAudit(client, event),
   }
+}
+
+/**
+ * Wiring explícito do GOAL-012. Exige preparer, persistência e provider stub
+ * injetados; a factory legada continua fail-closed para payload v2 sem wiring.
+ */
+export function createPrismaGoal012FiscalQueueWorkerPorts(
+  dependencies: UncertainStateJobExecutorDependencies,
+  client: QueuePrismaClient = prisma as unknown as QueuePrismaClient,
+): FiscalQueueWorkerPorts {
+  return createPrismaFiscalQueueWorkerPorts(
+    client,
+    emitirNotaFiscalVenda,
+    createUncertainStateJobExecutor(dependencies),
+  )
 }
