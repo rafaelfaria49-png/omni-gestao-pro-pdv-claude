@@ -3,9 +3,9 @@ title: NFCE_ARCHITECTURE — Arquitetura de emissão NFC-e (pipeline completo)
 hub: fiscal
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-07-22
-decidido_por: docs/decisions/ADR-0008-fiscal-architecture.md + docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md + docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md
-governa_codigo: lib/fiscal/emission/*, lib/fiscal/provider/*, lib/fiscal/numbering/*, lib/fiscal/queue/*
+last_update: 2026-07-23
+decidido_por: docs/decisions/ADR-0008-fiscal-architecture.md + docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md + docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md + docs/decisions/ADR-0018-persistencia-legal-xml-e-protocolo.md
+governa_codigo: lib/fiscal/emission/*, lib/fiscal/provider/*, lib/fiscal/numbering/*, lib/fiscal/queue/*, lib/fiscal/storage/*
 ---
 
 # 🧾 NFCE_ARCHITECTURE — Pipeline de emissão NFC-e

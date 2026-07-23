@@ -1,8 +1,14 @@
+import { createHash } from "node:crypto"
+
 import { prisma } from "@/lib/prisma"
-import type {
-  FiscalDocumentLocator,
-  PersistedFiscalDocument,
-  UncertainStatePersistence,
+
+import { resolveXmlStorageMirror } from "../storage/mirror-vault"
+import type { XmlStorageMirror } from "../storage/types"
+import {
+  AuthorizedDivergenceError,
+  type FiscalDocumentLocator,
+  type PersistedFiscalDocument,
+  type UncertainStatePersistence,
 } from "./uncertain-state.types"
 
 type UnknownRecord = Record<string, unknown>
@@ -35,6 +41,11 @@ function record(value: unknown): UnknownRecord {
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null
+}
+
+/** SHA-256 hex dos bytes UTF-8 — mesma convenção do `bytesSha256` da ADR-0017. */
+function sha256Hex(content: string): string {
+  return createHash("sha256").update(content, "utf8").digest("hex")
 }
 
 function documentMetadata(document: {
@@ -134,6 +145,12 @@ function mergePayload(
 
 export function createPrismaUncertainStatePersistence(
   client: UncertainPrismaClient = prisma as unknown as UncertainPrismaClient,
+  /**
+   * Espelho privado opcional (ADR-0018 §2.4). Injetável só para teste; em
+   * produção resolve para o no-op inativo enquanto não houver bucket fiscal
+   * provisionado — este GOAL não provisiona nenhum recurso externo.
+   */
+  resolveMirror: () => XmlStorageMirror = resolveXmlStorageMirror,
 ): UncertainStatePersistence {
   return {
     load: (locator) => loadDocument(client, locator),
@@ -310,7 +327,73 @@ export function createPrismaUncertainStatePersistence(
       }),
 
     markAuthorized: async ({ document, result, now, source }) => {
-      await client.$transaction(async (tx) => {
+      const persisted = await client.$transaction(async (tx) => {
+        // ADR-0018 §2.3 — imutabilidade. A checagem roda ANTES de qualquer
+        // escrita e é independente do `status`: o que protege o documento é a
+        // presença dos bytes/protocolo já persistidos, não a transição. Assim a
+        // retomada do GOAL-012 (nota `AUTORIZADA` com coluna incompleta) segue
+        // podendo completar o que falta, sem jamais sobrescrever o que existe.
+        const existing = record(await tx.notaFiscal.findFirst({
+          where: {
+            id: document.notaFiscalId,
+            storeId: document.storeId,
+            vendaId: document.vendaId,
+          },
+          select: {
+            id: true,
+            status: true,
+            xmlAutorizado: true,
+            protocolo: true,
+            cStat: true,
+            xMotivo: true,
+          },
+        }))
+        if (!existing.id) {
+          throw new Error(
+            "markAuthorized abortado: nota não encontrada no escopo fiscal informado.",
+          )
+        }
+        const existingXml = stringOrNull(existing.xmlAutorizado)
+        const existingProtocolo = stringOrNull(existing.protocolo)
+        if (existingXml !== null && existingXml !== result.xmlAutorizado) {
+          throw new AuthorizedDivergenceError(
+            "xml_autorizado_imutavel_diverge",
+            "Tentativa de substituir XML autorizado com bytes divergentes; operação bloqueada.",
+          )
+        }
+        if (existingProtocolo !== null && existingProtocolo !== result.protocolo) {
+          throw new AuthorizedDivergenceError(
+            "protocolo_imutavel_diverge",
+            "Tentativa de trocar o protocolo de autorização; operação bloqueada.",
+          )
+        }
+        // Autorização completa já persistida: reprocessamento com os mesmos
+        // bytes converge sem escrever nada (idempotência — ADR-0018 §2.3.1).
+        if (existingXml !== null && existingProtocolo !== null) {
+          if (
+            stringOrNull(existing.cStat) !== stringOrNull(result.cStat) ||
+            stringOrNull(existing.xMotivo) !== stringOrNull(result.xMotivo)
+          ) {
+            throw new AuthorizedDivergenceError(
+              "metadados_autorizacao_divergem",
+              "Tentativa de alterar metadados da autorização (cStat/xMotivo) com mesmo XML; operação bloqueada.",
+            )
+          }
+          await tx.fiscalLog.create({
+            data: {
+              storeId: document.storeId,
+              vendaId: document.vendaId,
+              notaFiscalId: document.notaFiscalId,
+              nivel: "INFO",
+              acao: "fiscal.emission.idempotent_mark",
+              mensagem:
+                "markAuthorized idempotente: XML/protocolo/metadados já persistidos e idênticos; nenhuma escrita.",
+              operador: "fiscal-goal-013",
+              detalhe: { source },
+            },
+          })
+          return false
+        }
         const updated = await tx.notaFiscal.updateMany({
           where: {
             id: document.notaFiscalId,
@@ -325,6 +408,9 @@ export function createPrismaUncertainStatePersistence(
             xMotivo: result.xMotivo,
             dataAutorizacao: now,
             xmlAutorizado: result.xmlAutorizado,
+            digestValue: result.digestValue ?? null,
+            qrCodeData: result.qrCodeData ?? null,
+            urlConsulta: result.urlConsulta ?? null,
             ultimoErro: null,
           },
         })
@@ -365,12 +451,89 @@ export function createPrismaUncertainStatePersistence(
                 : "fiscal.emission.authorized",
             cStat: result.cStat,
             xMotivo: result.xMotivo,
-            mensagem: "Autorização simulada persistida.",
-            operador: "fiscal-goal-012",
-            detalhe: { source, protocoloPersistido: true, xmlAutorizadoPersistido: true },
+            mensagem: "Autorização persistida com XML/protocolo imutáveis.",
+            operador: "fiscal-goal-013",
+            detalhe: {
+              source,
+              protocoloPersistido: true,
+              xmlAutorizadoPersistido: true,
+              digestValuePersistido: Boolean(result.digestValue),
+              qrCodeDataPersistido: Boolean(result.qrCodeData),
+              urlConsultaPersistido: Boolean(result.urlConsulta),
+            },
           },
         })
+        return true
       })
+      // ADR-0018 §2.4 — espelho privado OPCIONAL. Roda FORA da transação (é
+      // I/O externo) e **nunca** derruba uma autorização já persistida: a
+      // coluna é a fonte primária e já está commitada neste ponto. Com o
+      // espelho inativo (estado atual do projeto) nada acontece.
+      if (!persisted) return
+      const mirror = resolveMirror()
+      if (!mirror.active) return
+      const bytesSha256 = sha256Hex(result.xmlAutorizado)
+      try {
+        const stored = await mirror.storeMirror({
+          storeId: document.storeId,
+          notaFiscalId: document.notaFiscalId,
+          xmlAutorizado: result.xmlAutorizado,
+          bytesSha256,
+        })
+        if (stored.divergent || !stored.xmlStorageRef) {
+          await client.fiscalLog.create({
+            data: {
+              storeId: document.storeId,
+              vendaId: document.vendaId,
+              notaFiscalId: document.notaFiscalId,
+              nivel: "WARN",
+              acao: "fiscal.storage.mirror_write_skipped",
+              mensagem:
+                "Espelho privado não confirmou a cópia; coluna permanece a fonte primária.",
+              operador: "fiscal-goal-013",
+              detalhe: { bytesSha256, reason: stored.reason ?? null },
+            },
+          })
+          return
+        }
+        // `xmlStorageRef: null` no WHERE mantém o ponteiro imutável: uma
+        // referência já gravada nunca é trocada por outra.
+        await client.notaFiscal.updateMany({
+          where: {
+            id: document.notaFiscalId,
+            storeId: document.storeId,
+            vendaId: document.vendaId,
+            xmlStorageRef: null,
+          },
+          data: { xmlStorageRef: stored.xmlStorageRef },
+        })
+        await client.fiscalLog.create({
+          data: {
+            storeId: document.storeId,
+            vendaId: document.vendaId,
+            notaFiscalId: document.notaFiscalId,
+            nivel: "INFO",
+            acao: "fiscal.storage.mirror_written",
+            mensagem: "Cópia imutável do XML autorizado registrada no espelho privado.",
+            operador: "fiscal-goal-013",
+            detalhe: { bytesSha256, xmlStorageRef: stored.xmlStorageRef },
+          },
+        })
+      } catch {
+        await client.fiscalLog.create({
+          data: {
+            storeId: document.storeId,
+            vendaId: document.vendaId,
+            notaFiscalId: document.notaFiscalId,
+            nivel: "WARN",
+            acao: "fiscal.storage.mirror_failed",
+            mensagem:
+              "Falha ao gravar espelho privado; autorização permanece válida na coluna.",
+            operador: "fiscal-goal-013",
+            detalhe: { bytesSha256 },
+          },
+        })
+      }
     },
 
     markRejected: async ({ document, result, now, source, requiresInutilizacao }) => {
