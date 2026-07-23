@@ -1,0 +1,465 @@
+/**
+ * Adapter Prisma da fila fiscal.
+ *
+ * Aquisição usa select ordenado + updateMany compare-and-swap. O CAS revalida status, vencimento
+ * e proprietário; dois workers podem enxergar o mesmo candidato, mas apenas um adquire o lock.
+ */
+import { prisma } from "@/lib/prisma"
+import { emitirNotaFiscalVenda } from "../emission/emission-service"
+import type { EmissionOutcome } from "../emission/emission.types"
+import type {
+  FiscalQueueAuditEvent,
+  FiscalQueueExecutionResult,
+  FiscalQueueJob,
+  FiscalQueueLease,
+  FiscalQueuePauseSnapshot,
+  FiscalQueuePayload,
+  FiscalQueueWorkerPorts,
+} from "./queue.types"
+
+export const GLOBAL_PAUSE_ACTION = "fiscal.queue.pause.global"
+export const STORE_PAUSE_ACTION = "fiscal.queue.pause.store"
+
+const JOB_SELECT = {
+  id: true,
+  storeId: true,
+  vendaId: true,
+  notaFiscalId: true,
+  tipo: true,
+  status: true,
+  tentativas: true,
+  maxTentativas: true,
+  proximaTentativaEm: true,
+  prioridade: true,
+  lockOwner: true,
+  lockedAt: true,
+  lockExpiresAt: true,
+  dedupeKey: true,
+  payload: true,
+  ultimoErro: true,
+  concluidoEm: true,
+  createdAt: true,
+  updatedAt: true,
+} as const
+
+type QueuePrismaClient = {
+  fiscalEmissaoJob: {
+    findMany: (args: unknown) => Promise<unknown[]>
+    findUnique: (args: unknown) => Promise<unknown | null>
+    updateMany: (args: unknown) => Promise<{ count: number }>
+  }
+  fiscalLog: {
+    findFirst: (args: unknown) => Promise<unknown | null>
+    findMany: (args: unknown) => Promise<unknown[]>
+    create: (args: unknown) => Promise<unknown>
+  }
+  configuracaoFiscalLoja: {
+    findUnique: (args: unknown) => Promise<unknown | null>
+  }
+  notaFiscal: {
+    findFirst: (args: unknown) => Promise<unknown | null>
+  }
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function asDate(value: unknown): Date | null {
+  if (value instanceof Date) return value
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  return null
+}
+
+function toJob(value: unknown): FiscalQueueJob {
+  const row = record(value)
+  return {
+    id: String(row.id ?? ""),
+    storeId: String(row.storeId ?? ""),
+    vendaId: String(row.vendaId ?? ""),
+    notaFiscalId: row.notaFiscalId == null ? null : String(row.notaFiscalId),
+    tipo: String(row.tipo ?? "EMISSAO") as FiscalQueueJob["tipo"],
+    status: String(row.status ?? "PENDENTE") as FiscalQueueJob["status"],
+    tentativas: Number(row.tentativas ?? 0),
+    maxTentativas: Number(row.maxTentativas ?? 5),
+    proximaTentativaEm: asDate(row.proximaTentativaEm),
+    prioridade: Number(row.prioridade ?? 0),
+    lockOwner: row.lockOwner == null ? null : String(row.lockOwner),
+    lockedAt: asDate(row.lockedAt),
+    lockExpiresAt: asDate(row.lockExpiresAt),
+    dedupeKey: row.dedupeKey == null ? null : String(row.dedupeKey),
+    payload: Object.keys(record(row.payload)).length > 0 ? record(row.payload) : null,
+    ultimoErro: row.ultimoErro == null ? null : String(row.ultimoErro),
+    concluidoEm: asDate(row.concluidoEm),
+    createdAt: asDate(row.createdAt) ?? new Date(0),
+    updatedAt: asDate(row.updatedAt) ?? new Date(0),
+  }
+}
+
+function pausedFromDetail(value: unknown): boolean {
+  return record(value).paused === true
+}
+
+export async function readFiscalQueuePauseSnapshot(
+  client: QueuePrismaClient = prisma as unknown as QueuePrismaClient,
+): Promise<FiscalQueuePauseSnapshot> {
+  const envPaused = process.env.FISCAL_QUEUE_GLOBAL_PAUSED?.trim() === "1"
+  const [globalEvent, storeEvents] = await Promise.all([
+    client.fiscalLog.findFirst({
+      where: { acao: GLOBAL_PAUSE_ACTION },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { detalhe: true },
+    }),
+    client.fiscalLog.findMany({
+      where: { acao: STORE_PAUSE_ACTION },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { storeId: true, detalhe: true },
+      take: 10_000,
+    }),
+  ])
+
+  const latestByStore = new Map<string, boolean>()
+  for (const raw of storeEvents) {
+    const event = record(raw)
+    const storeId = String(event.storeId ?? "").trim()
+    if (storeId && !latestByStore.has(storeId)) {
+      latestByStore.set(storeId, pausedFromDetail(event.detalhe))
+    }
+  }
+  const pausedStoreIds = [...latestByStore.entries()]
+    .filter(([, paused]) => paused)
+    .map(([storeId]) => storeId)
+    .sort()
+
+  const auditPaused = pausedFromDetail(record(globalEvent).detalhe)
+  return {
+    globalPaused: envPaused || auditPaused,
+    globalSource: envPaused ? "environment" : auditPaused ? "audit_log" : "none",
+    pausedStoreIds,
+  }
+}
+
+function eligibleWhere(now: Date, pausedStoreIds: string[]): Record<string, unknown> {
+  return {
+    ...(pausedStoreIds.length > 0 ? { storeId: { notIn: pausedStoreIds } } : {}),
+    OR: [
+      {
+        status: { in: ["PENDENTE", "AGUARDANDO_RETRY"] },
+        AND: [
+          {
+            OR: [
+              { proximaTentativaEm: null },
+              { proximaTentativaEm: { lte: now } },
+            ],
+          },
+          {
+            OR: [
+              { lockExpiresAt: null },
+              { lockExpiresAt: { lte: now } },
+            ],
+          },
+        ],
+      },
+      {
+        status: "PROCESSANDO",
+        lockExpiresAt: { lte: now },
+      },
+    ],
+  }
+}
+
+async function acquireNextJob(
+  client: QueuePrismaClient,
+  input: {
+    workerId: string
+    now: Date
+    leaseMs: number
+    pausedStoreIds: string[]
+  },
+): Promise<FiscalQueueLease | null> {
+  const where = eligibleWhere(input.now, input.pausedStoreIds)
+  const candidates = await client.fiscalEmissaoJob.findMany({
+    where,
+    orderBy: [
+      { prioridade: "desc" },
+      { proximaTentativaEm: "asc" },
+      { createdAt: "asc" },
+      { id: "asc" },
+    ],
+    take: 25,
+    select: JOB_SELECT,
+  })
+
+  for (const raw of candidates) {
+    const candidate = toJob(raw)
+    const acquired = await client.fiscalEmissaoJob.updateMany({
+      where: {
+        id: candidate.id,
+        ...eligibleWhere(input.now, input.pausedStoreIds),
+      },
+      data: {
+        status: "PROCESSANDO",
+        lockOwner: input.workerId,
+        lockedAt: input.now,
+        lockExpiresAt: new Date(input.now.getTime() + input.leaseMs),
+        tentativas: { increment: 1 },
+      },
+    })
+    if (acquired.count !== 1) continue
+    const locked = await client.fiscalEmissaoJob.findUnique({
+      where: { id: candidate.id },
+      select: JOB_SELECT,
+    })
+    if (!locked) return null
+    return {
+      job: toJob(locked),
+      takeover: candidate.status === "PROCESSANDO",
+    }
+  }
+  return null
+}
+
+function ownedLockWhere(
+  jobId: string,
+  workerId: string,
+  now: Date,
+): Record<string, unknown> {
+  return {
+    id: jobId,
+    status: "PROCESSANDO",
+    lockOwner: workerId,
+    lockExpiresAt: { gt: now },
+  }
+}
+
+async function bestEffortAudit(
+  client: QueuePrismaClient,
+  event: FiscalQueueAuditEvent,
+): Promise<void> {
+  await client.fiscalLog.create({
+    data: {
+      storeId: event.job.storeId,
+      vendaId: event.job.vendaId,
+      notaFiscalId: event.job.notaFiscalId,
+      jobId: event.job.id,
+      nivel: event.nivel,
+      acao: event.acao,
+      mensagem: event.mensagem,
+      operador: event.operador ?? null,
+      detalhe: {
+        worker: event.detalhe?.workerId ?? null,
+        tentativas: event.job.tentativas,
+        ...event.detalhe,
+      },
+    },
+  }).then(() => undefined).catch(() => undefined)
+}
+
+async function executeFiscalJob(
+  client: QueuePrismaClient,
+  job: FiscalQueueJob,
+  emit: (input: {
+    storeId: string
+    vendaId: string
+    operador?: string | null
+  }) => Promise<EmissionOutcome>,
+): Promise<FiscalQueueExecutionResult> {
+  if (job.tipo !== "EMISSAO") {
+    return {
+      kind: "terminal",
+      code: "tipo_nao_suportado",
+      mensagem: `GOAL-011 processa somente EMISSAO; recebido ${job.tipo}.`,
+      simulado: true,
+      externalTransmissionAttempted: false,
+    }
+  }
+  const config = record(await client.configuracaoFiscalLoja.findUnique({
+    where: { storeId: job.storeId },
+    select: {
+      provider: true,
+      ambiente: true,
+      modeloFiscal: true,
+      fiscalEnabled: true,
+    },
+  }))
+  if (
+    config.provider !== "STUB_HOMOLOGACAO" ||
+    config.ambiente !== "HOMOLOGACAO" ||
+    config.modeloFiscal !== "NFCE" ||
+    config.fiscalEnabled !== true
+  ) {
+    return {
+      kind: "terminal",
+      code: "contexto_simulado_obrigatorio",
+      mensagem: "Job bloqueado: somente STUB_HOMOLOGACAO/NFCE/HOMOLOGACAO habilitado é permitido.",
+      simulado: true,
+      externalTransmissionAttempted: false,
+    }
+  }
+  const nota = record(await client.notaFiscal.findFirst({
+    where: {
+      ...(job.notaFiscalId ? { id: job.notaFiscalId } : { vigente: true }),
+      storeId: job.storeId,
+      vendaId: job.vendaId,
+      modelo: "NFCE",
+      ambiente: "HOMOLOGACAO",
+    },
+    select: { id: true, modelo: true, ambiente: true },
+  }))
+  if (!nota.id) {
+    return {
+      kind: "terminal",
+      code: "nota_homologacao_ausente",
+      mensagem: "NotaFiscal NFC-e de homologação não encontrada no escopo do job.",
+      simulado: true,
+      externalTransmissionAttempted: false,
+    }
+  }
+
+  const outcome = await emit({
+    storeId: job.storeId,
+    vendaId: job.vendaId,
+    operador: `fiscal-queue:${job.lockOwner ?? "worker"}`,
+  })
+  if (!outcome.simulado) {
+    return {
+      kind: "terminal",
+      code: "provider_real_bloqueado",
+      mensagem: "Executor devolveu provider real, bloqueado no GOAL-011.",
+      simulado: false,
+      externalTransmissionAttempted: true,
+    }
+  }
+  if (
+    outcome.ok &&
+    (outcome.resultado === "autorizada" || outcome.resultado === "ja_autorizada")
+  ) {
+    return {
+      kind: "success",
+      code: outcome.resultado,
+      mensagem: outcome.mensagem,
+      simulado: true,
+      externalTransmissionAttempted: false,
+      detalhe: { fiscalStatusNovo: outcome.fiscalStatusNovo },
+    }
+  }
+  const transient =
+    outcome.resultado === "pendente" ||
+    outcome.resultado === "contingencia" ||
+    outcome.errorCode === "erro_interno"
+  return {
+    kind: transient ? "transient" : "terminal",
+    code: outcome.errorCode ?? outcome.resultado,
+    mensagem: outcome.mensagem,
+    simulado: true,
+    externalTransmissionAttempted: false,
+  }
+}
+
+export function createPrismaFiscalQueueWorkerPorts(
+  client: QueuePrismaClient = prisma as unknown as QueuePrismaClient,
+  emit: (input: {
+    storeId: string
+    vendaId: string
+    operador?: string | null
+  }) => Promise<EmissionOutcome> = emitirNotaFiscalVenda,
+): FiscalQueueWorkerPorts {
+  return {
+    readPauseSnapshot: () => readFiscalQueuePauseSnapshot(client),
+    acquireNextJob: (input) => acquireNextJob(client, input),
+    heartbeat: async ({ jobId, workerId, now, leaseMs }) => {
+      const updated = await client.fiscalEmissaoJob.updateMany({
+        where: ownedLockWhere(jobId, workerId, now),
+        data: { lockExpiresAt: new Date(now.getTime() + leaseMs) },
+      })
+      return updated.count === 1
+    },
+    markTransmissionStarted: async ({ job, workerId, now, payload }) => {
+      const updated = await client.fiscalEmissaoJob.updateMany({
+        where: ownedLockWhere(job.id, workerId, now),
+        data: { payload },
+      })
+      return updated.count === 1
+    },
+    complete: async ({ job, workerId, now, payload }) => {
+      const updated = await client.fiscalEmissaoJob.updateMany({
+        where: ownedLockWhere(job.id, workerId, now),
+        data: {
+          status: "CONCLUIDO",
+          payload,
+          ultimoErro: null,
+          concluidoEm: now,
+          proximaTentativaEm: null,
+          lockOwner: null,
+          lockedAt: null,
+          lockExpiresAt: null,
+        },
+      })
+      if (updated.count === 1) {
+        await bestEffortAudit(client, {
+          job,
+          acao: "fiscal.queue.completed",
+          nivel: "INFO",
+          mensagem: "Job fiscal concluído pelo provider simulado.",
+          detalhe: { workerId },
+        })
+      }
+      return updated.count === 1
+    },
+    retry: async ({ job, workerId, now, nextAttemptAt, error, payload }) => {
+      const updated = await client.fiscalEmissaoJob.updateMany({
+        where: ownedLockWhere(job.id, workerId, now),
+        data: {
+          status: "PENDENTE",
+          payload,
+          ultimoErro: error,
+          proximaTentativaEm: nextAttemptAt,
+          lockOwner: null,
+          lockedAt: null,
+          lockExpiresAt: null,
+        },
+      })
+      if (updated.count === 1) {
+        await bestEffortAudit(client, {
+          job,
+          acao: "fiscal.queue.retry.scheduled",
+          nivel: "WARN",
+          mensagem: "Retry fiscal agendado com backoff.",
+          detalhe: { workerId, nextAttemptAt: nextAttemptAt.toISOString(), errorCode: error },
+        })
+      }
+      return updated.count === 1
+    },
+    fail: async ({ job, workerId, now, error, payload }) => {
+      const updated = await client.fiscalEmissaoJob.updateMany({
+        where: ownedLockWhere(job.id, workerId, now),
+        data: {
+          status: "FALHA",
+          payload,
+          ultimoErro: error,
+          proximaTentativaEm: null,
+          lockOwner: null,
+          lockedAt: null,
+          lockExpiresAt: null,
+        },
+      })
+      if (updated.count === 1) {
+        await bestEffortAudit(client, {
+          job,
+          acao: "fiscal.queue.dead_letter",
+          nivel: "ERROR",
+          mensagem: "Job fiscal enviado para dead-letter.",
+          detalhe: { workerId, errorCode: error },
+        })
+      }
+      return updated.count === 1
+    },
+    execute: (job) => executeFiscalJob(client, job, emit),
+    audit: (event) => bestEffortAudit(client, event),
+  }
+}

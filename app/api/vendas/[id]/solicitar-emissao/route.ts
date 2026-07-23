@@ -1,24 +1,27 @@
 /**
- * POST /api/vendas/[id]/solicitar-emissao  — GOAL-005 (snapshot runtime integration)
+ * POST /api/vendas/[id]/solicitar-emissao — GOAL-011 (produtor transacional da outbox)
  *
  * Rota admin-guarded que dá caller REAL ao snapshot fiscal da venda. Congela o
- * snapshot, registra versão do contrato + hash determinístico SHA-256, e
- * transiciona `Venda.fiscalStatus` NAO_FISCAL → PENDENTE.
+ * snapshot e, na mesma transação, cria o job deduplicado e transiciona
+ * `Venda.fiscalStatus` NAO_FISCAL → PENDENTE.
  *
  * Comportamento:
  *  - FAIL-CLOSED: loja sem `fiscalEnabled = true` → 423 Locked (não ativa loja).
  *  - IDEMPOTENTE: mesma venda → mesmo `localKey` → mesma NotaFiscal vigente.
  *  - DEFAULT-OFF: em produção (sem loja habilitada), retorna 423 sem efeitos.
- *  - ZERO job, ZERO emissão, ZERO SEFAZ, ZERO certificado, ZERO ativação.
+ *  - OUTBOX: job + status PENDENTE são atômicos; falha do job reverte o status.
+ *  - ZERO emissão síncrona, ZERO SEFAZ, ZERO certificado, ZERO ativação.
  *
- * Única escrita de negócio: `Venda.fiscalStatus` (NAO_FISCAL → PENDENTE).
  * Nenhuma mudança de schema. Nenhuma chamada a emission/provider/dry-run/numbering.
  */
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { requireFiscalAdmin } from "@/lib/fiscal/guard-fiscal-admin"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
-import { solicitarEmissaoVenda } from "@/lib/fiscal/venda-fiscal-snapshot-runtime"
+import {
+  requestFiscalEmissionWithJob,
+  sanitizeFiscalQueueError,
+} from "@/lib/fiscal/queue"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -61,7 +64,7 @@ export async function POST(
 
   // 5) Delega ao runtime service (fail-closed + snapshot + transição).
   try {
-    const result = await solicitarEmissaoVenda({ storeId, pedidoId, operador })
+    const result = await requestFiscalEmissionWithJob({ storeId, pedidoId, operador })
 
     if (!result.ok) {
       return NextResponse.json(
@@ -85,16 +88,20 @@ export async function POST(
       hashAlgoritmo: "sha256",
       hashContratoVersao: result.hashContratoVersao,
       contratoVersao: result.contratoVersao,
-      created: result.created,
+      created: result.snapshotCreated,
       transitioned: result.transitioned,
       diagnostico: result.diagnostico,
-      // Confirmação explícita das invariantes do GOAL-005 (auditoria).
-      zeroJob: true,
+      jobId: result.jobId,
+      jobStatus: result.jobStatus,
+      jobCreated: result.jobCreated,
+      dedupeKey: result.dedupeKey,
+      // Confirmação explícita: a rota só produz a outbox; o worker emite depois.
+      zeroEmissaoSincrona: true,
       zeroEmissao: true,
       zeroSefaz: true,
     })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
+    const msg = sanitizeFiscalQueueError(e)
     console.error("[vendas/solicitar-emissao]", msg)
     return NextResponse.json(
       {
