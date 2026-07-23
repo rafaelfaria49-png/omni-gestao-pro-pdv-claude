@@ -309,8 +309,10 @@ Tabela existe; **produtor e worker são a F7** (gap P0-6).
 
 ## 6. FiscalNumber — numeração como entidade lógica
 
-Não há tabela `FiscalNumber`. O "número fiscal" é o par `(serie, numero)` em `NotaFiscal`,
-reservado a partir de `SerieFiscal.proximoNumero`:
+Não há tabela `FiscalNumber`. O número fiscal é o par `(serie, numero)` em `NotaFiscal`,
+reservado a partir de `SerieFiscal.proximoNumero`. A identidade do contador é sempre a chave
+completa `(storeId, modelo, serie, ambiente)`; não existe contador global, fallback de loja,
+série literal ou troca automática de ambiente.
 
 ```mermaid
 sequenceDiagram
@@ -320,22 +322,47 @@ sequenceDiagram
   participant N as NotaFiscal
   P->>A: allocateNumero(storeId, notaFiscalId, modelo, ambiente)
   A->>N: getNota (numerada? -> idempotente: reused=true)
-  A->>DB: findActiveSerie(loja, modelo, ambiente)
+  A->>DB: findActiveSerie(storeId, modelo, ambiente, serie/serieFiscalId)
   alt série inativa/inexistente
     A-->>P: erro serie_inativa (NÃO emite, NÃO muta status)
   else série ativa
-    A->>DB: reserveNextNumber (increment atômico)
-    A->>N: bindNotaNumero(serie, numero)
-    alt P2002 (número já usado)
+    A->>DB: UPDATE condicionado + increment atômico de proximoNumero
+    A->>N: compare-and-swap numero IS NULL
+    alt outra chamada numerou a mesma nota
+      A->>N: relê e devolve exatamente o número persistido
+    else P2002/conflito transitório
       A->>DB: retry controlado
     end
-    A-->>P: { serie, numero, reused }
+    A-->>P: { serie, numero, localKey, reused, lacunas }
   end
 ```
 
-**Garantias:** atomicidade no banco (`reserveNextNumber` = increment), idempotência (nota já
-numerada não toca o contador), nunca repete nem retrocede. Código: `lib/fiscal/numbering/*`.
-Falha de numeração **aborta a emissão sem mutar `fiscalStatus`** (`emission-pipeline.ts §5b`).
+### 6.1 Invariantes endurecidas no GOAL-010
+
+- A reserva é um único `UPDATE` atômico que revalida `id`, `storeId`, `modelo`, `serie`,
+  `ambiente`, `ativo=true` e `proximoNumero` entre `1` e `999.999.999`, incrementando o contador
+  sem read-modify-write na aplicação.
+- A unicidade de `SerieFiscal(storeId, modelo, serie, ambiente)` isola linhas e locks; a unicidade
+  de `NotaFiscal(storeId, modelo, serie, numero, ambiente)` atua como segunda barreira contra
+  duplicidade.
+- Nota já numerada retorna o mesmo `serieFiscalId`, série, número, ambiente e `localKey`, sem tocar
+  no contador. O vínculo inicial usa compare-and-swap e nunca sobrescreve número persistido.
+- Conflitos transitórios e colisões usam retry limitado (padrão 3, teto 10). Esgotamento falha
+  claramente; não reinicia nem retrocede o contador.
+- Zero, negativos e valores acima de `999.999.999` falham antes do incremento. O último número
+  válido pode ser reservado uma vez; o estado seguinte fica esgotado e não reinicia.
+- Reserva seguida de falha de vínculo não sofre rollback. O resultado carrega loja, nota,
+  `localKey`, série fiscal, modelo, ambiente, série, número, motivo e
+  `requerInutilizacao=true`, preparando a futura inutilização sem chamar a SEFAZ neste GOAL.
+- A integração opt-in do pipeline ocorre antes da geração definitiva de XML/chave e antes do
+  provider. Sem a porta de numeração, o dry-run permanece puro, determinístico e sem banco.
+- Essa integração aceita somente NFC-e/HOMOLOGACAO; PRODUCAO (`tpAmb=1`) permanece bloqueada antes
+  de qualquer acesso ao contador. O piloto continua restrito à Matriz RafaCell Assistec por
+  `storeId` real obtido em runtime, sem registrar seu valor em documentação ou fixture.
+
+Código: `lib/fiscal/numbering/*` e integração mínima em `lib/fiscal/pipeline/fiscal-pipeline.ts`.
+Falha de numeração aborta o pipeline antes de XML/chave/provider. Nenhuma transmissão ou
+inutilização SEFAZ foi adicionada.
 
 ---
 

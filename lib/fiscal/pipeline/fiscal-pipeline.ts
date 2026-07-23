@@ -3,10 +3,15 @@
  *
  * Esteira única: Dry-Run (snapshot → tributação congelada → XML → assinatura de TESTE →
  * verificação → estrutural → XSD) → Provider Stub (validarSnapshot → prepararEmissao → emitir
- * SIMULADO) → relatório consolidado. NUNCA persiste, NUNCA transmite, NUNCA toca banco/SEFAZ.
- * Pura (exceto hashing no dry-run) e determinística (relatório sem timestamps/segredo).
+ * SIMULADO) → relatório consolidado. NUNCA transmite nem toca SEFAZ. Sem a porta opt-in de
+ * numeração, não persiste, não toca banco e permanece determinístico (sem timestamps/segredo).
  */
 import type { VendaFiscalSnapshot } from "../venda-fiscal-snapshot"
+import {
+  allocateFiscalNumber,
+  type FiscalNumberingGap,
+  type FiscalNumberingPorts,
+} from "../numbering"
 import {
   runFiscalDryRunDetailed,
   type RunFiscalDryRunOptions,
@@ -35,6 +40,26 @@ export type RunFiscalPipelineOptions = RunFiscalDryRunOptions & {
   config?: FiscalProviderConfigInput
   /** Id da NotaFiscal (apenas para semente do placeholder do provider). */
   notaFiscalId?: string | null
+  /**
+   * Integração real e opt-in da numeração. Sem esta porta, o dry-run continua puro,
+   * determinístico e sem banco. Quando presente, aloca antes de gerar XML/chave/provider.
+   */
+  numbering?: {
+    ports: FiscalNumberingPorts
+    maxTentativas?: number
+  }
+}
+
+/** Falha fail-closed da numeração antes de qualquer XML/chave/provider. */
+export class FiscalPipelineNumberingError extends Error {
+  constructor(
+    readonly errorCode: string,
+    readonly lacunas: FiscalNumberingGap[],
+    mensagem: string,
+  ) {
+    super(mensagem)
+    this.name = "FiscalPipelineNumberingError"
+  }
 }
 
 export type RunFiscalPipelineDetailed = {
@@ -82,8 +107,68 @@ export async function runFiscalPipelineDetailed(
   const warnings: string[] = []
   const providerRespostas: FiscalProviderResponse[] = []
 
+  let effectiveOptions: RunFiscalPipelineOptions = options
+
+  // 0) Numeração real opcional: sempre ANTES do XML/chave e do provider.
+  // O gate/dry-run não injeta esta porta e, portanto, continua sem banco.
+  if (options.numbering) {
+    if (snapshot.modelo !== "NFCE") {
+      throw new FiscalPipelineNumberingError(
+        "modelo_incompativel",
+        [],
+        "GOAL-010 permite numeração integrada somente para NFC-e modelo 65.",
+      )
+    }
+    if (snapshot.ambiente !== "HOMOLOGACAO") {
+      throw new FiscalPipelineNumberingError(
+        "ambiente_incompativel",
+        [],
+        "GOAL-010 mantém produção/tpAmb=1 bloqueados.",
+      )
+    }
+    const notaFiscalId = options.notaFiscalId?.trim()
+    if (!notaFiscalId) {
+      throw new FiscalPipelineNumberingError(
+        "parametros_invalidos",
+        [],
+        "NotaFiscal é obrigatória para integrar a numeração real.",
+      )
+    }
+
+    const allocation = await allocateFiscalNumber(
+      {
+        storeId: snapshot.storeId,
+        notaFiscalId,
+        maxTentativas: options.numbering.maxTentativas,
+      },
+      options.numbering.ports,
+    )
+    if (!allocation.ok) {
+      throw new FiscalPipelineNumberingError(allocation.errorCode, allocation.lacunas, allocation.mensagem)
+    }
+    if (
+      allocation.storeId !== snapshot.storeId ||
+      allocation.modelo !== snapshot.modelo ||
+      allocation.ambiente !== snapshot.ambiente
+    ) {
+      throw new FiscalPipelineNumberingError(
+        "contexto_incompativel",
+        allocation.lacunas,
+        "A numeração persistida diverge do contexto do snapshot.",
+      )
+    }
+    effectiveOptions = {
+      ...options,
+      contexto: {
+        ...options.contexto,
+        serie: allocation.serie,
+        numero: allocation.numero,
+      },
+    }
+  }
+
   // 1) Dry-Run (snapshot → XML → assinatura de teste → verificação → estrutural → XSD).
-  const dry = await runFiscalDryRunDetailed(snapshot, options)
+  const dry = await runFiscalDryRunDetailed(snapshot, effectiveOptions)
   const dryReport = dry.report
   warnings.push(...dryReport.warnings)
   if (dryReport.status === "erro") {
@@ -107,22 +192,22 @@ export async function runFiscalPipelineDetailed(
     etapas.push(etapa("provider_preparo", "pulada", "Pulada (sem XML assinado válido)."))
     etapas.push(etapa("provider_emissao", "pulada", "Pulada (sem XML assinado válido)."))
   } else {
-    const prov = options.provider ?? stubHomologacaoProvider
+    const prov = effectiveOptions.provider ?? stubHomologacaoProvider
     const request: FiscalProviderRequest = {
       contexto: {
         storeId: snapshot.storeId,
-        notaFiscalId: options.notaFiscalId ?? null,
+        notaFiscalId: effectiveOptions.notaFiscalId ?? null,
         modelo: snapshot.modelo,
         ambiente: snapshot.ambiente,
-        serie: options.contexto?.serie ?? null,
-        numero: options.contexto?.numero ?? null,
+        serie: effectiveOptions.contexto?.serie ?? null,
+        numero: effectiveOptions.contexto?.numero ?? null,
       },
       snapshot,
     }
 
     // (opcional) validação de configuração da loja.
-    if (options.config !== undefined) {
-      const respCfg = prov.validarConfiguracao(options.config)
+    if (effectiveOptions.config !== undefined) {
+      const respCfg = prov.validarConfiguracao(effectiveOptions.config)
       providerRespostas.push(respCfg)
       if (!respCfg.ok) warnings.push(`Config do provider: ${respCfg.mensagem}`)
     }

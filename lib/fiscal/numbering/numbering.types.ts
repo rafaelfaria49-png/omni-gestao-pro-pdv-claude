@@ -1,5 +1,5 @@
 /**
- * Tipos da numeração fiscal por série (GOAL_008).
+ * Tipos da numeração fiscal por série (GOAL_010).
  *
  * A alocação é feita por (storeId, modelo, série, ambiente) sobre `SerieFiscal.proximoNumero`
  * e gravada em `NotaFiscal` (serieFiscalId/serie/numero). O orquestrador (`allocateFiscalNumber`)
@@ -13,27 +13,64 @@
 export type FiscalNumberingErrorCode =
   | "parametros_invalidos"
   | "nota_nao_encontrada"
-  | "serie_inativa" // não há SerieFiscal ativa para (loja, modelo, ambiente[, série])
+  | "nota_numeracao_inconsistente"
+  | "serie_nao_encontrada"
+  | "serie_inativa"
+  | "serie_outra_loja"
+  | "modelo_incompativel"
+  | "ambiente_incompativel"
+  | "serie_invalida"
+  | "sequencia_invalida"
+  | "sequencia_esgotada"
+  | "reserva_conflito"
+  | "reserva_falhou"
   | "bind_falhou" // falha NÃO-conflito ao gravar o número na NotaFiscal (número já reservado/queimado)
   | "conflito_persistente" // colisão de numeração mesmo após o retry controlado
 
 // ── Resultado da alocação ─────────────────────────────────────────────────────────────
 
+export const FISCAL_NUMERO_MINIMO = 1
+export const FISCAL_NUMERO_MAXIMO = 999_999_999
+
+/**
+ * Número consumido pelo contador, mas não vinculado a esta NotaFiscal. O contrato é suficiente
+ * para auditoria e para uma futura inutilização; este GOAL não chama a SEFAZ.
+ */
+export type FiscalNumberingGap = {
+  storeId: string
+  notaFiscalId: string
+  localKey: string | null
+  serieFiscalId: string
+  modelo: string
+  ambiente: string
+  serie: number
+  numero: number
+  motivo: "bind_falhou" | "nota_ja_numerada"
+  requerInutilizacao: true
+}
+
 export type FiscalNumberAllocation = {
   ok: true
   /** true quando a nota JÁ estava numerada (idempotente) — o contador não foi tocado. */
   reused: boolean
+  storeId: string
+  notaFiscalId: string
+  localKey: string | null
   serieFiscalId: string
   serie: number
   numero: number
   modelo: string
   ambiente: string
+  /** Reservas não vinculadas detectadas nesta chamada; nunca são devolvidas ao contador. */
+  lacunas: FiscalNumberingGap[]
 }
 
 export type FiscalNumberAllocationError = {
   ok: false
   errorCode: FiscalNumberingErrorCode
   mensagem: string
+  /** Reserva já consumida antes da falha, para auditoria/futura inutilização. */
+  lacunas: FiscalNumberingGap[]
 }
 
 export type FiscalNumberAllocationOutcome = FiscalNumberAllocation | FiscalNumberAllocationError
@@ -50,14 +87,18 @@ export type NumberingNota = {
   serie: number | null
   numero: number | null
   serieFiscalId: string | null
+  localKey?: string | null
 }
 
-/** Série fiscal ATIVA resolvida para a numeração. */
+/** Série fiscal resolvida para validação; o alocador exige que esteja ativa e compatível. */
 export type NumberingActiveSerie = {
   id: string
+  storeId?: string
   serie: number
   modelo: string
   ambiente: string
+  ativo?: boolean
+  proximoNumero?: number
 }
 
 /** Número reservado de forma atômica (o contador já avançou no banco). */
@@ -68,9 +109,31 @@ export type NumberingReservation = {
   numero: number
 }
 
+export type NumberingReservationFailure = {
+  ok: false
+  errorCode:
+    | "serie_nao_encontrada"
+    | "serie_inativa"
+    | "serie_outra_loja"
+    | "modelo_incompativel"
+    | "ambiente_incompativel"
+    | "serie_invalida"
+    | "sequencia_invalida"
+    | "sequencia_esgotada"
+    | "reserva_conflito"
+    | "reserva_falhou"
+  mensagem: string
+  retryable?: boolean
+}
+
 export type NumberingBindResult =
   | { ok: true }
-  | { ok: false; conflito: boolean; mensagem: string }
+  | {
+      ok: false
+      conflito: boolean
+      motivo?: "numero_em_uso" | "nota_ja_numerada" | "falha"
+      mensagem: string
+    }
 
 // ── Portas (dependency injection) ─────────────────────────────────────────────────────
 
@@ -87,12 +150,25 @@ export type FiscalNumberingPorts = {
     modelo: string
     ambiente: string
     serie?: number | null
+    serieFiscalId?: string | null
   }) => Promise<NumberingActiveSerie | null>
-  /** RESERVA atômica: incrementa `proximoNumero` e devolve o número reservado (anterior). */
-  reserveNextNumber: (p: { serieFiscalId: string }) => Promise<NumberingReservation>
-  /** Vincula série+número à NotaFiscal. Conflito (número já usado) é sinalizado para retry. */
+  /**
+   * RESERVA atômica e condicionada ao contexto completo. Incrementa `proximoNumero` somente
+   * se a série continuar ativa, compatível e dentro do intervalo permitido.
+   */
+  reserveNextNumber: (p: {
+    serieFiscalId: string
+    storeId: string
+    modelo: string
+    ambiente: string
+    serie: number
+  }) => Promise<NumberingReservation | NumberingReservationFailure>
+  /** Vincula série+número por compare-and-swap; nunca sobrescreve nota já numerada. */
   bindNotaNumero: (p: {
     notaFiscalId: string
+    storeId: string
+    modelo: string
+    ambiente: string
     serieFiscalId: string
     serie: number
     numero: number
