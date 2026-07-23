@@ -257,6 +257,48 @@ describe("adapter Prisma da fila fiscal", () => {
     })
     expect(emit).not.toHaveBeenCalled()
   })
+
+  it("payload v2 é roteado ao executor seguro sem chamar o pipeline legado", async () => {
+    const state = casClient(
+      jobRow({
+        status: "PROCESSANDO",
+        lockOwner: "worker-a",
+        lockExpiresAt: new Date("2026-07-23T00:01:00.000Z"),
+        payload: { version: 2, operation: "EMISSAO" },
+      }),
+    )
+    state.client.configuracaoFiscalLoja.findUnique.mockResolvedValue({
+      provider: "STUB_HOMOLOGACAO",
+      ambiente: "HOMOLOGACAO",
+      modeloFiscal: "NFCE",
+      fiscalEnabled: true,
+    })
+    state.client.notaFiscal.findFirst.mockResolvedValue({
+      id: "nota-1",
+      modelo: "NFCE",
+      ambiente: "HOMOLOGACAO",
+    })
+    const legacyEmit = vi.fn()
+    const goal012 = vi.fn(async () => ({
+      kind: "uncertain" as const,
+      code: "timeout_simulado",
+      mensagem: "consulta obrigatória",
+      simulado: true as const,
+      externalTransmissionAttempted: false,
+    }))
+    const ports = createPrismaFiscalQueueWorkerPorts(
+      state.client as never,
+      legacyEmit as never,
+      goal012,
+    )
+
+    await expect(ports.execute(state.current())).resolves.toMatchObject({
+      kind: "uncertain",
+      code: "timeout_simulado",
+    })
+    expect(goal012).toHaveBeenCalledTimes(1)
+    expect(legacyEmit).not.toHaveBeenCalled()
+  })
 })
 
 describe("leitura de pausa persistida", () => {

@@ -244,8 +244,9 @@ credenciais, CSC, certificado ou códigos reais.
 - **Escopo:** somente Matriz RafaCell Assistec/Taguaí, UF SP, SEFAZ-SP e NFC-e modelo 65, sempre
   pelo `storeId` real propagado no contexto; nenhuma outra loja herda a configuração.
 - **Saída:** `cStat`/`xMotivo`/`protocolo`/`dataAutorizacao` (Etapa 8).
-- **Falhas:** timeout/instabilidade → `EM_CONTINGENCIA` (recuperável); rejeição (cStat≠100) →
-  `REJEITADA`; denegação → `DENEGADA`.
+- **Falhas:** timeout/retorno desconhecido após envio mantém a nota `TRANSMITINDO`, estaciona a
+  emissão sem data de retry e cria/reencontra `CONSULTA`; rejeição conclusiva consome o número e
+  segue para `REJEITADA`; denegação segue para `DENEGADA`.
 - **Rollback:** não se "desfaz" transmissão; trata-se por **retry/contingência/evento**.
 - **Idempotência:** resultado incerto exige consulta por `chaveAcesso`/recibo antes de retransmitir.
 - **Alternativas futuras:** gateway, PAA ou provider alternativo entram como outro adapter e exigem
@@ -257,8 +258,9 @@ credenciais, CSC, certificado ou códigos reais.
   §6). O pipeline reconcilia resultado incerto e grava chave, recibo/protocolo, `cStat`, `xMotivo`,
   data/autorizador/versão, hash, XML assinado enviado e XML autorizado/protocolado imutável.
 - **Saída:** documento persistido; trilha em `FiscalLog` (`acao = emissao.resultado`, `cStat`).
-- **Falhas:** persistência parcial → o job permanece e reprocessa; consulta confirma se a SEFAZ
-  autorizou mesmo sem termos persistido (evita duplicar).
+- **Falhas:** persistência parcial após tentativa não autoriza reprocessar o builder/signing; a
+  consulta por chave confirma o resultado e a retomada, quando liberada por `NOT_FOUND`, usa os
+  mesmos bytes assinados persistidos antes da primeira transmissão.
 - **Idempotência:** `chaveAcesso @unique` impede dois documentos autorizados iguais.
 
 ### Etapa 9 — DANFCE + QR-Code ❌ (F8/F6 — gaps P1-1/P0-5)
@@ -350,8 +352,26 @@ operacionalmente** conforme `fiscalStatus` (gates `assert*` em 6 rotas `corrigir
   não existe loop automático infinito.
 - Timeout após envio não entra diretamente em retransmissão: primeiro consulta/reconcilia a chave
   ou o recibo, porque a SEFAZ pode ter autorizado apesar da perda da resposta local.
+- Enquanto a consulta não conclui, o job `EMISSAO` permanece `AGUARDANDO_RETRY` com
+  `proximaTentativaEm = null`; esse estado não é elegível para drenagem automática.
+- Somente `CONSULTA=NOT_FOUND` cria uma autorização consumível para uma retransmissão. A retomada
+  relê `xmlAssinado`, verifica SHA-256 e não executa builder, XSD, assinatura nem numeração.
+- `CONSULTA=AUTHORIZED` conclui sem retransmitir. `CONSULTA=REJECTED` preserva o número consumido e
+  marca a demanda de inutilização futura (GOAL-019).
 
-### 7.3 Contingência
+### 7.3 Estado incerto e reconciliação (GOAL-012)
+
+- Chave, série, número, XML assinado exato e estado `TRANSMITINDO` são persistidos antes do
+  provider.
+- O reconciliador varre apenas notas envelhecidas, com threshold configurável, respeitando pausa,
+  `storeId` e lease ainda válido.
+- `@@unique([storeId, dedupeKey])` torna a consulta por nota idempotente mesmo com varreduras
+  concorrentes.
+- Métricas cobrem backlog/idade, consultas pendentes e resultados `AUTHORIZED`, `NOT_FOUND` e
+  `REJECTED`.
+- A implementação permanece desligada de provider real: apenas stub/teste, sem SEFAZ ou produção.
+
+### 7.4 Contingência
 - Timeout/SEFAZ fora → `EM_CONTINGENCIA` (venda) + `CONTINGENCIA` (nota) + `TipoEmissao.
   CONTINGENCIA_OFFLINE`, `dataContingencia`/`justContingencia`.
 - Saída da contingência: job `CONTINGENCIA_TRANSMISSAO` retransmite quando a SEFAZ volta.
@@ -366,7 +386,7 @@ operacionalmente** conforme `fiscalStatus` (gates `assert*` em 6 rotas `corrigir
 | Snapshot | loja sem identidade / item sem fiscal | Pendência; corrige config/produto | ❌ nunca |
 | Tributos/XML | campo obrigatório ausente / XSD inválido | Rejeição local; corrige snapshot e reprocessa | ❌ |
 | Assinatura | certificado expirado / cofre fora | Erro sem vazar segredo; corrige certificado | ❌ |
-| Transmissão | timeout / SEFAZ fora | `EM_CONTINGENCIA` + retry/contingência | ❌ |
+| Transmissão | timeout / resultado desconhecido após envio | mantém `TRANSMITINDO`; consulta obrigatória; sem retry direto | ❌ |
 | Transmissão | rejeição (cStat≠100) | `REJEITADA`; corrige e reenvia (nova tentativa) | ❌ |
 | Transmissão | denegação | `DENEGADA` (problema cadastral/fiscal do destinatário) | ❌ |
 | Persistência | gravação parcial | Job reprocessa; consulta por chave evita duplicar | ❌ |

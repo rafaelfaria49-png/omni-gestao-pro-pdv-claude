@@ -56,7 +56,7 @@ export type FiscalQueuePauseSnapshot = {
 }
 
 export type FiscalQueueExecutionResult = {
-  kind: "success" | "transient" | "terminal"
+  kind: "success" | "transient" | "terminal" | "uncertain"
   code: string
   mensagem: string
   /** Sempre true no GOAL-011. Resultado false é bloqueado pelo worker. */
@@ -119,6 +119,17 @@ export type FiscalQueueWorkerPorts = {
     error: string
     payload: FiscalQueuePayload
   }) => Promise<boolean>
+  /**
+   * Estaciona uma transmissão ambígua sem agendar retry. A consulta deduplicada
+   * já deve ter sido persistida atomicamente pelo executor antes deste retorno.
+   */
+  waitForConsultation?: (input: {
+    job: FiscalQueueJob
+    workerId: string
+    now: Date
+    error: string
+    payload: FiscalQueuePayload
+  }) => Promise<boolean>
   execute: (job: FiscalQueueJob) => Promise<FiscalQueueExecutionResult>
   audit: (event: FiscalQueueAuditEvent) => Promise<void>
 }
@@ -136,7 +147,7 @@ export type DrainFiscalQueueInput = {
 export type DrainFiscalQueueItemResult = {
   jobId: string
   storeId: string
-  status: "concluido" | "retry" | "falha" | "lock_perdido"
+  status: "concluido" | "retry" | "consulta" | "falha" | "lock_perdido"
   takeover: boolean
   tentativas: number
   mensagem: string
@@ -149,6 +160,7 @@ export type DrainFiscalQueueReport = {
   acquired: number
   completed: number
   retried: number
+  awaitingConsultation: number
   failed: number
   lockLost: number
   items: DrainFiscalQueueItemResult[]

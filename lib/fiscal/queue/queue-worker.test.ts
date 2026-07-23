@@ -77,6 +77,10 @@ function memoryQueue(
             return Boolean(current.lockExpiresAt && current.lockExpiresAt.getTime() <= now.getTime())
           }
           if (!["PENDENTE", "AGUARDANDO_RETRY"].includes(current.status)) return false
+          if (
+            current.status === "AGUARDANDO_RETRY" &&
+            current.proximaTentativaEm == null
+          ) return false
           if (current.proximaTentativaEm && current.proximaTentativaEm.getTime() > now.getTime()) return false
           return !current.lockExpiresAt || current.lockExpiresAt.getTime() <= now.getTime()
         })
@@ -137,6 +141,18 @@ function memoryQueue(
       const current = jobs.get(leased.id)
       if (!current || !owns(current, workerId, now)) return false
       current.status = "FALHA"
+      current.payload = payload
+      current.ultimoErro = error
+      current.proximaTentativaEm = null
+      current.lockOwner = null
+      current.lockedAt = null
+      current.lockExpiresAt = null
+      return true
+    },
+    waitForConsultation: async ({ job: leased, workerId, now, error, payload }) => {
+      const current = jobs.get(leased.id)
+      if (!current || !owns(current, workerId, now)) return false
+      current.status = "AGUARDANDO_RETRY"
       current.payload = payload
       current.ultimoErro = error
       current.proximaTentativaEm = null
@@ -397,6 +413,7 @@ describe("worker fiscal · retry, dead-letter e trava de transmissão", () => {
           transmission: {
             external: true,
             startedAt: "2026-07-22T23:59:00.000Z",
+            uncertainAt: "2026-07-22T23:59:30.000Z",
           },
         },
       }),
@@ -408,6 +425,31 @@ describe("worker fiscal · retry, dead-letter e trava de transmissão", () => {
     expect(report.failed).toBe(1)
     expect(state.execute).not.toHaveBeenCalled()
     expect(state.audits).toContain("fiscal.queue.transmission.blocked")
+  })
+
+  it("timeout fica estacionado sem backoff e sem retransmissão automática", async () => {
+    const state = memoryQueue([job()], {
+      kind: "uncertain",
+      code: "timeout_simulado",
+      mensagem: "resultado desconhecido",
+      simulado: true,
+      externalTransmissionAttempted: false,
+    })
+    const first = await drainFiscalQueue(
+      { workerId: "worker-incerto", batchSize: 1 },
+      state.ports,
+    )
+    expect(first.awaitingConsultation).toBe(1)
+    expect(state.jobs.get("job-1")).toMatchObject({
+      status: "AGUARDANDO_RETRY",
+      proximaTentativaEm: null,
+    })
+    const second = await drainFiscalQueue(
+      { workerId: "worker-incerto", batchSize: 1 },
+      state.ports,
+    )
+    expect(second.acquired).toBe(0)
+    expect(state.execute).toHaveBeenCalledTimes(1)
   })
 })
 
