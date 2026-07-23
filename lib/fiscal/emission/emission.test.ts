@@ -342,7 +342,7 @@ describe("runEmissionPipeline — FiscalLog", () => {
   })
 })
 
-describe("runEmissionPipeline — numeração fiscal (GOAL_008)", () => {
+describe("runEmissionPipeline — numeração fiscal (GOAL_010)", () => {
   it("aloca número antes de emitir e o provider recebe o contexto numerado", async () => {
     const { ports, statusWrites, logs } = fakePorts()
     let capturado: FiscalProviderContexto | null = null
@@ -357,11 +357,15 @@ describe("runEmissionPipeline — numeração fiscal (GOAL_008)", () => {
     ports.allocateNumero = async () => ({
       ok: true,
       reused: false,
+      storeId: "store-matriz-fixture",
+      notaFiscalId: "nf-1",
+      localKey: "nfce:store-matriz-fixture:venda-1",
       serieFiscalId: "serie-1",
       serie: 1,
       numero: 5,
       modelo: "NFCE",
       ambiente: "HOMOLOGACAO",
+      lacunas: [],
     })
 
     const out = await runEmissionPipeline(pipelineInput({ provider }), ports)
@@ -382,7 +386,12 @@ describe("runEmissionPipeline — numeração fiscal (GOAL_008)", () => {
   it("série inativa → numeracao_indisponivel, sem mutar status e sem emitir", async () => {
     const { ports, statusWrites } = fakePorts()
     const provider = makeMockProvider(async () => resp("emitir", { statusNota: "AUTORIZADA" }))
-    ports.allocateNumero = async () => ({ ok: false, errorCode: "serie_inativa", mensagem: "sem série fiscal ativa" })
+    ports.allocateNumero = async () => ({
+      ok: false,
+      errorCode: "serie_inativa",
+      mensagem: "sem série fiscal ativa",
+      lacunas: [],
+    })
 
     const out = await runEmissionPipeline(pipelineInput({ provider }), ports)
 
