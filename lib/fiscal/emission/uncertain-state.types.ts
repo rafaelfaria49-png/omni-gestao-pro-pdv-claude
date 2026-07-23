@@ -38,13 +38,7 @@ export type FinalizedFiscalDocument = FiscalDocumentIdentity & {
 }
 
 export type FiscalTransmissionResult =
-  | {
-      outcome: "AUTHORIZED"
-      protocolo: string
-      cStat: string
-      xMotivo: string
-      xmlAutorizado: string
-    }
+  | AuthorizedFiscalResult
   | {
       outcome: "UNCERTAIN"
       code: "TIMEOUT" | "CONNECTION_LOST" | "UNKNOWN"
@@ -57,13 +51,7 @@ export type FiscalTransmissionResult =
     }
 
 export type FiscalConsultationResult =
-  | {
-      outcome: "AUTHORIZED"
-      protocolo: string
-      cStat: string
-      xMotivo: string
-      xmlAutorizado: string
-    }
+  | AuthorizedFiscalResult
   | {
       outcome: "NOT_FOUND"
       cStat: string
@@ -74,6 +62,44 @@ export type FiscalConsultationResult =
       cStat: string
       xMotivo: string
     }
+
+/**
+ * Resultado de autorização fiscal — ADR-0018 (GOAL-013).
+ *
+ * `digestValue`/`qrCodeData`/`urlConsulta` são **opcionais** para preservar
+ * o contrato do `stubHomologacaoProvider` e do `UncertainStateTestStub` do
+ * GOAL-012 — um provider real (F5/GOAL-021) passa a preenchê-los. O schema
+ * já os suporta (`NotaFiscal.{digestValue,qrCodeData,urlConsulta}`).
+ */
+export type AuthorizedFiscalResult = {
+  outcome: "AUTHORIZED"
+  protocolo: string
+  cStat: string
+  xMotivo: string
+  xmlAutorizado: string
+  digestValue?: string | null
+  qrCodeData?: string | null
+  urlConsulta?: string | null
+}
+
+/**
+ * Códigos estáveis de divergência de imutabilidade emitidos por `markAuthorized`
+ * (ADR-0018). Nenhum XML é exposto; o código e identificadores documentam o
+ * motivo sem conteúdo do documento.
+ */
+export type AuthorizedDivergenceCode =
+  | "xml_autorizado_imutavel_diverge"
+  | "protocolo_imutavel_diverge"
+  | "metadados_autorizacao_divergem"
+
+export class AuthorizedDivergenceError extends Error {
+  readonly code: AuthorizedDivergenceCode
+  constructor(code: AuthorizedDivergenceCode, message?: string) {
+    super(message ?? code)
+    this.name = "AuthorizedDivergenceError"
+    this.code = code
+  }
+}
 
 /**
  * Contrato exclusivo do drill/adapter. Não representa transporte SOAP nem
