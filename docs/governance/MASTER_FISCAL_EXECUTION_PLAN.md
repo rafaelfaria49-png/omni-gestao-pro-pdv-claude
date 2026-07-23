@@ -1,7 +1,8 @@
 # MASTER FISCAL EXECUTION PLAN
 
 > **Documento de governança** da frente Fiscal do OmniGestão Pro.
-> **Data:** 2026-07-22 · **Versão:** 1.4 · **Estado:** Fase 1 (Arquitetura oficial) consolidada
+> **Data:** 2026-07-23 · **Versão:** 1.5 · **Estado:** Fase 1 (Arquitetura oficial) consolidada ·
+> G-C5 criado e fechado (ADR-0015 ratificada) · execução F5 aberta
 > **Citado por:** `prisma/schema.prisma:2077` (este é o doc que governa o schema fiscal).
 > **Base factual:** `docs/audits/AUDITORIA_PRE_FISCAL_READINESS_v01.md` +
 > `docs/audits/AUDITORIA_FISCAL_GAPS_v01.md`.
@@ -54,7 +55,7 @@ de NFC-e em produção**, sem quebrar uma única venda real no caminho.
 | F3 | XML + **XSD oficial real (N4 no eixo)**; sem caller de venda | merge `82c219c` · worker B2 · G-C2 **fechado** · sem SEFAZ |
 | F4 | signer RSA-SHA1/C14N 1.0 **integrado e dormente** | merge `e52d16b` (PR #6) · **N4 no eixo C14N/XMLDSig** · prova Java/JSR 105 · **sem caller de venda** · sem certificado real |
 | Cadastro produto | **paridade `upsertProduto` FECHADA (N3)** | merge `b307337` (PR #8) · `metadata.fiscal` canônica · P-04 resolvido no eixo V2 · sem emissão |
-| F5 | contrato/stub N1 | provider real ausente; G-F5 aberto |
+| F5 | contrato/stub N1 | **decisão** resolvida (ADR-0015, ratificada 2026-07-23); **execução aberta** — `SefazDiretoProvider` ainda não existe (`REGISTRY` só tem `STUB_HOMOLOGACAO`) |
 | F6 | N0 | QR-Code/CSC operacional ausente |
 | F7 | contrato de fila N1; guards em seis rotas | 0 jobs; sem produtor/worker; G-F7 aberto |
 | F8 | N0 | DANFCE ausente |
@@ -146,9 +147,29 @@ Cada fase é uma sprint pequena, com Gate humano antes de começar e antes de me
 - **DoD / critério de bloqueio:** **não se inicia a F5 sem Dry-Run verde** para os casos-alvo.
   Não recebe número próprio (evita renumerar F5–F12).
 
-### FASE F5 — Provider real + transmissão SEFAZ `[GATE G-F5 RESOLVIDO]`
+### FASE F5 — Provider real + transmissão SEFAZ `[DECISÃO RESOLVIDA · EXECUÇÃO ABERTA]`
+
+> **Estado em 2026-07-23:** a **decisão** de transporte está resolvida (ADR-0015, ratificada — §4.1)
+> e a **execução está formalmente aberta**, mas **não implementada**. Não existe
+> `SefazDiretoProvider`; o `REGISTRY` de `lib/fiscal/provider/resolver.ts` tem uma única fábrica
+> (`STUB_HOMOLOGACAO`). **Esta fase não pode ser marcada como concluída** enquanto não houver
+> documento autorizado em homologação.
+
 - **Objetivo:** implementar `SefazDiretoProvider` atrás do contrato `FiscalProvider` e transmitir
   exclusivamente aos Web Services oficiais de homologação (ADR-0015).
+- **Escopo obrigatório da abertura (2026-07-23), fail-closed antes da rede:**
+
+  | Restrição | Valor |
+  |---|---|
+  | Autorizador | **somente SEFAZ-SP** |
+  | Modelo | **somente NFC-e modelo 65** |
+  | Ambiente | **somente homologação** |
+  | `tpAmb` | **somente 2** |
+  | Loja | **somente Matriz RafaCell** |
+  | Entrada do provider | **XML previamente assinado e validado** |
+  | Produção | **zero** |
+  | `tpAmb=1` | **zero** |
+  | Ativação automática de `fiscalEnabled` | **zero** |
 - **Escopo inicial:** exclusivamente o registro `Store` real da Matriz RafaCell Assistec em
   Taguaí/SP, SEFAZ-SP, NFC-e modelo 65, `HOMOLOGACAO` e `tpAmb=2` (ADR-0016). Nenhum `storeId`
   literal/fallback; nenhuma herança para outra loja.
@@ -233,12 +254,45 @@ Cada fase é uma sprint pequena, com Gate humano antes de começar e antes de me
 | Gate | Antes de | Decisão do humano |
 |---|---|---|
 | G-F1 ✅ | Qualquer manuseio de certificado | Aprovar contrato e backend do cofre → **resolvido: ADR-0009 + ADR-0014** |
-| G-F5 ✅ | Integração externa | **SEFAZ direta na homologação inicial**, atrás de `FiscalProvider` → ADR-0015 |
+| **G-C5** ✅ | **Estratégia do provider e transporte fiscal** | **SEFAZ direta ratificada** em 2026-07-23 → ADR-0015 + [`FISCAL_PROVIDER_DOSSIE_001.md`](../fiscal/FISCAL_PROVIDER_DOSSIE_001.md). ⚠️ Rótulo **criado pelo GOAL-014**; ver nota abaixo |
+| G-F5 ✅ | Integração externa (**decisão**) | **SEFAZ direta na homologação inicial**, atrás de `FiscalProvider` → ADR-0015, **ratificada** em 2026-07-23. **Decisão ≠ execução** — a fase F5 está aberta e não implementada |
 | G-F5.1 ✅ | Escopo da primeira homologação | **Matriz RafaCell Assistec/Taguaí, SP, SEFAZ-SP, NFC-e 65, `tpAmb=2`** → ADR-0016 |
 | G-F7 | Ligar emissão | Aprovar ativação na loja-piloto (homologação) |
 | G-F12 | Produção | Aprovar virada `HOMOLOGACAO → PRODUCAO` por loja |
 
 Nenhuma fase com `[GATE]` inicia sem aprovação explícita registrada.
+
+> ⚠️ **Nota de honestidade sobre o G-C5.** O rótulo `G-C5` **não existia** em nenhum documento do
+> projeto antes do GOAL-014 — a numeração de gates de construção ia de G-C1 a G-C4 e G-C6, sem
+> G-C5. Ele foi **criado pelo GOAL-014** para nomear a decisão estratégica de provider/transporte e
+> **nasce fechado** em 2026-07-23. **Nenhum histórico anterior lhe é atribuído**: não houve período
+> em que estivesse "aberto", e nenhum documento retroativo o menciona.
+
+### 4.1 Ratificação da ADR-0015 e gatilhos de reavaliação (2026-07-23)
+
+A ADR-0015 foi **ratificada** por Rafael Faria no checkpoint do GOAL-014, com base no
+[`FISCAL_PROVIDER_DOSSIE_001.md`](../fiscal/FISCAL_PROVIDER_DOSSIE_001.md) (matriz A/B/C em 15
+dimensões, preços públicos e churn da NT 2025.002). **Nenhuma ADR nova foi criada e o texto
+histórico da ADR-0015 permanece inalterado.**
+
+A ratificação vale enquanto nenhum destes gatilhos ocorrer:
+
+| # | Gatilho de reavaliação |
+|---|---|
+| **T1** | Piloto **não atingir `cStat=100`** em até **dois ciclos de correção** por problemas de NT, layout ou transporte |
+| **T2** | Manutenção de NT consumir **>~20% do esforço de engenharia fiscal** por **dois meses consecutivos** |
+| **T3** | Entrada de **segunda UF** ou de **NFS-e** no roadmap |
+| **T4** | Produção exigir **contingência** que o OmniGestão não consiga operar com segurança |
+
+Ao disparar qualquer gatilho, **reavaliar o cenário C** (domínio fiscal próprio + `FiscalProvider`
+agnóstico + adapter de gateway). **A reavaliação não autoriza mudança automática de provider** —
+trocar de transporte continua exigindo decisão humana explícita e ADR própria (ADR-0015 §2.6).
+
+**Custódia do A1 — ADR-0014 preservada integralmente e sem flexibilização:** custódia na
+infraestrutura própria, **nenhuma entrega automática do A1 a gateway**, assinatura local, envelope
+encryption, isolamento por loja e acesso somente server-side. **Qualquer gateway futuro que exija
+custódia externa do certificado depende de nova decisão humana e arquitetura formal** — não decorre
+de nenhum gatilho T1–T4.
 
 ---
 
@@ -356,7 +410,10 @@ A fundação fiscal já existe; novas fases devem **evitar** mexer no schema. Se
   `docs/architecture/FISCAL_DRY_RUN.md`.
 - Cofre de segredos (F1, decidido): `docs/decisions/ADR-0009-fiscal-secret-vault.md`.
 - Backend KMS de produção (D3, decidido): `docs/decisions/ADR-0014-supabase-vault-backend-kms-fiscal.md`.
-- Provider inicial (G-F5, decidido): `docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md`.
+- Provider inicial (G-F5, decidido): `docs/decisions/ADR-0015-sefaz-direta-homologacao-inicial.md`
+  — **ratificado em 2026-07-23** (G-C5), sem ADR nova e sem alteração do histórico.
+- Estratégia do provider (G-C5, decidido): `docs/fiscal/FISCAL_PROVIDER_DOSSIE_001.md` — matriz
+  A/B/C em 15 dimensões, custos públicos, gatilhos T1–T4 e insumos humanos pendentes.
 - Escopo do piloto (G-F5.1, decidido): `docs/decisions/ADR-0016-piloto-homologacao-sp-matriz-rafacell.md`.
   - **Nota de nomenclatura:** o comentário `schema.prisma:2077` cita `FISCAL_SCHEMA_DESIGN_v01.md`
     e `venda-fiscal-state-machine.ts:13` cita `NFCE_ARCHITECTURE §17/§18`. Os docs oficiais foram
