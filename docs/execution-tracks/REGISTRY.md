@@ -7,5 +7,5 @@ Semáforo: 🟢 rodando · 🟡 esperando humano · 🔴 bloqueado ou check falh
 | Trilha | Semáforo | Status | Risco | GOAL atual | Próximo | DONE | BLOCKED | Última ratificação |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | contador | 🟡 amarelo | PAUSED | MEDIO | — | — | 17 | 0 | 2026-08-20T20:16:31.782Z |
-| fiscal | 🟡 amarelo | PAUSED | ALTO | — | — | 4 | 0 | 2026-09-07T03:18:04.825Z |
+| fiscal | 🟢 verde | RUNNING | ALTO | FISCAL-PILOT-HOMOLOGATION-ACTIVATION-022 | — | 4 | 0 | 2026-09-07T03:18:04.825Z |
 | pdv | 🟡 amarelo | PAUSED | ALTO | — | — | 3 | 0 | 2026-08-29T21:00:50.288Z |
