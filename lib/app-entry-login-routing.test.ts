@@ -104,9 +104,14 @@ describe("proxy — sessão expirada e rota privada sem sessão", () => {
 describe("landing comercial — continua pública", () => {
   it("a rota / segue renderizando a landing (não foi removida)", () => {
     const page = read("app/page.tsx")
-    expect(page).toContain("landing-page")
-    expect(page).toContain("@/components/landing/lovable/Hero")
-    expect(page).toContain("@/components/landing/lovable/Pricing")
+    // LOCALHOST-DEV-DIRECT-DASHBOARD-002B: `/` virou wrapper server-side. Fora do
+    // ambiente local autorizado a landing continua o render padrão — agora via
+    // `landing-client.tsx` (mesmo conteúdo, movido verbatim).
+    expect(page).toContain("landing-client")
+    expect(page).toContain("LandingPage")
+    const landing = read("app/landing-client.tsx")
+    expect(landing).toContain("@/components/landing/lovable/Hero")
+    expect(landing).toContain("@/components/landing/lovable/Pricing")
   })
 
   it("o proxy deixa / passar — a landing NÃO é redirecionada para o login", () => {

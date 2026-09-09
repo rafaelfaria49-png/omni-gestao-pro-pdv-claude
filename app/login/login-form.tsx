@@ -8,6 +8,7 @@ import { signInAction } from "@/app/actions/auth"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { LocalDevLoginBlock } from "./local-dev-login-button"
 
 function SubmitButton() {
   const { pending } = useFormStatus()
@@ -22,7 +23,7 @@ function SubmitButton() {
   )
 }
 
-export function LoginForm() {
+export function LoginForm({ localBypassAvailable = false }: { localBypassAvailable?: boolean }) {
   const [state, formAction] = useActionState(signInAction, { error: null })
   const [showPassword, setShowPassword] = useState(false)
 
@@ -102,6 +103,12 @@ export function LoginForm() {
 
               <SubmitButton />
             </form>
+
+            {localBypassAvailable && (
+              <div className="mt-4 border-t border-border/60 pt-4">
+                <LocalDevLoginBlock />
+              </div>
+            )}
           </CardContent>
         </Card>
 

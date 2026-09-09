@@ -4,6 +4,8 @@ import { z } from "zod"
 import { authConfig } from "./auth.config"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
+import { evaluateLocalDevAuthBypass } from "@/lib/local-dev-auth-guard"
+import { resolveLocalDevBypassUser } from "@/lib/local-dev-auth"
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -17,8 +19,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Senha", type: "password" },
+        localBypass: { label: "Local Dev Auth Bypass", type: "text" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
+        // ── Bypass LOCAL/DEV (LOCALHOST-DEV-AUTH-BYPASS-002) — FAIL-CLOSED ──
+        // Só existe fora de produção, com flag explícita, request em loopback e
+        // banco local omnigestao_visual_dev. Reutiliza o MESMO mecanismo oficial
+        // de sessão do NextAuth; em produção o ramo nunca é usado: sem a flag o
+        // campo é ignorado e a autenticação por senha segue intacta.
+        if (credentials?.localBypass === "true") {
+          const guard = evaluateLocalDevAuthBypass({
+            hostHeader: request?.headers?.get("host") ?? null,
+          })
+          if (!guard.allowed) return null
+          return resolveLocalDevBypassUser()
+        }
+
         const parsed = loginSchema.safeParse(credentials)
         if (!parsed.success) return null
 
