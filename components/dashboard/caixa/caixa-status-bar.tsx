@@ -347,61 +347,38 @@ export function CaixaStatusBar({
             <CaixaDashboard />
             <div
               className={cn(
-                "flex flex-col gap-3 p-3 xl:flex-row xl:items-center",
+                "flex flex-col gap-2.5 p-3",
                 variant === "pdv" && "px-2 py-1.5 sm:px-3 sm:py-2"
               )}
             >
-              {/* Identidade do caixa */}
-              <div className="flex min-w-0 shrink-0 items-center gap-2.5">
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-success/15 text-success">
-                  <Unlock className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 leading-tight">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-bold text-success">Caixa Aberto</span>
-                    <Badge variant="outline" className="shrink-0 border-success/30 bg-success/5 px-1.5 py-0 text-[10px] text-success">
-                      <Clock className="mr-1 h-3 w-3" />
-                      Desde {formatTime(caixa.dataAbertura)}
-                    </Badge>
-                    {terminalPill}
+              {/* Linha 1: identidade compacta + ações. Os indicadores ficam na linha
+                  de baixo com a largura toda — valor financeiro nunca trunca. */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {/* Identidade do caixa */}
+                <div className="flex items-center gap-2">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-success/15 text-success">
+                    <Unlock className="h-4 w-4" />
                   </div>
-                  <p className="text-xs text-muted-foreground">Pronto para vendas</p>
+                  <div className="leading-tight">
+                    <p className="text-sm font-bold text-success">Caixa Aberto</p>
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1 whitespace-nowrap">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        Desde {formatTime(caixa.dataAbertura)}
+                      </span>
+                      {terminal && (
+                        <span className="flex items-center gap-1 whitespace-nowrap">
+                          <span aria-hidden="true" className="text-muted-foreground/50">•</span>
+                          <Monitor className="h-3 w-3 shrink-0" />
+                          {terminal.code || terminal.name}
+                        </span>
+                      )}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Resumo — grid uniforme: nunca desalinha ao quebrar linha */}
-              <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5 sm:grid-cols-4 xl:mx-auto xl:max-w-2xl">
-                <div className="min-w-0 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5">
-                  <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                    <DollarSign className="h-3 w-3 shrink-0" />
-                    Abertura
-                  </p>
-                  <p className="truncate text-sm font-semibold tabular-nums text-foreground">{formatCurrency(caixa.saldoInicial)}</p>
-                </div>
-                <div className="min-w-0 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5">
-                  <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                    <TrendingUp className="h-3 w-3 shrink-0 text-success" />
-                    Entradas
-                  </p>
-                  <p className="truncate text-sm font-semibold tabular-nums text-success">{formatCurrency(entradas)}</p>
-                </div>
-                <div className="min-w-0 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5">
-                  <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                    <TrendingDown className="h-3 w-3 shrink-0 text-destructive" />
-                    Saídas
-                  </p>
-                  <p className="truncate text-sm font-semibold tabular-nums text-destructive">{formatCurrency(saidas)}</p>
-                </div>
-                <div className="min-w-0 rounded-lg border border-success/35 bg-success/10 px-2.5 py-1.5">
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-success/90 dark:text-success">
-                    Saldo Atual
-                  </p>
-                  <p className="truncate text-base font-bold leading-snug tabular-nums text-success">{formatCurrency(saldoEsperado)}</p>
-                </div>
-              </div>
-
-              {/* Ações */}
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                {/* Ações */}
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
                 {botaoAtualizarCaixa}
                 <Button
                   variant="ghost"
@@ -442,6 +419,39 @@ export function CaixaStatusBar({
                   <Lock className="mr-1.5 h-4 w-4" />
                   Fechar Caixa
                 </Button>
+              </div>
+              </div>
+
+              {/* Resumo — linha inteira para os 4 indicadores: sem truncate,
+                  os valores aparecem sempre por completo. */}
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                <div className="rounded-lg border border-border/60 bg-background/70 px-3 py-1.5">
+                  <p className="flex items-center gap-1 whitespace-nowrap text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                    <DollarSign className="h-3 w-3 shrink-0" />
+                    Abertura
+                  </p>
+                  <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">{formatCurrency(caixa.saldoInicial)}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-background/70 px-3 py-1.5">
+                  <p className="flex items-center gap-1 whitespace-nowrap text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                    <TrendingUp className="h-3 w-3 shrink-0 text-success" />
+                    Entradas
+                  </p>
+                  <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-success">{formatCurrency(entradas)}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-background/70 px-3 py-1.5">
+                  <p className="flex items-center gap-1 whitespace-nowrap text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                    <TrendingDown className="h-3 w-3 shrink-0 text-destructive" />
+                    Saídas
+                  </p>
+                  <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-destructive">{formatCurrency(saidas)}</p>
+                </div>
+                <div className="rounded-lg border border-success/35 bg-success/10 px-3 py-1.5">
+                  <p className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-success">
+                    Saldo Atual
+                  </p>
+                  <p className="whitespace-nowrap text-base font-bold leading-snug tabular-nums text-success">{formatCurrency(saldoEsperado)}</p>
+                </div>
               </div>
             </div>
           </>

@@ -82,7 +82,10 @@ export function CaixaDashboard({ className }: { className?: string }) {
         className="h-auto w-full justify-between gap-2 rounded-none px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-muted/50"
         onClick={() => setOpen((v) => !v)}
       >
-        <span>Resumo do caixa (vendas do dia)</span>
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <span className="font-semibold">Resumo do Caixa</span>
+          <span className="text-xs font-normal text-muted-foreground">Sessão atual</span>
+        </span>
         {open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
       </Button>
       {open && (
