@@ -15,6 +15,8 @@ export type LocalDevEntryDecision = "landing" | "dashboard" | "auto-login"
  * Absolutos, protocol-relative ("//host") ou inválidos → "/dashboard" (sem open redirect).
  */
 export function normalizeLocalCallbackPath(raw: string | null | undefined): string {
+  // URL parsers discard tabs/newlines; reject controls before validating slashes.
+  if (/[\u0000-\u001f\u007f]/.test(raw ?? "")) return "/dashboard"
   const value = (raw ?? "").trim()
   if (!value.startsWith("/")) return "/dashboard"
   if (value.startsWith("//")) return "/dashboard"

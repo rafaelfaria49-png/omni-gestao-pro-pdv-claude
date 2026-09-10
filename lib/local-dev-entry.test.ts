@@ -33,6 +33,13 @@ describe("normalizeLocalCallbackPath — sem open redirect", () => {
     expect(normalizeLocalCallbackPath("/\\evil.example.com")).toBe("/dashboard")
   })
 
+  it.each(["/\t/evil.example.com", "/\n/evil.example.com", "/\r/evil.example.com", "/dashboard\u0000"])(
+    "rejeita controles no callback: %j",
+    (callback) => {
+      expect(normalizeLocalCallbackPath(callback)).toBe("/dashboard")
+    },
+  )
+
   it("não-caminho (sem barra inicial) → /dashboard", () => {
     expect(normalizeLocalCallbackPath("dashboard")).toBe("/dashboard")
   })
