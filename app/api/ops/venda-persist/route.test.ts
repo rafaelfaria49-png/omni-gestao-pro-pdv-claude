@@ -28,7 +28,7 @@ vi.mock("@/lib/auth/session-operator", () => ({
 }))
 
 import { POST } from "./route"
-import { VendaCreateUniqueConflictError } from "@/lib/ops-upsert-venda"
+import { FractionalQuantityError, VendaCreateUniqueConflictError } from "@/lib/ops-upsert-venda"
 
 function requestSale(total = 100) {
   return {
@@ -168,4 +168,33 @@ describe("POST /api/ops/venda-persist — recuperação concorrente P2002", () =
     expect(response.status).toBe(503)
     expect(body.code).toBe("P2002")
   })
+})
+
+describe("POST /api/ops/venda-persist — quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005)", () => {
+  function fractionalSale(quantity: number) {
+    return {
+      id: "VDA-FRAC-409",
+      at: "2026-09-10T12:00:00.000Z",
+      total: 35,
+      sessaoId: "sessao-1",
+      terminalId: "PDV1",
+      lines: [{ inventoryId: "SKU-1", name: "Produto", quantity, unitPrice: 100, lineTotal: 35 }],
+      paymentBreakdown: { dinheiro: 35 },
+    }
+  }
+
+  it.each([0.35, 0.5, 1.5, 2.25])(
+    "quantidade %s vira 409 FRACTIONAL_QUANTITY_UNSUPPORTED (nunca 500)",
+    async (quantity) => {
+      h.transaction.mockRejectedValue(new FractionalQuantityError(quantity, 0))
+      const response = await POST(req({ sale: fractionalSale(quantity) }))
+      const body = await response.json()
+
+      expect(response.status).toBe(409)
+      expect(body.code).toBe("FRACTIONAL_QUANTITY_UNSUPPORTED")
+      expect(body.error).toMatch(/fracionada/)
+      // O guard dispara dentro da transação: nada foi relido nem regravado.
+      expect(h.findUnique).not.toHaveBeenCalled()
+    },
+  )
 })

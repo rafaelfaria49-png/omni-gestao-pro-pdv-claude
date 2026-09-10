@@ -33,6 +33,7 @@ import {
   round2,
   type CorrecaoLineInput,
 } from "@/lib/vendas/correcao-itens-plan"
+import { FRACTIONAL_QUANTITY_CODE } from "@/lib/vendas/sale-quantity-contract"
 import { composeCorrectedSalePayloadLines } from "@/lib/vendas/preserve-sale-line-payload"
 
 export const runtime = "nodejs"
@@ -133,6 +134,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Plano puro (decide tudo; não toca o banco).
     const plan = computeCorrecaoItensPlan({ oldLines, newLines: body.itens, oldTotal: venda.total, oldBreakdown: oldPb })
     if (!plan.ok) {
+      // Fail-closed (FRACTIONAL-SALE-HARD-BLOCK-005): draft com quantidade
+      // fracionária nunca chega a ItemVenda/estoque/financeiro — 409 explícito.
+      if (plan.errorCode === "quantidade_fracionada") {
+        return NextResponse.json({ ok: false, error: plan.error, code: FRACTIONAL_QUANTITY_CODE }, { status: 409 })
+      }
       const status = plan.errorCode === "no_change" ? 200 : 422
       return NextResponse.json({ ok: false, error: plan.error, code: plan.errorCode }, { status })
     }

@@ -7,12 +7,20 @@ import type { SaleLineItemType } from "@/lib/sale-line-classification"
 import { valorAVistaVenda } from "@/lib/financeiro/correcao-pagamento-plan"
 import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
 import { sanitizeSaleLinesPayload } from "@/lib/vendas/sanitize-sale-line-payload"
+import {
+  FractionalQuantityError,
+  normalizeSaleQuantity,
+} from "@/lib/vendas/sale-quantity-contract"
+
 import { stripClientSyncFlags } from "@/lib/vendas/sale-sync-flags"
 import { buildLegacySaleFingerprint, isLegacySaleFactsComparable } from "@/lib/vendas/legacy-sale-fingerprint"
 import {
   parseClientSaleId,
   type ClientSaleIdRejectionReason,
 } from "@/lib/vendas/sale-identity-contracts"
+
+/** Re-exportado para as rotas traduzirem o erro de negócio em HTTP 409. */
+export { FractionalQuantityError }
 
 /**
  * Lançada pela baixa de estoque do PDV quando `enforceStock` está ativo e o saldo
@@ -558,6 +566,25 @@ export async function upsertVendaInTransaction(
   operadorLabel?: string,
   options?: UpsertVendaOptions
 ): Promise<UpsertVendaResult> {
+  // ── GUARD FAIL-CLOSED: quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005) ──
+  // PRIMEIRA coisa na função, ANTES de qualquer lookup (replay incluso), gate de
+  // caixa, `Venda.create`, itens, estoque, financeiro ou títulos. `ItemVenda.quantidade`
+  // e `Produto.stock` são inteiros: fração comercial (0.350, 1.5…) lança
+  // `FractionalQuantityError` — nunca `Math.round` silencioso (0.35 virava 0 no
+  // estoque com o total refletindo o decimal). Inteiros passam; ruído
+  // insignificante de floating point é normalizado in-place para que ItemVenda,
+  // estoque, payload e fingerprint usem o inteiro. Roda antes do replay porque o
+  // fingerprint normaliza quantidade — sem isto, 1.5 poderia "replaysar" uma venda
+  // inteira de quantidade 2. Não-finito preserva o fallback legado (→ 0) abaixo.
+  if (Array.isArray(sale.lines)) {
+    sale.lines.forEach((line, index) => {
+      const raw = line?.quantity
+      if (typeof raw !== "number" || !Number.isFinite(raw)) return
+      const normalized = normalizeSaleQuantity(raw, index)
+      if (normalized !== raw) line.quantity = normalized
+    })
+  }
+
   const enforceStock = options?.enforceStock === true
   const v2 = options?.v2
   let pedidoId = ""
@@ -824,7 +851,9 @@ export async function upsertVendaInTransaction(
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : null
     const nome = typeof line.name === "string" ? line.name : ""
     const qRaw = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
-    const quantidade = Math.max(0, Math.min(2_000_000_000, Math.round(qRaw)))
+    // Já validado inteiro pelo guard FRACTIONAL-SALE-HARD-BLOCK-005 no topo —
+    // sem `Math.round` aqui (arredondar quantidade externa seria validação silenciosa).
+    const quantidade = Math.max(0, Math.min(2_000_000_000, qRaw))
     const precoUnitario =
       typeof line.unitPrice === "number" && Number.isFinite(line.unitPrice) ? line.unitPrice : 0
     const lineTotal =
@@ -884,7 +913,8 @@ export async function upsertVendaInTransaction(
       unresolvedInventoryIds.push(rawInvId)
       continue
     }
-    const qty = Math.max(0, Math.round(typeof line.quantity === "number" ? line.quantity : 0))
+    // Quantidade já inteira pelo guard do topo — sem `Math.round` silencioso.
+    const qty = Math.max(0, typeof line.quantity === "number" ? line.quantity : 0)
     if (qty === 0) continue
     qtyByProdutoId.set(resolved.dbId, (qtyByProdutoId.get(resolved.dbId) ?? 0) + qty)
   }

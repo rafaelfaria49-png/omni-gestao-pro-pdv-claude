@@ -7,6 +7,7 @@ import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import {
   upsertVendaInTransaction,
   InsufficientStockError,
+  FractionalQuantityError,
   UnresolvedProductError,
   CaixaSessaoInvalidaError,
   CaixaOriginalFechadoError,
@@ -113,6 +114,18 @@ export async function POST(req: Request) {
       }
     }
 
+    // Quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005): venda por peso/
+    // fração ainda não suportada (ItemVenda/estoque são inteiros). Falha de
+    // negócio explícita (409), não erro de servidor. Nada foi gravado — o guard
+    // roda antes de qualquer efeito na transação. O PDV mantém `syncPending` e
+    // orienta o operador a informar quantidade inteira.
+    if (error instanceof FractionalQuantityError) {
+      console.warn(
+        "[ops/venda-persist] quantidade-fracionada",
+        JSON.stringify({ lojaId, pedidoId, quantity: error.quantity, lineIndex: error.lineIndex ?? null }),
+      )
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
+    }
     // Colisão de `pedidoId` entre lojas (PDV-PEDIDO-ID-COLISAO-MULTILOJA-FIX-001): o
     // número já pertence a uma venda de OUTRA loja. Fail-closed — nada foi gravado e a
     // venda da outra loja permanece intacta. Não é contornável por reenvio nem por

@@ -33,6 +33,10 @@ import {
   SALE_IDENTITY_CONFLICT_TITLE,
 } from "@/lib/vendas/sale-identity-conflict"
 import {
+  FRACTIONAL_QUANTITY_MESSAGE,
+  isIntegerSaleQuantity,
+} from "@/lib/vendas/sale-quantity-contract"
+import {
   assertGeneratedClientSaleId,
   buildProvisionalSaleRef,
   generateClientSaleId,
@@ -2005,6 +2009,20 @@ export function OperationsProvider({
       pixQrKind,
       cashTendered,
     }) => {
+      // Preflight fail-closed (FRACTIONAL-SALE-HARD-BLOCK-005): quantidade
+      // significativamente fracionária nunca gera mutação local (carrinho,
+      // SaleRecord, estoque, caixa, syncPending) nem "Venda finalizada". Roda
+      // antes de qualquer leitura/mutação — o guard do servidor continua sendo
+      // a autoridade final. Ruído insignificante de floating point passa.
+      for (const line of lines) {
+        const q = line?.quantity
+        if (typeof q !== "number" || !Number.isFinite(q)) {
+          return { ok: false, reason: "Quantidade inválida." }
+        }
+        if (!isIntegerSaleQuantity(q)) {
+          return { ok: false, reason: FRACTIONAL_QUANTITY_MESSAGE }
+        }
+      }
       const current = stateRef.current
       const next: OpsState = {
         inventory: current.inventory.map((i) => ({ ...i })),

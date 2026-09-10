@@ -6,6 +6,7 @@ import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import {
   InsufficientStockError,
+  FractionalQuantityError,
   UnresolvedProductError,
   CaixaSessaoInvalidaError,
   CaixaOriginalFechadoError,
@@ -148,6 +149,12 @@ export async function POST(req: Request) {
     }
     if (e instanceof UnresolvedProductError) {
       return jsonError(e.message, e.code, 409, { inventoryIds: e.inventoryIds })
+    }
+    // Quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005): mesmo contrato
+    // fail-closed da rota V1 — falha de negócio (409), nunca 500.
+    if (e instanceof FractionalQuantityError) {
+      console.warn("[ops/venda-persist/v2] quantidade-fracionada", JSON.stringify({ lojaId }))
+      return jsonError(e.message, e.code, 409)
     }
     if (e instanceof InsufficientStockError) {
       return NextResponse.json(
