@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAdmin } from "@/lib/require-admin"
-import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
+import { requireEnterpriseWith, requireStoreAccess } from "@/lib/auth/guard-enterprise"
 import { buildStoreSettingsAuditChanges } from "@/lib/config-audit/store-settings"
 import { recordConfigAuditChanges } from "@/lib/config-audit/record"
 
@@ -9,18 +8,12 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-async function canManageStoreSettings(): Promise<boolean> {
-  // 1) NextAuth session ou cookie admin legado
-  const adminGate = await requireAdmin()
-  if (adminGate.ok) return true
-
-  // 2) Dono da loja sem sessão NextAuth, autenticado por assinatura válida
-  const sub = await getVerifiedSubscriptionFromCookies()
-  return sub.ok
-}
-
 export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
+  const guard = await requireStoreAccess(id)
+  if (!guard.ok) {
+    return NextResponse.json({ settings: null, error: guard.error }, { status: guard.status })
+  }
   try {
     const settings = await prisma.storeSettings.findUnique({ where: { storeId: id } })
     return NextResponse.json({ settings })
@@ -32,9 +25,15 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
+  const guard = await requireEnterpriseWith(
+    id,
+    (p) => p.admin.configuracoes,
+    "Sem permissão para alterar configurações desta unidade.",
+  )
+  if (!guard.ok) {
+    return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status })
+  }
   try {
-    const allowed = await canManageStoreSettings()
-    if (!allowed) return NextResponse.json({ error: "forbidden" }, { status: 403 })
     const body = (await req.json()) as Partial<{
       contactEmail: string
       contactWhatsapp: string
