@@ -32,16 +32,45 @@
  */
 
 import type { EventPayload, SystemEvent } from "@/lib/events/event-bus"
+import { sanitizeSaleLinesPayload } from "@/lib/vendas/sanitize-sale-line-payload"
+import type { SalePayload } from "@/lib/ops-upsert-venda"
 
 /** Evento definitivo de venda. Só este evento migrou para dispatch server-side. */
 export const SALE_FINALIZADA_EVENT = "venda_finalizada" as const
 
-/** Recorte mínimo da venda confirmada necessário ao dispatch. */
+/**
+ * Recorte da venda confirmada e contexto de entrada necessário ao dispatch.
+ * Compatível com `VendaPersistView` retornado por `upsertVendaInTransaction` / `persistSaleV2`.
+ */
 export type SaleAutomationSaleView = {
-  storeId: string
+  storeId?: string
   pedidoId: string
   clientSaleId?: string | null
   total?: number
+  at?: string
+  clienteNome?: string | null
+  customerName?: string | null
+  customerCpf?: string | null
+  clienteId?: string | null
+  terminalId?: string | null
+  cashierId?: string | null
+  sessaoId?: string | null
+  paymentBreakdown?: Record<string, unknown> | null
+  lines?: unknown[] | null
+  pixQrKind?: string | null
+  cashTendered?: number | null
+  linkedOsId?: string | null
+  aPrazoConfig?: unknown | null
+  discountAuthorizedByAdminId?: string | null
+  discountReais?: number | null
+  discountPercent?: number | null
+}
+
+export type SaleAutomationDispatchInput = {
+  replayed: boolean
+  storeId: string
+  venda: SaleAutomationSaleView
+  sale?: Partial<SalePayload> | null
 }
 
 export type SaleAutomationRunner = (
@@ -79,23 +108,164 @@ export function shouldDispatchSaleAutomation(replayed: boolean): boolean {
   return replayed !== true
 }
 
-/** Payload server-side: `storeId` sempre explícito (multiloja), sem fallback. */
+/**
+ * Payload server-side: restaura paridade funcional com o contrato anterior do browser
+ * (CORREÇÃO-02), preservando identidade confirmada, cliente, template, pagamentos e linhas,
+ * sem propagar flags transitórias de UI (syncPending, syncBlockedCode).
+ */
 export function buildSaleFinalizadaPayload(
   storeId: string,
-  venda: { pedidoId: string; clientSaleId?: string | null; total?: number },
+  venda: SaleAutomationSaleView,
+  sale?: Partial<SalePayload> | null,
 ): EventPayload {
   const sid = storeId.trim()
+  const rawClientSaleId = venda.clientSaleId ?? sale?.clientSaleId
   const clientSaleId =
-    typeof venda.clientSaleId === "string" && venda.clientSaleId.trim()
-      ? venda.clientSaleId.trim()
+    typeof rawClientSaleId === "string" && rawClientSaleId.trim()
+      ? rawClientSaleId.trim()
       : null
+
+  const rawCustomerName =
+    venda.customerName ?? venda.clienteNome ?? sale?.customerName
+  const customerName =
+    typeof rawCustomerName === "string" && rawCustomerName.trim()
+      ? rawCustomerName.trim()
+      : undefined
+
+  const rawCustomerCpf = venda.customerCpf ?? sale?.customerCpf
+  const customerCpf =
+    typeof rawCustomerCpf === "string" && rawCustomerCpf.trim()
+      ? rawCustomerCpf.trim()
+      : undefined
+
+  const rawClienteId = venda.clienteId ?? sale?.clienteId
+  const clienteId =
+    typeof rawClienteId === "string" && rawClienteId.trim()
+      ? rawClienteId.trim()
+      : undefined
+
+  const rawAt = venda.at ?? sale?.at
+  const at = typeof rawAt === "string" && rawAt.trim() ? rawAt.trim() : undefined
+
+  const total =
+    typeof venda.total === "number"
+      ? venda.total
+      : typeof sale?.total === "number"
+        ? sale.total
+        : undefined
+
+  const paymentBreakdown =
+    (venda.paymentBreakdown && typeof venda.paymentBreakdown === "object"
+      ? venda.paymentBreakdown
+      : null) ??
+    (sale?.paymentBreakdown && typeof sale.paymentBreakdown === "object"
+      ? (sale.paymentBreakdown as Record<string, unknown>)
+      : undefined)
+
+  const rawLines = venda.lines ?? sale?.lines
+  const lines = Array.isArray(rawLines)
+    ? sanitizeSaleLinesPayload(rawLines).lines
+    : undefined
+
+  const rawCashierId = venda.cashierId ?? sale?.cashierId
+  const cashierId =
+    typeof rawCashierId === "string" && rawCashierId.trim()
+      ? rawCashierId.trim()
+      : undefined
+
+  const rawSessaoId = venda.sessaoId ?? sale?.sessaoId
+  const sessaoId =
+    typeof rawSessaoId === "string" && rawSessaoId.trim()
+      ? rawSessaoId.trim()
+      : undefined
+
+  const rawTerminalId = venda.terminalId ?? sale?.terminalId
+  const terminalId =
+    typeof rawTerminalId === "string" && rawTerminalId.trim()
+      ? rawTerminalId.trim()
+      : undefined
+
+  const rawPixQrKind = venda.pixQrKind ?? sale?.pixQrKind
+  const pixQrKind =
+    typeof rawPixQrKind === "string" && rawPixQrKind.trim()
+      ? rawPixQrKind.trim()
+      : undefined
+
+  const rawCashTendered = venda.cashTendered ?? sale?.cashTendered
+  const cashTendered =
+    typeof rawCashTendered === "number" && Number.isFinite(rawCashTendered)
+      ? rawCashTendered
+      : undefined
+
+  const rawLinkedOsId = venda.linkedOsId ?? sale?.linkedOsId
+  const linkedOsId =
+    typeof rawLinkedOsId === "string" && rawLinkedOsId.trim()
+      ? rawLinkedOsId.trim()
+      : undefined
+
+  const aPrazoConfig =
+    (venda.aPrazoConfig && typeof venda.aPrazoConfig === "object"
+      ? venda.aPrazoConfig
+      : null) ??
+    (sale?.aPrazoConfig && typeof sale.aPrazoConfig === "object"
+      ? sale.aPrazoConfig
+      : undefined)
+
+  const rawSaleObj = sale as Record<string, unknown> | null | undefined
+  const rawDiscountAuth =
+    venda.discountAuthorizedByAdminId ??
+    (typeof rawSaleObj?.discountAuthorizedByAdminId === "string"
+      ? rawSaleObj.discountAuthorizedByAdminId
+      : undefined)
+  const discountAuthorizedByAdminId =
+    typeof rawDiscountAuth === "string" && rawDiscountAuth.trim()
+      ? rawDiscountAuth.trim()
+      : undefined
+
+  const rawDiscountReais =
+    venda.discountReais ??
+    (typeof rawSaleObj?.discountReais === "number"
+      ? rawSaleObj.discountReais
+      : undefined)
+  const discountReais =
+    typeof rawDiscountReais === "number" && Number.isFinite(rawDiscountReais)
+      ? rawDiscountReais
+      : undefined
+
+  const rawDiscountPercent =
+    venda.discountPercent ??
+    (typeof rawSaleObj?.discountPercent === "number"
+      ? rawSaleObj.discountPercent
+      : undefined)
+  const discountPercent =
+    typeof rawDiscountPercent === "number" && Number.isFinite(rawDiscountPercent)
+      ? rawDiscountPercent
+      : undefined
+
   return {
     storeId: sid,
     entityId: clientSaleId ?? venda.pedidoId,
     data: {
+      id: venda.pedidoId,
       pedidoId: venda.pedidoId,
       ...(clientSaleId ? { clientSaleId } : {}),
-      ...(typeof venda.total === "number" ? { total: venda.total } : {}),
+      ...(at ? { at } : {}),
+      ...(total !== undefined ? { total } : {}),
+      ...(customerName ? { customerName } : {}),
+      ...(customerCpf ? { customerCpf } : {}),
+      ...(clienteId ? { clienteId } : {}),
+      ...(paymentBreakdown ? { paymentBreakdown } : {}),
+      ...(lines !== undefined ? { lines } : {}),
+      ...(cashierId ? { cashierId } : {}),
+      ...(sessaoId ? { sessaoId } : {}),
+      ...(terminalId ? { terminalId } : {}),
+      ...(pixQrKind ? { pixQrKind } : {}),
+      ...(cashTendered !== undefined ? { cashTendered } : {}),
+      ...(linkedOsId ? { linkedOsId } : {}),
+      ...(aPrazoConfig ? { aPrazoConfig } : {}),
+      ...(discountAuthorizedByAdminId ? { discountAuthorizedByAdminId } : {}),
+      ...(discountReais !== undefined ? { discountReais } : {}),
+      ...(discountPercent !== undefined ? { discountPercent } : {}),
       source: "venda-persist-create",
     },
   }
@@ -109,7 +279,7 @@ export function buildSaleFinalizadaPayload(
  * Retorna se a automação foi efetivamente despachada.
  */
 export async function dispatchSaleAutomationIfCreated(
-  input: { replayed: boolean; storeId: string; venda: SaleAutomationSaleView },
+  input: SaleAutomationDispatchInput,
   run: SaleAutomationRunner,
   onError?: (error: unknown) => void,
 ): Promise<{ dispatched: boolean }> {
@@ -121,7 +291,10 @@ export async function dispatchSaleAutomationIfCreated(
   })
   if (!key) return { dispatched: false }
   try {
-    await run(SALE_FINALIZADA_EVENT, buildSaleFinalizadaPayload(input.storeId, input.venda))
+    await run(
+      SALE_FINALIZADA_EVENT,
+      buildSaleFinalizadaPayload(input.storeId, input.venda, input.sale),
+    )
     return { dispatched: true }
   } catch (error) {
     onError?.(error)

@@ -101,7 +101,7 @@ export async function POST(req: Request) {
     if (!result.replayed) {
       try {
         await dispatchSaleAutomationIfCreated(
-          { replayed: result.replayed, storeId: lojaId, venda: result.venda },
+          { replayed: result.replayed, storeId: lojaId, venda: result.venda, sale },
           handleEvent,
           (automationError) => {
             console.error(

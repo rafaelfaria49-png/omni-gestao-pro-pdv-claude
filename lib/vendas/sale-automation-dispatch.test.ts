@@ -225,3 +225,234 @@ describe("dispatchSaleAutomationIfCreated — falha da automação não quebra a
     // financeira continua autoridade primária.
   })
 })
+
+describe("CORREÇÃO-02 — paridade de payload (PAYLOAD-PARITY)", () => {
+  const DEFAULT_TEMPLATE =
+    "Venda realizada no valor de {{total}}. Obrigado pela compra, {{customerName}}! Qualquer dúvida estamos à disposição."
+
+  function renderTemplate(template: string, payload: { data?: unknown }): string {
+    const data = (payload.data ?? {}) as Record<string, unknown>
+    return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+      const val = data[key]
+      if (val === undefined || val === null) return ""
+      if (
+        typeof val === "number" &&
+        (key === "total" || key === "totalFinal" || key === "valor" || key === "totalPago")
+      ) {
+        return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+      }
+      return String(val)
+    })
+  }
+
+  it("1 & 2. payload contém customerName e template padrão resolve customerName", () => {
+    const venda = {
+      ...VENDA_A,
+      total: 250,
+      clienteNome: "Maria da Silva",
+    }
+    const payload = buildSaleFinalizadaPayload("loja-a", venda)
+    const data = payload.data as Record<string, unknown>
+    expect(data.customerName).toBe("Maria da Silva")
+    expect(data.id).toBe(VENDA_A.pedidoId)
+    expect(data.pedidoId).toBe(VENDA_A.pedidoId)
+
+    const rendered = renderTemplate(DEFAULT_TEMPLATE, payload)
+    expect(rendered).toContain("Maria da Silva")
+    expect(rendered).toContain("250")
+    expect(rendered).toBe(
+      `Venda realizada no valor de ${(250).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Obrigado pela compra, Maria da Silva! Qualquer dúvida estamos à disposição.`,
+    )
+  })
+
+  it("2a. consumidor final sem nome: customerName ausente e template não quebra", () => {
+    const venda = {
+      ...VENDA_A,
+      clienteNome: null,
+      customerName: undefined,
+    }
+    const payload = buildSaleFinalizadaPayload("loja-a", venda, { customerName: "" })
+    const data = payload.data as Record<string, unknown>
+    expect(data.customerName).toBeUndefined()
+    const rendered = renderTemplate(DEFAULT_TEMPLATE, payload)
+    expect(rendered).toContain("Obrigado pela compra, !")
+  })
+
+  it("2b. cliente cadastrado com caracteres especiais: preserva acentos e símbolos no template", () => {
+    const nomeEspecial = "José d'Ávila & Filhos / LTDA (São Paulo) - <Filial>"
+    const payload = buildSaleFinalizadaPayload("loja-a", VENDA_A, { customerName: nomeEspecial })
+    const data = payload.data as Record<string, unknown>
+    expect(data.customerName).toBe(nomeEspecial)
+    const rendered = renderTemplate(DEFAULT_TEMPLATE, payload)
+    expect(rendered).toContain(nomeEspecial)
+  })
+
+  it("3. payload preserva customerCpf e clienteId", () => {
+    const payload = buildSaleFinalizadaPayload("loja-a", VENDA_A, {
+      customerCpf: "12345678909",
+      clienteId: "cli_cuid_987654",
+    })
+    const data = payload.data as Record<string, unknown>
+    expect(data.customerCpf).toBe("12345678909")
+    expect(data.clienteId).toBe("cli_cuid_987654")
+  })
+
+  it("4. payload preserva paymentBreakdown sem recalcular valores", () => {
+    const pb = {
+      dinheiro: 50.5,
+      pix: 100,
+      cartaoDebito: 0,
+      cartaoCredito: 0,
+      carne: 0,
+      aPrazo: 0,
+      creditoVale: 0,
+    }
+    const payload = buildSaleFinalizadaPayload("loja-a", VENDA_A, { paymentBreakdown: pb })
+    const data = payload.data as Record<string, unknown>
+    expect(data.paymentBreakdown).toEqual(pb)
+  })
+
+  it("5. payload preserva lines com saneamento de acessórios e sem cartLineKey", () => {
+    const rawLines = [
+      {
+        inventoryId: "prod-capa-01",
+        name: "Capa Protetora",
+        quantity: 2,
+        unitPrice: 35,
+        cartLineKey: "temp_cart_key_123", // deve ser removido defensivamente
+        accessorySelection: {
+          version: 1 as const,
+          deviceModelKey: "apple:iphone-15-pro",
+          deviceModelName: "iPhone 15 Pro",
+          colorKey: "preto" as const,
+        },
+      },
+      {
+        inventoryId: "prod-pelicula-02",
+        name: "Película 3D",
+        quantity: 1,
+        unitPrice: 25,
+        isAvulso: false,
+      },
+    ]
+    const payload = buildSaleFinalizadaPayload("loja-a", VENDA_A, { lines: rawLines })
+    const data = payload.data as Record<string, unknown>
+    const lines = data.lines as Array<Record<string, unknown>>
+    expect(lines).toHaveLength(2)
+    expect(lines[0].inventoryId).toBe("prod-capa-01")
+    expect(lines[0].name).toBe("Capa Protetora")
+    expect(lines[0].quantity).toBe(2)
+    expect(lines[0].unitPrice).toBe(35)
+    // cartLineKey removida
+    expect(lines[0].cartLineKey).toBeUndefined()
+    // accessorySelection preservada round-trip
+    expect(lines[0].accessorySelection).toMatchObject({
+      version: 1,
+      deviceModelKey: "apple:iphone-15-pro",
+      deviceModelName: "iPhone 15 Pro",
+      colorKey: "preto",
+    })
+    expect(lines[1].inventoryId).toBe("prod-pelicula-02")
+    expect(lines[1].name).toBe("Película 3D")
+  })
+
+  it("6. payload preserva at, cashierId, sessaoId, terminalId", () => {
+    const payload = buildSaleFinalizadaPayload(
+      "loja-a",
+      {
+        ...VENDA_A,
+        at: "2026-09-11T18:00:00.000Z",
+        terminalId: "PDV-01",
+      },
+      {
+        cashierId: "op-caixa-42",
+        sessaoId: "sessao-caixa-999",
+      },
+    )
+    const data = payload.data as Record<string, unknown>
+    expect(data.at).toBe("2026-09-11T18:00:00.000Z")
+    expect(data.terminalId).toBe("PDV-01")
+    expect(data.cashierId).toBe("op-caixa-42")
+    expect(data.sessaoId).toBe("sessao-caixa-999")
+  })
+
+  it("7. payload preserva pixQrKind e cashTendered quando presentes", () => {
+    const payload = buildSaleFinalizadaPayload("loja-a", VENDA_A, {
+      pixQrKind: "ESTATICO",
+      cashTendered: 160.0,
+    })
+    const data = payload.data as Record<string, unknown>
+    expect(data.pixQrKind).toBe("ESTATICO")
+    expect(data.cashTendered).toBe(160.0)
+  })
+
+  it("8. campos opcionais ausentes continuam opcionais (não emite chaves vazias)", () => {
+    const payload = buildSaleFinalizadaPayload("loja-a", { pedidoId: "VDA-0001" })
+    const data = payload.data as Record<string, unknown>
+    expect(data.pedidoId).toBe("VDA-0001")
+    expect(data.id).toBe("VDA-0001")
+    expect(data.clientSaleId).toBeUndefined()
+    expect(data.customerName).toBeUndefined()
+    expect(data.customerCpf).toBeUndefined()
+    expect(data.clienteId).toBeUndefined()
+    expect(data.paymentBreakdown).toBeUndefined()
+    expect(data.lines).toBeUndefined()
+    expect(data.cashierId).toBeUndefined()
+    expect(data.sessaoId).toBeUndefined()
+    expect(data.terminalId).toBeUndefined()
+    expect(data.pixQrKind).toBeUndefined()
+    expect(data.cashTendered).toBeUndefined()
+    expect(data.syncPending).toBeUndefined()
+    expect(data.syncBlockedCode).toBeUndefined()
+  })
+
+  it("auditoria de destinatário: phoneDigits e contactId NÃO faziam parte do contrato real anterior", () => {
+    // RECIPIENT_PARITY = PREEXISTING_LIMITATION
+    // O browser anterior postava saleRow em data, e saleRow nunca teve phoneDigits nem contactId.
+    // O motor server-side usava targetPhone da automação do HUB ou caía em automation_fired_no_recipient.
+    const payload = buildSaleFinalizadaPayload("loja-a", VENDA_A)
+    const data = payload.data as Record<string, unknown>
+    expect(data.phoneDigits).toBeUndefined()
+    expect(data.contactId).toBeUndefined()
+  })
+
+  it("dispatch integrado: create passa contexto de sale e template é resolvido pelo runner", async () => {
+    let capturedPayload: Record<string, unknown> | null = null
+    const run = vi.fn(async (_event: unknown, p: unknown) => {
+      capturedPayload = p as Record<string, unknown>
+    })
+    const out = await dispatchSaleAutomationIfCreated(
+      {
+        replayed: false,
+        storeId: "loja-a",
+        venda: { ...VENDA_A, clienteNome: "Carlos Santos" },
+        sale: {
+          customerCpf: "11122233344",
+          total: 150.5,
+          paymentBreakdown: { pix: 150.5 },
+        },
+      },
+      run,
+    )
+    expect(out.dispatched).toBe(true)
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(capturedPayload).not.toBeNull()
+    const rendered = renderTemplate(DEFAULT_TEMPLATE, capturedPayload!)
+    expect(rendered).toContain("Carlos Santos")
+  })
+
+  it("replay não redispara template nem executa runner", async () => {
+    const run = vi.fn(async () => undefined)
+    const out = await dispatchSaleAutomationIfCreated(
+      {
+        replayed: true,
+        storeId: "loja-a",
+        venda: { ...VENDA_A, clienteNome: "Carlos Santos" },
+        sale: { customerName: "Carlos Santos" },
+      },
+      run,
+    )
+    expect(out.dispatched).toBe(false)
+    expect(run).not.toHaveBeenCalled()
+  })
+})
