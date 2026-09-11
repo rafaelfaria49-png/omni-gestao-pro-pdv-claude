@@ -14,6 +14,8 @@ import {
   PedidoIdConflitoMesmaLojaError,
   InvalidClientSaleIdError,
   ClientSaleIdReusedError,
+  SalePaymentsMismatchError,
+  InvalidSaleLinesError,
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
 import { persistSaleV2 } from "@/lib/vendas/sale-writer-v2"
@@ -149,6 +151,16 @@ export async function POST(req: Request) {
     }
     if (e instanceof UnresolvedProductError) {
       return jsonError(e.message, e.code, 409, { inventoryIds: e.inventoryIds })
+    }
+    // Invariante linhas × total (PDV-MOTOR-INTEGRITY-N1): mesmo contrato
+    // fail-closed da rota V1 — falha de negócio (409), nunca 500.
+    if (e instanceof SalePaymentsMismatchError) {
+      console.warn("[ops/venda-persist/v2] pagamentos-total-divergente", JSON.stringify({ lojaId }))
+      return jsonError(e.message, e.code, 409)
+    }
+    if (e instanceof InvalidSaleLinesError) {
+      console.warn("[ops/venda-persist/v2] linhas-venda-invalidas", JSON.stringify({ lojaId }))
+      return jsonError(e.message, e.code, 409)
     }
     // Quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005): mesmo contrato
     // fail-closed da rota V1 — falha de negócio (409), nunca 500.

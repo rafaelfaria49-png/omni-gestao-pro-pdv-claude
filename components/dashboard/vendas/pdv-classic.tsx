@@ -137,6 +137,12 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+  findUnresolvedSaleLines,
+  unresolvedSaleLinesDescription,
+} from "@/lib/pdv-finalize-integrity"
 
 type Customer = {
   id: string
@@ -1854,13 +1860,27 @@ export function PdvClassic({
         onRequireCustomer={() => setAPrazoClientePickerOpen(true)}
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
+          // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
+          // linha de produto sem cadastro BLOQUEIA com os nomes — nunca filtrada
+          // em silêncio enquanto o total cheio segue para cobrança. Carrinho intacto.
+          const unresolvedClassic = findUnresolvedSaleLines(
+            cart.map((item) => ({
+              inventoryId: item.inventoryId,
+              name: item.name,
+              isAvulso: item.isAvulso,
+            })),
+            inventory.map((i) => i.id),
+          )
+          if (unresolvedClassic.length > 0) {
+            toast({
+              variant: "destructive",
+              title: "Item não pode ser vendido",
+              description: unresolvedSaleLinesDescription(unresolvedClassic),
+            })
+            return false
+          }
+          // Todas as linhas resolvem (garantido pelo guard) — nada é descartado.
           const saleLines = cart
-            .filter(
-              (item) =>
-                isOsVirtualSaleLine(item.inventoryId) ||
-                isAvulsoSaleLine(item.inventoryId) ||
-                inventory.some((i) => i.id === item.inventoryId)
-            )
             .map((item) => ({
               inventoryId: item.inventoryId,
               quantity: item.quantity,
@@ -2006,7 +2026,7 @@ export function PdvClassic({
           appendAuditLog({
             action: "sale_finalized",
             userLabel: auditUser(),
-            detail: `Venda ${displaySaleNumber(result.saleId, result.pending)} Total ${formatBrlAudit(total)} | Din ${formatBrlAudit(dinheiro)} Pix ${formatBrlAudit(pix)} Déb ${formatBrlAudit(cartaoDebito)} Créd ${formatBrlAudit(cartaoCredito)} Carnê ${formatBrlAudit(carne)} Prazo ${formatBrlAudit(aPrazo)} Vale ${formatBrlAudit(creditoVale)}`,
+            detail: `${result.pending ? "Venda PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda "}${displaySaleNumber(result.saleId, result.pending)} Total ${formatBrlAudit(total)} | Din ${formatBrlAudit(dinheiro)} Pix ${formatBrlAudit(pix)} Déb ${formatBrlAudit(cartaoDebito)} Créd ${formatBrlAudit(cartaoCredito)} Carnê ${formatBrlAudit(carne)} Prazo ${formatBrlAudit(aPrazo)} Vale ${formatBrlAudit(creditoVale)}`,
           })
           if (subtotal > 0 && discountTotal > 0) {
             const pct = (discountTotal / subtotal) * 100
@@ -2019,6 +2039,23 @@ export function PdvClassic({
             }
           }
           setLastSaleTotal(total)
+          // PENDING (PDV-MOTOR-INTEGRITY-N1): sem sucesso definitivo, sem número
+          // definitivo, sem limpar o carrinho. O reenvio usa a MESMA identidade
+          // (Vendas → Reenviar sync); a confirmação posterior conclui uma vez só.
+          if (result.pending) {
+            toast({
+              title: PENDING_SALE_TITLE,
+              description: PENDING_SALE_DESCRIPTION,
+              duration: 6000,
+            })
+            queueMicrotask(() => {
+              shellBipeRef.current?.focus()
+              if (isModoRapido) {
+                window.requestAnimationFrame(() => shellBipeRef.current?.focus())
+              }
+            })
+            return true
+          }
           setCart([])
           setDiscountReais(0)
           setDiscountPercent(0)

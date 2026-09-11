@@ -15,6 +15,8 @@ import {
   PedidoIdDeOutraLojaError,
   PedidoIdConflitoMesmaLojaError,
   VendaCreateUniqueConflictError,
+  SalePaymentsMismatchError,
+  InvalidSaleLinesError,
   classifyExistingVendaReplay,
   VENDA_REPLAY_SELECT,
   type SalePayload,
@@ -219,6 +221,24 @@ export async function POST(req: Request) {
         { error: "Estoque insuficiente", detail: error.message, code: error.code },
         { status: 409 },
       )
+    }
+    // Invariante linhas × total (PDV-MOTOR-INTEGRITY-N1): request incoerente
+    // (cobrança ≠ total, venda sem itens, linha inválida) é falha de negócio
+    // (409), nunca erro de servidor. Nada foi gravado — os guards rodam antes
+    // de qualquer efeito na transação. Vale para V1 e V2 (mesmo núcleo).
+    if (error instanceof SalePaymentsMismatchError) {
+      console.warn(
+        "[ops/venda-persist] pagamentos-total-divergente",
+        JSON.stringify({ lojaId, pedidoId, ...error.detail }),
+      )
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
+    }
+    if (error instanceof InvalidSaleLinesError) {
+      console.warn(
+        "[ops/venda-persist] linhas-venda-invalidas",
+        JSON.stringify({ lojaId, pedidoId }),
+      )
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
     }
     const msg = error instanceof Error ? error.message : String(error)
     // Extrai code do PrismaClientKnownRequestError (P2002 unique, P2003 FK, P2025 not found, etc.)

@@ -20,6 +20,12 @@ import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+  findUnresolvedSaleLines,
+  unresolvedSaleLinesDescription,
+} from "@/lib/pdv-finalize-integrity"
 
 /** Modos de operação expostos na UI. `troca`/`vale_credito` geram crédito local; `devolucao`/`somente_estoque` não. */
 type DevMode = "devolucao" | "troca" | "vale_credito" | "somente_estoque"
@@ -418,6 +424,21 @@ export function TrocasDevolucao({
       else if (diffPayMethod === "credito") pb.cartaoCredito = diff
     }
 
+    // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
+    // item novo sem cadastro BLOQUEIA com os nomes — nunca cobrado sem persistir.
+    const unresolvedTroca = findUnresolvedSaleLines(
+      trocaCart.map((l) => ({ inventoryId: l.inventoryId, name: l.name })),
+      inventory.map((i) => i.id),
+    )
+    if (unresolvedTroca.length > 0) {
+      toast({
+        title: "Item não pode ser vendido",
+        description: unresolvedSaleLinesDescription(unresolvedTroca),
+        variant: "destructive",
+      })
+      return
+    }
+
     const novaVenda = await finalizeSaleTransaction({
       lines: trocaCart.map((l) => ({ inventoryId: l.inventoryId, quantity: l.quantity, name: l.name, unitPrice: l.unitPrice })),
       total: totalNovaCompra,
@@ -453,7 +474,7 @@ export function TrocasDevolucao({
     appendAuditLog({
       action: "devolucao_vale",
       userLabel: `${nomeLoja} (PDV)`,
-      detail: `[troca_imediata] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
+      detail: `${novaVenda.pending ? "[troca_imediata PENDENTE — AGUARDANDO CONFIRMAÇÃO] " : "[troca_imediata] "}dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
     })
 
     setLastDevolucao({ id: dev.devolucaoId, credit: creditEmitido, nome, cpf })
@@ -496,6 +517,18 @@ export function TrocasDevolucao({
       at: new Date().toISOString(),
     })
     setCupomOpen(true)
+
+    // PENDING (PDV-MOTOR-INTEGRITY-N1): sem sucesso definitivo — o cupom acima
+    // já sai sem novaVendaId. Mantém o mini-carrinho; o reenvio usa a MESMA
+    // identidade (Vendas → Reenviar sync).
+    if (novaVenda.pending) {
+      toast({
+        title: PENDING_SALE_TITLE,
+        description: PENDING_SALE_DESCRIPTION,
+        duration: 6000,
+      })
+      return
+    }
 
     toast({
       title: "Troca finalizada",

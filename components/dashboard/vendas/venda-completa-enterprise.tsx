@@ -57,6 +57,18 @@ import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+  findUnresolvedSaleLines,
+  unresolvedSaleLinesDescription,
+} from "@/lib/pdv-finalize-integrity"
+import { SelecionarAcessorioDialog } from "./acessorios/selecionar-acessorio-dialog"
+import {
+  accessoryConfigRequiresSelection,
+  type AccessoryCartLineSnapshot,
+  type AccessorySelectionV1,
+} from "@/lib/acessorios/cart-line"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useCaixa } from "../caixa/caixa-provider"
@@ -129,6 +141,13 @@ type CartLine = {
   isAvulso?: boolean
   custoUnitario?: number | null
   codigoAvulso?: string | null
+  /**
+   * Snapshot da seleção de acessório (modelo/cor) — mesmo contrato das demais
+   * superfícies (PDV-MOTOR-INTEGRITY-N1). Dado passivo: nunca variação de estoque.
+   */
+  accessorySelection?: AccessorySelectionV1
+  /** Chave determinística produto+modelo+cor (agrupamento visual). */
+  cartLineKey?: string
 }
 
 type DraftData = {
@@ -223,6 +242,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   // ── Item avulso + venda em espera (paridade com Clássico/Assistência) ──────
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
   const [showVendaEsperaModal, setShowVendaEsperaModal] = useState(false)
+  // ── Acessório modelo/cor (mesmo contrato do Clássico/Assistência/Super) ───
+  const [accessoryProduct, setAccessoryProduct] = useState<PdvCatalogProduct | null>(null)
   const [heldRefresh, setHeldRefresh] = useState(0)
   const terminalIdForHold = useMemo(
     () => readSelectedTerminal(storeId)?.id ?? "default",
@@ -246,7 +267,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         barcode: inv.barcode,
         dbId: inv.dbId,
         sku: inv.sku,
-        codigo: inv.codigo ?? inv.sku ?? inv.id,
+        codigo: inv.codigo ?? inv.sku ?? "",
         codigoBarras: inv.codigoBarras ?? inv.barcode,
         price: unit,
         stock: inv.stock,
@@ -254,6 +275,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         vendaPorPeso: inv.vendaPorPeso,
         precoPorKg: inv.precoPorKg,
         atributos: inv.atributos,
+        // Mesmo contrato das demais superfícies (PDV-MOTOR-INTEGRITY-N1): sem
+        // isto, o acessório nunca chega à seleção nem à persistência.
+        ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
       }
     })
   }, [inventory])
@@ -339,7 +363,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       if (e.altKey) return
       // Toda flag de modal entra no guard — evita atalho disparar com diálogo aberto.
       const anyModalOpen =
-        isPaymentOpen || cupomOpen || helpOpen || showItemAvulsoModal || showVendaEsperaModal
+        isPaymentOpen || cupomOpen || helpOpen || showItemAvulsoModal || showVendaEsperaModal || accessoryProduct !== null
       switch (e.key) {
         case "F1":
           e.preventDefault()
@@ -383,7 +407,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal],
+    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal, accessoryProduct],
   )
 
   useEffect(() => {
@@ -397,6 +421,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       const isService = product.category === "Servicos"
       if (!isService && product.stock <= 0) {
         toast({ title: "Sem estoque", description: `${product.name} está sem estoque.`, variant: "destructive" })
+        return
+      }
+      // Acessório configurado (modelo/cor): intercepta ANTES da mutação do
+      // carrinho — mesmo contrato do Clássico (PDV-MOTOR-INTEGRITY-N1).
+      if (accessoryConfigRequiresSelection(product.accessoryConfig)) {
+        setAccessoryProduct(product)
         return
       }
       setCart((prev) => {
@@ -461,6 +491,41 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setCart((prev) => prev.map((l) => l.lineId === lineId ? { ...l, discountPct: clamped } : l))
   }
 
+  /**
+   * Confirmação do modal "Configurar acessório": mesma combinação
+   * produto+modelo+cor vira linha própria com `accessorySelection` — o motor e
+   * o servidor persistem pelo mesmo contrato das demais superfícies.
+   * Retorna `false` para manter o modal aberto quando a inclusão falha.
+   */
+  const confirmAccessorySelection = (line: AccessoryCartLineSnapshot): boolean => {
+    const product = accessoryProduct
+    if (!product) return false
+    const invItem = inventory.find((i) => i.id === product.id)
+    if (invItem && invItem.category !== "Servicos" && invItem.stock <= 0) {
+      toast({ title: "Sem estoque", description: `${product.name} está sem estoque.`, variant: "destructive" })
+      return false
+    }
+    setCart((prev) => [
+      ...prev,
+      {
+        lineId: newPdvLineId(product.id),
+        inventoryId: product.id,
+        codigo: product.codigo ?? product.sku ?? "",
+        name: line.lineDescription,
+        unid: "UN",
+        price: product.price,
+        qty: 1,
+        discountPct: 0,
+        accessorySelection: line.selection,
+        cartLineKey: line.cartLineKey,
+      },
+    ])
+    setProductQuery("")
+    setShowProductDropdown(false)
+    setAccessoryProduct(null)
+    return true
+  }
+
   // ── Item avulso (INSERT) ──────────────────────────────────────────────────
   // Cria uma linha com `inventoryId` virtual (`__avulso__…`) — `isVirtualSaleLine`
   // faz o motor da venda pular a baixa de estoque. Descrição/valor/qtd/custo/código
@@ -516,6 +581,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         codigoAvulso: l.codigoAvulso,
         discountPct: l.discountPct,
         detail: l.detail,
+        accessorySelection: l.accessorySelection,
+        cartLineKey: l.cartLineKey,
       })),
       customer: selectedCliente
         ? {
@@ -559,6 +626,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           isAvulso: i.isAvulso,
           custoUnitario: i.custoUnitario,
           codigoAvulso: i.codigoAvulso,
+          accessorySelection: i.accessorySelection,
+          cartLineKey: i.cartLineKey,
         }
       }),
     )
@@ -631,8 +700,28 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
     setIsProcessing(true)
     try {
+      // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
+      // linha de produto sem cadastro BLOQUEIA com os nomes — nunca filtrada
+      // em silêncio enquanto o total cheio segue para cobrança. Carrinho intacto.
+      const unresolvedCompleta = findUnresolvedSaleLines(
+        cart.map((l) => ({
+          inventoryId: l.inventoryId,
+          name: l.name,
+          isAvulso: l.isAvulso,
+        })),
+        inventory.map((i) => i.id),
+      )
+      if (unresolvedCompleta.length > 0) {
+        toast({
+          title: "Item não pode ser vendido",
+          description: unresolvedSaleLinesDescription(unresolvedCompleta),
+          variant: "destructive",
+        })
+        return false
+      }
+      // Todas as linhas resolvem (garantido pelo guard) — nada é descartado.
+      // `accessorySelection` segue no mesmo contrato das demais superfícies.
       const saleLines = cart
-        .filter((l) => isAvulsoSaleLine(l.inventoryId) || inventory.some((i) => i.id === l.inventoryId))
         .map((l) => ({
           inventoryId: l.inventoryId,
           quantity: l.qty,
@@ -640,6 +729,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           name: l.name,
           ...(l.isAvulso ? { isAvulso: true as const } : {}),
           ...(l.custoUnitario !== undefined ? { custoUnitario: l.custoUnitario } : {}),
+          ...(l.accessorySelection ? { accessorySelection: l.accessorySelection } : {}),
         }))
 
       let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
@@ -717,7 +807,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       appendAuditLog({
         action: "sale_finalized",
         userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
-        detail: `Venda Completa Enterprise ${displaySaleNumber(result.saleId, result.pending)} | ${selectedCliente.name} | ${pagamentosResumo} | ${brl(total)}`,
+        detail: `${result.pending ? "Venda Completa Enterprise PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda Completa Enterprise "}${displaySaleNumber(result.saleId, result.pending)} | ${selectedCliente.name} | ${pagamentosResumo} | ${brl(total)}`,
       })
 
       const linhasDetalhe = cart
@@ -751,11 +841,21 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       })
 
       if (!enrichResult.ok) {
-        // Venda local já registrada — avisa sem bloquear o fluxo
-        toast({
-          title: "Aviso de sincronização",
-          description: "Venda registrada localmente. Os dados detalhados serão sincronizados em breve.",
-        })
+        if (result.pending) {
+          // PENDING (PDV-MOTOR-INTEGRITY-N1): sem copy de sucesso definitivo —
+          // o número ainda não existe e os detalhes seguem no carrinho/rascunho.
+          toast({
+            title: PENDING_SALE_TITLE,
+            description: PENDING_SALE_DESCRIPTION,
+            duration: 6000,
+          })
+        } else {
+          // Venda confirmada mas sem os dados detalhados — avisa sem bloquear.
+          toast({
+            title: "Aviso de sincronização",
+            description: "Venda registrada. Os dados detalhados serão sincronizados em breve.",
+          })
+        }
       }
 
       const storeDisplayName =
@@ -797,6 +897,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       setCupomData(cupom)
       setIsPaymentOpen(false)
       setCupomOpen(true)
+
+      // PENDING (PDV-MOTOR-INTEGRITY-N1): mantém rascunho + carrinho + cliente.
+      // O reenvio usa a MESMA identidade (Vendas → Reenviar sync); a confirmação
+      // posterior conclui exatamente uma vez. O cupom acima já sai com número
+      // PENDENTE (honesto, nunca definitivo).
+      if (result.pending) {
+        return true
+      }
 
       try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch {}
 
@@ -1645,6 +1753,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         onOpenChange={setShowItemAvulsoModal}
         onConfirm={addItemAvulso}
         checkCodigoExistente={(codigo) => acharProdutoPorCodigoExato(products, codigo)}
+      />
+
+      {/* ── Acessório modelo/cor (mesmo contrato do Clássico) ── */}
+      <SelecionarAcessorioDialog
+        open={accessoryProduct !== null}
+        product={accessoryProduct}
+        onCancel={() => setAccessoryProduct(null)}
+        onConfirm={confirmAccessorySelection}
       />
 
       {/* ── Vendas em espera (F7) ── */}

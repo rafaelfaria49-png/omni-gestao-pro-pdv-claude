@@ -1,4 +1,5 @@
 import type { SaleLineRecord } from "@/lib/operations-sale-types"
+import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
 import { resolveSaleLineItemType, type SaleLineItemType } from "@/lib/sale-line-classification"
 import { serviceIdFromVirtualInventoryId } from "@/lib/os-pdv-virtual-lines"
 
@@ -10,6 +11,12 @@ export type FinalizeSaleLineInput = {
   itemType?: SaleLineItemType
   isAvulso?: boolean
   custoUnitario?: number | null
+  /**
+   * Seleção de modelo/cor do acessório (dado passivo — nunca participa de
+   * resolução de produto, estoque, fiscal ou financeiro). Copiada como está;
+   * o servidor resaneia via `sanitizeSaleLinesPayload` antes de persistir.
+   */
+  accessorySelection?: AccessorySelectionV1
   serviceId?: string
   serviceCategory?: string
   warrantyDays?: number
@@ -49,6 +56,7 @@ export function saleLineRecordFromFinalizeInput(
     itemType,
     ...(itemType === "avulso" ? { isAvulso: true } : {}),
     ...(custoUnitario !== undefined ? { custoUnitario } : {}),
+    ...(line.accessorySelection ? { accessorySelection: line.accessorySelection } : {}),
     ...(itemType === "servico"
       ? {
           serviceId: line.serviceId ?? serviceIdFromVirtualInventoryId(line.inventoryId) ?? undefined,

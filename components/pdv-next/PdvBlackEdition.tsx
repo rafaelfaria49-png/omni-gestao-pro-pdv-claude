@@ -33,6 +33,10 @@ import { PaymentModal, type PaymentMethod } from "@/components/dashboard/vendas/
 import { PdvClientePicker, type PdvClienteResult } from "@/components/dashboard/vendas/pdv-cliente-picker"
 import { useToast } from "@/hooks/use-toast"
 import { reducePaymentsToBreakdown } from "@/lib/pdv-payments"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+} from "@/lib/pdv-finalize-integrity"
 import { PdvBlackShell, type PdvBlackCartRow } from "./PdvBlackShell"
 
 const brlBlack = (v: number) =>
@@ -393,6 +397,15 @@ export function PdvBlackEdition() {
     })
     if (!result.ok) {
       toast({ variant: "destructive", title: "Falha ao registrar venda", description: result.reason })
+      return
+    }
+    // PENDING (PDV-MOTOR-INTEGRITY-N1): sem sucesso definitivo, sem cupom
+    // definitivo, sem limpar o carrinho. Reenvio com a MESMA identidade em
+    // Vendas → Reenviar sync. Guard anti-descarte acima preservado.
+    if (result.pending) {
+      setPaymentOpen(false)
+      toast({ title: PENDING_SALE_TITLE, description: PENDING_SALE_DESCRIPTION, duration: 6000 })
+      focusBipe()
       return
     }
     const nextCupom = cupomNum + 1

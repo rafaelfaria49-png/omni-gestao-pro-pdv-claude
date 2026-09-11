@@ -213,6 +213,43 @@ export class InvalidClientSaleIdError extends Error {
   }
 }
 
+/**
+ * Lançado no fluxo PDV ao vivo (`enforceStock`) quando a soma das formas de
+ * pagamento recebidas diverge do total cobrado (PDV-MOTOR-INTEGRITY-N1).
+ * Cobre o que o filtro silencioso client-side escondia: nenhuma cobrança pode
+ * representar valor diferente do total persistido. Falha ANTES de
+ * Venda/ItemVenda/estoque/caixa/financeiro/títulos. O caller traduz para HTTP 409.
+ */
+export class SalePaymentsMismatchError extends Error {
+  readonly code = "PAGAMENTOS_TOTAL_DIVERGENTE"
+  readonly detail: {
+    total: number
+    somaPagamentos: number
+  }
+  constructor(total: number, somaPagamentos: number) {
+    super(
+      "Soma das formas de pagamento difere do total da venda. Revise os valores antes de finalizar.",
+    )
+    this.name = "SalePaymentsMismatchError"
+    this.detail = { total, somaPagamentos }
+  }
+}
+
+/**
+ * Lançado no fluxo PDV ao vivo (`enforceStock`) quando as linhas recebidas não
+ * são persistíveis segundo seus tipos (PDV-MOTOR-INTEGRITY-N1): venda sem
+ * itens, linha sem produto, quantidade inválida ou preço inválido. Falha ANTES
+ * de qualquer efeito. Replay legado preserva o histórico (sem este gate).
+ * O caller traduz para HTTP 409.
+ */
+export class InvalidSaleLinesError extends Error {
+  readonly code = "LINHAS_VENDA_INVALIDAS"
+  constructor(motivo = "Itens da venda inválidos. Revise os itens antes de finalizar.") {
+    super(motivo)
+    this.name = "InvalidSaleLinesError"
+  }
+}
+
 /** Mesmo `clientSaleId` reutilizado com fatos canônicos diferentes. */
 export class ClientSaleIdReusedError extends Error {
   readonly code = "IDEMPOTENCY_KEY_REUSED"
@@ -674,6 +711,51 @@ export async function upsertVendaInTransaction(
   // gaveta (MovimentacaoFinanceira no passo 4) e, portanto, exige caixa aberto.
   const pb = sale.paymentBreakdown
   const valorImediato = valorAVistaVenda(total, pb)
+
+  // ── Invariante linhas × total (PDV-MOTOR-INTEGRITY-N1) ─────────────────────
+  // Fluxo PDV ao vivo (`enforceStock`, V1 e V2): a request precisa ser coerente
+  // ANTES de qualquer efeito (Venda/ItemVenda/estoque/caixa/financeiro/
+  // títulos). Cobre o que o filtro silencioso client-side escondia: o total
+  // cobrado precisa ser explicado pelas linhas + pagamentos recebidos, e toda
+  // linha recebida precisa ser persistível segundo seu tipo. Replay legado
+  // (`enforceStock` ausente) preserva o histórico sem revalidar.
+  if (enforceStock) {
+    if (!Array.isArray(sale.lines) || sale.lines.length === 0) {
+      throw new InvalidSaleLinesError("Venda sem itens. Adicione ao menos um item antes de finalizar.")
+    }
+    sale.lines.forEach((line, index) => {
+      const rawInvId = typeof line?.inventoryId === "string" ? line.inventoryId.trim() : ""
+      if (!rawInvId) {
+        throw new InvalidSaleLinesError(`Linha ${index + 1} sem produto. Revise os itens antes de finalizar.`)
+      }
+      const q = line?.quantity
+      if (typeof q !== "number" || !Number.isFinite(q) || q <= 0) {
+        throw new InvalidSaleLinesError(`Quantidade inválida na linha ${index + 1}.`)
+      }
+      // Fração significativa já lançaria `FractionalQuantityError` no topo; aqui
+      // só reafirma o inteiro no fluxo ao vivo (ruído já normalizado in-place).
+      normalizeSaleQuantity(q, index)
+      const unit = line?.unitPrice
+      if (typeof unit !== "number" || !Number.isFinite(unit) || unit < 0) {
+        throw new InvalidSaleLinesError(`Preço inválido na linha ${index + 1}.`)
+      }
+    })
+    const rawTotal = sale.total
+    if (typeof rawTotal !== "number" || !Number.isFinite(rawTotal) || rawTotal < 0) {
+      throw new InvalidSaleLinesError("Total da venda inválido.")
+    }
+    const somaPagamentos =
+      Number(pb?.dinheiro ?? 0) +
+      Number(pb?.pix ?? 0) +
+      Number(pb?.cartaoDebito ?? 0) +
+      Number(pb?.cartaoCredito ?? 0) +
+      Number(pb?.carne ?? 0) +
+      Number(pb?.aPrazo ?? 0) +
+      Number(pb?.creditoVale ?? 0)
+    if (!Number.isFinite(somaPagamentos) || Math.abs(somaPagamentos - rawTotal) > 0.02) {
+      throw new SalePaymentsMismatchError(rawTotal, somaPagamentos)
+    }
+  }
 
   // ── 0. Caixa servidor obrigatório (P1 — OPS-SALE-SAFETY-P1-001) ─────────────
   // Vendas que geram entrada no caixa (valorImediato > 0) exigem uma `SessaoCaixa`

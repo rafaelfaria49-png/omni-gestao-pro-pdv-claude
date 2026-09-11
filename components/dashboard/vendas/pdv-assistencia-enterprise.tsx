@@ -127,6 +127,12 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+  findUnresolvedSaleLines,
+  unresolvedSaleLinesDescription,
+} from "@/lib/pdv-finalize-integrity"
 import { isServicoDisponivelParaVenda } from "@/lib/servicos/servico-pdv"
 
 // ─── Cart persistence ─────────────────────────────────────────────────────────
@@ -1790,6 +1796,27 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   ) => {
     if (cart.length === 0 || discountOverTotal) return
 
+    // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
+    // linha de produto sem cadastro BLOQUEIA com os nomes — o motor segue como
+    // backstop. Serviço/avulso/O.S. legítimos nunca bloqueiam. Carrinho intacto.
+    const unresolvedAssist = findUnresolvedSaleLines(
+      cart.map((l) => ({
+        inventoryId: l.inventoryId,
+        name: l.title,
+        itemType: l.itemType,
+        isAvulso: l.isAvulso,
+      })),
+      inventory.map((i) => i.id),
+    )
+    if (unresolvedAssist.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Item não pode ser vendido",
+        description: unresolvedSaleLinesDescription(unresolvedAssist),
+      })
+      return
+    }
+
     // Reduz as formas do modal compartilhado para o breakdown do motor (mesma regra
     // de Clássico/Supermercado/Venda Completa/Black — sem duplicar lógica).
     let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
@@ -1924,6 +1951,28 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       }
     } catch {
       /* fila é auxiliar — não interrompe o pós-venda */
+    }
+
+    // PENDING (PDV-MOTOR-INTEGRITY-N1): venda salva local, AGUARDANDO
+    // confirmação — sem copy de sucesso definitivo, sem limpar carrinho nem a
+    // persistência local. Reenvio com a MESMA identidade em Vendas → Reenviar
+    // sync; a confirmação posterior conclui exatamente uma vez.
+    if (result.pending) {
+      if (impressaoConfig.imprimirAutomatico && _hadItems) {
+        setAutoPrintInput(_printInput)
+      } else if (_hadItems) {
+        setPostSalePrintInput(_printInput)
+        setPostSalePrintOpen(true)
+      }
+      closePaymentModal(false)
+      toast({ title: PENDING_SALE_TITLE, description: PENDING_SALE_DESCRIPTION, duration: 6000 })
+      queueMicrotask(() => {
+        inputRef.current?.focus()
+        if (isModoRapido) {
+          window.requestAnimationFrame(() => inputRef.current?.focus())
+        }
+      })
+      return
     }
 
     // Venda real concluída — limpa carrinho e persistência.
