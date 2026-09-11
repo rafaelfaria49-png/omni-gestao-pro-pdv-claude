@@ -1,4 +1,5 @@
-import type { GarantiaOrdemServicoLeitura, Orcamento, OrdemServico, OSStatus, PecaUsada, Servico } from "@/types/os";
+import type { GarantiaOrdemServicoLeitura, Orcamento, OrdemServico, OSStatus, PecaUsada } from "@/types/os";
+import type { ServicoV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { normalizeOperacaoStatus, prismaStatusToOperacaoStatus } from "@/components/operacoes/lovable/utils/os-status";
 import { asOperacoesPayload } from "@/lib/operacoes/services/os-helpers";
 
@@ -76,13 +77,19 @@ function mergeOrcamentoFromPrismaRow(r: PrismaOSRow, m: OrdemServico): Orcamento
   const cat = Array.isArray(m.servicosCatalogo) ? m.servicosCatalogo : [];
   const pecasPayload = Array.isArray(m.pecas) ? m.pecas : [];
 
-  let servicos: Servico[] = cat.map((s, i) => ({
+  let servicos: ServicoV3[] = cat.map((s, i) => ({
     id: s.servicoId || `cat_${i}`,
     descricao: s.descricao,
     valor: s.valorVenda,
     desconto: 0,
     prazoGarantiaDias: s.prazoGarantiaDias,
     termoGarantia: s.termoGarantia,
+    // Custo conhecido do intake (GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002);
+    // linha legada sem custo → sem `custoV3` (UNKNOWN, nunca zero inventado).
+    ...(typeof s.custoInterno === "number" ? { custoV3: Math.max(0, s.custoInterno) } : {}),
+    // Snapshots opcionais da linha; ausentes em payloads legados — nunca viram SLA.
+    ...(s.prazoTexto ? { prazoTexto: s.prazoTexto } : {}),
+    ...(s.catalogoServicoId ? { catalogoServicoId: s.catalogoServicoId } : {}),
   }));
   // Peças entram no orçamento sintetizado E no total. Antes eram ignoradas — uma OS
   // só com peças (ou com a maior parte do valor em peças) aparecia como R$ 0,00.
