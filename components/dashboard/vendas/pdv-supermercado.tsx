@@ -80,7 +80,7 @@ import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
-import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import {
   construirProdutosACadastrar,
@@ -105,6 +105,12 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+  findUnresolvedSaleLines,
+  unresolvedSaleLinesDescription,
+} from "@/lib/pdv-finalize-integrity"
 
 import type { VendasPDVProps } from "./pdv-classic"
 
@@ -1428,11 +1434,27 @@ export function PdvSupermercado({
           }
           const _hadItems = cart.length > 0
 
+          // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
+          // linha de produto sem cadastro BLOQUEIA com os nomes — nunca filtrada
+          // em silêncio enquanto o total cheio segue para cobrança. Carrinho intacto.
+          const unresolvedSuper = findUnresolvedSaleLines(
+            cart.map((item) => ({
+              inventoryId: item.inventoryId,
+              name: item.name,
+              isAvulso: item.isAvulso,
+            })),
+            inventory.map((i) => i.id),
+          )
+          if (unresolvedSuper.length > 0) {
+            toast({
+              variant: "destructive",
+              title: "Item não pode ser vendido",
+              description: unresolvedSaleLinesDescription(unresolvedSuper),
+            })
+            return
+          }
+          // Todas as linhas resolvem (garantido pelo guard) — nada é descartado.
           const saleLines = cart
-            .filter(
-              (item) =>
-                isAvulsoSaleLine(item.inventoryId) || inventory.some((i) => i.id === item.inventoryId),
-            )
             .map((item) => ({
               inventoryId: item.inventoryId,
               quantity: item.quantity,
@@ -1502,6 +1524,27 @@ export function PdvSupermercado({
             toast({ title: "Falha transacional", description: result.reason })
             return
           }
+          // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
+          // sem impressão, sem cupom, sem audit sale_finalizado, sem fila de
+          // produtos, sem limpar o carrinho. Só informa o estado honesto,
+          // preserva carrinho/identidade e permite retry da MESMA venda
+          // (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
+          if (result.pending) {
+            setIsPaymentModalOpen(false)
+            setInstantPayIntent(null)
+            toast({
+              title: PENDING_SALE_TITLE,
+              description: PENDING_SALE_DESCRIPTION,
+              duration: 6000,
+            })
+            queueMicrotask(() => {
+              hardFocusSearch()
+              if (isModoRapido) {
+                window.requestAnimationFrame(() => hardFocusSearch())
+              }
+            })
+            return
+          }
           _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
           if (aPrazo > 0.02 && selectedCustomer && !result.pending) {
             appendContaReceberTituloPdvAprazo({
@@ -1541,7 +1584,7 @@ export function PdvSupermercado({
           appendAuditLog({
             action: "sale_finalized",
             userLabel: cashierId.slice(0, 8),
-            detail: `Venda ${result.saleId} Total ${brl(total)} | Din ${brl(dinheiro)} Pix ${brl(pix)} Déb ${brl(cartaoDebito)} Créd ${brl(cartaoCredito)} Carnê ${brl(carne)} Prazo ${brl(aPrazo)} Vale ${brl(creditoVale)}`,
+            detail: `${result.pending ? "Venda PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda "}${displaySaleNumber(result.saleId, result.pending)} Total ${brl(total)} | Din ${brl(dinheiro)} Pix ${brl(pix)} Déb ${brl(cartaoDebito)} Créd ${brl(cartaoCredito)} Carnê ${brl(carne)} Prazo ${brl(aPrazo)} Vale ${brl(creditoVale)}`,
           })
           if (subtotal > 0 && discountTotal > 0) {
             const pct = (discountTotal / subtotal) * 100
@@ -1554,6 +1597,7 @@ export function PdvSupermercado({
             }
           }
 
+          // CONFIRMED: venda concluída — limpa o carrinho e conclui pós-venda.
           setCart([])
           setSelectedCustomer(null)
           setDiscountReais(0)

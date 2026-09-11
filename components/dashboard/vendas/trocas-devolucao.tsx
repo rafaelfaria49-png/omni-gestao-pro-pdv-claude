@@ -20,6 +20,12 @@ import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+  findUnresolvedSaleLines,
+  unresolvedSaleLinesDescription,
+} from "@/lib/pdv-finalize-integrity"
 
 /** Modos de operação expostos na UI. `troca`/`vale_credito` geram crédito local; `devolucao`/`somente_estoque` não. */
 type DevMode = "devolucao" | "troca" | "vale_credito" | "somente_estoque"
@@ -418,6 +424,21 @@ export function TrocasDevolucao({
       else if (diffPayMethod === "credito") pb.cartaoCredito = diff
     }
 
+    // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
+    // item novo sem cadastro BLOQUEIA com os nomes — nunca cobrado sem persistir.
+    const unresolvedTroca = findUnresolvedSaleLines(
+      trocaCart.map((l) => ({ inventoryId: l.inventoryId, name: l.name })),
+      inventory.map((i) => i.id),
+    )
+    if (unresolvedTroca.length > 0) {
+      toast({
+        title: "Item não pode ser vendido",
+        description: unresolvedSaleLinesDescription(unresolvedTroca),
+        variant: "destructive",
+      })
+      return
+    }
+
     const novaVenda = await finalizeSaleTransaction({
       lines: trocaCart.map((l) => ({ inventoryId: l.inventoryId, quantity: l.quantity, name: l.name, unitPrice: l.unitPrice })),
       total: totalNovaCompra,
@@ -432,6 +453,26 @@ export function TrocasDevolucao({
         title: "Devolução registrada, nova venda falhou",
         description: `${novaVenda.reason} — devolução ${dev.devolucaoId} mantida. Registre a nova venda manualmente.`,
         variant: "destructive",
+      })
+      return
+    }
+
+    // PENDING (CORREÇÃO-01): a nova venda ainda NÃO confirmou — sem callback
+    // de conclusão, sem marcar a devolução como concluída, sem cupom. Só
+    // informa o estado honesto e mantém o mini-carrinho; o reenvio usa a MESMA
+    // identidade (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
+    // (O audit devolucao_vale abaixo é trilha honesta da devolução registrada +
+    // venda pendente — não é audit de venda concluída.)
+    if (novaVenda.pending) {
+      appendAuditLog({
+        action: "devolucao_vale",
+        userLabel: `${nomeLoja} (PDV)`,
+        detail: `[troca_imediata PENDENTE — AGUARDANDO CONFIRMAÇÃO] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
+      })
+      toast({
+        title: PENDING_SALE_TITLE,
+        description: PENDING_SALE_DESCRIPTION,
+        duration: 6000,
       })
       return
     }
@@ -458,7 +499,8 @@ export function TrocasDevolucao({
 
     setLastDevolucao({ id: dev.devolucaoId, credit: creditEmitido, nome, cpf })
 
-    // Abre o cupom de troca automaticamente (resumo operacional para o cliente)
+    // CONFIRMED: abre o cupom de troca (resumo operacional para o cliente).
+    // (PENDING já retornou acima — nunca abre cupom pendente.)
     const itensDevolvidos = lines.map((req) => {
       const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
       const valorUnit = sl ? sl.lineTotal / sl.quantity : 0
@@ -479,7 +521,7 @@ export function TrocasDevolucao({
       tipo: "troca",
       devolucaoId: dev.devolucaoId,
       vendaOrigemId: sale.id,
-      novaVendaId: novaVenda.pending ? null : novaVenda.saleId,
+      novaVendaId: novaVenda.saleId,
       clienteNome: nome,
       clienteCpf: cpf,
       operador: nomeLoja,

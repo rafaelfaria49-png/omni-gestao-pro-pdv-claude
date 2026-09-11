@@ -14,9 +14,13 @@ import {
   PedidoIdConflitoMesmaLojaError,
   InvalidClientSaleIdError,
   ClientSaleIdReusedError,
+  SalePaymentsMismatchError,
+  InvalidSaleLinesError,
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
 import { persistSaleV2 } from "@/lib/vendas/sale-writer-v2"
+import { handleEvent } from "@/lib/automation/automation-engine"
+import { dispatchSaleAutomationIfCreated } from "@/lib/vendas/sale-automation-dispatch"
 import {
   isSaleNumberingError,
   SALE_NUMBERING_ERROR_CODES,
@@ -123,6 +127,39 @@ export async function POST(req: Request) {
         allowClosedOriginalSession,
       },
     })
+    // Automação definitiva nasce SOMENTE do create durável (CORREÇÃO-01):
+    // a dedupe é a unique (storeId, clientSaleId) — replay/retry/aba
+    // concorrente perdedora/reload nunca redisparam. Falha aqui NUNCA desfaz
+    // a venda nem muda este resultado (persistência financeira é autoridade
+    // primária). Ressalva B: crash entre commit e dispatch = under-delivery
+    // honesto, nunca duplicação (sem outbox nesta fase).
+    if (!result.replayed) {
+      try {
+        await dispatchSaleAutomationIfCreated(
+          { replayed: result.replayed, storeId: lojaId, venda: result.venda, sale },
+          handleEvent,
+          (automationError) => {
+            console.error(
+              "[ops/venda-persist/v2] automacao-pos-commit-falhou",
+              JSON.stringify({
+                lojaId,
+                pedidoId: result.venda.pedidoId,
+                error: automationError instanceof Error ? automationError.message : String(automationError),
+              }),
+            )
+          },
+        )
+      } catch (automationError) {
+        console.error(
+          "[ops/venda-persist/v2] automacao-pos-commit-falhou",
+          JSON.stringify({
+            lojaId,
+            pedidoId: result.venda.pedidoId,
+            error: automationError instanceof Error ? automationError.message : String(automationError),
+          }),
+        )
+      }
+    }
     return NextResponse.json({ ok: true, replayed: result.replayed, venda: result.venda })
   } catch (e) {
     if (e instanceof InvalidClientSaleIdError) {
@@ -149,6 +186,16 @@ export async function POST(req: Request) {
     }
     if (e instanceof UnresolvedProductError) {
       return jsonError(e.message, e.code, 409, { inventoryIds: e.inventoryIds })
+    }
+    // Invariante linhas × total (PDV-MOTOR-INTEGRITY-N1): mesmo contrato
+    // fail-closed da rota V1 — falha de negócio (409), nunca 500.
+    if (e instanceof SalePaymentsMismatchError) {
+      console.warn("[ops/venda-persist/v2] pagamentos-total-divergente", JSON.stringify({ lojaId }))
+      return jsonError(e.message, e.code, 409)
+    }
+    if (e instanceof InvalidSaleLinesError) {
+      console.warn("[ops/venda-persist/v2] linhas-venda-invalidas", JSON.stringify({ lojaId }))
+      return jsonError(e.message, e.code, 409)
     }
     // Quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005): mesmo contrato
     // fail-closed da rota V1 — falha de negócio (409), nunca 500.

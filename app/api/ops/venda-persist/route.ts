@@ -15,10 +15,14 @@ import {
   PedidoIdDeOutraLojaError,
   PedidoIdConflitoMesmaLojaError,
   VendaCreateUniqueConflictError,
+  SalePaymentsMismatchError,
+  InvalidSaleLinesError,
   classifyExistingVendaReplay,
   VENDA_REPLAY_SELECT,
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
+import { handleEvent } from "@/lib/automation/automation-engine"
+import { dispatchSaleAutomationIfCreated } from "@/lib/vendas/sale-automation-dispatch"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -88,6 +92,39 @@ export async function POST(req: Request) {
       // "Transaction not found... refere-se a uma transação antiga já encerrada".
       { maxWait: 15_000, timeout: 20_000 },
     )
+
+    // Automação definitiva nasce SOMENTE do create durável (CORREÇÃO-01):
+    // a dedupe é a unique de `pedidoId` + fingerprint fail-closed — replay
+    // (aba concorrente perdedora, retry, reenvio) nunca redispara. Falha aqui
+    // NUNCA desfaz a venda nem muda este resultado. Ressalva B: crash entre
+    // commit e dispatch = under-delivery honesto, nunca duplicação.
+    if (!result.replayed) {
+      try {
+        await dispatchSaleAutomationIfCreated(
+          { replayed: result.replayed, storeId: lojaId, venda: result.venda, sale },
+          handleEvent,
+          (automationError) => {
+            console.error(
+              "[ops/venda-persist] automacao-pos-commit-falhou",
+              JSON.stringify({
+                lojaId,
+                pedidoId,
+                error: automationError instanceof Error ? automationError.message : String(automationError),
+              }),
+            )
+          },
+        )
+      } catch (automationError) {
+        console.error(
+          "[ops/venda-persist] automacao-pos-commit-falhou",
+          JSON.stringify({
+            lojaId,
+            pedidoId,
+            error: automationError instanceof Error ? automationError.message : String(automationError),
+          }),
+        )
+      }
+    }
 
     return NextResponse.json({ ok: true, replayed: result.replayed, venda: result.venda })
   } catch (e) {
@@ -219,6 +256,24 @@ export async function POST(req: Request) {
         { error: "Estoque insuficiente", detail: error.message, code: error.code },
         { status: 409 },
       )
+    }
+    // Invariante linhas × total (PDV-MOTOR-INTEGRITY-N1): request incoerente
+    // (cobrança ≠ total, venda sem itens, linha inválida) é falha de negócio
+    // (409), nunca erro de servidor. Nada foi gravado — os guards rodam antes
+    // de qualquer efeito na transação. Vale para V1 e V2 (mesmo núcleo).
+    if (error instanceof SalePaymentsMismatchError) {
+      console.warn(
+        "[ops/venda-persist] pagamentos-total-divergente",
+        JSON.stringify({ lojaId, pedidoId, ...error.detail }),
+      )
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
+    }
+    if (error instanceof InvalidSaleLinesError) {
+      console.warn(
+        "[ops/venda-persist] linhas-venda-invalidas",
+        JSON.stringify({ lojaId, pedidoId }),
+      )
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
     }
     const msg = error instanceof Error ? error.message : String(error)
     // Extrai code do PrismaClientKnownRequestError (P2002 unique, P2003 FK, P2025 not found, etc.)
