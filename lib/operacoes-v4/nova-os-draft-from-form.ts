@@ -45,6 +45,22 @@ export interface NovaOSClienteNovoV4 {
 
 export type TipoEntradaOSV4 = "servico_autorizado" | "precisa_diagnostico" | "retorno_garantia";
 
+/** Serviço autorizado — UMA linha comercial da Nova OS (GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002).
+ *  `id` é o identificador único da LINHA (nunca o id do catálogo): duas linhas
+ *  podem compartilhar o mesmo `catalogoServicoId` e continuar distintas. */
+export interface ServicoAutorizadoV4 {
+  /** Id da linha; ausente = gerado (`autorizado` no singular legado, `autorizado-N` no multi). */
+  id?: string;
+  descricao: string;
+  valor: number;
+  custo: number;
+  garantiaDias: number;
+  /** Snapshot textual do prazo/tempo estimado (ex.: "2 horas"). Nunca vira SLA. */
+  prazoTexto?: string;
+  /** Rastreabilidade opcional ao `Servico` de catálogo. Snapshot textual/comercial continua autoritativo. */
+  catalogoServicoId?: string;
+}
+
 /** Forma bruta do formulário do modal "Nova OS" da V4. */
 export interface NovaOSFormV4 {
   /** Cliente existente — tem prioridade sobre os campos de cliente novo. */
@@ -63,13 +79,18 @@ export interface NovaOSFormV4 {
   prioridade?: "baixa" | "media" | "alta";
   localFisico?: "balcao" | "bancada" | "aguardando_diagnostico";
   previsaoEntrega?: string;
+  /** Legado singular (UI atual = 1 serviço). Preferir `servicosAutorizados`; quando
+   *  o array vier preenchido ele tem prioridade. Mantido para compatibilidade. */
   servicoAutorizado?: {
     descricao: string;
     valor: number;
     custo: number;
     garantiaDias: number;
     prazoTexto?: string;
+    catalogoServicoId?: string;
   } | null;
+  /** Multi-serviço (UI-003): N linhas autorizadas na mesma OS. */
+  servicosAutorizados?: ServicoAutorizadoV4[] | null;
 }
 
 /** Tipo de equipamento (chave V4) → rótulo canônico da V3 (`TIPO_EQUIPAMENTO_V3`). */
@@ -118,14 +139,26 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
   const origem: NovaOSOrigemV4 =
     form.tipoEntrada === "retorno_garantia" ? (form.origem === "garantia" ? "garantia" : "retorno") : form.origem;
 
-  const serv = form.tipoEntrada === "servico_autorizado" && form.servicoAutorizado?.descricao.trim() && form.servicoAutorizado.valor > 0
-    ? form.servicoAutorizado
-    : null;
+  // Multi-serviço (GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002): o array tem
+  // prioridade quando preenchido; o singular legado segue válido (1 serviço).
+  // Linhas sem descrição ou sem valor > 0 são ignoradas (mesma regra de antes).
+  const multi = Array.isArray(form.servicosAutorizados) ? form.servicosAutorizados : [];
+  const usaMulti = form.tipoEntrada === "servico_autorizado" && multi.length > 0;
+  const singular =
+    !usaMulti &&
+    form.tipoEntrada === "servico_autorizado" &&
+    form.servicoAutorizado?.descricao.trim() &&
+    form.servicoAutorizado.valor > 0
+      ? form.servicoAutorizado
+      : null;
+  const servicos: ServicoAutorizadoV4[] = usaMulti ? multi : singular ? [singular] : [];
+  const validos = servicos.filter((s) => s.descricao.trim() && s.valor > 0);
 
-  const itens = serv
-    ? [
-        {
-          id: "autorizado",
+  const itens =
+    validos.length > 0
+      ? validos.map((serv, i) => ({
+          // Linha N: id próprio (ou `autorizado-N`); singular legado preserva `autorizado`.
+          id: serv.id?.trim() || (singular ? "autorizado" : `autorizado-${i + 1}`),
           categoria: "servico" as const,
           descricao: serv.descricao.trim(),
           quantidade: 1,
@@ -134,9 +167,13 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
           kind: "cobrado" as const,
           baixaEstoque: false,
           garantiaDias: serv.garantiaDias > 0 ? serv.garantiaDias : undefined,
-        },
-      ]
-    : base.itens;
+          ...(clean(serv.prazoTexto) ? { prazoTexto: clean(serv.prazoTexto) } : {}),
+          ...(clean(serv.catalogoServicoId) ? { catalogoServicoId: clean(serv.catalogoServicoId) } : {}),
+        }))
+      : base.itens;
+
+  // Garantia da OS: snapshot do 1º serviço com garantia (singular legado = o único).
+  const comGarantia = validos.find((s) => s.garantiaDias > 0);
 
   return {
     ...base,
@@ -163,8 +200,8 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
       condicaoAparelho: clean(form.cor),
     },
     itens,
-    garantia: serv?.garantiaDias
-      ? { ...base.garantia, prazoDias: serv.garantiaDias }
+    garantia: comGarantia
+      ? { ...base.garantia, prazoDias: comGarantia.garantiaDias }
       : base.garantia,
   };
 }
