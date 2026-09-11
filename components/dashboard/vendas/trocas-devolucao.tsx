@@ -457,6 +457,26 @@ export function TrocasDevolucao({
       return
     }
 
+    // PENDING (CORREÇÃO-01): a nova venda ainda NÃO confirmou — sem callback
+    // de conclusão, sem marcar a devolução como concluída, sem cupom. Só
+    // informa o estado honesto e mantém o mini-carrinho; o reenvio usa a MESMA
+    // identidade (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
+    // (O audit devolucao_vale abaixo é trilha honesta da devolução registrada +
+    // venda pendente — não é audit de venda concluída.)
+    if (novaVenda.pending) {
+      appendAuditLog({
+        action: "devolucao_vale",
+        userLabel: `${nomeLoja} (PDV)`,
+        detail: `[troca_imediata PENDENTE — AGUARDANDO CONFIRMAÇÃO] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
+      })
+      toast({
+        title: PENDING_SALE_TITLE,
+        description: PENDING_SALE_DESCRIPTION,
+        duration: 6000,
+      })
+      return
+    }
+
     onRegistered?.()
 
     // Excesso em dinheiro: debita o vale local pelo valor a devolver
@@ -474,12 +494,13 @@ export function TrocasDevolucao({
     appendAuditLog({
       action: "devolucao_vale",
       userLabel: `${nomeLoja} (PDV)`,
-      detail: `${novaVenda.pending ? "[troca_imediata PENDENTE — AGUARDANDO CONFIRMAÇÃO] " : "[troca_imediata] "}dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
+      detail: `[troca_imediata] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
     })
 
     setLastDevolucao({ id: dev.devolucaoId, credit: creditEmitido, nome, cpf })
 
-    // Abre o cupom de troca automaticamente (resumo operacional para o cliente)
+    // CONFIRMED: abre o cupom de troca (resumo operacional para o cliente).
+    // (PENDING já retornou acima — nunca abre cupom pendente.)
     const itensDevolvidos = lines.map((req) => {
       const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
       const valorUnit = sl ? sl.lineTotal / sl.quantity : 0
@@ -500,7 +521,7 @@ export function TrocasDevolucao({
       tipo: "troca",
       devolucaoId: dev.devolucaoId,
       vendaOrigemId: sale.id,
-      novaVendaId: novaVenda.pending ? null : novaVenda.saleId,
+      novaVendaId: novaVenda.saleId,
       clienteNome: nome,
       clienteCpf: cpf,
       operador: nomeLoja,
@@ -517,18 +538,6 @@ export function TrocasDevolucao({
       at: new Date().toISOString(),
     })
     setCupomOpen(true)
-
-    // PENDING (PDV-MOTOR-INTEGRITY-N1): sem sucesso definitivo — o cupom acima
-    // já sai sem novaVendaId. Mantém o mini-carrinho; o reenvio usa a MESMA
-    // identidade (Vendas → Reenviar sync).
-    if (novaVenda.pending) {
-      toast({
-        title: PENDING_SALE_TITLE,
-        description: PENDING_SALE_DESCRIPTION,
-        duration: 6000,
-      })
-      return
-    }
 
     toast({
       title: "Troca finalizada",

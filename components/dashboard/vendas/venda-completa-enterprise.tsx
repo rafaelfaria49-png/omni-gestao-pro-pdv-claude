@@ -767,6 +767,21 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         return false
       }
 
+      // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo — sem
+      // cupom, sem impressão, sem audit sale_finalizado, sem fila de produtos,
+      // sem limpar rascunho/carrinho/cliente. Só informa o estado honesto,
+      // preserva tudo e permite retry da MESMA venda (Vendas → Reenviar sync).
+      // Tudo abaixo é CONFIRMED.
+      if (result.pending) {
+        setIsPaymentOpen(false)
+        toast({
+          title: PENDING_SALE_TITLE,
+          description: PENDING_SALE_DESCRIPTION,
+          duration: 6000,
+        })
+        return true
+      }
+
       // Fila "Produtos a cadastrar": itens avulsos vendidos → revisão posterior.
       // Não toca estoque/venda/caixa e nunca lança (venda já concluída).
       try {
@@ -822,9 +837,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         }))
 
       // enrichVendaEnterprise awaited — persiste dados completos no DB
-      const enrichResult = result.pending
-        ? { ok: false as const }
-        : await enrichVendaEnterprise({
+      // (CONFIRMED: PENDING já retornou acima).
+      const enrichResult = await enrichVendaEnterprise({
         pedidoId: result.saleId,
         storeId,
         clienteId: selectedCliente.id,
@@ -841,21 +855,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       })
 
       if (!enrichResult.ok) {
-        if (result.pending) {
-          // PENDING (PDV-MOTOR-INTEGRITY-N1): sem copy de sucesso definitivo —
-          // o número ainda não existe e os detalhes seguem no carrinho/rascunho.
-          toast({
-            title: PENDING_SALE_TITLE,
-            description: PENDING_SALE_DESCRIPTION,
-            duration: 6000,
-          })
-        } else {
-          // Venda confirmada mas sem os dados detalhados — avisa sem bloquear.
-          toast({
-            title: "Aviso de sincronização",
-            description: "Venda registrada. Os dados detalhados serão sincronizados em breve.",
-          })
-        }
+        // Venda confirmada mas sem os dados detalhados — avisa sem bloquear.
+        toast({
+          title: "Aviso de sincronização",
+          description: "Venda registrada. Os dados detalhados serão sincronizados em breve.",
+        })
       }
 
       const storeDisplayName =
@@ -894,17 +898,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           : undefined,
       }
 
+      // CONFIRMED: cupom definitivo, limpeza de rascunho/carrinho e pós-venda.
+      // (PENDING já retornou acima — nunca abre cupom pendente.)
       setCupomData(cupom)
       setIsPaymentOpen(false)
       setCupomOpen(true)
-
-      // PENDING (PDV-MOTOR-INTEGRITY-N1): mantém rascunho + carrinho + cliente.
-      // O reenvio usa a MESMA identidade (Vendas → Reenviar sync); a confirmação
-      // posterior conclui exatamente uma vez. O cupom acima já sai com número
-      // PENDENTE (honesto, nunca definitivo).
-      if (result.pending) {
-        return true
-      }
 
       try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch {}
 

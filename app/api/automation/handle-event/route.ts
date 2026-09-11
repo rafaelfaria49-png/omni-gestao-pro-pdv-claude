@@ -38,6 +38,23 @@ export async function POST(req: NextRequest) {
     const guarded = await guardAutomationHandleEventPost(req, body, VALID_EVENTS)
     if (!guarded.ok) return guarded.response
 
+    // CORREÇÃO-01: `venda_finalizada` de browser NÃO dispara automação por esta
+    // rota. O dispatch definitivo é server-side no ponto create-vs-replay de
+    // `venda-persist` (V1/V2) — ancorado nas uniques duráveis, não em POST por
+    // aba. Sem este no-op, duas abas/retry/reload (inclusive bundle PWA stale)
+    // gerariam N automações reais para a MESMA confirmação. O event-bus local
+    // continua valendo como notificação de UI (refresh de listas).
+    // Resposta honesta: ok (request válido/autenticado), sem dispatch.
+    if (guarded.event === "venda_finalizada") {
+      return NextResponse.json({
+        ok: true,
+        event: guarded.event,
+        dispatched: false,
+        reason:
+          "venda_finalizada é despachada server-side em venda-persist (create-vs-replay); POST de browser ignorado para impedir duplicação entre abas/retry/reload.",
+      })
+    }
+
     await handleEvent(guarded.event, guarded.payload)
     return NextResponse.json({
       ok: true,

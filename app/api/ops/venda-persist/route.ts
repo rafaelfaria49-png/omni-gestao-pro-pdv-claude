@@ -21,6 +21,8 @@ import {
   VENDA_REPLAY_SELECT,
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
+import { handleEvent } from "@/lib/automation/automation-engine"
+import { dispatchSaleAutomationIfCreated } from "@/lib/vendas/sale-automation-dispatch"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -90,6 +92,39 @@ export async function POST(req: Request) {
       // "Transaction not found... refere-se a uma transação antiga já encerrada".
       { maxWait: 15_000, timeout: 20_000 },
     )
+
+    // Automação definitiva nasce SOMENTE do create durável (CORREÇÃO-01):
+    // a dedupe é a unique de `pedidoId` + fingerprint fail-closed — replay
+    // (aba concorrente perdedora, retry, reenvio) nunca redispara. Falha aqui
+    // NUNCA desfaz a venda nem muda este resultado. Ressalva B: crash entre
+    // commit e dispatch = under-delivery honesto, nunca duplicação.
+    if (!result.replayed) {
+      try {
+        await dispatchSaleAutomationIfCreated(
+          { replayed: result.replayed, storeId: lojaId, venda: result.venda },
+          handleEvent,
+          (automationError) => {
+            console.error(
+              "[ops/venda-persist] automacao-pos-commit-falhou",
+              JSON.stringify({
+                lojaId,
+                pedidoId,
+                error: automationError instanceof Error ? automationError.message : String(automationError),
+              }),
+            )
+          },
+        )
+      } catch (automationError) {
+        console.error(
+          "[ops/venda-persist] automacao-pos-commit-falhou",
+          JSON.stringify({
+            lojaId,
+            pedidoId,
+            error: automationError instanceof Error ? automationError.message : String(automationError),
+          }),
+        )
+      }
+    }
 
     return NextResponse.json({ ok: true, replayed: result.replayed, venda: result.venda })
   } catch (e) {

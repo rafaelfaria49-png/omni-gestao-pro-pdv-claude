@@ -1916,6 +1916,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       toast({ title: "Falha ao finalizar", description: result.reason, variant: "destructive" })
       return
     }
+
+    // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo — sem
+    // impressão, sem cupom, sem fila de produtos, sem limpar carrinho nem a
+    // persistência local. Só informa o estado honesto, preserva
+    // carrinho/identidade e permite retry da MESMA venda (Vendas → Reenviar
+    // sync). Tudo abaixo é CONFIRMED.
+    if (result.pending) {
+      closePaymentModal(false)
+      toast({ title: PENDING_SALE_TITLE, description: PENDING_SALE_DESCRIPTION, duration: 6000 })
+      queueMicrotask(() => {
+        inputRef.current?.focus()
+        if (isModoRapido) {
+          window.requestAnimationFrame(() => inputRef.current?.focus())
+        }
+      })
+      return
+    }
+
     _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
     // Saldo à prazo → Conta a Receber (cache local; o servidor é a fonte da verdade).
     if (aPrazo > 0.02 && (customerName.trim() || selectedClienteId) && !result.pending) {
@@ -1953,29 +1971,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       /* fila é auxiliar — não interrompe o pós-venda */
     }
 
-    // PENDING (PDV-MOTOR-INTEGRITY-N1): venda salva local, AGUARDANDO
-    // confirmação — sem copy de sucesso definitivo, sem limpar carrinho nem a
-    // persistência local. Reenvio com a MESMA identidade em Vendas → Reenviar
-    // sync; a confirmação posterior conclui exatamente uma vez.
-    if (result.pending) {
-      if (impressaoConfig.imprimirAutomatico && _hadItems) {
-        setAutoPrintInput(_printInput)
-      } else if (_hadItems) {
-        setPostSalePrintInput(_printInput)
-        setPostSalePrintOpen(true)
-      }
-      closePaymentModal(false)
-      toast({ title: PENDING_SALE_TITLE, description: PENDING_SALE_DESCRIPTION, duration: 6000 })
-      queueMicrotask(() => {
-        inputRef.current?.focus()
-        if (isModoRapido) {
-          window.requestAnimationFrame(() => inputRef.current?.focus())
-        }
-      })
-      return
-    }
-
-    // Venda real concluída — limpa carrinho e persistência.
+    // CONFIRMED: venda concluída — limpa carrinho e persistência.
     paymentDiscountSnapshotRef.current = null
     try { localStorage.removeItem(CART_STORAGE_KEY(storeIdKey)) } catch { /* ignore */ }
     setCart([])

@@ -1524,6 +1524,27 @@ export function PdvSupermercado({
             toast({ title: "Falha transacional", description: result.reason })
             return
           }
+          // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
+          // sem impressão, sem cupom, sem audit sale_finalizado, sem fila de
+          // produtos, sem limpar o carrinho. Só informa o estado honesto,
+          // preserva carrinho/identidade e permite retry da MESMA venda
+          // (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
+          if (result.pending) {
+            setIsPaymentModalOpen(false)
+            setInstantPayIntent(null)
+            toast({
+              title: PENDING_SALE_TITLE,
+              description: PENDING_SALE_DESCRIPTION,
+              duration: 6000,
+            })
+            queueMicrotask(() => {
+              hardFocusSearch()
+              if (isModoRapido) {
+                window.requestAnimationFrame(() => hardFocusSearch())
+              }
+            })
+            return
+          }
           _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
           if (aPrazo > 0.02 && selectedCustomer && !result.pending) {
             appendContaReceberTituloPdvAprazo({
@@ -1576,32 +1597,7 @@ export function PdvSupermercado({
             }
           }
 
-          // PENDING (PDV-MOTOR-INTEGRITY-N1): sem sucesso definitivo, sem limpar
-          // o carrinho. Reenvio com a MESMA identidade em Vendas → Reenviar sync.
-          // O cupom sai com número PENDENTE (honesto, nunca definitivo).
-          if (result.pending) {
-            if (impressaoConfig.imprimirAutomatico && _hadItems) {
-              setAutoPrintInput(_printInput)
-            } else if (_hadItems) {
-              setPostSalePrintInput(_printInput)
-              setPostSalePrintOpen(true)
-            }
-            setIsPaymentModalOpen(false)
-            setInstantPayIntent(null)
-            toast({
-              title: PENDING_SALE_TITLE,
-              description: PENDING_SALE_DESCRIPTION,
-              duration: 6000,
-            })
-            queueMicrotask(() => {
-              hardFocusSearch()
-              if (isModoRapido) {
-                window.requestAnimationFrame(() => hardFocusSearch())
-              }
-            })
-            return
-          }
-
+          // CONFIRMED: venda concluída — limpa o carrinho e conclui pós-venda.
           setCart([])
           setSelectedCustomer(null)
           setDiscountReais(0)

@@ -1132,11 +1132,17 @@ export function OperationsProvider({
   const vendaAutoRetryHoldRef = useRef<Map<string, number>>(new Map())
   const writerCapabilityRef = useRef<SaleWriterCapability>("unknown")
   /**
-   * Exatamente-uma-vez do `venda_finalizada` (PDV-MOTOR-INTEGRITY-N1): o evento
+   * NOTIFICAÇÃO LOCAL DE UI do `venda_finalizada` (CORREÇÃO-01): o evento
    * definitivo só sai na CONFIRMAÇÃO server-side (POST de persistência,
    * reconciliação com venda existente ou recovery com evidência) — nunca
    * enquanto PENDING. A chave é a identidade estável (`clientSaleId` ou `id`),
-   * então o retry da MESMA pendência confirma sem duplicar automações.
+   * então o retry da MESMA pendência notifica a UI sem duplicar refresh.
+   *
+   * NÃO é autoridade de idempotência da automação: o `Set` em memória não
+   * atravessa abas nem sobrevive a reload. A automação definitiva é
+   * despachada server-side no ponto create-vs-replay de `venda-persist`
+   * (ver `lib/vendas/sale-automation-dispatch.ts`); o browser nunca posta
+   * `venda_finalizada` para `/api/automation/handle-event`.
    */
   const confirmedSaleEmitterRef = useRef(createConfirmedSaleEmitter(() => {}))
   const emitVendaFinalizadaOnce = useCallback(

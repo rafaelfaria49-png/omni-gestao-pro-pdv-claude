@@ -19,6 +19,8 @@ import {
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
 import { persistSaleV2 } from "@/lib/vendas/sale-writer-v2"
+import { handleEvent } from "@/lib/automation/automation-engine"
+import { dispatchSaleAutomationIfCreated } from "@/lib/vendas/sale-automation-dispatch"
 import {
   isSaleNumberingError,
   SALE_NUMBERING_ERROR_CODES,
@@ -125,6 +127,39 @@ export async function POST(req: Request) {
         allowClosedOriginalSession,
       },
     })
+    // Automação definitiva nasce SOMENTE do create durável (CORREÇÃO-01):
+    // a dedupe é a unique (storeId, clientSaleId) — replay/retry/aba
+    // concorrente perdedora/reload nunca redisparam. Falha aqui NUNCA desfaz
+    // a venda nem muda este resultado (persistência financeira é autoridade
+    // primária). Ressalva B: crash entre commit e dispatch = under-delivery
+    // honesto, nunca duplicação (sem outbox nesta fase).
+    if (!result.replayed) {
+      try {
+        await dispatchSaleAutomationIfCreated(
+          { replayed: result.replayed, storeId: lojaId, venda: result.venda },
+          handleEvent,
+          (automationError) => {
+            console.error(
+              "[ops/venda-persist/v2] automacao-pos-commit-falhou",
+              JSON.stringify({
+                lojaId,
+                pedidoId: result.venda.pedidoId,
+                error: automationError instanceof Error ? automationError.message : String(automationError),
+              }),
+            )
+          },
+        )
+      } catch (automationError) {
+        console.error(
+          "[ops/venda-persist/v2] automacao-pos-commit-falhou",
+          JSON.stringify({
+            lojaId,
+            pedidoId: result.venda.pedidoId,
+            error: automationError instanceof Error ? automationError.message : String(automationError),
+          }),
+        )
+      }
+    }
     return NextResponse.json({ ok: true, replayed: result.replayed, venda: result.venda })
   } catch (e) {
     if (e instanceof InvalidClientSaleIdError) {

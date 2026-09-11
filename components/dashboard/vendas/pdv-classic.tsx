@@ -1981,6 +1981,26 @@ export function PdvClassic({
             toast({ title: "Falha transacional", description: result.reason })
             return false
           }
+          // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
+          // sem impressão, sem cupom, sem auditoria de venda concluída, sem
+          // fila de produtos, sem marcar total da última venda, sem limpar o
+          // carrinho. Só informa o estado honesto, preserva carrinho/identidade
+          // e permite retry da MESMA venda (Vendas → Reenviar sync). Tudo
+          // abaixo é CONFIRMED.
+          if (result.pending) {
+            toast({
+              title: PENDING_SALE_TITLE,
+              description: PENDING_SALE_DESCRIPTION,
+              duration: 6000,
+            })
+            queueMicrotask(() => {
+              shellBipeRef.current?.focus()
+              if (isModoRapido) {
+                window.requestAnimationFrame(() => shellBipeRef.current?.focus())
+              }
+            })
+            return true
+          }
           _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
           // Fila "Produtos a cadastrar": registra os itens avulsos vendidos para revisão posterior.
           // Não toca estoque/venda/caixa e nunca lança (não pode afetar a venda já concluída).
@@ -2039,23 +2059,7 @@ export function PdvClassic({
             }
           }
           setLastSaleTotal(total)
-          // PENDING (PDV-MOTOR-INTEGRITY-N1): sem sucesso definitivo, sem número
-          // definitivo, sem limpar o carrinho. O reenvio usa a MESMA identidade
-          // (Vendas → Reenviar sync); a confirmação posterior conclui uma vez só.
-          if (result.pending) {
-            toast({
-              title: PENDING_SALE_TITLE,
-              description: PENDING_SALE_DESCRIPTION,
-              duration: 6000,
-            })
-            queueMicrotask(() => {
-              shellBipeRef.current?.focus()
-              if (isModoRapido) {
-                window.requestAnimationFrame(() => shellBipeRef.current?.focus())
-              }
-            })
-            return true
-          }
+          // CONFIRMED: venda concluída — limpa carrinho e conclui pós-venda.
           setCart([])
           setDiscountReais(0)
           setDiscountPercent(0)

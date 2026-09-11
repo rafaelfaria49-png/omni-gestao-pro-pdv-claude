@@ -15,9 +15,11 @@
  *   `linhasNaoResolvidas`) — linha de produto físico sem cadastro resolvido
  *   BLOQUEIA com os nomes, nunca é filtrada em silêncio enquanto o total
  *   cheio segue para cobrança.
- * - `createConfirmedSaleEmitter`: `_exactly-once_ do `venda_finalizada` — o
- *   evento definitivo só sai na confirmação server-side, uma vez por
- *   identidade (`clientSaleId` ou `id`), mesmo com retry concorrente.
+ * - `createConfirmedSaleEmitter`: dedupe local (UI) do `venda_finalizada` — a
+ *   notificação local só sai na confirmação server-side, uma vez por
+ *   identidade (`clientSaleId` ou `id`), mesmo com retry concorrente. A
+ *   automação definitiva NÃO nasce aqui: é despachada server-side no ponto
+ *   create-vs-replay de `venda-persist`.
  */
 
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
@@ -105,9 +107,14 @@ export type ConfirmedSaleIdentity = {
 }
 
 /**
- * Fábrica do emissor exatamente-uma-vez. A chave é a identidade estável da
- * tentativa (`clientSaleId` quando houver, senão `id`): o retry da MESMA
- * pendência confirma sem duplicar venda/evento/estoque/financeiro.
+ * Dedupe local (UI) do emissor de venda confirmada — CORREÇÃO-01: NÃO é
+ * autoridade de idempotência da automação definitiva (o `Set` em memória não
+ * atravessa abas nem sobrevive a reload). A automação real é despachada
+ * server-side no ponto create-vs-replay de `venda-persist` (ver
+ * `lib/vendas/sale-automation-dispatch.ts`); aqui sai apenas a notificação
+ * local de UI. A chave continua sendo a identidade estável da tentativa
+ * (`clientSaleId` quando houver, senão `id`): o retry da MESMA pendência
+ * confirma sem duplicar notificações locais.
  */
 export function createConfirmedSaleEmitter(
   emit: (key: string) => void,
