@@ -52,7 +52,7 @@ import {
 } from "@/lib/operacoes-v4/posvenda-v4";
 // Reuso PURO (read-only) dos totais com faixa/grupo da V3 (GOAL OPS-V4-ORC-
 // MULTIOPCAO-MODEL-021): mesma função que a V3 usa para persistir o total.
-import { computeTotaisV3, pecaValorCliente, servicoValorCliente, type PecaV3, type ServicoV3 } from "@/lib/operacoes-v3/orcamento-model";
+import { computeTotaisV3, pecaCusto, pecaValorCliente, servicoCusto, servicoValorCliente, type PecaV3, type ServicoV3 } from "@/lib/operacoes-v3/orcamento-model";
 
 export const NI = "Não informado";
 
@@ -954,7 +954,8 @@ export interface V4OrcItemView {
   detalhe: string;
   /** Total da linha (qtd × unitário − desconto), formatado. */
   valor: string;
-  /** Custo da linha — somente quando `custoUnitario` real existir; senão null. */
+  /** Custo da linha — somente quando houver custo real (`custoUnitario` em peças,
+   *  `custoV3` em serviços); senão null (UNKNOWN, nunca zero inventado). */
   custo: string | null;
   /** Classificação persistida da linha (`kindV3`); null quando a OS não registra. */
   kind: V4OrcKind | null;
@@ -1067,13 +1068,17 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
 
   const servicos: V4OrcItemView[] = servicosRaw.map((s, i) => {
     const kind = lerOrcKindV4(s);
+    // Custo do serviço (`custoV3`, GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002):
+    // só quando realmente persistido — ausente em payloads legados = UNKNOWN (null),
+    // nunca zero inventado.
+    const custoV3 = (s as ServicoV3).custoV3;
+    const temCusto = typeof custoV3 === "number";
     return {
       id: txt(s.id) || `svc_${i}`,
       descricao: txt(s.descricao) || "Serviço",
       detalhe: typeof s.prazoGarantiaDias === "number" && s.prazoGarantiaDias > 0 ? `garantia ${s.prazoGarantiaDias}d` : "",
       valor: fmt(servicoLineTotal(s)),
-      // Servico não tem custo no modelo → nunca exibe margem por linha.
-      custo: null,
+      custo: temCusto ? fmt(servicoCusto(s as ServicoV3)) : null,
       kind,
       kindLabel: kind ? ORC_KIND_LABEL[kind] : "",
       grupoId: lerGrupoIdV4(s),
@@ -1112,12 +1117,17 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
     pecasRaw.reduce((a, p) => a + pecaLineTotal(p), 0);
   const totalNum = declaredTotal > 0 ? declaredTotal : lineSum;
 
-  // Custo/lucro agregado: SÓ quando todas as linhas têm custo real (Decisão 2).
-  // Como Servico não tem custo, basta haver 1 serviço para suprimir o agregado.
+  // Custo/lucro agregado: SÓ quando todas as linhas têm custo real conhecido
+  // (Decisão 2 + GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002). Serviços com `custoV3`
+  // persistido entram na soma; qualquer linha sem custo (ex.: serviço de payload
+  // legado) suprime o agregado — nunca se afirma lucro preciso sobre UNKNOWN.
   const todasComCusto =
-    hasLines && servicosRaw.length === 0 && pecasRaw.every((p) => typeof p.custoUnitario === "number");
+    hasLines &&
+    pecasRaw.every((p) => typeof p.custoUnitario === "number") &&
+    servicosRaw.every((s) => typeof (s as ServicoV3).custoV3 === "number");
   const custoNum = todasComCusto
-    ? pecasRaw.reduce((a, p) => a + (p.custoUnitario as number) * (p.quantidade || 0), 0)
+    ? pecasRaw.reduce((a, p) => a + pecaCusto(p as PecaV3), 0) +
+      servicosRaw.reduce((a, s) => a + servicoCusto(s as ServicoV3), 0)
     : null;
 
   const versoesCount = Array.isArray(os.orcamentoHistorico) ? os.orcamentoHistorico.length : 0;
