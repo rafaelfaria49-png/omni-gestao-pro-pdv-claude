@@ -55,6 +55,7 @@ import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-recebe
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
@@ -114,17 +115,11 @@ import {
 
 import type { VendasPDVProps } from "./pdv-classic"
 
-/** Atalho de quantidade: `3*78912345` → quantidade 3 e código à direita do asterisco. */
+/** Atalho de quantidade: `3x789`, `3*789`, `3×789` → quantidade 3 e código à direita do prefixo. */
 function parseStarQtyAndRest(raw: string): { codePart: string; qty: number } | null {
-  const t = raw.trim()
-  const i = t.indexOf("*")
-  if (i <= 0) return null
-  const left = t.slice(0, i).trim().replace(",", ".")
-  const right = t.slice(i + 1).trim()
-  if (!right) return null
-  const q = parseFloat(left)
-  if (!Number.isFinite(q) || q <= 0) return null
-  return { codePart: right, qty: q }
+  const parsed = parsePdvScanPrefix(raw)
+  if (!parsed.hasPrefix) return null
+  return { codePart: parsed.query, qty: parsed.qty }
 }
 
 function normalizeQtyForProduct(p: PdvCatalogProduct, q: number | undefined): number {

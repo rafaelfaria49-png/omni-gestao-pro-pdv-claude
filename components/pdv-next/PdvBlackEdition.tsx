@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -10,10 +11,29 @@ import {
 } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
+import { RotateCcw } from "lucide-react"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { useConfigEmpresa } from "@/lib/config-empresa"
+import { useStoreSettings } from "@/lib/store-settings-provider"
+import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
+import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
+import {
+  readPdvBlackTurno,
+  writePdvBlackTurno,
+  readPdvBlackCupom,
+  writePdvBlackCupom,
+} from "@/lib/pdv-black-storage"
+import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import {
+  useHeldSales,
+  saveHeldSale,
+  removeHeldSale,
+  newHoldId,
+  nextHoldLabel,
+  type HeldSale,
+} from "@/lib/pdv-hold"
 import { useOperationsStore } from "@/lib/operations-store"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { AberturaCaixaModal } from "@/components/dashboard/caixa/abertura-caixa-modal"
@@ -31,6 +51,14 @@ import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PaymentModal, type PaymentMethod } from "@/components/dashboard/vendas/payment-modal"
 import { PdvClientePicker, type PdvClienteResult } from "@/components/dashboard/vendas/pdv-cliente-picker"
+import { VendaEsperaModal } from "@/components/dashboard/vendas/venda-espera-modal"
+import { TrocasDevolucao } from "@/components/dashboard/vendas/trocas-devolucao"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { reducePaymentsToBreakdown } from "@/lib/pdv-payments"
 import {
@@ -42,43 +70,38 @@ import { PdvBlackShell, type PdvBlackCartRow } from "./PdvBlackShell"
 const brlBlack = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
 
-const TURNO_STORAGE_KEY = "@omnigestao:pdv-black-turno"
-const CUPOM_STORAGE_KEY = "@omnigestao:pdv-black-cupom"
-
-function readTurno(): number {
-  try { return parseInt(localStorage.getItem(TURNO_STORAGE_KEY) ?? "1", 10) || 1 } catch { return 1 }
-}
-function writeTurno(n: number) {
-  try { localStorage.setItem(TURNO_STORAGE_KEY, String(n)) } catch { /* ignore */ }
-}
-function readCupom(): number {
-  try { return parseInt(localStorage.getItem(CUPOM_STORAGE_KEY) ?? "1000", 10) || 1000 } catch { return 1000 }
-}
-function writeCupom(n: number) {
-  try { localStorage.setItem(CUPOM_STORAGE_KEY, String(n)) } catch { /* ignore */ }
-}
-
 export function PdvBlackEdition() {
   const router = useRouter()
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva()
   const { config } = useConfigEmpresa()
-  const { inventory, setInventory, finalizeSaleTransaction } = useOperationsStore()
+  const { pdvParams } = useStoreSettings()
+  const {
+    inventory,
+    setInventory,
+    finalizeSaleTransaction,
+    getSaldoCreditoCliente,
+    sincronizarCreditoLocal,
+  } = useOperationsStore()
   const { caixa, abrirCaixa, fecharCaixa } = useCaixa()
   const { toast } = useToast()
+
+  // ── Terminal e escopo de storage ───────────────────────────────────────────
+  const terminalId = useMemo(
+    () => readSelectedTerminal(lojaAtivaId)?.id ?? "default",
+    [lojaAtivaId]
+  )
 
   // ── Caixa ──────────────────────────────────────────────────────────────────
   const [turno, setTurno] = useState<number>(1)
   const [cupomNum, setCupomNum] = useState<number>(1000)
   const [showAbertura, setShowAbertura] = useState(false)
   const [showFechamento, setShowFechamento] = useState(false)
-  // Fechar caixa pelo shell preto é ação sensível: exige PIN de supervisor
-  // (mesmo gate compartilhado da CaixaStatusBar). Abrir caixa segue livre.
   const [fecharGateOpen, setFecharGateOpen] = useState(false)
 
   useEffect(() => {
-    setTurno(readTurno())
-    setCupomNum(readCupom())
-  }, [])
+    setTurno(readPdvBlackTurno(lojaAtivaId, terminalId))
+    setCupomNum(readPdvBlackCupom(lojaAtivaId, terminalId))
+  }, [lojaAtivaId, terminalId])
 
   const handleAbrirCaixa = useCallback(() => {
     setShowAbertura(true)
@@ -94,10 +117,10 @@ export function PdvBlackEdition() {
     if (!prevCaixaOpen.current && caixa.isOpen) {
       const next = turno + 1
       setTurno(next)
-      writeTurno(next)
+      writePdvBlackTurno(lojaAtivaId, terminalId, next)
     }
     prevCaixaOpen.current = caixa.isOpen
-  }, [caixa.isOpen, turno])
+  }, [caixa.isOpen, turno, lojaAtivaId, terminalId])
 
   // ── Nome da loja e operador ────────────────────────────────────────────────
   const storeName = useMemo(() => {
@@ -106,8 +129,6 @@ export function PdvBlackEdition() {
     return config?.empresa.nomeFantasia || config?.empresa.razaoSocial || "OmniGestão PDV"
   }, [lojaAtivaRaw, config])
 
-  // Operador para exibição e auditoria (cashierId): fonte única — abertura do
-  // caixa → sessão autenticada → e-mail → "Operador não identificado". Nunca id.
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome((lojaAtivaId ?? "").trim())
   const operadorNome = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
@@ -118,6 +139,10 @@ export function PdvBlackEdition() {
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null)
   const [lastAddedItem, setLastAddedItem] = useState<string | null>(null)
 
+  // ── Descontos (percentual e valor em reais) ──────────────────────────────────
+  const [discountReais, setDiscountReais] = useState<number>(0)
+  const [discountPercent, setDiscountPercent] = useState<number>(0)
+
   // ── Barcode ────────────────────────────────────────────────────────────────
   const [bipeCode, setBipeCode] = useState("")
   const bipeRef = useRef<HTMLInputElement | null>(null)
@@ -126,10 +151,11 @@ export function PdvBlackEdition() {
   // ── Cliente ────────────────────────────────────────────────────────────────
   const [customerDisplay, setCustomerDisplay] = useState("Consumidor final")
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null)
-  /** Cliente completo (com CPF) — necessário para venda à prazo (motor exige documento). */
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; cpf: string; phone: string } | null>(null)
   const [aPrazoClientePickerOpen, setAPrazoClientePickerOpen] = useState(false)
   const [clientSearchOpen, setClientSearchOpen] = useState(false)
+  const [customerCreditFetched, setCustomerCreditFetched] = useState<number | null>(null)
+
   const { clientes: clientResults } = useClienteSearch(
     clientSearchOpen ? customerDisplay.replace("Consumidor final", "") : "",
     lojaAtivaId
@@ -143,25 +169,55 @@ export function PdvBlackEdition() {
     [clientResults]
   )
 
-  // ── Documento fiscal ───────────────────────────────────────────────────────
-  const [emitirNota, setEmitirNota] = useState(true)
+  // Busca de crédito/vale do cliente (remoto com fallback local)
+  useEffect(() => {
+    setCustomerCreditFetched(null)
+    const docNorm = (selectedCustomer?.cpf ?? "").replace(/\D/g, "")
+    const cId = selectedCustomer?.id
+    if (!docNorm && !cId) return
+    const params = new URLSearchParams({ lojaId: lojaAtivaId ?? "" })
+    if (docNorm) params.set("doc", docNorm)
+    else if (cId) params.set("clienteId", cId)
+    fetch(`/api/ops/credito-cliente?${params.toString()}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { creditos?: Record<string, { nome: string; saldo: number }> } | null) => {
+        const saldo = j?.creditos ? Object.values(j.creditos).reduce((s, v) => s + v.saldo, 0) : 0
+        setCustomerCreditFetched(saldo)
+      })
+      .catch(() => setCustomerCreditFetched(null))
+  }, [selectedCustomer?.cpf, selectedCustomer?.id, lojaAtivaId])
 
-  // ── Valor recebido ────────────────────────────────────────────────────────
-  const [valorRecebido, setValorRecebido] = useState("")
+  const customerStoreCredit = useMemo(() => {
+    if (!selectedCustomer) return 0
+    if (customerCreditFetched != null) return customerCreditFetched
+    return getSaldoCreditoCliente(selectedCustomer.cpf)
+  }, [selectedCustomer, customerCreditFetched, getSaldoCreditoCliente])
 
   // ── Catálogo ───────────────────────────────────────────────────────────────
   const products = useMemo(
-    // Server = fonte da verdade: somente estoque real da loja, sem catálogo mock.
     () => mergePdvCatalogWithInventory([], inventory),
     [inventory]
   )
 
-  // ── Total ──────────────────────────────────────────────────────────────────
-  const total = useMemo(
+  // ── Totais canônicos (subtotal, desconto combinado, imposto estimado, total) ─
+  const subtotal = useMemo(
     () => cartRows.reduce((acc, r) => acc + r.qty * r.unitPrice, 0),
     [cartRows]
   )
+  const pctRaw = Math.min(100, Math.max(0, discountPercent || 0))
+  const discountTotal = Math.min(
+    +(subtotal * (pctRaw / 100)).toFixed(2) + Math.max(0, discountReais || 0),
+    subtotal
+  )
+  const { impostoEstimado, total } = useMemo(
+    () => computePdvCartTotals(subtotal, discountTotal, pdvParams),
+    [subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv]
+  )
   const itemCount = cartRows.length
+
+  // ── Valor recebido e troco (derivados do modal de pagamento) ───────────────
+  const [lastCashTendered, setLastCashTendered] = useState<number | null>(null)
+  const [lastTroco, setLastTroco] = useState<number>(0)
 
   // ── Diálogos ──────────────────────────────────────────────────────────────
   const [productSearchOpen, setProductSearchOpen] = useState(false)
@@ -169,6 +225,102 @@ export function PdvBlackEdition() {
   const [qtyEditOpen, setQtyEditOpen] = useState(false)
   const [cancelSaleOpen, setCancelSaleOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [trocasOpen, setTrocasOpen] = useState(false)
+  const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
+
+  // ── Vendas em espera (pdvType: "black", isoladas por storeId + terminalId) ──
+  const heldSales = useHeldSales(lojaAtivaId ?? "", terminalId, "black")
+
+  const handleHoldSale = useCallback(() => {
+    if (cartRows.length === 0) return
+    const label = nextHoldLabel(heldSales)
+    const sale: HeldSale = {
+      id: newHoldId(),
+      label,
+      savedAt: new Date().toISOString(),
+      items: cartRows.map((r) => ({
+        lineId: r.lineId,
+        inventoryId: r.inventoryId || r.lineId,
+        name: r.description,
+        price: r.unitPrice,
+        quantity: r.qty,
+        itemType: "produto",
+      })),
+      customer: selectedCustomer
+        ? {
+            id: selectedCustomer.id,
+            name: selectedCustomer.name,
+            cpf: selectedCustomer.cpf,
+            phone: selectedCustomer.phone,
+          }
+        : null,
+      discountReais,
+      discountPercent,
+      pdvType: "black",
+    }
+    saveHeldSale(lojaAtivaId ?? "", terminalId, sale)
+    setCartRows([])
+    setSelectedLineId(null)
+    setLastAddedItem(null)
+    setDiscountReais(0)
+    setDiscountPercent(0)
+    setLastCashTendered(null)
+    setLastTroco(0)
+    setVendaEsperaOpen(false)
+    toast({ title: "Venda em espera", description: `"${label}" salva em espera.` })
+  }, [
+    cartRows,
+    selectedCustomer,
+    discountReais,
+    discountPercent,
+    lojaAtivaId,
+    terminalId,
+    heldSales,
+    toast,
+  ])
+
+  const handleResumeSale = useCallback(
+    (sale: HeldSale) => {
+      setCartRows(
+        sale.items.map((it) => ({
+          lineId: it.lineId || newPdvLineId(it.inventoryId),
+          inventoryId: it.inventoryId,
+          code: it.inventoryId,
+          description: it.name,
+          unit: "UN",
+          unitPrice: it.price,
+          qty: it.quantity,
+        }))
+      )
+      if (sale.customer) {
+        setSelectedCustomer({
+          id: sale.customer.id,
+          name: sale.customer.name,
+          cpf: sale.customer.cpf || "",
+          phone: sale.customer.phone || "",
+        })
+        setSelectedClienteId(sale.customer.id)
+        setCustomerDisplay(sale.customer.name)
+      } else {
+        setSelectedCustomer(null)
+        setSelectedClienteId(null)
+        setCustomerDisplay("Consumidor final")
+      }
+      setDiscountReais(sale.discountReais ?? 0)
+      setDiscountPercent(sale.discountPercent ?? 0)
+      removeHeldSale(lojaAtivaId ?? "", terminalId, sale.id)
+      setVendaEsperaOpen(false)
+      toast({ title: "Venda retomada", description: `"${sale.label}" carregada no caixa.` })
+    },
+    [lojaAtivaId, terminalId, toast]
+  )
+
+  const handleDiscardHeldSale = useCallback(
+    (id: string) => {
+      removeHeldSale(lojaAtivaId ?? "", terminalId, id)
+    },
+    [lojaAtivaId, terminalId]
+  )
 
   const selectedLineQty = useMemo(
     () => cartRows.find((r) => r.lineId === selectedLineId)?.qty ?? 1,
@@ -210,7 +362,7 @@ export function PdvBlackEdition() {
     []
   )
 
-  // ── Bipe: Enter ────────────────────────────────────────────────────────────
+  // ── Bipe: Enter (prefixo canônico parsePdvScanPrefix) ───────────────────────
   const handleBipeKeyDown = useCallback(
     async (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key !== "Enter") return
@@ -218,14 +370,7 @@ export function PdvBlackEdition() {
       const raw = bipeCode.trim()
       if (!raw) return
 
-      // Suporte ao prefixo "3x" ou "3*" para múltiplas unidades
-      const prefixMatch = raw.match(/^(\d+)[x*×](.+)/i)
-      let qty = 1
-      let query = raw
-      if (prefixMatch) {
-        qty = Math.max(1, parseInt(prefixMatch[1], 10))
-        query = prefixMatch[2].trim()
-      }
+      const { qty, query } = parsePdvScanPrefix(raw)
 
       const found = findPdvProductByScan(query, products)
       if (found) {
@@ -233,8 +378,7 @@ export function PdvBlackEdition() {
         return
       }
 
-      // Fallback fuzzy: nome/categoria/SKU/EAN. Se houver match único, adiciona;
-      // se múltiplos, abre busca avançada pré-filtrada para o operador escolher.
+      // Fallback fuzzy: nome/categoria/SKU/EAN
       const matches = filterPdvCatalogBySearch(products, query)
       if (matches.length === 1) {
         addProduct(matches[0]!, qty)
@@ -247,7 +391,7 @@ export function PdvBlackEdition() {
         return
       }
 
-      // Miss local → busca autoritativa no catálogo INTEIRO da loja (snapshot pode estar defasado).
+      // Miss local → busca autoritativa no catálogo da loja
       const remote = await lookupPdvScanRemote({ code: query, storeId: (lojaAtivaId ?? "").trim(), setInventory })
       if (remote.kind === "single") {
         addProduct(remote.product, qty)
@@ -266,7 +410,7 @@ export function PdvBlackEdition() {
     [bipeCode, products, addProduct, lojaAtivaId, setInventory, toast]
   )
 
-  // ── Remover linha (X / Delete) ─────────────────────────────────────────────
+  // ── Remover linha ─────────────────────────────────────────────────────────
   const removeLine = useCallback((lineId: string) => {
     setCartRows((prev) => {
       const idx = prev.findIndex((r) => r.lineId === lineId)
@@ -299,30 +443,33 @@ export function PdvBlackEdition() {
           setClientSearchOpen(true)
           break
         case "F6":
-          // Troca/Devolução — placeholder
+          setTrocasOpen(true)
           break
         case "F7":
-          setEmitirNota((v) => !v)
+          toast({
+            title: "Fiscal em breve",
+            description: "Emissão fiscal não disponível neste PDV experimental.",
+          })
           break
         case "F8":
-          // Desconto/Acréscimo — placeholder
+          // Desconto abre modal de pagamento onde residem os controles oficiais
+          if (cartRows.length > 0) setPaymentOpen(true)
           break
         case "F9":
-          // CPF/CNPJ — abre busca de cliente
           setClientSearchOpen(true)
           break
         case "F10":
           if (cartRows.length > 0) setCancelSaleOpen(true)
           break
         case "F11":
-          // Suspender — placeholder
+          setVendaEsperaOpen(true)
           break
         case "F12":
           if (cartRows.length > 0) setPaymentOpen(true)
           break
       }
     },
-    [cartRows, selectedLineId, focusBipe]
+    [cartRows.length, selectedLineId, focusBipe, toast]
   )
 
   useEffect(() => {
@@ -330,7 +477,6 @@ export function PdvBlackEdition() {
       const tag = (e.target as HTMLElement).tagName
       const isTyping = tag === "INPUT" || tag === "TEXTAREA"
 
-      // F2–F12 sempre interceptados
       const fKeys = new Set(["F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"])
       if (fKeys.has(e.key)) {
         e.preventDefault()
@@ -339,7 +485,6 @@ export function PdvBlackEdition() {
       }
       if (isTyping) return
 
-      // Delete/Backspace fora de input: remove item selecionado
       if ((e.key === "Delete" || e.key === "Backspace") && selectedLineId) {
         e.preventDefault()
         removeSelectedLine()
@@ -350,19 +495,25 @@ export function PdvBlackEdition() {
   }, [handleShortcutAction, selectedLineId, removeSelectedLine])
 
   // ── Confirmar pagamento ────────────────────────────────────────────────────
-  const handlePaymentConfirm = useCallback(async (payments: PaymentMethod[], meta?: { pixQrKind?: string; cashTendered?: number }) => {
-    // Persistência REAL alinhada ao core (Black continua GATED por env).
-    // Elimina o "ghost sale": grava Venda + estoque + financeiro via
-    // finalizeSaleTransaction (mesmo motor dos demais PDVs, idempotente + retry).
+  const handlePaymentConfirm = useCallback(async (
+    payments: PaymentMethod[],
+    meta?: {
+      pixQrKind?: string
+      cashTendered?: number
+      creditDoc?: string
+      creditNome?: string
+      creditSaldo?: number
+      discountAuthorizedByAdminId?: string
+      discountReais?: number
+      discountPercent?: number
+      cashierId?: string
+    }
+  ) => {
     if (!caixa.isOpen) {
       toast({ variant: "destructive", title: "Caixa fechado", description: "Abra o caixa antes de finalizar a venda." })
       return
     }
-    // Guard anti-descarte-silencioso: detecta linhas cujo produto não resolve no
-    // inventory real desta loja. Antes elas eram filtradas EM SILÊNCIO — o cliente
-    // seria cobrado pelo `total` cheio (calculado sobre TODO o carrinho), mas o item
-    // sumiria da venda persistida e do estoque. Agora bloqueamos com aviso claro,
-    // sem perder a venda nem o item (carrinho intacto para o operador corrigir).
+
     const isLinhaResolvivel = (r: PdvBlackCartRow) =>
       !!r.inventoryId && inventory.some((i) => i.id === r.inventoryId)
     const linhasNaoResolvidas = cartRows.filter((r) => !isLinhaResolvivel(r))
@@ -375,50 +526,85 @@ export function PdvBlackEdition() {
       })
       return
     }
-    // Todas as linhas resolvem (garantido pelo guard acima) — nada é descartado.
+
     const saleLines = cartRows.map((r) => ({
       inventoryId: r.inventoryId as string,
       quantity: r.qty,
       unitPrice: r.unitPrice,
       name: r.description,
     }))
+
+    // Cálculo canônico de troco em dinheiro (mesmo do Classic para pagamentos simples ou mistos)
+    let dinheiroPago = 0
+    for (const p of payments) {
+      if (p.type === "dinheiro") dinheiroPago += p.value
+    }
+    let trocoCalculado = 0
+    if (meta?.cashTendered != null && dinheiroPago > 0.005) {
+      const cashTenderedNum = Number(meta.cashTendered)
+      if (Number.isFinite(cashTenderedNum) && cashTenderedNum >= dinheiroPago) {
+        trocoCalculado = Math.max(0, Math.round((cashTenderedNum - dinheiroPago) * 100) / 100)
+      }
+    }
+
+    // Suporte a Vale/Crédito seguindo o contrato canônico do Classic
+    const usouValeLoc = !!meta?.creditDoc && payments.some((p) => p.type === "credito_vale")
+    const cpfDaVenda =
+      usouValeLoc && meta?.creditDoc ? meta.creditDoc : selectedCustomer?.cpf
+    const nomeDaVenda =
+      usouValeLoc && meta?.creditDoc
+        ? meta.creditNome || selectedCustomer?.name
+        : selectedCustomer?.name
+    if (usouValeLoc && meta?.creditDoc) {
+      sincronizarCreditoLocal(meta.creditDoc, meta.creditNome ?? "", meta.creditSaldo ?? 0)
+    }
+
     const aPrazoPayment = payments.find((p) => p.type === "a_prazo")
     const result = await finalizeSaleTransaction({
       lines: saleLines,
       total,
       paymentBreakdown: reducePaymentsToBreakdown(payments),
-      customerCpf: selectedCustomer?.cpf,
-      customerName: selectedCustomer?.name ?? (customerDisplay !== "Consumidor final" ? customerDisplay : undefined),
-      clienteId: selectedCustomer?.id ?? selectedClienteId ?? undefined,
-      auditMeta: { cashierId: operadorNome },
+      customerCpf: cpfDaVenda,
+      customerName: nomeDaVenda,
+      clienteId: usouValeLoc ? undefined : (selectedCustomer?.id ?? selectedClienteId ?? undefined),
+      auditMeta: {
+        cashierId: meta?.cashierId ?? operadorNome,
+        discountAuthorizedByAdminId: meta?.discountAuthorizedByAdminId,
+        discountReais: meta?.discountReais ?? discountReais,
+        discountPercent: meta?.discountPercent ?? discountPercent,
+      },
       aPrazoConfig: aPrazoPayment?.aPrazoConfig,
       pixQrKind: meta?.pixQrKind,
       cashTendered: meta?.cashTendered,
     })
+
     if (!result.ok) {
       toast({ variant: "destructive", title: "Falha ao registrar venda", description: result.reason })
       return
     }
-    // PENDING (PDV-MOTOR-INTEGRITY-N1): sem sucesso definitivo, sem cupom
-    // definitivo, sem limpar o carrinho. Reenvio com a MESMA identidade em
-    // Vendas → Reenviar sync. Guard anti-descarte acima preservado.
+
     if (result.pending) {
       setPaymentOpen(false)
       toast({ title: PENDING_SALE_TITLE, description: PENDING_SALE_DESCRIPTION, duration: 6000 })
       focusBipe()
       return
     }
+
+    // Venda confirmada
+    setLastCashTendered(meta?.cashTendered ?? null)
+    setLastTroco(trocoCalculado)
     const nextCupom = cupomNum + 1
     setCupomNum(nextCupom)
-    writeCupom(nextCupom)
+    writePdvBlackCupom(lojaAtivaId, terminalId, nextCupom)
     setCartRows([])
     setSelectedLineId(null)
     setHighlightLineId(null)
     setCustomerDisplay("Consumidor final")
     setSelectedClienteId(null)
     setSelectedCustomer(null)
+    setDiscountReais(0)
+    setDiscountPercent(0)
     setBipeCode("")
-    setValorRecebido("")
     setLastAddedItem(null)
     setPaymentOpen(false)
     focusBipe()
@@ -428,27 +614,22 @@ export function PdvBlackEdition() {
     cartRows,
     inventory,
     total,
-    customerDisplay,
-    selectedClienteId,
     selectedCustomer,
+    selectedClienteId,
     finalizeSaleTransaction,
     operadorNome,
+    discountReais,
+    discountPercent,
     cupomNum,
+    lojaAtivaId,
+    terminalId,
+    sincronizarCreditoLocal,
     focusBipe,
     toast,
   ])
 
-  // ── Troco (depende de total) ───────────────────────────────────────────────
-  const trocoFinal = useMemo(() => {
-    const recebido = parseFloat(valorRecebido.replace(",", ".")) || 0
-    return Math.max(0, recebido - total)
-  }, [valorRecebido, total])
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#000000]">
-      {/* Convergência P1.3: barra de caixa compartilhada (sangria/suprimento +
-          terminal + fechamento ERP) também no Black. Gated/experimental — o shell
-          preto mantém seus controles; visual unificado fica para follow-up. */}
       <CaixaStatusBar variant="pdv" />
       <PdvBlackShell
         // Caixa
@@ -465,6 +646,9 @@ export function PdvBlackEdition() {
         selectedLineId={selectedLineId}
         onSelectLine={setSelectedLineId}
         onRemoveLine={removeLine}
+        subtotal={subtotal}
+        discountTotal={discountTotal}
+        impostoEstimado={impostoEstimado}
         total={total}
         itemCount={itemCount}
         lastAddedItem={lastAddedItem}
@@ -476,13 +660,9 @@ export function PdvBlackEdition() {
         // Cliente
         customerDisplay={customerDisplay}
         onClientSearchOpen={() => setClientSearchOpen(true)}
-        // Documento fiscal
-        emitirNota={emitirNota}
-        onEmitirNotaChange={setEmitirNota}
-        // Valor recebido / troco
-        valorRecebido={valorRecebido}
-        onValorRecebidoChange={setValorRecebido}
-        troco={trocoFinal}
+        // Troco / Valor recebido (leitura do último pagamento confirmado)
+        cashTendered={lastCashTendered}
+        troco={lastTroco}
         // Ações
         onShortcutAction={handleShortcutAction}
         onFinalizeClick={() => { if (cartRows.length > 0) setPaymentOpen(true) }}
@@ -541,7 +721,11 @@ export function PdvBlackEdition() {
           setCartRows([])
           setSelectedLineId(null)
           setLastAddedItem(null)
-          setBipeCode("") // limpar busca ao cancelar (GOAL limpeza pós-ação)
+          setDiscountReais(0)
+          setDiscountPercent(0)
+          setLastCashTendered(null)
+          setLastTroco(0)
+          setBipeCode("")
           setCancelSaleOpen(false)
           focusBipe()
         }}
@@ -558,7 +742,7 @@ export function PdvBlackEdition() {
       />
       <FechamentoCaixaModal isOpen={showFechamento} onClose={() => setShowFechamento(false)} />
 
-      {/* Seletor de cliente (com cadastro rápido) para venda à prazo — por cima do pagamento */}
+      {/* Seletor de cliente para venda à prazo */}
       <PdvClientePicker
         open={aPrazoClientePickerOpen}
         storeId={lojaAtivaId ?? ""}
@@ -576,23 +760,53 @@ export function PdvBlackEdition() {
         }}
       />
 
-      {/* Modal de pagamento */}
+      {/* Modal de pagamento com descontos e crédito do cliente integrados */}
       <PaymentModal
         isOpen={paymentOpen}
         onClose={() => setPaymentOpen(false)}
-        cartSubtotal={total}
+        cartSubtotal={subtotal}
+        impostoEstimado={impostoEstimado}
         total={total}
-        discountReais={0}
-        discountPercent={0}
-        onDiscountReaisChange={() => {}}
-        onDiscountPercentChange={() => {}}
+        discountReais={discountReais}
+        discountPercent={discountPercent}
+        onDiscountReaisChange={setDiscountReais}
+        onDiscountPercentChange={setDiscountPercent}
         selectedCustomer={selectedCustomer}
+        customerStoreCredit={customerStoreCredit}
         onCustomerCpfUpdate={(id, cpf) =>
           setSelectedCustomer((prev) => (prev && prev.id === id ? { ...prev, cpf } : prev))
         }
         onRequireCustomer={() => setAPrazoClientePickerOpen(true)}
         cashierId={operadorNome}
         onConfirm={handlePaymentConfirm}
+      />
+
+      {/* F6 — Troca / Devolução */}
+      <Dialog open={trocasOpen} onOpenChange={setTrocasOpen}>
+        <DialogContent className="max-h-[min(90vh,680px)] w-[min(100vw-2rem,82rem)] sm:max-w-[82rem] border-border bg-card p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
+            <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-primary" />
+              Troca / Devolução
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
+            <Suspense fallback={<div className="py-8 text-center text-muted-foreground">Carregando…</div>}>
+              <TrocasDevolucao />
+            </Suspense>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* F11 — Vendas em Espera */}
+      <VendaEsperaModal
+        open={vendaEsperaOpen}
+        onOpenChange={setVendaEsperaOpen}
+        heldSales={heldSales}
+        cartEmpty={cartRows.length === 0}
+        onHold={handleHoldSale}
+        onResume={handleResumeSale}
+        onDiscard={handleDiscardHeldSale}
       />
     </div>
   )

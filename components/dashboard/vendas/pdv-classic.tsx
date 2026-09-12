@@ -87,6 +87,7 @@ import {
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
@@ -303,6 +304,7 @@ export function PdvClassic({
   const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [selectedCartLineId, setSelectedCartLineId] = useState<string | null>(null)
   const [shellProductSearchOpen, setShellProductSearchOpen] = useState(false)
+  const [shellProductSearchQuery, setShellProductSearchQuery] = useState("")
   const [shellClientSearchOpen, setShellClientSearchOpen] = useState(false)
   const [shellQtyEditOpen, setShellQtyEditOpen] = useState(false)
   const [shellCancelSaleOpen, setShellCancelSaleOpen] = useState(false)
@@ -889,7 +891,12 @@ export function PdvClassic({
       e.preventDefault()
       const raw = bipeCode.trim()
       if (!raw) return
-      const q = Number(shellNextQty.replace(",", ".")) || 1
+
+      const parsedPrefix = parsePdvScanPrefix(raw)
+      const q = parsedPrefix.hasPrefix
+        ? parsedPrefix.qty
+        : (Number(shellNextQty.replace(",", ".")) || 1)
+      const query = parsedPrefix.query
 
       const commitScan = (product: PdvCatalogProduct) => {
         if (!addToCart(product, q)) return
@@ -903,25 +910,41 @@ export function PdvClassic({
         queueMicrotask(() => shellBipeRef.current?.focus())
       }
 
-      const found = findPdvProductByScan(raw, products)
+      const found = findPdvProductByScan(query, products)
       if (found) {
         commitScan(found)
         return
       }
 
+      // Fallback local fuzzy: se único, adiciona; se múltiplos, abre F3 pré-filtrado.
+      const localMatches = filterPdvCatalogBySearch(products, query)
+      if (localMatches.length === 1) {
+        commitScan(localMatches[0]!)
+        return
+      }
+      if (localMatches.length > 1) {
+        setShellProductSearchQuery(query)
+        setShellProductSearchOpen(true)
+        setShellInfo(`Vários produtos encontrados para "${query}". Escolha na lista F3.`)
+        setBipeCode("")
+        return
+      }
+
       // Miss local → busca autoritativa no catálogo INTEIRO da loja (snapshot pode estar defasado).
-      const remote = await lookupPdvScanRemote({ code: raw, storeId: lojaKey, setInventory })
+      const remote = await lookupPdvScanRemote({ code: query, storeId: lojaKey, setInventory })
       if (remote.kind === "single") {
         commitScan(remote.product)
         return
       }
       if (remote.kind === "multiple") {
-        setShellInfo(`Vários produtos para o código "${raw}". Use F3 para escolher.`)
-        queueMicrotask(() => shellBipeRef.current?.focus())
+        setShellProductSearchQuery(query)
+        setShellProductSearchOpen(true)
+        setShellInfo(`Vários produtos para o código "${query}". Escolha na lista F3.`)
+        setBipeCode("")
         return
       }
-      toast({ title: "Produto não encontrado", description: `Produto não encontrado nesta loja para o código: ${raw}` })
-      setShellInfo(`✕ Produto não encontrado nesta loja para o código: ${raw}`)
+      toast({ title: "Produto não encontrado", description: `Produto não encontrado nesta loja para o código: ${query}` })
+      setShellInfo(`✕ Produto não encontrado nesta loja para o código: ${query}`)
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
     [addToCart, bipeCode, cart, products, shellNextQty, toast, lojaKey, setInventory]
@@ -1689,9 +1712,13 @@ export function PdvClassic({
               onFinalizeClick={() => openShellShortcut("F1")}
               products={products}
               productSearchOpen={shellProductSearchOpen}
+              productSearchInitialQuery={shellProductSearchQuery}
               onProductSearchOpenChange={(open) => {
                 setShellProductSearchOpen(open)
-                if (!open) focusShellBipe()
+                if (!open) {
+                  setShellProductSearchQuery("")
+                  focusShellBipe()
+                }
               }}
               clientSearchOpen={shellClientSearchOpen}
               onClientSearchOpenChange={(open) => {

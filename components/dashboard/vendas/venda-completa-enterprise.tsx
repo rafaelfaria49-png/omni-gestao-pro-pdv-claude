@@ -40,6 +40,7 @@ import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
@@ -1213,20 +1214,42 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                       e.preventDefault()
                       const raw = productQuery.trim()
                       if (!raw) return
-                      const exact = findPdvProductByScan(raw, products)
-                      if (exact) { addToCart(exact); return }
-                      if (filteredProducts.length > 0) { addToCart(filteredProducts[0]!); return }
+                      const parsed = parsePdvScanPrefix(raw)
+                      const exact = findPdvProductByScan(parsed.query, products)
+                      if (exact) {
+                        addToCart(exact)
+                        setShowProductDropdown(false)
+                        setProductQuery("")
+                        return
+                      }
+                      if (filteredProducts.length === 1) {
+                        addToCart(filteredProducts[0]!)
+                        setShowProductDropdown(false)
+                        setProductQuery("")
+                        return
+                      }
+                      if (filteredProducts.length > 1) {
+                        setShowProductDropdown(true)
+                        toast({ title: "Vários produtos", description: `Mais de um item para "${parsed.query}". Selecione na lista abaixo.` })
+                        return
+                      }
                       // Miss local → catálogo INTEIRO da loja (snapshot pode estar defasado),
                       // igual ao PDV Assistência/Clássico. Isolamento multi-loja no servidor.
-                      const remote = await lookupPdvScanRemote({ code: raw, storeId, setInventory })
-                      if (remote.kind === "single") { addToCart(remote.product); return }
+                      const remote = await lookupPdvScanRemote({ code: parsed.query, storeId, setInventory })
+                      if (remote.kind === "single") {
+                        addToCart(remote.product)
+                        setShowProductDropdown(false)
+                        setProductQuery("")
+                        return
+                      }
                       if (remote.kind === "multiple") {
-                        toast({ title: "Vários produtos", description: `Mais de um item para "${raw}". Refine a busca.` })
+                        setShowProductDropdown(true)
+                        toast({ title: "Vários produtos", description: `Mais de um item para "${parsed.query}". Refine a busca.` })
                         return
                       }
                       toast({
                         title: "Produto não encontrado",
-                        description: `Nada encontrado nesta loja para o código: ${raw}`,
+                        description: `Nada encontrado nesta loja para o código: ${parsed.query}`,
                         variant: "destructive",
                       })
                     }

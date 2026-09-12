@@ -247,6 +247,7 @@ export type PdvOmniClassicShellProps = {
   onFinalizeClick: () => void
   products: PdvCatalogProduct[]
   productSearchOpen: boolean
+  productSearchInitialQuery?: string
   onProductSearchOpenChange: (open: boolean) => void
   clientSearchOpen: boolean
   onClientSearchOpenChange: (open: boolean) => void
@@ -402,11 +403,14 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
 
   useEffect(() => {
     if (!props.productSearchOpen) return
-    setProductDialogQuery("")
+    setProductDialogQuery(props.productSearchInitialQuery ?? "")
     setProductActiveIdx(0)
-    const id = window.setTimeout(() => productSearchInputRef.current?.focus(), 60)
+    const id = window.setTimeout(() => {
+      productSearchInputRef.current?.focus()
+      productSearchInputRef.current?.select?.()
+    }, 60)
     return () => window.clearTimeout(id)
-  }, [props.productSearchOpen])
+  }, [props.productSearchOpen, props.productSearchInitialQuery])
 
   const productsForDialog = useMemo(
     () => filterPdvCatalogBySearch(props.products, productDialogQuery),

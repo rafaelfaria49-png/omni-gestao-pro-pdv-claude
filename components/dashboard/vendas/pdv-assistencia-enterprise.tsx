@@ -70,6 +70,7 @@ import {
   type AccessorySelectionV1,
 } from "@/lib/acessorios/cart-line"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
@@ -1306,9 +1307,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const fullSearch = useMemo(() => {
     const raw = search.trim()
     if (!raw) return []
-    const exact = findPdvProductByScan(raw, realCatalog)
+    const parsed = parsePdvScanPrefix(raw)
+    const exact = findPdvProductByScan(parsed.query, realCatalog)
     if (exact) return [exact]
-    return filterPdvCatalogBySearch(realCatalog, raw).slice(0, 50)
+    return filterPdvCatalogBySearch(realCatalog, parsed.query).slice(0, 50)
   }, [search, realCatalog])
 
   useEffect(() => {
@@ -1570,7 +1572,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget, accessoryTarget])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
-  const addItem = (item: PdvCatalogProduct, priceOverride?: number) => {
+  const addItem = (item: PdvCatalogProduct, priceOverride?: number, qtyToAdd: number = 1) => {
     const svcMeta = servicoMetaById.get(item.id)
     // Atalhos entram com o preço atual do catálogo; override só existe ao editar a linha.
     const effectivePrice = priceOverride !== undefined ? priceOverride : item.price
@@ -1587,7 +1589,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     const isService = isServicoCatalogItem(item)
     if (!isService && item.stock < 999) {
       const reserved = cartQtyByInventoryId[item.id] ?? 0
-      if (reserved >= item.stock) {
+      if (reserved + qtyToAdd > item.stock) {
         toast({
           title: "Estoque insuficiente",
           description: `"${item.name}" não tem mais unidades disponíveis (${item.stock} em estoque, ${reserved} no carrinho).`,
@@ -1608,7 +1610,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     appendAuditLog({
       action: "pdv_item_adicionado",
       userLabel: cashierId.slice(0, 8),
-      detail: `${item.name} — ${brl(effectivePrice)}`,
+      detail: `${item.name} — ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ""}${brl(effectivePrice)}`,
     })
     let flashId: string | null = null
     setCart((prev) => {
@@ -1616,7 +1618,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       const hit = prev.find((l) => l.inventoryId === item.id && Math.abs(l.price - effectivePrice) < 0.001 && !l.cartLineKey)
       if (hit) {
         flashId = hit.lineId
-        return prev.map((l) => (l.lineId === hit.lineId ? { ...l, qty: l.qty + 1 } : l))
+        return prev.map((l) => (l.lineId === hit.lineId ? { ...l, qty: l.qty + qtyToAdd } : l))
       }
       const nid = newLineId()
       flashId = nid
@@ -1629,7 +1631,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               inventoryId: item.id,
               title: item.name,
               price: effectivePrice,
-              qty: 1,
+              qty: qtyToAdd,
               itemType: "produto" as const,
             },
       ]
@@ -2240,6 +2242,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={async (e) => {
                   if (!search.trim()) return
+                  const parsed = parsePdvScanPrefix(search)
                   if (e.key === "ArrowDown" && modoRapido) {
                     e.preventDefault()
                     setRapidoPickIdx((i) => Math.min(i + 1, Math.max(0, fullSearch.length - 1)))
@@ -2258,7 +2261,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       const pick = modoRapido ? (fullSearch[rapidoPickIdx] ?? fullSearch[0]) : fullSearch[0]
                       if (pick) {
                         // addItem já limpa a busca após adicionar (scan contínuo em qualquer modo).
-                        addItem(pick)
+                        addItem(pick, undefined, parsed.qty)
+                        setSearch("")
                       }
                     }
                     return
@@ -2267,10 +2271,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   // (snapshot pode estar defasado ou o item não veio na página carregada).
                   if (e.key === "Enter" && fullSearch.length === 0) {
                     e.preventDefault()
-                    const code = search.trim()
+                    const code = parsed.query
                     const remote = await lookupPdvScanRemote({ code, storeId: (lojaAtivaId ?? "").trim(), setInventory })
                     if (remote.kind === "single") {
-                      addItem(remote.product)
+                      addItem(remote.product, undefined, parsed.qty)
+                      setSearch("")
                       return
                     }
                     if (remote.kind === "multiple") {
