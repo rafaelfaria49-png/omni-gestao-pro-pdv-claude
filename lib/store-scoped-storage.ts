@@ -3,6 +3,16 @@
  * Sem `storeId` válido: não lê/grava (evita vazamento para loja-1 ou global).
  */
 
+function getLocalStorage(): Storage | null {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) return window.localStorage
+    if (typeof localStorage !== "undefined") return localStorage
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
 export function storeScopedKey(base: string, storeId: string | null | undefined): string | null {
   const sid = String(storeId ?? "").trim()
   if (!sid) return null
@@ -15,15 +25,17 @@ export function readStoreScopedString(
   legacyGlobalKey?: string,
 ): string | null {
   const key = storeScopedKey(base, storeId)
-  if (!key || typeof window === "undefined") return null
+  if (!key) return null
+  const storage = getLocalStorage()
+  if (!storage) return null
   try {
-    const scoped = localStorage.getItem(key)
+    const scoped = storage.getItem(key)
     if (scoped != null && scoped.trim() !== "") return scoped.trim()
     if (legacyGlobalKey) {
-      const legacy = localStorage.getItem(legacyGlobalKey)
+      const legacy = storage.getItem(legacyGlobalKey)
       if (legacy != null && legacy.trim() !== "") {
         const trimmed = legacy.trim()
-        localStorage.setItem(key, trimmed)
+        storage.setItem(key, trimmed)
         return trimmed
       }
     }
@@ -39,9 +51,11 @@ export function writeStoreScopedString(
   value: string,
 ): boolean {
   const key = storeScopedKey(base, storeId)
-  if (!key || typeof window === "undefined") return false
+  if (!key) return false
+  const storage = getLocalStorage()
+  if (!storage) return false
   try {
-    localStorage.setItem(key, value)
+    storage.setItem(key, value)
     return true
   } catch {
     return false

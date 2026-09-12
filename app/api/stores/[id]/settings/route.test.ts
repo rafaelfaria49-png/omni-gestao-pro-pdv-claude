@@ -258,3 +258,261 @@ describe("PUT /api/stores/[id]/settings — autorização", () => {
     expect(body.ok).toBe(true)
   })
 })
+
+describe("PUT /api/stores/[id]/settings — Capabilities V1", () => {
+  it("capabilities version=1 válido persiste com sucesso → 200", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    const existing = { storeId: "loja-a", printerConfig: {} }
+    const updated = {
+      storeId: "loja-a",
+      printerConfig: {
+        capabilities: { version: 1, overrides: { "pdv.tables": true } },
+      },
+    }
+    h.findUnique.mockResolvedValue(existing)
+    h.upsert.mockResolvedValue(updated)
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: { version: 1, overrides: { "pdv.tables": true } },
+        },
+      }),
+      ctx("loja-a"),
+    )
+    const body = (await res.json()) as { ok: boolean; settings: unknown }
+
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(h.upsert).toHaveBeenCalledTimes(1)
+  })
+
+  it("version diferente de 1 é rejeitado com 400", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: { version: 2, overrides: {} },
+        },
+      }),
+      ctx("loja-a"),
+    )
+    const body = (await res.json()) as { ok: boolean; error: string }
+
+    expect(res.status).toBe(400)
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain("Versão de capabilities incompatível")
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("capability desconhecida é rejeitada com 400", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: { version: 1, overrides: { "pdv.inventedFeature": true } },
+        },
+      }),
+      ctx("loja-a"),
+    )
+    const body = (await res.json()) as { ok: boolean; error: string }
+
+    expect(res.status).toBe(400)
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain("Capability desconhecida")
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("pdv.scale é explicitamente bloqueado e rejeitado com 400", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: { version: 1, overrides: { "pdv.scale": true } },
+        },
+      }),
+      ctx("loja-a"),
+    )
+    const body = (await res.json()) as { ok: boolean; error: string }
+
+    expect(res.status).toBe(400)
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain("explicitamente bloqueada")
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("sale.fractionalQty é explicitamente bloqueado e rejeitado com 400", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: { version: 1, overrides: { "sale.fractionalQty": true } },
+        },
+      }),
+      ctx("loja-a"),
+    )
+    const body = (await res.json()) as { ok: boolean; error: string }
+
+    expect(res.status).toBe(400)
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain("explicitamente bloqueada")
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("tentativa de escrever 'available' na raiz de capabilities é rejeitada com 400", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: { version: 1, available: true, overrides: {} },
+        },
+      }),
+      ctx("loja-a"),
+    )
+    const body = (await res.json()) as { ok: boolean; error: string }
+
+    expect(res.status).toBe(400)
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain("autoridade do servidor")
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("tentativa de escrever 'entitled' é rejeitada com 400", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: { version: 1, entitled: true, overrides: {} },
+        },
+      }),
+      ctx("loja-a"),
+    )
+    const body = (await res.json()) as { ok: boolean; error: string }
+
+    expect(res.status).toBe(400)
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain("autoridade do servidor")
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("tentativa de escrever 'plan' ou 'license' dentro de override é rejeitada com 400", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: {
+            version: 1,
+            overrides: {
+              "pdv.tables": { enabled: true, plan: "enterprise" },
+            },
+          },
+        },
+      }),
+      ctx("loja-a"),
+    )
+    const body = (await res.json()) as { ok: boolean; error: string }
+
+    expect(res.status).toBe(400)
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain("autoridade do servidor")
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("merge não-destrutivo preserva campos irmãos e namespaces desconhecidos em printerConfig", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    const existing = {
+      storeId: "loja-a",
+      printerConfig: {
+        impressao: { modelo: "generic-80mm", largura: 80 },
+        pdvParams: { moduloControleConsumo: true },
+        customNamespace: { chaveExistente: "valorPreservado" },
+      },
+    }
+    h.findUnique.mockResolvedValue(existing)
+    h.upsert.mockResolvedValue({ storeId: "loja-a" })
+
+    const res = await PUT(
+      putReq({
+        printerConfig: {
+          capabilities: { version: 1, overrides: { "pdv.tables": true } },
+        },
+      }),
+      ctx("loja-a"),
+    )
+
+    expect(res.status).toBe(200)
+    const upsertCalls = h.upsert.mock.calls as unknown[][]
+    const upsertArg = (upsertCalls[0] as unknown[])[0] as {
+      update: { printerConfig: Record<string, unknown> }
+    }
+    const merged = upsertArg.update.printerConfig
+
+    // Preservou irmãos
+    expect(merged.impressao).toEqual({ modelo: "generic-80mm", largura: 80 })
+    expect(merged.pdvParams).toEqual({ moduloControleConsumo: true })
+    expect(merged.customNamespace).toEqual({ chaveExistente: "valorPreservado" })
+    // Adicionou capabilities
+    expect(merged.capabilities).toEqual({ version: 1, overrides: { "pdv.tables": true } })
+  })
+})
+
+describe("PUT /api/stores/[id]/settings — Backfill e Proteção contra Stale Device", () => {
+  it("backfill grava valor quando o servidor está ausente", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    h.findUnique.mockResolvedValue({ storeId: "loja-a", printerConfig: {} })
+    h.upsert.mockResolvedValue({ storeId: "loja-a" })
+
+    const res = await PUT(
+      putReq({
+        printerConfig: { pdvMainLayout: "supermercado" },
+        backfill: true,
+      }),
+      ctx("loja-a"),
+    )
+
+    expect(res.status).toBe(200)
+    const upsertCalls = h.upsert.mock.calls as unknown[][]
+    const upsertArg = (upsertCalls[0] as unknown[])[0] as {
+      update: { printerConfig: Record<string, unknown> }
+    }
+    expect(upsertArg.update.printerConfig.pdvMainLayout).toBe("supermercado")
+  })
+
+  it("concorrência: Device B stale NÃO sobrescreve valor já gravado por Device A no backfill", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    // Simulação do cenário obrigatório:
+    // Device A já gravou "supermercado" no servidor.
+    // Device B (que tinha lido servidor vazio antes e possui legacy="classic") tenta gravar "classic" depois com backfill: true.
+    const serverAlreadyHasA = {
+      storeId: "loja-a",
+      printerConfig: {
+        pdvMainLayout: "supermercado",
+      },
+    }
+    h.findUnique.mockResolvedValue(serverAlreadyHasA)
+    h.upsert.mockResolvedValue(serverAlreadyHasA)
+
+    const resB = await PUT(
+      putReq({
+        printerConfig: { pdvMainLayout: "classic" },
+        backfill: true,
+      }),
+      ctx("loja-a"),
+    )
+
+    expect(resB.status).toBe(200)
+    const upsertCalls = h.upsert.mock.calls as unknown[][]
+    const upsertArg = (upsertCalls[0] as unknown[])[0] as {
+      update: { printerConfig: Record<string, unknown> }
+    }
+    // Servidor continua "supermercado", rejeitando a sobrescrita stale de B!
+    expect(upsertArg.update.printerConfig.pdvMainLayout).toBe("supermercado")
+  })
+})
