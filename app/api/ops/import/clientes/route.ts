@@ -2,13 +2,9 @@
 import { NextResponse } from "next/server"
 import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
-import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { isVencimentoExpired } from "@/lib/subscription-seal"
-import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { importClientesJson } from "@/lib/import-clientes-json"
-import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
-import { auth } from "@/auth"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -30,29 +26,10 @@ function isMissingRelationError(e: unknown): boolean {
   return /does not exist|não existe|relation.*does not exist/i.test(msg)
 }
 
-async function requireSubscription() {
-  try {
-    const session = await auth()
-    if (session?.user) return { ok: true as const }
-  } catch {
-    // fora de contexto de request; tenta fallback legacy
-  }
-  const sub = await getVerifiedSubscriptionFromCookies()
-  if (!sub.ok) {
-    return { ok: false as const, res: NextResponse.json({ error: "Não autorizado" }, { status: 401 }) }
-  }
-  const now = await getTrustedTimeMs()
-  if (isVencimentoExpired(now, sub.vencimento) || sub.status !== "ativa") {
-    return { ok: false as const, res: NextResponse.json({ error: "Assinatura inválida" }, { status: 403 }) }
-  }
-  return { ok: true as const }
-}
-
 export async function GET(req: Request) {
-  const gate = await requireSubscription()
-  if (!gate.ok) return gate.res
-  const storeId = storeIdFromAssistecRequestForRead(req)
-  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
+  const gate = await requireCadastrosHubApi(req, "read", "shared")
+  if (!gate.ok) return gate.response
+  const storeId = gate.storeId
 
   try {
     const rows = await prisma.cliente.findMany({

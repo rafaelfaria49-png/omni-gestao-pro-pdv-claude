@@ -5,8 +5,9 @@ import {
   importClientesItems,
   listClientesForLoja,
 } from "@/lib/clientes-import-handler"
-import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -39,22 +40,21 @@ function errMsg(e: unknown): string {
   return String(e)
 }
 
-function loja(req: Request): string | null {
-  return storeIdFromAssistecRequestForRead(req)
-}
-
 export async function OPTIONS(req: Request) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(req) })
 }
 
+function withCors(req: Request, res: NextResponse) {
+  const cors = corsHeaders(req)
+  for (const [k, v] of Object.entries(cors)) res.headers.set(k, v)
+  return res
+}
+
 export async function GET(request: Request) {
   try {
-    const auth = await assertActiveSubscriptionForImport()
-    if (!auth.ok) {
-      return json(request, { error: "Não autorizado", detail: auth.message }, 401)
-    }
-    const lid = loja(request)
-    if (!lid) return json(request, { error: "storeId obrigatório" }, 400)
+    const gate = await requireCadastrosHubApi(request, "read", "shared")
+    if (!gate.ok) return withCors(request, gate.response)
+    const lid = gate.storeId
     const clientes = await listClientesForLoja(lid)
     return json(request, { clientes })
   } catch (e) {

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { auth } from "@/auth"
 import { isValidPhoneBr } from "@/lib/phone-br"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,8 +15,8 @@ function json(data: unknown, init?: ResponseInit) {
  * Cadastro RÁPIDO de cliente a partir do PDV (à prazo / carnê) — sem perder o carrinho.
  *
  * Diferenças deliberadas do `POST /api/clientes` (Cadastros HUB):
- *  - Aberto a QUALQUER usuário autenticado (operador), não só ADMIN — criar um cliente
- *    é ação de baixo risco; a decisão de crédito segue protegida no fluxo à prazo.
+ *  - Aberto a operador autenticado com autorização na loja (PDV), não só ADMIN.
+ *    A decisão de crédito segue protegida no fluxo à prazo.
  *  - `phone` é OPCIONAL (coluna é nullable). Só valida o formato se vier preenchido.
  *  - Campos mínimos: name (obrigatório), phone/document (opcionais). Sem tags/totais.
  *
@@ -25,15 +24,9 @@ function json(data: unknown, init?: ResponseInit) {
  */
 export async function POST(req: Request) {
   try {
-    const session = await auth()
-    if (!session?.user?.id) {
-      return json({ error: "Não autorizado. Faça login." }, { status: 401 })
-    }
-
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) {
-      return json({ error: "Unidade obrigatória: envie o header x-assistec-loja-id." }, { status: 400 })
-    }
+    const gate = await requireCadastrosHubApi(req, "write", "shared")
+    if (!gate.ok) return gate.response
+    const storeId = gate.storeId
 
     const body = (await req.json().catch(() => ({}))) as {
       name?: unknown
