@@ -139,6 +139,7 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -244,6 +245,11 @@ export function PdvClassic({
     useLojaAtiva()
   const { pdvParams, impressaoConfig, settings, storeId } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("classic")
+  const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
+  const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
+  const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
+  const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
+  const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
   const { mode: studioThemeMode } = useStudioTheme()
@@ -658,6 +664,7 @@ export function PdvClassic({
 
   useEffect(() => {
     setCustomerCreditFetched(null)
+    if (!storeCreditEnabled) return
     const docNorm = (selectedCustomer?.cpf ?? "").replace(/\D/g, "")
     const cId = selectedCustomer?.id
     if (!docNorm && !cId) return
@@ -672,7 +679,7 @@ export function PdvClassic({
       })
       .catch(() => setCustomerCreditFetched(null))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCustomer?.cpf, selectedCustomer?.id, lojaKey])
+  }, [selectedCustomer?.cpf, selectedCustomer?.id, lojaKey, storeCreditEnabled])
 
   const updateCustomerCpf = useCallback((customerId: string, cpfDigits: string) => {
     const display = formatBrDocDisplay(cpfDigits)
@@ -753,7 +760,11 @@ export function PdvClassic({
     // Atalhos/entradas sem `accessoryConfig` resolvem a config pelo catálogo real.
     const accessoryConfig =
       product.accessoryConfig ?? products.find((p) => p.id === product.id)?.accessoryConfig
-    if (!product.vendaPorPeso && accessoryConfigRequiresSelection(accessoryConfig)) {
+    if (
+      accessoryModelColorEnabled &&
+      !product.vendaPorPeso &&
+      accessoryConfigRequiresSelection(accessoryConfig)
+    ) {
       accessoryQtyRef.current = baseQty
       setAccessoryProduct({ ...product, accessoryConfig })
       return true
@@ -1335,7 +1346,7 @@ export function PdvClassic({
           setShowKeyboardHelp(true)
           break
         case "F2":
-          setShellClientSearchOpen(true)
+          if (customerSearchEnabled) setShellClientSearchOpen(true)
           break
         case "F3":
           setShellProductSearchOpen(true)
@@ -1362,7 +1373,7 @@ export function PdvClassic({
           setShellCancelSaleOpen(true)
           break
         case "F7":
-          setVendaEsperaOpen(true)
+          if (heldSalesEnabled) setVendaEsperaOpen(true)
           break
         case "F8":
           goBipe()
@@ -1393,7 +1404,7 @@ export function PdvClassic({
           break
       }
     },
-    [cart.length, focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow]
+    [cart.length, focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow, customerSearchEnabled, heldSalesEnabled]
   )
 
   useEffect(() => {
@@ -1521,6 +1532,7 @@ export function PdvClassic({
   const heldSales = useHeldSales(lojaKey, terminalIdForHold, "classic")
 
   function handleHoldSale() {
+    if (!heldSalesEnabled) return
     const held: HeldSale = {
       id: newHoldId(),
       label: nextHoldLabel(heldSales),
@@ -1561,6 +1573,13 @@ export function PdvClassic({
   }
 
   function handleResumeSale(sale: HeldSale) {
+    if (!heldSalesEnabled) return false
+    const resumeCaps = combineHoldSnapshotWithRuntime({
+      surfaceId: "classic",
+      overrides: pdvCapabilities.overrides,
+      snapshot: sale.capabilitiesSnapshot,
+    })
+    const discountRestore = resumeDiscountFields(sale, resumeCaps.isEnabled("pdv.discounts"))
     setCart(
       sale.items.map((i) => ({
         lineId: i.lineId,
@@ -1589,8 +1608,8 @@ export function PdvClassic({
     } else {
       setSelectedCustomer(null)
     }
-    setDiscountReais(sale.discountReais ?? 0)
-    setDiscountPercent(sale.discountPercent ?? 0)
+    setDiscountReais(discountRestore.discountReais)
+    setDiscountPercent(discountRestore.discountPercent)
     removeHeldSale(lojaKey, terminalIdForHold, sale.id)
     return true
   }
@@ -1709,9 +1728,8 @@ export function PdvClassic({
               onBipeSuggestionSelect={handleBipeSuggestionSelect}
               customerDisplay={shellCustomerField}
               onCustomerDisplayChange={(v) => {
-                // Busca de cliente ao digitar no campo inline (antes só funcionava
-                // via F2): alimenta a mesma busca live do picker e abre o resultado.
                 setShellCustomerField(v)
+                if (!customerSearchEnabled) return
                 setCustomerSearch(v)
                 if (v.trim().length > 0) setShellClientSearchOpen(true)
               }}
@@ -1722,6 +1740,7 @@ export function PdvClassic({
               info={shellInfo}
               onShortcutAction={openShellShortcut}
               heldSalesCount={heldSales.length}
+              heldSalesEnabled={heldSalesEnabled}
               onFinalizeClick={() => openShellShortcut("F1")}
               products={products}
               productSearchOpen={shellProductSearchOpen}
@@ -1733,8 +1752,9 @@ export function PdvClassic({
                   focusShellBipe()
                 }
               }}
-              clientSearchOpen={shellClientSearchOpen}
+              clientSearchOpen={customerSearchEnabled && shellClientSearchOpen}
               onClientSearchOpenChange={(open) => {
+                if (!customerSearchEnabled && open) return
                 setShellClientSearchOpen(open)
                 if (open) setCustomerSearch("")
                 if (!open) focusShellBipe()
@@ -1837,8 +1857,11 @@ export function PdvClassic({
       />
 
       <VendaEsperaModal
-        open={vendaEsperaOpen}
-        onOpenChange={setVendaEsperaOpen}
+        open={heldSalesEnabled && vendaEsperaOpen}
+        onOpenChange={(open) => {
+          if (!heldSalesEnabled && open) return
+          setVendaEsperaOpen(open)
+        }}
         heldSales={heldSales}
         cartEmpty={cart.length === 0}
         onHold={handleHoldSale}
@@ -1860,7 +1883,7 @@ export function PdvClassic({
       />
 
       <PdvClientePicker
-        open={aPrazoClientePickerOpen}
+        open={customerSearchEnabled && aPrazoClientePickerOpen}
         storeId={lojaKey}
         onClose={() => setAPrazoClientePickerOpen(false)}
         onSelect={(c: PdvClienteResult) => {
@@ -1892,12 +1915,21 @@ export function PdvClassic({
         onDiscountPercentChange={setDiscountPercent}
         custoPeca={total * 0.35}
         selectedCustomer={selectedCustomer}
-        customerStoreCredit={selectedCustomer ? (customerCreditFetched ?? getSaldoCreditoCliente(selectedCustomer.cpf)) : 0}
+        customerStoreCredit={
+          storeCreditEnabled && selectedCustomer
+            ? (customerCreditFetched ?? getSaldoCreditoCliente(selectedCustomer.cpf))
+            : 0
+        }
         instantPayIntent={instantPayIntent}
         onInstantPayIntentConsumed={() => setInstantPayIntent(null)}
         onCustomerCpfUpdate={updateCustomerCpf}
         multipayHint={multipayMode}
-        onRequireCustomer={() => setAPrazoClientePickerOpen(true)}
+        onRequireCustomer={() => {
+          if (customerSearchEnabled) setAPrazoClientePickerOpen(true)
+        }}
+        discountsEnabled={discountsEnabled}
+        storeCreditEnabled={storeCreditEnabled}
+        allowMultiplePayments={pdvCapabilities.isEnabled("pdv.multiplePayments")}
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
           // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
@@ -2193,7 +2225,7 @@ export function PdvClassic({
       />
 
       <SelecionarAcessorioDialog
-        open={accessoryProduct !== null}
+        open={accessoryModelColorEnabled && accessoryProduct !== null}
         product={accessoryProduct}
         onCancel={() => setAccessoryProduct(null)}
         onConfirm={confirmAccessorySelection}

@@ -14,8 +14,7 @@ export function MesasPageClient() {
   const router = useRouter()
   const { pdvParams, hydrated, pdvMainLayout, pdvClassicLayout } = useStoreSettings()
   const switcherSurfaceId = surfaceIdFromSwitcherLayouts(pdvMainLayout, pdvClassicLayout)
-  const tablesSurface = switcherSurfaceId === "next" ? "classic" : switcherSurfaceId
-  const pdvCapabilities = usePdvCapabilities(tablesSurface)
+  const pdvCapabilities = usePdvCapabilities(switcherSurfaceId)
 
   if (!hydrated) {
     return <LoadingState message="Carregando mesas…" />

@@ -129,6 +129,7 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -913,6 +914,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("assistencia")
+  const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
+  const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
+  const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
+  const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
+  const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
+  const quickServicesEnabled = pdvCapabilities.isEnabled("pdv.quickServices")
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   // Chave dos atalhos: estritamente a unidade ativa, sem fallback silencioso para
   // loja-1 (alinhado à política multi-loja). A grade só monta com unidade ativa.
@@ -1017,6 +1024,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // ── Search + catalog tab ─────────────────────────────────────────────────────
   const [search, setSearch] = useState("")
   const [tab, setTab] = useState<"servicos" | "produtos" | "favoritos">("servicos")
+  useEffect(() => {
+    if (!quickServicesEnabled && tab === "servicos") setTab("produtos")
+  }, [quickServicesEnabled, tab])
 
   // ── Cart ─────────────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartLine[]>([])
@@ -1043,6 +1053,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   useEffect(() => {
     setCustomerCreditFetched(null)
+    if (!storeCreditEnabled) return
     const docNorm = (selectedClienteDoc ?? "").replace(/\D/g, "")
     const cId = selectedClienteId
     if (!docNorm && !cId) return
@@ -1056,7 +1067,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         setCustomerCreditFetched(saldo)
       })
       .catch(() => setCustomerCreditFetched(null))
-  }, [selectedClienteDoc, selectedClienteId, storeIdKey])
+  }, [selectedClienteDoc, selectedClienteId, storeIdKey, storeCreditEnabled])
 
   const customerCredit = customerCreditFetched ?? (selectedClienteDoc ? getSaldoCreditoCliente(selectedClienteDoc) : 0)
 
@@ -1480,7 +1491,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           if (m) openPaymentModal(m.id)
           break
         }
-        case "F2":  setClientePickerOpen((o) => !o); break
+        case "F2":
+          if (customerSearchEnabled) setClientePickerOpen((o) => !o)
+          break
         case "F3":  inputRef.current?.focus(); break
         case "F4":
           if (cart.length > 0) {
@@ -1521,7 +1534,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           }
           break
         case "F7":
-          setVendaEsperaOpen(true)
+          if (heldSalesEnabled) setVendaEsperaOpen(true)
           break
         case "F8":
           appendAuditLog({ action: "pdv_troca_aberta", userLabel: cashierId.slice(0, 8), detail: "Painel de trocas/devoluções aberto via F8" })
@@ -1593,7 +1606,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     // Acessório configurado (modelo/cor): intercepta ANTES da mutação do carrinho.
     // Serviços e itens virtuais nunca abrem o modal.
-    if (!svcMeta && !isService && accessoryConfigRequiresSelection(item.accessoryConfig)) {
+    if (
+      accessoryModelColorEnabled &&
+      !svcMeta &&
+      !isService &&
+      accessoryConfigRequiresSelection(item.accessoryConfig)
+    ) {
       setAccessoryTarget({
         item,
         ...(priceOverride !== undefined ? { priceOverride } : {}),
@@ -2022,6 +2040,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const heldSales = useHeldSales(storeIdKey, terminalIdForHold, "assistencia")
 
   function handleHoldSale() {
+    if (!heldSalesEnabled) return
     const held: HeldSale = {
       id: newHoldId(),
       label: nextHoldLabel(heldSales),
@@ -2066,6 +2085,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }
 
   function handleResumeSale(sale: HeldSale) {
+    if (!heldSalesEnabled) return false
+    const resumeCaps = combineHoldSnapshotWithRuntime({
+      surfaceId: "assistencia",
+      overrides: pdvCapabilities.overrides,
+      snapshot: sale.capabilitiesSnapshot,
+    })
+    const discountRestore = resumeDiscountFields(sale, resumeCaps.isEnabled("pdv.discounts"))
     // HeldCartItem.name → CartLine.title ; HeldCartItem.quantity → CartLine.qty
     setCart(
       sale.items.map((i) => ({
@@ -2095,8 +2121,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       setSelectedClienteId(null)
       setSelectedClienteDoc(null)
     }
-    setDiscountReais(sale.discountReais ?? 0)
-    setDiscountPercent(sale.discountPercent ?? 0)
+    setDiscountReais(discountRestore.discountReais)
+    setDiscountPercent(discountRestore.discountPercent)
     removeHeldSale(storeIdKey, terminalIdForHold, sale.id)
     return true
   }
@@ -2140,6 +2166,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
         {/* Center: control buttons */}
         <div className="flex flex-1 items-center justify-center gap-2">
+          {heldSalesEnabled ? (
           <button
             type="button"
             onClick={() => setVendaEsperaOpen(true)}
@@ -2152,6 +2179,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             {heldSales.length > 0 ? <span className="tabular-nums">({heldSales.length})</span> : null}
             <kbd className="hidden rounded border border-primary/30 bg-primary/10 px-1 py-px text-[9px] font-bold sm:inline">F7</kbd>
           </button>
+          ) : null}
           {!modoRapido ? (
             <button
               type="button"
@@ -2382,13 +2410,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             >
                 {/* Tab header + Editar Atalhos */}
                 <div className="flex shrink-0 items-center gap-2">
-                  <TabsList className={cn("flex-1 grid rounded-xl border border-border bg-muted/60 p-0.5 h-8.5 sm:h-9", quickFavorites.length > 0 ? "grid-cols-3" : "grid-cols-2")}>
+                  <TabsList className={cn("flex-1 grid rounded-xl border border-border bg-muted/60 p-0.5 h-8.5 sm:h-9", quickFavorites.length > 0 ? (quickServicesEnabled ? "grid-cols-3" : "grid-cols-2") : (quickServicesEnabled ? "grid-cols-2" : "grid-cols-1"))}>
+                    {quickServicesEnabled ? (
                     <TabsTrigger
                       value="servicos"
                       className="rounded-lg py-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                     >
                       Serviços ({quickServices.length})
                     </TabsTrigger>
+                    ) : null}
                     <TabsTrigger
                       value="produtos"
                       className="rounded-lg py-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2418,6 +2448,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   </Button>
                 </div>
 
+              {quickServicesEnabled ? (
               <TabsContent
                 value="servicos"
                 className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden outline-none data-[state=inactive]:hidden"
@@ -2448,6 +2479,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                     </div>
                 </ScrollArea>
               </TabsContent>
+              ) : null}
 
               <TabsContent
                 value="produtos"
@@ -2871,7 +2903,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             ? { id: selectedClienteId, name: customerName, cpf: (selectedClienteDoc ?? "").trim(), phone: "" }
             : null
         }
-        customerStoreCredit={customerCredit}
+        customerStoreCredit={storeCreditEnabled ? customerCredit : 0}
         cashierId={cashierId}
         instantPayIntent={paymentInstantIntent}
         onInstantPayIntentConsumed={() => setPaymentInstantIntent(null)}
@@ -2879,7 +2911,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         onCustomerCpfUpdate={(id, cpf) => {
           if (id === selectedClienteId) setSelectedClienteDoc(cpf)
         }}
-        onRequireCustomer={() => setClientePickerOpen(true)}
+        onRequireCustomer={() => {
+          if (customerSearchEnabled) setClientePickerOpen(true)
+        }}
+        discountsEnabled={discountsEnabled}
+        storeCreditEnabled={storeCreditEnabled}
+        allowMultiplePayments={pdvCapabilities.isEnabled("pdv.multiplePayments")}
         onConfirm={handlePaymentConfirm}
         onClose={() => closePaymentModal(true)}
       />
@@ -2957,7 +2994,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       />
 
       <SelecionarAcessorioDialog
-        open={accessoryTarget !== null}
+        open={accessoryModelColorEnabled && accessoryTarget !== null}
         product={accessoryTarget?.item ?? null}
         onCancel={() => {
           setAccessoryTarget(null)
@@ -2967,8 +3004,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       />
 
       <VendaEsperaModal
-        open={vendaEsperaOpen}
-        onOpenChange={setVendaEsperaOpen}
+        open={heldSalesEnabled && vendaEsperaOpen}
+        onOpenChange={(open) => {
+          if (!heldSalesEnabled && open) return
+          setVendaEsperaOpen(open)
+        }}
         heldSales={heldSales}
         cartEmpty={cart.length === 0}
         onHold={handleHoldSale}
@@ -3154,7 +3194,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       </Dialog>
 
       <PdvClientePicker
-        open={clientePickerOpen}
+        open={customerSearchEnabled && clientePickerOpen}
         storeId={(lojaAtivaId ?? "").trim()}
         onSelect={(c: PdvClienteResult) => {
           setCustomerName(c.name)

@@ -40,6 +40,8 @@ export {
   resolveAllKnownCapabilities,
   buildCapabilitiesSnapshot,
   applySnapshotAgainstRuntime,
+  combineHoldSnapshotWithRuntime,
+  resumeDiscountFields,
   isBlockedCapabilityKey,
   isCapabilityEnabled,
   overridesFromStoreCapabilities,

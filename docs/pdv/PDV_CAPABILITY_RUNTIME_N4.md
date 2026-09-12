@@ -100,3 +100,10 @@ Um único resolver. Hook compartilhado `usePdvCapabilities(surfaceId)`.
 - Assistência / Supermercado / Venda Completa: mesmo contrato nas capabilities
   realmente suportadas.
 - `vendas-pdv.tsx` escolhe a superfície via `resolveSwitcherSurface`.
+- Next **não** herda `pdv.tables` do Classic: `VendasPageClient` e `MesasPageClient`
+  resolvem a superfície real. Com `surface=next`, `pdv.tables` permanece unsupported.
+- Override `false` em capability suportada tem efeito operacional nas bordas
+  (`heldSales`, `discounts`, `customerStoreCredit`, `customerSearch`,
+  `accessoryModelColor`, `quickServices`, `multiplePayments`).
+- Retomada de hold usa `combineHoldSnapshotWithRuntime` (runtime vivo vence;
+  snapshot não eleva; hold legado usa só o runtime atual).

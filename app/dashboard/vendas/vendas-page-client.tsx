@@ -39,7 +39,7 @@ export function VendasPageClient() {
   const { lojaAtivaId } = useLojaAtiva()
   const { pdvParams, hydrated: settingsHydrated, pdvMainLayout, pdvClassicLayout } = useStoreSettings()
   const switcherSurfaceId = surfaceIdFromSwitcherLayouts(pdvMainLayout, pdvClassicLayout)
-  const pdvCapabilities = usePdvCapabilities(switcherSurfaceId === "next" ? "classic" : switcherSurfaceId)
+  const pdvCapabilities = usePdvCapabilities(switcherSurfaceId)
   const { terminal, select, clear } = useTerminalAtivo(lojaAtivaId)
   const lock = useTerminalHeartbeat({
     storeId: lojaAtivaId,

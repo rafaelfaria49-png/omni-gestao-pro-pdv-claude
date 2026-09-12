@@ -85,6 +85,7 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
 import {
   construirProdutosACadastrar,
   enfileirarProdutosACadastrar,
@@ -197,6 +198,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const { empresaDocumentos, lojaAtivaId, getEnderecoDocumentos } = useLojaAtiva()
   const { pdvParams, impressaoConfig } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("venda-completa")
+  const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
+  const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
+  const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
+  const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
+  const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
+  const multiplePaymentsEnabled = pdvCapabilities.isEnabled("pdv.multiplePayments")
   const { toast } = useToast()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
@@ -300,8 +307,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     [subtotal, discountReais, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
   )
   const customerStoreCredit = useMemo(
-    () => (selectedCliente?.document ? getSaldoCreditoCliente(selectedCliente.document) : 0),
-    [selectedCliente, getSaldoCreditoCliente],
+    () =>
+      storeCreditEnabled && selectedCliente?.document
+        ? getSaldoCreditoCliente(selectedCliente.document)
+        : 0,
+    [selectedCliente, getSaldoCreditoCliente, storeCreditEnabled],
   )
 
   // ── Draft restore ─────────────────────────────────────────────────────────
@@ -377,6 +387,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         case "F2":
           e.preventDefault()
           if (anyModalOpen) break
+          if (!customerSearchEnabled && !selectedCliente) break
           if (selectedCliente) {
             setSelectedCliente(null)
             setClienteQuery("")
@@ -397,9 +408,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           if (!anyModalOpen) setShowItemAvulsoModal(true)
           break
         case "F7":
-          // Venda em espera (suspender/retomar) — mesmo atalho dos PDVs ativos.
           e.preventDefault()
-          if (!isPaymentOpen && !cupomOpen && !helpOpen) setShowVendaEsperaModal(true)
+          if (heldSalesEnabled && !isPaymentOpen && !cupomOpen && !helpOpen) {
+            setShowVendaEsperaModal(true)
+          }
           break
         case "End":
           e.preventDefault()
@@ -429,7 +441,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
       // Acessório configurado (modelo/cor): intercepta ANTES da mutação do
       // carrinho — mesmo contrato do Clássico (PDV-MOTOR-INTEGRITY-N1).
-      if (accessoryConfigRequiresSelection(product.accessoryConfig)) {
+      if (
+        accessoryModelColorEnabled &&
+        accessoryConfigRequiresSelection(product.accessoryConfig)
+      ) {
         setAccessoryProduct(product)
         return
       }
@@ -457,7 +472,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       setProductQuery("")
       setShowProductDropdown(false)
     },
-    [pdvParams.garantiaPadraoDias, toast],
+    [pdvParams.garantiaPadraoDias, toast, accessoryModelColorEnabled],
   )
 
   function updateQtyDirect(lineId: string, rawQty: number) {
@@ -569,6 +584,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
   // ── Venda em espera (F7) ──────────────────────────────────────────────────
   function handleHoldSale() {
+    if (!heldSalesEnabled) return
     if (cart.length === 0) return
     const held: HeldSale = {
       id: newHoldId(),
@@ -618,6 +634,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   }
 
   function handleResumeSale(sale: HeldSale) {
+    if (!heldSalesEnabled) return
+    const resumeCaps = combineHoldSnapshotWithRuntime({
+      surfaceId: "venda-completa",
+      overrides: pdvCapabilities.overrides,
+      snapshot: sale.capabilitiesSnapshot,
+    })
+    const discountRestore = resumeDiscountFields(sale, resumeCaps.isEnabled("pdv.discounts"))
     setCart(
       sale.items.map((i) => {
         const inv = inventory.find((x) => x.id === i.inventoryId)
@@ -647,7 +670,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         document: sale.customer.cpf ?? null,
       })
     }
-    setDiscountReais(sale.discountReais ?? 0)
+    setDiscountReais(discountRestore.discountReais)
     removeHeldSale(storeId, terminalIdForHold, sale.id)
     setHeldRefresh((n) => n + 1)
     toast({ title: "Venda retomada", description: `${sale.label} carregada no carrinho.` })
@@ -1099,7 +1122,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                       ref={clienteInputRef}
                       placeholder="Nome, CPF ou telefone… [F2]"
                       value={clienteQuery}
-                      onChange={(e) => { setClienteQuery(e.target.value); setShowClienteDropdown(true) }}
+                      disabled={!customerSearchEnabled}
+                      onChange={(e) => {
+                        if (!customerSearchEnabled) return
+                        setClienteQuery(e.target.value)
+                        setShowClienteDropdown(true)
+                      }}
                       onFocus={() => { if (clienteQuery.trim()) setShowClienteDropdown(true) }}
                       onBlur={() => setTimeout(() => setShowClienteDropdown(false), 200)}
                       onKeyDown={(e) => {
@@ -1179,6 +1207,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     Item avulso
                     <kbd className="ml-0.5 rounded border border-border bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground">INS</kbd>
                   </Button>
+                  {heldSalesEnabled ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -1195,6 +1224,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                       </Badge>
                     )}
                   </Button>
+                  ) : null}
                   {cart.length > 0 && (
                     <button
                       type="button"
@@ -1713,7 +1743,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         onCustomerCpfUpdate={(id, cpf) =>
           setSelectedCliente((prev) => (prev && prev.id === id ? { ...prev, document: cpf } : prev))
         }
-        onRequireCustomer={() => clienteInputRef.current?.focus()}
+        onRequireCustomer={() => {
+          if (customerSearchEnabled) clienteInputRef.current?.focus()
+        }}
+        discountsEnabled={discountsEnabled}
+        storeCreditEnabled={storeCreditEnabled}
+        allowMultiplePayments={multiplePaymentsEnabled}
         onConfirm={handleConfirmPayment}
       />
 
@@ -1786,7 +1821,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
       {/* ── Acessório modelo/cor (mesmo contrato do Clássico) ── */}
       <SelecionarAcessorioDialog
-        open={accessoryProduct !== null}
+        open={accessoryModelColorEnabled && accessoryProduct !== null}
         product={accessoryProduct}
         onCancel={() => setAccessoryProduct(null)}
         onConfirm={confirmAccessorySelection}
@@ -1794,8 +1829,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
       {/* ── Vendas em espera (F7) ── */}
       <VendaEsperaModal
-        open={showVendaEsperaModal}
-        onOpenChange={setShowVendaEsperaModal}
+        open={heldSalesEnabled && showVendaEsperaModal}
+        onOpenChange={(open) => {
+          if (!heldSalesEnabled && open) return
+          setShowVendaEsperaModal(open)
+        }}
         heldSales={heldSales}
         cartEmpty={cart.length === 0}
         onHold={handleHoldSale}

@@ -17,9 +17,11 @@ import {
 import {
   applySnapshotAgainstRuntime,
   buildCapabilitiesSnapshot,
+  combineHoldSnapshotWithRuntime,
   isBlockedCapabilityKey,
   resolveAllKnownCapabilities,
   resolveCapability,
+  resumeDiscountFields,
 } from "@/lib/pdv/resolve-capability"
 import {
   PDV_BLACK_REGISTRY_NOTE,
@@ -308,6 +310,56 @@ describe("N4 — holds / snapshot", () => {
     })
     expect(film.enabled).toBe(false)
   })
+
+  it("snapshot true não eleva runtime false", () => {
+    const combined = combineHoldSnapshotWithRuntime({
+      surfaceId: "classic",
+      overrides: { "pdv.heldSales": false },
+      snapshot: buildCapabilitiesSnapshot({ storeId: "loja-1", surfaceId: "classic" }),
+    })
+    expect(combined.isEnabled("pdv.heldSales")).toBe(false)
+  })
+
+  it("snapshot false restringe runtime true", () => {
+    const snap = buildCapabilitiesSnapshot({
+      storeId: "loja-1",
+      surfaceId: "classic",
+      overrides: { "pdv.discounts": false },
+    })
+    const combined = combineHoldSnapshotWithRuntime({
+      surfaceId: "classic",
+      overrides: {},
+      snapshot: snap,
+    })
+    expect(combined.isEnabled("pdv.discounts")).toBe(false)
+    expect(resolveCapability({ surfaceId: "classic", capabilityKey: "pdv.discounts" }).enabled).toBe(true)
+  })
+
+  it("hold legado sem snapshot usa runtime atual", () => {
+    const off = combineHoldSnapshotWithRuntime({
+      surfaceId: "classic",
+      overrides: { "pdv.discounts": false },
+      snapshot: undefined,
+    })
+    expect(off.isEnabled("pdv.discounts")).toBe(false)
+    const on = combineHoldSnapshotWithRuntime({
+      surfaceId: "classic",
+      overrides: {},
+      snapshot: null,
+    })
+    expect(on.isEnabled("pdv.discounts")).toBe(true)
+  })
+
+  it("retomada não reaplica desconto se capability estiver efetivamente off", () => {
+    expect(resumeDiscountFields({ discountReais: 10, discountPercent: 5 }, false)).toEqual({
+      discountReais: 0,
+      discountPercent: 0,
+    })
+    expect(resumeDiscountFields({ discountReais: 10, discountPercent: 5 }, true)).toEqual({
+      discountReais: 10,
+      discountPercent: 5,
+    })
+  })
 })
 
 describe("N4 — wiring das superfícies e contrato N3", () => {
@@ -352,5 +404,58 @@ describe("N4 — wiring das superfícies e contrato N3", () => {
     expect(film?.supportedBy).toEqual([])
     expect(os?.supportedBy).toEqual([])
     expect([...qs!.supportedBy]).toEqual(["assistencia"])
+  })
+
+  it("Next não herda pdv.tables do Classic", () => {
+    const next = resolveCapability({ surfaceId: "next", capabilityKey: "pdv.tables" })
+    expect(next.supported).toBe(false)
+    expect(next.enabled).toBe(false)
+    expect(next.source).toBe("unsupported")
+    const vendas = readSrc("app/dashboard/vendas/vendas-page-client.tsx")
+    const mesas = readSrc("app/dashboard/vendas/mesas/mesas-page-client.tsx")
+    expect(vendas).not.toContain('switcherSurfaceId === "next" ? "classic"')
+    expect(mesas).not.toContain('switcherSurfaceId === "next" ? "classic"')
+    expect(vendas).toContain("usePdvCapabilities(switcherSurfaceId)")
+    expect(mesas).toContain("usePdvCapabilities(switcherSurfaceId)")
+    expect(vendas).toContain('pdvCapabilities.isEnabled("pdv.tables")')
+    expect(mesas).toContain('pdvCapabilities.isEnabled("pdv.tables")')
+  })
+
+  it("gates operacionais nas quatro superfícies oficiais", () => {
+    const classic = readSrc("components/dashboard/vendas/pdv-classic.tsx")
+    const assist = readSrc("components/dashboard/vendas/pdv-assistencia-enterprise.tsx")
+    const superM = readSrc("components/dashboard/vendas/pdv-supermercado.tsx")
+    const venda = readSrc("components/dashboard/vendas/venda-completa-enterprise.tsx")
+    const modal = readSrc("components/dashboard/vendas/payment-modal.tsx")
+    for (const src of [classic, assist, superM, venda]) {
+      expect(src).toContain('isEnabled("pdv.heldSales")')
+      expect(src).toContain("combineHoldSnapshotWithRuntime")
+      expect(src).toContain("resumeDiscountFields")
+      expect(src).toContain("discountsEnabled")
+      expect(src).toContain("storeCreditEnabled")
+      expect(src).toContain("customerSearchEnabled")
+      expect(src).toContain("accessoryModelColorEnabled")
+    }
+    expect(assist).toContain('isEnabled("pdv.quickServices")')
+    expect(venda).toContain("allowMultiplePayments={multiplePaymentsEnabled}")
+    expect(modal).toContain("allowMultiplePayments")
+    expect(modal).toContain("discountsEnabled")
+    expect(modal).toContain("storeCreditEnabled")
+  })
+})
+
+describe("N4 — hold persistido não é apagado quando heldSales=false", () => {
+  beforeEach(installLocalStorageShim)
+  afterEach(uninstallLocalStorageShim)
+
+  it("getHeldSales continua lendo holds mesmo com runtime off", () => {
+    saveHeldSale("loja-1", "T1", emptyHold({ id: "keep-me" }))
+    const off = resolveCapability({
+      surfaceId: "classic",
+      capabilityKey: "pdv.heldSales",
+      overrides: { "pdv.heldSales": false },
+    })
+    expect(off.enabled).toBe(false)
+    expect(getHeldSales("loja-1", "T1").map((s) => s.id)).toEqual(["keep-me"])
   })
 })

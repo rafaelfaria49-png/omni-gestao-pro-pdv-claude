@@ -217,6 +217,12 @@ interface PaymentModalProps {
    * o cliente, o shell atualiza `selectedCustomer` e o fluxo à prazo é liberado.
    */
   onRequireCustomer?: () => void
+  /** Default true — paridade pré-N4. Quando false, campos de desconto ficam inativos. */
+  discountsEnabled?: boolean
+  /** Default true. Quando false, crédito/vale da loja não entra no fluxo. */
+  storeCreditEnabled?: boolean
+  /** Default true. Quando false, composição com múltiplas formas fica indisponível. */
+  allowMultiplePayments?: boolean
 }
 
 function PixQrKindPicker({
@@ -283,6 +289,9 @@ export function PaymentModal({
   multipayHint = false,
   twoColumn = false,
   onRequireCustomer,
+  discountsEnabled = true,
+  storeCreditEnabled = true,
+  allowMultiplePayments = true,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
   const [isConfirming, setIsConfirming] = useState(false)
@@ -343,11 +352,15 @@ export function PaymentModal({
 
   const formasPagamento = pdvParams.formasPagamento ?? []
   const formasModal = useMemo(() => {
-    const list = getFormasForPaymentModal(formasPagamento)
-    // Pagamento Múltiplo permite combinar qualquer forma "permitirNoMultiplo" + À Prazo:
-    // o saldo à prazo vira Conta a Receber (não entra no caixa) via o card de configuração.
-    return multipayHint ? list.filter((f) => f.permitirNoMultiplo || f.id === "a_prazo") : list
-  }, [formasPagamento, multipayHint])
+    let list = getFormasForPaymentModal(formasPagamento)
+    if (!storeCreditEnabled) {
+      list = list.filter((f) => f.id !== "credito_vale")
+    }
+    if (multipayHint && allowMultiplePayments) {
+      list = list.filter((f) => f.permitirNoMultiplo || f.id === "a_prazo")
+    }
+    return list
+  }, [formasPagamento, multipayHint, storeCreditEnabled, allowMultiplePayments])
 
   const resolveFormaForType = useCallback(
     (type: PaymentMethodType, preferId?: FormaPagamentoConfigId) =>
@@ -426,14 +439,18 @@ export function PaymentModal({
   // do servidor); o valor já aplicado nesta venda é subtraído por derivação
   // (sem estado duplicado — evita dessincronizar sob re-render estrito).
   const valeJaAplicado = payments.reduce((s, p) => (p.type === "credito_vale" ? s + p.value : s), 0)
+  const creditBalanceSource = storeCreditEnabled
+    ? locatedCredit
+      ? locatedCredit.saldo
+      : customerStoreCredit
+    : 0
   const saldoValeDisponivel = Math.max(
     0,
-    Math.round(
-      ((locatedCredit ? locatedCredit.saldo : customerStoreCredit) - valeJaAplicado) * 100,
-    ) / 100,
+    Math.round((creditBalanceSource - valeJaAplicado) * 100) / 100,
   )
 
   const localizarCreditoVale = useCallback(async () => {
+    if (!storeCreditEnabled) return
     const raw = valeBusca.trim()
     if (!raw || valeBuscando) return
     setValeErro(null)
@@ -503,7 +520,7 @@ export function PaymentModal({
     } finally {
       setValeBuscando(false)
     }
-  }, [valeBusca, valeBuscando, storeIdForPdv])
+  }, [valeBusca, valeBuscando, storeIdForPdv, storeCreditEnabled])
 
   /** Aplica um valor explícito de crédito/vale (clamp: menor entre saldo e restante). */
   const aplicarCreditoVale = useCallback(
@@ -533,7 +550,7 @@ export function PaymentModal({
   // Card de Crédito/Vale — renderizado nos dois layouts (enterprise e clássico).
   // Lookup por CPF/CNPJ ou código do vale; nunca cria crédito manual.
   const creditoValeCard =
-    selectedType === "credito_vale" && faltaPagar > 0 ? (
+    storeCreditEnabled && selectedType === "credito_vale" && faltaPagar > 0 ? (
       <Card className="border-emerald-500/50 bg-emerald-500/5">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -832,6 +849,7 @@ export function PaymentModal({
 
   const handleAddPayment = useCallback(
     (type: PaymentMethodType, preferFormaId?: FormaPagamentoConfigId) => {
+      if (type === "credito_vale" && !storeCreditEnabled) return
       const forma = resolveFormaForType(type, preferFormaId)
       if (!guardFormaRules(forma, type)) return
       if (type === "a_prazo" && !selectedCustomer) {
@@ -856,6 +874,7 @@ export function PaymentModal({
         return
       }
       setPayments((prev) => {
+        if (!allowMultiplePayments && prev.length > 0) return prev
         const paid = prev.reduce((s, p) => s + p.value, 0)
         const rem = Math.max(0, total - paid)
         if (rem <= 0.009) return prev
@@ -906,6 +925,8 @@ export function PaymentModal({
       toast,
       total,
       onRequireCustomer,
+      storeCreditEnabled,
+      allowMultiplePayments,
     ]
   )
 
@@ -1291,6 +1312,7 @@ export function PaymentModal({
                     <span className="font-medium">{formatCurrency(impostoEstimado)}</span>
                   </div>
                 ) : null}
+                {discountsEnabled ? (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Desconto (R$)</Label>
@@ -1318,6 +1340,7 @@ export function PaymentModal({
                     />
                   </div>
                 </div>
+                ) : null}
                 <p className="text-[11px] text-muted-foreground">
                   O percentual incide sobre o subtotal; o valor em R$ soma ao desconto (limitado ao subtotal).
                 </p>
@@ -1489,7 +1512,7 @@ export function PaymentModal({
 
             {/* ── Coluna direita: pagamento ── */}
             <div className="min-w-0 space-y-3 p-4">
-              {multipayHint && faltaPagar > 0.009 && (
+              {multipayHint && allowMultiplePayments && faltaPagar > 0.009 && (
                 <div className="rounded-xl border-2 border-violet-500/40 bg-violet-500/10 px-4 py-3 dark:bg-violet-500/15">
                   <div className="flex items-start gap-3">
                     <Layers className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
@@ -1550,7 +1573,7 @@ export function PaymentModal({
                     <Label className="text-sm text-muted-foreground">Forma de pagamento</Label>
                     <span className="text-[11px] text-muted-foreground">↑↓ navega · Enter seleciona</span>
                   </div>
-                  {selectedCustomer && customerStoreCredit > 0 && (
+                  {storeCreditEnabled && selectedCustomer && customerStoreCredit > 0 && (
                     <p className="text-xs text-muted-foreground">
                       Crédito em haver disponível: <span className="text-primary font-medium">{formatCurrency(customerStoreCredit)}</span>
                     </p>
@@ -1995,6 +2018,7 @@ export function PaymentModal({
                 <span className="font-medium">{formatCurrency(impostoEstimado)}</span>
               </div>
             ) : null}
+            {discountsEnabled ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Desconto (R$)</Label>
@@ -2022,6 +2046,7 @@ export function PaymentModal({
                 />
               </div>
             </div>
+            ) : null}
             <p className="text-[11px] text-muted-foreground">
               O percentual incide sobre o subtotal; o valor em R$ soma ao desconto (limitado ao subtotal).
             </p>
@@ -2036,7 +2061,7 @@ export function PaymentModal({
           />
 
           {/* Banner Modo Pagamento Múltiplo (convergência operacional) */}
-          {multipayHint && faltaPagar > 0.009 && (
+          {multipayHint && allowMultiplePayments && faltaPagar > 0.009 && (
             <div className="rounded-xl border-2 border-violet-500/40 bg-violet-500/10 px-4 py-3 dark:bg-violet-500/15">
               <div className="flex items-start gap-3">
                 <Layers className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
@@ -2256,7 +2281,7 @@ export function PaymentModal({
           {faltaPagar > 0 && (
             <div className="space-y-3">
               <Label className="text-sm text-muted-foreground">Escolha a Forma de Pagamento</Label>
-              {selectedCustomer && customerStoreCredit > 0 && (
+              {storeCreditEnabled && selectedCustomer && customerStoreCredit > 0 && (
                 <p className="text-xs text-muted-foreground">
                   Crédito em haver disponível: <span className="text-primary font-medium">{formatCurrency(customerStoreCredit)}</span>
                 </p>

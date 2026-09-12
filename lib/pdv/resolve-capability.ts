@@ -150,6 +150,45 @@ export function applySnapshotAgainstRuntime(
   return { enabled: current.enabled && snapshotEntry.enabled, elevated: false }
 }
 
+/**
+ * Combina snapshot do hold com o runtime vivo.
+ * Runtime atual vence: snapshot nunca eleva unsupported/blocked/disabled.
+ * Hold legado (sem snapshot) usa só o runtime atual.
+ */
+export function combineHoldSnapshotWithRuntime(input: {
+  surfaceId: PdvSurfaceId
+  overrides?: CapabilityOverridesV1 | null
+  snapshot?: CapabilitiesSnapshot | null
+}): {
+  resolved: ResolvedCapability[]
+  isEnabled: (key: string) => boolean
+} {
+  const current = resolveAllKnownCapabilities(input.surfaceId, input.overrides)
+  const resolved = current.map((item) => {
+    const entry = input.snapshot?.entries.find((e) => e.key === item.capabilityKey)
+    const applied = applySnapshotAgainstRuntime(item, entry)
+    return { ...item, enabled: applied.enabled }
+  })
+  return {
+    resolved,
+    isEnabled: (key: string) =>
+      resolved.find((item) => item.capabilityKey === key)?.enabled === true,
+  }
+}
+
+export function resumeDiscountFields(
+  sale: { discountReais?: number; discountPercent?: number },
+  discountsEffectivelyEnabled: boolean,
+): { discountReais: number; discountPercent: number } {
+  if (!discountsEffectivelyEnabled) {
+    return { discountReais: 0, discountPercent: 0 }
+  }
+  return {
+    discountReais: sale.discountReais ?? 0,
+    discountPercent: sale.discountPercent ?? 0,
+  }
+}
+
 export function isCapabilityEnabled(
   surfaceId: PdvSurfaceId,
   capabilityKey: string,
