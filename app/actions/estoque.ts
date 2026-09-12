@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access";
 
 /**
  * Resolve quem está registrando a movimentação a partir da sessão NextAuth (fonte confiável).
@@ -73,8 +74,12 @@ export async function registrarEntradaEstoque(
     usuario?: string;
   }
 ): Promise<EntradaEstoqueResult> {
-  const sid = (storeId ?? "").trim();
-  if (!sid) return { ok: false, reason: "Loja não selecionada" };
+  let sid: string;
+  try {
+    sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
+  }
   if (!input.produtoId?.trim()) return { ok: false, reason: "Produto inválido" };
 
   const qtd = Math.trunc(Number(input.quantidade));
@@ -164,8 +169,12 @@ export async function registrarAjusteEstoque(
     usuario?: string;
   }
 ): Promise<EntradaEstoqueResult> {
-  const sid = (storeId ?? "").trim();
-  if (!sid) return { ok: false, reason: "Loja não selecionada" };
+  let sid: string;
+  try {
+    sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
+  }
   if (!input.produtoId?.trim()) return { ok: false, reason: "Produto inválido" };
   if (!input.motivo?.trim()) return { ok: false, reason: "Motivo do ajuste é obrigatório" };
 
@@ -238,17 +247,7 @@ export type EstoqueResumo = {
 
 /** KPIs de estoque da loja: valor a custo, valor a venda, unidades e cobertura de SKUs. */
 export async function getEstoqueResumo(storeId: string): Promise<EstoqueResumo> {
-  const sid = (storeId ?? "").trim();
-  const vazio: EstoqueResumo = {
-    totalSkus: 0,
-    skusComEstoque: 0,
-    skusSemEstoque: 0,
-    totalUnidades: 0,
-    valorCusto: 0,
-    valorVenda: 0,
-    margemPotencial: 0,
-  };
-  if (!sid) return vazio;
+  const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
 
   // Produto.stock × precoCusto/price não é expressável em aggregate do Prisma → soma em JS.
   const rows = await prisma.produto.findMany({
@@ -286,8 +285,7 @@ export async function listMovimentacoesEstoque(
   storeId: string,
   opts?: { produtoId?: string; limit?: number }
 ): Promise<MovimentacaoEstoqueDTO[]> {
-  const sid = (storeId ?? "").trim();
-  if (!sid) return [];
+  const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
   const limit = Math.min(Math.max(1, opts?.limit ?? 50), 500);
 
   const rows = await prisma.movimentacaoEstoque.findMany({
@@ -435,8 +433,7 @@ export async function getAuditoriaEstoque(
   storeId: string,
   filtro?: AuditoriaEstoqueFiltro
 ): Promise<AuditoriaEstoqueData> {
-  const sid = (storeId ?? "").trim();
-  if (!sid) return vazioAuditoria();
+  const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
 
   const limit = Math.min(Math.max(1, filtro?.limit ?? 300), 1000);
   const tipoEfetivo = filtro?.somenteAjustes ? "ajuste" : filtro?.tipo?.trim() || undefined;

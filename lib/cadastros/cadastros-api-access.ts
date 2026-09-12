@@ -31,3 +31,22 @@ export function isCadastrosAdminPrincipal(session: Session | null): boolean {
   if (!session?.user?.id) return false
   return isElevatedRole(String(session.user.role ?? ""))
 }
+
+/** Lojas visíveis para dumps globais (auditoria / lista de lojas). */
+export function cadastrosStoreScope(session: Session | null): "all" | string[] {
+  if (!session?.user?.id) return []
+  if (isCadastrosAdminPrincipal(session)) return "all"
+  if (session.user.storeAccess !== "restricted") return []
+  return (session.user.allowedStoreIds ?? []).map((id) => id.trim()).filter(Boolean)
+}
+
+export function canSeeCadastrosStoreRecord(
+  session: Session | null,
+  recordStoreId: string | null | undefined,
+): boolean {
+  const scope = cadastrosStoreScope(session)
+  if (scope === "all") return true
+  const sid = (recordStoreId ?? "").trim()
+  if (!sid) return false
+  return scope.includes(sid)
+}

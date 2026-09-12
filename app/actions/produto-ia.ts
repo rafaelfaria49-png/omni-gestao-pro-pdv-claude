@@ -11,6 +11,7 @@
 import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access";
 import type { ProdutoIAMetadata } from "@/lib/catalog/produto-catalogo";
 
 function metaRecord(v: unknown): Record<string, unknown> {
@@ -28,9 +29,8 @@ export async function salvarProdutoIAMetadata(
   productId: string,
   meta: ProdutoIAMetadata,
 ): Promise<{ ok: true }> {
-  const sid = (storeId ?? "").trim();
+  const sid = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const pid = (productId ?? "").trim();
-  if (!sid) throw new Error("Loja ativa não resolvida.");
   if (!pid) throw new Error("Produto inválido.");
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
     throw new Error("Metadata inválido.");

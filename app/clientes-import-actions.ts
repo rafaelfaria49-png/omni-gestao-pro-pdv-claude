@@ -3,12 +3,11 @@
 import { revalidatePath } from "next/cache"
 import { Prisma } from "@/generated/prisma"
 import {
-  assertActiveSubscriptionForImport,
   importClientesItems,
   listClientesForLoja,
   type ClienteListItem,
 } from "@/lib/clientes-import-handler"
-import { resolveLojaIdParaConsultaClientes } from "@/lib/clientes-loja-resolve"
+import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access"
 
 /** Lista clientes da loja (substitui GET /api/clientes/importar). */
 export async function listarClientesParaCadastro(lojaId: string | null | undefined): Promise<
@@ -16,10 +15,7 @@ export async function listarClientesParaCadastro(lojaId: string | null | undefin
   | { ok: false; error: string }
 > {
   try {
-    const auth = await assertActiveSubscriptionForImport()
-    if (!auth.ok) return { ok: false, error: auth.message }
-
-    const lid = resolveLojaIdParaConsultaClientes(lojaId)
+    const lid = (await requireCadastrosActionAccess(lojaId ?? "", "shared")).storeId
     const clientes = await listClientesForLoja(lid)
     return { ok: true, clientes }
   } catch (e) {
@@ -40,17 +36,11 @@ export async function importarClientesLote(
   | { ok: false; error: string; detail?: string }
 > {
   try {
-    const auth = await assertActiveSubscriptionForImport()
-    if (!auth.ok) return { ok: false, error: "Não autorizado", detail: auth.message }
-
     if (!Array.isArray(items)) {
       return { ok: false, error: "Payload inválido", detail: "Envie um array de { Nome, Telefone }." }
     }
 
-    const lid = lojaId?.trim()
-    if (!lid) {
-      return { ok: false, error: "Unidade obrigatória", detail: "Informe a loja (id) para importar clientes." }
-    }
+    const lid = (await requireCadastrosActionAccess(lojaId ?? "", "hub")).storeId
     const { created, updated, skippedDuplicate } = await importClientesItems(lid, items)
 
     revalidatePath("/")

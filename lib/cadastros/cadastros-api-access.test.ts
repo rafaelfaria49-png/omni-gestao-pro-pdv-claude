@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 import type { Session } from "next-auth"
 import {
+  cadastrosStoreScope,
   canAuthorizeCadastrosStore,
+  canSeeCadastrosStoreRecord,
   hasCadastrosHub,
   isCadastrosAdminPrincipal,
 } from "@/lib/cadastros/cadastros-api-access"
@@ -74,6 +76,16 @@ describe("hasCadastrosHub / isCadastrosAdminPrincipal", () => {
     expect(hasCadastrosHub(session({ role: "TECNICO" }))).toBe(true)
     expect(hasCadastrosHub(session({ role: "ADMIN" }))).toBe(true)
     expect(hasCadastrosHub(null)).toBe(false)
+  })
+
+  it("cadastrosStoreScope: admin=all, restricted=ids, non-admin all=vazio", () => {
+    expect(cadastrosStoreScope(session({ role: "ADMIN", storeAccess: "all" }))).toBe("all")
+    expect(
+      cadastrosStoreScope(session({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })),
+    ).toEqual(["loja-a"])
+    expect(cadastrosStoreScope(session({ role: "GERENTE", storeAccess: "all" }))).toEqual([])
+    expect(canSeeCadastrosStoreRecord(session({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] }), "loja-b")).toBe(false)
+    expect(canSeeCadastrosStoreRecord(session({ role: "ADMIN", storeAccess: "all" }), "loja-z")).toBe(true)
   })
 
   it("somente ADMIN/SUPER_ADMIN são principal admin de Cadastros", () => {
