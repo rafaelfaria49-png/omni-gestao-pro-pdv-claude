@@ -25,7 +25,7 @@ import {
   readPdvBlackCupom,
   writePdvBlackCupom,
 } from "@/lib/pdv-black-storage"
-import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import { useTerminalAtivo } from "@/lib/pdv-terminal"
 import {
   useHeldSales,
   saveHeldSale,
@@ -85,11 +85,9 @@ export function PdvBlackEdition() {
   const { caixa, abrirCaixa, fecharCaixa } = useCaixa()
   const { toast } = useToast()
 
-  // ── Terminal e escopo de storage ───────────────────────────────────────────
-  const terminalId = useMemo(
-    () => readSelectedTerminal(lojaAtivaId)?.id ?? "default",
-    [lojaAtivaId]
-  )
+  // ── Terminal e escopo de storage (reativo via useTerminalAtivo) ────────────
+  const { terminal } = useTerminalAtivo(lojaAtivaId)
+  const terminalId = terminal?.id ?? "default"
 
   // ── Caixa ──────────────────────────────────────────────────────────────────
   const [turno, setTurno] = useState<number>(1)
@@ -111,16 +109,17 @@ export function PdvBlackEdition() {
     setFecharGateOpen(true)
   }, [])
 
-  // Incrementa turno quando o caixa é aberto
+  // Incrementa turno exclusivamente quando o caixa transiciona de fechado para aberto
   const prevCaixaOpen = useRef(caixa.isOpen)
   useEffect(() => {
     if (!prevCaixaOpen.current && caixa.isOpen) {
-      const next = turno + 1
+      const currentPersisted = readPdvBlackTurno(lojaAtivaId, terminalId)
+      const next = currentPersisted + 1
       setTurno(next)
       writePdvBlackTurno(lojaAtivaId, terminalId, next)
     }
     prevCaixaOpen.current = caixa.isOpen
-  }, [caixa.isOpen, turno, lojaAtivaId, terminalId])
+  }, [caixa.isOpen, lojaAtivaId, terminalId])
 
   // ── Nome da loja e operador ────────────────────────────────────────────────
   const storeName = useMemo(() => {
@@ -593,7 +592,8 @@ export function PdvBlackEdition() {
     // Venda confirmada
     setLastCashTendered(meta?.cashTendered ?? null)
     setLastTroco(trocoCalculado)
-    const nextCupom = cupomNum + 1
+    const currentCupom = readPdvBlackCupom(lojaAtivaId, terminalId)
+    const nextCupom = Math.max(cupomNum, currentCupom) + 1
     setCupomNum(nextCupom)
     writePdvBlackCupom(lojaAtivaId, terminalId, nextCupom)
     setCartRows([])
