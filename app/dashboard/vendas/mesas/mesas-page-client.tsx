@@ -7,16 +7,21 @@ import { Button } from "@/components/ui/button"
 import { LoadingState } from "@/components/ui/states"
 import { ControleConsumo } from "@/components/dashboard/vendas/controle-consumo"
 import { useStoreSettings } from "@/lib/store-settings-provider"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { surfaceIdFromSwitcherLayouts } from "@/lib/pdv/surface-ids"
 
 export function MesasPageClient() {
   const router = useRouter()
-  const { pdvParams, hydrated } = useStoreSettings()
+  const { pdvParams, hydrated, pdvMainLayout, pdvClassicLayout } = useStoreSettings()
+  const switcherSurfaceId = surfaceIdFromSwitcherLayouts(pdvMainLayout, pdvClassicLayout)
+  const tablesSurface = switcherSurfaceId === "next" ? "classic" : switcherSurfaceId
+  const pdvCapabilities = usePdvCapabilities(tablesSurface)
 
   if (!hydrated) {
     return <LoadingState message="Carregando mesas…" />
   }
 
-  if (!pdvParams.moduloControleConsumo) {
+  if (!pdvParams.moduloControleConsumo || !pdvCapabilities.isEnabled("pdv.tables")) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground">

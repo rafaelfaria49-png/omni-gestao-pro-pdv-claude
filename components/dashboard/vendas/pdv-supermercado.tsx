@@ -103,8 +103,10 @@ import {
   removeHeldSale,
   newHoldId,
   nextHoldLabel,
+  withHoldCapabilitiesSnapshot,
   type HeldSale,
 } from "@/lib/pdv-hold"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -184,6 +186,7 @@ export function PdvSupermercado({
   const { toast } = useToast()
   const { lojaAtivaId, opsStorageKey, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const { pdvParams, blob, save: saveStoreSettings, impressaoConfig } = useStoreSettings()
+  const pdvCapabilities = usePdvCapabilities("supermercado")
   const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
@@ -589,6 +592,7 @@ export function PdvSupermercado({
 
   const openPaymentModal = useCallback(
     (intent: PaymentMethodType | null) => {
+      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
       if (cart.length === 0) {
         toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
         hardFocusSearch()
@@ -599,11 +603,13 @@ export function PdvSupermercado({
       setMultipayMode(false)
       setIsPaymentModalOpen(true)
     },
-    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, toast]
+    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast]
   )
 
   /** Pagamento Múltiplo — convergência operacional com PDV Assistência (F12). */
   const openMultipayModal = useCallback(() => {
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
+    if (!pdvCapabilities.isEnabled("pdv.multiplePayments")) return
     if (cart.length === 0) {
       toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
       hardFocusSearch()
@@ -613,7 +619,7 @@ export function PdvSupermercado({
     setInstantPayIntent(null)
     setMultipayMode(true)
     setIsPaymentModalOpen(true)
-  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, toast])
+  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast])
 
   const confirmAttrDialog = useCallback(() => {
     if (!attrProduct) return
@@ -890,7 +896,11 @@ export function PdvSupermercado({
       discountPercent,
       pdvType: "supermercado",
     }
-    saveHeldSale(lojaKey, terminalIdForHold, held)
+    saveHeldSale(
+      lojaKey,
+      terminalIdForHold,
+      withHoldCapabilitiesSnapshot(held, pdvCapabilities.snapshot),
+    )
     setCart([])
     setDiscountReais(0)
     setDiscountPercent(0)

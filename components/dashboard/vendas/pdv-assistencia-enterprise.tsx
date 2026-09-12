@@ -125,8 +125,10 @@ import {
   removeHeldSale,
   newHoldId,
   nextHoldLabel,
+  withHoldCapabilitiesSnapshot,
   type HeldSale,
 } from "@/lib/pdv-hold"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -910,6 +912,7 @@ function EditarAtalhosModal({
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
   const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig } = useStoreSettings()
+  const pdvCapabilities = usePdvCapabilities("assistencia")
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   // Chave dos atalhos: estritamente a unidade ativa, sem fallback silencioso para
   // loja-1 (alinhado à política multi-loja). A grade só monta com unidade ativa.
@@ -1310,6 +1313,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // seletor de cliente (com cadastro rápido) via onRequireCustomer. `method = null`
   // abre em estado neutro (ex.: F10 = Desconto), sem pré-selecionar forma.
   const openPaymentModal = (method: PayMethod | null = null) => {
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
+    if (method === "multiplo" && !pdvCapabilities.isEnabled("pdv.multiplePayments")) return
     if (method && !payMethods.some((p) => p.id === method)) return
     if (cart.length === 0) return
     if (discountOverTotal) {
@@ -2046,7 +2051,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       discountPercent,
       pdvType: "assistencia",
     }
-    saveHeldSale(storeIdKey, terminalIdForHold, held)
+    saveHeldSale(
+      storeIdKey,
+      terminalIdForHold,
+      withHoldCapabilitiesSnapshot(held, pdvCapabilities.snapshot),
+    )
     setCart([])
     setCustomerName("")
     setSelectedClienteId(null)

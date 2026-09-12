@@ -8,6 +8,8 @@ import { useEffect, useState } from "react"
  */
 
 import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
+import type { CapabilitiesSnapshot } from "@/lib/pdv/capability-types"
+import { CAPABILITIES_RUNTIME_VERSION } from "@/lib/pdv/capability-types"
 
 const HOLDS_KEY_PREFIX = "@omnigestao:pdv-holds:"
 const HOLDS_CHANGED_EVENT = "omnigestao:pdv-holds-changed"
@@ -63,6 +65,29 @@ export type HeldSale = {
   discountReais?: number
   discountPercent?: number
   pdvType: "classic" | "supermercado" | "assistencia" | "black" | "venda-completa"
+  /** Presente em holds novos (N4). Ausente em holds legados — continua válido. */
+  capabilitiesVersion?: typeof CAPABILITIES_RUNTIME_VERSION
+  /** Snapshot imutável do runtime resolvido no momento do hold. */
+  capabilitiesSnapshot?: CapabilitiesSnapshot
+}
+
+export function withHoldCapabilitiesSnapshot(
+  sale: HeldSale,
+  snapshot: CapabilitiesSnapshot,
+): HeldSale {
+  const frozen: CapabilitiesSnapshot = {
+    version: CAPABILITIES_RUNTIME_VERSION,
+    surfaceId: snapshot.surfaceId,
+    storeId: snapshot.storeId,
+    resolvedAt: snapshot.resolvedAt,
+    entries: Object.freeze([...snapshot.entries.map((e) => Object.freeze({ ...e }))]),
+  }
+  Object.freeze(frozen)
+  return {
+    ...sale,
+    capabilitiesVersion: CAPABILITIES_RUNTIME_VERSION,
+    capabilitiesSnapshot: frozen,
+  }
 }
 
 function holdsKey(storeId: string, terminalId: string): string {

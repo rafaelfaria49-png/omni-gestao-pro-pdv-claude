@@ -81,8 +81,10 @@ import {
   removeHeldSale,
   newHoldId,
   nextHoldLabel,
+  withHoldCapabilitiesSnapshot,
   type HeldSale,
 } from "@/lib/pdv-hold"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
 import {
   construirProdutosACadastrar,
   enfileirarProdutosACadastrar,
@@ -194,6 +196,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const { garantirSessao } = useGarantirSessaoCaixa()
   const { empresaDocumentos, lojaAtivaId, getEnderecoDocumentos } = useLojaAtiva()
   const { pdvParams, impressaoConfig } = useStoreSettings()
+  const pdvCapabilities = usePdvCapabilities("venda-completa")
   const { toast } = useToast()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
@@ -596,7 +599,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       discountReais,
       pdvType: "venda-completa",
     }
-    saveHeldSale(storeId, terminalIdForHold, held)
+    saveHeldSale(
+      storeId,
+      terminalIdForHold,
+      withHoldCapabilitiesSnapshot(held, pdvCapabilities.snapshot),
+    )
     setCart([])
     setSelectedCliente(null)
     setClienteQuery("")
@@ -676,6 +683,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       void garantirSessao()
       return
     }
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
     setIsPaymentOpen(true)
   }
 

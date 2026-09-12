@@ -135,8 +135,10 @@ import {
   removeHeldSale,
   newHoldId,
   nextHoldLabel,
+  withHoldCapabilitiesSnapshot,
   type HeldSale,
 } from "@/lib/pdv-hold"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -241,6 +243,7 @@ export function PdvClassic({
   const { empresaDocumentos, getEnderecoDocumentos, lojaAtivaId, opsStorageKey, storesRefreshNonce } =
     useLojaAtiva()
   const { pdvParams, impressaoConfig, settings, storeId } = useStoreSettings()
+  const pdvCapabilities = usePdvCapabilities("classic")
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
   const { mode: studioThemeMode } = useStudioTheme()
@@ -1303,6 +1306,12 @@ export function PdvClassic({
 
   const openPaymentFlow = useCallback(
     (intent: PaymentMethodType | null, multiple: boolean) => {
+      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+        return false
+      }
+      if (multiple && !pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+        return false
+      }
       if (!validateBeforeOpenPayment()) {
         focusShellBipe()
         return false
@@ -1312,7 +1321,7 @@ export function PdvClassic({
       setIsPaymentModalOpen(true)
       return true
     },
-    [focusShellBipe, validateBeforeOpenPayment]
+    [focusShellBipe, pdvCapabilities, validateBeforeOpenPayment]
   )
 
   const openShellShortcut = useCallback(
@@ -1539,7 +1548,11 @@ export function PdvClassic({
       discountPercent,
       pdvType: "classic",
     }
-    saveHeldSale(lojaKey, terminalIdForHold, held)
+    saveHeldSale(
+      lojaKey,
+      terminalIdForHold,
+      withHoldCapabilitiesSnapshot(held, pdvCapabilities.snapshot),
+    )
     setCart([])
     setSelectedCustomer(null)
     setDiscountReais(0)
