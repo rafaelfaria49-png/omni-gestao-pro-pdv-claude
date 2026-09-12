@@ -25,8 +25,8 @@ A resolução de configurações de loja segue a seguinte ordem estrita:
 |---|---|---|---|
 | `@omnigestao:pdv-layout::{storeId}` | Loja | `SERVER_SETTING` | Migrado para `printerConfig.pdvMainLayout` / `v3PdvSectionCard`. Server-first. |
 | `omni-pdv-classic-layout::{storeId}` | Loja | `SERVER_SETTING` | Migrado para `printerConfig.pdvParams.pdvClassicLayout`. Server-first. |
-| `omnigestao-pdv-modo::{storeId}` | Loja | `SERVER_SETTING` | Default de loja em `printerConfig.v3PdvClassicModoInicial`. URL `?modo=` prevalece na sessão. |
-| `omnigestao:pdv-shortcuts:{storeId}` | Loja | `SERVER_SETTING` | Persistido em `pdvParams.atalhosRapidos`. Servidor vence fast-path local. |
+| `omnigestao-pdv-modo::{storeId}` | Dispositivo | `UI_PREFERENCE_LOCAL` | **Não migra neste N3.** Runtime local e URL `?modo=` preservados. Sem backfill/cutover. |
+| `omnigestao:pdv-shortcuts:{storeId}` | Loja | `SERVER_SETTING` | Persistido em `pdvParams.atalhosRapidos`. `[]` é valor explícito. |
 | `printerConfig.capabilities` | Loja | `SERVER_SETTING` | Persistido no JSON de `StoreSettings`. Version 1 com validação estrita. |
 | `assistec-pdv-ui-mode` | Dispositivo | `UI_PREFERENCE_LOCAL` | **Não migra**. Preferência visual local (`omni-smart`, `compact`, `expand`). |
 | `omnigestao-pdv-rapido-beep` | Dispositivo | `UI_PREFERENCE_LOCAL` | **Não migra**. Preferência de feedback sonoro local. |
@@ -74,13 +74,27 @@ Persistido dentro de `StoreSettings.printerConfig.capabilities`:
 
 ---
 
-## 4. Backfill Idempotente e Concorrência
+## 4. Backfill atômico, first-writer-wins e provider (CORRECTION-01)
 
-- **Write only if absent**: Implementado no lado servidor (`app/api/stores/[id]/settings/route.ts`).
-- Se o payload contiver `backfill: true`, o servidor revalida o registro no momento da escrita. Se um campo já estiver definido no banco, ele **não é sobrescrito**.
-- **Cenário de múltiplos dispositivos**: Se o Device A backfillou `supermercado` no servidor vazio, quando o Device B carregar com legado antigo `classic`, o servidor já possui valor explícito. O write de B é ignorado pelo servidor e `supermercado` prevalece.
-- **Autoridade**: A autoridade é a presença de valor no banco (`DEVICE_ID_AUTHORITY=NO`).
-- **Resiliência do Provider**: Tentativa de backfill sem permissão (403) ou falha de rede é registrada no ref da sessão e não entra em loop infinito de retry.
+Todos os PUTs de `StoreSettings` da mesma loja (admin e backfill) passam por:
+
+1. `prisma.$transaction(...)`
+2. `SELECT pg_advisory_xact_lock(hashtext('store-settings:' || storeId))::text AS lock`
+3. **re-read** de `StoreSettings` **depois** de adquirir o lock
+4. merge (`backfill: true` = write-only-if-absent)
+5. upsert na **mesma** transação
+
+O lock é transacional: liberado automaticamente no commit/rollback. Sem schema/migration.
+
+**First committed authoritative value wins.** Duas requisições que leem ausência antes de qualquer write são serializadas pelo lock. A segunda relê o valor já persistido e, em backfill, não sobrescreve. PUT administrativo posterior ao backfill altera normalmente; backfill posterior a admin preserva o admin.
+
+**Atalhos:** `atalhosRapidos: []` no servidor é configuração explícita ("nenhum atalho"). Não é ausência. Dual-read usa o valor RAW (`undefined` ≠ `[]`) no `StoreSettingsProvider` antes dos defaults. Legacy só é fallback/backfill se o campo ainda não existe.
+
+**Modo PDV:** `omnigestao-pdv-modo::{storeId}` **não** é SERVER_SETTING neste N3 (`UI_PREFERENCE_LOCAL`). URL `?modo=` e preferência local permanecem. `v3PdvClassicModoInicial` pode existir no JSON da UI V3, mas não há cutover server-first.
+
+**Troca de loja:** `StoreSettingsProvider` usa geração/epoch monotônica (`requestedStoreId` + `requestGeneration`). Respostas de GET e backfill só chamam `setSettings` / `setHydrated` se a epoch ainda for a ativa. `setSettings(null)` ao trocar de loja não é a proteção única. Finally stale não altera `hydrated`; erro stale não apaga settings atuais.
+
+**Resiliência:** 401/403/500/rede no backfill não entra em loop e não promove fallback a autoridade.
 
 ---
 

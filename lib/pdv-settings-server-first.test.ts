@@ -119,15 +119,37 @@ describe("N3 — Precedência Server-First e Dual-Read", () => {
     expect(resolved.isEligibleForBackfill).toBe(false)
   })
 
-  it("shortcuts: servidor ausente/vazio permite fallback para legacy scoped da mesma loja", () => {
+  it("shortcuts: servidor ausente (undefined) permite fallback para legacy scoped da mesma loja", () => {
+    const localShortcuts = [{ id: "local-1", nome: "Local Item", preco: 15 }]
+    storageMap.set("omnigestao:pdv-shortcuts:loja-1", JSON.stringify(localShortcuts))
+
+    const resolved = resolvePdvShortcutsServerFirst(undefined, "loja-1")
+
+    expect(resolved.value).toEqual(localShortcuts)
+    expect(resolved.source).toBe("legacy_fallback")
+    expect(resolved.isEligibleForBackfill).toBe(true)
+  })
+
+  it("shortcuts: servidor [] é valor explícito e NÃO ressuscita legacy", () => {
     const localShortcuts = [{ id: "local-1", nome: "Local Item", preco: 15 }]
     storageMap.set("omnigestao:pdv-shortcuts:loja-1", JSON.stringify(localShortcuts))
 
     const resolved = resolvePdvShortcutsServerFirst([], "loja-1")
 
-    expect(resolved.value).toEqual(localShortcuts)
-    expect(resolved.source).toBe("legacy_fallback")
-    expect(resolved.isEligibleForBackfill).toBe(true)
+    expect(resolved.value).toEqual([])
+    expect(resolved.source).toBe("server")
+    expect(resolved.isEligibleForBackfill).toBe(false)
+  })
+
+  it("shortcuts: depois de backfill para [] o legado nunca reaparece", () => {
+    storageMap.set(
+      "omnigestao:pdv-shortcuts:loja-1",
+      JSON.stringify([{ id: "stale", nome: "Stale", preco: 1 }]),
+    )
+    const afterBackfill = resolvePdvShortcutsServerFirst([], "loja-1")
+    expect(afterBackfill.value).toEqual([])
+    expect(afterBackfill.source).toBe("server")
+    expect(resolvePdvShortcutsServerFirst([], "loja-1").value).toEqual([])
   })
 })
 
@@ -166,9 +188,9 @@ describe("N3 — Matriz de Classificação e Quarentena", () => {
   it("SERVER_SETTING são as únicas classificadas como elegíveis para migração", () => {
     expect(isMigratableServerSetting("@omnigestao:pdv-layout::loja-1")).toBe(true)
     expect(isMigratableServerSetting("omni-pdv-classic-layout::loja-1")).toBe(true)
-    expect(isMigratableServerSetting("omnigestao-pdv-modo::loja-1")).toBe(true)
     expect(isMigratableServerSetting("omnigestao:pdv-shortcuts:loja-1")).toBe(true)
     expect(isMigratableServerSetting("printerConfig.capabilities")).toBe(true)
+    expect(isMigratableServerSetting("omnigestao-pdv-modo::loja-1")).toBe(false)
   })
 
   it("UI_PREFERENCE_LOCAL NÃO migra para StoreSettings", () => {
@@ -177,6 +199,9 @@ describe("N3 — Matriz de Classificação e Quarentena", () => {
 
     expect(classifySettingKey("omnigestao-pdv-rapido-beep")).toBe("UI_PREFERENCE_LOCAL")
     expect(isMigratableServerSetting("omnigestao-pdv-rapido-beep")).toBe(false)
+
+    expect(classifySettingKey("omnigestao-pdv-modo::loja-1")).toBe("UI_PREFERENCE_LOCAL")
+    expect(isMigratableServerSetting("omnigestao-pdv-modo::loja-1")).toBe(false)
   })
 
   it("OPERATIONAL_LOCAL NÃO migra para StoreSettings", () => {
@@ -375,25 +400,23 @@ describe("N3 — Ciclo de Vida do Provider, Troca de Loja e Falhas de Rede", () 
     expect(attemptedStores.has("loja-1")).toBe(true)
   })
 
-  it("troca de loja limpa imediatamente o estado anterior antes da hidratação", () => {
-    // Simula troca de loja A -> B
-    let activeStoreId = "loja-a"
+  it("troca de loja incrementa geração e zera estado (descarte fica no epoch gate)", () => {
     let currentSettings: Record<string, unknown> | null = { storeId: "loja-a", pdvMainLayout: "supermercado" }
     let hydrated = true
+    let generation = 1
 
-    // Função de reset acionada na troca de loja (idêntica ao useEffect([storeId]) do provider)
-    const onStoreChange = (newStoreId: string) => {
-      activeStoreId = newStoreId
+    const onStoreChange = () => {
+      generation += 1
       currentSettings = null
       hydrated = false
     }
 
-    onStoreChange("loja-b")
+    const previousGeneration = generation
+    onStoreChange()
 
-    expect(activeStoreId).toBe("loja-b")
+    expect(generation).toBe(previousGeneration + 1)
     expect(currentSettings).toBeNull()
     expect(hydrated).toBe(false)
-    // Estado de A não vaza como configuração de B
   })
 
   it("falha de rede não promove fallback local a autoridade de servidor", () => {

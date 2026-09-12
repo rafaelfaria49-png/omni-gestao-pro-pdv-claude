@@ -1137,38 +1137,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     if (hydratedFromDb) return
 
-    // ── Hidratação Server-First: servidor vence localStorage ──────────────────
+    // Dual-read já resolvido no StoreSettingsProvider (servidor [] é explícito).
     if (!settingsHydrated) return
 
-    // Se o servidor possui atalhos configurados, o servidor vence incondicionalmente
-    if (Array.isArray(pdvParams.atalhosRapidos) && pdvParams.atalhosRapidos.length > 0) {
-      setLocalAtalhos(pdvParams.atalhosRapidos)
-      hydratedShortcutsKeyRef.current = shortcutsKey
-      setHydratedFromDb(true)
-      // Sincroniza cache local com o servidor
-      try { localStorage.setItem(shortcutsKey, JSON.stringify(pdvParams.atalhosRapidos)) } catch { /* ignore */ }
-      return
-    }
-
-    // Fallback legado scoped por loja (apenas se o servidor não tiver atalhos persistidos)
-    try {
-      const raw = localStorage.getItem(shortcutsKey)
-      if (raw) {
-        const parsed = JSON.parse(raw) as AtalhoSaved[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setLocalAtalhos(parsed)
-          hydratedShortcutsKeyRef.current = shortcutsKey
-          setHydratedFromDb(true)
-          return
-        }
-      }
-    } catch { /* ignore */ }
-
-    // Default: vazio
-    const saved = pdvParams.atalhosRapidos ?? []
-    setLocalAtalhos(saved)
+    const resolved = Array.isArray(pdvParams.atalhosRapidos) ? pdvParams.atalhosRapidos : []
+    setLocalAtalhos(resolved)
     hydratedShortcutsKeyRef.current = shortcutsKey
     setHydratedFromDb(true)
+    try { localStorage.setItem(shortcutsKey, JSON.stringify(resolved)) } catch { /* ignore */ }
   }, [shortcutsKey, settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
 
   // ── Normalizar atalhos legados para kind/referência explícitos ──────────────

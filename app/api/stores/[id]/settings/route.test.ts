@@ -28,7 +28,17 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/auth", () => ({ auth: h.auth }))
 vi.mock("@/lib/prisma", () => ({
-  prisma: { storeSettings: { findUnique: h.findUnique, upsert: h.upsert } },
+  prisma: {
+    storeSettings: { findUnique: h.findUnique, upsert: h.upsert },
+    $transaction: async (fn: (tx: {
+      $queryRaw: (...args: unknown[]) => Promise<unknown>
+      storeSettings: { findUnique: typeof h.findUnique; upsert: typeof h.upsert }
+    }) => Promise<unknown>) =>
+      fn({
+        $queryRaw: async () => [{ lock: "" }],
+        storeSettings: { findUnique: h.findUnique, upsert: h.upsert },
+      }),
+  },
 }))
 vi.mock("@/lib/config-audit/record", () => ({
   recordConfigAuditChanges: h.recordAudit,

@@ -97,12 +97,13 @@ export function resolvePdvShortcutsServerFirst(
 ): ResolvedSetting<StorePdvAtalhoRapido[]> {
   const sid = (storeId || "").trim()
 
-  // 1. Servidor explícito: se veio um array do servidor com itens, servidor vence!
-  if (Array.isArray(serverValue) && serverValue.length > 0) {
+  // 1. Servidor explícito: QUALQUER array (inclusive []) é configuração válida.
+  //    [] significa "nenhum atalho configurado", não "campo ausente".
+  if (Array.isArray(serverValue)) {
     return { value: serverValue, source: "server", isEligibleForBackfill: false }
   }
 
-  // 2. Fallback legado por loja: `omnigestao:pdv-shortcuts:${storeId}`
+  // 2. Fallback legado por loja: somente se o campo AINDA NÃO existe no servidor
   if (sid) {
     try {
       const storage = getLocalStorage()
@@ -110,7 +111,6 @@ export function resolvePdvShortcutsServerFirst(
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Servidor vazio mas legacy tem atalhos para a mesma loja
           return { value: parsed as StorePdvAtalhoRapido[], source: "legacy_fallback", isEligibleForBackfill: true }
         }
       }
@@ -120,7 +120,7 @@ export function resolvePdvShortcutsServerFirst(
   }
 
   // 3. Default canônico
-  return { value: Array.isArray(serverValue) ? serverValue : [], source: "default", isEligibleForBackfill: false }
+  return { value: [], source: "default", isEligibleForBackfill: false }
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -131,8 +131,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * Merge profundo de `printerConfig` para salvamento seguro.
  * Preserva campos irmãos pré-existentes e namespaces desconhecidos.
  *
- * Quando `isBackfill === true`, aplica "write only if absent":
- * se o servidor já contiver um valor definido no banco, ele NÃO é sobrescrito.
+ * Quando `isBackfill === true`, aplica "write only if absent" sobre o snapshot
+ * relido DEPOIS do advisory lock transacional (não sobre um findUnique prévio).
  */
 export function mergePrinterConfigServerSide(
   existingPrinter: Record<string, unknown> | null | undefined,

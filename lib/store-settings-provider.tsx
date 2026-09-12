@@ -23,7 +23,12 @@ import { configPadrao, type CategoriaGarantia, type TermosGarantia } from "@/lib
 import {
   resolvePdvClassicLayoutServerFirst,
   resolvePdvMainLayoutServerFirst,
+  resolvePdvShortcutsServerFirst,
 } from "@/lib/pdv-settings-server-first"
+import {
+  applyIfLiveStoreSettingsEpoch,
+  createStoreSettingsEpochGate,
+} from "@/lib/store-settings-request-epoch"
 
 export type StoreSettingsContextType = {
   /** ID da unidade ativa; vazio quando nenhuma loja está selecionada (sem fallback silencioso). */
@@ -127,14 +132,21 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
 
   // Registro de backfill já tentado nesta sessão para cada loja (evita loops e repetições)
   const backfillAttemptedStoresRef = useRef<Set<string>>(new Set())
+  const epochGateRef = useRef(createStoreSettingsEpochGate())
 
   const refresh = useCallback(async () => {
-    setHydrated(false)
+    const request = epochGateRef.current.begin(storeId)
+    if (!request) return
     if (!storeId) {
-      setSettings(null)
-      setHydrated(true)
+      applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+        setSettings(null)
+        setHydrated(true)
+      })
       return
     }
+    applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+      setHydrated(false)
+    })
     try {
       const r = await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
         credentials: "include",
@@ -142,16 +154,23 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
         headers: { [ASSISTEC_LOJA_HEADER]: storeId },
       })
       const j = (await r.json().catch(() => null)) as { settings?: StoreSettingsApi | null } | null
-      setSettings(j?.settings ?? null)
+      applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+        setSettings(j?.settings ?? null)
+      })
     } catch {
-      setSettings(null)
+      applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+        setSettings(null)
+      })
     } finally {
-      setHydrated(true)
+      applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+        setHydrated(true)
+      })
     }
   }, [storeId])
 
-  // Ao trocar de loja: zera estado imediatamente (impede qualquer piscar de loja A em loja B)
+  // Ao trocar de loja: invalida geração (descarta GET/backfill in-flight) e zera estado.
   useEffect(() => {
+    epochGateRef.current.onStoreChange(storeId)
     setSettings(null)
     setHydrated(false)
   }, [storeId])
@@ -161,7 +180,18 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   }, [refresh, storesRefreshNonce])
 
   const blob = useMemo(() => parseBlob(settings?.printerConfig), [settings?.printerConfig])
-  const pdvParams = useMemo(() => mergePdvParams(defaultPdvParams(), blob.pdvParams), [blob.pdvParams])
+  const resolvedShortcuts = useMemo(
+    () =>
+      resolvePdvShortcutsServerFirst(
+        Array.isArray(blob.pdvParams?.atalhosRapidos) ? blob.pdvParams.atalhosRapidos : undefined,
+        storeId,
+      ),
+    [blob.pdvParams?.atalhosRapidos, storeId],
+  )
+  const pdvParams = useMemo(
+    () => mergePdvParams(defaultPdvParams(), { ...blob.pdvParams, atalhosRapidos: resolvedShortcuts.value }),
+    [blob.pdvParams, resolvedShortcuts.value],
+  )
   const impressaoConfig = useMemo(
     () => parseImpressaoFromPrinterConfig(settings?.printerConfig),
     [settings?.printerConfig],
@@ -194,22 +224,29 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
 
     const needsMainLayoutBackfill = resolvedMainLayout.isEligibleForBackfill
     const needsClassicLayoutBackfill = resolvedClassicLayout.isEligibleForBackfill
+    const needsShortcutsBackfill = resolvedShortcuts.isEligibleForBackfill
 
-    if (!needsMainLayoutBackfill && !needsClassicLayoutBackfill) return
+    if (!needsMainLayoutBackfill && !needsClassicLayoutBackfill && !needsShortcutsBackfill) return
 
     // Marca imediatamente para nunca entrar em loop mesmo com falhas ou 403
     backfillAttemptedStoresRef.current.add(storeId)
+
+    const request = { storeId, generation: epochGateRef.current.active.generation }
 
     const patchPrinterConfig: Record<string, unknown> = {}
     if (needsMainLayoutBackfill) {
       patchPrinterConfig.pdvMainLayout = resolvedMainLayout.value
       patchPrinterConfig.v3PdvSectionCard = resolvedMainLayout.value
     }
+    const pdvParamsPatch: Record<string, unknown> = {}
     if (needsClassicLayoutBackfill) {
-      patchPrinterConfig.pdvParams = {
-        ...blob.pdvParams,
-        pdvClassicLayout: resolvedClassicLayout.value,
-      }
+      pdvParamsPatch.pdvClassicLayout = resolvedClassicLayout.value
+    }
+    if (needsShortcutsBackfill) {
+      pdvParamsPatch.atalhosRapidos = resolvedShortcuts.value
+    }
+    if (Object.keys(pdvParamsPatch).length > 0) {
+      patchPrinterConfig.pdvParams = pdvParamsPatch
     }
 
     void fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
@@ -225,12 +262,12 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       }),
     })
       .then(async (res) => {
-        if (res.ok) {
-          const j = (await res.json().catch(() => null)) as { settings?: StoreSettingsApi } | null
-          if (j?.settings) {
-            setSettings(j.settings)
-          }
-        }
+        if (!res.ok) return
+        const j = (await res.json().catch(() => null)) as { settings?: StoreSettingsApi } | null
+        if (!j?.settings) return
+        applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+          setSettings(j.settings as StoreSettingsApi)
+        })
       })
       .catch(() => {
         // Falha de rede ou falta de permissão não quebra o provider nem entra em retry infinito
@@ -242,7 +279,8 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     resolvedMainLayout.value,
     resolvedClassicLayout.isEligibleForBackfill,
     resolvedClassicLayout.value,
-    blob.pdvParams,
+    resolvedShortcuts.isEligibleForBackfill,
+    resolvedShortcuts.value,
   ])
 
   const save = useCallback(

@@ -83,9 +83,8 @@ export type StoreSettingsApi = {
 
 export type StoreSettingsPutPayload = Partial<StoreSettingsApi> & {
   /**
-   * Quando `backfill: true`, o servidor aplica a regra "write only if absent":
-   * revalida o estado no momento da escrita e só grava campos que estiverem
-   * AUSENTES no servidor, impedindo que um stale device sobrescreva um valor já migrado.
+   * Quando `backfill: true`, o PUT serializa a loja com advisory lock transacional,
+   * relê StoreSettings sob o lock e só grava campos ainda AUSENTES (first-writer-wins).
    */
   backfill?: boolean
 }

@@ -4,7 +4,7 @@ import { requireEnterpriseWith, requireStoreAccess } from "@/lib/auth/guard-ente
 import { buildStoreSettingsAuditChanges } from "@/lib/config-audit/store-settings"
 import { recordConfigAuditChanges } from "@/lib/config-audit/record"
 import { validateCapabilitiesPayload } from "@/lib/capabilities-persistence-v1"
-import { mergePrinterConfigServerSide } from "@/lib/pdv-settings-server-first"
+import { persistStoreSettingsPut, type StoreSettingsPutDb } from "@/lib/store-settings-put"
 import type { StoreSettingsPutPayload } from "@/lib/store-settings-types"
 
 export const runtime = "nodejs"
@@ -53,64 +53,11 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       }
     }
 
-    const isBackfill = !!body.backfill
-    const existing = await prisma.storeSettings.findUnique({ where: { storeId: id } })
-
-    const existingPrinter =
-      existing?.printerConfig && typeof existing.printerConfig === "object" && !Array.isArray(existing.printerConfig)
-        ? (existing.printerConfig as Record<string, unknown>)
-        : null
-
-    const incomingPrinter =
-      body.printerConfig && typeof body.printerConfig === "object" && !Array.isArray(body.printerConfig)
-        ? (body.printerConfig as Record<string, unknown>)
-        : null
-
-    const resolvedPrinter =
-      incomingPrinter !== null
-        ? mergePrinterConfigServerSide(existingPrinter, incomingPrinter, isBackfill)
-        : existingPrinter
-
-    // Se for backfill, só grava campos de texto se estiverem vazios/ausentes no banco existente
-    const resolveField = (incoming: string | null | undefined, current: string | undefined): string | undefined => {
-      if (incoming === undefined) return undefined
-      if (isBackfill && current && current.trim() !== "") {
-        return current.trim()
-      }
-      return incoming != null ? String(incoming).trim() : ""
-    }
-
-    const nextContactEmail = resolveField(body.contactEmail, existing?.contactEmail)
-    const nextContactWhatsapp = resolveField(body.contactWhatsapp, existing?.contactWhatsapp)
-    const nextContactWhatsappDono = resolveField(body.contactWhatsappDono, existing?.contactWhatsappDono)
-    const nextReceiptFooter = resolveField(body.receiptFooter, existing?.receiptFooter)
-    const nextMascotSeed = resolveField(body.mascotCharacterSeed, existing?.mascotCharacterSeed)
-    const nextMascotPrompt = resolveField(body.mascotPromptBase, existing?.mascotPromptBase)
-
-    const settings = await prisma.storeSettings.upsert({
-      where: { storeId: id },
-      create: {
-        storeId: id,
-        contactEmail: (body.contactEmail || "").trim(),
-        contactWhatsapp: (body.contactWhatsapp || "").trim(),
-        contactWhatsappDono: (body.contactWhatsappDono || "").trim(),
-        receiptFooter: (body.receiptFooter || "").trim(),
-        mascotCharacterSeed: (body.mascotCharacterSeed || "").trim(),
-        mascotPromptBase: (body.mascotPromptBase || "").trim(),
-        printerConfig: (resolvedPrinter ?? {}) as any,
-        cardFees: body.cardFees as any,
-      },
-      update: {
-        ...(nextContactEmail !== undefined ? { contactEmail: nextContactEmail } : {}),
-        ...(nextContactWhatsapp !== undefined ? { contactWhatsapp: nextContactWhatsapp } : {}),
-        ...(nextContactWhatsappDono !== undefined ? { contactWhatsappDono: nextContactWhatsappDono } : {}),
-        ...(nextReceiptFooter !== undefined ? { receiptFooter: nextReceiptFooter } : {}),
-        ...(nextMascotSeed !== undefined ? { mascotCharacterSeed: nextMascotSeed } : {}),
-        ...(nextMascotPrompt !== undefined ? { mascotPromptBase: nextMascotPrompt } : {}),
-        ...(body.printerConfig !== undefined ? { printerConfig: resolvedPrinter as any } : {}),
-        ...(body.cardFees !== undefined ? { cardFees: body.cardFees as any } : {}),
-      },
-    })
+    const { existing, settings } = await persistStoreSettingsPut(
+      prisma as unknown as StoreSettingsPutDb,
+      id,
+      body,
+    )
 
     try {
       const { section, changes } = buildStoreSettingsAuditChanges(existing, settings, body)

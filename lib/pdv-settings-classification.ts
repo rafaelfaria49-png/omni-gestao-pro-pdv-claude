@@ -54,10 +54,11 @@ export const PDV_SETTINGS_CLASSIFICATION_MATRIX: SettingKeyInventoryItem[] = [
   },
   {
     keyPattern: "omnigestao-pdv-modo::{storeId}",
-    scope: "store",
-    classification: "SERVER_SETTING",
-    description: "Modo inicial padrão configurado para a loja no PDV Clássico (normal / rapido)",
-    actionN3: "Server-first em printerConfig.v3PdvClassicModoInicial. URL ?modo= prevalece na sessão.",
+    scope: "device",
+    classification: "UI_PREFERENCE_LOCAL",
+    description: "Preferência/override local de modo rápido vs normal neste dispositivo",
+    actionN3:
+      "Não migra neste N3. Runtime local e URL ?modo= preservados. Sem backfill/cutover server-first.",
   },
   {
     keyPattern: "omnigestao:pdv-shortcuts:{storeId}",
