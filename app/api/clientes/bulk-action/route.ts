@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
+import {
+  cadastrosAuditLogFields,
+  cadastrosAuditPrincipalFromSession,
+} from "@/lib/cadastros/cadastros-audit-principal"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -41,7 +45,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Máximo de ${MAX_IDS} itens por lote` }, { status: 400 })
   }
 
-  const operator = userLabel?.trim() || "Operador"
+  const audit = cadastrosAuditLogFields(cadastrosAuditPrincipalFromSession(gate.session), {
+    operatorNote: userLabel,
+  })
+  const operator = audit.userLabel
 
   const items = await prisma.cliente.findMany({
     where: { id: { in: normalizedIds }, storeId },
@@ -98,6 +105,7 @@ export async function POST(req: Request) {
             entidade: "Cliente",
             ids: normalizedIds,
             clientes: items.map((c) => ({ id: c.id, nome: c.name })),
+            ...audit.actorMeta,
           }),
           source: "dashboard",
         },
@@ -129,6 +137,7 @@ export async function POST(req: Request) {
             inactivatedIds: linkedIds,
             deleted: items.filter((c) => freeIds.includes(c.id)).map((c) => ({ id: c.id, nome: c.name })),
             inactivated: items.filter((c) => linkedIds.includes(c.id)).map((c) => ({ id: c.id, nome: c.name })),
+            ...audit.actorMeta,
           }),
           source: "dashboard",
         },

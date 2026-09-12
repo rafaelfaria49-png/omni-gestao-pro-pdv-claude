@@ -3,24 +3,11 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
 import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access";
-
-/**
- * Resolve quem está registrando a movimentação a partir da sessão NextAuth (fonte confiável).
- * Cai para o valor enviado pelo cliente apenas se não houver sessão. Nunca lança.
- */
-async function resolverUsuario(fallback?: string): Promise<string | null> {
-  try {
-    const session = await auth();
-    const u = session?.user;
-    const fromSession = (u?.name || u?.email || "").trim();
-    if (fromSession) return fromSession;
-  } catch {
-    /* sem contexto de sessão — usa fallback */
-  }
-  return fallback?.trim() || null;
-}
+import {
+  cadastrosAuditActorLabel,
+  cadastrosAuditPrincipalFromSession,
+} from "@/lib/cadastros/cadastros-audit-principal";
 
 /**
  * Movimentação de estoque (livro-razão). Toda entrada/ajuste:
@@ -71,12 +58,16 @@ export async function registrarEntradaEstoque(
     documento?: string;
     fornecedor?: string;
     observacao?: string;
+    /** Aceito no contrato público; o ator oficial vem da sessão. */
     usuario?: string;
   }
 ): Promise<EntradaEstoqueResult> {
   let sid: string;
+  let usuario: string | null;
   try {
-    sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
+    const gate = await requireCadastrosActionAccess(storeId, "shared");
+    sid = gate.storeId;
+    usuario = cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session)) || null;
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
   }
@@ -88,8 +79,6 @@ export async function registrarEntradaEstoque(
   }
   const custoUnit = Math.max(0, Number(input.custoUnitario ?? 0));
   if (!Number.isFinite(custoUnit)) return { ok: false, reason: "Custo unitário inválido" };
-
-  const usuario = await resolverUsuario(input.usuario);
 
   try {
     const out = await prisma.$transaction(async (tx) => {
@@ -166,12 +155,16 @@ export async function registrarAjusteEstoque(
     novoSaldo: number;
     motivo: string;
     observacao?: string;
+    /** Aceito no contrato público; o ator oficial vem da sessão. */
     usuario?: string;
   }
 ): Promise<EntradaEstoqueResult> {
   let sid: string;
+  let usuario: string | null;
   try {
-    sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
+    const gate = await requireCadastrosActionAccess(storeId, "shared");
+    sid = gate.storeId;
+    usuario = cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session)) || null;
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
   }
@@ -182,8 +175,6 @@ export async function registrarAjusteEstoque(
   if (!Number.isFinite(novoSaldo) || novoSaldo < 0) {
     return { ok: false, reason: "Novo saldo deve ser um inteiro >= 0" };
   }
-
-  const usuario = await resolverUsuario(input.usuario);
 
   try {
     const out = await prisma.$transaction(async (tx) => {

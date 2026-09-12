@@ -28,6 +28,10 @@ import {
 } from "@/lib/cadastros/cadastros-action-access";
 import { canSeeCadastrosStoreRecord } from "@/lib/cadastros/cadastros-api-access";
 import {
+  cadastrosAuditActorLabel,
+  cadastrosAuditPrincipalFromSession,
+} from "@/lib/cadastros/cadastros-audit-principal";
+import {
   consultarProdutosSql,
   MENSAGEM_ERRO_FILTROS_PRODUTOS,
   normalizarFiltroImportacao,
@@ -1814,7 +1818,8 @@ export async function aplicarConferenciaLote(
   }>,
   opts?: { revisadoPor?: string },
 ): Promise<AplicarConferenciaResult> {
-  const sid = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
+  const gate = await requireCadastrosActionAccess(storeId, "hub");
+  const sid = gate.storeId;
   const bid = (batchId ?? "").trim();
   if (!bid) return { ok: false, message: "Loja ou lote não informado." };
   if (!Array.isArray(itens) || itens.length === 0) {
@@ -1848,7 +1853,8 @@ export async function aplicarConferenciaLote(
   let ativados = 0;
   let revisados = 0;
   const naoAtivados: Array<{ id: string; motivo: string }> = [];
-  const revisadoPor = (opts?.revisadoPor ?? "").trim() || "Conferência de importação";
+  // `opts.revisadoPor` permanece no contrato público, mas não é o ator oficial.
+  const revisadoPor = cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session));
 
   for (const item of itens) {
     const atual = porId.get((item.id ?? "").trim());

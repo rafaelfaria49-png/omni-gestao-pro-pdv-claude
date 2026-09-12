@@ -9,7 +9,20 @@ const h = vi.hoisted(() => ({
   auth: vi.fn(async (): Promise<unknown> => null),
   getSessionEntitlement: vi.fn(async (): Promise<{ ok: boolean }> => ({ ok: false })),
   produtoFindFirst: vi.fn(async (_args?: unknown) => null),
-  produtoFindMany: vi.fn(async () => []),
+  produtoFindMany: vi.fn(
+    async (): Promise<
+      Array<{
+        id: string
+        name: string
+        category: string | null
+        price: number
+        active: boolean
+        sku: string | null
+        barcode: string | null
+        metadata: unknown
+      }>
+    > => [],
+  ),
   produtoDelete: vi.fn(async () => ({})),
   produtoCreate: vi.fn(async (args: { data: Record<string, unknown> }) => ({
     id: "p-1",
@@ -18,7 +31,7 @@ const h = vi.hoisted(() => ({
     barcode: args.data.barcode ?? null,
     stock: args.data.stock ?? 0,
   })),
-  produtoUpdate: vi.fn(async () => ({})),
+  produtoUpdate: vi.fn(async (_args: { where: { id: string }; data: Record<string, unknown> }) => ({})),
   clienteFindMany: vi.fn(async () => []),
   clienteFindFirst: vi.fn(async () => null),
   clienteCreate: vi.fn(async (args: { data: { storeId: string; name: string } }) => ({ id: "cli-1" })),
@@ -231,6 +244,57 @@ describe("aplicarConferenciaLote", () => {
       aplicarConferenciaLote("loja-b", "batch-1", [{ id: "p1", preco: 10 }]),
     ).rejects.toThrow("Sem permissão para esta unidade")
     expect(h.produtoFindMany).not.toHaveBeenCalled()
+  })
+
+  it("revisadoPor do caller não vira ator oficial — usa principal da sessão", async () => {
+    sessionAtiva({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+    h.produtoFindMany.mockResolvedValue([
+      {
+        id: "p1",
+        name: "Cabo",
+        category: "Acessorios",
+        price: 10,
+        active: false,
+        sku: "SKU1",
+        barcode: null,
+        metadata: {
+          importacao: {
+            ultimoLote: {
+              batchId: "batch-1",
+              origem: "planilha",
+              arquivo: "x.xlsx",
+              importadoEm: "2026-01-01T00:00:00.000Z",
+              acao: "criado",
+              matchPor: null,
+              fornecedor: null,
+              documento: null,
+              linhaOrigem: 1,
+              statusRevisao: "pendente",
+              revisadoEm: null,
+              revisadoPor: null,
+            },
+            historico: [],
+          },
+        },
+      },
+    ])
+    const r = await aplicarConferenciaLote(
+      "loja-a",
+      "batch-1",
+      [{ id: "p1", revisado: true }],
+      { revisadoPor: "Rafael" },
+    )
+    expect(r.ok).toBe(true)
+    expect(h.produtoUpdate).toHaveBeenCalled()
+    const updateArg = h.produtoUpdate.mock.calls.at(0)?.[0]
+    expect(updateArg).toBeDefined()
+    const data = updateArg?.data as {
+      metadata: { importacao: { ultimoLote: { revisadoPor: string | null; batchId: string } } }
+    }
+    expect(data.metadata.importacao.ultimoLote.batchId).toBe("batch-1")
+    expect(data.metadata.importacao.ultimoLote.revisadoPor).toBe("U")
+    expect(data.metadata.importacao.ultimoLote.revisadoPor).not.toBe("Rafael")
+    expect(data.metadata.importacao.ultimoLote.revisadoPor).not.toBe("Conferência de importação")
   })
 })
 

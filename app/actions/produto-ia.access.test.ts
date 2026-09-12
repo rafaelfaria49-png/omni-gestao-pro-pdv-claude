@@ -4,8 +4,8 @@ import type { Session } from "next-auth"
 const h = vi.hoisted(() => ({
   auth: vi.fn(async (): Promise<unknown> => null),
   getSessionEntitlement: vi.fn(async (): Promise<{ ok: boolean }> => ({ ok: false })),
-  findFirst: vi.fn(async (_args?: unknown) => null),
-  update: vi.fn(async () => ({})),
+  findFirst: vi.fn(async (_args?: unknown): Promise<{ metadata: unknown } | null> => null),
+  update: vi.fn(async (_args: { data: { metadata: Record<string, unknown> } }) => ({})),
 }))
 
 vi.mock("@/auth", () => ({ auth: h.auth }))
@@ -59,5 +59,16 @@ describe("salvarProdutoIAMetadata", () => {
     )
     expect(h.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "p-b", storeId: "loja-a" } }))
     expect(h.update).not.toHaveBeenCalled()
+  })
+
+  it("iaRevisadoPor vem da sessão, não do fallback estático operador", async () => {
+    sessionAtiva("VENDEDOR", ["loja-a"])
+    h.findFirst.mockResolvedValue({ metadata: {} })
+    await salvarProdutoIAMetadata("loja-a", "p1", { titulo: "x" } as never)
+    expect(h.update).toHaveBeenCalled()
+    const data = h.update.mock.calls.at(0)?.[0].data
+    expect(data?.metadata.iaRevisadoPor).toBe("U")
+    expect(data?.metadata.iaRevisadoPor).not.toBe("operador")
+    expect(data?.metadata.titulo).toBe("x")
   })
 })
