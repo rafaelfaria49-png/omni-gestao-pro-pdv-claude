@@ -1,37 +1,19 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import {
   Lock,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  CheckCircle,
-  AlertTriangle,
   Printer,
   Copy,
-  Layers,
-  Wallet,
-  Banknote,
-  QrCode,
-  CreditCard,
-  Receipt,
-  CalendarClock,
-  Ticket,
-  Hash,
-  User,
-  Monitor,
-  Clock,
-  BarChart3,
-  ClipboardList,
   Calculator,
+  CheckCircle2,
+  MinusCircle,
+  PlusCircle,
   type LucideIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import {
   Dialog,
   DialogContent,
@@ -58,6 +40,7 @@ import {
   receitaTotalDoDia,
   type FechamentoPosSnapshot,
   type DinheiroContadoDetalhado,
+  type ResumoPagamento,
 } from "@/lib/caixa-fechamento-resumo"
 import { useCaixaResumo } from "./use-caixa-resumo"
 import { FechamentoPosFechamentoDialog } from "./fechamento-pos-fechamento-dialog"
@@ -70,6 +53,21 @@ interface FechamentoCaixaModalProps {
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
+
+/** Formas exibidas no Resumo — só as que tiveram valor na sessão aparecem. */
+const FORMAS_PAGAMENTO: Array<{ key: Exclude<keyof ResumoPagamento, "total">; label: string }> = [
+  { key: "dinheiro", label: "Dinheiro" },
+  { key: "pix", label: "PIX" },
+  { key: "cartaoDebito", label: "Débito" },
+  { key: "cartaoCredito", label: "Crédito" },
+  { key: "carne", label: "Carnê" },
+  { key: "aPrazo", label: "A prazo" },
+  { key: "creditoVale", label: "Crédito/Vale" },
+]
+
+/** Abas sublinhadas — sobrescrevem o visual "pílula" do TabsTrigger base. */
+const TAB_TRIGGER =
+  "relative h-10 flex-none rounded-none border-0 bg-transparent font-semibold text-muted-foreground shadow-none hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:text-muted-foreground dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-foreground after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent data-[state=active]:after:bg-primary"
 
 export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalProps) {
   const { caixa, fecharCaixa, sessaoId } = useCaixa()
@@ -101,8 +99,17 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   // Fonte ÚNICA e autoritativa — idêntica à do Resumo do caixa e da barra de status.
   // Reconcilia o status das vendas (cancelamentos da tela Vendas) e exclui canceladas
   // de TODOS os totais. Garante que o fechamento grave os mesmos números exibidos.
-  const { resumo, opsCarregando, saldoEsperado, entradas, saidas, sessionSales, operacoesSessao, vendasSessao } =
-    useCaixaResumo(isOpen)
+  const {
+    resumo,
+    opsCarregando,
+    saldoEsperado,
+    entradas,
+    saidas,
+    sessionSales,
+    operacoesSessao,
+    vendasSessao,
+    qtdCanceladas,
+  } = useCaixaResumo(isOpen)
 
   // Operador da sessão para o comprovante — nome LEGÍVEL (fonte única: abertura do
   // caixa → sessão → e-mail; nunca o `cashierId` técnico). O `cashierId` permanece
@@ -433,370 +440,300 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     setPosFechamentoOpen(true)
   }
 
+  // ── Apresentação ──────────────────────────────────────────────────────────
+  const estadoGaveta = resolverEstadoGaveta(valorContado !== "", temDiferenca, diferenca)
+  const formasPresentes = FORMAS_PAGAMENTO.filter((f) => resumo.porPagamento[f.key] > 0.001)
+  const horaAbertura = caixa.dataAbertura
+    ? caixa.dataAbertura.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : null
+  const notasResumo = [
+    resumo.qtdVendasMultiplas > 0 ? `${resumo.qtdVendasMultiplas} venda(s) com múltiplas formas` : null,
+    qtdCanceladas > 0 ? `${qtdCanceladas} cancelada(s) fora dos totais` : null,
+  ].filter(Boolean)
+
   return (
     <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[92vw] border-border bg-card p-0 sm:max-w-3xl">
-        <div className="flex max-h-[90vh] flex-col overflow-hidden">
-          <DialogHeader className="shrink-0 px-6 pb-2 pt-6">
-            <DialogTitle className="flex items-center gap-3 text-xl font-bold tracking-tight text-foreground">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10">
-                <Lock className="h-5 w-5 text-destructive" />
-              </span>
-              Fechamento de Caixa
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
+      {/* `p-0!`/`gap-0!`: modal full-bleed (cabeçalho, trilho e rodapé de borda a borda) —
+          precisa vencer o padding/gap `!important` da densidade operacional do dialog. */}
+      <DialogContent className="w-[96vw] gap-0! border-border bg-card p-0! sm:max-w-3xl lg:max-w-4xl xl:max-w-[76rem]">
+        <div className="flex max-h-[92dvh] min-h-0 flex-col overflow-hidden xl:h-[min(92dvh,52rem)]">
+          <DialogHeader className="shrink-0 gap-1 border-b border-border px-4 py-3 pr-12 text-left sm:px-5">
+            <div className="flex min-w-0 flex-col gap-1 xl:flex-row xl:items-baseline xl:gap-4">
+              <DialogTitle className="shrink-0 font-display font-bold tracking-tight text-foreground">
+                Fechamento de Caixa
+              </DialogTitle>
+              <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">
+                  <span className="sr-only">Terminal: </span>
+                  {terminalLabel}
+                </span>
+                <MetaSeparador />
+                {operadoresSessao.length ? (
+                  <span className="font-semibold text-foreground">
+                    <span className="sr-only">Operador: </span>
+                    {operadoresSessao.join(", ")}
+                  </span>
+                ) : (
+                  <span>Operador: —</span>
+                )}
+                <MetaSeparador />
+                <span title={sessaoId ?? undefined}>
+                  {sessaoId ? (
+                    <>
+                      Sessão <span className="font-mono text-[11px]">{sessaoId.slice(0, 8)}</span>
+                    </>
+                  ) : (
+                    "Sessão não registrada"
+                  )}
+                </span>
+                {horaAbertura && (
+                  <>
+                    <MetaSeparador />
+                    <span>
+                      Aberto às <span className="font-semibold tabular-nums text-foreground">{horaAbertura}</span>
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+            <DialogDescription className="sr-only">
               Confira os valores e conte o dinheiro em caixa antes de fechar.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-            <div className="space-y-4 pt-4">
-              {/* Cabeçalho da sessão (operador / sessão / terminal / abertura) */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <SessaoChip
-                  icon={Hash}
-                  label={sessaoId ? `Sessão ${sessaoId.slice(0, 10)}…` : "Sessão não registrada"}
-                />
-                <SessaoChip
-                  icon={User}
-                  label={operadoresSessao.length ? `Operador: ${operadoresSessao.join(", ")}` : "Operador: —"}
-                />
-                <SessaoChip icon={Monitor} label={`Terminal: ${terminalLabel}`} />
-                {caixa.dataAbertura && (
-                  <SessaoChip
-                    icon={Clock}
-                    label={`Aberto às ${caixa.dataAbertura.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}
-                  />
-                )}
-              </div>
-
-              <Tabs defaultValue="resumo">
-                <TabsList className="grid h-11 w-full grid-cols-2 rounded-xl p-1">
-                  <TabsTrigger value="resumo" className="gap-2 rounded-lg">
-                    <BarChart3 className="h-4 w-4" />
+          <div className="min-h-0 flex-1 overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_29rem] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden">
+            {/* ── Consulta (esquerda) ─────────────────────────────────────── */}
+            <Tabs defaultValue="resumo" className="min-w-0 gap-0 xl:min-h-0 xl:overflow-hidden">
+              <div className="sticky top-0 z-[2] flex shrink-0 items-center gap-3 border-b border-border bg-card px-2 sm:px-3 xl:static">
+                <TabsList className="h-auto w-auto gap-1 rounded-none border-0 bg-transparent p-0 dark:border-0 dark:bg-transparent dark:backdrop-blur-none">
+                  <TabsTrigger value="resumo" className={TAB_TRIGGER}>
                     Resumo
                   </TabsTrigger>
-                  <TabsTrigger value="conferencia" className="gap-2 rounded-lg">
-                    <ClipboardList className="h-4 w-4" />
+                  <TabsTrigger value="conferencia" className={TAB_TRIGGER}>
                     Conferência
                   </TabsTrigger>
                 </TabsList>
-
-                <TabsContent value="conferencia" className="pt-3">
-                  <ConferenciaCaixa
-                    vendasSessao={vendasSessao}
-                    sessionSales={sessionSales}
-                    operacoesSessao={operacoesSessao}
-                  />
-                </TabsContent>
-
-                <TabsContent value="resumo" className="space-y-4 pt-3">
-              {/* Resumo financeiro — RECEITA TOTAL DO DIA (faturamento, separado da gaveta) */}
-              <Card className="overflow-hidden border-success/25 bg-gradient-to-br from-success/10 via-success/5 to-transparent shadow-sm">
-                <CardContent className="space-y-3 pt-4 pb-4">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success/15">
-                      <TrendingUp className="h-4 w-4 text-success" />
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-foreground">Resumo financeiro do dia</h3>
-                      <p className="text-[11px] text-muted-foreground">
-                        Vendas + serviços recebidos · não inclui abertura nem suprimentos
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Vendas de produtos</span>
-                      <span className="font-medium tabular-nums text-foreground">{fmt(resumo.totalLiquido)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Serviços recebidos</span>
-                      <span className="font-medium tabular-nums text-foreground">{fmt(resumo.recebimentosContas)}</span>
-                    </div>
-                    {resumo.outrosRecebimentos > 0 && (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground">Outros recebimentos</span>
-                        <span className="font-medium tabular-nums text-foreground">{fmt(resumo.outrosRecebimentos)}</span>
-                      </div>
-                    )}
-                    <Separator className="bg-border" />
-                    <div className="flex items-end justify-between gap-3 pt-0.5">
-                      <span className="font-semibold text-foreground">Receita total do dia</span>
-                      <span className="text-3xl font-bold tracking-tight tabular-nums text-success">{fmt(receitaTotalDia)}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* KPIs operacionais */}
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <KpiMini label="Vendas" value={String(resumo.qtdVendas)} sub="quantidade" />
-                <KpiMini label="Total líquido" value={fmt(resumo.totalLiquido)} />
-                <KpiMini label="Recebido" value={fmt(resumo.totalRecebido)} accent="text-success" />
-                <KpiMini label="Ticket médio" value={fmt(resumo.ticketMedio)} accent="text-info" />
+                <span className="ml-auto hidden truncate text-[11px] text-muted-foreground md:block">
+                  Somente consulta — nada aqui altera valores
+                </span>
               </div>
 
-              {/* Vendas por origem */}
-              <Card className="bg-secondary border-border">
-                <CardContent className="space-y-2 pt-4 pb-4">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Layers className="h-4 w-4 text-primary" />
-                    Vendas por origem
-                  </h3>
-                  {resumo.porOrigem.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhuma venda nesta sessão.</p>
-                  ) : (
-                    <div className="space-y-1.5 text-sm">
-                      {resumo.porOrigem.map((o) => (
-                        <div key={o.key} className="flex items-center justify-between">
-                          <span className="text-muted-foreground">
-                            {o.label}
-                            <span className="ml-1 text-xs text-muted-foreground/70">({o.qtdItens})</span>
-                          </span>
-                          <span className="font-medium tabular-nums text-foreground">{fmt(o.valorBruto)}</span>
-                        </div>
-                      ))}
-                      <Separator className="bg-border" />
-                      <div className="flex items-center justify-between text-sm font-semibold">
-                        <span>Subtotal bruto</span>
-                        <span className="tabular-nums text-foreground">{fmt(resumo.subtotalBruto)}</span>
-                      </div>
-                      {resumo.descontos > 0 && (
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-warning">Descontos</span>
-                          <span className="font-medium tabular-nums text-warning">- {fmt(resumo.descontos)}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Recebimentos de contas (PDV F5 — não são vendas) */}
-              {resumo.qtdRecebimentosContas > 0 && (
-                <Card className="bg-secondary border-border">
-                  <CardContent className="space-y-2 pt-4 pb-4">
-                    <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <Wallet className="h-4 w-4 text-info" />
-                      Serviços recebidos
-                      {opsCarregando ? (
-                        <span className="text-xs font-normal text-muted-foreground">(atualizando…)</span>
-                      ) : null}
-                    </h3>
-                    <div className="space-y-1.5 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">
-                          Títulos recebidos ({resumo.qtdRecebimentosContas})
-                        </span>
-                        <span className="font-medium tabular-nums text-info">
-                          {fmt(resumo.recebimentosContas)}
-                        </span>
-                      </div>
-                      {resumo.recebimentosContasDinheiro > 0 &&
-                        resumo.recebimentosContasDinheiro < resumo.recebimentosContas && (
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">Em dinheiro (gaveta)</span>
-                            <span className="font-medium tabular-nums text-foreground">
-                              {fmt(resumo.recebimentosContasDinheiro)}
-                            </span>
-                          </div>
-                        )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Baixas de Contas a Receber no PDV — não entram no total de vendas.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Formas de pagamento */}
-              <Card className="bg-secondary border-border">
-                <CardContent className="space-y-3 pt-4 pb-4">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <DollarSign className="h-4 w-4 text-primary" />
-                    Formas de pagamento
-                  </h3>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <PgtoBox icon={Banknote} label="Dinheiro" value={resumo.porPagamento.dinheiro} total={resumo.porPagamento.total} />
-                    <PgtoBox icon={QrCode} label="Pix" value={resumo.porPagamento.pix} total={resumo.porPagamento.total} />
-                    <PgtoBox icon={CreditCard} label="Cartão débito" value={resumo.porPagamento.cartaoDebito} total={resumo.porPagamento.total} />
-                    <PgtoBox icon={CreditCard} label="Cartão crédito" value={resumo.porPagamento.cartaoCredito} total={resumo.porPagamento.total} />
-                    <PgtoBox icon={Receipt} label="Carnê" value={resumo.porPagamento.carne} total={resumo.porPagamento.total} />
-                    <PgtoBox icon={CalendarClock} label="A prazo (fiado)" value={resumo.porPagamento.aPrazo} total={resumo.porPagamento.total} />
-                    <PgtoBox icon={Ticket} label="Crédito/Vale" value={resumo.porPagamento.creditoVale} total={resumo.porPagamento.total} />
-                    <div className="flex min-w-0 flex-col justify-center gap-1 rounded-xl border border-primary/25 bg-primary/10 p-3">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total das vendas</span>
-                      <span className="text-xl font-bold leading-none tracking-tight tabular-nums text-foreground">
-                        {fmt(resumo.porPagamento.total)}
-                      </span>
-                    </div>
-                  </div>
-                  {resumo.qtdVendasMultiplas > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {resumo.qtdVendasMultiplas} venda(s) com múltiplas formas de pagamento.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Caixa (gaveta) — conferência de dinheiro físico */}
-              <Card className="bg-secondary border-border">
-                <CardContent className="space-y-3 pt-4 pb-4">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Wallet className="h-4 w-4 text-primary" />
-                    Caixa (gaveta) — dinheiro físico
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Abertura</span>
-                      <span className="font-medium tabular-nums text-foreground">{fmt(resumo.saldoInicial)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="flex items-center gap-1.5 text-success">
-                        <Banknote className="h-3.5 w-3.5" />+ Dinheiro (vendas)
-                      </span>
-                      <span className="font-medium tabular-nums text-success">+ {fmt(resumo.porPagamento.dinheiro)}</span>
-                    </div>
-                    {resumo.recebimentosContasDinheiro > 0 && (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-info">+ Serviços recebidos (dinheiro)</span>
-                        <span className="font-medium tabular-nums text-info">
-                          + {fmt(resumo.recebimentosContasDinheiro)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="flex items-center gap-1.5 text-success">
-                        <TrendingUp className="h-3.5 w-3.5" />+ Suprimentos
-                      </span>
-                      <span className="font-medium tabular-nums text-success">+ {fmt(resumo.suprimentos)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="flex items-center gap-1.5 text-destructive">
-                        <TrendingDown className="h-3.5 w-3.5" />- Sangrias
-                      </span>
-                      <span className="font-medium tabular-nums text-destructive">- {fmt(resumo.sangrias)}</span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between gap-3 rounded-xl border border-success/30 bg-success/10 px-3 py-2.5">
-                      <span className="text-sm font-semibold text-foreground">Saldo esperado em dinheiro</span>
-                      <span className="text-xl font-bold tracking-tight tabular-nums text-success">{fmt(saldoDinheiroEsperado)}</span>
-                    </div>
-                  </div>
-                  <p className="rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-                    Saldo total movimentado (inclui pix/cartão):{" "}
-                    <span className="font-medium tabular-nums text-foreground">{fmt(saldoEsperado)}</span>
-                  </p>
-                </CardContent>
-              </Card>
-                </TabsContent>
-              </Tabs>
-              {/* Contagem da gaveta — input sempre visível, independente da aba ativa */}
-              <Card className="bg-secondary border-border">
-                <CardContent className="space-y-4 pt-4 pb-4">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Calculator className="h-4 w-4 text-primary" />
-                    Contagem da gaveta
-                  </h3>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Dinheiro contado na gaveta</Label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">
-                        R$
-                      </span>
-                      <Input
-                        type="number"
-                        placeholder="Digite o dinheiro contado..."
-                        value={valorContado}
-                        onChange={(e) => {
-                          setValorContado(e.target.value)
-                          // Edição manual invalida o detalhamento aplicado pela calculadora.
-                          setDinheiroContadoDetalhado(null)
-                        }}
-                        className="pl-12 h-14 text-xl font-bold tabular-nums bg-background border-border"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Conferência contra o saldo esperado em dinheiro ({fmt(saldoDinheiroEsperado)}). Pix/cartão não entram na gaveta.
-                    </p>
-                  </div>
-
-                  {/* Calculadora de conferência de dinheiro físico (cédulas/moedas).
-                      Aplica o total no campo acima por ação explícita do operador. */}
-                  <CalculadoraDinheiroCaixa
-                    saldoDinheiroEsperado={saldoDinheiroEsperado}
-                    onAplicar={(t, detalhe) => {
-                      setValorContado(t.toFixed(2))
-                      setDinheiroContadoDetalhado(detalhe)
-                    }}
-                  />
-
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Observação (opcional)</Label>
-                    <Input
-                      placeholder="Ex.: Conferido por supervisor, sangria realizada..."
-                      value={observacao}
-                      onChange={(e) => setObservacao(e.target.value)}
-                      className="h-11 bg-background border-border"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Status da Conferência */}
-              {valorContado !== "" && (
-                <Card
-                  className={`border ${temDiferenca ? "bg-warning/10 border-warning/30" : "bg-success/10 border-success/30"}`}
+              <TabsContent value="resumo" className="space-y-3 p-3 sm:p-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+                {/* Total movimentado = soma exata das formas de pagamento presentes. */}
+                <section
+                  aria-label="Total movimentado"
+                  className="grid min-w-0 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
                 >
-                  <CardContent className="pt-4 pb-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        {temDiferenca ? (
-                          <AlertTriangle className="w-5 h-5 text-warning" />
-                        ) : (
-                          <CheckCircle className="w-5 h-5 text-success" />
+                  <div className="flex min-w-0 flex-col justify-center gap-0.5 border-b border-border bg-secondary/50 px-4 py-3 sm:border-b-0 sm:border-r">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Total movimentado
+                    </p>
+                    <p className="truncate font-display text-3xl font-bold leading-tight tracking-tight tabular-nums text-foreground">
+                      {fmt(resumo.porPagamento.total)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {resumo.qtdVendas} {resumo.qtdVendas === 1 ? "venda" : "vendas"} · ticket médio{" "}
+                      {fmt(resumo.ticketMedio)}
+                    </p>
+                  </div>
+                  <div className="flex min-w-0 flex-col justify-center gap-2 px-4 py-3">
+                    {formasPresentes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhum recebimento nesta sessão.</p>
+                    ) : (
+                      formasPresentes.map((f) => (
+                        <FormaPagamentoLinha
+                          key={f.key}
+                          label={f.label}
+                          valor={resumo.porPagamento[f.key]}
+                          total={resumo.porPagamento.total}
+                        />
+                      ))
+                    )}
+                    {notasResumo.length > 0 && (
+                      <p className="text-[11px] text-muted-foreground">{notasResumo.join(" · ")}</p>
+                    )}
+                  </div>
+                </section>
+
+                <div className="grid min-w-0 gap-3 md:grid-cols-2">
+                  {/* Faturamento — RECEITA TOTAL DO DIA (separado da gaveta) */}
+                  <section
+                    aria-label="Faturamento do dia"
+                    className="min-w-0 space-y-1.5 rounded-lg border border-border bg-card px-4 py-3"
+                  >
+                    <TituloSecao>Faturamento do dia</TituloSecao>
+                    <LinhaValor rotulo="Vendas de produtos" valor={fmt(resumo.totalLiquido)} />
+                    <LinhaValor
+                      rotulo="Serviços recebidos"
+                      detalhe={
+                        opsCarregando
+                          ? "atualizando…"
+                          : resumo.qtdRecebimentosContas > 0
+                            ? `${resumo.qtdRecebimentosContas} título(s)`
+                            : undefined
+                      }
+                      valor={fmt(resumo.recebimentosContas)}
+                    />
+                    {resumo.outrosRecebimentos > 0 && (
+                      <LinhaValor rotulo="Outros recebimentos" valor={fmt(resumo.outrosRecebimentos)} />
+                    )}
+                    <LinhaValor total rotulo="Receita total do dia" valor={fmt(receitaTotalDia)} />
+
+                    <TituloSecao className="pt-2">Vendas por origem</TituloSecao>
+                    {resumo.porOrigem.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhuma venda nesta sessão.</p>
+                    ) : (
+                      <>
+                        {resumo.porOrigem.map((o) => (
+                          <LinhaValor
+                            key={o.key}
+                            rotulo={o.label}
+                            detalhe={`${o.qtdItens} ${o.qtdItens === 1 ? "item" : "itens"}`}
+                            valor={fmt(o.valorBruto)}
+                          />
+                        ))}
+                        <LinhaValor mutado rotulo="Subtotal bruto" valor={fmt(resumo.subtotalBruto)} />
+                        {resumo.descontos > 0 && (
+                          <LinhaValor mutado rotulo="Descontos" valor={`− ${fmt(resumo.descontos)}`} />
                         )}
-                        <span className={`font-medium ${temDiferenca ? "text-warning" : "text-success"}`}>
-                          {temDiferenca ? "Diferença Encontrada" : "Conferência OK"}
-                        </span>
-                      </div>
-                      {temDiferenca && (
-                        <span
-                          className={`font-bold tabular-nums ${diferenca > 0 ? "text-success" : "text-destructive"}`}
-                        >
-                          {diferenca > 0 ? "+" : ""}
-                          {fmt(diferenca)}
-                        </span>
-                      )}
-                    </div>
-                    {temDiferenca && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {diferenca > 0
-                          ? "Há dinheiro a mais no caixa. Verifique se houve entrada não registrada."
-                          : "Há dinheiro faltando no caixa. Verifique se houve saída não registrada."}
+                      </>
+                    )}
+                    <LinhaValor mutado rotulo="Recebido à vista" valor={fmt(resumo.totalRecebido)} />
+                    {resumo.qtdRecebimentosContas > 0 && (
+                      <p className="pt-1 text-[11px] text-muted-foreground">
+                        Serviços recebidos são baixas de Contas a Receber no PDV — não entram no total de vendas.
                       </p>
                     )}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+                  </section>
+
+                  {/* Caixa (gaveta) — composição do dinheiro físico esperado */}
+                  <section
+                    aria-label="Gaveta — dinheiro físico"
+                    className="min-w-0 space-y-1.5 rounded-lg border border-border bg-card px-4 py-3"
+                  >
+                    <TituloSecao>Gaveta · dinheiro físico</TituloSecao>
+                    <LinhaValor rotulo="Abertura" valor={fmt(resumo.saldoInicial)} />
+                    <LinhaValor rotulo="+ Dinheiro das vendas" valor={fmt(resumo.porPagamento.dinheiro)} />
+                    {resumo.recebimentosContasDinheiro > 0 && (
+                      <LinhaValor
+                        rotulo="+ Serviços recebidos em dinheiro"
+                        valor={fmt(resumo.recebimentosContasDinheiro)}
+                      />
+                    )}
+                    <LinhaValor rotulo="+ Suprimentos" valor={fmt(resumo.suprimentos)} />
+                    <LinhaValor rotulo="− Sangrias" valor={`− ${fmt(resumo.sangrias)}`} />
+                    <LinhaValor total rotulo="Dinheiro esperado" valor={fmt(saldoDinheiroEsperado)} />
+                    <p className="pt-1 text-[11px] text-muted-foreground">
+                      Saldo final da sessão, todas as formas:{" "}
+                      <span className="font-semibold tabular-nums text-foreground">{fmt(saldoEsperado)}</span>
+                    </p>
+                  </section>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="conferencia" className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+                <ConferenciaCaixa
+                  vendasSessao={vendasSessao}
+                  sessionSales={sessionSales}
+                  operacoesSessao={operacoesSessao}
+                />
+              </TabsContent>
+            </Tabs>
+
+            {/* ── Contagem da gaveta (direita) — sempre visível, independente da aba ── */}
+            <aside
+              aria-label="Contagem da gaveta"
+              className="min-w-0 border-t border-border bg-card xl:min-h-0 xl:overflow-y-auto xl:border-l xl:border-t-0"
+            >
+              <div className="space-y-2 bg-card px-3 pb-2 pt-3 sm:px-4 xl:sticky xl:top-0 xl:z-[1] xl:border-b xl:border-border/60 xl:pb-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="font-display text-sm font-semibold text-foreground">Contagem da gaveta</h3>
+                  <span className="text-[11px] text-muted-foreground">dinheiro físico</span>
+                </div>
+                <ResultadoGaveta
+                  estado={estadoGaveta}
+                  esperado={saldoDinheiroEsperado}
+                  contado={valorContado !== "" ? valorContadoNum : null}
+                  diferenca={diferenca}
+                />
+              </div>
+
+              <div className="space-y-3 px-3 pb-4 pt-2 sm:px-4 xl:pt-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="fechamento-dinheiro-contado">Dinheiro contado na gaveta</Label>
+                  <div className="relative">
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground"
+                    >
+                      R$
+                    </span>
+                    {/* Input nativo (sem data-slot): a densidade operacional força 13px no Input
+                        padrão, e o valor contado precisa de leitura imediata. */}
+                    <input
+                      id="fechamento-dinheiro-contado"
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={valorContado}
+                      onChange={(e) => {
+                        setValorContado(e.target.value)
+                        // Edição manual invalida o detalhamento aplicado pela calculadora.
+                        setDinheiroContadoDetalhado(null)
+                      }}
+                      className="h-12 w-full min-w-0 rounded-lg border border-input bg-background pl-10 pr-3 font-display text-2xl font-bold tabular-nums text-foreground shadow-xs outline-none transition-[color,box-shadow] [appearance:textfield] placeholder:font-normal placeholder:text-muted-foreground/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                  </div>
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    Só o <span className="font-semibold text-foreground">dinheiro físico</span> entra na gaveta. PIX e
+                    cartão não entram.
+                  </p>
+                </div>
+
+                {/* Calculadora de conferência de dinheiro físico (cédulas/moedas).
+                    Aplica o total no campo acima por ação explícita do operador. */}
+                <CalculadoraDinheiroCaixa
+                  saldoDinheiroEsperado={saldoDinheiroEsperado}
+                  onAplicar={(t, detalhe) => {
+                    setValorContado(t.toFixed(2))
+                    setDinheiroContadoDetalhado(detalhe)
+                  }}
+                />
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="fechamento-observacao" className="w-full justify-between">
+                    Observação
+                    <span className="text-[11px] font-normal text-muted-foreground">opcional</span>
+                  </Label>
+                  <Input
+                    id="fechamento-observacao"
+                    placeholder="Ex.: conferido pelo supervisor, sangria realizada…"
+                    value={observacao}
+                    onChange={(e) => setObservacao(e.target.value)}
+                    className="h-9 bg-background"
+                  />
+                </div>
+              </div>
+            </aside>
           </div>
 
-          <div className="sticky bottom-0 shrink-0 border-t border-border bg-card px-6 py-4">
-            <div className="space-y-3">
-              <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="shrink-0 border-t border-border bg-card px-3 py-2.5 sm:px-4">
+            <div className="flex flex-col-reverse gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center justify-center gap-1 lg:justify-start">
                 <Button
-                  variant="outline"
-                  className="h-12 flex-1 border-border gap-2"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground hover:text-foreground"
                   onClick={handleImprimirRelatorio}
                 >
                   <Printer className="h-4 w-4" />
                   Imprimir relatório
                 </Button>
                 <Button
-                  variant="outline"
-                  className="h-12 flex-1 border-border gap-2"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground hover:text-foreground"
                   onClick={() => void handleCopiarRelatorio()}
                 >
                   <Copy className="h-4 w-4" />
@@ -804,11 +741,16 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 </Button>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap sm:justify-end">
+                <ChipGaveta
+                  estado={estadoGaveta}
+                  diferenca={diferenca}
+                  className="w-full justify-center sm:w-auto xl:hidden"
+                />
                 <Button
                   variant="outline"
                   onClick={onClose}
-                  className="h-12 flex-1 border-border"
+                  className="flex-1 border-border sm:flex-none"
                   disabled={salvando}
                 >
                   Cancelar
@@ -816,9 +758,9 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 <Button
                   onClick={handleFecharCaixa}
                   disabled={salvando}
-                  className="h-12 flex-1 bg-destructive font-semibold text-destructive-foreground hover:bg-destructive/90"
+                  className="flex-1 gap-2 font-semibold sm:flex-none"
                 >
-                  <Lock className="mr-2 h-4 w-4" />
+                  <Lock className="h-4 w-4" />
                   {salvando ? "Salvando..." : "Confirmar Fechamento"}
                 </Button>
               </div>
@@ -836,90 +778,227 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   )
 }
 
-function KpiMini({
-  label,
-  value,
-  sub,
-  accent = "text-foreground",
-}: {
-  label: string
-  value: string
-  sub?: string
-  accent?: string
-}) {
-  return (
-    <div className="min-w-0 rounded-xl border border-border bg-card p-3 shadow-sm">
-      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={`mt-1 truncate text-base font-bold tabular-nums ${accent}`}>{value}</p>
-      {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
-    </div>
-  )
+type EstadoGaveta = "pendente" | "confere" | "falta" | "sobra"
+
+/** Mesma regra do fechamento: diferença acima de 1 centavo é quebra de caixa. */
+function resolverEstadoGaveta(contado: boolean, temDiferenca: boolean, diferenca: number): EstadoGaveta {
+  if (!contado) return "pendente"
+  if (!temDiferenca) return "confere"
+  return diferenca < 0 ? "falta" : "sobra"
 }
 
 /**
- * Box de forma de pagamento — ícone em chip, valor em destaque e barra com a
- * participação da forma no total. Formas zeradas ficam esmaecidas (mas visíveis,
- * para o operador confirmar que não houve recebimento naquela forma).
+ * Estado → texto + ícone + tom. Nunca só cor: cada estado tem ícone e título próprios.
+ * O VALOR fica em `text-foreground`: success/destructive sobre o próprio tint não chegam a
+ * 4,5:1 em texto pequeno nos temas atuais — a cor semântica vive no ícone, borda e fundo.
  */
-function PgtoBox({
-  icon: Icon,
-  label,
-  value,
-  total,
+const ESTADO_GAVETA: Record<
+  EstadoGaveta,
+  { titulo: string; dica: string; icon: LucideIcon; caixa: string; icone: string; celula: string; valor: string }
+> = {
+  pendente: {
+    titulo: "Aguardando contagem",
+    dica: "Informe o dinheiro contado na gaveta.",
+    icon: Calculator,
+    caixa: "border-dashed border-border",
+    icone: "text-muted-foreground",
+    celula: "",
+    valor: "text-muted-foreground",
+  },
+  confere: {
+    titulo: "Caixa confere",
+    dica: "Dinheiro contado igual ao esperado.",
+    icon: CheckCircle2,
+    caixa: "border-success/40 bg-success/10",
+    icone: "text-success",
+    celula: "bg-success/10",
+    valor: "text-foreground",
+  },
+  falta: {
+    titulo: "Falta no caixa",
+    dica: "Verifique se houve saída não registrada.",
+    icon: MinusCircle,
+    caixa: "border-destructive/40 bg-destructive/10",
+    icone: "text-destructive",
+    celula: "bg-destructive/10",
+    valor: "text-foreground",
+  },
+  sobra: {
+    titulo: "Sobra no caixa",
+    dica: "Verifique se houve entrada não registrada.",
+    icon: PlusCircle,
+    caixa: "border-warning/50 bg-warning/15",
+    icone: "text-warning",
+    celula: "bg-warning/15",
+    valor: "text-foreground",
+  },
+}
+
+const fmtSinal = (v: number) => (Math.abs(v) <= 0.01 ? fmt(0) : `${v > 0 ? "+" : "−"} ${fmt(Math.abs(v))}`)
+
+/** Esperado / Contado / Diferença + veredito da gaveta. */
+function ResultadoGaveta({
+  estado,
+  esperado,
+  contado,
+  diferenca,
 }: {
-  icon: LucideIcon
-  label: string
-  value: number
-  total: number
+  estado: EstadoGaveta
+  esperado: number
+  contado: number | null
+  diferenca: number
 }) {
-  const ativo = value > 0.001
-  const pct = ativo && total > 0.001 ? Math.min(100, Math.round((value / total) * 100)) : 0
+  const cfg = ESTADO_GAVETA[estado]
+  const Icon = cfg.icon
   return (
-    <div
-      className={cn(
-        "min-w-0 space-y-1.5 rounded-xl border p-3",
-        ativo ? "border-border bg-background/70 shadow-sm" : "border-border/50 bg-background/30",
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2">
-          <span
-            className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
-              ativo ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/50",
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
+    <div className="space-y-2">
+      <dl className="grid grid-cols-3 overflow-hidden rounded-lg border border-border">
+        <CelulaGaveta rotulo="Esperado" valor={fmt(esperado)} />
+        <CelulaGaveta
+          rotulo="Contado"
+          valor={contado === null ? "—" : fmt(contado)}
+          className="border-l border-border"
+          valorClassName={contado === null ? "text-muted-foreground" : undefined}
+        />
+        <CelulaGaveta
+          rotulo="Diferença"
+          valor={contado === null ? "—" : fmtSinal(diferenca)}
+          className={cn("border-l border-border", cfg.celula)}
+          valorClassName={cfg.valor}
+        />
+      </dl>
+      <div className={cn("flex min-w-0 items-center gap-2.5 rounded-lg border px-3 py-2", cfg.caixa)}>
+        <Icon aria-hidden className={cn("h-4 w-4 shrink-0", cfg.icone)} />
+        <div role="status" className="min-w-0 flex-1 leading-tight">
+          <p className="text-sm font-semibold text-foreground">{cfg.titulo}</p>
+          <p className="truncate text-[11px] text-muted-foreground">{cfg.dica}</p>
+        </div>
+        {estado !== "pendente" && (
+          <span className={cn("shrink-0 font-display text-sm font-bold tabular-nums", cfg.valor)}>
+            {fmtSinal(diferenca)}
           </span>
-          <span className={cn("truncate text-xs font-medium", ativo ? "text-muted-foreground" : "text-muted-foreground/50")}>
-            {label}
-          </span>
-        </span>
-        {ativo && (
-          <span className="shrink-0 text-[10px] font-semibold tabular-nums text-muted-foreground">{pct}%</span>
         )}
-      </div>
-      <p
-        className={cn(
-          "truncate text-lg font-bold leading-none tracking-tight tabular-nums",
-          ativo ? "text-foreground" : "text-muted-foreground/40",
-        )}
-      >
-        {fmt(value)}
-      </p>
-      <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
       </div>
     </div>
   )
 }
 
-/** Chip do cabeçalho da sessão (sessão / operador / terminal / abertura). */
-function SessaoChip({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+function CelulaGaveta({
+  rotulo,
+  valor,
+  className,
+  valorClassName,
+}: {
+  rotulo: string
+  valor: string
+  className?: string
+  valorClassName?: string
+}) {
   return (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border bg-secondary/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-      <Icon className="h-3 w-3 shrink-0 text-muted-foreground/70" />
-      <span className="truncate">{label}</span>
+    <div className={cn("min-w-0 px-2.5 py-2", className)}>
+      <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{rotulo}</dt>
+      <dd className={cn("truncate font-display text-base font-bold tabular-nums text-foreground", valorClassName)}>
+        {valor}
+      </dd>
+    </div>
+  )
+}
+
+/** Veredito compacto para o rodapé quando o trilho não está visível (abaixo de xl). */
+function ChipGaveta({
+  estado,
+  diferenca,
+  className,
+}: {
+  estado: EstadoGaveta
+  diferenca: number
+  className?: string
+}) {
+  const cfg = ESTADO_GAVETA[estado]
+  const Icon = cfg.icon
+  const texto =
+    estado === "pendente"
+      ? "Contagem pendente"
+      : estado === "confere"
+        ? "Caixa confere"
+        : `${estado === "falta" ? "Falta" : "Sobra"} ${fmt(Math.abs(diferenca))}`
+  return (
+    <span
+      className={cn(
+        "inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold text-foreground",
+        cfg.caixa,
+        className,
+      )}
+    >
+      <Icon aria-hidden className={cn("h-3.5 w-3.5 shrink-0", cfg.icone)} />
+      <span className="truncate tabular-nums">{texto}</span>
     </span>
+  )
+}
+
+function MetaSeparador() {
+  return <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/40" />
+}
+
+function TituloSecao({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <h3 className={cn("text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", className)}>
+      {children}
+    </h3>
+  )
+}
+
+function LinhaValor({
+  rotulo,
+  valor,
+  detalhe,
+  mutado = false,
+  total = false,
+}: {
+  rotulo: string
+  valor: string
+  detalhe?: string
+  mutado?: boolean
+  total?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-w-0 items-baseline justify-between gap-3 text-sm",
+        total && "mt-1 border-t border-border pt-2",
+      )}
+    >
+      <span className={cn("min-w-0 truncate", total ? "font-semibold text-foreground" : "text-muted-foreground")}>
+        {rotulo}
+        {detalhe && <span className="ml-1.5 text-[11px] text-muted-foreground/80">{detalhe}</span>}
+      </span>
+      <span
+        className={cn(
+          "shrink-0 tabular-nums",
+          total
+            ? "font-display text-base font-bold text-foreground"
+            : mutado
+              ? "text-muted-foreground"
+              : "font-semibold text-foreground",
+        )}
+      >
+        {valor}
+      </span>
+    </div>
+  )
+}
+
+/** Forma de pagamento com barra de participação no total movimentado. */
+function FormaPagamentoLinha({ label, valor, total }: { label: string; valor: number; total: number }) {
+  const pct = total > 0.001 ? Math.min(100, Math.round((valor / total) * 100)) : 0
+  return (
+    <div className="grid min-w-0 grid-cols-[5.25rem_minmax(0,1fr)_auto_2.25rem] items-center gap-2.5 text-sm">
+      <span className="truncate font-semibold text-foreground">{label}</span>
+      <span aria-hidden className="h-1.5 overflow-hidden rounded-full bg-secondary">
+        <span className="block h-full rounded-full bg-foreground/50" style={{ width: `${pct}%` }} />
+      </span>
+      <span className="text-right font-semibold tabular-nums text-foreground">{fmt(valor)}</span>
+      <span className="text-right text-[11px] tabular-nums text-muted-foreground">{pct}%</span>
+    </div>
   )
 }
