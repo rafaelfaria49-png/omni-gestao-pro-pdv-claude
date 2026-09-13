@@ -4,8 +4,9 @@ import "server-only"
  * Núcleo COMPARTILHADO da recuperação de vendas em quarentena
  * (GOAL PDV-VENDAS-QUARENTENA-RECOVERY-ALL-P0-006A).
  *
- * Usado pela recuperação individual (`/api/ops/vendas/recover-quarantined`) e pelo
- * lote (`/api/ops/vendas/quarantine-recovery/{preview,batch}`). Existe UM motor de
+ * Usado pela recuperação individual (`/api/ops/vendas/recover-quarantined`), pelo
+ * lote (`/api/ops/vendas/quarantine-recovery/{preview,batch}`) e pela reconciliação
+ * automática do PDV (`/api/ops/vendas/quarantine-recovery/auto`). Existe UM motor de
  * persistência — `persistSaleV2` — e este módulo apenas o orquestra. Nenhuma rota
  * escreve venda por conta própria.
  *
@@ -185,9 +186,55 @@ async function readOriginalSession(
   }
 }
 
+/** Fingerprint canônico SEM a sessão: a recuperação pode ter resolvido a sessão pela janela. */
+function sameSaleFingerprint(facts: Record<string, unknown>): string {
+  return buildLegacySaleFingerprint({ ...facts, sessaoId: null })
+}
+
+/**
+ * Procura, na MESMA loja, venda já gravada no MESMO instante da cópia local.
+ *
+ * `at` nasce no relógio do PDV com milissegundos e o motor o preserva: duas vendas
+ * físicas distintas não compartilham o mesmo instante. Com os mesmos fatos é a própria
+ * venda, gravada sob OUTRA identidade técnica — a "ocupante" que na verdade é a mesma
+ * venda, ou uma recuperação anterior cujo `clientSaleId` local se perdeu — e o correto é
+ * só reconciliar. Com fatos diferentes não há prova de identidade: nem reconciliar nem
+ * criar (`conflict`).
+ */
+async function readSameInstantSale(
+  db: ReadClient,
+  storeId: string,
+  candidate: QuarantineCandidate,
+): Promise<{ match: { id: string; pedidoId: string } | null; conflict: boolean }> {
+  const atRaw = text(candidate.at)
+  const at = atRaw ? new Date(atRaw) : null
+  // Fatos inválidos nunca viram "mesma venda": o planner os bloqueia como INVALID_PAYLOAD.
+  if (!at || Number.isNaN(at.getTime()) || !isLegacySaleFactsComparable(candidate)) {
+    return { match: null, conflict: false }
+  }
+
+  const rows = await db.venda.findMany({
+    where: { storeId, at },
+    select: VENDA_REPLAY_SELECT,
+    take: 5,
+  })
+  if (rows.length === 0) return { match: null, conflict: false }
+
+  const expected = sameSaleFingerprint(candidate as Record<string, unknown>)
+  const matches = rows.filter((row) => {
+    const facts: Record<string, unknown> = factsFromOccupantPayload(row)
+    const comparable = { ...facts, at: facts.at ? facts.at : row.at.toISOString() }
+    return isLegacySaleFactsComparable(comparable) && sameSaleFingerprint(comparable) === expected
+  })
+  if (matches.length === 1) {
+    return { match: { id: matches[0].id, pedidoId: matches[0].pedidoId }, conflict: false }
+  }
+  return { match: null, conflict: true }
+}
+
 /**
  * Lê todos os fatos server-side de UMA candidata. Estritamente read-only:
- * `findFirst`/`findUnique` apenas. Chamado tanto pelo preview quanto pelo lote.
+ * `findFirst`/`findUnique`/`findMany` apenas. Chamado tanto pelo preview quanto pelo lote.
  */
 export async function readQuarantineServerFacts(input: {
   storeId: string
@@ -214,11 +261,15 @@ export async function readQuarantineServerFacts(input: {
       })
     : null
 
+  // A mesma venda gravada sob OUTRA identidade técnica também "já existe".
+  const sameInstant = already ? null : await readSameInstantSale(db, storeId, candidate)
+  const existing = already ?? sameInstant?.match ?? null
+
   // Produto/estoque e sessão só importam quando ainda há algo a criar.
-  if (already) {
+  if (existing) {
     return {
-      alreadyRecoveredPedidoId: already.pedidoId,
-      alreadyRecoveredVendaId: already.id,
+      alreadyRecoveredPedidoId: existing.pedidoId,
+      alreadyRecoveredVendaId: existing.id,
       occupantExists: Boolean(occupant),
       occupantStoreId: occupant?.storeId ?? null,
       originalSessionStatus: "NO_SESSION_ID",
@@ -242,6 +293,7 @@ export async function readQuarantineServerFacts(input: {
     resolvedSessaoId: session.resolvedSessaoId,
     unresolvedInventoryIds: productFacts.unresolvedInventoryIds,
     stockShortfalls: productFacts.stockShortfalls,
+    sameInstantConflict: sameInstant?.conflict === true,
   }
 }
 
@@ -288,11 +340,30 @@ export type QuarantineRecoveryResult = {
   readonly replayed: boolean
 }
 
+/** Quem disparou a recuperação — fica na trilha `payload.recovery.trigger`. */
+export const QUARANTINE_RECOVERY_TRIGGER = Object.freeze({
+  /** Console administrativo (motivo e confirmação informados por uma pessoa). */
+  ADMIN: "admin",
+  /** Reconciliação automática do PDV, sem operador. */
+  AUTO: "auto",
+} as const)
+
+export type QuarantineRecoveryTrigger =
+  (typeof QUARANTINE_RECOVERY_TRIGGER)[keyof typeof QUARANTINE_RECOVERY_TRIGGER]
+
+export const QUARANTINE_AUTO_RECONCILE_MOTIVO =
+  "Reconciliação automática: venda preservada no PDV gravada com data e sessão de caixa originais."
+
 export type ExecuteQuarantineRecoveryInput = {
   storeId: string
   candidate: QuarantineCandidate
   motivo: string
   operadorLabel?: string
+  /**
+   * `auto`: política da reconciliação automática — lança na sessão original mesmo fechada
+   * (o único destino correto; nunca o caixa de hoje) e aceita número antigo livre.
+   */
+  trigger?: QuarantineRecoveryTrigger
   /** Autorização explícita para lançamento retroativo em sessão original FECHADA. */
   allowClosedOriginalSession?: boolean
   /** Fatos já lidos (o lote reaproveita os do preview); relidos quando ausentes. */
@@ -407,15 +478,16 @@ export async function executeQuarantineRecovery(
 ): Promise<QuarantineRecoveryResult> {
   const { storeId, candidate, motivo, operadorLabel } = input
   const db = input.db ?? prisma
-  const allowClosedOriginalSession = input.allowClosedOriginalSession === true
+  const auto = input.trigger === QUARANTINE_RECOVERY_TRIGGER.AUTO
+  // O automático grava na sessão ORIGINAL mesmo fechada: é a sessão em que a venda
+  // aconteceu, com a data real e trilha retroativa — nunca o caixa aberto de hoje.
+  const allowClosedOriginalSession = auto || input.allowClosedOriginalSession === true
+  const mode = auto
+    ? QUARANTINE_CLASSIFY_MODE.AUTO_RECONCILE
+    : QUARANTINE_CLASSIFY_MODE.HISTORICAL_RECOVERY
 
   const facts = input.facts ?? (await readQuarantineServerFacts({ storeId, candidate, db }))
-  const item = classifyQuarantineCandidate({
-    storeId,
-    candidate,
-    facts,
-    mode: QUARANTINE_CLASSIFY_MODE.HISTORICAL_RECOVERY,
-  })
+  const item = classifyQuarantineCandidate({ storeId, candidate, facts, mode })
   const ref = { conflictingPedidoId: item.conflictingPedidoId, clientSaleId: item.clientSaleId }
 
   // Gate do writer — defesa em profundidade, sem bypass.
@@ -429,12 +501,21 @@ export async function executeQuarantineRecovery(
   }
 
   if (item.klass === QUARANTINE_RECOVERY_CLASS.ALREADY_RECOVERED) {
-    const existing = item.clientSaleId
+    const byClientSaleId = item.clientSaleId
       ? await db.venda.findFirst({
           where: { storeId, clientSaleId: item.clientSaleId },
           select: VENDA_REPLAY_SELECT,
         })
       : null
+    // A mesma venda pode estar gravada sob OUTRA identidade técnica (`readSameInstantSale`).
+    const existing =
+      byClientSaleId ??
+      (item.alreadyRecoveredVendaId
+        ? await db.venda.findFirst({
+            where: { id: item.alreadyRecoveredVendaId, storeId },
+            select: VENDA_REPLAY_SELECT,
+          })
+        : null)
     return resultFrom(
       ref,
       QUARANTINE_RECOVERY_STATUS.ALREADY_RECOVERED,
@@ -487,13 +568,12 @@ export async function executeQuarantineRecovery(
     )
   }
 
-  const confirmed = await confirmConflict(
-    db,
-    storeId,
-    item.conflictingPedidoId,
-    clientSaleId,
-    candidate,
-  )
+  // Número antigo livre (só no automático): não há ocupante a confirmar. O servidor aloca
+  // número novo e a idempotência por `(storeId, clientSaleId)` impede segunda criação.
+  const confirmed =
+    auto && !facts.occupantExists
+      ? { ok: true as const, occupantOtherStore: false, occupantStoreId: null }
+      : await confirmConflict(db, storeId, item.conflictingPedidoId, clientSaleId, candidate)
   if (!confirmed.ok) {
     return resultFrom(
       ref,
@@ -526,7 +606,8 @@ export async function executeQuarantineRecovery(
       recoveredFromPedidoId: item.conflictingPedidoId,
       recoveredAt: new Date().toISOString(),
       motivo,
-      mode: QUARANTINE_CLASSIFY_MODE.HISTORICAL_RECOVERY,
+      trigger: auto ? QUARANTINE_RECOVERY_TRIGGER.AUTO : QUARANTINE_RECOVERY_TRIGGER.ADMIN,
+      mode,
       stockPolicy: HISTORICAL_RECOVERY_STOCK_POLICY,
       caixaPolicy: historicalRecoveryCaixaPolicy(item.originalSessionStatus),
       conflictCode:
@@ -604,6 +685,7 @@ export type BatchQuarantineRecoveryInput = {
   candidates: readonly QuarantineCandidate[]
   motivo: string
   operadorLabel?: string
+  trigger?: QuarantineRecoveryTrigger
   /** Autoriza lançamento retroativo nas sessões ORIGINAIS fechadas do lote. */
   allowClosedOriginalSession?: boolean
   db?: ReadClient
@@ -676,6 +758,7 @@ export async function executeQuarantineRecoveryBatch(
           candidate,
           motivo: input.motivo,
           operadorLabel: input.operadorLabel,
+          trigger: input.trigger,
           allowClosedOriginalSession: input.allowClosedOriginalSession,
           db: input.db,
         }),
@@ -694,4 +777,27 @@ export async function executeQuarantineRecoveryBatch(
     }
   }
   return { results, summary: summarizeBatchResults(results) }
+}
+
+/**
+ * Reconciliação AUTOMÁTICA do PDV: o mesmo lote, com a política `auto` e trilha própria.
+ * Sem motivo digitado e sem confirmação — é a venda que o operador já concluiu.
+ */
+export async function executeQuarantineAutoReconcileBatch(input: {
+  storeId: string
+  candidates: readonly QuarantineCandidate[]
+  operadorLabel?: string
+  db?: ReadClient
+}): Promise<{
+  results: QuarantineRecoveryResult[]
+  summary: BatchQuarantineRecoverySummary
+}> {
+  return executeQuarantineRecoveryBatch({
+    storeId: input.storeId,
+    candidates: input.candidates,
+    motivo: QUARANTINE_AUTO_RECONCILE_MOTIVO,
+    operadorLabel: input.operadorLabel,
+    trigger: QUARANTINE_RECOVERY_TRIGGER.AUTO,
+    db: input.db,
+  })
 }

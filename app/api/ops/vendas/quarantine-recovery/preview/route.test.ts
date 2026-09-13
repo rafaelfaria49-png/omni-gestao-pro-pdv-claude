@@ -23,6 +23,7 @@ vi.mock("@/lib/prisma", () => ({
     venda: {
       findFirst: h.findFirst,
       findUnique: h.findUnique,
+      findMany: vi.fn(async () => []),
       update: h.vendaUpdate,
       create: h.vendaCreate,
       delete: h.vendaDelete,

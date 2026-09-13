@@ -957,6 +957,19 @@ Módulo operacional principal da assistência técnica. Últimas melhorias **con
   pipeline dos dois projetos, não por essa prova local.
 - O **GOAL 002C permanece bloqueado** pela auditoria Production Classe C.
 
+**Vendas preservadas no PDV — reconciliação automática (13/09/2026)**
+- Venda presa por conflito de identificação não depende mais de ação manual: o PDV chama
+  `POST /api/ops/vendas/quarantine-recovery/auto` (mesma permissão de registrar venda) no ciclo de
+  sincronização. Já existente — mesma identidade técnica, ou a mesma venda pelo instante `at` + fatos
+  canônicos — só reconcilia; ausente é criada uma vez, com data e sessão de caixa originais, inclusive
+  fechada (`payload.recovery.trigger = "auto"` + `retroactiveSync`), nunca no caixa aberto de hoje.
+- Mesmo instante com fatos diferentes vira `AMBIGUOUS_EXISTING_SALE` e fica para o administrador; só
+  essas acendem "Recuperar vendas em quarentena" e o aviso de revisão no PDV.
+- Recuperação histórica não baixa de novo produto com ajuste de saldo (`tipo = "ajuste"`) posterior à venda.
+- "Limpar pendentes locais" virou "Verificar pendentes locais" e nunca descarta venda ausente no servidor.
+- Sem schema/migration. As vendas já presas só são reparadas quando o navegador que as guarda abre
+  PDV/Vendas com esta versão publicada — o `localStorage` daquele dispositivo é a única cópia.
+
 **Writer legado v1 — replay atômico e conflito permanente (28/07/2026)**
 - `Venda` passou a ser **create-only**: não existe mais `upsert` permissivo no caminho compartilhado.
 - Reenvio idêntico na mesma loja é replay sem novas escritas; divergência canônica vira

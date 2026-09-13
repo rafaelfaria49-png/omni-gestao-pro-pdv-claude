@@ -235,6 +235,7 @@ describe("classifyQuarantineCandidate", () => {
       QUARANTINE_RECOVERY_CLASS.STORE_MISMATCH,
       QUARANTINE_RECOVERY_CLASS.PRODUCT_UNRESOLVED,
       QUARANTINE_RECOVERY_CLASS.INSUFFICIENT_STOCK_RISK,
+      QUARANTINE_RECOVERY_CLASS.AMBIGUOUS_EXISTING_SALE,
       QUARANTINE_RECOVERY_CLASS.BLOCKED_UNKNOWN,
     ] as const
     for (const klass of blocked) {
@@ -393,6 +394,7 @@ describe("historicalRecoveryPersistOptions", () => {
       enforceStock: false,
       requireCaixaSession: true,
       allowClosedOriginalSession: true,
+      historicalRecovery: true,
     })
   })
 
@@ -406,6 +408,7 @@ describe("historicalRecoveryPersistOptions", () => {
       enforceStock: false,
       requireCaixaSession: false,
       allowClosedOriginalSession: false,
+      historicalRecovery: true,
     })
     expect(
       historicalRecoveryPersistOptions({
@@ -413,6 +416,98 @@ describe("historicalRecoveryPersistOptions", () => {
         allowClosedOriginalSession: false,
       }).requireCaixaSession,
     ).toBe(false)
+  })
+})
+
+describe("classifyQuarantineCandidate · ambiguidade e reconciliação automática", () => {
+  const AUTO = QUARANTINE_CLASSIFY_MODE.AUTO_RECONCILE
+
+  it("AMBIGUOUS_EXISTING_SALE: venda no mesmo instante com fatos diferentes bloqueia em todos os modos", () => {
+    for (const mode of [undefined, QUARANTINE_CLASSIFY_MODE.HISTORICAL_RECOVERY, AUTO]) {
+      const item = classifyQuarantineCandidate({
+        storeId: STORE,
+        candidate: candidate(),
+        facts: facts({ sameInstantConflict: true, originalSessionStatus: "FECHADA" }),
+        mode,
+      })
+      expect(item.klass).toBe(QUARANTINE_RECOVERY_CLASS.AMBIGUOUS_EXISTING_SALE)
+      expect(item.bucket).toBe(QUARANTINE_RECOVERY_BUCKET.BLOCKED)
+      expect(isExecutableClass(item.klass)).toBe(false)
+      expect(item.reason).toContain("revisão do administrador")
+    }
+  })
+
+  it("venda já existente vence a ambiguidade — idempotência primeiro", () => {
+    const item = classifyQuarantineCandidate({
+      storeId: STORE,
+      candidate: candidate(),
+      facts: facts({
+        sameInstantConflict: true,
+        alreadyRecoveredPedidoId: "VDA-L02-2026-000731",
+        alreadyRecoveredVendaId: "venda-731",
+      }),
+      mode: AUTO,
+    })
+    expect(item.klass).toBe(QUARANTINE_RECOVERY_CLASS.ALREADY_RECOVERED)
+    expect(item.alreadyRecoveredVendaId).toBe("venda-731")
+  })
+
+  it("auto: número antigo livre não prende a venda — o servidor aloca número novo", () => {
+    const item = classifyQuarantineCandidate({
+      storeId: STORE,
+      candidate: candidate(),
+      facts: facts({ occupantExists: false }),
+      mode: AUTO,
+    })
+    expect(item.klass).toBe(QUARANTINE_RECOVERY_CLASS.READY)
+    expect(isExecutableClass(item.klass)).toBe(true)
+  })
+
+  it("auto: sessão original fechada segue sendo a sessão da venda (classe retroativa executável)", () => {
+    const item = classifyQuarantineCandidate({
+      storeId: STORE,
+      candidate: candidate(),
+      facts: facts({ originalSessionStatus: "FECHADA" }),
+      mode: AUTO,
+    })
+    expect(item.klass).toBe(QUARANTINE_RECOVERY_CLASS.REQUIRES_CLOSED_SESSION_CONFIRM)
+    expect(isExecutableClass(item.klass)).toBe(true)
+  })
+
+  it("auto aplica as regras históricas: estoque de hoje e sessão não identificável não apagam a venda", () => {
+    expect(
+      classifyQuarantineCandidate({
+        storeId: STORE,
+        candidate: candidate(),
+        facts: facts({
+          stockShortfalls: [{ produtoId: "prod-1", nome: "CONTROLE TV BOX", disponivel: 0, necessario: 1 }],
+        }),
+        mode: AUTO,
+      }).klass,
+    ).toBe(QUARANTINE_RECOVERY_CLASS.READY)
+    expect(
+      classifyQuarantineCandidate({
+        storeId: STORE,
+        candidate: candidate({ sessaoId: undefined }),
+        facts: facts({ originalSessionStatus: "NO_SESSION_ID" }),
+        mode: AUTO,
+      }).klass,
+    ).toBe(QUARANTINE_RECOVERY_CLASS.READY)
+  })
+
+  it("auto não relaxa identidade: payload inválido e outra loja continuam bloqueados", () => {
+    expect(
+      classifyQuarantineCandidate({ storeId: STORE, candidate: candidate({ lines: [] }), facts: facts(), mode: AUTO })
+        .klass,
+    ).toBe(QUARANTINE_RECOVERY_CLASS.INVALID_PAYLOAD)
+    expect(
+      classifyQuarantineCandidate({
+        storeId: STORE,
+        candidate: candidate({ storeId: "loja-2" }),
+        facts: facts(),
+        mode: AUTO,
+      }).klass,
+    ).toBe(QUARANTINE_RECOVERY_CLASS.STORE_MISMATCH)
   })
 })
 

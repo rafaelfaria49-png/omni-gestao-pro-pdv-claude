@@ -4,6 +4,7 @@ import {
   assertGeneratedClientSaleId,
   buildProvisionalSaleRef,
   classifyLocalSaleSync,
+  deriveLegacySaleClientSaleId,
   displaySaleNumber,
   generateClientSaleId,
   isProvisionalSaleRef,
@@ -56,5 +57,38 @@ describe("local-sale-identity", () => {
     expect(displaySaleNumber("PEND-cs_localattempt01")).toBe("PENDENTE — AGUARDANDO NÚMERO")
     expect(displaySaleNumber("VDA-RC02-2026-000001", true)).toBe("PENDENTE — AGUARDANDO NÚMERO")
     expect(displaySaleNumber("VDA-RC02-2026-000001")).toBe("VDA-RC02-2026-000001")
+  })
+})
+
+describe("deriveLegacySaleClientSaleId — identidade determinística de venda preservada", () => {
+  const venda = {
+    id: "VDA-2026-0412",
+    at: "2026-06-15T18:42:07.123Z",
+    total: 59.9,
+    lines: [{ inventoryId: "prod-1", quantity: 2, unitPrice: 29.95 }],
+    paymentBreakdown: { dinheiro: 59.9, pix: 0 },
+  }
+
+  it("duas abas (ou antes e depois de um crash) chegam à MESMA chave", () => {
+    const a = deriveLegacySaleClientSaleId("loja-2", venda)
+    const b = deriveLegacySaleClientSaleId("loja-2", {
+      ...venda,
+      paymentBreakdown: { pix: 0, dinheiro: 59.9 },
+    })
+    expect(a).toBe(b)
+  })
+
+  it("é identidade técnica válida, nunca com forma de número comercial", () => {
+    const id = deriveLegacySaleClientSaleId("loja-2", venda)
+    expect(id).toMatch(/^lq_[0-9a-f]{32}$/)
+    expect(assertGeneratedClientSaleId(id)).toBe(id)
+  })
+
+  it("vendas diferentes — ou a mesma venda em outra loja — têm chaves diferentes", () => {
+    const base = deriveLegacySaleClientSaleId("loja-2", venda)
+    expect(deriveLegacySaleClientSaleId("loja-1", venda)).not.toBe(base)
+    expect(deriveLegacySaleClientSaleId("loja-2", { ...venda, at: "2026-06-15T18:42:07.124Z" })).not.toBe(base)
+    expect(deriveLegacySaleClientSaleId("loja-2", { ...venda, total: 59.8 })).not.toBe(base)
+    expect(deriveLegacySaleClientSaleId("loja-2", { ...venda, id: "VDA-2026-0413" })).not.toBe(base)
   })
 })

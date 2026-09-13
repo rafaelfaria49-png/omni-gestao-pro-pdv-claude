@@ -235,3 +235,69 @@ export function applyRecoveryConfirmations<T extends LocalSaleShape>(
 
   return { sales: next, reconciled }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reconciliação automática
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resposta DEFINITIVA sem reconciliação (bloqueio que pede revisão, rota indisponível
+ * para a sessão): só tenta de novo, sozinho, depois disto.
+ */
+export const QUARANTINE_AUTO_RECONCILE_HOLD_MS = 10 * 60_000
+
+/** Falha transitória do servidor (5xx, `FAILED`): tenta de novo mais cedo. */
+export const QUARANTINE_AUTO_RECONCILE_RETRY_MS = 60_000
+
+/** Chave local de uma venda preservada: identidade técnica, ou o número quando ainda não há. */
+export function quarantineReviewKey(sale: Pick<LocalSaleShape, "id" | "clientSaleId">): string {
+  return typeof sale.clientSaleId === "string" && sale.clientSaleId ? sale.clientSaleId : sale.id
+}
+
+/**
+ * Candidatas da reconciliação automática.
+ *
+ * Só entra venda cuja identidade técnica JÁ ESTÁ gravada no armazenamento local: se a aba
+ * morrer depois do envio, a próxima tentativa reusa exatamente a mesma chave e o servidor
+ * devolve a venda já criada em vez de criar outra.
+ */
+export function selectAutoReconcileCandidates<T extends LocalSaleShape>(input: {
+  readonly sales: readonly T[]
+  readonly isQuarantined: (sale: T) => boolean
+  readonly persistedClientSaleIds: ReadonlySet<string>
+  readonly holdUntil: ReadonlyMap<string, number>
+  readonly now: number
+}): T[] {
+  return input.sales.filter((sale) => {
+    if (!input.isQuarantined(sale)) return false
+    const clientSaleId = typeof sale.clientSaleId === "string" ? sale.clientSaleId : ""
+    if (!clientSaleId || !input.persistedClientSaleIds.has(clientSaleId)) return false
+    return (input.holdUntil.get(clientSaleId) ?? 0) <= input.now
+  })
+}
+
+/**
+ * Pendências locais para a UI — somente o que existe de fato.
+ *
+ * - `retryable`: pendência comum, reenviada pelo ciclo automático;
+ * - `autoSync`: venda preservada que a reconciliação automática ainda vai resolver;
+ * - `review`: venda preservada que o servidor NÃO reconciliou com segurança — a única
+ *   que pede o administrador.
+ */
+export function summarizeLocalPendingSales(
+  sales: readonly LocalSaleShape[],
+  reviewKeys: ReadonlySet<string> = new Set(),
+): { pending: number; retryable: number; autoSync: number; review: number } {
+  let pending = 0
+  let retryable = 0
+  let autoSync = 0
+  let review = 0
+  for (const sale of sales) {
+    if (sale.syncPending !== true) continue
+    pending += 1
+    if (!isSaleIdentityConflictCode(sale.syncBlockedCode)) retryable += 1
+    else if (reviewKeys.has(quarantineReviewKey(sale))) review += 1
+    else autoSync += 1
+  }
+  return { pending, retryable, autoSync, review }
+}
