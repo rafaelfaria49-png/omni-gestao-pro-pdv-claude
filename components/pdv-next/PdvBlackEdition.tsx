@@ -32,8 +32,10 @@ import {
   removeHeldSale,
   newHoldId,
   nextHoldLabel,
+  withHoldCapabilitiesSnapshot,
   type HeldSale,
 } from "@/lib/pdv-hold"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
 import { useOperationsStore } from "@/lib/operations-store"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { AberturaCaixaModal } from "@/components/dashboard/caixa/abertura-caixa-modal"
@@ -75,6 +77,7 @@ export function PdvBlackEdition() {
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva()
   const { config } = useConfigEmpresa()
   const { pdvParams } = useStoreSettings()
+  const pdvCapabilities = usePdvCapabilities("next")
   const {
     inventory,
     setInventory,
@@ -257,7 +260,11 @@ export function PdvBlackEdition() {
       discountPercent,
       pdvType: "black",
     }
-    saveHeldSale(lojaAtivaId ?? "", terminalId, sale)
+    saveHeldSale(
+      lojaAtivaId ?? "",
+      terminalId,
+      withHoldCapabilitiesSnapshot(sale, pdvCapabilities.snapshot),
+    )
     setCartRows([])
     setSelectedLineId(null)
     setLastAddedItem(null)
@@ -276,6 +283,7 @@ export function PdvBlackEdition() {
     terminalId,
     heldSales,
     toast,
+    pdvCapabilities.snapshot,
   ])
 
   const handleResumeSale = useCallback(

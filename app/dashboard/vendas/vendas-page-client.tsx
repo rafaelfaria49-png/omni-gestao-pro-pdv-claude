@@ -14,6 +14,8 @@ import { experimentalPdvEnabled } from "@/lib/feature-flags"
 import { readPdvMainLayout, writePdvMainLayout } from "@/lib/pdv-layout-storage"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useStoreSettings } from "@/lib/store-settings-provider"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { surfaceIdFromSwitcherLayouts } from "@/lib/pdv/surface-ids"
 import Link from "next/link"
 import { useTerminalAtivo, useTerminalHeartbeat } from "@/lib/pdv-terminal"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -35,7 +37,9 @@ export function VendasPageClient() {
   const [terminalBypass, setTerminalBypass] = useState(false)
   const { mode } = useStudioTheme()
   const { lojaAtivaId } = useLojaAtiva()
-  const { pdvParams, hydrated: settingsHydrated } = useStoreSettings()
+  const { pdvParams, hydrated: settingsHydrated, pdvMainLayout, pdvClassicLayout } = useStoreSettings()
+  const switcherSurfaceId = surfaceIdFromSwitcherLayouts(pdvMainLayout, pdvClassicLayout)
+  const pdvCapabilities = usePdvCapabilities(switcherSurfaceId)
   const { terminal, select, clear } = useTerminalAtivo(lojaAtivaId)
   const lock = useTerminalHeartbeat({
     storeId: lojaAtivaId,
@@ -124,7 +128,7 @@ export function VendasPageClient() {
           Controle de terminal indisponível — operando sem trava de uso simultâneo.
         </div>
       )}
-      {settingsHydrated && pdvParams.moduloControleConsumo ? (
+      {settingsHydrated && pdvParams.moduloControleConsumo && pdvCapabilities.isEnabled("pdv.tables") ? (
         <div className="flex shrink-0 items-center justify-end border-b border-border bg-background px-3 py-1.5">
           <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" asChild>
             <Link href="/dashboard/vendas/mesas">
