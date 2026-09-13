@@ -189,6 +189,29 @@ export function resumeDiscountFields(
   }
 }
 
+/** Não aplica novo desconto operacional quando a capability está off. */
+export function applyDiscountIfEnabled(
+  discountsEnabled: boolean,
+  next: number,
+  current: number,
+): number {
+  return discountsEnabled ? next : current
+}
+
+/** Resume: desconto de linha só entra no carrinho se efetivamente permitido. */
+export function operationalLineDiscountPct(
+  stored: number | undefined,
+  discountsEffectivelyEnabled: boolean,
+): number {
+  if (!discountsEffectivelyEnabled) return 0
+  return stored ?? 0
+}
+
+/** Busca/seleção operacional nova de cliente. Não apaga associação existente. */
+export function canSelectCustomerFromSearch(customerSearchEnabled: boolean): boolean {
+  return customerSearchEnabled
+}
+
 export function isCapabilityEnabled(
   surfaceId: PdvSurfaceId,
   capabilityKey: string,

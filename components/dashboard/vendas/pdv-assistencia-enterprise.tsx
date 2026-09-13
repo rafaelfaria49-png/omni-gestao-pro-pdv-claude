@@ -129,7 +129,11 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
-import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
+import {
+  canSelectCustomerFromSearch,
+  combineHoldSnapshotWithRuntime,
+  resumeDiscountFields,
+} from "@/lib/pdv/resolve-capability"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -938,7 +942,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     [lojaAtivaId]
   )
   const [clienteQuery, setClienteQuery] = useState("")
-  const { clientes: clienteSugestoes, isLoading: buscandoCliente } = useClienteSearch(clienteQuery, storeIdKey)
+  const { clientes: clienteSugestoes, isLoading: buscandoCliente } = useClienteSearch(
+    customerSearchEnabled ? clienteQuery : "",
+    storeIdKey,
+  )
   const [showCustomerSidebarDropdown, setShowCustomerSidebarDropdown] = useState(false)
   const cartHydratedRef = useRef(false)
   const cartPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -2550,7 +2557,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               <input
                 ref={customerInputRef}
                 value={customerName}
+                readOnly={!customerSearchEnabled}
+                disabled={!customerSearchEnabled}
                 onChange={(e) => {
+                  if (!canSelectCustomerFromSearch(customerSearchEnabled)) return
                   const v = e.target.value
                   setCustomerName(v)
                   setClienteQuery(v)
@@ -2559,12 +2569,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   setShowCustomerSidebarDropdown(true)
                 }}
                 onFocus={() => {
+                  if (!canSelectCustomerFromSearch(customerSearchEnabled)) return
                   if (clienteQuery.trim()) {
                     setShowCustomerSidebarDropdown(true)
                   }
                 }}
                 onBlur={() => setTimeout(() => setShowCustomerSidebarDropdown(false), 180)}
                 onKeyDown={(e) => {
+                  if (!canSelectCustomerFromSearch(customerSearchEnabled)) return
                   if (e.key === "Escape") { setShowCustomerSidebarDropdown(false); setClienteQuery("") }
                   if (e.key === "Enter" && clienteSugestoes.length > 0) {
                     e.preventDefault()
@@ -2586,6 +2598,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
+                    if (!canSelectCustomerFromSearch(customerSearchEnabled)) return
                     setCustomerName("")
                     setSelectedClienteId(null)
                     setSelectedClienteDoc(null)
@@ -2609,7 +2622,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 </div>
               )}
               {/* Inline dropdown */}
-              {showCustomerSidebarDropdown && (clienteSugestoes.length > 0 || buscandoCliente) && (
+              {customerSearchEnabled && showCustomerSidebarDropdown && (clienteSugestoes.length > 0 || buscandoCliente) && (
                 <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
                   {buscandoCliente && clienteSugestoes.length === 0 ? (
                     <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
@@ -2629,6 +2642,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-accent"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
+                            if (!canSelectCustomerFromSearch(customerSearchEnabled)) return
                             setCustomerName(c.name)
                             setSelectedClienteId(c.id)
                             setSelectedClienteDoc(c.document ?? null)

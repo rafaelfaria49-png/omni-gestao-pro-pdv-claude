@@ -15,10 +15,13 @@ import {
   isCapabilitySupportedOnSurface,
 } from "@/lib/pdv/capability-support-matrix"
 import {
+  applyDiscountIfEnabled,
   applySnapshotAgainstRuntime,
   buildCapabilitiesSnapshot,
+  canSelectCustomerFromSearch,
   combineHoldSnapshotWithRuntime,
   isBlockedCapabilityKey,
+  operationalLineDiscountPct,
   resolveAllKnownCapabilities,
   resolveCapability,
   resumeDiscountFields,
@@ -457,5 +460,63 @@ describe("N4 — hold persistido não é apagado quando heldSales=false", () => 
     })
     expect(off.enabled).toBe(false)
     expect(getHeldSales("loja-1", "T1").map((s) => s.id)).toEqual(["keep-me"])
+  })
+})
+
+describe("N4 CORRECTION-02 — venda-completa discounts + assistência customerSearch", () => {
+  it("handler não altera desconto com capability off", () => {
+    expect(applyDiscountIfEnabled(false, 25, 10)).toBe(10)
+    expect(applyDiscountIfEnabled(true, 25, 10)).toBe(25)
+  })
+
+  it("DESC% por linha e desconto global na Venda Completa respeitam o gate", () => {
+    const venda = readSrc("components/dashboard/vendas/venda-completa-enterprise.tsx")
+    expect(venda).toContain("if (!discountsEnabled) return")
+    expect(venda).toContain("updateLineDiscountPct")
+    expect(venda).toContain('disabled={!discountsEnabled}')
+    expect(venda).toContain("applyDiscountIfEnabled")
+    expect(venda).toContain("operationalLineDiscountPct")
+  })
+
+  it("resume não reaplica desconto de linha com capability combinada off", () => {
+    expect(operationalLineDiscountPct(15, false)).toBe(0)
+    expect(operationalLineDiscountPct(15, true)).toBe(15)
+    expect(resumeDiscountFields({ discountReais: 8, discountPercent: 0 }, false)).toEqual({
+      discountReais: 0,
+      discountPercent: 0,
+    })
+    const venda = readSrc("components/dashboard/vendas/venda-completa-enterprise.tsx")
+    expect(venda).toContain("operationalLineDiscountPct(")
+    expect(venda).toContain("i.discountPct")
+  })
+
+  it("default=true mantém desconto operacional", () => {
+    expect(
+      resolveCapability({ surfaceId: "venda-completa", capabilityKey: "pdv.discounts" }).enabled,
+    ).toBe(true)
+    expect(applyDiscountIfEnabled(true, 12, 0)).toBe(12)
+  })
+
+  it("assistência bloqueia input/callback lateral com customerSearch=false", () => {
+    expect(canSelectCustomerFromSearch(false)).toBe(false)
+    expect(canSelectCustomerFromSearch(true)).toBe(true)
+    const assist = readSrc("components/dashboard/vendas/pdv-assistencia-enterprise.tsx")
+    expect(assist).toContain("canSelectCustomerFromSearch(customerSearchEnabled)")
+    expect(assist).toContain("readOnly={!customerSearchEnabled}")
+    expect(assist).toContain("disabled={!customerSearchEnabled}")
+    expect(assist).toContain("customerSearchEnabled ? clienteQuery : \"\"")
+  })
+
+  it("cliente histórico permanece — search controla seleção nova", () => {
+    const assist = readSrc("components/dashboard/vendas/pdv-assistencia-enterprise.tsx")
+    expect(assist).toContain("sale.customer.name")
+    expect(assist).toContain("setSelectedClienteId(sale.customer.id)")
+    expect(canSelectCustomerFromSearch(false)).toBe(false)
+  })
+
+  it("default=true mantém busca lateral da Assistência", () => {
+    expect(
+      resolveCapability({ surfaceId: "assistencia", capabilityKey: "pdv.customerSearch" }).enabled,
+    ).toBe(true)
   })
 })

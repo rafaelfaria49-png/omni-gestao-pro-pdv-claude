@@ -85,7 +85,12 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
-import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
+import {
+  applyDiscountIfEnabled,
+  combineHoldSnapshotWithRuntime,
+  operationalLineDiscountPct,
+  resumeDiscountFields,
+} from "@/lib/pdv/resolve-capability"
 import {
   construirProdutosACadastrar,
   enfileirarProdutosACadastrar,
@@ -506,6 +511,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   }
 
   function updateLineDiscountPct(lineId: string, pct: number) {
+    if (!discountsEnabled) return
     const clamped = Math.min(100, Math.max(0, isNaN(pct) ? 0 : pct))
     setCart((prev) => prev.map((l) => l.lineId === lineId ? { ...l, discountPct: clamped } : l))
   }
@@ -652,7 +658,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           unid: i.vendaPorPeso ? "KG" : "UN",
           price: i.price,
           qty: i.quantity,
-          discountPct: i.discountPct ?? 0,
+          discountPct: operationalLineDiscountPct(
+            i.discountPct,
+            resumeCaps.isEnabled("pdv.discounts"),
+          ),
           detail: i.detail,
           isAvulso: i.isAvulso,
           custoUnitario: i.custoUnitario,
@@ -1417,6 +1426,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                     step={0.5}
                                     placeholder="0"
                                     value={line.discountPct === 0 ? "" : line.discountPct}
+                                    disabled={!discountsEnabled}
+                                    readOnly={!discountsEnabled}
                                     onChange={(e) => updateLineDiscountPct(line.lineId, parseFloat(e.target.value))}
                                     className="w-12 rounded border border-border bg-background px-1 py-0.5 text-center text-xs tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                   />
@@ -1613,9 +1624,18 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     min={0}
                     placeholder="0,00"
                     value={discountReais || ""}
+                    disabled={!discountsEnabled}
+                    readOnly={!discountsEnabled}
                     onChange={(e) => {
+                      if (!discountsEnabled) return
                       const v = parseFloat(e.target.value)
-                      setDiscountReais(isNaN(v) ? 0 : Math.max(0, v))
+                      setDiscountReais(
+                        applyDiscountIfEnabled(
+                          discountsEnabled,
+                          isNaN(v) ? 0 : Math.max(0, v),
+                          discountReais,
+                        ),
+                      )
                     }}
                     className="h-8 border-border bg-background text-xs tabular-nums"
                   />
@@ -1724,10 +1744,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         total={total}
         discountReais={discountReais}
         discountPercent={0}
-        onDiscountReaisChange={setDiscountReais}
-        onDiscountPercentChange={(pct) =>
-          setDiscountReais(Math.max(0, Math.round(subtotal * (pct / 100) * 100) / 100))
-        }
+        onDiscountReaisChange={(v) => {
+          setDiscountReais(applyDiscountIfEnabled(discountsEnabled, v, discountReais))
+        }}
+        onDiscountPercentChange={(pct) => {
+          const next = Math.max(0, Math.round(subtotal * (pct / 100) * 100) / 100)
+          setDiscountReais(applyDiscountIfEnabled(discountsEnabled, next, discountReais))
+        }}
         selectedCustomer={
           selectedCliente
             ? {
