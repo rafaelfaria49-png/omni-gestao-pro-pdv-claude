@@ -2,8 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { StatusOrdemServico } from "@/generated/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
-import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -23,10 +22,11 @@ function normalizeSearch(s: string) {
 
 export async function GET(req: Request) {
   try {
+    const gate = await requireCadastrosHubApi(req, "read", "shared")
+    if (!gate.ok) return gate.response
+    const storeId = gate.storeId
     const url = new URL(req.url)
     const q = normalizeSearch(url.searchParams.get("q") ?? "")
-    const storeId = storeIdFromAssistecRequestForRead(req)
-    if (!storeId) return json({ error: "storeId obrigatório" }, { status: 400 })
 
     const clientes = await prisma.cliente.findMany({
       where: {
@@ -111,8 +111,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const gate = await requireAdmin()
-    if (!gate.ok) return gate.res
+    const gate = await requireCadastrosHubApi(req, "write", "admin")
+    if (!gate.ok) return gate.response
+    const storeId = gate.storeId
     const body = (await req.json()) as {
       name?: unknown
       phone?: unknown
@@ -142,11 +143,6 @@ export async function POST(req: Request) {
       if (!Number.isNaN(d.getTime())) {
         lastPurchaseAt = d
       }
-    }
-
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) {
-      return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId.")
     }
 
     if (!name) return badRequest('Campo "name" é obrigatório')

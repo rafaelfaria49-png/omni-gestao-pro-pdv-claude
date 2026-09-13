@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
-import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { isVencimentoExpired } from "@/lib/subscription-seal"
-import { getTrustedTimeMs } from "@/lib/trusted-time"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import {
+  cadastrosAuditLogFields,
+  cadastrosAuditPrincipalFromSession,
+} from "@/lib/cadastros/cadastros-audit-principal"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { parsearArquivos } from "@/lib/importador-avancado/parser"
 import { agruparEMerge, labelDominio } from "@/lib/importador-avancado"
 import { persistirImportacao, planejarProdutosDoLote } from "@/lib/importador-avancado/persistidor"
@@ -15,25 +15,6 @@ import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
-
-// ── Auth helper ──────────────────────────────────────────────────────────────
-
-async function requireSubscription(_req: NextRequest) {
-  // NextAuth v5 primeiro
-  try {
-    const session = await auth()
-    if (session?.user) return { ok: true as const, userLabel: session.user.email ?? session.user.name ?? "" }
-  } catch { /* fora de contexto — cai no fallback */ }
-
-  // Fallback: cookie legacy
-  const sub = await getVerifiedSubscriptionFromCookies()
-  if (!sub || !sub.ok) return { ok: false as const, res: NextResponse.json({ error: "forbidden" }, { status: 403 }) }
-  const now = await getTrustedTimeMs()
-  if (isVencimentoExpired(now, sub.vencimento)) {
-    return { ok: false as const, res: NextResponse.json({ error: "subscription_expired" }, { status: 402 }) }
-  }
-  return { ok: true as const, userLabel: "" }
-}
 
 // ── GET: capabilities ────────────────────────────────────────────────────────
 
@@ -101,11 +82,14 @@ function lerContextoProdutos(raw: string | null): ContextoLoteImport {
 // ── POST: parse → detect → merge → preview | importar ───────────────────────
 
 export async function POST(req: NextRequest) {
-  const authResult = await requireSubscription(req)
-  if (!authResult.ok) return authResult.res
-
-  const storeId = storeIdFromAssistecRequestForWrite(req)
-  if (!storeId) return NextResponse.json({ error: "storeId ausente" }, { status: 400 })
+  const gate = await requireCadastrosHubApi(req, "write", "hub")
+  if (!gate.ok) return gate.response
+  const principal = cadastrosAuditPrincipalFromSession(gate.session)
+  if (!principal) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+  }
+  const audit = cadastrosAuditLogFields(principal)
+  const storeId = gate.storeId
 
   let formData: FormData
   try {
@@ -331,11 +315,10 @@ export async function POST(req: NextRequest) {
     const detalhe =
       `${totaisFinais.criados} criados · ${totaisFinais.atualizados} atualizados · ${totaisFinais.ignorados} ignorados · ${totaisFinais.erros} erros` +
       (partes ? ` — ${partes}` : "")
-    const userLabel = (authResult.userLabel && authResult.userLabel.trim()) || "Importador Avançado"
     await prisma.logsAuditoria.create({
       data: {
         action: okFinal ? "import.planilha" : "import.planilha.erro",
-        userLabel: userLabel.slice(0, 500),
+        userLabel: audit.userLabel,
         detail: detalhe.slice(0, 4000),
         source: "importador_avancado",
         metadata: JSON.stringify({
@@ -362,6 +345,7 @@ export async function POST(req: NextRequest) {
                 },
               }
             : {}),
+          ...audit.actorMeta,
         }).slice(0, 8000),
       },
     })

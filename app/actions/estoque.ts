@@ -3,23 +3,11 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
-
-/**
- * Resolve quem está registrando a movimentação a partir da sessão NextAuth (fonte confiável).
- * Cai para o valor enviado pelo cliente apenas se não houver sessão. Nunca lança.
- */
-async function resolverUsuario(fallback?: string): Promise<string | null> {
-  try {
-    const session = await auth();
-    const u = session?.user;
-    const fromSession = (u?.name || u?.email || "").trim();
-    if (fromSession) return fromSession;
-  } catch {
-    /* sem contexto de sessão — usa fallback */
-  }
-  return fallback?.trim() || null;
-}
+import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access";
+import {
+  cadastrosAuditActorLabel,
+  cadastrosAuditPrincipalFromSession,
+} from "@/lib/cadastros/cadastros-audit-principal";
 
 /**
  * Movimentação de estoque (livro-razão). Toda entrada/ajuste:
@@ -70,11 +58,19 @@ export async function registrarEntradaEstoque(
     documento?: string;
     fornecedor?: string;
     observacao?: string;
+    /** Aceito no contrato público; o ator oficial vem da sessão. */
     usuario?: string;
   }
 ): Promise<EntradaEstoqueResult> {
-  const sid = (storeId ?? "").trim();
-  if (!sid) return { ok: false, reason: "Loja não selecionada" };
+  let sid: string;
+  let usuario: string | null;
+  try {
+    const gate = await requireCadastrosActionAccess(storeId, "shared");
+    sid = gate.storeId;
+    usuario = cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session)) || null;
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
+  }
   if (!input.produtoId?.trim()) return { ok: false, reason: "Produto inválido" };
 
   const qtd = Math.trunc(Number(input.quantidade));
@@ -83,8 +79,6 @@ export async function registrarEntradaEstoque(
   }
   const custoUnit = Math.max(0, Number(input.custoUnitario ?? 0));
   if (!Number.isFinite(custoUnit)) return { ok: false, reason: "Custo unitário inválido" };
-
-  const usuario = await resolverUsuario(input.usuario);
 
   try {
     const out = await prisma.$transaction(async (tx) => {
@@ -161,11 +155,19 @@ export async function registrarAjusteEstoque(
     novoSaldo: number;
     motivo: string;
     observacao?: string;
+    /** Aceito no contrato público; o ator oficial vem da sessão. */
     usuario?: string;
   }
 ): Promise<EntradaEstoqueResult> {
-  const sid = (storeId ?? "").trim();
-  if (!sid) return { ok: false, reason: "Loja não selecionada" };
+  let sid: string;
+  let usuario: string | null;
+  try {
+    const gate = await requireCadastrosActionAccess(storeId, "shared");
+    sid = gate.storeId;
+    usuario = cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session)) || null;
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
+  }
   if (!input.produtoId?.trim()) return { ok: false, reason: "Produto inválido" };
   if (!input.motivo?.trim()) return { ok: false, reason: "Motivo do ajuste é obrigatório" };
 
@@ -173,8 +175,6 @@ export async function registrarAjusteEstoque(
   if (!Number.isFinite(novoSaldo) || novoSaldo < 0) {
     return { ok: false, reason: "Novo saldo deve ser um inteiro >= 0" };
   }
-
-  const usuario = await resolverUsuario(input.usuario);
 
   try {
     const out = await prisma.$transaction(async (tx) => {
@@ -238,17 +238,7 @@ export type EstoqueResumo = {
 
 /** KPIs de estoque da loja: valor a custo, valor a venda, unidades e cobertura de SKUs. */
 export async function getEstoqueResumo(storeId: string): Promise<EstoqueResumo> {
-  const sid = (storeId ?? "").trim();
-  const vazio: EstoqueResumo = {
-    totalSkus: 0,
-    skusComEstoque: 0,
-    skusSemEstoque: 0,
-    totalUnidades: 0,
-    valorCusto: 0,
-    valorVenda: 0,
-    margemPotencial: 0,
-  };
-  if (!sid) return vazio;
+  const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
 
   // Produto.stock × precoCusto/price não é expressável em aggregate do Prisma → soma em JS.
   const rows = await prisma.produto.findMany({
@@ -286,8 +276,7 @@ export async function listMovimentacoesEstoque(
   storeId: string,
   opts?: { produtoId?: string; limit?: number }
 ): Promise<MovimentacaoEstoqueDTO[]> {
-  const sid = (storeId ?? "").trim();
-  if (!sid) return [];
+  const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
   const limit = Math.min(Math.max(1, opts?.limit ?? 50), 500);
 
   const rows = await prisma.movimentacaoEstoque.findMany({
@@ -435,8 +424,7 @@ export async function getAuditoriaEstoque(
   storeId: string,
   filtro?: AuditoriaEstoqueFiltro
 ): Promise<AuditoriaEstoqueData> {
-  const sid = (storeId ?? "").trim();
-  if (!sid) return vazioAuditoria();
+  const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
 
   const limit = Math.min(Math.max(1, filtro?.limit ?? 300), 1000);
   const tipoEfetivo = filtro?.somenteAjustes ? "ajuste" : filtro?.tipo?.trim() || undefined;
