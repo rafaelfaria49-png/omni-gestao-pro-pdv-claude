@@ -6,7 +6,8 @@
  *
  * Arquitetura atual (Writer V2 / quarentena):
  * - auto-retry e reenvio passam por `persistPendingSale` (não por `fetch(vendaPersistUrl)` direto);
- * - conflito vira quarentena e só sai por `recoverQuarantinedSale`;
+ * - conflito vira quarentena e só sai com evidência server-side: recovery administrado
+ *   (`recoverQuarantinedSale`/lote) ou reconciliação automática pela rota própria;
  * - o ocupante remoto não é sobrescrito nem troca de número automaticamente.
  */
 import { readFileSync } from "node:fs"
@@ -156,5 +157,29 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
     expect(archive).toContain("disabled={!individualRecoveryEnabled}")
     expect(archive).toContain("openRecoverDialog")
     expect(archive).toMatch(/if \(!canStartIndividualQuarantineRecovery\(writerEnabled\)\) return/)
+  })
+
+  it("reconciliação automática usa a rota própria — nunca o reenvio comum", () => {
+    const auto = between(
+      store,
+      "const autoReconcileQuarantinedSales = useCallback",
+      "const discardLocalPendingSale = useCallback",
+    )
+    expect(auto).toContain("quarantineAutoReconcileUrl")
+    expect(auto).toContain("selectAutoReconcileCandidates")
+    expect(auto).toContain("persistedClientSaleIds(storageKey)")
+    expect(auto).toContain("deriveLegacySaleClientSaleId")
+    expect(auto).toContain("buildRecoveryConfirmations")
+    expect(auto).not.toContain("persistPendingSale(")
+    expect(auto).not.toContain("vendaPersistV2Url")
+    expect(auto).not.toContain("generateClientSaleId")
+    // Roda no bootstrap e no ciclo de wake (online/foco/30s), ao lado dos demais flushes.
+    expect(store.match(/flushPendingCaixaOperations\(\)\s+void autoReconcileQuarantinedSales\(\)/g)).toHaveLength(2)
+  })
+
+  it("verificação em lote nunca descarta venda ausente no servidor", () => {
+    expect(bulk).not.toContain("discardedIds")
+    expect(bulk).toMatch(/res\.status === 404\)\s*\{[\s\S]*kept \+= 1/)
+    expect(archive).not.toContain("Não existe → descarta apenas o registro local.")
   })
 })

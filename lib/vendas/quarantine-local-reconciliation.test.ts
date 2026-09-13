@@ -8,6 +8,9 @@ import {
   buildRecoveryConfirmations,
   chunk,
   isQuarantinedLocalSale,
+  quarantineReviewKey,
+  selectAutoReconcileCandidates,
+  summarizeLocalPendingSales,
   summarizePlanItems,
   summarizeRecoveryResults,
   type LocalSaleShape,
@@ -358,5 +361,107 @@ describe("estado final da venda recuperada", () => {
     )
     expect(reconciled).toBe(0)
     expect(classifyLocalSaleSync(next[0])).toBe("LOCAL_QUARANTINED")
+  })
+})
+
+describe("reconciliação automática — candidatas", () => {
+  it("só envia venda preservada cuja chave já está gravada no armazenamento local", () => {
+    const gravada = localSale({ clientSaleId: "cs_attempt_111111" })
+    const recemCunhada = localSale({ id: "VDA-2026-0616", clientSaleId: "cs_attempt_222222" })
+    const semChave = localSale({ id: "VDA-2026-0617", clientSaleId: undefined })
+    const comum = localSale({
+      id: "VDA-2026-0618",
+      clientSaleId: "cs_attempt_333333",
+      syncBlockedCode: "CAIXA_ORIGINAL_FECHADO",
+    })
+    const candidates = selectAutoReconcileCandidates({
+      sales: [gravada, recemCunhada, semChave, comum],
+      isQuarantined: isQuarantinedLocalSale,
+      persistedClientSaleIds: new Set(["cs_attempt_111111", "cs_attempt_333333"]),
+      holdUntil: new Map(),
+      now: 1_000,
+    })
+    expect(candidates).toEqual([gravada])
+  })
+
+  it("respeita a espera depois de uma resposta sem reconciliação", () => {
+    const sale = localSale()
+    const input = {
+      sales: [sale],
+      isQuarantined: isQuarantinedLocalSale,
+      persistedClientSaleIds: new Set(["cs_attempt_111111"]),
+      holdUntil: new Map([["cs_attempt_111111", 5_000]]),
+    }
+    expect(selectAutoReconcileCandidates({ ...input, now: 4_999 })).toEqual([])
+    expect(selectAutoReconcileCandidates({ ...input, now: 5_000 })).toEqual([sale])
+  })
+})
+
+describe("pendências locais para a UI", () => {
+  it("separa pendência comum, preservada em sincronização automática e preservada em revisão", () => {
+    const summary = summarizeLocalPendingSales(
+      [
+        localSale({ clientSaleId: "cs_attempt_111111" }),
+        localSale({ id: "VDA-2026-0616", clientSaleId: "cs_attempt_222222" }),
+        localSale({ id: "VDA-2026-0617", clientSaleId: undefined, syncBlockedCode: "CAIXA_ORIGINAL_FECHADO" }),
+        localSale({ id: "VDA-2026-0618", syncPending: false, syncBlockedCode: undefined }),
+      ],
+      new Set(["cs_attempt_222222"]),
+    )
+    expect(summary).toEqual({ pending: 3, retryable: 1, autoSync: 1, review: 1 })
+  })
+
+  it("chave de revisão usa a identidade técnica e cai no número quando ainda não há", () => {
+    expect(quarantineReviewKey({ id: "VDA-2026-0615", clientSaleId: "cs_attempt_111111" })).toBe(
+      "cs_attempt_111111",
+    )
+    expect(quarantineReviewKey({ id: "VDA-2026-0615" })).toBe("VDA-2026-0615")
+  })
+
+  it("o contador cai para zero depois que as 12 preservadas são reconciliadas", () => {
+    const preservadas = Array.from({ length: 12 }, (_, i) =>
+      localSale({
+        id: `VDA-2026-${String(400 + i).padStart(4, "0")}`,
+        clientSaleId: `cs_attempt_${String(i).padStart(6, "0")}`,
+      }),
+    )
+    expect(summarizeLocalPendingSales(preservadas)).toMatchObject({ pending: 12, autoSync: 12, review: 0 })
+
+    const { sales: next, reconciled } = applyRecoveryConfirmations(
+      preservadas,
+      buildRecoveryConfirmations(
+        preservadas.map((sale, i) =>
+          result({
+            conflictingPedidoId: sale.id,
+            clientSaleId: sale.clientSaleId ?? null,
+            // Parte já existia no servidor, parte foi criada agora — as duas reconciliam.
+            status: i % 3 === 0 ? "ALREADY_RECOVERED" : "RECOVERED",
+            venda: { id: `venda-${i}`, pedidoId: `VDA-L02-2026-${String(700 + i).padStart(6, "0")}` },
+          }),
+        ),
+      ),
+    )
+
+    expect(reconciled).toBe(12)
+    expect(summarizeLocalPendingSales(next)).toEqual({ pending: 0, retryable: 0, autoSync: 0, review: 0 })
+    expect(next.every((sale) => classifyLocalSaleSync(sale) === "REMOTE_CONFIRMED")).toBe(true)
+  })
+
+  it("venda ainda bloqueada continua contada — o contador só reflete pendência real", () => {
+    const a = localSale({ clientSaleId: "cs_attempt_111111" })
+    const b = localSale({ id: "VDA-2026-0616", clientSaleId: "cs_attempt_222222" })
+    const { sales: next } = applyRecoveryConfirmations(
+      [a, b],
+      buildRecoveryConfirmations([
+        result({ clientSaleId: "cs_attempt_111111" }),
+        result({ clientSaleId: "cs_attempt_222222", status: "BLOCKED", venda: null }),
+      ]),
+    )
+    expect(summarizeLocalPendingSales(next, new Set(["cs_attempt_222222"]))).toEqual({
+      pending: 1,
+      retryable: 0,
+      autoSync: 0,
+      review: 1,
+    })
   })
 })

@@ -70,6 +70,7 @@ export async function persistSaleV2(input: PersistSaleV2Input): Promise<UpsertVe
     enforceStock: options?.enforceStock ?? true,
     requireCaixaSession: options?.requireCaixaSession ?? true,
     allowClosedOriginalSession: options?.allowClosedOriginalSession === true,
+    ...(options?.historicalRecovery === true ? { historicalRecovery: true } : {}),
     v2: {
       clientSaleId,
       allocate: (tx) => allocateSaleNumberForWriter(tx, storeId),

@@ -101,6 +101,14 @@ export function quarantineRecoveryBatchUrl(lojaId: string): string {
   return `/api/ops/vendas/quarantine-recovery/batch?storeId=${encodeURIComponent(lojaId)}`
 }
 
+/**
+ * Reconciliação AUTOMÁTICA das vendas preservadas no PDV — sem operador, com a mesma
+ * permissão de registrar venda. Idempotente por `(storeId, clientSaleId)`.
+ */
+export function quarantineAutoReconcileUrl(lojaId: string): string {
+  return `/api/ops/vendas/quarantine-recovery/auto?storeId=${encodeURIComponent(lojaId)}`
+}
+
 export type ConfirmedVendaView = {
   id: string
   storeId: string

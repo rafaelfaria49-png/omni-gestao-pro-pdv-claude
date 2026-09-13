@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
   ensureConnected: vi.fn(async () => undefined),
   requireAdmin: vi.fn(),
   canAccessStore: vi.fn(() => true),
+  findMany: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -26,6 +27,7 @@ vi.mock("@/lib/prisma", () => ({
     venda: {
       findFirst: h.findFirst,
       findUnique: h.findUnique,
+      findMany: h.findMany,
       update: h.vendaUpdate,
       updateMany: h.vendaUpdateMany,
       delete: h.vendaDelete,
@@ -137,6 +139,7 @@ beforeEach(() => {
   h.requireAdmin.mockResolvedValue({ ok: true, session: { user: { id: "admin-1" } } })
   h.canAccessStore.mockReturnValue(true)
   h.findFirst.mockResolvedValue(null)
+  h.findMany.mockResolvedValue([])
   h.findUnique.mockImplementation(async ({ where }: { where: { pedidoId: string } }) =>
     occupantFor(where.pedidoId),
   )
@@ -560,5 +563,57 @@ describe("POST /api/ops/vendas/quarantine-recovery/batch", () => {
     )
     expect(res.status).toBe(403)
     expect(h.persist).not.toHaveBeenCalled()
+  })
+
+  // ── Mesma venda já gravada sob outra identidade técnica ──────────────────
+
+  it("ocupante que é a PRÓPRIA venda (mesmo instante e fatos) só reconcilia — não cria duplicata", async () => {
+    const mesmaVenda = {
+      id: "venda-original",
+      storeId: STORE,
+      pedidoId: "VDA-2026-0615",
+      clientSaleId: null,
+      payload: { ...candidate(), clientSaleId: undefined, syncBlockedCode: undefined },
+      total: 18,
+      at: new Date("2026-06-15T18:00:00.000Z"),
+      clienteNome: "Consumidor",
+      clienteId: null,
+      terminalId: null,
+      status: "concluida",
+    }
+    h.findUnique.mockResolvedValue(mesmaVenda)
+    h.findMany.mockResolvedValue([mesmaVenda])
+    h.findFirst.mockImplementation(async ({ where }: { where: { id?: string } }) =>
+      where.id === "venda-original" ? mesmaVenda : null,
+    )
+
+    const res = await POST(req({ motivo: "recuperacao administrada", candidates: [candidate()] }))
+    const json = await res.json()
+    expect(json.summary).toMatchObject({ total: 1, alreadyRecovered: 1, recovered: 0 })
+    expect(json.results[0]).toMatchObject({
+      status: "ALREADY_RECOVERED",
+      replayed: true,
+      venda: { id: "venda-original", pedidoId: "VDA-2026-0615" },
+    })
+    expect(h.persist).not.toHaveBeenCalled()
+    expectOccupantUntouched()
+  })
+
+  it("venda no mesmo instante com dados diferentes fica para revisão — não cria nem reconcilia", async () => {
+    const outra = occupantFor("VDA-2026-0999")
+    h.findMany.mockResolvedValue([
+      {
+        ...outra,
+        id: "venda-mesmo-instante",
+        at: new Date("2026-06-15T18:00:00.000Z"),
+        payload: { ...outra.payload, at: "2026-06-15T18:00:00.000Z" },
+      },
+    ])
+    const res = await POST(req({ motivo: "recuperacao administrada", candidates: [candidate()] }))
+    const json = await res.json()
+    expect(json.results[0]).toMatchObject({ status: "BLOCKED", code: "AMBIGUOUS_EXISTING_SALE" })
+    expect(json.results[0].venda).toBeNull()
+    expect(h.persist).not.toHaveBeenCalled()
+    expectOccupantUntouched()
   })
 })

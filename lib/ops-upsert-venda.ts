@@ -328,6 +328,14 @@ export type UpsertVendaOptions = {
    */
   allowClosedOriginalSession?: boolean
   /**
+   * Recuperação HISTÓRICA de venda preservada no cliente (quarentena) — nunca o PDV ao
+   * vivo. Um AJUSTE absoluto de saldo do produto (`MovimentacaoEstoque.tipo = "ajuste"`:
+   * contagem/inventário) posterior a `sale.at` já refletiu a saída física, então a baixa
+   * desse produto é pulada (baixar de novo contaria a mesma saída duas vezes) e o produto
+   * fica registrado em `payload.recovery.stockAbsorbedByLaterAdjustment`.
+   */
+  historicalRecovery?: boolean
+  /**
    * Fluxo V2: o caller traz `clientSaleId` e um callback que aloca o número
    * comercial DENTRO desta transação. Este módulo NÃO importa o allocator.
    */
@@ -1021,6 +1029,10 @@ export async function upsertVendaInTransaction(
     resolvedByDbId.set(resolved.dbId, resolved)
   }
 
+  // Recuperação histórica: produtos cuja saída um ajuste de saldo posterior já refletiu.
+  const historicalRecovery = options?.historicalRecovery === true
+  const stockAbsorbedByLaterAdjustment: Array<{ produtoId: string; nome: string; quantidade: number }> = []
+
   for (const [produtoId, qty] of qtyByProdutoId) {
     const resolved = resolvedByDbId.get(produtoId)
     if (!resolved) continue
@@ -1031,6 +1043,19 @@ export async function upsertVendaInTransaction(
       select: { id: true },
     })
     if (jaExiste) continue
+
+    // Venda histórica: um AJUSTE absoluto de saldo (contagem/inventário) DEPOIS da venda
+    // já refletiu esta saída física — baixar agora seria a segunda baixa da mesma venda.
+    if (historicalRecovery) {
+      const ajustePosterior = await tx.movimentacaoEstoque.findFirst({
+        where: { storeId: lojaId, produtoId, tipo: "ajuste", createdAt: { gt: at } },
+        select: { id: true },
+      })
+      if (ajustePosterior) {
+        stockAbsorbedByLaterAdjustment.push({ produtoId, nome: resolved.name, quantidade: qty })
+        continue
+      }
+    }
 
     // Re-lê stock atual dentro da transação para estoqueAntes preciso
     const produtoAtual = await tx.produto.findUnique({
@@ -1081,6 +1106,22 @@ export async function upsertVendaInTransaction(
         documento: pedidoId,
         motivo: pedidoId,
         usuario: operador,
+        // A baixa acontece no saldo AGORA (a conciliação de inventário lê `createdAt` como
+        // o instante da mudança de saldo); a data real da venda histórica fica registrada aqui.
+        ...(historicalRecovery ? { observacao: `Recuperação histórica — venda de ${at.toISOString()}` } : {}),
+      },
+    })
+  }
+
+  if (stockAbsorbedByLaterAdjustment.length > 0) {
+    const recovery = asRecord((salePayloadForStorage as { recovery?: unknown }).recovery)
+    await tx.venda.update({
+      where: { id: v.id },
+      data: {
+        payload: asJsonPayload({
+          ...salePayloadForStorage,
+          recovery: { ...recovery, stockAbsorbedByLaterAdjustment },
+        } as SalePayload),
       },
     })
   }

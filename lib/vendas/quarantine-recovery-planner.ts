@@ -17,9 +17,10 @@
  * `BLOCKED`, nunca `READY`. O objetivo é "0 quarentenas legítimas recuperáveis
  * pendentes", nunca "0 badges".
  *
- * O modo `historical-recovery` é a exceção ADMIN-only: vendas históricas reais
- * que já aconteceram não podem ser apagadas pelo estoque/catálogo/caixa de hoje.
- * Só o recovery administrativo usa esse modo — o PDV normal continua fail-closed.
+ * O modo `historical-recovery` é a exceção do recovery: vendas históricas reais que já
+ * aconteceram não podem ser apagadas pelo estoque/catálogo/caixa de hoje. Usam esse modo
+ * o recovery administrativo e a reconciliação automática (`auto-reconcile`) das vendas
+ * preservadas no PDV — a venda normal ao vivo continua fail-closed.
  */
 
 import { valorAVistaVenda } from "@/lib/financeiro/correcao-pagamento-plan"
@@ -56,6 +57,12 @@ export const QUARANTINE_RECOVERY_CLASS = Object.freeze({
   OCCUPANT_NOT_FOUND: "OCCUPANT_NOT_FOUND",
   /** Fatos centrais ausentes/corrompidos — não persistir às cegas. */
   INVALID_PAYLOAD: "INVALID_PAYLOAD",
+  /**
+   * Há venda DESTA loja gravada no mesmo instante (`at`) com fatos diferentes — pode ser
+   * a própria venda, alterada depois no servidor. Sem prova de identidade, criar outra
+   * arriscaria duplicar e reconciliar arriscaria confirmar a venda errada.
+   */
+  AMBIGUOUS_EXISTING_SALE: "AMBIGUOUS_EXISTING_SALE",
   /** A cópia local declara outra loja. */
   STORE_MISMATCH: "STORE_MISMATCH",
   /** Linha de produto físico que não casa com nenhum `Produto` da loja. */
@@ -109,6 +116,12 @@ export const QUARANTINE_CLASSIFY_MODE = Object.freeze({
    * venda. Nunca usado pelo PDV normal.
    */
   HISTORICAL_RECOVERY: "historical-recovery",
+  /**
+   * Reconciliação AUTOMÁTICA do PDV, sem operador: as mesmas regras históricas, e o
+   * número antigo livre (sem ocupante) deixa de bloquear — o servidor aloca número novo
+   * e a idempotência por `(storeId, clientSaleId)` impede uma segunda criação.
+   */
+  AUTO_RECONCILE: "auto-reconcile",
 } as const)
 
 export type QuarantineClassifyMode =
@@ -130,7 +143,8 @@ export function historicalRecoveryCaixaPolicy(
 
 /**
  * Opções de persistência do recovery histórico. Isoladas do PDV ao vivo:
- * `enforceStock` permanece `true` no writer V2 padrão.
+ * `enforceStock` permanece `true` no writer V2 padrão, e `historicalRecovery` (saída já
+ * absorvida por ajuste de saldo posterior não é baixada de novo) só é ligado aqui.
  */
 export function historicalRecoveryPersistOptions(input: {
   originalSessionStatus: OriginalSessionStatus
@@ -139,6 +153,7 @@ export function historicalRecoveryPersistOptions(input: {
   enforceStock: false
   requireCaixaSession: boolean
   allowClosedOriginalSession: boolean
+  historicalRecovery: true
 } {
   const hasOriginalSession =
     input.originalSessionStatus === "ABERTA" || input.originalSessionStatus === "FECHADA"
@@ -147,6 +162,7 @@ export function historicalRecoveryPersistOptions(input: {
     requireCaixaSession: hasOriginalSession,
     allowClosedOriginalSession:
       input.allowClosedOriginalSession === true && input.originalSessionStatus === "FECHADA",
+    historicalRecovery: true,
   }
 }
 
@@ -217,6 +233,11 @@ export type QuarantineServerFacts = {
   /** `inventoryId` de linhas FÍSICAS sem `Produto` correspondente. */
   readonly unresolvedInventoryIds?: readonly string[]
   readonly stockShortfalls?: readonly QuarantineStockShortfall[]
+  /**
+   * Há venda DESTA loja no mesmo instante (`at`) cujos fatos não batem com a cópia local
+   * (ou mais de uma que bate). Sem prova de identidade, nem criar nem reconciliar.
+   */
+  readonly sameInstantConflict?: boolean
 }
 
 export type QuarantineRecoveryPlanItem = {
@@ -281,8 +302,9 @@ function breakdown(value: unknown): Partial<PaymentBreakdownFull> | null {
  *  3. identidade técnica;
  *  4. loja;
  *  5. integridade dos fatos;
- *  6. conflito realmente confirmado (ocupante);
- *  7. produto/estoque (omitidos no modo `historical-recovery`);
+ *  5b. mesma venda no mesmo instante com fatos diferentes (ambígua);
+ *  6. conflito realmente confirmado (ocupante — dispensado no automático);
+ *  7. produto/estoque (omitidos nos modos `historical-recovery`/`auto-reconcile`);
  *  8. caixa (última, porque é a única que pode virar "confirmável").
  *
  * A precedência de 6 sobre 8 espelha `upsertVendaInTransaction`, onde o guard de
@@ -293,11 +315,15 @@ export function classifyQuarantineCandidate(input: {
   storeId: string
   candidate: QuarantineCandidate
   facts: QuarantineServerFacts
-  /** Default: regras do PDV ao vivo. O recovery administrativo passa `historical-recovery`. */
+  /**
+   * Default: regras do PDV ao vivo. O recovery administrativo passa `historical-recovery`;
+   * a reconciliação automática, `auto-reconcile`.
+   */
   mode?: QuarantineClassifyMode
 }): QuarantineRecoveryPlanItem {
   const { storeId, candidate, facts } = input
-  const historical = input.mode === QUARANTINE_CLASSIFY_MODE.HISTORICAL_RECOVERY
+  const auto = input.mode === QUARANTINE_CLASSIFY_MODE.AUTO_RECONCILE
+  const historical = auto || input.mode === QUARANTINE_CLASSIFY_MODE.HISTORICAL_RECOVERY
 
   const conflictingPedidoId = text(candidate.id) ?? ""
   const parsedClientSaleId = parseClientSaleId(candidate.clientSaleId)
@@ -331,14 +357,15 @@ export function classifyQuarantineCandidate(input: {
     reason,
   })
 
-  // 1. Idempotência antes de tudo: se a venda JÁ existe no servidor sob a mesma
-  //    identidade técnica, nada há a criar — nem mesmo se o payload local estiver
-  //    ruim, a sessão fechada ou o código de quarentena já limpo. Só o estado local
-  //    precisa ser reconciliado. Um caso idempotente nunca é relatado como erro.
+  // 1. Idempotência antes de tudo: se a venda JÁ existe no servidor — sob a mesma
+  //    identidade técnica, ou a mesma venda (mesmo instante e fatos) sob outra —, nada
+  //    há a criar, nem mesmo se o payload local estiver ruim, a sessão fechada ou o
+  //    código de quarentena já limpo. Só o estado local precisa ser reconciliado. Um
+  //    caso idempotente nunca é relatado como erro.
   if (text(facts.alreadyRecoveredPedidoId)) {
     return decide(
       QUARANTINE_RECOVERY_CLASS.ALREADY_RECOVERED,
-      "Já existe venda no servidor com esta identidade técnica. Nada será criado.",
+      "Esta venda já existe no servidor. Nada será criado — só a cópia local é reconciliada.",
     )
   }
 
@@ -382,9 +409,20 @@ export function classifyQuarantineCandidate(input: {
     )
   }
 
+  // 5b. Mesma loja, mesmo instante, fatos diferentes: pode ser a própria venda gravada
+  //     e depois alterada no servidor. Sem prova de identidade, nunca criar outra.
+  if (facts.sameInstantConflict === true) {
+    return decide(
+      QUARANTINE_RECOVERY_CLASS.AMBIGUOUS_EXISTING_SALE,
+      "Há venda no servidor no mesmo horário com dados diferentes. Precisa de revisão do administrador.",
+    )
+  }
+
   // 6. O conflito é real? Sem ocupante não há colisão: renumerar seria inventar
-  //    um número novo sem motivo. O caminho correto é o reenvio normal.
-  if (!facts.occupantExists) {
+  //    um número novo sem motivo. O caminho correto é o reenvio normal. Na
+  //    reconciliação automática não há reenvio normal para venda preservada e o número
+  //    é sempre do servidor: seguir é seguro (idempotência por `clientSaleId`).
+  if (!facts.occupantExists && !auto) {
     return decide(
       QUARANTINE_RECOVERY_CLASS.OCCUPANT_NOT_FOUND,
       "Nenhuma venda ocupa o número antigo. Use o reenvio normal, não a recuperação.",

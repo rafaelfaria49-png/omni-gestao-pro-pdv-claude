@@ -75,6 +75,7 @@ import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { WorkspaceCorrecaoVenda } from "./workspace-correcao-venda"
 import { QuarentenaRecoveryDialog } from "./quarentena-recovery-dialog"
+import { quarantineReviewKey } from "@/lib/vendas/quarantine-local-reconciliation"
 import { useToast } from "@/hooks/use-toast"
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { useOperationsStore } from "@/lib/operations-store"
@@ -338,6 +339,7 @@ export function VendasArquivoGeral() {
     bulkDiscardLocalPendingSales,
     recoverQuarantinedSale,
     probeSaleWriterCapability,
+    quarantineReviewKeys,
   } = useOperationsStore()
   const { toast } = useToast()
   
@@ -540,7 +542,7 @@ export function VendasArquivoGeral() {
       vendas.map((v) => v.clientSaleId).filter((id): id is string => Boolean(id)),
     )
 
-    // Ids pendentes SEM filtro: alimentam o botão "Limpar pendentes locais" e os
+    // Ids pendentes SEM filtro: alimentam o botão "Verificar pendentes locais" e os
     // guards de ação mesmo quando a linha está oculta por algum filtro ativo.
     const pendingSync = new Set(
       opsSales.filter((s) => s.id && s.syncPending === true).map((s) => s.id),
@@ -610,6 +612,22 @@ export function VendasArquivoGeral() {
       conflitoIdentidadeIds: conflitosIdentidade,
     }
   }, [vendas, opsSales, fromDate, toDate, busca, statusFiltro, pagamentoFiltro, terminalFiltro, operadorFiltro])
+
+  // Vendas preservadas que a reconciliação automática devolveu para revisão — as únicas
+  // que pedem o administrador. As demais saem sozinhas assim que o servidor confirma.
+  const quarentenaRevisaoCount = useMemo(
+    () =>
+      opsSales.filter(
+        (s) =>
+          s.id &&
+          s.syncPending === true &&
+          isSaleIdentityConflictCode(s.syncBlockedCode) &&
+          quarantineReviewKeys.has(quarantineReviewKey(s)),
+      ).length,
+    [opsSales, quarantineReviewKeys],
+  )
+  // Pendências comuns que a verificação em lote consegue conferir no servidor.
+  const pendentesVerificaveis = pendingSyncIds.size - conflitoIdentidadeIds.size
 
   const [writerEnabled, setWriterEnabled] = useState(false)
   useEffect(() => {
@@ -816,20 +834,20 @@ export function VendasArquivoGeral() {
     setBulkLimparOpen(false)
     if (!res.ok) {
       toast({
-        title: "Limpeza não concluída",
+        title: "Verificação não concluída",
         description: "Tente novamente em instantes.",
         variant: "destructive",
       })
       return
     }
     const partes = [
-      `${res.discarded} descartada${res.discarded !== 1 ? "s" : ""}`,
-      `${res.reconciled} sincronizada${res.reconciled !== 1 ? "s" : ""}`,
+      `${res.reconciled} já no servidor`,
+      `${res.kept} aguardando envio automático`,
     ]
-    if (res.conflicts > 0) partes.push(`${res.conflicts} conflito${res.conflicts !== 1 ? "s" : ""}`)
+    if (res.conflicts > 0) partes.push(`${res.conflicts} não verificada${res.conflicts !== 1 ? "s" : ""}`)
     toast({
-      title: `Limpeza local concluída (${res.total} pendentes)`,
-      description: `${partes.join(" · ")}. Apenas estado local foi alterado.`,
+      title: `Verificação concluída (${res.total} pendentes)`,
+      description: `${partes.join(" · ")}. Nenhuma venda foi descartada.`,
     })
     if (res.reconciled > 0) {
       void fetchRemoteSales()
@@ -1282,7 +1300,7 @@ export function VendasArquivoGeral() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {conflitoIdentidadeIds.size > 0 && (
+          {quarentenaRevisaoCount > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -1297,16 +1315,16 @@ export function VendasArquivoGeral() {
                     variant="outline"
                     className="border-destructive/30 bg-destructive/15 text-[9px] px-1 py-0 text-destructive"
                   >
-                    {conflitoIdentidadeIds.size}
+                    {quarentenaRevisaoCount}
                   </Badge>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                Analisa e recupera vendas reais cujo número colidiu — nenhuma venda existente é alterada
+                Vendas que a sincronização automática não resolveu com segurança — nenhuma venda existente é alterada
               </TooltipContent>
             </Tooltip>
           )}
-          {pendingSyncIds.size > 0 && (
+          {pendentesVerificaveis > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -1317,13 +1335,15 @@ export function VendasArquivoGeral() {
                   disabled={bulkLimparLoading}
                 >
                   <ListChecks className="h-4 w-4" />
-                  Limpar pendentes locais
+                  Verificar pendentes locais
                   <Badge variant="outline" className="border-warning/30 bg-warning/15 text-[9px] px-1 py-0 text-warning">
-                    {pendingSyncIds.size}
+                    {pendentesVerificaveis}
                   </Badge>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Verifica no servidor e descarta apenas as órfãs locais (não cancela vendas reais)</TooltipContent>
+              <TooltipContent>
+                Confere no servidor e marca como sincronizadas as vendas que já estão lá — venda que ainda não chegou nunca é descartada
+              </TooltipContent>
             </Tooltip>
           )}
           <Button
@@ -2919,14 +2939,14 @@ export function VendasArquivoGeral() {
               </span>
               <div className="min-w-0 space-y-1">
                 <AlertDialogTitle className="text-foreground text-left">
-                  Limpar pendentes locais ({pendingSyncIds.size})
+                  Verificar pendentes locais ({pendentesVerificaveis})
                 </AlertDialogTitle>
                 <AlertDialogDescription className="text-muted-foreground text-left">
-                  Ação administrativa. Para CADA venda pendente, o sistema consulta o servidor:
-                  <span className="block mt-1">· Já existe no banco → reconcilia como sincronizada (NÃO descarta).</span>
-                  <span className="block">· Não existe → descarta apenas o registro local.</span>
-                  <span className="block">· Conflito técnico de identificação → mantém em quarentena (NÃO descarta).</span>
-                  <span className="block">· Erro na consulta → contabiliza conflito e mantém pendente.</span>
+                  Para CADA venda pendente, o sistema consulta o servidor:
+                  <span className="block mt-1">· Já existe no banco → marca como sincronizada.</span>
+                  <span className="block">· Ainda não chegou → continua guardada e o envio automático segue tentando (nunca é descartada).</span>
+                  <span className="block">· Venda preservada → a sincronização automática cuida dela.</span>
+                  <span className="block">· Erro na consulta → continua pendente.</span>
                 </AlertDialogDescription>
               </div>
             </div>
@@ -2934,7 +2954,7 @@ export function VendasArquivoGeral() {
           <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground flex items-center gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0" />
-              Esta é uma limpeza LOCAL — não cancela vendas fiscais nem altera caixa/estoque/financeiro.
+              Só confere o estado deste dispositivo — não cancela vendas nem altera caixa/estoque/financeiro.
             </p>
             <p>Vendas confirmadas no servidor permanecem intactas no histórico.</p>
           </div>
@@ -2944,14 +2964,14 @@ export function VendasArquivoGeral() {
             </AlertDialogCancel>
             <AlertDialogAction
               className="bg-warning text-warning-foreground hover:bg-warning/90 gap-2"
-              disabled={bulkLimparLoading || pendingSyncIds.size === 0}
+              disabled={bulkLimparLoading || pendentesVerificaveis === 0}
               onClick={(e) => {
                 e.preventDefault()
                 void handleConfirmBulkLimpar()
               }}
             >
               {bulkLimparLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {bulkLimparLoading ? "Verificando no servidor…" : "Limpar pendentes locais"}
+              {bulkLimparLoading ? "Verificando no servidor…" : "Verificar pendentes"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
