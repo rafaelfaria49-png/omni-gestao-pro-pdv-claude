@@ -55,6 +55,8 @@ import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-recebe
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -211,6 +213,8 @@ export function PdvSupermercado({
   const activeSuggestionIndexRef = useRef(-1)
 
   const [searchTerm, setSearchTerm] = useState("")
+  /** Aviso transitório de código não encontrado (um único aviso vivo). */
+  const scanFeedback = usePdvScanNotFoundFeedback()
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
   const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -283,6 +287,15 @@ export function PdvSupermercado({
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
       if (isPaymentModalOpen || supervisorDialogOpen || weightDialogOpen || attrDialogOpen || accessoryProduct !== null || postSalePrintOpen) return
+      // Texto na busca: Esc limpa a busca primeiro — não remove item do carrinho.
+      if (productInputRef.current?.value.trim()) {
+        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+        e.preventDefault()
+        setSearchTerm("")
+        scanFeedback.dismiss()
+        queueMicrotask(hardFocusSearch)
+        return
+      }
       if (cart.length === 0) return
       e.preventDefault()
       setCart((prev) => prev.slice(0, -1))
@@ -290,7 +303,7 @@ export function PdvSupermercado({
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, isPaymentModalOpen, supervisorDialogOpen, weightDialogOpen, attrDialogOpen, accessoryProduct, cart.length, hardFocusSearch])
+  }, [isModoRapido, isPaymentModalOpen, supervisorDialogOpen, weightDialogOpen, attrDialogOpen, accessoryProduct, cart.length, hardFocusSearch, scanFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -537,6 +550,9 @@ export function PdvSupermercado({
         { lineId, inventoryId, name: payload.description, price, quantity, isAvulso: true, custoUnitario, codigoAvulso: payload.codigo },
       ])
       setShowItemAvulsoModal(false)
+      // Item Avulso concluído: nenhum código/busca antiga fica no campo.
+      setSearchTerm("")
+      scanFeedback.dismiss()
       if (isModoRapido) {
         setRapidoFlashLineId(lineId)
         window.setTimeout(() => setRapidoFlashLineId((h) => (h === lineId ? null : h)), 150)
@@ -544,7 +560,7 @@ export function PdvSupermercado({
       }
       queueMicrotask(hardFocusSearch)
     },
-    [hardFocusSearch, isModoRapido],
+    [hardFocusSearch, isModoRapido, scanFeedback],
   )
 
   const updateQuantity = useCallback((lineId: string, delta: number) => {
@@ -751,6 +767,8 @@ export function PdvSupermercado({
 
   const submitSearch = useCallback(
     async (keyboardPickIndex?: number) => {
+      // Novo Enter encerra na hora o aviso do bipe anterior.
+      scanFeedback.dismiss()
       if (
         keyboardPickIndex != null &&
         keyboardPickIndex >= 0 &&
@@ -802,6 +820,14 @@ export function PdvSupermercado({
 
       // Sem candidatos locais → busca autoritativa no catálogo INTEIRO da loja (snapshot defasado).
       if (candidates.length === 0) {
+        // Código: consome o campo ANTES do await — um 2º Enter (CR+LF, tecla repetida) encontra o
+        // campo vazio e não repete a busca nem duplica o item. Pesquisa manual nunca é apagada sozinha.
+        const scanLike = isPdvScanLikeQuery(lookupTerm)
+        if (scanLike) {
+          setSearchTerm("")
+          activeSuggestionIndexRef.current = -1
+          setActiveSuggestionIndex(-1)
+        }
         const remote = await lookupPdvScanRemote({ code: lookupTerm, storeId: lojaKey, setInventory })
         if (remote.kind === "single") {
           addToCart(remote.product as Product, multQty)
@@ -812,14 +838,12 @@ export function PdvSupermercado({
           return
         }
         if (remote.kind === "none" || remote.kind === "error") {
-          toast({
-            title: "Produto não encontrado",
-            description: `Produto não encontrado nesta loja para o código: ${lookupTerm}`,
-          })
+          scanFeedback.notify(lookupTerm)
           hardFocusSearch()
           return
         }
         // remote.kind === "multiple": itens injetados no estoque — operador escolhe na lista.
+        if (scanLike) setSearchTerm(rawFull)
       }
 
       toast({
@@ -828,7 +852,7 @@ export function PdvSupermercado({
       })
       hardFocusSearch()
     },
-    [addToCart, filterCatalogByTerm, filteredProducts, findProductByEan, hardFocusSearch, searchTerm, toast, lojaKey, setInventory]
+    [addToCart, filterCatalogByTerm, filteredProducts, findProductByEan, hardFocusSearch, searchTerm, toast, lojaKey, setInventory, scanFeedback]
   )
 
   // Atalhos de teclado (evitar conflitos com o navegador)
@@ -836,6 +860,20 @@ export function PdvSupermercado({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      // Esc fora de campo de texto (sem modal): limpa a busca e o aviso, foco volta à busca.
+      if (e.key === "Escape") {
+        const active = document.activeElement
+        const emCampo =
+          active instanceof HTMLInputElement ||
+          active instanceof HTMLTextAreaElement ||
+          active instanceof HTMLSelectElement
+        if (!emCampo && !document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+          setSearchTerm("")
+          scanFeedback.dismiss()
+          hardFocusSearch()
+        }
+        return
+      }
       if (
         e.key !== "F2" &&
         e.key !== "F3" &&
@@ -877,7 +915,7 @@ export function PdvSupermercado({
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado, heldSalesEnabled, customerSearchEnabled])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado, heldSalesEnabled, customerSearchEnabled, hardFocusSearch, scanFeedback])
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = useHeldSales(lojaKey, terminalIdForHold, "supermercado")
@@ -1091,6 +1129,15 @@ export function PdvSupermercado({
                         activeSuggestionIndexRef.current = next
                         return next
                       })
+                      return
+                    }
+                    // Esc limpa a busca e o aviso (o foco continua no campo).
+                    if (e.key === "Escape" && searchTerm) {
+                      e.preventDefault()
+                      setSearchTerm("")
+                      scanFeedback.dismiss()
+                      activeSuggestionIndexRef.current = -1
+                      setActiveSuggestionIndex(-1)
                       return
                     }
                     if (e.key === "Enter") {
@@ -1662,7 +1709,18 @@ export function PdvSupermercado({
 
       <ItemAvulsoModal
         open={showItemAvulsoModal}
-        onOpenChange={setShowItemAvulsoModal}
+        onOpenChange={(open) => {
+          setShowItemAvulsoModal(open)
+          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca.
+          if (!open) {
+            setSearchTerm("")
+            scanFeedback.dismiss()
+          }
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          productInputRef.current?.focus()
+        }}
         onConfirm={addItemAvulso}
         checkCodigoExistente={(c) => acharProdutoPorCodigoExato(inventory, c)}
       />

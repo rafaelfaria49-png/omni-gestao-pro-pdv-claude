@@ -53,6 +53,11 @@ interface ItemAvulsoModalProps {
    * Quando fornecida, o modal só ALERTA (não bloqueia) — a decisão é do operador.
    */
   checkCodigoExistente?: (codigo: string) => { nome: string } | null
+  /**
+   * Foco ao fechar (confirmar ou cancelar). O PDV devolve o foco ao campo de bipe aqui: o Radix
+   * restaura o foco depois da animação de saída e sobrescreveria um `focus()` feito no fechamento.
+   */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 function parseDecimal(raw: string): number {
@@ -65,7 +70,13 @@ function parseQuantity(raw: string): number {
   return Number.isFinite(v) && v >= 1 ? v : 0
 }
 
-export function ItemAvulsoModal({ open, onOpenChange, onConfirm, checkCodigoExistente }: ItemAvulsoModalProps) {
+export function ItemAvulsoModal({
+  open,
+  onOpenChange,
+  onConfirm,
+  checkCodigoExistente,
+  onCloseAutoFocus,
+}: ItemAvulsoModalProps) {
   const [description, setDescription] = useState("")
   const [unitPriceInput, setUnitPriceInput] = useState("")
   const [quantityInput, setQuantityInput] = useState("1")
@@ -126,7 +137,7 @@ export function ItemAvulsoModal({ open, onOpenChange, onConfirm, checkCodigoExis
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-card border-border">
+      <DialogContent className="max-w-md bg-card border-border" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <PlusCircle className="h-5 w-5 text-primary" />
