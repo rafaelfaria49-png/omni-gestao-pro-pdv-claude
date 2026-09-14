@@ -33,7 +33,16 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { receitaTotalDoDia, type FechamentoResumo } from "@/lib/caixa-fechamento-resumo"
+import {
+  blocoRecebimentosDasOperacoes,
+  htmlBlocoFechamento,
+  htmlBlocosFechamento,
+  montarBlocosFechamento,
+  ORIGEM_VENDA_LABEL,
+  type LinhaBloco,
+  type ResumoFechamentoPersistido,
+} from "@/lib/caixa/fechamento-blocos"
+import { aggregateRecebimentosSessao, classificarRecebimentoCaixa } from "@/lib/caixa/recebimentos-sessao"
 
 /** Soma das vendas por forma no ledger legado (sessões sem resumoFechamento premium). */
 const LEDGER_VENDAS_KEYS = [
@@ -69,6 +78,8 @@ interface CaixaOperacao {
   motivo: string
   operador: string
   at: string
+  /** Origem/forma gravadas pelo fluxo — separam contas × O.S. e formas no relatório. */
+  payload?: unknown
 }
 
 interface DevolucaoResumo {
@@ -254,59 +265,28 @@ export function CaixaHistoricoClient() {
     const payload = s.payload as Record<string, unknown> | null
     const sangrias = s.operacoes.filter((o) => o.tipo === "sangria").reduce((a, o) => a + o.valor, 0)
     const suprimentos = s.operacoes.filter((o) => o.tipo === "suprimento").reduce((a, o) => a + o.valor, 0)
-    const recebimentosCr = s.operacoes
-      .filter((o) => o.tipo === "recebimento_cr")
-      .reduce((a, o) => a + o.valor, 0)
     const totalDev = s.devolucoes.reduce((a, d) => a + d.valorTotal, 0)
 
-    // Comprovante ERP: usa o resumoFechamento (por origem + pagamento + totais) quando
-    // a sessão foi fechada já com a consolidação premium; senão cai no ledger legado.
-    const resumo = (payload?.resumoFechamento ?? null) as FechamentoResumo | null
+    // Sessão fechada com resumo (premium): os quatro blocos do fechamento — Vendas ×
+    // Recebido por origem × Recebido por forma × Gaveta (GOAL 003A). Snapshot antigo
+    // recalcula contas × O.S. pelas operações da sessão. Sem resumo (sessão legada):
+    // ledger de vendas + recebimentos lidos das operações.
+    const resumo = (payload?.resumoFechamento ?? null) as ResumoFechamentoPersistido | null
     const ledger = payload?.ledger as Record<string, number> | null
-
-    // Resumo financeiro (faturamento) — fonte única, robusta a sessões antigas.
-    const vendasProdutos = resumo ? resumo.totalLiquido : vendasDoLedger(ledger)
-    const servicosRecebidos = resumo ? resumo.recebimentosContas : recebimentosCr
-    const receitaTotalDia = receitaTotalDoDia({
-      totalLiquido: vendasProdutos,
-      recebimentosContas: servicosRecebidos,
-    })
-    const resumoFinanceiroHtml = `<hr><strong>RESUMO FINANCEIRO</strong>
-    <p>Vendas de produtos: ${fmt(vendasProdutos)}</p>
-    <p>Serviços recebidos: ${fmt(servicosRecebidos)}</p>
-    <p><strong>RECEITA TOTAL DO DIA: ${fmt(receitaTotalDia)}</strong></p>`
 
     let secaoVendas = ""
     if (resumo) {
-      const origem = resumo.porOrigem
-        .map((o) => `<p>${o.label}: ${fmt(o.valorBruto)} (${o.qtdItens} itens)</p>`)
-        .join("")
-      const pg = resumo.porPagamento
-      secaoVendas = `<hr><strong>VENDAS POR ORIGEM</strong>
-      ${origem || "<p>—</p>"}
-      <hr><strong>FORMAS DE PAGAMENTO</strong>
-      <p>Dinheiro: ${fmt(pg.dinheiro)}</p>
-      <p>Pix: ${fmt(pg.pix)}</p>
-      <p>Débito: ${fmt(pg.cartaoDebito)}</p>
-      <p>Crédito: ${fmt(pg.cartaoCredito)}</p>
-      <p>Carnê: ${fmt(pg.carne)}</p>
-      <p>A prazo: ${fmt(pg.aPrazo)}</p>
-      <p>Vale/Crédito: ${fmt(pg.creditoVale)}</p>
-      <hr><strong>CONSOLIDAÇÃO</strong>
-      <p>Vendas (qtd): ${resumo.qtdVendas}</p>
-      <p>Subtotal bruto: ${fmt(resumo.subtotalBruto)}</p>
-      <p>Descontos: -${fmt(resumo.descontos)}</p>
-      <p>Total líquido: ${fmt(resumo.totalLiquido)}</p>
-      <p>Total recebido: ${fmt(resumo.totalRecebido)}</p>
-      <p>Ticket médio: ${fmt(resumo.ticketMedio)}</p>
-      ${resumo.qtdRecebimentosContas > 0 ? `<p>Serviços recebidos: ${fmt(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas})</p>` : ""}`
-    } else if (ledger) {
-      secaoVendas = `<hr>
+      secaoVendas = htmlBlocosFechamento(montarBlocosFechamento(resumo, { operacoes: s.operacoes }))
+    } else {
+      const ledgerHtml = ledger
+        ? `<hr><strong>VENDAS DA SESSÃO (REGISTRO ANTIGO)</strong>
       <p>Dinheiro: ${fmt(ledger.vendasDinheiro ?? 0)}</p>
       <p>Pix: ${fmt(ledger.vendasPix ?? 0)}</p>
       <p>Débito: ${fmt(ledger.vendasCartaoDebito ?? 0)}</p>
       <p>Crédito: ${fmt(ledger.vendasCartaoCredito ?? 0)}</p>
       <p>Carnê: ${fmt(ledger.vendasCarne ?? 0)}</p>`
+        : ""
+      secaoVendas = `${ledgerHtml}${htmlBlocoFechamento(blocoRecebimentosDasOperacoes(s.operacoes))}`
     }
 
     const html = `<html><head><title>Fechamento de Caixa</title>
@@ -318,19 +298,14 @@ export function CaixaHistoricoClient() {
     <p>Abertura: ${fmtDt(s.abertaEm)}</p>
     <p>Fechamento: ${s.fechadaEm ? fmtDt(s.fechadaEm) : "Em aberto"}</p>
     <p>Status: ${s.status}</p>
-    ${resumoFinanceiroHtml}
-    <hr><strong>CAIXA (GAVETA)</strong>
-    <p>Saldo inicial: ${fmt(s.saldoInicial)}</p>
-    <p>Saldo final esperado: ${fmt(s.saldoFinal ?? 0)}</p>
-    ${s.saldoContado != null ? `<p>Saldo contado: ${fmt(s.saldoContado)}</p>` : ""}
-    <p>Sangrias: ${fmt(sangrias)}</p>
-    <p>Suprimentos: ${fmt(suprimentos)}</p>
-    ${recebimentosCr > 0 ? `<p>Serviços recebidos: ${fmt(recebimentosCr)}</p>` : ""}
-    <p>Devoluções: ${fmt(totalDev)}</p>
     ${secaoVendas}
-    <hr style="border-top:2px solid #000;margin-top:10px">
-    <div style="text-align:center;font-weight:700;font-size:13px">RECEITA TOTAL DO DIA</div>
-    <div style="text-align:center;font-weight:700;font-size:16px">${fmt(receitaTotalDia)}</div>
+    <hr><strong>SESSÃO</strong>
+    ${resumo ? "" : `<p>Saldo inicial: ${fmt(s.saldoInicial)}</p>
+    <p>Sangrias: ${fmt(sangrias)}</p>
+    <p>Suprimentos: ${fmt(suprimentos)}</p>`}
+    <p>Saldo final registrado (todas as formas): ${fmt(s.saldoFinal ?? 0)}</p>
+    ${s.saldoContado != null ? `<p>Dinheiro contado na gaveta: ${fmt(s.saldoContado)}</p>` : ""}
+    <p>Devoluções (informativo): ${fmt(totalDev)}</p>
     <hr style="border-top:2px solid #000">
     <div style="height:14mm" aria-hidden="true"></div>
     </body></html>`
@@ -524,26 +499,32 @@ function SessaoDetalheView({
 }) {
   const sangrias = sessao.operacoes.filter((o) => o.tipo === "sangria")
   const suprimentos = sessao.operacoes.filter((o) => o.tipo === "suprimento")
-  const recebimentosCr = sessao.operacoes.filter((o) => o.tipo === "recebimento_cr")
   const totalSangrias = sangrias.reduce((a, o) => a + o.valor, 0)
   const totalSuprimentos = suprimentos.reduce((a, o) => a + o.valor, 0)
-  const totalRecebimentosCr = recebimentosCr.reduce((a, o) => a + o.valor, 0)
   const totalDev = sessao.devolucoes.reduce((a, d) => a + d.valorTotal, 0)
   const payload = sessao.payload as Record<string, unknown> | null
   const ledger = payload?.ledger as Record<string, number> | null
-  const resumo = (payload?.resumoFechamento ?? null) as FechamentoResumo | null
+  const resumo = (payload?.resumoFechamento ?? null) as ResumoFechamentoPersistido | null
 
-  // Resumo financeiro (faturamento) — fonte única; cai no ledger para sessões antigas.
-  const vendasProdutos = resumo ? resumo.totalLiquido : vendasDoLedger(ledger)
-  const servicosRecebidos = resumo ? resumo.recebimentosContas : totalRecebimentosCr
-  const receitaTotalDia = receitaTotalDoDia({
-    totalLiquido: vendasProdutos,
-    recebimentosContas: servicosRecebidos,
-  })
+  // Contas × O.S. × estornos lidos das operações (GOAL 003A). Com resumo: blocos do
+  // fechamento; sem resumo (sessão legada): vendas do ledger + recebimentos das operações.
+  const recebimentos = aggregateRecebimentosSessao(sessao.operacoes)
+  const recebidoContasOs = Math.round((recebimentos.contas.valor + recebimentos.os.valor) * 100) / 100
+  const blocos = resumo ? montarBlocosFechamento(resumo, { operacoes: sessao.operacoes }) : null
+  const vendasLiquidas = blocos ? blocos.totais.vendasLiquidas : vendasDoLedger(ledger)
+  const blocoRecebido = blocos ? blocos.recebidoPorOrigem : blocoRecebimentosDasOperacoes(sessao.operacoes)
 
+  // Gaveta: dinheiro contado × dinheiro esperado (GOAL 003A). `saldoFinal` soma todas as formas —
+  // contra ele, toda sessão com PIX/cartão acusava diferença. Sessão antiga sem o esperado em
+  // dinheiro gravado mantém a comparação anterior.
+  const dinheiroEsperadoGravado = payload?.saldoDinheiroEsperado
+  const esperadoGaveta =
+    typeof dinheiroEsperadoGravado === "number" && Number.isFinite(dinheiroEsperadoGravado)
+      ? dinheiroEsperadoGravado
+      : sessao.saldoFinal
   const diferenca =
-    sessao.saldoContado != null && sessao.saldoFinal != null
-      ? sessao.saldoContado - sessao.saldoFinal
+    sessao.saldoContado != null && esperadoGaveta != null
+      ? sessao.saldoContado - esperadoGaveta
       : null
 
   return (
@@ -568,7 +549,10 @@ function SessaoDetalheView({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MiniKpi label="Abertura" value={fmt(sessao.saldoInicial)} />
-        <MiniKpi label="Saldo Final" value={sessao.saldoFinal != null ? fmt(sessao.saldoFinal) : "—"} />
+        <MiniKpi
+          label="Saldo final · todas as formas"
+          value={sessao.saldoFinal != null ? fmt(sessao.saldoFinal) : "—"}
+        />
         <MiniKpi
           label="Sangrias"
           value={fmt(totalSangrias)}
@@ -581,35 +565,45 @@ function SessaoDetalheView({
           color={totalSuprimentos > 0 ? "text-emerald-500" : undefined}
           icon={<TrendingUp className="h-3 w-3" />}
         />
-        {totalRecebimentosCr > 0 && (
+        {recebidoContasOs > 0 && (
           <MiniKpi
-            label="Serviços recebidos"
-            value={fmt(totalRecebimentosCr)}
+            label="Contas e O.S. recebidas"
+            value={fmt(recebidoContasOs)}
             color="text-violet-600 dark:text-violet-400"
             icon={<TrendingUp className="h-3 w-3" />}
           />
         )}
+        {recebimentos.estornos.valor > 0 && (
+          <MiniKpi
+            label="Estornos de recebimento"
+            value={`− ${fmt(recebimentos.estornos.valor)}`}
+            color="text-destructive"
+            icon={<TrendingDown className="h-3 w-3" />}
+          />
+        )}
       </div>
 
-      {/* Resumo financeiro — RECEITA TOTAL DO DIA (faturamento, separado da gaveta) */}
-      {(vendasProdutos > 0 || servicosRecebidos > 0) && (
+      {/* Vendas × recebido na sessão (GOAL 003A) — conceitos separados, sem "receita do dia" somada. */}
+      {(vendasLiquidas > 0 || blocoRecebido.linhas.some((l) => l.tipo !== "total" && l.valor > 0)) && (
         <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Resumo financeiro
+            Vendas e recebido na sessão
           </p>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Vendas de produtos</span>
-            <span className="font-medium text-foreground">{fmt(vendasProdutos)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Serviços recebidos</span>
-            <span className="font-medium text-foreground">{fmt(servicosRecebidos)}</span>
-          </div>
+          <LinhaResumoSessao rotulo={blocos ? "Vendas líquidas" : "Vendas (registro antigo)"} valor={vendasLiquidas} />
+          {blocos?.vendas.linhas
+            .filter((l) => l.tipo === "info")
+            .map((l) => (
+              <LinhaResumoSessao key={l.id} rotulo={l.rotulo} valor={l.valor} informativo />
+            ))}
           <Separator className="my-1.5 bg-border" />
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-foreground">Receita total do dia</span>
-            <span className="text-base font-bold text-primary">{fmt(receitaTotalDia)}</span>
-          </div>
+          {blocoRecebido.linhas.map((l: LinhaBloco) => (
+            <LinhaResumoSessao
+              key={l.id}
+              rotulo={l.rotulo}
+              valor={l.tipo === "deducao" ? -l.valor : l.valor}
+              total={l.tipo === "total"}
+            />
+          ))}
         </div>
       )}
 
@@ -654,23 +648,12 @@ function SessaoDetalheView({
             {resumo.porOrigem.map((o) => (
               <div key={o.key} className="rounded-lg border border-border bg-secondary/50 px-2 py-1.5 text-center">
                 <p className="text-[10px] text-muted-foreground">
-                  {o.label} ({o.qtdItens})
+                  {(ORIGEM_VENDA_LABEL as Record<string, string>)[o.key] ?? o.label} ({o.qtdItens})
                 </p>
                 <p className="font-semibold">{fmt(o.valorBruto)}</p>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {resumo && resumo.qtdRecebimentosContas > 0 && (
-        <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2 text-sm">
-          <p className="text-xs text-muted-foreground">
-            Serviços recebidos no PDV ({resumo.qtdRecebimentosContas})
-          </p>
-          <p className="text-base font-semibold text-violet-600 dark:text-violet-400">
-            {fmt(resumo.recebimentosContas)}
-          </p>
         </div>
       )}
 
@@ -707,43 +690,50 @@ function SessaoDetalheView({
             Operações de caixa
           </p>
           <div className="space-y-1.5">
-            {sessao.operacoes.map((op) => (
-              <div
-                key={op.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-secondary/50 px-3 py-1.5 text-sm"
-              >
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className={
-                      op.tipo === "sangria"
-                        ? "border-red-500/30 text-red-500"
-                        : op.tipo === "recebimento_cr"
-                          ? "border-violet-500/30 text-violet-600 dark:text-violet-400"
-                          : "border-emerald-500/30 text-emerald-500"
-                    }
-                  >
-                    {op.tipo === "recebimento_cr" ? "Serviço" : op.tipo}
-                  </Badge>
-                  <span className="text-muted-foreground">{op.motivo || "—"}</span>
+            {sessao.operacoes.map((op) => {
+              // Recebimento: conta × O.S. pela mesma classificação do fechamento. Estorno sai
+              // com sinal negativo (antes aparecia como entrada). Demais tipos seguem iguais.
+              const rec = classificarRecebimentoCaixa(op)
+              const saida = op.tipo === "sangria" || rec?.natureza === "estorno"
+              const tom =
+                op.tipo === "sangria"
+                  ? { badge: "border-red-500/30 text-red-500", valor: "text-red-500" }
+                  : rec?.natureza === "estorno"
+                    ? { badge: "border-destructive/30 text-destructive", valor: "text-destructive" }
+                    : rec
+                      ? {
+                          badge: "border-violet-500/30 text-violet-600 dark:text-violet-400",
+                          valor: "text-violet-600 dark:text-violet-400",
+                        }
+                      : { badge: "border-emerald-500/30 text-emerald-500", valor: "text-emerald-500" }
+              const rotulo = !rec
+                ? op.tipo
+                : rec.natureza === "estorno"
+                  ? "Estorno"
+                  : rec.origem === "os"
+                    ? "O.S. recebida"
+                    : "Conta recebida"
+              return (
+                <div
+                  key={op.id}
+                  className="flex items-center justify-between rounded-lg border border-border bg-secondary/50 px-3 py-1.5 text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={tom.badge}>
+                      {rotulo}
+                    </Badge>
+                    <span className="text-muted-foreground">{op.motivo || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">{fmtDt(op.at)}</span>
+                    <span className={`font-semibold ${tom.valor}`}>
+                      {saida ? "−" : "+"}
+                      {fmt(op.valor)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">{fmtDt(op.at)}</span>
-                  <span
-                    className={`font-semibold ${
-                      op.tipo === "sangria"
-                        ? "text-red-500"
-                        : op.tipo === "recebimento_cr"
-                          ? "text-violet-600 dark:text-violet-400"
-                          : "text-emerald-500"
-                    }`}
-                  >
-                    {op.tipo === "sangria" ? "−" : "+"}
-                    {fmt(op.valor)}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -786,6 +776,36 @@ function SessaoDetalheView({
           Imprimir relatório
         </Button>
       </div>
+    </div>
+  )
+}
+
+/** Linha do cartão "Vendas e recebido na sessão" (valor negativo = dedução). */
+function LinhaResumoSessao({
+  rotulo,
+  valor,
+  total = false,
+  informativo = false,
+}: {
+  rotulo: string
+  valor: number
+  total?: boolean
+  informativo?: boolean
+}) {
+  return (
+    <div className={`flex items-center justify-between gap-3 ${informativo ? "pl-3 text-xs" : ""}`}>
+      <span className={total ? "font-semibold text-foreground" : "text-muted-foreground"}>{rotulo}</span>
+      <span
+        className={
+          total
+            ? "text-base font-bold text-primary"
+            : informativo
+              ? "tabular-nums text-muted-foreground"
+              : "font-medium text-foreground"
+        }
+      >
+        {valor < 0 ? `− ${fmt(-valor)}` : fmt(valor)}
+      </span>
     </div>
   )
 }

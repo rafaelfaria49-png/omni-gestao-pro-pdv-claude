@@ -11,6 +11,7 @@ import {
   type CaixaOperacaoLinha,
   type FechamentoResumo,
 } from "@/lib/caixa-fechamento-resumo"
+import { aggregateRecebimentosSessao } from "@/lib/caixa/recebimentos-sessao"
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import type { VendaSessaoDetalheItem } from "@/app/api/ops/caixa/sessao-detalhe/route"
 
@@ -35,7 +36,7 @@ export interface CaixaResumoView {
   canceladas: SaleRecord[]
   qtdCanceladas: number
   totalCanceladas: number
-  /** Entradas reais = recebido à vista + suprimentos + serviços recebidos (CR). */
+  /** Entradas gravadas no fechamento = recebido à vista + suprimentos + contas/O.S. recebidas (CR, líquido). */
   entradas: number
   /** Saídas = sangrias. */
   saidas: number
@@ -146,6 +147,8 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
       recebimentosContas: opsAgg.recebimentosContas,
       recebimentosContasDinheiro: opsAgg.recebimentosContasDinheiro,
       qtdRecebimentosContas: opsAgg.qtdRecebimentosContas,
+      // Mesmas operações, separadas por origem (contas × O.S.) e por forma (GOAL 003A).
+      recebimentos: aggregateRecebimentosSessao(ops),
     })
     const canceladas = sessionSales.filter((s) => s.status === "cancelada")
     const totalCanceladas = round2(canceladas.reduce((s, v) => s + (v.total ?? 0), 0))
