@@ -5,13 +5,18 @@ import { Coins, Banknote, ChevronDown, Check, Eraser } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import type { DinheiroContadoDetalhado } from "@/lib/caixa-fechamento-resumo"
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
+
+/** Valor de face curto para o rótulo da linha ("R$ 200", "R$ 0,50"). */
+const fmtFace = (v: number) =>
+  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: v < 1 ? 2 : 0, maximumFractionDigits: 2 })}`
+
+/** Subtotal sem símbolo — a coluna já é monetária e precisa caber na grade de duas colunas. */
+const fmtNum = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /**
  * Denominações do Real em **centavos** (cálculo monetário seguro — evita erro de
@@ -37,6 +42,12 @@ const DENOMINACOES: Denominacao[] = [
   { centavos: 10, tipo: "moeda" },
   { centavos: 5, tipo: "moeda" },
   { centavos: 1, tipo: "moeda", discreta: true },
+]
+
+/** Colunas da grade (cédulas | moedas). A ordem de foco segue `DENOMINACOES`. */
+const GRUPOS: Array<{ tipo: Denominacao["tipo"]; titulo: string; icon: typeof Coins }> = [
+  { tipo: "cedula", titulo: "Cédulas", icon: Banknote },
+  { tipo: "moeda", titulo: "Moedas", icon: Coins },
 ]
 
 interface CalculadoraDinheiroCaixaProps {
@@ -72,13 +83,15 @@ export function CalculadoraDinheiroCaixa({
   const diferenca = total - saldoDinheiroEsperado
   const conferido = Math.abs(diferenca) < 0.01
 
+  // Texto em foreground: o estado é dito por extenso (success/destructive sobre
+  // `bg-secondary` ficam abaixo de 4,5:1 em texto pequeno).
   const status = !temContagem
-    ? { label: "Aguardando contagem", cls: "text-muted-foreground" }
+    ? { label: `Esperado ${fmt(saldoDinheiroEsperado)}`, cls: "text-muted-foreground" }
     : conferido
-      ? { label: "Contagem confere", cls: "text-success" }
+      ? { label: "Confere com o esperado", cls: "text-foreground" }
       : diferenca > 0
-        ? { label: "Sobra", cls: "text-success" }
-        : { label: "Falta", cls: "text-destructive" }
+        ? { label: `Sobra ${fmt(diferenca)} acima do esperado`, cls: "text-foreground" }
+        : { label: `Falta ${fmt(Math.abs(diferenca))} para o esperado`, cls: "text-foreground" }
 
   const setQtd = (centavos: number, raw: string) => {
     // Só dígitos → inteiro ≥ 0; remove zeros à esquerda; vazio permanece vazio.
@@ -117,136 +130,138 @@ export function CalculadoraDinheiroCaixa({
   }
 
   return (
-    <Card className="border-border bg-secondary">
-      <CardContent className="p-0">
-        <button
-          type="button"
-          onClick={() => setAberta((v) => !v)}
-          aria-expanded={aberta}
-          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-        >
-          <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Coins className="h-4 w-4 text-primary" />
-            Calculadora de cédulas e moedas
-          </span>
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            {temContagem ? (
-              <span className="font-medium tabular-nums text-foreground">{fmt(total)}</span>
-            ) : (
-              "Contar dinheiro"
-            )}
-            <ChevronDown className={cn("h-4 w-4 transition-transform", aberta && "rotate-180")} />
-          </span>
-        </button>
+    <div className="min-w-0 rounded-lg border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setAberta((v) => !v)}
+        aria-expanded={aberta}
+        aria-controls="calculadora-denominacoes"
+        className="flex w-full min-w-0 items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
+          <Coins className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">Contar por cédulas e moedas</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          {temContagem ? (
+            <span className="font-semibold tabular-nums text-foreground">{fmt(total)}</span>
+          ) : (
+            "Opcional"
+          )}
+          <ChevronDown className={cn("h-4 w-4 transition-transform", aberta && "rotate-180")} />
+        </span>
+      </button>
 
-        {aberta && (
-          <div className="space-y-3 border-t border-border px-4 pb-4 pt-3">
-            <div className="space-y-1.5">
-              {DENOMINACOES.map((d, i) => {
-                const valor = d.centavos / 100
-                const qtd = qtdDe(d.centavos)
-                const subtotal = (d.centavos * qtd) / 100
-                const primeiraMoeda = d.tipo === "moeda" && DENOMINACOES[i - 1]?.tipo === "cedula"
-                return (
-                  <div key={d.centavos}>
-                    {i === 0 && <GroupLabel icon={Banknote} text="Cédulas" />}
-                    {primeiraMoeda && <GroupLabel icon={Coins} text="Moedas" />}
-                    <div
-                      className={cn(
-                        "grid grid-cols-[minmax(0,1fr)_4.5rem_5.5rem] items-center gap-2",
-                        d.discreta && "opacity-70",
-                      )}
-                    >
-                      <Label
-                        htmlFor={`denom-${d.centavos}`}
-                        className="text-sm tabular-nums text-muted-foreground"
-                      >
-                        {fmt(valor)}
-                      </Label>
-                      <Input
-                        id={`denom-${d.centavos}`}
-                        ref={(el) => {
-                          inputsRef.current[i] = el
-                        }}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        placeholder="0"
-                        value={quantidades[d.centavos] ?? ""}
-                        onChange={(e) => setQtd(d.centavos, e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i)}
-                        onFocus={(e) => e.currentTarget.select()}
-                        aria-label={`Quantidade de ${fmt(valor)}`}
-                        className="h-9 bg-background text-center tabular-nums"
-                      />
-                      <span
+      {aberta && (
+        <div id="calculadora-denominacoes" className="space-y-3 border-t border-border px-3 pb-3 pt-2.5">
+          <div className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+            {GRUPOS.map((g) => {
+              const itens = DENOMINACOES.map((d, i) => ({ d, i })).filter(({ d }) => d.tipo === g.tipo)
+              const subtotalGrupo = itens.reduce((acc, { d }) => acc + d.centavos * qtdDe(d.centavos), 0) / 100
+              const GrupoIcon = g.icon
+              return (
+                <fieldset key={g.tipo} className="min-w-0 space-y-1.5">
+                  <legend className="sr-only">{g.titulo}</legend>
+                  <div
+                    aria-hidden
+                    className="flex items-baseline justify-between gap-2 border-b border-border pb-1"
+                  >
+                    <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <GrupoIcon className="h-3 w-3" />
+                      {g.titulo}
+                    </span>
+                    <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                      {fmt(subtotalGrupo)}
+                    </span>
+                  </div>
+                  {itens.map(({ d, i }) => {
+                    const valor = d.centavos / 100
+                    const qtd = qtdDe(d.centavos)
+                    const subtotal = (d.centavos * qtd) / 100
+                    return (
+                      <div
+                        key={d.centavos}
                         className={cn(
-                          "text-right text-sm tabular-nums",
-                          qtd > 0 ? "font-medium text-foreground" : "text-muted-foreground/50",
+                          "grid grid-cols-[3.5rem_0.625rem_3.5rem_minmax(0,1fr)] items-center gap-1.5",
+                          d.discreta && "opacity-70",
                         )}
                       >
-                        {fmt(subtotal)}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            <Separator className="bg-border" />
-
-            <div className="space-y-1.5 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold text-foreground">Total contado</span>
-                <span className="text-lg font-bold tabular-nums text-foreground">{fmt(total)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">Dinheiro esperado</span>
-                <span className="tabular-nums text-muted-foreground">{fmt(saldoDinheiroEsperado)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className={cn("font-medium", status.cls)}>{status.label}</span>
-                {temContagem && (
-                  <span className={cn("font-bold tabular-nums", status.cls)}>
-                    {diferenca > 0 ? "+" : ""}
-                    {fmt(diferenca)}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                onClick={handleAplicar}
-                disabled={!temContagem}
-                className="h-10 flex-1 gap-2 font-semibold"
-              >
-                <Check className="h-4 w-4" />
-                Aplicar no dinheiro contado
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleLimpar}
-                disabled={!temContagem}
-                className="h-10 gap-2 border-border"
-              >
-                <Eraser className="h-4 w-4" />
-                Limpar contagem
-              </Button>
-            </div>
+                        <Label
+                          htmlFor={`denom-${d.centavos}`}
+                          className="justify-end whitespace-nowrap text-right font-semibold tabular-nums text-foreground"
+                        >
+                          {fmtFace(valor)}
+                        </Label>
+                        <span aria-hidden className="text-center text-xs text-muted-foreground">
+                          ×
+                        </span>
+                        <Input
+                          id={`denom-${d.centavos}`}
+                          ref={(el) => {
+                            inputsRef.current[i] = el
+                          }}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="0"
+                          value={quantidades[d.centavos] ?? ""}
+                          onChange={(e) => setQtd(d.centavos, e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, i)}
+                          onFocus={(e) => e.currentTarget.select()}
+                          aria-label={`Quantidade de ${fmt(valor)}`}
+                          className={cn(
+                            "h-8 px-1 text-center font-semibold tabular-nums",
+                            qtd > 0 ? "border-border bg-card" : "bg-background",
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "truncate text-right text-xs tabular-nums",
+                            qtd > 0 ? "font-semibold text-foreground" : "text-muted-foreground/60",
+                          )}
+                        >
+                          {fmtNum(subtotal)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </fieldset>
+              )
+            })}
           </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
 
-function GroupLabel({ icon: Icon, text }: { icon: typeof Coins; text: string }) {
-  return (
-    <div className="flex items-center gap-1.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-      <Icon className="h-3 w-3" />
-      {text}
+          <div className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-secondary px-3 py-2">
+            <div className="min-w-0 leading-tight">
+              <p className="text-xs text-muted-foreground">Total pelas denominações</p>
+              <p className={cn("truncate text-xs font-medium", status.cls)}>{status.label}</p>
+            </div>
+            <span className="shrink-0 font-display text-xl font-bold tabular-nums text-foreground">
+              {fmt(total)}
+            </span>
+          </div>
+
+          <div className="flex min-w-0 gap-2">
+            <Button
+              type="button"
+              onClick={handleAplicar}
+              disabled={!temContagem}
+              className="min-w-0 flex-1 gap-2 font-semibold"
+            >
+              <Check className="h-4 w-4" />
+              <span className="truncate">Aplicar no dinheiro contado</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleLimpar}
+              disabled={!temContagem}
+              className="shrink-0 gap-1.5 text-muted-foreground"
+            >
+              <Eraser className="h-4 w-4" />
+              Limpar contagem
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
