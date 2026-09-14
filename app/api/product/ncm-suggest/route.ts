@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server"
 import { suggestNcmFromProductName } from "@/lib/product-ncm-fiscal-ai"
+import { requireCadastrosSession } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(req: Request) {
+  const gate = await requireCadastrosSession({ hub: true })
+  if (!gate.ok) return gate.response
   try {
     const body = (await req.json()) as { nome?: string }
     const nome = typeof body.nome === "string" ? body.nome.trim() : ""

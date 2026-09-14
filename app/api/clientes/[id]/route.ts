@@ -2,8 +2,7 @@ import { NextResponse } from "next/server"
 import { Prisma, StatusOrdemServico } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
-import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -18,15 +17,14 @@ function badRequest(message: string) {
 }
 
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
+  const gate = await requireCadastrosHubApi(req, "read", "shared")
+  if (!gate.ok) return gate.response
+  const storeId = gate.storeId
+
   const { id } = await context.params
   if (!id?.trim()) return badRequest("ID inválido")
 
   try {
-    const storeId = storeIdFromAssistecRequestForRead(req)
-    if (!storeId) {
-      return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId.")
-    }
-
     const cliente = await prisma.cliente.findFirst({
       where: { id, storeId },
       include: {
@@ -83,12 +81,14 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 }
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  const gate = await requireCadastrosHubApi(req, "write", "admin")
+  if (!gate.ok) return gate.response
+  const storeId = gate.storeId
+
   const { id } = await context.params
   if (!id?.trim()) return badRequest("ID inválido")
 
   try {
-    const gate = await requireAdmin()
-    if (!gate.ok) return gate.res
     const body = (await req.json()) as {
       name?: unknown
       phone?: unknown
@@ -122,11 +122,6 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
           lastPurchaseAt = d
         }
       }
-    }
-
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) {
-      return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId.")
     }
 
     if (!name) return badRequest('Campo "name" é obrigatório')
@@ -185,16 +180,14 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 }
 
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+  const gate = await requireCadastrosHubApi(req, "write", "admin")
+  if (!gate.ok) return gate.response
+  const storeId = gate.storeId
+
   const { id } = await context.params
   if (!id?.trim()) return badRequest("ID inválido")
 
   try {
-    const gate = await requireAdmin()
-    if (!gate.ok) return gate.res
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) {
-      return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId.")
-    }
     const del = await prisma.cliente.deleteMany({ where: { id, storeId } })
     if (del.count === 0) {
       return json({ error: "Cliente não encontrado" }, { status: 404 })

@@ -97,6 +97,15 @@ export interface NovaOSItemV3 {
   baixaEstoque: boolean;
   /** Garantia em dias (apenas serviços). */
   garantiaDias?: number;
+  /** Snapshot textual do prazo/tempo estimado do serviço (ex.: "2 horas").
+   *  Apenas informativo — NUNCA vira SLA (o SLA vem de `recepcao.previsaoEntrega`).
+   *  Ausente em drafts/payloads legados. */
+  prazoTexto?: string;
+  /** Rastreabilidade opcional: id real do `Servico` de catálogo que originou a
+   *  linha. NÃO confundir com `id` (identificador único da LINHA da OS — duas
+   *  linhas podem compartilhar o mesmo `catalogoServicoId`). Sem FK de banco;
+   *  o snapshot textual/comercial continua autoritativo para histórico. */
+  catalogoServicoId?: string;
   /** Vínculo opcional com o catálogo oficial (SPRINT_3D.1B): habilita a baixa
    *  real de estoque quando a OS é entregue. Ausente = item manual. */
   produtoId?: string;
@@ -235,6 +244,59 @@ export function itemValorClienteV3(it: NovaOSItemV3): number {
 export function itemCustoV3(it: NovaOSItemV3): number {
   const qtd = Math.max(0, it.quantidade || 0);
   return Math.max(0, qtd * (it.custoUnitario || 0));
+}
+
+/** Linha comercial de serviço persistida no payload da OS (`servicosCatalogo`).
+ *  `servicoId` é o identificador da LINHA (`nova-<itemId>`); `catalogoServicoId`
+ *  (opcional) é a rastreabilidade ao cadastro — nunca FK, nunca substitui o snapshot. */
+export interface ServicoCatalogoLinhaV3 {
+  servicoId: string;
+  descricao: string;
+  custoInterno: number;
+  valorVenda: number;
+  prazoGarantiaDias: number;
+  termoGarantia: string;
+  /** Classificação da linha (cobrado | brinde | interno) — mesmo nome usado no payload histórico. */
+  kindV3: OrcamentoLinhaKindV3;
+  prazoTexto?: string;
+  catalogoServicoId?: string;
+}
+
+function cleanLinhaTexto(value: string | undefined | null): string | undefined {
+  const s = typeof value === "string" ? value.trim() : "";
+  return s.length ? s : undefined;
+}
+
+/**
+ * Mapeamento PURO `NovaOSItemV3[]` (categoria `servico`) → linhas `servicosCatalogo`.
+ * Mesma regra usada por `criarOSEnterpriseV3`: para brinde/interno o valor ao
+ * cliente é zerado na persistência (R$ 0,00 ao cliente), preservando o custo.
+ * `prazoTexto`/`catalogoServicoId` viajam como snapshot/metadata opcionais;
+ * linhas legadas sem esses campos continuam mapeando normalmente.
+ */
+export function mapItensParaServicosCatalogoV3(
+  itens: NovaOSItemV3[],
+  garantiaFallbackDias?: number,
+): ServicoCatalogoLinhaV3[] {
+  const lista = Array.isArray(itens) ? itens : [];
+  return lista
+    .filter((it) => it.categoria === "servico")
+    .map((it) => {
+      const qtd = Math.max(1, Math.trunc(it.quantidade) || 1);
+      const prazoTexto = cleanLinhaTexto(it.prazoTexto);
+      const catalogoServicoId = cleanLinhaTexto(it.catalogoServicoId);
+      return {
+        servicoId: `nova-${it.id}`,
+        descricao: it.descricao.trim(),
+        custoInterno: Math.max(0, it.custoUnitario) * qtd,
+        valorVenda: it.kind === "cobrado" ? Math.max(0, it.valorUnitario) * qtd : 0,
+        prazoGarantiaDias: Math.max(0, Math.trunc(it.garantiaDias ?? garantiaFallbackDias ?? 0)),
+        termoGarantia: "",
+        kindV3: it.kind,
+        ...(prazoTexto ? { prazoTexto } : {}),
+        ...(catalogoServicoId ? { catalogoServicoId } : {}),
+      };
+    });
 }
 
 export function computeTotaisNovaOSV3(itens: NovaOSItemV3[], desconto: number): NovaOSTotaisV3 {

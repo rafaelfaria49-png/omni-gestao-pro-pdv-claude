@@ -50,8 +50,8 @@ const SHORTCUTS = [
   { key: "F4", label: "Alterar qtd" },
   { key: "F5", label: "Cliente" },
   { key: "F6", label: "Troca/Devolução" },
-  { key: "F7", label: "NF-e", tone: "accent" as const },
-  { key: "F8", label: "Desconto/Acréscimo" },
+  { key: "F7", label: "Fiscal (Em breve)", tone: "disabled" as const },
+  { key: "F8", label: "Desconto" },
   { key: "F9", label: "CPF/CNPJ" },
   { key: "F10", label: "Cancelar", tone: "destructive" as const },
   { key: "F11", label: "Suspender" },
@@ -61,33 +61,42 @@ const SHORTCUTS = [
 function ShortcutBar({ onAction }: { onAction: (key: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1 border-t border-border bg-card px-2 py-1.5">
-      {SHORTCUTS.map((s) => (
-        <button
-          key={s.key}
-          type="button"
-          onClick={() => onAction(s.key)}
-          className={cn(
-            "group flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
-            "border-border bg-background text-foreground/80 hover:-translate-y-px hover:border-primary/50 hover:shadow-sm",
-            s.tone === "accent" && "border-primary/30",
-            s.tone === "destructive" && "border-red-500/25"
-          )}
-        >
-          <kbd
+      {SHORTCUTS.map((s) => {
+        const isDisabled = s.tone === "disabled"
+        return (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => onAction(s.key)}
             className={cn(
-              "rounded border border-b-2 px-1.5 py-0.5 text-[10px] font-bold",
-              s.tone === "accent"
-                ? "border-primary/50 bg-primary/15 text-primary"
-                : s.tone === "destructive"
-                  ? "border-red-400/50 bg-red-500/15 text-red-600 dark:text-red-300"
-                  : "border-border bg-muted/40 text-muted-foreground"
+              "group flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium transition-all",
+              isDisabled
+                ? "border-border/40 bg-muted/20 text-muted-foreground/50 opacity-60 cursor-not-allowed"
+                : "border-border bg-background text-foreground/80 hover:-translate-y-px hover:border-primary/50 hover:shadow-sm cursor-pointer",
+              s.tone === "accent" && "border-primary/30",
+              s.tone === "destructive" && "border-red-500/25"
             )}
           >
-            {s.key}
-          </kbd>
-          <span className="text-muted-foreground group-hover:text-foreground">{s.label}</span>
-        </button>
-      ))}
+            <kbd
+              className={cn(
+                "rounded border border-b-2 px-1.5 py-0.5 text-[10px] font-bold",
+                s.tone === "accent"
+                  ? "border-primary/50 bg-primary/15 text-primary"
+                  : s.tone === "destructive"
+                    ? "border-red-400/50 bg-red-500/15 text-red-600 dark:text-red-300"
+                    : isDisabled
+                      ? "border-border/30 bg-muted/10 text-muted-foreground/40"
+                      : "border-border bg-muted/40 text-muted-foreground"
+              )}
+            >
+              {s.key}
+            </kbd>
+            <span className={isDisabled ? "text-muted-foreground/40" : "text-muted-foreground group-hover:text-foreground"}>
+              {s.label}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -227,6 +236,9 @@ export type PdvBlackShellProps = {
   selectedLineId: string | null
   onSelectLine: (lineId: string) => void
   onRemoveLine: (lineId: string) => void
+  subtotal: number
+  discountTotal?: number
+  impostoEstimado?: number
   total: number
   itemCount: number
   lastAddedItem: string | null
@@ -238,12 +250,8 @@ export type PdvBlackShellProps = {
   // Cliente
   customerDisplay: string
   onClientSearchOpen: () => void
-  // Documento fiscal
-  emitirNota: boolean
-  onEmitirNotaChange: (v: boolean) => void
-  // Valor recebido / troco
-  valorRecebido: string
-  onValorRecebidoChange: (v: string) => void
+  // Valor recebido / troco (leitura derivada do modal)
+  cashTendered?: number | null
   troco: number
   // Ações
   onShortcutAction: (key: string) => void
@@ -600,8 +608,20 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
               </div>
               <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground/50">
                 <span>Subtotal · {props.itemCount} itens</span>
-                <span>R$ {fmt(props.total)}</span>
+                <span>R$ {fmt(props.subtotal)}</span>
               </div>
+              {(props.discountTotal ?? 0) > 0 && (
+                <div className="mt-0.5 flex justify-between text-[11px] text-emerald-600 dark:text-emerald-400">
+                  <span>Desconto aplicado</span>
+                  <span>- R$ {fmt(props.discountTotal ?? 0)}</span>
+                </div>
+              )}
+              {(props.impostoEstimado ?? 0) > 0 && (
+                <div className="mt-0.5 flex justify-between text-[11px] text-muted-foreground/50">
+                  <span>Imposto aprox. (config.)</span>
+                  <span>R$ {fmt(props.impostoEstimado ?? 0)}</span>
+                </div>
+              )}
             </div>
 
             {/* ÚLTIMO ADICIONADO */}
@@ -653,66 +673,17 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
               </div>
             </div>
 
-            {/* DOCUMENTO FISCAL */}
-            <div className="border-b border-border px-4 py-2">
-              <div className="flex items-center justify-between">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  Documento Fiscal
+            {/* VALOR RECEBIDO EM DINHEIRO (leitura derivada do modal se informado) */}
+            {(props.cashTendered ?? 0) > 0 && (
+              <div className="border-b border-border px-4 py-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                  <span>Recebido em dinheiro</span>
+                  <span className="font-semibold tabular-nums text-foreground">
+                    R$ {fmt(props.cashTendered ?? 0)}
+                  </span>
                 </div>
-                <kbd className="rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground/60">
-                  F7
-                </kbd>
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => props.onEmitirNotaChange(true)}
-                  className={cn(
-                    "flex flex-col items-start rounded-md border p-2 text-left transition-colors cursor-pointer",
-                    props.emitirNota
-                      ? "border-primary/50 bg-primary/10 text-primary"
-                      : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/45 hover:text-foreground"
-                  )}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Receipt className="h-3.5 w-3.5 shrink-0" />
-                    <span className="text-[11px] font-semibold">Com NF-e</span>
-                  </div>
-                  <span className="mt-0.5 text-[10px] opacity-60">Cupom fiscal eletrônico</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => props.onEmitirNotaChange(false)}
-                  className={cn(
-                    "flex flex-col items-start rounded-md border p-2 text-left transition-colors cursor-pointer",
-                    !props.emitirNota
-                      ? "border-primary/50 bg-primary/10 text-primary"
-                      : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/45 hover:text-foreground"
-                  )}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5 shrink-0" />
-                    <span className="text-[11px] font-semibold">Sem nota</span>
-                  </div>
-                  <span className="mt-0.5 text-[10px] opacity-60">Cupom simples não fiscal</span>
-                </button>
-              </div>
-            </div>
-
-            {/* VALOR RECEBIDO EM DINHEIRO */}
-            <div className="border-b border-border px-4 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                Valor Recebido em Dinheiro
-              </div>
-              <input
-                type="text"
-                value={props.valorRecebido}
-                onChange={(e) => props.onValorRecebidoChange(e.target.value)}
-                inputMode="decimal"
-                placeholder="0,00"
-                className="mt-2 h-10 w-full rounded border border-border bg-background px-3 text-right text-lg tabular-nums text-foreground outline-none placeholder:text-muted-foreground/30 focus:border-primary/60 focus:ring-1 focus:ring-primary/25"
-              />
-            </div>
+            )}
 
             {/* Troco */}
             <div className="border-b border-border px-4 py-2">
@@ -729,7 +700,7 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
               </div>
             </div>
 
-            {/* Finalizar com NF-e */}
+            {/* Finalizar Venda (F12) */}
             <div className="p-3">
               <button
                 type="button"
@@ -743,7 +714,7 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                 )}
               >
                 <Receipt className="h-4 w-4" />
-                Finalizar com NF-e
+                Finalizar Venda (F12)
               </button>
             </div>
           </div>

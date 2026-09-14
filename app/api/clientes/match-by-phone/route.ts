@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { matchClientesByPhone } from "@/lib/cliente-phone-match"
-import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -20,12 +20,9 @@ function badRequest(message: string) {
  */
 export async function GET(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForRead(req)
-    if (!storeId) {
-      return badRequest(
-        "Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId."
-      )
-    }
+    const gate = await requireCadastrosHubApi(req, "read", "shared")
+    if (!gate.ok) return gate.response
+    const storeId = gate.storeId
 
     const url = new URL(req.url)
     const phone = url.searchParams.get("phone")?.trim() ?? ""

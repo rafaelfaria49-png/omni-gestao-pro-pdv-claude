@@ -21,7 +21,16 @@ import {
   type ExistingProdutoLite,
 } from "@/lib/produtos/duplicate-product";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
-import { requireCadastrosStoreAccess } from "@/lib/cadastros/cadastros-action-access";
+import {
+  requireCadastrosActionAccess,
+  requireCadastrosActionSession,
+  requireCadastrosStoreAccess,
+} from "@/lib/cadastros/cadastros-action-access";
+import { canSeeCadastrosStoreRecord } from "@/lib/cadastros/cadastros-api-access";
+import {
+  cadastrosAuditActorLabel,
+  cadastrosAuditPrincipalFromSession,
+} from "@/lib/cadastros/cadastros-audit-principal";
 import {
   consultarProdutosSql,
   MENSAGEM_ERRO_FILTROS_PRODUTOS,
@@ -111,6 +120,8 @@ function pct(part: number, total: number): number {
  * Importante: se alguma tabela/model não existir no banco em produção, `withPrismaSafe` retorna 0 sem quebrar UI.
  */
 export async function getCadastrosDashboardStats(storeId: string): Promise<CadastrosDashboardStats> {
+  const { storeId: sid } = await requireCadastrosActionAccess(storeId, "hub");
+  storeId = sid;
   const now = new Date();
   const monthStart = startOfMonth(now);
 
@@ -334,8 +345,9 @@ export type FornecedorDTO = {
 };
 
 export async function listFornecedores(storeId: string): Promise<FornecedorDTO[]> {
+  const { storeId: sid } = await requireCadastrosActionAccess(storeId, "hub");
   const rows = await prisma.fornecedor.findMany({
-    where: { storeId },
+    where: { storeId: sid },
     orderBy: { updatedAt: "desc" },
     take: 500,
   });
@@ -375,6 +387,7 @@ export async function upsertFornecedor(
     active?: boolean;
   }
 ): Promise<{ id: string }> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const nome = input.nome.trim();
   if (!nome) throw new Error("Nome obrigatório");
 
@@ -480,6 +493,7 @@ export type MarcaCadastroDTO = {
 };
 
 export async function listMarcas(storeId: string): Promise<MarcaCadastroDTO[]> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const rows = await prisma.marcaCadastro.findMany({
     where: { storeId },
     orderBy: [{ type: "asc" }, { name: "asc" }],
@@ -497,6 +511,7 @@ export async function upsertMarca(
   storeId: string,
   input: { id?: string; name: string; type?: string; active?: boolean }
 ): Promise<{ id: string; name: string }> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const name = input.name.trim();
   if (!name) throw new Error("Nome obrigatório");
   const type = (input.type ?? "").trim();
@@ -541,6 +556,7 @@ export async function upsertMarca(
 export async function listCategoriasMarcasUsadasEmProduto(
   storeId: string
 ): Promise<{ categorias: string[]; marcas: string[] }> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   try {
     const [cats, brs] = await Promise.all([
       prisma.produto.findMany({
@@ -580,6 +596,7 @@ export type TecnicoDTO = {
 };
 
 export async function listTecnicos(storeId: string): Promise<TecnicoDTO[]> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const rows = await prisma.tecnico.findMany({
     where: { storeId },
     orderBy: { updatedAt: "desc" },
@@ -610,6 +627,7 @@ export async function upsertTecnico(
     active?: boolean;
   }
 ): Promise<{ id: string }> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const name = input.name.trim();
   if (!name) throw new Error("Nome obrigatório");
 
@@ -656,6 +674,7 @@ function jsonStringArray(v: unknown): string[] {
 }
 
 export async function listEquipamentosModelos(storeId: string): Promise<EquipamentoModeloDTO[]> {
+  storeId = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
   const rows = await prisma.equipamentoModelo.findMany({
     where: { storeId },
     orderBy: { updatedAt: "desc" },
@@ -690,6 +709,7 @@ export async function upsertEquipamentoModelo(
     active?: boolean;
   }
 ): Promise<{ id: string }> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const name = input.name.trim();
   if (!name) throw new Error("Nome obrigatório");
 
@@ -719,6 +739,7 @@ export async function upsertEquipamentoModelo(
 }
 
 export async function countProdutoImagens(storeId: string): Promise<{ total: number; distinctProducts: number }> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const total = await withPrismaSafe((db) => db.productMedia.count({ where: { storeId } }), 0);
   const distinctProducts = await withPrismaSafe(
     async (db) => {
@@ -735,6 +756,7 @@ export async function countProdutoImagens(storeId: string): Promise<{ total: num
 }
 
 export async function countMarketplaceListings(storeId: string): Promise<{ total: number; pending: number }> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const total = await withPrismaSafe((db) => db.marketplaceListing.count({ where: { storeId } }), 0);
   const pending = await withPrismaSafe(
     (db) => db.marketplaceListing.count({ where: { storeId, status: { in: ["draft", "pending", "error"] } } }),
@@ -903,6 +925,7 @@ function fmtDateISO(d: Date | null | undefined): string {
 }
 
 export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
+  storeId = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
   try {
     const rows = await prisma.cliente.findMany({
       where: { storeId },
@@ -993,6 +1016,7 @@ export async function createCliente(
     active?: boolean;
   }
 ): Promise<{ id: string }> {
+  storeId = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
   try {
     const nome = input.nome.trim();
     if (!nome) throw new Error("Nome obrigatório");
@@ -1039,6 +1063,7 @@ export async function updateCliente(
     active: boolean;
   }>
 ): Promise<void> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   try {
     const existing = await prisma.cliente.findFirst({ where: { id, storeId }, select: { id: true } });
     if (!existing) throw new Error("Cliente não encontrado");
@@ -1069,6 +1094,7 @@ function produtoMetadataRecord(v: unknown): Record<string, unknown> | null {
 }
 
 export async function listProdutos(storeId: string, opts?: { q?: string }): Promise<ProdutoDTO[]> {
+  storeId = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
   const q = opts?.q?.trim();
   try {
     const rows = await prisma.produto.findMany({
@@ -1206,6 +1232,7 @@ export async function listProdutos(storeId: string, opts?: { q?: string }): Prom
  * propagada para o chamador decidir — ver `listProdutosPaginado`.
  */
 export async function getUltimoBatchProdutos(storeId: string): Promise<string | null> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   return resolverUltimoBatchProdutos(storeId);
 }
 
@@ -1259,6 +1286,7 @@ export async function listProdutosPaginado(
     };
   },
 ): Promise<ListagemProdutosResultado> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const filtros: ProdutosListagemFiltros = opts?.filters ?? {};
   const importacao = normalizarFiltroImportacao(filtros.importacao);
 
@@ -1380,6 +1408,7 @@ export async function lookupProdutoPorBarcodeLocal(
   storeId: string,
   rawBarcode: string,
 ): Promise<BarcodeLocalLookupResult> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const validation = validarGtin(rawBarcode);
   if (!validation.valid) return { ok: false, status: "INVALID", message: validation.message };
 
@@ -1436,6 +1465,7 @@ export async function upsertProduto(
     accessoryConfig?: unknown;
   }
 ): Promise<UpsertProdutoResult> {
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const nome = input.nome.trim();
   if (!nome) return { ok: false, type: "VALIDATION_ERROR", message: "Informe o nome do produto." };
 
@@ -1693,9 +1723,9 @@ export async function getConferenciaLote(
   storeId: string,
   batchId: string,
 ): Promise<ConferenciaLoteDTO | null> {
-  const sid = (storeId ?? "").trim();
+  const sid = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   const bid = (batchId ?? "").trim();
-  if (!sid || !bid) return null;
+  if (!bid) return null;
 
   let rows: Array<Parameters<typeof mapConferenciaRow>[0]> = [];
   try {
@@ -1788,9 +1818,10 @@ export async function aplicarConferenciaLote(
   }>,
   opts?: { revisadoPor?: string },
 ): Promise<AplicarConferenciaResult> {
-  const sid = (storeId ?? "").trim();
+  const gate = await requireCadastrosActionAccess(storeId, "hub");
+  const sid = gate.storeId;
   const bid = (batchId ?? "").trim();
-  if (!sid || !bid) return { ok: false, message: "Loja ou lote não informado." };
+  if (!bid) return { ok: false, message: "Loja ou lote não informado." };
   if (!Array.isArray(itens) || itens.length === 0) {
     return { ok: false, message: "Nenhum item para aplicar." };
   }
@@ -1822,7 +1853,8 @@ export async function aplicarConferenciaLote(
   let ativados = 0;
   let revisados = 0;
   const naoAtivados: Array<{ id: string; motivo: string }> = [];
-  const revisadoPor = (opts?.revisadoPor ?? "").trim() || "Conferência de importação";
+  // `opts.revisadoPor` permanece no contrato público, mas não é o ator oficial.
+  const revisadoPor = cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session));
 
   for (const item of itens) {
     const atual = porId.get((item.id ?? "").trim());
@@ -1921,9 +1953,13 @@ export async function deleteProduto(
   storeId: string,
   produtoId: string
 ): Promise<DeleteProdutoResult> {
+  let sid: string;
+  try {
+    sid = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
+  }
   if (!produtoId?.trim()) return { ok: false, reason: "ID inválido" };
-  const sid = (storeId ?? "").trim();
-  if (!sid) return { ok: false, reason: "Loja não selecionada" };
 
   const produto = await prisma.produto.findFirst({
     where: { id: produtoId, storeId: sid },
@@ -2091,14 +2127,21 @@ function parseImportacaoMetadata(raw: string | null): Record<string, unknown> {
 }
 
 export async function listImportacoesAuditoria(limit = 50): Promise<ImportacaoAuditoriaDTO[]> {
+  const { session } = await requireCadastrosActionSession("hub");
   try {
+    const take = Math.min(Math.max(1, limit), 200);
     const rows = await prisma.logsAuditoria.findMany({
       where: { action: { startsWith: "import." } },
       orderBy: { createdAt: "desc" },
-      take: Math.min(Math.max(1, limit), 200),
+      take: 200,
     });
+    const visiveis = rows.filter((r) => {
+      const meta = parseImportacaoMetadata(r.metadata);
+      const recStore = typeof meta.storeId === "string" ? meta.storeId : null;
+      return canSeeCadastrosStoreRecord(session, recStore);
+    }).slice(0, take);
 
-    return rows.map((r) => {
+    return visiveis.map((r) => {
       const meta = parseImportacaoMetadata(r.metadata);
       const isXml = r.action.includes("xml");
       const isErro = r.action.endsWith(".erro") || r.action.endsWith("_erro");
@@ -2138,11 +2181,17 @@ export async function listImportacoesAuditoria(limit = 50): Promise<ImportacaoAu
 }
 
 export async function listLogsAuditoriaCadastros(): Promise<AuditoriaItemDTO[]> {
+  const { session } = await requireCadastrosActionSession("hub");
   const rows = await prisma.logsAuditoria.findMany({
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 200,
   })
-  return rows.map((r) => {
+  return rows.filter((r) => {
+    let meta: Record<string, unknown> = {}
+    try { if (r.metadata) meta = JSON.parse(r.metadata) } catch { /* ignore */ }
+    const recStore = typeof meta.storeId === "string" ? meta.storeId : null
+    return canSeeCadastrosStoreRecord(session, recStore)
+  }).slice(0, 50).map((r) => {
     let meta: Record<string, unknown> = {}
     try { if (r.metadata) meta = JSON.parse(r.metadata) } catch { /* ignore */ }
     return {
@@ -2169,7 +2218,12 @@ export type LojaDTO = {
 }
 
 export async function listLojasCadastros(): Promise<LojaDTO[]> {
-  const rows = await prisma.store.findMany({ orderBy: { id: "asc" }, take: 50 })
+  const { storeScope } = await requireCadastrosActionSession("shared");
+  const rows = await prisma.store.findMany({
+    where: storeScope === "all" ? undefined : { id: { in: storeScope } },
+    orderBy: { id: "asc" },
+    take: 50,
+  })
   return rows.map((s) => {
     const addr =
       s.address && typeof s.address === "object" && !Array.isArray(s.address)
@@ -2267,6 +2321,7 @@ export async function resolverCodigoBarras(
   _storeId: string,
   rawBarcode: string,
 ): Promise<ResolverCodigoBarrasResult> {
+  await requireCadastrosActionAccess(_storeId, "hub");
   const classificacao = classificarBarcode(rawBarcode);
   if (classificacao.tipo === "INVALID") {
     return { ok: false, status: "INVALID", message: classificacao.message };

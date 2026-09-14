@@ -39,11 +39,11 @@ const cards: VendasCard[] = [
   },
   {
     title: "Venda Completa",
-    description: "Venda detalhada com dados do cliente, nota fiscal e registro completo.",
+    description: "Venda detalhada com dados do cliente e registro completo da venda.",
     icon: ShoppingCart,
     status: "ativo",
     dashboardHref: "/dashboard/vendas/venda-completa",
-    meta: "Com NF e cliente",
+    meta: "Registro completo e cliente",
   },
   {
     title: "Orçamentos",

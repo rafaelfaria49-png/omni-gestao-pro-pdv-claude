@@ -87,6 +87,7 @@ import {
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
@@ -134,9 +135,18 @@ import {
   removeHeldSale,
   newHoldId,
   nextHoldLabel,
+  withHoldCapabilitiesSnapshot,
   type HeldSale,
 } from "@/lib/pdv-hold"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+  findUnresolvedSaleLines,
+  unresolvedSaleLinesDescription,
+} from "@/lib/pdv-finalize-integrity"
 
 type Customer = {
   id: string
@@ -234,6 +244,12 @@ export function PdvClassic({
   const { empresaDocumentos, getEnderecoDocumentos, lojaAtivaId, opsStorageKey, storesRefreshNonce } =
     useLojaAtiva()
   const { pdvParams, impressaoConfig, settings, storeId } = useStoreSettings()
+  const pdvCapabilities = usePdvCapabilities("classic")
+  const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
+  const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
+  const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
+  const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
+  const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
   const { mode: studioThemeMode } = useStudioTheme()
@@ -297,6 +313,7 @@ export function PdvClassic({
   const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [selectedCartLineId, setSelectedCartLineId] = useState<string | null>(null)
   const [shellProductSearchOpen, setShellProductSearchOpen] = useState(false)
+  const [shellProductSearchQuery, setShellProductSearchQuery] = useState("")
   const [shellClientSearchOpen, setShellClientSearchOpen] = useState(false)
   const [shellQtyEditOpen, setShellQtyEditOpen] = useState(false)
   const [shellCancelSaleOpen, setShellCancelSaleOpen] = useState(false)
@@ -647,6 +664,7 @@ export function PdvClassic({
 
   useEffect(() => {
     setCustomerCreditFetched(null)
+    if (!storeCreditEnabled) return
     const docNorm = (selectedCustomer?.cpf ?? "").replace(/\D/g, "")
     const cId = selectedCustomer?.id
     if (!docNorm && !cId) return
@@ -661,7 +679,7 @@ export function PdvClassic({
       })
       .catch(() => setCustomerCreditFetched(null))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCustomer?.cpf, selectedCustomer?.id, lojaKey])
+  }, [selectedCustomer?.cpf, selectedCustomer?.id, lojaKey, storeCreditEnabled])
 
   const updateCustomerCpf = useCallback((customerId: string, cpfDigits: string) => {
     const display = formatBrDocDisplay(cpfDigits)
@@ -742,7 +760,11 @@ export function PdvClassic({
     // Atalhos/entradas sem `accessoryConfig` resolvem a config pelo catálogo real.
     const accessoryConfig =
       product.accessoryConfig ?? products.find((p) => p.id === product.id)?.accessoryConfig
-    if (!product.vendaPorPeso && accessoryConfigRequiresSelection(accessoryConfig)) {
+    if (
+      accessoryModelColorEnabled &&
+      !product.vendaPorPeso &&
+      accessoryConfigRequiresSelection(accessoryConfig)
+    ) {
       accessoryQtyRef.current = baseQty
       setAccessoryProduct({ ...product, accessoryConfig })
       return true
@@ -883,7 +905,12 @@ export function PdvClassic({
       e.preventDefault()
       const raw = bipeCode.trim()
       if (!raw) return
-      const q = Number(shellNextQty.replace(",", ".")) || 1
+
+      const parsedPrefix = parsePdvScanPrefix(raw)
+      const q = parsedPrefix.hasPrefix
+        ? parsedPrefix.qty
+        : (Number(shellNextQty.replace(",", ".")) || 1)
+      const query = parsedPrefix.query
 
       const commitScan = (product: PdvCatalogProduct) => {
         if (!addToCart(product, q)) return
@@ -897,25 +924,41 @@ export function PdvClassic({
         queueMicrotask(() => shellBipeRef.current?.focus())
       }
 
-      const found = findPdvProductByScan(raw, products)
+      const found = findPdvProductByScan(query, products)
       if (found) {
         commitScan(found)
         return
       }
 
+      // Fallback local fuzzy: se único, adiciona; se múltiplos, abre F3 pré-filtrado.
+      const localMatches = filterPdvCatalogBySearch(products, query)
+      if (localMatches.length === 1) {
+        commitScan(localMatches[0]!)
+        return
+      }
+      if (localMatches.length > 1) {
+        setShellProductSearchQuery(query)
+        setShellProductSearchOpen(true)
+        setShellInfo(`Vários produtos encontrados para "${query}". Escolha na lista F3.`)
+        setBipeCode("")
+        return
+      }
+
       // Miss local → busca autoritativa no catálogo INTEIRO da loja (snapshot pode estar defasado).
-      const remote = await lookupPdvScanRemote({ code: raw, storeId: lojaKey, setInventory })
+      const remote = await lookupPdvScanRemote({ code: query, storeId: lojaKey, setInventory })
       if (remote.kind === "single") {
         commitScan(remote.product)
         return
       }
       if (remote.kind === "multiple") {
-        setShellInfo(`Vários produtos para o código "${raw}". Use F3 para escolher.`)
-        queueMicrotask(() => shellBipeRef.current?.focus())
+        setShellProductSearchQuery(query)
+        setShellProductSearchOpen(true)
+        setShellInfo(`Vários produtos para o código "${query}". Escolha na lista F3.`)
+        setBipeCode("")
         return
       }
-      toast({ title: "Produto não encontrado", description: `Produto não encontrado nesta loja para o código: ${raw}` })
-      setShellInfo(`✕ Produto não encontrado nesta loja para o código: ${raw}`)
+      toast({ title: "Produto não encontrado", description: `Produto não encontrado nesta loja para o código: ${query}` })
+      setShellInfo(`✕ Produto não encontrado nesta loja para o código: ${query}`)
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
     [addToCart, bipeCode, cart, products, shellNextQty, toast, lojaKey, setInventory]
@@ -1274,6 +1317,12 @@ export function PdvClassic({
 
   const openPaymentFlow = useCallback(
     (intent: PaymentMethodType | null, multiple: boolean) => {
+      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+        return false
+      }
+      if (multiple && !pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+        return false
+      }
       if (!validateBeforeOpenPayment()) {
         focusShellBipe()
         return false
@@ -1283,7 +1332,7 @@ export function PdvClassic({
       setIsPaymentModalOpen(true)
       return true
     },
-    [focusShellBipe, validateBeforeOpenPayment]
+    [focusShellBipe, pdvCapabilities, validateBeforeOpenPayment]
   )
 
   const openShellShortcut = useCallback(
@@ -1297,7 +1346,7 @@ export function PdvClassic({
           setShowKeyboardHelp(true)
           break
         case "F2":
-          setShellClientSearchOpen(true)
+          if (customerSearchEnabled) setShellClientSearchOpen(true)
           break
         case "F3":
           setShellProductSearchOpen(true)
@@ -1324,7 +1373,7 @@ export function PdvClassic({
           setShellCancelSaleOpen(true)
           break
         case "F7":
-          setVendaEsperaOpen(true)
+          if (heldSalesEnabled) setVendaEsperaOpen(true)
           break
         case "F8":
           goBipe()
@@ -1355,7 +1404,7 @@ export function PdvClassic({
           break
       }
     },
-    [cart.length, focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow]
+    [cart.length, focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow, customerSearchEnabled, heldSalesEnabled]
   )
 
   useEffect(() => {
@@ -1483,6 +1532,7 @@ export function PdvClassic({
   const heldSales = useHeldSales(lojaKey, terminalIdForHold, "classic")
 
   function handleHoldSale() {
+    if (!heldSalesEnabled) return
     const held: HeldSale = {
       id: newHoldId(),
       label: nextHoldLabel(heldSales),
@@ -1510,7 +1560,11 @@ export function PdvClassic({
       discountPercent,
       pdvType: "classic",
     }
-    saveHeldSale(lojaKey, terminalIdForHold, held)
+    saveHeldSale(
+      lojaKey,
+      terminalIdForHold,
+      withHoldCapabilitiesSnapshot(held, pdvCapabilities.snapshot),
+    )
     setCart([])
     setSelectedCustomer(null)
     setDiscountReais(0)
@@ -1519,6 +1573,13 @@ export function PdvClassic({
   }
 
   function handleResumeSale(sale: HeldSale) {
+    if (!heldSalesEnabled) return false
+    const resumeCaps = combineHoldSnapshotWithRuntime({
+      surfaceId: "classic",
+      overrides: pdvCapabilities.overrides,
+      snapshot: sale.capabilitiesSnapshot,
+    })
+    const discountRestore = resumeDiscountFields(sale, resumeCaps.isEnabled("pdv.discounts"))
     setCart(
       sale.items.map((i) => ({
         lineId: i.lineId,
@@ -1547,8 +1608,8 @@ export function PdvClassic({
     } else {
       setSelectedCustomer(null)
     }
-    setDiscountReais(sale.discountReais ?? 0)
-    setDiscountPercent(sale.discountPercent ?? 0)
+    setDiscountReais(discountRestore.discountReais)
+    setDiscountPercent(discountRestore.discountPercent)
     removeHeldSale(lojaKey, terminalIdForHold, sale.id)
     return true
   }
@@ -1667,9 +1728,8 @@ export function PdvClassic({
               onBipeSuggestionSelect={handleBipeSuggestionSelect}
               customerDisplay={shellCustomerField}
               onCustomerDisplayChange={(v) => {
-                // Busca de cliente ao digitar no campo inline (antes só funcionava
-                // via F2): alimenta a mesma busca live do picker e abre o resultado.
                 setShellCustomerField(v)
+                if (!customerSearchEnabled) return
                 setCustomerSearch(v)
                 if (v.trim().length > 0) setShellClientSearchOpen(true)
               }}
@@ -1680,15 +1740,21 @@ export function PdvClassic({
               info={shellInfo}
               onShortcutAction={openShellShortcut}
               heldSalesCount={heldSales.length}
+              heldSalesEnabled={heldSalesEnabled}
               onFinalizeClick={() => openShellShortcut("F1")}
               products={products}
               productSearchOpen={shellProductSearchOpen}
+              productSearchInitialQuery={shellProductSearchQuery}
               onProductSearchOpenChange={(open) => {
                 setShellProductSearchOpen(open)
-                if (!open) focusShellBipe()
+                if (!open) {
+                  setShellProductSearchQuery("")
+                  focusShellBipe()
+                }
               }}
-              clientSearchOpen={shellClientSearchOpen}
+              clientSearchOpen={customerSearchEnabled && shellClientSearchOpen}
               onClientSearchOpenChange={(open) => {
+                if (!customerSearchEnabled && open) return
                 setShellClientSearchOpen(open)
                 if (open) setCustomerSearch("")
                 if (!open) focusShellBipe()
@@ -1791,8 +1857,11 @@ export function PdvClassic({
       />
 
       <VendaEsperaModal
-        open={vendaEsperaOpen}
-        onOpenChange={setVendaEsperaOpen}
+        open={heldSalesEnabled && vendaEsperaOpen}
+        onOpenChange={(open) => {
+          if (!heldSalesEnabled && open) return
+          setVendaEsperaOpen(open)
+        }}
         heldSales={heldSales}
         cartEmpty={cart.length === 0}
         onHold={handleHoldSale}
@@ -1814,7 +1883,7 @@ export function PdvClassic({
       />
 
       <PdvClientePicker
-        open={aPrazoClientePickerOpen}
+        open={customerSearchEnabled && aPrazoClientePickerOpen}
         storeId={lojaKey}
         onClose={() => setAPrazoClientePickerOpen(false)}
         onSelect={(c: PdvClienteResult) => {
@@ -1846,21 +1915,44 @@ export function PdvClassic({
         onDiscountPercentChange={setDiscountPercent}
         custoPeca={total * 0.35}
         selectedCustomer={selectedCustomer}
-        customerStoreCredit={selectedCustomer ? (customerCreditFetched ?? getSaldoCreditoCliente(selectedCustomer.cpf)) : 0}
+        customerStoreCredit={
+          storeCreditEnabled && selectedCustomer
+            ? (customerCreditFetched ?? getSaldoCreditoCliente(selectedCustomer.cpf))
+            : 0
+        }
         instantPayIntent={instantPayIntent}
         onInstantPayIntentConsumed={() => setInstantPayIntent(null)}
         onCustomerCpfUpdate={updateCustomerCpf}
         multipayHint={multipayMode}
-        onRequireCustomer={() => setAPrazoClientePickerOpen(true)}
+        onRequireCustomer={() => {
+          if (customerSearchEnabled) setAPrazoClientePickerOpen(true)
+        }}
+        discountsEnabled={discountsEnabled}
+        storeCreditEnabled={storeCreditEnabled}
+        allowMultiplePayments={pdvCapabilities.isEnabled("pdv.multiplePayments")}
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
+          // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
+          // linha de produto sem cadastro BLOQUEIA com os nomes — nunca filtrada
+          // em silêncio enquanto o total cheio segue para cobrança. Carrinho intacto.
+          const unresolvedClassic = findUnresolvedSaleLines(
+            cart.map((item) => ({
+              inventoryId: item.inventoryId,
+              name: item.name,
+              isAvulso: item.isAvulso,
+            })),
+            inventory.map((i) => i.id),
+          )
+          if (unresolvedClassic.length > 0) {
+            toast({
+              variant: "destructive",
+              title: "Item não pode ser vendido",
+              description: unresolvedSaleLinesDescription(unresolvedClassic),
+            })
+            return false
+          }
+          // Todas as linhas resolvem (garantido pelo guard) — nada é descartado.
           const saleLines = cart
-            .filter(
-              (item) =>
-                isOsVirtualSaleLine(item.inventoryId) ||
-                isAvulsoSaleLine(item.inventoryId) ||
-                inventory.some((i) => i.id === item.inventoryId)
-            )
             .map((item) => ({
               inventoryId: item.inventoryId,
               quantity: item.quantity,
@@ -1961,6 +2053,26 @@ export function PdvClassic({
             toast({ title: "Falha transacional", description: result.reason })
             return false
           }
+          // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
+          // sem impressão, sem cupom, sem auditoria de venda concluída, sem
+          // fila de produtos, sem marcar total da última venda, sem limpar o
+          // carrinho. Só informa o estado honesto, preserva carrinho/identidade
+          // e permite retry da MESMA venda (Vendas → Reenviar sync). Tudo
+          // abaixo é CONFIRMED.
+          if (result.pending) {
+            toast({
+              title: PENDING_SALE_TITLE,
+              description: PENDING_SALE_DESCRIPTION,
+              duration: 6000,
+            })
+            queueMicrotask(() => {
+              shellBipeRef.current?.focus()
+              if (isModoRapido) {
+                window.requestAnimationFrame(() => shellBipeRef.current?.focus())
+              }
+            })
+            return true
+          }
           _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
           // Fila "Produtos a cadastrar": registra os itens avulsos vendidos para revisão posterior.
           // Não toca estoque/venda/caixa e nunca lança (não pode afetar a venda já concluída).
@@ -2006,7 +2118,7 @@ export function PdvClassic({
           appendAuditLog({
             action: "sale_finalized",
             userLabel: auditUser(),
-            detail: `Venda ${displaySaleNumber(result.saleId, result.pending)} Total ${formatBrlAudit(total)} | Din ${formatBrlAudit(dinheiro)} Pix ${formatBrlAudit(pix)} Déb ${formatBrlAudit(cartaoDebito)} Créd ${formatBrlAudit(cartaoCredito)} Carnê ${formatBrlAudit(carne)} Prazo ${formatBrlAudit(aPrazo)} Vale ${formatBrlAudit(creditoVale)}`,
+            detail: `${result.pending ? "Venda PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda "}${displaySaleNumber(result.saleId, result.pending)} Total ${formatBrlAudit(total)} | Din ${formatBrlAudit(dinheiro)} Pix ${formatBrlAudit(pix)} Déb ${formatBrlAudit(cartaoDebito)} Créd ${formatBrlAudit(cartaoCredito)} Carnê ${formatBrlAudit(carne)} Prazo ${formatBrlAudit(aPrazo)} Vale ${formatBrlAudit(creditoVale)}`,
           })
           if (subtotal > 0 && discountTotal > 0) {
             const pct = (discountTotal / subtotal) * 100
@@ -2019,6 +2131,7 @@ export function PdvClassic({
             }
           }
           setLastSaleTotal(total)
+          // CONFIRMED: venda concluída — limpa carrinho e conclui pós-venda.
           setCart([])
           setDiscountReais(0)
           setDiscountPercent(0)
@@ -2112,7 +2225,7 @@ export function PdvClassic({
       />
 
       <SelecionarAcessorioDialog
-        open={accessoryProduct !== null}
+        open={accessoryModelColorEnabled && accessoryProduct !== null}
         product={accessoryProduct}
         onCancel={() => setAccessoryProduct(null)}
         onConfirm={confirmAccessorySelection}

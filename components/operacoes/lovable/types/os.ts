@@ -92,6 +92,11 @@ export interface Servico {
   observacao?: string;
   prazoGarantiaDias?: number;
   termoGarantia?: string;
+  /** Snapshot textual do prazo/tempo estimado (ex.: "2 horas"). Nunca vira SLA. Ausente em payloads legados. */
+  prazoTexto?: string;
+  /** Rastreabilidade opcional: id real do `Servico` de catálogo que originou a linha.
+   *  Nunca substitui o snapshot textual/comercial (a OS antiga não muda se o cadastro mudar). */
+  catalogoServicoId?: string;
 }
 
 export interface Orcamento {
@@ -279,7 +284,7 @@ export interface OrdemServico {
 
   // Novos campos operacionais
   checklist?: ChecklistItem[];
-  servicosCatalogo?: { servicoId: string; descricao: string; custoInterno: number; valorVenda: number; prazoGarantiaDias: number; termoGarantia: string; observacao?: string }[];
+  servicosCatalogo?: { servicoId: string; descricao: string; custoInterno: number; valorVenda: number; prazoGarantiaDias: number; termoGarantia: string; observacao?: string; prazoTexto?: string; catalogoServicoId?: string }[];
   senhaEquipamento?: string;
   /** Como a senha foi registrada: numérica/PIN, texto alfanumérico ou descrição do padrão (desenho). */
   senhaEquipamentoTipo?: "numerica" | "texto" | "padrao";

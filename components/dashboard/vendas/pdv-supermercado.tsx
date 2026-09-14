@@ -55,6 +55,7 @@ import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-recebe
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
@@ -80,7 +81,7 @@ import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
-import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import {
   construirProdutosACadastrar,
@@ -102,23 +103,26 @@ import {
   removeHeldSale,
   newHoldId,
   nextHoldLabel,
+  withHoldCapabilitiesSnapshot,
   type HeldSale,
 } from "@/lib/pdv-hold"
+import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import {
+  PENDING_SALE_DESCRIPTION,
+  PENDING_SALE_TITLE,
+  findUnresolvedSaleLines,
+  unresolvedSaleLinesDescription,
+} from "@/lib/pdv-finalize-integrity"
 
 import type { VendasPDVProps } from "./pdv-classic"
 
-/** Atalho de quantidade: `3*78912345` → quantidade 3 e código à direita do asterisco. */
+/** Atalho de quantidade: `3x789`, `3*789`, `3×789` → quantidade 3 e código à direita do prefixo. */
 function parseStarQtyAndRest(raw: string): { codePart: string; qty: number } | null {
-  const t = raw.trim()
-  const i = t.indexOf("*")
-  if (i <= 0) return null
-  const left = t.slice(0, i).trim().replace(",", ".")
-  const right = t.slice(i + 1).trim()
-  if (!right) return null
-  const q = parseFloat(left)
-  if (!Number.isFinite(q) || q <= 0) return null
-  return { codePart: right, qty: q }
+  const parsed = parsePdvScanPrefix(raw)
+  if (!parsed.hasPrefix) return null
+  return { codePart: parsed.query, qty: parsed.qty }
 }
 
 function normalizeQtyForProduct(p: PdvCatalogProduct, q: number | undefined): number {
@@ -183,6 +187,12 @@ export function PdvSupermercado({
   const { toast } = useToast()
   const { lojaAtivaId, opsStorageKey, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const { pdvParams, blob, save: saveStoreSettings, impressaoConfig } = useStoreSettings()
+  const pdvCapabilities = usePdvCapabilities("supermercado")
+  const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
+  const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
+  const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
+  const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
+  const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
@@ -416,7 +426,11 @@ export function PdvSupermercado({
         return
       }
       // Acessório configurado (modelo/cor): intercepta ANTES da mutação do carrinho.
-      if (!product.vendaPorPeso && accessoryConfigRequiresSelection(product.accessoryConfig)) {
+      if (
+        accessoryModelColorEnabled &&
+        !product.vendaPorPeso &&
+        accessoryConfigRequiresSelection(product.accessoryConfig)
+      ) {
         accessoryQtyRef.current = nq
         setAccessoryProduct(product)
         return
@@ -588,6 +602,7 @@ export function PdvSupermercado({
 
   const openPaymentModal = useCallback(
     (intent: PaymentMethodType | null) => {
+      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
       if (cart.length === 0) {
         toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
         hardFocusSearch()
@@ -598,11 +613,13 @@ export function PdvSupermercado({
       setMultipayMode(false)
       setIsPaymentModalOpen(true)
     },
-    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, toast]
+    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast]
   )
 
   /** Pagamento Múltiplo — convergência operacional com PDV Assistência (F12). */
   const openMultipayModal = useCallback(() => {
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
+    if (!pdvCapabilities.isEnabled("pdv.multiplePayments")) return
     if (cart.length === 0) {
       toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
       hardFocusSearch()
@@ -612,7 +629,7 @@ export function PdvSupermercado({
     setInstantPayIntent(null)
     setMultipayMode(true)
     setIsPaymentModalOpen(true)
-  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, toast])
+  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast])
 
   const confirmAttrDialog = useCallback(() => {
     if (!attrProduct) return
@@ -837,7 +854,7 @@ export function PdvSupermercado({
       e.preventDefault()
       e.stopPropagation()
       if (e.key === "Insert") setShowItemAvulsoModal(true)
-      else if (e.key === "F7") setVendaEsperaOpen(true)
+      else if (e.key === "F7") { if (heldSalesEnabled) setVendaEsperaOpen(true) }
       else if (e.key === "F8") {
         appendAuditLog({
           action: "pdv_troca_aberta",
@@ -846,7 +863,7 @@ export function PdvSupermercado({
         })
         setTrocasOpen(true)
       } else if (e.key === "F9") setRecebimentoOpen(true)
-      else if (e.key === "F10") setAPrazoClientePickerOpen(true)
+      else if (e.key === "F10") { if (customerSearchEnabled) setAPrazoClientePickerOpen(true) }
       else if (e.key === "F2") {
         const r = toPaymentMethodType(formasSupermercado.quick[0]?.id ?? "dinheiro")
         if (r) openPaymentModal(r)
@@ -860,12 +877,13 @@ export function PdvSupermercado({
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado, heldSalesEnabled, customerSearchEnabled])
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = useHeldSales(lojaKey, terminalIdForHold, "supermercado")
 
   function handleHoldSale() {
+    if (!heldSalesEnabled) return
     const held: HeldSale = {
       id: newHoldId(),
       label: nextHoldLabel(heldSales),
@@ -889,7 +907,11 @@ export function PdvSupermercado({
       discountPercent,
       pdvType: "supermercado",
     }
-    saveHeldSale(lojaKey, terminalIdForHold, held)
+    saveHeldSale(
+      lojaKey,
+      terminalIdForHold,
+      withHoldCapabilitiesSnapshot(held, pdvCapabilities.snapshot),
+    )
     setCart([])
     setDiscountReais(0)
     setDiscountPercent(0)
@@ -897,6 +919,13 @@ export function PdvSupermercado({
   }
 
   function handleResumeSale(sale: HeldSale) {
+    if (!heldSalesEnabled) return false
+    const resumeCaps = combineHoldSnapshotWithRuntime({
+      surfaceId: "supermercado",
+      overrides: pdvCapabilities.overrides,
+      snapshot: sale.capabilitiesSnapshot,
+    })
+    const discountRestore = resumeDiscountFields(sale, resumeCaps.isEnabled("pdv.discounts"))
     setCart(
       sale.items.map((i) => ({
         lineId: i.lineId,
@@ -911,8 +940,8 @@ export function PdvSupermercado({
         cartLineKey: i.cartLineKey,
       })),
     )
-    setDiscountReais(sale.discountReais ?? 0)
-    setDiscountPercent(sale.discountPercent ?? 0)
+    setDiscountReais(discountRestore.discountReais)
+    setDiscountPercent(discountRestore.discountPercent)
     setSelectedCustomer(
       sale.customer
         ? { id: sale.customer.id, name: sale.customer.name, cpf: sale.customer.cpf ?? "", phone: sale.customer.phone ?? "" }
@@ -966,6 +995,7 @@ export function PdvSupermercado({
                   </div>
                 )}
                 <div className="flex items-center gap-2">
+                  {heldSalesEnabled ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -979,6 +1009,7 @@ export function PdvSupermercado({
                     {heldSales.length > 0 ? <span className="ml-1 tabular-nums">({heldSales.length})</span> : null}
                     <span className="ml-1 text-[9px] font-normal opacity-50">[F7]</span>
                   </Button>
+                  ) : null}
                   {!isModoRapido ? (
                     <Button
                       type="button"
@@ -998,8 +1029,7 @@ export function PdvSupermercado({
                       Trocas <span className="ml-1 text-[9px] font-normal opacity-50">[F8]</span>
                     </Button>
                   ) : null}
-                  {!isModoRapido ? (
-                    selectedCustomer ? (
+                  {!isModoRapido && selectedCustomer ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -1011,7 +1041,7 @@ export function PdvSupermercado({
                         <span className="truncate">{selectedCustomer.name}</span>
                         <X className="ml-1.5 h-3 w-3 shrink-0 opacity-60" />
                       </Button>
-                    ) : (
+                  ) : !isModoRapido && customerSearchEnabled ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -1022,7 +1052,6 @@ export function PdvSupermercado({
                         <User className="mr-1.5 h-3.5 w-3.5" />
                         Cliente / CPF <span className="ml-1 text-[9px] font-normal opacity-50">[F10]</span>
                       </Button>
-                    )
                   ) : null}
                   <Button
                     type="button"
@@ -1346,7 +1375,7 @@ export function PdvSupermercado({
               })}
             </div>
 
-            {formasSupermercado.multiplo ? (
+            {formasSupermercado.multiplo && pdvCapabilities.isEnabled("pdv.multiplePayments") ? (
               <Button
                 type="button"
                 variant="outline"
@@ -1368,7 +1397,7 @@ export function PdvSupermercado({
       </div>
 
       <PdvClientePicker
-        open={aPrazoClientePickerOpen}
+        open={customerSearchEnabled && aPrazoClientePickerOpen}
         storeId={lojaKey}
         onClose={() => setAPrazoClientePickerOpen(false)}
         onSelect={(c: PdvClienteResult) => {
@@ -1399,14 +1428,21 @@ export function PdvSupermercado({
         onDiscountPercentChange={setDiscountPercent}
         custoPeca={total * 0.35}
         selectedCustomer={selectedCustomer}
-        customerStoreCredit={getSaldoCreditoCliente(selectedCustomer?.cpf ?? "")}
+        customerStoreCredit={
+          storeCreditEnabled ? getSaldoCreditoCliente(selectedCustomer?.cpf ?? "") : 0
+        }
         instantPayIntent={instantPayIntent}
         onInstantPayIntentConsumed={() => setInstantPayIntent(null)}
         onCustomerCpfUpdate={(id, cpf) =>
           setSelectedCustomer((prev) => (prev && prev.id === id ? { ...prev, cpf } : prev))
         }
         multipayHint={multipayMode}
-        onRequireCustomer={() => setAPrazoClientePickerOpen(true)}
+        onRequireCustomer={() => {
+          if (customerSearchEnabled) setAPrazoClientePickerOpen(true)
+        }}
+        discountsEnabled={discountsEnabled}
+        storeCreditEnabled={storeCreditEnabled}
+        allowMultiplePayments={pdvCapabilities.isEnabled("pdv.multiplePayments")}
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
           // Capturar dados de impressão ANTES de limpar o cart
@@ -1428,11 +1464,27 @@ export function PdvSupermercado({
           }
           const _hadItems = cart.length > 0
 
+          // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
+          // linha de produto sem cadastro BLOQUEIA com os nomes — nunca filtrada
+          // em silêncio enquanto o total cheio segue para cobrança. Carrinho intacto.
+          const unresolvedSuper = findUnresolvedSaleLines(
+            cart.map((item) => ({
+              inventoryId: item.inventoryId,
+              name: item.name,
+              isAvulso: item.isAvulso,
+            })),
+            inventory.map((i) => i.id),
+          )
+          if (unresolvedSuper.length > 0) {
+            toast({
+              variant: "destructive",
+              title: "Item não pode ser vendido",
+              description: unresolvedSaleLinesDescription(unresolvedSuper),
+            })
+            return
+          }
+          // Todas as linhas resolvem (garantido pelo guard) — nada é descartado.
           const saleLines = cart
-            .filter(
-              (item) =>
-                isAvulsoSaleLine(item.inventoryId) || inventory.some((i) => i.id === item.inventoryId),
-            )
             .map((item) => ({
               inventoryId: item.inventoryId,
               quantity: item.quantity,
@@ -1502,6 +1554,27 @@ export function PdvSupermercado({
             toast({ title: "Falha transacional", description: result.reason })
             return
           }
+          // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
+          // sem impressão, sem cupom, sem audit sale_finalizado, sem fila de
+          // produtos, sem limpar o carrinho. Só informa o estado honesto,
+          // preserva carrinho/identidade e permite retry da MESMA venda
+          // (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
+          if (result.pending) {
+            setIsPaymentModalOpen(false)
+            setInstantPayIntent(null)
+            toast({
+              title: PENDING_SALE_TITLE,
+              description: PENDING_SALE_DESCRIPTION,
+              duration: 6000,
+            })
+            queueMicrotask(() => {
+              hardFocusSearch()
+              if (isModoRapido) {
+                window.requestAnimationFrame(() => hardFocusSearch())
+              }
+            })
+            return
+          }
           _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
           if (aPrazo > 0.02 && selectedCustomer && !result.pending) {
             appendContaReceberTituloPdvAprazo({
@@ -1541,7 +1614,7 @@ export function PdvSupermercado({
           appendAuditLog({
             action: "sale_finalized",
             userLabel: cashierId.slice(0, 8),
-            detail: `Venda ${result.saleId} Total ${brl(total)} | Din ${brl(dinheiro)} Pix ${brl(pix)} Déb ${brl(cartaoDebito)} Créd ${brl(cartaoCredito)} Carnê ${brl(carne)} Prazo ${brl(aPrazo)} Vale ${brl(creditoVale)}`,
+            detail: `${result.pending ? "Venda PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda "}${displaySaleNumber(result.saleId, result.pending)} Total ${brl(total)} | Din ${brl(dinheiro)} Pix ${brl(pix)} Déb ${brl(cartaoDebito)} Créd ${brl(cartaoCredito)} Carnê ${brl(carne)} Prazo ${brl(aPrazo)} Vale ${brl(creditoVale)}`,
           })
           if (subtotal > 0 && discountTotal > 0) {
             const pct = (discountTotal / subtotal) * 100
@@ -1554,6 +1627,7 @@ export function PdvSupermercado({
             }
           }
 
+          // CONFIRMED: venda concluída — limpa o carrinho e conclui pós-venda.
           setCart([])
           setSelectedCustomer(null)
           setDiscountReais(0)
@@ -1606,8 +1680,11 @@ export function PdvSupermercado({
       />
 
       <VendaEsperaModal
-        open={vendaEsperaOpen}
-        onOpenChange={setVendaEsperaOpen}
+        open={heldSalesEnabled && vendaEsperaOpen}
+        onOpenChange={(open) => {
+          if (!heldSalesEnabled && open) return
+          setVendaEsperaOpen(open)
+        }}
         heldSales={heldSales}
         cartEmpty={cart.length === 0}
         onHold={handleHoldSale}
@@ -1675,7 +1752,7 @@ export function PdvSupermercado({
       />
 
       <SelecionarAcessorioDialog
-        open={accessoryProduct !== null}
+        open={accessoryModelColorEnabled && accessoryProduct !== null}
         product={accessoryProduct}
         onCancel={() => setAccessoryProduct(null)}
         onConfirm={confirmAccessorySelection}

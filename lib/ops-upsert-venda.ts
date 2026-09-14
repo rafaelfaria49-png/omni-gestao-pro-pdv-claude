@@ -7,12 +7,20 @@ import type { SaleLineItemType } from "@/lib/sale-line-classification"
 import { valorAVistaVenda } from "@/lib/financeiro/correcao-pagamento-plan"
 import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
 import { sanitizeSaleLinesPayload } from "@/lib/vendas/sanitize-sale-line-payload"
+import {
+  FractionalQuantityError,
+  normalizeSaleQuantity,
+} from "@/lib/vendas/sale-quantity-contract"
+
 import { stripClientSyncFlags } from "@/lib/vendas/sale-sync-flags"
 import { buildLegacySaleFingerprint, isLegacySaleFactsComparable } from "@/lib/vendas/legacy-sale-fingerprint"
 import {
   parseClientSaleId,
   type ClientSaleIdRejectionReason,
 } from "@/lib/vendas/sale-identity-contracts"
+
+/** Re-exportado para as rotas traduzirem o erro de negócio em HTTP 409. */
+export { FractionalQuantityError }
 
 /**
  * Lançada pela baixa de estoque do PDV quando `enforceStock` está ativo e o saldo
@@ -205,6 +213,43 @@ export class InvalidClientSaleIdError extends Error {
   }
 }
 
+/**
+ * Lançado no fluxo PDV ao vivo (`enforceStock`) quando a soma das formas de
+ * pagamento recebidas diverge do total cobrado (PDV-MOTOR-INTEGRITY-N1).
+ * Cobre o que o filtro silencioso client-side escondia: nenhuma cobrança pode
+ * representar valor diferente do total persistido. Falha ANTES de
+ * Venda/ItemVenda/estoque/caixa/financeiro/títulos. O caller traduz para HTTP 409.
+ */
+export class SalePaymentsMismatchError extends Error {
+  readonly code = "PAGAMENTOS_TOTAL_DIVERGENTE"
+  readonly detail: {
+    total: number
+    somaPagamentos: number
+  }
+  constructor(total: number, somaPagamentos: number) {
+    super(
+      "Soma das formas de pagamento difere do total da venda. Revise os valores antes de finalizar.",
+    )
+    this.name = "SalePaymentsMismatchError"
+    this.detail = { total, somaPagamentos }
+  }
+}
+
+/**
+ * Lançado no fluxo PDV ao vivo (`enforceStock`) quando as linhas recebidas não
+ * são persistíveis segundo seus tipos (PDV-MOTOR-INTEGRITY-N1): venda sem
+ * itens, linha sem produto, quantidade inválida ou preço inválido. Falha ANTES
+ * de qualquer efeito. Replay legado preserva o histórico (sem este gate).
+ * O caller traduz para HTTP 409.
+ */
+export class InvalidSaleLinesError extends Error {
+  readonly code = "LINHAS_VENDA_INVALIDAS"
+  constructor(motivo = "Itens da venda inválidos. Revise os itens antes de finalizar.") {
+    super(motivo)
+    this.name = "InvalidSaleLinesError"
+  }
+}
+
 /** Mesmo `clientSaleId` reutilizado com fatos canônicos diferentes. */
 export class ClientSaleIdReusedError extends Error {
   readonly code = "IDEMPOTENCY_KEY_REUSED"
@@ -282,6 +327,14 @@ export type UpsertVendaOptions = {
    * `syncedAt`/`reason`. Sem esse flag, o mesmo cenário falha com `CaixaOriginalFechadoError`.
    */
   allowClosedOriginalSession?: boolean
+  /**
+   * Recuperação HISTÓRICA de venda preservada no cliente (quarentena) — nunca o PDV ao
+   * vivo. Um AJUSTE absoluto de saldo do produto (`MovimentacaoEstoque.tipo = "ajuste"`:
+   * contagem/inventário) posterior a `sale.at` já refletiu a saída física, então a baixa
+   * desse produto é pulada (baixar de novo contaria a mesma saída duas vezes) e o produto
+   * fica registrado em `payload.recovery.stockAbsorbedByLaterAdjustment`.
+   */
+  historicalRecovery?: boolean
   /**
    * Fluxo V2: o caller traz `clientSaleId` e um callback que aloca o número
    * comercial DENTRO desta transação. Este módulo NÃO importa o allocator.
@@ -558,6 +611,25 @@ export async function upsertVendaInTransaction(
   operadorLabel?: string,
   options?: UpsertVendaOptions
 ): Promise<UpsertVendaResult> {
+  // ── GUARD FAIL-CLOSED: quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005) ──
+  // PRIMEIRA coisa na função, ANTES de qualquer lookup (replay incluso), gate de
+  // caixa, `Venda.create`, itens, estoque, financeiro ou títulos. `ItemVenda.quantidade`
+  // e `Produto.stock` são inteiros: fração comercial (0.350, 1.5…) lança
+  // `FractionalQuantityError` — nunca `Math.round` silencioso (0.35 virava 0 no
+  // estoque com o total refletindo o decimal). Inteiros passam; ruído
+  // insignificante de floating point é normalizado in-place para que ItemVenda,
+  // estoque, payload e fingerprint usem o inteiro. Roda antes do replay porque o
+  // fingerprint normaliza quantidade — sem isto, 1.5 poderia "replaysar" uma venda
+  // inteira de quantidade 2. Não-finito preserva o fallback legado (→ 0) abaixo.
+  if (Array.isArray(sale.lines)) {
+    sale.lines.forEach((line, index) => {
+      const raw = line?.quantity
+      if (typeof raw !== "number" || !Number.isFinite(raw)) return
+      const normalized = normalizeSaleQuantity(raw, index)
+      if (normalized !== raw) line.quantity = normalized
+    })
+  }
+
   const enforceStock = options?.enforceStock === true
   const v2 = options?.v2
   let pedidoId = ""
@@ -647,6 +719,51 @@ export async function upsertVendaInTransaction(
   // gaveta (MovimentacaoFinanceira no passo 4) e, portanto, exige caixa aberto.
   const pb = sale.paymentBreakdown
   const valorImediato = valorAVistaVenda(total, pb)
+
+  // ── Invariante linhas × total (PDV-MOTOR-INTEGRITY-N1) ─────────────────────
+  // Fluxo PDV ao vivo (`enforceStock`, V1 e V2): a request precisa ser coerente
+  // ANTES de qualquer efeito (Venda/ItemVenda/estoque/caixa/financeiro/
+  // títulos). Cobre o que o filtro silencioso client-side escondia: o total
+  // cobrado precisa ser explicado pelas linhas + pagamentos recebidos, e toda
+  // linha recebida precisa ser persistível segundo seu tipo. Replay legado
+  // (`enforceStock` ausente) preserva o histórico sem revalidar.
+  if (enforceStock) {
+    if (!Array.isArray(sale.lines) || sale.lines.length === 0) {
+      throw new InvalidSaleLinesError("Venda sem itens. Adicione ao menos um item antes de finalizar.")
+    }
+    sale.lines.forEach((line, index) => {
+      const rawInvId = typeof line?.inventoryId === "string" ? line.inventoryId.trim() : ""
+      if (!rawInvId) {
+        throw new InvalidSaleLinesError(`Linha ${index + 1} sem produto. Revise os itens antes de finalizar.`)
+      }
+      const q = line?.quantity
+      if (typeof q !== "number" || !Number.isFinite(q) || q <= 0) {
+        throw new InvalidSaleLinesError(`Quantidade inválida na linha ${index + 1}.`)
+      }
+      // Fração significativa já lançaria `FractionalQuantityError` no topo; aqui
+      // só reafirma o inteiro no fluxo ao vivo (ruído já normalizado in-place).
+      normalizeSaleQuantity(q, index)
+      const unit = line?.unitPrice
+      if (typeof unit !== "number" || !Number.isFinite(unit) || unit < 0) {
+        throw new InvalidSaleLinesError(`Preço inválido na linha ${index + 1}.`)
+      }
+    })
+    const rawTotal = sale.total
+    if (typeof rawTotal !== "number" || !Number.isFinite(rawTotal) || rawTotal < 0) {
+      throw new InvalidSaleLinesError("Total da venda inválido.")
+    }
+    const somaPagamentos =
+      Number(pb?.dinheiro ?? 0) +
+      Number(pb?.pix ?? 0) +
+      Number(pb?.cartaoDebito ?? 0) +
+      Number(pb?.cartaoCredito ?? 0) +
+      Number(pb?.carne ?? 0) +
+      Number(pb?.aPrazo ?? 0) +
+      Number(pb?.creditoVale ?? 0)
+    if (!Number.isFinite(somaPagamentos) || Math.abs(somaPagamentos - rawTotal) > 0.02) {
+      throw new SalePaymentsMismatchError(rawTotal, somaPagamentos)
+    }
+  }
 
   // ── 0. Caixa servidor obrigatório (P1 — OPS-SALE-SAFETY-P1-001) ─────────────
   // Vendas que geram entrada no caixa (valorImediato > 0) exigem uma `SessaoCaixa`
@@ -824,7 +941,9 @@ export async function upsertVendaInTransaction(
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : null
     const nome = typeof line.name === "string" ? line.name : ""
     const qRaw = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
-    const quantidade = Math.max(0, Math.min(2_000_000_000, Math.round(qRaw)))
+    // Já validado inteiro pelo guard FRACTIONAL-SALE-HARD-BLOCK-005 no topo —
+    // sem `Math.round` aqui (arredondar quantidade externa seria validação silenciosa).
+    const quantidade = Math.max(0, Math.min(2_000_000_000, qRaw))
     const precoUnitario =
       typeof line.unitPrice === "number" && Number.isFinite(line.unitPrice) ? line.unitPrice : 0
     const lineTotal =
@@ -884,7 +1003,8 @@ export async function upsertVendaInTransaction(
       unresolvedInventoryIds.push(rawInvId)
       continue
     }
-    const qty = Math.max(0, Math.round(typeof line.quantity === "number" ? line.quantity : 0))
+    // Quantidade já inteira pelo guard do topo — sem `Math.round` silencioso.
+    const qty = Math.max(0, typeof line.quantity === "number" ? line.quantity : 0)
     if (qty === 0) continue
     qtyByProdutoId.set(resolved.dbId, (qtyByProdutoId.get(resolved.dbId) ?? 0) + qty)
   }
@@ -909,6 +1029,10 @@ export async function upsertVendaInTransaction(
     resolvedByDbId.set(resolved.dbId, resolved)
   }
 
+  // Recuperação histórica: produtos cuja saída um ajuste de saldo posterior já refletiu.
+  const historicalRecovery = options?.historicalRecovery === true
+  const stockAbsorbedByLaterAdjustment: Array<{ produtoId: string; nome: string; quantidade: number }> = []
+
   for (const [produtoId, qty] of qtyByProdutoId) {
     const resolved = resolvedByDbId.get(produtoId)
     if (!resolved) continue
@@ -919,6 +1043,19 @@ export async function upsertVendaInTransaction(
       select: { id: true },
     })
     if (jaExiste) continue
+
+    // Venda histórica: um AJUSTE absoluto de saldo (contagem/inventário) DEPOIS da venda
+    // já refletiu esta saída física — baixar agora seria a segunda baixa da mesma venda.
+    if (historicalRecovery) {
+      const ajustePosterior = await tx.movimentacaoEstoque.findFirst({
+        where: { storeId: lojaId, produtoId, tipo: "ajuste", createdAt: { gt: at } },
+        select: { id: true },
+      })
+      if (ajustePosterior) {
+        stockAbsorbedByLaterAdjustment.push({ produtoId, nome: resolved.name, quantidade: qty })
+        continue
+      }
+    }
 
     // Re-lê stock atual dentro da transação para estoqueAntes preciso
     const produtoAtual = await tx.produto.findUnique({
@@ -969,6 +1106,22 @@ export async function upsertVendaInTransaction(
         documento: pedidoId,
         motivo: pedidoId,
         usuario: operador,
+        // A baixa acontece no saldo AGORA (a conciliação de inventário lê `createdAt` como
+        // o instante da mudança de saldo); a data real da venda histórica fica registrada aqui.
+        ...(historicalRecovery ? { observacao: `Recuperação histórica — venda de ${at.toISOString()}` } : {}),
+      },
+    })
+  }
+
+  if (stockAbsorbedByLaterAdjustment.length > 0) {
+    const recovery = asRecord((salePayloadForStorage as { recovery?: unknown }).recovery)
+    await tx.venda.update({
+      where: { id: v.id },
+      data: {
+        payload: asJsonPayload({
+          ...salePayloadForStorage,
+          recovery: { ...recovery, stockAbsorbedByLaterAdjustment },
+        } as SalePayload),
       },
     })
   }

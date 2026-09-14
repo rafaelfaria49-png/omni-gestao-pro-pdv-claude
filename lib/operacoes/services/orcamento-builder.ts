@@ -1,4 +1,5 @@
-import type { Orcamento, OrdemServico, PecaUsada, Servico } from "@/types/os";
+import type { Orcamento, OrdemServico, PecaUsada } from "@/types/os";
+import type { ServicoV3 } from "@/lib/operacoes-v3/orcamento-model";
 
 /**
  * PASSO 1 (remediação intake → orçamento). Funções PURAS (sem I/O, vitest-safe):
@@ -21,7 +22,7 @@ export function buildOrcamentoRascunhoFromOS(os: OSItensFonte, deps: BuildOrcame
   const cat = Array.isArray(os.servicosCatalogo) ? os.servicosCatalogo : [];
   const pecasFonte = Array.isArray(os.pecas) ? os.pecas : [];
 
-  const servicos: Servico[] = cat.map((s) => ({
+  const servicos: ServicoV3[] = cat.map((s) => ({
     id: deps.uid("srv"),
     descricao: s.descricao,
     valor: Number(s.valorVenda) || 0,
@@ -29,6 +30,13 @@ export function buildOrcamentoRascunhoFromOS(os: OSItensFonte, deps: BuildOrcame
     observacao: s.observacao,
     prazoGarantiaDias: s.prazoGarantiaDias,
     termoGarantia: s.termoGarantia,
+    // Custo conhecido do intake (GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002):
+    // projeta `custoInterno` em `custoV3` para a leitura agregar custo/lucro.
+    // Linha legada sem custo → sem `custoV3` (UNKNOWN, nunca zero inventado).
+    ...(typeof s.custoInterno === "number" ? { custoV3: Math.max(0, s.custoInterno) } : {}),
+    // Snapshots opcionais da linha; ausentes em payloads legados — nunca viram SLA.
+    ...(s.prazoTexto ? { prazoTexto: s.prazoTexto } : {}),
+    ...(s.catalogoServicoId ? { catalogoServicoId: s.catalogoServicoId } : {}),
   }));
 
   const pecas: PecaUsada[] = pecasFonte.map((p) => ({ ...p }));

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { FractionalQuantityError } from "@/lib/ops-upsert-venda"
 
 const STORE = "loja-1"
 
@@ -118,5 +119,20 @@ describe("POST /api/ops/venda-persist/v2", () => {
       ok: true,
       venda: { pedidoId: "VDA-RC02-2026-000001" },
     })
+  })
+
+  it("quantidade fracionada vira 409 FRACTIONAL_QUANTITY_UNSUPPORTED (nunca 500)", async () => {
+    h.persist.mockRejectedValue(new FractionalQuantityError(1.5, 0))
+    const res = await POST(
+      req({
+        clientSaleId: "cs_attempt_aaaaaa",
+        sale: {
+          total: 150,
+          lines: [{ inventoryId: "SKU-1", name: "Produto", quantity: 1.5, unitPrice: 100 }],
+        },
+      }),
+    )
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ code: "FRACTIONAL_QUANTITY_UNSUPPORTED" })
   })
 })

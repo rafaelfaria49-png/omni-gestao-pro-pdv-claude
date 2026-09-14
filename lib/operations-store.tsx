@@ -33,8 +33,13 @@ import {
   SALE_IDENTITY_CONFLICT_TITLE,
 } from "@/lib/vendas/sale-identity-conflict"
 import {
+  FRACTIONAL_QUANTITY_MESSAGE,
+  isIntegerSaleQuantity,
+} from "@/lib/vendas/sale-quantity-contract"
+import {
   assertGeneratedClientSaleId,
   buildProvisionalSaleRef,
+  deriveLegacySaleClientSaleId,
   generateClientSaleId,
   isProvisionalSaleRef,
   saleLocalKey,
@@ -43,6 +48,7 @@ import {
   classifySaleWriterCapability,
   extractConfirmedVenda,
   parseSalePersistError,
+  quarantineAutoReconcileUrl,
   recoverQuarantinedSaleUrl,
   quarantineRecoveryPreviewUrl,
   quarantineRecoveryBatchUrl,
@@ -52,16 +58,20 @@ import {
   type SaleWriterCapability,
 } from "@/lib/vendas/sale-client-sync"
 import {
+  QUARANTINE_AUTO_RECONCILE_HOLD_MS,
+  QUARANTINE_AUTO_RECONCILE_RETRY_MS,
   QUARANTINE_RECOVERY_CHUNK,
   applyRecoveryConfirmations,
   buildIndividualRecoveryConfirmations,
   buildRecoveryConfirmations,
   chunk,
   isQuarantinedLocalSale,
+  selectAutoReconcileCandidates,
   summarizePlanItems,
   summarizeRecoveryResults,
   type RecoveryConfirmation,
 } from "@/lib/vendas/quarantine-local-reconciliation"
+import { createConfirmedSaleEmitter } from "@/lib/pdv-finalize-integrity"
 
 const VENDA_AUTO_RETRY_HOLD_MS = 5 * 60_000
 
@@ -249,6 +259,23 @@ function persistedSaleIdentityConflictCode(
   }
 }
 
+/** `clientSaleId`s já gravados no armazenamento local desta loja. */
+function persistedClientSaleIds(storageKey: string): Set<string> {
+  if (typeof window === "undefined") return new Set()
+  try {
+    const raw = localStorage.getItem(storageKey)
+    const parsed = raw ? (JSON.parse(raw) as { sales?: SaleRecord[] }) : null
+    const sales = parsed && Array.isArray(parsed.sales) ? parsed.sales : []
+    return new Set(
+      sales
+        .map((sale) => sale.clientSaleId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
 function mergeCustomerCredits(
   local: Record<string, { nome: string; saldo: number }>,
   remote: Record<string, { nome: string; saldo: number }>,
@@ -368,6 +395,16 @@ interface OperationsContextType {
    * "Saldo de crédito insuficiente" no guard do finalize em navegador frio.
    */
   sincronizarCreditoLocal: (doc: string, nome: string, saldo: number) => void
+  /**
+   * Contrato tri-estado (PDV-MOTOR-INTEGRITY-N1) — sem segunda máquina:
+   * - `{ ok: false }` = FAILED (rejeitada antes de qualquer efeito);
+   * - `{ ok: true, pending: true }` = PENDING (gravada local, AGUARDANDO
+   *   confirmação do servidor; nunca usar copy de sucesso definitivo, nunca
+   *   limpar o carrinho, nunca descartar a identidade);
+   * - `{ ok: true, pending: false }` = CONFIRMED (servidor confirmou).
+   * Somente CONFIRMED dispara efeitos definitivos (`venda_finalizada`, cupom
+   * definitivo). Retry/sync confirma com a MESMA identidade (`clientSaleId`).
+   */
   finalizeSaleTransaction: (input: {
     lines: Array<
       SaleLine & {
@@ -480,15 +517,17 @@ interface OperationsContextType {
     | { ok: false; reason: string }
   >
   /**
-   * Para CADA venda local com `syncPending=true`, consulta o servidor: descarta as
-   * ausentes (404), reconcilia as presentes (200), contabiliza conflitos (outros).
-   * Limpeza local pura — não toca em estoque/financeiro/caixa.
+   * Para CADA venda local com `syncPending=true`, consulta o servidor: reconcilia as
+   * presentes (200) e MANTÉM as ausentes (404) — venda real que ainda não chegou ao
+   * servidor nunca é descartada; o reenvio automático continua cuidando dela. Conflitos
+   * de identificação e erros de consulta entram em `conflicts`.
+   * Só estado local — não toca em estoque/financeiro/caixa.
    */
   bulkDiscardLocalPendingSales: () => Promise<{
     ok: true
     total: number
-    discarded: number
     reconciled: number
+    kept: number
     conflicts: number
   }>
   /**
@@ -531,6 +570,11 @@ interface OperationsContextType {
       }
     | { ok: false; reason: string; code?: string }
   >
+  /**
+   * Chaves (`quarantineReviewKey`) das vendas preservadas que a reconciliação automática
+   * NÃO resolveu com segurança — as únicas que pedem o administrador.
+   */
+  quarantineReviewKeys: ReadonlySet<string>
 }
 
 /** Recorte do item do planner consumido pela UI. */
@@ -1116,6 +1160,39 @@ export function OperationsProvider({
   // original fechada é sempre ação manual e explícita (ver `retrySyncSaleRetroactive`).
   const vendaAutoRetryHoldRef = useRef<Map<string, number>>(new Map())
   const writerCapabilityRef = useRef<SaleWriterCapability>("unknown")
+  /**
+   * NOTIFICAÇÃO LOCAL DE UI do `venda_finalizada` (CORREÇÃO-01): o evento
+   * definitivo só sai na CONFIRMAÇÃO server-side (POST de persistência,
+   * reconciliação com venda existente ou recovery com evidência) — nunca
+   * enquanto PENDING. A chave é a identidade estável (`clientSaleId` ou `id`),
+   * então o retry da MESMA pendência notifica a UI sem duplicar refresh.
+   *
+   * NÃO é autoridade de idempotência da automação: o `Set` em memória não
+   * atravessa abas nem sobrevive a reload. A automação definitiva é
+   * despachada server-side no ponto create-vs-replay de `venda-persist`
+   * (ver `lib/vendas/sale-automation-dispatch.ts`); o browser nunca posta
+   * `venda_finalizada` para `/api/automation/handle-event`.
+   */
+  const confirmedSaleEmitterRef = useRef(createConfirmedSaleEmitter(() => {}))
+  const emitVendaFinalizadaOnce = useCallback(
+    (
+      lojaId: string,
+      sale: { id: string; clientSaleId?: string | null },
+      data: unknown,
+    ) => {
+      const shouldEmit = confirmedSaleEmitterRef.current({
+        id: sale.id,
+        clientSaleId: sale.clientSaleId ?? undefined,
+      })
+      if (!shouldEmit) return
+      emitEvent("venda_finalizada", {
+        storeId: lojaId,
+        entityId: sale.clientSaleId ?? sale.id,
+        data,
+      })
+    },
+    [],
+  )
 
   const probeWriterCapability = useCallback(async (lojaId: string): Promise<SaleWriterCapability> => {
     const cached = writerCapabilityRef.current
@@ -1246,6 +1323,15 @@ export function OperationsProvider({
             confirmed = null
           }
           markSaleConfirmed(token, confirmed ?? undefined)
+          // Semântica definitiva NO ponto confirmado (nunca enquanto PENDING):
+          // cobre a finalização imediata e o retry/sync posterior, uma vez só.
+          emitVendaFinalizadaOnce(
+            lojaId,
+            { id: confirmed?.pedidoId ?? sale.id, clientSaleId: sale.clientSaleId ?? confirmed?.clientSaleId },
+            confirmed
+              ? { ...sale, id: confirmed.pedidoId, serverId: confirmed.id, syncPending: false }
+              : { ...sale, syncPending: false },
+          )
           return {
             ok: true,
             pedidoId: confirmed?.pedidoId,
@@ -1261,6 +1347,11 @@ export function OperationsProvider({
           const v1Body = await v1.text().catch(() => "")
           if (v1.ok) {
             markSaleConfirmed({ id: converted.id, clientSaleId: converted.clientSaleId })
+            emitVendaFinalizadaOnce(
+              lojaId,
+              { id: converted.id, clientSaleId: converted.clientSaleId },
+              { ...converted, syncPending: false },
+            )
             return { ok: true, pedidoId: converted.id, clientSaleId: converted.clientSaleId }
           }
           const v1Parsed = parseSalePersistError(v1Body)
@@ -1274,7 +1365,7 @@ export function OperationsProvider({
         return { ok: false, reason: `Falha de rede: ${msg}`, networkError: true }
       }
     },
-    [convertPendingV2ToV1, markSaleBlocked, markSaleConfirmed, postV1Sale, postV2Sale],
+    [convertPendingV2ToV1, emitVendaFinalizadaOnce, markSaleBlocked, markSaleConfirmed, postV1Sale, postV2Sale],
   )
 
   const flushPendingSales = useCallback(() => {
@@ -1379,7 +1470,8 @@ export function OperationsProvider({
       if (!isSaleIdentityConflictCode(sale.syncBlockedCode) && !persistedSaleIdentityConflictCode(storageKey, sale)) {
         return { ok: false, reason: "Esta venda não está em conflito de identificação." }
       }
-      const clientSaleId = sale.clientSaleId ?? assertGeneratedClientSaleId(generateClientSaleId())
+      const clientSaleId =
+        sale.clientSaleId ?? deriveLegacySaleClientSaleId(opsLojaIdFromStorageKey(storageKey), sale)
       if (!sale.clientSaleId) {
         setState((prev) => ({
           ...prev,
@@ -1433,6 +1525,11 @@ export function OperationsProvider({
         for (const confirmation of confirmations) {
           vendaAutoRetryHoldRef.current.delete(confirmation.clientSaleId)
           vendaAutoRetryHoldRef.current.delete(confirmation.pedidoId)
+          emitVendaFinalizadaOnce(
+            lj,
+            { id: confirmation.pedidoId, clientSaleId: confirmation.clientSaleId },
+            { ...sale, clientSaleId, syncPending: false },
+          )
         }
         setState((prev) => ({
           ...prev,
@@ -1444,7 +1541,7 @@ export function OperationsProvider({
         return { ok: false, reason: `Falha de rede: ${msg}` }
       }
     },
-    [storageKey],
+    [emitVendaFinalizadaOnce, storageKey],
   )
 
   /**
@@ -1470,7 +1567,8 @@ export function OperationsProvider({
         candidates.push(sale)
         return
       }
-      const clientSaleId = assertGeneratedClientSaleId(generateClientSaleId())
+      // Determinística: qualquer aba chega à MESMA chave para a mesma venda.
+      const clientSaleId = deriveLegacySaleClientSaleId(opsLojaIdFromStorageKey(storageKey), sale)
       mintedByIndex.set(index, clientSaleId)
       candidates.push({ ...sale, clientSaleId })
     })
@@ -1503,9 +1601,17 @@ export function OperationsProvider({
   const reconcileRecoveredSales = useCallback(
     (confirmations: readonly RecoveryConfirmation[]): number => {
       if (confirmations.length === 0) return 0
+      const lj = opsLojaIdFromStorageKey(storageKey)
       for (const confirmation of confirmations) {
         vendaAutoRetryHoldRef.current.delete(confirmation.clientSaleId)
         vendaAutoRetryHoldRef.current.delete(confirmation.pedidoId)
+        // Recovery com evidência server-side é confirmação definitiva — uma vez só.
+        const local = stateRef.current.sales.find((s) => s.clientSaleId === confirmation.clientSaleId)
+        emitVendaFinalizadaOnce(
+          lj,
+          { id: confirmation.pedidoId, clientSaleId: confirmation.clientSaleId },
+          local ? { ...local, syncPending: false } : { id: confirmation.pedidoId },
+        )
       }
       setState((prev) => ({
         ...prev,
@@ -1513,7 +1619,7 @@ export function OperationsProvider({
       }))
       return applyRecoveryConfirmations(stateRef.current.sales, confirmations).reconciled
     },
-    [],
+    [emitVendaFinalizadaOnce, storageKey],
   )
 
   const previewQuarantineRecovery = useCallback<
@@ -1617,6 +1723,124 @@ export function OperationsProvider({
     [collectQuarantinedCandidates, reconcileRecoveredSales, storageKey],
   )
 
+  const autoReconcileInFlightRef = useRef(false)
+  const quarantineAutoHoldRef = useRef<Map<string, number>>(new Map())
+  const [quarantineReviewKeys, setQuarantineReviewKeys] = useState<ReadonlySet<string>>(() => new Set())
+
+  /**
+   * Reconciliação AUTOMÁTICA das vendas preservadas por conflito de identificação.
+   *
+   * O operador não precisa entender nada disto: a venda que ele concluiu entra no
+   * histórico assim que o servidor confirma. O servidor só grava quando é seguro — venda
+   * já existente é apenas reconciliada; venda ausente é criada UMA vez, com a data e a
+   * sessão de caixa originais (mesmo fechada; nunca o caixa de hoje) — e devolve bloqueio
+   * para o que for realmente ambíguo, que vai para o administrador (`quarantineReviewKeys`).
+   *
+   * Nunca passa por `persistPendingSale`: conflito de identificação não vira reenvio comum.
+   */
+  const autoReconcileQuarantinedSales = useCallback(async () => {
+    if (autoReconcileInFlightRef.current) return
+    const lj = opsLojaIdFromStorageKey(storageKey)
+    const isQuarantined = (sale: SaleRecord) =>
+      Boolean(sale.id) &&
+      sale.syncPending === true &&
+      (isSaleIdentityConflictCode(sale.syncBlockedCode) ||
+        Boolean(persistedSaleIdentityConflictCode(storageKey, sale)))
+    const quarantined = stateRef.current.sales.filter(isQuarantined)
+    if (quarantined.length === 0) return
+
+    // 1. Identidade técnica determinística para quem ainda não tem, gravada ANTES da
+    //    rede. O envio dessas fica para a volta seguinte, com a chave já persistida.
+    if (quarantined.some((sale) => !sale.clientSaleId)) {
+      setState((prev) => ({
+        ...prev,
+        sales: prev.sales.map((sale) =>
+          !sale.clientSaleId && isQuarantined(sale)
+            ? { ...sale, clientSaleId: deriveLegacySaleClientSaleId(lj, sale) }
+            : sale,
+        ),
+      }))
+    }
+
+    // 2. Só vai à rede venda cuja chave já está no armazenamento local.
+    const candidates = selectAutoReconcileCandidates({
+      sales: quarantined,
+      isQuarantined,
+      persistedClientSaleIds: persistedClientSaleIds(storageKey),
+      holdUntil: quarantineAutoHoldRef.current,
+      now: Date.now(),
+    })
+    if (candidates.length === 0) return
+
+    autoReconcileInFlightRef.current = true
+    const results: QuarantineRecoveryResultView[] = []
+    let routeUnavailable: "session" | "transient" | null = null
+    try {
+      for (const slice of chunk(candidates, QUARANTINE_RECOVERY_CHUNK)) {
+        const res = await fetch(quarantineAutoReconcileUrl(lj), {
+          method: "POST",
+          credentials: "include",
+          headers: persistHeaders(lj),
+          body: JSON.stringify({ candidates: slice }),
+        })
+        if (!res.ok) {
+          // 4xx: indisponível para esta sessão (permissão, writer V1) — fica para o
+          // administrador. 5xx: transitório — tenta de novo em breve.
+          routeUnavailable = res.status >= 500 ? "transient" : "session"
+          break
+        }
+        const json = (await res.json().catch(() => null)) as {
+          results?: QuarantineRecoveryResultView[]
+        } | null
+        const sliceResults = json?.results
+        if (Array.isArray(sliceResults)) results.push(...sliceResults)
+      }
+    } catch {
+      // Rede: nada muda — a venda segue preservada e a próxima volta do ciclo tenta de novo.
+    } finally {
+      autoReconcileInFlightRef.current = false
+    }
+
+    // 3. Só sai da preservação o que tem venda real no servidor.
+    const confirmations = buildRecoveryConfirmations(results)
+    reconcileRecoveredSales(confirmations)
+
+    const now = Date.now()
+    const confirmed = new Set(confirmations.map((confirmation) => confirmation.clientSaleId))
+    const answered = new Set<string>()
+    const review = new Set<string>()
+    for (const result of results) {
+      const key = result.clientSaleId
+      if (!key || confirmed.has(key)) continue
+      answered.add(key)
+      if (result.status === "FAILED") {
+        quarantineAutoHoldRef.current.set(key, now + QUARANTINE_AUTO_RECONCILE_RETRY_MS)
+      } else {
+        // BLOCKED / REQUIRES_CONFIRMATION: o servidor não viu segurança — revisão humana.
+        quarantineAutoHoldRef.current.set(key, now + QUARANTINE_AUTO_RECONCILE_HOLD_MS)
+        review.add(key)
+      }
+    }
+    if (routeUnavailable) {
+      const until =
+        now + (routeUnavailable === "transient" ? QUARANTINE_AUTO_RECONCILE_RETRY_MS : QUARANTINE_AUTO_RECONCILE_HOLD_MS)
+      for (const candidate of candidates) {
+        const key = candidate.clientSaleId
+        if (!key || confirmed.has(key) || answered.has(key)) continue
+        quarantineAutoHoldRef.current.set(key, until)
+        if (routeUnavailable === "session") review.add(key)
+      }
+    }
+
+    setQuarantineReviewKeys((prev) => {
+      const next = new Set(prev)
+      for (const key of confirmed) next.delete(key)
+      for (const key of review) next.add(key)
+      if (next.size === prev.size && [...next].every((key) => prev.has(key))) return prev
+      return next
+    })
+  }, [reconcileRecoveredSales, storageKey])
+
   const discardLocalPendingSale = useCallback<OperationsContextType["discardLocalPendingSale"]>(
     async (saleId) => {
       const sale = stateRef.current.sales.find(
@@ -1643,6 +1867,12 @@ export function OperationsProvider({
             const body: unknown = await res.json().catch(() => null)
             const confirmed = extractConfirmedVenda(body)
             markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId }, confirmed ?? undefined)
+            // Evidência server-side: confirmação definitiva, exatamente uma vez.
+            emitVendaFinalizadaOnce(
+              lj,
+              { id: confirmed?.pedidoId ?? sale.id, clientSaleId: sale.clientSaleId },
+              { ...sale, syncPending: false },
+            )
             return {
               ok: true,
               mode: "reconciled",
@@ -1673,6 +1903,7 @@ export function OperationsProvider({
             ...prev,
             sales: prev.sales.map((s) => (s.id === saleId ? { ...s, syncPending: false } : s)),
           }))
+          emitVendaFinalizadaOnce(lj, { id: saleId }, { ...sale, syncPending: false })
           return {
             ok: true,
             mode: "reconciled",
@@ -1699,7 +1930,7 @@ export function OperationsProvider({
         return { ok: false, reason: `Falha de rede ao verificar no servidor: ${msg}` }
       }
     },
-    [markSaleConfirmed, storageKey],
+    [emitVendaFinalizadaOnce, markSaleConfirmed, storageKey],
   )
 
   const bulkDiscardLocalPendingSales = useCallback<
@@ -1708,11 +1939,11 @@ export function OperationsProvider({
     const pending = stateRef.current.sales.filter((s) => s.syncPending === true)
     const total = pending.length
     if (total === 0) {
-      return { ok: true, total: 0, discarded: 0, reconciled: 0, conflicts: 0 }
+      return { ok: true, total: 0, reconciled: 0, kept: 0, conflicts: 0 }
     }
     const lj = opsLojaIdFromStorageKey(storageKey)
-    const discardedIds = new Set<string>()
     const reconciledIds = new Set<string>()
+    let kept = 0
     let conflicts = 0
     for (const sale of pending) {
       if (persistedSaleIdentityConflictCode(storageKey, sale)) {
@@ -1728,7 +1959,9 @@ export function OperationsProvider({
         if (res.ok) {
           reconciledIds.add(sale.id)
         } else if (res.status === 404) {
-          discardedIds.add(sale.id)
+          // Ainda não chegou ao servidor: é venda REAL aguardando envio. Nunca descartar —
+          // o reenvio automático (`flushPendingSales`) continua cuidando dela.
+          kept += 1
         } else {
           conflicts += 1
         }
@@ -1736,19 +1969,17 @@ export function OperationsProvider({
         conflicts += 1
       }
     }
-    if (discardedIds.size > 0 || reconciledIds.size > 0) {
+    if (reconciledIds.size > 0) {
       setState((prev) => ({
         ...prev,
-        sales: prev.sales
-          .filter((s) => !discardedIds.has(s.id))
-          .map((s) => (reconciledIds.has(s.id) ? { ...s, syncPending: false } : s)),
+        sales: prev.sales.map((s) => (reconciledIds.has(s.id) ? { ...s, syncPending: false } : s)),
       }))
     }
     return {
       ok: true,
       total,
-      discarded: discardedIds.size,
       reconciled: reconciledIds.size,
+      kept,
       conflicts,
     }
   }, [storageKey])
@@ -1850,7 +2081,8 @@ export function OperationsProvider({
     flushPendingSales()
     flushPendingDevolucoes()
     flushPendingCaixaOperations()
-  }, [opsDbReady, flushPendingSales, flushPendingDevolucoes, flushPendingCaixaOperations])
+    void autoReconcileQuarantinedSales()
+  }, [opsDbReady, flushPendingSales, flushPendingDevolucoes, flushPendingCaixaOperations, autoReconcileQuarantinedSales])
 
   // Rede de segurança em sessão: re-tenta pendências quando a conexão volta,
   // quando a aba reganha foco e periodicamente.
@@ -1861,6 +2093,7 @@ export function OperationsProvider({
       flushPendingSales()
       flushPendingDevolucoes()
       flushPendingCaixaOperations()
+      void autoReconcileQuarantinedSales()
       // Reconcilia status autoritativo das vendas (ex.: cancelamento feito na tela
       // Vendas) ao voltar o foco/rede — caixa/fechamento atualizam sem reload manual.
       void refreshSalesFromServer()
@@ -1876,7 +2109,14 @@ export function OperationsProvider({
       document.removeEventListener("visibilitychange", onVisible)
       window.clearInterval(interval)
     }
-  }, [opsDbReady, flushPendingSales, flushPendingDevolucoes, flushPendingCaixaOperations, refreshSalesFromServer])
+  }, [
+    opsDbReady,
+    flushPendingSales,
+    flushPendingDevolucoes,
+    flushPendingCaixaOperations,
+    refreshSalesFromServer,
+    autoReconcileQuarantinedSales,
+  ])
 
   const setOrdens: OperationsContextType["setOrdens"] = useCallback((updater) => {
     setState((prev) => ({
@@ -2005,6 +2245,25 @@ export function OperationsProvider({
       pixQrKind,
       cashTendered,
     }) => {
+      // Preflight fail-closed (FRACTIONAL-SALE-HARD-BLOCK-005): quantidade
+      // significativamente fracionária nunca gera mutação local (carrinho,
+      // SaleRecord, estoque, caixa, syncPending) nem "Venda finalizada". Roda
+      // antes de qualquer leitura/mutação — o guard do servidor continua sendo
+      // a autoridade final. Ruído insignificante de floating point passa.
+      for (const line of lines) {
+        const q = line?.quantity
+        if (typeof q !== "number" || !Number.isFinite(q)) {
+          return { ok: false, reason: "Quantidade inválida." }
+        }
+        if (!isIntegerSaleQuantity(q)) {
+          return { ok: false, reason: FRACTIONAL_QUANTITY_MESSAGE }
+        }
+      }
+      // Fail-closed (PDV-MOTOR-INTEGRITY-N1): venda sem itens nunca gera
+      // mutação local nem pendência — o servidor rejeitaria do mesmo jeito.
+      if (lines.length === 0) {
+        return { ok: false, reason: "Carrinho vazio." }
+      }
       const current = stateRef.current
       const next: OpsState = {
         inventory: current.inventory.map((i) => ({ ...i })),
@@ -2112,11 +2371,12 @@ export function OperationsProvider({
         const item = itemType === "produto"
           ? next.inventory.find((inventoryItem) => inventoryItem.id === ln.inventoryId)
           : undefined
-        const record = saleLineRecordFromFinalizeInput(
+        // `accessorySelection` (quando houver) é copiada dentro de
+        // `saleLineRecordFromFinalizeInput` — mesmo contrato das demais superfícies.
+        return saleLineRecordFromFinalizeInput(
           ln,
           item ? { name: item.name, price: item.price } : undefined,
         )
-        return ln.accessorySelection ? { ...record, accessorySelection: ln.accessorySelection } : record
       })
       next.sales.push({
         id: saleId,
@@ -2163,11 +2423,9 @@ export function OperationsProvider({
       setState(next)
       const saleRow = next.sales[next.sales.length - 1]
       if (saleRow) {
-        emitEvent("venda_finalizada", {
-          storeId: lj,
-          entityId: saleRow.clientSaleId ?? saleRow.id,
-          data: saleRow,
-        })
+        // `venda_finalizada` NÃO sai aqui: a venda ainda é PENDING (mutação
+        // local otimista). O evento definitivo sai em `persistPendingSale` no
+        // ponto confirmado — imediato ou retry/sync posterior, exatamente uma vez.
         const persistResult = await persistPendingSale(saleRow, lj, false)
         if (persistResult.ok) {
           const confirmedId = persistResult.pedidoId ?? saleRow.id
@@ -2446,6 +2704,7 @@ export function OperationsProvider({
       recoverQuarantinedSalesBatch,
       discardLocalPendingSale,
       bulkDiscardLocalPendingSales,
+      quarantineReviewKeys,
     }),
     [
       state,
@@ -2474,6 +2733,7 @@ export function OperationsProvider({
       recoverQuarantinedSalesBatch,
       discardLocalPendingSale,
       bulkDiscardLocalPendingSales,
+      quarantineReviewKeys,
     ]
   )
 

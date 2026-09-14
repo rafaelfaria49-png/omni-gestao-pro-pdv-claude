@@ -21,6 +21,11 @@
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { normalizeBreakdown } from "@/lib/financeiro/correcao-pagamento-plan"
+import {
+  FRACTIONAL_QUANTITY_MESSAGE,
+  FractionalQuantityError,
+  normalizeSaleQuantity,
+} from "@/lib/vendas/sale-quantity-contract"
 
 const EPS = 0.005
 
@@ -63,6 +68,7 @@ export interface StockDelta {
 export type CorrecaoItensErrorCode =
   | "sem_itens"
   | "linha_invalida"
+  | "quantidade_fracionada"
   | "no_change"
   | "aprazo_ou_vale_bloqueado"
   | "caixa_nao_absorve"
@@ -99,7 +105,11 @@ export interface CorrecaoItensPlan {
 function resolveLine(l: CorrecaoLineInput): CorrecaoLineResolved | null {
   const inventoryId = typeof l.inventoryId === "string" ? l.inventoryId.trim() : ""
   const nome = typeof l.nome === "string" ? l.nome.trim() : ""
-  const quantidade = Math.max(0, Math.round(Number(l.quantidade) || 0))
+  // Fail-closed (FRACTIONAL-SALE-HARD-BLOCK-005): quantidade externa nunca é
+  // arredondada silenciosamente — fração comercial lança `FractionalQuantityError`
+  // (o caller converte em plano `quantidade_fracionada`); ruído insignificante de
+  // floating point é normalizado para o inteiro.
+  const quantidade = Math.max(0, normalizeSaleQuantity(Number(l.quantidade) || 0))
   const precoUnitario = round2(Number(l.precoUnitario) || 0)
   const desconto = round2(Math.max(0, Number(l.desconto) || 0))
   if (!inventoryId || !nome || quantidade <= 0) return null
@@ -163,7 +173,15 @@ export function computeCorrecaoItensPlan(input: {
 
   const newResolved: CorrecaoLineResolved[] = []
   for (const l of input.newLines ?? []) {
-    const r = resolveLine(l)
+    let r: CorrecaoLineResolved | null
+    try {
+      r = resolveLine(l)
+    } catch (e) {
+      if (e instanceof FractionalQuantityError) {
+        return baseFail("quantidade_fracionada", FRACTIONAL_QUANTITY_MESSAGE, input.oldTotal, oldBreakdown, oldResolved)
+      }
+      throw e
+    }
     if (!r) {
       return baseFail("linha_invalida", "Há item inválido (nome/quantidade/preço). Revise as linhas.", input.oldTotal, oldBreakdown, oldResolved)
     }

@@ -247,6 +247,7 @@ export type PdvOmniClassicShellProps = {
   onFinalizeClick: () => void
   products: PdvCatalogProduct[]
   productSearchOpen: boolean
+  productSearchInitialQuery?: string
   onProductSearchOpenChange: (open: boolean) => void
   clientSearchOpen: boolean
   onClientSearchOpenChange: (open: boolean) => void
@@ -275,6 +276,8 @@ export type PdvOmniClassicShellProps = {
   isModoRapido?: boolean
   /** Quantidade de holds do tipo Classic no terminal atual. */
   heldSalesCount: number
+  /** Default true. Quando false, o atalho/botão de espera some. */
+  heldSalesEnabled?: boolean
 }
 
 export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
@@ -402,11 +405,14 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
 
   useEffect(() => {
     if (!props.productSearchOpen) return
-    setProductDialogQuery("")
+    setProductDialogQuery(props.productSearchInitialQuery ?? "")
     setProductActiveIdx(0)
-    const id = window.setTimeout(() => productSearchInputRef.current?.focus(), 60)
+    const id = window.setTimeout(() => {
+      productSearchInputRef.current?.focus()
+      productSearchInputRef.current?.select?.()
+    }, 60)
     return () => window.clearTimeout(id)
-  }, [props.productSearchOpen])
+  }, [props.productSearchOpen, props.productSearchInitialQuery])
 
   const productsForDialog = useMemo(
     () => filterPdvCatalogBySearch(props.products, productDialogQuery),
@@ -470,6 +476,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {props.heldSalesEnabled !== false ? (
           <button
             type="button"
             onClick={() => props.onShortcutAction("F7")}
@@ -484,6 +491,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             ) : null}
             <kbd className="hidden rounded border border-primary/30 bg-primary/10 px-1 py-px text-[9px] font-bold sm:inline">F7</kbd>
           </button>
+          ) : null}
           {!isModoRapido ? (
             <>
               <span className="hidden items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary md:inline-flex">

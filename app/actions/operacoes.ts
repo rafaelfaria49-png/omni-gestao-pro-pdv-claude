@@ -104,6 +104,10 @@ export type OperacoesServicoLinha = {
   valorVenda: number;
   prazoGarantiaDias: number;
   termoGarantia: string;
+  /** Snapshot textual do prazo/tempo estimado (ex.: "2 horas"). Nunca vira SLA. */
+  prazoTexto?: string;
+  /** Rastreabilidade opcional ao `Servico` de catálogo. Snapshot textual/comercial continua autoritativo. */
+  catalogoServicoId?: string;
 };
 
 export type OperacoesOSPayload = OrdemServico & {

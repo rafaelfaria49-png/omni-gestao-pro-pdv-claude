@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
-import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { isVencimentoExpired } from "@/lib/subscription-seal"
-import { getTrustedTimeMs } from "@/lib/trusted-time"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import {
+  cadastrosAuditLogFields,
+  cadastrosAuditPrincipalFromSession,
+} from "@/lib/cadastros/cadastros-audit-principal"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { prisma } from "@/lib/prisma"
 import { persistirLoteProdutos } from "@/lib/importador-produtos/persist"
 import type {
@@ -29,34 +29,6 @@ const MAX_ITENS_LOTE = 1000
  */
 const UPDATE_RATIO_LIMIT = 0.5 // se >50% das linhas viraram update + 0 criados → suspeito
 
-async function requireAuth(): Promise<
-  { ok: true; userLabel: string } | { ok: false; res: NextResponse }
-> {
-  try {
-    const session = await auth()
-    if (session?.user) {
-      return {
-        ok: true,
-        userLabel: session.user.email ?? session.user.name ?? "",
-      }
-    }
-  } catch {
-    /* fallback */
-  }
-  const sub = await getVerifiedSubscriptionFromCookies()
-  if (!sub || !sub.ok) {
-    return { ok: false, res: NextResponse.json({ error: "forbidden" }, { status: 403 }) }
-  }
-  const now = await getTrustedTimeMs()
-  if (isVencimentoExpired(now, sub.vencimento)) {
-    return {
-      ok: false,
-      res: NextResponse.json({ error: "subscription_expired" }, { status: 402 }),
-    }
-  }
-  return { ok: true, userLabel: "" }
-}
-
 function isProdutoNormalizado(x: unknown): x is ProdutoNormalizado {
   if (!x || typeof x !== "object") return false
   const o = x as Record<string, unknown>
@@ -78,16 +50,14 @@ function isProdutoNormalizado(x: unknown): x is ProdutoNormalizado {
 }
 
 export async function POST(req: NextRequest) {
-  const a = await requireAuth()
-  if (!a.ok) return a.res
-
-  const storeId = storeIdFromAssistecRequestForWrite(req)
-  if (!storeId) {
-    return NextResponse.json(
-      { error: "Unidade ativa não enviada (header x-assistec-loja-id obrigatório)" },
-      { status: 400 },
-    )
+  const gate = await requireCadastrosHubApi(req, "write", "hub")
+  if (!gate.ok) return gate.response
+  const principal = cadastrosAuditPrincipalFromSession(gate.session)
+  if (!principal) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
   }
+  const audit = cadastrosAuditLogFields(principal)
+  const storeId = gate.storeId
 
   let body: unknown
   try {
@@ -173,7 +143,7 @@ export async function POST(req: NextRequest) {
       await prisma.logsAuditoria.create({
         data: {
           action: "import.produtos.lote.bloqueado",
-          userLabel: (a.userLabel || "Importador de Produtos").slice(0, 500),
+          userLabel: audit.userLabel,
           detail: `BLOQUEIO trava anti-update massivo (lote ${loteIndex + 1}/${totalLotes})`.slice(0, 4000),
           source: "importador_produtos",
           metadata: JSON.stringify({
@@ -190,6 +160,7 @@ export async function POST(req: NextRequest) {
               pulados: resultado.pulados,
               erros: resultado.erros,
             },
+            ...audit.actorMeta,
           }).slice(0, 8000),
         },
       })
@@ -223,7 +194,7 @@ export async function POST(req: NextRequest) {
     await prisma.logsAuditoria.create({
       data: {
         action: resultado.erros === 0 ? "import.produtos.lote" : "import.produtos.lote.erro",
-        userLabel: (a.userLabel || "Importador de Produtos").slice(0, 500),
+        userLabel: audit.userLabel,
         detail: detalhe.slice(0, 4000),
         source: "importador_produtos",
         metadata: JSON.stringify({
@@ -243,6 +214,7 @@ export async function POST(req: NextRequest) {
           },
           // Mantém só erros e pulados no log (criados/atualizados podem ser ~500 entradas).
           falhas: resultado.itens.filter((i) => i.acao === "erro" || i.acao === "pulado").slice(0, 100),
+          ...audit.actorMeta,
         }).slice(0, 8000),
       },
     })

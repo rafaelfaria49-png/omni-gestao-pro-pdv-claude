@@ -26,6 +26,7 @@ import { resolverClienteOperacoesV3 } from "./cliente-resolver";
 import {
   computeTotaisNovaOSV3,
   garantiaModeloV3,
+  mapItensParaServicosCatalogoV3,
   type NovaOSDraftV3,
   validarNovaOSDraftV3,
 } from "./nova-os-model";
@@ -98,6 +99,9 @@ export async function criarOSEnterpriseV3(
   // 2. Itens → peças (PecaUsada + extras kindV3/baixaEstoqueV3) e serviços (servicosCatalogo + kindV3).
   //    Para brinde/interno o valor ao cliente é zerado na persistência (R$ 0,00 ao cliente),
   //    preservando o custo interno. createOS soma `servicosCatalogo.valorVenda` no valorTotal.
+  //    O mapeamento de serviços é o helper puro `mapItensParaServicosCatalogoV3`
+  //    (GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002: N itens, `prazoTexto` e
+  //    `catalogoServicoId` aditivos; `servicoId` segue sendo o id da LINHA).
   const pecas = draft.itens
     .filter((it) => it.categoria === "peca")
     .map((it) => {
@@ -119,20 +123,7 @@ export async function criarOSEnterpriseV3(
       };
     });
 
-  const servicosCatalogo = draft.itens
-    .filter((it) => it.categoria === "servico")
-    .map((it) => {
-      const qtd = Math.max(1, Math.trunc(it.quantidade) || 1);
-      return {
-        servicoId: `nova-${it.id}`,
-        descricao: it.descricao.trim(),
-        custoInterno: Math.max(0, it.custoUnitario) * qtd,
-        valorVenda: it.kind === "cobrado" ? Math.max(0, it.valorUnitario) * qtd : 0,
-        prazoGarantiaDias: Math.max(0, Math.trunc(it.garantiaDias ?? draft.garantia.prazoDias ?? 0)),
-        termoGarantia: "",
-        kindV3: it.kind,
-      };
-    });
+  const servicosCatalogo = mapItensParaServicosCatalogoV3(draft.itens, draft.garantia.prazoDias);
 
   // 3. Garantia prevista (snapshot para impressão/termo futuro).
   const modeloGarantia = garantiaModeloV3(draft.garantia.modelo);

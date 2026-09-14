@@ -190,14 +190,21 @@ let clientStarted = false
  * Inicializa o motor no runtime do navegador (PDV, etc.).
  *
  * IMPORTANTE: `handleEvent` usa Prisma (Node.js-only) e NÃO pode rodar no browser.
- * Por isso enviamos um POST para a API route `/api/automation/handle-event` que executa
- * o processamento server-side. Isso garante que eventos de venda_finalizada e outros
- * disparados pelo PDV cheguem ao banco e gerem logs visíveis no WhatsApp HUB.
+ * Os demais eventos seguem via POST para a API route `/api/automation/handle-event`
+ * que executa o processamento server-side.
+ *
+ * CORREÇÃO-01: `venda_finalizada` NÃO é postado daqui. A automação definitiva
+ * desse evento nasce server-side no ponto create-vs-replay de `venda-persist`
+ * (V1/V2) — um POST por aba causaria N automações reais para a MESMA
+ * confirmação (duas abas, retry, reload). O `emitEvent("venda_finalizada")`
+ * continua existindo como NOTIFICAÇÃO LOCAL DE UI (ex.: refresh do arquivo de
+ * vendas) — só não dispara mais POST/automação.
  */
 export function initAutomationEngineClient(): void {
   if (clientStarted) return
   clientStarted = true
   subscribeAllEvents((event, payload) => {
+    if (event === "venda_finalizada") return
     const storeId = (payload.storeId || "").trim()
     if (!storeId) {
       console.warn("[automation-engine] evento ignorado: payload.storeId ausente", event)
