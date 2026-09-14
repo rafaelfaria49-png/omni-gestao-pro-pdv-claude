@@ -15,6 +15,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { openThermalHtmlPrint } from "@/lib/thermal-print"
 import { buildComprovanteFechamentoHtml, type FechamentoPosSnapshot } from "@/lib/caixa-fechamento-resumo"
+import { montarBlocosFechamento } from "@/lib/caixa/fechamento-blocos"
 
 export interface FechamentoPosFechamentoDialogProps {
   open: boolean
@@ -79,6 +80,10 @@ export function FechamentoPosFechamentoDialog({
   const temDiferenca = snapshot.diferenca != null && Math.abs(snapshot.diferenca) > 0.01
   const denomsContadas =
     snapshot.dinheiroContadoDetalhado?.denominacoes.filter((d) => d.quantidade > 0) ?? []
+  // Mesmos conceitos do modal e do comprovante (GOAL 003A): vendas × recebido × gaveta.
+  const blocos = montarBlocosFechamento(snapshot.resumo)
+  const informativosVenda = blocos.vendas.linhas.filter((l) => l.tipo === "info")
+  const formasRecebidas = blocos.recebidoPorForma.linhas.filter((l) => l.tipo !== "total")
 
   return (
     <Dialog
@@ -147,8 +152,18 @@ export function FechamentoPosFechamentoDialog({
             <Separator className="bg-border" />
 
             <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Total de vendas</span>
-              <span className="font-semibold text-foreground">{fmt(snapshot.resumo.totalLiquido)}</span>
+              <span className="text-muted-foreground">Vendas líquidas</span>
+              <span className="font-semibold text-foreground">{fmt(blocos.totais.vendasLiquidas)}</span>
+            </div>
+            {informativosVenda.map((l) => (
+              <div key={l.id} className="flex items-center justify-between gap-3 pl-3 text-xs">
+                <span className="text-muted-foreground">{l.rotulo}</span>
+                <span className="tabular-nums text-muted-foreground">{fmt(l.valor)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Recebido na sessão</span>
+              <span className="font-semibold text-foreground">{fmt(blocos.totais.recebidoSessao)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -191,16 +206,19 @@ export function FechamentoPosFechamentoDialog({
               </div>
             )}
 
-            <Separator className="bg-border" />
-
-            <div className="grid grid-cols-2 gap-1.5 text-xs sm:grid-cols-3">
-              <PgtoMini label="Dinheiro" value={snapshot.resumo.porPagamento.dinheiro} />
-              <PgtoMini label="Pix" value={snapshot.resumo.porPagamento.pix} />
-              <PgtoMini label="Débito" value={snapshot.resumo.porPagamento.cartaoDebito} />
-              <PgtoMini label="Crédito" value={snapshot.resumo.porPagamento.cartaoCredito} />
-              <PgtoMini label="Carnê" value={snapshot.resumo.porPagamento.carne} />
-              <PgtoMini label="Vale" value={snapshot.resumo.porPagamento.creditoVale} />
-            </div>
+            {formasRecebidas.length > 0 && (
+              <>
+                <Separator className="bg-border" />
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Recebido por forma
+                </p>
+                <div className="grid grid-cols-2 gap-1.5 text-xs sm:grid-cols-3">
+                  {formasRecebidas.map((l) => (
+                    <PgtoMini key={l.id} label={l.rotulo} value={l.tipo === "deducao" ? -l.valor : l.valor} />
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -228,11 +246,13 @@ export function FechamentoPosFechamentoDialog({
 }
 
 function PgtoMini({ label, value }: { label: string; value: number }) {
-  if (!(value > 0.001)) return null
+  if (!(Math.abs(value) > 0.001)) return null
   return (
     <div className="rounded-lg border border-border bg-background/60 px-2 py-1.5 text-center">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="font-semibold text-foreground">{fmt(value)}</p>
+      <p className="truncate text-[10px] text-muted-foreground" title={label}>
+        {label}
+      </p>
+      <p className="font-semibold text-foreground">{value < 0 ? `− ${fmt(-value)}` : fmt(value)}</p>
     </div>
   )
 }
