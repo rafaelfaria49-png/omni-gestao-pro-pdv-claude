@@ -54,10 +54,14 @@ ENV NODE_ENV=production \
 #                                     é 1:2.66-4+deb12u3+b1 (rebuild binário), que é o valor
 #                                     instalado. Atualização exclusiva, sem dist-upgrade,
 #                                     sem wildcard e sem atualização geral.
+#   - libpcre2-8-0=10.42-1+deb12u1   → HIGH corrigido no Bookworm security
+#                                     (substitui 10.42-1). Mesmo padrão exclusivo:
+#                                     pin exato, sem dist-upgrade, sem wildcard.
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends --only-upgrade \
        libgnutls30=3.7.9-2+deb12u7 \
        libcap2=1:2.66-4+deb12u3+b1 \
+       libpcre2-8-0=10.42-1+deb12u1 \
   && rm -rf /var/lib/apt/lists/*
 # Hardening de superfície de ataque (Trivy HIGH): remover os gerenciadores de pacote
 # não usados no runtime. O worker inicia apenas com `node /opt/fiscal-xsd/src/server.mjs`
