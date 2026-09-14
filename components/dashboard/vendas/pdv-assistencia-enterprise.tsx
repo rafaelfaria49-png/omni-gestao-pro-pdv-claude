@@ -70,6 +70,8 @@ import {
   type AccessorySelectionV1,
 } from "@/lib/acessorios/cart-line"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -1030,6 +1032,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Search + catalog tab ─────────────────────────────────────────────────────
   const [search, setSearch] = useState("")
+  /** Aviso transitório de código não encontrado (um único aviso vivo). */
+  const scanFeedback = usePdvScanNotFoundFeedback()
   const [tab, setTab] = useState<"servicos" | "produtos" | "favoritos">("servicos")
   useEffect(() => {
     if (!quickServicesEnabled && tab === "servicos") setTab("produtos")
@@ -1405,6 +1409,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
       const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen || showItemAvulsoModal || servicoPrecoTarget !== null || accessoryTarget !== null
 
+      // ESC fora de campo de texto (sem modal): limpa a busca e o aviso, foco volta à busca.
+      if (e.key === "Escape" && !inInput && !anyModalOpen && !document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+        setSearch("")
+        scanFeedback.dismiss()
+        queueMicrotask(() => inputRef.current?.focus())
+        return
+      }
+
       // END — toggle help overlay (always works)
       if (e.key === "End") {
         e.preventDefault()
@@ -1582,7 +1594,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget, accessoryTarget])
+  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget, accessoryTarget, scanFeedback])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct, priceOverride?: number, qtyToAdd: number = 1) => {
@@ -2028,6 +2040,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
       if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || servicoPrecoTarget !== null || accessoryTarget !== null) return
+      // Texto na busca: Esc limpa a busca primeiro — não remove item do carrinho.
+      if (inputRef.current?.value.trim()) {
+        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+        e.preventDefault()
+        e.stopPropagation()
+        setSearch("")
+        scanFeedback.dismiss()
+        queueMicrotask(() => inputRef.current?.focus())
+        return
+      }
       if (cart.length === 0) return
       e.preventDefault()
       e.stopPropagation()
@@ -2039,7 +2061,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, servicoPrecoTarget, accessoryTarget, cart.length])
+  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, servicoPrecoTarget, accessoryTarget, cart.length, scanFeedback])
 
   // ─── Venda em espera ────────────────────────────────────────────────────────
 
@@ -2275,6 +2297,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 onKeyDown={async (e) => {
                   if (!search.trim()) return
                   const parsed = parsePdvScanPrefix(search)
+                  // Esc limpa a busca e o aviso (o foco continua no campo).
+                  if (e.key === "Escape") {
+                    e.preventDefault()
+                    setSearch("")
+                    scanFeedback.dismiss()
+                    return
+                  }
+                  // Novo Enter encerra na hora o aviso do bipe anterior.
+                  if (e.key === "Enter") scanFeedback.dismiss()
                   if (e.key === "ArrowDown" && modoRapido) {
                     e.preventDefault()
                     setRapidoPickIdx((i) => Math.min(i + 1, Math.max(0, fullSearch.length - 1)))
@@ -2304,6 +2335,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   if (e.key === "Enter" && fullSearch.length === 0) {
                     e.preventDefault()
                     const code = parsed.query
+                    // Código: consome o campo ANTES do await — um 2º Enter (CR+LF, tecla repetida)
+                    // encontra o campo vazio e não repete a busca nem duplica o item.
+                    // Pesquisa manual (com espaço / só letras) nunca é apagada sozinha.
+                    const scanLike = isPdvScanLikeQuery(code)
+                    if (scanLike) setSearch("")
                     const remote = await lookupPdvScanRemote({ code, storeId: (lojaAtivaId ?? "").trim(), setInventory })
                     if (remote.kind === "single") {
                       addItem(remote.product, undefined, parsed.qty)
@@ -2312,12 +2348,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                     }
                     if (remote.kind === "multiple") {
                       // itens injetados no estoque — fullSearch recomputa e o operador escolhe na lista.
+                      if (scanLike) setSearch(search)
                       return
                     }
-                    toast({
-                      title: "Produto não encontrado",
-                      description: `Produto não encontrado nesta loja para o código: ${code}`,
-                    })
+                    scanFeedback.notify(code)
+                    queueMicrotask(() => inputRef.current?.focus())
                   }
                 }}
                 placeholder="Bipe o produto ou busque por nome / código  [F3]"
@@ -2972,7 +3007,18 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       {/* INSERT — Item Avulso (Venda Avulsa de balcão, não baixa estoque) */}
       <ItemAvulsoModal
         open={showItemAvulsoModal}
-        onOpenChange={setShowItemAvulsoModal}
+        onOpenChange={(open) => {
+          setShowItemAvulsoModal(open)
+          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca.
+          if (!open) {
+            setSearch("")
+            scanFeedback.dismiss()
+          }
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          inputRef.current?.focus()
+        }}
         checkCodigoExistente={(c) => acharProdutoPorCodigoExato(inventory, c)}
         onConfirm={(payload: ItemAvulsoPayload) => {
           const nid = newLineId()
@@ -2998,6 +3044,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             },
           ])
           setShowItemAvulsoModal(false)
+          // Item Avulso concluído: nenhum código/busca antiga fica no campo.
+          setSearch("")
+          scanFeedback.dismiss()
           appendAuditLog({
             action: "pdv_item_avulso_adicionado",
             userLabel: cashierId.slice(0, 8),
