@@ -288,8 +288,8 @@ export function ConferenciaCaixa({
   const vazio = linhas.length === 0
 
   return (
-    <div className="flex min-h-full min-w-0 flex-col">
-      <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
+    <div className="flex min-h-full min-w-0 flex-col xl:min-h-0 xl:flex-1">
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
         <div
           role="group"
           aria-label="Filtrar lançamentos"
@@ -344,205 +344,209 @@ export function ConferenciaCaixa({
         </p>
       ) : (
         <>
-          <div
-            aria-hidden
-            className={cn(
-              "sticky top-0 z-[1] hidden items-center gap-3 border-y border-border bg-card px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid",
-              GRADE,
-            )}
-          >
-            <span>Hora</span>
-            <span>Cliente · forma</span>
-            <span>Venda</span>
-            <span className="text-right">Valor</span>
-            <span />
-          </div>
-          <ul className="flex-1 border-t border-border sm:border-t-0">
-            {filtradas.map((l) => {
-              const venda = l.categoria === "venda"
-              const negativo = l.categoria === "sangria" || l.categoria === "estorno"
-              const cancelada = venda && l.status === "cancelada"
-              const dh = dataHoraConferencia(l.at)
-              const forma = formaPagamentoLabel(l.formaPagamento)
-              const numeroCurto = venda ? numeroVendaCurto(l.referencia) : `#${l.referencia}`
-              const statusLabel =
-                venda && l.status && l.status !== "concluida" ? (STATUS_VENDA_LABEL[l.status] ?? l.status) : null
-              // Recebimento/estorno: o título diz o que foi recebido e por onde (quando os dados
-              // determinam); o motivo gravado segue como subtítulo.
-              const recebimentoOuEstorno = l.categoria === "recebimento" || l.categoria === "estorno"
-              const titulo = venda
-                ? (l.cliente ?? "Cliente não identificado")
-                : recebimentoOuEstorno
-                  ? l.origemLabel
-                  : CATEGORIA_LABEL[l.categoria]
-              const sub = venda
-                ? l.origemLabel
-                : l.descricao !== CATEGORIA_LABEL[l.categoria]
-                  ? l.descricao
+          {/* No xl só a lista rola (cabeçalho de colunas junto, alinhado às linhas). O rodapé de soma
+              fica fora da área rolável: nenhuma linha passa por baixo dele. */}
+          <div className="flex min-w-0 flex-1 flex-col xl:min-h-0 xl:overflow-y-auto">
+            <div
+              aria-hidden
+              className={cn(
+                "sticky top-0 z-[1] hidden items-center gap-3 border-y border-border bg-card px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid",
+                GRADE,
+              )}
+            >
+              <span>Hora</span>
+              <span>Cliente · forma</span>
+              <span>Venda</span>
+              <span className="text-right">Valor</span>
+              <span />
+            </div>
+            <ul className="flex-1 border-t border-border sm:border-t-0">
+              {filtradas.map((l) => {
+                const venda = l.categoria === "venda"
+                const negativo = l.categoria === "sangria" || l.categoria === "estorno"
+                const cancelada = venda && l.status === "cancelada"
+                const dh = dataHoraConferencia(l.at)
+                const forma = formaPagamentoLabel(l.formaPagamento)
+                const numeroCurto = venda ? numeroVendaCurto(l.referencia) : `#${l.referencia}`
+                const statusLabel =
+                  venda && l.status && l.status !== "concluida" ? (STATUS_VENDA_LABEL[l.status] ?? l.status) : null
+                // Recebimento/estorno: o título diz o que foi recebido e por onde (quando os dados
+                // determinam); o motivo gravado segue como subtítulo.
+                const recebimentoOuEstorno = l.categoria === "recebimento" || l.categoria === "estorno"
+                const titulo = venda
+                  ? (l.cliente ?? "Cliente não identificado")
                   : recebimentoOuEstorno
-                    ? ""
-                    : l.origemLabel
-              const detalheAberto = detalheId === l.id
-              const Icon = CATEGORIA_ICON[l.categoria]
-              return (
-                <li key={l.id} className="border-b border-border/60 last:border-b-0">
-                  <div
-                    className={cn(
-                      "grid min-h-12 items-center gap-2.5 px-3 py-1.5 transition-colors hover:bg-secondary/50 sm:gap-3 sm:px-4",
-                      GRADE,
-                      detalheAberto && "bg-secondary/60",
-                    )}
-                  >
-                    <div className="min-w-0 leading-tight tabular-nums">
-                      <p className={cn("text-sm font-semibold", cancelada ? "text-muted-foreground" : "text-foreground")}>
-                        {dh?.hora ?? "--:--"}
-                      </p>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        {dh ? (
-                          <>
-                            <span className="sm:hidden">{dh.data.slice(0, 5)}</span>
-                            <span className="hidden sm:inline">{dh.data}</span>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </p>
-                    </div>
-                    <div className="min-w-0 leading-tight">
+                    ? l.origemLabel
+                    : CATEGORIA_LABEL[l.categoria]
+                const sub = venda
+                  ? l.origemLabel
+                  : l.descricao !== CATEGORIA_LABEL[l.categoria]
+                    ? l.descricao
+                    : recebimentoOuEstorno
+                      ? ""
+                      : l.origemLabel
+                const detalheAberto = detalheId === l.id
+                const Icon = CATEGORIA_ICON[l.categoria]
+                return (
+                  <li key={l.id} className="border-b border-border/60 last:border-b-0">
+                    <div
+                      className={cn(
+                        "grid min-h-12 items-center gap-2.5 px-3 py-1.5 transition-colors hover:bg-secondary/50 sm:gap-3 sm:px-4",
+                        GRADE,
+                        detalheAberto && "bg-secondary/60",
+                      )}
+                    >
+                      <div className="min-w-0 leading-tight tabular-nums">
+                        <p className={cn("text-sm font-semibold", cancelada ? "text-muted-foreground" : "text-foreground")}>
+                          {dh?.hora ?? "--:--"}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {dh ? (
+                            <>
+                              <span className="sm:hidden">{dh.data.slice(0, 5)}</span>
+                              <span className="hidden sm:inline">{dh.data}</span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </p>
+                      </div>
+                      <div className="min-w-0 leading-tight">
+                        <p
+                          className={cn(
+                            "flex min-w-0 items-center gap-1.5 text-sm",
+                            venda && !l.cliente
+                              ? "font-medium text-muted-foreground"
+                              : cancelada
+                                ? "font-semibold text-muted-foreground"
+                                : "font-semibold text-foreground",
+                          )}
+                        >
+                          {!venda && <Icon aria-hidden className={cn("h-3.5 w-3.5 shrink-0", CATEGORIA_TOM[l.categoria])} />}
+                          <span className="truncate">{titulo}</span>
+                        </p>
+                        <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                          {forma && (
+                            <span className="shrink-0 rounded bg-secondary px-1.5 py-px font-semibold text-foreground">
+                              {forma}
+                            </span>
+                          )}
+                          <span className="truncate">{sub}</span>
+                          {statusLabel && (
+                            <span className="shrink-0 rounded border border-warning/50 bg-warning/15 px-1 text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                              {statusLabel}
+                            </span>
+                          )}
+                          <span className="shrink-0 tabular-nums sm:hidden">· {numeroCurto}</span>
+                        </p>
+                      </div>
                       <p
                         className={cn(
-                          "flex min-w-0 items-center gap-1.5 text-sm",
-                          venda && !l.cliente
-                            ? "font-medium text-muted-foreground"
-                            : cancelada
-                              ? "font-semibold text-muted-foreground"
-                              : "font-semibold text-foreground",
+                          "hidden truncate text-xs tabular-nums text-muted-foreground sm:block",
+                          venda ? "font-semibold" : "font-normal",
+                        )}
+                        title={l.referencia}
+                      >
+                        {venda ? `Venda ${numeroCurto}` : `Operação ${numeroCurto}`}
+                      </p>
+                      <p
+                        className={cn(
+                          "whitespace-nowrap text-right font-display text-sm font-bold tabular-nums",
+                          cancelada
+                            ? "font-medium text-muted-foreground line-through"
+                            : l.categoria === "estorno"
+                              ? "text-destructive"
+                              : "text-foreground",
                         )}
                       >
-                        {!venda && <Icon aria-hidden className={cn("h-3.5 w-3.5 shrink-0", CATEGORIA_TOM[l.categoria])} />}
-                        <span className="truncate">{titulo}</span>
+                        {negativo ? "− " : ""}
+                        {fmt(l.valor)}
                       </p>
-                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                        {forma && (
-                          <span className="shrink-0 rounded bg-secondary px-1.5 py-px font-semibold text-foreground">
-                            {forma}
-                          </span>
-                        )}
-                        <span className="truncate">{sub}</span>
-                        {statusLabel && (
-                          <span className="shrink-0 rounded border border-warning/50 bg-warning/15 px-1 text-[10px] font-semibold uppercase tracking-wide text-foreground">
-                            {statusLabel}
-                          </span>
-                        )}
-                        <span className="shrink-0 tabular-nums sm:hidden">· {numeroCurto}</span>
-                      </p>
-                    </div>
-                    <p
-                      className={cn(
-                        "hidden truncate text-xs tabular-nums text-muted-foreground sm:block",
-                        venda ? "font-semibold" : "font-normal",
-                      )}
-                      title={l.referencia}
-                    >
-                      {venda ? `Venda ${numeroCurto}` : `Operação ${numeroCurto}`}
-                    </p>
-                    <p
-                      className={cn(
-                        "whitespace-nowrap text-right font-display text-sm font-bold tabular-nums",
-                        cancelada
-                          ? "font-medium text-muted-foreground line-through"
-                          : l.categoria === "estorno"
-                            ? "text-destructive"
-                            : "text-foreground",
-                      )}
-                    >
-                      {negativo ? "− " : ""}
-                      {fmt(l.valor)}
-                    </p>
-                    <div className="flex justify-end">
-                      {venda && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`Ações da venda ${numeroCurto}`}
-                              className="text-muted-foreground hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-64">
-                            <DropdownMenuLabel className="flex min-w-0 flex-col gap-0.5">
-                              <span className="text-sm font-semibold text-foreground">Venda {numeroCurto}</span>
-                              <span className="truncate font-mono text-[11px] font-normal text-muted-foreground">
-                                {l.referencia}
-                              </span>
-                            </DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuGroup>
-                              <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Consultar
+                      <div className="flex justify-end">
+                        {venda && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`Ações da venda ${numeroCurto}`}
+                                className="text-muted-foreground hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuLabel className="flex min-w-0 flex-col gap-0.5">
+                                <span className="text-sm font-semibold text-foreground">Venda {numeroCurto}</span>
+                                <span className="truncate font-mono text-[11px] font-normal text-muted-foreground">
+                                  {l.referencia}
+                                </span>
                               </DropdownMenuLabel>
-                              <DropdownMenuItem onSelect={() => setDetalheId((cur) => (cur === l.id ? null : l.id))}>
-                                {detalheAberto ? <EyeOff /> : <Eye />}
-                                {detalheAberto ? "Ocultar detalhes" : "Ver detalhes"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => void copiarNumero(l.referencia)}>
-                                <Copy />
-                                Copiar número da venda
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <Printer />
-                                Reimprimir comprovante
+                              <DropdownMenuSeparator />
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Consultar
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem onSelect={() => setDetalheId((cur) => (cur === l.id ? null : l.id))}>
+                                  {detalheAberto ? <EyeOff /> : <Eye />}
+                                  {detalheAberto ? "Ocultar detalhes" : "Ver detalhes"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => void copiarNumero(l.referencia)}>
+                                  <Copy />
+                                  Copiar número da venda
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled>
+                                  <Printer />
+                                  Reimprimir comprovante
+                                  <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled>
+                                  <History />
+                                  Histórico da venda
+                                  <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
+                                </DropdownMenuItem>
+                              </DropdownMenuGroup>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Operações · pedem autorização
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem disabled>
+                                  <ArrowLeftRight />
+                                  Trocar produtos
+                                  <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled>
+                                  <Undo2 />
+                                  Devolução parcial
+                                  <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
+                                </DropdownMenuItem>
+                              </DropdownMenuGroup>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem variant="destructive" disabled>
+                                <Ban />
+                                Estornar venda
                                 <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
                               </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <History />
-                                Histórico da venda
-                                <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                              </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuGroup>
-                              <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Operações · pedem autorização
-                              </DropdownMenuLabel>
-                              <DropdownMenuItem disabled>
-                                <ArrowLeftRight />
-                                Trocar produtos
-                                <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <Undo2 />
-                                Devolução parcial
-                                <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                              </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" disabled>
-                              <Ban />
-                              Estornar venda
-                              <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  {detalheAberto && (
-                    <dl className="mx-3 mb-2 grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-secondary px-3 py-2 sm:mx-4 sm:ml-[5.5rem] sm:grid-cols-4">
-                      <DetalheItem rotulo="Número" valor={l.referencia} mono />
-                      <DetalheItem rotulo="Data e hora" valor={dh ? `${dh.data} às ${dh.hora}` : "—"} />
-                      <DetalheItem rotulo="Pagamento" valor={forma ?? "—"} />
-                      <DetalheItem rotulo="Origem · status" valor={`${l.origemLabel} · ${statusLabel ?? "Concluída"}`} />
-                    </dl>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-          <div className="sticky bottom-0 z-[1] flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-card px-3 py-2 sm:px-4">
+                    {detalheAberto && (
+                      <dl className="mx-3 mb-2 grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-secondary px-3 py-2 sm:mx-4 sm:ml-[5.5rem] sm:grid-cols-4">
+                        <DetalheItem rotulo="Número" valor={l.referencia} mono />
+                        <DetalheItem rotulo="Data e hora" valor={dh ? `${dh.data} às ${dh.hora}` : "—"} />
+                        <DetalheItem rotulo="Pagamento" valor={forma ?? "—"} />
+                        <DetalheItem rotulo="Origem · status" valor={`${l.origemLabel} · ${statusLabel ?? "Concluída"}`} />
+                      </dl>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-card px-3 py-2 sm:px-4">
             <span className="text-xs text-muted-foreground">
               {filtradas.length} lançamento(s)
               {canceladasVista > 0 ? ` · ${canceladasVista} cancelada(s) fora da soma` : ""}
