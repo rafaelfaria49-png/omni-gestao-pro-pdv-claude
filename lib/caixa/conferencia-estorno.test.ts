@@ -173,6 +173,35 @@ describe("estornarVendaConferencia · bloqueios propagados do servidor", () => {
   })
 })
 
+describe("estornarVendaConferencia · step-up recusado pelo servidor (007A)", () => {
+  it("403 step_up_required vira status próprio, não erro genérico", async () => {
+    const f = fetchFake(403, { ok: false, error: "Autorização de supervisor obrigatória.", code: "step_up_required" })
+    const r = await estornarVendaConferencia(base, { current: false }, { fetch: f })
+    expect(r.status).toBe("step_up_requerido")
+  })
+
+  it("403 step_up_session_required também pede nova autorização", async () => {
+    const f = fetchFake(403, { ok: false, error: "Entre com a sua conta.", code: "step_up_session_required" })
+    expect((await estornarVendaConferencia(base, { current: false }, { fetch: f })).status)
+      .toBe("step_up_requerido")
+  })
+
+  it("403 de PERMISSÃO normal continua erro comum — step-up não mascara falta de permissão", async () => {
+    const f = fetchFake(403, { ok: false, error: "Sem permissão para cancelar vendas." })
+    expect((await estornarVendaConferencia(base, { current: false }, { fetch: f })).status).toBe("erro")
+  })
+
+  it("409 recebivel_quitado chega com mensagem e código reais", async () => {
+    const f = fetchFake(409, {
+      ok: false,
+      error: "Conta a receber já quitada — estorne o recebimento no Financeiro antes de estornar a venda.",
+      code: "recebivel_quitado",
+    })
+    const r = await estornarVendaConferencia(base, { current: false }, { fetch: f })
+    expect(r).toMatchObject({ status: "erro", code: "recebivel_quitado", httpStatus: 409 })
+  })
+})
+
 describe("estornarVendaConferencia · guardas de entrada (§8)", () => {
   it.each(["", "   "])("motivo %p nem chega a chamar a rede", async (motivo) => {
     const f = fetchFake(200, { ok: true })

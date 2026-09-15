@@ -25,6 +25,8 @@
  * exibir duas opções seria redundância inventada (§12: CANCEL_AND_REVERSAL_DISTINCT=NO).
  */
 
+import { ESTORNO_BLOQUEIO_RECEBIVEL_QUITADO } from "@/lib/vendas/estorno-recebivel-guard"
+
 export type AcaoVendaKey =
   | "detalhes"
   | "historico"
@@ -64,6 +66,12 @@ export const ACAO_BLOQUEADA_JA_ESTORNADA = "Venda já estornada"
 export const ACAO_BLOQUEADA_SESSAO_FECHADA = "Sessão de caixa já fechada"
 export const ACAO_BLOQUEADA_NAO_SINCRONIZADA = "Venda ainda não sincronizada com o servidor"
 export const ACAO_BLOQUEADA_FISCAL = "Documento fiscal emitido — use o fluxo fiscal apropriado"
+/**
+ * Recebível já quitado (GOAL 007A · BLOCKER-2). O texto é o MESMO que o servidor
+ * devolve em `estorno-recebivel-guard`, para a razão no menu e a razão do 409 não
+ * divergirem.
+ */
+export const ACAO_BLOQUEADA_RECEBIVEL_QUITADO = ESTORNO_BLOQUEIO_RECEBIVEL_QUITADO
 
 export type AvaliarAcoesInput = {
   /** `Venda.status`: concluida | cancelada | parcialmente_devolvida | devolvida. */
@@ -77,6 +85,11 @@ export type AvaliarAcoesInput = {
   servidorConfirmada: boolean
   /** A sessão de caixa desta conferência ainda está aberta. */
   sessaoAberta: boolean
+  /**
+   * A venda tem Conta a Receber já quitada. Vem agregado de `sessao-detalhe` (uma
+   * consulta para a lista inteira) — nunca de um fetch por linha do menu.
+   */
+  recebivelQuitado?: boolean
 }
 
 const BLOQUEADA: AcaoVendaEstado = { habilitada: false, motivo: ACAO_BLOQUEADA_POS_VENDA }
@@ -107,9 +120,11 @@ export function avaliarAcoesVenda(input: AvaliarAcoesInput): Record<AcaoVendaKey
       ? { habilitada: false, motivo: ACAO_BLOQUEADA_JA_ESTORNADA }
       : fiscalBloqueia
         ? { habilitada: false, motivo: ACAO_BLOQUEADA_FISCAL }
-        : !input.sessaoAberta
-          ? { habilitada: false, motivo: ACAO_BLOQUEADA_SESSAO_FECHADA }
-          : { habilitada: true }
+        : input.recebivelQuitado === true
+          ? { habilitada: false, motivo: ACAO_BLOQUEADA_RECEBIVEL_QUITADO }
+          : !input.sessaoAberta
+            ? { habilitada: false, motivo: ACAO_BLOQUEADA_SESSAO_FECHADA }
+            : { habilitada: true }
 
   return {
     detalhes: consulta,

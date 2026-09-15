@@ -11,7 +11,9 @@
  *   - aplica o gate fiscal (`assertVendaFiscalCancelavel`) e o de período fechado.
  *
  * O que ESTA camada acrescenta (e o Histórico de Vendas não tinha):
- *   - step-up de supervisor obrigatório ANTES do POST, com o autorizador registrado;
+ *   - step-up de supervisor ANTES do POST. Desde o GOAL 007A o step-up também é
+ *     EXIGIDO E VERIFICADO NO SERVIDOR: esta camada é conveniência de UX (não gastar
+ *     uma ida à rota sem autorização), não é mais a única barreira;
  *   - motivo obrigatório com mínimo coerente;
  *   - idempotência de UI: um POST em voo por vez, e `409 já cancelada` tratado como
  *     resultado terminal e não como erro (duplo clique / retry / refresh).
@@ -39,6 +41,11 @@ export type EstornoVendaResult =
   | { status: "estornada"; pedidoId: string; estoqueReposto: number; estornoFinanceiro: boolean }
   /** A venda já estava cancelada — estado final desejado, não é erro. */
   | { status: "ja_estornada"; pedidoId: string }
+  /**
+   * O servidor recusou por falta de step-up válido (expirado entre a autorização e o
+   * POST, ou chamada sem autorização). O operador precisa autorizar de novo.
+   */
+  | { status: "step_up_requerido"; error: string }
   /** Há devoluções vinculadas: precisa de confirmação explícita (`forcar`). */
   | { status: "require_confirm"; devolucoes: number }
   | { status: "in_flight" }
@@ -125,6 +132,13 @@ export async function estornarVendaConferencia(
 
     if (res.status === 409 && payload?.requireConfirm === true && input.forcar !== true) {
       return { status: "require_confirm", devolucoes: lerNumero(payload, "devolucoes") }
+    }
+
+    // Step-up recusado pelo servidor (007A). Separado de "erro" genérico para a UI poder
+    // pedir nova autorização em vez de só exibir uma mensagem morta.
+    const code = lerCodigo(payload)
+    if (res.status === 403 && (code === "step_up_required" || code === "step_up_session_required")) {
+      return { status: "step_up_requerido", error: lerMensagem(payload, "Autorização de supervisor necessária.") }
     }
 
     // Já cancelada: o efeito desejado já está no banco. Tratar como erro faria o

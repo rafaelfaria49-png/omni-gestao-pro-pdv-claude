@@ -9,6 +9,8 @@ import {
   financeiroDasVendasWhere,
   somarVendasAtivas,
 } from "@/lib/caixa/sessao-vendas-escopo"
+import { avaliarRecebiveisParaEstorno } from "@/lib/vendas/estorno-recebivel-guard"
+import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -32,6 +34,12 @@ export type VendaSessaoDetalheItem = {
    * O gate autoritativo continua no servidor (`assertVendaFiscalCancelavel`).
    */
   fiscalStatus: string
+  /**
+   * `true` quando a venda tem Conta a Receber JÁ QUITADA — o menu da Conferência
+   * desabilita o estorno com razão real antes do POST (GOAL 007A · BLOCKER-2).
+   * O gate autoritativo continua no servidor (`/api/vendas/[id]/cancelar`).
+   */
+  recebivelQuitado: boolean
 }
 
 const FORMA_LABEL: Record<keyof PaymentBreakdownFull, string> = {
@@ -228,6 +236,37 @@ export async function GET(req: Request) {
         )
       : null
 
+    // Recebíveis quitados das vendas à prazo da sessão — UMA consulta para a lista
+    // inteira (nada de um request por linha: a Conferência pode ter muitas vendas).
+    // Só entram vendas que realmente geraram título, e o `LIKE` é ancorado no prefixo
+    // indexável `pdv-aprazo-<pedido>`; sessão sem venda à prazo não consulta nada.
+    const pedidosComTitulo = vendaRows
+      .filter((v) => (readPaymentBreakdown(v.payload)?.aPrazo ?? 0) > 0.009)
+      .map((v) => v.pedidoId)
+    const quitadoPorPedido = new Map<string, boolean>()
+    if (pedidosComTitulo.length > 0) {
+      const titulos = await prisma.contaReceberTitulo.findMany({
+        where: {
+          storeId: lojaId,
+          OR: pedidosComTitulo.map((pid) => ({ localKey: { startsWith: `pdv-aprazo-${pid}` } })),
+        },
+        select: { localKey: true, status: true, valor: true, payload: true },
+      })
+      for (const pid of pedidosComTitulo) {
+        const doPedido = titulos.filter((t) => (t.localKey ?? "").startsWith(`pdv-aprazo-${pid}`))
+        quitadoPorPedido.set(
+          pid,
+          avaliarRecebiveisParaEstorno(
+            doPedido.map((t) => ({
+              status: t.status,
+              valor: t.valor,
+              pago: sumPagamentosHistorico(t.payload),
+            })),
+          ).bloqueado,
+        )
+      }
+    }
+
     const vendas: VendaSessaoDetalheItem[] = vendaRows.map((v) => ({
       id: v.id,
       numero: v.pedidoId,
@@ -240,6 +279,7 @@ export async function GET(req: Request) {
       status: v.status,
       terminalId: v.terminalId,
       fiscalStatus: v.fiscalStatus,
+      recebivelQuitado: quitadoPorPedido.get(v.pedidoId) === true,
     }))
 
     return NextResponse.json({

@@ -183,9 +183,14 @@ describe("D. estorno — step-up ANTES do POST (§7/§8/§25)", () => {
     // EXPLICA a regra cita ambos de propósito e é ignorado aqui).
     const codigoDialog = estornoDialog.slice(estornoDialog.indexOf("export function ConferenciaEstornoDialog"))
     expect(codigoDialog).not.toContain("/api/auth/admin")
-    expect(codigoDialog).not.toMatch(/\bpin\b/i)
+    // A prova é sobre o VALOR do PIN não transitar: nada de state, prop, campo de corpo
+    // ou leitura de input com PIN. A palavra pode aparecer em texto para o operador
+    // ("Digite o PIN novamente"), então as literais de string saem antes da checagem.
+    const semLiterais = (src: string) =>
+      src.replace(/`[^`]*`/g, "``").replace(/"[^"]*"/g, '""').replace(/'[^']*'/g, "''")
+    expect(semLiterais(codigoDialog)).not.toMatch(/\bpin\b/i)
     const codigoLib = estornoLib.slice(estornoLib.indexOf("export type EstornoVendaInput"))
-    expect(codigoLib).not.toMatch(/\bpin\b/i)
+    expect(semLiterais(codigoLib)).not.toMatch(/\bpin\b/i)
   })
 
   it("o POST só sai DEPOIS do `onAuthorized` do gate", () => {
@@ -197,6 +202,22 @@ describe("D. estorno — step-up ANTES do POST (§7/§8/§25)", () => {
   it("o AUTORIZADOR é registrado na trilha enviada ao servidor (§25/§32)", () => {
     expect(gate).toContain("onAuthorized(admin)")
     expect(estornoLib).toContain("[autorizado por ${input.autorizadoPor}]")
+  })
+
+  it("007A: recusa do SERVIDOR não some da tela — o gate não se fecha antes do resultado", () => {
+    // Regressão real encontrada na prova visual: com o gate fechando sozinho no PIN
+    // aceito, um 403 do servidor chegava com o diálogo desmontado e o operador não via
+    // erro nenhum numa ação de segurança.
+    expect(estornoDialog).toContain("closeOnAuthorized={false}")
+    expect(gate).toContain("if (closeOnAuthorized) onOpenChange(false)")
+    expect(estornoDialog).toContain('if (r.status === "step_up_requerido")')
+    expect(estornoDialog).toContain("Digite o PIN novamente")
+  })
+
+  it("007A: o step-up também é exigido pelo SERVIDOR, não só pela UI", () => {
+    const rotaCancelarSrc = ler("../../../app/api/vendas/[id]/cancelar/route.ts")
+    expect(rotaCancelarSrc).toContain("requireEstornoStepUp(sessionUserId, storeId)")
+    expect(estornoLib).toContain('status: "step_up_requerido"')
   })
 
   it("motivo é obrigatório e trava o botão do gate antes de gastar o PIN (§8)", () => {

@@ -104,6 +104,13 @@ export function ConferenciaEstornoDialog({
       setConfirmarForcar({ devolucoes: r.devolucoes, autorizadoPor })
       return
     }
+    if (r.status === "step_up_requerido") {
+      // O servidor recusou o step-up (expirou entre autorizar e enviar). Volta ao gate
+      // com a mensagem real — o motivo digitado é preservado para não refazer tudo.
+      setConfirmarForcar(null)
+      setErro(`${r.error} Digite o PIN novamente.`)
+      return
+    }
     if (r.status === "erro") {
       setErro(r.error)
       setConfirmarForcar(null)
@@ -131,6 +138,9 @@ export function ConferenciaEstornoDialog({
         description={`Estornar a venda ${alvo.numero} reverte estoque, caixa e financeiro.`}
         canSubmit={motivoOk && !enviando}
         confirmLabel="Autorizar e estornar"
+        // O gate fica aberto até a rota responder: se o servidor recusar o step-up, o
+        // erro precisa aparecer em algum lugar (antes, o diálogo já tinha sumido).
+        closeOnAuthorized={false}
       >
         <div className="min-w-0 space-y-1 rounded-md bg-secondary px-3 py-2">
           <div className="flex min-w-0 items-baseline justify-between gap-3">
@@ -142,6 +152,12 @@ export function ConferenciaEstornoDialog({
           <p className="truncate text-[11px] text-muted-foreground">
             {alvo.cliente ?? "Cliente não identificado"}
             {alvo.formaPagamento ? ` · ${alvo.formaPagamento}` : ""}
+          </p>
+          {/* Honestidade sobre o alcance da reversão: o OmniGestão reverte o próprio
+              registro; devolver dinheiro ao cliente em PIX/cartão é ato externo. */}
+          <p className="text-[11px] text-muted-foreground">
+            A reversão vale dentro do OmniGestão. Devoluções de PIX ou cartão precisam ser
+            feitas no provedor de pagamento, quando for o caso.
           </p>
         </div>
 

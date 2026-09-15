@@ -47,6 +47,7 @@ export function SupervisorGateDialog({
   children,
   canSubmit = true,
   confirmLabel = "Autorizar",
+  closeOnAuthorized = true,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -59,6 +60,13 @@ export function SupervisorGateDialog({
   /** `false` mantém "Autorizar" desabilitado mesmo com PIN preenchido. */
   canSubmit?: boolean
   confirmLabel?: string
+  /**
+   * `false` deixa o diálogo ABERTO após o PIN ser aceito, para o consumidor fechá-lo
+   * só depois de saber o resultado da ação. Sem isso, uma recusa do servidor (ex.: o
+   * step-up expirou entre autorizar e enviar) chegava com o diálogo já desmontado e o
+   * operador não via erro nenhum. O PIN é limpo de qualquer forma.
+   */
+  closeOnAuthorized?: boolean
 }) {
   const [pin, setPin] = useState("")
   const [busy, setBusy] = useState(false)
@@ -96,7 +104,7 @@ export function SupervisorGateDialog({
       const j = (await r.json().catch(() => null)) as { admin?: SupervisorAutorizador } | null
       const admin = j?.admin?.id ? { id: j.admin.id, name: j.admin.name ?? "" } : null
       reset()
-      onOpenChange(false)
+      if (closeOnAuthorized) onOpenChange(false)
       onAuthorized(admin)
     } catch {
       setErr("Falha ao validar a senha. Tente novamente.")

@@ -69,6 +69,8 @@ interface LinhaConferencia {
   fiscalStatus?: string | null
   /** A venda existe no servidor (tem ficha, comprovante e estorno). */
   servidorConfirmada?: boolean
+  /** Conta a receber da venda já quitada — bloqueia o estorno (007A). */
+  recebivelQuitado?: boolean
 }
 
 const CATEGORIA_LABEL: Record<Categoria, string> = {
@@ -133,6 +135,7 @@ function linhaDeVenda(v: VendaSessaoDetalheItem): LinhaConferencia {
     referencia: v.numero,
     fiscalStatus: v.fiscalStatus,
     servidorConfirmada: true,
+    recebivelQuitado: v.recebivelQuitado,
     searchBlob: [v.numero, v.clienteNome, v.clienteCpf, v.formaPagamento, formaPagamentoLabel(v.formaPagamento), v.origem]
       .filter(Boolean)
       .join(" ")
@@ -486,6 +489,7 @@ export function ConferenciaCaixa({
                       status: l.status,
                       fiscalStatus: l.fiscalStatus,
                       servidorConfirmada: l.servidorConfirmada === true,
+                      recebivelQuitado: l.recebivelQuitado === true,
                       sessaoAberta,
                     })
                   : null

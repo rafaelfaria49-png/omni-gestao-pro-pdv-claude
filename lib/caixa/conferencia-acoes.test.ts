@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest"
 import {
   ACAO_BLOQUEADA_FISCAL,
+  ACAO_BLOQUEADA_RECEBIVEL_QUITADO,
   ACAO_BLOQUEADA_JA_ESTORNADA,
   ACAO_BLOQUEADA_NAO_SINCRONIZADA,
   ACAO_BLOQUEADA_POS_VENDA,
@@ -107,6 +108,44 @@ describe("avaliarAcoesVenda · estorno (§26: razão real em cada bloqueio)", ()
   it("precedência: 'já estornada' vence sessão fechada — o estado da venda é mais informativo", () => {
     const a = avaliarAcoesVenda({ ...base, status: "cancelada", sessaoAberta: false })
     expect(a.estorno.motivo).toBe(ACAO_BLOQUEADA_JA_ESTORNADA)
+  })
+})
+
+describe("avaliarAcoesVenda · recebível quitado (007A · BLOCKER-2)", () => {
+  it("venda com conta a receber JÁ QUITADA não oferece estorno", () => {
+    expect(avaliarAcoesVenda({ ...base, recebivelQuitado: true }).estorno).toEqual({
+      habilitada: false,
+      motivo: ACAO_BLOQUEADA_RECEBIVEL_QUITADO,
+    })
+  })
+
+  it("a razão manda regularizar no Financeiro — não promete fluxo inexistente", () => {
+    expect(ACAO_BLOQUEADA_RECEBIVEL_QUITADO).toMatch(/Financeiro/)
+    expect(ACAO_BLOQUEADA_RECEBIVEL_QUITADO).not.toMatch(/em breve/i)
+  })
+
+  it("sem recebível quitado (ausente ou false) o estorno segue disponível", () => {
+    expect(avaliarAcoesVenda({ ...base }).estorno.habilitada).toBe(true)
+    expect(avaliarAcoesVenda({ ...base, recebivelQuitado: false }).estorno.habilitada).toBe(true)
+  })
+
+  it("consulta continua liberada numa venda com recebível quitado", () => {
+    const a = avaliarAcoesVenda({ ...base, recebivelQuitado: true })
+    expect(a.detalhes.habilitada).toBe(true)
+    expect(a.historico.habilitada).toBe(true)
+    expect(a.reimprimir.habilitada).toBe(true)
+  })
+
+  it("precedência: 'já estornada' e bloqueio fiscal vêm antes do recebível", () => {
+    expect(avaliarAcoesVenda({ ...base, status: "cancelada", recebivelQuitado: true }).estorno.motivo)
+      .toBe(ACAO_BLOQUEADA_JA_ESTORNADA)
+    expect(avaliarAcoesVenda({ ...base, fiscalStatus: "AUTORIZADA", recebivelQuitado: true }).estorno.motivo)
+      .toBe(ACAO_BLOQUEADA_FISCAL)
+  })
+
+  it("recebível quitado vence sessão fechada — é o motivo mais acionável", () => {
+    expect(avaliarAcoesVenda({ ...base, recebivelQuitado: true, sessaoAberta: false }).estorno.motivo)
+      .toBe(ACAO_BLOQUEADA_RECEBIVEL_QUITADO)
   })
 })
 
