@@ -26,6 +26,12 @@ export type VendaSessaoDetalheItem = {
   createdAt: string
   status: string
   terminalId: string | null
+  /**
+   * `Venda.fiscalStatus` — permite à Conferência desabilitar o estorno com a razão
+   * fiscal REAL antes do POST (GOAL CAIXA-CONFERENCIA-VENDAS-ACOES-REAIS-007 §20/§26).
+   * O gate autoritativo continua no servidor (`assertVendaFiscalCancelavel`).
+   */
+  fiscalStatus: string
 }
 
 const FORMA_LABEL: Record<keyof PaymentBreakdownFull, string> = {
@@ -166,6 +172,7 @@ export async function GET(req: Request) {
       clienteNome: true,
       status: true,
       terminalId: true,
+      fiscalStatus: true,
       payload: true,
       itens: { select: vendasItensSelect },
     } as const
@@ -232,6 +239,7 @@ export async function GET(req: Request) {
       createdAt: v.at.toISOString(),
       status: v.status,
       terminalId: v.terminalId,
+      fiscalStatus: v.fiscalStatus,
     }))
 
     return NextResponse.json({
