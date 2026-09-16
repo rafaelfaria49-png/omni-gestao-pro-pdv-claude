@@ -2059,7 +2059,9 @@ function ProdutosPanel({
                                   categoria: p.categoria === "—" ? "" : p.categoria,
                                   marca: p.marca === "—" ? "" : p.marca,
                                   fornecedor: p.fornecedor === "—" ? "" : p.fornecedor,
-                                  estoque: p.estoque,
+                                  // CAD-R2-006: toggle de status nunca move saldo.
+                                  // `estoque` omitido = intenção explícita de não tocar
+                                  // (saldo só muda pelo fluxo Movimentar estoque/ledger).
                                   custo: p.custo,
                                   preco: p.preco,
                                   garantia: p.garantia,

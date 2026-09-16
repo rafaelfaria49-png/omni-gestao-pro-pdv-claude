@@ -9,6 +9,9 @@ const h = vi.hoisted(() => ({
   auth: vi.fn(async (): Promise<unknown> => null),
   getSessionEntitlement: vi.fn(async (): Promise<{ ok: boolean }> => ({ ok: false })),
   produtoFindFirst: vi.fn(async (_args?: unknown) => null),
+  produtoFindUnique: vi.fn(async (_args?: unknown) => null),
+  logsCreate: vi.fn(async (_args?: unknown) => ({})),
+  txRunner: vi.fn(async (fn: (tx: unknown) => unknown) => fn({})),
   produtoFindMany: vi.fn(
     async (): Promise<
       Array<{
@@ -58,11 +61,30 @@ vi.mock("@/lib/prisma", () => ({
     adminUser: { findUnique: vi.fn() },
     produto: {
       findFirst: h.produtoFindFirst,
+      findUnique: h.produtoFindUnique,
       findMany: h.produtoFindMany,
       delete: h.produtoDelete,
       create: h.produtoCreate,
       update: h.produtoUpdate,
     },
+    logsAuditoria: { create: h.logsCreate },
+    // CAD-R2-005/006: ProductWriteService persiste via `db.$transaction(tx)`.
+    // O tx reutiliza os mesmos fakes para que os asserts de acesso continuem
+    // observando as chamadas (sem banco real).
+    $transaction: async (fn: (tx: Record<string, unknown>) => unknown) =>
+      fn({
+        produto: {
+          findFirst: h.produtoFindFirst,
+          findUnique: h.produtoFindUnique,
+          create: h.produtoCreate,
+          update: h.produtoUpdate,
+        },
+        logsAuditoria: { create: h.logsCreate },
+        $queryRaw: async () => [],
+        deposito: { findFirst: async () => null, findUnique: async () => null },
+        produtoDeposito: { findMany: async () => [], upsert: async () => ({}) },
+        movimentacaoEstoque: { findFirst: async () => null, create: async () => ({ id: "mov-1" }) },
+      }),
     cliente: {
       findMany: h.clienteFindMany,
       findFirst: h.clienteFindFirst,
@@ -123,6 +145,8 @@ beforeEach(() => {
   h.auth.mockReset()
   h.getSessionEntitlement.mockReset()
   h.produtoFindFirst.mockReset()
+  h.produtoFindUnique.mockReset()
+  h.logsCreate.mockReset()
   h.produtoFindMany.mockReset()
   h.produtoDelete.mockReset()
   h.produtoCreate.mockReset()
@@ -133,6 +157,7 @@ beforeEach(() => {
   h.clienteUpdate.mockReset()
   h.storeFindMany.mockClear()
   h.produtoFindFirst.mockResolvedValue(null)
+  h.produtoFindUnique.mockResolvedValue(null)
   h.produtoFindMany.mockResolvedValue([])
   h.clienteFindMany.mockResolvedValue([])
   h.auth.mockResolvedValue(null)
