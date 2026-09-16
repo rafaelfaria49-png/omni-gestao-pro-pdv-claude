@@ -18,6 +18,8 @@ import {
   parseClientSaleId,
   type ClientSaleIdRejectionReason,
 } from "@/lib/vendas/sale-identity-contracts"
+import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
+import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 
 /** Re-exportado para as rotas traduzirem o erro de negócio em HTTP 409. */
 export { FractionalQuantityError }
@@ -1037,7 +1039,11 @@ export async function upsertVendaInTransaction(
     const resolved = resolvedByDbId.get(produtoId)
     if (!resolved) continue
 
-    // Idempotência: bloqueia retry da mesma venda (mesmo pedidoId + produto)
+    // Idempotência era dupla (CAD-R2-009):
+    // (a) guarda legado por (documento, produto, origem) — cobre linhas pré-009
+    //     gravadas sem idempotencyKey (NULL histórico);
+    // (b) boundary canônico com @@unique([storeId, idempotencyKey]) — retry da
+    //     mesma venda/produto retorna a movimentação existente sem reaplicar saldo.
     const jaExiste = await tx.movimentacaoEstoque.findFirst({
       where: { storeId: lojaId, documento: pedidoId, produtoId, origem: "pdv" },
       select: { id: true },
@@ -1057,60 +1063,42 @@ export async function upsertVendaInTransaction(
       }
     }
 
-    // Re-lê stock atual dentro da transação para estoqueAntes preciso
-    const produtoAtual = await tx.produto.findUnique({
-      where: { id: produtoId },
-      select: { stock: true, precoCusto: true },
-    })
-    if (!produtoAtual) continue
-
-    const estoqueAntes = produtoAtual.stock
-    const custo = arredonda2(Math.max(0, produtoAtual.precoCusto))
-
-    if (enforceStock) {
-      // Baixa atômica anti-negativo (DT-B): o predicado `stock >= qty` faz parte do
-      // WHERE do UPDATE, reavaliado sob lock de linha pelo Postgres. Dois caixas
-      // vendendo o mesmo SKU em paralelo serializam na linha — a 2ª transação que
-      // não encontrar saldo retorna `count = 0` e falha de forma explícita, sem
-      // nunca deixar `Produto.stock` abaixo de zero.
-      const baixa = await tx.produto.updateMany({
-        where: { id: produtoId, storeId: lojaId, stock: { gte: qty } },
-        data: { stock: { decrement: qty } },
-      })
-      if (baixa.count === 0) {
-        // Rollback de toda a transação da venda (atomicidade do $transaction).
-        throw new InsufficientStockError(produtoId, resolved.name, estoqueAntes, qty)
-      }
-    } else {
-      await tx.produto.update({
-        where: { id: produtoId },
-        data: { stock: { decrement: qty } },
-      })
-    }
-
-    await tx.movimentacaoEstoque.create({
-      data: {
-        storeId: lojaId,
+    // CAD-R2-009: baixa pelo boundary canônico (lock FOR UPDATE + ownership +
+    // depósito principal + ledger append-only na MESMA transação da venda).
+    // - Agregação por produto já feita acima (qtyByProdutoId);
+    // - `permitirNegativo` SÓ no replay histórico (`enforceStock=false`), que
+    //   preserva fatos passados; PDV ao vivo nunca permite negativo;
+    // - operador: SOMENTE `operadorLabel` server-derived (sessão). `sale.cashierId`
+    //   é input do client e NÃO entra no contexto confiável (anti-spoof §5) —
+    //   permanece apenas no payload da venda, fora da autoridade de estoque.
+    const ledgerOperator = (operadorLabel ?? "").trim() || null
+    const baixa009 = await applyStockMutationTx(
+      tx as unknown as StockLedgerTx,
+      { storeId: lojaId, principal: null, source: "pdv", operatorLabel: ledgerOperator },
+      {
+        kind: "saida",
         produtoId,
-        produtoSku: resolved.sku ?? null,
-        produtoNome: resolved.name,
-        tipo: "saida",
+        quantidade: qty,
         origem: "pdv",
-        quantidade: -qty,
-        estoqueAntes,
-        estoqueDepois: estoqueAntes - qty,
-        custoUnitario: custo,
-        custoMedioAntes: custo,
-        custoMedioDepois: custo,
-        valorTotal: arredonda2(qty * custo),
         documento: pedidoId,
         motivo: pedidoId,
-        usuario: operador,
-        // A baixa acontece no saldo AGORA (a conciliação de inventário lê `createdAt` como
-        // o instante da mudança de saldo); a data real da venda histórica fica registrada aqui.
+        idempotencyKey: StockIdempotency.venda(pedidoId, produtoId),
+        permitirNegativo: !enforceStock,
+        // A baixa acontece no saldo AGORA (a conciliação de inventário lê
+        // `createdAt` como o instante da mudança de saldo); a data real da venda
+        // histórica fica registrada na observação.
         ...(historicalRecovery ? { observacao: `Recuperação histórica — venda de ${at.toISOString()}` } : {}),
       },
-    })
+    )
+    if (!baixa009.ok) {
+      // Produto removido entre a resolução e a baixa: legado pulava (continue).
+      if (baixa009.code === "NOT_FOUND") continue
+      if (baixa009.code === "INSUFFICIENT_STOCK") {
+        // Rollback de toda a transação da venda (atomicidade do $transaction).
+        throw new InsufficientStockError(produtoId, resolved.name, baixa009.estoqueAntes ?? 0, qty)
+      }
+      throw new Error(`[upsert-venda] baixa de estoque falhou: ${baixa009.code} ${baixa009.message}`)
+    }
   }
 
   if (stockAbsorbedByLaterAdjustment.length > 0) {

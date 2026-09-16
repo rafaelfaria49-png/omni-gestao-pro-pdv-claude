@@ -18,6 +18,7 @@ import {
   InvalidSaleLinesError,
   type SalePayload,
 } from "./ops-upsert-venda"
+import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 type FakeProduct = {
   id: string
@@ -103,6 +104,8 @@ function makeFakeTx(opts?: { products?: FakeProduct[] }) {
       findFirst: async () => ({ id: "sess-1", status: "ABERTA" }),
     },
   }
+  // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
+  attachStockLedgerBoundaryToFakeTx(tx, { products })
   return {
     tx,
     counts: () => ({ vendaUpserts, itemUpserts, estoqueMoves, financeiroMoves }),

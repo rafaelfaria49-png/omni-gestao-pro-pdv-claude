@@ -16,6 +16,7 @@
  */
 import { describe, expect, it, vi } from "vitest"
 import { upsertVendaInTransaction, type SalePayload } from "./ops-upsert-venda"
+import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 type FakeProduct = {
   id: string
@@ -108,6 +109,9 @@ function makeFakeTx(products: FakeProduct[]) {
       create: async ({ data }: any) => data,
     },
   }
+
+  // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
+  attachStockLedgerBoundaryToFakeTx(tx, { products, ledger })
 
   return {
     tx,

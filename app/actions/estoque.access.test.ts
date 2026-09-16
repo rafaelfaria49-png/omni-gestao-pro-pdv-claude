@@ -20,6 +20,13 @@ const h = vi.hoisted(() => ({
     id: "mov-1",
     ...args.data,
   })),
+  // CAD-R2-009: o boundary canônico exige lock + depósito principal + ProdutoDeposito.
+  queryRaw: vi.fn(async () => []),
+  depositoFindFirst: vi.fn(async () => ({ id: "d1", storeId: "loja-a" })),
+  depositoCreate: vi.fn(async () => ({ id: "d1", storeId: "loja-a" })),
+  produtoDepositoFindMany: vi.fn(async () => [{ depositoId: "d1", quantidade: 1 }]),
+  produtoDepositoUpsert: vi.fn(async () => ({})),
+  movimentacaoFindFirst: vi.fn(async () => null),
 }))
 
 vi.mock("@/auth", () => ({ auth: h.auth }))
@@ -27,15 +34,34 @@ vi.mock("@/lib/auth/session-entitlement", () => ({ getSessionEntitlement: h.getS
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    produto: { findFirst: h.produtoFindFirst, update: h.produtoUpdate },
-    movimentacaoEstoque: { create: h.movimentacaoCreate, findMany: vi.fn(async () => []) },
-    $transaction: async (fn: (tx: {
-      produto: { findFirst: typeof h.produtoFindFirst; update: typeof h.produtoUpdate }
-      movimentacaoEstoque: { create: typeof h.movimentacaoCreate }
-    }) => Promise<unknown>) =>
+    produto: {
+      findFirst: h.produtoFindFirst,
+      findUnique: h.produtoFindFirst,
+      update: h.produtoUpdate,
+    },
+    deposito: { findFirst: h.depositoFindFirst, findUnique: h.depositoFindFirst, create: h.depositoCreate },
+    produtoDeposito: { findMany: h.produtoDepositoFindMany, upsert: h.produtoDepositoUpsert },
+    movimentacaoEstoque: {
+      create: h.movimentacaoCreate,
+      findFirst: h.movimentacaoFindFirst,
+      findMany: vi.fn(async () => []),
+    },
+    $queryRaw: h.queryRaw,
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
-        produto: { findFirst: h.produtoFindFirst, update: h.produtoUpdate },
-        movimentacaoEstoque: { create: h.movimentacaoCreate },
+        $queryRaw: h.queryRaw,
+        produto: {
+          findFirst: h.produtoFindFirst,
+          findUnique: h.produtoFindFirst,
+          update: h.produtoUpdate,
+        },
+        deposito: {
+          findFirst: h.depositoFindFirst,
+          findUnique: h.depositoFindFirst,
+          create: h.depositoCreate,
+        },
+        produtoDeposito: { findMany: h.produtoDepositoFindMany, upsert: h.produtoDepositoUpsert },
+        movimentacaoEstoque: { create: h.movimentacaoCreate, findFirst: h.movimentacaoFindFirst },
       }),
   },
 }))

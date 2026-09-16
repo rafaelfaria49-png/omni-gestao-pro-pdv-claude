@@ -26,6 +26,9 @@ const h = vi.hoisted(() => {
     produtos: [] as Row[],
     vendas: [] as Row[],
     estoqueAtual: new Map<string, number>(),
+    // CAD-R2-009: depósito principal + saldos físicos do boundary.
+    depositos: [] as Row[],
+    produtoDepositos: [] as Array<{ storeId: unknown; produtoId: unknown; depositoId: unknown; quantidade: number }>,
   }
   const saidas: Array<Row> = []
   let seq = 0
@@ -38,12 +41,14 @@ const h = vi.hoisted(() => {
     db.produtos.length = 0
     db.vendas.length = 0
     db.estoqueAtual.clear()
+    db.depositos.length = 0
+    db.produtoDepositos.length = 0
     saidas.length = 0
     seq = 0
   }
 
   function addProduto(id: string, stock = 10) {
-    db.produtos.push({ id, storeId: STORE, sku: id, name: `Prod ${id}`, precoCusto: 5 })
+    db.produtos.push({ id, storeId: STORE, sku: id, name: `Prod ${id}`, precoCusto: 5, stock })
     db.estoqueAtual.set(id, stock)
   }
 
@@ -99,25 +104,105 @@ const h = vi.hoisted(() => {
     },
     produto: {
       findFirst: async ({ where }: { where: Row }) => {
+        // CAD-R2-009: boundary consulta por `{ id, storeId }` (ownership);
+        // a resolução da rota usa `OR: [id, sku, barcode]`.
+        if (typeof (where as Row).id === "string") {
+          const p = db.produtos.find(
+            (x) => x.id === (where as Row).id && ((where as Row).storeId === undefined || x.storeId === (where as Row).storeId),
+          )
+          if (!p) return null
+          return { ...p, stock: (p.stock as number) ?? 0 }
+        }
         const raw = ((where.OR as Array<Row>)[0] as Row).id as string
         const p = db.produtos.find((x) => x.id === raw)
         if (!p) return null
-        return { ...p, stock: db.estoqueAtual.get(String(p.id)) ?? 0 }
+        return { ...p, stock: (p.stock as number) ?? 0 }
       },
-      update: async ({ where, data }: { where: { id: string }; data: { stock: { increment: number } } }) => {
-        const atual = db.estoqueAtual.get(where.id) ?? 0
-        db.estoqueAtual.set(where.id, atual + data.stock.increment)
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        const p = db.produtos.find((x) => x.id === where.id)
+        return p ? { id: p.id as string, storeId: p.storeId as string } : null
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Row }) => {
+        const p = db.produtos.find((x) => x.id === where.id)
+        const atual = ((p?.stock as number) ?? db.estoqueAtual.get(where.id) ?? 0) as number
+        const stockData = data.stock as number | { increment?: number } | undefined
+        const novo =
+          typeof stockData === "number" ? stockData : atual + ((stockData?.increment as number) ?? 0)
+        if (p) {
+          p.stock = novo
+          if (typeof data.precoCusto === "number") p.precoCusto = data.precoCusto
+        }
+        db.estoqueAtual.set(where.id, novo)
+        return {}
+      },
+    },
+    $queryRaw: async () => [] as unknown[],
+    deposito: {
+      findFirst: async ({ where }: { where: Row }) =>
+        db.depositos.find((d) => d.storeId === where.storeId) ?? null,
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        db.depositos.find((d) => d.id === where.id) ?? null,
+      create: async ({ data }: { data: Row }) => {
+        const d = { id: `dep-${++seq}`, storeId: data.storeId as string }
+        db.depositos.push(d)
+        return d
+      },
+    },
+    produtoDeposito: {
+      findMany: async ({ where }: { where: Row }) =>
+        db.produtoDepositos
+          .filter((r) => r.storeId === where.storeId && (where.produtoId === undefined || r.produtoId === where.produtoId))
+          .map((r) => ({ depositoId: r.depositoId, quantidade: r.quantidade })),
+      upsert: async ({ where, create, update }: { where: Row; create: Row; update: Row }) => {
+        const k = `${(where.produtoId_depositoId as Row).produtoId}|${(where.produtoId_depositoId as Row).depositoId}`
+        const ex = db.produtoDepositos.find(
+          (r) =>
+            r.produtoId === (where.produtoId_depositoId as Row).produtoId &&
+            r.depositoId === (where.produtoId_depositoId as Row).depositoId,
+        )
+        if (ex) ex.quantidade = update.quantidade as number
+        else {
+          db.produtoDepositos.push({
+            storeId: create.storeId,
+            produtoId: create.produtoId,
+            depositoId: create.depositoId,
+            quantidade: (create.quantidade as number) ?? (update.quantidade as number),
+          })
+        }
+        void k
         return {}
       },
     },
     movimentacaoEstoque: {
-      findFirst: async ({ where }: { where: Row }) =>
-        db.movEstoque.find(
-          (m) => m.documento === where.documento && m.produtoId === where.produtoId && m.origem === where.origem,
-        ) ?? null,
+      findFirst: async ({ where }: { where: Row }) => {
+        // CAD-R2-009: lookup por chave (dedupe) + guarda legado.
+        if (where.idempotencyKey !== undefined) {
+          return (
+            db.movEstoque.find(
+              (m) => m.storeId === where.storeId && (m.idempotencyKey ?? null) === where.idempotencyKey,
+            ) ?? null
+          )
+        }
+        return (
+          db.movEstoque.find(
+            (m) => m.documento === where.documento && m.produtoId === where.produtoId && m.origem === where.origem,
+          ) ?? null
+        )
+      },
       create: async ({ data }: { data: Row }) => {
-        db.movEstoque.push(data)
-        return data
+        const key = (data.idempotencyKey ?? null) as string | null
+        if (
+          key &&
+          db.movEstoque.some((m) => m.storeId === data.storeId && (m.idempotencyKey ?? null) === key)
+        ) {
+          const e = new Error("Unique constraint failed") as Error & { code: string; name: string }
+          e.code = "P2002"
+          e.name = "PrismaClientKnownRequestError"
+          throw e
+        }
+        const row = { id: `mov-${++seq}`, ...data }
+        db.movEstoque.push(row)
+        return { id: row.id }
       },
     },
     venda: {

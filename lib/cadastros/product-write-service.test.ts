@@ -1,10 +1,11 @@
 /**
  * CAD-R2-005 — Testes focados do ProductWriteService (contract/core).
+ * CAD-R2-009 — estoque inicial via Stock/Ledger; PATCH de saldo bloqueado.
  *
  * Sem banco: fake em memória injetado via `deps.db`. Cobre ownership/IDOR,
  * normalização determinística, duplicidade por loja, PATCH safety, audit com
- * principal server-derived, ausência de mutação de estoque/ledger, ausência
- * de IA e ausência de dependência de browser.
+ * principal server-derived, estoque inicial com ledger (origem `cadastro`),
+ * bloqueio de PATCH de saldo, ausência de IA e ausência de dependência de browser.
  */
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
@@ -53,6 +54,21 @@ type AuditRow = {
   detail: string
   metadata: string
   source: string
+}
+
+type MovRow = {
+  id: string
+  storeId: string
+  produtoId: string | null
+  tipo: string
+  quantidade: number
+  documento: string | null
+  motivo: string | null
+  origem: string
+  custoUnitario: number
+  estoqueAntes: number
+  estoqueDepois: number
+  idempotencyKey: string | null
 }
 
 function seedRow(partial: Partial<FakeRow> & { id: string; storeId: string }): FakeRow {
@@ -107,6 +123,12 @@ function makeFakeDb(seed: FakeRow[] = []) {
   let idSeq = 1
   /** Quando > 0, os próximos findFirst retornam null (simula corrida pré-check). */
   const state = { blindFindFirst: 0 }
+  // ── CAD-R2-009: estado do boundary (depósito principal, saldos, ledger) ──
+  const depositos = new Map<string, { id: string; storeId: string; codigo: string; principal: boolean }>()
+  const pds = new Map<string, { storeId: string; produtoId: string; depositoId: string; quantidade: number }>()
+  const movs = new Map<string, MovRow>()
+  let depSeq = 1
+  let movSeq = 1
 
   function checkUnique(dataStoreId: string, sku: unknown, barcode: unknown, excludeId?: string) {
     for (const row of rows.values()) {
@@ -141,6 +163,19 @@ function makeFakeDb(seed: FakeRow[] = []) {
 
   const tx = {
     produto: {
+      findFirst: async (args: Prisma.ProdutoFindFirstArgs): Promise<FakeRow | null> => {
+        calls.push("tx.produto.findFirst")
+        for (const row of rows.values()) {
+          if (matchWhere(row, args.where as Record<string, unknown> | undefined)) return { ...row }
+        }
+        return null
+      },
+      findUnique: async (args: Prisma.ProdutoFindUniqueArgs): Promise<{ id: string; storeId: string } | null> => {
+        calls.push("tx.produto.findUnique")
+        const where = args.where as { id?: string }
+        const row = where.id ? rows.get(where.id) : undefined
+        return row ? { id: row.id, storeId: row.storeId } : null
+      },
       create: async (args: Prisma.ProdutoCreateArgs): Promise<{ id: string }> => {
         calls.push("tx.produto.create")
         const data = args.data as Record<string, unknown> & { storeId: string }
@@ -186,15 +221,112 @@ function makeFakeDb(seed: FakeRow[] = []) {
         return { id: `audit-${audits.length}` }
       },
     },
+    // ── CAD-R2-009: membros do boundary Stock/Ledger (falsificáveis) ──
+    $queryRaw: async (): Promise<unknown[]> => {
+      calls.push("tx.$queryRaw")
+      return []
+    },
+    deposito: {
+      findFirst: async (args: { where: { storeId?: string } }): Promise<{ id: string; storeId: string; codigo: string; principal: boolean } | null> => {
+        calls.push("tx.deposito.findFirst")
+        for (const d of depositos.values()) {
+          if (args.where?.storeId !== undefined && d.storeId !== args.where.storeId) continue
+          return { ...d }
+        }
+        return null
+      },
+      findUnique: async (args: { where: { id?: string } }): Promise<{ id: string; storeId: string } | null> => {
+        calls.push("tx.deposito.findUnique")
+        const d = args.where?.id ? depositos.get(args.where.id) : undefined
+        return d ? { id: d.id, storeId: d.storeId } : null
+      },
+      create: async (args: { data: { storeId: string } }): Promise<{ id: string; storeId: string; codigo: string; principal: boolean }> => {
+        calls.push("tx.deposito.create")
+        const id = `dep-${depSeq++}`
+        const row = { id, storeId: args.data.storeId, codigo: "PRINCIPAL", principal: true }
+        depositos.set(id, row)
+        return { ...row }
+      },
+    },
+    produtoDeposito: {
+      findMany: async (args: { where: { storeId?: string; produtoId?: string } }): Promise<Array<{ depositoId: string; quantidade: number }>> => {
+        calls.push("tx.produtoDeposito.findMany")
+        const out: Array<{ depositoId: string; quantidade: number }> = []
+        for (const r of pds.values()) {
+          if (args.where?.storeId !== undefined && r.storeId !== args.where.storeId) continue
+          if (args.where?.produtoId !== undefined && r.produtoId !== args.where.produtoId) continue
+          out.push({ depositoId: r.depositoId, quantidade: r.quantidade })
+        }
+        return out
+      },
+      upsert: async (args: {
+        where: { produtoId_depositoId: { produtoId: string; depositoId: string } }
+        create: { storeId: string; produtoId: string; depositoId: string; quantidade: number }
+        update: { quantidade: number }
+      }): Promise<unknown> => {
+        calls.push("tx.produtoDeposito.upsert")
+        const k = `${args.where.produtoId_depositoId.produtoId}|${args.where.produtoId_depositoId.depositoId}`
+        const ex = pds.get(k)
+        if (ex) ex.quantidade = args.update.quantidade
+        else {
+          pds.set(k, {
+            storeId: args.create.storeId,
+            produtoId: args.create.produtoId,
+            depositoId: args.create.depositoId,
+            quantidade: args.create.quantidade ?? args.update.quantidade,
+          })
+        }
+        return {}
+      },
+    },
+    movimentacaoEstoque: {
+      findFirst: async (args: { where: { storeId?: string; idempotencyKey?: string | null } }): Promise<MovRow | null> => {
+        calls.push("tx.movimentacaoEstoque.findFirst")
+        for (const m of movs.values()) {
+          if (args.where?.storeId !== undefined && m.storeId !== args.where.storeId) continue
+          if (args.where?.idempotencyKey !== undefined && m.idempotencyKey !== args.where.idempotencyKey) continue
+          return { ...m }
+        }
+        return null
+      },
+      create: async (args: { data: Record<string, unknown> }): Promise<{ id: string }> => {
+        calls.push("tx.movimentacaoEstoque.create")
+        const data = args.data
+        const key = (data.idempotencyKey ?? null) as string | null
+        if (key) {
+          for (const m of movs.values()) {
+            if (m.storeId === data.storeId && m.idempotencyKey === key) throw prismaKnownError("P2002")
+          }
+        }
+        const id = `mov-${movSeq++}`
+        movs.set(id, {
+          id,
+          storeId: String(data.storeId),
+          produtoId: (data.produtoId ?? null) as string | null,
+          tipo: String(data.tipo),
+          quantidade: Number(data.quantidade),
+          documento: (data.documento ?? null) as string | null,
+          motivo: (data.motivo ?? null) as string | null,
+          origem: String(data.origem ?? "manual"),
+          custoUnitario: Number(data.custoUnitario ?? 0),
+          estoqueAntes: Number(data.estoqueAntes),
+          estoqueDepois: Number(data.estoqueDepois),
+          idempotencyKey: key,
+        })
+        return { id }
+      },
+    },
   }
 
-  const db: ProductWriteDb = {
+  // Fake estrutural: cobre ProductWriteTx (inclui StockLedgerTx). Cast via
+  // unknown porque os membros usam args Prisma concretos (runtime equivalente).
+  const db = {
     produto,
     $transaction: async <T>(fn: (t: typeof tx) => Promise<T>): Promise<T> => {
       calls.push("$transaction")
       return fn(tx)
     },
-  }
+  } as unknown as ProductWriteDb
 
   return {
     db,
@@ -202,6 +334,9 @@ function makeFakeDb(seed: FakeRow[] = []) {
     audits,
     calls,
     state,
+    depositos,
+    pds,
+    movs,
   }
 }
 
@@ -570,64 +705,70 @@ describe("ProductWriteService — PATCH safety e metadata", () => {
   })
 })
 
-// ─── 14. Sem mutação de estoque/ledger ──────────────────────────────────────
+// ─── 14. Estoque inicial via Stock/Ledger; PATCH de saldo bloqueado (009) ────
 
-describe("ProductWriteService — sem mutação de estoque/ledger", () => {
-  function guardedDb(inner: ProductWriteDb): ProductWriteDb {
-    const forbid = (scope: string) => ({
-      get(target: object, prop: string | symbol, receiver: unknown) {
-        if (typeof prop === "string" && prop !== "then") {
-          const allowed =
-            scope === "db"
-              ? ["produto", "$transaction"]
-              : scope === "produto"
-                ? ["findFirst", "findUnique"]
-                : scope === "tx-produto"
-                  ? ["create", "update"]
-                  : ["create"]
-          if (!allowed.includes(prop)) {
-            throw new Error(`PRODUCT_WRITE_SERVICE_DOES_NOT_MUTATE_STOCK_LEDGER: acesso proibido a ${prop}`)
-          }
-        }
-        return Reflect.get(target, prop, receiver)
-      },
-    })
-    const db = new Proxy(inner, forbid("db")) as ProductWriteDb
-    const originalTx = inner.$transaction.bind(inner)
-    db.$transaction = async <T>(fn: (tx: never) => Promise<T>): Promise<T> =>
-      originalTx(async (tx) => {
-        const guardedTx = {
-          produto: new Proxy(tx.produto, forbid("tx-produto")),
-          logsAuditoria: new Proxy(tx.logsAuditoria, forbid("tx-audit")),
-        }
-        return fn(guardedTx as never)
-      })
-    db.produto = new Proxy(inner.produto, forbid("produto")) as ProductWriteDb["produto"]
-    return db
-  }
-
-  it("14. create/update com estoque explícito não tocam ledger/inventário/depósitos", async () => {
-    const inner = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", stock: 4 })])
-    const db = guardedDb(inner.db)
-    const c = await createProduct(ctx(), { nome: "C", estoque: 10 }, { db })
+describe("ProductWriteService — estoque via boundary (CAD-R2-009)", () => {
+  it("14. create sem estoque nasce zerado e sem ledger", async () => {
+    const fake = makeFakeDb()
+    const c = await createProduct(ctx(), { nome: "C" }, { db: fake.db })
     expect(c.ok).toBe(true)
-    const u = await updateProduct(ctx(), "p1", { estoque: 9 }, { db })
-    expect(u.ok).toBe(true)
-    if (!c.ok || !u.ok) return
-    expect(inner.rows.get(c.id)?.stock).toBe(10)
-    expect(inner.rows.get("p1")?.stock).toBe(9)
-    expect(inner.audits).toHaveLength(2)
+    if (!c.ok) return
+    expect(fake.rows.get(c.id)?.stock).toBe(0)
+    expect(fake.movs.size).toBe(0)
+    expect(fake.calls).not.toContain("tx.movimentacaoEstoque.create")
   })
 
-  it("14b. fonte não contém acesso a estoque/ledger/inventário", () => {
+  it("14b. create com estoque inicial aplica entrada `cadastro` (stock + depósito + ledger)", async () => {
+    const fake = makeFakeDb()
+    const c = await createProduct(ctx(), { nome: "C", estoque: 10, custo: 4 }, { db: fake.db })
+    expect(c.ok).toBe(true)
+    if (!c.ok) return
+    expect(fake.rows.get(c.id)?.stock).toBe(10)
+    expect(fake.rows.get(c.id)?.precoCusto).toBe(4)
+    // Depósito principal materializado com o saldo.
+    let soma = 0
+    for (const r of fake.pds.values()) {
+      if (r.produtoId === c.id) soma += r.quantidade
+    }
+    expect(soma).toBe(10)
+    // Ledger: 1 entrada compensatória de cadastro.
+    expect(fake.movs.size).toBe(1)
+    const mov = [...fake.movs.values()][0]
+    expect(mov.produtoId).toBe(c.id)
+    expect(mov.tipo).toBe("entrada")
+    expect(mov.quantidade).toBe(10)
+    expect(mov.origem).toBe("cadastro")
+    expect(mov.estoqueAntes).toBe(0)
+    expect(mov.estoqueDepois).toBe(10)
+    expect(mov.idempotencyKey).toContain(c.id)
+    expect(fake.calls).toContain("tx.$queryRaw")
+  })
+
+  it("14c. update com estoque/stock explícito falha VALIDATION (saldo só pelo ledger)", async () => {
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", stock: 4 })])
+    for (const input of [{ estoque: 9 }, { stock: 9 }]) {
+      const u = await updateProduct(ctx(), "p1", input, { db: fake.db })
+      expect(u.ok).toBe(false)
+      if (u.ok) continue
+      expect(u.code).toBe("VALIDATION")
+    }
+    expect(fake.rows.get("p1")?.stock).toBe(4)
+    expect(fake.movs.size).toBe(0)
+    expect(fake.calls).not.toContain("tx.produto.update")
+  })
+
+  it("14d. fonte só toca estoque pelo boundary canônico (sem write direto)", () => {
     const src = readFileSync(resolve(process.cwd(), "lib/cadastros/product-write-service.ts"), "utf8")
     expect(src).toMatch(/["']server-only["']/)
+    // Boundary canônico: única ponte para saldo/ledger.
+    expect(src).toMatch(/from\s+["']@\/lib\/estoque\/stock-ledger-service["']/)
+    expect(src).toMatch(/applyStockMutationTx/)
+    // Sem writes diretos de saldo/ledger fora do boundary.
     for (const pattern of [
       /(tx|db|prisma)\s*\.\s*movimentacaoEstoque/i,
       /(tx|db|prisma)\s*\.\s*produtoDeposito/i,
       /(tx|db|prisma)\s*\.\s*inventario/i,
-      /(tx|db|prisma)\s*\.\s*ledger/i,
-      /from\s+["'][^"']*\/(estoque|inventario|ledger|movimentacoes)/i,
+      /stock\s*:\s*\{\s*(increment|decrement)/i,
     ]) {
       expect(src, String(pattern)).not.toMatch(pattern)
     }

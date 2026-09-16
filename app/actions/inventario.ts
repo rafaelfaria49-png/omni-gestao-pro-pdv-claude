@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
 import { canAccessStore } from "@/lib/auth/enterprise-permissions";
 import { registrarAjusteEstoque } from "@/app/actions/estoque";
+import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract";
 import {
   aplicarBipe,
   aplicarModoContagem,
@@ -1210,11 +1211,14 @@ export async function aplicarAjusteInventario(
     const motivo = (opts?.motivo ?? "").trim() || montarMotivoInventario(sessao, "divergencia");
 
     // Motor único de ledger (transacional + auditoria + Produto.stock na MESMA transação).
+    // CAD-R2-009: idempotência por (sessão, produto) — reaplicar o mesmo ajuste
+    // retorna a movimentação existente sem reaplicar saldo.
     const res = await registrarAjusteEstoque(g.sid, {
       produtoId: pid,
       novoSaldo,
       motivo,
       observacao: `Inventário ${sid}`,
+      idempotencyKey: StockIdempotency.inventario(sid, pid),
     });
 
     // "Novo saldo igual ao atual" = estoque já bate com o contado → benigno (marca como ajustado).
@@ -1286,6 +1290,7 @@ export async function aplicarZeragemNaoBipado(
       novoSaldo: NOVO_SALDO_NAO_BIPADO,
       motivo,
       observacao: `Inventário ${sid} — ausência confirmada`,
+      idempotencyKey: StockIdempotency.inventario(sid, pid),
     });
 
     const semMudanca = !res.ok && /nada a ajustar/i.test(res.reason);
@@ -1624,6 +1629,7 @@ export async function aplicarConciliacaoInventario(
         novoSaldo: saldoAplicavel(d.saldoEsperadoHoje),
         motivo: motivoSessao,
         observacao: `Inventário ${sid} — conciliação`,
+        idempotencyKey: StockIdempotency.inventario(sid, d.produtoId),
       });
       const semMudanca = !res.ok && /nada a ajustar/i.test(res.reason);
       if (!res.ok && !semMudanca) {
@@ -1658,6 +1664,7 @@ export async function aplicarConciliacaoInventario(
         novoSaldo: NOVO_SALDO_NAO_BIPADO,
         motivo: motivoAusencia,
         observacao: `Inventário ${sid} — ausência confirmada (conciliação)`,
+        idempotencyKey: StockIdempotency.inventario(sid, n.produtoId),
       });
       const semMudanca = !res.ok && /nada a ajustar/i.test(res.reason);
       if (!res.ok && !semMudanca) {

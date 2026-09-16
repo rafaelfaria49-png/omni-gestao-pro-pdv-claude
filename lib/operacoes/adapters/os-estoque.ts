@@ -3,6 +3,8 @@ import type { OrdemServico, Orcamento, PecaUsada, EventoTimeline } from "@/types
 import { prisma } from "@/lib/prisma";
 import { nowIso } from "@/lib/operacoes/services/os-helpers";
 import { selectEstoquePecaSource } from "@/lib/operacoes/services/orcamento-builder";
+import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract";
+import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service";
 
 export type EstoqueMovimentoPayload = {
   id: string;
@@ -41,10 +43,6 @@ function safeStr(v: unknown): string {
 function safeQty(v: unknown): number {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) ? n : 0;
-}
-
-function arredonda2(n: number): number {
-  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
 }
 
 export function getEstoqueLocalKey(storeId: string, ordemServicoId: string): string {
@@ -163,61 +161,20 @@ function makeEv(tipo: EventoTimeline["tipo"], conteudo: string, metadata?: Recor
 }
 
 /**
- * Registra a baixa/retorno no livro-razão de estoque (MovimentacaoEstoque).
- * Best-effort: roda dentro da transação da OS, mas NUNCA quebra o fluxo — se falhar,
- * apenas loga (o estoque já é a fonte da verdade; a trilha é complementar).
+ * CAD-R2-009: baixa/retorno de OS pelo boundary canônico.
+ * `registrarLedgerOS` (best-effort, sem depósito, sem lock, com erros engolidos)
+ * foi removido: cada baixa/retorno agora é `applyStockMutationTx` (lock FOR
+ * UPDATE + ownership + ProdutoDeposito + ledger append-only) na MESMA transação
+ * da OS. Falha de ledger falha a operação (visível na timeline) em vez de
+ * mascarar divergência — o caller decide não quebrar a transição de status.
  */
-async function registrarLedgerOS(
-  tx: Prisma.TransactionClient,
-  params: {
-    storeId: string;
-    osId: string;
-    osNumero?: string | null;
-    operador?: string | null;
-    produtoId: string;
-    sku: string | null;
-    nome: string;
-    custoMedio: number;
-    tipo: "saida" | "entrada";
-    quantidadeAbs: number;
-    estoqueAntes: number;
-    estoqueDepois: number;
-  }
-): Promise<void> {
-  try {
-    const numero = (params.osNumero ?? "").trim();
-    const docLabel = numero || `OS ${params.osId}`;
-    const operador = (params.operador ?? "").trim() || null;
-    // Custo unitário e valor total refletem o custo médio atual do produto — base para KPIs de
-    // valor consumido por OS. Em entrada (restauração), representa o valor reintegrado ao estoque.
-    const custoUnitario = arredonda2(Math.max(0, params.custoMedio));
-    const valorTotal = arredonda2(params.quantidadeAbs * custoUnitario);
-    await tx.movimentacaoEstoque.create({
-      data: {
-        storeId: params.storeId,
-        produtoId: params.produtoId,
-        produtoSku: params.sku,
-        produtoNome: params.nome,
-        tipo: params.tipo,
-        origem: "os",
-        quantidade: params.tipo === "saida" ? -params.quantidadeAbs : params.quantidadeAbs,
-        estoqueAntes: params.estoqueAntes,
-        estoqueDepois: params.estoqueDepois,
-        custoUnitario,
-        custoMedioAntes: params.custoMedio,
-        custoMedioDepois: params.custoMedio,
-        valorTotal,
-        documento: docLabel,
-        motivo: docLabel,
-        usuario: operador,
-      },
-    });
-  } catch (e) {
-    console.error(
-      "[os-estoque] falha ao registrar movimentação no livro-razão (ignorado):",
-      e instanceof Error ? e.message : e
-    );
-  }
+function ledgerContext(storeId: string, operador?: string | null) {
+  return {
+    storeId,
+    principal: null,
+    source: "os-estoque",
+    operatorLabel: (operador ?? "").trim() || null,
+  } as const;
 }
 
 export async function consumeEstoqueFromOS(params: { storeId: string; osId: string; osPayload?: OrdemServico; operador?: string | null }): Promise<ConsumeResult> {
@@ -247,58 +204,60 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
 
       const movimentos: EstoqueMovimentoPayload[] = [];
 
-      // Valida tudo primeiro (evita baixa parcial)
+      // Aplica baixa pelo boundary canônico (uma chamada por produto — items já
+      // vêm agregados de buildEstoqueMovimentosFromOS). Tudo na mesma tx: falha
+      // em qualquer item aborta a OS inteira (sem baixa parcial).
       for (const it of items) {
-        const p = await tx.produto.findFirst({ where: { id: it.produtoId, storeId: params.storeId }, select: { id: true, stock: true, name: true } });
-        if (!p) throw new Error(`Produto não encontrado: ${it.produtoId}`);
-        if (p.stock < it.quantidade) throw new Error(`Estoque insuficiente para "${p.name}" (disponível: ${p.stock}).`);
-      }
-
-      // Aplica baixa + cria itens da OS
-      for (const it of items) {
-        const p = await tx.produto.findFirstOrThrow({ where: { id: it.produtoId, storeId: params.storeId }, select: { id: true, stock: true, name: true, price: true, sku: true, precoCusto: true } });
-        const anterior = p.stock;
-        const depois = anterior - it.quantidade;
-
-        await tx.produto.update({ where: { id: p.id }, data: { stock: { decrement: it.quantidade } } });
+        const docLabel = osNumero?.trim() || `OS ${params.osId}`;
+        // Preço é dado de negócio (não autoridade de estoque): leitura simples
+        // para compor o OrdemServicoItem, como antes.
+        const catalog = await tx.produto.findFirst({
+          where: { id: it.produtoId, storeId: params.storeId },
+          select: { id: true, name: true, price: true },
+        });
+        if (!catalog) throw new Error(`Produto não encontrado: ${it.produtoId}`);
+        const r = await applyStockMutationTx(
+          tx as unknown as StockLedgerTx,
+          ledgerContext(params.storeId, params.operador),
+          {
+            kind: "saida",
+            produtoId: it.produtoId,
+            quantidade: it.quantidade,
+            origem: "os",
+            documento: docLabel,
+            motivo: docLabel,
+            idempotencyKey: StockIdempotency.osConsumo(params.osId, it.produtoId),
+          },
+        );
+        if (!r.ok) {
+          if (r.code === "INSUFFICIENT_STOCK") {
+            throw new Error(`Estoque insuficiente para "${catalog.name}" (disponível: ${r.estoqueAntes ?? 0}).`);
+          }
+          throw new Error(`[os-estoque] baixa falhou: ${r.code} ${r.message}`);
+        }
         const unit =
           typeof it.precoUnitario === "number" && Number.isFinite(it.precoUnitario) && it.precoUnitario >= 0
             ? it.precoUnitario
-            : p.price;
+            : catalog.price;
         await tx.ordemServicoItem.create({
           data: {
             ordemServicoId: params.osId,
-            produtoId: p.id,
+            produtoId: catalog.id,
             tipo: "peca",
-            descricao: it.nome || p.name,
+            descricao: it.nome || catalog.name,
             quantidade: it.quantidade,
             precoUnitario: unit,
             observacao: "",
           },
         });
 
-        await registrarLedgerOS(tx, {
-          storeId: params.storeId,
-          osId: params.osId,
-          osNumero,
-          operador: params.operador ?? null,
-          produtoId: p.id,
-          sku: p.sku,
-          nome: p.name,
-          custoMedio: p.precoCusto ?? 0,
-          tipo: "saida",
-          quantidadeAbs: it.quantidade,
-          estoqueAntes: anterior,
-          estoqueDepois: depois,
-        });
-
         movimentos.push({
           id: newId("mov"),
-          produtoId: p.id,
-          nome: p.name,
+          produtoId: catalog.id,
+          nome: catalog.name,
           quantidade: it.quantidade,
-          estoqueAnterior: anterior,
-          estoqueDepois: depois,
+          estoqueAnterior: r.estoqueAntes,
+          estoqueDepois: r.estoqueDepois,
           origem: "operacoes-hub-v2",
           ordemServicoId: params.osId,
           createdAt: nowIso(),
@@ -356,30 +315,34 @@ export async function restoreEstoqueFromOS(params: {
         return;
       }
 
-      // Restaura estoque a partir de OrdemServicoItem real
+      // Restaura estoque a partir de OrdemServicoItem real, agregado por produto
+      // (uma entrada compensatória por produto — retry dedupeia pela chave).
       const itens = await tx.ordemServicoItem.findMany({ where: { ordemServicoId: params.osId } });
+      const qtdPorProduto = new Map<string, number>();
       for (const it of itens) {
-        if (!it.produtoId) continue;
-        const p = await tx.produto.findFirst({
-          where: { id: it.produtoId, storeId: params.storeId },
-          select: { id: true, stock: true, name: true, sku: true, precoCusto: true },
-        });
-        await tx.produto.update({ where: { id: it.produtoId }, data: { stock: { increment: it.quantidade } } });
-        if (p) {
-          await registrarLedgerOS(tx, {
-            storeId: params.storeId,
-            osId: params.osId,
-            osNumero,
-            operador: params.operador ?? null,
-            produtoId: p.id,
-            sku: p.sku,
-            nome: p.name,
-            custoMedio: p.precoCusto ?? 0,
-            tipo: "entrada",
-            quantidadeAbs: it.quantidade,
-            estoqueAntes: p.stock,
-            estoqueDepois: p.stock + it.quantidade,
-          });
+        const pid = typeof it.produtoId === "string" ? it.produtoId.trim() : "";
+        if (!pid) continue;
+        const q = Math.floor(Number(it.quantidade) || 0);
+        if (q <= 0) continue;
+        qtdPorProduto.set(pid, (qtdPorProduto.get(pid) ?? 0) + q);
+      }
+      const docLabel = (osNumero ?? "").trim() || `OS ${params.osId}`;
+      for (const [produtoId, qtd] of qtdPorProduto) {
+        const r = await applyStockMutationTx(
+          tx as unknown as StockLedgerTx,
+          ledgerContext(params.storeId, params.operador),
+          {
+            kind: "entrada",
+            produtoId,
+            quantidade: qtd,
+            origem: "os",
+            documento: docLabel,
+            motivo: docLabel,
+            idempotencyKey: StockIdempotency.osEstorno(params.osId, produtoId),
+          },
+        );
+        if (!r.ok) {
+          throw new Error(`[os-estoque] estorno falhou: ${r.code} ${r.message}`);
         }
       }
       await tx.ordemServicoItem.deleteMany({ where: { ordemServicoId: params.osId } });
@@ -499,22 +462,35 @@ export async function applyEstoqueDelta(params: {
         return { ok: true as const, status: "no_delta" as const, delta };
       }
 
-      // Valida consumo adicional antes de aplicar (evita parcial)
-      for (const d of delta) {
-        if (d.tipo !== "consumo") continue;
-        const p = await tx.produto.findFirst({ where: { id: d.produtoId, storeId: params.storeId }, select: { id: true, stock: true, name: true } });
-        if (!p) throw new Error(`Produto não encontrado: ${d.produtoId}`);
-        if (p.stock < d.diferenca) throw new Error(`Estoque insuficiente para "${p.name}" (necessário: ${d.diferenca}, disponível: ${p.stock}).`);
-      }
-
-      // Aplica delta (consumo/restauração parcial)
+      // Aplica delta pelo boundary canônico (tudo na mesma tx: falha em
+      // qualquer item aborta sem parcial). Chave por (OS, revisão, produto).
+      const docLabel = (osNumero ?? "").trim() || `OS ${params.osId}`;
       for (const d of delta) {
         if (d.tipo === "consumo") {
-          const p = await tx.produto.findFirstOrThrow({
+          const catalog = await tx.produto.findFirst({
             where: { id: d.produtoId, storeId: params.storeId },
-            select: { id: true, price: true, stock: true, name: true, sku: true, precoCusto: true },
+            select: { id: true, price: true, name: true },
           });
-          await tx.produto.update({ where: { id: d.produtoId }, data: { stock: { decrement: d.diferenca } } });
+          if (!catalog) throw new Error(`Produto não encontrado: ${d.produtoId}`);
+          const r = await applyStockMutationTx(
+            tx as unknown as StockLedgerTx,
+            ledgerContext(params.storeId, params.operador),
+            {
+              kind: "saida",
+              produtoId: d.produtoId,
+              quantidade: d.diferenca,
+              origem: "os",
+              documento: docLabel,
+              motivo: docLabel,
+              idempotencyKey: StockIdempotency.osDelta(params.osId, params.revisaoKey, d.produtoId),
+            },
+          );
+          if (!r.ok) {
+            if (r.code === "INSUFFICIENT_STOCK") {
+              throw new Error(`Estoque insuficiente para "${catalog.name}" (necessário: ${d.diferenca}, disponível: ${r.estoqueAntes ?? 0}).`);
+            }
+            throw new Error(`[os-estoque] delta de consumo falhou: ${r.code} ${r.message}`);
+          }
           await tx.ordemServicoItem.create({
             data: {
               ordemServicoId: params.osId,
@@ -522,46 +498,27 @@ export async function applyEstoqueDelta(params: {
               tipo: "peca",
               descricao: "",
               quantidade: d.diferenca,
-              precoUnitario: p.price,
+              precoUnitario: catalog.price,
               observacao: "",
             },
           });
-          await registrarLedgerOS(tx, {
-            storeId: params.storeId,
-            osId: params.osId,
-            osNumero,
-            operador: params.operador ?? null,
-            produtoId: p.id,
-            sku: p.sku,
-            nome: p.name,
-            custoMedio: p.precoCusto ?? 0,
-            tipo: "saida",
-            quantidadeAbs: d.diferenca,
-            estoqueAntes: p.stock,
-            estoqueDepois: p.stock - d.diferenca,
-          });
         } else {
           const toRestore = Math.abs(d.diferenca);
-          const pRest = await tx.produto.findFirst({
-            where: { id: d.produtoId, storeId: params.storeId },
-            select: { id: true, stock: true, name: true, sku: true, precoCusto: true },
-          });
-          await tx.produto.update({ where: { id: d.produtoId }, data: { stock: { increment: toRestore } } });
-          if (pRest) {
-            await registrarLedgerOS(tx, {
-              storeId: params.storeId,
-              osId: params.osId,
-              osNumero,
-              operador: params.operador ?? null,
-              produtoId: pRest.id,
-              sku: pRest.sku,
-              nome: pRest.name,
-              custoMedio: pRest.precoCusto ?? 0,
-              tipo: "entrada",
-              quantidadeAbs: toRestore,
-              estoqueAntes: pRest.stock,
-              estoqueDepois: pRest.stock + toRestore,
-            });
+          const r = await applyStockMutationTx(
+            tx as unknown as StockLedgerTx,
+            ledgerContext(params.storeId, params.operador),
+            {
+              kind: "entrada",
+              produtoId: d.produtoId,
+              quantidade: toRestore,
+              origem: "os",
+              documento: docLabel,
+              motivo: docLabel,
+              idempotencyKey: StockIdempotency.osDelta(params.osId, params.revisaoKey, d.produtoId),
+            },
+          );
+          if (!r.ok) {
+            throw new Error(`[os-estoque] delta de restauração falhou: ${r.code} ${r.message}`);
           }
 
           let remaining = toRestore;
