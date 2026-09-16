@@ -191,16 +191,21 @@ describe("CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos", () => {
     const guardIdx = source.indexOf(guard, finalizeIdx)
     expect(guardIdx).toBeGreaterThan(finalizeIdx)
     const gap = source.slice(finalizeIdx, guardIdx)
-    for (const marker of ["setCupomNum", "writeCupom", "setCartRows([])", "sale_finalized"]) {
+    // REPARO N5-A (F-07 / BUG_OUTSIDE_N5-03, test-only): o Black escreve o cupom
+    // via `writePdvBlackCupom` desde o N2 (cadf188). O literal antigo
+    // `writeCupom` não existe mais no fonte e o teste falhava por inspeção
+    // textual desatualizada — comportamento real (pending antes do cupom)
+    // nunca mudou. Nenhuma alteração de produção.
+    for (const marker of ["setCupomNum", "writePdvBlackCupom", "setCartRows([])", "sale_finalized"]) {
       expect(gap, `Black gap sem ${marker}`).not.toContain(marker)
     }
     const pendingBlock = balancedBlock(source, source.indexOf("{", guardIdx))
     expect(pendingBlock).toContain("PENDING_SALE_TITLE")
-    for (const marker of ["setCupomNum", "writeCupom", "setCartRows([])"]) {
+    for (const marker of ["setCupomNum", "writePdvBlackCupom", "setCartRows([])"]) {
       expect(pendingBlock, `Black pending sem ${marker}`).not.toContain(marker)
     }
     const confirmed = source.slice(guardIdx + pendingBlock.length + (source.indexOf("{", guardIdx) - guardIdx))
-    expect(confirmed).toContain("writeCupom")
+    expect(confirmed).toContain("writePdvBlackCupom")
   })
 })
 
