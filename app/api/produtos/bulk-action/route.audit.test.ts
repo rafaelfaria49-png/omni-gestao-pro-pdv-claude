@@ -9,9 +9,30 @@ const h = vi.hoisted(() => ({
   logsCreate: vi.fn(async (_args: { data: { userLabel: string; metadata: string } }) => ({
     id: "log-1",
   })),
+  updateProductTx: vi.fn(async () => ({ ok: true, id: "p1", operacao: "update" })),
 }))
 
 vi.mock("@/auth", () => ({ auth: h.auth }))
+vi.mock("@/lib/cadastros/cadastros-audit-principal", () => ({
+  cadastrosAuditPrincipalFromSession: vi.fn((session: unknown) => {
+    const user = (session as { user?: { id?: string; email?: string; name?: string; role?: string } })?.user
+    if (!user?.id) return null
+    return { userId: user.id, email: user.email, role: user.role, displayLabel: user.name || user.email || user.id }
+  }),
+  cadastrosAuditLogFields: vi.fn((principal: { displayLabel?: string; userId?: string } | null, opts?: { operatorNote?: string | null }) => ({
+    userLabel: principal?.displayLabel ?? "",
+    actorMeta: {
+      actor: principal ? { userId: principal.userId as string } : null,
+      ...(opts?.operatorNote ? { operatorNote: opts.operatorNote } : {}),
+    },
+  })),
+}))
+vi.mock("@/lib/cadastros/product-write-service", () => ({
+  PRODUCT_WRITE_AUDIT_SOURCE: "product-write-service",
+  createProduct: vi.fn(),
+  updateProduct: vi.fn(),
+  updateProductTx: (...args: unknown[]) => (h.updateProductTx as (...a: unknown[]) => unknown)(...args),
+}))
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     produto: {
@@ -68,15 +89,18 @@ beforeEach(() => {
   h.produtoFindMany.mockReset()
   h.produtoUpdateMany.mockReset()
   h.logsCreate.mockReset()
+  h.updateProductTx.mockReset()
   h.auth.mockResolvedValue(adminSession())
   h.produtoFindMany.mockResolvedValue([{ id: "p1", name: "Cabo" }])
   h.produtoUpdateMany.mockResolvedValue({ count: 1 })
+  h.updateProductTx.mockResolvedValue({ ok: true, id: "p1", operacao: "update" })
 })
 
 describe("POST /api/produtos/bulk-action — ator oficial", () => {
   it("ignora body.userLabel e não cai em Operador", async () => {
     const res = await POST(req({ ids: ["p1"], action: "inactivate", userLabel: "Rafael" }))
     expect(res.status).toBe(200)
+    expect(h.updateProductTx).toHaveBeenCalled()
     expect(h.logsCreate).toHaveBeenCalled()
     const row = h.logsCreate.mock.calls.at(0)?.[0].data
     expect(row).toBeDefined()
@@ -93,5 +117,13 @@ describe("POST /api/produtos/bulk-action — ator oficial", () => {
     expect(meta.ids).toEqual(["p1"])
     expect(meta.actor.userId).toBe("admin-1")
     expect(meta.operatorNote).toBe("Rafael")
+  })
+
+  it("inactivate em lote usa boundary canônica (sem updateMany direto de cadastro)", async () => {
+    await POST(req({ ids: ["p1"], action: "inactivate" }))
+    expect(h.updateProductTx).toHaveBeenCalledTimes(1)
+    const [, , , input] = h.updateProductTx.mock.calls[0] as unknown as [unknown, unknown, unknown, { active: boolean }]
+    expect(input).toMatchObject({ active: false })
+    expect(h.produtoUpdateMany).not.toHaveBeenCalled()
   })
 })

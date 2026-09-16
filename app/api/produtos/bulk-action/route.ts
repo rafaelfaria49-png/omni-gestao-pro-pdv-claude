@@ -6,6 +6,7 @@ import {
   cadastrosAuditLogFields,
   cadastrosAuditPrincipalFromSession,
 } from "@/lib/cadastros/cadastros-audit-principal"
+import { updateProductTx, type ProductWriteTx } from "@/lib/cadastros/product-write-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -45,10 +46,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Máximo de ${MAX_IDS} itens por lote` }, { status: 400 })
   }
 
-  const audit = cadastrosAuditLogFields(cadastrosAuditPrincipalFromSession(gate.session), {
+  const principal = cadastrosAuditPrincipalFromSession(gate.session)
+  const audit = cadastrosAuditLogFields(principal, {
     operatorNote: userLabel,
   })
   const operator = audit.userLabel
+  const writeContext = { storeId, principal }
 
   const items = await prisma.produto.findMany({
     where: { id: { in: normalizedIds }, storeId },
@@ -93,13 +96,32 @@ export async function POST(req: Request) {
   let deletedCount = 0
   let inactivatedCount = 0
 
+  // CAD-R2-007: cadastro-base em lote via primitive canônica (Tx variant) na
+  // MESMA transação do lote — nenhum item usa Prisma Produto direto; nenhum
+  // bulk altera stock (só active/status). DELETE permanece fora do contrato.
+  async function inactivateBatch(
+    tx: ProductWriteTx,
+    targetIds: string[],
+  ): Promise<number> {
+    let count = 0
+    for (const pid of targetIds) {
+      const r = await updateProductTx(tx, writeContext, pid, { active: false })
+      if (r.ok) {
+        count += 1
+        continue
+      }
+      // Paridade com o updateMany anterior: ids inexistentes/cross-store apenas
+      // não contam — não abortam o lote.
+      if (r.code === "NOT_FOUND" || r.code === "CROSS_STORE") continue
+      throw new Error(`[bulk-action] inativação falhou para ${pid}: ${r.code} ${r.message}`)
+    }
+    return count
+  }
+
   await prisma.$transaction(async (tx) => {
+    const btx = tx as unknown as ProductWriteTx
     if (action === "inactivate") {
-      const res = await tx.produto.updateMany({
-        where: { id: { in: normalizedIds }, storeId },
-        data: { active: false, status: "Inativo" },
-      })
-      inactivatedCount = res.count
+      inactivatedCount = await inactivateBatch(btx, normalizedIds)
 
       await tx.logsAuditoria.create({
         data: {
@@ -124,11 +146,7 @@ export async function POST(req: Request) {
       }
 
       if (linkedIds.length > 0) {
-        const inactRes = await tx.produto.updateMany({
-          where: { id: { in: linkedIds }, storeId },
-          data: { active: false, status: "Inativo" },
-        })
-        inactivatedCount = inactRes.count
+        inactivatedCount = await inactivateBatch(btx, linkedIds)
       }
 
       await tx.logsAuditoria.create({

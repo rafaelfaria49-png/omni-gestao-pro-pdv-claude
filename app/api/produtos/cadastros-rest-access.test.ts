@@ -1,5 +1,6 @@
 /**
  * CAD-R2-002 — GET/POST /api/produtos com o gate REAL (não mockado).
+ * CAD-R2-007 — POST/PATCH delegam ao boundary canônico (service mockado).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Session } from "next-auth"
@@ -16,6 +17,8 @@ const h = vi.hoisted(() => ({
   })),
   produtoUpdateMany: vi.fn(async () => ({ count: 1 })),
   produtoDeleteMany: vi.fn(async () => ({ count: 1 })),
+  createProduct: vi.fn(async () => ({ ok: true, id: "p-1", operacao: "create" })),
+  updateProduct: vi.fn(async () => ({ ok: true, id: "p-1", operacao: "update" })),
 }))
 
 vi.mock("next/headers", () => ({
@@ -32,8 +35,23 @@ vi.mock("@/lib/prisma", () => ({
       updateMany: h.produtoUpdateMany,
       deleteMany: h.produtoDeleteMany,
     },
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
   },
   prismaEnsureConnected: vi.fn(async () => undefined),
+}))
+vi.mock("@/lib/cadastros/cadastros-audit-principal", () => ({
+  cadastrosAuditPrincipalFromSession: vi.fn(() => null),
+  cadastrosAuditLogFields: vi.fn(() => ({ userLabel: "", actorMeta: { actor: null } })),
+}))
+vi.mock("@/lib/cadastros/product-write-service", () => ({
+  PRODUCT_WRITE_AUDIT_SOURCE: "product-write-service",
+  createProduct: (...args: unknown[]) => (h.createProduct as (...a: unknown[]) => unknown)(...args),
+  updateProduct: (...args: unknown[]) => (h.updateProduct as (...a: unknown[]) => unknown)(...args),
+  updateProductTx: vi.fn(async () => ({ ok: true, id: "p-1", operacao: "update" })),
+}))
+vi.mock("@/lib/estoque/stock-ledger-service", () => ({
+  applyStockMutation: vi.fn(async () => ({ ok: true, movimentacaoId: "mov-1" })),
+  applyStockMutationTx: vi.fn(async () => ({ ok: true, movimentacaoId: "mov-1" })),
 }))
 
 import { GET, POST } from "./route"
@@ -80,6 +98,27 @@ beforeEach(() => {
   h.produtoCreate.mockClear()
   h.produtoUpdateMany.mockClear()
   h.produtoDeleteMany.mockClear()
+  h.createProduct.mockClear()
+  h.updateProduct.mockClear()
+  h.createProduct.mockResolvedValue({ ok: true, id: "p-1", operacao: "create" })
+  h.updateProduct.mockResolvedValue({ ok: true, id: "p-1", operacao: "update" })
+  h.produtoFindFirst.mockResolvedValue({
+    id: "p-1",
+    name: "Cabo",
+    stock: 1,
+    price: 10,
+    precoCusto: 0,
+    sku: null,
+    barcode: null,
+    category: null,
+    brand: "",
+    supplierName: "",
+    warrantyDays: 0,
+    active: true,
+    status: "Ativo",
+    metadata: null,
+    storeId: "loja-a",
+  } as never)
   h.auth.mockResolvedValue(null)
   h.findUnique.mockResolvedValue(null)
 })
@@ -117,7 +156,7 @@ describe("POST /api/produtos", () => {
     sessionAtiva({ role: "CAIXA", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
     const res = await POST(req("POST", "loja-a", body))
     expect(res.status).toBe(403)
-    expect(h.produtoCreate).not.toHaveBeenCalled()
+    expect(h.createProduct).not.toHaveBeenCalled()
   })
 
   it("VENDEDOR outra loja → 403", async () => {
