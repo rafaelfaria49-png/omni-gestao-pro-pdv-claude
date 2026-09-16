@@ -2264,9 +2264,11 @@ export async function listLojasCadastros(): Promise<LojaDTO[]> {
   })
 }
 
-// ── Lookup externo por código de barras (GOAL 004A) ───────────────────────────
-// Camada server-side: contrato + orquestrador + adapter Cosmos.
-// Não salva produto, não altera metadata, não altera UI.
+// ── Lookup externo por código de barras (GOAL 004A · CAD-R2-015) ─────────────
+// Camada server-side: contrato + orquestrador + adapters, governados por
+// lib/cadastros/provider-governance (fonte única de status/capabilities).
+// Não salva produto (sugestão revisável; write boundary continua upsertProduto),
+// não altera metadata, não altera UI.
 // Código interno 20–29 nunca vai a provedor externo (D08).
 
 export type ResolverCodigoBarrasResult =

@@ -1,4 +1,10 @@
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin"
+import {
+  MENSAGEM_COSMOS_SEM_CONFIG,
+  MENSAGEM_OFF_INDISPONIVEL,
+  avaliarProvedor,
+  type DecisaoProvedor,
+} from "@/lib/cadastros/provider-governance"
 import { criarProvedorCosmos } from "./provedores/cosmos"
 import { criarProvedorUpcItemdb } from "./provedores/upcitemdb"
 import { type MemoLookup } from "./memo"
@@ -53,23 +59,32 @@ export function classificarBarcode(rawBarcode: string): BarcodeClassificado {
  * Fábrica padrão de provedores. Lê a chave de cada provedor da env.
  * - cosmos: requer COSMOS_API_KEY; senão => erro de config (não crash).
  * - upcitemdb: FREE/trial sem chave; sempre disponível.
- * - openfoodfacts: ainda não implementado (GOAL 004C opcional/futuro).
+ * - openfoodfacts: conhecido porém indisponível — sem adapter real (CAD-R2-015);
+ *   NUNCA executado, sempre erro honesto. NÃO implementar neste GOAL.
+ *
+ * CAD-R2-015: cada ramo consulta a governança canônica (avaliarProvedor) antes
+ * de construir o adapter. A decisão recebe só presença de config (booleano) —
+ * valores de segredo jamais entram na governança.
  */
 export function fabricaProvedorPadrao(
   id: ProvedorId,
   env: BarcodeEnv,
   opts?: OpcoesFabrica,
 ): FabricaProvedorResult {
+  const chaveCosmos = env.COSMOS_API_KEY?.trim()
+  const cosmosApiKeyPresente = Boolean(chaveCosmos)
   if (id === "cosmos") {
-    const key = env.COSMOS_API_KEY?.trim()
-    if (!key) return { erro: "COSMOS_API_KEY não configurada." }
-    return criarProvedorCosmos({ apiKey: key, fetchImpl: opts?.fetchImpl })
+    const decisao: DecisaoProvedor = avaliarProvedor(id, { cosmosApiKeyPresente })
+    if (!decisao.executable) return { erro: MENSAGEM_COSMOS_SEM_CONFIG }
+    return criarProvedorCosmos({ apiKey: chaveCosmos as string, fetchImpl: opts?.fetchImpl })
   }
   if (id === "upcitemdb") {
+    const decisao: DecisaoProvedor = avaliarProvedor(id, { cosmosApiKeyPresente })
+    if (!decisao.executable) return { erro: decisao.mensagem }
     return criarProvedorUpcItemdb({ fetchImpl: opts?.fetchImpl })
   }
   if (id === "openfoodfacts") {
-    return { erro: "Provedor openfoodfacts ainda não implementado (GOAL 004C)." }
+    return { erro: MENSAGEM_OFF_INDISPONIVEL }
   }
   return { erro: `Provedor desconhecido: ${id}` }
 }
@@ -106,10 +121,17 @@ export async function resolverCodigoBarrasCore(
   }
   const boundFactory = (id: ProvedorId): FabricaProvedorResult =>
     deps.criarProvedor(id, env, deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : undefined)
+  // CAD-R2-015 (defesa em profundidade): o orquestrador consulta a governança
+  // ANTES de construir qualquer adapter. Provider desabilitado, não
+  // implementado ou sem config obrigatória gera tentativa erro/config honesta
+  // e NUNCA é executado — mesmo que a fábrica acima seja substituída em testes.
+  const decidirExecucao = (id: ProvedorId): DecisaoProvedor =>
+    avaliarProvedor(id, { cosmosApiKeyPresente: Boolean(env.COSMOS_API_KEY?.trim()) })
 
   const resultado = await resolverCadeia(gtin, {
     ordem: ordemResult.provedores,
     criarProvedor: boundFactory,
+    decidirExecucao,
     memo: deps.memo,
   })
   return { resultado }

@@ -1,17 +1,22 @@
+import {
+  ENV_ORDEM_BARCODE,
+  ORDEM_BARCODE_DEFAULT,
+  idsConhecidos,
+} from "@/lib/cadastros/provider-governance"
 import type { ProvedorId } from "./types"
 
 /**
- * Registro/ordem dos provedores de lookup externo (GOAL 004A).
+ * Registro/ordem dos provedores de lookup externo (GOAL 004A · CAD-R2-015).
  *
  * Lê `BARCODE_LOOKUP_PROVIDERS` (CSV). Default neste GOAL: "cosmos".
  * Provedor desconhecido na env => erro claro (não crash).
+ *
+ * CAD-R2-015: os ids válidos, o default e o nome da env vêm da governança
+ * canônica (lib/cadastros/provider-governance) — fonte única. O comportamento
+ * funcional (parse, default, dedup, erro honesto) é preservado.
  */
 
-const PROVEDORES_VALIDOS: ReadonlySet<ProvedorId> = new Set([
-  "cosmos",
-  "upcitemdb",
-  "openfoodfacts",
-])
+const PROVEDORES_VALIDOS: ReadonlySet<ProvedorId> = new Set(idsConhecidos())
 
 export type ResultadoOrdem =
   | { ok: true; provedores: ProvedorId[] }
@@ -25,14 +30,14 @@ export type ResultadoOrdem =
  */
 export function lerOrdemProvedores(env: string | undefined): ResultadoOrdem {
   const raw = (env ?? "").trim()
-  if (!raw) return { ok: true, provedores: ["cosmos"] }
+  if (!raw) return { ok: true, provedores: [...ORDEM_BARCODE_DEFAULT] }
 
   const tokens = raw
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean)
 
-  if (tokens.length === 0) return { ok: true, provedores: ["cosmos"] }
+  if (tokens.length === 0) return { ok: true, provedores: [...ORDEM_BARCODE_DEFAULT] }
 
   const ordem: ProvedorId[] = []
   const vistos = new Set<string>()
@@ -40,7 +45,7 @@ export function lerOrdemProvedores(env: string | undefined): ResultadoOrdem {
     if (!PROVEDORES_VALIDOS.has(token as ProvedorId)) {
       return {
         ok: false,
-        erro: `Provedor desconhecido em BARCODE_LOOKUP_PROVIDERS: "${token}". Valores aceitos: cosmos, upcitemdb, openfoodfacts.`,
+        erro: `Provedor desconhecido em ${ENV_ORDEM_BARCODE}: "${token}". Valores aceitos: ${idsConhecidos().join(", ")}.`,
       }
     }
     if (!vistos.has(token)) {
@@ -48,6 +53,6 @@ export function lerOrdemProvedores(env: string | undefined): ResultadoOrdem {
       ordem.push(token as ProvedorId)
     }
   }
-  if (ordem.length === 0) return { ok: true, provedores: ["cosmos"] }
+  if (ordem.length === 0) return { ok: true, provedores: [...ORDEM_BARCODE_DEFAULT] }
   return { ok: true, provedores: ordem }
 }
