@@ -25,6 +25,7 @@ import {
   type SalePayload,
 } from "./ops-upsert-venda"
 import { servicoInventoryId } from "./os-pdv-virtual-lines"
+import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 type FakeProduct = {
   id: string
@@ -160,6 +161,8 @@ function makeFakeTx(opts?: { products?: FakeProduct[]; sessoes?: FakeSessao[] })
       },
     },
   }
+  // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
+  attachStockLedgerBoundaryToFakeTx(tx, { products, ledger })
   return {
     tx,
     byId,

@@ -42,6 +42,8 @@ import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
+import { isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import {
@@ -231,6 +233,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
   // ── Produtos ──────────────────────────────────────────────────────────────
   const [productQuery, setProductQuery] = useState("")
+  /** Aviso transitório de código não encontrado (um único aviso vivo). */
+  const scanFeedback = usePdvScanNotFoundFeedback()
   const [showProductDropdown, setShowProductDropdown] = useState(false)
   const productInputRef = useRef<HTMLInputElement>(null)
 
@@ -580,13 +584,16 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       },
     ])
     setShowItemAvulsoModal(false)
+    // Item Avulso concluído: nenhum código/busca antiga fica no campo.
+    setProductQuery("")
+    scanFeedback.dismiss()
     appendAuditLog({
       action: "pdv_item_avulso_adicionado",
       userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
       detail: `${payload.description} · ${quantity}x ${brl(price)}${custoUnitario !== null ? ` · custo ${brl(custoUnitario)}` : " · custo n/i"}`,
     })
     setTimeout(() => productInputRef.current?.focus(), 50)
-  }, [empresaDocumentos.nomeFantasia])
+  }, [empresaDocumentos.nomeFantasia, scanFeedback])
 
   // ── Venda em espera (F7) ──────────────────────────────────────────────────
   function handleHoldSale() {
@@ -1261,6 +1268,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                       e.preventDefault()
                       const raw = productQuery.trim()
                       if (!raw) return
+                      // Novo Enter encerra na hora o aviso do bipe anterior.
+                      scanFeedback.dismiss()
                       const parsed = parsePdvScanPrefix(raw)
                       const exact = findPdvProductByScan(parsed.query, products)
                       if (exact) {
@@ -1282,6 +1291,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                       }
                       // Miss local → catálogo INTEIRO da loja (snapshot pode estar defasado),
                       // igual ao PDV Assistência/Clássico. Isolamento multi-loja no servidor.
+                      // Código: consome o campo ANTES do await — um 2º Enter (CR+LF, tecla repetida)
+                      // encontra o campo vazio e não repete a busca nem duplica o item.
+                      // Pesquisa manual (com espaço / só letras) nunca é apagada sozinha.
+                      const scanLike = isPdvScanLikeQuery(parsed.query)
+                      if (scanLike) setProductQuery("")
                       const remote = await lookupPdvScanRemote({ code: parsed.query, storeId, setInventory })
                       if (remote.kind === "single") {
                         addToCart(remote.product)
@@ -1290,17 +1304,15 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                         return
                       }
                       if (remote.kind === "multiple") {
+                        if (scanLike) setProductQuery(raw)
                         setShowProductDropdown(true)
                         toast({ title: "Vários produtos", description: `Mais de um item para "${parsed.query}". Refine a busca.` })
                         return
                       }
-                      toast({
-                        title: "Produto não encontrado",
-                        description: `Nada encontrado nesta loja para o código: ${parsed.query}`,
-                        variant: "destructive",
-                      })
+                      scanFeedback.notify(parsed.query)
+                      queueMicrotask(() => productInputRef.current?.focus())
                     }
-                    if (e.key === "Escape") { setShowProductDropdown(false); setProductQuery("") }
+                    if (e.key === "Escape") { setShowProductDropdown(false); setProductQuery(""); scanFeedback.dismiss() }
                   }}
                   className="h-10 border-border bg-secondary pl-9 text-sm"
                 />
@@ -1837,7 +1849,18 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       {/* ── Item avulso (INSERT) ── */}
       <ItemAvulsoModal
         open={showItemAvulsoModal}
-        onOpenChange={setShowItemAvulsoModal}
+        onOpenChange={(open) => {
+          setShowItemAvulsoModal(open)
+          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca.
+          if (!open) {
+            setProductQuery("")
+            scanFeedback.dismiss()
+          }
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          productInputRef.current?.focus()
+        }}
         onConfirm={addItemAvulso}
         checkCodigoExistente={(codigo) => acharProdutoPorCodigoExato(products, codigo)}
       />

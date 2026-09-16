@@ -25,11 +25,24 @@
  *  - `estorno_recebimento_cr` (CaixaOperacao) abate `recebimentosContas`/`recebimentosContasDinheiro`
  *    (GOAL CAIXA-FIX-ESTORNO-OS-002) — sem isso o saldo esperado ficava inflado após um estorno
  *    de recebimento de OS/CR na mesma sessão.
+ *  - GOAL CAIXA-FECHAMENTO-ORIGENS-PAGAMENTO-003A: a apresentação passa a separar Vendas da
+ *    sessão, Recebido na sessão (por origem e por forma) e Gaveta — ver `recebidoPorOrigem`,
+ *    `recebidoPorForma`, `gavetaDinheiro` e `lib/caixa/fechamento-blocos.ts`. Os campos
+ *    legados continuam calculados e gravados; nenhuma fórmula de gaveta/saldo mudou.
  */
 
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { isAvulsoSaleLine, isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { escapeHtml } from "@/lib/thermal-print"
+import { htmlBlocosFechamento, montarBlocosFechamento } from "@/lib/caixa/fechamento-blocos"
+import {
+  calcularRecebidoSessao,
+  recebimentosDeTotaisLegados,
+  type RecebimentosSessao,
+  type ResumoGavetaDinheiro,
+  type ResumoRecebidoPorForma,
+  type ResumoRecebidoPorOrigem,
+} from "@/lib/caixa/recebimentos-sessao"
 
 export type OrigemVendaKey = "pdv" | "avulso" | "os"
 
@@ -83,6 +96,10 @@ export interface FechamentoResumo {
    * Receita total do dia (faturamento) = vendas líquidas (`totalLiquido`)
    * + serviços recebidos (`recebimentosContas`) + `outrosRecebimentos`.
    * NÃO inclui abertura de caixa nem suprimentos; sangria reduz gaveta, não receita.
+   *
+   * @deprecated na apresentação (GOAL CAIXA-FECHAMENTO-ORIGENS-PAGAMENTO-003A): mistura
+   * competência e caixa — a venda à prazo recebida na mesma sessão entra duas vezes.
+   * Continua calculado e gravado por compatibilidade com snapshots e histórico.
    */
   receitaTotalDia: number
   /** Devoluções/estornos da sessão (informativo). */
@@ -96,8 +113,18 @@ export interface FechamentoResumo {
   /** Vendas liquidadas com 2+ formas de pagamento (conceito "múltiplo"). */
   qtdVendasMultiplas: number
   ticketMedio: number
+  /**
+   * GOAL CAIXA-FECHAMENTO-ORIGENS-PAGAMENTO-003A — "Recebido na sessão" por origem:
+   * vendas à vista + contas recebidas + O.S. recebidas − estornos de recebimento.
+   */
+  recebidoPorOrigem: ResumoRecebidoPorOrigem
+  /** GOAL 003A — o mesmo recebido, aberto pela forma usada (vendas à vista + contas/O.S.). */
+  recebidoPorForma: ResumoRecebidoPorForma
+  /** GOAL 003A — composição do dinheiro esperado na gaveta (mesma fórmula de `saldoDinheiroEsperado`). */
+  gavetaDinheiro: ResumoGavetaDinheiro
 }
 
+/** Rótulo gravado em `porOrigem` (consumido também pelo relatório de caixa). */
 const ORIGEM_LABEL: Record<OrigemVendaKey, string> = {
   pdv: "PDV / Balcão",
   avulso: "Item Avulso",
@@ -105,7 +132,7 @@ const ORIGEM_LABEL: Record<OrigemVendaKey, string> = {
 }
 
 function round2(n: number): number {
-  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100 || 0
 }
 
 /** Classifica uma linha de venda pela sua origem (a partir do `inventoryId`). */
@@ -209,6 +236,11 @@ export function computeFechamentoResumo(input: {
   recebimentosContas?: number
   recebimentosContasDinheiro?: number
   qtdRecebimentosContas?: number
+  /**
+   * Operações da sessão agregadas por origem e forma (`aggregateRecebimentosSessao`).
+   * Ausente (chamador legado): deriva dos totais acima, sem separar contas × O.S.
+   */
+  recebimentos?: RecebimentosSessao
 }): FechamentoResumo {
   const {
     sales,
@@ -219,6 +251,7 @@ export function computeFechamentoResumo(input: {
     recebimentosContas = 0,
     recebimentosContasDinheiro = 0,
     qtdRecebimentosContas = 0,
+    recebimentos,
   } = input
 
   // Exclui vendas canceladas de TODOS os cálculos financeiros.
@@ -315,6 +348,24 @@ export function computeFechamentoResumo(input: {
     saldoInicial + totalRecebido + suprimentos + recCr - sangrias,
   )
 
+  // GOAL 003A — recebido por origem/forma e composição da gaveta. Sem `recebimentos`
+  // (chamador legado), deriva dos totais de CR sem separar contas × O.S.
+  const { recebidoPorOrigem, recebidoPorForma, gavetaDinheiro } = calcularRecebidoSessao({
+    pagamentosVendas: pg,
+    vendasAVista: totalRecebido,
+    recebimentos:
+      recebimentos ??
+      recebimentosDeTotaisLegados({
+        recebimentosContas: recCr,
+        recebimentosContasDinheiro: recCrDin,
+        qtdRecebimentosContas,
+      }),
+    saldoInicial,
+    suprimentos,
+    sangrias,
+    dinheiroEsperado: saldoDinheiroEsperado,
+  })
+
   const porOrigem: ResumoOrigemLinha[] = (Object.keys(origemAcc) as OrigemVendaKey[])
     .map((key) => ({
       key,
@@ -346,11 +397,18 @@ export function computeFechamentoResumo(input: {
     qtdVendas,
     qtdVendasMultiplas,
     ticketMedio,
+    recebidoPorOrigem,
+    recebidoPorForma,
+    gavetaDinheiro,
   }
 }
 
 /**
  * Receita total do dia (faturamento) a partir de um resumo já calculado.
+ *
+ * @deprecated na apresentação (GOAL CAIXA-FECHAMENTO-ORIGENS-PAGAMENTO-003A) — conta duas vezes a
+ * venda à prazo recebida na mesma sessão. As telas usam `montarBlocosFechamento`
+ * (`lib/caixa/fechamento-blocos.ts`); a função fica por compatibilidade.
  *
  * Centraliza a definição única usada pelo modal de fechamento E pela reimpressão
  * do histórico — inclusive para sessões antigas cujo `resumoFechamento` persistido
@@ -432,17 +490,8 @@ function fmtDataHora(iso: string | null): string {
  * Função pura: não lê DOM, não formata moeda fora de `fmtBRL`, não busca dados.
  */
 export function buildComprovanteFechamentoHtml(s: FechamentoPosSnapshot): string {
-  const { resumo } = s
-  const pg = resumo.porPagamento
-
-  const origemHtml = resumo.porOrigem.length
-    ? resumo.porOrigem
-        .map(
-          (o) =>
-            `<p>${escapeHtml(o.label)}: ${fmtBRL(o.valorBruto)} (${o.qtdItens} itens)</p>`,
-        )
-        .join("")
-    : "<p>—</p>"
+  // Vendas da sessão × Recebido (origem e forma) × Gaveta — GOAL 003A. Tolera snapshot antigo.
+  const blocosHtml = htmlBlocosFechamento(montarBlocosFechamento(s.resumo))
 
   const operadoresHtml = s.operadores.length ? escapeHtml(s.operadores.join(", ")) : "—"
 
@@ -466,27 +515,7 @@ export function buildComprovanteFechamentoHtml(s: FechamentoPosSnapshot): string
     <p>Operador(es): ${operadoresHtml}</p>
     <p>Abertura: ${fmtDataHora(s.dataAbertura)}</p>
     <p>Fechamento: ${fmtDataHora(s.fechadaEm)}</p>
-    <hr><strong>VENDAS POR ORIGEM</strong>
-    ${origemHtml}
-    <hr><strong>FORMAS DE PAGAMENTO</strong>
-    <p>Dinheiro: ${fmtBRL(pg.dinheiro)}</p>
-    <p>Pix: ${fmtBRL(pg.pix)}</p>
-    <p>Débito: ${fmtBRL(pg.cartaoDebito)}</p>
-    <p>Crédito: ${fmtBRL(pg.cartaoCredito)}</p>
-    <p>Carnê: ${fmtBRL(pg.carne)}</p>
-    <p>A prazo: ${fmtBRL(pg.aPrazo)}</p>
-    <p>Vale/Crédito: ${fmtBRL(pg.creditoVale)}</p>
-    <hr><strong>CONSOLIDAÇÃO</strong>
-    <p>Vendas (qtd): ${resumo.qtdVendas}</p>
-    <p>Total líquido: ${fmtBRL(resumo.totalLiquido)}</p>
-    <p>Total recebido: ${fmtBRL(resumo.totalRecebido)}</p>
-    ${resumo.qtdRecebimentosContas > 0 ? `<p>Serviços recebidos: ${fmtBRL(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas})</p>` : ""}
-    <hr><strong>CAIXA (GAVETA)</strong>
-    <p>Abertura: ${fmtBRL(s.saldoInicial)}</p>
-    <p>(+) Suprimentos: ${fmtBRL(resumo.suprimentos)}</p>
-    <p>(-) Sangrias: ${fmtBRL(resumo.sangrias)}</p>
-    <p>Dinheiro esperado: ${fmtBRL(s.saldoDinheiroEsperado)}</p>
-    ${s.saldoMovimentadoEsperado != null ? `<p>Saldo total movimentado: ${fmtBRL(s.saldoMovimentadoEsperado)}</p>` : ""}
+    ${blocosHtml}
     ${s.valorContado != null ? `<p>Dinheiro contado: ${fmtBRL(s.valorContado)}</p>` : ""}
     ${s.diferenca != null ? `<p>Diferença: ${fmtBRL(s.diferenca)}</p>` : ""}
     ${conferenciaHtml}

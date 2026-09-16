@@ -8,6 +8,8 @@ import { createSaida } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import type { Prisma } from "@/generated/prisma"
+import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
+import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { z } from "zod"
 
 export const runtime = "nodejs"
@@ -186,10 +188,15 @@ export async function POST(req: Request) {
       })
 
       // 2. Estoque REAL — devolve itens ao estoque + ledger auditável.
-      // Mesmo padrão do adapter OS → Estoque (MovimentacaoEstoque + decrement/increment de Produto.stock).
-      // origem: "devolucao" diferencia de "pdv" (saída de venda) e "os".
-      // Idempotência: a devolução só é criada uma vez (guard `existing` no topo); o findFirst
-      // por documento+produto+origem é defesa extra contra reprocessamento na mesma tx.
+      // CAD-R2-009: cada devolução gera ENTRADA compensatória pelo boundary
+      // canônico (lock + ownership + depósito + ledger na MESMA transação).
+      // Nunca "seta stock de volta": movimento compensatório com idempotência
+      // por (devolução, produto). Guarda legado por (documento, produto,
+      // origem) cobre devoluções pré-009 sem chave.
+      // CAD-R2-009 §5: ledger usa SOMENTE rótulo server-derived da sessão;
+      // `data.operador` (input do client) permanece no documento, fora da
+      // autoridade de estoque.
+      const ledgerOperator = (session?.user ? getOperatorLabelFromSession(session) : "").trim() || null
       for (const it of data.itens) {
         const rawInvId = (it.inventoryId ?? "").trim()
         if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
@@ -198,7 +205,7 @@ export async function POST(req: Request) {
 
         const produto = await tx.produto.findFirst({
           where: { storeId: lojaId, OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }] },
-          select: { id: true, stock: true, precoCusto: true, sku: true, name: true },
+          select: { id: true },
         })
         if (!produto) continue
 
@@ -208,29 +215,23 @@ export async function POST(req: Request) {
         })
         if (jaExiste) continue
 
-        const estoqueAntes = produto.stock
-        const custo = arredonda2(Math.max(0, produto.precoCusto))
-        await tx.produto.update({ where: { id: produto.id }, data: { stock: { increment: qty } } })
-        await tx.movimentacaoEstoque.create({
-          data: {
-            storeId: lojaId,
+        const dev = await applyStockMutationTx(
+          tx as unknown as StockLedgerTx,
+          { storeId: lojaId, principal: null, source: "ops-devolucao", operatorLabel: ledgerOperator },
+          {
+            kind: "entrada",
             produtoId: produto.id,
-            produtoSku: produto.sku ?? null,
-            produtoNome: produto.name,
-            tipo: "entrada",
-            origem: "devolucao",
             quantidade: qty,
-            estoqueAntes,
-            estoqueDepois: estoqueAntes + qty,
-            custoUnitario: custo,
-            custoMedioAntes: custo,
-            custoMedioDepois: custo,
-            valorTotal: arredonda2(qty * custo),
+            origem: "devolucao",
             documento: data.localId,
             motivo: data.motivo?.trim() || `Devolução ${data.localId}`,
-            usuario: operadorFinal || null,
+            idempotencyKey: StockIdempotency.devolucao(data.localId, produto.id),
           },
-        })
+        )
+        if (!dev.ok) {
+          if (dev.code === "NOT_FOUND") continue
+          throw new Error(`[ops/devolucao] devolução ao estoque falhou: ${dev.code} ${dev.message}`)
+        }
       }
 
       // 3. Status da Venda — parcialmente_devolvida / devolvida (com base no total devolvido).

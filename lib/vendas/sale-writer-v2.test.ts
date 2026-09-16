@@ -20,6 +20,7 @@ import {
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
 import { persistSaleV2 } from "./sale-writer-v2"
+import { attachStockLedgerBoundaryToFakeTx } from "../estoque/stock-ledger-test-fake"
 
 type FakeProduct = {
   id: string
@@ -135,6 +136,9 @@ function makeFakeTx(opts?: { products?: FakeProduct[]; existing?: Array<Record<s
       numeroSequencial: seq,
     }
   }
+
+  // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
+  attachStockLedgerBoundaryToFakeTx(tx, { products, ledger })
 
   return {
     tx: tx as never,

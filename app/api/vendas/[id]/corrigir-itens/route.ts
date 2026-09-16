@@ -35,6 +35,8 @@ import {
 } from "@/lib/vendas/correcao-itens-plan"
 import { FRACTIONAL_QUANTITY_CODE } from "@/lib/vendas/sale-quantity-contract"
 import { composeCorrectedSalePayloadLines } from "@/lib/vendas/preserve-sale-line-payload"
+import { buildIdempotencyKey } from "@/lib/estoque/stock-ledger-contract"
+import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -216,52 +218,51 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // ── Transação atômica ────────────────────────────────────────────────────────
     let estoqueMovimentos = 0
+    // Índice da correção (nº de correções já registradas): compõe a chave de
+    // idempotência por (venda, correção, produto). Retry do MESMO request após
+    // commit é bloqueado antes pelo guard `expectedTotal` (stale); retry com a
+    // tx aborvida reusa a mesma chave e dedupeia sem reaplicar saldo.
+    const correcaoIndex = Array.isArray((payload as Record<string, unknown>).correcoes)
+      ? ((payload as Record<string, unknown>).correcoes as unknown[]).length
+      : 0
     await prisma.$transaction(async (tx) => {
-      // 1) Estoque: aplica delta por produto (baixa anti-negativa / devolução).
+      // 1) Estoque: aplica delta por produto pelo boundary canônico (lock +
+      // ownership + depósito + ledger na MESMA transação da correção).
+      // CAD-R2-009 §5: contexto confiável usa SOMENTE o rótulo server-derived
+      // da sessão; o fallback "Operador" (payload/auditoria) NÃO entra no
+      // ledger como actor humano — sem sessão, actor é null (automatizada).
+      const ledgerOperator = session?.user ? getOperatorLabelFromSession(session).trim() || null : null
       for (const [produtoId, info] of deltaByProduto) {
         if (info.delta === 0) continue
-        const atual = await tx.produto.findUnique({
-          where: { id: produtoId },
-          select: { stock: true, precoCusto: true, sku: true, name: true },
-        })
-        if (!atual) continue
-        const estoqueAntes = atual.stock
-        const custo = round2(Math.max(0, atual.precoCusto))
-
-        if (info.delta > 0) {
-          // baixar a mais — anti-negativo atômico
-          const baixa = await tx.produto.updateMany({
-            where: { id: produtoId, storeId, stock: { gte: info.delta } },
-            data: { stock: { decrement: info.delta } },
-          })
-          if (baixa.count === 0) throw new Error(`estoque_insuficiente_concorrente:${produtoId}`)
-        } else {
-          // devolver — incrementa
-          await tx.produto.update({ where: { id: produtoId }, data: { stock: { increment: -info.delta } } })
+        const r = await applyStockMutationTx(
+          tx as unknown as StockLedgerTx,
+          { storeId, principal: null, source: "vendas-corrigir-itens", operatorLabel: ledgerOperator },
+          info.delta > 0
+            ? {
+                kind: "saida",
+                produtoId,
+                quantidade: info.delta,
+                origem: "correcao_pdv",
+                documento: pedidoId,
+                motivo: `Correção de itens — venda ${pedidoId}`,
+                idempotencyKey: buildIdempotencyKey("correcao-pdv", pedidoId, correcaoIndex, produtoId),
+              }
+            : {
+                kind: "entrada",
+                produtoId,
+                quantidade: -info.delta,
+                origem: "correcao_pdv",
+                documento: pedidoId,
+                motivo: `Correção de itens — venda ${pedidoId}`,
+                idempotencyKey: buildIdempotencyKey("correcao-pdv", pedidoId, correcaoIndex, produtoId),
+              },
+        )
+        if (!r.ok) {
+          if (r.code === "NOT_FOUND") continue
+          if (r.code === "INSUFFICIENT_STOCK") throw new Error(`estoque_insuficiente_concorrente:${produtoId}`)
+          throw new Error(`[vendas/corrigir-itens] ajuste de estoque falhou: ${r.code} ${r.message}`)
         }
-
-        const estoqueDepois = estoqueAntes - info.delta
-        await tx.movimentacaoEstoque.create({
-          data: {
-            storeId,
-            produtoId,
-            produtoSku: atual.sku ?? null,
-            produtoNome: atual.name,
-            tipo: info.delta > 0 ? "saida" : "entrada",
-            origem: "correcao_pdv",
-            quantidade: -info.delta, // saída negativa, devolução positiva (convenção do ledger)
-            estoqueAntes,
-            estoqueDepois,
-            custoUnitario: custo,
-            custoMedioAntes: custo,
-            custoMedioDepois: custo,
-            valorTotal: round2(Math.abs(info.delta) * custo),
-            documento: pedidoId,
-            motivo: `Correção de itens — venda ${pedidoId}`,
-            usuario: operador,
-          },
-        })
-        estoqueMovimentos += 1
+        if (!r.idempotente) estoqueMovimentos += 1
       }
 
       // 2) ItemVenda: recria conforme o draft (espelha upsertVendaInTransaction).

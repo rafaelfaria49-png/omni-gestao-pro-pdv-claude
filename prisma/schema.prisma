@@ -804,7 +804,10 @@ model Produto {
  * Livro-razão de estoque (append-only). Cada entrada de mercadoria ou ajuste de saldo
  * gera um registro imutável. O saldo atual vive em Produto.stock; este modelo é a
  * trilha auditável de COMO o saldo chegou ali, com custo médio ponderado.
- * Não substitui o decremento de venda do PDV/OS (Fase futura migra o adapter da OS).
+ * CAD-R2-009: TODA mutação operacional de saldo passa pelo boundary canônico
+ * (`lib/estoque/stock-ledger-service.ts`), que mantém `Produto.stock`,
+ * `ProdutoDeposito` e este ledger na MESMA transação. Reversões geram linhas
+ * compensatórias — nunca UPDATE/DELETE de linha histórica.
  */
 model MovimentacaoEstoque {
   id        String   @id @default(cuid())
@@ -819,7 +822,7 @@ model MovimentacaoEstoque {
 
   /** "entrada" | "ajuste" | "saida" */
   tipo   String @map("tipo")
-  /** "manual" | "importacao" | "os" | "pdv" */
+  /** "manual" | "importacao" | "os" | "pdv" | "cancelamento_pdv" | "correcao_pdv" | "devolucao" | "inventario" | "cadastro" */
   origem String @default("manual") @map("origem")
 
   /** Delta assinado aplicado ao saldo (+ entrada, +/- ajuste). */
@@ -839,11 +842,20 @@ model MovimentacaoEstoque {
   observacao String? @map("observacao")
   usuario    String? @map("usuario")
 
+  /**
+   * Chave de idempotência (CAD-R2-009). NULL no histórico pré-009.
+   * Unicidade por loja: @@unique([storeId, idempotencyKey]). Retry com a MESMA
+   * chave e o MESMO conteúdo lógico retorna a movimentação existente sem
+   * reaplicar saldo; mesma chave com conteúdo diferente falha (IDEMPOTENCY_CONFLICT).
+   */
+  idempotencyKey String? @map("idempotencyKey")
+
   createdAt DateTime @default(now()) @map("createdAt")
 
   @@index([storeId])
   @@index([storeId, produtoId])
   @@index([storeId, createdAt])
+  @@unique([storeId, idempotencyKey], name: "storeId_idempotencyKey")
   @@map("movimentacoes_estoque")
 }
 

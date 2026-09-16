@@ -89,6 +89,8 @@ import {
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
+import { isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
@@ -305,6 +307,8 @@ export function PdvClassic({
   const linkedOsHydratedRef = useRef<string | null>(null)
   const shellBipeRef = useRef<HTMLInputElement>(null)
   const [bipeCode, setBipeCode] = useState("")
+  /** Aviso transitório de código não encontrado (um único aviso vivo). */
+  const scanFeedback = usePdvScanNotFoundFeedback()
   const [shellNextQty, setShellNextQty] = useState("1")
   const [shellSeller, setShellSeller] = useState("01 — Caixa 1")
   const [shellInfo, setShellInfo] = useState("Sistema pronto. Bipe um produto ou pressione F3 para pesquisar.")
@@ -879,6 +883,9 @@ export function PdvClassic({
     ])
     setSelectedCartLineId(lineId)
     setShowItemAvulsoModal(false)
+    // Item Avulso concluído: nenhum código/busca antiga fica no campo de bipe.
+    setBipeCode("")
+    scanFeedback.dismiss()
     appendAuditLog({
       action: "pdv_item_avulso_adicionado",
       userLabel: auditUser(),
@@ -905,15 +912,23 @@ export function PdvClassic({
       e.preventDefault()
       const raw = bipeCode.trim()
       if (!raw) return
+      // Novo Enter encerra na hora o aviso do bipe anterior.
+      scanFeedback.dismiss()
 
       const parsedPrefix = parsePdvScanPrefix(raw)
       const q = parsedPrefix.hasPrefix
         ? parsedPrefix.qty
         : (Number(shellNextQty.replace(",", ".")) || 1)
       const query = parsedPrefix.query
+      // Código confirmado é consumido; pesquisa manual (com espaço / só letras) nunca é apagada sozinha.
+      const scanLike = isPdvScanLikeQuery(query)
 
       const commitScan = (product: PdvCatalogProduct) => {
-        if (!addToCart(product, q)) return
+        if (!addToCart(product, q)) {
+          // Código não fica preso no campo mesmo quando o item não pôde entrar (ex.: sem estoque).
+          if (scanLike) setBipeCode("")
+          return
+        }
         setBipeCode("")
         setShellNextQty("1")
         const _newCount = cart.length + 1
@@ -945,6 +960,9 @@ export function PdvClassic({
       }
 
       // Miss local → busca autoritativa no catálogo INTEIRO da loja (snapshot pode estar defasado).
+      // Código: consome o campo ANTES do await — um 2º Enter (CR+LF, tecla repetida) encontra o
+      // campo vazio e não repete a busca nem duplica o item.
+      if (scanLike) setBipeCode("")
       const remote = await lookupPdvScanRemote({ code: query, storeId: lojaKey, setInventory })
       if (remote.kind === "single") {
         commitScan(remote.product)
@@ -957,11 +975,11 @@ export function PdvClassic({
         setBipeCode("")
         return
       }
-      toast({ title: "Produto não encontrado", description: `Produto não encontrado nesta loja para o código: ${query}` })
+      scanFeedback.notify(query)
       setShellInfo(`✕ Produto não encontrado nesta loja para o código: ${query}`)
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
-    [addToCart, bipeCode, cart, products, shellNextQty, toast, lojaKey, setInventory]
+    [addToCart, bipeCode, cart, products, shellNextQty, scanFeedback, lojaKey, setInventory]
   )
 
   const handleBipeSuggestionSelect = useCallback(
@@ -1243,6 +1261,15 @@ export function PdvClassic({
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (shellModalBlocking) return
+      // Texto no campo de bipe: Esc limpa o campo primeiro — não remove item do carrinho.
+      if (e.key === "Escape" && shellBipeRef.current?.value.trim()) {
+        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+        e.preventDefault()
+        setBipeCode("")
+        scanFeedback.dismiss()
+        queueMicrotask(() => shellBipeRef.current?.focus())
+        return
+      }
       if (e.key === "Escape" && cart.length > 0) {
         e.preventDefault()
         setCart((prev) => {
@@ -1274,7 +1301,7 @@ export function PdvClassic({
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, uiShell, shellModalBlocking, cart, selectedCartLineId])
+  }, [isModoRapido, uiShell, shellModalBlocking, cart, selectedCartLineId, scanFeedback])
 
   const focusShellBipe = useCallback(() => {
     queueMicrotask(() => shellBipeRef.current?.focus())
@@ -1437,6 +1464,20 @@ export function PdvClassic({
           return
         }
       }
+      // Esc fora de campo de texto (sem modal): limpa a busca/aviso e devolve o foco ao bipe.
+      if (e.key === "Escape") {
+        const active = document.activeElement
+        const emCampo =
+          active instanceof HTMLInputElement ||
+          active instanceof HTMLTextAreaElement ||
+          active instanceof HTMLSelectElement
+        if (!emCampo && !document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+          setBipeCode("")
+          scanFeedback.dismiss()
+          focusShellBipe()
+        }
+        return
+      }
       if (e.key === "Control") ctrlDown = true
       else ctrlDown = false
       // INSERT — Item Avulso (venda de balcão sem cadastro). Antes só existia no
@@ -1465,7 +1506,7 @@ export function PdvClassic({
       window.removeEventListener("keydown", down)
       window.removeEventListener("keyup", up)
     }
-  }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe])
+  }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe, scanFeedback])
 
   useEffect(() => {
     const t = window.setTimeout(() => shellBipeRef.current?.focus(), 100)
@@ -1851,7 +1892,18 @@ export function PdvClassic({
 
       <ItemAvulsoModal
         open={showItemAvulsoModal}
-        onOpenChange={setShowItemAvulsoModal}
+        onOpenChange={(open) => {
+          setShowItemAvulsoModal(open)
+          // Cancelou/fechou: estado operacional limpo, sem código antigo no campo de bipe.
+          if (!open) {
+            setBipeCode("")
+            scanFeedback.dismiss()
+          }
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          shellBipeRef.current?.focus()
+        }}
         onConfirm={addItemAvulso}
         checkCodigoExistente={(c) => acharProdutoPorCodigoExato(inventory, c)}
       />

@@ -1,9 +1,9 @@
 {
   "goal": "FISCAL-XSD-WORKER-GITHUB-ACTIONS-SUPPLY-CHAIN-005A",
   "version": "1.0.0",
-  "repositoryCommit": "c0d4b00e2f3aa93c7715d430a0f1c4d141abdb91",
-  "dockerfileSha256": "c70e6261e834f961fefc1147805da71eab2fdcdd27480cc167e61ac301c007b1",
-  "buildContextSha256": "37047724e879076ab9982e8fc42b7885be6e2705efe605b1fd19de55ca98422b",
+  "repositoryCommit": "17dab2674ad92f84d08199144d0a3f32fa5eb03c",
+  "dockerfileSha256": "56cd3c46f480c34f6ebf63394a4a0b9a82a685c761c78bf0c2b6997543f2f9a3",
+  "buildContextSha256": "c1ac69a0caeb36707722072ecccdc723443d03f7bbf763c144194caafb8a448c",
   "actions": [
     {
       "action": "actions/checkout",
@@ -43,8 +43,8 @@
     }
   ],
   "runner": "ubuntu-24.04",
-  "workflowRef": "refs/heads/work/fiscal-xsd-worker-gha-supply-chain-005a",
-  "runId": "29669361609",
+  "workflowRef": "refs/heads/work/fiscal-xsd-worker-cve-patch-005b",
+  "runId": "34833154637",
   "baseImages": [
     "node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0"
   ],
@@ -64,13 +64,13 @@
   "rootSchema": "nfe_v4.00.xsd",
   "schemaManifestSha256": "fc42d03e1c4a676d5ea5fe813cd2941672caa18540856cac5208ccdff049cae1",
   "imageTag": "fiscal-xsd-worker:pl010e-v1.02-libxml2-2.15.3-goal005a",
-  "imageId": "sha256:cc27c5d6a27c7f15d83fe2220075825b12711d77b6fcfde9744c42383cb485a6",
-  "ociManifestDigest": "sha256:40c28fd14c57a7d1ea35bd3b23683049345873cf0e65dc48143572e30536333c",
+  "imageId": "sha256:b69e20bf394120f2075c2af5dad81970f3ce4742a9c2af63271ebb49f8bc40f6",
+  "ociManifestDigest": "sha256:a65f8fe6f64f6c31e3989662c5e715f634c7634e4ffd221193f9468e73a2965a",
   "platform": "linux/amd64",
-  "dockerArchiveSha256": "827e4b522b86ceeb242124e8477a4e12c23eeb4501988e0220abb88edd33af9c",
-  "ociArchiveSha256": "fef17c43204267b14c51443494f5daab233802cd2c73c2756b31b1b517be6d91",
-  "sbomSha256": "1b64a87b39351bb28e6ef8f1afb4932dd0aafb59002293f4fead40f94962c868",
-  "trivySha256": "ad532841d23e043624ce4ef695418e62781a1dc8168d208dd8eea3d49840fdb5",
+  "dockerArchiveSha256": "b53d8220e846da301906cd7a036d957c82b86c21a3062b85dbc53502b2ec5d13",
+  "ociArchiveSha256": "f090ea7a7f3b875421c60d16d984cb4e11e90cdef89314841540b5a06c350eb5",
+  "sbomSha256": "87bd843810e3ed65f0fbe39c98e2abf30469948dfb73b60c144bc8b74e8f4d9c",
+  "trivySha256": "35748a03d6e097823055bf28fece9cd2903a2b34f6b174d04aadaead5159fd4c",
   "vulnerabilities": {
     "critical": 0,
     "high": 0
