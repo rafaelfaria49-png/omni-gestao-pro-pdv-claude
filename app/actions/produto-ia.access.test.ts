@@ -5,7 +5,9 @@ const h = vi.hoisted(() => ({
   auth: vi.fn(async (): Promise<unknown> => null),
   getSessionEntitlement: vi.fn(async (): Promise<{ ok: boolean }> => ({ ok: false })),
   findFirst: vi.fn(async (_args?: unknown): Promise<{ metadata: unknown } | null> => null),
-  update: vi.fn(async (_args: { data: { metadata: Record<string, unknown> } }) => ({})),
+  findUnique: vi.fn(async (_args?: unknown) => null),
+  logsCreate: vi.fn(async (_args?: unknown) => ({})),
+  update: vi.fn(async (_args: { data: { metadata: Record<string, unknown> } }) => ({ id: "p1" })),
 }))
 
 vi.mock("@/auth", () => ({ auth: h.auth }))
@@ -13,7 +15,17 @@ vi.mock("@/lib/auth/session-entitlement", () => ({ getSessionEntitlement: h.getS
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    produto: { findFirst: h.findFirst, update: h.update },
+    produto: { findFirst: h.findFirst, findUnique: h.findUnique, update: h.update },
+    logsAuditoria: { create: h.logsCreate },
+    $transaction: async (fn: (tx: Record<string, unknown>) => unknown) =>
+      fn({
+        produto: { findFirst: h.findFirst, findUnique: h.findUnique, update: h.update },
+        logsAuditoria: { create: h.logsCreate },
+        $queryRaw: async () => [],
+        deposito: { findFirst: async () => null, findUnique: async () => null },
+        produtoDeposito: { findMany: async () => [], upsert: async () => ({}) },
+        movimentacaoEstoque: { findFirst: async () => null, create: async () => ({ id: "mov-1" }) },
+      }),
   },
 }))
 
@@ -38,10 +50,13 @@ beforeEach(() => {
   h.auth.mockReset()
   h.getSessionEntitlement.mockReset()
   h.findFirst.mockReset()
+  h.findUnique.mockReset()
+  h.logsCreate.mockReset()
   h.update.mockReset()
   h.auth.mockResolvedValue(null)
   h.getSessionEntitlement.mockResolvedValue({ ok: false })
   h.findFirst.mockResolvedValue(null)
+  h.findUnique.mockResolvedValue(null)
 })
 
 describe("salvarProdutoIAMetadata", () => {

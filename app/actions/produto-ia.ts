@@ -8,25 +8,25 @@
  * schema, importador, marketplace, whatsapp, PDV, financeiro ou inventário.
  */
 
-import { Prisma } from "@/generated/prisma";
-import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access";
 import {
   cadastrosAuditActorLabel,
   cadastrosAuditPrincipalFromSession,
 } from "@/lib/cadastros/cadastros-audit-principal";
+import { updateProduct } from "@/lib/cadastros/product-write-service";
 import type { ProdutoIAMetadata } from "@/lib/catalog/produto-catalogo";
 
-function metaRecord(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
-  return v as Record<string, unknown>;
-}
-
 /**
- * Salva o bloco IA editado pelo operador em `Produto.metadata` (merge raso aditivo).
- * Multi-loja: exige `storeId` não-vazio e confere que o produto pertence à loja.
- * Preserva chaves existentes (ncm/cest, importador) — só sobrescreve as enviadas.
+ * Salva o bloco IA editado pelo operador em `Produto.metadata` via boundary
+ * canônico (CAD-R2-006).
+ *
+ * IA sugere; humano revisa; servidor autoriza. Sem primitive própria de
+ * persistência de Produto aqui: o write passa pelo ProductWriteService
+ * (trusted context + ownership + IDOR fail-closed + merge 2 níveis + audit
+ * canônico com principal da sessão). A origem revisada é registrada como
+ * proveniência (`iaRevisadoPor`/`iaRevisadoEm`, server-derived), nunca como
+ * autoridade vinda do payload. Nunca toca colunas core.
  */
 export async function salvarProdutoIAMetadata(
   storeId: string,
@@ -35,30 +35,32 @@ export async function salvarProdutoIAMetadata(
 ): Promise<{ ok: true }> {
   const gate = await requireCadastrosActionAccess(storeId, "hub");
   const sid = gate.storeId;
+  const principal = cadastrosAuditPrincipalFromSession(gate.session);
   const pid = (productId ?? "").trim();
   if (!pid) throw new Error("Produto inválido.");
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
     throw new Error("Metadata inválido.");
   }
 
-  const row = await prisma.produto.findFirst({
-    where: { id: pid, storeId: sid },
-    select: { metadata: true },
-  });
-  if (!row) throw new Error("Produto não encontrado nesta unidade.");
-
-  const prev = metaRecord(row.metadata);
-  const merged: Record<string, unknown> = {
-    ...prev,
-    ...meta,
-    iaRevisadoPor: cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session)),
-    iaRevisadoEm: new Date().toISOString(),
-  };
-
-  await prisma.produto.update({
-    where: { id: pid },
-    data: { metadata: merged as Prisma.InputJsonValue },
-  });
+  const result = await updateProduct(
+    { storeId: sid, principal },
+    pid,
+    {
+      metadata: {
+        ...(meta as Record<string, unknown>),
+        iaRevisadoPor: cadastrosAuditActorLabel(principal),
+        iaRevisadoEm: new Date().toISOString(),
+      },
+    },
+  );
+  if (!result.ok) {
+    // Contrato preservado: callers esperam throw com mensagem amigável.
+    // Cross-store vira o mesmo NOT_FOUND (sem oráculo entre lojas).
+    if (result.code === "NOT_FOUND" || result.code === "CROSS_STORE") {
+      throw new Error("Produto não encontrado nesta unidade.");
+    }
+    throw new Error(result.message);
+  }
 
   revalidatePath("/dashboard/produtos/assistente-ia");
   revalidatePath("/dashboard/cadastros-v2");
