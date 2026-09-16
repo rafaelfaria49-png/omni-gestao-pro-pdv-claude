@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "pdv-parity-suite-n5-a-foundation-001",
-  "status": "RUNNING",
+  "status": "PAUSED",
   "risk_tier": "MEDIO",
-  "current_goal": "PDV-PARITY-SUITE-N5-A-FOUNDATION-001",
+  "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
-    "goals_done": 0,
+    "goals_done": 1,
     "goals_blocked": 0,
     "goals_imported": 0,
-    "ledger_lines": 0
+    "ledger_lines": 1
   },
-  "last_goal": null,
-  "last_result": null,
-  "last_ratified_at": null
+  "last_goal": "PDV-PARITY-SUITE-N5-A-FOUNDATION-001",
+  "last_result": "DONE",
+  "last_ratified_at": "2026-09-16T14:36:01.262Z"
 }
