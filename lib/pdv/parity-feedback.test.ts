@@ -7,8 +7,9 @@
  * (toast destructive), audit do CONFIRMED (ver F-04). Apresentação de
  * sucesso VARIA por intenção (#21): Classic shellInfo/impressão,
  * Assistência/Supermercado PdvPostSaleDialog, Venda Completa CupomNaoFiscal.
- * Divergência GAP-P2-03 (fail-closed silencioso nos gates de pagamento)
- * permanece registrada — a prova detalhada vive em parity-payment-props.
+ * Divergência GAP-P2-03 CORRIGIDA no N5-B1 (fail-closed audível): gates de
+ * pagamento bloqueiam sem abrir fluxo E com feedback (toast com cooldown +
+ * entries disabled/ocultos). A prova detalhada vive em parity-payment-props.
  */
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -64,15 +65,18 @@ describe("F-06 — feedback pending/erro/sucesso por superfície", () => {
     expect(read(fixtureFor("venda-completa").componentPath)).not.toContain("isModoRapido")
   })
 
-  it("GAP-P2-03: gates com feedback desigual permanecem como estão (F2/F7 escondem; pagamento silencia)", () => {
+  it("GAP-P2-03=FIXED: gates de pagamento bloqueiam com feedback (F2/F7 escondem; pagamento avisa)", () => {
     // F2/F7 checam capability antes do efeito (feedback = nada acontece, gate visível no código).
     const classic = read(fixtureFor("classic").componentPath)
     expect(classic).toContain("if (customerSearchEnabled) setShellClientSearchOpen(true)")
     expect(classic).toContain("if (heldSalesEnabled) setVendaEsperaOpen(true)")
 
-    // O contraste (gates de pagamento retornam false sem toast) está congelado
-    // em parity-payment-props.test.ts — aqui só garantimos que o gap continua
-    // catalogado na superfície de prova correta.
-    expect(classic).toContain('!pdvCapabilities.isEnabled("sales.paymentMethods")')
+    // Pagamento: fail-closed continua (sem abrir fluxo), mas agora audível.
+    // A prova completa do contrato está em parity-payment-props.test.ts; aqui
+    // se congela que nenhuma das 4 superfícies ficou no silêncio antigo.
+    for (const fixture of OFFICIAL_SURFACE_FIXTURES) {
+      const source = read(fixture.componentPath)
+      expect(source, `${fixture.surfaceId}: feedback de bloqueio`).toContain("notifyPaymentCapabilityBlocked(")
+    }
   })
 })

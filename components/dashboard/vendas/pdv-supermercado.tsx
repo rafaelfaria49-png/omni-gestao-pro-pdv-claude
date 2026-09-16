@@ -110,6 +110,13 @@ import {
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
 import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
+import { resolveSaleCreditHolder } from "@/lib/pdv/sale-credit-holder"
+import { effectiveWeightUnitPrice } from "@/lib/pdv/weight-unit-price"
+import {
+  BLOCKED_PAYMENT_CAPABILITY_COPY,
+  shouldNotifyBlockedCapability,
+  type BlockedPaymentCapability,
+} from "@/lib/pdv/capability-blocked-feedback"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -193,9 +200,11 @@ export function PdvSupermercado({
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
   const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
+  const paymentMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
+  const multiplePaymentsEnabled = pdvCapabilities.isEnabled("pdv.multiplePayments")
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal } = useOperationsStore()
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
 
@@ -616,9 +625,27 @@ export function PdvSupermercado({
     return false
   }, [caixa.isOpen, garantirSessao, hardFocusSearch, sessaoId])
 
+  // Fail-closed audível (GAP-P2-03): cooldown anti-spam do feedback de
+  // pagamento bloqueado por capability. Só consumido dentro de handlers.
+  const blockedCapabilityToastAt = useRef(0)
+  const notifyPaymentCapabilityBlocked = useCallback(
+    (kind: BlockedPaymentCapability) => {
+      const now = Date.now()
+      if (!shouldNotifyBlockedCapability(blockedCapabilityToastAt.current, now)) return
+      blockedCapabilityToastAt.current = now
+      const copy = BLOCKED_PAYMENT_CAPABILITY_COPY[kind]
+      toast({ title: copy.title, description: copy.description })
+    },
+    [toast]
+  )
+
   const openPaymentModal = useCallback(
     (intent: PaymentMethodType | null) => {
-      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
+      // Fail-closed AUDÍVEL (GAP-P2-03): sem abrir fluxo, com feedback.
+      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+        notifyPaymentCapabilityBlocked("sales.paymentMethods")
+        return
+      }
       if (cart.length === 0) {
         toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
         hardFocusSearch()
@@ -629,13 +656,19 @@ export function PdvSupermercado({
       setMultipayMode(false)
       setIsPaymentModalOpen(true)
     },
-    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast]
+    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, notifyPaymentCapabilityBlocked, pdvCapabilities, toast]
   )
 
   /** Pagamento Múltiplo — convergência operacional com PDV Assistência (F12). */
   const openMultipayModal = useCallback(() => {
-    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
-    if (!pdvCapabilities.isEnabled("pdv.multiplePayments")) return
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+      notifyPaymentCapabilityBlocked("sales.paymentMethods")
+      return
+    }
+    if (!pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+      notifyPaymentCapabilityBlocked("pdv.multiplePayments")
+      return
+    }
     if (cart.length === 0) {
       toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
       hardFocusSearch()
@@ -645,7 +678,7 @@ export function PdvSupermercado({
     setInstantPayIntent(null)
     setMultipayMode(true)
     setIsPaymentModalOpen(true)
-  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast])
+  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, notifyPaymentCapabilityBlocked, pdvCapabilities, toast])
 
   const confirmAttrDialog = useCallback(() => {
     if (!attrProduct) return
@@ -683,7 +716,19 @@ export function PdvSupermercado({
       toast({ title: "Estoque", description: "Peso maior que o disponível.", variant: "destructive" })
       return
     }
-    const pKg = weightProduct.precoPorKg ?? weightProduct.price
+    // Hard-block de preço (GAP-P2-05): produto por peso sem preço efetivo
+    // válido (<= 0, NaN, ausente) NUNCA vira linha vendável de R$0. O diálogo
+    // permanece aberto para correção/cancelamento — sem inferir preço e sem
+    // alterar o cadastro.
+    const pKg = effectiveWeightUnitPrice(weightProduct.precoPorKg, weightProduct.price)
+    if (pKg === null) {
+      toast({
+        title: "Preço por kg inválido",
+        description: `${weightProduct.name} está sem preço de venda válido. Confira o cadastro — a linha não foi adicionada.`,
+        variant: "destructive",
+      })
+      return
+    }
     const parts = weightProduct.atributos?.length ? weightProduct.atributos.map((a) => attrSelections[a.id]).filter(Boolean) : []
     const baseName = parts.length ? `${weightProduct.name} (${parts.join(" · ")})` : weightProduct.name
     pushCartLine({
@@ -1403,10 +1448,12 @@ export function PdvSupermercado({
                     type="button"
                     className={cn(
                       "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
+                      "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0",
                       formaPagamentoSupermercadoQuickClasses(forma.cor),
                     )}
                     onClick={() => openPaymentModal(runtime)}
-                    title={forma.label}
+                    title={!paymentMethodsEnabled ? BLOCKED_PAYMENT_CAPABILITY_COPY["sales.paymentMethods"].title : forma.label}
+                    disabled={!paymentMethodsEnabled}
                   >
                     <div className="flex flex-col items-center gap-1">
                       <Icon className="h-5 w-5 transition-transform group-hover:scale-110" />
@@ -1493,6 +1540,24 @@ export function PdvSupermercado({
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
           // Capturar dados de impressão ANTES de limpar o cart
+          // Vale com titular localizado por doc/código no PaymentModal
+          // (GAP-P2-02, mesmo contrato do Classic via `resolveSaleCreditHolder`):
+          // sem isto, vale válido sem cliente selecionado falhava no guard do
+          // finalize ("Informe o cliente (CPF)") ou debitava o cliente errado.
+          const creditHolder = resolveSaleCreditHolder({
+            payments,
+            creditDoc: meta?.creditDoc,
+            creditNome: meta?.creditNome,
+            creditSaldo: meta?.creditSaldo,
+            selectedCpf: selectedCustomer?.cpf,
+            selectedName: selectedCustomer?.name,
+            storeCreditEnabled,
+          })
+          const cpfDaVenda = creditHolder.cpf
+          const nomeDaVenda = creditHolder.nome
+          if (creditHolder.seedLocal) {
+            sincronizarCreditoLocal(creditHolder.seedLocal.doc, creditHolder.seedLocal.nome, creditHolder.seedLocal.saldo)
+          }
           const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || "Loja"
           const _cnpj = (empresaDocumentos?.cnpj || "").trim()
           const _footer = resolveCupomRodape(impressaoConfig, undefined)
@@ -1502,6 +1567,8 @@ export function PdvSupermercado({
             enderecoLinha: getEnderecoDocumentos?.() ?? "",
             receiptFooter: _footer,
             operador: operatorLabel,
+            clienteNome: nomeDaVenda,
+            clienteCpf: cpfDaVenda,
             itens: cart.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.price, lineTotal: i.price * i.quantity })),
             subtotal,
             taxes: impostoEstimado,
@@ -1583,9 +1650,9 @@ export function PdvSupermercado({
               aPrazo,
               creditoVale,
             },
-            customerCpf: selectedCustomer?.cpf,
-            customerName: selectedCustomer?.name,
-            clienteId: selectedCustomer?.id || undefined,
+            customerCpf: cpfDaVenda,
+            customerName: nomeDaVenda,
+            clienteId: creditHolder.seedLocal ? undefined : selectedCustomer?.id || undefined,
             auditMeta: {
               cashierId: meta?.cashierId ?? cashierId,
               discountAuthorizedByAdminId: meta?.discountAuthorizedByAdminId,

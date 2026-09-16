@@ -23,6 +23,16 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -87,6 +97,12 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { resolveSaleCreditHolder } from "@/lib/pdv/sale-credit-holder"
+import {
+  BLOCKED_PAYMENT_CAPABILITY_COPY,
+  shouldNotifyBlockedCapability,
+  type BlockedPaymentCapability,
+} from "@/lib/pdv/capability-blocked-feedback"
 import {
   applyDiscountIfEnabled,
   combineHoldSnapshotWithRuntime,
@@ -196,7 +212,7 @@ function pagamentoLabelMethod(p: PaymentMethod): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
-  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal } = useOperationsStore()
   // Mesma porta de pré-pagamento dos demais PDVs: caixa aberto E sessão do
   // terminal atual. Sem isso a venda saía daqui e voltava recusada por
   // `CAIXA_FECHADO`, virando pendência local (F-02 da readiness 002A).
@@ -211,6 +227,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const multiplePaymentsEnabled = pdvCapabilities.isEnabled("pdv.multiplePayments")
+  const paymentMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
   const { toast } = useToast()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
@@ -258,6 +275,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const [tipoVenda, setTipoVenda] = useState<TipoVenda>("comum")
   const [observacaoGeral, setObservacaoGeral] = useState("")
   const [helpOpen, setHelpOpen] = useState(false)
+  const [showClearSaleConfirm, setShowClearSaleConfirm] = useState(false)
 
   // ── Item avulso + venda em espera (paridade com Clássico/Assistência) ──────
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
@@ -386,7 +404,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       if (e.altKey) return
       // Toda flag de modal entra no guard — evita atalho disparar com diálogo aberto.
       const anyModalOpen =
-        isPaymentOpen || cupomOpen || helpOpen || showItemAvulsoModal || showVendaEsperaModal || accessoryProduct !== null
+        isPaymentOpen || cupomOpen || helpOpen || showClearSaleConfirm || showItemAvulsoModal || showVendaEsperaModal || accessoryProduct !== null
       switch (e.key) {
         case "F1":
           e.preventDefault()
@@ -418,7 +436,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           break
         case "F7":
           e.preventDefault()
-          if (heldSalesEnabled && !isPaymentOpen && !cupomOpen && !helpOpen) {
+          if (heldSalesEnabled && !isPaymentOpen && !cupomOpen && !helpOpen && !showClearSaleConfirm) {
             setShowVendaEsperaModal(true)
           }
           break
@@ -432,7 +450,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal, accessoryProduct],
+    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showClearSaleConfirm, showItemAvulsoModal, showVendaEsperaModal, accessoryProduct],
   )
 
   useEffect(() => {
@@ -633,17 +651,42 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       terminalIdForHold,
       withHoldCapabilitiesSnapshot(held, pdvCapabilities.snapshot),
     )
+    resetFreshSaleState()
+    setHeldRefresh((n) => n + 1)
+    toast({ title: "Venda em espera", description: `${held.label} guardada.` })
+  }
+
+  // ── Nova venda limpa (GAP-P1-01) ─────────────────────────────────────────
+  // Contrato ÚNICO de "venda operacional nova": zera todo estado pertencente
+  // à venda corrente (carrinho, cliente, desconto global e por linha via
+  // carrinho, tipo, observação, endereço, buscas, dropdowns, expandidos e
+  // transitórios). Usado por "Limpar tudo" (confirmado), CONFIRMED e
+  // hold-save — sem três implementações divergentes de fresh sale state.
+  // NÃO toca: StoreSettings, preferências permanentes, holds salvos, dados
+  // persistidos do cliente, cupom/pós-venda, modais de fluxo, lock de finalize.
+  function resetFreshSaleState() {
     setCart([])
     setSelectedCliente(null)
     setClienteQuery("")
+    setShowClienteDropdown(false)
+    setProductQuery("")
+    setShowProductDropdown(false)
+    setExpandedLineId(null)
     setDiscountReais(0)
-    setEnderecoEntrega(EMPTY_ENDERECO)
-    setShowEnderecoForm(false)
     setTipoVenda("comum")
     setObservacaoGeral("")
-    setExpandedLineId(null)
-    setHeldRefresh((n) => n + 1)
-    toast({ title: "Venda em espera", description: `${held.label} guardada.` })
+    setEnderecoEntrega(EMPTY_ENDERECO)
+    setShowEnderecoForm(false)
+    setAccessoryProduct(null)
+    scanFeedback.dismiss()
+    try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch { /* ignore */ }
+  }
+
+  function confirmClearSale() {
+    setShowClearSaleConfirm(false)
+    resetFreshSaleState()
+    toast({ title: "Nova venda", description: "Carrinho, cliente, desconto e demais dados da venda limpos." })
+    queueMicrotask(() => clienteInputRef.current?.focus())
   }
 
   function handleResumeSale(sale: HeldSale) {
@@ -698,6 +741,16 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   }
 
   // ── Validações e abertura do modal ────────────────────────────────────────
+  // Fail-closed audível (GAP-P2-03): cooldown anti-spam do feedback de
+  // pagamento bloqueado por capability. Só consumido dentro de handlers.
+  const blockedCapabilityToastAt = useRef(0)
+  function notifyPaymentCapabilityBlocked(kind: BlockedPaymentCapability) {
+    const now = Date.now()
+    if (!shouldNotifyBlockedCapability(blockedCapabilityToastAt.current, now)) return
+    blockedCapabilityToastAt.current = now
+    const copy = BLOCKED_PAYMENT_CAPABILITY_COPY[kind]
+    toast({ title: copy.title, description: copy.description })
+  }
   function handleClickFinalize() {
     if (isSaleFinalizeBusy(isProcessingRef)) return
     if (!selectedCliente) {
@@ -722,14 +775,19 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       void garantirSessao()
       return
     }
-    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
+    // Fail-closed AUDÍVEL (GAP-P2-03): capability off continua sem abrir o
+    // modal, mas o operador recebe feedback em vez de silêncio.
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+      notifyPaymentCapabilityBlocked("sales.paymentMethods")
+      return
+    }
     setIsPaymentOpen(true)
   }
 
   // ── Confirmação e finalização ─────────────────────────────────────────────
   async function handleConfirmPayment(
     payments: PaymentMethod[],
-    meta?: { pixQrKind?: string; cashTendered?: number },
+    meta?: { pixQrKind?: string; cashTendered?: number; creditDoc?: string; creditNome?: string; creditSaldo?: number },
   ): Promise<boolean> {
     if (!selectedCliente || cart.length === 0 || total <= 0) return false
     if (payments.length === 0) {
@@ -769,6 +827,24 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
       // Todas as linhas resolvem (garantido pelo guard) — nada é descartado.
       // `accessorySelection` segue no mesmo contrato das demais superfícies.
+      // Vale com titular localizado por doc/código no PaymentModal (GAP-P2-02,
+      // mesmo contrato do Classic via `resolveSaleCreditHolder`): a venda carrega
+      // o documento que o servidor debita; a identidade explícita (clienteId)
+      // continua sendo a do cliente selecionado.
+      const creditHolder = resolveSaleCreditHolder({
+        payments,
+        creditDoc: meta?.creditDoc,
+        creditNome: meta?.creditNome,
+        creditSaldo: meta?.creditSaldo,
+        selectedCpf: selectedCliente.document,
+        selectedName: selectedCliente.name,
+        storeCreditEnabled,
+      })
+      const cpfDaVenda = creditHolder.cpf ?? selectedCliente.document ?? undefined
+      const nomeDaVenda = creditHolder.nome ?? selectedCliente.name
+      if (creditHolder.seedLocal) {
+        sincronizarCreditoLocal(creditHolder.seedLocal.doc, creditHolder.seedLocal.nome, creditHolder.seedLocal.saldo)
+      }
       const saleLines = cart
         .map((l) => ({
           inventoryId: l.inventoryId,
@@ -802,9 +878,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           discountReais,
           discountPercent: subtotal > 0 ? (discountReais / (subtotal + totalPerLineDiscount)) * 100 : 0,
         },
-        customerCpf: selectedCliente.document ?? undefined,
-        customerName: selectedCliente.name,
-        clienteId: selectedCliente.id || undefined,
+        customerCpf: cpfDaVenda,
+        customerName: nomeDaVenda,
+        clienteId: creditHolder.seedLocal ? undefined : selectedCliente.id || undefined,
         aPrazoConfig,
         pixQrKind: meta?.pixQrKind,
         cashTendered: meta?.cashTendered,
@@ -870,7 +946,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       appendAuditLog({
         action: "sale_finalized",
         userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
-        detail: `${result.pending ? "Venda Completa Enterprise PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda Completa Enterprise "}${displaySaleNumber(result.saleId, result.pending)} | ${selectedCliente.name} | ${pagamentosResumo} | ${brl(total)}`,
+        detail: `${result.pending ? "Venda Completa Enterprise PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda Completa Enterprise "}${displaySaleNumber(result.saleId, result.pending)} | ${nomeDaVenda} | ${pagamentosResumo} | ${brl(total)}`,
       })
 
       const linhasDetalhe = cart
@@ -889,9 +965,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       const enrichResult = await enrichVendaEnterprise({
         pedidoId: result.saleId,
         storeId,
-        clienteId: selectedCliente.id,
-        clienteNome: selectedCliente.name,
-        clienteDocument: selectedCliente.document ?? undefined,
+        clienteId: creditHolder.seedLocal ? undefined : selectedCliente.id,
+        clienteNome: nomeDaVenda,
+        clienteDocument: cpfDaVenda,
         clienteTelefone: selectedCliente.phone ?? undefined,
         clienteEmail: selectedCliente.email ?? undefined,
         observacoesVenda: observacaoGeral || undefined,
@@ -924,8 +1000,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         lojaNome: storeDisplayName,
         lojaCnpj: empresaDocumentos.cnpj || undefined,
         lojaEndereco: getEnderecoDocumentos() || undefined,
-        clienteNome: selectedCliente.name,
-        clienteCpf: selectedCliente.document ?? null,
+        clienteNome: nomeDaVenda,
+        clienteCpf: cpfDaVenda ?? null,
         operador: operatorLabel,
         tipoVenda: tipoVenda !== "comum" ? tipoVendaLabel : undefined,
         observacaoGeral: observacaoGeral || undefined,
@@ -952,19 +1028,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       setIsPaymentOpen(false)
       setCupomOpen(true)
 
-      try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch {}
-
-      setCart([])
-      setProductQuery("") // limpa termo + resultados de busca após finalizar (GOAL limpeza pós-ação)
-      setShowProductDropdown(false)
-      setDiscountReais(0)
-      setSelectedCliente(null)
-      setClienteQuery("")
-      setExpandedLineId(null)
-      setTipoVenda("comum")
-      setObservacaoGeral("")
-      setEnderecoEntrega(EMPTY_ENDERECO)
-      setShowEnderecoForm(false)
+      resetFreshSaleState()
       return true
     } finally {
       releaseSaleFinalizeLock(isProcessingRef)
@@ -972,7 +1036,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     }
   }
 
-  const canFinalize = selectedCliente !== null && cart.length > 0 && total > 0 && caixa.isOpen
+  const canFinalize = selectedCliente !== null && cart.length > 0 && total > 0 && caixa.isOpen && paymentMethodsEnabled
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1245,7 +1309,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     <button
                       type="button"
                       className="ml-1 text-xs text-muted-foreground transition-colors hover:text-destructive"
-                      onClick={() => { setCart([]); setExpandedLineId(null); setProductQuery(""); setShowProductDropdown(false) }}
+                      onClick={() => setShowClearSaleConfirm(true)}
                     >
                       Limpar tudo
                     </button>
@@ -1734,6 +1798,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
               type="button"
               className="h-12 w-full rounded-xl bg-emerald-600 text-sm font-bold text-zinc-950 shadow-lg hover:bg-emerald-500 disabled:opacity-50"
               disabled={!canFinalize || isProcessing}
+              title={!paymentMethodsEnabled ? BLOCKED_PAYMENT_CAPABILITY_COPY["sales.paymentMethods"].title : undefined}
               onClick={handleClickFinalize}
             >
               <span>Finalizar Venda</span>
@@ -1886,6 +1951,24 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         onResume={handleResumeSale}
         onDiscard={handleDiscardHold}
       />
+
+      {/* ── Limpar tudo (GAP-P1-01: nova venda limpa, com confirmação) ── */}
+      <AlertDialog open={showClearSaleConfirm} onOpenChange={setShowClearSaleConfirm}>
+        <AlertDialogContent className="max-w-sm rounded-2xl border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Iniciar nova venda?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Limpa carrinho, cliente, desconto, tipo, observação e endereço da venda atual. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Manter venda</AlertDialogCancel>
+            <AlertDialogAction className="rounded-xl" onClick={confirmClearSale}>
+              Limpar tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Cupom não fiscal ── */}
       {cupomData && (

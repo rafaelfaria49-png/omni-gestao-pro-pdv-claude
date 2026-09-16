@@ -136,6 +136,11 @@ import {
   combineHoldSnapshotWithRuntime,
   resumeDiscountFields,
 } from "@/lib/pdv/resolve-capability"
+import {
+  BLOCKED_PAYMENT_CAPABILITY_COPY,
+  shouldNotifyBlockedCapability,
+  type BlockedPaymentCapability,
+} from "@/lib/pdv/capability-blocked-feedback"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -923,6 +928,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
   const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
+  const paymentMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
+  const multiplePaymentsEnabled = pdvCapabilities.isEnabled("pdv.multiplePayments")
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const quickServicesEnabled = pdvCapabilities.isEnabled("pdv.quickServices")
@@ -1097,6 +1104,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     discountReais: number
     discountPercent: number
   } | null>(null)
+  // Fail-closed audível (GAP-P2-03): cooldown anti-spam do feedback de
+  // pagamento bloqueado por capability. Só consumido dentro de handlers.
+  const blockedCapabilityToastAt = useRef(0)
   const [trocasOpen, setTrocasOpen] = useState(false)
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -1334,9 +1344,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // Sem cliente, à prazo/carnê NÃO barram mais: o modal compartilhado abre e pede o
   // seletor de cliente (com cadastro rápido) via onRequireCustomer. `method = null`
   // abre em estado neutro (ex.: F10 = Desconto), sem pré-selecionar forma.
+  const notifyPaymentCapabilityBlocked = (kind: BlockedPaymentCapability) => {
+    const now = Date.now()
+    if (!shouldNotifyBlockedCapability(blockedCapabilityToastAt.current, now)) return
+    blockedCapabilityToastAt.current = now
+    const copy = BLOCKED_PAYMENT_CAPABILITY_COPY[kind]
+    toast({ title: copy.title, description: copy.description })
+  }
   const openPaymentModal = (method: PayMethod | null = null) => {
-    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
-    if (method === "multiplo" && !pdvCapabilities.isEnabled("pdv.multiplePayments")) return
+    // Fail-closed AUDÍVEL (GAP-P2-03): capability off continua sem abrir fluxo,
+    // mas o operador recebe feedback em vez de silêncio (botão aparentemente quebrado).
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+      notifyPaymentCapabilityBlocked("sales.paymentMethods")
+      return
+    }
+    if (method === "multiplo" && !pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+      notifyPaymentCapabilityBlocked("pdv.multiplePayments")
+      return
+    }
     if (method && !payMethods.some((p) => p.id === method)) return
     if (cart.length === 0) return
     if (discountOverTotal) {
@@ -2894,7 +2919,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               <Button
                   key={m.id}
                 type="button"
-                  disabled={cart.length === 0 || !caixa.isOpen || discountOverTotal}
+                  disabled={cart.length === 0 || !caixa.isOpen || discountOverTotal || !paymentMethodsEnabled || (m.id === "multiplo" && !multiplePaymentsEnabled)}
+                  title={
+                    !paymentMethodsEnabled
+                      ? BLOCKED_PAYMENT_CAPABILITY_COPY["sales.paymentMethods"].title
+                      : m.id === "multiplo" && !multiplePaymentsEnabled
+                        ? BLOCKED_PAYMENT_CAPABILITY_COPY["pdv.multiplePayments"].title
+                        : undefined
+                  }
                   onClick={() => openPaymentModal(m.id)}
                 className={cn(
                     "relative rounded-xl text-xs font-bold text-white",

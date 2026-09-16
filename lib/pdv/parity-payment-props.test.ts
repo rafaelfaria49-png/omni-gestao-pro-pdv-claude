@@ -12,8 +12,9 @@
  *    PaymentModal a partir de `pdvCapabilities.isEnabled(...)` (drift guard
  *    estático; nada aqui muda o wiring).
  * 4. Defaults do modal — paridade pré-N4 preservada (true nos 3 gates).
- * 5. Gaps registrados, NÃO corrigidos: GAP-P2-02 (fallback creditDoc só
- *    Classic/Black) e GAP-P2-03 (fail-closed silencioso).
+ * 5. Gaps N5-B1 corrigidos: GAP-P2-02 (fallback creditDoc via contrato
+ *    compartilhado `resolveSaleCreditHolder` no Classic/Super/VC) e GAP-P2-03
+ *    (fail-closed audível: toast com cooldown + entries desabilitados/ocultos).
  */
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -122,36 +123,74 @@ describe("F-01 — wiring real das props do PaymentModal (drift guard estático)
   }
 })
 
-describe("F-01 — gaps registrados como estão (NÃO corrigir aqui)", () => {
-  it("GAP-P2-02: fallback creditDoc→cpf + sync local existe só no Classic (e Black)", () => {
-    const classic = read(fixtureFor("classic").componentPath)
-    expect(classic, "Classic usa meta?.creditDoc").toContain("meta?.creditDoc")
-    expect(classic, "Classic semeia saldo local").toContain("sincronizarCreditoLocal")
-
-    // Super e VC NÃO têm o fallback — divergência documentada, sem correção.
-    for (const surfaceId of ["supermercado", "venda-completa"] as const) {
+describe("F-01 — GAP-P2-02=FIXED (fallback creditDoc uniforme via helper)", () => {
+  it("Classic, Super e VC resolvem o titular via resolveSaleCreditHolder (meta?.creditDoc)", () => {
+    for (const surfaceId of ["classic", "supermercado", "venda-completa"] as const) {
       const source = read(fixtureFor(surfaceId).componentPath)
-      expect(source, `${surfaceId} continua SEM fallback creditDoc (N5-B)`).not.toContain("meta?.creditDoc")
+      expect(source, `${surfaceId}: usa o contrato compartilhado`).toContain("resolveSaleCreditHolder({")
+      expect(source, `${surfaceId}: lê meta?.creditDoc`).toContain("meta?.creditDoc")
+      expect(source, `${surfaceId}: semeia saldo local`).toContain("sincronizarCreditoLocal(")
+      expect(source, `${surfaceId}: respeita customerStoreCredit`).toContain("storeCreditEnabled")
     }
   })
 
-  it("GAP-P2-03: gates de pagamento retornam silenciosos (sem toast) nas 4 bordas", () => {
-    // Classic: openPaymentFlow faz return false sem feedback audível.
+  it("cliente selecionado mantém precedência fora do vale; sem invenção de cliente", () => {
+    const helper = read("lib/pdv/sale-credit-holder.ts")
+    expect(helper).toContain("selectedCpf")
+    expect(helper).toContain("seedLocal: null")
+    expect(helper).toContain("normalizeDocDigits")
+    expect(helper).not.toContain("loja-1")
+  })
+})
+
+describe("F-01 — GAP-P2-03=FIXED (fail-closed audível, sem botão quebrado)", () => {
+  it("GAP-P2-03=FIXED: Classic bloqueia com feedback (sem silêncio)", () => {
     const classic = read(fixtureFor("classic").componentPath)
     const openFlow = classic.slice(classic.indexOf("const openPaymentFlow"), classic.indexOf("const openShellShortcut"))
     expect(openFlow).toContain('!pdvCapabilities.isEnabled("sales.paymentMethods")')
     expect(openFlow).toContain('multiple && !pdvCapabilities.isEnabled("pdv.multiplePayments")')
     expect(openFlow).toContain("return false")
-    // O silêncio é o GAP: nenhum toast entre o gate e o return.
+    // O GAP era o silêncio: agora há feedback com cooldown entre o gate e o return.
     const gateBlock = openFlow.slice(0, openFlow.indexOf("if (!validateBeforeOpenPayment())"))
-    expect(gateBlock, "fail-closed silencioso permanece (GAP-P2-03, N5-B)").not.toContain("toast(")
+    expect(gateBlock, "feedback audível no bloqueio").toContain("notifyPaymentCapabilityBlocked(")
+  })
 
-    // Assistência/Super/VC: gate no openPaymentModal com return silencioso.
+  it("GAP-P2-03=FIXED: Assistência, Super e VC emitem feedback no bloqueio", () => {
+    for (const surfaceId of ["assistencia", "supermercado", "venda-completa"] as const) {
+      const source = read(fixtureFor(surfaceId).componentPath)
+      expect(source, `${surfaceId}: gate paymentMethods presente`).toContain('isEnabled("sales.paymentMethods")')
+      expect(source, `${surfaceId}: feedback no bloqueio`).toContain('notifyPaymentCapabilityBlocked("sales.paymentMethods")')
+    }
     const assist = read(fixtureFor("assistencia").componentPath)
-    expect(assist).toContain('if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return')
+    expect(assist).toContain('notifyPaymentCapabilityBlocked("pdv.multiplePayments")')
     const superSrc = read(fixtureFor("supermercado").componentPath)
-    expect(superSrc).toContain('if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return')
+    expect(superSrc).toContain('notifyPaymentCapabilityBlocked("pdv.multiplePayments")')
+  })
+
+  it("GAP-P2-03=FIXED: entries de pagamento disabled/ocultos com capability off", () => {
+    // Assistência: grid desabilita (incl. Múltiplo individual).
+    const assist = read(fixtureFor("assistencia").componentPath)
+    expect(assist).toContain("|| !paymentMethodsEnabled || (m.id === \"multiplo\" && !multiplePaymentsEnabled)")
+    // Supermercado: quick buttons desabilitados; Múltiplo já era oculto quando off.
+    const superSrc = read(fixtureFor("supermercado").componentPath)
+    expect(superSrc).toContain("disabled={!paymentMethodsEnabled}")
+    expect(superSrc).toContain('pdvCapabilities.isEnabled("pdv.multiplePayments") ? (')
+    // Venda Completa: Finalizar desabilita via canFinalize; sem F12 (só modal).
     const completa = read(fixtureFor("venda-completa").componentPath)
-    expect(completa).toContain('if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return')
+    expect(completa).toContain("caixa.isOpen && paymentMethodsEnabled")
+    // Modal compartilhado: split some quando allowMultiplePayments=false.
+    const modal = read("components/dashboard/vendas/payment-modal.tsx")
+    expect(modal).toContain("multipayHint && allowMultiplePayments && faltaPagar")
+  })
+
+  it("GAP-P2-03=FIXED: copy compartilhada com cooldown (sem toast em render)", () => {
+    const helper = read("lib/pdv/capability-blocked-feedback.ts")
+    expect(helper).toContain("BLOCKED_PAYMENT_CAPABILITY_COPY")
+    expect(helper).toContain("shouldNotifyBlockedCapability")
+    for (const surfaceId of ["classic", "assistencia", "supermercado", "venda-completa"] as const) {
+      const source = read(fixtureFor(surfaceId).componentPath)
+      expect(source, `${surfaceId}: cooldown anti-spam`).toContain("shouldNotifyBlockedCapability(")
+      expect(source, `${surfaceId}: ref de cooldown`).toContain("blockedCapabilityToastAt")
+    }
   })
 })

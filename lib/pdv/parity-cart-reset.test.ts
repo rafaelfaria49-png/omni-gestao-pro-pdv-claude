@@ -12,11 +12,9 @@
  *   desconto, busca, seleção;
  * - supermercado (Limpar, PIN-gated — GAP-P2-01 NÃO corrigido): total —
  *   carrinho, descontos, busca, nos 3 caminhos (modo-rápido/admin/PIN);
- * - venda-completa ("Limpar tudo"): PARCIAL — GAP-P1-01 REGISTRADO como
- *   comportamento atual esperado (mantém cliente/desconto/tipo/obs/endereço),
- *   enquanto hold e CONFIRMED resetam total. O teste documenta a divergência
- *   sem escondê-la e sem corrigi-la; quando N5-B corrigir o P1, este teste
- *   muda DE PROPÓSITO junto com o fix.
+ * - venda-completa ("Limpar tudo"): TOTAL desde o N5-B1 (GAP-P1-01=FIXED) —
+ *   contrato único `resetFreshSaleState` compartilhado por "Limpar tudo"
+ *   (confirmado), CONFIRMED e hold-save, sem três implementações divergentes.
  */
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -71,37 +69,63 @@ describe("F-05 — reset total nas superfícies do switcher", () => {
   })
 })
 
-describe("F-05 — venda-completa: GAP-P1-01 registrado (NÃO corrigir aqui)", () => {
-  it("'Limpar tudo' é PARCIAL por design atual: só carrinho + UI da busca", () => {
+describe("F-05 — venda-completa: GAP-P1-01=FIXED (contrato único de nova venda)", () => {
+  const FRESH_MARKERS = [
+    "setCart([])",
+    "setSelectedCliente(null)",
+    "setClienteQuery(",
+    "setShowClienteDropdown(false)",
+    "setProductQuery(",
+    "setShowProductDropdown(false)",
+    "setExpandedLineId(null)",
+    "setDiscountReais(0)",
+    'setTipoVenda("comum")',
+    'setObservacaoGeral("")',
+    "setEnderecoEntrega(EMPTY_ENDERECO)",
+    "setShowEnderecoForm(false)",
+  ]
+
+  it("'Limpar tudo' pede confirmação e delega ao reset único (sem handler parcial inline)", () => {
     const source = read(fixtureFor("venda-completa").componentPath)
-    const HANDLER = 'onClick={() => { setCart([]); setExpandedLineId(null); setProductQuery(""); setShowProductDropdown(false) }}'
-    const handlerIdx = source.indexOf(HANDLER)
-    expect(handlerIdx, "handler atual do 'Limpar tudo' (mudou? revise GAP-P1-01)").toBeGreaterThan(-1)
-    // Dentro do handler NÃO há reset de cliente/desconto/tipo/obs/endereço.
-    const handler = source.slice(handlerIdx, handlerIdx + HANDLER.length)
-    expect(handler).not.toContain("setSelectedCliente(null)")
-    expect(handler).not.toContain("setDiscountReais(0)")
-    expect(handler).not.toContain('setTipoVenda("comum")')
-    expect(handler).not.toContain("setObservacaoGeral(\"\")")
-    expect(handler).not.toContain("setEnderecoEntrega(")
+    // O botão abre o diálogo de confirmação — nada é limpo no clique.
+    expect(source).toContain("onClick={() => setShowClearSaleConfirm(true)}")
+    expect(source).toContain("Limpar tudo")
+    // O handler parcial antigo (só carrinho + UI da busca) não existe mais.
+    expect(source).not.toContain(
+      'onClick={() => { setCart([]); setExpandedLineId(null); setProductQuery(""); setShowProductDropdown(false) }}',
+    )
+    // A confirmação executa o contrato único.
+    const confirmIdx = source.indexOf("function confirmClearSale()")
+    expect(confirmIdx).toBeGreaterThan(-1)
+    expect(source.slice(confirmIdx, confirmIdx + 600)).toContain("resetFreshSaleState()")
   })
 
-  it("hold na VC reseta total — a divergência é só do botão 'Limpar tudo' (GAP-P1-01)", () => {
+  it("resetFreshSaleState zera todo estado operacional da venda (e nada permanente)", () => {
+    const source = read(fixtureFor("venda-completa").componentPath)
+    const resetIdx = source.indexOf("function resetFreshSaleState()")
+    expect(resetIdx, "contrato único presente").toBeGreaterThan(-1)
+    const block = source.slice(resetIdx, source.indexOf("function confirmClearSale()"))
+    for (const marker of FRESH_MARKERS) {
+      expect(block, `reset contém ${marker}`).toContain(marker)
+    }
+    // Transitórios também zerados; permanentes/holds/cupom intocados.
+    expect(block).toContain("setAccessoryProduct(null)")
+    expect(block).toContain("scanFeedback.dismiss()")
+    expect(block).toContain("localStorage.removeItem(DRAFT_KEY(storeId))")
+    expect(block).not.toContain("removeHeldSale")
+    expect(block).not.toContain("setCupomOpen")
+    expect(block).not.toContain("useStoreSettings")
+  })
+
+  it("hold-save e CONFIRMED usam o mesmo reset (sem terceira implementação)", () => {
     const source = read(fixtureFor("venda-completa").componentPath)
     const holdIdx = source.indexOf("function handleHoldSale()")
     const resumeIdx = source.indexOf("function handleResumeSale(")
-    const holdBlock = source.slice(holdIdx, resumeIdx)
-    for (const marker of ["setCart([])", "setSelectedCliente(null)", "setDiscountReais(0)", 'setTipoVenda("comum")', "setObservacaoGeral(\"\")", "setEnderecoEntrega(EMPTY_ENDERECO)"]) {
-      expect(holdBlock, `hold reseta ${marker}`).toContain(marker)
-    }
-  })
-
-  it("CONFIRMED na VC reseta total — pós-venda não deixa resíduo (contrast GAP-P1-01)", () => {
-    const source = read(fixtureFor("venda-completa").componentPath)
+    expect(source.slice(holdIdx, resumeIdx)).toContain("resetFreshSaleState()")
     const confirmedIdx = source.indexOf("// CONFIRMED: cupom definitivo")
     const confirmedBlock = source.slice(confirmedIdx, source.indexOf("const canFinalize ="))
-    for (const marker of ["setCart([])", "setSelectedCliente(null)", "setDiscountReais(0)", 'setTipoVenda("comum")', "setEnderecoEntrega(EMPTY_ENDERECO)"]) {
-      expect(confirmedBlock, `CONFIRMED reseta ${marker}`).toContain(marker)
-    }
+    expect(confirmedBlock).toContain("resetFreshSaleState()")
+    // Uma única definição do contrato em todo o componente.
+    expect(source.split("function resetFreshSaleState()").length - 1).toBe(1)
   })
 })

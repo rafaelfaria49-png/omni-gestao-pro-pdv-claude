@@ -15,9 +15,14 @@
  *    (`postFinalizeDisposition`) declara CONFIRMED apenas com `{ok:true}` sem
  *    pendência, e retry idempotente emite exatamente uma vez.
  *
- * GAP-P2-06 registrado como evidência N5-B: mutex (`claimSaleFinalizeLock`)
- * existe SÓ na Venda Completa; as demais dependem do `finalConfirmBusyRef` do
- * modal. NADA é corrigido aqui e nenhum mutex novo é implementado.
+ * GAP-P2-06 PROVADO no N5-B1 (DOUBLE_SUBMIT_PROTECTION=PROVEN_NO_FIX): as 4
+ * superfícies finalizam exclusivamente pelo `handleFinalConfirm` do
+ * PaymentModal (ponto único de `onConfirm`), que faz claim síncrono
+ * (`finalConfirmBusyRef`, atômico no event loop) antes de qualquer await —
+ * duplo clique, F1/Enter repetido e chamadas quase simultâneas não disparam
+ * duas finalizações concorrentes. O mutex da VC é defesa em profundidade
+ * redundante, mantido como está. Nenhum mutex novo. Idempotência N1
+ * server-side continua autoridade final.
  */
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -77,17 +82,53 @@ describe("F-04 — single entry e guards de borda por superfície", () => {
     })
   }
 
-  it("GAP-P2-06 (evidência N5-B): mutex de finalização existe SÓ na Venda Completa", () => {
+  it("GAP-P2-06=PROVEN_NO_FIX: mutex exclusivo da VC é defesa redundante (modal já serializa)", () => {
     const vc = read(fixtureFor("venda-completa").componentPath)
     expect(vc).toContain("claimSaleFinalizeLock(isProcessingRef)")
     expect(vc).toContain("releaseSaleFinalizeLock(isProcessingRef)")
 
+    // Sem mutex novo nas demais: a prova abaixo mostra que o choke point do
+    // modal já impede concorrência — mutex extra seria segunda camada.
     for (const surfaceId of ["classic", "assistencia", "supermercado"] as const) {
       const source = read(fixtureFor(surfaceId).componentPath)
       expect(
         source,
-        `${surfaceId}: sem mutex novo (N5-A não implementa; N5-B decide prova)`,
+        `${surfaceId}: sem mutex (proteção equivalente provada no modal)`,
       ).not.toContain("claimSaleFinalizeLock")
+    }
+  })
+
+  it("GAP-P2-06=PROVEN_NO_FIX: PaymentModal serializa o confirm (ponto único + claim síncrono)", () => {
+    const modal = read("components/dashboard/vendas/payment-modal.tsx")
+    // Ponto único de chamada ao finalize da superfície.
+    expect(modal.split("onConfirm?.(").length - 1).toBe(1)
+    // Claim síncrono antes de qualquer await: check-and-set atômico no event
+    // loop — duas invocações quase simultâneas não passam juntas.
+    const confirmIdx = modal.indexOf("const handleFinalConfirm = useCallback(() => {")
+    expect(confirmIdx).toBeGreaterThan(-1)
+    const confirmBlock = modal.slice(confirmIdx, modal.indexOf("}, [isConfirming, payments, total"))
+    expect(confirmBlock).toContain("if (finalConfirmBusyRef.current || isConfirming) return")
+    expect(confirmBlock).toContain("finalConfirmBusyRef.current = true")
+    // Caminhos de falha/retorno liberam; fechar o modal reseta para a próxima venda.
+    expect(confirmBlock).toContain("finalConfirmBusyRef.current = false")
+    expect(modal).toContain("finalConfirmBusyRef.current = false")
+    // Intenções (botão/Enter/F-key) checam busy; botões desabilitam confirmando.
+    expect(modal).toContain("if (isConfirming || showFinalConfirm || finalConfirmBusyRef.current) return")
+    expect(modal).toContain("disabled={isConfirming}")
+  })
+
+  it("GAP-P2-06=PROVEN_NO_FIX: as 4 superfícies finalizam SÓ via onConfirm do modal", () => {
+    const wiring: Record<string, string> = {
+      classic: "onConfirm={async (payments, meta) => {",
+      assistencia: "onConfirm={handlePaymentConfirm}",
+      supermercado: "onConfirm={async (payments, meta) => {",
+      "venda-completa": "onConfirm={handleConfirmPayment}",
+    }
+    for (const fixture of OFFICIAL_SURFACE_FIXTURES) {
+      const source = read(fixture.componentPath)
+      expect(source, `${fixture.surfaceId}: finalize via modal`).toContain(wiring[fixture.surfaceId]!)
+      // Entrada única do motor por superfície (sem caminho paralelo de finalize).
+      expect(source.split("await finalizeSaleTransaction(").length - 1).toBe(1)
     }
   })
 

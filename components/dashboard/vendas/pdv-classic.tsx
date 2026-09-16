@@ -142,6 +142,12 @@ import {
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
 import { combineHoldSnapshotWithRuntime, resumeDiscountFields } from "@/lib/pdv/resolve-capability"
+import { resolveSaleCreditHolder } from "@/lib/pdv/sale-credit-holder"
+import {
+  BLOCKED_PAYMENT_CAPABILITY_COPY,
+  shouldNotifyBlockedCapability,
+  type BlockedPaymentCapability,
+} from "@/lib/pdv/capability-blocked-feedback"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import {
   PENDING_SALE_DESCRIPTION,
@@ -1307,6 +1313,20 @@ export function PdvClassic({
     queueMicrotask(() => shellBipeRef.current?.focus())
   }, [])
 
+  // Fail-closed audível (GAP-P2-03): feedback com cooldown anti-spam para
+  // ação de pagamento bloqueada por capability (teclado/race). Só em handler.
+  const blockedCapabilityToastAt = useRef(0)
+  const notifyPaymentCapabilityBlocked = useCallback(
+    (kind: BlockedPaymentCapability) => {
+      const now = Date.now()
+      if (!shouldNotifyBlockedCapability(blockedCapabilityToastAt.current, now)) return
+      blockedCapabilityToastAt.current = now
+      const copy = BLOCKED_PAYMENT_CAPABILITY_COPY[kind]
+      toast({ title: copy.title, description: copy.description })
+    },
+    [toast]
+  )
+
   const validateBeforeOpenPayment = useCallback(() => {
     const caixaState = caixa as typeof caixa | null | undefined
 
@@ -1344,10 +1364,15 @@ export function PdvClassic({
 
   const openPaymentFlow = useCallback(
     (intent: PaymentMethodType | null, multiple: boolean) => {
+      // Fail-closed AUDÍVEL (GAP-P2-03): capability off continua sem abrir
+      // fluxo, mas o operador recebe feedback — botão/tecla não parecem
+      // quebrados. Cooldown anti-spam para repetição de tecla/race.
       if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+        notifyPaymentCapabilityBlocked("sales.paymentMethods")
         return false
       }
       if (multiple && !pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+        notifyPaymentCapabilityBlocked("pdv.multiplePayments")
         return false
       }
       if (!validateBeforeOpenPayment()) {
@@ -1359,7 +1384,7 @@ export function PdvClassic({
       setIsPaymentModalOpen(true)
       return true
     },
-    [focusShellBipe, pdvCapabilities, validateBeforeOpenPayment]
+    [focusShellBipe, notifyPaymentCapabilityBlocked, pdvCapabilities, validateBeforeOpenPayment]
   )
 
   const openShellShortcut = useCallback(
@@ -2015,20 +2040,25 @@ export function PdvClassic({
               ...(item.accessorySelection ? { accessorySelection: item.accessorySelection } : {}),
             }))
           // Capturar dados de impressão ANTES de limpar o cart
-          // Vale usado com titular localizado por doc/código no PaymentModal: a
-          // venda precisa carregar o documento que o servidor vai debitar
+          // Vale usado com titular localizado por doc/código no PaymentModal
+          // (GAP-P2-02, contrato compartilhado em `resolveSaleCreditHolder`):
+          // a venda precisa carregar o documento que o servidor vai debitar
           // (ClienteCredito é chaveado por CPF/CNPJ) — pode diferir do cliente
           // selecionado. O saldo local é semeado com o valor reportado pelo
           // servidor para o guard do finalize não rejeitar em navegador frio.
-          const usouValeLoc = !!meta?.creditDoc && payments.some((p) => p.type === "credito_vale")
-          const cpfDaVenda =
-            usouValeLoc && meta?.creditDoc ? meta.creditDoc : selectedCustomer?.cpf
-          const nomeDaVenda =
-            usouValeLoc && meta?.creditDoc
-              ? meta.creditNome || selectedCustomer?.name
-              : selectedCustomer?.name
-          if (usouValeLoc && meta?.creditDoc) {
-            sincronizarCreditoLocal(meta.creditDoc, meta.creditNome ?? "", meta.creditSaldo ?? 0)
+          const creditHolder = resolveSaleCreditHolder({
+            payments,
+            creditDoc: meta?.creditDoc,
+            creditNome: meta?.creditNome,
+            creditSaldo: meta?.creditSaldo,
+            selectedCpf: selectedCustomer?.cpf,
+            selectedName: selectedCustomer?.name,
+            storeCreditEnabled,
+          })
+          const cpfDaVenda = creditHolder.cpf
+          const nomeDaVenda = creditHolder.nome
+          if (creditHolder.seedLocal) {
+            sincronizarCreditoLocal(creditHolder.seedLocal.doc, creditHolder.seedLocal.nome, creditHolder.seedLocal.saldo)
           }
           const _rp = buildReceiptPrintPayload()
           const _printInput: PdvReceiptInput = {
@@ -2096,7 +2126,7 @@ export function PdvClassic({
             },
             customerCpf: cpfDaVenda,
             customerName: nomeDaVenda,
-            clienteId: usouValeLoc ? undefined : selectedCustomer?.id || undefined,
+            clienteId: creditHolder.seedLocal ? undefined : selectedCustomer?.id || undefined,
             aPrazoConfig,
             pixQrKind: meta?.pixQrKind,
             cashTendered: meta?.cashTendered,
