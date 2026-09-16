@@ -300,13 +300,34 @@ export async function POST(request: Request) {
     })
   }
 
-  let body: { pin?: unknown } = {}
+  let body: { pin?: unknown; action?: unknown; resource?: unknown } = {}
   try {
-    body = (await request.json()) as { pin?: unknown }
+    body = (await request.json()) as { pin?: unknown; action?: unknown; resource?: unknown }
   } catch {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 })
   }
   const pin = typeof body.pin === "string" ? body.pin.trim() : ""
+
+  // Escopo opcional (GOAL 007B): quando o chamador declara para QUE ação e sobre QUE
+  // alvo está pedindo a co-assinatura, isso entra no payload assinado e a autorização
+  // deixa de servir para qualquer outra operação. Sem escopo, o token nasce genérico,
+  // como antes — e um token genérico não autoriza consumidor que exige escopo.
+  //
+  // Os valores são só rótulos de vínculo: não concedem nada por si. Limitados em
+  // tamanho e a caracteres inertes para não virarem veículo de dado arbitrário no
+  // token nem no log.
+  const escopoValido = (v: unknown): string | undefined => {
+    if (typeof v !== "string") return undefined
+    const t = v.trim()
+    if (!t || t.length > 128 || !/^[\w.:@/-]+$/.test(t)) return undefined
+    return t
+  }
+  const action = escopoValido(body.action)
+  const resource = escopoValido(body.resource)
+  // Alvo sem ação seria vínculo pela metade: recusa em vez de emitir algo ambíguo.
+  if (resource && !action) {
+    return NextResponse.json({ error: "invalid_scope" }, { status: 400 })
+  }
 
   // (5) PIN LEGADO BLOQUEADO — recusado ANTES de qualquer consulta, para que nem
   // exista caminho em que ele possa autenticar. Conta como tentativa incorreta.
@@ -356,14 +377,16 @@ export async function POST(request: Request) {
   // canónico devolvido pelo banco, nunca à string que o cliente enviou.
   registerContadorAuthSuccess(rateKey)
   const token = await createPinAuthorizationToken(
-    { userId, storeId, supervisorId: supervisor.id },
+    { userId, storeId, supervisorId: supervisor.id, action, resource },
     secret,
   )
   await audit("PIN_SUPERVISOR_AUTORIZADO", {
     userId,
     storeId,
     ipHash,
-    detail: `Autorização de supervisor concedida por ${supervisor.id}.`,
+    detail:
+      `Autorização de supervisor concedida por ${supervisor.id}` +
+      (action ? ` para ${action}${resource ? ` em ${resource}` : ""}.` : " (genérica)."),
   })
   logPinAuthorizationEvent("pin_auth_success", { ipHash, userId, storeId })
 

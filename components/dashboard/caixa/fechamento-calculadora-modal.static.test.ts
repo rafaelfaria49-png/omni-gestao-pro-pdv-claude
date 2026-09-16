@@ -7,7 +7,8 @@
  * 2. X/Esc/clique fora só escondem o diálogo — nada ali zera quantidades ou apaga o rascunho;
  * 3. "Aplicar" preenche o dinheiro contado pelo MESMO contrato e fecha só a calculadora;
  * 4. "Limpar contagem" zera e apaga o rascunho; o fechamento confirmado pelo servidor também;
- * 5. as ações "Em breve" da Conferência seguem desabilitadas;
+ * 5. a Conferência não exibe rótulo "Em breve" (o item 5 original — "ações seguem
+ *    desabilitadas" — foi superado pelo GOAL 007, que as tornou reais);
  * 6. a regra financeira do fechamento (diferença, payload) não mudou.
  *
  * Aritmética e isolamento do rascunho: `lib/caixa/contagem-cedulas.test.ts`. O comportamento
@@ -116,25 +117,18 @@ describe("Calculadora de cédulas e moedas · diálogo próprio (005)", () => {
   })
 })
 
-describe("Conferência · ações de venda seguem 'Em breve' (005)", () => {
-  const EM_BREVE = [
-    "Reimprimir comprovante",
-    "Histórico da venda",
-    "Trocar produtos",
-    "Devolução parcial",
-    "Estornar venda",
-  ]
-
-  it("O. nenhuma ação 'Em breve' foi ativada", () => {
+// O contrato "tudo Em breve" do GOAL 005 foi SUPERADO por
+// CAIXA-CONFERENCIA-VENDAS-ACOES-REAIS-007: as ações de consulta e o estorno passaram a
+// ser reais. O que sobrevive aqui é a regra que não mudou — nenhum rótulo de promessa na
+// Conferência. O contrato novo, por ação, está em `conferencia-acoes-reais.static.test.ts`.
+describe("Conferência · nenhuma ação promete futuro (005 → 007)", () => {
+  it("O. o menu não exibe mais 'Em breve' em ação nenhuma", () => {
     const menu = conferencia.slice(conferencia.indexOf("<DropdownMenuContent"))
-    expect(ocorrencias(menu, ">Em breve<")).toBe(EM_BREVE.length)
-    for (const rotulo of EM_BREVE) {
-      const at = menu.indexOf(rotulo)
-      expect(at, rotulo).toBeGreaterThan(0)
-      const abertura = menu.slice(menu.lastIndexOf("<DropdownMenuItem", at), at)
-      expect(abertura, rotulo).toMatch(/\sdisabled>/)
-      expect(abertura, rotulo).not.toContain("onSelect")
-    }
+    expect(ocorrencias(menu, ">Em breve<")).toBe(0)
+    // Fora do comentário de cabeçalho (que EXPLICA a remoção), o texto não renderiza
+    // em lugar nenhum do componente.
+    const render = conferencia.slice(conferencia.indexOf("export function ConferenciaCaixa"))
+    expect(render).not.toContain("Em breve")
   })
 })
 
@@ -152,10 +146,16 @@ describe("Conferência · rodapé fora da área rolável (005-microfix)", () => 
   })
 })
 
-describe("Fechamento · copy de consulta restrita às abas (005-microfix)", () => {
+describe("Fechamento · copy de consulta restrita às abas (005-microfix → 007)", () => {
   it("não sugere que a contagem da gaveta seja somente leitura", () => {
-    expect(modal).toContain("Resumo e conferência são somente consulta.")
     expect(modal).not.toContain("nada aqui altera valores")
+  })
+
+  it("a copy é honesta: a conferência ganhou uma ação que altera a venda (007)", () => {
+    expect(modal).toContain("Resumo é somente consulta.")
+    expect(modal).toContain("estornar venda pede autorização")
+    // A promessa antiga ("conferência é somente consulta") não pode voltar.
+    expect(modal).not.toContain("Resumo e conferência são somente consulta.")
   })
 })
 

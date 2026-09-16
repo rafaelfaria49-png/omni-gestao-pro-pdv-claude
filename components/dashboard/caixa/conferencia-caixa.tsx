@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import {
   ShoppingCart,
   ArrowDownCircle,
@@ -15,6 +15,7 @@ import {
   Printer,
   History,
   Ban,
+  Lock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +40,12 @@ import {
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import type { VendaSessaoDetalheItem } from "@/app/api/ops/caixa/sessao-detalhe/route"
 import type { CaixaOperacaoDetalhe } from "./use-caixa-resumo"
+import { avaliarAcoesVenda, type AcaoVendaEstado } from "@/lib/caixa/conferencia-acoes"
+import { mapVendaDetalheToCupom } from "@/lib/vendas/venda-cupom-mapper"
+import type { VendaDetalhe } from "@/lib/vendas/venda-detalhe-contract"
+import { ConferenciaVendaDetalhe } from "./conferencia-venda-detalhe"
+import { ConferenciaEstornoDialog, type EstornoAlvo } from "./conferencia-estorno-dialog"
+import { CupomNaoFiscal, type CupomData } from "@/components/dashboard/vendas/cupom-nao-fiscal"
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
@@ -58,6 +65,12 @@ interface LinhaConferencia {
   status: string | null
   referencia: string
   searchBlob: string
+  /** `Venda.fiscalStatus` — só em linha de venda vinda do servidor. */
+  fiscalStatus?: string | null
+  /** A venda existe no servidor (tem ficha, comprovante e estorno). */
+  servidorConfirmada?: boolean
+  /** Conta a receber da venda já quitada — bloqueia o estorno (007A). */
+  recebivelQuitado?: boolean
 }
 
 const CATEGORIA_LABEL: Record<Categoria, string> = {
@@ -120,6 +133,9 @@ function linhaDeVenda(v: VendaSessaoDetalheItem): LinhaConferencia {
     valor: v.total,
     status: v.status,
     referencia: v.numero,
+    fiscalStatus: v.fiscalStatus,
+    servidorConfirmada: true,
+    recebivelQuitado: v.recebivelQuitado,
     searchBlob: [v.numero, v.clienteNome, v.clienteCpf, v.formaPagamento, formaPagamentoLabel(v.formaPagamento), v.origem]
       .filter(Boolean)
       .join(" ")
@@ -140,6 +156,9 @@ function linhaDeSaleRecord(s: SaleRecord): LinhaConferencia {
     valor: s.total,
     status: s.status ?? "concluida",
     referencia: s.id,
+    // Fallback legado: a linha veio do store local, não do `sessao-detalhe`. Sem
+    // confirmação do servidor não há ficha, comprovante nem estorno para oferecer.
+    servidorConfirmada: false,
     searchBlob: [s.id, s.customerName, s.customerCpf].filter(Boolean).join(" ").toLowerCase(),
   }
 }
@@ -206,23 +225,56 @@ function pertenceAoFiltro(linha: LinhaConferencia, filtro: (typeof FILTROS)[numb
 }
 
 /**
- * Conferência do fechamento — somente consulta. Ações de venda que alterariam
- * venda, caixa ou estoque (troca, devolução, estorno) aparecem DESABILITADAS até
- * existir backend com autorização step-up (CAIXA-VENDAS-ACOES-SEGURAS-002).
+ * Conferência do fechamento — GOAL CAIXA-CONFERENCIA-VENDAS-ACOES-REAIS-007.
+ *
+ * O menu ⋮ de cada venda deixou de mostrar "Em breve". Cada item ou está ligado a
+ * backend REAL, ou aparece desabilitado com a razão REAL (`lib/caixa/conferencia-acoes.ts`):
+ *
+ *   consulta  · Ver detalhes / Histórico  → `GET /api/vendas/[id]?full=1` (read-only)
+ *   documento · Reimprimir / Copiar       → `CupomNaoFiscal` (mesmo comprovante do Histórico)
+ *   crítico   · Estornar venda            → `POST /api/vendas/[id]/cancelar`, com step-up
+ *                                            de supervisor e motivo obrigatório
+ *
+ * Troca e Devolução parcial continuam DESABILITADAS aqui, e não por falta de backend:
+ * o reembolso mexeria na gaveta que está sendo contada sem que o fechamento saiba
+ * recalcular o esperado (a forma de pagamento do reembolso não é persistida). A razão
+ * exibida diz isso e aponta o caminho real — Troca/Devolução no PDV.
  */
 export function ConferenciaCaixa({
   vendasSessao,
   sessionSales,
   operacoesSessao,
+  storeId,
+  operador,
+  loja,
+  sessaoAberta = true,
+  contagemIniciada = false,
+  onDadosAlterados,
 }: {
   vendasSessao: VendaSessaoDetalheItem[]
   sessionSales: SaleRecord[]
   operacoesSessao: CaixaOperacaoDetalhe[]
+  /** Unidade ativa — obrigatória em toda leitura/escrita (multi-loja). */
+  storeId: string
+  /** Rótulo legível do operador da sessão — vai para a trilha do estorno. */
+  operador: string
+  /** Cabeçalho do comprovante reimpresso. */
+  loja: { nome: string; cnpj?: string; endereco?: string }
+  /** A sessão desta conferência ainda está aberta (§21). */
+  sessaoAberta?: boolean
+  /** O operador já digitou algum valor na contagem da gaveta (§23). */
+  contagemIniciada?: boolean
+  /** Disparado após uma operação REAL — o pai recarrega vendas, operações e resumo (§22). */
+  onDadosAlterados?: () => void
 }) {
   const { toast } = useToast()
   const [filtro, setFiltro] = useState<(typeof FILTROS)[number]["key"]>("todos")
   const [busca, setBusca] = useState("")
   const [detalheId, setDetalheId] = useState<string | null>(null)
+  /** Ficha lateral da venda: número + aba inicial. `null` = fechada. */
+  const [ficha, setFicha] = useState<{ numero: string; aba: "detalhes" | "historico" } | null>(null)
+  const [estornoAlvo, setEstornoAlvo] = useState<EstornoAlvo | null>(null)
+  const [cupom, setCupom] = useState<CupomData | null>(null)
 
   const linhas = useMemo<LinhaConferencia[]>(() => {
     const vendas =
@@ -276,14 +328,58 @@ export function ConferenciaCaixa({
     return c
   }, [linhas])
 
-  const copiarNumero = async (numero: string) => {
-    try {
-      await navigator.clipboard.writeText(numero)
-      toast({ title: "Número copiado", description: numero })
-    } catch {
-      toast({ title: "Erro", description: "Não foi possível copiar.", variant: "destructive" })
-    }
-  }
+  const copiarNumero = useCallback(
+    async (numero: string) => {
+      try {
+        await navigator.clipboard.writeText(numero)
+        toast({ title: "Número copiado", description: numero })
+      } catch {
+        toast({ title: "Erro", description: "Não foi possível copiar.", variant: "destructive" })
+      }
+    },
+    [toast],
+  )
+
+  /**
+   * Reimpressão: projeta o comprovante da venda ORIGINAL pelo mapeador ÚNICO
+   * compartilhado com o Histórico de Vendas. Não recalcula nada e não toca na venda.
+   */
+  const abrirCupom = useCallback(
+    (venda: VendaDetalhe) => {
+      setCupom(mapVendaDetalheToCupom(venda, loja))
+    },
+    [loja],
+  )
+
+  /** Busca a venda e abre o comprovante — usado pelo item de menu (sem abrir a ficha). */
+  const reimprimirPorNumero = useCallback(
+    async (numero: string) => {
+      try {
+        const r = await fetch(`/api/vendas/${encodeURIComponent(numero)}`, {
+          credentials: "include",
+          headers: { "x-assistec-loja-id": storeId },
+          cache: "no-store",
+        })
+        const j = (await r.json().catch(() => null)) as { ok?: boolean; venda?: VendaDetalhe } | null
+        if (!r.ok || !j?.ok || !j.venda) {
+          toast({
+            title: "Comprovante indisponível",
+            description: "Não foi possível carregar os dados desta venda.",
+            variant: "destructive",
+          })
+          return
+        }
+        abrirCupom(j.venda)
+      } catch {
+        toast({
+          title: "Erro",
+          description: "Falha de conexão ao carregar o comprovante.",
+          variant: "destructive",
+        })
+      }
+    },
+    [abrirCupom, storeId, toast],
+  )
 
   const vazio = linhas.length === 0
 
@@ -387,6 +483,16 @@ export function ConferenciaCaixa({
                       : l.origemLabel
                 const detalheAberto = detalheId === l.id
                 const Icon = CATEGORIA_ICON[l.categoria]
+                // Estado do menu ⋮ derivado dos dados da linha — nunca de `useState`.
+                const acoes = venda
+                  ? avaliarAcoesVenda({
+                      status: l.status,
+                      fiscalStatus: l.fiscalStatus,
+                      servidorConfirmada: l.servidorConfirmada === true,
+                      recebivelQuitado: l.recebivelQuitado === true,
+                      sessaoAberta,
+                    })
+                  : null
                 return (
                   <li key={l.id} className="border-b border-border/60 last:border-b-0">
                     <div
@@ -463,7 +569,7 @@ export function ConferenciaCaixa({
                         {fmt(l.valor)}
                       </p>
                       <div className="flex justify-end">
-                        {venda && (
+                        {venda && acoes && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -475,7 +581,7 @@ export function ConferenciaCaixa({
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-64">
+                            <DropdownMenuContent align="end" className="w-72">
                               <DropdownMenuLabel className="flex min-w-0 flex-col gap-0.5">
                                 <span className="text-sm font-semibold text-foreground">Venda {numeroCurto}</span>
                                 <span className="truncate font-mono text-[11px] font-normal text-muted-foreground">
@@ -485,49 +591,74 @@ export function ConferenciaCaixa({
                               <DropdownMenuSeparator />
                               <DropdownMenuGroup>
                                 <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Consultar
+                                  Ver
                                 </DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={() => setDetalheId((cur) => (cur === l.id ? null : l.id))}>
-                                  {detalheAberto ? <EyeOff /> : <Eye />}
-                                  {detalheAberto ? "Ocultar detalhes" : "Ver detalhes"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => void copiarNumero(l.referencia)}>
-                                  <Copy />
-                                  Copiar número da venda
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled>
-                                  <Printer />
-                                  Reimprimir comprovante
-                                  <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled>
-                                  <History />
-                                  Histórico da venda
-                                  <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                                </DropdownMenuItem>
+                                <AcaoItem
+                                  estado={acoes.detalhes}
+                                  icone={<Eye />}
+                                  rotulo="Ver detalhes"
+                                  onSelect={() => setFicha({ numero: l.referencia, aba: "detalhes" })}
+                                />
+                                <AcaoItem
+                                  estado={acoes.historico}
+                                  icone={<History />}
+                                  rotulo="Histórico da venda"
+                                  onSelect={() => setFicha({ numero: l.referencia, aba: "historico" })}
+                                />
                               </DropdownMenuGroup>
                               <DropdownMenuSeparator />
                               <DropdownMenuGroup>
                                 <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Operações · pedem autorização
+                                  Documento
                                 </DropdownMenuLabel>
-                                <DropdownMenuItem disabled>
-                                  <ArrowLeftRight />
-                                  Trocar produtos
-                                  <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled>
-                                  <Undo2 />
-                                  Devolução parcial
-                                  <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                                </DropdownMenuItem>
+                                <AcaoItem
+                                  estado={acoes.reimprimir}
+                                  icone={<Printer />}
+                                  rotulo="Reimprimir comprovante"
+                                  onSelect={() => void reimprimirPorNumero(l.referencia)}
+                                />
+                                <AcaoItem
+                                  estado={acoes.copiar}
+                                  icone={<Copy />}
+                                  rotulo="Copiar número da venda"
+                                  onSelect={() => void copiarNumero(l.referencia)}
+                                />
                               </DropdownMenuGroup>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem variant="destructive" disabled>
-                                <Ban />
-                                Estornar venda
-                                <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                              </DropdownMenuItem>
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Pós-venda
+                                </DropdownMenuLabel>
+                                <AcaoItem
+                                  estado={acoes.troca}
+                                  icone={<ArrowLeftRight />}
+                                  rotulo="Trocar produtos"
+                                />
+                                <AcaoItem
+                                  estado={acoes.devolucao}
+                                  icone={<Undo2 />}
+                                  rotulo="Devolução parcial"
+                                />
+                              </DropdownMenuGroup>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Crítico
+                              </DropdownMenuLabel>
+                              <AcaoItem
+                                estado={acoes.estorno}
+                                icone={<Ban />}
+                                rotulo="Estornar venda"
+                                destrutiva
+                                atalho="PIN"
+                                onSelect={() =>
+                                  setEstornoAlvo({
+                                    numero: l.referencia,
+                                    valor: l.valor,
+                                    cliente: l.cliente,
+                                    formaPagamento: forma,
+                                  })
+                                }
+                              />
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
@@ -569,7 +700,90 @@ export function ConferenciaCaixa({
           </div>
         </>
       )}
+
+      {/* ── Ficha da venda (detalhes + histórico) — somente leitura ───────────── */}
+      <ConferenciaVendaDetalhe
+        numeroVenda={ficha?.numero ?? null}
+        aba={ficha?.aba ?? "detalhes"}
+        storeId={storeId}
+        onOpenChange={(open) => {
+          if (!open) setFicha(null)
+        }}
+        onCopiarNumero={(n) => void copiarNumero(n)}
+        onReimprimir={abrirCupom}
+      />
+
+      {/* ── Reimpressão do comprovante — mesmo componente do Histórico de Vendas ── */}
+      {cupom && (
+        <CupomNaoFiscal isOpen={!!cupom} onClose={() => setCupom(null)} data={cupom} />
+      )}
+
+      {/* ── Estorno: step-up de supervisor + motivo obrigatório ──────────────── */}
+      <ConferenciaEstornoDialog
+        alvo={estornoAlvo}
+        storeId={storeId}
+        operador={operador}
+        contagemIniciada={contagemIniciada}
+        onOpenChange={(open) => {
+          if (!open) setEstornoAlvo(null)
+        }}
+        onEstornada={({ numero, autorizadoPor }) => {
+          setEstornoAlvo(null)
+          toast({
+            title: "Venda estornada",
+            description: `${numero} · autorizado por ${autorizadoPor}. Os valores esperados do caixa foram recalculados.`,
+          })
+          // §22 — recarrega vendas, operações e resumo sem fechar o Fechamento.
+          onDadosAlterados?.()
+        }}
+      />
     </div>
+  )
+}
+
+/**
+ * Item do menu ⋮ governado por `avaliarAcoesVenda`.
+ *
+ * Desabilitado NUNCA some: fica visível com a razão real embaixo do rótulo (§26). O
+ * `title` repete a razão para quem navega por teclado/leitor de tela, já que
+ * `DropdownMenuItem` desabilitado não recebe foco.
+ */
+function AcaoItem({
+  estado,
+  icone,
+  rotulo,
+  onSelect,
+  destrutiva = false,
+  atalho,
+}: {
+  estado: AcaoVendaEstado
+  icone: React.ReactNode
+  rotulo: string
+  onSelect?: () => void
+  destrutiva?: boolean
+  atalho?: string
+}) {
+  if (!estado.habilitada) {
+    return (
+      <DropdownMenuItem disabled className="items-start" title={estado.motivo}>
+        <Lock />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span>{rotulo}</span>
+          <span className="whitespace-normal text-[10px] leading-snug text-muted-foreground">
+            {estado.motivo}
+          </span>
+        </span>
+      </DropdownMenuItem>
+    )
+  }
+  return (
+    <DropdownMenuItem onSelect={onSelect} {...(destrutiva ? { variant: "destructive" as const } : {})}>
+      {icone}
+      {rotulo}
+      {atalho ? (
+        <DropdownMenuShortcut className="tracking-normal">{atalho}</DropdownMenuShortcut>
+      ) : null}
+    </DropdownMenuItem>
   )
 }
 

@@ -71,7 +71,7 @@ const TAB_TRIGGER =
 export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalProps) {
   const { caixa, fecharCaixa, sessaoId } = useCaixa()
   const { dailyLedger, sales } = useOperationsStore()
-  const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
+  const { empresaDocumentos, lojaAtivaId, getEnderecoDocumentos } = useLojaAtiva()
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome(lojaAtivaId)
   const { terminal } = useTerminalAtivo(lojaAtivaId)
@@ -91,6 +91,13 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const [salvando, setSalvando] = useState(false)
   const [posFechamentoOpen, setPosFechamentoOpen] = useState(false)
   const [posFechamentoSnapshot, setPosFechamentoSnapshot] = useState<FechamentoPosSnapshot | null>(null)
+  /**
+   * Incrementado quando uma ação REAL da Conferência muda o servidor (estorno). Força
+   * `useCaixaResumo` a rebuscar vendas e operações — o esperado da gaveta recalcula sem
+   * o operador sair do Fechamento (GOAL CAIXA-CONFERENCIA-VENDAS-ACOES-REAIS-007 §22).
+   * A contagem digitada NÃO é apagada: o operador revê a diferença já atualizada.
+   */
+  const [conferenciaRefreshKey, setConferenciaRefreshKey] = useState(0)
 
   const ledger = ensureLedger(dailyLedger)
   const userAudit = (empresaDocumentos.nomeFantasia || "").trim() || "Loja"
@@ -108,7 +115,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     operacoesSessao,
     vendasSessao,
     qtdCanceladas,
-  } = useCaixaResumo(isOpen)
+  } = useCaixaResumo(isOpen, conferenciaRefreshKey)
 
   // Operador da sessão para o comprovante — nome LEGÍVEL (fonte única: abertura do
   // caixa → sessão → e-mail; nunca o `cashierId` técnico). O `cashierId` permanece
@@ -492,7 +499,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                   </TabsTrigger>
                 </TabsList>
                 <span className="ml-auto hidden truncate text-[11px] text-muted-foreground md:block">
-                  Resumo e conferência são somente consulta.
+                  Resumo é somente consulta. Na conferência, estornar venda pede autorização.
                 </span>
               </div>
 
@@ -560,6 +567,17 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                   vendasSessao={vendasSessao}
                   sessionSales={sessionSales}
                   operacoesSessao={operacoesSessao}
+                  storeId={lojaAtivaId ?? ""}
+                  operador={operadorDisplay || "Operador"}
+                  loja={{
+                    nome:
+                      empresaDocumentos.nomeFantasia || empresaDocumentos.razaoSocial || "Loja",
+                    cnpj: empresaDocumentos.cnpj || undefined,
+                    endereco: getEnderecoDocumentos() || undefined,
+                  }}
+                  sessaoAberta={caixa.isOpen}
+                  contagemIniciada={valorContado.trim().length > 0}
+                  onDadosAlterados={() => setConferenciaRefreshKey((k) => k + 1)}
                 />
               </TabsContent>
             </Tabs>
