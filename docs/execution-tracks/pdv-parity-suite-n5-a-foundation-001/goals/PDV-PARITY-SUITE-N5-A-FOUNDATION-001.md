@@ -7,8 +7,8 @@
   "status": "READY",
   "class": "C2",
   "risk_tier": "MEDIO",
-  "branch": "goal/pdv-parity-suite-n5-a",
-  "worktree": "C:/Projetos/omni-gestao",
+  "branch": "goal/pdv-parity-suite-n5-a-final",
+  "worktree": "C:/Projetos/omni-gestao-n5a-final",
   "test_command": "npx vitest run lib/pdv lib/pdv-hold.test.ts lib/pdv-payments.test.ts lib/pdv-formas-pagamento.test.ts lib/pdv-finalize-integrity.test.ts lib/pdv-pending-post-sale-effects.static.test.ts",
   "allowlist": [
     "lib/pdv/**",
@@ -42,8 +42,8 @@
 - trilha: `pdv-parity-suite-n5-a-foundation-001`
 - classe: C2 · status: READY
 - plano: audit canônico `docs/pdv/PDV_PARITY_SUITE_N5_AUDIT_001.md` (commit `02fc0bf`, GAPS_P0=0 · P1=1 · P2=6 · P3=15 · N4_REGRESSION_FOUND=false · CAPABILITY_RUNTIME_COHERENT=true)
-- branch: `goal/pdv-parity-suite-n5-a` (a partir de `origin/main`; base declarada `02fc0bf` é ancestral da ponta atual `fe9445b`, que só adiciona trabalho de cadastros/segurança — zero diff em paths PDV entre os dois)
-- worktree: `C:/Projetos/omni-gestao`
+- branch: `goal/pdv-parity-suite-n5-a-final` (a partir de `origin/main`; base declarada `02fc0bf` é ancestral da ponta atual `fe9445b`, que só adiciona trabalho de cadastros/segurança — zero diff em paths PDV entre os dois)
+- worktree: `C:/Projetos/omni-gestao-n5a-final`
 - teste: `npx vitest run lib/pdv lib/pdv-hold.test.ts lib/pdv-payments.test.ts lib/pdv-formas-pagamento.test.ts lib/pdv-finalize-integrity.test.ts lib/pdv-pending-post-sale-effects.static.test.ts`
 - risco: `MEDIO` (toque em produção esperado = zero; extração somente-leitura)
 
