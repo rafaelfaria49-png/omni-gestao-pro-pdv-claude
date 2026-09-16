@@ -22,6 +22,12 @@
  *
  * **Complementa, não substitui, a permissão normal.** A rota continua exigindo
  * `pdv.cancelarVenda` antes de chegar aqui: step-up sem permissão continua negado.
+ *
+ * GOAL 007B — VÍNCULO POR AÇÃO E POR VENDA. Antes, a autorização valia por 15 min para
+ * o par (utilizador, loja): co-assinar o estorno da Venda A liberava, via API, o estorno
+ * da Venda B sem o supervisor saber. Agora a verificação exige que o token tenha sido
+ * emitido para a ação `estornar_venda` E para ESTE `pedidoId`. Autorização genérica
+ * (sem escopo) deixa de autorizar estorno — recusa explícita, não silenciosa.
  */
 
 import { cookies } from "next/headers"
@@ -33,6 +39,7 @@ import {
   type PinAuthorizationFailure,
 } from "@/lib/auth/pin-authorization"
 import { SUPERVISOR_ROLE_FILTER } from "@/lib/auth/verify-supervisor-pin"
+import { ESTORNO_STEP_UP_ACTION } from "@/lib/vendas/estorno-step-up-contract"
 
 export type EstornoStepUpResult =
   | {
@@ -66,6 +73,8 @@ const MOTIVO_LOG: Record<PinAuthorizationFailure, string> = {
   expired: "autorização expirada",
   user_mismatch: "autorização de outro utilizador",
   store_mismatch: "autorização de outra unidade",
+  action_mismatch: "autorização concedida para outra ação",
+  resource_mismatch: "autorização concedida para outra venda",
 }
 
 /**
@@ -78,12 +87,18 @@ const MOTIVO_LOG: Record<PinAuthorizationFailure, string> = {
 export async function requireEstornoStepUp(
   userId: string,
   storeId: string,
+  pedidoId: string,
 ): Promise<EstornoStepUpResult> {
+  const alvo = pedidoId.trim()
+  if (!alvo) return NEGADO
+
   const jar = await cookies()
   const verification = await verifyPinAuthorizationToken(
     jar.get(ADMIN_AUTHORIZATION_COOKIE)?.value,
     resolvePinAuthorizationSecret(),
-    { userId, storeId },
+    // `action` + `resource` tornam a recusa estrita: token genérico ou emitido para
+    // outra venda não passa. O alvo é o número da venda que ESTA requisição estorna.
+    { userId, storeId, action: ESTORNO_STEP_UP_ACTION, resource: alvo },
   )
 
   if (!verification.ok) {

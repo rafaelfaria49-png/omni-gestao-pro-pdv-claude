@@ -26,6 +26,7 @@ import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { assertVendaFiscalCancelavel } from "@/lib/fiscal/venda-fiscal-state-machine"
 import { requireEstornoStepUp } from "@/lib/vendas/guard-estorno-venda"
 import { avaliarRecebiveisParaEstorno } from "@/lib/vendas/estorno-recebivel-guard"
+import { avaliarSessaoParaEstorno } from "@/lib/vendas/estorno-sessao-guard"
 import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 import { auth } from "@/auth"
 
@@ -79,7 +80,8 @@ export async function POST(
       { status: 403 },
     )
   }
-  const stepUp = await requireEstornoStepUp(sessionUserId, storeId)
+  // O alvo do step-up é ESTA venda: autorização emitida para outra não passa.
+  const stepUp = await requireEstornoStepUp(sessionUserId, storeId, pedidoId)
   if (!stepUp.ok) {
     return NextResponse.json(
       { ok: false, error: stepUp.error, code: stepUp.code },
@@ -135,6 +137,31 @@ export async function POST(
     const fiscalGate = assertVendaFiscalCancelavel(venda)
     if (!fiscalGate.ok) {
       return NextResponse.json({ ok: false, error: fiscalGate.error, code: fiscalGate.code }, { status: fiscalGate.status })
+    }
+
+    // ── Guard de sessão de caixa (GOAL 007B · INVARIANTE 3) ─────────────────────
+    // Antes de qualquer mutação. A reconciliação da gaveta deste fluxo depende de a
+    // venda sair dos agregados da sessão que está sendo conferida; numa sessão já
+    // fechada isso não acontece e o dinheiro sairia sem contrapartida.
+    const sessaoIdDaVenda =
+      venda.payload && typeof venda.payload === "object" && !Array.isArray(venda.payload)
+        ? ((venda.payload as Record<string, unknown>).sessaoId as string | undefined)
+        : undefined
+    const sessaoDaVenda = sessaoIdDaVenda?.trim()
+      ? await prisma.sessaoCaixa.findFirst({
+          where: { id: sessaoIdDaVenda.trim(), storeId },
+          select: { status: true },
+        })
+      : null
+    const veredictoSessao = avaliarSessaoParaEstorno({
+      sessaoId: sessaoIdDaVenda,
+      sessao: sessaoDaVenda,
+    })
+    if (veredictoSessao.bloqueado) {
+      return NextResponse.json(
+        { ok: false, error: veredictoSessao.motivo, code: veredictoSessao.code },
+        { status: 409 },
+      )
     }
 
     // ── Guard de recebíveis (GOAL 007A · BLOCKER-2) ─────────────────────────────

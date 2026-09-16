@@ -216,7 +216,7 @@ describe("D. estorno — step-up ANTES do POST (§7/§8/§25)", () => {
 
   it("007A: o step-up também é exigido pelo SERVIDOR, não só pela UI", () => {
     const rotaCancelarSrc = ler("../../../app/api/vendas/[id]/cancelar/route.ts")
-    expect(rotaCancelarSrc).toContain("requireEstornoStepUp(sessionUserId, storeId)")
+    expect(rotaCancelarSrc).toContain("requireEstornoStepUp(sessionUserId, storeId, pedidoId)")
     expect(estornoLib).toContain('status: "step_up_requerido"')
   })
 

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { SupervisorGateDialog } from "./supervisor-gate-dialog"
+import { ESTORNO_STEP_UP_ACTION } from "@/lib/vendas/estorno-step-up-contract"
 import { MOTIVO_MIN_CARACTERES, motivoEstornoValido } from "@/lib/caixa/conferencia-acoes"
 import { estornarVendaConferencia, type EstornoVendaResult } from "@/lib/caixa/conferencia-estorno"
 
@@ -136,6 +137,9 @@ export function ConferenciaEstornoDialog({
         }}
         title="Autorização para estornar venda"
         description={`Estornar a venda ${alvo.numero} reverte estoque, caixa e financeiro.`}
+        // A autorização nasce vinculada a ESTA venda: o servidor recusa o mesmo token
+        // para qualquer outra (007B).
+        scope={{ action: ESTORNO_STEP_UP_ACTION, resource: alvo.numero }}
         canSubmit={motivoOk && !enviando}
         confirmLabel="Autorizar e estornar"
         // O gate fica aberto até a rota responder: se o servidor recusar o step-up, o

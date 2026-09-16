@@ -48,6 +48,7 @@ export function SupervisorGateDialog({
   canSubmit = true,
   confirmLabel = "Autorizar",
   closeOnAuthorized = true,
+  scope,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -67,6 +68,12 @@ export function SupervisorGateDialog({
    * operador não via erro nenhum. O PIN é limpo de qualquer forma.
    */
   closeOnAuthorized?: boolean
+  /**
+   * Vincula a autorização a UMA ação sobre UM alvo (GOAL 007B). Quando informado, o
+   * token emitido só serve para esse par — co-assinar o estorno da Venda A deixa de
+   * liberar a Venda B. Sem `scope`, o token nasce genérico (fluxo legado).
+   */
+  scope?: { action: string; resource?: string }
 }) {
   const [pin, setPin] = useState("")
   const [busy, setBusy] = useState(false)
@@ -93,7 +100,10 @@ export function SupervisorGateDialog({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: value }),
+        body: JSON.stringify({
+          pin: value,
+          ...(scope ? { action: scope.action, resource: scope.resource } : {}),
+        }),
       })
       if (!r.ok) {
         setErr(r.status === 429 ? "Muitas tentativas. Aguarde e tente de novo." : "Senha inválida.")

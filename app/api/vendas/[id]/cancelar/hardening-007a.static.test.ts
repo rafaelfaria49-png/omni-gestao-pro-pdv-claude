@@ -29,8 +29,8 @@ const at = (h: string, n: string) => {
 }
 
 describe("A. step-up é exigido NO SERVIDOR (BLOCKER-1)", () => {
-  it("a rota chama o guard de step-up", () => {
-    expect(rota).toContain("requireEstornoStepUp(sessionUserId, storeId)")
+  it("a rota chama o guard de step-up com a VENDA alvo (007B)", () => {
+    expect(rota).toContain("requireEstornoStepUp(sessionUserId, storeId, pedidoId)")
   })
 
   it("NÃO confia em flag/campo enviado pelo cliente", () => {
@@ -42,7 +42,8 @@ describe("A. step-up é exigido NO SERVIDOR (BLOCKER-1)", () => {
 
   it("o guard verifica assinatura, expiração e vínculo usuário+loja", () => {
     expect(guardStepUp).toContain("verifyPinAuthorizationToken(")
-    expect(guardStepUp).toContain("{ userId, storeId }")
+    // 007B: a verificação exige também ação e alvo — token genérico não passa.
+    expect(guardStepUp).toContain("action: ESTORNO_STEP_UP_ACTION, resource: alvo")
     expect(guardStepUp).toContain("ADMIN_AUTHORIZATION_COOKIE")
   })
 
@@ -55,7 +56,7 @@ describe("A. step-up é exigido NO SERVIDOR (BLOCKER-1)", () => {
 
   it("STEP-UP COMPLEMENTA a permissão — a permissão normal continua antes", () => {
     expect(at(rota, "p.pdv.cancelarVenda")).toBeLessThan(
-      at(rota, "requireEstornoStepUp(sessionUserId, storeId)"),
+      at(rota, "requireEstornoStepUp(sessionUserId, storeId, pedidoId)"),
     )
     expect(rota).toContain("CAMADA 1")
     expect(rota).toContain("CAMADA 2")
@@ -101,7 +102,7 @@ describe("B. guarda de recebível quitado (BLOCKER-2)", () => {
 
 describe("C. ordem dos guards — nada destrutivo antes (§14/§15)", () => {
   const iPermissao = at(rota, "p.pdv.cancelarVenda")
-  const iStepUp = at(rota, "requireEstornoStepUp(sessionUserId, storeId)")
+  const iStepUp = at(rota, "requireEstornoStepUp(sessionUserId, storeId, pedidoId)")
   const iFiscal = at(rota, "assertVendaFiscalCancelavel(venda)")
   const iReceb = at(rota, "avaliarRecebiveisParaEstorno(")
   const iPeriodo = at(rota, "verificarPeriodoFechado(storeId")
@@ -160,7 +161,28 @@ describe("D. o que NÃO mudou neste corretivo", () => {
     expect(politica).toContain("devolucao: BLOQUEADA")
   })
 
-  it("sessão fechada NÃO foi endurecida neste corretivo (§20 — follow-up)", () => {
-    expect(rota).not.toContain("sessaoCaixa.findFirst")
+  it("007B: sessão fechada AGORA é endurecida no servidor (o follow-up do 007A fechou)", () => {
+    expect(rota).toContain("sessaoCaixa.findFirst")
+    expect(rota).toContain("avaliarSessaoParaEstorno({")
+    // e antes do guard de recebíveis, ambos pré-mutação
+    expect(at(rota, "avaliarSessaoParaEstorno(")).toBeLessThan(at(rota, "avaliarRecebiveisParaEstorno("))
+    expect(at(rota, "avaliarSessaoParaEstorno(")).toBeLessThan(at(rota, "prisma.$transaction"))
+  })
+
+  it("007B: o contrato do escopo não arrasta servidor para o bundle do cliente", () => {
+    // A prova é sobre IMPORTS reais; o cabeçalho do arquivo cita esses módulos de
+    // propósito, ao explicar por que o contrato vive isolado.
+    const contrato = ler("../../../../../lib/vendas/estorno-step-up-contract.ts")
+    const imports = contrato
+      .split("\n")
+      .filter((l) => /^\s*(import|export)\s/.test(l) && l.includes("from"))
+      .join("\n")
+    expect(imports.trim()).toBe("")
+    for (const servidor of ["next/headers", "@/lib/prisma", "generated/prisma"]) {
+      expect(imports, servidor).not.toContain(servidor)
+    }
+    const dialogo = ler("../../../../../components/dashboard/caixa/conferencia-estorno-dialog.tsx")
+    expect(dialogo).toContain('from "@/lib/vendas/estorno-step-up-contract"')
+    expect(dialogo).not.toContain('from "@/lib/vendas/guard-estorno-venda"')
   })
 })
