@@ -488,28 +488,29 @@ function auditMetadata(
 }
 
 /**
- * CREATE do cadastro-base dentro de `context.storeId`.
- * `input.id`/`input.storeId` (e demais chaves de autoridade) são ignorados.
- * CAD-R2-009: o produto nasce com `stock: 0` (neutro estrutural); `estoque`/
- * `stock` explícito > 0 é aplicado como ENTRADA `cadastro` via Stock/Ledger
- * na MESMA transação (stock + depósito + ledger, sem janela inconsistente).
+ * CREATE do cadastro-base DENTRO de uma transação já aberta.
+ * Componível: import-catalog (categoria + cadastro + StockLedger) chama esta
+ * variante com o MESMO `tx` — commit único, sem nested transaction. Mesmas
+ * invariantes do `createProduct` (normalização, duplicidade por loja,
+ * metadata/fiscal canônicos, estoque inicial via ledger `cadastro`).
+ * CAD-R2-014: extensão mínima para composição; não cria segundo motor.
+ * Callers sem transação DEVEM usar `createProduct`.
  */
-export async function createProduct(
+export async function createProductTx(
+  tx: ProductWriteTx,
   context: ProductWriteContext,
   input: ProductWriteInput,
-  deps?: ProductWriteDeps,
 ): Promise<ProductWriteResult> {
   const trusted = trustedContext(context)
   if ("error" in trusted) return trusted.error
   const { ctx } = trusted
-  const db = deps?.db ?? (prisma as unknown as ProductWriteDb)
 
   const normalized = normalizePatch(input ?? {}, { requireName: true })
   if (!normalized.ok) return normalized.error
   const patch = normalized.patch
   if (!patch.name) return productWriteInvalid('Campo "nome" é obrigatório.', "nome")
 
-  const duplicate = await findDuplicate(db, ctx.storeId, patch.sku, patch.barcode).catch(() => null)
+  const duplicate = await findDuplicate(tx, ctx.storeId, patch.sku, patch.barcode).catch(() => null)
   if (duplicate) return duplicateFailure(duplicate, patch.sku, patch.barcode, "create")
 
   const meta = resolveMetadata(input ?? {}, null, { isCreate: true })
@@ -540,43 +541,67 @@ export async function createProduct(
   ]
 
   const audit = auditFields(ctx)
+  const row = await tx.produto.create({ data, select: { id: true } })
+  await tx.logsAuditoria.create({
+    data: {
+      action: "produto.create",
+      userLabel: audit.userLabel,
+      detail: `${audit.userLabel} criou o produto "${patch.name}" na loja ${ctx.storeId}.`,
+      metadata: auditMetadata(ctx, "create", row.id, patch.name as string, patch.sku, patch.barcode, changedFields),
+      source: PRODUCT_WRITE_AUDIT_SOURCE,
+    },
+  })
+  if (initialStock > 0) {
+    const ledger = await applyStockMutationTx(
+      tx,
+      { storeId: ctx.storeId, principal: ctx.principal, source: PRODUCT_WRITE_AUDIT_SOURCE },
+      {
+        kind: "entrada",
+        produtoId: row.id,
+        quantidade: initialStock,
+        custoUnitario: patch.precoCusto ?? 0,
+        origem: "cadastro",
+        motivo: `Estoque inicial — cadastro ${patch.name as string}`,
+        idempotencyKey: StockIdempotency.cadastroInicial(row.id),
+      },
+    )
+    if (!ledger.ok) {
+      throw new Error(`[product-write-service] estoque inicial falhou: ${ledger.code} ${ledger.message}`)
+    }
+  }
+  return { ok: true, id: row.id, operacao: "create" }
+}
+
+/**
+ * CREATE do cadastro-base dentro de `context.storeId`.
+ * `input.id`/`input.storeId` (e demais chaves de autoridade) são ignorados.
+ * CAD-R2-009: o produto nasce com `stock: 0` (neutro estrutural); `estoque`/
+ * `stock` explícito > 0 é aplicado como ENTRADA `cadastro` via Stock/Ledger
+ * na MESMA transação (stock + depósito + ledger, sem janela inconsistente).
+ */
+export async function createProduct(
+  context: ProductWriteContext,
+  input: ProductWriteInput,
+  deps?: ProductWriteDeps,
+): Promise<ProductWriteResult> {
+  const trusted = trustedContext(context)
+  if ("error" in trusted) return trusted.error
+  const { ctx } = trusted
+  const db = deps?.db ?? (prisma as unknown as ProductWriteDb)
+
+  // Pré-validação fora da tx para mapear DUPLICATE sem abrir transação à toa.
+  // A checagem autoritativa acontece dentro de `createProductTx` (via tx).
+  const pre = normalizePatch(input ?? {}, { requireName: true })
+  if (!pre.ok) return pre.error
+  const prePatch = pre.patch
+
   try {
-    const created = await db.$transaction(async (tx) => {
-      const row = await tx.produto.create({ data, select: { id: true } })
-      await tx.logsAuditoria.create({
-        data: {
-          action: "produto.create",
-          userLabel: audit.userLabel,
-          detail: `${audit.userLabel} criou o produto "${patch.name}" na loja ${ctx.storeId}.`,
-          metadata: auditMetadata(ctx, "create", row.id, patch.name as string, patch.sku, patch.barcode, changedFields),
-          source: PRODUCT_WRITE_AUDIT_SOURCE,
-        },
-      })
-      if (initialStock > 0) {
-        const ledger = await applyStockMutationTx(
-          tx,
-          { storeId: ctx.storeId, principal: ctx.principal, source: PRODUCT_WRITE_AUDIT_SOURCE },
-          {
-            kind: "entrada",
-            produtoId: row.id,
-            quantidade: initialStock,
-            custoUnitario: patch.precoCusto ?? 0,
-            origem: "cadastro",
-            motivo: `Estoque inicial — cadastro ${patch.name as string}`,
-            idempotencyKey: StockIdempotency.cadastroInicial(row.id),
-          },
-        )
-        if (!ledger.ok) {
-          throw new Error(`[product-write-service] estoque inicial falhou: ${ledger.code} ${ledger.message}`)
-        }
-      }
-      return row
-    })
-    return { ok: true, id: created.id, operacao: "create" }
+    const created = await db.$transaction((tx) => createProductTx(tx, context, input))
+    return created
   } catch (e) {
     if (isPrismaKnownError(e, "P2002")) {
-      const conflicted = await findDuplicate(db, ctx.storeId, patch.sku, patch.barcode).catch(() => null)
-      if (conflicted) return duplicateFailure(conflicted, patch.sku, patch.barcode, "create")
+      const conflicted = await findDuplicate(db, ctx.storeId, prePatch.sku, prePatch.barcode).catch(() => null)
+      if (conflicted) return duplicateFailure(conflicted, prePatch.sku, prePatch.barcode, "create")
     }
     console.error("[product-write-service] create falhou:", e instanceof Error ? e.message : String(e))
     return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }

@@ -26,6 +26,9 @@ import { upsertContaReceber } from "@/lib/financeiro/services/contas-receber-ser
 import { upsertContaPagar } from "@/lib/financeiro/services/contas-pagar-service"
 import { nomePareceDocumento } from "@/lib/produto-sku-normalize"
 import { getProdutoFiscal, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
+import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
+import type { ProductWriteContext, ProductWriteInput } from "@/lib/cadastros/product-write-contract"
+import { createProduct, updateProduct } from "@/lib/cadastros/product-write-service"
 import {
   alertasDaLinha,
   ativacaoDaAtualizacao,
@@ -405,13 +408,43 @@ export async function planejarProdutosDoLote(
   }
 }
 
+/**
+ * CAD-R2-014: traduz o patch puro de `montarAtualizacaoProduto` para o
+ * `ProductWriteInput` preservando presença (ausente = preserva). `sku: null`
+ * (limpeza do sintético) vira `""` — o service interpreta string vazia como
+ * CLEAR para NULL; `null` seria omissão/preservação.
+ */
+export function patchAtualizacaoParaWriteInput(
+  patch: Record<string, unknown>,
+  metadata: Record<string, unknown>,
+): ProductWriteInput {
+  const input: Record<string, unknown> = {}
+  if (patch.name !== undefined) input.nome = patch.name
+  if ("sku" in patch) {
+    const sku = (patch as { sku?: string | null }).sku
+    input.sku = sku === null ? "" : sku
+  }
+  if ("barcode" in patch) input.barcode = patch.barcode
+  if ("category" in patch) input.categoria = patch.category
+  if ("brand" in patch) input.marca = patch.brand
+  if ("supplierName" in patch) input.fornecedor = patch.supplierName
+  if ("precoCusto" in patch) input.custo = patch.precoCusto
+  if ("price" in patch) input.preco = patch.price
+  if ("warrantyDays" in patch) input.garantia = patch.warrantyDays
+  if ("active" in patch) input.active = patch.active
+  if ("status" in patch) input.status = patch.status
+  input.metadata = metadata
+  return input as unknown as ProductWriteInput
+}
+
 async function persistirProdutos(
   storeId: string,
   registros: RegistroMergeado[],
   log: LogLinhaImport[],
-  ctx: { batchId: string; contexto: ContextoLoteImport },
+  ctx: { batchId: string; contexto: ContextoLoteImport; principal?: CadastrosAuditPrincipal | null },
   resumo: ResumoProdutoImportado[],
 ): Promise<void> {
+  const wctx: ProductWriteContext = { storeId, principal: ctx.principal ?? null }
   const fornecedorPadrao = ctx.contexto.fornecedor?.nome ?? ""
   const importadoEm = new Date().toISOString()
 
@@ -554,20 +587,23 @@ async function persistirProdutos(
           }
         }
 
-        // `montarAtualizacaoProduto` omite `stock` de propósito: saldo só muda por
-        // movimentação auditada (app/actions/estoque.ts → MovimentacaoEstoque).
+        // CAD-R2-014: UPDATE cadastral via boundary canônico. `montarAtualizacaoProduto`
+        // omite `stock` de propósito: saldo só muda por movimentação auditada.
         // `active`/`status` vêm da política e só aparecem para REBAIXAR o produto que
         // termina sem preço — importação nunca reativa cadastro desligado (F-05).
-        await prisma.produto.update({
-          where: { id: alvo.id },
-          data: {
-            ...montarAtualizacaoProduto(linha, alvo, {
-              categoria,
-              statusRevisaoAtual: revisaoAnterior?.ultimoLote.statusRevisao,
-            }),
-            metadata: metadata as Prisma.InputJsonValue,
-          },
+        // Metadata (fiscal + lote + fornecedor) vai como `metadata` aditivo.
+        const patchFinal = montarAtualizacaoProduto(linha, alvo, {
+          categoria,
+          statusRevisaoAtual: revisaoAnterior?.ultimoLote.statusRevisao,
         })
+        const updated = await updateProduct(
+          wctx,
+          alvo.id,
+          patchAtualizacaoParaWriteInput(patchFinal as unknown as Record<string, unknown>, metadata),
+        )
+        if (!updated.ok) {
+          throw new Error(updated.message)
+        }
         consumidos.add(alvo.id)
         log.push({ dominio: "produtos", chave: reg.chave, acao: "atualizado" })
         resumo.push({
@@ -601,19 +637,34 @@ async function persistirProdutos(
         metadata.fornecedor = { codigo: linha.codigoFornecedor, nome: linha.fornecedorNome || undefined }
       }
 
-      // Política de estoque + regra de ativação vivem em `montarCriacaoProduto`:
-      // `nao_movimentar` (padrão) cadastra com saldo 0 e produto sem preço nasce inativo.
-      const criado = await prisma.produto.create({
-        data: {
-          storeId,
-          ...montarCriacaoProduto(linha, {
-            categoria,
-            politicaEstoque: ctx.contexto.politicaEstoque,
-          }),
-          metadata: metadata as Prisma.InputJsonValue,
-        },
-        select: { id: true },
+      // CAD-R2-014: CREATE via boundary canônico. Política de estoque + ativação
+      // vivem em `montarCriacaoProduto`: `nao_movimentar` (padrão) cadastra com
+      // saldo 0 e produto sem preço nasce inativo. Estoque > 0 vira entrada
+      // `cadastro` via StockLedger na MESMA transação (sem Produto.stock direto).
+      const dadosCriacao = montarCriacaoProduto(linha, {
+        categoria,
+        politicaEstoque: ctx.contexto.politicaEstoque,
       })
+      const createInput: Record<string, unknown> = {
+        nome: dadosCriacao.name,
+        sku: dadosCriacao.sku,
+        barcode: dadosCriacao.barcode,
+        categoria: dadosCriacao.category,
+        marca: dadosCriacao.brand,
+        fornecedor: dadosCriacao.supplierName,
+        custo: dadosCriacao.precoCusto,
+        preco: dadosCriacao.price,
+        estoque: dadosCriacao.stock,
+        garantia: dadosCriacao.warrantyDays,
+        active: dadosCriacao.active,
+        status: dadosCriacao.status,
+        metadata,
+      }
+      const criadoRes = await createProduct(wctx, createInput as unknown as ProductWriteInput)
+      if (!criadoRes.ok) {
+        throw new Error(criadoRes.message)
+      }
+      const criado = { id: criadoRes.id }
       consumidos.add(criado.id)
       log.push({ dominio: "produtos", chave: reg.chave, acao: "criado" })
       resumo.push({
@@ -1054,7 +1105,9 @@ export async function persistirImportacao(
   grupos: Map<DominioImport, RegistroMergeado[]>,
   batchId: string,
   /** Contexto humano do lote (fornecedor, NF-e, política de estoque). Opcional. */
-  contextoLote: ContextoLoteImport = { ...CONTEXTO_LOTE_VAZIO }
+  contextoLote: ContextoLoteImport = { ...CONTEXTO_LOTE_VAZIO },
+  /** Principal humano canônico (server-derived). Slice de produtos usa para audit. */
+  principal?: CadastrosAuditPrincipal | null,
 ): Promise<ResultadoImportacao> {
   const inicio = Date.now()
   const log: LogLinhaImport[] = []
@@ -1074,10 +1127,16 @@ export async function persistirImportacao(
     await persistirFornecedores(storeId, regFornecedores, log)
   }
 
-  // 3. Produtos / Catálogo
+  // 3. Produtos / Catálogo (CAD-R2-014: via ProductWriteService + StockLedger)
   const regProdutos = grupos.get("produtos") ?? []
   if (regProdutos.length > 0) {
-    await persistirProdutos(storeId, regProdutos, log, { batchId, contexto: contextoLote }, resumoProdutos)
+    await persistirProdutos(
+      storeId,
+      regProdutos,
+      log,
+      { batchId, contexto: contextoLote, principal: principal ?? null },
+      resumoProdutos,
+    )
   }
 
   // 4. Serviços catálogo — não persiste em produto. Aguarda model Servico próprio.
