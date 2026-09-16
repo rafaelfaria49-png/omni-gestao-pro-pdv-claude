@@ -122,7 +122,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Itens com formato inválido" }, { status: 400 })
   }
 
-  const resultado = await persistirLoteProdutos(storeId, itens as ProdutoNormalizado[], modoConflito)
+  // CAD-R2-014: contexto server-derived (loja autorizada + principal canônico)
+  // para os boundaries. Payload nunca é autoridade.
+  const resultado = await persistirLoteProdutos(storeId, itens as ProdutoNormalizado[], modoConflito, {
+    principal,
+  })
 
   // Trava de segurança anti-update massivo (incidente Smart).
   // Se quase tudo virou update e nada foi criado, alta probabilidade de

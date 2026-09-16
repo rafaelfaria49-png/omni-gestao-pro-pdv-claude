@@ -15,12 +15,14 @@
 //    pulados (e por quê), matches fracos descartados.
 // ============================================================
 
-import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { normalizeSkuForSave } from "@/lib/produto-sku"
 import { nomePareceDocumento } from "@/lib/produto-sku-normalize"
 import { buildProdutoIAMetadata } from "@/lib/catalog/produto-catalogo"
 import { mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
+import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
+import type { ProductWriteContext, ProductWriteInput } from "@/lib/cadastros/product-write-contract"
+import { createProduct, updateProduct } from "@/lib/cadastros/product-write-service"
 import type { ItemResultado, ModoConflito, ProdutoNormalizado } from "./types"
 import {
   classificarBarcode,
@@ -142,16 +144,31 @@ async function carregarSnapshotBanco(
   return { skus, barcodes, skuParaId, barcodeParaId, skuParaBarcodeAtual }
 }
 
+/** Opções de contexto confiável do importador (server-derived, nunca payload). */
+export type PersistirLoteProdutosOpts = {
+  /** Principal humano canônico quando houver; null = origem técnica honesta. */
+  principal?: CadastrosAuditPrincipal | null
+}
+
+function writeContext(storeId: string, opts?: PersistirLoteProdutosOpts): ProductWriteContext {
+  return { storeId, principal: opts?.principal ?? null }
+}
+
 /**
  * Persiste UM produto a partir da decisão pré-resolvida.
  * Usa SnapshotPersist para resolver o ID do produto existente em O(1)
  * — sem findFirst por linha.
+ *
+ * CAD-R2-014: matching/preview/decisão preservados; persistência final via
+ * ProductWriteService (CREATE/UPDATE cadastral + estoque inicial via ledger).
+ * Nunca atualiza Produto.stock diretamente.
  */
 async function aplicarLinha(
   storeId: string,
   p: ProdutoNormalizado,
   modo: ModoImportacao,
   banco: SnapshotPersist,
+  ctx?: ProductWriteContext,
 ): Promise<ItemResultado> {
   const base: ItemResultado = {
     linha: p.linha,
@@ -188,43 +205,49 @@ async function aplicarLinha(
         return { ...base, acao: "erro", detalhe: "atualizar sem match forte (estado inconsistente)" }
       }
 
-      // Resolve ID via snapshot (O(1)) — elimina findFirst por linha
+      // Resolve ID via snapshot (O(1)) — elimina findFirst por linha.
+      // Barcode existente preservado por omissão no input (ausente = preserva).
       let existenteId: string | undefined
-      let barcodeExistente: string | null = null
 
       if (resolucao.matchForte.campo === "barcode") {
         existenteId = banco.barcodeParaId.get(resolucao.matchForte.valor)
-        barcodeExistente = resolucao.matchForte.valor
       } else {
         const skuNorm = resolucao.matchForte.valor.toLowerCase()
         existenteId = banco.skuParaId.get(skuNorm)
-        barcodeExistente = banco.skuParaBarcodeAtual.get(skuNorm) ?? null
       }
 
       if (!existenteId) {
         // Produto deletado entre snapshot e persist → criar como novo
-        return await criarProdutoNovo(storeId, p, catSlug, skuToSave, barcodeToSave, base)
+        return await criarProdutoNovo(storeId, p, catSlug, skuToSave, barcodeToSave, base, ctx)
       }
 
-      await prisma.produto.update({
-        where: { id: existenteId },
-        data: {
-          name: p.nome,
-          category: catSlug,
-          // NUNCA sobrescreve stock — estoque só muda por ledger auditado.
-          precoCusto: p.custo > 0 ? p.custo : undefined,
-          price: p.preco > 0 ? p.preco : undefined,
-          barcode: barcodeToSave ?? barcodeExistente ?? undefined,
-          // brand: nunca importado a partir da categoria — as planilhas
-          // suportadas (Gestão Clique / Smart Genius) não trazem coluna
-          // de marca real. Mantém o brand existente intocado.
-        },
-      })
-      return { ...base, acao: "atualizado", detalhe: decisao.motivo }
+      // CAD-R2-014: UPDATE cadastral via boundary canônico. Presença preservada:
+      // ausente = preserva (nunca apaga). SKU nunca atualizado aqui (paridade
+      // legada); barcode só quando a planilha trouxe; preço/custo só quando > 0.
+      // NUNCA envia estoque — saldo só muda por ledger auditado.
+      // brand nunca importado da categoria — mantém o existente intocado.
+      const wctx = ctx ?? { storeId, principal: null }
+      const cadastral: Record<string, unknown> = { nome: p.nome, categoria: catSlug }
+      if (p.custo > 0) cadastral.custo = p.custo
+      if (p.preco > 0) cadastral.preco = p.preco
+      if (barcodeToSave) cadastral.barcode = barcodeToSave
+      const updated = await updateProduct(wctx, existenteId, cadastral as unknown as ProductWriteInput)
+      if (updated.ok) {
+        return { ...base, acao: "atualizado", detalhe: decisao.motivo }
+      }
+      if (updated.code === "DUPLICATE") {
+        // Race: outra request criou o mesmo SKU/barcode simultaneamente.
+        return { ...base, acao: "pulado", detalhe: "unique constraint (race condition)" }
+      }
+      if (updated.code === "NOT_FOUND") {
+        // Produto deletado entre snapshot e update → criar como novo (paridade).
+        return await criarProdutoNovo(storeId, p, catSlug, skuToSave, barcodeToSave, base, ctx)
+      }
+      return { ...base, acao: "erro", detalhe: updated.message }
     }
 
     // decisao.acao === "criar"
-    return await criarProdutoNovo(storeId, p, catSlug, skuToSave, barcodeToSave, base)
+    return await criarProdutoNovo(storeId, p, catSlug, skuToSave, barcodeToSave, base, ctx)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     if (msg.includes("Unique")) {
@@ -242,6 +265,7 @@ async function criarProdutoNovo(
   skuToSave: string | null,
   barcodeToSave: string | null,
   base: ItemResultado,
+  ctx?: ProductWriteContext,
 ): Promise<ItemResultado> {
   // NCM/CEST vão em Produto.metadata (schema não tem coluna dedicada —
   // decisão arquitetural em docs/auditoria/COMPRAS_FORNECEDORES_PLANO_TECNICO.md:347).
@@ -273,22 +297,29 @@ async function criarProdutoNovo(
   // GOAL_004: grava a identidade fiscal canônica em metadata.fiscal (além do legado topo).
   const metadataFinal = mergeProdutoFiscalIntoMetadata(metadataExtras, { ncm: p.ncm, cest: p.cest })
 
-  await prisma.produto.create({
-    data: {
-      storeId,
-      sku: skuToSave,
-      name: p.nome,
-      category: catSlug,
-      precoCusto: p.custo,
-      price: p.preco,
-      stock: p.estoque,
-      barcode: barcodeToSave,
-      metadata:
-        Object.keys(metadataFinal).length > 0 ? (metadataFinal as Prisma.InputJsonValue) : undefined,
-      // brand: deixar vazio — schema default já é "". Planilhas suportadas
-      // não trazem coluna de marca real. Não duplicar categoria em brand.
-    },
-  })
+  // CAD-R2-014: CREATE via boundary canônico. Estoque inicial (>0) vira entrada
+  // `cadastro` via StockLedger na MESMA transação (produto + audit + ledger).
+  // brand omitido — schema default "" (não duplicar categoria em brand).
+  const wctx = ctx ?? { storeId, principal: null }
+  const input: Record<string, unknown> = {
+    nome: p.nome,
+    sku: skuToSave,
+    barcode: barcodeToSave,
+    categoria: catSlug,
+    custo: p.custo,
+    preco: p.preco,
+    estoque: p.estoque,
+  }
+  if (Object.keys(metadataFinal).length > 0) input.metadata = metadataFinal
+  if (p.ncm) input.ncm = p.ncm
+  if (p.cest) input.cest = p.cest
+  const created = await createProduct(wctx, input as unknown as ProductWriteInput)
+  if (!created.ok) {
+    if (created.code === "DUPLICATE") {
+      return { ...base, acao: "pulado", detalhe: "unique constraint (race condition)" }
+    }
+    throw new Error(created.message)
+  }
   return { ...base, acao: "criado", detalhe: skuToSave ? undefined : "sem SKU (planilha não trouxe)" }
 }
 
@@ -313,9 +344,11 @@ export async function persistirLoteProdutos(
   storeId: string,
   itens: ProdutoNormalizado[],
   modoConflito: ModoConflito,
+  opts?: PersistirLoteProdutosOpts,
 ): Promise<ResultadoLotePersistencia> {
   const inicio = Date.now()
   const modo = mapearModo(modoConflito)
+  const wctx = writeContext(storeId, opts)
 
   // 1. Snapshot inicial do banco — 2 queries em vez de N findFirst
   const banco = await carregarSnapshotBanco(storeId, itens)
@@ -349,7 +382,7 @@ export async function persistirLoteProdutos(
   const resultados: ItemResultado[] = []
   for (let i = 0; i < itens.length; i += CONCURRENCIA) {
     const chunk = itens.slice(i, i + CONCURRENCIA)
-    const parcial = await Promise.all(chunk.map((p) => aplicarLinha(storeId, p, modo, banco)))
+    const parcial = await Promise.all(chunk.map((p) => aplicarLinha(storeId, p, modo, banco, wctx)))
     resultados.push(...parcial)
   }
 
