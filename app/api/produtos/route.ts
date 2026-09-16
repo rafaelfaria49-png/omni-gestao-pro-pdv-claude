@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server"
-import { Prisma } from "@/generated/prisma"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
-import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
-import { catalogoInputFromBody, mergeCatalogoAparelhosIntoMetadata } from "@/lib/catalogo-aparelhos/produto-metadata"
-import { duplicateProductResponse, PRODUTO_DUP_SELECT } from "@/lib/produtos/duplicate-product"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
+import { createProduct } from "@/lib/cadastros/product-write-service"
+import type { ProductWriteInput } from "@/lib/cadastros/product-write-contract"
 import {
-  mergeProdutoAcessoriosIntoMetadata,
-  produtoAcessoriosInputFromBody,
-} from "@/lib/acessorios/metadata"
+  PRODUTO_REST_SELECT,
+  mapProductWriteFailureToResponse,
+} from "@/lib/cadastros/product-rest-write-adapter"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -41,36 +40,6 @@ function parsePrice(body: unknown): number | null {
   return null
 }
 
-function optTrim(body: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const k of keys) {
-    const v = body[k]
-    if (typeof v !== "string") continue
-    const t = v.trim()
-    if (t) return t
-  }
-  return undefined
-}
-
-const PRODUTO_LIST_SELECT = {
-  id: true,
-  name: true,
-  stock: true,
-  price: true,
-  precoCusto: true,
-  sku: true,
-  barcode: true,
-  category: true,
-  brand: true,
-  supplierName: true,
-  warrantyDays: true,
-  active: true,
-  status: true,
-  metadata: true,
-  storeId: true,
-  createdAt: true,
-  updatedAt: true,
-} as const
-
 export async function GET(req: Request) {
   const gate = await requireCadastrosHubApi(req, "read")
   if (!gate.ok) return gate.response
@@ -100,7 +69,7 @@ export async function GET(req: Request) {
           : {}),
       },
       orderBy: { updatedAt: "desc" },
-      select: PRODUTO_LIST_SELECT,
+      select: PRODUTO_REST_SELECT,
       take: 500,
     })
 
@@ -120,61 +89,16 @@ export async function POST(req: Request) {
   if (!gate.ok) return gate.response
   const storeId = gate.storeId
 
-  // Hoisted para o catch (P2002) também conseguir reconsultar o item existente.
-  let sku: string | undefined
-  let barcode: string | undefined
-
   try {
     const raw = (await req.json()) as Record<string, unknown>
-    const accessoryInput = produtoAcessoriosInputFromBody(raw)
     const body = raw as { name?: unknown; stock?: unknown; price?: unknown }
 
+    // Contrato REST preservado (CAD-R2-007): POST exige name/stock/price mesmo
+    // que o service tenha defaults. Mensagens idênticas ao comportamento atual.
     const name = typeof body.name === "string" ? body.name.trim() : ""
     const stock = parseStock(body.stock)
     const price = parsePrice(body.price)
-    const precoCusto = parsePrice(raw.precoCusto ?? raw.cost) ?? 0
-    const category = optTrim(raw, "category", "categoria")
-    sku = optTrim(raw, "sku", "codigo")
-    barcode = optTrim(raw, "barcode", "codigoBarras")
-    const brand = optTrim(raw, "brand", "marca") ?? ""
-    const supplierName = optTrim(raw, "supplierName", "fornecedor") ?? ""
-    const warrantyDaysRaw = parseStock(raw.warrantyDays ?? raw.garantia)
-    const warrantyDays = warrantyDaysRaw === null ? 0 : Math.max(0, warrantyDaysRaw)
-    const active = typeof raw.active === "boolean" ? raw.active : true
-    const statusStr = typeof raw.status === "string" && raw.status.trim() ? raw.status.trim() : active ? "Ativo" : "Inativo"
-
-    let metadata: Prisma.InputJsonValue | typeof Prisma.DbNull | undefined
-    if (raw.metadata !== undefined) {
-      if (raw.metadata === null) metadata = Prisma.DbNull
-      else if (typeof raw.metadata === "object" && raw.metadata !== null && !Array.isArray(raw.metadata)) {
-        metadata = raw.metadata as Prisma.InputJsonValue
-      } else {
-        return badRequest("metadata deve ser objeto JSON ou null")
-      }
-    }
-
-    // Identidade fiscal (GOAL_004): campos fiscais (top-level ou metadata.fiscal) passam a
-    // PERSISTIR canonicamente em `metadata.fiscal` — fim do descarte no cadastro. Dormente.
-    const fiscalInput = fiscalInputFromBody(raw)
-    if (fiscalInput) {
-      const baseMeta = metadata && metadata !== Prisma.DbNull ? metadata : {}
-      metadata = mergeProdutoFiscalIntoMetadata(baseMeta, fiscalInput) as Prisma.InputJsonValue
-    }
-
-    // Catálogo de Aparelhos (MVP): grava `metadata.catalogoAparelhos` de forma ADITIVA,
-    // sem tocar em SKU/EAN/estoque/preço. Ausente = não grava; null = limpa.
-    const catalogoInput = catalogoInputFromBody(raw)
-    if (catalogoInput !== undefined) {
-      const baseMeta = metadata && metadata !== Prisma.DbNull ? metadata : {}
-      metadata = mergeCatalogoAparelhosIntoMetadata(baseMeta, catalogoInput) as Prisma.InputJsonValue
-    }
-
-    // Configuração de acessórios: aceita o payload específico e callers legados, mas
-    // nunca persiste metadata.acessorios sem passar pelo contrato canônico.
-    if (accessoryInput.provided) {
-      const baseMeta = metadata && metadata !== Prisma.DbNull ? metadata : {}
-      metadata = mergeProdutoAcessoriosIntoMetadata(baseMeta, accessoryInput.value) as Prisma.InputJsonValue
-    }
+    const precoCusto = parsePrice((raw as Record<string, unknown>).precoCusto ?? (raw as Record<string, unknown>).cost) ?? 0
 
     if (!name) return badRequest('Campo "name" é obrigatório')
     if (stock === null) return badRequest('Campo "stock" é obrigatório (número inteiro)')
@@ -183,66 +107,28 @@ export async function POST(req: Request) {
     if (price < 0) return badRequest("Preço não pode ser negativo")
     if (precoCusto < 0) return badRequest("Preço de custo não pode ser negativo")
 
+    // Boundary canônico: duplicate/metadata/fiscal/accessory/catalogo/audit/
+    // stock-inicial-ledger pertencem ao ProductWriteService. A rota é adapter
+    // HTTP fino (gate + compat + response shape) — sem Prisma write direto.
+    const principal = cadastrosAuditPrincipalFromSession(gate.session)
+    const created = await createProduct(
+      { storeId, principal },
+      raw as unknown as ProductWriteInput,
+    )
+    if (!created.ok) return mapProductWriteFailureToResponse(created, { context: "create" })
+
     await prismaEnsureConnected()
-
-    // CADASTROS-PRODUTOS-DUPLICIDADE-001 — duplicidade FORTE: mesmo SKU/código ou mesmo
-    // código de barras/EAN já cadastrado nesta loja. Bloqueia com aviso claro ANTES do
-    // insert (antes, a colisão só aparecia como 503 genérico vindo do unique constraint).
-    const dupOr: Prisma.ProdutoWhereInput[] = []
-    if (sku) dupOr.push({ sku })
-    if (barcode) dupOr.push({ barcode })
-    if (dupOr.length > 0) {
-      const existing = await prisma.produto.findFirst({
-        where: { storeId, OR: dupOr },
-        select: PRODUTO_DUP_SELECT,
-      })
-      if (existing) return duplicateProductResponse(existing, sku, barcode)
-    }
-
-    const created = await prisma.produto.create({
-      data: {
-        name,
-        stock,
-        price,
-        storeId,
-        precoCusto,
-        category: category ?? null,
-        sku: sku ?? null,
-        barcode: barcode ?? null,
-        brand,
-        supplierName,
-        warrantyDays,
-        active,
-        status: statusStr,
-        ...(metadata !== undefined ? { metadata } : {}),
-      },
-      select: PRODUTO_LIST_SELECT,
+    const produto = await prisma.produto.findFirst({
+      where: { id: created.id, storeId },
+      select: PRODUTO_REST_SELECT,
     })
-
-    return json({ ok: true, produto: created }, { status: 201 })
-  } catch (e) {
-    // Corrida: o item pode ter sido criado entre a verificação e o insert. O unique
-    // constraint (P2002) também vira a MESMA mensagem amigável de duplicidade — nunca um
-    // 503 cru que deixava o operador sem saber que o produto já existia.
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      const dupOr: Prisma.ProdutoWhereInput[] = []
-      if (sku) dupOr.push({ sku })
-      if (barcode) dupOr.push({ barcode })
-      if (dupOr.length > 0) {
-        const existing = await prisma.produto
-          .findFirst({ where: { storeId, OR: dupOr }, select: PRODUTO_DUP_SELECT })
-          .catch(() => null)
-        if (existing) return duplicateProductResponse(existing, sku, barcode)
-      }
-      return json(
-        {
-          error: "Produto já cadastrado",
-          type: "DUPLICATE_PRODUCT",
-          message: "Produto já cadastrado. Já existe um item com este mesmo código/EAN/SKU nesta loja.",
-        },
-        { status: 409 },
-      )
+    if (!produto) {
+      console.error("[api/produtos POST] reconsulta pós-create não encontrou o produto")
+      return json({ error: "Falha ao criar produto" }, { status: 503 })
     }
+
+    return json({ ok: true, produto }, { status: 201 })
+  } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[api/produtos POST]", msg)
     return json(

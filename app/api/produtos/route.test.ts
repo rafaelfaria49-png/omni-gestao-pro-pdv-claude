@@ -1,102 +1,41 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { Prisma } from "@/generated/prisma"
 
 // ============================================================================
-// CADASTROS-PRODUTOS-DUPLICIDADE-001 — aviso claro de "Produto já cadastrado".
+// CAD-R2-007 — POST /api/produtos delega ao ProductWriteService.
 // ----------------------------------------------------------------------------
-// Antes, o POST /api/produtos criava direto; a colisão de SKU/EAN caía no unique
-// constraint (P2002) e virava um 503 genérico ("Falha ao criar produto"), sem
-// avisar o operador que o item já existia. Agora a duplicidade forte (mesmo
-// SKU/código ou mesmo barcode/EAN na loja) é detectada e responde 409 com um
-// payload estruturado { type: "DUPLICATE_PRODUCT", message, field, produto }.
-//
-// Exercita o handler POST de PRODUÇÃO sobre um Prisma EM MEMÓRIA. Apenas auth/
-// store-id/conexão são mockados; a lógica de detecção roda sobre o banco fake.
+// A rota é adapter HTTP fino: gate + compat (name/stock/price) + response
+// shape. Duplicate/metadata/fiscal/ledger pertencem ao service — a rota não
+// faz findFirst pre-check, P2002 próprio, merge próprio nem Prisma direto.
 // ============================================================================
 
 const STORE = "loja-2"
 
-const h = vi.hoisted(() => {
-  type Row = Record<string, unknown>
-  const produtos = new Map<string, Row>()
-  let seq = 0
-  // Quando true, findFirst sempre devolve null — simula a CORRIDA em que o item
-  // foi criado entre a verificação e o insert (exercita o ramo P2002 do catch).
-  let suppressFindFirst = false
-
-  function p2002(target: string[]): never {
-    throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
-      code: "P2002",
-      clientVersion: "test",
-      meta: { target },
-    })
-  }
-
-  const prisma = {
-    produto: {
-      findFirst: async ({
-        where,
-      }: {
-        where: { storeId?: string; OR?: Array<{ sku?: string; barcode?: string }> }
-      }) => {
-        if (suppressFindFirst) return null
-        for (const r of produtos.values()) {
-          if (where.storeId && r.storeId !== where.storeId) continue
-          if (!where.OR) return r
-          for (const c of where.OR) {
-            if (c.sku !== undefined && r.sku === c.sku) return r
-            if (c.barcode !== undefined && r.barcode === c.barcode) return r
-          }
-        }
-        return null
-      },
-      create: async ({ data }: { data: Row }) => {
-        // Espelha os unique constraints @@unique([storeId, sku]) / [storeId, barcode].
-        for (const r of produtos.values()) {
-          if (r.storeId !== data.storeId) continue
-          if (data.sku != null && r.sku === data.sku) p2002(["storeId", "sku"])
-          if (data.barcode != null && r.barcode === data.barcode) p2002(["storeId", "barcode"])
-        }
-        const row: Row = {
-          id: `prod-${++seq}`,
-          stock: 0,
-          sku: null,
-          barcode: null,
-          ...data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }
-        produtos.set(String(row.id), row)
-        return row
-      },
-    },
-  }
-
-  return {
-    prisma,
-    produtos,
-    seedDireto: (row: Row) => {
-      const full: Row = { id: `seed-${++seq}`, stock: 0, sku: null, barcode: null, storeId: STORE, ...row }
-      produtos.set(String(full.id), full)
-      return full
-    },
-    setSuppressFindFirst: (v: boolean) => {
-      suppressFindFirst = v
-    },
-    reset: () => {
-      produtos.clear()
-      seq = 0
-      suppressFindFirst = false
-    },
-  }
-})
+const h = vi.hoisted(() => ({
+  createProduct: vi.fn(async () => ({ ok: true, id: "prod-1", operacao: "create" })),
+  findFirst: vi.fn(async () => null as unknown),
+}))
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: h.prisma,
+  prisma: {
+    produto: {
+      findMany: vi.fn(async () => []),
+      findFirst: (...args: unknown[]) => (h.findFirst as (...a: unknown[]) => unknown)(...args),
+    },
+  },
   prismaEnsureConnected: vi.fn(async () => undefined),
 }))
 vi.mock("@/lib/cadastros/hub-api-gate", () => ({
   requireCadastrosHubApi: vi.fn(async () => ({ ok: true as const, storeId: STORE })),
+}))
+vi.mock("@/lib/cadastros/cadastros-audit-principal", () => ({
+  cadastrosAuditPrincipalFromSession: vi.fn(() => null),
+  cadastrosAuditLogFields: vi.fn(() => ({ userLabel: "", actorMeta: { actor: null } })),
+}))
+vi.mock("@/lib/cadastros/product-write-service", () => ({
+  PRODUCT_WRITE_AUDIT_SOURCE: "product-write-service",
+  createProduct: (...args: unknown[]) => (h.createProduct as (...a: unknown[]) => unknown)(...args),
+  updateProduct: vi.fn(),
+  updateProductTx: vi.fn(),
 }))
 
 import { POST } from "./route"
@@ -118,64 +57,98 @@ type PostJson = {
   produto?: { id?: string; name?: string; sku?: string | null; barcode?: string | null; stock?: number | null }
 }
 
+const PRODUTO_ROW = {
+  id: "prod-1",
+  name: "Cabo USB-C",
+  stock: 10,
+  price: 25,
+  precoCusto: 0,
+  sku: "CAB-001",
+  barcode: null,
+  category: null,
+  brand: "",
+  supplierName: "",
+  warrantyDays: 0,
+  active: true,
+  status: "Ativo",
+  metadata: null,
+  storeId: STORE,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+}
+
 beforeEach(() => {
-  h.reset()
+  h.createProduct.mockReset()
+  h.findFirst.mockReset()
+  h.createProduct.mockResolvedValue({ ok: true, id: "prod-1", operacao: "create" })
+  h.findFirst.mockResolvedValue(PRODUTO_ROW)
 })
 
-describe("POST /api/produtos — aviso de duplicidade (CADASTROS-PRODUTOS-DUPLICIDADE-001)", () => {
-  it("cadastra produto novo (sem colisão) com 201", async () => {
+describe("POST /api/produtos — boundary canônico (CAD-R2-007)", () => {
+  it("cadastra produto novo via createProduct com 201 {ok, produto}", async () => {
     const res = await POST(postReq({ name: "Cabo USB-C", stock: 10, price: 25, sku: "CAB-001" }))
     const json = (await res.json()) as PostJson
     expect(res.status).toBe(201)
     expect(json.ok).toBe(true)
     expect(json.produto?.name).toBe("Cabo USB-C")
+    expect(h.createProduct).toHaveBeenCalledTimes(1)
+    const [ctx] = h.createProduct.mock.calls[0] as unknown as [{ storeId: string }]
+    expect(ctx.storeId).toBe(STORE)
   })
 
-  it("mesmo código de barras/EAN na loja → 409 DUPLICATE_PRODUCT (field barcode)", async () => {
-    h.seedDireto({ name: "Fone Bluetooth", barcode: "7891234567890", stock: 3 })
+  it("mesmo barcode na loja → service DUPLICATE vira 409 DUPLICATE_PRODUCT", async () => {
+    h.createProduct.mockResolvedValue({
+      ok: false,
+      code: "DUPLICATE",
+      message: "Produto já cadastrado. Encontramos um item com este mesmo código de barras (EAN) nesta loja.",
+      field: "barcode",
+      produto: { id: "seed-1", name: "Fone Bluetooth", sku: null, barcode: "7891234567890", stock: 3 },
+    } as never)
     const res = await POST(postReq({ name: "Fone BT novo", stock: 5, price: 80, barcode: "7891234567890" }))
     const json = (await res.json()) as PostJson
     expect(res.status).toBe(409)
     expect(json.type).toBe("DUPLICATE_PRODUCT")
     expect(json.field).toBe("barcode")
     expect(json.produto?.name).toBe("Fone Bluetooth")
-    expect(json.produto?.stock).toBe(3)
-    expect(json.message).toMatch(/já cadastrado/i)
   })
 
-  it("mesmo SKU/código na loja → 409 DUPLICATE_PRODUCT (field sku)", async () => {
-    h.seedDireto({ name: "Carregador Turbo", sku: "CARR-99", stock: 7 })
+  it("mesmo SKU na loja → 409 DUPLICATE_PRODUCT (field sku)", async () => {
+    h.createProduct.mockResolvedValue({
+      ok: false,
+      code: "DUPLICATE",
+      message: "Produto já cadastrado.",
+      field: "sku",
+      produto: { id: "seed-2", name: "Carregador Turbo", sku: "CARR-99", barcode: null, stock: 7 },
+    } as never)
     const res = await POST(postReq({ name: "Carregador outro", stock: 1, price: 50, codigo: "CARR-99" }))
     const json = (await res.json()) as PostJson
     expect(res.status).toBe(409)
     expect(json.type).toBe("DUPLICATE_PRODUCT")
     expect(json.field).toBe("sku")
-    expect(json.produto?.name).toBe("Carregador Turbo")
   })
 
-  it("erro Prisma P2002 (corrida) vira 409 amigável, nunca 503", async () => {
-    h.seedDireto({ name: "Película 3D", barcode: "7890000000001", stock: 2 })
-    h.setSuppressFindFirst(true) // pré-checagem não enxerga; só o insert colide
-    const res = await POST(postReq({ name: "Película nova", stock: 4, price: 15, barcode: "7890000000001" }))
-    const json = (await res.json()) as PostJson
-    expect(res.status).toBe(409)
-    expect(json.type).toBe("DUPLICATE_PRODUCT")
-    expect(json.message).toMatch(/já cadastrado/i)
+  it("POST sem name continua 400 (contrato preservado)", async () => {
+    const res = await POST(postReq({ stock: 1, price: 10 }))
+    expect(res.status).toBe(400)
+    expect(h.createProduct).not.toHaveBeenCalled()
   })
 
-  it("mesmo SKU em OUTRA loja não bloqueia (escopo por storeId)", async () => {
-    h.seedDireto({ name: "Suporte veicular", sku: "SUP-1", storeId: "loja-9", stock: 5 })
-    const res = await POST(postReq({ name: "Suporte veicular", stock: 5, price: 30, sku: "SUP-1" }))
-    const json = (await res.json()) as PostJson
-    expect(res.status).toBe(201)
-    expect(json.ok).toBe(true)
+  it("POST sem stock continua 400 (service default não relaxa)", async () => {
+    const res = await POST(postReq({ name: "X", price: 10 }))
+    expect(res.status).toBe(400)
+    expect(h.createProduct).not.toHaveBeenCalled()
   })
 
-  it("sem código, nome igual NÃO é bloqueado pela API (regra permite; aviso é client-side)", async () => {
-    h.seedDireto({ name: "Caixa de som", stock: 1 })
-    const res = await POST(postReq({ name: "Caixa de som", stock: 2, price: 120 }))
-    const json = (await res.json()) as PostJson
-    expect(res.status).toBe(201)
-    expect(json.ok).toBe(true)
+  it("POST sem price continua 400", async () => {
+    const res = await POST(postReq({ name: "X", stock: 1 }))
+    expect(res.status).toBe(400)
+    expect(h.createProduct).not.toHaveBeenCalled()
+  })
+
+  it("caller storeId vira autoridade (payload storeId ignorado)", async () => {
+    await POST(postReq({ name: "Y", stock: 1, price: 5, storeId: "loja-invasora" }))
+    const [ctx, input] = h.createProduct.mock.calls[0] as unknown as [{ storeId: string }, Record<string, unknown>]
+    expect(ctx.storeId).toBe(STORE)
+    expect((input as Record<string, unknown>).storeId ?? null).not.toBe(STORE)
   })
 })
