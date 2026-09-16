@@ -215,11 +215,26 @@ describe("CAD-R2-007 — Tx componível sem nested", () => {
     }
   })
 
-  it("imports allowlisted para 014 (não migrados)", async () => {
+  it("imports migrados em 014 (sem write direto de Produto)", async () => {
+    // CAD-R2-014: os 4 import writers ativos usam os boundaries canônicos.
+    // O allowlist "não migrados" do 007 foi aposentado aqui.
+    for (const f of [
+      "lib/importador-produtos/persist.ts",
+      "lib/importador-avancado/persistidor.ts",
+      "app/api/ops/inventory/import/route.ts",
+      "app/api/stores/import-catalog/route.ts",
+    ]) {
+      const src = readFileSync(resolve(process.cwd(), f), "utf8")
+      expect(src, f).not.toMatch(/prisma\.produto\.(create|update|updateMany|upsert)\s*\(/)
+      expect(src, f).not.toMatch(/tx\.produto\.(create|update|updateMany|upsert)\s*\(/)
+    }
     const catalog = readFileSync(resolve(process.cwd(), "app/api/stores/import-catalog/route.ts"), "utf8")
-    expect(catalog).toMatch(/tx\.produto\.upsert|prisma\.produto/)
+    expect(catalog).toMatch(/createProductTx/)
+    expect(catalog).toMatch(/updateProductTx/)
+    expect(catalog).toMatch(/applyStockMutationTx/)
     const ops = readFileSync(resolve(process.cwd(), "app/api/ops/inventory/import/route.ts"), "utf8")
-    expect(ops).toMatch(/prisma\.produto\.(create|update)/)
+    expect(ops).toMatch(/createProduct/)
+    expect(ops).toMatch(/updateProduct/)
   })
 })
 

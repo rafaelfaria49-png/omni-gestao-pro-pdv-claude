@@ -239,9 +239,11 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Modo importar: persiste ──────────────────────────────────────────────
+  // CAD-R2-014: loja autorizada + principal canônico (server-derived) para os
+  // boundaries. Payload nunca é autoridade.
   let resultado
   try {
-    resultado = await persistirImportacao(storeId, grupos, batchId, contextoProdutos)
+    resultado = await persistirImportacao(storeId, grupos, batchId, contextoProdutos, principal)
   } catch (e) {
     return NextResponse.json(
       { error: "Falha ao persistir importação", detalhe: e instanceof Error ? e.message : String(e) },
