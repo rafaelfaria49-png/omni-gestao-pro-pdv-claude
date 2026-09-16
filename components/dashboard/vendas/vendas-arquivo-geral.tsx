@@ -74,6 +74,8 @@ import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import type { VendaDetalhe } from "@/lib/vendas/venda-detalhe-contract"
+import { SupervisorGateDialog } from "@/components/dashboard/caixa/supervisor-gate-dialog"
+import { ESTORNO_STEP_UP_ACTION } from "@/lib/vendas/estorno-step-up-contract"
 import { mapVendaDetalheToCupom } from "@/lib/vendas/venda-cupom-mapper"
 import { WorkspaceCorrecaoVenda } from "./workspace-correcao-venda"
 import { QuarentenaRecoveryDialog } from "./quarentena-recovery-dialog"
@@ -354,6 +356,16 @@ export function VendasArquivoGeral() {
   const [cancelMotivo, setCancelMotivo] = useState("")
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelConfirmForcar, setCancelConfirmForcar] = useState(false)
+  /**
+   * Step-up do cancelamento (GOAL 007C). `POST /api/vendas/[id]/cancelar` exige
+   * autorização de supervisor escopada por ação + venda — o mesmo contrato da
+   * Conferência. Esta tela passa a abrir o gate ANTES do POST em vez de bater na
+   * rota e tomar 403; nenhuma exceção foi criada no servidor.
+   *
+   * Guarda o `forcar` pendente porque a segunda confirmação (venda com devoluções)
+   * acontece depois de já ter autorizado.
+   */
+  const [cancelGate, setCancelGate] = useState<{ pedidoId: string; forcar: boolean } | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const cancelInFlightRef = useRef(false)
 
@@ -952,8 +964,15 @@ export function VendasArquivoGeral() {
   }, [storeId, openCupom, toast, blocksConfirmedSaleAction, toastVendaPendenteBloqueada])
 
   // ── Cancelamento ─────────────────────────────────────────────────────────────
-  const handleCancelar = useCallback(async (forcar = false) => {
+  /** Abre o step-up. O POST só sai depois que o supervisor autorizar ESTA venda. */
+  const handleCancelar = useCallback((forcar = false) => {
     if (!cancelandoId || !cancelMotivo.trim() || cancelLoading) return
+    setCancelError(null)
+    setCancelGate({ pedidoId: cancelandoId, forcar })
+  }, [cancelandoId, cancelMotivo, cancelLoading])
+
+  const executarCancelamento = useCallback(async (forcar: boolean) => {
+    if (!cancelandoId || !cancelMotivo.trim()) return
     setCancelError(null)
     setCancelLoading(true)
     const result = await confirmCancelarVendaHistorico({
@@ -996,7 +1015,6 @@ export function VendasArquivoGeral() {
     cancelandoId,
     cancelandoKind,
     cancelMotivo,
-    cancelLoading,
     storeId,
     detalhe,
     detalhePendenteLocal,
@@ -2938,6 +2956,31 @@ export function VendasArquivoGeral() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Step-up do cancelamento (007C) ──────────────────────────────────────
+          Mesmo gate e mesmo contrato da Conferência: a autorização nasce vinculada a
+          ESTA venda, então não serve para nenhuma outra. O diálogo fica aberto até a
+          rota responder, para uma recusa do servidor não sumir da tela. */}
+      <SupervisorGateDialog
+        open={!!cancelGate}
+        onOpenChange={(o) => {
+          if (!o) setCancelGate(null)
+        }}
+        onAuthorized={() => {
+          const pendente = cancelGate
+          setCancelGate(null)
+          if (pendente) void executarCancelamento(pendente.forcar)
+        }}
+        title="Autorização para cancelar venda"
+        description={`Cancelar a venda ${cancelGate?.pedidoId ?? ""} reverte estoque, caixa e financeiro.`}
+        scope={{ action: ESTORNO_STEP_UP_ACTION, resource: cancelGate?.pedidoId }}
+        confirmLabel="Autorizar e cancelar"
+      >
+        <p className="rounded-md bg-secondary px-3 py-2 text-[11px] text-muted-foreground">
+          A reversão vale dentro do OmniGestão. Devoluções de PIX ou cartão precisam ser
+          feitas no provedor de pagamento, quando for o caso.
+        </p>
+      </SupervisorGateDialog>
 
       {/* ── Workspace Enterprise da Venda — ficha completa + correções (única via) ── */}
       <WorkspaceCorrecaoVenda
