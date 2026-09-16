@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
-import { Prisma } from "@/generated/prisma"
-import { prisma } from "@/lib/prisma"
+import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
+import { updateProduct } from "@/lib/cadastros/product-write-service"
+import type { ProductWriteInput } from "@/lib/cadastros/product-write-contract"
+import { mapProductWriteFailureToResponse } from "@/lib/cadastros/product-rest-write-adapter"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -32,6 +35,8 @@ function normalizeCodeField(v: unknown): string | null | undefined {
 /**
  * Atualiza apenas `sku` e/ou `barcode` do produto (admin).
  * Não altera nome, estoque, preço nem categoria.
+ * CAD-R2-007: writer cadastral via ProductWriteService (sem Prisma direto).
+ * Autorização preservada: requireAdmin + storeId explícita.
  */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
@@ -65,12 +70,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   const barcodeNorm = hasBarcodeKey ? normalizeCodeField(raw.barcode) : undefined
   const codigoBarrasNorm = hasCodigoBarrasKey ? normalizeCodeField(raw.codigoBarras) : undefined
 
-  const data: { sku?: string | null; barcode?: string | null } = {}
+  const input: Record<string, unknown> = {}
   if (hasSku) {
     if (skuNorm === undefined && skuRaw != null && typeof skuRaw !== "string" && typeof skuRaw !== "number") {
       return badRequest('Campo "sku"/"codigo" inválido.')
     }
-    data.sku = skuNorm === undefined ? null : skuNorm
+    input.sku = skuNorm === undefined ? null : skuNorm
   }
   if (hasBarcode) {
     if (hasBarcodeKey && hasCodigoBarrasKey && barcodeNorm !== codigoBarrasNorm) {
@@ -92,17 +97,36 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     ) {
       return badRequest('Campo "barcode"/"codigoBarras" inválido.')
     }
-    data.barcode = merged === undefined ? null : merged
+    input.barcode = merged === undefined ? null : merged
   }
 
-  if (Object.keys(data).length === 0) {
+  if (Object.keys(input).length === 0) {
     return badRequest("Nenhum valor válido para atualizar.")
   }
 
   try {
-    const updated = await prisma.produto.update({
-      where: { id, storeId },
-      data,
+    const principal = cadastrosAuditPrincipalFromSession(gate.session)
+    const result = await updateProduct(
+      { storeId, principal },
+      id.trim(),
+      input as unknown as ProductWriteInput,
+    )
+    if (!result.ok) {
+      if (result.code === "NOT_FOUND" || result.code === "CROSS_STORE") {
+        return json({ error: "Produto não encontrado" }, { status: 404 })
+      }
+      if (result.code === "DUPLICATE") {
+        return json(
+          { error: "Conflito: outro produto já usa este SKU ou código de barras nesta loja." },
+          { status: 409 },
+        )
+      }
+      return mapProductWriteFailureToResponse(result, { context: "update" })
+    }
+
+    await prismaEnsureConnected()
+    const updated = await prisma.produto.findFirst({
+      where: { id: id.trim(), storeId },
       select: {
         id: true,
         name: true,
@@ -112,19 +136,9 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
         updatedAt: true,
       },
     })
+    if (!updated) return json({ error: "Produto não encontrado" }, { status: 404 })
     return json({ ok: true, produto: updated })
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError) {
-      if (e.code === "P2025") {
-        return json({ error: "Produto não encontrado" }, { status: 404 })
-      }
-      if (e.code === "P2002") {
-        return json(
-          { error: "Conflito: outro produto já usa este SKU ou código de barras nesta loja." },
-          { status: 409 }
-        )
-      }
-    }
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[api/produtos PATCH codigos]", msg)
     return json(
