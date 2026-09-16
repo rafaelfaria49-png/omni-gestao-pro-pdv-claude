@@ -19,6 +19,8 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { assertVendaFiscalCancelavel } from "@/lib/fiscal/venda-fiscal-state-machine"
+import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
+import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { auth } from "@/auth"
 
 export const runtime = "nodejs"
@@ -265,41 +267,39 @@ export async function POST(
       for (const [produtoId, sold] of soldByProdutoId) {
         const net = sold - (returnedByProdutoId.get(produtoId) ?? 0)
         if (net <= 0) continue
-        // Idempotência: não repor duas vezes a mesma venda/produto.
+        // Idempotência era dupla (CAD-R2-009): guarda legado por
+        // (documento, produto, origem) cobre reposições pré-009 sem chave;
+        // o boundary dedupeia retries pela chave estável.
         const jaExiste = await tx.movimentacaoEstoque.findFirst({
           where: { storeId, documento: pedidoId, produtoId, origem: "cancelamento_pdv" },
           select: { id: true },
         })
         if (jaExiste) continue
-        const atual = await tx.produto.findUnique({
-          where: { id: produtoId },
-          select: { stock: true, precoCusto: true, sku: true, name: true },
-        })
-        if (!atual) continue
-        const estoqueAntes = atual.stock
-        const custo = arredonda2(Math.max(0, atual.precoCusto))
-        await tx.produto.update({ where: { id: produtoId }, data: { stock: { increment: net } } })
-        await tx.movimentacaoEstoque.create({
-          data: {
-            storeId,
+        // CAD-R2-009: reposição compensatória pelo boundary canônico (lock +
+        // ownership + depósito + ledger na MESMA transação do cancelamento).
+        // Nunca "seta stock de volta": cria movimento de entrada compensatório.
+        // operadorLedger aqui é SOMENTE o rótulo server-derived da sessão;
+        // `canceladaPor` (input do client) NÃO entra no contexto confiável.
+        const ledgerOperator = (session?.user ? getOperatorLabelFromSession(session) : "").trim() || null
+        const repo = await applyStockMutationTx(
+          tx as unknown as StockLedgerTx,
+          { storeId, principal: null, source: "vendas-cancelar", operatorLabel: ledgerOperator },
+          {
+            kind: "entrada",
             produtoId,
-            produtoSku: atual.sku ?? null,
-            produtoNome: atual.name,
-            tipo: "entrada",
-            origem: "cancelamento_pdv",
             quantidade: net,
-            estoqueAntes,
-            estoqueDepois: estoqueAntes + net,
-            custoUnitario: custo,
-            custoMedioAntes: custo,
-            custoMedioDepois: custo,
-            valorTotal: arredonda2(net * custo),
+            origem: "cancelamento_pdv",
             documento: pedidoId,
             motivo: `Cancelamento venda ${pedidoId}`,
-            usuario: operadorLedger || null,
+            idempotencyKey: StockIdempotency.cancelamento(pedidoId, produtoId),
           },
-        })
-        estoqueRepostoCount += 1
+        )
+        if (!repo.ok) {
+          // Produto excluído entre a resolução e a reposição: legado pulava.
+          if (repo.code === "NOT_FOUND") continue
+          throw new Error(`[vendas/cancelar] reposição de estoque falhou: ${repo.code} ${repo.message}`)
+        }
+        if (!repo.idempotente) estoqueRepostoCount += 1
       }
 
       // 3. Estorno financeiro à vista — reverte o valor LÍQUIDO da entrada de venda

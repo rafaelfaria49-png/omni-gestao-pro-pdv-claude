@@ -1,3 +1,14 @@
+/**
+ * CAD-R2-009 — LEGADO / SEM CALLERS RUNTIME (DEAD).
+ *
+ * Estas funções escrevem `Produto.stock` direto, sem lock, sem `ProdutoDeposito`,
+ * sem ledger e sem idempotência — violam a invariante Stock/Ledger. Nenhum caller
+ * runtime as referencia (verificado em 009); fluxos de OS usam
+ * `lib/operacoes/adapters/os-estoque.ts` (boundary canônico) e PDV usa
+ * `lib/ops-upsert-venda.ts`. NÃO usar em código novo; remoção fica para
+ * higienização futura. Mantido intacto apenas para não quebrar import
+ * inesperado fora do scan.
+ */
 import type { Prisma } from "@/generated/prisma"
 
 export type ItemInput = { produtoId: string; quantidade: number }

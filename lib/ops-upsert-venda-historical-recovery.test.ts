@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { upsertVendaInTransaction, type SalePayload } from "./ops-upsert-venda"
+import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 import {
   historicalRecoveryPersistOptions,
   type OriginalSessionStatus,
@@ -40,7 +41,7 @@ function makeDb(opts: {
   movimentosEstoque?: MovEstoque[]
   financeiros?: Array<{ referenciaId: string; valor: number; createdAt: Date }>
 } = {}) {
-  const produto = { id: "prod-1", stock: opts.stock ?? 10, precoCusto: 4, sku: "SKU-1", name: "Boneca" }
+  const produto = { id: "prod-1", storeId: STORE, stock: opts.stock ?? 10, precoCusto: 4, sku: "SKU-1", name: "Boneca" }
   const vendas: Array<Record<string, any>> = []
   const payloadUpdates: unknown[] = []
   const movimentosEstoque: MovEstoque[] = [...(opts.movimentosEstoque ?? [])]
@@ -134,6 +135,12 @@ function makeDb(opts: {
       allocations += 1
       return { pedidoId: PEDIDO_NOVO, serieVendaId: "serie-l02", anoNumero: 2026, numeroSequencial: 731 }
     }) as never,
+  })
+
+  // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
+  attachStockLedgerBoundaryToFakeTx(tx, {
+    products: [produto],
+    ledger: movimentosEstoque as unknown as Array<Record<string, unknown>>,
   })
 
   return {

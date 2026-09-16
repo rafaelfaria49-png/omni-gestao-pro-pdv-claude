@@ -23,11 +23,12 @@
  *
  * O QUE ESTE SERVIÇO NÃO FAZ (escopo bloqueado)
  * - NÃO migra callers existentes (Server Actions, REST, bulk, imports, IA, PDV).
- * - NÃO toca estoque operacional: nenhum write em `MovimentacaoEstoque`,
- *   `ProdutoDeposito`, inventário ou ledger. O campo `Produto.stock` carrega
- *   apenas o cadastro-base (saldo inicial/default 0 no create; edição direta
- *   explícita no update — semântica já praticada pelo `upsertProduto`), sem
- *   gerar movimentação. Mutações reais de estoque ficam para o CAD-R2-009.
+ * - NÃO permite PATCH de saldo: `updateProduct` com `estoque`/`stock` explícito
+ *   falha (VALIDATION) — saldo só muda pelo boundary de estoque (CAD-R2-009).
+ *   `createProduct` aceita `estoque`/`stock` como ESTOQUE INICIAL, aplicado via
+ *   Stock/Ledger (`entrada`, origem `cadastro`) na MESMA transação de criação,
+ *   gerando `Produto.stock` + `ProdutoDeposito` + `MovimentacaoEstoque` sem
+ *   janela inconsistente. `stock: 0`/ausente = sem ledger.
  * - NÃO valida dígito verificador GTIN no write path (nenhum writer atual faz;
  *   `validarGtin` continua disponível para leitura/scanner).
  * - NÃO exige `price` no create: default 0, como o `upsertProduto`; preço zero
@@ -60,6 +61,8 @@ import {
 } from "@/lib/catalogo-aparelhos/produto-metadata"
 import { fiscalInputFromBody } from "@/lib/produto-fiscal"
 import { canonicalizeProdutoFiscalMetadata } from "@/lib/produtos/produto-fiscal-upsert"
+import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
+import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import {
   duplicateProductDetails,
   PRODUTO_DUP_SELECT,
@@ -77,8 +80,10 @@ import {
 export const PRODUCT_WRITE_AUDIT_SOURCE = "product-write-service"
 
 /** Delegate mínimo usado pelo serviço (falsificável em testes; Prisma real em produção). */
-export type ProductWriteTx = {
-  produto: {
+export type ProductWriteTx = Omit<StockLedgerTx, "produto"> & {
+  // `update` preciso do cadastro (sem a assinatura genérica `args: unknown` da
+  // base, que sombrearia o retorno `{ id }` na interseção).
+  produto: Omit<StockLedgerTx["produto"], "update"> & {
     create(args: Prisma.ProdutoCreateArgs): Promise<{ id: string }>
     update(args: Prisma.ProdutoUpdateArgs): Promise<{ id: string }>
   }
@@ -444,7 +449,9 @@ function auditMetadata(
 /**
  * CREATE do cadastro-base dentro de `context.storeId`.
  * `input.id`/`input.storeId` (e demais chaves de autoridade) são ignorados.
- * Estoque inicial: valor explícito válido ou 0 — sem ledger, sem movimentação.
+ * CAD-R2-009: o produto nasce com `stock: 0` (neutro estrutural); `estoque`/
+ * `stock` explícito > 0 é aplicado como ENTRADA `cadastro` via Stock/Ledger
+ * na MESMA transação (stock + depósito + ledger, sem janela inconsistente).
  */
 export async function createProduct(
   context: ProductWriteContext,
@@ -468,6 +475,7 @@ export async function createProduct(
   if (!meta.ok) return meta.error
 
   const active = patch.active ?? true
+  const initialStock = patch.stock ?? 0
   const data: Prisma.ProdutoUncheckedCreateInput = {
     name: patch.name as string,
     sku: patch.sku,
@@ -480,7 +488,7 @@ export async function createProduct(
     warrantyDays: patch.warrantyDays ?? 0,
     active,
     status: patch.status ?? (active ? "Ativo" : "Inativo"),
-    stock: patch.stock ?? 0,
+    stock: 0,
     storeId: ctx.storeId,
     ...(meta.metadata ? { metadata: meta.metadata as Prisma.InputJsonValue } : {}),
   }
@@ -503,6 +511,24 @@ export async function createProduct(
           source: PRODUCT_WRITE_AUDIT_SOURCE,
         },
       })
+      if (initialStock > 0) {
+        const ledger = await applyStockMutationTx(
+          tx,
+          { storeId: ctx.storeId, principal: ctx.principal, source: PRODUCT_WRITE_AUDIT_SOURCE },
+          {
+            kind: "entrada",
+            produtoId: row.id,
+            quantidade: initialStock,
+            custoUnitario: patch.precoCusto ?? 0,
+            origem: "cadastro",
+            motivo: `Estoque inicial — cadastro ${patch.name as string}`,
+            idempotencyKey: StockIdempotency.cadastroInicial(row.id),
+          },
+        )
+        if (!ledger.ok) {
+          throw new Error(`[product-write-service] estoque inicial falhou: ${ledger.code} ${ledger.message}`)
+        }
+      }
       return row
     })
     return { ok: true, id: created.id, operacao: "create" }
@@ -520,6 +546,8 @@ export async function createProduct(
  * UPDATE parcial do cadastro-base. O produto é resolvido pelo par
  * (`productId`, `context.storeId`) — fail-closed contra cross-store.
  * Campos ausentes são preservados; `metadata` ausente/nulo preserva o JSON.
+ * CAD-R2-009: `estoque`/`stock` explícito NÃO é PATCH — falha VALIDATION.
+ * Saldo só muda pelo Stock/Ledger boundary.
  */
 export async function updateProduct(
   context: ProductWriteContext,
@@ -534,6 +562,13 @@ export async function updateProduct(
 
   const pid = (productId ?? "").trim()
   if (!pid) return productWriteInvalid("ID do produto inválido.", "productId")
+
+  if (firstDefined(input ?? {}, "estoque", "stock") !== undefined) {
+    return productWriteInvalid(
+      'Campo "estoque" não pode ser alterado por PATCH de cadastro. Use a operação de estoque (entrada/ajuste).',
+      "estoque",
+    )
+  }
 
   const normalized = normalizePatch(input ?? {}, { requireName: false })
   if (!normalized.ok) return normalized.error
@@ -572,7 +607,6 @@ export async function updateProduct(
   if (patch.category !== undefined) data.category = patch.category
   if (patch.brand !== undefined) data.brand = patch.brand
   if (patch.supplierName !== undefined) data.supplierName = patch.supplierName
-  if (patch.stock !== undefined) data.stock = patch.stock
   if (patch.precoCusto !== undefined) data.precoCusto = patch.precoCusto
   if (patch.price !== undefined) data.price = patch.price
   if (patch.warrantyDays !== undefined) data.warrantyDays = patch.warrantyDays

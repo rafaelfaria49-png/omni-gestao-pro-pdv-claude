@@ -25,6 +25,9 @@ const h = vi.hoisted(() => {
     devolucoes: [] as Row[],
     produtos: [] as Row[],
     titulos: [] as Row[],
+    // CAD-R2-009: depósito principal + saldos físicos do boundary.
+    depositos: [] as Row[],
+    produtoDepositos: [] as Row[],
   }
   const estornosReceber: Array<Row> = []
   let seq = 0
@@ -38,6 +41,8 @@ const h = vi.hoisted(() => {
     db.devolucoes.length = 0
     db.produtos.length = 0
     db.titulos.length = 0
+    db.depositos.length = 0
+    db.produtoDepositos.length = 0
     estornosReceber.length = 0
     seq = 0
   }
@@ -98,15 +103,99 @@ const h = vi.hoisted(() => {
       },
     },
     produto: {
-      findFirst: async () => null,
-      findUnique: async () => null,
-      update: async () => ({}),
+      // CAD-R2-009: resolução id|sku|barcode da rota + ownership `{ id, storeId }` do boundary.
+      findFirst: async ({ where }: { where: Row }) => {
+        if (typeof where.id === "string") {
+          const hit = db.produtos.find(
+            (x) => x.id === where.id && (where.storeId === undefined || x.storeId === where.storeId),
+          )
+          return hit ? { ...hit } : null
+        }
+        const ors = (where.OR ?? []) as Row[]
+        const hit = db.produtos.find((x) => {
+          if (x.storeId !== where.storeId) return false
+          return ors.some((c) => (c.id !== undefined && x.id === c.id) || (c.sku !== undefined && x.sku === c.sku) || (c.barcode !== undefined && x.barcode === c.barcode))
+        })
+        return hit ? { ...hit } : null
+      },
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        const hit = db.produtos.find((x) => x.id === where.id)
+        return hit ? { id: hit.id as string, storeId: hit.storeId as string } : null
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Row }) => {
+        const hit = db.produtos.find((x) => x.id === where.id)
+        if (hit) {
+          const stockData = data.stock as number | { increment?: number } | undefined
+          if (typeof stockData === "number") hit.stock = stockData
+          else if (typeof stockData?.increment === "number") hit.stock = ((hit.stock as number) ?? 0) + stockData.increment
+          if (typeof data.precoCusto === "number") hit.precoCusto = data.precoCusto
+        }
+        return hit ?? {}
+      },
+    },
+    $queryRaw: async () => [] as unknown[],
+    deposito: {
+      findFirst: async ({ where }: { where: Row }) =>
+        db.depositos.find((d) => d.storeId === where.storeId) ?? null,
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        db.depositos.find((d) => d.id === where.id) ?? null,
+      create: async ({ data }: { data: Row }) => {
+        const d = { id: `dep-${++seq}`, storeId: data.storeId }
+        db.depositos.push(d)
+        return d
+      },
+    },
+    produtoDeposito: {
+      findMany: async ({ where }: { where: Row }) =>
+        db.produtoDepositos
+          .filter((r) => r.storeId === where.storeId && (where.produtoId === undefined || r.produtoId === where.produtoId))
+          .map((r) => ({ depositoId: r.depositoId, quantidade: r.quantidade })),
+      upsert: async ({ where, create, update }: { where: Row; create: Row; update: Row }) => {
+        const key = where.produtoId_depositoId as Row
+        const ex = db.produtoDepositos.find((r) => r.produtoId === key.produtoId && r.depositoId === key.depositoId)
+        if (ex) ex.quantidade = update.quantidade as number
+        else {
+          db.produtoDepositos.push({
+            storeId: create.storeId,
+            produtoId: create.produtoId,
+            depositoId: create.depositoId,
+            quantidade: (create.quantidade as number) ?? (update.quantidade as number),
+          })
+        }
+        return {}
+      },
     },
     movimentacaoEstoque: {
-      findFirst: async () => null,
+      findFirst: async ({ where }: { where: Row }) => {
+        // CAD-R2-009: lookup por chave (dedupe) + guarda legado.
+        if (where.idempotencyKey !== undefined) {
+          return (
+            db.movEstoque.find(
+              (m) => m.storeId === where.storeId && (m.idempotencyKey ?? null) === where.idempotencyKey,
+            ) ?? null
+          )
+        }
+        return (
+          db.movEstoque.find(
+            (m) =>
+              m.storeId === where.storeId &&
+              m.documento === where.documento &&
+              m.produtoId === where.produtoId &&
+              m.origem === where.origem,
+          ) ?? null
+        )
+      },
       create: async ({ data }: { data: Row }) => {
-        db.movEstoque.push(data)
-        return data
+        const key = (data.idempotencyKey ?? null) as string | null
+        if (key && db.movEstoque.some((m) => m.storeId === data.storeId && (m.idempotencyKey ?? null) === key)) {
+          const e = new Error("Unique constraint failed") as Error & { code: string; name: string }
+          e.code = "P2002"
+          e.name = "PrismaClientKnownRequestError"
+          throw e
+        }
+        const row = { id: `mov-${++seq}`, ...data }
+        db.movEstoque.push(row)
+        return { id: row.id }
       },
     },
     movimentacaoFinanceira: {
@@ -280,5 +369,68 @@ describe("POST /api/vendas/[id]/cancelar — estorno do crédito/vale", () => {
     expect(j.estornoCreditoVale).toEqual({ usos: 0, valor: 0 })
     expect(h.db.creditos[0]!.saldoAtual).toBe(25)
     expect((h.db.vendas[0]!.payload as Row).estornoCreditoVale).toBeUndefined()
+  })
+})
+
+describe("POST /api/vendas/[id]/cancelar — reposição de estoque (CAD-R2-009)", () => {
+  it("cancela com entrada compensatória: stock + depósito + ledger, sem PATCH direto", async () => {
+    h.db.produtos.push({
+      id: "p1",
+      storeId: h.STORE,
+      sku: "SKU-1",
+      name: "Fone",
+      stock: 5,
+      precoCusto: 4,
+    })
+    h.addVenda("VDA-EST", {
+      itens: [{ inventoryId: "p1", nome: "Fone", quantidade: 2, precoUnitario: 50, lineTotal: 100 }],
+    })
+
+    const res = await post("VDA-EST")
+    const j = await res.json()
+    expect(j.ok).toBe(true)
+    expect(j.estoqueReposto).toBe(1)
+    // Saldo restaurado pelo líquido (2 vendidos − 0 devolvidos).
+    expect(h.db.produtos[0]!.stock).toBe(7)
+    // Depósito espelha o agregado.
+    let soma = 0
+    for (const r of h.db.produtoDepositos) soma += r.quantidade as number
+    expect(soma).toBe(7)
+    // Ledger: 1 entrada compensatória (nunca update/delete de histórico).
+    const ledger = h.db.movEstoque.filter((m) => m.documento === "VDA-EST")
+    expect(ledger).toHaveLength(1)
+    expect(ledger[0]).toMatchObject({
+      produtoId: "p1",
+      tipo: "entrada",
+      origem: "cancelamento_pdv",
+      quantidade: 2,
+      estoqueAntes: 5,
+      estoqueDepois: 7,
+    })
+    expect(ledger[0]!.idempotencyKey).toContain("VDA-EST")
+  })
+
+  it("retry de cancelamento não duplica o retorno (409 + estoque/ledger intactos)", async () => {
+    h.db.produtos.push({
+      id: "p1",
+      storeId: h.STORE,
+      sku: "SKU-1",
+      name: "Fone",
+      stock: 5,
+      precoCusto: 4,
+    })
+    h.addVenda("VDA-EST2", {
+      itens: [{ inventoryId: "p1", nome: "Fone", quantidade: 2, precoUnitario: 50, lineTotal: 100 }],
+    })
+
+    const primeira = await post("VDA-EST2")
+    expect((await primeira.json()).ok).toBe(true)
+    expect(h.db.produtos[0]!.stock).toBe(7)
+
+    const replay = await post("VDA-EST2")
+    expect(replay.status).toBe(409)
+    // Nada reaplicado: estoque e ledger intactos.
+    expect(h.db.produtos[0]!.stock).toBe(7)
+    expect(h.db.movEstoque.filter((m) => m.documento === "VDA-EST2")).toHaveLength(1)
   })
 })
