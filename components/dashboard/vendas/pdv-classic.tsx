@@ -271,7 +271,7 @@ export function PdvClassic({
   // Caixa: apenas leitura do CaixaStatusBar/CaixaProvider via outros consumers.
   // `useCaixa()` legado (adicionarEntrada/Saida/sessaoId) só era usado pelo
   // `saveOperation` removido — fluxo migrado para o CaixaStatusBar compartilhado.
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, ordens } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, ordens, sales } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome(lojaKey)
@@ -1386,9 +1386,10 @@ export function PdvClassic({
         paymentBlockedFeedback.notifyBlocked("pdv.multiplePayments", CAPABILITY_BLOCKED_COPY["pdv.multiplePayments"])
         return false
       }
-      // N5-B1 R2 (P2-06): venda PENDING de identidade própria — reconfirmar
-      // criaria novo clientSaleId. Orienta para o retry existente.
-      if (pendingSaleIdentityRef.current?.hasPending()) {
+      // N5-B1 R2 (P2-06) / GOAL 002: venda PENDING de identidade própria e
+      // ainda não resolvida (syncPending) — reconfirmar criaria novo
+      // clientSaleId. Orienta para o retry existente.
+      if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
         toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
         return false
       }
@@ -1646,6 +1647,9 @@ export function PdvClassic({
       discountReais,
       discountPercent,
       pdvType: "classic",
+      // N5-B1 GOAL 002: identidade PENDING viaja com o hold — o resume
+      // re-registra no guard (holds legados sem este campo seguem válidos).
+      pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
     }
     saveHeldSale(
       lojaKey,
@@ -1656,8 +1660,9 @@ export function PdvClassic({
     setSelectedCustomer(null)
     setDiscountReais(0)
     setDiscountPercent(0)
-    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de identidade
-    // PENDING liberado (a venda pendente segue syncing independente).
+    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de sessão
+    // liberado; a identidade PENDING continua preservada no próprio hold
+    // (re-registrada no resume) e a venda pendente segue syncing independente.
     pendingSaleIdentityRef.current?.clear()
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
   }
@@ -1700,6 +1705,9 @@ export function PdvClassic({
     }
     setDiscountReais(discountRestore.discountReais)
     setDiscountPercent(discountRestore.discountPercent)
+    // N5-B1 GOAL 002: hold com identidade PENDING restaura a proteção —
+    // reconfirmar após o resume ficaria bloqueado (nova identidade = 2ª venda).
+    if (sale.pendingIdentity) pendingSaleIdentityRef.current?.register(sale.pendingIdentity)
     removeHeldSale(lojaKey, terminalIdForHold, sale.id)
     return true
   }
@@ -2042,9 +2050,10 @@ export function PdvClassic({
         requireExplicitResult
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
-          // N5-B1 R2 (P2-06): defesa em profundidade — venda PENDING de
-          // identidade própria não pode gerar nova confirmação.
-          if (pendingSaleIdentityRef.current?.hasPending()) {
+          // N5-B1 R2 (P2-06) / GOAL 002: defesa em profundidade — venda PENDING
+          // de identidade própria e ainda não resolvida não pode gerar nova
+          // confirmação.
+          if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
             toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
             return false
           }

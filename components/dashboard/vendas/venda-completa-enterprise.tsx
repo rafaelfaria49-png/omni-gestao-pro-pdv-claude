@@ -53,7 +53,7 @@ import {
   releaseSaleFinalizeLock,
 } from "@/lib/vendas/sale-finalize-busy"
 import { PaymentModal, type PaymentMethod } from "./payment-modal"
-import { createPendingSaleIdentityGuard, FINALIZE_IN_FLIGHT_FEEDBACK, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { createPendingSaleIdentityGuard, FINALIZE_IN_FLIGHT_FEEDBACK, PENDING_RETRY_GUIDANCE, type PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
 import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
 import {
   CAPABILITY_BLOCKED_COPY,
@@ -175,6 +175,12 @@ type DraftData = {
   tipoVenda?: TipoVenda
   observacaoGeral?: string
   enderecoEntrega?: EnderecoEntrega
+  /**
+   * N5-B1 GOAL 002 (R3): identidade PENDING que sobrevive ao reload — o
+   * restore re-registra no guard da superfície, mantendo a reconfirmação
+   * bloqueada enquanto a pendência original (syncPending) não resolver.
+   */
+  pendingIdentity?: PendingSaleIdentity
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -203,7 +209,7 @@ function pagamentoLabelMethod(p: PaymentMethod): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
-  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal } = useOperationsStore()
+  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
   // Mesma porta de pré-pagamento dos demais PDVs: caixa aberto E sessão do
   // terminal atual. Sem isso a venda saía daqui e voltava recusada por
   // `CAIXA_FECHADO`, virando pendência local (F-02 da readiness 002A).
@@ -358,6 +364,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         if (draft.tipoVenda) setTipoVenda(draft.tipoVenda)
         if (draft.observacaoGeral) setObservacaoGeral(draft.observacaoGeral)
         if (draft.enderecoEntrega) setEnderecoEntrega(draft.enderecoEntrega)
+        // N5-B1 GOAL 002 (R3): draft com identidade PENDING restaura a
+        // proteção — após reload, reconfirmar fica bloqueado enquanto a
+        // pendência original (syncPending) não resolver.
+        if (draft.pendingIdentity) pendingSaleIdentityRef.current?.register(draft.pendingIdentity)
         toast({
           title: "Rascunho restaurado",
           description: `${validCart.length} ite${validCart.length === 1 ? "m" : "ns"} recuperado${validCart.length === 1 ? "" : "s"}.`,
@@ -378,6 +388,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           tipoVenda,
           observacaoGeral,
           enderecoEntrega,
+          // N5-B1 GOAL 002: identidade PENDING acompanha o draft (reload-safe).
+          pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
         }
         localStorage.setItem(DRAFT_KEY(storeId), JSON.stringify(draft))
       } else {
@@ -647,6 +659,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         : null,
       discountReais,
       pdvType: "venda-completa",
+      // N5-B1 GOAL 002: identidade PENDING viaja com o hold — o resume
+      // re-registra no guard (holds legados sem este campo seguem válidos).
+      pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
     }
     saveHeldSale(
       storeId,
@@ -662,8 +677,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setTipoVenda("comum")
     setObservacaoGeral("")
     setExpandedLineId(null)
-    // N5-B1 R2 (P2-06): o rascunho saiu da superfície — guard de identidade
-    // PENDING liberado (a venda pendente segue syncing independente).
+    // N5-B1 R2 (P2-06): o rascunho saiu da superfície — guard de sessão
+    // liberado; a identidade PENDING continua preservada no próprio hold
+    // (re-registrada no resume) e a venda pendente segue syncing independente.
     pendingSaleIdentityRef.current?.clear()
     setHeldRefresh((n) => n + 1)
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
@@ -710,6 +726,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       })
     }
     setDiscountReais(discountRestore.discountReais)
+    // N5-B1 GOAL 002: hold com identidade PENDING restaura a proteção —
+    // reconfirmar após o resume ficaria bloqueado (nova identidade = 2ª venda).
+    if (sale.pendingIdentity) pendingSaleIdentityRef.current?.register(sale.pendingIdentity)
     removeHeldSale(storeId, terminalIdForHold, sale.id)
     setHeldRefresh((n) => n + 1)
     toast({ title: "Venda retomada", description: `${sale.label} carregada no carrinho.` })
@@ -747,7 +766,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     }
     // N5-B1 R2 (P2-06): venda PENDING com identidade própria — reconfirmar pelo
     // modal criaria novo clientSaleId (segunda venda). Orienta para o retry.
-    if (pendingSaleIdentityRef.current?.hasPending()) {
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
       toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
       return
     }
@@ -938,6 +957,21 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           id: result.saleId,
           ...(result.clientSaleId ? { clientSaleId: result.clientSaleId } : {}),
         })
+        // N5-B1 GOAL 002 (R3): persiste o draft COM a identidade registrada —
+        // o carrinho não mudou, então o efeito de draft-save não re-dispararia;
+        // sem isto o reload perderia a referência PENDING (segunda venda).
+        try {
+          const draft: DraftData = {
+            cliente: selectedCliente,
+            cart,
+            discountReais,
+            tipoVenda,
+            observacaoGeral,
+            enderecoEntrega,
+            pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
+          }
+          localStorage.setItem(DRAFT_KEY(storeId), JSON.stringify(draft))
+        } catch { /* ignore */ }
         setIsPaymentOpen(false)
         toast({
           title: PENDING_SALE_TITLE,

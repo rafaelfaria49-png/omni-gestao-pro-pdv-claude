@@ -207,7 +207,7 @@ export function PdvSupermercado({
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const payMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
   // N5-B1 R2 (P2-06): identidade PENDING já criada — reconfirmar pelo modal
@@ -647,9 +647,10 @@ export function PdvSupermercado({
         paymentBlockedFeedback.notifyBlocked("sales.paymentMethods", CAPABILITY_BLOCKED_COPY["sales.paymentMethods"])
         return
       }
-      // N5-B1 R2 (P2-06): venda PENDING de identidade própria — reconfirmar
-      // criaria novo clientSaleId. Orienta para o retry existente.
-      if (pendingSaleIdentityRef.current?.hasPending()) {
+      // N5-B1 R2 (P2-06) / GOAL 002: venda PENDING de identidade própria e
+      // ainda não resolvida (syncPending) — reconfirmar criaria novo
+      // clientSaleId. Orienta para o retry existente.
+      if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
         toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
         return
       }
@@ -677,7 +678,7 @@ export function PdvSupermercado({
       paymentBlockedFeedback.notifyBlocked("pdv.multiplePayments", CAPABILITY_BLOCKED_COPY["pdv.multiplePayments"])
       return
     }
-    if (pendingSaleIdentityRef.current?.hasPending()) {
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
       toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
       return
     }
@@ -690,7 +691,7 @@ export function PdvSupermercado({
     setInstantPayIntent(null)
     setMultipayMode(true)
     setIsPaymentModalOpen(true)
-  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, paymentBlockedFeedback, toast])
+  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, paymentBlockedFeedback, sales, toast])
 
   const confirmAttrDialog = useCallback(() => {
     if (!attrProduct) return
@@ -1004,6 +1005,9 @@ export function PdvSupermercado({
       discountReais,
       discountPercent,
       pdvType: "supermercado",
+      // N5-B1 GOAL 002: identidade PENDING viaja com o hold — o resume
+      // re-registra no guard (holds legados sem este campo seguem válidos).
+      pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
     }
     saveHeldSale(
       lojaKey,
@@ -1013,8 +1017,9 @@ export function PdvSupermercado({
     setCart([])
     setDiscountReais(0)
     setDiscountPercent(0)
-    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de identidade
-    // PENDING liberado (a venda pendente segue syncing independente).
+    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de sessão
+    // liberado; a identidade PENDING continua preservada no próprio hold
+    // (re-registrada no resume) e a venda pendente segue syncing independente.
     pendingSaleIdentityRef.current?.clear()
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
   }
@@ -1048,6 +1053,9 @@ export function PdvSupermercado({
         ? { id: sale.customer.id, name: sale.customer.name, cpf: sale.customer.cpf ?? "", phone: sale.customer.phone ?? "" }
         : null,
     )
+    // N5-B1 GOAL 002: hold com identidade PENDING restaura a proteção —
+    // reconfirmar após o resume ficaria bloqueado (nova identidade = 2ª venda).
+    if (sale.pendingIdentity) pendingSaleIdentityRef.current?.register(sale.pendingIdentity)
     removeHeldSale(lojaKey, terminalIdForHold, sale.id)
     return true
   }
@@ -1576,7 +1584,7 @@ export function PdvSupermercado({
           // N5-B1 R2 (P2-06): contrato EXPLÍCITO com o modal — `true` =
           // desfecho (CONFIRMED ou PENDING registrado), `false` = falha (modal
           // aberto, busy liberado). Retorno vazio não é sucesso.
-          if (pendingSaleIdentityRef.current?.hasPending()) {
+          if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
             toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
             return false
           }

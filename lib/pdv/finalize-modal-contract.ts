@@ -74,14 +74,33 @@ export type PendingSaleIdentity = {
 }
 
 /**
+ * Registro de venda consultável para resolução canônica de pendência.
+ * Fonte única: as vendas do operations-store (`syncPending` é o estado
+ * canônico — CONFIRMED limpa `syncPending`; enquanto `true`, a identidade
+ * original continua pendente). Nenhuma fila ou idempotência nova é criada.
+ */
+export type PendingResolutionSource = {
+  id: string
+  clientSaleId?: string
+  syncPending?: boolean
+}
+
+/**
  * Guarda de identidade PENDING por superfície (sessão, em memória).
  *
- * Após um resultado PENDING a superfície registra o token; enquanto registrado,
- * abrir o modal de pagamento ou confirmar de novo é BLOQUEADO (nova confirmação
- * geraria `clientSaleId` novo no motor). O guard é liberado quando o operador
- * encerra conscientemente o rascunho (limpar/cancelar venda, guardar em espera)
- * ou quando uma nova venda é CONFIRMADA — a venda pendente continua syncing
- * de forma independente pela identidade original.
+ * Após um resultado PENDING a superfície registra o token; enquanto registrado
+ * e ainda NÃO resolvido, abrir o modal de pagamento ou confirmar de novo é
+ * BLOQUEADO (nova confirmação geraria `clientSaleId` novo no motor).
+ *
+ * N5-B1 GOAL 002 (R3): a identidade também VIAJA COM O ESTADO RESTAURÁVEL —
+ * hold (`HeldSale.pendingIdentity`) e draft da Venda Completa
+ * (`DraftData.pendingIdentity`) carregam o mesmo token; o resume/restore
+ * re-registra no guard. Assim reload, hold/resume, fechar/reabrir modal e
+ * re-render não perdem a proteção, e um hold legado (sem metadata) segue
+ * válido. A referência só deixa de bloquear por resolução terminal canônica
+ * (`syncPending` limpo no operations-store, avaliado por `isUnresolved`) ou
+ * encerramento consciente do rascunho (limpar venda — `clear`). A venda
+ * PENDING original nunca é apagada.
  */
 export function createPendingSaleIdentityGuard() {
   let token: PendingSaleIdentity | null = null
@@ -98,6 +117,31 @@ export function createPendingSaleIdentityGuard() {
     },
     clear(): void {
       token = null
+    },
+    /**
+     * Bloqueio EFETIVO contra a fonte canônica (`sales` do operations-store).
+     * - sem token → liberado;
+     * - registro não encontrado nas vendas da loja → conservadoramente
+     *   bloqueado (BLOCKED_BY_EXISTING_IDENTITY — a venda PENDING original
+     *   nunca é apagada);
+     * - `syncPending === true` → bloqueado (identidade original ainda pendente);
+     * - registro com `syncPending` limpo → resolução terminal canônica: libera
+     *   e limpa o token (CONFIRMED libera estado).
+     * O casamento espelha o operations-store (`s.id === saleId ||
+     * s.clientSaleId === saleId`) — nunca cria segunda identidade.
+     */
+    isUnresolved(sales: PendingResolutionSource[]): boolean {
+      if (!token) return false
+      const registered = token
+      const match = sales.find(
+        (s) =>
+          (registered.clientSaleId ? s.clientSaleId === registered.clientSaleId : false) ||
+          s.id === registered.id,
+      )
+      if (!match) return true
+      if (match.syncPending === true) return true
+      token = null
+      return false
     },
   }
 }

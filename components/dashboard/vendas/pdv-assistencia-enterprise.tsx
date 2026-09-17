@@ -924,7 +924,7 @@ function EditarAtalhosModal({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("assistencia")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
@@ -1370,9 +1370,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       paymentBlockedFeedback.notifyBlocked("pdv.multiplePayments", CAPABILITY_BLOCKED_COPY["pdv.multiplePayments"])
       return
     }
-    // N5-B1 R2 (P2-06): venda PENDING de identidade própria — reconfirmar
-    // criaria novo clientSaleId. Orienta para o retry existente.
-    if (pendingSaleIdentityRef.current?.hasPending()) {
+    // N5-B1 R2 (P2-06) / GOAL 002: venda PENDING de identidade própria e
+    // ainda não resolvida (syncPending) — reconfirmar criaria novo
+    // clientSaleId. Orienta para o retry existente.
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
       toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
       return
     }
@@ -1881,9 +1882,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   ): Promise<boolean> => {
     if (cart.length === 0 || discountOverTotal) return false
 
-    // N5-B1 R2 (P2-06): defesa em profundidade — venda PENDING de identidade
-    // própria não pode gerar nova confirmação (nova identidade = 2ª venda).
-    if (pendingSaleIdentityRef.current?.hasPending()) {
+    // N5-B1 R2 (P2-06) / GOAL 002: defesa em profundidade — venda PENDING de
+    // identidade própria e ainda não resolvida não pode gerar nova confirmação
+    // (nova identidade = 2ª venda).
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
       toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
       return false
     }
@@ -2190,6 +2192,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       discountReais,
       discountPercent,
       pdvType: "assistencia",
+      // N5-B1 GOAL 002: identidade PENDING viaja com o hold — o resume
+      // re-registra no guard (holds legados sem este campo seguem válidos).
+      pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
     }
     saveHeldSale(
       storeIdKey,
@@ -2202,8 +2207,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setSelectedClienteDoc(null)
     setDiscountReais(0)
     setDiscountPercent(0)
-    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de identidade
-    // PENDING liberado (a venda pendente segue syncing independente).
+    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de sessão
+    // liberado; a identidade PENDING continua preservada no próprio hold
+    // (re-registrada no resume) e a venda pendente segue syncing independente.
     pendingSaleIdentityRef.current?.clear()
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
   }
@@ -2247,6 +2253,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     setDiscountReais(discountRestore.discountReais)
     setDiscountPercent(discountRestore.discountPercent)
+    // N5-B1 GOAL 002: hold com identidade PENDING restaura a proteção —
+    // reconfirmar após o resume ficaria bloqueado (nova identidade = 2ª venda).
+    if (sale.pendingIdentity) pendingSaleIdentityRef.current?.register(sale.pendingIdentity)
     removeHeldSale(storeIdKey, terminalIdForHold, sale.id)
     return true
   }
