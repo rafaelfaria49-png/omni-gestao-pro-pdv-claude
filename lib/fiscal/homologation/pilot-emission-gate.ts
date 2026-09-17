@@ -143,6 +143,7 @@ type PilotActivationBinding = {
   readonly activationId: string
   readonly storeId: string
   readonly jobIdHash: string
+  readonly notaFiscalId: string
   readonly notBeforeMs: number
   readonly expiresAtMs: number
   readonly clock: () => Date
@@ -267,6 +268,7 @@ export async function consumePilotEmissionActivation(
     activationId,
     storeId: input.storeId,
     jobIdHash,
+    notaFiscalId: typeof input.notaFiscalId === "string" ? input.notaFiscalId : "",
     notBeforeMs: afterCommit.window.notBefore.getTime(),
     expiresAtMs: afterCommit.window.expiresAt.getTime(),
     clock,
@@ -406,4 +408,126 @@ export function createPilotEmissionGateTestHarness(options: {
 /** Cliente padrão do ledger one-shot. */
 export function defaultPilotEmissionLedgerClient(): PilotEmissionLedgerClient {
   return prisma as unknown as PilotEmissionLedgerClient
+}
+
+/* ========================================================================== *
+ * Prova opaca de autorização de EMISSAO do piloto (GOAL 022C)
+ *
+ * Handoff entre o executor armado e o freio GOAL-011 no queue-worker:
+ *  - nasce SOMENTE de uma ativação opaca consumida pelo ledger persistente
+ *    one-shot (`consumePilotEmissionActivation`), para o trio exato
+ *    (jobId, storeId, notaFiscalId) do consumo;
+ *  - vincula activationId + serviço literal `NFeAutorizacao4` + ambiente literal
+ *    `HOMOLOGACAO` + janela vigente;
+ *  - é opaca: o binding vive em `WeakMap` privado deste módulo. Copiar, clonar
+ *    (`{...prova}`), serializar (`JSON`) ou forjar objeto estrutural NÃO reproduz
+ *    a entrada — a validação é por identidade, não por forma;
+ *  - é one-shot em memória (`available=false` após o primeiro consumo válido):
+ *    uma prova não autoriza duas execuções.
+ *
+ * O queue-worker a consome EXCLUSIVAMENTE para job `EMISSAO`. Qualquer outro tipo,
+ * PRODUCAO, janela inválida, wiring dormente ou executor genérico jamais possui
+ * uma prova válida — o freio permanece DEFAULT DENY para todos eles.
+ * ========================================================================== */
+
+const PILOT_EMISSION_AUTHORIZATION_PROOF = Symbol("pilot-emission-authorization-proof")
+
+/** Token opaco — incapaz de ser forjado fora deste módulo (binding em WeakMap privado). */
+export type PilotEmissionAuthorizationProof = {
+  readonly [PILOT_EMISSION_AUTHORIZATION_PROOF]: true
+}
+
+export const PILOT_EMISSION_PROOF_SERVICO = "NFeAutorizacao4" as const
+export const PILOT_EMISSION_PROOF_AMBIENTE = "HOMOLOGACAO" as const
+
+type PilotEmissionProofBinding = {
+  available: boolean
+  readonly activationId: string
+  readonly jobId: string
+  readonly storeId: string
+  readonly notaFiscalId: string
+  readonly servico: typeof PILOT_EMISSION_PROOF_SERVICO
+  readonly ambiente: typeof PILOT_EMISSION_PROOF_AMBIENTE
+  readonly notBeforeMs: number
+  readonly expiresAtMs: number
+}
+
+const pilotEmissionProofBindings = new WeakMap<object, PilotEmissionProofBinding>()
+
+function textoId(value: unknown): string {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+/**
+ * Cria a prova de EMISSAO DESTA execução a partir da ativação consumida.
+ * Devolve `null` (fail-closed) quando a ativação é forjada, o trio diverge do
+ * consumo (job/store/nota), a nota é vazia ou a janela já encerrou.
+ */
+export function createPilotEmissionAuthorizationProof(
+  activation: PilotEmissionActivation,
+  input: { readonly jobId: string; readonly storeId: string; readonly notaFiscalId: string },
+): PilotEmissionAuthorizationProof | null {
+  const binding = pilotActivationBindings.get(activation)
+  if (!binding) return null
+  const jobId = textoId(input.jobId)
+  const storeId = textoId(input.storeId)
+  const notaFiscalId = textoId(input.notaFiscalId)
+  if (!jobId || !storeId || !notaFiscalId) return null
+  if (binding.storeId !== storeId) return null
+  if (binding.jobIdHash !== sha256Hex(jobId)) return null
+  if (!binding.notaFiscalId || binding.notaFiscalId !== notaFiscalId) return null
+  if (!pilotEmissionActivationStillActive(activation)) return null
+  const proof: PilotEmissionAuthorizationProof = Object.freeze({
+    [PILOT_EMISSION_AUTHORIZATION_PROOF]: true as const,
+  })
+  pilotEmissionProofBindings.set(proof, {
+    available: true,
+    activationId: binding.activationId,
+    jobId,
+    storeId,
+    notaFiscalId,
+    servico: PILOT_EMISSION_PROOF_SERVICO,
+    ambiente: PILOT_EMISSION_PROOF_AMBIENTE,
+    notBeforeMs: binding.notBeforeMs,
+    expiresAtMs: binding.expiresAtMs,
+  })
+  return proof
+}
+
+/** Existência nominal em runtime: cast/clone/objeto estrutural não atravessam o WeakMap. */
+export function isPilotEmissionAuthorizationProof(proof: unknown): proof is PilotEmissionAuthorizationProof {
+  return proof !== null && typeof proof === "object" && pilotEmissionProofBindings.has(proof)
+}
+
+/**
+ * Valida E consome (one-shot) a prova contra o job em processamento.
+ * Devolve `true` somente quando TUDO confere: identidade do token, disponibilidade
+ * (primeiro uso), trio (job/store/nota), serviço `NFeAutorizacao4`, ambiente
+ * `HOMOLOGACAO` e janela vigente. O consumo marca `available=false`: a mesma prova
+ * jamais autoriza uma segunda execução.
+ */
+export function consumePilotEmissionAuthorizationProof(
+  proof: unknown,
+  input: {
+    readonly jobId: string
+    readonly storeId: string
+    readonly notaFiscalId: string
+    readonly now?: Date
+  },
+): boolean {
+  if (proof === null || typeof proof !== "object") return false
+  const entry = pilotEmissionProofBindings.get(proof)
+  if (!entry || !entry.available) return false
+  if (entry.servico !== PILOT_EMISSION_PROOF_SERVICO) return false
+  if (entry.ambiente !== PILOT_EMISSION_PROOF_AMBIENTE) return false
+  if (textoId(input.jobId) !== entry.jobId) return false
+  if (textoId(input.storeId) !== entry.storeId) return false
+  if (textoId(input.notaFiscalId) !== entry.notaFiscalId || !entry.notaFiscalId) return false
+  const now = input.now ?? new Date()
+  const nowMs = now instanceof Date ? now.getTime() : NaN
+  if (!Number.isFinite(nowMs) || nowMs < entry.notBeforeMs || nowMs >= entry.expiresAtMs) {
+    return false
+  }
+  entry.available = false
+  return true
 }
