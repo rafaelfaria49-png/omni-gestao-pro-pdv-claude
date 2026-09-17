@@ -116,6 +116,11 @@
       "dir": "pdv-parity-suite-n5-b1-core-gaps-001",
       "risk_tier": "ALTO",
       "titulo": "<PREENCHER>"
+    },
+    "pdv-scan-inline-feedback-autofocus-006": {
+      "dir": "pdv-scan-inline-feedback-autofocus-006",
+      "risk_tier": "MEDIO",
+      "titulo": "<PREENCHER>"
     }
   },
   "remote_layer": {

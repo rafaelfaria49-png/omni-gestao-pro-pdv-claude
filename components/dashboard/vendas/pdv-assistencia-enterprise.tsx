@@ -70,8 +70,9 @@ import {
   type AccessorySelectionV1,
 } from "@/lib/acessorios/cart-line"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
-import { isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
+import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -1024,9 +1025,20 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     return () => window.clearInterval(t)
   }, [])
 
+  // Autofocus operacional (GOAL 006): ao entrar/retornar — em qualquer modo — o campo de bipe
+  // já está focado; o guard evita roubar foco de outro campo ou de modal aberto.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (canAutoFocusPdvBipe()) inputRef.current?.focus()
+    }, 150)
+    return () => window.clearTimeout(t)
+  }, [])
+
   useEffect(() => {
     if (!isModoRapido) return
-    const t = window.setTimeout(() => inputRef.current?.focus(), 200)
+    const t = window.setTimeout(() => {
+      if (canAutoFocusPdvBipe()) inputRef.current?.focus()
+    }, 200)
     return () => window.clearTimeout(t)
   }, [isModoRapido])
 
@@ -2293,7 +2305,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               <input
                 ref={inputRef}
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  // Digitação nova (scan ou busca manual) encerra na hora o aviso inline anterior.
+                  scanFeedback.dismiss()
+                  setSearch(e.target.value)
+                }}
+                aria-invalid={!!scanFeedback.inline.code || undefined}
                 onKeyDown={async (e) => {
                   if (!search.trim()) return
                   const parsed = parsePdvScanPrefix(search)
@@ -2357,8 +2374,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 }}
                 placeholder="Bipe o produto ou busque por nome / código  [F3]"
                 autoComplete="off"
-                className="h-11 w-full rounded-xl border border-border bg-card pl-10 pr-9 text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/25"
+                className={`h-11 w-full rounded-xl border bg-card pl-10 pr-9 text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 ${
+                  scanFeedback.inline.code
+                    ? "border-destructive/70 focus:border-destructive/70 focus:ring-destructive/25"
+                    : "border-border focus:border-primary/50 focus:ring-primary/25"
+                }`}
               />
+              {/* Aviso INLINE (GOAL 006): sobrepõe o próprio campo; input segue vazio e focado. */}
+              <PdvScanInlineNotFound feedback={scanFeedback.inline} className="rounded-xl pl-10 pr-9 text-sm" />
               {search ? (
                 <button
                   type="button"
