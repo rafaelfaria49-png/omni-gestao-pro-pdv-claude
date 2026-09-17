@@ -67,7 +67,7 @@ describe("createPdvScanNotFoundFeedback — um único aviso vivo", () => {
     fb.dismiss()
     expect(handles[0]!.dismiss).toHaveBeenCalledTimes(1)
     fb.notify("333")
-    expect(show).toHaveBeenLastCalledWith("333")
+    expect(show).toHaveBeenLastCalledWith("333", undefined)
   })
 })
 
@@ -92,7 +92,7 @@ describe("createPdvScanInlineNotFoundFeedback — aviso inline no próprio campo
     try {
       const { fb, last } = harness()
       fb.notify("6951454122135")
-      expect(last()).toEqual({ code: "6951454122135", seq: 1 })
+      expect(last()).toEqual({ code: "6951454122135", seq: 1, suggestsAvulso: false })
       vi.advanceTimersByTime(PDV_SCAN_NOT_FOUND_FEEDBACK_MS - 1)
       expect(last().code).toBe("6951454122135")
       vi.advanceTimersByTime(1)
@@ -110,7 +110,7 @@ describe("createPdvScanInlineNotFoundFeedback — aviso inline no próprio campo
       fb.notify("111")
       vi.advanceTimersByTime(1000)
       fb.notify("222")
-      expect(last()).toEqual({ code: "222", seq: 2 })
+      expect(last()).toEqual({ code: "222", seq: 2, suggestsAvulso: false })
       vi.advanceTimersByTime(PDV_SCAN_NOT_FOUND_FEEDBACK_MS - 1000)
       // o timer do 1º aviso venceria aqui — o 2º continua visível.
       expect(last().code).toBe("222")
@@ -131,7 +131,7 @@ describe("createPdvScanInlineNotFoundFeedback — aviso inline no próprio campo
       vi.advanceTimersByTime(PDV_SCAN_NOT_FOUND_FEEDBACK_MS * 2)
       expect(last().code).toBeNull()
       fb.notify("111")
-      expect(last()).toEqual({ code: "111", seq: 2 })
+      expect(last()).toEqual({ code: "111", seq: 2, suggestsAvulso: false })
     } finally {
       vi.useRealTimers()
     }
@@ -143,6 +143,23 @@ describe("createPdvScanInlineNotFoundFeedback — aviso inline no próprio campo
     fb.dismiss()
     fb.notify("999")
     expect(last().seq).toBe(2)
+  })
+
+  it("GOAL 007 — notify com suggestAvulso propaga o hint no estado (e o esconde junto)", () => {
+    vi.useFakeTimers()
+    try {
+      const { fb, last } = harness()
+      fb.notify("A05", { suggestAvulso: true })
+      expect(last()).toEqual({ code: "A05", seq: 1, suggestsAvulso: true })
+      vi.advanceTimersByTime(PDV_SCAN_NOT_FOUND_FEEDBACK_MS)
+      // Aviso sumido não deixa hint órfão visível.
+      expect(last()).toEqual({ code: null, seq: 1 })
+      // Modo A (sem hint) substitui o modo B na hora.
+      fb.notify("S23")
+      expect(last()).toEqual({ code: "S23", seq: 2, suggestsAvulso: false })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

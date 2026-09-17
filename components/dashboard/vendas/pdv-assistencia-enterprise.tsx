@@ -71,6 +71,7 @@ import {
 } from "@/lib/acessorios/cart-line"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
@@ -919,7 +920,7 @@ function EditarAtalhosModal({
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
   const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
-  const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig } = useStoreSettings()
+  const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("assistencia")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
@@ -1046,6 +1047,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [search, setSearch] = useState("")
   /** Aviso transitório de código não encontrado (um único aviso vivo). */
   const scanFeedback = usePdvScanNotFoundFeedback()
+  // GOAL 007 — política por loja "quando bipar um produto não cadastrado" (server-first).
+  const scanUnregisteredPolicy = useMemo(
+    () => resolvePdvScanUnregisteredPolicy(pdvScanUnregisteredAction),
+    [pdvScanUnregisteredAction],
+  )
+  /** Código do último miss scan-like — contexto do Item Avulso nos modos B/C. */
+  const missedScanCodeRef = useRef<string | null>(null)
   const [tab, setTab] = useState<"servicos" | "produtos" | "favoritos">("servicos")
   useEffect(() => {
     if (!quickServicesEnabled && tab === "servicos") setTab("produtos")
@@ -1060,6 +1068,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [discountPercent, setDiscountPercent] = useState(0)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  /** Contexto transitório (GOAL 007): código bipado não cadastrado semeado no modal. */
+  const [avulsoSeedCodigo, setAvulsoSeedCodigo] = useState<string | null>(null)
+  /** Único caminho de abertura do Item Avulso: TODO abrir é explícito sobre o contexto. */
+  const openItemAvulso = useCallback((seedCodigo: string | null) => {
+    setAvulsoSeedCodigo(seedCodigo)
+    setShowItemAvulsoModal(true)
+  }, [])
   const [recebimentoOpen, setRecebimentoOpen] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
   // Acessório com modelo/cor: produto aguardando seleção no modal compartilhado.
@@ -1505,7 +1520,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         if (anyModalOpen) return
         e.preventDefault()
         if (active === inputRef.current) setSearch("")
-        setShowItemAvulsoModal(true)
+        // GOAL 007 (modos B/C): contexto do último código não cadastrado, seguro apenas
+        // se o campo segue vazio (nada digitado depois do miss). Modo A abre limpo.
+        const stash = missedScanCodeRef.current
+        missedScanCodeRef.current = null
+        const campoVazio = (inputRef.current?.value ?? "").trim() === ""
+        openItemAvulso(scanUnregisteredPolicy.offersAvulsoContext && campoVazio ? stash : null)
         return
       }
 
@@ -1606,7 +1626,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget, accessoryTarget, scanFeedback])
+  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget, accessoryTarget, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct, priceOverride?: number, qtyToAdd: number = 1) => {
@@ -2368,7 +2388,19 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       if (scanLike) setSearch(search)
                       return
                     }
-                    scanFeedback.notify(code)
+                    scanFeedback.notify(code, {
+                      suggestAvulso: scanLike && scanUnregisteredPolicy.showInsertHint,
+                    })
+                    // GOAL 007 — política por loja só age APÓS o fluxo determinar PRODUTO NÃO
+                    // ENCONTRADO (match exato, parciais e busca textual nunca chegam aqui).
+                    // Miss de busca textual invalida o contexto do último código SCAN-like.
+                    missedScanCodeRef.current = scanLike ? code : null
+                    // Autoabertura (modo C) SÓ para scan-like; miss de busca textual nunca abre modal.
+                    if (scanLike && scanUnregisteredPolicy.autoOpenAvulso && !hasBlockingPdvDialog()) {
+                      // Modo C: Item Avulso UMA vez por scan, código como contexto.
+                      openItemAvulso(code)
+                      return
+                    }
                     queueMicrotask(() => inputRef.current?.focus())
                   }
                 }}
@@ -3030,12 +3062,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       {/* INSERT — Item Avulso (Venda Avulsa de balcão, não baixa estoque) */}
       <ItemAvulsoModal
         open={showItemAvulsoModal}
+        initialCodigo={avulsoSeedCodigo}
         onOpenChange={(open) => {
           setShowItemAvulsoModal(open)
-          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca.
+          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca
+          // e sem contexto transitório de scan (GOAL 007).
           if (!open) {
             setSearch("")
             scanFeedback.dismiss()
+            missedScanCodeRef.current = null
+            setAvulsoSeedCodigo(null)
           }
         }}
         onCloseAutoFocus={(e) => {

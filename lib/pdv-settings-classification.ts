@@ -74,6 +74,15 @@ export const PDV_SETTINGS_CLASSIFICATION_MATRIX: SettingKeyInventoryItem[] = [
     description: "Envelope de persistência de capabilities version: 1 da loja",
     actionN3: "Server autoritativo no banco de dados com validação estrita no PUT.",
   },
+  {
+    keyPattern: "printerConfig.pdvScanUnregisteredAction",
+    scope: "store",
+    classification: "SERVER_SETTING",
+    description:
+      "Ação do PDV ao bipar produto não cadastrado (GOAL 007): warn_continue | warn_offer_avulso | open_avulso",
+    actionN3:
+      "Server-first em printerConfig.pdvScanUnregisteredAction. Chave nova, sem espelho legado: sem backfill; inválido cai no default (warn_offer_avulso).",
+  },
 
   // ── UI_PREFERENCE_LOCAL (preferências locais de visualização) ───────────
   {

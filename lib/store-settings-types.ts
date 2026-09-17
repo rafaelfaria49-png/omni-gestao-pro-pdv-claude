@@ -2,6 +2,7 @@ import type { TermosGarantia } from "@/lib/config-empresa"
 import type { FormaPagamentoConfig } from "@/lib/pdv-formas-pagamento"
 import type { PdvImpressaoConfig } from "@/lib/pdv-impressao-config"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
+import type { PdvScanUnregisteredAction } from "@/lib/pdv-scan-unregistered-action"
 
 export type { StoreCapabilitiesV1, KnownCapabilityKeyV1 } from "@/lib/capabilities-persistence-v1"
 
@@ -70,6 +71,8 @@ export type StoreSettingsBlob = {
   v3PdvSectionCard?: string
   /** Modo inicial da loja no PDV Clássico (normal | rapido). */
   v3PdvClassicModoInicial?: "normal" | "rapido"
+  /** Ação ao bipar produto não cadastrado (GOAL 007): warn_continue | warn_offer_avulso | open_avulso. */
+  pdvScanUnregisteredAction?: PdvScanUnregisteredAction
 }
 
 export type StoreSettingsApi = {
