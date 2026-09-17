@@ -1,9 +1,9 @@
 {
   "aep": "1.0-R2",
   "track": "pdv-scan-inline-feedback-autofocus-006",
-  "status": "PLANNED",
+  "status": "RUNNING",
   "risk_tier": "MEDIO",
-  "current_goal": null,
+  "current_goal": "PDV-SCAN-INLINE-FEEDBACK-AUTOFOCUS-006",
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {

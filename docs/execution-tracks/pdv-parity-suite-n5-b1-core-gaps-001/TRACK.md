@@ -57,6 +57,7 @@ npx vitest run lib/pdv lib/pdv-hold.test.ts lib/pdv-payments.test.ts lib/pdv-for
 - branch de implementação: goal/pdv-parity-n5-b1-core-gaps
 - worktree de implementação: C:/Projetos/omni-gestao-pdv-n5b1-core-gaps
 - (este bootstrap vive em branch governance-only goal/pdv-n5-b1-aep-plan-to-main; nunca usar a worktree principal como worktree do GOAL)
+- GOAL corretivo PDV-PARITY-N5-B1-PENDING-IDENTITY-002: branch de implementação goal/pdv-parity-n5-b1-pending-identity-r3, worktree C:/Projetos/omni-gestao-pdv-n5b1-pending-identity-r3 — R3 a partir do candidato aprovado ebeab29f9f5b54cc7f7e9b1422ac31fe5a20c0ca + merge de origin/main corrente; bootstrap deste GOAL vive em branch governance-only goal/pdv-n5-b1-pending-identity-aep-plan-to-main
 
 ## Plano de origem
 
