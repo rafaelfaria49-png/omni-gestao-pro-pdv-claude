@@ -29,6 +29,8 @@ import { getProdutoFiscal, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-
 import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
 import type { ProductWriteContext, ProductWriteInput } from "@/lib/cadastros/product-write-contract"
 import { createProduct, updateProduct } from "@/lib/cadastros/product-write-service"
+import { createClient } from "@/lib/cadastros/client-write-service"
+import { clientWriteImportMessage } from "@/lib/cadastros/client-write-contract"
 import {
   alertasDaLinha,
   ativacaoDaAtualizacao,
@@ -90,9 +92,11 @@ function toStatusPrisma(s: string): StatusOrdemServico {
 async function persistirClientes(
   storeId: string,
   registros: RegistroMergeado[],
-  log: LogLinhaImport[]
+  log: LogLinhaImport[],
+  principal?: CadastrosAuditPrincipal | null,
 ): Promise<Map<string, string>> {
   const nomeParaId = new Map<string, string>()
+  const writeContext = { storeId, principal: principal ?? null }
 
   for (const reg of registros) {
     try {
@@ -105,49 +109,30 @@ async function persistirClientes(
       const docDigits = docDigitsForDedupe(campos.document)
       const nomeNorm = normalizeNameForMatch(campos.name)
 
-      // Busca por documento (CPF/CNPJ) primeiro — mais precisa que nome
-      const docDigitsLocal = docDigitsForDedupe(campos.document)
-      let existente: { id: string } | null = null
-      if (docDigitsLocal) {
-        existente = await prisma.cliente.findFirst({
-          where: { storeId, document: { contains: docDigitsLocal } },
-          select: { id: true },
-        })
-      }
-      // Fallback: busca por nome insensível a maiúsculas
-      if (!existente) {
-        existente = await prisma.cliente.findFirst({
-          where: {
-            storeId,
-            name: { equals: campos.name, mode: "insensitive" as const },
-          },
-          select: { id: true },
-        })
-      }
-
       const cidadeUf = [campos.city].filter(Boolean).join("") || ""
-      const data = {
-        storeId,
+      const written = await createClient(writeContext, {
         name: campos.name,
         phone: campos.phone ?? null,
         email: campos.email ?? null,
         document: campos.document || "",
-        kind: (campos.kind === "PJ" ? "PJ" : "PF") as string,
+        kind: campos.kind === "PJ" ? "PJ" : "PF",
         city: cidadeUf,
         active: campos.active ?? true,
-        tags: campos.payload as Prisma.InputJsonValue,
+        tags: campos.payload,
+      })
+
+      if (!written.ok) {
+        log.push({
+          dominio: "clientes",
+          chave: reg.chave,
+          acao: written.code === "VALIDATION" ? "erro" : "ignorado",
+          detalhe: clientWriteImportMessage(written),
+        })
+        continue
       }
 
-      let id: string
-      if (existente) {
-        await prisma.cliente.update({ where: { id: existente.id }, data })
-        id = existente.id
-        log.push({ dominio: "clientes", chave: reg.chave, acao: "atualizado" })
-      } else {
-        const criado = await prisma.cliente.create({ data })
-        id = criado.id
-        log.push({ dominio: "clientes", chave: reg.chave, acao: "criado" })
-      }
+      const id = written.id
+      log.push({ dominio: "clientes", chave: reg.chave, acao: "criado" })
 
       nomeParaId.set(nomeNorm, id)
       if (docDigits) nomeParaId.set(docDigits, id)
@@ -1117,7 +1102,7 @@ export async function persistirImportacao(
   const clienteNomeParaId = new Map<string, string>()
   const regClientes = grupos.get("clientes") ?? []
   if (regClientes.length > 0) {
-    const mapa = await persistirClientes(storeId, regClientes, log)
+    const mapa = await persistirClientes(storeId, regClientes, log, principal ?? null)
     for (const [k, v] of mapa) clienteNomeParaId.set(k, v)
   }
 

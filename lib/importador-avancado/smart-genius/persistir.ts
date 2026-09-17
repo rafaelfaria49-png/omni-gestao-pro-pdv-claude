@@ -2,7 +2,7 @@
 // lib/importador-avancado/smart-genius/persistir.ts
 // Persistência server-side dos dois relatórios Smart Genius.
 //
-// Clientes  → upsert mínimo seguro em `Cliente` (dedupe por nome, multi-loja).
+// Clientes  → create via ClientWriteService (identidade canônica; nome NÃO é identidade).
 // Contas a Receber → 2 títulos por cliente (atraso=VENCIDO, a vencer=PENDENTE)
 //   via `upsertContaReceber` (idempotente por storeId+localKey).
 //
@@ -13,7 +13,7 @@
 //
 // Invariantes (inalteradas):
 //  - storeId obrigatório em TODA query (multi-loja).
-//  - Idempotência: reimportar não duplica (dedupe por nome / localKey estável).
+//  - Clientes: sem dedupe por nome. Contas a Receber: localKey estável.
 //  - Não rebaixa título já pago/parcial/cancelado/estornado.
 //  - Importa o PRINCIPAL ("Em atraso"/"A vencer"); "Reaj"/"Total"/"Tot. Reaj"
 //    ficam apenas na observação (payload). Nunca soma juros ao principal.
@@ -23,6 +23,9 @@ import { prisma } from "@/lib/prisma"
 import { upsertContaReceber } from "@/lib/financeiro/services/contas-receber-service"
 import { RECEBER_STATUS, normalizeReceberStatus, type ReceberStatusCanon } from "@/lib/financeiro/contracts/status"
 import { FINANCEIRO_ORIGEM } from "@/lib/financeiro/contracts/origem"
+import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
+import { createClient } from "@/lib/cadastros/client-write-service"
+import { clientWriteImportMessage } from "@/lib/cadastros/client-write-contract"
 import type { SmartClienteNormalizado, SmartContaReceberNormalizada } from "./tipos"
 
 const ORIGEM_SISTEMA = "smart-genius" as const
@@ -67,14 +70,10 @@ function fatiar<T>(itens: T[], tamanho: number): T[][] {
 
 // ── Clientes ─────────────────────────────────────────────────
 
-/** Chave case-insensitive (espelha `equals … mode:"insensitive"` do Prisma). */
-function ciKey(s: string): string {
-  return s.trim().toLowerCase()
-}
-
 export async function persistirClientesSmart(
   storeId: string,
   clientes: SmartClienteNormalizado[],
+  principal?: CadastrosAuditPrincipal | null,
 ): Promise<SmartPersistResultado> {
   const out = vazio()
   const sid = String(storeId ?? "").trim()
@@ -84,9 +83,9 @@ export async function persistirClientesSmart(
     return out
   }
 
-  // 1. Dedupe no arquivo por nome (case-insensitive). Evita race de creates
-  //    do mesmo nome quando rodando em paralelo (Cliente não tem unique de nome).
-  const porNome = new Map<string, SmartClienteNormalizado>()
+  const writeContext = { storeId: sid, principal: principal ?? null }
+
+  // Sequencial: sem Promise.all, sem dedupe por nome (nome não é identidade).
   for (const c of clientes) {
     const nome = c.nome.trim()
     if (!nome) {
@@ -94,59 +93,43 @@ export async function persistirClientesSmart(
       out.log.push({ chave: `linha ${c.linha}`, acao: "pulado", detalhe: "nome vazio" })
       continue
     }
-    const k = ciKey(nome)
-    if (!porNome.has(k)) porNome.set(k, c)
-  }
-  const unicos = [...porNome.values()]
-
-  // 2. Snapshot do banco em lote: nome(ci) → id. 1 query por chunk de 200.
-  const idPorNome = new Map<string, string>()
-  for (const chunk of fatiar(unicos.map((c) => c.nome.trim()), SNAPSHOT_CHUNK)) {
-    const rows = await prisma.cliente.findMany({
-      where: { storeId: sid, name: { in: chunk, mode: "insensitive" } },
-      select: { id: true, name: true, storeId: true },
-    })
-    for (const r of rows) {
-      if (r.storeId !== sid) continue // defesa em profundidade multi-loja
-      idPorNome.set(ciKey(r.name), r.id)
-    }
-  }
-
-  // 3. Escrita em chunks paralelos.
-  await emChunks(unicos, CONCORRENCIA, async (c) => {
-    const nome = c.nome.trim()
     try {
-      const id = idPorNome.get(ciKey(nome))
-      if (id) {
-        // Update conservador: só sobrescreve quando vier preenchido (não apaga).
-        await prisma.cliente.update({
-          where: { id },
-          data: { phone: c.telefone || undefined, city: c.cidade || undefined },
-        })
-        out.atualizados++
-        out.log.push({ chave: nome, acao: "atualizado" })
-      } else {
-        await prisma.cliente.create({
-          data: { storeId: sid, name: nome, kind: "PF", phone: c.telefone || null, city: c.cidade || "" },
-        })
+      const written = await createClient(writeContext, {
+        name: nome,
+        kind: "PF",
+        phone: c.telefone || null,
+        city: c.cidade || "",
+      })
+      if (written.ok) {
         out.criados++
-        out.log.push({ chave: nome, acao: "criado" })
+        out.log.push({ chave: `linha ${c.linha}`, acao: "criado" })
+        continue
       }
+      if (
+        written.code === "IDENTITY_REVIEW_REQUIRED" ||
+        written.code === "IDENTITY_CONFLICT" ||
+        written.code === "AMBIGUOUS"
+      ) {
+        out.pulados++
+        out.log.push({ chave: `linha ${c.linha}`, acao: "pulado", detalhe: clientWriteImportMessage(written) })
+        continue
+      }
+      out.erros++
+      out.log.push({ chave: `linha ${c.linha}`, acao: "erro", detalhe: clientWriteImportMessage(written) })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      // Race rara (criado em paralelo por outra request) → conta como pulado, não falha o lote.
       if (msg.includes("Unique") || msg.includes("P2002")) {
         out.pulados++
-        out.log.push({ chave: nome, acao: "pulado", detalhe: "duplicata (race)" })
+        out.log.push({ chave: `linha ${c.linha}`, acao: "pulado", detalhe: "duplicata (race)" })
       } else {
         out.erros++
-        out.log.push({ chave: nome, acao: "erro", detalhe: msg })
+        out.log.push({ chave: `linha ${c.linha}`, acao: "erro", detalhe: msg })
       }
     }
-  })
+  }
 
   console.info(
-    `[import/smart/clientes] storeId=${sid} arquivo=${clientes.length} unicos=${unicos.length} ` +
+    `[import/smart/clientes] storeId=${sid} arquivo=${clientes.length} ` +
       `criados=${out.criados} atualizados=${out.atualizados} pulados=${out.pulados} erros=${out.erros}`,
   )
   return out

@@ -1,15 +1,18 @@
 /**
- * Lógica de importação JSON → `prisma.cliente` (`clientes_importados`).
+ * Importação JSON de clientes via ClientWriteService (CAD-R2-008).
  * Campos persistidos: `storeId`, `name`, `phone`, `email`.
  */
 import { NextResponse } from "next/server"
 import { Prisma } from "@/generated/prisma"
-import { prisma } from "@/lib/prisma"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
 import { isVencimentoExpired } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { cellToTrimmedString } from "@/lib/import-normalize"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { auth } from "@/auth"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
+import { createClient } from "@/lib/cadastros/client-write-service"
+import { clientWriteImportMessage } from "@/lib/cadastros/client-write-contract"
 
 function missingClientesTableResponse() {
   return NextResponse.json(
@@ -89,6 +92,10 @@ export async function importClientesJson(req: Request) {
   let updated = 0
 
   try {
+    const session = await auth().catch(() => null)
+    const principal = cadastrosAuditPrincipalFromSession(session)
+    const writeContext = { storeId, principal }
+
     const batchSize = 10
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize)
@@ -100,25 +107,17 @@ export async function importClientesJson(req: Request) {
         const phone = pickPhone(o) || null
         const email = pickEmail(o) || null
 
-        let existing =
-          phone != null && phone !== ""
-            ? await prisma.cliente.findFirst({ where: { storeId, phone } })
-            : null
-        if (!existing) {
-          existing = await prisma.cliente.findFirst({ where: { storeId, name } })
-        }
-
-        if (existing) {
-          await prisma.cliente.update({
-            where: { id: existing.id },
-            data: { name, phone, email },
-          })
-          updated += 1
-        } else {
-          await prisma.cliente.create({
-            data: { storeId, name, phone, email },
-          })
+        const written = await createClient(writeContext, { name, phone, email })
+        if (written.ok) {
           created += 1
+        } else if (
+          written.code === "IDENTITY_REVIEW_REQUIRED" ||
+          written.code === "IDENTITY_CONFLICT" ||
+          written.code === "AMBIGUOUS"
+        ) {
+          console.info("[import-clientes-json] linha exigiu revisão de identidade:", written.code)
+        } else {
+          console.info("[import-clientes-json] linha ignorada:", clientWriteImportMessage(written))
         }
       }
     }

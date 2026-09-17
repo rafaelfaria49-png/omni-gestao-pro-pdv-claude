@@ -12,6 +12,7 @@
 
 import { parsearArquivoSmart } from "./parser"
 import { persistirClientesSmart, persistirContasReceberSmart } from "./persistir"
+import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
 import type { SmartClientesParse, SmartContasReceberParse, SmartGeniusLayout } from "./tipos"
 
 export type SmartDominio = "clientes" | "contas_receber"
@@ -121,6 +122,7 @@ export type SmartPersistAgregado = {
 export async function persistirSmartSeparado(
   storeId: string,
   sep: SmartSeparacao,
+  principal?: CadastrosAuditPrincipal | null,
 ): Promise<SmartPersistAgregado> {
   const agg: SmartPersistAgregado = {
     totais: { criados: 0, atualizados: 0, ignorados: 0, erros: 0 },
@@ -146,7 +148,7 @@ export async function persistirSmartSeparado(
 
   // 1) Clientes primeiro.
   for (const p of sep.clientes) {
-    const r = await persistirClientesSmart(storeId, p.validos)
+    const r = await persistirClientesSmart(storeId, p.validos, principal)
     acumular("clientes", r)
   }
   // 2) Contas a receber (referenciam o cliente por nome — já criado acima).

@@ -1,9 +1,11 @@
-import { Prisma, type Cliente } from "@/generated/prisma"
+import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
 import { isVencimentoExpired } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { cellToTrimmedString } from "@/lib/import-normalize"
+import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
+import { createClient } from "@/lib/cadastros/client-write-service"
 
 export type ClienteListItem = {
   id: string
@@ -77,13 +79,15 @@ export async function listClientesForLoja(storeId: string): Promise<ClienteListI
 
 export async function importClientesItems(
   storeId: string,
-  items: unknown[]
+  items: unknown[],
+  principal?: CadastrosAuditPrincipal | null,
 ): Promise<{ created: number; updated: number; skippedDuplicate: number }> {
   await withDbRetry("$connect", () => prisma.$connect())
 
   let created = 0
   let updated = 0
   let skippedDuplicate = 0
+  const writeContext = { storeId, principal: principal ?? null }
 
   for (const row of items) {
     if (!row || typeof row !== "object") continue
@@ -96,42 +100,29 @@ export async function importClientesItems(
       const email = cellToTrimmedString(r["Email"] ?? r["E-mail"] ?? r["email"]) || ""
       if (!nome) continue
 
-      let existing: Cliente | null = null
-      if (telefone) {
-        existing = await withDbRetry("findFirst-phone", () =>
-          prisma.cliente.findFirst({ where: { storeId, phone: telefone } })
-        )
-      }
-      if (!existing) {
-        existing = await withDbRetry("findFirst-name", () =>
-          prisma.cliente.findFirst({ where: { storeId, name: nome } })
-        )
-      }
-
-      if (existing) {
-        await withDbRetry("update", () =>
-          prisma.cliente.update({
-            where: { id: existing!.id },
-            data: { name: nome, phone: telefone || null, email: email || null },
-          })
-        )
-        updated += 1
-      } else {
-        await withDbRetry("create", () =>
-          prisma.cliente.create({
-            data: {
-              storeId,
-              name: nome,
-              phone: telefone || null,
-              email: email || null,
-            },
-          })
-        )
+      const written = await withDbRetry("createClient", () =>
+        createClient(writeContext, {
+          nome,
+          telefone: telefone || null,
+          email: email || null,
+        }),
+      )
+      if (written.ok) {
         created += 1
+      } else if (
+        written.code === "IDENTITY_REVIEW_REQUIRED" ||
+        written.code === "IDENTITY_CONFLICT" ||
+        written.code === "AMBIGUOUS"
+      ) {
+        skippedDuplicate += 1
+      } else if (written.code === "VALIDATION") {
+        continue
+      } else {
+        throw new Error(written.message)
       }
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        console.warn("[clientes-import] Unique constraint (duplicado) — ignorando e seguindo:", row)
+        console.warn("[clientes-import] Unique constraint (duplicado) — ignorando e seguindo")
         skippedDuplicate += 1
         continue
       }
