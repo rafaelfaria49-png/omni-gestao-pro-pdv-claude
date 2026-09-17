@@ -5,6 +5,7 @@ import {
   withExecutionResult,
   withTransmissionStarted,
 } from "./queue-policy"
+import { consumePilotEmissionAuthorizationProof } from "../homologation/pilot-emission-gate"
 import type {
   DrainFiscalQueueInput,
   DrainFiscalQueueItemResult,
@@ -553,11 +554,28 @@ async function processLease(input: {
     prova.notaFiscalId === String(job.notaFiscalId ?? "") &&
     ((job.tipo === "CONTINGENCIA_TRANSMISSAO" && prova.kind === "transmissao_autorizada") ||
       (job.tipo === "CONSULTA" && prova.kind === "consulta_autorizada"))
+  /**
+   * Prova OPACA de EMISSAO do piloto de homologação (GOAL 022C): SOMENTE job `EMISSAO`
+   * com prova nascida do consumo persistente one-shot da ativação (activationId +
+   * job/store/nota + NFeAutorizacao4 + HOMOLOGACAO + janela vigente). A validação é
+   * por identidade (WeakMap) com consumo one-shot: objeto estrutural, clone,
+   * `providerInvoked` isolado ou booleano genérico NÃO atravessam. Não vale para
+   * nenhum outro tipo — a exceção não é ampliada.
+   */
+  const provaPilotoEmissaoCoerente =
+    job.tipo === "EMISSAO" &&
+    consumePilotEmissionAuthorizationProof(execution.pilotEmissionExternalAuthorization, {
+      jobId: job.id,
+      storeId: job.storeId,
+      notaFiscalId: String(job.notaFiscalId ?? ""),
+      now: input.now(),
+    })
   if (
     !maisRestritivoQueTerminal &&
     !repeticaoDeConsultaSegura &&
     !inutilizacaoRealAutorizada &&
     !provaTipadaCoerente &&
+    !provaPilotoEmissaoCoerente &&
     !consultaResolvidaPeloPipeline &&
     !execution.simulado
   ) {

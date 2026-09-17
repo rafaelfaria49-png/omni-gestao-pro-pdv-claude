@@ -61,6 +61,7 @@ import { OFFICIAL_XSD_MANIFEST_SHA256 } from "@/lib/fiscal/xsd/official-package"
 import { NFCE_HOMOLOGATION_PILOT_QR_URLS } from "./nfce-homologation-pilot-wiring"
 import {
   consumePilotEmissionActivation,
+  createPilotEmissionAuthorizationProof,
   createPilotEmissionExternalAuthority,
   evaluatePilotEmissionWindow,
   PILOT_EMISSION_HOMOLOGATION_WINDOW,
@@ -415,6 +416,25 @@ export function createArmedNfceHomologationPilotWiring(input: {
       )
     }
 
+    /**
+     * Prova opaca de EMISSAO DESTA execução (GOAL 022C): nasce da MESMA ativação
+     * consumida, vinculada a job/store/nota + NFeAutorizacao4/HOMOLOGACAO + janela.
+     * É anexada ao resultado SOMENTE quando o provider foi de fato invocado —
+     * o queue-worker a consome (one-shot) para preservar o desfecho real sem
+     * reescrevê-lo para `provider_real_bloqueado`. Falha aqui ⇒ fail-closed.
+     */
+    const emissionProof = createPilotEmissionAuthorizationProof(consumed.activation, {
+      jobId: job.id,
+      storeId: job.storeId,
+      notaFiscalId: String(job.notaFiscalId),
+    })
+    if (!emissionProof) {
+      return negado(
+        "pilot_emission_prova_indisponivel",
+        "Prova de autorização da emissão não nasceu da ativação consumida; bloqueado.",
+      )
+    }
+
     // Authority externa DESTA execução → transporte produtivo one-shot.
     const authority = createPilotEmissionExternalAuthority(consumed.activation, {
       jobId: job.id,
@@ -438,7 +458,17 @@ export function createArmedNfceHomologationPilotWiring(input: {
       now: clock,
       capability,
     }
-    return createUncertainStateJobExecutor(executorDependencies)(job)
+    const outcome = await createUncertainStateJobExecutor(executorDependencies)(job)
+    /**
+     * Handoff 022C: o desfecho REAL (success/uncertain/throttled/processing/terminal
+     * com `providerInvoked`) atravessa o freio GOAL-011 SOMENTE com esta prova opaca.
+     * As flags de auditoria (`simulado`/`externalTransmissionAttempted`) seguem
+     * exatamente as da proveniência do boundary de transporte — nada é fabricado aqui.
+     */
+    if (outcome.providerInvoked === true) {
+      return { ...outcome, pilotEmissionExternalAuthorization: emissionProof }
+    }
+    return outcome
   }
 
   // Ports do worker canônico com o executor ARMADO no lugar do default — o dispatch da
