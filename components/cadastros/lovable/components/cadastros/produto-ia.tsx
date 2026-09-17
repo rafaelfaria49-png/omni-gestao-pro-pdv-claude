@@ -3,7 +3,7 @@ import {
   Sparkles, Link2, Barcode, ImagePlus, Type, Check, Loader2,
   Wand2, Layers, Tag as TagIcon, Store,
   AlertCircle, Image as ImageIcon,
-  Send, Plus, ChevronDown, PackagePlus, MessageSquareText,
+  Send, Plus, ChevronDown, PackagePlus, MessageSquareText, Mic, Square,
 } from "lucide-react";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea } from "./ui-kit";
 import { MovimentacaoEstoqueModal } from "./MovimentacaoEstoqueModal";
@@ -20,11 +20,22 @@ import {
 } from "@/app/actions/cadastros";
 import { interpretarProdutoTextoLivre } from "@/app/actions/produto-texto-livre";
 import type {
+  CaptureSourceTextoLivre,
   NomeCampoTextoLivre,
   OrigemCampoTextoLivre,
   SugestaoTextoLivre,
 } from "@/lib/cadastros/natural-text";
 import { calcularAplicacaoTextoLivre } from "@/lib/cadastros/natural-text";
+import {
+  detectVoiceCaptureCapability,
+  montarTextoCaptura,
+  reduceVoiceCapture,
+  startBrowserVoiceCapture,
+  VOICE_CAPTURE_INITIAL,
+  type VoiceBrowserSession,
+  type VoiceCaptureEvent,
+  type VoiceCaptureSnapshot,
+} from "@/lib/cadastros/voice-capture";
 // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reaproveita a seção do Catálogo de Aparelhos
 // (mesma UI/guardrails do /dashboard/estoque) e o contrato de metadata já publicado.
 import {
@@ -147,6 +158,21 @@ function nomeBackendTextoLivre(sugestao: SugestaoTextoLivre): string {
   if (backend === "openai") return "OpenAI";
   if (backend === "gemini") return "Gemini";
   return "extração local";
+}
+
+function rotuloCapturaTextoLivre(origem: CaptureSourceTextoLivre): string {
+  return origem === "voice" ? "voz → texto livre" : "texto livre";
+}
+
+function rotuloEstadoVoz(voz: VoiceCaptureSnapshot): string {
+  if (voz.status === "listening") return "Ouvindo";
+  if (voz.status === "transcribing") return "Transcrevendo";
+  if (voz.status === "completed") return "Concluído";
+  if (voz.status === "permission-denied") return "Permissão negada";
+  if (voz.status === "unavailable") return "Indisponível neste navegador";
+  if (voz.status === "error") return "Erro";
+  if (voz.status === "cancelled") return "Cancelado";
+  return "Pronto";
 }
 
 /* ── Combobox com autocomplete + "criar novo" (Categoria/Marca) ── */
@@ -423,6 +449,10 @@ export function ProductAIModal({
   const [textoSugestao, setTextoSugestao] = useState<SugestaoTextoLivre | null>(null);
   const [textoExcluidos, setTextoExcluidos] = useState<string[]>([]);
   const [textoErro, setTextoErro] = useState<string | null>(null);
+  const [textoCaptureSource, setTextoCaptureSource] = useState<CaptureSourceTextoLivre>("text");
+  const [voz, setVoz] = useState<VoiceCaptureSnapshot>(VOICE_CAPTURE_INITIAL);
+  const vozSessionRef = useRef<VoiceBrowserSession | null>(null);
+  const textoLivreAntesVozRef = useRef("");
 
   // Modal de movimentação de estoque (Parte 13) — só em edição.
   const [movimentacaoAberta, setMovimentacaoAberta] = useState(false);
@@ -471,12 +501,38 @@ export function ProductAIModal({
     setTextoSugestao(null);
     setTextoExcluidos([]);
     setTextoErro(null);
+    setTextoCaptureSource("text");
+    setVoz((prev) =>
+      prev.status === "unavailable" ? prev : { ...VOICE_CAPTURE_INITIAL },
+    );
+    vozSessionRef.current = null;
     barcodeLookupRequestRef.current += 1;
   }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest, initial?.metadata]);
 
   useEffect(() => {
     if (open && source === "barcode") barcodeScannerRef.current?.focus();
   }, [open, source]);
+
+  // CAD-R2-017 — feature detection honesta. Nunca inicia captura no mount.
+  useEffect(() => {
+    const cap = detectVoiceCaptureCapability(typeof window === "undefined" ? null : window);
+    setVoz((prev) => reduceVoiceCapture(prev, { type: "capability", available: cap.available }));
+  }, []);
+
+  useEffect(() => {
+    if (open && source === "texto") return;
+    if (vozSessionRef.current) {
+      vozSessionRef.current.cancel();
+      vozSessionRef.current = null;
+    }
+  }, [open, source]);
+
+  useEffect(() => {
+    return () => {
+      vozSessionRef.current?.dispose();
+      vozSessionRef.current = null;
+    };
+  }, []);
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reidrata a compatibilidade ao abrir/editar.
   // Lê o endpoint read-only já publicado (GET /api/catalogo/aparelhos/produto/[id]). Sempre
@@ -757,7 +813,9 @@ export function ProductAIModal({
     setTextoErro(null);
     startInterpretacaoTexto(async () => {
       try {
-        const result = await interpretarProdutoTextoLivre(storeId, texto);
+        const result = await interpretarProdutoTextoLivre(storeId, texto, {
+          captureSource: textoCaptureSource,
+        });
         if (!result.ok) {
           setTextoErro(result.message);
           return;
@@ -768,6 +826,57 @@ export function ProductAIModal({
         setTextoErro("Não foi possível interpretar o texto agora. Tente novamente.");
       }
     });
+  };
+
+  const emitirEventoVoz = (event: VoiceCaptureEvent) => {
+    setVoz((prev) => {
+      const next = reduceVoiceCapture(prev, event);
+      if (next.status === "completed" && next.sessionTranscript.trim()) {
+        const mesclado = montarTextoCaptura(textoLivreAntesVozRef.current, next.sessionTranscript);
+        queueMicrotask(() => {
+          setTextoLivre(mesclado);
+          setTextoCaptureSource("voice");
+        });
+      }
+      if (next.status === "cancelled" || next.status === "permission-denied") {
+        queueMicrotask(() => setTextoLivre(textoLivreAntesVozRef.current));
+      }
+      if (next.status === "error" && !next.sessionTranscript.trim()) {
+        queueMicrotask(() => setTextoLivre(textoLivreAntesVozRef.current));
+      }
+      return next;
+    });
+  };
+
+  const iniciarVoz = () => {
+    if (interpretandoTexto) return;
+    if (voz.status === "unavailable") return;
+    if (voz.status === "listening" || voz.status === "transcribing") return;
+    textoLivreAntesVozRef.current = textoLivre;
+    emitirEventoVoz({ type: "start" });
+    const session = startBrowserVoiceCapture({ emit: emitirEventoVoz, lang: "pt-BR" });
+    if (!session.ok) {
+      vozSessionRef.current = null;
+      if (session.reason === "unavailable") {
+        emitirEventoVoz({ type: "capability", available: false });
+      } else {
+        emitirEventoVoz({ type: "error", code: "start-failed" });
+      }
+      setTextoLivre(textoLivreAntesVozRef.current);
+      return;
+    }
+    vozSessionRef.current = session;
+  };
+
+  const pararVoz = () => {
+    vozSessionRef.current?.stop();
+    vozSessionRef.current = null;
+  };
+
+  const cancelarVoz = () => {
+    vozSessionRef.current?.cancel();
+    vozSessionRef.current = null;
+    setTextoLivre(textoLivreAntesVozRef.current);
   };
 
   const alternarExclusaoTextoLivre = (campo: string) => {
@@ -832,7 +941,7 @@ export function ProductAIModal({
 
   const title = productId ? "Editar produto" : "Novo produto";
   return (
-    <Modal open={open} onClose={onClose} title={title} subtitle="Fase 1: cadastro real no banco — texto livre interpreta de verdade (sem OCR/voz)." size="xl">
+    <Modal open={open} onClose={onClose} title={title} subtitle="Cadastro real no banco — descreva por texto ou voz; a IA só sugere após revisão. Áudio e transcrição não são salvos." size="xl">
       <div className="space-y-6">
         {/* IA SOURCE */}
         <Card className="p-5 border-primary/30 bg-primary/5">
@@ -868,31 +977,105 @@ export function ProductAIModal({
           </div>
           {source === "texto" ? (
             <div className="mt-3 grid gap-2">
-              <Textarea
-                value={textoLivre}
-                onChange={(event) => {
-                  setTextoLivre(event.target.value);
-                  setTextoErro(null);
-                }}
-                rows={3}
-                maxLength={2000}
-                placeholder="Ex.: Película 3D para iPhone 15, custa 4 reais e vendo por 25"
-                title="Descreva o produto em linguagem natural — a IA sugere o preenchimento para revisão"
-              />
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] text-muted-foreground">
-                  {textoLivre.trim().length}/2000 · preço, custo, estoque e fornecedor só entram se você declarar.
-                </span>
-                <button
-                  type="button"
-                  onClick={runInterpretacaoTextoLivre}
-                  disabled={interpretandoTexto || textoLivre.trim().length === 0}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-                >
-                  {interpretandoTexto ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareText className="h-4 w-4" />}
-                  Interpretar com IA
-                </button>
-              </div>
+              {(() => {
+                const ouvindo = voz.status === "listening" || voz.status === "transcribing";
+                const textoExibido = ouvindo
+                  ? montarTextoCaptura(textoLivreAntesVozRef.current, voz.sessionTranscript, voz.interim)
+                  : textoLivre;
+                return (
+                  <>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground">
+                        texto
+                      </span>
+                      <span className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground">
+                        microfone
+                      </span>
+                      <span className="min-w-0 text-[11px] text-muted-foreground">
+                        {rotuloEstadoVoz(voz)}
+                        {voz.status === "unavailable"
+                          ? " — Chrome ou Edge em HTTPS/localhost."
+                          : null}
+                      </span>
+                    </div>
+                    <Textarea
+                      value={textoExibido}
+                      onChange={(event) => {
+                        if (ouvindo) return;
+                        setTextoLivre(event.target.value);
+                        setTextoErro(null);
+                      }}
+                      rows={3}
+                      maxLength={2000}
+                      readOnly={ouvindo}
+                      placeholder="Ex.: Película 3D para iPhone 15, custa 4 reais e vendo por 25"
+                      title="Descreva o produto em linguagem natural — a IA sugere o preenchimento para revisão"
+                    />
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                      <span className="min-w-0 text-[11px] text-muted-foreground">
+                        {textoExibido.trim().length}/2000 · preço, custo, estoque e fornecedor só entram se você declarar.
+                      </span>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        {ouvindo ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={pararVoz}
+                              className="flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground"
+                            >
+                              <Square className="h-4 w-4" /> Encerrar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelarVoz}
+                              className="flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={iniciarVoz}
+                            disabled={voz.status === "unavailable" || interpretandoTexto}
+                            title={
+                              voz.status === "unavailable"
+                                ? "Reconhecimento de voz indisponível neste navegador"
+                                : "Gravar descrição por voz (pede permissão de microfone)"
+                            }
+                            className="flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground disabled:opacity-60"
+                          >
+                            <Mic className="h-4 w-4" /> Microfone
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={runInterpretacaoTextoLivre}
+                          disabled={interpretandoTexto || textoExibido.trim().length === 0 || ouvindo}
+                          className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                        >
+                          {interpretandoTexto ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareText className="h-4 w-4" />}
+                          Interpretar com IA
+                        </button>
+                      </div>
+                    </div>
+                    {voz.status !== "ready" && voz.message ? (
+                      <div
+                        role="status"
+                        className={`rounded-lg border p-3 text-xs ${
+                          voz.status === "permission-denied" || voz.status === "error"
+                            ? "border-destructive/40 bg-destructive/10 text-destructive"
+                            : voz.status === "unavailable"
+                              ? "border-amber-500/40 bg-amber-500/10 text-foreground"
+                              : "border-border bg-background text-muted-foreground"
+                        }`}
+                      >
+                        {voz.message}
+                      </div>
+                    ) : null}
+                  </>
+                );
+              })()}
               {textoErro && (
                 <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
                   {textoErro}
@@ -994,9 +1177,9 @@ export function ProductAIModal({
                 </div>
               )}
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Origem: texto livre · {nomeBackendTextoLivre(textoSugestao)} ·{" "}
+                Origem: {rotuloCapturaTextoLivre(textoSugestao.proveniencia.captureSource)} · {nomeBackendTextoLivre(textoSugestao)} ·{" "}
                 {new Date(textoSugestao.proveniencia.interpretedAt).toLocaleString("pt-BR")}. O texto
-                original não é salvo no produto.
+                original e o áudio não são salvos no produto.
               </p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-muted-foreground">
@@ -1399,6 +1582,7 @@ export function ProductAIModal({
                     active: true,
                     accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue),
                     metadata: {
+                      // CAD-R2-017: nao gravar audio, blob, prompt nem transcricao.
                       cadastroIa: {
                         phase: "fase1-stub",
                         savedAt: new Date().toISOString(),

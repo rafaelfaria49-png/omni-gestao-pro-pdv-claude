@@ -79,12 +79,23 @@ export type CampoTextoLivre<T> = {
 export type BackendTextoLivre = "openrouter" | "openai" | "gemini" | "local-deterministico"
 
 /**
- * Proveniência segura da sugestão. Contém APENAS: fonte, backend/model
- * (nomes, nunca chaves), instante e listas de campos. NUNCA texto do operador,
- * prompt bruto ou resposta bruta do modelo.
+ * Como o texto chegou ao interpretador 016.
+ * `text` = digitado; `voice` = transcrição temporária (CAD-R2-017).
+ * Não persiste áudio nem transcript — só a origem da captura.
+ */
+export type CaptureSourceTextoLivre = "text" | "voice"
+
+/**
+ * Proveniência segura da sugestão. Contém APENAS: fonte, origem da captura,
+ * backend/model (nomes, nunca chaves), instante e listas de campos. NUNCA
+ * texto do operador, prompt bruto, resposta bruta do modelo ou áudio.
+ *
+ * Cadeia: captureSource → transcript (efêmero na UI) → source=natural_text.
  */
 export type ProvenienciaTextoLivre = {
   source: "natural_text"
+  /** Default canônico: texto digitado. Voz só quando a captura foi por microfone. */
+  captureSource: CaptureSourceTextoLivre
   backend: BackendTextoLivre
   /** Nome do modelo (ex.: "openrouter/auto"). null no modo local. Sem segredos. */
   model: string | null

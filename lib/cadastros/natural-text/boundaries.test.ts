@@ -21,6 +21,11 @@ const ARQUIVOS = [
   "aplicar.ts",
   "index.ts",
   resolve(__dirname, "..", "..", "..", "app", "actions", "produto-texto-livre.ts"),
+  resolve(__dirname, "..", "voice-capture", "types.ts"),
+  resolve(__dirname, "..", "voice-capture", "detect.ts"),
+  resolve(__dirname, "..", "voice-capture", "session.ts"),
+  resolve(__dirname, "..", "voice-capture", "browser.ts"),
+  resolve(__dirname, "..", "voice-capture", "index.ts"),
 ]
 
 function ler(relOuAbs: string): string {
@@ -55,6 +60,15 @@ describe("boundaries estaticos: parser nunca escreve", () => {
     for (const arq of ARQUIVOS) {
       const src = semComentarios(ler(arq))
       expect(src, arq).not.toMatch(/product-write-service|createProduct|updateProduct|upsertProduto/i)
+    }
+  })
+
+  it("CAD-R2-017: Capture Adapter nao interpreta Produto", () => {
+    const dir = resolve(__dirname, "..", "voice-capture")
+    for (const arq of ["types.ts", "detect.ts", "session.ts", "browser.ts", "index.ts"]) {
+      const src = semComentarios(ler(resolve(dir, arq)))
+      expect(src, arq).not.toMatch(/interpretarTextoProduto|interpretarProdutoTextoLivre|SugestaoTextoLivre|voiceProductParser|extractProductFormFromTranscript/)
+      expect(src, arq).not.toMatch(/SYS_TEXTO_LIVRE|OPENROUTER|OPENAI_API_KEY/)
     }
   })
 

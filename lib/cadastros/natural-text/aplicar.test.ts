@@ -28,6 +28,7 @@ function sugestaoFixture(): SugestaoTextoLivre {
     rejeitados: [],
     proveniencia: {
       source: "natural_text",
+      captureSource: "text",
       backend: "openrouter",
       model: "openrouter/auto",
       interpretedAt: "2026-09-17T12:00:00.000Z",

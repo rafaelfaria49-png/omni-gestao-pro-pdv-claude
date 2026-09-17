@@ -7,6 +7,7 @@ export type {
   NomeCampoTextoLivre,
   CampoTextoLivre,
   BackendTextoLivre,
+  CaptureSourceTextoLivre,
   ProvenienciaTextoLivre,
   SugestaoTextoLivre,
 } from "./types"
