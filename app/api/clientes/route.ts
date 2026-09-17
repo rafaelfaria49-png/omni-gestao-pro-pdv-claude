@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma"
 import { StatusOrdemServico } from "@/generated/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
+import { createClient } from "@/lib/cadastros/client-write-service"
+import { mapClientWriteFailureToResponse } from "@/lib/cadastros/client-write-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -149,20 +152,25 @@ export async function POST(req: Request) {
     if (!phone) return badRequest('Campo "phone" é obrigatório')
     if (!isValidPhoneBr(phone)) return badRequest("Telefone inválido (use DDD + número, 10 ou 11 dígitos)")
 
-    const created = await prisma.cliente.create({
-      data: {
+    const written = await createClient(
+      { storeId, principal: cadastrosAuditPrincipalFromSession(gate.session) },
+      {
         name,
         phone,
         email: email || null,
         kind,
         document,
         city,
-        tags: tags || undefined,
+        ...(tags ? { tags } : {}),
         active,
         totalSpent,
         lastPurchaseAt,
-        storeId,
       },
+    )
+    if (!written.ok) return mapClientWriteFailureToResponse(written)
+
+    const created = await prisma.cliente.findFirst({
+      where: { id: written.id, storeId },
       select: {
         id: true,
         name: true,

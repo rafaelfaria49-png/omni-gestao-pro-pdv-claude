@@ -21,6 +21,26 @@ const SELECT = {
   name: true,
 } as const
 
+/** Delegate mínimo (Prisma ou TransactionClient) — lookup permanece read-only. */
+export type ClientIdentityPrismaLike = {
+  cliente: {
+    findMany(args: {
+      where: unknown
+      select: typeof SELECT
+      take: number
+    }): Promise<
+      Array<{
+        id: string
+        storeId: string
+        document: string
+        phone: string | null
+        email: string | null
+        name: string
+      }>
+    >
+  }
+}
+
 function phoneSearchTokens(phoneDigits: string): string[] {
   const tokens = new Set<string>()
   tokens.add(phoneDigits)
@@ -29,7 +49,14 @@ function phoneSearchTokens(phoneDigits: string): string[] {
   return [...tokens]
 }
 
-export function createPrismaClientIdentitySource(): ClientIdentityRecordSource {
+/**
+ * Adapter Prisma read-only. Quando `client` é uma TransactionClient, o lookup
+ * ocorre DENTRO da mesma transação da escrita (CAD-R2-008) — sem janela
+ * lookup-fora / write-desconectado. Sem `client`, usa o singleton.
+ */
+export function createPrismaClientIdentitySource(
+  client: ClientIdentityPrismaLike = prisma as unknown as ClientIdentityPrismaLike,
+): ClientIdentityRecordSource {
   return {
     async findByIdentityKeys(storeId, keys: ClientIdentityLookupKeys) {
       const sid = storeId.trim()
@@ -48,7 +75,7 @@ export function createPrismaClientIdentitySource(): ClientIdentityRecordSource {
       }
       if (or.length === 0) return []
 
-      const rows = await prisma.cliente.findMany({
+      const rows = await client.cliente.findMany({
         where: { storeId: sid, OR: or },
         select: SELECT,
         take: 40,

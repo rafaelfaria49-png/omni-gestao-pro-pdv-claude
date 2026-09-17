@@ -91,9 +91,9 @@ describe("boundaries: identidade não persiste nem faz merge", () => {
     expect(name).toMatch(/normalizeNameForMatch/)
   })
 
-  it("ClientWriteService / merge não implementados", () => {
+  it("ClientWriteService implementado; merge não", () => {
     const types = ler(resolve(DIR, "types.ts"))
-    expect(types).toMatch(/CLIENT_WRITE_SERVICE_IMPLEMENTED\s*=\s*false/)
+    expect(types).toMatch(/CLIENT_WRITE_SERVICE_IMPLEMENTED\s*=\s*true/)
     expect(types).toMatch(/CLIENT_MERGE_IMPLEMENTED\s*=\s*false/)
     const index = semComentarios(ler(resolve(DIR, "index.ts")))
     expect(index).not.toMatch(/createClient\s*\(|updateClient\s*\(/)

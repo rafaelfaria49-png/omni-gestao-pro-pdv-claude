@@ -6,6 +6,7 @@ import {
   cadastrosAuditLogFields,
   cadastrosAuditPrincipalFromSession,
 } from "@/lib/cadastros/cadastros-audit-principal"
+import { updateClientTx } from "@/lib/cadastros/client-write-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -49,6 +50,10 @@ export async function POST(req: Request) {
     operatorNote: userLabel,
   })
   const operator = audit.userLabel
+  const writeContext = {
+    storeId,
+    principal: cadastrosAuditPrincipalFromSession(gate.session),
+  }
 
   const items = await prisma.cliente.findMany({
     where: { id: { in: normalizedIds }, storeId },
@@ -90,26 +95,10 @@ export async function POST(req: Request) {
 
   await prisma.$transaction(async (tx) => {
     if (action === "inactivate") {
-      const res = await tx.cliente.updateMany({
-        where: { id: { in: normalizedIds }, storeId },
-        data: { active: false },
-      })
-      inactivatedCount = res.count
-
-      await tx.logsAuditoria.create({
-        data: {
-          action: "cliente.bulk_inactivate",
-          userLabel: operator,
-          detail: `${operator} inativou ${inactivatedCount} cliente(s) em lote na loja ${storeId}.`,
-          metadata: JSON.stringify({
-            entidade: "Cliente",
-            ids: normalizedIds,
-            clientes: items.map((c) => ({ id: c.id, nome: c.name })),
-            ...audit.actorMeta,
-          }),
-          source: "dashboard",
-        },
-      })
+      for (const id of normalizedIds) {
+        const r = await updateClientTx(tx, writeContext, id, { active: false })
+        if (r.ok) inactivatedCount += 1
+      }
     } else {
       if (freeIds.length > 0) {
         const delRes = await tx.cliente.deleteMany({
@@ -118,30 +107,27 @@ export async function POST(req: Request) {
         deletedCount = delRes.count
       }
 
-      if (linkedIds.length > 0) {
-        const inactRes = await tx.cliente.updateMany({
-          where: { id: { in: linkedIds }, storeId },
-          data: { active: false },
-        })
-        inactivatedCount = inactRes.count
+      for (const id of linkedIds) {
+        const r = await updateClientTx(tx, writeContext, id, { active: false })
+        if (r.ok) inactivatedCount += 1
       }
 
-      await tx.logsAuditoria.create({
-        data: {
-          action: "cliente.bulk_delete_inactivate",
-          userLabel: operator,
-          detail: `${operator} excluiu ${deletedCount} cliente(s) e inativou ${inactivatedCount} cliente(s) (por conterem histórico) em lote na loja ${storeId}.`,
-          metadata: JSON.stringify({
-            entidade: "Cliente",
-            deletedIds: freeIds,
-            inactivatedIds: linkedIds,
-            deleted: items.filter((c) => freeIds.includes(c.id)).map((c) => ({ id: c.id, nome: c.name })),
-            inactivated: items.filter((c) => linkedIds.includes(c.id)).map((c) => ({ id: c.id, nome: c.name })),
-            ...audit.actorMeta,
-          }),
-          source: "dashboard",
-        },
-      })
+      if (deletedCount > 0) {
+        await tx.logsAuditoria.create({
+          data: {
+            action: "cliente.bulk_delete",
+            userLabel: operator,
+            detail: `${operator} excluiu ${deletedCount} cliente(s) em lote na loja ${storeId}.`,
+            metadata: JSON.stringify({
+              entidade: "Cliente",
+              deletedIds: freeIds,
+              deleted: items.filter((c) => freeIds.includes(c.id)).map((c) => ({ id: c.id, nome: c.name })),
+              ...audit.actorMeta,
+            }),
+            source: "dashboard",
+          },
+        })
+      }
     }
   })
 

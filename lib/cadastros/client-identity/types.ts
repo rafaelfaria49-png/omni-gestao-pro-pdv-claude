@@ -11,10 +11,9 @@
  * - `storeId` / `actor` / `userId` no input do caller são IGNORADOS.
  * - IA nunca participa da decisão de identidade.
  *
- * Fluxo preparado (este GOAL só cobre até a classificação):
- * captura → normalização determinística → identidade → detecção de
- * duplicidade/conflito → revisão humana → ClientWriteService futuro
- * → persistência/auditoria.
+ * Fluxo: captura → normalização determinística → identidade → detecção
+ * de duplicidade/conflito → revisão humana → ClientWriteService
+ * (CAD-R2-008) → persistência/auditoria.
  */
 
 /** Unidade autorizada — única fronteira da dedupe. */
@@ -141,8 +140,8 @@ export type ClientIdentityVerdict = {
 }
 
 /**
- * Handoff puro para o ClientWriteService futuro (CAD-R2-008).
- * Não há implementação de persistência neste GOAL.
+ * Handoff puro para o ClientWriteService (CAD-R2-008).
+ * Este módulo não persiste Cliente.
  */
 export type ClientWriteIdentityHandoff = {
   scope: ClientIdentityScope
@@ -152,5 +151,6 @@ export type ClientWriteIdentityHandoff = {
 
 export const CLIENT_IDENTITY_AUTO_MERGE = false as const
 export const CLIENT_IDENTITY_AI_DECISION = false as const
-export const CLIENT_WRITE_SERVICE_IMPLEMENTED = false as const
+/** CAD-R2-008: ClientWriteService implementado. Merge (018-B) continua fora. */
+export const CLIENT_WRITE_SERVICE_IMPLEMENTED = true as const
 export const CLIENT_MERGE_IMPLEMENTED = false as const
