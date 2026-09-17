@@ -139,7 +139,8 @@ export type FiscalQueueExecutionResult = {
    * clone (`{...prova}`), `JSON` ou booleano genérico (`allowRealProvider`,
    * `providerInvoked`) NÃO produzem prova válida.
    *
-   * O freio GOAL-011 a consome (one-shot) EXCLUSIVAMENTE para job `EMISSAO`;
+   * O freio GOAL-011 a consome (one-shot) EXCLUSIVAMENTE para job `EMISSAO` com
+   * `providerInvoked === true` (R1) e janela vigente no INÍCIO da execução (R2);
    * prova ausente/forjada/reutilizada ou com qualquer divergência permanece
    * `provider_real_bloqueado`. Campo propositalmente `unknown`: a forma nunca é
    * inspecionada — só a identidade via `consumePilotEmissionAuthorizationProof`.

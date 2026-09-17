@@ -406,6 +406,92 @@ describe("022C · E — mismatch job/store/nota, ativação forjada e janela inv
   })
 })
 
+describe("022C · R1 — providerInvoked reconferido no freio", () => {
+  it("prova válida + providerInvoked=false ⇒ provider_real_bloqueado (e a prova não queima)", async () => {
+    const { proof } = await provaValida()
+    const { ports, jobs } = memoryPorts([jobEmissao()], async () => ({
+      ...emissaoReal(proof),
+      providerInvoked: false,
+    }))
+    const report = await drainFiscalQueue({ workerId: "w-022c", now: () => AGORA }, ports)
+    expect(report.items[0]?.status).toBe("falha")
+    expect(jobs.get(TRIO.jobId)?.ultimoErro).toContain("GOAL-011")
+    // Short-circuit antes do consume: a prova segue válida para a execução real.
+    expect(consumePilotEmissionAuthorizationProof(proof, { ...TRIO, now: AGORA })).toBe(true)
+  })
+})
+
+describe("022C · R2 — resposta após expiresAt não invalida autorização pré-boundary", () => {
+  const T_START = new Date("2026-09-12T12:00:00.000Z")
+  const T_AFTER = new Date("2026-09-12T12:06:00.000Z")
+  function windowR2(): PilotEmissionWindowConfig {
+    return {
+      activationId: "homolog-022c-r2-cross-expiry-01",
+      notBeforeUtc: new Date(T_START.getTime() - 5 * 60_000).toISOString(),
+      expiresAtUtc: new Date(T_START.getTime() + 5 * 60_000).toISOString(),
+    }
+  }
+  async function provaR2() {
+    const consumed = await consumePilotEmissionActivation(
+      ledgerClient() as never,
+      windowR2(),
+      { ...TRIO, operatorId: "operador-r2" },
+      () => T_START,
+    )
+    if (!consumed.ok) throw new Error(`consumo esperado OK: ${consumed.code}`)
+    const proof = createPilotEmissionAuthorizationProof(consumed.activation, { ...TRIO })
+    if (!proof) throw new Error("prova esperada válida")
+    return proof
+  }
+
+  it("success autorizado em janela, resposta após expiry ⇒ preservado (não reescrito)", async () => {
+    const proof = await provaR2()
+    let agora = T_START
+    const { ports, jobs } = memoryPorts([jobEmissao()], async () => {
+      // Round-trip longo cruza o expiry DENTRO do provider, após o boundary.
+      agora = T_AFTER
+      return emissaoReal(proof)
+    })
+    const report = await drainFiscalQueue(
+      { workerId: "w-022c", batchSize: 1, leaseMs: 900_000, now: () => agora },
+      ports,
+    )
+    expect(report.items[0]?.status).toBe("concluido")
+    expect(jobs.get(TRIO.jobId)?.status).toBe("CONCLUIDO")
+  })
+
+  it("uncertain após boundary com resposta após expiry ⇒ consulta, sem retransmissão", async () => {
+    const proof = await provaR2()
+    let agora = T_START
+    const { ports, waitForConsultation } = memoryPorts([jobEmissao()], async () => {
+      agora = T_AFTER
+      return {
+        kind: "uncertain" as const,
+        code: "resultado_transmissao_incerto",
+        mensagem: "Transmissão incerta após boundary; resposta tardia.",
+        simulado: false,
+        externalTransmissionAttempted: true,
+        providerInvoked: true,
+        pilotEmissionExternalAuthorization: proof,
+      }
+    })
+    const report = await drainFiscalQueue(
+      { workerId: "w-022c", batchSize: 1, leaseMs: 900_000, now: () => agora },
+      ports,
+    )
+    expect(report.items[0]?.status).toBe("consulta")
+    expect(waitForConsultation).toHaveBeenCalledTimes(1)
+  })
+
+  it("execução que começa somente após o expiry continua bloqueada", async () => {
+    const proof = await provaR2()
+    const { ports, jobs } = memoryPorts([jobEmissao()], async () => emissaoReal(proof))
+    const report = await drainFiscalQueue({ workerId: "w-022c", now: () => T_AFTER }, ports)
+    expect(report.items[0]?.status).toBe("falha")
+    expect(jobs.get(TRIO.jobId)?.ultimoErro).toContain("GOAL-011")
+  })
+})
+
 describe("022C · F — wiring dormente/default e executor genérico seguem incapazes/bloqueados", () => {
   it("default dormente: capability negada e transporte offline", () => {
     const wiring = createNfceHomologationPilotWiring()

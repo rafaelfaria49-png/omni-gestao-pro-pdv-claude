@@ -503,8 +503,14 @@ export function isPilotEmissionAuthorizationProof(proof: unknown): proof is Pilo
  * Valida E consome (one-shot) a prova contra o job em processamento.
  * Devolve `true` somente quando TUDO confere: identidade do token, disponibilidade
  * (primeiro uso), trio (job/store/nota), serviço `NFeAutorizacao4`, ambiente
- * `HOMOLOGACAO` e janela vigente. O consumo marca `available=false`: a mesma prova
- * jamais autoriza uma segunda execução.
+ * `HOMOLOGACAO` e janela vigente NO INSTANTE DE REFERÊNCIA INFORMADO.
+ * O consumo marca `available=false`: a mesma prova jamais autoriza uma segunda
+ * execução. Falha de validação NÃO queima a prova.
+ *
+ * Contrato do instante de referência (R2): o chamador informa o instante ANTERIOR
+ * ao boundary — o queue-worker passa o início da execução (`startedAt`, relógio
+ * próprio). A prova testemunha autorização nascida dentro da janela; resposta que
+ * chega após `expiresAt` não invalida retroativamente a transmissão autorizada.
  */
 export function consumePilotEmissionAuthorizationProof(
   proof: unknown,

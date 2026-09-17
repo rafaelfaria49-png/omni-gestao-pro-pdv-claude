@@ -555,20 +555,30 @@ async function processLease(input: {
     ((job.tipo === "CONTINGENCIA_TRANSMISSAO" && prova.kind === "transmissao_autorizada") ||
       (job.tipo === "CONSULTA" && prova.kind === "consulta_autorizada"))
   /**
-   * Prova OPACA de EMISSAO do piloto de homologação (GOAL 022C): SOMENTE job `EMISSAO`
-   * com prova nascida do consumo persistente one-shot da ativação (activationId +
-   * job/store/nota + NFeAutorizacao4 + HOMOLOGACAO + janela vigente). A validação é
-   * por identidade (WeakMap) com consumo one-shot: objeto estrutural, clone,
-   * `providerInvoked` isolado ou booleano genérico NÃO atravessam. Não vale para
-   * nenhum outro tipo — a exceção não é ampliada.
+   * Prova OPACA de EMISSAO do piloto de homologação (GOAL 022C · findings R1+R2):
+   * SOMENTE job `EMISSAO` com provider efetivamente invocado NESTA execução —
+   * `execution.providerInvoked === true` é reconferido aqui (R1), antes de tocar
+   * na prova, de modo que prova válida isolada com `providerInvoked=false`
+   * continua `provider_real_bloqueado` e nem sequer queima o one-shot.
+   * `externalTransmissionAttempted` NÃO substitui `providerInvoked`.
+   *
+   * O instante de referência da janela é o INÍCIO da execução (`startedAt`,
+   * relógio próprio do worker, anterior ao boundary) — não o pós-resposta (R2):
+   * a prova testemunha que a autorização nasceu dentro da janela antes do
+   * boundary, então uma resposta que chega após `expiresAt` NÃO invalida
+   * retroativamente a transmissão legitimamente autorizada. Execução que começa
+   * após o expiry continua bloqueada. Validação por identidade (WeakMap) com
+   * consumo one-shot: objeto estrutural, clone ou booleano genérico NÃO
+   * atravessam. Não vale para nenhum outro tipo — a exceção não é ampliada.
    */
   const provaPilotoEmissaoCoerente =
     job.tipo === "EMISSAO" &&
+    execution.providerInvoked === true &&
     consumePilotEmissionAuthorizationProof(execution.pilotEmissionExternalAuthorization, {
       jobId: job.id,
       storeId: job.storeId,
       notaFiscalId: String(job.notaFiscalId ?? ""),
-      now: input.now(),
+      now: startedAt,
     })
   if (
     !maisRestritivoQueTerminal &&

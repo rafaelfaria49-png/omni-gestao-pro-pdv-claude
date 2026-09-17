@@ -43,18 +43,31 @@ sem ser reescrita para `provider_real_bloqueado`. **Zero transmissão SEFAZ.**
      `provaPilotoEmissaoCoerente` EXCLUSIVA para job `EMISSAO` com prova válida e
      coerente (campo `pilotEmissionExternalAuthorization?: unknown` — a forma
      nunca é inspecionada, só a identidade).
+   - Revisão independente (R1): `execution.providerInvoked === true` reconferido
+     no freio ANTES de tocar na prova — prova válida isolada com
+     `providerInvoked=false` continua `provider_real_bloqueado` e nem queima o
+     one-shot. `externalTransmissionAttempted` não substitui `providerInvoked`.
+   - Revisão independente (R2): o instante de referência da janela é o INÍCIO da
+     execução (`startedAt`, relógio próprio do worker, anterior ao boundary) —
+     resposta que chega após `expiresAt` NÃO invalida retroativamente a
+     transmissão legitimamente autorizada; execução que começa após o expiry
+     continua bloqueada. Sem flag booleana global.
    - Preservação: success/uncertain-after-boundary (via `maisRestritivo`)/
      throttled/processing/terminal atravessam com a semântica existente.
 
-## Testes novos (37 its)
+## Testes novos (41 its)
 
-- `lib/fiscal/queue/queue-worker-goal022c-prova.test.ts` (25): A–I no nível do
+- `lib/fiscal/queue/queue-worker-goal022c-prova.test.ts` (29): A–I no nível do
   freio — success com prova ⇒ concluído; uncertain ⇒ consulta; sem prova ⇒
   bloqueado; forjadas (vazio/plausível/contingência/spread/JSON) ⇒ bloqueadas;
   mismatch job/store/nota/ativação + janela expirada ⇒ bloqueados; dormente
   incapaz; executor genérico e `allowRealProvider` ⇒ bloqueados; reuso ⇒
   bloqueado; CONSULTA 022B só no contrato existente (prova ignorada e não
-  queimada); INUTILIZACAO/CONTINGÊNCIA intactas; piloto não autoriza outros tipos.
+  queimada); INUTILIZACAO/CONTINGÊNCIA intactas; piloto não autoriza outros tipos;
+  R1 (prova válida + `providerInvoked=false` ⇒ bloqueado, sem queimar); R2
+  (resposta após expiry ⇒ success preservado e uncertain ⇒ consulta; início
+  pós-expiry ⇒ bloqueado). Discriminação provada: R1 e R2-cross-expiry falham
+  contra o código pré-fix.
 - `lib/fiscal/homologation/pilot-emission-authorization-handoff-022c.test.ts` (12):
   ciclo de vida da prova + integração offline
   consume→capability→authority→executor→worker→loopback (104+100 com chave
@@ -64,7 +77,7 @@ sem ser reescrita para `provider_real_bloqueado`. **Zero transmissão SEFAZ.**
 
 ## Validações
 
-- Suíte do GOAL: 40 arquivos / 742 passed / 3 skipped (baseline pré-022C: 705).
+- Suíte do GOAL: 40 arquivos / 746 passed / 3 skipped (pós-R1+R2; baseline pré-022C: 705).
 - `npm run typecheck`: zero erros.
 - ESLint focado nos 6 arquivos + `git diff --check`: limpos.
 - `node scripts/track.mjs verify --all`: ver relatório final.
