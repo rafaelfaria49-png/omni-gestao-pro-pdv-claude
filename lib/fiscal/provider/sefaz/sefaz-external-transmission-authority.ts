@@ -10,8 +10,10 @@
  *  - o token é um objeto opaco; a associação authority→runtime vive em `WeakMap` privado
  *    deste módulo — copiar/forjar o objeto não reproduz a autoridade;
  *  - o consumo é ONE-SHOT em memória (`available=false` após o primeiro uso) e valida,
- *    no instante do consumo, o binding completo: serviço `NFeAutorizacao4` (literal de
- *    tipo), ambiente `HOMOLOGACAO` (literal de tipo), loja e janela temporal;
+ *    no instante do consumo, o binding completo: serviço literal da fábrica
+ *    (`NFeAutorizacao4` na emissão; `NFeConsultaProtocolo4` na consulta de reconciliação),
+ *    ambiente `HOMOLOGACAO` (literal de tipo), loja e janela temporal;
+ *    a authority de emissão NÃO autoriza consulta, e a de consulta NÃO autoriza emissão;
  *  - a fábrica PRODUTIVA binda exclusivamente `nodeSefazHttpsRuntimePorts`; não existe
  *    parâmetro de runtime injetável — o campo `runtime` de `SefazSoapTransportOptions`
  *    continua sendo apenas detector de conflito;
@@ -28,8 +30,14 @@
  */
 import { nodeSefazHttpsRuntimePorts, type SefazHttpsRuntimePorts } from "./sefaz-runtime-ports"
 
-/** Único serviço autorizado pela authority externa do piloto (emissão normal). */
+/** Serviço autorizado pela authority externa do piloto na emissão (NFeAutorizacao4). */
 export const SEFAZ_EXTERNAL_PILOT_SERVICO = "NFeAutorizacao4" as const
+
+/**
+ * Serviço autorizado pela authority externa do piloto na CONSULTA de reconciliação
+ * (GOAL 022B). Leitura `NFeConsultaProtocolo4` — nunca uma segunda EMISSAO.
+ */
+export const SEFAZ_EXTERNAL_PILOT_CONSULTA_SERVICO = "NFeConsultaProtocolo4" as const
 
 /** Único ambiente autorizado pela authority externa do piloto. */
 export const SEFAZ_EXTERNAL_PILOT_AMBIENTE = "HOMOLOGACAO" as const
@@ -44,21 +52,30 @@ export type SefazExternalTransmissionAuthority = {
   readonly [EXTERNAL_TRANSMISSION_AUTHORITY]: true
 }
 
-export type SefazExternalTransmissionBinding = {
+type SefazExternalPilotBindingBase = {
   readonly activationId: string
   readonly storeId: string
   readonly jobId: string
-  /** Literal de tipo: a authority do piloto NÃO nasce para outro serviço. */
-  readonly servico: typeof SEFAZ_EXTERNAL_PILOT_SERVICO
-  /** Literal de tipo: a authority do piloto NÃO nasce para outro ambiente. */
   readonly ambiente: typeof SEFAZ_EXTERNAL_PILOT_AMBIENTE
   readonly notBeforeMs: number
   readonly expiresAtMs: number
 }
 
+export type SefazExternalTransmissionBinding = SefazExternalPilotBindingBase & {
+  /** Literal de tipo: a authority de EMISSÃO não nasce para outro serviço. */
+  readonly servico: typeof SEFAZ_EXTERNAL_PILOT_SERVICO
+}
+
+export type SefazExternalConsultationBinding = SefazExternalPilotBindingBase & {
+  /** Literal de tipo: a authority de CONSULTA não nasce para outro serviço. */
+  readonly servico: typeof SEFAZ_EXTERNAL_PILOT_CONSULTA_SERVICO
+}
+
+type StoredPilotBinding = SefazExternalTransmissionBinding | SefazExternalConsultationBinding
+
 type ExternalAuthorityBinding = {
   available: boolean
-  readonly binding: SefazExternalTransmissionBinding
+  readonly binding: StoredPilotBinding
   readonly runtime: SefazHttpsRuntimePorts
 }
 
@@ -66,10 +83,9 @@ const externalAuthorityBindings = new WeakMap<object, ExternalAuthorityBinding>(
 
 const ACTIVATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/
 
-function validBinding(binding: SefazExternalTransmissionBinding): boolean {
+function validCommonBinding(binding: SefazExternalPilotBindingBase): boolean {
   if (!ACTIVATION_ID_PATTERN.test(String(binding.activationId ?? ""))) return false
   if (!String(binding.storeId ?? "").trim() || !String(binding.jobId ?? "").trim()) return false
-  if (binding.servico !== SEFAZ_EXTERNAL_PILOT_SERVICO) return false
   if (binding.ambiente !== SEFAZ_EXTERNAL_PILOT_AMBIENTE) return false
   const notBefore = Number(binding.notBeforeMs)
   const expiresAt = Number(binding.expiresAtMs)
@@ -77,6 +93,14 @@ function validBinding(binding: SefazExternalTransmissionBinding): boolean {
   if (expiresAt <= notBefore) return false
   if (expiresAt - notBefore > SEFAZ_EXTERNAL_PILOT_MAX_WINDOW_MS) return false
   return true
+}
+
+function validBinding(binding: SefazExternalTransmissionBinding): boolean {
+  return validCommonBinding(binding) && binding.servico === SEFAZ_EXTERNAL_PILOT_SERVICO
+}
+
+function validConsultaBinding(binding: SefazExternalConsultationBinding): boolean {
+  return validCommonBinding(binding) && binding.servico === SEFAZ_EXTERNAL_PILOT_CONSULTA_SERVICO
 }
 
 /**
@@ -131,6 +155,54 @@ export function createSefazExternalTransmissionTestAuthority(
   return authority
 }
 
+/**
+ * Fábrica PRODUTIVA da CONSULTA de reconciliação: mesmo contrato one-shot/HOMOLOGACAO,
+ * serviço literal `NFeConsultaProtocolo4`. Não autoriza `NFeAutorizacao4`.
+ */
+export function createSefazExternalConsultationAuthority(
+  binding: SefazExternalConsultationBinding,
+): SefazExternalTransmissionAuthority {
+  if (!validConsultaBinding(binding)) {
+    throw new Error("Binding de authority de consulta inválido (serviço/ambiente/janela/escopo).")
+  }
+  const authority: SefazExternalTransmissionAuthority = Object.freeze({
+    [EXTERNAL_TRANSMISSION_AUTHORITY]: true as const,
+  })
+  externalAuthorityBindings.set(authority, {
+    available: true,
+    binding: { ...binding },
+    runtime: nodeSefazHttpsRuntimePorts,
+  })
+  return authority
+}
+
+/**
+ * Fábrica de TESTE da CONSULTA: runtime injetado, `NODE_ENV=test`.
+ */
+export function createSefazExternalConsultationTestAuthority(
+  binding: SefazExternalConsultationBinding,
+  runtime: SefazHttpsRuntimePorts,
+): SefazExternalTransmissionAuthority {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("Authority externa de teste disponível somente em NODE_ENV=test.")
+  }
+  if (!runtime || typeof runtime.request !== "function" || typeof runtime.createSecureContext !== "function") {
+    throw new Error("Runtime de teste inválido.")
+  }
+  if (!validConsultaBinding(binding)) {
+    throw new Error("Binding de authority de consulta inválido (serviço/ambiente/janela/escopo).")
+  }
+  const authority: SefazExternalTransmissionAuthority = Object.freeze({
+    [EXTERNAL_TRANSMISSION_AUTHORITY]: true as const,
+  })
+  externalAuthorityBindings.set(authority, {
+    available: true,
+    binding: { ...binding },
+    runtime,
+  })
+  return authority
+}
+
 /** Existência nominal em runtime: cast/clone/objeto estrutural não atravessam o WeakMap. */
 export function isSefazExternalTransmissionAuthority(
   authority: unknown,
@@ -144,7 +216,7 @@ export function isSefazExternalTransmissionAuthority(
 
 export type SefazExternalAuthorityConsumption = {
   readonly runtime: SefazHttpsRuntimePorts
-  readonly binding: SefazExternalTransmissionBinding
+  readonly binding: SefazExternalTransmissionBinding | SefazExternalConsultationBinding
 }
 
 /**

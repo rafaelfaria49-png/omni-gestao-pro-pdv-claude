@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "fiscal",
-  "status": "RUNNING",
+  "status": "BLOCKED",
   "risk_tier": "ALTO",
-  "current_goal": "FISCAL-PILOT-HOMOLOGATION-UNBLOCK-022B",
+  "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
-    "goals_done": 4,
+    "goals_done": 5,
     "goals_blocked": 1,
     "goals_imported": 0,
-    "ledger_lines": 5
+    "ledger_lines": 6
   },
-  "last_goal": "FISCAL-PILOT-HOMOLOGATION-ACTIVATION-022",
-  "last_result": "BLOCKED",
-  "last_ratified_at": "2026-09-17T03:54:16.051Z"
+  "last_goal": "FISCAL-PILOT-HOMOLOGATION-UNBLOCK-022B",
+  "last_result": "DONE",
+  "last_ratified_at": "2026-09-17T11:52:46.577Z"
 }

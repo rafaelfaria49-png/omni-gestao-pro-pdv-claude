@@ -87,6 +87,17 @@ async function findEmissionJob(
   }))
 }
 
+function ufFromPersistedNote(note: UnknownRecord): string | undefined {
+  const emitente = record(note.snapshotEmitente)
+  const endereco = record(emitente.endereco)
+  const fromSnapshot = stringOrNull(endereco.uf) ?? stringOrNull(emitente.uf)
+  if (fromSnapshot) return fromSnapshot.toUpperCase()
+  const chave = String(note.chaveAcesso ?? "")
+  // cUF 35 (SP) é o prefixo legal da chave NFC-e paulista — não é literal de loja.
+  if (/^35\d{42}$/.test(chave)) return "SP"
+  return undefined
+}
+
 async function loadDocument(
   client: UncertainPrismaClient,
   locator: FiscalDocumentLocator,
@@ -116,6 +127,8 @@ async function loadDocument(
         digestValue: true,
         qrCodeData: true,
         urlConsulta: true,
+        localKey: true,
+        snapshotEmitente: true,
       },
     }),
     findEmissionJob(client, locator),
@@ -124,6 +137,10 @@ async function loadDocument(
   if (!note.id) return null
   const payload = record(job.payload)
   const metadata = record(payload.document)
+  const xmlAssinado = stringOrNull(note.xmlAssinado)
+  const fromJob = stringOrNull(metadata.bytesSha256)
+  const uf = ufFromPersistedNote(note)
+  const correlationId = stringOrNull(note.localKey)
   return {
     notaFiscalId: String(note.id),
     storeId: String(note.storeId),
@@ -134,8 +151,15 @@ async function loadDocument(
     serie: Number(note.serie),
     numero: Number(note.numero),
     chaveAcesso: String(note.chaveAcesso ?? ""),
-    xmlAssinado: stringOrNull(note.xmlAssinado),
-    xmlBytesSha256: stringOrNull(metadata.bytesSha256),
+    ...(uf ? { uf } : {}),
+    ...(correlationId ? { correlationId } : {}),
+    xmlAssinado,
+    /**
+     * Hash canônico vive em `payload.document` do job EMISSAO. O worker GOAL-011 pode
+     * regravar o payload sem essa chave; o XML em `NotaFiscal.xmlAssinado` continua a
+     * autoridade dos bytes — o hash é rederivado, nunca inventado.
+     */
+    xmlBytesSha256: fromJob ?? (xmlAssinado ? sha256Hex(xmlAssinado) : null),
     xmlAutorizado: stringOrNull(note.xmlAutorizado),
     protocolo: stringOrNull(note.protocolo),
     cStat: stringOrNull(note.cStat),

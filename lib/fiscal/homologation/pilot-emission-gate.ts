@@ -31,6 +31,7 @@ import { createHash } from "node:crypto"
 import { prisma } from "@/lib/prisma"
 import type { FiscalExternalExecutionCapability } from "@/lib/fiscal/emission/uncertain-state.types"
 import {
+  createSefazExternalConsultationAuthority,
   createSefazExternalTransmissionAuthority,
   type SefazExternalTransmissionAuthority,
 } from "@/lib/fiscal/provider/sefaz/sefaz-external-transmission-authority"
@@ -326,6 +327,55 @@ export function createPilotEmissionExternalAuthority(
       ambiente: "HOMOLOGACAO",
       notBeforeMs: binding.notBeforeMs,
       expiresAtMs: binding.expiresAtMs,
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Capability POSITIVA de CONSULTA (leitura) — não consome o ledger de documento.
+ * Exige janela vigente e o par (loja, job CONSULTA). Nunca autoriza NFeAutorizacao4.
+ */
+export function pilotConsultationCapability(
+  config: PilotEmissionWindowConfig,
+  input: { readonly jobId: string; readonly storeId: string },
+  now: Date = new Date(),
+): FiscalExternalExecutionCapability | null {
+  const status = evaluatePilotEmissionWindow(config, now)
+  if (!status.active) return null
+  const jobId = input.jobId.trim()
+  const storeId = input.storeId.trim()
+  if (!jobId || !storeId) return null
+  return {
+    allowExternalProviderExecution: true,
+    concedidaPor: `homologacao-consulta:v1:${sha256Hex(jobId).slice(0, 12)}:leitura`,
+  }
+}
+
+/**
+ * Authority externa one-shot de CONSULTA (`NFeConsultaProtocolo4`) na janela vigente.
+ * Não nasce do consumo do ledger de emissão — a transmissão de documento já ocorreu.
+ */
+export function createPilotConsultationExternalAuthority(
+  config: PilotEmissionWindowConfig,
+  input: { readonly jobId: string; readonly storeId: string },
+  now: Date = new Date(),
+): SefazExternalTransmissionAuthority | null {
+  const status = evaluatePilotEmissionWindow(config, now)
+  if (!status.active) return null
+  const jobId = input.jobId.trim()
+  const storeId = input.storeId.trim()
+  if (!jobId || !storeId) return null
+  try {
+    return createSefazExternalConsultationAuthority({
+      activationId: status.window.activationId,
+      storeId,
+      jobId,
+      servico: "NFeConsultaProtocolo4",
+      ambiente: "HOMOLOGACAO",
+      notBeforeMs: status.window.notBefore.getTime(),
+      expiresAtMs: status.window.expiresAt.getTime(),
     })
   } catch {
     return null

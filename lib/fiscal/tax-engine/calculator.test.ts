@@ -40,6 +40,18 @@ describe("tax-engine · valor cheio (Simples Nacional, sem destaque)", () => {
     expect(r.ok).toBe(true)
     expect(r.itens[0].icms.codigo).toBe("102")
   })
+
+  it("MEI (CRT 4) com CSOSN 102 é família Simples: sem destaque, ok=true", () => {
+    const r = calculateTax({
+      regime: "MEI",
+      itens: [{ quantidade: 1, valorUnitario: 1, csosn: "102", cfop: "5102", origemMercadoria: "0" }],
+    })
+    expect(r.ok).toBe(true)
+    expect(r.meta.semDestaque).toBe(true)
+    expect(r.itens[0].icms.codigo).toBe("102")
+    expect(r.itens[0].icms.valor).toBe(0)
+    expect(r.totais.valorTotalNota).toBe(1)
+  })
 })
 
 describe("tax-engine · descontos", () => {
