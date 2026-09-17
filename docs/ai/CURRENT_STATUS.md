@@ -1,5 +1,7 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
+> **Adendo — 17 Set 2026 · Cadastros · CAD-R2-017 Product Voice:** em `/dashboard/cadastros-v2` a aba **Descrever produto** ganhou captura por voz (Web Speech API, feature detection honesta, microfone só após clique). A transcrição é temporária e editável e entra no mesmo `interpretarProdutoTextoLivre` do CAD-R2-016. Sem segundo parser, sem persistência de áudio/transcript, sem write direto — save continua `upsertProduto` → ProductWriteService → StockLedger. Proveniência aditiva `captureSource: text | voice` com `source: natural_text`. Sem schema/migration.
+
 > **Adendo — 12 Set 2026 · PDV · Capability runtime N4 (`PDV-CAPABILITY-RUNTIME-N4`):** contrato canônico de superfícies (`classic` / `assistencia` / `supermercado` / `venda-completa`), Next experimental/gated, Black como SHELL. Resolver puro `resolveCapability()` consome overrides V1 do N3; matrix code-owned; `PdvRegistry` dirige o switcher; holds novos com `capabilitiesVersion` + snapshot. Sem billing/N6/N7. Detalhe: [`docs/pdv/PDV_CAPABILITY_RUNTIME_N4.md`](../pdv/PDV_CAPABILITY_RUNTIME_N4.md).
 
 
