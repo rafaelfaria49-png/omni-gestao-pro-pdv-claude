@@ -42,8 +42,9 @@ import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
-import { isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
+import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import {
@@ -372,8 +373,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   }, [selectedCliente, cart, discountReais, tipoVenda, observacaoGeral, enderecoEntrega, storeId])
 
   // ── Mount focus ───────────────────────────────────────────────────────────
+  // Autofocus operacional (GOAL 006): ao entrar/retornar, o Código/Bipe é o campo operacional
+  // preferencial — o leitor bipa sem clique (antes focava o Cliente; F2 continua focando-o).
+  // O guard evita roubar foco de outro campo ou de modal aberto.
   useEffect(() => {
-    const t = setTimeout(() => clienteInputRef.current?.focus(), 80)
+    const t = setTimeout(() => {
+      if (canAutoFocusPdvBipe()) productInputRef.current?.focus()
+    }, 80)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -1260,7 +1266,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                   ref={productInputRef}
                   placeholder="Adicionar: nome, SKU ou código de barras… [F3]"
                   value={productQuery}
-                  onChange={(e) => { setProductQuery(e.target.value); setShowProductDropdown(true) }}
+                  onChange={(e) => {
+                    // Digitação nova (scan ou busca manual) encerra na hora o aviso inline anterior.
+                    scanFeedback.dismiss()
+                    setProductQuery(e.target.value)
+                    setShowProductDropdown(true)
+                  }}
+                  aria-invalid={!!scanFeedback.inline.code || undefined}
                   onFocus={() => { if (productQuery.trim()) setShowProductDropdown(true) }}
                   onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
                   onKeyDown={async (e) => {
@@ -1314,8 +1326,15 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     }
                     if (e.key === "Escape") { setShowProductDropdown(false); setProductQuery(""); scanFeedback.dismiss() }
                   }}
-                  className="h-10 border-border bg-secondary pl-9 text-sm"
+                  className={`h-10 border bg-secondary pl-9 text-sm ${
+                    scanFeedback.inline.code
+                      ? "border-destructive/70 focus:border-destructive/70 focus:ring-destructive/25"
+                      : "border-border"
+                  }`}
                 />
+
+                {/* Aviso INLINE (GOAL 006): sobrepõe o próprio campo; input segue vazio e focado. */}
+                <PdvScanInlineNotFound feedback={scanFeedback.inline} className="rounded-md pl-9 text-sm" />
 
                 {showProductDropdown && filteredProducts.length > 0 && (
                   <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-lg">

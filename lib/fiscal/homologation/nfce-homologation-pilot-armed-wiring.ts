@@ -542,10 +542,12 @@ export async function executePilotHomologationEmissionTransmission(
     return { ok: false, code: "parametros_invalidos", mensagem: "jobId e storeId são obrigatórios.", outcome: null }
   }
   const client = deps.client ?? (prisma as unknown as ArmedPilotPrismaClient)
-  const jobRow = record(
-    await client.fiscalEmissaoJob.findUnique({ where: { id: jobId }, select: { storeId: true, tipo: true } }),
-  )
-  if (!jobRow.id) {
+  const raw = await client.fiscalEmissaoJob.findUnique({
+    where: { id: jobId },
+    select: { id: true, storeId: true, tipo: true },
+  })
+  const jobRow = record(raw)
+  if (!raw || String(jobRow.id ?? "") !== jobId) {
     return { ok: false, code: "job_nao_encontrado", mensagem: "Job da transmissão do piloto não encontrado.", outcome: null }
   }
   if (String(jobRow.storeId ?? "") !== storeId) {

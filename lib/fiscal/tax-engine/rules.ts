@@ -20,8 +20,8 @@ import type { RoundingConfig, TaxComponentResult, TaxIcmsResult, TaxIcmsStFields
 import { applyAliquota, num, onlyDigits } from "./helpers"
 import { roundMoney, roundRate } from "./rounding"
 
-/** Regimes da "família Simples" suportados no baseline F2. */
-const SIMPLES_REGIMES = new Set<TaxRegime>(["SIMPLES_NACIONAL", "SIMPLES_NACIONAL_EXCESSO"])
+/** Regimes da "família Simples" suportados no baseline F2 (MEI = CRT 4, CSOSN 102 no DAS). */
+const SIMPLES_REGIMES = new Set<TaxRegime>(["SIMPLES_NACIONAL", "SIMPLES_NACIONAL_EXCESSO", "MEI"])
 
 /** CSOSN sem destaque de ICMS (imposto no DAS). */
 const CSOSN_NAO_DESTACADO = new Set<string>(["102"])

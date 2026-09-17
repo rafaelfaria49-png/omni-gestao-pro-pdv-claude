@@ -6,7 +6,7 @@
  * por parâmetro; toda saída é este objeto tipado. Determinístico (sem Date.now/Math.random).
  *
  * Escopo (NFC-e Simples Nacional B2C, conforme ROADMAP_FISCAL §8 / plano §3 F2 + GOAL-006):
- *   - Regime: Simples Nacional (e SN excesso de sublimite).
+ *   - Regime: Simples Nacional, SN excesso de sublimite e MEI (CRT 4; mesmo CSOSN 102 / DAS).
  *   - Operação: interna (mesma UF), consumidor final.
  *   - ST: CSOSN 500 (ICMS já retido anteriormente — substituído) SUPORTADO; CSOSN 201/202/203/900
  *     e DIFAL/FCP-próprio/IPI/ISS permanecem rejeitados de forma explícita pelos validators.

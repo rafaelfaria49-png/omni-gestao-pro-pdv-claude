@@ -46,3 +46,64 @@ export function createPdvScanNotFoundFeedback(
     },
   }
 }
+
+/** Estado do aviso INLINE no campo Código/Bipe (GOAL PDV-SCAN-INLINE-FEEDBACK-AUTOFOCUS-006). */
+export type PdvScanInlineFeedbackState = {
+  /** Código não cadastrado exibido; null quando nenhum aviso está visível. */
+  code: string | null
+  /** Incrementa a cada novo aviso — permite re-anúncio/mount mesmo para o mesmo código. */
+  seq: number
+}
+
+/**
+ * Aviso transitório INLINE de código não encontrado: em vez de renderizar fora do campo
+ * (toast), a superfície sobrepõe a mensagem ao próprio input Código/Bipe — que permanece
+ * `value=""` e focado. Um único timer vivo; `notify` novo substitui o anterior na hora e
+ * `dismiss` (Esc, digitação, Item Avulso, desmonte) encerra imediatamente.
+ */
+export function createPdvScanInlineNotFoundFeedback(
+  onViewChange: (state: PdvScanInlineFeedbackState) => void,
+  durationMs: number = PDV_SCAN_NOT_FOUND_FEEDBACK_MS,
+): PdvScanNotFoundFeedback {
+  let seq = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const clearTimer = () => {
+    if (timer === null) return
+    clearTimeout(timer)
+    timer = null
+  }
+  return createPdvScanNotFoundFeedback((code) => {
+    clearTimer()
+    const id = ++seq
+    onViewChange({ code, seq: id })
+    timer = setTimeout(() => {
+      timer = null
+      onViewChange({ code: null, seq: id })
+    }, durationMs)
+    return {
+      dismiss: () => {
+        clearTimer()
+        onViewChange({ code: null, seq: id })
+      },
+    }
+  })
+}
+
+/**
+ * Guarda do autofocus operacional (GOAL 006): só devolve o foco ao Código/Bipe quando não há
+ * outro campo de texto ativo — o operador pode ter clicado em Cliente/Quantidade/pesquisa —
+ * e nenhum modal aberto. Leitura pontual; quem chama decide o momento (montagem, gate pronto).
+ * `doc` injetável para teste em ambiente sem DOM.
+ */
+export function canAutoFocusPdvBipe(
+  doc: Pick<Document, "activeElement" | "querySelector"> | null = typeof document === "undefined" ? null : document,
+): boolean {
+  if (!doc) return false
+  const active = doc.activeElement
+  if (active) {
+    const tag = (active.tagName ?? "").toUpperCase()
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return false
+    if ((active as HTMLElement).isContentEditable) return false
+  }
+  return doc.querySelector('[role="dialog"], [role="alertdialog"]') === null
+}
