@@ -12,4 +12,4 @@ Semáforo: 🟢 rodando · 🟡 esperando humano · 🔴 bloqueado ou check falh
 | pdv-parity-suite-n5-a-foundation-001 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-16T14:36:01.262Z |
 | pdv-parity-suite-n5-b1-core-gaps-001 | 🟢 verde | RUNNING | ALTO | PDV-PARITY-N5-B1-CORE-GAPS-001 | PDV-PARITY-N5-B1-PENDING-IDENTITY-002 | 0 | 0 | — |
 | pdv-scan-inline-feedback-autofocus-006 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-17T13:01:23.513Z |
-| pdv-scan-unregistered-action-settings-007 | 🟢 verde | RUNNING | MEDIO | PDV-SCAN-UNREGISTERED-ACTION-SETTINGS-007 | — | 0 | 0 | — |
+| pdv-scan-unregistered-action-settings-007 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-17T22:15:44.863Z |
