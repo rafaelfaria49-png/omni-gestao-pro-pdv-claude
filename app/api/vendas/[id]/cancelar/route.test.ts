@@ -9,10 +9,22 @@
  *  - cancelamento repetido (replay) → 409 e nenhuma segunda devolução de crédito;
  *  - crédito de outra loja nunca é tocado (storeId isola);
  *  - venda sem uso de crédito → nenhum efeito sobre créditos.
+ *
+ * Reconciliação 007C: este arquivo compõe o harness do CAD-R2-009 (depósito
+ * principal, saldos físicos, boundary canônico de estoque) com as camadas de
+ * autorização e elegibilidade do pacote 007A/007B. Os dois lados são exercitados
+ * pelo MESMO handler de produção — nada foi substituído por "ours/theirs".
  */
 import { describe, it, expect, beforeEach, vi } from "vitest"
 
 type Row = Record<string, unknown>
+
+/** 007A/007B — estado de autenticação/autorização manipulável por teste. */
+const auth = vi.hoisted(() => ({
+  sessao: { user: { id: "operador-1" } } as { user: { id: string } } | null,
+  permissao: { ok: true } as { ok: true } | { ok: false; status: number; error: string },
+  cookies: new Map<string, string>(),
+}))
 
 const h = vi.hoisted(() => {
   const STORE = "loja-1"
@@ -28,6 +40,8 @@ const h = vi.hoisted(() => {
     // CAD-R2-009: depósito principal + saldos físicos do boundary.
     depositos: [] as Row[],
     produtoDepositos: [] as Row[],
+    // 007B: sessões de caixa, para a guarda de elegibilidade.
+    sessoes: [] as Row[],
   }
   const estornosReceber: Array<Row> = []
   let seq = 0
@@ -43,6 +57,7 @@ const h = vi.hoisted(() => {
     db.titulos.length = 0
     db.depositos.length = 0
     db.produtoDepositos.length = 0
+    db.sessoes.length = 0
     estornosReceber.length = 0
     seq = 0
   }
@@ -223,6 +238,15 @@ const h = vi.hoisted(() => {
     contaReceberTitulo: {
       findMany: async () => db.titulos,
     },
+    // 007A: o guard resolve o nome do supervisor a partir do token.
+    user: {
+      findFirst: async () => ({ name: "Supervisora Teste" }),
+    },
+    // 007B: elegibilidade da sessão de caixa da venda.
+    sessaoCaixa: {
+      findFirst: async ({ where }: { where: Row }) =>
+        db.sessoes.find((x) => x.id === where.id && x.storeId === where.storeId) ?? null,
+    },
   }
 
   const prisma = {
@@ -238,7 +262,17 @@ vi.mock("@/lib/ops-api-gate", () => ({
   opsLojaIdFromRequest: vi.fn(() => h.STORE),
   requireOpsSubscription: vi.fn(async () => ({ ok: true })),
 }))
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => null) }))
+// O step-up é vinculado a um utilizador, então o caminho legado (sem sessão
+// NextAuth) deixa de poder estornar por esta rota — comportamento deliberado do 007A.
+vi.mock("@/auth", () => ({ auth: vi.fn(async () => auth.sessao) }))
+vi.mock("@/lib/auth/guard-enterprise", () => ({
+  requireEnterpriseWith: vi.fn(async () => auth.permissao),
+}))
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (n: string) => (auth.cookies.has(n) ? { value: auth.cookies.get(n) } : undefined),
+  }),
+}))
 vi.mock("@/lib/auth/session-operator", () => ({ getOperatorLabelFromSession: vi.fn(() => "") }))
 vi.mock("@/lib/financeiro/services/movimentacoes-service", () => ({
   estornarMovimentacaoPorReferencia: vi.fn(async (storeId: string, id: string) => {
@@ -256,9 +290,41 @@ vi.mock("@/lib/fiscal/venda-fiscal-state-machine", () => ({
   assertVendaFiscalCancelavel: vi.fn(() => ({ ok: true })),
 }))
 
+import {
+  ADMIN_AUTHORIZATION_COOKIE,
+  PIN_AUTHORIZATION_MAX_AGE_SECONDS,
+  createPinAuthorizationToken,
+} from "@/lib/auth/pin-authorization"
+import { ESTORNO_STEP_UP_ACTION } from "@/lib/vendas/estorno-step-up-contract"
 import { POST } from "./route"
 
-function post(pedidoId: string, body: Row = {}) {
+const SECRET = "segredo-de-teste-007"
+
+/** Emite uma autorização de supervisor REAL, escopada por ação + venda (007B). */
+async function autorizarSupervisor(
+  over: { userId?: string; storeId?: string; nowMs?: number; resource?: string | null } = {},
+) {
+  const token = await createPinAuthorizationToken(
+    {
+      userId: over.userId ?? "operador-1",
+      storeId: over.storeId ?? h.STORE,
+      supervisorId: "supervisor-1",
+      action: ESTORNO_STEP_UP_ACTION,
+      ...(over.resource === null ? {} : { resource: over.resource ?? "VDA-1" }),
+    },
+    SECRET,
+    over.nowMs ?? Date.now(),
+  )
+  auth.cookies.set(ADMIN_AUTHORIZATION_COOKIE, token)
+}
+
+/**
+ * Envia o POST. Por padrão emite antes uma autorização escopada para ESTE pedido —
+ * desde o 007B a autorização é por venda, e os casos de motor exercitam o motor, não
+ * o vínculo. Os testes de segurança passam `semAutorizar` e controlam o cookie.
+ */
+async function post(pedidoId: string, body: Row = {}, opts: { semAutorizar?: boolean } = {}) {
+  if (!opts.semAutorizar) await autorizarSupervisor({ resource: pedidoId })
   return POST(
     new Request(`http://local/api/vendas/${pedidoId}/cancelar`, {
       method: "POST",
@@ -269,8 +335,13 @@ function post(pedidoId: string, body: Row = {}) {
   )
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   h.reset()
+  process.env.AUTH_SECRET = SECRET
+  auth.sessao = { user: { id: "operador-1" } }
+  auth.permissao = { ok: true }
+  auth.cookies.clear()
+  await autorizarSupervisor()
 })
 
 describe("POST /api/vendas/[id]/cancelar — estorno do crédito/vale", () => {
@@ -432,5 +503,263 @@ describe("POST /api/vendas/[id]/cancelar — reposição de estoque (CAD-R2-009)
     // Nada reaplicado: estoque e ledger intactos.
     expect(h.db.produtos[0]!.stock).toBe(7)
     expect(h.db.movEstoque.filter((m) => m.documento === "VDA-EST2")).toHaveLength(1)
+  })
+})
+
+// ─── Camadas de autorização e elegibilidade (pacote 007A/007B) ───
+
+describe("007A · BLOCKER-1 — step-up é exigido pelo SERVIDOR", () => {
+  beforeEach(() => {
+    h.addVenda("VDA-SU", { payload: { paymentBreakdown: { dinheiro: 100 } } })
+  })
+
+  it("§6F chamada direta SEM autorização de supervisor → 403 e venda intacta", async () => {
+    auth.cookies.clear()
+    const res = await post("VDA-SU", {}, { semAutorizar: true })
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe("step_up_required")
+    expect(h.db.vendas[0]!.status).toBe("concluida")
+  })
+
+  it("§6B autorização adulterada → 403", async () => {
+    auth.cookies.set(ADMIN_AUTHORIZATION_COOKIE, "token.forjado")
+    expect((await post("VDA-SU", {}, { semAutorizar: true })).status).toBe(403)
+  })
+
+  it("§6C autorização expirada → 403", async () => {
+    await autorizarSupervisor({ nowMs: Date.now() - (PIN_AUTHORIZATION_MAX_AGE_SECONDS + 60) * 1000 })
+    expect((await post("VDA-SU", {}, { semAutorizar: true })).status).toBe(403)
+  })
+
+  it("autorização de OUTRA loja não vale", async () => {
+    await autorizarSupervisor({ storeId: "loja-2" })
+    expect((await post("VDA-SU", {}, { semAutorizar: true })).status).toBe(403)
+  })
+
+  it("autorização de OUTRO utilizador não vale", async () => {
+    await autorizarSupervisor({ userId: "outro-operador" })
+    expect((await post("VDA-SU", {}, { semAutorizar: true })).status).toBe(403)
+  })
+
+  it("§6G step-up NÃO substitui permissão: sem permissão continua negado", async () => {
+    auth.permissao = { ok: false, status: 403, error: "Sem permissão para cancelar vendas." }
+    const res = await post("VDA-SU", {}, { semAutorizar: true })
+    expect(res.status).toBe(403)
+    expect((await res.json()).error).toMatch(/Sem permissão/)
+    expect(h.db.vendas[0]!.status).toBe("concluida")
+  })
+
+  it("sem sessão (PDV legado) não estorna mais por esta rota — não há a quem vincular", async () => {
+    auth.sessao = null
+    const res = await post("VDA-SU", {}, { semAutorizar: true })
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe("step_up_session_required")
+  })
+
+  it("§6D com as DUAS camadas válidas o estorno prossegue", async () => {
+    await autorizarSupervisor({ resource: "VDA-SU" })
+    const res = await post("VDA-SU", {}, { semAutorizar: true })
+    expect(res.status).toBe(200)
+    expect(h.db.vendas[0]!.status).toBe("cancelada")
+  })
+
+  it("§5 o autorizador da resposta vem do TOKEN, não do corpo enviado", async () => {
+    await autorizarSupervisor({ resource: "VDA-SU" })
+    const body = await (await post("VDA-SU", { canceladaPor: "Fulano Falsificado" }, { semAutorizar: true })).json()
+    expect(body.autorizadoPor).toEqual({ supervisorId: "supervisor-1", nome: "Supervisora Teste" })
+  })
+})
+
+describe("007A · BLOCKER-2 — recebível quitado bloqueia ANTES de qualquer mutação", () => {
+  it("§13 título PAGO → 409, venda ativa, sem estoque, sem ledger, título intacto", async () => {
+    h.addVenda("VDA-PG", { payload: { paymentBreakdown: { aPrazo: 100 } } })
+    h.db.titulos.push({
+      id: "t1",
+      localKey: "pdv-aprazo-VDA-PG-1",
+      storeId: h.STORE,
+      status: "pago",
+      valor: 100,
+      payload: { historico: [{ tipo: "pagamento", valor: 100 }] },
+    })
+
+    const res = await post("VDA-PG")
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe("recebivel_quitado")
+
+    // nenhuma mutação parcial
+    expect(h.db.vendas[0]!.status).toBe("concluida")
+    expect(h.db.movEstoque).toHaveLength(0)
+    expect(h.db.movFinanceira).toHaveLength(0)
+    expect(h.estornosReceber).toHaveLength(0)
+    expect(h.db.titulos[0]!.status).toBe("pago")
+  })
+
+  it("§11 título PENDENTE segue estornável — comportamento preservado", async () => {
+    h.addVenda("VDA-PD", { payload: { paymentBreakdown: { aPrazo: 100 } } })
+    h.db.titulos.push({
+      id: "t2",
+      localKey: "pdv-aprazo-VDA-PD-1",
+      storeId: h.STORE,
+      status: "pendente",
+      valor: 100,
+      payload: {},
+    })
+    expect((await post("VDA-PD")).status).toBe(200)
+    expect(h.db.vendas[0]!.status).toBe("cancelada")
+    expect(h.estornosReceber).toHaveLength(1)
+  })
+
+  it("§12 título PARCIALMENTE pago segue estornável — não bloquear sem revalidar", async () => {
+    h.addVenda("VDA-PP", { payload: { paymentBreakdown: { aPrazo: 100 } } })
+    h.db.titulos.push({
+      id: "t3",
+      localKey: "pdv-aprazo-VDA-PP-1",
+      storeId: h.STORE,
+      status: "parcial",
+      valor: 100,
+      payload: { historico: [{ tipo: "pagamento", valor: 40 }] },
+    })
+    expect((await post("VDA-PP")).status).toBe(200)
+    expect(h.estornosReceber).toHaveLength(1)
+  })
+
+  it("mistura pendente + pago bloqueia pelo título quitado", async () => {
+    h.addVenda("VDA-MX", { payload: { paymentBreakdown: { aPrazo: 100 } } })
+    h.db.titulos.push(
+      { id: "t4", localKey: "pdv-aprazo-VDA-MX-1", storeId: h.STORE, status: "pendente", valor: 50, payload: {} },
+      { id: "t5", localKey: "pdv-aprazo-VDA-MX-2", storeId: h.STORE, status: "pago", valor: 50, payload: {} },
+    )
+    const res = await post("VDA-MX")
+    expect(res.status).toBe(409)
+    expect((await res.json()).titulosQuitados).toBe(1)
+    expect(h.db.vendas[0]!.status).toBe("concluida")
+  })
+
+  it("venda sem título nenhum passa normalmente", async () => {
+    h.addVenda("VDA-SEM", { payload: { paymentBreakdown: { dinheiro: 100 } } })
+    expect((await post("VDA-SEM")).status).toBe(200)
+  })
+})
+
+// ─── GOAL 007B — vínculo por venda e elegibilidade de sessão, no handler real ───
+
+describe("007B · AUTH A → SALE A permitido / AUTH A → SALE B negado", () => {
+  beforeEach(() => {
+    h.addVenda("VDA-A", { payload: { paymentBreakdown: { dinheiro: 50 } } })
+    h.addVenda("VDA-B", { payload: { paymentBreakdown: { dinheiro: 70 } } })
+  })
+
+  it("autorização emitida para a Venda A estorna a Venda A", async () => {
+    await autorizarSupervisor({ resource: "VDA-A" })
+    expect((await post("VDA-A", {}, { semAutorizar: true })).status).toBe(200)
+    expect(h.db.vendas.find((v) => v.pedidoId === "VDA-A")!.status).toBe("cancelada")
+  })
+
+  it("a MESMA autorização NÃO estorna a Venda B — e a B fica intacta", async () => {
+    await autorizarSupervisor({ resource: "VDA-A" })
+    const res = await post("VDA-B", {}, { semAutorizar: true })
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe("step_up_required")
+    expect(h.db.vendas.find((v) => v.pedidoId === "VDA-B")!.status).toBe("concluida")
+    expect(h.db.movEstoque).toHaveLength(0)
+    expect(h.db.movFinanceira).toHaveLength(0)
+  })
+
+  it("o reuso em lote morre: estornar A não abre caminho para B na mesma janela", async () => {
+    await autorizarSupervisor({ resource: "VDA-A" })
+    expect((await post("VDA-A", {}, { semAutorizar: true })).status).toBe(200)
+    expect((await post("VDA-B", {}, { semAutorizar: true })).status).toBe(403)
+    expect(h.db.vendas.find((v) => v.pedidoId === "VDA-B")!.status).toBe("concluida")
+  })
+
+  it("autorização genérica (sem escopo) não estorna nada", async () => {
+    const tk = await createPinAuthorizationToken(
+      { userId: "operador-1", storeId: h.STORE, supervisorId: "supervisor-1" },
+      SECRET,
+    )
+    auth.cookies.set(ADMIN_AUTHORIZATION_COOKIE, tk)
+    expect((await post("VDA-A", {}, { semAutorizar: true })).status).toBe(403)
+  })
+
+  it("INVARIANTE 2: step-up escopado NÃO substitui a permissão normal", async () => {
+    await autorizarSupervisor({ resource: "VDA-A" })
+    auth.permissao = { ok: false, status: 403, error: "Sem permissão para cancelar vendas." }
+    const res = await post("VDA-A", {}, { semAutorizar: true })
+    expect((await res.json()).error).toMatch(/Sem permissão/)
+    expect(h.db.vendas.find((v) => v.pedidoId === "VDA-A")!.status).toBe("concluida")
+  })
+})
+
+describe("007B · INVARIANTE 3 — sessão de caixa", () => {
+  it("SESSÃO FECHADA: chamada direta bloqueada com ZERO mutação", async () => {
+    h.db.sessoes.push({ id: "s-fechada", storeId: h.STORE, status: "FECHADA" })
+    h.addVenda("VDA-SF", {
+      payload: { paymentBreakdown: { dinheiro: 100 }, sessaoId: "s-fechada" },
+    })
+    h.db.movFinanceira.push({
+      storeId: h.STORE, referenciaId: "VDA-SF", tipo: "entrada", origem: "venda", valor: 100,
+    })
+
+    const res = await post("VDA-SF")
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe("sessao_fechada")
+
+    expect(h.db.vendas[0]!.status).toBe("concluida")
+    expect(h.db.movEstoque).toHaveLength(0)
+    expect(h.db.movFinanceira.filter((m) => m.origem === "cancelamento_pdv")).toHaveLength(0)
+    expect(h.estornosReceber).toHaveLength(0)
+    expect(h.db.creditos).toHaveLength(0)
+  })
+
+  it("SESSÃO ABERTA: estorno segue funcionando", async () => {
+    h.db.sessoes.push({ id: "s-aberta", storeId: h.STORE, status: "ABERTA" })
+    h.addVenda("VDA-SA", {
+      payload: { paymentBreakdown: { dinheiro: 100 }, sessaoId: "s-aberta" },
+    })
+    expect((await post("VDA-SA")).status).toBe(200)
+    expect(h.db.vendas[0]!.status).toBe("cancelada")
+  })
+
+  it("venda SEM vínculo de sessão: política documentada — segue permitida", async () => {
+    h.addVenda("VDA-LEG", { payload: { paymentBreakdown: { dinheiro: 100 } } })
+    expect((await post("VDA-LEG")).status).toBe(200)
+  })
+
+  it("vínculo para sessão de OUTRA loja não é lido como aberta nem bloqueia por invenção", async () => {
+    h.db.sessoes.push({ id: "s-outra", storeId: "loja-2", status: "FECHADA" })
+    h.addVenda("VDA-XL", {
+      payload: { paymentBreakdown: { dinheiro: 100 }, sessaoId: "s-outra" },
+    })
+    // o findFirst é escopado por storeId → não encontra → sem prova de fechamento
+    expect((await post("VDA-XL")).status).toBe(200)
+  })
+
+  it("a guarda de sessão corre ANTES do guard de recebíveis (ordem dos blocos)", async () => {
+    h.db.sessoes.push({ id: "s-fechada2", storeId: h.STORE, status: "FECHADA" })
+    h.addVenda("VDA-SF2", {
+      payload: { paymentBreakdown: { aPrazo: 100 }, sessaoId: "s-fechada2" },
+    })
+    h.db.titulos.push({
+      id: "t9", localKey: "pdv-aprazo-VDA-SF2-1", storeId: h.STORE,
+      status: "pago", valor: 100, payload: { historico: [{ tipo: "pagamento", valor: 100 }] },
+    })
+    const res = await post("VDA-SF2")
+    // ambos bloqueariam; o de sessão responde primeiro
+    expect((await res.json()).code).toBe("sessao_fechada")
+  })
+
+  it("VENDA JÁ CANCELADA continua terminal (409), sem regressão", async () => {
+    h.db.sessoes.push({ id: "s-ok", storeId: h.STORE, status: "ABERTA" })
+    h.addVenda("VDA-JC", {
+      status: "cancelada", payload: { paymentBreakdown: { dinheiro: 10 }, sessaoId: "s-ok" },
+    })
+    const res = await post("VDA-JC")
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/já foi cancelada/)
+  })
+
+  it("VENDA DE OUTRA LOJA continua 404", async () => {
+    h.addVenda("VDA-L2", { storeId: "loja-2", payload: { paymentBreakdown: { dinheiro: 10 } } })
+    expect((await post("VDA-L2")).status).toBe(404)
   })
 })
