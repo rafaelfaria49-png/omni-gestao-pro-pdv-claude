@@ -30,8 +30,11 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
+import type { PdvScanInlineFeedbackState } from "@/lib/pdv-scan-input"
 import { cn } from "@/lib/utils"
 import type { PdvCatalogProduct } from "@/lib/pdv-catalog"
+
+import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -54,8 +57,12 @@ const PosField = forwardRef<
     hint?: string
     icon?: ReactNode
     fieldClassName?: string
+    /** Estado de erro (GOAL 006): borda/anel destructive enquanto o aviso inline está visível. */
+    error?: boolean
+    /** Sobreposição renderizada dentro do próprio campo (ex.: aviso de código não cadastrado). */
+    overlay?: ReactNode
   }
->((({ label, hint, icon, className, fieldClassName, ...props }, ref) => {
+>((({ label, hint, icon, className, fieldClassName, error, overlay, ...props }, ref) => {
   return (
     <label className={cn("flex flex-col gap-1", fieldClassName)}>
       <span className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
@@ -74,13 +81,17 @@ const PosField = forwardRef<
         ) : null}
         <input
           ref={ref}
+          aria-invalid={error || undefined}
           className={cn(
             "tabular-pdv h-9 w-full rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground/70 shadow-sm outline-none transition-colors focus:border-[hsl(var(--pos-action))]/60 focus:ring-2 focus:ring-[hsl(var(--pos-action))]/20",
+            error &&
+              "border-destructive/70 focus:border-destructive/70 focus:ring-destructive/25",
             icon && "pl-8",
             className
           )}
           {...props}
         />
+        {overlay}
       </div>
     </label>
   )
@@ -233,6 +244,8 @@ export type PdvOmniClassicShellProps = {
   onBipeChange: (v: string) => void
   bipeRef: React.RefObject<HTMLInputElement | null>
   onBipeKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void
+  /** Aviso INLINE de código não cadastrado sobre o próprio campo (GOAL 006). */
+  bipeInlineFeedback?: PdvScanInlineFeedbackState
   /** Sugestões para autocomplete do campo BIPE (max 8). */
   bipeSuggestions?: PdvCatalogProduct[]
   onBipeSuggestionSelect?: (product: PdvCatalogProduct) => void
@@ -519,6 +532,12 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             onKeyDown={handleBipeKeyDown}
             placeholder="Bipe ou digite o código do produto"
             autoComplete="off"
+            error={!!props.bipeInlineFeedback?.code}
+            overlay={
+              props.bipeInlineFeedback ? (
+                <PdvScanInlineNotFound feedback={props.bipeInlineFeedback} className="pl-8" />
+              ) : null
+            }
           />
           {props.bipeCode.trim().length >= 1 ? (
             <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-card shadow-xl">
