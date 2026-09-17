@@ -117,6 +117,16 @@ import {
   findUnresolvedSaleLines,
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
+import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
+import {
+  resolveWeightUnitPrice,
+  WEIGHT_PRICE_INVALID_FEEDBACK,
+} from "@/lib/pdv/weight-line-guard"
+import {
+  CAPABILITY_BLOCKED_COPY,
+  createCapabilityBlockedFeedback,
+} from "@/lib/pdv/capability-blocked-feedback"
 
 import type { VendasPDVProps } from "./pdv-classic"
 
@@ -195,9 +205,16 @@ export function PdvSupermercado({
   const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const payMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal } = useOperationsStore()
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
+  // N5-B1 R2 (P2-06): identidade PENDING já criada — reconfirmar pelo modal
+  // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
+  const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
+  if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
+  const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
 
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
 
@@ -618,7 +635,17 @@ export function PdvSupermercado({
 
   const openPaymentModal = useCallback(
     (intent: PaymentMethodType | null) => {
-      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
+      // N5-B1 R2 (P2-03): capability off = feedback claro, nunca retorno silencioso.
+      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+        paymentBlockedFeedback.notifyBlocked("sales.paymentMethods", CAPABILITY_BLOCKED_COPY["sales.paymentMethods"])
+        return
+      }
+      // N5-B1 R2 (P2-06): venda PENDING de identidade própria — reconfirmar
+      // criaria novo clientSaleId. Orienta para o retry existente.
+      if (pendingSaleIdentityRef.current?.hasPending()) {
+        toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+        return
+      }
       if (cart.length === 0) {
         toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
         hardFocusSearch()
@@ -629,13 +656,24 @@ export function PdvSupermercado({
       setMultipayMode(false)
       setIsPaymentModalOpen(true)
     },
-    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast]
+    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, paymentBlockedFeedback, toast]
   )
 
   /** Pagamento Múltiplo — convergência operacional com PDV Assistência (F12). */
   const openMultipayModal = useCallback(() => {
-    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
-    if (!pdvCapabilities.isEnabled("pdv.multiplePayments")) return
+    // N5-B1 R2 (P2-03): capability off = feedback claro nos dois gates.
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+      paymentBlockedFeedback.notifyBlocked("sales.paymentMethods", CAPABILITY_BLOCKED_COPY["sales.paymentMethods"])
+      return
+    }
+    if (!pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+      paymentBlockedFeedback.notifyBlocked("pdv.multiplePayments", CAPABILITY_BLOCKED_COPY["pdv.multiplePayments"])
+      return
+    }
+    if (pendingSaleIdentityRef.current?.hasPending()) {
+      toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+      return
+    }
     if (cart.length === 0) {
       toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
       hardFocusSearch()
@@ -645,7 +683,7 @@ export function PdvSupermercado({
     setInstantPayIntent(null)
     setMultipayMode(true)
     setIsPaymentModalOpen(true)
-  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast])
+  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, paymentBlockedFeedback, toast])
 
   const confirmAttrDialog = useCallback(() => {
     if (!attrProduct) return
@@ -678,12 +716,27 @@ export function PdvSupermercado({
       toast({ title: "Peso inválido", description: "Informe o peso em kg.", variant: "destructive" })
       return
     }
+    // N5-B1 R2 (GAP-P2-05): preço efetivo do peso precisa existir e ser > 0 —
+    // 0/negativo/NaN/ausente rejeita a linha (sem inferir preço, sem tocar no
+    // cadastro). O diálogo permanece aberto para correção ou cancelamento.
+    const pesoPreco = resolveWeightUnitPrice({
+      precoPorKg: weightProduct.precoPorKg,
+      price: weightProduct.price,
+    })
+    if (!pesoPreco.ok) {
+      toast({
+        title: WEIGHT_PRICE_INVALID_FEEDBACK.title,
+        description: WEIGHT_PRICE_INVALID_FEEDBACK.description,
+        variant: "destructive",
+      })
+      return
+    }
     const inv = inventory.find((i) => i.id === weightProduct.id)
     if (inv && kg > inv.stock + 0.0001) {
       toast({ title: "Estoque", description: "Peso maior que o disponível.", variant: "destructive" })
       return
     }
-    const pKg = weightProduct.precoPorKg ?? weightProduct.price
+    const pKg = pesoPreco.unitPrice
     const parts = weightProduct.atributos?.length ? weightProduct.atributos.map((a) => attrSelections[a.id]).filter(Boolean) : []
     const baseName = parts.length ? `${weightProduct.name} (${parts.join(" · ")})` : weightProduct.name
     pushCartLine({
@@ -953,6 +1006,9 @@ export function PdvSupermercado({
     setCart([])
     setDiscountReais(0)
     setDiscountPercent(0)
+    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de identidade
+    // PENDING liberado (a venda pendente segue syncing independente).
+    pendingSaleIdentityRef.current?.clear()
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
   }
 
@@ -1241,6 +1297,7 @@ export function PdvSupermercado({
                     setDiscountPercent(0)
                     setDiscountReais(0)
                     setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                    pendingSaleIdentityRef.current?.clear()
                     toast({ title: "Carrinho limpo" })
                     queueMicrotask(hardFocusSearch)
                     return
@@ -1255,6 +1312,7 @@ export function PdvSupermercado({
                     setDiscountPercent(0)
                     setDiscountReais(0)
                     setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                    pendingSaleIdentityRef.current?.clear()
                     toast({ title: "Carrinho limpo" })
                     productInputRef.current?.focus()
                     return
@@ -1401,6 +1459,7 @@ export function PdvSupermercado({
                   <Button
                     key={forma.id}
                     type="button"
+                    disabled={!payMethodsEnabled}
                     className={cn(
                       "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
                       formaPagamentoSupermercadoQuickClasses(forma.cor),
@@ -1490,8 +1549,16 @@ export function PdvSupermercado({
         discountsEnabled={discountsEnabled}
         storeCreditEnabled={storeCreditEnabled}
         allowMultiplePayments={pdvCapabilities.isEnabled("pdv.multiplePayments")}
+        requireExplicitResult
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
+          // N5-B1 R2 (P2-06): contrato EXPLÍCITO com o modal — `true` =
+          // desfecho (CONFIRMED ou PENDING registrado), `false` = falha (modal
+          // aberto, busy liberado). Retorno vazio não é sucesso.
+          if (pendingSaleIdentityRef.current?.hasPending()) {
+            toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+            return false
+          }
           // Capturar dados de impressão ANTES de limpar o cart
           const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || "Loja"
           const _cnpj = (empresaDocumentos?.cnpj || "").trim()
@@ -1528,7 +1595,7 @@ export function PdvSupermercado({
               title: "Item não pode ser vendido",
               description: unresolvedSaleLinesDescription(unresolvedSuper),
             })
-            return
+            return false
           }
           // Todas as linhas resolvem (garantido pelo guard) — nada é descartado.
           const saleLines = cart
@@ -1570,6 +1637,29 @@ export function PdvSupermercado({
             }
           }
 
+          // N5-B1 R2 (P2-02): crédito/vale consome meta.creditDoc (audit
+          // GAP-P2-02 — o Super não tinha o fallback do Classic). O servidor
+          // debita pelo customerCpf da venda: titular de terceiro → doc DELE
+          // na venda, clienteId do selecionado NUNCA herda; titular = cliente
+          // selecionado → identidade dele intacta. Seed local opcional apenas.
+          const usouValeSuper = payments.some((p) => p.type === "credito_vale")
+          const attributionSuper = resolveCreditAttribution({
+            usedCredit: usouValeSuper,
+            meta,
+            selectedCustomer: selectedCustomer
+              ? { id: selectedCustomer.id, name: selectedCustomer.name, cpf: selectedCustomer.cpf }
+              : null,
+          })
+          if (attributionSuper.seedLocalCredit) {
+            sincronizarCreditoLocal(
+              attributionSuper.seedLocalCredit.doc,
+              attributionSuper.seedLocalCredit.nome,
+              attributionSuper.seedLocalCredit.saldo,
+            )
+          }
+          const clienteVendaNome = attributionSuper.saleName ?? selectedCustomer?.name
+          const clienteVendaDoc = attributionSuper.saleDoc ?? selectedCustomer?.cpf
+
           const result = await finalizeSaleTransaction({
             lines: saleLines,
             total,
@@ -1583,9 +1673,9 @@ export function PdvSupermercado({
               aPrazo,
               creditoVale,
             },
-            customerCpf: selectedCustomer?.cpf,
-            customerName: selectedCustomer?.name,
-            clienteId: selectedCustomer?.id || undefined,
+            customerCpf: clienteVendaDoc,
+            customerName: clienteVendaNome,
+            clienteId: attributionSuper.belongsToSelectedCustomer ? selectedCustomer?.id || undefined : undefined,
             auditMeta: {
               cashierId: meta?.cashierId ?? cashierId,
               discountAuthorizedByAdminId: meta?.discountAuthorizedByAdminId,
@@ -1599,14 +1689,19 @@ export function PdvSupermercado({
 
           if (!result.ok) {
             toast({ title: "Falha transacional", description: result.reason })
-            return
+            return false
           }
           // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
           // sem impressão, sem cupom, sem audit sale_finalizado, sem fila de
           // produtos, sem limpar o carrinho. Só informa o estado honesto,
           // preserva carrinho/identidade e permite retry da MESMA venda
-          // (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
+          // (Vendas → Reenviar sync). N5-B1 R2 (P2-06): identidade REGISTRADA —
+          // reconfirmação pelo modal fica bloqueada (nova identidade = 2ª venda).
           if (result.pending) {
+            pendingSaleIdentityRef.current?.register({
+              id: result.saleId,
+              ...(result.clientSaleId ? { clientSaleId: result.clientSaleId } : {}),
+            })
             setIsPaymentModalOpen(false)
             setInstantPayIntent(null)
             toast({
@@ -1620,14 +1715,14 @@ export function PdvSupermercado({
                 window.requestAnimationFrame(() => hardFocusSearch())
               }
             })
-            return
+            return true
           }
           _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
           if (aPrazo > 0.02 && selectedCustomer && !result.pending) {
             appendContaReceberTituloPdvAprazo({
               lojaId: lojaKey,
               saleId: result.saleId,
-              clienteNome: selectedCustomer.name,
+              clienteNome: clienteVendaNome ?? selectedCustomer.name,
               valor: aPrazo,
               aPrazoConfig,
             })
@@ -1704,6 +1799,7 @@ export function PdvSupermercado({
               window.requestAnimationFrame(() => hardFocusSearch())
             }
           })
+          return true
         }}
       />
 
@@ -1915,6 +2011,7 @@ export function PdvSupermercado({
                       setDiscountPercent(0)
                       setDiscountReais(0)
                       setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                      pendingSaleIdentityRef.current?.clear()
                       toast({ title: "Carrinho limpo", description: "Autorizado pelo supervisor." })
                     }
                     setSupervisorDialogOpen(false)
