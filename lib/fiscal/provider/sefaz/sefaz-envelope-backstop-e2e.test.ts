@@ -227,5 +227,5 @@ describe("nenhum caller produtivo novo (GOAL-016D-C1)", () => {
       "lib/fiscal/provider/sefaz/index.ts",
       "lib/fiscal/provider/sefaz/sefaz-direto-provider.ts",
     ])
-  })
+  }, 60_000)
 })

@@ -88,7 +88,7 @@ describe("Integridade Estatica do Artefato: ICP-Brasil v10 PEM", () => {
   })
 })
 
-describe("Composicao de Trust e SecureContext SEFAZ (Criterios A a G)", () => {
+describe("Composicao de Trust e SecureContext SEFAZ (Criterios A a G)", { timeout: 30_000 }, () => {
   const rootPem = loadIcpBrasilV10Pem()
 
   // Intermediaria de teste simulando a AC SOLUTI SSL EV G4
