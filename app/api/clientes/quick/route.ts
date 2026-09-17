@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
+import { createClient } from "@/lib/cadastros/client-write-service"
+import { mapClientWriteFailureToResponse } from "@/lib/cadastros/client-write-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -46,14 +49,14 @@ export async function POST(req: Request) {
       return json({ error: "Telefone inválido (use DDD + número, 10 ou 11 dígitos)" }, { status: 400 })
     }
 
-    const created = await prisma.cliente.create({
-      data: {
-        name,
-        phone: phone || null,
-        document,
-        kind,
-        storeId,
-      },
+    const written = await createClient(
+      { storeId, principal: cadastrosAuditPrincipalFromSession(gate.session) },
+      { name, phone: phone || null, document, kind },
+    )
+    if (!written.ok) return mapClientWriteFailureToResponse(written)
+
+    const created = await prisma.cliente.findFirst({
+      where: { id: written.id, storeId },
       select: { id: true, name: true, phone: true, email: true, document: true },
     })
 

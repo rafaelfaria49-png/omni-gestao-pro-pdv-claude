@@ -325,7 +325,7 @@ describe("política de dedupe", () => {
   it("25+26. nenhuma IA e nenhum merge automático", () => {
     expect(CLIENT_IDENTITY_AI_DECISION).toBe(false)
     expect(CLIENT_IDENTITY_AUTO_MERGE).toBe(false)
-    expect(CLIENT_WRITE_SERVICE_IMPLEMENTED).toBe(false)
+    expect(CLIENT_WRITE_SERVICE_IMPLEMENTED).toBe(true)
     expect(CLIENT_MERGE_IMPLEMENTED).toBe(false)
   })
 })
@@ -431,7 +431,7 @@ describe("telemetria / PII", () => {
 })
 
 describe("inventário de writers (entrada do CAD-R2-008)", () => {
-  it("classifica writers ativos sem implementar ClientWriteService", () => {
+  it("classifica writers ativos; ClientWriteService é a boundary de escrita", () => {
     expect(CLIENT_WRITER_INVENTORY.length).toBeGreaterThan(10)
     expect(ACTIVE_CLIENT_WRITERS.every((w) => w.writes)).toBe(true)
     expect(CLIENT_WRITER_INVENTORY.some((w) => w.kind === "INTERACTIVE")).toBe(true)
@@ -441,7 +441,7 @@ describe("inventário de writers (entrada do CAD-R2-008)", () => {
     expect(CLIENT_IDENTITY_FIELDS).toEqual(
       expect.arrayContaining(["storeId", "name", "document", "phone", "email"]),
     )
-    expect(CLIENT_WRITE_SERVICE_IMPLEMENTED).toBe(false)
+    expect(CLIENT_WRITE_SERVICE_IMPLEMENTED).toBe(true)
     expect(CLIENT_MERGE_IMPLEMENTED).toBe(false)
   })
 })

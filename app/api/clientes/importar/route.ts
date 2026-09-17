@@ -8,6 +8,7 @@ import {
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -102,7 +103,11 @@ async function handleImport(request: Request) {
       return json(request, { error: "Payload inválido", detail: "Envie { items: [ { Nome, Telefone } ] }" }, 400)
     }
 
-    const { created, updated, skippedDuplicate } = await importClientesItems(lid, body.items)
+    const { created, updated, skippedDuplicate } = await importClientesItems(
+      lid,
+      body.items,
+      cadastrosAuditPrincipalFromSession(adminGate.session),
+    )
 
     return json(request, { ok: true, created, updated, skippedDuplicate })
   } catch (e) {

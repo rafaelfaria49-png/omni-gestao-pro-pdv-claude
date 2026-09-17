@@ -79,6 +79,12 @@ vi.mock("@/lib/prisma", () => ({
           create: h.produtoCreate,
           update: h.produtoUpdate,
         },
+        cliente: {
+          findMany: h.clienteFindMany,
+          findFirst: h.clienteFindFirst,
+          create: h.clienteCreate,
+          update: h.clienteUpdate,
+        },
         logsAuditoria: { create: h.logsCreate },
         $queryRaw: async () => [],
         deposito: { findFirst: async () => null, findUnique: async () => null },

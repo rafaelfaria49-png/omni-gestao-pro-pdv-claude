@@ -13,6 +13,12 @@ import type {
   ProductWriteInput,
   ProductWriteResult,
 } from "@/lib/cadastros/product-write-contract";
+import { createClient, updateClient } from "@/lib/cadastros/client-write-service";
+import {
+  clientWriteImportMessage,
+  type ClientWriteInput,
+  type ClientWriteResult,
+} from "@/lib/cadastros/client-write-contract";
 import { applyStockMutation } from "@/lib/estoque/stock-ledger-service";
 import type { ExistingProdutoLite } from "@/lib/produtos/duplicate-product";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
@@ -997,6 +1003,10 @@ export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
   }
 }
 
+function mapClientWriteFailureToActionError(result: Extract<ClientWriteResult, { ok: false }>): Error {
+  return new Error(clientWriteImportMessage(result));
+}
+
 export async function createCliente(
   storeId: string,
   input: {
@@ -1011,27 +1021,25 @@ export async function createCliente(
     active?: boolean;
   }
 ): Promise<{ id: string }> {
-  storeId = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
+  const gate = await requireCadastrosActionAccess(storeId, "shared");
+  const principal = cadastrosAuditPrincipalFromSession(gate.session);
   try {
-    const nome = input.nome.trim();
-    if (!nome) throw new Error("Nome obrigatório");
-
-    const created = await prisma.cliente.create({
-      data: {
-        storeId,
-        name: nome,
-        kind: input.tipo,
-        document: (input.documento ?? "").trim(),
-        phone: (input.telefone ?? "").trim() || null,
-        email: (input.email ?? "").trim() || null,
-        city: (input.cidade ?? "").trim(),
-        tags: input.tags ? (input.tags as Prisma.InputJsonValue) : undefined,
-        active: input.active ?? true,
-      },
-      select: { id: true },
-    });
+    const result = await createClient(
+      { storeId: gate.storeId, principal },
+      {
+        nome: input.nome,
+        tipo: input.tipo,
+        documento: input.documento,
+        telefone: input.telefone,
+        email: input.email,
+        cidade: input.cidade,
+        ...(input.tags !== undefined ? { tags: input.tags } : {}),
+        ...(input.active !== undefined ? { active: input.active } : {}),
+      } as ClientWriteInput,
+    );
+    if (!result.ok) throw mapClientWriteFailureToActionError(result);
     revalidatePath("/dashboard/cadastros-v2");
-    return created;
+    return { id: result.id };
   } catch (err) {
     console.error("[createCliente] erro ao criar cliente:", err instanceof Error ? err.message : String(err));
     throw err instanceof Error ? err : new Error("Falha ao criar cliente. Tente novamente.");
@@ -1058,24 +1066,21 @@ export async function updateCliente(
     active: boolean;
   }>
 ): Promise<void> {
-  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
+  const gate = await requireCadastrosActionAccess(storeId, "hub");
+  const principal = cadastrosAuditPrincipalFromSession(gate.session);
   try {
-    const existing = await prisma.cliente.findFirst({ where: { id, storeId }, select: { id: true } });
-    if (!existing) throw new Error("Cliente não encontrado");
+    const input: ClientWriteInput = {};
+    if (patch.nome !== undefined) input.nome = patch.nome;
+    if (patch.tipo !== undefined) input.tipo = patch.tipo;
+    if (patch.documento !== undefined) input.documento = patch.documento;
+    if (patch.telefone !== undefined) input.telefone = patch.telefone;
+    if (patch.email !== undefined) input.email = patch.email;
+    if (patch.cidade !== undefined) input.cidade = patch.cidade;
+    if (patch.tags !== undefined) input.tags = patch.tags;
+    if (patch.active !== undefined) input.active = patch.active;
 
-    await prisma.cliente.update({
-      where: { id },
-      data: {
-        name: patch.nome ? patch.nome.trim() : undefined,
-        kind: patch.tipo,
-        document: patch.documento !== undefined ? patch.documento.trim() : undefined,
-        phone: patch.telefone !== undefined ? patch.telefone.trim() || null : undefined,
-        email: patch.email !== undefined ? patch.email.trim() || null : undefined,
-        city: patch.cidade !== undefined ? patch.cidade.trim() : undefined,
-        tags: patch.tags !== undefined ? (patch.tags as Prisma.InputJsonValue) : undefined,
-        active: patch.active,
-      },
-    });
+    const result = await updateClient({ storeId: gate.storeId, principal }, id, input);
+    if (!result.ok) throw mapClientWriteFailureToActionError(result);
     revalidatePath("/dashboard/cadastros-v2");
   } catch (err) {
     console.error("[updateCliente] erro ao atualizar cliente:", err instanceof Error ? err.message : String(err));

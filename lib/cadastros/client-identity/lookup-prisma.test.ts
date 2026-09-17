@@ -82,4 +82,18 @@ describe("lookup Prisma store-scoped", () => {
     expect(rows).toEqual([])
     expect(h.findMany).not.toHaveBeenCalled()
   })
+
+  it("aceita TransactionClient injetado (lookup na mesma tx da escrita)", async () => {
+    const findMany = vi.fn(async () => [])
+    const source = createPrismaClientIdentitySource({
+      cliente: { findMany },
+    })
+    await source.findByIdentityKeys("loja-a", {
+      documentDigits: "52998224725",
+      phoneDigits: null,
+      email: null,
+    })
+    expect(findMany).toHaveBeenCalledTimes(1)
+    expect(h.findMany).not.toHaveBeenCalled()
+  })
 })

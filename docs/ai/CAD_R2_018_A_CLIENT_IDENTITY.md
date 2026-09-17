@@ -1,7 +1,7 @@
 # CAD-R2-018-A — Identidade e dedupe canônicos de Cliente
 
-Fundação pura e testável para o Cadastros R2. **Não** implementa o
-`ClientWriteService` (CAD-R2-008), **não** faz merge (CAD-R2-018-B),
+Fundação pura e testável para o Cadastros R2. **ClientWriteService**
+foi entregue em CAD-R2-008. Este GOAL **não** faz merge (CAD-R2-018-B),
 **não** cria unique/migration (CAD-R2-019) e **não** abre a frente LGPD
 (CAD-R2-020).
 
@@ -57,8 +57,8 @@ veredito (sem id/nome/documento/email/telefone).
 
 ## Inventário de writers (entrada do 008)
 
-Ver `writers-inventory.ts`. Writers ativos continuam nos caminhos atuais;
-**nenhum** foi migrado neste GOAL.
+Ver `writers-inventory.ts`. Em CAD-R2-008 os writers ativos de create/update
+passaram a adapters do `ClientWriteService`. Hard delete permanece fora.
 
 ## Dívidas observadas
 

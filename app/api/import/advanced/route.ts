@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
               restantes: sep.restantes,
             }
           : sep
-      smartAgg = await persistirSmartSeparado(storeId, sepFiltrada)
+      smartAgg = await persistirSmartSeparado(storeId, sepFiltrada, principal)
     } catch (e) {
       return NextResponse.json(
         { error: "Falha ao persistir importação Smart Genius", detalhe: e instanceof Error ? e.message : String(e) },

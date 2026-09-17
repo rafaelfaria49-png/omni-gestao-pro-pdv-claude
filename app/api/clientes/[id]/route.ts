@@ -3,6 +3,10 @@ import { Prisma, StatusOrdemServico } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
+import { updateClient } from "@/lib/cadastros/client-write-service"
+import { mapClientWriteFailureToResponse } from "@/lib/cadastros/client-write-http"
+import type { ClientWriteInput } from "@/lib/cadastros/client-write-contract"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -128,24 +132,25 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     if (!phone) return badRequest('Campo "phone" é obrigatório')
     if (!isValidPhoneBr(phone)) return badRequest("Telefone inválido (use DDD + número, 10 ou 11 dígitos)")
 
-    const upd = await prisma.cliente.updateMany({
-      where: { id, storeId },
-      data: {
-        name,
-        phone,
-        email: email || null,
-        ...(kind !== undefined ? { kind } : {}),
-        ...(document !== undefined ? { document } : {}),
-        ...(city !== undefined ? { city } : {}),
-        ...(tags !== undefined ? { tags: tags || Prisma.DbNull } : {}),
-        ...(active !== undefined ? { active } : {}),
-        ...(totalSpent !== undefined ? { totalSpent } : {}),
-        ...(lastPurchaseAt !== undefined ? { lastPurchaseAt } : {}),
-      },
-    })
-    if (upd.count === 0) {
-      return json({ error: "Cliente não encontrado" }, { status: 404 })
+    const patch: ClientWriteInput = {
+      name,
+      phone,
+      email: email || null,
     }
+    if (kind !== undefined) patch.kind = kind
+    if (document !== undefined) patch.document = document
+    if (city !== undefined) patch.city = city
+    if (tags !== undefined) patch.tags = tags || null
+    if (active !== undefined) patch.active = active
+    if (totalSpent !== undefined) patch.totalSpent = totalSpent
+    if (lastPurchaseAt !== undefined) patch.lastPurchaseAt = lastPurchaseAt
+
+    const written = await updateClient(
+      { storeId, principal: cadastrosAuditPrincipalFromSession(gate.session) },
+      id,
+      patch,
+    )
+    if (!written.ok) return mapClientWriteFailureToResponse(written)
 
     const updated = await prisma.cliente.findFirst({
       where: { id, storeId },
