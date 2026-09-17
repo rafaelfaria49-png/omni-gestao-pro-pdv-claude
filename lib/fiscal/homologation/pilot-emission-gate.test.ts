@@ -9,9 +9,11 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   consumePilotEmissionActivation,
+  createPilotConsultationExternalAuthority,
   createPilotEmissionExternalAuthority,
   evaluatePilotEmissionWindow,
   PILOT_EMISSION_HOMOLOGATION_WINDOW,
+  pilotConsultationCapability,
   pilotEmissionCapability,
   pilotEmissionDedupeKey,
   pilotEmissionActivationStillActive,
@@ -272,6 +274,39 @@ describe("createPilotEmissionExternalAuthority · authority nasce da ativação"
         jobId: INPUT.jobId,
         storeId: INPUT.storeId,
       }),
+    ).toBeNull()
+  })
+})
+
+describe("createPilotConsultationExternalAuthority · leitura sem ledger de documento", () => {
+  it("nasce da janela vigente e não da ativação de emissão", () => {
+    const authority = createPilotConsultationExternalAuthority(
+      WINDOW,
+      { jobId: "job-consulta-1", storeId: INPUT.storeId },
+      NOW,
+    )
+    expect(authority).not.toBeNull()
+    const capability = pilotConsultationCapability(
+      WINDOW,
+      { jobId: "job-consulta-1", storeId: INPUT.storeId },
+      NOW,
+    )
+    expect(capability?.allowExternalProviderExecution).toBe(true)
+    expect(capability?.concedidaPor).toMatch(/^homologacao-consulta:v1:/)
+  })
+
+  it("janela dormente não produz authority nem capability de consulta", () => {
+    expect(
+      createPilotConsultationExternalAuthority(PILOT_EMISSION_HOMOLOGATION_WINDOW, {
+        jobId: "job-consulta-1",
+        storeId: INPUT.storeId,
+      }, NOW),
+    ).toBeNull()
+    expect(
+      pilotConsultationCapability(PILOT_EMISSION_HOMOLOGATION_WINDOW, {
+        jobId: "job-consulta-1",
+        storeId: INPUT.storeId,
+      }, NOW),
     ).toBeNull()
   })
 })

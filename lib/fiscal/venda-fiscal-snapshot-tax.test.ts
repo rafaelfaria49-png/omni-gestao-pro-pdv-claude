@@ -174,6 +174,17 @@ describe("snapshot+tax · compatibilidade com o snapshot antigo", () => {
     expect(snap.tributacao).toBeDefined()
     expect(snap.tributacao!.ok).toBe(true)
   })
+
+  it("MEI CRT 4 + CSOSN 102 congela tributacao.ok=true sem destaque", () => {
+    const t = build({
+      loja: { ...LOJA_OK, regimeTributario: "MEI", crt: 4 },
+    }).tributacao!
+    expect(t.ok).toBe(true)
+    expect(t.regime).toBe("MEI")
+    expect(t.semDestaque).toBe(true)
+    expect(t.itens[0]?.csosn).toBe("102")
+    expect(t.totais.valorIcms).toBe(0)
+  })
 })
 
 describe("snapshot+tax · erro controlado fora do baseline", () => {

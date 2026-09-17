@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest"
 import { nodeSefazHttpsRuntimePorts } from "./sefaz-runtime-ports"
 import {
   consumeSefazExternalTransmissionAuthority,
+  createSefazExternalConsultationAuthority,
   createSefazExternalTransmissionAuthority,
   createSefazExternalTransmissionTestAuthority,
   isSefazExternalTransmissionAuthority,
@@ -151,5 +152,44 @@ describe("createSefazExternalTransmissionTestAuthority · fábrica de teste", ()
     expect(() =>
       createSefazExternalTransmissionTestAuthority(binding(), {} as never),
     ).toThrow()
+  })
+})
+
+describe("createSefazExternalConsultationAuthority · CONSULTA one-shot", () => {
+  const CONSULTA_CTX = {
+    servico: "NFeConsultaProtocolo4" as const,
+    ambiente: "HOMOLOGACAO" as const,
+    storeId: "store-piloto",
+    now: NOW,
+  }
+
+  function consultaBinding() {
+    return {
+      activationId: "homolog-consulta-2026-09-17-a",
+      storeId: "store-piloto",
+      jobId: "job-consulta-1",
+      servico: "NFeConsultaProtocolo4" as const,
+      ambiente: "HOMOLOGACAO" as const,
+      notBeforeMs: NOW.getTime() - 60_000,
+      expiresAtMs: NOW.getTime() + 5 * 60_000,
+    }
+  }
+
+  it("autoriza NFeConsultaProtocolo4 uma vez e recusa NFeAutorizacao4 e o segundo consumo", () => {
+    const authority = createSefazExternalConsultationAuthority(consultaBinding())
+    expect(
+      consumeSefazExternalTransmissionAuthority(authority, { ...CONSULTA_CTX, servico: "NFeAutorizacao4" }),
+    ).toBeNull()
+    expect(consumeSefazExternalTransmissionAuthority(authority, CONSULTA_CTX)).not.toBeNull()
+    expect(consumeSefazExternalTransmissionAuthority(authority, CONSULTA_CTX)).toBeNull()
+  })
+
+  it("recusa binding de emissão (NFeAutorizacao4) na fábrica de consulta", () => {
+    expect(() =>
+      createSefazExternalConsultationAuthority({
+        ...consultaBinding(),
+        servico: "NFeAutorizacao4",
+      } as never),
+    ).toThrow(/inválido/i)
   })
 })

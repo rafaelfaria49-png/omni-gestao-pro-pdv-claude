@@ -205,6 +205,21 @@ describe("GOAL-011 · prova tipada do drill atravessa o freio; resto continua bl
     expect(jobs.get("job-consulta")?.status).toBe("FALHA")
   })
 
+  it("CONSULTA pipeline consulta_not_found com provider invocado ⇒ CONCLUIDO (sem retranmissão)", async () => {
+    const consulta = job({ id: "job-consulta", tipo: "CONSULTA" })
+    const { ports, jobs } = memoryPorts([consulta], async () => ({
+      kind: "success" as const,
+      code: "consulta_not_found",
+      mensagem: "Consulta não encontrou a nota; retranmissão do piloto permanece vedada.",
+      simulado: false,
+      externalTransmissionAttempted: true,
+      providerInvoked: true,
+    }))
+    const report = await drainFiscalQueue({ workerId: "w", now: () => AGORA }, ports)
+    expect(report.items[0]?.status).toBe("concluido")
+    expect(jobs.get("job-consulta")?.status).toBe("CONCLUIDO")
+  })
+
   it("generic drain: execução real sem prova em EMISSAO segue provider_real_bloqueado", async () => {
     const emissao = job({ id: "job-emissao", tipo: "EMISSAO" })
     const { ports, jobs } = memoryPorts(
