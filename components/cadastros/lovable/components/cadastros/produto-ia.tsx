@@ -3,7 +3,7 @@ import {
   Sparkles, Link2, Barcode, ImagePlus, Type, Check, Loader2,
   Wand2, Layers, Tag as TagIcon, Store,
   AlertCircle, Image as ImageIcon,
-  Send, Plus, ChevronDown, PackagePlus,
+  Send, Plus, ChevronDown, PackagePlus, MessageSquareText,
 } from "lucide-react";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea } from "./ui-kit";
 import { MovimentacaoEstoqueModal } from "./MovimentacaoEstoqueModal";
@@ -18,6 +18,13 @@ import {
   upsertProduto,
   type ResolverCodigoBarrasResult,
 } from "@/app/actions/cadastros";
+import { interpretarProdutoTextoLivre } from "@/app/actions/produto-texto-livre";
+import type {
+  NomeCampoTextoLivre,
+  OrigemCampoTextoLivre,
+  SugestaoTextoLivre,
+} from "@/lib/cadastros/natural-text";
+import { calcularAplicacaoTextoLivre } from "@/lib/cadastros/natural-text";
 // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reaproveita a seção do Catálogo de Aparelhos
 // (mesma UI/guardrails do /dashboard/estoque) e o contrato de metadata já publicado.
 import {
@@ -90,6 +97,56 @@ function resumoTentativas(tentativas: Array<{ provedor: string; status: string; 
       return `${nome}: ${rotulo}`;
     })
     .join(" · ");
+}
+
+/* ── Texto livre (CAD-R2-016): preview estruturado da sugestão temporária ── */
+
+const TEXTO_LIVRE_CAMPOS: ReadonlyArray<{ campo: NomeCampoTextoLivre; rotulo: string }> = [
+  { campo: "nome", rotulo: "Nome" },
+  { campo: "marca", rotulo: "Marca" },
+  { campo: "categoria", rotulo: "Categoria" },
+  { campo: "descricao", rotulo: "Descrição" },
+  { campo: "preco", rotulo: "Preço venda (R$)" },
+  { campo: "custo", rotulo: "Custo (R$)" },
+  { campo: "estoque", rotulo: "Estoque inicial" },
+  { campo: "fornecedor", rotulo: "Fornecedor" },
+  { campo: "sku", rotulo: "SKU" },
+  { campo: "ean", rotulo: "EAN" },
+  { campo: "garantia", rotulo: "Garantia (dias)" },
+  { campo: "ncm", rotulo: "NCM" },
+  { campo: "cest", rotulo: "CEST" },
+];
+
+function rotuloEstadoTextoLivre(estado: OrigemCampoTextoLivre): string {
+  if (estado === "extraido") return "extraído do texto";
+  if (estado === "inferido") return "inferido pela IA";
+  if (estado === "ambiguo") return "confirmar";
+  return "ausente";
+}
+
+function toneEstadoTextoLivre(estado: OrigemCampoTextoLivre): "success" | "info" | "warning" | "default" {
+  if (estado === "extraido") return "success";
+  if (estado === "inferido") return "info";
+  if (estado === "ambiguo") return "warning";
+  return "default";
+}
+
+function formatarValorTextoLivre(campo: NomeCampoTextoLivre, valor: string | number): string {
+  if (typeof valor === "number") {
+    if (campo === "preco" || campo === "custo") {
+      return valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return String(valor);
+  }
+  return valor;
+}
+
+function nomeBackendTextoLivre(sugestao: SugestaoTextoLivre): string {
+  const backend = sugestao.proveniencia.backend;
+  if (backend === "openrouter") return "OpenRouter";
+  if (backend === "openai") return "OpenAI";
+  if (backend === "gemini") return "Gemini";
+  return "extração local";
 }
 
 /* ── Combobox com autocomplete + "criar novo" (Categoria/Marca) ── */
@@ -269,7 +326,7 @@ function CategoriaMarcaCombobox({
   );
 }
 
-type Source = "manual" | "link" | "barcode" | "image";
+type Source = "manual" | "link" | "barcode" | "image" | "texto";
 
 const STEPS = [
   "Analisando produto…",
@@ -328,6 +385,7 @@ export function ProductAIModal({
   const [saving, startSaving] = useTransition();
   const [lookingUpBarcode, startBarcodeLookup] = useTransition();
   const [lookingUpExternalBarcode, startExternalBarcodeLookup] = useTransition();
+  const [interpretandoTexto, startInterpretacaoTexto] = useTransition();
 
   const nomeRef = useRef<HTMLInputElement | null>(null);
   const skuRef = useRef<HTMLInputElement | null>(null);
@@ -358,6 +416,13 @@ export function ProductAIModal({
   const [externalBarcodeLookup, setExternalBarcodeLookup] = useState<ExternalBarcodeLookup | null>(null);
   const [barcodeSuggestionApplication, setBarcodeSuggestionApplication] = useState<BarcodeSuggestionApplication | null>(null);
   const [cosmosFiscalApplied, setCosmosFiscalApplied] = useState<{ ncm?: string; cest?: string } | null>(null);
+
+  // CAD-R2-016 — texto livre: descrição do operador → sugestão temporária revisável.
+  // A sugestão NUNCA grava banco; "aplicar" só preenche o formulário local.
+  const [textoLivre, setTextoLivre] = useState("");
+  const [textoSugestao, setTextoSugestao] = useState<SugestaoTextoLivre | null>(null);
+  const [textoExcluidos, setTextoExcluidos] = useState<string[]>([]);
+  const [textoErro, setTextoErro] = useState<string | null>(null);
 
   // Modal de movimentação de estoque (Parte 13) — só em edição.
   const [movimentacaoAberta, setMovimentacaoAberta] = useState(false);
@@ -402,6 +467,10 @@ export function ProductAIModal({
     setExternalBarcodeLookup(null);
     setBarcodeSuggestionApplication(null);
     setCosmosFiscalApplied(null);
+    setTextoLivre("");
+    setTextoSugestao(null);
+    setTextoExcluidos([]);
+    setTextoErro(null);
     barcodeLookupRequestRef.current += 1;
   }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest, initial?.metadata]);
 
@@ -680,9 +749,90 @@ export function ProductAIModal({
     }
   };
 
+  // CAD-R2-016 — interpreta a descrição em linguagem natural (server-side) e
+  // exibe a sugestão temporária para revisão. Não grava banco.
+  const runInterpretacaoTextoLivre = () => {
+    const texto = textoLivre.trim();
+    if (!texto || interpretandoTexto) return;
+    setTextoErro(null);
+    startInterpretacaoTexto(async () => {
+      try {
+        const result = await interpretarProdutoTextoLivre(storeId, texto);
+        if (!result.ok) {
+          setTextoErro(result.message);
+          return;
+        }
+        setTextoSugestao(result.sugestao);
+        setTextoExcluidos([]);
+      } catch {
+        setTextoErro("Não foi possível interpretar o texto agora. Tente novamente.");
+      }
+    });
+  };
+
+  const alternarExclusaoTextoLivre = (campo: string) => {
+    setTextoExcluidos((prev) => (prev.includes(campo) ? prev.filter((c) => c !== campo) : [...prev, campo]));
+  };
+
+  // CAD-R2-016 — "aplicar" = preencher/mesclar o formulário local. NÃO salva.
+  // Preenche só campos vazios (nunca sobrescreve o operador); em edição o
+  // estoque é ignorado (saldo somente leitura). Salvar continua via
+  // upsertProduto → ProductWriteService → StockLedger ("Salvar produto").
+  const applySugestaoTextoLivre = () => {
+    if (!textoSugestao) return;
+    const { aplicacoes, ignorados } = calcularAplicacaoTextoLivre(
+      textoSugestao,
+      {
+        nome: nomeRef.current?.value ?? "",
+        marca,
+        categoria,
+        descricao,
+        preco: precoRef.current?.value ?? "",
+        custo: custoRef.current?.value ?? "",
+        estoque: estoqueRef.current?.value ?? "",
+        fornecedor: fornecedorRef.current?.value ?? "",
+        sku: skuRef.current?.value ?? "",
+        ean: barrasRef.current?.value ?? "",
+        garantia: garantiaRef.current?.value ?? "",
+        ncm: ncmDisplay,
+        cest: cestDisplay,
+      },
+      { modoEdicao: Boolean(productId), excluir: textoExcluidos },
+    );
+    for (const item of aplicacoes) {
+      if (item.campo === "nome" && nomeRef.current) nomeRef.current.value = item.valor;
+      else if (item.campo === "sku" && skuRef.current) skuRef.current.value = item.valor;
+      else if (item.campo === "ean" && barrasRef.current) barrasRef.current.value = item.valor;
+      else if (item.campo === "fornecedor" && fornecedorRef.current) fornecedorRef.current.value = item.valor;
+      else if (item.campo === "estoque" && estoqueRef.current) estoqueRef.current.value = item.valor;
+      else if (item.campo === "custo" && custoRef.current) custoRef.current.value = item.valor;
+      else if (item.campo === "preco" && precoRef.current) precoRef.current.value = item.valor;
+      else if (item.campo === "garantia" && garantiaRef.current) garantiaRef.current.value = item.valor;
+      else if (item.campo === "marca") setMarca(item.valor);
+      else if (item.campo === "categoria") setCategoria(item.valor);
+      else if (item.campo === "descricao") setDescricao(item.valor);
+      else if (item.campo === "ncm") setNcmDisplay(item.valor);
+      else if (item.campo === "cest") setCestDisplay(item.valor);
+    }
+    const ambiguosAplicados = aplicacoes.filter(
+      (a) => textoSugestao.campos[a.campo].estado === "ambiguo",
+    ).length;
+    if (aplicacoes.length > 0) {
+      toast.success(
+        `Sugestão aplicada em ${aplicacoes.length} campo(s). Revise e salve manualmente.` +
+          (ambiguosAplicados > 0 ? ` ${ambiguosAplicados} campo(s) precisam de confirmação.` : ""),
+      );
+    } else {
+      const motivo = ignorados.some((i) => i.motivo === "ja-preenchido")
+        ? "Os campos já estão preenchidos e foram preservados."
+        : "Nada a aplicar — revise os avisos.";
+      toast.message(`${motivo} Nenhum produto foi salvo.`);
+    }
+  };
+
   const title = productId ? "Editar produto" : "Novo produto";
   return (
-    <Modal open={open} onClose={onClose} title={title} subtitle="Fase 1: cadastro real no banco — fluxo IA abaixo ainda é simulado (sem OCR/voz)." size="xl">
+    <Modal open={open} onClose={onClose} title={title} subtitle="Fase 1: cadastro real no banco — texto livre interpreta de verdade (sem OCR/voz)." size="xl">
       <div className="space-y-6">
         {/* IA SOURCE */}
         <Card className="p-5 border-primary/30 bg-primary/5">
@@ -693,9 +843,10 @@ export function ProductAIModal({
               <p className="text-xs text-muted-foreground">Escolha como quer começar — a IA preenche o resto.</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             {[
               { id: "manual", l: "Digitar nome", i: Type },
+              { id: "texto", l: "Descrever produto", i: MessageSquareText },
               { id: "link", l: "Link marketplace", i: Link2 },
               { id: "barcode", l: "Código de barras", i: Barcode },
               { id: "image", l: "Upload imagem", i: ImagePlus },
@@ -715,6 +866,40 @@ export function ProductAIModal({
               );
             })}
           </div>
+          {source === "texto" ? (
+            <div className="mt-3 grid gap-2">
+              <Textarea
+                value={textoLivre}
+                onChange={(event) => {
+                  setTextoLivre(event.target.value);
+                  setTextoErro(null);
+                }}
+                rows={3}
+                maxLength={2000}
+                placeholder="Ex.: Película 3D para iPhone 15, custa 4 reais e vendo por 25"
+                title="Descreva o produto em linguagem natural — a IA sugere o preenchimento para revisão"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-muted-foreground">
+                  {textoLivre.trim().length}/2000 · preço, custo, estoque e fornecedor só entram se você declarar.
+                </span>
+                <button
+                  type="button"
+                  onClick={runInterpretacaoTextoLivre}
+                  disabled={interpretandoTexto || textoLivre.trim().length === 0}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                >
+                  {interpretandoTexto ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareText className="h-4 w-4" />}
+                  Interpretar com IA
+                </button>
+              </div>
+              {textoErro && (
+                <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  {textoErro}
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
             {source === "manual" && <Input placeholder="Ex.: Tela iPhone 11 Original" />}
             {source === "link" && <Input placeholder="https://produto.mercadolivre.com.br/…" />}
@@ -768,6 +953,77 @@ export function ProductAIModal({
               </button>
             )}
           </div>
+          )}
+
+          {source === "texto" && textoSugestao && (
+            <div role="status" className="mt-3 rounded-lg border border-border bg-background p-3 text-xs text-foreground">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-medium">Sugestão da descrição — revise antes de aplicar</div>
+                <Badge tone={textoSugestao.proveniencia.degradadoLocal ? "warning" : "info"}>
+                  {nomeBackendTextoLivre(textoSugestao)}
+                </Badge>
+              </div>
+              <div className="mt-2 grid gap-1.5">
+                {TEXTO_LIVRE_CAMPOS.map(({ campo, rotulo }) => {
+                  const proposto = textoSugestao.campos[campo];
+                  const excluido = textoExcluidos.includes(campo);
+                  if (proposto.valor === null || proposto.valor === undefined) return null;
+                  return (
+                    <label key={campo} className="flex items-center gap-2 text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={!excluido}
+                        onChange={() => alternarExclusaoTextoLivre(campo)}
+                        title={excluido ? "Ignorado na aplicação" : "Desmarque para não aplicar"}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <span className={excluido ? "line-through opacity-60" : ""}>
+                        <strong className="text-foreground">{rotulo}:</strong>{" "}
+                        {formatarValorTextoLivre(campo, proposto.valor)}
+                      </span>
+                      <Badge tone={toneEstadoTextoLivre(proposto.estado)}>{rotuloEstadoTextoLivre(proposto.estado)}</Badge>
+                    </label>
+                  );
+                })}
+              </div>
+              {textoSugestao.avisos.length > 0 && (
+                <div className="mt-2 grid gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-muted-foreground">
+                  {textoSugestao.avisos.map((aviso) => (
+                    <span key={aviso}>• {aviso}</span>
+                  ))}
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Origem: texto livre · {nomeBackendTextoLivre(textoSugestao)} ·{" "}
+                {new Date(textoSugestao.proveniencia.interpretedAt).toLocaleString("pt-BR")}. O texto
+                original não é salvo no produto.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-muted-foreground">
+                  Preenche apenas campos vazios{productId ? "; estoque ignorado na edição" : ""}. Nada é salvo agora.
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTextoSugestao(null);
+                      setTextoExcluidos([]);
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent"
+                  >
+                    Descartar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applySugestaoTextoLivre}
+                    className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                  >
+                    Aplicar ao cadastro
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {source === "barcode" && barcodeFeedback && (
             <div
