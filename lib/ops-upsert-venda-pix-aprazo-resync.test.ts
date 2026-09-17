@@ -22,6 +22,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { upsertVendaInTransaction, type SalePayload } from "./ops-upsert-venda"
+import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 const STORE = "loja-1"
 
@@ -58,7 +59,7 @@ function makeStatefulFakeDb(products: FakeProduct[]) {
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
   function makeTx(): any {
-    return {
+    const tx = {
       cliente: { findFirst: async () => null },
       venda: {
         // Guard de colisão entre lojas (PDV-PEDIDO-ID-COLISAO-MULTILOJA-FIX-001):
@@ -144,6 +145,12 @@ function makeStatefulFakeDb(products: FakeProduct[]) {
         },
       },
     }
+    // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
+    attachStockLedgerBoundaryToFakeTx(tx, {
+      products,
+      ledger: movimentacoesEstoque as unknown as Array<Record<string, unknown>>,
+    })
+    return tx
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */
 

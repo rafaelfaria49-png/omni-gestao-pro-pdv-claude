@@ -23,11 +23,12 @@
  *
  * O QUE ESTE SERVIÇO NÃO FAZ (escopo bloqueado)
  * - NÃO migra callers existentes (Server Actions, REST, bulk, imports, IA, PDV).
- * - NÃO toca estoque operacional: nenhum write em `MovimentacaoEstoque`,
- *   `ProdutoDeposito`, inventário ou ledger. O campo `Produto.stock` carrega
- *   apenas o cadastro-base (saldo inicial/default 0 no create; edição direta
- *   explícita no update — semântica já praticada pelo `upsertProduto`), sem
- *   gerar movimentação. Mutações reais de estoque ficam para o CAD-R2-009.
+ * - NÃO permite PATCH de saldo: `updateProduct` com `estoque`/`stock` explícito
+ *   falha (VALIDATION) — saldo só muda pelo boundary de estoque (CAD-R2-009).
+ *   `createProduct` aceita `estoque`/`stock` como ESTOQUE INICIAL, aplicado via
+ *   Stock/Ledger (`entrada`, origem `cadastro`) na MESMA transação de criação,
+ *   gerando `Produto.stock` + `ProdutoDeposito` + `MovimentacaoEstoque` sem
+ *   janela inconsistente. `stock: 0`/ausente = sem ledger.
  * - NÃO valida dígito verificador GTIN no write path (nenhum writer atual faz;
  *   `validarGtin` continua disponível para leitura/scanner).
  * - NÃO exige `price` no create: default 0, como o `upsertProduto`; preço zero
@@ -60,6 +61,8 @@ import {
 } from "@/lib/catalogo-aparelhos/produto-metadata"
 import { fiscalInputFromBody } from "@/lib/produto-fiscal"
 import { canonicalizeProdutoFiscalMetadata } from "@/lib/produtos/produto-fiscal-upsert"
+import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
+import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import {
   duplicateProductDetails,
   PRODUTO_DUP_SELECT,
@@ -77,8 +80,10 @@ import {
 export const PRODUCT_WRITE_AUDIT_SOURCE = "product-write-service"
 
 /** Delegate mínimo usado pelo serviço (falsificável em testes; Prisma real em produção). */
-export type ProductWriteTx = {
-  produto: {
+export type ProductWriteTx = Omit<StockLedgerTx, "produto"> & {
+  // `update` preciso do cadastro (sem a assinatura genérica `args: unknown` da
+  // base, que sombrearia o retorno `{ id }` na interseção).
+  produto: Omit<StockLedgerTx["produto"], "update"> & {
     create(args: Prisma.ProdutoCreateArgs): Promise<{ id: string }>
     update(args: Prisma.ProdutoUpdateArgs): Promise<{ id: string }>
   }
@@ -336,29 +341,64 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Opções explícitas do write (intenção do adapter, nunca heurística).
+ * - `clearMetadata`: REST `metadata: null` continua LIMPANDO (DbNull);
+ *   interactive `metadata: null` sem a opção continua PRESERVANDO (omissão,
+ *   paridade `upsertProduto`). CAD-R2-007.
+ */
+export type ProductWriteTxOptions = {
+  clearMetadata?: boolean
+}
+
+export type ProductWriteOptions = ProductWriteTxOptions
+
+/**
  * Resolve o `metadata` final do write.
  * - create: parte do objeto enviado (ou `{}`); update: merge aditivo de 2 níveis.
  * - `accessoryConfig`/`metadata.acessorios`, sinal fiscal e top-level
  *   `catalogoAparelhos` passam pelos contratos canônicos existentes.
  *   Retorna `undefined` quando nada de metadata foi sinalizado (create omite
  *   a coluna; update preserva).
+ * - CAD-R2-007: `clearMetadata: true` + `metadata: null` explícito = CLEAR
+ *   (DbNull). Sem a opção, `metadata: null` = omissão/preservação.
  */
 function resolveMetadata(
   input: ProductWriteInput,
   existingMetadata: unknown,
-  opts: { isCreate: boolean },
-): { ok: true; metadata: Record<string, unknown> | undefined } | { ok: false; error: ProductWriteResult } {
+  opts: { isCreate: boolean; clearMetadata?: boolean },
+):
+  | { ok: true; metadata: Record<string, unknown> | undefined; clear: boolean }
+  | { ok: false; error: ProductWriteResult } {
   const rawMetadata = input.metadata
   if (rawMetadata !== undefined && rawMetadata !== null && !isRecord(rawMetadata)) {
     return { ok: false, error: productWriteInvalid("metadata deve ser objeto JSON ou null.", "metadata") }
   }
   const incoming = isRecord(rawMetadata) ? rawMetadata : null
+  const explicitNull = rawMetadata === null
   const accessoryInput = produtoAcessoriosInputFromBody(input)
   const fiscalInput = fiscalInputFromBody(input)
   const catalogoInput = catalogoInputFromBody(input)
   const signaled =
     incoming !== null || accessoryInput.provided || fiscalInput !== null || catalogoInput !== undefined
-  if (!signaled) return { ok: true, metadata: undefined }
+
+  // CLEAR explícito do adapter REST: base zerada; namespaces sinalizados
+  // (fiscal/acessórios/catálogo) fazem merge sobre `{}` em vez do existente.
+  if (!opts.isCreate && opts.clearMetadata && explicitNull) {
+    if (!signaled) return { ok: true, metadata: undefined, clear: true }
+    let next: Record<string, unknown> = { ...(incoming ?? {}) }
+    if (accessoryInput.provided) {
+      next = { ...mergeProdutoAcessoriosIntoMetadata(next, accessoryInput.value) }
+    }
+    if (fiscalInput) {
+      next = { ...canonicalizeProdutoFiscalMetadata(next, fiscalInput) }
+    }
+    if (catalogoInput !== undefined) {
+      next = { ...mergeCatalogoAparelhosIntoMetadata(next, catalogoInput) }
+    }
+    return { ok: true, metadata: next, clear: false }
+  }
+
+  if (!signaled) return { ok: true, metadata: undefined, clear: false }
 
   let next: Record<string, unknown> = opts.isCreate
     ? { ...(incoming ?? {}) }
@@ -372,11 +412,17 @@ function resolveMetadata(
   if (catalogoInput !== undefined) {
     next = { ...mergeCatalogoAparelhosIntoMetadata(next, catalogoInput) }
   }
-  return { ok: true, metadata: next }
+  return { ok: true, metadata: next, clear: false }
+}
+
+type DuplicateReader = {
+  produto: {
+    findFirst(args: Prisma.ProdutoFindFirstArgs): Promise<unknown>
+  }
 }
 
 async function findDuplicate(
-  db: ProductWriteDb,
+  db: DuplicateReader,
   storeId: string,
   sku: string | null,
   barcode: string | null,
@@ -442,32 +488,36 @@ function auditMetadata(
 }
 
 /**
- * CREATE do cadastro-base dentro de `context.storeId`.
- * `input.id`/`input.storeId` (e demais chaves de autoridade) são ignorados.
- * Estoque inicial: valor explícito válido ou 0 — sem ledger, sem movimentação.
+ * CREATE do cadastro-base DENTRO de uma transação já aberta.
+ * Componível: import-catalog (categoria + cadastro + StockLedger) chama esta
+ * variante com o MESMO `tx` — commit único, sem nested transaction. Mesmas
+ * invariantes do `createProduct` (normalização, duplicidade por loja,
+ * metadata/fiscal canônicos, estoque inicial via ledger `cadastro`).
+ * CAD-R2-014: extensão mínima para composição; não cria segundo motor.
+ * Callers sem transação DEVEM usar `createProduct`.
  */
-export async function createProduct(
+export async function createProductTx(
+  tx: ProductWriteTx,
   context: ProductWriteContext,
   input: ProductWriteInput,
-  deps?: ProductWriteDeps,
 ): Promise<ProductWriteResult> {
   const trusted = trustedContext(context)
   if ("error" in trusted) return trusted.error
   const { ctx } = trusted
-  const db = deps?.db ?? (prisma as unknown as ProductWriteDb)
 
   const normalized = normalizePatch(input ?? {}, { requireName: true })
   if (!normalized.ok) return normalized.error
   const patch = normalized.patch
   if (!patch.name) return productWriteInvalid('Campo "nome" é obrigatório.', "nome")
 
-  const duplicate = await findDuplicate(db, ctx.storeId, patch.sku, patch.barcode).catch(() => null)
+  const duplicate = await findDuplicate(tx, ctx.storeId, patch.sku, patch.barcode).catch(() => null)
   if (duplicate) return duplicateFailure(duplicate, patch.sku, patch.barcode, "create")
 
   const meta = resolveMetadata(input ?? {}, null, { isCreate: true })
   if (!meta.ok) return meta.error
 
   const active = patch.active ?? true
+  const initialStock = patch.stock ?? 0
   const data: Prisma.ProdutoUncheckedCreateInput = {
     name: patch.name as string,
     sku: patch.sku,
@@ -480,7 +530,7 @@ export async function createProduct(
     warrantyDays: patch.warrantyDays ?? 0,
     active,
     status: patch.status ?? (active ? "Ativo" : "Inativo"),
-    stock: patch.stock ?? 0,
+    stock: 0,
     storeId: ctx.storeId,
     ...(meta.metadata ? { metadata: meta.metadata as Prisma.InputJsonValue } : {}),
   }
@@ -491,39 +541,46 @@ export async function createProduct(
   ]
 
   const audit = auditFields(ctx)
-  try {
-    const created = await db.$transaction(async (tx) => {
-      const row = await tx.produto.create({ data, select: { id: true } })
-      await tx.logsAuditoria.create({
-        data: {
-          action: "produto.create",
-          userLabel: audit.userLabel,
-          detail: `${audit.userLabel} criou o produto "${patch.name}" na loja ${ctx.storeId}.`,
-          metadata: auditMetadata(ctx, "create", row.id, patch.name as string, patch.sku, patch.barcode, changedFields),
-          source: PRODUCT_WRITE_AUDIT_SOURCE,
-        },
-      })
-      return row
-    })
-    return { ok: true, id: created.id, operacao: "create" }
-  } catch (e) {
-    if (isPrismaKnownError(e, "P2002")) {
-      const conflicted = await findDuplicate(db, ctx.storeId, patch.sku, patch.barcode).catch(() => null)
-      if (conflicted) return duplicateFailure(conflicted, patch.sku, patch.barcode, "create")
+  const row = await tx.produto.create({ data, select: { id: true } })
+  await tx.logsAuditoria.create({
+    data: {
+      action: "produto.create",
+      userLabel: audit.userLabel,
+      detail: `${audit.userLabel} criou o produto "${patch.name}" na loja ${ctx.storeId}.`,
+      metadata: auditMetadata(ctx, "create", row.id, patch.name as string, patch.sku, patch.barcode, changedFields),
+      source: PRODUCT_WRITE_AUDIT_SOURCE,
+    },
+  })
+  if (initialStock > 0) {
+    const ledger = await applyStockMutationTx(
+      tx,
+      { storeId: ctx.storeId, principal: ctx.principal, source: PRODUCT_WRITE_AUDIT_SOURCE },
+      {
+        kind: "entrada",
+        produtoId: row.id,
+        quantidade: initialStock,
+        custoUnitario: patch.precoCusto ?? 0,
+        origem: "cadastro",
+        motivo: `Estoque inicial — cadastro ${patch.name as string}`,
+        idempotencyKey: StockIdempotency.cadastroInicial(row.id),
+      },
+    )
+    if (!ledger.ok) {
+      throw new Error(`[product-write-service] estoque inicial falhou: ${ledger.code} ${ledger.message}`)
     }
-    console.error("[product-write-service] create falhou:", e instanceof Error ? e.message : String(e))
-    return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }
   }
+  return { ok: true, id: row.id, operacao: "create" }
 }
 
 /**
- * UPDATE parcial do cadastro-base. O produto é resolvido pelo par
- * (`productId`, `context.storeId`) — fail-closed contra cross-store.
- * Campos ausentes são preservados; `metadata` ausente/nulo preserva o JSON.
+ * CREATE do cadastro-base dentro de `context.storeId`.
+ * `input.id`/`input.storeId` (e demais chaves de autoridade) são ignorados.
+ * CAD-R2-009: o produto nasce com `stock: 0` (neutro estrutural); `estoque`/
+ * `stock` explícito > 0 é aplicado como ENTRADA `cadastro` via Stock/Ledger
+ * na MESMA transação (stock + depósito + ledger, sem janela inconsistente).
  */
-export async function updateProduct(
+export async function createProduct(
   context: ProductWriteContext,
-  productId: string,
   input: ProductWriteInput,
   deps?: ProductWriteDeps,
 ): Promise<ProductWriteResult> {
@@ -532,19 +589,70 @@ export async function updateProduct(
   const { ctx } = trusted
   const db = deps?.db ?? (prisma as unknown as ProductWriteDb)
 
+  // Pré-validação fora da tx para mapear DUPLICATE sem abrir transação à toa.
+  // A checagem autoritativa acontece dentro de `createProductTx` (via tx).
+  const pre = normalizePatch(input ?? {}, { requireName: true })
+  if (!pre.ok) return pre.error
+  const prePatch = pre.patch
+
+  try {
+    const created = await db.$transaction((tx) => createProductTx(tx, context, input))
+    return created
+  } catch (e) {
+    if (isPrismaKnownError(e, "P2002")) {
+      const conflicted = await findDuplicate(db, ctx.storeId, prePatch.sku, prePatch.barcode).catch(() => null)
+      if (conflicted) return duplicateFailure(conflicted, prePatch.sku, prePatch.barcode, "create")
+    }
+    console.error("[product-write-service] create falhou:", e instanceof Error ? e.message : String(e))
+    return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }
+  }
+}
+
+/**
+ * UPDATE parcial do cadastro-base DENTRO de uma transação já aberta.
+ * Componível: REST mixed PATCH (cadastro + StockLedger) e bulk-action chamam
+ * esta variante com o MESMO `tx` do ledger/bulk — commit único, sem nested
+ * transaction. Callers sem transação DEVEM usar `updateProduct`.
+ * CAD-R2-007: `opts.clearMetadata` = intenção explícita REST `metadata: null`
+ * → CLEAR (DbNull). Sem a opção, `metadata: null` = preservação.
+ */
+export async function updateProductTx(
+  tx: ProductWriteTx,
+  context: ProductWriteContext,
+  productId: string,
+  input: ProductWriteInput,
+  opts?: ProductWriteTxOptions,
+): Promise<ProductWriteResult> {
+  const trusted = trustedContext(context)
+  if ("error" in trusted) return trusted.error
+  const { ctx } = trusted
+
   const pid = (productId ?? "").trim()
   if (!pid) return productWriteInvalid("ID do produto inválido.", "productId")
+
+  if (firstDefined(input ?? {}, "estoque", "stock") !== undefined) {
+    return productWriteInvalid(
+      'Campo "estoque" não pode ser alterado por PATCH de cadastro. Use a operação de estoque (entrada/ajuste).',
+      "estoque",
+    )
+  }
 
   const normalized = normalizePatch(input ?? {}, { requireName: false })
   if (!normalized.ok) return normalized.error
   const patch = normalized.patch
 
-  const existing = await db.produto.findFirst({
+  const reader = tx as unknown as {
+    produto: {
+      findFirst(args: Prisma.ProdutoFindFirstArgs): Promise<ProductWriteFoundRow | null>
+      findUnique(args: Prisma.ProdutoFindUniqueArgs): Promise<{ id: string; storeId: string } | null>
+    }
+  }
+  const existing = await reader.produto.findFirst({
     where: { id: pid, storeId: ctx.storeId },
     select: { id: true, name: true, metadata: true },
   })
   if (!existing) {
-    const elsewhere = await db.produto
+    const elsewhere = await reader.produto
       .findUnique({ where: { id: pid }, select: { id: true, storeId: true } })
       .catch(() => null)
     if (elsewhere) {
@@ -558,11 +666,14 @@ export async function updateProduct(
   const nextSku = patch.skuTouched ? (patch.sku || null) : null
   const nextBarcode = patch.barcodeTouched ? (patch.barcode || null) : null
   if (nextSku || nextBarcode) {
-    const duplicate = await findDuplicate(db, ctx.storeId, nextSku, nextBarcode, pid).catch(() => null)
+    const duplicate = await findDuplicate(tx, ctx.storeId, nextSku, nextBarcode, pid).catch(() => null)
     if (duplicate) return duplicateFailure(duplicate, nextSku, nextBarcode, "update")
   }
 
-  const meta = resolveMetadata(input ?? {}, existing.metadata, { isCreate: false })
+  const meta = resolveMetadata(input ?? {}, existing.metadata, {
+    isCreate: false,
+    clearMetadata: opts?.clearMetadata === true,
+  })
   if (!meta.ok) return meta.error
 
   const data: Prisma.ProdutoUpdateInput = {}
@@ -572,7 +683,6 @@ export async function updateProduct(
   if (patch.category !== undefined) data.category = patch.category
   if (patch.brand !== undefined) data.brand = patch.brand
   if (patch.supplierName !== undefined) data.supplierName = patch.supplierName
-  if (patch.stock !== undefined) data.stock = patch.stock
   if (patch.precoCusto !== undefined) data.precoCusto = patch.precoCusto
   if (patch.price !== undefined) data.price = patch.price
   if (patch.warrantyDays !== undefined) data.warrantyDays = patch.warrantyDays
@@ -581,11 +691,12 @@ export async function updateProduct(
     if (patch.status === undefined) data.status = patch.active ? "Ativo" : "Inativo"
   }
   if (patch.status !== undefined) data.status = patch.status
-  if (meta.metadata) data.metadata = meta.metadata as Prisma.InputJsonValue
+  if (meta.clear) data.metadata = Prisma.DbNull
+  else if (meta.metadata) data.metadata = meta.metadata as Prisma.InputJsonValue
 
   const changedFields: ProductWriteField[] = [
     ...patch.changedFields,
-    ...(meta.metadata ? (["metadata"] as ProductWriteField[]) : []),
+    ...(meta.metadata || meta.clear ? (["metadata"] as ProductWriteField[]) : []),
   ]
   if (changedFields.length === 0) {
     return productWriteInvalid("Nada para atualizar.", undefined)
@@ -594,23 +705,20 @@ export async function updateProduct(
   const audit = auditFields(ctx)
   const finalName = patch.name ?? existing.name ?? pid
   try {
-    const updated = await db.$transaction(async (tx) => {
-      const row = await tx.produto.update({ where: { id: pid }, data, select: { id: true } })
-      await tx.logsAuditoria.create({
-        data: {
-          action: "produto.update",
-          userLabel: audit.userLabel,
-          detail: `${audit.userLabel} atualizou o produto "${finalName}" na loja ${ctx.storeId} (campos: ${changedFields.join(", ")}).`,
-          metadata: auditMetadata(ctx, "update", pid, finalName, nextSku, nextBarcode, changedFields),
-          source: PRODUCT_WRITE_AUDIT_SOURCE,
-        },
-      })
-      return row
+    const row = await tx.produto.update({ where: { id: pid }, data, select: { id: true } })
+    await tx.logsAuditoria.create({
+      data: {
+        action: "produto.update",
+        userLabel: audit.userLabel,
+        detail: `${audit.userLabel} atualizou o produto "${finalName}" na loja ${ctx.storeId} (campos: ${changedFields.join(", ")}).`,
+        metadata: auditMetadata(ctx, "update", pid, finalName, nextSku, nextBarcode, changedFields),
+        source: PRODUCT_WRITE_AUDIT_SOURCE,
+      },
     })
-    return { ok: true, id: updated.id, operacao: "update" }
+    return { ok: true, id: row.id, operacao: "update" }
   } catch (e) {
     if (isPrismaKnownError(e, "P2002")) {
-      const conflicted = await findDuplicate(db, ctx.storeId, nextSku, nextBarcode, pid).catch(() => null)
+      const conflicted = await findDuplicate(tx, ctx.storeId, nextSku, nextBarcode, pid).catch(() => null)
       if (conflicted) return duplicateFailure(conflicted, nextSku, nextBarcode, "update")
       return { ok: false, code: "DUPLICATE", message: "Produto já cadastrado nesta loja.", field: nextBarcode ? "barcode" : "sku" }
     }
@@ -619,5 +727,51 @@ export async function updateProduct(
     }
     console.error("[product-write-service] update falhou:", e instanceof Error ? e.message : String(e))
     return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }
+  }
+}
+
+/**
+ * UPDATE parcial do cadastro-base. O produto é resolvido pelo par
+ * (`productId`, `context.storeId`) — fail-closed contra cross-store.
+ * Campos ausentes são preservados; `metadata` ausente/nulo preserva o JSON
+ * (salvo `opts.clearMetadata`, intenção REST explícita de CLEAR).
+ * CAD-R2-009: `estoque`/`stock` explícito NÃO é PATCH — falha VALIDATION.
+ * Saldo só muda pelo Stock/Ledger boundary.
+ */
+export async function updateProduct(
+  context: ProductWriteContext,
+  productId: string,
+  input: ProductWriteInput,
+  optsOrDeps?: ProductWriteOptions & ProductWriteDeps | ProductWriteDeps,
+  maybeDeps?: ProductWriteDeps,
+): Promise<ProductWriteResult> {
+  const { opts, deps } = normalizeUpdateArgs(optsOrDeps, maybeDeps)
+  const db = deps?.db ?? (prisma as unknown as ProductWriteDb)
+  try {
+    return await db.$transaction((tx) => updateProductTx(tx, context, productId, input, opts))
+  } catch (e) {
+    console.error("[product-write-service] update transacional falhou:", e instanceof Error ? e.message : String(e))
+    return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }
+  }
+}
+
+function normalizeUpdateArgs(
+  optsOrDeps?: (ProductWriteOptions & ProductWriteDeps) | ProductWriteDeps | ProductWriteTxOptions,
+  maybeDeps?: ProductWriteDeps,
+): { opts: ProductWriteTxOptions; deps: ProductWriteDeps | undefined } {
+  if (maybeDeps) {
+    const o = (optsOrDeps ?? {}) as ProductWriteTxOptions
+    return {
+      opts: {
+        ...(o.clearMetadata !== undefined ? { clearMetadata: o.clearMetadata } : {}),
+      },
+      deps: maybeDeps,
+    }
+  }
+  const mixed = (optsOrDeps ?? {}) as ProductWriteOptions & ProductWriteDeps
+  const { db, clearMetadata } = mixed
+  return {
+    opts: clearMetadata !== undefined ? { clearMetadata } : {},
+    deps: db !== undefined ? { db } : undefined,
   }
 }

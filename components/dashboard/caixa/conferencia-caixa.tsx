@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import {
   ShoppingCart,
   ArrowDownCircle,
@@ -15,6 +15,7 @@ import {
   Printer,
   History,
   Ban,
+  Lock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +40,12 @@ import {
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import type { VendaSessaoDetalheItem } from "@/app/api/ops/caixa/sessao-detalhe/route"
 import type { CaixaOperacaoDetalhe } from "./use-caixa-resumo"
+import { avaliarAcoesVenda, type AcaoVendaEstado } from "@/lib/caixa/conferencia-acoes"
+import { mapVendaDetalheToCupom } from "@/lib/vendas/venda-cupom-mapper"
+import type { VendaDetalhe } from "@/lib/vendas/venda-detalhe-contract"
+import { ConferenciaVendaDetalhe } from "./conferencia-venda-detalhe"
+import { ConferenciaEstornoDialog, type EstornoAlvo } from "./conferencia-estorno-dialog"
+import { CupomNaoFiscal, type CupomData } from "@/components/dashboard/vendas/cupom-nao-fiscal"
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
@@ -58,6 +65,12 @@ interface LinhaConferencia {
   status: string | null
   referencia: string
   searchBlob: string
+  /** `Venda.fiscalStatus` — só em linha de venda vinda do servidor. */
+  fiscalStatus?: string | null
+  /** A venda existe no servidor (tem ficha, comprovante e estorno). */
+  servidorConfirmada?: boolean
+  /** Conta a receber da venda já quitada — bloqueia o estorno (007A). */
+  recebivelQuitado?: boolean
 }
 
 const CATEGORIA_LABEL: Record<Categoria, string> = {
@@ -120,6 +133,9 @@ function linhaDeVenda(v: VendaSessaoDetalheItem): LinhaConferencia {
     valor: v.total,
     status: v.status,
     referencia: v.numero,
+    fiscalStatus: v.fiscalStatus,
+    servidorConfirmada: true,
+    recebivelQuitado: v.recebivelQuitado,
     searchBlob: [v.numero, v.clienteNome, v.clienteCpf, v.formaPagamento, formaPagamentoLabel(v.formaPagamento), v.origem]
       .filter(Boolean)
       .join(" ")
@@ -140,6 +156,9 @@ function linhaDeSaleRecord(s: SaleRecord): LinhaConferencia {
     valor: s.total,
     status: s.status ?? "concluida",
     referencia: s.id,
+    // Fallback legado: a linha veio do store local, não do `sessao-detalhe`. Sem
+    // confirmação do servidor não há ficha, comprovante nem estorno para oferecer.
+    servidorConfirmada: false,
     searchBlob: [s.id, s.customerName, s.customerCpf].filter(Boolean).join(" ").toLowerCase(),
   }
 }
@@ -206,23 +225,56 @@ function pertenceAoFiltro(linha: LinhaConferencia, filtro: (typeof FILTROS)[numb
 }
 
 /**
- * Conferência do fechamento — somente consulta. Ações de venda que alterariam
- * venda, caixa ou estoque (troca, devolução, estorno) aparecem DESABILITADAS até
- * existir backend com autorização step-up (CAIXA-VENDAS-ACOES-SEGURAS-002).
+ * Conferência do fechamento — GOAL CAIXA-CONFERENCIA-VENDAS-ACOES-REAIS-007.
+ *
+ * O menu ⋮ de cada venda deixou de mostrar "Em breve". Cada item ou está ligado a
+ * backend REAL, ou aparece desabilitado com a razão REAL (`lib/caixa/conferencia-acoes.ts`):
+ *
+ *   consulta  · Ver detalhes / Histórico  → `GET /api/vendas/[id]?full=1` (read-only)
+ *   documento · Reimprimir / Copiar       → `CupomNaoFiscal` (mesmo comprovante do Histórico)
+ *   crítico   · Estornar venda            → `POST /api/vendas/[id]/cancelar`, com step-up
+ *                                            de supervisor e motivo obrigatório
+ *
+ * Troca e Devolução parcial continuam DESABILITADAS aqui, e não por falta de backend:
+ * o reembolso mexeria na gaveta que está sendo contada sem que o fechamento saiba
+ * recalcular o esperado (a forma de pagamento do reembolso não é persistida). A razão
+ * exibida diz isso e aponta o caminho real — Troca/Devolução no PDV.
  */
 export function ConferenciaCaixa({
   vendasSessao,
   sessionSales,
   operacoesSessao,
+  storeId,
+  operador,
+  loja,
+  sessaoAberta = true,
+  contagemIniciada = false,
+  onDadosAlterados,
 }: {
   vendasSessao: VendaSessaoDetalheItem[]
   sessionSales: SaleRecord[]
   operacoesSessao: CaixaOperacaoDetalhe[]
+  /** Unidade ativa — obrigatória em toda leitura/escrita (multi-loja). */
+  storeId: string
+  /** Rótulo legível do operador da sessão — vai para a trilha do estorno. */
+  operador: string
+  /** Cabeçalho do comprovante reimpresso. */
+  loja: { nome: string; cnpj?: string; endereco?: string }
+  /** A sessão desta conferência ainda está aberta (§21). */
+  sessaoAberta?: boolean
+  /** O operador já digitou algum valor na contagem da gaveta (§23). */
+  contagemIniciada?: boolean
+  /** Disparado após uma operação REAL — o pai recarrega vendas, operações e resumo (§22). */
+  onDadosAlterados?: () => void
 }) {
   const { toast } = useToast()
   const [filtro, setFiltro] = useState<(typeof FILTROS)[number]["key"]>("todos")
   const [busca, setBusca] = useState("")
   const [detalheId, setDetalheId] = useState<string | null>(null)
+  /** Ficha lateral da venda: número + aba inicial. `null` = fechada. */
+  const [ficha, setFicha] = useState<{ numero: string; aba: "detalhes" | "historico" } | null>(null)
+  const [estornoAlvo, setEstornoAlvo] = useState<EstornoAlvo | null>(null)
+  const [cupom, setCupom] = useState<CupomData | null>(null)
 
   const linhas = useMemo<LinhaConferencia[]>(() => {
     const vendas =
@@ -276,20 +328,64 @@ export function ConferenciaCaixa({
     return c
   }, [linhas])
 
-  const copiarNumero = async (numero: string) => {
-    try {
-      await navigator.clipboard.writeText(numero)
-      toast({ title: "Número copiado", description: numero })
-    } catch {
-      toast({ title: "Erro", description: "Não foi possível copiar.", variant: "destructive" })
-    }
-  }
+  const copiarNumero = useCallback(
+    async (numero: string) => {
+      try {
+        await navigator.clipboard.writeText(numero)
+        toast({ title: "Número copiado", description: numero })
+      } catch {
+        toast({ title: "Erro", description: "Não foi possível copiar.", variant: "destructive" })
+      }
+    },
+    [toast],
+  )
+
+  /**
+   * Reimpressão: projeta o comprovante da venda ORIGINAL pelo mapeador ÚNICO
+   * compartilhado com o Histórico de Vendas. Não recalcula nada e não toca na venda.
+   */
+  const abrirCupom = useCallback(
+    (venda: VendaDetalhe) => {
+      setCupom(mapVendaDetalheToCupom(venda, loja))
+    },
+    [loja],
+  )
+
+  /** Busca a venda e abre o comprovante — usado pelo item de menu (sem abrir a ficha). */
+  const reimprimirPorNumero = useCallback(
+    async (numero: string) => {
+      try {
+        const r = await fetch(`/api/vendas/${encodeURIComponent(numero)}`, {
+          credentials: "include",
+          headers: { "x-assistec-loja-id": storeId },
+          cache: "no-store",
+        })
+        const j = (await r.json().catch(() => null)) as { ok?: boolean; venda?: VendaDetalhe } | null
+        if (!r.ok || !j?.ok || !j.venda) {
+          toast({
+            title: "Comprovante indisponível",
+            description: "Não foi possível carregar os dados desta venda.",
+            variant: "destructive",
+          })
+          return
+        }
+        abrirCupom(j.venda)
+      } catch {
+        toast({
+          title: "Erro",
+          description: "Falha de conexão ao carregar o comprovante.",
+          variant: "destructive",
+        })
+      }
+    },
+    [abrirCupom, storeId, toast],
+  )
 
   const vazio = linhas.length === 0
 
   return (
-    <div className="flex min-h-full min-w-0 flex-col">
-      <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
+    <div className="flex min-h-full min-w-0 flex-col xl:min-h-0 xl:flex-1">
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
         <div
           role="group"
           aria-label="Filtrar lançamentos"
@@ -344,205 +440,244 @@ export function ConferenciaCaixa({
         </p>
       ) : (
         <>
-          <div
-            aria-hidden
-            className={cn(
-              "sticky top-0 z-[1] hidden items-center gap-3 border-y border-border bg-card px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid",
-              GRADE,
-            )}
-          >
-            <span>Hora</span>
-            <span>Cliente · forma</span>
-            <span>Venda</span>
-            <span className="text-right">Valor</span>
-            <span />
-          </div>
-          <ul className="flex-1 border-t border-border sm:border-t-0">
-            {filtradas.map((l) => {
-              const venda = l.categoria === "venda"
-              const negativo = l.categoria === "sangria" || l.categoria === "estorno"
-              const cancelada = venda && l.status === "cancelada"
-              const dh = dataHoraConferencia(l.at)
-              const forma = formaPagamentoLabel(l.formaPagamento)
-              const numeroCurto = venda ? numeroVendaCurto(l.referencia) : `#${l.referencia}`
-              const statusLabel =
-                venda && l.status && l.status !== "concluida" ? (STATUS_VENDA_LABEL[l.status] ?? l.status) : null
-              // Recebimento/estorno: o título diz o que foi recebido e por onde (quando os dados
-              // determinam); o motivo gravado segue como subtítulo.
-              const recebimentoOuEstorno = l.categoria === "recebimento" || l.categoria === "estorno"
-              const titulo = venda
-                ? (l.cliente ?? "Cliente não identificado")
-                : recebimentoOuEstorno
-                  ? l.origemLabel
-                  : CATEGORIA_LABEL[l.categoria]
-              const sub = venda
-                ? l.origemLabel
-                : l.descricao !== CATEGORIA_LABEL[l.categoria]
-                  ? l.descricao
+          {/* No xl só a lista rola (cabeçalho de colunas junto, alinhado às linhas). O rodapé de soma
+              fica fora da área rolável: nenhuma linha passa por baixo dele. */}
+          <div className="flex min-w-0 flex-1 flex-col xl:min-h-0 xl:overflow-y-auto">
+            <div
+              aria-hidden
+              className={cn(
+                "sticky top-0 z-[1] hidden items-center gap-3 border-y border-border bg-card px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid",
+                GRADE,
+              )}
+            >
+              <span>Hora</span>
+              <span>Cliente · forma</span>
+              <span>Venda</span>
+              <span className="text-right">Valor</span>
+              <span />
+            </div>
+            <ul className="flex-1 border-t border-border sm:border-t-0">
+              {filtradas.map((l) => {
+                const venda = l.categoria === "venda"
+                const negativo = l.categoria === "sangria" || l.categoria === "estorno"
+                const cancelada = venda && l.status === "cancelada"
+                const dh = dataHoraConferencia(l.at)
+                const forma = formaPagamentoLabel(l.formaPagamento)
+                const numeroCurto = venda ? numeroVendaCurto(l.referencia) : `#${l.referencia}`
+                const statusLabel =
+                  venda && l.status && l.status !== "concluida" ? (STATUS_VENDA_LABEL[l.status] ?? l.status) : null
+                // Recebimento/estorno: o título diz o que foi recebido e por onde (quando os dados
+                // determinam); o motivo gravado segue como subtítulo.
+                const recebimentoOuEstorno = l.categoria === "recebimento" || l.categoria === "estorno"
+                const titulo = venda
+                  ? (l.cliente ?? "Cliente não identificado")
                   : recebimentoOuEstorno
-                    ? ""
-                    : l.origemLabel
-              const detalheAberto = detalheId === l.id
-              const Icon = CATEGORIA_ICON[l.categoria]
-              return (
-                <li key={l.id} className="border-b border-border/60 last:border-b-0">
-                  <div
-                    className={cn(
-                      "grid min-h-12 items-center gap-2.5 px-3 py-1.5 transition-colors hover:bg-secondary/50 sm:gap-3 sm:px-4",
-                      GRADE,
-                      detalheAberto && "bg-secondary/60",
-                    )}
-                  >
-                    <div className="min-w-0 leading-tight tabular-nums">
-                      <p className={cn("text-sm font-semibold", cancelada ? "text-muted-foreground" : "text-foreground")}>
-                        {dh?.hora ?? "--:--"}
-                      </p>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        {dh ? (
-                          <>
-                            <span className="sm:hidden">{dh.data.slice(0, 5)}</span>
-                            <span className="hidden sm:inline">{dh.data}</span>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </p>
-                    </div>
-                    <div className="min-w-0 leading-tight">
+                    ? l.origemLabel
+                    : CATEGORIA_LABEL[l.categoria]
+                const sub = venda
+                  ? l.origemLabel
+                  : l.descricao !== CATEGORIA_LABEL[l.categoria]
+                    ? l.descricao
+                    : recebimentoOuEstorno
+                      ? ""
+                      : l.origemLabel
+                const detalheAberto = detalheId === l.id
+                const Icon = CATEGORIA_ICON[l.categoria]
+                // Estado do menu ⋮ derivado dos dados da linha — nunca de `useState`.
+                const acoes = venda
+                  ? avaliarAcoesVenda({
+                      status: l.status,
+                      fiscalStatus: l.fiscalStatus,
+                      servidorConfirmada: l.servidorConfirmada === true,
+                      recebivelQuitado: l.recebivelQuitado === true,
+                      sessaoAberta,
+                    })
+                  : null
+                return (
+                  <li key={l.id} className="border-b border-border/60 last:border-b-0">
+                    <div
+                      className={cn(
+                        "grid min-h-12 items-center gap-2.5 px-3 py-1.5 transition-colors hover:bg-secondary/50 sm:gap-3 sm:px-4",
+                        GRADE,
+                        detalheAberto && "bg-secondary/60",
+                      )}
+                    >
+                      <div className="min-w-0 leading-tight tabular-nums">
+                        <p className={cn("text-sm font-semibold", cancelada ? "text-muted-foreground" : "text-foreground")}>
+                          {dh?.hora ?? "--:--"}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {dh ? (
+                            <>
+                              <span className="sm:hidden">{dh.data.slice(0, 5)}</span>
+                              <span className="hidden sm:inline">{dh.data}</span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </p>
+                      </div>
+                      <div className="min-w-0 leading-tight">
+                        <p
+                          className={cn(
+                            "flex min-w-0 items-center gap-1.5 text-sm",
+                            venda && !l.cliente
+                              ? "font-medium text-muted-foreground"
+                              : cancelada
+                                ? "font-semibold text-muted-foreground"
+                                : "font-semibold text-foreground",
+                          )}
+                        >
+                          {!venda && <Icon aria-hidden className={cn("h-3.5 w-3.5 shrink-0", CATEGORIA_TOM[l.categoria])} />}
+                          <span className="truncate">{titulo}</span>
+                        </p>
+                        <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                          {forma && (
+                            <span className="shrink-0 rounded bg-secondary px-1.5 py-px font-semibold text-foreground">
+                              {forma}
+                            </span>
+                          )}
+                          <span className="truncate">{sub}</span>
+                          {statusLabel && (
+                            <span className="shrink-0 rounded border border-warning/50 bg-warning/15 px-1 text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                              {statusLabel}
+                            </span>
+                          )}
+                          <span className="shrink-0 tabular-nums sm:hidden">· {numeroCurto}</span>
+                        </p>
+                      </div>
                       <p
                         className={cn(
-                          "flex min-w-0 items-center gap-1.5 text-sm",
-                          venda && !l.cliente
-                            ? "font-medium text-muted-foreground"
-                            : cancelada
-                              ? "font-semibold text-muted-foreground"
-                              : "font-semibold text-foreground",
+                          "hidden truncate text-xs tabular-nums text-muted-foreground sm:block",
+                          venda ? "font-semibold" : "font-normal",
+                        )}
+                        title={l.referencia}
+                      >
+                        {venda ? `Venda ${numeroCurto}` : `Operação ${numeroCurto}`}
+                      </p>
+                      <p
+                        className={cn(
+                          "whitespace-nowrap text-right font-display text-sm font-bold tabular-nums",
+                          cancelada
+                            ? "font-medium text-muted-foreground line-through"
+                            : l.categoria === "estorno"
+                              ? "text-destructive"
+                              : "text-foreground",
                         )}
                       >
-                        {!venda && <Icon aria-hidden className={cn("h-3.5 w-3.5 shrink-0", CATEGORIA_TOM[l.categoria])} />}
-                        <span className="truncate">{titulo}</span>
+                        {negativo ? "− " : ""}
+                        {fmt(l.valor)}
                       </p>
-                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                        {forma && (
-                          <span className="shrink-0 rounded bg-secondary px-1.5 py-px font-semibold text-foreground">
-                            {forma}
-                          </span>
-                        )}
-                        <span className="truncate">{sub}</span>
-                        {statusLabel && (
-                          <span className="shrink-0 rounded border border-warning/50 bg-warning/15 px-1 text-[10px] font-semibold uppercase tracking-wide text-foreground">
-                            {statusLabel}
-                          </span>
-                        )}
-                        <span className="shrink-0 tabular-nums sm:hidden">· {numeroCurto}</span>
-                      </p>
-                    </div>
-                    <p
-                      className={cn(
-                        "hidden truncate text-xs tabular-nums text-muted-foreground sm:block",
-                        venda ? "font-semibold" : "font-normal",
-                      )}
-                      title={l.referencia}
-                    >
-                      {venda ? `Venda ${numeroCurto}` : `Operação ${numeroCurto}`}
-                    </p>
-                    <p
-                      className={cn(
-                        "whitespace-nowrap text-right font-display text-sm font-bold tabular-nums",
-                        cancelada
-                          ? "font-medium text-muted-foreground line-through"
-                          : l.categoria === "estorno"
-                            ? "text-destructive"
-                            : "text-foreground",
-                      )}
-                    >
-                      {negativo ? "− " : ""}
-                      {fmt(l.valor)}
-                    </p>
-                    <div className="flex justify-end">
-                      {venda && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`Ações da venda ${numeroCurto}`}
-                              className="text-muted-foreground hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-64">
-                            <DropdownMenuLabel className="flex min-w-0 flex-col gap-0.5">
-                              <span className="text-sm font-semibold text-foreground">Venda {numeroCurto}</span>
-                              <span className="truncate font-mono text-[11px] font-normal text-muted-foreground">
-                                {l.referencia}
-                              </span>
-                            </DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuGroup>
-                              <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Consultar
+                      <div className="flex justify-end">
+                        {venda && acoes && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`Ações da venda ${numeroCurto}`}
+                                className="text-muted-foreground hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-72">
+                              <DropdownMenuLabel className="flex min-w-0 flex-col gap-0.5">
+                                <span className="text-sm font-semibold text-foreground">Venda {numeroCurto}</span>
+                                <span className="truncate font-mono text-[11px] font-normal text-muted-foreground">
+                                  {l.referencia}
+                                </span>
                               </DropdownMenuLabel>
-                              <DropdownMenuItem onSelect={() => setDetalheId((cur) => (cur === l.id ? null : l.id))}>
-                                {detalheAberto ? <EyeOff /> : <Eye />}
-                                {detalheAberto ? "Ocultar detalhes" : "Ver detalhes"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => void copiarNumero(l.referencia)}>
-                                <Copy />
-                                Copiar número da venda
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <Printer />
-                                Reimprimir comprovante
-                                <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <History />
-                                Histórico da venda
-                                <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                              </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuGroup>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Ver
+                                </DropdownMenuLabel>
+                                <AcaoItem
+                                  estado={acoes.detalhes}
+                                  icone={<Eye />}
+                                  rotulo="Ver detalhes"
+                                  onSelect={() => setFicha({ numero: l.referencia, aba: "detalhes" })}
+                                />
+                                <AcaoItem
+                                  estado={acoes.historico}
+                                  icone={<History />}
+                                  rotulo="Histórico da venda"
+                                  onSelect={() => setFicha({ numero: l.referencia, aba: "historico" })}
+                                />
+                              </DropdownMenuGroup>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Documento
+                                </DropdownMenuLabel>
+                                <AcaoItem
+                                  estado={acoes.reimprimir}
+                                  icone={<Printer />}
+                                  rotulo="Reimprimir comprovante"
+                                  onSelect={() => void reimprimirPorNumero(l.referencia)}
+                                />
+                                <AcaoItem
+                                  estado={acoes.copiar}
+                                  icone={<Copy />}
+                                  rotulo="Copiar número da venda"
+                                  onSelect={() => void copiarNumero(l.referencia)}
+                                />
+                              </DropdownMenuGroup>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Pós-venda
+                                </DropdownMenuLabel>
+                                <AcaoItem
+                                  estado={acoes.troca}
+                                  icone={<ArrowLeftRight />}
+                                  rotulo="Trocar produtos"
+                                />
+                                <AcaoItem
+                                  estado={acoes.devolucao}
+                                  icone={<Undo2 />}
+                                  rotulo="Devolução parcial"
+                                />
+                              </DropdownMenuGroup>
+                              <DropdownMenuSeparator />
                               <DropdownMenuLabel className="py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Operações · pedem autorização
+                                Crítico
                               </DropdownMenuLabel>
-                              <DropdownMenuItem disabled>
-                                <ArrowLeftRight />
-                                Trocar produtos
-                                <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <Undo2 />
-                                Devolução parcial
-                                <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                              </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" disabled>
-                              <Ban />
-                              Estornar venda
-                              <DropdownMenuShortcut className="tracking-normal">Em breve</DropdownMenuShortcut>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+                              <AcaoItem
+                                estado={acoes.estorno}
+                                icone={<Ban />}
+                                rotulo="Estornar venda"
+                                destrutiva
+                                atalho="PIN"
+                                onSelect={() =>
+                                  setEstornoAlvo({
+                                    numero: l.referencia,
+                                    valor: l.valor,
+                                    cliente: l.cliente,
+                                    formaPagamento: forma,
+                                  })
+                                }
+                              />
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  {detalheAberto && (
-                    <dl className="mx-3 mb-2 grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-secondary px-3 py-2 sm:mx-4 sm:ml-[5.5rem] sm:grid-cols-4">
-                      <DetalheItem rotulo="Número" valor={l.referencia} mono />
-                      <DetalheItem rotulo="Data e hora" valor={dh ? `${dh.data} às ${dh.hora}` : "—"} />
-                      <DetalheItem rotulo="Pagamento" valor={forma ?? "—"} />
-                      <DetalheItem rotulo="Origem · status" valor={`${l.origemLabel} · ${statusLabel ?? "Concluída"}`} />
-                    </dl>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-          <div className="sticky bottom-0 z-[1] flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-card px-3 py-2 sm:px-4">
+                    {detalheAberto && (
+                      <dl className="mx-3 mb-2 grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-secondary px-3 py-2 sm:mx-4 sm:ml-[5.5rem] sm:grid-cols-4">
+                        <DetalheItem rotulo="Número" valor={l.referencia} mono />
+                        <DetalheItem rotulo="Data e hora" valor={dh ? `${dh.data} às ${dh.hora}` : "—"} />
+                        <DetalheItem rotulo="Pagamento" valor={forma ?? "—"} />
+                        <DetalheItem rotulo="Origem · status" valor={`${l.origemLabel} · ${statusLabel ?? "Concluída"}`} />
+                      </dl>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-card px-3 py-2 sm:px-4">
             <span className="text-xs text-muted-foreground">
               {filtradas.length} lançamento(s)
               {canceladasVista > 0 ? ` · ${canceladasVista} cancelada(s) fora da soma` : ""}
@@ -565,7 +700,90 @@ export function ConferenciaCaixa({
           </div>
         </>
       )}
+
+      {/* ── Ficha da venda (detalhes + histórico) — somente leitura ───────────── */}
+      <ConferenciaVendaDetalhe
+        numeroVenda={ficha?.numero ?? null}
+        aba={ficha?.aba ?? "detalhes"}
+        storeId={storeId}
+        onOpenChange={(open) => {
+          if (!open) setFicha(null)
+        }}
+        onCopiarNumero={(n) => void copiarNumero(n)}
+        onReimprimir={abrirCupom}
+      />
+
+      {/* ── Reimpressão do comprovante — mesmo componente do Histórico de Vendas ── */}
+      {cupom && (
+        <CupomNaoFiscal isOpen={!!cupom} onClose={() => setCupom(null)} data={cupom} />
+      )}
+
+      {/* ── Estorno: step-up de supervisor + motivo obrigatório ──────────────── */}
+      <ConferenciaEstornoDialog
+        alvo={estornoAlvo}
+        storeId={storeId}
+        operador={operador}
+        contagemIniciada={contagemIniciada}
+        onOpenChange={(open) => {
+          if (!open) setEstornoAlvo(null)
+        }}
+        onEstornada={({ numero, autorizadoPor }) => {
+          setEstornoAlvo(null)
+          toast({
+            title: "Venda estornada",
+            description: `${numero} · autorizado por ${autorizadoPor}. Os valores esperados do caixa foram recalculados.`,
+          })
+          // §22 — recarrega vendas, operações e resumo sem fechar o Fechamento.
+          onDadosAlterados?.()
+        }}
+      />
     </div>
+  )
+}
+
+/**
+ * Item do menu ⋮ governado por `avaliarAcoesVenda`.
+ *
+ * Desabilitado NUNCA some: fica visível com a razão real embaixo do rótulo (§26). O
+ * `title` repete a razão para quem navega por teclado/leitor de tela, já que
+ * `DropdownMenuItem` desabilitado não recebe foco.
+ */
+function AcaoItem({
+  estado,
+  icone,
+  rotulo,
+  onSelect,
+  destrutiva = false,
+  atalho,
+}: {
+  estado: AcaoVendaEstado
+  icone: React.ReactNode
+  rotulo: string
+  onSelect?: () => void
+  destrutiva?: boolean
+  atalho?: string
+}) {
+  if (!estado.habilitada) {
+    return (
+      <DropdownMenuItem disabled className="items-start" title={estado.motivo}>
+        <Lock />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span>{rotulo}</span>
+          <span className="whitespace-normal text-[10px] leading-snug text-muted-foreground">
+            {estado.motivo}
+          </span>
+        </span>
+      </DropdownMenuItem>
+    )
+  }
+  return (
+    <DropdownMenuItem onSelect={onSelect} {...(destrutiva ? { variant: "destructive" as const } : {})}>
+      {icone}
+      {rotulo}
+      {atalho ? (
+        <DropdownMenuShortcut className="tracking-normal">{atalho}</DropdownMenuShortcut>
+      ) : null}
+    </DropdownMenuItem>
   )
 }
 

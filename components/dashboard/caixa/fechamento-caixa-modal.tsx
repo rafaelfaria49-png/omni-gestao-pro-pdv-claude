@@ -50,6 +50,11 @@ import {
 import { useCaixaResumo } from "./use-caixa-resumo"
 import { FechamentoPosFechamentoDialog } from "./fechamento-pos-fechamento-dialog"
 import { CalculadoraDinheiroCaixa } from "./calculadora-dinheiro-caixa"
+import {
+  chaveDraftContagem,
+  limparDraftContagem,
+  sessionStorageContagem,
+} from "@/lib/caixa/contagem-cedulas"
 
 interface FechamentoCaixaModalProps {
   isOpen: boolean
@@ -66,7 +71,7 @@ const TAB_TRIGGER =
 export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalProps) {
   const { caixa, fecharCaixa, sessaoId } = useCaixa()
   const { dailyLedger, sales } = useOperationsStore()
-  const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
+  const { empresaDocumentos, lojaAtivaId, getEnderecoDocumentos } = useLojaAtiva()
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome(lojaAtivaId)
   const { terminal } = useTerminalAtivo(lojaAtivaId)
@@ -86,6 +91,13 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const [salvando, setSalvando] = useState(false)
   const [posFechamentoOpen, setPosFechamentoOpen] = useState(false)
   const [posFechamentoSnapshot, setPosFechamentoSnapshot] = useState<FechamentoPosSnapshot | null>(null)
+  /**
+   * Incrementado quando uma ação REAL da Conferência muda o servidor (estorno). Força
+   * `useCaixaResumo` a rebuscar vendas e operações — o esperado da gaveta recalcula sem
+   * o operador sair do Fechamento (GOAL CAIXA-CONFERENCIA-VENDAS-ACOES-REAIS-007 §22).
+   * A contagem digitada NÃO é apagada: o operador revê a diferença já atualizada.
+   */
+  const [conferenciaRefreshKey, setConferenciaRefreshKey] = useState(0)
 
   const ledger = ensureLedger(dailyLedger)
   const userAudit = (empresaDocumentos.nomeFantasia || "").trim() || "Loja"
@@ -103,7 +115,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     operacoesSessao,
     vendasSessao,
     qtdCanceladas,
-  } = useCaixaResumo(isOpen)
+  } = useCaixaResumo(isOpen, conferenciaRefreshKey)
 
   // Operador da sessão para o comprovante — nome LEGÍVEL (fonte única: abertura do
   // caixa → sessão → e-mail; nunca o `cashierId` técnico). O `cashierId` permanece
@@ -130,6 +142,12 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const valorContadoNum = parseFloat(valorContado) || 0
   const diferenca = valorContadoNum - saldoDinheiroEsperado
   const temDiferenca = valorContado !== "" && Math.abs(diferenca) > 0.01
+  // Rascunho da contagem por cédulas e moedas — escopado por loja + sessão de caixa.
+  const chaveDraftContagemSessao = chaveDraftContagem({
+    storeId: lojaAtivaId,
+    sessaoId,
+    dataAbertura: caixa.dataAbertura,
+  })
 
   const buildResumoTexto = () => {
     const lines = [
@@ -382,6 +400,8 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       })
     }
 
+    // Fechamento confirmado: a contagem por cédulas desta sessão não serve a nenhum outro caixa.
+    limparDraftContagem(sessionStorageContagem(), chaveDraftContagemSessao)
     fecharCaixa()
     setValorContado("")
     setDinheiroContadoDetalhado(null)
@@ -479,18 +499,23 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                   </TabsTrigger>
                 </TabsList>
                 <span className="ml-auto hidden truncate text-[11px] text-muted-foreground md:block">
-                  Somente consulta — nada aqui altera valores
+                  Resumo é somente consulta. Na conferência, estornar venda pede autorização.
                 </span>
               </div>
 
-              <TabsContent value="resumo" className="space-y-3 p-3 sm:p-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+              {/* Fundo `surface` + cards com borda e sombra mínima: blocos enquadrados, sem o aspecto
+                  lavado de card branco sobre fundo branco. */}
+              <TabsContent
+                value="resumo"
+                className="space-y-3 bg-surface p-3 sm:p-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto"
+              >
                 {/* Recebido na sessão = vendas à vista + contas e O.S. recebidas − estornos, aberto
                     pela forma usada. À prazo e crédito/vale ficam em "Vendas da sessão". */}
                 <section
                   aria-label="Recebido na sessão"
-                  className="grid min-w-0 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
+                  className="grid min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
                 >
-                  <div className="flex min-w-0 flex-col justify-center gap-0.5 border-b border-border bg-secondary/50 px-4 py-3 sm:border-b-0 sm:border-r">
+                  <div className="flex min-w-0 flex-col justify-center gap-0.5 border-b border-border bg-secondary/70 px-4 py-3 sm:border-b-0 sm:border-r">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Recebido na sessão
                     </p>
@@ -522,8 +547,9 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                   </div>
                 </section>
 
-                {/* Vendas (competência) à esquerda; recebido por origem e gaveta à direita. */}
-                <div className="grid min-w-0 items-start gap-3 md:grid-cols-2">
+                {/* Vendas (competência) à esquerda; recebido por origem e gaveta à direita. As colunas
+                    esticam juntas: sem área vazia abaixo do bloco mais curto. */}
+                <div className="grid min-w-0 gap-3 md:grid-cols-2">
                   <BlocoResumo bloco={blocos.vendas} meta={blocos.vendas.meta} notas={notasVendas} />
                   <div className="grid min-w-0 gap-3">
                     <BlocoResumo
@@ -535,11 +561,23 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 </div>
               </TabsContent>
 
-              <TabsContent value="conferencia" className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+              {/* No xl a Conferência controla a própria rolagem: só a lista rola; filtros e rodapé ficam fixos. */}
+              <TabsContent value="conferencia" className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden">
                 <ConferenciaCaixa
                   vendasSessao={vendasSessao}
                   sessionSales={sessionSales}
                   operacoesSessao={operacoesSessao}
+                  storeId={lojaAtivaId ?? ""}
+                  operador={operadorDisplay || "Operador"}
+                  loja={{
+                    nome:
+                      empresaDocumentos.nomeFantasia || empresaDocumentos.razaoSocial || "Loja",
+                    cnpj: empresaDocumentos.cnpj || undefined,
+                    endereco: getEnderecoDocumentos() || undefined,
+                  }}
+                  sessaoAberta={caixa.isOpen}
+                  contagemIniciada={valorContado.trim().length > 0}
+                  onDadosAlterados={() => setConferenciaRefreshKey((k) => k + 1)}
                 />
               </TabsContent>
             </Tabs>
@@ -547,9 +585,9 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
             {/* ── Contagem da gaveta (direita) — sempre visível, independente da aba ── */}
             <aside
               aria-label="Contagem da gaveta"
-              className="min-w-0 border-t border-border bg-card xl:min-h-0 xl:overflow-y-auto xl:border-l xl:border-t-0"
+              className="min-w-0 border-t border-border bg-surface xl:min-h-0 xl:overflow-y-auto xl:border-l xl:border-t-0"
             >
-              <div className="space-y-2 bg-card px-3 pb-2 pt-3 sm:px-4 xl:sticky xl:top-0 xl:z-[1] xl:border-b xl:border-border/60 xl:pb-3">
+              <div className="space-y-2 bg-surface px-3 pb-2 pt-3 sm:px-4 xl:sticky xl:top-0 xl:z-[1] xl:border-b xl:border-border/60 xl:pb-3">
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="font-display text-sm font-semibold text-foreground">Contagem da gaveta</h3>
                   <span className="text-[11px] text-muted-foreground">dinheiro físico</span>
@@ -563,8 +601,14 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
               </div>
 
               <div className="space-y-3 px-3 pb-4 pt-2 sm:px-4 xl:pt-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="fechamento-dinheiro-contado">Dinheiro contado na gaveta</Label>
+                {/* Entrada operacional: valor contado + contagem por cédulas no mesmo bloco. */}
+                <div className="space-y-2 rounded-lg border border-border bg-card p-3 shadow-xs">
+                  <div className="flex min-w-0 items-baseline justify-between gap-2">
+                    <Label htmlFor="fechamento-dinheiro-contado">Dinheiro contado na gaveta</Label>
+                    {dinheiroContadoDetalhado && valorContado !== "" && (
+                      <span className="shrink-0 text-[11px] text-muted-foreground">pela contagem de cédulas</span>
+                    )}
+                  </div>
                   <div className="relative">
                     <span
                       aria-hidden
@@ -585,24 +629,28 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                         // Edição manual invalida o detalhamento aplicado pela calculadora.
                         setDinheiroContadoDetalhado(null)
                       }}
-                      className="h-12 w-full min-w-0 rounded-lg border border-input bg-background pl-10 pr-3 font-display text-2xl font-bold tabular-nums text-foreground shadow-xs outline-none transition-[color,box-shadow] [appearance:textfield] placeholder:font-normal placeholder:text-muted-foreground/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className={cn(
+                        "h-12 w-full min-w-0 rounded-lg border pl-10 pr-3 font-display text-2xl font-bold tabular-nums text-foreground shadow-xs outline-none transition-[color,box-shadow] [appearance:textfield] placeholder:font-normal placeholder:text-muted-foreground/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+                        valorContado !== "" ? "border-foreground/30 bg-card" : "border-input bg-background",
+                      )}
                     />
                   </div>
                   <p className="text-[11px] leading-snug text-muted-foreground">
                     Só o <span className="font-semibold text-foreground">dinheiro físico</span> entra na gaveta. PIX,
                     cartão, à prazo e crédito/vale não entram.
                   </p>
-                </div>
 
-                {/* Calculadora de conferência de dinheiro físico (cédulas/moedas).
-                    Aplica o total no campo acima por ação explícita do operador. */}
-                <CalculadoraDinheiroCaixa
-                  saldoDinheiroEsperado={saldoDinheiroEsperado}
-                  onAplicar={(t, detalhe) => {
-                    setValorContado(t.toFixed(2))
-                    setDinheiroContadoDetalhado(detalhe)
-                  }}
-                />
+                  {/* Calculadora de conferência de dinheiro físico (cédulas/moedas) em diálogo próprio.
+                      Aplica o total no campo acima por ação explícita do operador. */}
+                  <CalculadoraDinheiroCaixa
+                    saldoDinheiroEsperado={saldoDinheiroEsperado}
+                    chaveDraft={chaveDraftContagemSessao}
+                    onAplicar={(t, detalhe) => {
+                      setValorContado(t.toFixed(2))
+                      setDinheiroContadoDetalhado(detalhe)
+                    }}
+                  />
+                </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="fechamento-observacao" className="w-full justify-between">
@@ -614,7 +662,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                     placeholder="Ex.: conferido pelo supervisor, sangria realizada…"
                     value={observacao}
                     onChange={(e) => setObservacao(e.target.value)}
-                    className="h-9 bg-background"
+                    className="h-9 bg-card"
                   />
                 </div>
               </div>
@@ -703,7 +751,7 @@ const ESTADO_GAVETA: Record<
     titulo: "Aguardando contagem",
     dica: "Informe o dinheiro contado na gaveta.",
     icon: Calculator,
-    caixa: "border-dashed border-border",
+    caixa: "border-border bg-secondary/60",
     icone: "text-muted-foreground",
     celula: "",
     valor: "text-muted-foreground",
@@ -739,7 +787,10 @@ const ESTADO_GAVETA: Record<
 
 const fmtSinal = (v: number) => (Math.abs(v) <= 0.01 ? fmt(0) : `${v > 0 ? "+" : "−"} ${fmt(Math.abs(v))}`)
 
-/** Esperado / Contado / Diferença + veredito da gaveta. */
+/**
+ * Esperado / Contado / Diferença + veredito da gaveta num único container: três células e a
+ * faixa do veredito embaixo (o valor da diferença vive na célula, sem repetir na faixa).
+ */
 function ResultadoGaveta({
   estado,
   esperado,
@@ -754,8 +805,8 @@ function ResultadoGaveta({
   const cfg = ESTADO_GAVETA[estado]
   const Icon = cfg.icon
   return (
-    <div className="space-y-2">
-      <dl className="grid grid-cols-3 overflow-hidden rounded-lg border border-border">
+    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
+      <dl className="grid grid-cols-3">
         <CelulaGaveta rotulo="Esperado" valor={fmt(esperado)} />
         <CelulaGaveta
           rotulo="Contado"
@@ -770,17 +821,17 @@ function ResultadoGaveta({
           valorClassName={cfg.valor}
         />
       </dl>
-      <div className={cn("flex min-w-0 items-center gap-2.5 rounded-lg border px-3 py-2", cfg.caixa)}>
-        <Icon aria-hidden className={cn("h-4 w-4 shrink-0", cfg.icone)} />
+      <div className={cn("flex min-w-0 items-center gap-2.5 border-t px-3 py-2", cfg.caixa)}>
+        <span
+          aria-hidden
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-card"
+        >
+          <Icon className={cn("h-4 w-4", cfg.icone)} />
+        </span>
         <div role="status" className="min-w-0 flex-1 leading-tight">
           <p className="text-sm font-semibold text-foreground">{cfg.titulo}</p>
           <p className="truncate text-[11px] text-muted-foreground">{cfg.dica}</p>
         </div>
-        {estado !== "pendente" && (
-          <span className={cn("shrink-0 font-display text-sm font-bold tabular-nums", cfg.valor)}>
-            {fmtSinal(diferenca)}
-          </span>
-        )}
       </div>
     </div>
   )
@@ -798,9 +849,17 @@ function CelulaGaveta({
   valorClassName?: string
 }) {
   return (
-    <div className={cn("min-w-0 px-2.5 py-2", className)}>
+    // Valor em `text-base` com `px-2.5`: a trilha de 29rem deixa ~124px por valor — `text-lg`
+    // cortava "+ R$ 9.729,99" (medido). O destaque vem do container; `title` guarda o valor inteiro.
+    <div className={cn("min-w-0 px-2.5 py-2.5", className)}>
       <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{rotulo}</dt>
-      <dd className={cn("truncate font-display text-base font-bold tabular-nums text-foreground", valorClassName)}>
+      <dd
+        title={valor}
+        className={cn(
+          "mt-0.5 truncate font-display text-base font-bold leading-tight tabular-nums text-foreground",
+          valorClassName,
+        )}
+      >
         {valor}
       </dd>
     </div>
@@ -911,7 +970,7 @@ function BlocoResumo({
   return (
     <section
       aria-label={bloco.titulo}
-      className="min-w-0 space-y-1.5 rounded-lg border border-border bg-card px-4 py-3"
+      className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-card px-4 py-3 shadow-xs"
     >
       <div className="flex min-w-0 items-baseline justify-between gap-2">
         <TituloSecao className="shrink-0">{bloco.titulo}</TituloSecao>

@@ -7,6 +7,7 @@ import {
   upsertVendaInTransaction,
   type SalePayload,
 } from "./ops-upsert-venda"
+import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 const STORE = "loja-1"
 const LIVE = { enforceStock: true, requireCaixaSession: true } as const
@@ -74,7 +75,25 @@ function makeDb(options?: { createP2002?: boolean; sessionStatus?: "ABERTA" | "F
   const session = { status: options?.sessionStatus ?? "ABERTA" }
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
-  const makeTx = (): any => ({
+  // Facade viva sobre `stock.value` para o boundary (ownership por id+loja).
+  // O setter conta como mutação (`updates`), preservando a semântica do
+  // contador legado (1 write de saldo por produto baixado).
+  const produtoFacade = {
+    id: "produto-1",
+    storeId: STORE,
+    sku: "SKU-1",
+    name: "Produto",
+    precoCusto: 20,
+    get stock() {
+      return stock.value
+    },
+    set stock(v: number) {
+      stock.value = v
+      stock.updates += 1
+    },
+  }
+  const makeTx = (): any => {
+    const tx = {
     cliente: { findFirst: async () => null },
     venda: {
       findUnique: async ({ where }: any) => vendas.get(where.pedidoId) ?? null,
@@ -191,7 +210,11 @@ function makeDb(options?: { createP2002?: boolean; sessionStatus?: "ABERTA" | "F
         return { id: "sessao-1", status: session.status }
       },
     },
-  })
+  }
+  // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
+  attachStockLedgerBoundaryToFakeTx(tx, { products: [produtoFacade], ledger: estoque })
+  return tx
+  }
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   return {

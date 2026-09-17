@@ -78,6 +78,20 @@ export type PinAuthorizationPayload = Readonly<{
   storeId: string
   /** `User.id` do supervisor cujo PIN co-assinou. Não é o autor da ação. */
   supervisorId: string
+  /**
+   * Ação para a qual a autorização foi concedida (ex.: `estornar_venda`).
+   * Ausente = autorização genérica do fluxo legado.
+   *
+   * GOAL 007B: sem isto, uma co-assinatura dada para UMA operação valia para
+   * qualquer outra dentro dos 15 min. Consumidor que exige escopo recusa token sem
+   * `action`, então autorização genérica nunca autoriza ação escopada.
+   */
+  action?: string
+  /**
+   * Alvo exato da ação (ex.: `pedidoId` da venda). Ausente = sem alvo.
+   * Autorização para a Venda A não vale para a Venda B.
+   */
+  resource?: string
   /** Epoch-seconds. */
   iat: number
   /** Epoch-seconds. */
@@ -94,6 +108,8 @@ export type PinAuthorizationFailure =
   | "expired"
   | "user_mismatch"
   | "store_mismatch"
+  | "action_mismatch"
+  | "resource_mismatch"
 
 export type PinAuthorizationVerification =
   | { ok: true; payload: PinAuthorizationPayload }
@@ -166,11 +182,20 @@ async function deriveKey(secret: string): Promise<CryptoKey> {
  * se transmite (assina-se o que se verifica).
  */
 export async function createPinAuthorizationToken(
-  input: { userId: string; storeId: string; supervisorId: string },
+  input: {
+    userId: string
+    storeId: string
+    supervisorId: string
+    /** Escopo opcional — quando presente, vira parte do payload ASSINADO. */
+    action?: string
+    resource?: string
+  },
   secret: string,
   nowMs: number = Date.now(),
 ): Promise<string> {
   const iat = Math.floor(nowMs / 1000)
+  const action = input.action?.trim()
+  const resource = input.resource?.trim()
   const payload: PinAuthorizationPayload = {
     v: PIN_AUTHORIZATION_SCHEMA,
     userId: input.userId,
@@ -179,6 +204,8 @@ export async function createPinAuthorizationToken(
     iat,
     exp: iat + PIN_AUTHORIZATION_MAX_AGE_SECONDS,
     nonce: randomNonce(),
+    ...(action ? { action } : {}),
+    ...(resource ? { resource } : {}),
   }
   const body = base64UrlEncode(encoder.encode(JSON.stringify(payload)))
   const key = await deriveKey(secret)
@@ -195,7 +222,9 @@ function isPayloadShape(value: unknown): value is PinAuthorizationPayload {
     typeof p.supervisorId === "string" &&
     typeof p.iat === "number" &&
     typeof p.exp === "number" &&
-    typeof p.nonce === "string"
+    typeof p.nonce === "string" &&
+    (p.action === undefined || typeof p.action === "string") &&
+    (p.resource === undefined || typeof p.resource === "string")
   )
 }
 
@@ -209,7 +238,17 @@ function isPayloadShape(value: unknown): value is PinAuthorizationPayload {
 export async function verifyPinAuthorizationToken(
   token: string | undefined | null,
   secret: string | null,
-  expected: { userId: string; storeId?: string | null },
+  expected: {
+    userId: string
+    storeId?: string | null
+    /**
+     * Quando informados, o payload PRECISA trazer exatamente estes valores. Token
+     * genérico (sem escopo) é RECUSADO — é o que impede uma co-assinatura ampla de
+     * autorizar uma ação escopada.
+     */
+    action?: string | null
+    resource?: string | null
+  },
   nowMs: number = Date.now(),
 ): Promise<PinAuthorizationVerification> {
   if (!secret) return { ok: false, reason: "missing_server_secret" }
@@ -253,6 +292,19 @@ export async function verifyPinAuthorizationToken(
   const wantedStore = (expected.storeId ?? "").trim()
   if (wantedStore.length > 0 && payload.storeId !== wantedStore) {
     return { ok: false, reason: "store_mismatch" }
+  }
+
+  // Escopo (GOAL 007B). Comparação estrita: exigir `action` recusa token sem
+  // `action`, e não só token com ação diferente. O consumidor que NÃO pede escopo
+  // segue aceitando ambos — nenhum chamador legado muda de comportamento.
+  const wantedAction = (expected.action ?? "").trim()
+  if (wantedAction.length > 0 && payload.action !== wantedAction) {
+    return { ok: false, reason: "action_mismatch" }
+  }
+
+  const wantedResource = (expected.resource ?? "").trim()
+  if (wantedResource.length > 0 && payload.resource !== wantedResource) {
+    return { ok: false, reason: "resource_mismatch" }
   }
 
   return { ok: true, payload }

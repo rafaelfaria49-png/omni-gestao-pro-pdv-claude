@@ -1,7 +1,12 @@
 /**
  * POST /api/vendas/[id]/cancelar
  *
- * Cancela uma venda PDV de forma profissional:
+ * Cancela (estorna) uma venda PDV de forma profissional:
+ * - Exige DUAS camadas de autorização (GOAL 007A): permissão normal
+ *   (`pdv.cancelarVenda`) E step-up de supervisor válido, verificado no SERVIDOR.
+ *   Step-up complementa a permissão — nunca a substitui.
+ * - Recusa venda cuja Conta a Receber já esteja quitada (o recebimento precisa ser
+ *   regularizado no Financeiro antes; `cancelContaReceber` não cancela título pago).
  * - Valida que não está já cancelada
  * - Avisa se houver devoluções parciais vinculadas
  * - Exige motivo
@@ -19,6 +24,15 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { assertVendaFiscalCancelavel } from "@/lib/fiscal/venda-fiscal-state-machine"
+// Boundary canônico de estoque (CAD-R2-009, da main): reposição compensatória com
+// lock + ownership + ledger na mesma transação, e idempotência por chave estável.
+import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
+import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
+// Guards de autorização e elegibilidade do estorno (pacote 007A/007B).
+import { requireEstornoStepUp } from "@/lib/vendas/guard-estorno-venda"
+import { avaliarRecebiveisParaEstorno } from "@/lib/vendas/estorno-recebivel-guard"
+import { avaliarSessaoParaEstorno } from "@/lib/vendas/estorno-sessao-guard"
+import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 import { auth } from "@/auth"
 
 export const runtime = "nodejs"
@@ -38,7 +52,9 @@ export async function POST(
   const { id: rawId } = await params
   const pedidoId = rawId?.trim()
 
+  // ── CAMADA 1 — sessão + permissão de papel (inalterada) ───────────────────────
   const session = await auth()
+  const sessionUserId = session?.user?.id
   if (session?.user) {
     const guard = await requireEnterpriseWith(
       storeId,
@@ -51,6 +67,31 @@ export async function POST(
   } else {
     const sub = await requireOpsSubscription()
     if (!sub.ok) return sub.res
+  }
+
+  // ── CAMADA 2 — step-up de supervisor, verificado no SERVIDOR (GOAL 007A) ──────
+  // Corre ANTES de qualquer leitura/escrita da venda: quem não provou a co-assinatura
+  // não chega nem a saber se a venda existe. `sessionUserId` é obrigatório porque a
+  // autorização é vinculada a quem a pediu — o PDV legado (sem sessão NextAuth) não tem
+  // a quem vincular o token e, por isso, deixa de poder estornar por esta rota.
+  if (!sessionUserId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Estorno exige sessão de utilizador com autorização de supervisor. Entre com a sua conta e refaça a autorização.",
+        code: "step_up_session_required",
+      },
+      { status: 403 },
+    )
+  }
+  // O alvo do step-up é ESTA venda: autorização emitida para outra não passa.
+  const stepUp = await requireEstornoStepUp(sessionUserId, storeId, pedidoId)
+  if (!stepUp.ok) {
+    return NextResponse.json(
+      { ok: false, error: stepUp.error, code: stepUp.code },
+      { status: stepUp.status },
+    )
   }
 
   if (!pedidoId) {
@@ -101,6 +142,60 @@ export async function POST(
     const fiscalGate = assertVendaFiscalCancelavel(venda)
     if (!fiscalGate.ok) {
       return NextResponse.json({ ok: false, error: fiscalGate.error, code: fiscalGate.code }, { status: fiscalGate.status })
+    }
+
+    // ── Guard de sessão de caixa (GOAL 007B · INVARIANTE 3) ─────────────────────
+    // Antes de qualquer mutação. A reconciliação da gaveta deste fluxo depende de a
+    // venda sair dos agregados da sessão que está sendo conferida; numa sessão já
+    // fechada isso não acontece e o dinheiro sairia sem contrapartida.
+    const sessaoIdDaVenda =
+      venda.payload && typeof venda.payload === "object" && !Array.isArray(venda.payload)
+        ? ((venda.payload as Record<string, unknown>).sessaoId as string | undefined)
+        : undefined
+    const sessaoDaVenda = sessaoIdDaVenda?.trim()
+      ? await prisma.sessaoCaixa.findFirst({
+          where: { id: sessaoIdDaVenda.trim(), storeId },
+          select: { status: true },
+        })
+      : null
+    const veredictoSessao = avaliarSessaoParaEstorno({
+      sessaoId: sessaoIdDaVenda,
+      sessao: sessaoDaVenda,
+    })
+    if (veredictoSessao.bloqueado) {
+      return NextResponse.json(
+        { ok: false, error: veredictoSessao.motivo, code: veredictoSessao.code },
+        { status: 409 },
+      )
+    }
+
+    // ── Guard de recebíveis (GOAL 007A · BLOCKER-2) ─────────────────────────────
+    // Corre ANTES de qualquer mutação. Venda com título já quitado não passa por aqui:
+    // `cancelContaReceber` recusa título pago, e deixar seguir produzia venda cancelada
+    // convivendo com título PAGO. Os títulos são os mesmos que o passo 4 cancelaria
+    // (`localKey LIKE 'pdv-aprazo-<pedido>%'`), então o guard e o efeito olham o mesmo
+    // conjunto. Parcialmente pago NÃO bloqueia — esse caminho reconcilia.
+    const titulosDaVenda = await prisma.contaReceberTitulo.findMany({
+      where: { storeId, localKey: { startsWith: `pdv-aprazo-${pedidoId}` } },
+      select: { status: true, valor: true, payload: true },
+    })
+    const veredito = avaliarRecebiveisParaEstorno(
+      titulosDaVenda.map((t) => ({
+        status: t.status,
+        valor: t.valor,
+        pago: sumPagamentosHistorico(t.payload),
+      })),
+    )
+    if (veredito.bloqueado) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: veredito.motivo,
+          code: veredito.code,
+          titulosQuitados: veredito.titulosQuitados,
+        },
+        { status: 409 },
+      )
     }
 
     // Verificar se há devoluções vinculadas (com itens para o netting de estoque)
@@ -265,41 +360,39 @@ export async function POST(
       for (const [produtoId, sold] of soldByProdutoId) {
         const net = sold - (returnedByProdutoId.get(produtoId) ?? 0)
         if (net <= 0) continue
-        // Idempotência: não repor duas vezes a mesma venda/produto.
+        // Idempotência era dupla (CAD-R2-009): guarda legado por
+        // (documento, produto, origem) cobre reposições pré-009 sem chave;
+        // o boundary dedupeia retries pela chave estável.
         const jaExiste = await tx.movimentacaoEstoque.findFirst({
           where: { storeId, documento: pedidoId, produtoId, origem: "cancelamento_pdv" },
           select: { id: true },
         })
         if (jaExiste) continue
-        const atual = await tx.produto.findUnique({
-          where: { id: produtoId },
-          select: { stock: true, precoCusto: true, sku: true, name: true },
-        })
-        if (!atual) continue
-        const estoqueAntes = atual.stock
-        const custo = arredonda2(Math.max(0, atual.precoCusto))
-        await tx.produto.update({ where: { id: produtoId }, data: { stock: { increment: net } } })
-        await tx.movimentacaoEstoque.create({
-          data: {
-            storeId,
+        // CAD-R2-009: reposição compensatória pelo boundary canônico (lock +
+        // ownership + depósito + ledger na MESMA transação do cancelamento).
+        // Nunca "seta stock de volta": cria movimento de entrada compensatório.
+        // operadorLedger aqui é SOMENTE o rótulo server-derived da sessão;
+        // `canceladaPor` (input do client) NÃO entra no contexto confiável.
+        const ledgerOperator = (session?.user ? getOperatorLabelFromSession(session) : "").trim() || null
+        const repo = await applyStockMutationTx(
+          tx as unknown as StockLedgerTx,
+          { storeId, principal: null, source: "vendas-cancelar", operatorLabel: ledgerOperator },
+          {
+            kind: "entrada",
             produtoId,
-            produtoSku: atual.sku ?? null,
-            produtoNome: atual.name,
-            tipo: "entrada",
-            origem: "cancelamento_pdv",
             quantidade: net,
-            estoqueAntes,
-            estoqueDepois: estoqueAntes + net,
-            custoUnitario: custo,
-            custoMedioAntes: custo,
-            custoMedioDepois: custo,
-            valorTotal: arredonda2(net * custo),
+            origem: "cancelamento_pdv",
             documento: pedidoId,
             motivo: `Cancelamento venda ${pedidoId}`,
-            usuario: operadorLedger || null,
+            idempotencyKey: StockIdempotency.cancelamento(pedidoId, produtoId),
           },
-        })
-        estoqueRepostoCount += 1
+        )
+        if (!repo.ok) {
+          // Produto excluído entre a resolução e a reposição: legado pulava.
+          if (repo.code === "NOT_FOUND") continue
+          throw new Error(`[vendas/cancelar] reposição de estoque falhou: ${repo.code} ${repo.message}`)
+        }
+        if (!repo.idempotente) estoqueRepostoCount += 1
       }
 
       // 3. Estorno financeiro à vista — reverte o valor LÍQUIDO da entrada de venda
@@ -347,6 +440,8 @@ export async function POST(
     // Mantido fora da transação por reaproveitar o recálculo de saldo de carteira.
     let estornoReceber = false
     let titulosCancelados = 0
+    /** Títulos que o serviço financeiro recusou cancelar — reportados, nunca silenciados. */
+    const titulosRecusados: Array<{ localKey: string; reason: string }> = []
     try {
       const titulosAprazo = await prisma.contaReceberTitulo.findMany({
         where: {
@@ -362,16 +457,28 @@ export async function POST(
         } catch (e) {
           console.error("[vendas/cancelar] estorno financeiro (a prazo) falhou:", titulo.localKey, e)
         }
-        // Marca o título como cancelado se ainda não estiver pago (best-effort).
+        // Marca o título como cancelado. `cancelContaReceber` devolve `{ ok:false }` em
+        // vez de lançar, então try/catch sozinho NÃO detecta recusa — era assim que uma
+        // recusa virava "cancelado" na resposta. O retorno agora é verificado, e a
+        // contagem só sobe quando o título realmente ficou cancelado.
         try {
-          await cancelContaReceber({
+          const res = await cancelContaReceber({
             storeId,
             id: titulo.id,
             motivo: motivo.trim(),
             userLabel: operadorCancelamento,
           })
-          titulosCancelados += 1
+          if (res.ok) {
+            titulosCancelados += 1
+          } else {
+            titulosRecusados.push({ localKey: titulo.localKey ?? titulo.id, reason: res.reason })
+            console.error(
+              "[vendas/cancelar] cancelContaReceber recusou",
+              JSON.stringify({ localKey: titulo.localKey, reason: res.reason }),
+            )
+          }
         } catch (e) {
+          titulosRecusados.push({ localKey: titulo.localKey ?? titulo.id, reason: "excecao" })
           console.error("[vendas/cancelar] cancelContaReceber falhou:", titulo.localKey, e)
         }
       }
@@ -390,6 +497,9 @@ export async function POST(
       estornoVenda: estornoVendaRealizado,
       estornoFinanceiro: estornoReceber || estornoVendaRealizado,
       titulosAprazoCancelados: titulosCancelados,
+      titulosAprazoRecusados: titulosRecusados,
+      // Autorizador vem do TOKEN assinado, não de texto enviado pelo cliente (007A §5).
+      autorizadoPor: { supervisorId: stepUp.supervisorId, nome: stepUp.supervisorNome },
       devolucoesMantidas: devolucoes.length,
       // Estorno do crédito/vale consumido (parcela de Crédito/Vale do pagamento).
       estornoCreditoVale: {

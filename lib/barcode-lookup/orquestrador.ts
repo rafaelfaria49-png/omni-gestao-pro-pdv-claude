@@ -1,4 +1,8 @@
 import { memoLookupGlobal, proximaMeiaNoiteSaoPaulo, type MemoLookup } from "./memo"
+import {
+  POLITICA_TIMEOUT_MS,
+  type DecisaoProvedor,
+} from "@/lib/cadastros/provider-governance"
 import type {
   FabricaProvedorResult,
   ProvedorId,
@@ -9,27 +13,37 @@ import type {
 } from "./types"
 
 /**
- * Orquestrador da cadeia de lookup externo (GOAL 004A).
+ * Orquestrador da cadeia de lookup externo (GOAL 004A · CAD-R2-015).
  *
  * - Percorre provedores em ordem (lida de BARCODE_LOOKUP_PROVIDERS).
- * - Timeout curto por provedor (~3s) via AbortController.
+ * - Timeout curto por provedor (POLITICA_TIMEOUT_MS da governança) via AbortController.
  * - Para no primeiro status "encontrado".
  * - Pula provedores memoizados como esgotados.
- * - Acumula trace de tentativas.
+ * - Acumula trace de tentativas (só provedor/status/instante/tipo — sem segredos,
+ *   sem URLs, sem payload).
  *
- * Semântica primeiro-sucesso-vence (D10): a ordem define o teto de qualidade.
+ * Semântica primeiro-sucesso-vence (D10 · POLITICA_FALLBACK): a ordem define o
+ * teto de qualidade.
+ *
+ * CAD-R2-015: antes de construir cada adapter, o orquestrador consulta a
+ * governança via `decidirExecucao` (quando fornecido). Decisão não-executável
+ * (desconhecido, desabilitado, não-implementado, sem-config) vira tentativa
+ * erro/config honesta SEM chamar a fábrica — o provider nunca executa
+ * silenciosamente.
  */
 
 export type OrquestradorDeps = {
   ordem: ProvedorId[]
   criarProvedor: (id: ProvedorId) => FabricaProvedorResult
+  /** CAD-R2-015: gate da governança (opcional por compatibilidade com testes legados). */
+  decidirExecucao?: (id: ProvedorId) => DecisaoProvedor
   memo?: MemoLookup
   timeoutMs?: number
   /** Injeta relógio em testes. */
   agora?: () => Date
 }
 
-const TIMEOUT_MS_DEFAULT = 3000
+const TIMEOUT_MS_DEFAULT = POLITICA_TIMEOUT_MS
 
 function mapStatus(resultado: ResultadoLookup): StatusTentativa {
   return resultado.status
@@ -73,6 +87,18 @@ export async function resolverCadeia(
       limites += 1
       if (!resetEmFinal) resetEmFinal = esgotadoAte
       continue
+    }
+
+    // CAD-R2-015: gate da governança — provider não-executável (desconhecido,
+    // desabilitado, não-implementado, sem-config) gera tentativa erro/config
+    // honesta SEM construir adapter e SEM executar. Nunca silencioso.
+    if (deps.decidirExecucao) {
+      const decisao = deps.decidirExecucao(id)
+      if (!decisao.executable) {
+        tentativas.push({ provedor: id, status: "erro", em: agoraIso(agora), tipo: "config" })
+        configErros.push(`${id}: ${decisao.mensagem}`)
+        continue
+      }
     }
 
     // Constrói o provedor; erro de config não crasha.

@@ -19,6 +19,7 @@ import {
   type SalePayload,
 } from "./ops-upsert-venda"
 import { historicalRecoveryPersistOptions } from "./vendas/quarantine-recovery-planner"
+import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 type FakeProduct = {
   id: string
@@ -112,6 +113,9 @@ function makeFakeTx(
     },
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
+  attachStockLedgerBoundaryToFakeTx(tx, { products, ledger })
 
   return { tx, byId, ledger, financeiro }
 }

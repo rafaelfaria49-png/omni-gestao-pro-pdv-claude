@@ -5,14 +5,24 @@ import type { Prisma } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
 import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access";
 import {
-  cadastrosAuditActorLabel,
   cadastrosAuditPrincipalFromSession,
+  type CadastrosAuditPrincipal,
 } from "@/lib/cadastros/cadastros-audit-principal";
+import {
+  applyStockMutationTx,
+  type StockLedgerTx,
+} from "@/lib/estoque/stock-ledger-service";
 
 /**
- * Movimentação de estoque (livro-razão). Toda entrada/ajuste:
- *  - grava 1 registro imutável em MovimentacaoEstoque (auditoria);
- *  - atualiza Produto.stock e Produto.precoCusto (custo médio) na MESMA transação.
+ * Movimentação de estoque (livro-razão) — CAD-R2-009.
+ *
+ * Estas actions são a porta de entrada HUMANA do boundary canônico
+ * (`lib/estoque/stock-ledger-service.ts`). Toda entrada/ajuste, na MESMA transação:
+ *  - trava a linha do produto (`SELECT ... FOR UPDATE`);
+ *  - valida ownership produto+depósito por storeId (fail-closed);
+ *  - atualiza Produto.stock + ProdutoDeposito (SUM == stock);
+ *  - recalcula custo médio só em entrada com custo (saída/ajuste preservam);
+ *  - grava 1 registro imutável em MovimentacaoEstoque (append-only).
  * Não toca o decremento de venda do PDV/OS — apenas entradas e ajustes manuais.
  */
 
@@ -45,9 +55,30 @@ function arredonda2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
 }
 
+/** Mapeia falha do boundary para o reason público destas actions (contrato estável). */
+function boundaryReason(
+  code: string,
+  message: string,
+  fallback: string,
+): string {
+  switch (code) {
+    case "NOT_FOUND":
+    case "CROSS_STORE":
+      return "Produto não encontrado nesta loja";
+    case "VALIDATION":
+    case "INSUFFICIENT_STOCK":
+    case "STOCK_INVARIANT_DRIFT":
+    case "IDEMPOTENCY_CONFLICT":
+      return message || fallback;
+    default:
+      return fallback;
+  }
+}
+
 /**
  * Entrada de mercadoria. quantidade > 0 obrigatória. Recalcula custo médio ponderado:
  *   novoCustoMedio = (estoqueAntes*custoMedioAntes + qtd*custoUnit) / (estoqueAntes + qtd)
+ * Delega ao boundary canônico (lock + ownership + depósito + ledger na mesma tx).
  */
 export async function registrarEntradaEstoque(
   storeId: string,
@@ -60,14 +91,19 @@ export async function registrarEntradaEstoque(
     observacao?: string;
     /** Aceito no contrato público; o ator oficial vem da sessão. */
     usuario?: string;
+    /**
+     * Chave de idempotência estável (CAD-R2-009). Operação manual sem ID estável:
+     * omitir (sem fingir idempotência). Chamadas programáticas passam chave real.
+     */
+    idempotencyKey?: string;
   }
 ): Promise<EntradaEstoqueResult> {
   let sid: string;
-  let usuario: string | null;
+  let principal: CadastrosAuditPrincipal | null;
   try {
     const gate = await requireCadastrosActionAccess(storeId, "shared");
     sid = gate.storeId;
-    usuario = cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session)) || null;
+    principal = cadastrosAuditPrincipalFromSession(gate.session);
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
   }
@@ -82,58 +118,27 @@ export async function registrarEntradaEstoque(
 
   try {
     const out = await prisma.$transaction(async (tx) => {
-      const prod = await tx.produto.findFirst({
-        where: { id: input.produtoId, storeId: sid },
-        select: { id: true, name: true, sku: true, stock: true, precoCusto: true },
-      });
-      if (!prod) return { ok: false as const, reason: "Produto não encontrado nesta loja" };
-
-      const estoqueAntes = prod.stock;
-      const custoMedioAntes = prod.precoCusto ?? 0;
-      const estoqueDepois = estoqueAntes + qtd;
-      // Custo médio só muda quando há custo informado; senão preserva o anterior.
-      const custoMedioDepois =
-        custoUnit > 0 && estoqueDepois > 0
-          ? arredonda2((estoqueAntes * custoMedioAntes + qtd * custoUnit) / estoqueDepois)
-          : custoMedioAntes;
-
-      const mov = await tx.movimentacaoEstoque.create({
-        data: {
-          storeId: sid,
-          produtoId: prod.id,
-          produtoSku: prod.sku,
-          produtoNome: prod.name,
-          tipo: "entrada",
-          origem: "manual",
+      const r = await applyStockMutationTx(
+        tx as unknown as StockLedgerTx,
+        { storeId: sid, principal, source: "estoque-actions" },
+        {
+          kind: "entrada",
+          produtoId: input.produtoId,
           quantidade: qtd,
-          estoqueAntes,
-          estoqueDepois,
           custoUnitario: custoUnit,
-          custoMedioAntes,
-          custoMedioDepois,
-          valorTotal: arredonda2(qtd * custoUnit),
-          documento: input.documento?.trim() || null,
-          fornecedor: input.fornecedor?.trim() || null,
-          observacao: input.observacao?.trim() || null,
-          usuario,
+          origem: "manual",
+          documento: input.documento,
+          fornecedor: input.fornecedor,
+          observacao: input.observacao,
+          idempotencyKey: input.idempotencyKey,
         },
-        select: { id: true },
-      });
-
-      await tx.produto.update({
-        where: { id: prod.id },
-        data: {
-          stock: estoqueDepois,
-          // Só sobrescreve custo quando recalculado (custo informado > 0).
-          precoCusto: custoUnit > 0 ? custoMedioDepois : undefined,
-        },
-      });
-
+      );
+      if (!r.ok) return { ok: false as const, reason: boundaryReason(r.code, r.message, "Falha ao registrar entrada") };
       return {
         ok: true as const,
-        movimentacaoId: mov.id,
-        estoqueDepois,
-        custoMedioDepois,
+        movimentacaoId: r.movimentacaoId,
+        estoqueDepois: r.estoqueDepois,
+        custoMedioDepois: r.custoMedioDepois,
       };
     });
 
@@ -157,14 +162,19 @@ export async function registrarAjusteEstoque(
     observacao?: string;
     /** Aceito no contrato público; o ator oficial vem da sessão. */
     usuario?: string;
+    /**
+     * Chave de idempotência estável (CAD-R2-009). Inventário passa
+     * `inventario:<sessaoId>:<produtoId>`; operação manual omite.
+     */
+    idempotencyKey?: string;
   }
 ): Promise<EntradaEstoqueResult> {
   let sid: string;
-  let usuario: string | null;
+  let principal: CadastrosAuditPrincipal | null;
   try {
     const gate = await requireCadastrosActionAccess(storeId, "shared");
     sid = gate.storeId;
-    usuario = cadastrosAuditActorLabel(cadastrosAuditPrincipalFromSession(gate.session)) || null;
+    principal = cadastrosAuditPrincipalFromSession(gate.session);
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
   }
@@ -178,45 +188,26 @@ export async function registrarAjusteEstoque(
 
   try {
     const out = await prisma.$transaction(async (tx) => {
-      const prod = await tx.produto.findFirst({
-        where: { id: input.produtoId, storeId: sid },
-        select: { id: true, name: true, sku: true, stock: true, precoCusto: true },
-      });
-      if (!prod) return { ok: false as const, reason: "Produto não encontrado nesta loja" };
-
-      const estoqueAntes = prod.stock;
-      const custoMedio = prod.precoCusto ?? 0;
-      const delta = novoSaldo - estoqueAntes;
-      if (delta === 0) return { ok: false as const, reason: "Novo saldo igual ao atual — nada a ajustar" };
-
-      const mov = await tx.movimentacaoEstoque.create({
-        data: {
-          storeId: sid,
-          produtoId: prod.id,
-          produtoSku: prod.sku,
-          produtoNome: prod.name,
-          tipo: "ajuste",
+      const r = await applyStockMutationTx(
+        tx as unknown as StockLedgerTx,
+        { storeId: sid, principal, source: "estoque-actions" },
+        {
+          kind: "ajuste",
+          produtoId: input.produtoId,
+          novoSaldo,
           origem: "manual",
-          quantidade: delta,
-          estoqueAntes,
-          estoqueDepois: novoSaldo,
-          custoUnitario: 0,
-          custoMedioAntes: custoMedio,
-          custoMedioDepois: custoMedio,
-          valorTotal: 0,
-          motivo: input.motivo.trim(),
-          observacao: input.observacao?.trim() || null,
-          usuario,
+          motivo: input.motivo,
+          observacao: input.observacao,
+          idempotencyKey: input.idempotencyKey,
         },
-        select: { id: true },
-      });
-
-      await tx.produto.update({
-        where: { id: prod.id },
-        data: { stock: novoSaldo },
-      });
-
-      return { ok: true as const, movimentacaoId: mov.id, estoqueDepois: novoSaldo, custoMedioDepois: custoMedio };
+      );
+      if (!r.ok) return { ok: false as const, reason: boundaryReason(r.code, r.message, "Falha ao registrar ajuste") };
+      return {
+        ok: true as const,
+        movimentacaoId: r.movimentacaoId,
+        estoqueDepois: r.estoqueDepois,
+        custoMedioDepois: r.custoMedioDepois,
+      };
     });
 
     if (out.ok) revalidatePath("/dashboard/cadastros-v2");

@@ -235,17 +235,39 @@ describe("contrato: todas as portas produzem o mesmo metadata.fiscal", () => {
       "lib/importador-avancado/persistidor.ts",
       "lib/importador-produtos/persist.ts",
       "lib/produtos/produto-fiscal-upsert.ts",
+      "lib/cadastros/product-write-service.ts",
     ]
+    // CAD-R2-006: as actions interativas delegam ao ProductWriteService e não
+    // reduplicam o helper fiscal — o contrato canônico continua valendo por
+    // delegação (o service usa o helper; a action usa o service).
+    // CAD-R2-007: REST Produto também delega (POST/PATCH/codigos/bulk via
+    // createProduct/updateProduct/updateProductTx).
+    const delegating = new Set([
+      "app/actions/cadastros.ts",
+      "app/api/produtos/route.ts",
+      "app/api/produtos/[id]/route.ts",
+    ])
     for (const rel of arquivos) {
       const fonte = readFileSync(resolve(RAIZ, rel), "utf8")
       // Atribuição direta ao bloco fiscal só pode existir dentro do helper canônico.
       expect(fonte, `${rel} atribui metadata.fiscal fora do contrato`).not.toMatch(
         /\.fiscal\s*=[^=]/,
       )
+      if (delegating.has(rel)) {
+        expect(fonte, `${rel} deve delegar ao ProductWriteService`).toMatch(
+          /createProduct|updateProduct/,
+        )
+        continue
+      }
       expect(fonte, `${rel} não usa o helper fiscal canônico`).toMatch(
         /mergeProdutoFiscalIntoMetadata|canonicalizeProdutoFiscalMetadata/,
       )
     }
+    // A delegação só vale se o service realmente usa o helper canônico.
+    const service = readFileSync(resolve(RAIZ, "lib/cadastros/product-write-service.ts"), "utf8")
+    expect(service, "product-write-service sem helper fiscal canônico").toMatch(
+      /mergeProdutoFiscalIntoMetadata|canonicalizeProdutoFiscalMetadata/,
+    )
   })
 
   it("`lib/produto-fiscal.ts` é o único módulo que grava o bloco fiscal", () => {

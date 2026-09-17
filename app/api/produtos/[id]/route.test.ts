@@ -1,123 +1,64 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { Prisma } from "@/generated/prisma"
 
 // ============================================================================
-// CADASTROS-PRODUTOS-DUPLICIDADE-002 — aviso claro de "Produto já cadastrado" na EDIÇÃO.
+// CAD-R2-007 — PATCH /api/produtos/[id] via ProductWriteService + StockLedger.
 // ----------------------------------------------------------------------------
-// Antes, o PATCH /api/produtos/[id] fazia updateMany direto; mudar SKU/EAN para um que
-// já pertence a OUTRO produto da loja caía no unique constraint (P2002) e virava um 503
-// genérico ("Falha ao atualizar produto"), sem avisar o operador. Agora a duplicidade
-// forte (mesmo SKU/código ou barcode/EAN de OUTRO produto da mesma loja — o próprio
-// produto é ignorado) é detectada e responde 409 estruturado
-// { type: "DUPLICATE_PRODUCT", field, message, produto }.
-//
-// Exercita o handler PATCH de PRODUÇÃO sobre um Prisma EM MEMÓRIA. Apenas auth/store-id/
-// conexão são mockados; a detecção (pré-checagem + ramo P2002) roda sobre o banco fake.
+// Cadastral → updateProduct/updateProductTx; stock → ajuste absoluto via
+// ledger; mixed → UMA transaction. Rota sem Prisma Produto direto.
 // ============================================================================
 
 const STORE = "loja-2"
 
-const h = vi.hoisted(() => {
-  type Row = Record<string, unknown>
-  const produtos = new Map<string, Row>()
-  let seq = 0
-  // Quando true, as consultas de duplicidade (com OR) devolvem null — simula a CORRIDA em
-  // que o SKU/EAN foi tomado por outro produto entre a verificação e o update (ramo P2002).
-  let suppressDupFindFirst = false
-
-  function p2002(target: string[]): never {
-    throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
-      code: "P2002",
-      clientVersion: "test",
-      meta: { target },
-    })
-  }
-
-  type WhereId = string | { not?: string } | undefined
-  function matchesId(rowId: unknown, whereId: WhereId): boolean {
-    if (whereId === undefined) return true
-    if (typeof whereId === "string") return rowId === whereId
-    if (whereId && typeof whereId === "object" && "not" in whereId) return rowId !== whereId.not
-    return true
-  }
-
-  const prisma = {
-    produto: {
-      findFirst: async ({
-        where,
-      }: {
-        where: { id?: WhereId; storeId?: string; OR?: Array<{ sku?: string; barcode?: string }> }
-      }) => {
-        const hasOr = Array.isArray(where.OR)
-        if (hasOr && suppressDupFindFirst) return null
-        for (const r of produtos.values()) {
-          if (where.storeId && r.storeId !== where.storeId) continue
-          if (!matchesId(r.id, where.id)) continue
-          if (!where.OR) return r
-          for (const c of where.OR) {
-            if (c.sku !== undefined && r.sku === c.sku) return r
-            if (c.barcode !== undefined && r.barcode === c.barcode) return r
-          }
-        }
-        return null
-      },
-      updateMany: async ({ where, data }: { where: { id?: string; storeId?: string }; data: Row }) => {
-        let target: Row | undefined
-        for (const r of produtos.values()) {
-          if (where.storeId && r.storeId !== where.storeId) continue
-          if (where.id && r.id !== where.id) continue
-          target = r
-          break
-        }
-        if (!target) return { count: 0 }
-        // Espelha os unique constraints @@unique([storeId, sku]) / [storeId, barcode]:
-        // colisão só com OUTRO produto da mesma loja (o próprio alvo é ignorado).
-        for (const r of produtos.values()) {
-          if (r.id === target.id) continue
-          if (r.storeId !== target.storeId) continue
-          if (data.sku != null && r.sku === data.sku) p2002(["storeId", "sku"])
-          if (data.barcode != null && r.barcode === data.barcode) p2002(["storeId", "barcode"])
-        }
-        Object.assign(target, data)
-        return { count: 1 }
-      },
-    },
-  }
-
-  return {
-    prisma,
-    produtos,
-    seedDireto: (row: Row) => {
-      const full: Row = { id: `seed-${++seq}`, stock: 0, sku: null, barcode: null, storeId: STORE, ...row }
-      produtos.set(String(full.id), full)
-      return full
-    },
-    setSuppressDupFindFirst: (v: boolean) => {
-      suppressDupFindFirst = v
-    },
-    reset: () => {
-      produtos.clear()
-      seq = 0
-      suppressDupFindFirst = false
-    },
-  }
-})
+const h = vi.hoisted(() => ({
+  updateProduct: vi.fn(async () => ({ ok: true, id: "seed-1", operacao: "update" })),
+  updateProductTx: vi.fn(async () => ({ ok: true, id: "seed-1", operacao: "update" })),
+  applyStockMutation: vi.fn(async () => ({ ok: true, movimentacaoId: "mov-1" })),
+  applyStockMutationTx: vi.fn(async () => ({ ok: true, movimentacaoId: "mov-1" })),
+  findFirst: vi.fn(async () => null as unknown),
+  transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
+}))
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: h.prisma,
+  prisma: {
+    produto: {
+      findFirst: (...args: unknown[]) => (h.findFirst as (...a: unknown[]) => unknown)(...args),
+    },
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
+      (h.transaction as (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown>)(fn),
+  },
   prismaEnsureConnected: vi.fn(async () => undefined),
 }))
 vi.mock("@/lib/cadastros/hub-api-gate", () => ({
   requireCadastrosHubApi: vi.fn(async () => ({ ok: true as const, storeId: STORE })),
 }))
+vi.mock("@/lib/cadastros/cadastros-audit-principal", () => ({
+  cadastrosAuditPrincipalFromSession: vi.fn(() => null),
+  cadastrosAuditLogFields: vi.fn(() => ({ userLabel: "", actorMeta: { actor: null } })),
+}))
+vi.mock("@/lib/cadastros/product-write-service", () => ({
+  PRODUCT_WRITE_AUDIT_SOURCE: "product-write-service",
+  createProduct: vi.fn(),
+  updateProduct: (...args: unknown[]) => (h.updateProduct as (...a: unknown[]) => unknown)(...args),
+  updateProductTx: (...args: unknown[]) => (h.updateProductTx as (...a: unknown[]) => unknown)(...args),
+}))
+vi.mock("@/lib/estoque/stock-ledger-service", () => ({
+  applyStockMutation: (...args: unknown[]) =>
+    (h.applyStockMutation as (...a: unknown[]) => unknown)(...args),
+  applyStockMutationTx: (...args: unknown[]) =>
+    (h.applyStockMutationTx as (...a: unknown[]) => unknown)(...args),
+}))
 
 import { PATCH } from "./route"
 
-function patchReq(id: string, body: Record<string, unknown>) {
+function patchReq(id: string, body: Record<string, unknown>, headers?: Record<string, string>) {
   return {
     req: new Request(`http://local/api/produtos/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-assistec-loja-id": STORE },
+      headers: {
+        "Content-Type": "application/json",
+        "x-assistec-loja-id": STORE,
+        ...(headers ?? {}),
+      },
       body: JSON.stringify(body),
     }),
     context: { params: Promise.resolve({ id }) },
@@ -133,87 +74,133 @@ type PatchJson = {
   produto?: { id?: string; name?: string; sku?: string | null; barcode?: string | null; stock?: number | null }
 }
 
-async function runPatch(id: string, body: Record<string, unknown>) {
-  const { req, context } = patchReq(id, body)
+async function runPatch(id: string, body: Record<string, unknown>, headers?: Record<string, string>) {
+  const { req, context } = patchReq(id, body, headers)
   const res = await PATCH(req, context)
   return { res, json: (await res.json()) as PatchJson }
 }
 
-beforeEach(() => {
-  h.reset()
+const ROW = (over: Record<string, unknown> = {}) => ({
+  id: "seed-1",
+  name: "Alvo",
+  stock: 2,
+  price: 10,
+  precoCusto: 0,
+  sku: "CARR-10",
+  barcode: null,
+  category: null,
+  brand: "",
+  supplierName: "",
+  warrantyDays: 0,
+  active: true,
+  status: "Ativo",
+  metadata: null,
+  storeId: STORE,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  ...over,
 })
 
-describe("PATCH /api/produtos/[id] — aviso de duplicidade na edição (CADASTROS-PRODUTOS-DUPLICIDADE-002)", () => {
-  it("editar SKU para um SKU já usado por OUTRO produto da loja → 409 DUPLICATE_PRODUCT (field sku)", async () => {
-    const existente = h.seedDireto({ name: "Carregador Turbo", sku: "CARR-99", stock: 7 })
-    const alvo = h.seedDireto({ name: "Carregador comum", sku: "CARR-10", stock: 2 })
-    const { res, json } = await runPatch(String(alvo.id), { codigo: "CARR-99" })
+beforeEach(() => {
+  h.updateProduct.mockReset()
+  h.updateProductTx.mockReset()
+  h.applyStockMutation.mockReset()
+  h.applyStockMutationTx.mockReset()
+  h.findFirst.mockReset()
+  h.transaction.mockReset()
+  h.updateProduct.mockResolvedValue({ ok: true, id: "seed-1", operacao: "update" })
+  h.updateProductTx.mockResolvedValue({ ok: true, id: "seed-1", operacao: "update" })
+  h.applyStockMutation.mockResolvedValue({ ok: true, movimentacaoId: "mov-1" })
+  h.applyStockMutationTx.mockResolvedValue({ ok: true, movimentacaoId: "mov-1" })
+  h.findFirst.mockResolvedValue(ROW())
+  h.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn({}))
+})
+
+describe("PATCH /api/produtos/[id] — boundary canônico (CAD-R2-007)", () => {
+  it("cadastral usa ProductWriteService (sem ledger)", async () => {
+    const { res, json } = await runPatch("seed-1", { name: "Novo nome", price: 29.9 })
+    expect(res.status).toBe(200)
+    expect(json.ok).toBe(true)
+    expect(h.updateProduct).toHaveBeenCalledTimes(1)
+    expect(h.applyStockMutation).not.toHaveBeenCalled()
+    expect(h.applyStockMutationTx).not.toHaveBeenCalled()
+  })
+
+  it("duplicate no update vira 409 DUPLICATE_PRODUCT", async () => {
+    h.updateProduct.mockResolvedValue({
+      ok: false,
+      code: "DUPLICATE",
+      message: "Produto já cadastrado.",
+      field: "sku",
+      produto: { id: "other-1", name: "Carregador Turbo", sku: "CARR-99", barcode: null, stock: 7 },
+    } as never)
+    const { res, json } = await runPatch("seed-1", { codigo: "CARR-99" })
     expect(res.status).toBe(409)
     expect(json.type).toBe("DUPLICATE_PRODUCT")
     expect(json.field).toBe("sku")
-    expect(json.produto?.id).toBe(existente.id)
-    expect(json.produto?.name).toBe("Carregador Turbo")
-    expect(json.produto?.stock).toBe(7)
-    expect(json.message).toMatch(/já cadastrado/i)
   })
 
-  it("editar barcode/EAN para um EAN já usado por OUTRO produto da loja → 409 DUPLICATE_PRODUCT (field barcode)", async () => {
-    h.seedDireto({ name: "Fone Bluetooth", barcode: "7891234567890", stock: 3 })
-    const alvo = h.seedDireto({ name: "Fone comum", barcode: "7890000000002", stock: 1 })
-    const { res, json } = await runPatch(String(alvo.id), { barcode: "7891234567890" })
+  it("stock-only usa StockLedger (sem updateProduct)", async () => {
+    const { res, json } = await runPatch("seed-1", { stock: 8 })
+    expect(res.status).toBe(200)
+    expect(json.ok).toBe(true)
+    expect(h.applyStockMutation).toHaveBeenCalledTimes(1)
+    expect(h.updateProduct).not.toHaveBeenCalled()
+    const [, cmd] = h.applyStockMutation.mock.calls[0] as unknown as [unknown, { kind: string; novoSaldo: number }]
+    expect(cmd.kind).toBe("ajuste")
+    expect(cmd.novoSaldo).toBe(8)
+  })
+
+  it("stock nunca faz Produto.stock direto (ledger ajuste absoluto)", async () => {
+    await runPatch("seed-1", { stock: 8 })
+    const [, cmd] = h.applyStockMutation.mock.calls[0] as unknown as [unknown, Record<string, unknown>]
+    expect(cmd).toMatchObject({ kind: "ajuste", novoSaldo: 8 })
+    expect(cmd).not.toHaveProperty("quantidade")
+  })
+
+  it("mixed é atômico: UMA transaction com updateTx + ledgerTx", async () => {
+    const { res } = await runPatch("seed-1", { price: 100, stock: 8 })
+    expect(res.status).toBe(200)
+    expect(h.transaction).toHaveBeenCalledTimes(1)
+    expect(h.updateProductTx).toHaveBeenCalledTimes(1)
+    expect(h.applyStockMutationTx).toHaveBeenCalledTimes(1)
+    expect(h.updateProduct).not.toHaveBeenCalled()
+  })
+
+  it("mixed rollback se stock falha (cadastro NÃO persiste)", async () => {
+    h.applyStockMutationTx.mockResolvedValue({
+      ok: false,
+      code: "INSUFFICIENT_STOCK",
+      message: "Estoque insuficiente no depósito.",
+    } as never)
+    const { res } = await runPatch("seed-1", { price: 100, stock: 50 })
+    expect(res.status).toBe(409)
+  })
+
+  it("mixed rollback se cadastro falha (stock não executa)", async () => {
+    h.updateProductTx.mockResolvedValue({
+      ok: false,
+      code: "DUPLICATE",
+      message: "Produto já cadastrado.",
+      field: "sku",
+      produto: { id: "other-1", name: "X", sku: "S", barcode: null, stock: 1 },
+    } as never)
+    const { res, json } = await runPatch("seed-1", { price: 100, stock: 8 })
     expect(res.status).toBe(409)
     expect(json.type).toBe("DUPLICATE_PRODUCT")
-    expect(json.field).toBe("barcode")
-    expect(json.produto?.name).toBe("Fone Bluetooth")
-    expect(json.message).toMatch(/já cadastrado/i)
+    expect(h.applyStockMutationTx).not.toHaveBeenCalled()
   })
 
-  it("manter o PRÓPRIO SKU/EAN do produto (editando outros campos) funciona — não bloqueia", async () => {
-    const alvo = h.seedDireto({ name: "Película 3D", sku: "PEL-1", barcode: "7890000000001", stock: 4 })
-    const { res, json } = await runPatch(String(alvo.id), {
-      name: "Película 3D Premium",
-      price: 29.9,
-      sku: "PEL-1",
-      barcode: "7890000000001",
-    })
-    expect(res.status).toBe(200)
-    expect(json.ok).toBe(true)
-    expect(json.produto?.name).toBe("Película 3D Premium")
+  it("Idempotency-Key gera chave namespaceda por produto", async () => {
+    await runPatch("seed-1", { stock: 9 }, { "Idempotency-Key": "abc-123" })
+    const [, cmd] = h.applyStockMutation.mock.calls[0] as unknown as [unknown, { idempotencyKey: string }]
+    expect(cmd.idempotencyKey).toContain("seed-1")
+    expect(cmd.idempotencyKey).toContain("abc-123")
   })
 
-  it("mesmo SKU em OUTRA loja não bloqueia a edição (escopo por storeId)", async () => {
-    h.seedDireto({ name: "Suporte veicular", sku: "SUP-1", storeId: "loja-9", stock: 5 })
-    const alvo = h.seedDireto({ name: "Suporte novo", sku: "SUP-X", stock: 2 })
-    const { res, json } = await runPatch(String(alvo.id), { sku: "SUP-1" })
-    expect(res.status).toBe(200)
-    expect(json.ok).toBe(true)
-    expect(json.produto?.sku).toBe("SUP-1")
-  })
-
-  it("erro Prisma P2002 (corrida) vira 409 amigável, nunca 503", async () => {
-    h.seedDireto({ name: "Cabo USB-C", sku: "CAB-1", stock: 9 })
-    const alvo = h.seedDireto({ name: "Cabo novo", sku: "CAB-9", stock: 1 })
-    h.setSuppressDupFindFirst(true) // pré-checagem não enxerga; só o update colide
-    const { res, json } = await runPatch(String(alvo.id), { sku: "CAB-1" })
-    expect(res.status).toBe(409)
-    expect(json.type).toBe("DUPLICATE_PRODUCT")
-    expect(json.message).toMatch(/já cadastrado/i)
-  })
-
-  it("editar apenas nome/preço/estoque (sem mexer em SKU/EAN) funciona", async () => {
-    const alvo = h.seedDireto({ name: "Caixa de som", sku: "SOM-1", stock: 3 })
-    const { res, json } = await runPatch(String(alvo.id), { name: "Caixa de som JBL", price: 199, stock: 8 })
-    expect(res.status).toBe(200)
-    expect(json.ok).toBe(true)
-    expect(json.produto?.name).toBe("Caixa de som JBL")
-    expect(json.produto?.stock).toBe(8)
-  })
-
-  it("limpar o SKU (string vazia → null) não dispara duplicidade", async () => {
-    const alvo = h.seedDireto({ name: "Item sem código", sku: "TMP-1", stock: 1 })
-    const { res, json } = await runPatch(String(alvo.id), { sku: "" })
-    expect(res.status).toBe(200)
-    expect(json.ok).toBe(true)
-    expect(json.produto?.sku).toBeNull()
+  it("metadata:null encaminha CLEAR explícito ao service", async () => {
+    await runPatch("seed-1", { metadata: null })
+    const [, , , opts] = h.updateProduct.mock.calls[0] as unknown as [unknown, unknown, unknown, { clearMetadata: boolean }]
+    expect(opts.clearMetadata).toBe(true)
   })
 })

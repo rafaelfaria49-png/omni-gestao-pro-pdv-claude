@@ -3,7 +3,7 @@ import {
   Sparkles, Link2, Barcode, ImagePlus, Type, Check, Loader2,
   Wand2, Layers, Tag as TagIcon, Store,
   AlertCircle, Image as ImageIcon,
-  Send, Plus, ChevronDown, PackagePlus,
+  Send, Plus, ChevronDown, PackagePlus, MessageSquareText, Mic, Square,
 } from "lucide-react";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea } from "./ui-kit";
 import { MovimentacaoEstoqueModal } from "./MovimentacaoEstoqueModal";
@@ -18,6 +18,24 @@ import {
   upsertProduto,
   type ResolverCodigoBarrasResult,
 } from "@/app/actions/cadastros";
+import { interpretarProdutoTextoLivre } from "@/app/actions/produto-texto-livre";
+import type {
+  CaptureSourceTextoLivre,
+  NomeCampoTextoLivre,
+  OrigemCampoTextoLivre,
+  SugestaoTextoLivre,
+} from "@/lib/cadastros/natural-text";
+import { calcularAplicacaoTextoLivre } from "@/lib/cadastros/natural-text";
+import {
+  detectVoiceCaptureCapability,
+  montarTextoCaptura,
+  reduceVoiceCapture,
+  startBrowserVoiceCapture,
+  VOICE_CAPTURE_INITIAL,
+  type VoiceBrowserSession,
+  type VoiceCaptureEvent,
+  type VoiceCaptureSnapshot,
+} from "@/lib/cadastros/voice-capture";
 // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reaproveita a seção do Catálogo de Aparelhos
 // (mesma UI/guardrails do /dashboard/estoque) e o contrato de metadata já publicado.
 import {
@@ -37,6 +55,10 @@ import {
 } from "@/lib/catalogo-aparelhos/produto-metadata";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { normalizeProdutoTags } from "@/lib/cadastros/produto-upsert-metadata";
+import {
+  calcularCamposAplicaveis,
+  construirProvenienciaBarcode,
+} from "@/lib/cadastros/provider-governance";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
 import { getProdutoFiscal } from "@/lib/produto-fiscal";
 import { cn } from "@/lib/utils";
@@ -57,7 +79,9 @@ type ExternalBarcodeLookup = {
   gtin: string;
   formato: GtinFormato;
   consultadoEm: string;
-  result: Extract<ResolverCodigoBarrasResult, { ok: true }>;
+  // INTERNO nunca chega aqui (runExternalBarcodeLookup retorna antes) — o tipo
+  // exclui esse caso para que só status da cadeia alimentem a proveniência.
+  result: Exclude<Extract<ResolverCodigoBarrasResult, { ok: true }>, { status: "INTERNO" }>;
 };
 
 type BarcodeSuggestionApplication = {
@@ -86,8 +110,69 @@ function resumoTentativas(tentativas: Array<{ provedor: string; status: string; 
     .join(" · ");
 }
 
-function statusLookupAuditavel(result: ExternalBarcodeLookup["result"]): "encontrado" | "nao_encontrado" | "erro" {
-  return result.status === "encontrado" || result.status === "nao_encontrado" ? result.status : "erro";
+/* ── Texto livre (CAD-R2-016): preview estruturado da sugestão temporária ── */
+
+const TEXTO_LIVRE_CAMPOS: ReadonlyArray<{ campo: NomeCampoTextoLivre; rotulo: string }> = [
+  { campo: "nome", rotulo: "Nome" },
+  { campo: "marca", rotulo: "Marca" },
+  { campo: "categoria", rotulo: "Categoria" },
+  { campo: "descricao", rotulo: "Descrição" },
+  { campo: "preco", rotulo: "Preço venda (R$)" },
+  { campo: "custo", rotulo: "Custo (R$)" },
+  { campo: "estoque", rotulo: "Estoque inicial" },
+  { campo: "fornecedor", rotulo: "Fornecedor" },
+  { campo: "sku", rotulo: "SKU" },
+  { campo: "ean", rotulo: "EAN" },
+  { campo: "garantia", rotulo: "Garantia (dias)" },
+  { campo: "ncm", rotulo: "NCM" },
+  { campo: "cest", rotulo: "CEST" },
+];
+
+function rotuloEstadoTextoLivre(estado: OrigemCampoTextoLivre): string {
+  if (estado === "extraido") return "extraído do texto";
+  if (estado === "inferido") return "inferido pela IA";
+  if (estado === "ambiguo") return "confirmar";
+  return "ausente";
+}
+
+function toneEstadoTextoLivre(estado: OrigemCampoTextoLivre): "success" | "info" | "warning" | "default" {
+  if (estado === "extraido") return "success";
+  if (estado === "inferido") return "info";
+  if (estado === "ambiguo") return "warning";
+  return "default";
+}
+
+function formatarValorTextoLivre(campo: NomeCampoTextoLivre, valor: string | number): string {
+  if (typeof valor === "number") {
+    if (campo === "preco" || campo === "custo") {
+      return valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return String(valor);
+  }
+  return valor;
+}
+
+function nomeBackendTextoLivre(sugestao: SugestaoTextoLivre): string {
+  const backend = sugestao.proveniencia.backend;
+  if (backend === "openrouter") return "OpenRouter";
+  if (backend === "openai") return "OpenAI";
+  if (backend === "gemini") return "Gemini";
+  return "extração local";
+}
+
+function rotuloCapturaTextoLivre(origem: CaptureSourceTextoLivre): string {
+  return origem === "voice" ? "voz → texto livre" : "texto livre";
+}
+
+function rotuloEstadoVoz(voz: VoiceCaptureSnapshot): string {
+  if (voz.status === "listening") return "Ouvindo";
+  if (voz.status === "transcribing") return "Transcrevendo";
+  if (voz.status === "completed") return "Concluído";
+  if (voz.status === "permission-denied") return "Permissão negada";
+  if (voz.status === "unavailable") return "Indisponível neste navegador";
+  if (voz.status === "error") return "Erro";
+  if (voz.status === "cancelled") return "Cancelado";
+  return "Pronto";
 }
 
 /* ── Combobox com autocomplete + "criar novo" (Categoria/Marca) ── */
@@ -267,7 +352,7 @@ function CategoriaMarcaCombobox({
   );
 }
 
-type Source = "manual" | "link" | "barcode" | "image";
+type Source = "manual" | "link" | "barcode" | "image" | "texto";
 
 const STEPS = [
   "Analisando produto…",
@@ -326,6 +411,7 @@ export function ProductAIModal({
   const [saving, startSaving] = useTransition();
   const [lookingUpBarcode, startBarcodeLookup] = useTransition();
   const [lookingUpExternalBarcode, startExternalBarcodeLookup] = useTransition();
+  const [interpretandoTexto, startInterpretacaoTexto] = useTransition();
 
   const nomeRef = useRef<HTMLInputElement | null>(null);
   const skuRef = useRef<HTMLInputElement | null>(null);
@@ -356,6 +442,17 @@ export function ProductAIModal({
   const [externalBarcodeLookup, setExternalBarcodeLookup] = useState<ExternalBarcodeLookup | null>(null);
   const [barcodeSuggestionApplication, setBarcodeSuggestionApplication] = useState<BarcodeSuggestionApplication | null>(null);
   const [cosmosFiscalApplied, setCosmosFiscalApplied] = useState<{ ncm?: string; cest?: string } | null>(null);
+
+  // CAD-R2-016 — texto livre: descrição do operador → sugestão temporária revisável.
+  // A sugestão NUNCA grava banco; "aplicar" só preenche o formulário local.
+  const [textoLivre, setTextoLivre] = useState("");
+  const [textoSugestao, setTextoSugestao] = useState<SugestaoTextoLivre | null>(null);
+  const [textoExcluidos, setTextoExcluidos] = useState<string[]>([]);
+  const [textoErro, setTextoErro] = useState<string | null>(null);
+  const [textoCaptureSource, setTextoCaptureSource] = useState<CaptureSourceTextoLivre>("text");
+  const [voz, setVoz] = useState<VoiceCaptureSnapshot>(VOICE_CAPTURE_INITIAL);
+  const vozSessionRef = useRef<VoiceBrowserSession | null>(null);
+  const textoLivreAntesVozRef = useRef("");
 
   // Modal de movimentação de estoque (Parte 13) — só em edição.
   const [movimentacaoAberta, setMovimentacaoAberta] = useState(false);
@@ -400,12 +497,42 @@ export function ProductAIModal({
     setExternalBarcodeLookup(null);
     setBarcodeSuggestionApplication(null);
     setCosmosFiscalApplied(null);
+    setTextoLivre("");
+    setTextoSugestao(null);
+    setTextoExcluidos([]);
+    setTextoErro(null);
+    setTextoCaptureSource("text");
+    setVoz((prev) =>
+      prev.status === "unavailable" ? prev : { ...VOICE_CAPTURE_INITIAL },
+    );
+    vozSessionRef.current = null;
     barcodeLookupRequestRef.current += 1;
   }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest, initial?.metadata]);
 
   useEffect(() => {
     if (open && source === "barcode") barcodeScannerRef.current?.focus();
   }, [open, source]);
+
+  // CAD-R2-017 — feature detection honesta. Nunca inicia captura no mount.
+  useEffect(() => {
+    const cap = detectVoiceCaptureCapability(typeof window === "undefined" ? null : window);
+    setVoz((prev) => reduceVoiceCapture(prev, { type: "capability", available: cap.available }));
+  }, []);
+
+  useEffect(() => {
+    if (open && source === "texto") return;
+    if (vozSessionRef.current) {
+      vozSessionRef.current.cancel();
+      vozSessionRef.current = null;
+    }
+  }, [open, source]);
+
+  useEffect(() => {
+    return () => {
+      vozSessionRef.current?.dispose();
+      vozSessionRef.current = null;
+    };
+  }, []);
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reidrata a compatibilidade ao abrir/editar.
   // Lê o endpoint read-only já publicado (GET /api/catalogo/aparelhos/produto/[id]). Sempre
@@ -630,37 +757,38 @@ export function ProductAIModal({
     if (!externalBarcodeLookup || externalBarcodeLookup.result.status !== "encontrado") return;
 
     const { dados, provedor } = externalBarcodeLookup.result;
+    // CAD-R2-015: campos aplicáveis vêm da governança canônica (allow-list por
+    // provider + nunca sobrescrever o operador + nunca preco/custo/estoque/
+    // fornecedor/sku). Nada aqui salva Produto — só preenche o formulário para
+    // revisão; a persistência continua sendo upsertProduto ("Salvar produto").
+    const aplicaveis = calcularCamposAplicaveis(provedor, dados, {
+      nome: nomeRef.current?.value.trim() ?? "",
+      marca,
+      categoria,
+      descricao,
+      ncm: ncmDisplay,
+      cest: cestDisplay,
+    });
     const camposAplicados: string[] = [];
-    const nomeAtual = nomeRef.current?.value.trim() ?? "";
-    if (dados.nome.trim() && !nomeAtual && nomeRef.current) {
-      nomeRef.current.value = dados.nome;
-      camposAplicados.push("nome");
-    }
-    if (dados.marca?.trim() && !marca.trim()) {
-      setMarca(dados.marca);
-      camposAplicados.push("marca");
-    }
-    if (dados.categoria?.trim() && !categoria.trim()) {
-      setCategoria(dados.categoria);
-      camposAplicados.push("categoria");
-    }
-    if (dados.descricao?.trim() && !descricao.trim()) {
-      setDescricao(dados.descricao);
-      camposAplicados.push("descricao");
-    }
-
     const fiscalAplicado: { ncm?: string; cest?: string } = {};
-    if (provedor === "cosmos") {
-      if (dados.ncm?.trim() && !ncmDisplay.trim()) {
-        setNcmDisplay(dados.ncm);
-        fiscalAplicado.ncm = dados.ncm;
-        camposAplicados.push("ncm");
+    for (const item of aplicaveis) {
+      if (item.campo === "nome") {
+        if (!nomeRef.current) continue;
+        nomeRef.current.value = item.valor;
+      } else if (item.campo === "marca") {
+        setMarca(item.valor);
+      } else if (item.campo === "categoria") {
+        setCategoria(item.valor);
+      } else if (item.campo === "descricao") {
+        setDescricao(item.valor);
+      } else if (item.campo === "ncm") {
+        setNcmDisplay(item.valor);
+        fiscalAplicado.ncm = item.valor;
+      } else if (item.campo === "cest") {
+        setCestDisplay(item.valor);
+        fiscalAplicado.cest = item.valor;
       }
-      if (dados.cest?.trim() && !cestDisplay.trim()) {
-        setCestDisplay(dados.cest);
-        fiscalAplicado.cest = dados.cest;
-        camposAplicados.push("cest");
-      }
+      camposAplicados.push(item.campo);
     }
 
     const camposAplicadosAntes = barcodeSuggestionApplication?.camposAplicados ?? [];
@@ -677,9 +805,143 @@ export function ProductAIModal({
     }
   };
 
+  // CAD-R2-016 — interpreta a descrição em linguagem natural (server-side) e
+  // exibe a sugestão temporária para revisão. Não grava banco.
+  const runInterpretacaoTextoLivre = () => {
+    const texto = textoLivre.trim();
+    if (!texto || interpretandoTexto) return;
+    setTextoErro(null);
+    startInterpretacaoTexto(async () => {
+      try {
+        const result = await interpretarProdutoTextoLivre(storeId, texto, {
+          captureSource: textoCaptureSource,
+        });
+        if (!result.ok) {
+          setTextoErro(result.message);
+          return;
+        }
+        setTextoSugestao(result.sugestao);
+        setTextoExcluidos([]);
+      } catch {
+        setTextoErro("Não foi possível interpretar o texto agora. Tente novamente.");
+      }
+    });
+  };
+
+  const emitirEventoVoz = (event: VoiceCaptureEvent) => {
+    setVoz((prev) => {
+      const next = reduceVoiceCapture(prev, event);
+      if (next.status === "completed" && next.sessionTranscript.trim()) {
+        const mesclado = montarTextoCaptura(textoLivreAntesVozRef.current, next.sessionTranscript);
+        queueMicrotask(() => {
+          setTextoLivre(mesclado);
+          setTextoCaptureSource("voice");
+        });
+      }
+      if (next.status === "cancelled" || next.status === "permission-denied") {
+        queueMicrotask(() => setTextoLivre(textoLivreAntesVozRef.current));
+      }
+      if (next.status === "error" && !next.sessionTranscript.trim()) {
+        queueMicrotask(() => setTextoLivre(textoLivreAntesVozRef.current));
+      }
+      return next;
+    });
+  };
+
+  const iniciarVoz = () => {
+    if (interpretandoTexto) return;
+    if (voz.status === "unavailable") return;
+    if (voz.status === "listening" || voz.status === "transcribing") return;
+    textoLivreAntesVozRef.current = textoLivre;
+    emitirEventoVoz({ type: "start" });
+    const session = startBrowserVoiceCapture({ emit: emitirEventoVoz, lang: "pt-BR" });
+    if (!session.ok) {
+      vozSessionRef.current = null;
+      if (session.reason === "unavailable") {
+        emitirEventoVoz({ type: "capability", available: false });
+      } else {
+        emitirEventoVoz({ type: "error", code: "start-failed" });
+      }
+      setTextoLivre(textoLivreAntesVozRef.current);
+      return;
+    }
+    vozSessionRef.current = session;
+  };
+
+  const pararVoz = () => {
+    vozSessionRef.current?.stop();
+    vozSessionRef.current = null;
+  };
+
+  const cancelarVoz = () => {
+    vozSessionRef.current?.cancel();
+    vozSessionRef.current = null;
+    setTextoLivre(textoLivreAntesVozRef.current);
+  };
+
+  const alternarExclusaoTextoLivre = (campo: string) => {
+    setTextoExcluidos((prev) => (prev.includes(campo) ? prev.filter((c) => c !== campo) : [...prev, campo]));
+  };
+
+  // CAD-R2-016 — "aplicar" = preencher/mesclar o formulário local. NÃO salva.
+  // Preenche só campos vazios (nunca sobrescreve o operador); em edição o
+  // estoque é ignorado (saldo somente leitura). Salvar continua via
+  // upsertProduto → ProductWriteService → StockLedger ("Salvar produto").
+  const applySugestaoTextoLivre = () => {
+    if (!textoSugestao) return;
+    const { aplicacoes, ignorados } = calcularAplicacaoTextoLivre(
+      textoSugestao,
+      {
+        nome: nomeRef.current?.value ?? "",
+        marca,
+        categoria,
+        descricao,
+        preco: precoRef.current?.value ?? "",
+        custo: custoRef.current?.value ?? "",
+        estoque: estoqueRef.current?.value ?? "",
+        fornecedor: fornecedorRef.current?.value ?? "",
+        sku: skuRef.current?.value ?? "",
+        ean: barrasRef.current?.value ?? "",
+        garantia: garantiaRef.current?.value ?? "",
+        ncm: ncmDisplay,
+        cest: cestDisplay,
+      },
+      { modoEdicao: Boolean(productId), excluir: textoExcluidos },
+    );
+    for (const item of aplicacoes) {
+      if (item.campo === "nome" && nomeRef.current) nomeRef.current.value = item.valor;
+      else if (item.campo === "sku" && skuRef.current) skuRef.current.value = item.valor;
+      else if (item.campo === "ean" && barrasRef.current) barrasRef.current.value = item.valor;
+      else if (item.campo === "fornecedor" && fornecedorRef.current) fornecedorRef.current.value = item.valor;
+      else if (item.campo === "estoque" && estoqueRef.current) estoqueRef.current.value = item.valor;
+      else if (item.campo === "custo" && custoRef.current) custoRef.current.value = item.valor;
+      else if (item.campo === "preco" && precoRef.current) precoRef.current.value = item.valor;
+      else if (item.campo === "garantia" && garantiaRef.current) garantiaRef.current.value = item.valor;
+      else if (item.campo === "marca") setMarca(item.valor);
+      else if (item.campo === "categoria") setCategoria(item.valor);
+      else if (item.campo === "descricao") setDescricao(item.valor);
+      else if (item.campo === "ncm") setNcmDisplay(item.valor);
+      else if (item.campo === "cest") setCestDisplay(item.valor);
+    }
+    const ambiguosAplicados = aplicacoes.filter(
+      (a) => textoSugestao.campos[a.campo].estado === "ambiguo",
+    ).length;
+    if (aplicacoes.length > 0) {
+      toast.success(
+        `Sugestão aplicada em ${aplicacoes.length} campo(s). Revise e salve manualmente.` +
+          (ambiguosAplicados > 0 ? ` ${ambiguosAplicados} campo(s) precisam de confirmação.` : ""),
+      );
+    } else {
+      const motivo = ignorados.some((i) => i.motivo === "ja-preenchido")
+        ? "Os campos já estão preenchidos e foram preservados."
+        : "Nada a aplicar — revise os avisos.";
+      toast.message(`${motivo} Nenhum produto foi salvo.`);
+    }
+  };
+
   const title = productId ? "Editar produto" : "Novo produto";
   return (
-    <Modal open={open} onClose={onClose} title={title} subtitle="Fase 1: cadastro real no banco — fluxo IA abaixo ainda é simulado (sem OCR/voz)." size="xl">
+    <Modal open={open} onClose={onClose} title={title} subtitle="Cadastro real no banco — descreva por texto ou voz; a IA só sugere após revisão. Áudio e transcrição não são salvos." size="xl">
       <div className="space-y-6">
         {/* IA SOURCE */}
         <Card className="p-5 border-primary/30 bg-primary/5">
@@ -690,9 +952,10 @@ export function ProductAIModal({
               <p className="text-xs text-muted-foreground">Escolha como quer começar — a IA preenche o resto.</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             {[
               { id: "manual", l: "Digitar nome", i: Type },
+              { id: "texto", l: "Descrever produto", i: MessageSquareText },
               { id: "link", l: "Link marketplace", i: Link2 },
               { id: "barcode", l: "Código de barras", i: Barcode },
               { id: "image", l: "Upload imagem", i: ImagePlus },
@@ -712,6 +975,114 @@ export function ProductAIModal({
               );
             })}
           </div>
+          {source === "texto" ? (
+            <div className="mt-3 grid gap-2">
+              {(() => {
+                const ouvindo = voz.status === "listening" || voz.status === "transcribing";
+                const textoExibido = ouvindo
+                  ? montarTextoCaptura(textoLivreAntesVozRef.current, voz.sessionTranscript, voz.interim)
+                  : textoLivre;
+                return (
+                  <>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground">
+                        texto
+                      </span>
+                      <span className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground">
+                        microfone
+                      </span>
+                      <span className="min-w-0 text-[11px] text-muted-foreground">
+                        {rotuloEstadoVoz(voz)}
+                        {voz.status === "unavailable"
+                          ? " — Chrome ou Edge em HTTPS/localhost."
+                          : null}
+                      </span>
+                    </div>
+                    <Textarea
+                      value={textoExibido}
+                      onChange={(event) => {
+                        if (ouvindo) return;
+                        setTextoLivre(event.target.value);
+                        setTextoErro(null);
+                      }}
+                      rows={3}
+                      maxLength={2000}
+                      readOnly={ouvindo}
+                      placeholder="Ex.: Película 3D para iPhone 15, custa 4 reais e vendo por 25"
+                      title="Descreva o produto em linguagem natural — a IA sugere o preenchimento para revisão"
+                    />
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                      <span className="min-w-0 text-[11px] text-muted-foreground">
+                        {textoExibido.trim().length}/2000 · preço, custo, estoque e fornecedor só entram se você declarar.
+                      </span>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        {ouvindo ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={pararVoz}
+                              className="flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground"
+                            >
+                              <Square className="h-4 w-4" /> Encerrar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelarVoz}
+                              className="flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={iniciarVoz}
+                            disabled={voz.status === "unavailable" || interpretandoTexto}
+                            title={
+                              voz.status === "unavailable"
+                                ? "Reconhecimento de voz indisponível neste navegador"
+                                : "Gravar descrição por voz (pede permissão de microfone)"
+                            }
+                            className="flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground disabled:opacity-60"
+                          >
+                            <Mic className="h-4 w-4" /> Microfone
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={runInterpretacaoTextoLivre}
+                          disabled={interpretandoTexto || textoExibido.trim().length === 0 || ouvindo}
+                          className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                        >
+                          {interpretandoTexto ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareText className="h-4 w-4" />}
+                          Interpretar com IA
+                        </button>
+                      </div>
+                    </div>
+                    {voz.status !== "ready" && voz.message ? (
+                      <div
+                        role="status"
+                        className={`rounded-lg border p-3 text-xs ${
+                          voz.status === "permission-denied" || voz.status === "error"
+                            ? "border-destructive/40 bg-destructive/10 text-destructive"
+                            : voz.status === "unavailable"
+                              ? "border-amber-500/40 bg-amber-500/10 text-foreground"
+                              : "border-border bg-background text-muted-foreground"
+                        }`}
+                      >
+                        {voz.message}
+                      </div>
+                    ) : null}
+                  </>
+                );
+              })()}
+              {textoErro && (
+                <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  {textoErro}
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
             {source === "manual" && <Input placeholder="Ex.: Tela iPhone 11 Original" />}
             {source === "link" && <Input placeholder="https://produto.mercadolivre.com.br/…" />}
@@ -765,6 +1136,77 @@ export function ProductAIModal({
               </button>
             )}
           </div>
+          )}
+
+          {source === "texto" && textoSugestao && (
+            <div role="status" className="mt-3 rounded-lg border border-border bg-background p-3 text-xs text-foreground">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-medium">Sugestão da descrição — revise antes de aplicar</div>
+                <Badge tone={textoSugestao.proveniencia.degradadoLocal ? "warning" : "info"}>
+                  {nomeBackendTextoLivre(textoSugestao)}
+                </Badge>
+              </div>
+              <div className="mt-2 grid gap-1.5">
+                {TEXTO_LIVRE_CAMPOS.map(({ campo, rotulo }) => {
+                  const proposto = textoSugestao.campos[campo];
+                  const excluido = textoExcluidos.includes(campo);
+                  if (proposto.valor === null || proposto.valor === undefined) return null;
+                  return (
+                    <label key={campo} className="flex items-center gap-2 text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={!excluido}
+                        onChange={() => alternarExclusaoTextoLivre(campo)}
+                        title={excluido ? "Ignorado na aplicação" : "Desmarque para não aplicar"}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <span className={excluido ? "line-through opacity-60" : ""}>
+                        <strong className="text-foreground">{rotulo}:</strong>{" "}
+                        {formatarValorTextoLivre(campo, proposto.valor)}
+                      </span>
+                      <Badge tone={toneEstadoTextoLivre(proposto.estado)}>{rotuloEstadoTextoLivre(proposto.estado)}</Badge>
+                    </label>
+                  );
+                })}
+              </div>
+              {textoSugestao.avisos.length > 0 && (
+                <div className="mt-2 grid gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-muted-foreground">
+                  {textoSugestao.avisos.map((aviso) => (
+                    <span key={aviso}>• {aviso}</span>
+                  ))}
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Origem: {rotuloCapturaTextoLivre(textoSugestao.proveniencia.captureSource)} · {nomeBackendTextoLivre(textoSugestao)} ·{" "}
+                {new Date(textoSugestao.proveniencia.interpretedAt).toLocaleString("pt-BR")}. O texto
+                original e o áudio não são salvos no produto.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-muted-foreground">
+                  Preenche apenas campos vazios{productId ? "; estoque ignorado na edição" : ""}. Nada é salvo agora.
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTextoSugestao(null);
+                      setTextoExcluidos([]);
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent"
+                  >
+                    Descartar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applySugestaoTextoLivre}
+                    className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                  >
+                    Aplicar ao cadastro
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {source === "barcode" && barcodeFeedback && (
             <div
@@ -1110,33 +1552,20 @@ export function ProductAIModal({
                     return;
                   }
                   const barcodeLookupMetadata = externalBarcodeLookup
-                    ? (() => {
-                        const { result } = externalBarcodeLookup;
-                        const encontrado = result.status === "encontrado";
-                        const aplicacao = barcodeSuggestionApplication;
-                        const camposAplicados = aplicacao?.camposAplicados ?? [];
-                        const ultimoResultado = {
-                          gtin: externalBarcodeLookup.gtin,
-                          formato: externalBarcodeLookup.formato,
-                          consultadoEm: externalBarcodeLookup.consultadoEm,
-                          status: result.status,
-                          tentativas: result.tentativas,
-                          ...(encontrado ? { provedor: result.provedor, sugestoes: result.dados } : {}),
-                        };
-                        return {
-                          ultimoResultado,
-                          gtin: externalBarcodeLookup.gtin,
-                          formato: externalBarcodeLookup.formato,
-                          consultadoEm: externalBarcodeLookup.consultadoEm,
-                          statusLookup: statusLookupAuditavel(result),
-                          tentativas: result.tentativas,
-                          ...(encontrado ? { provedor: result.provedor, sugestoes: result.dados } : {}),
-                          aplicadoPeloOperador: Boolean(aplicacao),
-                          ...(aplicacao ? { aplicadoEm: aplicacao.aplicadoEm } : {}),
-                          camposAplicados,
-                          aplicado: Object.fromEntries(camposAplicados.map((campo) => [campo, "aceito"])),
-                        };
-                      })()
+                    ? construirProvenienciaBarcode({
+                        gtin: externalBarcodeLookup.gtin,
+                        formato: externalBarcodeLookup.formato,
+                        consultadoEm: externalBarcodeLookup.consultadoEm,
+                        status: externalBarcodeLookup.result.status,
+                        ...(externalBarcodeLookup.result.status === "encontrado"
+                          ? {
+                              provedor: externalBarcodeLookup.result.provedor,
+                              sugestoes: externalBarcodeLookup.result.dados,
+                            }
+                          : {}),
+                        tentativas: externalBarcodeLookup.result.tentativas,
+                        aplicacao: barcodeSuggestionApplication,
+                      })
                     : null;
                   const result = await upsertProduto(storeId, {
                     id: productId,
@@ -1153,6 +1582,7 @@ export function ProductAIModal({
                     active: true,
                     accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue),
                     metadata: {
+                      // CAD-R2-017: nao gravar audio, blob, prompt nem transcricao.
                       cadastroIa: {
                         phase: "fase1-stub",
                         savedAt: new Date().toISOString(),

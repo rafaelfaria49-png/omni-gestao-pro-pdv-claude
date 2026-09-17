@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { Prisma } from "@/generated/prisma"
+import type { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { normalizeSkuForSave } from "@/lib/produto-sku"
 import { normalizeProdutoSku } from "@/lib/produto-sku-normalize"
@@ -9,6 +9,10 @@ import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
 import { auth } from "@/auth"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
+import { canAuthorizeCadastrosStore } from "@/lib/cadastros/cadastros-api-access"
+import type { ProductWriteInput } from "@/lib/cadastros/product-write-contract"
+import { createProduct, updateProduct } from "@/lib/cadastros/product-write-service"
 
 export const runtime = "nodejs"
 
@@ -53,6 +57,15 @@ export async function PUT(req: Request) {
     )
   }
 
+  // CAD-R2-014: loja autorizada fail-closed (header nunca é prova sozinho).
+  // ADMIN/SUPER_ADMIN têm acesso global; demais perfis exigem membership.
+  if (!canAuthorizeCadastrosStore(adminGate.session, storeId)) {
+    return NextResponse.json({ error: "Sem permissão para esta unidade" }, { status: 403 })
+  }
+  // Principal humano canônico quando houver; null = origem técnica honesta.
+  const principal = cadastrosAuditPrincipalFromSession(adminGate.session)
+  const wctx = { storeId, principal }
+
   let body: unknown
   try {
     body = await req.json()
@@ -96,7 +109,6 @@ export async function PUT(req: Request) {
   let updated = 0
 
   for (const it of normalized) {
-    // eslint-disable-next-line no-console
     console.log("IMPORT ESTOQUE (merge):", it.name, "->", it.category)
     const skuToSave = normalizeSkuForSave(it.id)
     const skuNorm = normalizeProdutoSku(skuToSave)
@@ -110,25 +122,78 @@ export async function PUT(req: Request) {
       select: { id: true },
     })
 
-    // Dados cadastrais (sem estoque) — atualizáveis em produto existente.
-    const dadosCadastrais = {
-      name: it.name,
-      precoCusto: it.cost,
-      price: it.price,
-      category: it.category && it.category.length > 0 ? it.category : undefined,
+    // CAD-R2-014: cadastral via ProductWriteService; estoque inicial de novo
+    // via ledger `cadastro` na mesma transação. Existente nunca tem saldo
+    // tocado (sem `estoque`/`stock` no input de update).
+    const cadastral: Record<string, unknown> = {
+      nome: it.name,
+      custo: it.cost,
+      preco: it.price,
     }
+    if (it.category && it.category.length > 0) cadastral.categoria = it.category
 
     if (existing) {
       // Existente: atualiza só cadastral; preserva o estoque atual.
-      await prisma.produto.update({ where: { id: existing.id }, data: dadosCadastrais })
-      updated += 1
-    } else {
-      // Novo: pode iniciar com o estoque da planilha.
-      await prisma.produto.create({
-        data: { storeId, sku: skuToSave, stock: Math.max(0, Math.floor(it.stock)), ...dadosCadastrais },
-      })
-      created += 1
+      const res = await updateProduct(wctx, existing.id, cadastral as unknown as ProductWriteInput)
+      if (res.ok) {
+        updated += 1
+        continue
+      }
+      if (res.code === "NOT_FOUND") {
+        // Corrida: deletado entre find e update → cria como novo (paridade).
+      } else if (res.code === "UNTRUSTED_CONTEXT") {
+        return NextResponse.json({ error: res.message || "Não autorizado" }, { status: 401 })
+      } else if (res.code === "CROSS_STORE") {
+        return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
+      } else if (res.code === "VALIDATION") {
+        return NextResponse.json({ error: res.message }, { status: 400 })
+      } else if (res.code === "DUPLICATE") {
+        return NextResponse.json({ error: res.message || "Produto já cadastrado" }, { status: 409 })
+      } else {
+        return NextResponse.json({ error: "Falha ao salvar produto" }, { status: 503 })
+      }
     }
+    // Novo (ou fallback NOT_FOUND): pode iniciar com o estoque da planilha.
+    const createInput: Record<string, unknown> = {
+      nome: it.name,
+      sku: skuToSave,
+      custo: it.cost,
+      preco: it.price,
+      estoque: Math.max(0, Math.floor(it.stock)),
+    }
+    if (it.category && it.category.length > 0) createInput.categoria = it.category
+    const cres = await createProduct(wctx, createInput as unknown as ProductWriteInput)
+    if (cres.ok) {
+      // Fallback NOT_FOUND (recriação) ou novo: ambos nascem como criados.
+      created += 1
+      continue
+    }
+    if (cres.code === "DUPLICATE") {
+      // Corrida: outra request criou o mesmo SKU entre find e create.
+      // Reconcilia como update cadastral (preserva estoque, sem duplicar ledger).
+      const retry = await prisma.produto.findFirst({
+        where: { storeId, OR: orMatch },
+        select: { id: true },
+      })
+      if (retry) {
+        const ures = await updateProduct(wctx, retry.id, cadastral as unknown as ProductWriteInput)
+        if (ures.ok) {
+          updated += 1
+          continue
+        }
+      }
+      return NextResponse.json({ error: cres.message || "Produto já cadastrado" }, { status: 409 })
+    }
+    if (cres.code === "UNTRUSTED_CONTEXT") {
+      return NextResponse.json({ error: cres.message || "Não autorizado" }, { status: 401 })
+    }
+    if (cres.code === "VALIDATION") {
+      return NextResponse.json({ error: cres.message }, { status: 400 })
+    }
+    if (cres.code === "CROSS_STORE") {
+      return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
+    }
+    return NextResponse.json({ error: "Falha ao salvar produto" }, { status: 503 })
   }
 
   return NextResponse.json({

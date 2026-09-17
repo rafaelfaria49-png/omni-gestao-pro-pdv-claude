@@ -73,6 +73,10 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { TrocasDevolucao } from "./trocas-devolucao"
+import type { VendaDetalhe } from "@/lib/vendas/venda-detalhe-contract"
+import { SupervisorGateDialog } from "@/components/dashboard/caixa/supervisor-gate-dialog"
+import { ESTORNO_STEP_UP_ACTION } from "@/lib/vendas/estorno-step-up-contract"
+import { mapVendaDetalheToCupom } from "@/lib/vendas/venda-cupom-mapper"
 import { WorkspaceCorrecaoVenda } from "./workspace-correcao-venda"
 import { QuarentenaRecoveryDialog } from "./quarentena-recovery-dialog"
 import { quarantineReviewKey } from "@/lib/vendas/quarantine-local-reconciliation"
@@ -148,73 +152,6 @@ type ApiResponse = {
   terminais?: TerminalOption[]
 }
 
-type VendaDetalhe = {
-  id: string
-  dbId: string
-  at: string
-  clienteNome: string | null
-  clienteId: string | null
-  clienteCpf: string | null
-  total: number
-  desconto: number
-  cashTendered: number | null
-  status: string
-  operador: string | null
-  canceladaEm: string | null
-  canceladaPor: string | null
-  motivoCancelamento: string | null
-  estoqueReposto?: boolean
-  estornoFinanceiro?: boolean
-  sessaoId: string | null
-  terminalId?: string | null
-  terminal?: { id: string; code: string; name: string } | null
-  observacao: string | null
-  /**
-   * Presente só quando a venda nasceu de uma recuperação de quarentena. Guarda o
-   * número ANTIGO como auditoria — a identidade atual continua sendo `id`.
-   */
-  recovery?: {
-    recoveredFromPedidoId: string
-    recoveredAt: string | null
-    motivo: string | null
-    conflictCode: string | null
-  } | null
-  correcoes: Array<{
-    at: string
-    operador: string
-    motivo: string
-    campos: string[]
-    pagamentoAnterior?: string
-    pagamentoNovo?: string
-    clienteAnterior?: string | null
-    clienteNovo?: string | null
-    observacaoAnterior?: string | null
-    observacaoNova?: string | null
-    supervisorNome?: string
-  }>
-  pagamentos: Array<{ label: string; valor: number }>
-  itens: Array<{
-    id: string
-    nome: string
-    quantidade: number
-    precoUnitario: number
-    lineTotal: number
-    acessorio?: { modelLabel?: string; colorLabel?: string }
-  }>
-  devolucoes: Array<{
-    id: string
-    localId: string
-    at: string
-    tipo: string
-    valorTotal: number
-    creditoEmitido: number
-    operador: string
-    motivo: string
-    modo?: string | null
-    novaVendaId?: string | null
-    itens: Array<{ nome: string; quantidade: number; valorTotal: number }>
-  }>
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -419,6 +356,16 @@ export function VendasArquivoGeral() {
   const [cancelMotivo, setCancelMotivo] = useState("")
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelConfirmForcar, setCancelConfirmForcar] = useState(false)
+  /**
+   * Step-up do cancelamento (GOAL 007C). `POST /api/vendas/[id]/cancelar` exige
+   * autorização de supervisor escopada por ação + venda — o mesmo contrato da
+   * Conferência. Esta tela passa a abrir o gate ANTES do POST em vez de bater na
+   * rota e tomar 403; nenhuma exceção foi criada no servidor.
+   *
+   * Guarda o `forcar` pendente porque a segunda confirmação (venda com devoluções)
+   * acontece depois de já ter autorizado.
+   */
+  const [cancelGate, setCancelGate] = useState<{ pedidoId: string; forcar: boolean } | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const cancelInFlightRef = useRef(false)
 
@@ -985,40 +932,17 @@ export function VendasArquivoGeral() {
   }, [storeId, toast, mergedVendas, opsSales, getPendingSaleRecord])
 
   // ── Cupom ────────────────────────────────────────────────────────────────────
+  // Mapeamento ÚNICO do comprovante (`lib/vendas/venda-cupom-mapper`), compartilhado
+  // com a reimpressão da Conferência do Fechamento — a aritmética de subtotal/troco não
+  // vive mais inline aqui, para os dois caminhos não divergirem.
   const openCupom = useCallback((d: VendaDetalhe) => {
-    const lojaNome = empresaDocumentos.nomeFantasia || empresaDocumentos.razaoSocial || "Loja"
-    const lojaCnpj = empresaDocumentos.cnpj || undefined
-    const lojaEndereco = getEnderecoDocumentos() || undefined
-    const desconto = Math.max(0, Number(d.desconto) || 0)
-    const subtotalBase = d.itens.reduce((sum, item) => sum + item.lineTotal, 0)
-    const subtotal = subtotalBase + desconto
-    const dinheiro = d.pagamentos
-      .filter((payment) => /dinheiro/i.test(payment.label))
-      .reduce((sum, payment) => sum + payment.valor, 0)
-    const troco = d.cashTendered != null && dinheiro > 0.005
-      ? Math.max(0, Math.round((d.cashTendered - dinheiro) * 100) / 100)
-      : undefined
-
-    setCupomData({
-      numeroPedido: d.id,
-      at: d.at,
-      lojaNome,
-      lojaCnpj,
-      lojaEndereco,
-      clienteNome: d.clienteNome,
-      clienteCpf: d.clienteCpf,
-      operador: d.operador,
-      sessaoId: d.sessaoId,
-      itens: d.itens,
-      pagamentos: d.pagamentos,
-      total: d.total,
-      subtotal,
-      taxes: Math.max(0, d.total + desconto - subtotalBase),
-      desconto,
-      cashTendered: d.cashTendered ?? undefined,
-      troco,
-      status: d.status,
-    })
+    setCupomData(
+      mapVendaDetalheToCupom(d, {
+        nome: empresaDocumentos.nomeFantasia || empresaDocumentos.razaoSocial || "Loja",
+        cnpj: empresaDocumentos.cnpj || undefined,
+        endereco: getEnderecoDocumentos() || undefined,
+      }),
+    )
     setCupomOpen(true)
   }, [empresaDocumentos, getEnderecoDocumentos])
 
@@ -1040,8 +964,15 @@ export function VendasArquivoGeral() {
   }, [storeId, openCupom, toast, blocksConfirmedSaleAction, toastVendaPendenteBloqueada])
 
   // ── Cancelamento ─────────────────────────────────────────────────────────────
-  const handleCancelar = useCallback(async (forcar = false) => {
+  /** Abre o step-up. O POST só sai depois que o supervisor autorizar ESTA venda. */
+  const handleCancelar = useCallback((forcar = false) => {
     if (!cancelandoId || !cancelMotivo.trim() || cancelLoading) return
+    setCancelError(null)
+    setCancelGate({ pedidoId: cancelandoId, forcar })
+  }, [cancelandoId, cancelMotivo, cancelLoading])
+
+  const executarCancelamento = useCallback(async (forcar: boolean) => {
+    if (!cancelandoId || !cancelMotivo.trim()) return
     setCancelError(null)
     setCancelLoading(true)
     const result = await confirmCancelarVendaHistorico({
@@ -1084,7 +1015,6 @@ export function VendasArquivoGeral() {
     cancelandoId,
     cancelandoKind,
     cancelMotivo,
-    cancelLoading,
     storeId,
     detalhe,
     detalhePendenteLocal,
@@ -3026,6 +2956,31 @@ export function VendasArquivoGeral() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Step-up do cancelamento (007C) ──────────────────────────────────────
+          Mesmo gate e mesmo contrato da Conferência: a autorização nasce vinculada a
+          ESTA venda, então não serve para nenhuma outra. O diálogo fica aberto até a
+          rota responder, para uma recusa do servidor não sumir da tela. */}
+      <SupervisorGateDialog
+        open={!!cancelGate}
+        onOpenChange={(o) => {
+          if (!o) setCancelGate(null)
+        }}
+        onAuthorized={() => {
+          const pendente = cancelGate
+          setCancelGate(null)
+          if (pendente) void executarCancelamento(pendente.forcar)
+        }}
+        title="Autorização para cancelar venda"
+        description={`Cancelar a venda ${cancelGate?.pedidoId ?? ""} reverte estoque, caixa e financeiro.`}
+        scope={{ action: ESTORNO_STEP_UP_ACTION, resource: cancelGate?.pedidoId }}
+        confirmLabel="Autorizar e cancelar"
+      >
+        <p className="rounded-md bg-secondary px-3 py-2 text-[11px] text-muted-foreground">
+          A reversão vale dentro do OmniGestão. Devoluções de PIX ou cartão precisam ser
+          feitas no provedor de pagamento, quando for o caso.
+        </p>
+      </SupervisorGateDialog>
 
       {/* ── Workspace Enterprise da Venda — ficha completa + correções (única via) ── */}
       <WorkspaceCorrecaoVenda

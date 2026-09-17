@@ -5,21 +5,16 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { withPrismaSafe } from "@/lib/prisma";
 import {
-  mergeProdutoMetadataTwoLevels,
-  normalizeProdutoIdentifier,
-  produtoStockPatch,
-} from "@/lib/cadastros/produto-upsert-metadata";
-import {
-  mergeProdutoAcessoriosIntoMetadata,
-  produtoAcessoriosInputFromBody,
-} from "@/lib/acessorios/metadata";
-import { fiscalInputFromBody } from "@/lib/produto-fiscal";
-import { canonicalizeProdutoFiscalMetadata } from "@/lib/produtos/produto-fiscal-upsert";
-import {
-  duplicateProductDetails,
-  PRODUTO_DUP_SELECT,
-  type ExistingProdutoLite,
-} from "@/lib/produtos/duplicate-product";
+  createProduct,
+  updateProduct,
+  PRODUCT_WRITE_AUDIT_SOURCE,
+} from "@/lib/cadastros/product-write-service";
+import type {
+  ProductWriteInput,
+  ProductWriteResult,
+} from "@/lib/cadastros/product-write-contract";
+import { applyStockMutation } from "@/lib/estoque/stock-ledger-service";
+import type { ExistingProdutoLite } from "@/lib/produtos/duplicate-product";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
 import {
   requireCadastrosActionAccess,
@@ -1446,6 +1441,40 @@ export async function lookupProdutoPorBarcodeLocal(
   }
 }
 
+/**
+ * CAD-R2-006 — Mapeia o resultado estruturado do ProductWriteService para o
+ * contrato legado da UI (`UpsertProdutoResult`). Mensagens já são amigáveis e
+ * nunca expõem Prisma/P2002/stack/store de outra loja/PII.
+ */
+function mapProductWriteFailure(
+  result: Extract<ProductWriteResult, { ok: false }>,
+): Extract<UpsertProdutoResult, { ok: false }> {
+  switch (result.code) {
+    case "DUPLICATE":
+      return {
+        ok: false,
+        type: "DUPLICATE_PRODUCT",
+        field: result.field === "barcode" ? "barcode" : "sku",
+        message: result.message,
+        ...(result.produto ? { produto: result.produto } : {}),
+      };
+    case "VALIDATION":
+      return { ok: false, type: "VALIDATION_ERROR", message: result.message };
+    case "NOT_FOUND":
+    case "CROSS_STORE":
+      // Fail-closed sem oráculo entre lojas: cross-store vira o mesmo NOT_FOUND.
+      return { ok: false, type: "NOT_FOUND", message: "Produto não encontrado." };
+    case "UNTRUSTED_CONTEXT":
+    case "PERSISTENCE":
+    default:
+      return {
+        ok: false,
+        type: "SAVE_ERROR",
+        message: "Não foi possível salvar o produto. Tente novamente.",
+      };
+  }
+}
+
 export async function upsertProduto(
   storeId: string,
   input: {
@@ -1463,123 +1492,119 @@ export async function upsertProduto(
     active?: boolean;
     metadata?: Record<string, unknown> | null;
     accessoryConfig?: unknown;
+    /**
+     * Chaves forward-compat (aliases EN, fiscal top-level, `catalogoAparelhos`
+     * top-level). O service trata pelos contratos canônicos; chaves de
+     * autoridade (`storeId`, `usuario`, `actor`, …) são ignoradas pelo service.
+     */
+    [key: string]: unknown;
   }
 ): Promise<UpsertProdutoResult> {
-  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
-  const nome = input.nome.trim();
-  if (!nome) return { ok: false, type: "VALIDATION_ERROR", message: "Informe o nome do produto." };
+  // CAD-R2-006: esta action é adapter fino. Autoridade real = gate (store) +
+  // principal da sessão. Duplicate/metadata/fiscal/normalização/audit pertencem
+  // ao ProductWriteService — nada disso é reduplicado aqui.
+  const gate = await requireCadastrosActionAccess(storeId, "hub");
+  const sid = gate.storeId;
+  const principal = cadastrosAuditPrincipalFromSession(gate.session);
+  const context = { storeId: sid, principal };
 
-  const sku = normalizeProdutoIdentifier(input.sku);
-  const barcode = normalizeProdutoIdentifier(input.barras);
-  const duplicateContext = input.id ? "update" : "create";
-  const findDuplicate = async (): Promise<ExistingProdutoLite | null> => {
-    const duplicateFields: Prisma.ProdutoWhereInput[] = [];
-    if (sku) duplicateFields.push({ sku });
-    if (barcode) duplicateFields.push({ barcode });
-    if (duplicateFields.length === 0) return null;
-    return prisma.produto.findFirst({
-      where: {
-        storeId,
-        ...(input.id ? { id: { not: input.id } } : {}),
-        OR: duplicateFields,
-      },
-      select: PRODUTO_DUP_SELECT,
-    });
-  };
+  const raw = (input ?? {}) as Record<string, unknown>;
+  const productId = typeof raw.id === "string" ? raw.id.trim() : "";
 
-  let existing: { id: string; metadata: unknown } | null = null;
-  if (input.id) {
-    existing = await prisma.produto.findFirst({
-      where: { id: input.id, storeId },
-      select: { id: true, metadata: true },
-    });
-    if (!existing) return { ok: false, type: "NOT_FOUND", message: "Produto não encontrado." };
-  }
-
-  const duplicate = await findDuplicate();
-  if (duplicate) {
-    return { ok: false, ...duplicateProductDetails(duplicate, sku, barcode, { context: duplicateContext }) };
-  }
-
-  // Em edição, null é omissão deliberada: preserva o JSON existente e nunca o apaga.
-  // A configuração específica é sempre saneada no servidor e substitui/remove somente
-  // metadata.acessorios, inclusive para callers legados que ainda mandam o namespace bruto.
-  const accessoryInput = produtoAcessoriosInputFromBody(input);
-  // Identidade fiscal (GOAL-004): extrai campos fiscais canônicos (top-level ou metadata.fiscal)
-  // do body, reutilizando o mesmo contrato das portas REST/importador. null = sem sinal fiscal.
-  const fiscalInput = fiscalInputFromBody(input as Record<string, unknown>);
-  const shouldWriteMetadata = Boolean(input.metadata) || accessoryInput.provided || fiscalInput != null;
-  let nextMetadata: unknown = input.id
-    ? mergeProdutoMetadataTwoLevels(existing?.metadata, input.metadata)
-    : { ...(input.metadata ?? {}) };
-  if (accessoryInput.provided) {
-    nextMetadata = mergeProdutoAcessoriosIntoMetadata(nextMetadata, accessoryInput.value);
-  }
-  // Canoniza `metadata.fiscal` sobre o metadata já mesclado: sanea, preserva os campos fiscais
-  // não reenviados e os demais namespaces, e descarta resíduo não canônico. Sem sinal fiscal, o
-  // merge de 2 níveis acima já preserva o `fiscal` existente (não recanoniza legado à toa).
-  if (fiscalInput) {
-    nextMetadata = canonicalizeProdutoFiscalMetadata(nextMetadata, fiscalInput);
-  }
-  const metadataPart: { metadata?: Prisma.InputJsonValue } = shouldWriteMetadata
-    ? { metadata: nextMetadata as Prisma.InputJsonValue }
-    : {};
-
-  // Stock: só inclui no patch quando o caller enviou número inteiro >= 0.
-  // `undefined` significa "não tocar" — evita zerar estoque ao editar outros campos.
-  // (Bug histórico: `Math.trunc(input.estoque ?? 0)` sobrescrevia stock com 0
-  // em qualquer chamada sem estoque, ex.: botão Ativar/Inativar antes do fix.)
-  const stockPatch = produtoStockPatch(input.estoque);
-
-  const common = {
-    name: nome,
-    sku,
-    barcode,
-    category: (input.categoria ?? "").trim() || null,
-    brand: (input.marca ?? "").trim(),
-    supplierName: (input.fornecedor ?? "").trim(),
-    precoCusto: Number(input.custo ?? 0),
-    price: Number(input.preco ?? 0),
-    warrantyDays: Math.max(0, Math.trunc(input.garantia ?? 0)),
-    active: input.active ?? true,
-    status: input.active === false ? "Inativo" : "Ativo",
-    ...stockPatch,
-    ...metadataPart,
-  };
-
-  try {
-    if (input.id) {
-      const updated = await prisma.produto.update({
-        where: { id: input.id },
-        data: common,
-        select: { id: true },
-      });
-      revalidatePath("/dashboard/cadastros-v2");
-      return { ok: true, id: updated.id };
+  // Estoque explícito (quando presente) é validado fail-closed ANTES de
+  // qualquer write. CREATE encaminha ao service (ledger atômico). UPDATE nunca
+  // faz PATCH direto — compara com o saldo atual e, só se divergir, ajusta via
+  // Stock/Ledger canônico. Ausente = não tocar (nunca zera/apaga por engano).
+  const hasEstoque = raw.estoque !== undefined;
+  let requestedStock: number | undefined;
+  if (hasEstoque) {
+    const n =
+      typeof raw.estoque === "number" && Number.isFinite(raw.estoque)
+        ? Math.trunc(raw.estoque)
+        : NaN;
+    if (!Number.isFinite(n) || n < 0) {
+      return { ok: false, type: "VALIDATION_ERROR", message: 'Campo "estoque" inválido.' };
     }
+    requestedStock = n;
+  }
 
-    // Create: estoque inicial é o que o caller enviou; quando ausente, default 0.
-    const created = await prisma.produto.create({
-      data: { ...common, storeId, stock: stockPatch.stock ?? 0 },
-      select: { id: true },
-    });
+  if (!productId) {
+    // CREATE — `estoque`/`stock` (quando > 0) vira entrada `cadastro` via
+    // Stock/Ledger NA MESMA transação do service (produto + audit + ledger).
+    const created = await createProduct(context, raw as unknown as ProductWriteInput);
+    if (!created.ok) return mapProductWriteFailure(created);
     revalidatePath("/dashboard/cadastros-v2");
     return { ok: true, id: created.id };
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const conflicted = await findDuplicate().catch(() => null);
-      if (conflicted) {
-        return { ok: false, ...duplicateProductDetails(conflicted, sku, barcode, { context: duplicateContext }) };
-      }
-      return {
-        ok: false,
-        type: "DUPLICATE_PRODUCT",
-        field: barcode ? "barcode" : "sku",
-        message: "SKU ou código de barras já pertence a outro produto desta loja.",
-      };
-    }
-    return { ok: false, type: "SAVE_ERROR", message: "Não foi possível salvar o produto. Tente novamente." };
   }
+
+  // UPDATE — strip de `estoque`/`stock`: o service bloqueia PATCH de saldo
+  // (VALIDATION). Todo o resto (aliases PT/EN, metadata, fiscal, acessórios,
+  // catalogoAparelhos) é encaminhado com presença preservada (PATCH-safe:
+  // ausente = preserva, nunca apaga).
+  const cadastral: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === "estoque" || key === "stock" || key === "id") continue;
+    cadastral[key] = value;
+  }
+  const updated = await updateProduct(
+    context,
+    productId,
+    cadastral as unknown as ProductWriteInput,
+  );
+  if (!updated.ok) return mapProductWriteFailure(updated);
+
+  if (!hasEstoque || requestedStock === undefined) {
+    revalidatePath("/dashboard/cadastros-v2");
+    return { ok: true, id: updated.id };
+  }
+
+  // O formulário de edição (ProductAIModal) já envia `estoque: undefined` em
+  // edição (saldo somente leitura) e o toggle Ativar/Inativar não deve mover
+  // saldo. Esta comparação impede ledger falso quando o caller reenvia o saldo
+  // atual sem intenção de mudança. Mudança explícita real → ajuste canônico.
+  let currentStock: number | null = null;
+  try {
+    const row = await prisma.produto.findFirst({
+      where: { id: productId, storeId: sid },
+      select: { stock: true },
+    });
+    currentStock = row ? (row.stock ?? 0) : null;
+  } catch {
+    currentStock = null;
+  }
+  if (currentStock === null || currentStock === requestedStock) {
+    revalidatePath("/dashboard/cadastros-v2");
+    return { ok: true, id: updated.id };
+  }
+
+  const ledger = await applyStockMutation(
+    { storeId: sid, principal, source: PRODUCT_WRITE_AUDIT_SOURCE },
+    {
+      kind: "ajuste",
+      produtoId: productId,
+      novoSaldo: requestedStock,
+      origem: "cadastro",
+      motivo: "Ajuste de estoque via cadastro de produto",
+    },
+  );
+  if (ledger.ok) {
+    revalidatePath("/dashboard/cadastros-v2");
+    return { ok: true, id: updated.id };
+  }
+  // Corrida: outro writer já levou o saldo ao valor pedido entre a leitura e o
+  // ajuste — nada a ajustar, o cadastral já salvou. Trata como sucesso.
+  if (ledger.code === "VALIDATION" && ledger.estoqueAntes === requestedStock) {
+    revalidatePath("/dashboard/cadastros-v2");
+    return { ok: true, id: updated.id };
+  }
+  // Cadastral salvou; só o ajuste falhou. Saldo permanece o anterior com ledger
+  // intacto (sem incoerência estrutural). O operador rejunta pelo fluxo
+  // Movimentar estoque. Mensagem do ledger já é amigável (sem Prisma/PII).
+  return {
+    ok: false,
+    type: "SAVE_ERROR",
+    message: ledger.message || "Não foi possível ajustar o estoque. Use Movimentar estoque para ajustar.",
+  };
 }
 
 // ─── Conferência pós-importação por lote (Parte 9) ──────────────────────────
@@ -2239,9 +2264,11 @@ export async function listLojasCadastros(): Promise<LojaDTO[]> {
   })
 }
 
-// ── Lookup externo por código de barras (GOAL 004A) ───────────────────────────
-// Camada server-side: contrato + orquestrador + adapter Cosmos.
-// Não salva produto, não altera metadata, não altera UI.
+// ── Lookup externo por código de barras (GOAL 004A · CAD-R2-015) ─────────────
+// Camada server-side: contrato + orquestrador + adapters, governados por
+// lib/cadastros/provider-governance (fonte única de status/capabilities).
+// Não salva produto (sugestão revisável; write boundary continua upsertProduto),
+// não altera metadata, não altera UI.
 // Código interno 20–29 nunca vai a provedor externo (D08).
 
 export type ResolverCodigoBarrasResult =
