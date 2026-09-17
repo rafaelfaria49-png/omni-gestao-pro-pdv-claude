@@ -2,6 +2,12 @@
 
 ## 2026-09-17
 
+### Cadastros — Identidade e dedupe canônicos de Cliente (CAD-R2-018-A)
+
+- Fundação pura em `lib/cadastros/client-identity`: normalização determinística de documento/telefone/email/nome e classificação store-scoped (`NO_MATCH` / `EXACT_DOCUMENT_MATCH` / `POSSIBLE_CONTACT_MATCH` / `AMBIGUOUS` / `IDENTITY_CONFLICT`).
+- Sem auto-merge, sem ClientWriteService, sem schema/migration. Lookup server-side não atravessa unidades e não vaza PII cross-store.
+- Inventário dos writers atuais de Cliente fica documentado para o CAD-R2-008.
+
 ### Cadastros — Voz no Cadastro Inteligente de Produto (CAD-R2-017)
 
 - Em **Descrever produto**, o operador pode ditar a descrição (Chrome/Edge, HTTPS ou localhost) ou continuar só com texto.
