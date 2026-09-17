@@ -24,6 +24,11 @@ import {
   type SefazHttpsRuntimePorts,
   type SefazOfflineLoopbackTestAuthority,
 } from "./sefaz-runtime-ports"
+import {
+  consumeSefazExternalTransmissionAuthority,
+  isSefazExternalTransmissionAuthority,
+  type SefazExternalTransmissionAuthority,
+} from "./sefaz-external-transmission-authority"
 import type {
   SefazTransport,
   SefazTransportErrorCode,
@@ -52,6 +57,13 @@ export type SefazSoapTransportOptions = {
   runtime?: SefazHttpsRuntimePorts
   /** Token opaco cujo runtime é criado e preso a `127.0.0.1` no mesmo factory de teste. */
   offlineLoopbackTestAuthority?: SefazOfflineLoopbackTestAuthority
+  /**
+   * Authority externa ONE-SHOT do piloto de homologação (GOAL 022): única forma legítima
+   * de liberar o runtime PRODUTIVO (`nodeSefazHttpsRuntimePorts`) para `NFeAutorizacao4`
+   * em HOMOLOGACAO. Mútua com a authority de teste e com `runtime` explícito — qualquer
+   * combinação é conflito e bloqueia ANTES de rede.
+   */
+  externalTransmissionAuthority?: SefazExternalTransmissionAuthority
 }
 
 function failure(
@@ -124,16 +136,23 @@ export class SefazSoapTransport implements SefazTransport {
 
   private readonly loadMaterial: LoadA1MtlsMaterialPort
   private readonly offlineLoopbackTestAuthority: SefazOfflineLoopbackTestAuthority | null
+  private readonly externalTransmissionAuthority: SefazExternalTransmissionAuthority | null
   private readonly hasRuntimeAuthorityConflict: boolean
 
   constructor(options: SefazSoapTransportOptions = {}) {
     this.loadMaterial = options.loadMaterial ?? loadA1MtlsMaterial
     this.offlineLoopbackTestAuthority = options.offlineLoopbackTestAuthority ?? null
+    this.externalTransmissionAuthority = options.externalTransmissionAuthority ?? null
+    // Conflito é QUALQUER combinação de fontes de runtime: `runtime` explícito junto de
+    // qualquer authority, ou as duas authorities juntas. Fail-closed no construtor.
     this.hasRuntimeAuthorityConflict =
-      options.runtime !== undefined && this.offlineLoopbackTestAuthority !== null
+      (options.runtime !== undefined &&
+        (this.offlineLoopbackTestAuthority !== null || this.externalTransmissionAuthority !== null)) ||
+      (this.offlineLoopbackTestAuthority !== null && this.externalTransmissionAuthority !== null)
     this.permiteRede =
       !this.hasRuntimeAuthorityConflict &&
-      isOfflineLoopbackTestAuthority(this.offlineLoopbackTestAuthority)
+      (isOfflineLoopbackTestAuthority(this.offlineLoopbackTestAuthority) ||
+        isSefazExternalTransmissionAuthority(this.externalTransmissionAuthority))
   }
 
   async send(request: SefazTransportRequest): Promise<SefazTransportOutcome> {
@@ -159,16 +178,30 @@ export class SefazSoapTransport implements SefazTransport {
     }
 
     let runtime: SefazHttpsRuntimePorts | null = null
-    if (!this.hasRuntimeAuthorityConflict && this.offlineLoopbackTestAuthority) {
+    if (this.hasRuntimeAuthorityConflict) {
+      runtime = null
+    } else if (this.offlineLoopbackTestAuthority) {
       runtime = consumeOfflineLoopbackTestAuthority(this.offlineLoopbackTestAuthority, {
         endpointLogico: `${endpoint.uf}/${endpoint.ambiente}/${endpoint.servico}/${endpoint.versao}`,
         correlationId: request.correlationId,
       })
+    } else if (this.externalTransmissionAuthority) {
+      // Authority externa do piloto (GOAL 022): o consumo valida serviço/ambiente/loja/janela
+      // e é one-shot. Divergência qualquer ⇒ null ⇒ bloqueio antes de cofre/TLS/socket.
+      const consumed = consumeSefazExternalTransmissionAuthority(
+        this.externalTransmissionAuthority,
+        {
+          servico: endpoint.servico,
+          ambiente: endpoint.ambiente,
+          storeId: request.certificate.storeId,
+        },
+      )
+      runtime = consumed ? consumed.runtime : null
     }
     if (!runtime) {
       return failure(
         "transporte_tentativa_nao_autorizada",
-        "Tentativa HTTPS não autorizada por authority loopback one-shot íntegra.",
+        "Tentativa HTTPS não autorizada por authority íntegra (loopback de teste ou externa one-shot).",
         "BLOCKED_BEFORE_NETWORK",
         false,
       )

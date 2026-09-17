@@ -703,6 +703,47 @@ describe("GOAL-021 · metadados QR persistidos antes da transmissão", () => {
     expect(reloaded?.xmlBytesSha256).toBe("a".repeat(64))
   })
 
+  it("load() rederiva xmlBytesSha256 do XML da nota quando o payload do job perdeu document", async () => {
+    const { createHash } = await import("node:crypto")
+    const expected = createHash("sha256").update(XML_ASSINADO, "utf8").digest("hex")
+    const { client } = createFakePrisma([
+      notaAssinada({ status: "TRANSMITINDO", xmlAssinado: XML_ASSINADO }),
+    ])
+    const persistence = createPrismaUncertainStatePersistence(asPersistenceClient(client))
+    const reloaded = await persistence.load(locator)
+    expect(reloaded?.xmlAssinado).toBe(XML_ASSINADO)
+    expect(reloaded?.xmlBytesSha256).toBe(expected)
+  })
+
+  it("load() restaura uf SP e correlationId do localKey para a CONSULTA", async () => {
+    const { client } = createFakePrisma([
+      notaAssinada({
+        status: "TRANSMITINDO",
+        xmlAssinado: XML_ASSINADO,
+        localKey: "nfce-snapshot:store:venda",
+        snapshotEmitente: { endereco: { uf: "SP" } },
+      }),
+    ])
+    const persistence = createPrismaUncertainStatePersistence(asPersistenceClient(client))
+    const reloaded = await persistence.load(locator)
+    expect(reloaded?.uf).toBe("SP")
+    expect(reloaded?.correlationId).toBe("nfce-snapshot:store:venda")
+  })
+
+  it("load() deriva UF SP do cUF 35 da chave quando o snapshot não traz uf", async () => {
+    const { client } = createFakePrisma([
+      notaAssinada({
+        status: "TRANSMITINDO",
+        xmlAssinado: XML_ASSINADO,
+        localKey: "corr-chave",
+      }),
+    ])
+    const persistence = createPrismaUncertainStatePersistence(asPersistenceClient(client))
+    const reloaded = await persistence.load(locator)
+    expect(reloaded?.uf).toBe("SP")
+    expect(reloaded?.correlationId).toBe("corr-chave")
+  })
+
   it("AUTHORIZED que omite metadata QR não apaga os valores persistidos", async () => {
     const { client, notaFiscal } = createFakePrisma([
       notaAssinada({

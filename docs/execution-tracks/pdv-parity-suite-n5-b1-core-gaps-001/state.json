@@ -4,7 +4,7 @@
   "status": "PAUSED",
   "risk_tier": "ALTO",
   "current_goal": null,
-  "next_goal": null,
+  "next_goal": "PDV-PARITY-N5-B1-PENDING-IDENTITY-002",
   "bootstrap_commit": null,
   "counters": {
     "goals_done": 1,

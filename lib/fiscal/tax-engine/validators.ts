@@ -50,7 +50,7 @@ export function validateInput(input: TaxEngineInput): ValidationResult {
     errors.push(
       err(
         "regime_nao_suportado",
-        `Regime "${input.regime}" não suportado na F2 (apenas Simples Nacional). Regime normal/MEI virão em fase futura.`,
+        `Regime "${input.regime}" não suportado na F2 (apenas família Simples: SN, SN-excesso e MEI).`,
         null,
         "regime",
       ),

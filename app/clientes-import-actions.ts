@@ -8,6 +8,7 @@ import {
   type ClienteListItem,
 } from "@/lib/clientes-import-handler"
 import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access"
+import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
 
 /** Lista clientes da loja (substitui GET /api/clientes/importar). */
 export async function listarClientesParaCadastro(lojaId: string | null | undefined): Promise<
@@ -40,8 +41,13 @@ export async function importarClientesLote(
       return { ok: false, error: "Payload inválido", detail: "Envie um array de { Nome, Telefone }." }
     }
 
-    const lid = (await requireCadastrosActionAccess(lojaId ?? "", "hub")).storeId
-    const { created, updated, skippedDuplicate } = await importClientesItems(lid, items)
+    const gate = await requireCadastrosActionAccess(lojaId ?? "", "hub")
+    const lid = gate.storeId
+    const { created, updated, skippedDuplicate } = await importClientesItems(
+      lid,
+      items,
+      cadastrosAuditPrincipalFromSession(gate.session),
+    )
 
     revalidatePath("/")
 

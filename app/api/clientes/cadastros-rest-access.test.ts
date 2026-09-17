@@ -17,13 +17,27 @@ const h = vi.hoisted(() => ({
     if (where?.storeId && row.storeId !== where.storeId) return null
     return { ...row, phone: "11988887777", email: null, document: "", ordensServico: [], vendas: [] }
   }),
-  clienteCreate: vi.fn(async (args: { data: Record<string, unknown> }) => ({
-    id: "cli-1",
-    name: args.data.name,
-    phone: args.data.phone ?? null,
-    email: null,
-    document: args.data.document ?? "",
-  })),
+  clienteCreate: vi.fn(async (args: { data: Record<string, unknown> }) => {
+    const row = {
+      id: "cli-1",
+      storeId: String(args.data.storeId ?? "loja-a"),
+      name: args.data.name as string,
+      phone: (args.data.phone as string | null) ?? null,
+      email: (args.data.email as string | null) ?? null,
+      document: (args.data.document as string) ?? "",
+      kind: (args.data.kind as string) ?? "PF",
+      city: (args.data.city as string) ?? "",
+      tags: args.data.tags ?? null,
+      active: args.data.active !== false,
+      totalSpent: (args.data.totalSpent as number) ?? 0,
+      lastPurchaseAt: (args.data.lastPurchaseAt as Date | null) ?? null,
+      createdAt: new Date(),
+    }
+    h.clientesById.set(row.id, { id: row.id, storeId: row.storeId, name: row.name, totalSpent: row.totalSpent })
+    return row
+  }),
+  clienteUpdate: vi.fn(async () => ({ id: "cli-1" })),
+  logsCreate: vi.fn(async () => ({ id: "log-1" })),
   groupBy: vi.fn(async () => []),
   aggregate: vi.fn(async () => ({ _sum: { valorTotal: null, total: null } })),
   matchByPhone: vi.fn(async () => ({
@@ -44,7 +58,19 @@ vi.mock("@/lib/prisma", () => ({
       findMany: h.clienteFindMany,
       findFirst: h.clienteFindFirst,
       create: h.clienteCreate,
+      update: h.clienteUpdate,
     },
+    logsAuditoria: { create: h.logsCreate },
+    $transaction: async (fn: (tx: Record<string, unknown>) => unknown) =>
+      fn({
+        cliente: {
+          findMany: h.clienteFindMany,
+          findFirst: h.clienteFindFirst,
+          create: h.clienteCreate,
+          update: h.clienteUpdate,
+        },
+        logsAuditoria: { create: h.logsCreate },
+      }),
     ordemServico: { groupBy: h.groupBy, aggregate: h.aggregate },
     venda: { groupBy: h.groupBy, aggregate: h.aggregate },
   },

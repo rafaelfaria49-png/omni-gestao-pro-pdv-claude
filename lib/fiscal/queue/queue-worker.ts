@@ -528,6 +528,18 @@ async function processLease(input: {
     (execution.kind === "uncertain" && execution.externalTransmissionAttempted)
   const inutilizacaoRealAutorizada = job.tipo === "INUTILIZACAO"
   /**
+   * CONSULTA do pipeline GOAL-012: códigos `consulta_*` com provider invocado são leitura
+   * (autorizada / não consta / rejeitada). Não atravessa EMISSAO nem sucesso genérico (`ok` /
+   * `autorizada` sem prova). GOAL 022B: classifica a única transmissão sem reescrever o
+   * desfecho para `provider_real_bloqueado`.
+   */
+  const consultaResolvidaPeloPipeline =
+    job.tipo === "CONSULTA" &&
+    execution.kind === "success" &&
+    execution.providerInvoked === true &&
+    typeof execution.code === "string" &&
+    execution.code.startsWith("consulta_")
+  /**
    * Prova tipada do drill de contingência (GOAL 020 · relatório 127): o executor só a produz
    * com capability desta execução + provider invocado + autorização com evidência fiscal
    * persistida. Aqui ela é CONFERIDA contra o job em processamento (id/store/notaFiscal) —
@@ -546,6 +558,7 @@ async function processLease(input: {
     !repeticaoDeConsultaSegura &&
     !inutilizacaoRealAutorizada &&
     !provaTipadaCoerente &&
+    !consultaResolvidaPeloPipeline &&
     !execution.simulado
   ) {
     execution = {

@@ -89,7 +89,7 @@ import {
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
-import { isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
@@ -1550,19 +1550,23 @@ export function PdvClassic({
     }
   }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe, scanFeedback])
 
+  // Autofocus operacional (GOAL 006): ao entrar/retornar ao PDV o Código/Bipe já está focado —
+  // o leitor bipa sem clique no mouse. Uma leitura do guard por efeito (nada de interval/loop
+  // de foco): se o operador já estiver em outro campo ou com modal aberto, o foco é respeitado.
   useEffect(() => {
-    const t = window.setTimeout(() => shellBipeRef.current?.focus(), 100)
+    const t = window.setTimeout(() => {
+      if (canAutoFocusPdvBipe()) shellBipeRef.current?.focus()
+    }, 100)
     return () => window.clearTimeout(t)
   }, [])
 
   useEffect(() => {
-    if (!isModoRapido) return
     if (!storePdvGate.ready || storePdvGate.block) return
     const t = window.setTimeout(() => {
-      shellBipeRef.current?.focus()
+      if (canAutoFocusPdvBipe()) shellBipeRef.current?.focus()
     }, 200)
     return () => window.clearTimeout(t)
-  }, [isModoRapido, storePdvGate.ready, storePdvGate.block])
+  }, [storePdvGate.ready, storePdvGate.block])
 
   useEffect(() => {
     if (!voiceCartSeed?.key) return
@@ -1807,9 +1811,14 @@ export function PdvClassic({
               itemCount={cart.length}
               previousSaleTotal={lastSaleTotal}
               bipeCode={bipeCode}
-              onBipeChange={setBipeCode}
+              onBipeChange={(v) => {
+                // Digitação nova (scan ou busca manual) encerra na hora o aviso inline anterior.
+                scanFeedback.dismiss()
+                setBipeCode(v)
+              }}
               bipeRef={shellBipeRef}
               onBipeKeyDown={handleShellBipeKeyDown}
+              bipeInlineFeedback={scanFeedback.inline}
               bipeSuggestions={bipeSuggestions}
               onBipeSuggestionSelect={handleBipeSuggestionSelect}
               customerDisplay={shellCustomerField}
