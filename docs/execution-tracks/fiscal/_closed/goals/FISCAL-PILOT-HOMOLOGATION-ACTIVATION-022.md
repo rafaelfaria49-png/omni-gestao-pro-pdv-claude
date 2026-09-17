@@ -4,7 +4,7 @@
   "id": "FISCAL-PILOT-HOMOLOGATION-ACTIVATION-022",
   "track": "fiscal",
   "title": "Ativação controlada e provisionamento da loja-piloto em homologação (NFC-e modelo 65, SEFAZ-SP, Matriz RafaCell)",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "branch": "goal/fiscal-022-pilot-homologation-activation",

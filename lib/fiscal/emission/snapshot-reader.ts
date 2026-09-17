@@ -133,6 +133,12 @@ export function reconstructSnapshotFromNota(nota: NotaFiscalRow): VendaFiscalSna
       pendencias: strArray(diag.pendencias),
       itensSemFiscal,
     },
+    // Tributação congelada (F2): o builder atual a grava no JSONB `snapshotPagamento.tributacao`
+    // — recarregada aqui como veio (foto congelada, NUNCA recalculada). Snapshots antigos sem o
+    // bloco seguem sem ele (campo opcional do contrato).
+    ...(Object.keys(asRecord(pag.tributacao)).length > 0
+      ? { tributacao: asRecord(pag.tributacao) as unknown as VendaFiscalSnapshot["tributacao"] }
+      : {}),
   }
 
   return deepFreeze(snapshot)
