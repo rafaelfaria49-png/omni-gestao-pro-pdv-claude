@@ -41,6 +41,7 @@ describe("interpretar: exemplos canonicos end-to-end", () => {
     expect(s.campos.ean.estado).toBe("ausente")
     expect(s.campos.garantia.estado).toBe("ausente")
     expect(s.proveniencia.source).toBe("natural_text")
+    expect(s.proveniencia.captureSource).toBe("text")
     expect(s.proveniencia.backend).toBe("openrouter")
     expect(s.proveniencia.interpretedAt).toBe(AGORA_FIXA.toISOString())
   })
@@ -216,5 +217,39 @@ describe("interpretar: contrato e limites", () => {
     const texto = "Película secreta XPTO-123"
     const s = await interpretarTextoProduto(texto, mockModelo({ nome: "Película XPTO" }))
     expect(JSON.stringify(s.proveniencia)).not.toContain("XPTO-123")
+  })
+
+  it("CAD-R2-017: captura voz marca captureSource sem persistir transcript", async () => {
+    const texto = "Película 3D para iPhone 15, custa 4 reais e vendo por 25"
+    const s = await interpretarTextoProduto(texto, {
+      ...mockModelo({ nome: "Película 3D iPhone 15", preco: 25, custo: 4 }),
+      captureSource: "voice",
+    })
+    expect(s.proveniencia.source).toBe("natural_text")
+    expect(s.proveniencia.captureSource).toBe("voice")
+    expect(s.campos.preco).toEqual({ valor: 25, estado: "extraido" })
+    expect(s.campos.custo).toEqual({ valor: 4, estado: "extraido" })
+    expect(JSON.stringify(s.proveniencia)).not.toContain("Película")
+    expect(JSON.stringify(s.proveniencia)).not.toMatch(/audio|blob|transcript/i)
+  })
+
+  it("CAD-R2-017: voz com estoque explicito preserva; sem inventar o que falta", async () => {
+    const s = await interpretarTextoProduto(
+      "Carregador turbo Kaidi 20W, estoque inicial 10 unidades",
+      { ...mockModelo({ nome: "Carregador turbo Kaidi 20W" }), captureSource: "voice" },
+    )
+    expect(s.campos.estoque).toEqual({ valor: 10, estado: "extraido" })
+    expect(s.campos.preco.estado).toBe("ausente")
+    expect(s.proveniencia.captureSource).toBe("voice")
+  })
+
+  it("CAD-R2-017: voz sem preco/estoque nao inventa", async () => {
+    const s = await interpretarTextoProduto("Capinha azul", {
+      ...mockModelo({ nome: "Capinha azul", preco: 50, estoque: 3 }),
+      captureSource: "voice",
+    })
+    expect(s.campos.preco.estado).toBe("ausente")
+    expect(s.campos.estoque.estado).toBe("ausente")
+    expect(s.proveniencia.captureSource).toBe("voice")
   })
 })

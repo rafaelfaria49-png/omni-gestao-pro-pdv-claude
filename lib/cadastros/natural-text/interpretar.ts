@@ -131,6 +131,8 @@ export type DepsInterpretacao = {
   /** Injeção para testes herméticos (sem rede). */
   chamarModelo?: (system: string, texto: string) => Promise<Record<string, unknown>>
   agora?: () => Date
+  /** Origem da captura (CAD-R2-017). Default `text`. Nunca persiste transcript. */
+  captureSource?: "text" | "voice"
 }
 
 type ResultadoLlm = { payload: Record<string, unknown>; backend: BackendTextoLivre; model: string | null }
@@ -490,6 +492,7 @@ export async function interpretarTextoProduto(
 
   const agora = (deps?.agora ? deps.agora() : new Date()).toISOString()
   const backend: BackendTextoLivre = llm ? llm.backend : "local-deterministico"
+  const captureSource = deps?.captureSource === "voice" ? "voice" : "text"
 
   return {
     campos: { nome, marca, categoria, descricao, preco, custo, estoque, fornecedor, sku, ean, garantia, ncm, cest },
@@ -497,6 +500,7 @@ export async function interpretarTextoProduto(
     rejeitados,
     proveniencia: {
       source: "natural_text",
+      captureSource,
       backend,
       model: llm?.model ?? null,
       interpretedAt: agora,

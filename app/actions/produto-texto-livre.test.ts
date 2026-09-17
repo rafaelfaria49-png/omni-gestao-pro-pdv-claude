@@ -33,8 +33,18 @@ describe("interpretarProdutoTextoLivre: adapter fino sem persistencia", () => {
   it("autoriza na area hub e devolve a sugestao temporaria", async () => {
     const r = await interpretarProdutoTextoLivre("loja-1", "Película iPhone, vendo por 25")
     expect(h.acesso).toHaveBeenCalledWith("loja-1", "hub")
-    expect(h.interpretar).toHaveBeenCalledWith("Película iPhone, vendo por 25")
+    expect(h.interpretar).toHaveBeenCalledWith("Película iPhone, vendo por 25", { captureSource: "text" })
     expect(r).toEqual({ ok: true, sugestao: { eco: "Película iPhone, vendo por 25" } })
+  })
+
+  it("CAD-R2-017: captureSource voice chega ao interpretador 016 (sem parser extra)", async () => {
+    await interpretarProdutoTextoLivre("loja-1", "Película falada", { captureSource: "voice" })
+    expect(h.interpretar).toHaveBeenCalledWith("Película falada", { captureSource: "voice" })
+  })
+
+  it("CAD-R2-017: captureSource inválido cai em text", async () => {
+    await interpretarProdutoTextoLivre("loja-1", "abc", { captureSource: "whisper" as "text" })
+    expect(h.interpretar).toHaveBeenCalledWith("abc", { captureSource: "text" })
   })
 
   it("sem acesso: propaga o erro do gate (fail-closed)", async () => {

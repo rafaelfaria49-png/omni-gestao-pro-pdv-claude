@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-17
+
+### Cadastros — Voz no Cadastro Inteligente de Produto (CAD-R2-017)
+
+- Em **Descrever produto**, o operador pode ditar a descrição (Chrome/Edge, HTTPS ou localhost) ou continuar só com texto.
+- A transcrição fica editável e segue o interpretador de texto livre já existente; aplicar só preenche o formulário.
+- Áudio e transcrição não são gravados no produto. Disponibilidade do microfone é detectada de forma honesta.
+
 ## 2026-08-29
 
 ### PDV — Venda em espera
