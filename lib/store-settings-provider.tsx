@@ -23,8 +23,13 @@ import { configPadrao, type CategoriaGarantia, type TermosGarantia } from "@/lib
 import {
   resolvePdvClassicLayoutServerFirst,
   resolvePdvMainLayoutServerFirst,
+  resolvePdvScanUnregisteredActionServerFirst,
   resolvePdvShortcutsServerFirst,
 } from "@/lib/pdv-settings-server-first"
+import {
+  DEFAULT_PDV_SCAN_UNREGISTERED_ACTION,
+  type PdvScanUnregisteredAction,
+} from "@/lib/pdv-scan-unregistered-action"
 import {
   applyIfLiveStoreSettingsEpoch,
   createStoreSettingsEpochGate,
@@ -43,6 +48,8 @@ export type StoreSettingsContextType = {
   capabilities: StoreCapabilitiesV1 | null
   pdvMainLayout: PdvMainLayoutKind
   pdvClassicLayout: PdvClassicLayoutKind
+  /** Ação ao bipar produto não cadastrado (GOAL 007) — resolvida server-first, default aplicado. */
+  pdvScanUnregisteredAction: PdvScanUnregisteredAction
   getGarantiaById: (id: string) => CategoriaGarantia | undefined
   refresh: () => Promise<void>
   save: (patch: StoreSettingsPutPayload) => Promise<void>
@@ -71,6 +78,12 @@ function parseBlob(printerConfig: unknown): StoreSettingsBlob {
     v3PdvClassicModoInicial:
       o.v3PdvClassicModoInicial === "rapido" || o.v3PdvClassicModoInicial === "normal"
         ? o.v3PdvClassicModoInicial
+        : undefined,
+    pdvScanUnregisteredAction:
+      o.pdvScanUnregisteredAction === "warn_continue" ||
+      o.pdvScanUnregisteredAction === "warn_offer_avulso" ||
+      o.pdvScanUnregisteredAction === "open_avulso"
+        ? o.pdvScanUnregisteredAction
         : undefined,
   } as StoreSettingsBlob
 }
@@ -217,6 +230,11 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     [blob.pdvParams?.pdvClassicLayout, storeId]
   )
 
+  const resolvedScanUnregisteredAction = useMemo(
+    () => resolvePdvScanUnregisteredActionServerFirst(blob.pdvScanUnregisteredAction),
+    [blob.pdvScanUnregisteredAction]
+  )
+
   // ── Backfill controlado e idempotente (executa uma única vez se elegível) ──────
   useEffect(() => {
     if (!hydrated || !storeId) return
@@ -319,6 +337,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       capabilities: blob.capabilities ?? null,
       pdvMainLayout: resolvedMainLayout.value,
       pdvClassicLayout: resolvedClassicLayout.value,
+      pdvScanUnregisteredAction: resolvedScanUnregisteredAction.value,
       getGarantiaById,
       refresh,
       save,
@@ -334,6 +353,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       termosGarantia,
       resolvedMainLayout.value,
       resolvedClassicLayout.value,
+      resolvedScanUnregisteredAction.value,
       getGarantiaById,
       refresh,
       save,
@@ -359,6 +379,7 @@ export function useStoreSettings(): StoreSettingsContextType {
       capabilities: null,
       pdvMainLayout: "classic",
       pdvClassicLayout: "lovable",
+      pdvScanUnregisteredAction: DEFAULT_PDV_SCAN_UNREGISTERED_ACTION,
       getGarantiaById: () => undefined,
       refresh: async () => {},
       save: async () => {

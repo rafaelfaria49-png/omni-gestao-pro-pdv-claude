@@ -129,6 +129,23 @@ export type FiscalQueueExecutionResult = {
     /** Procedência da capability que gerou a prova — trilha de auditoria, sem segredo. */
     readonly concedidaPor: string
   }
+  /**
+   * Prova OPACA de autorização de EMISSAO do piloto de homologação (GOAL 022C).
+   *
+   * Nasce SOMENTE de `createPilotEmissionAuthorizationProof` sobre a ativação opaca
+   * consumida pelo ledger persistente one-shot, vinculada a activationId + jobId +
+   * storeId + notaFiscalId + serviço `NFeAutorizacao4` + ambiente `HOMOLOGACAO` +
+   * janela vigente. O binding vive em `WeakMap` privado do gate: objeto estrutural,
+   * clone (`{...prova}`), `JSON` ou booleano genérico (`allowRealProvider`,
+   * `providerInvoked`) NÃO produzem prova válida.
+   *
+   * O freio GOAL-011 a consome (one-shot) EXCLUSIVAMENTE para job `EMISSAO` com
+   * `providerInvoked === true` (R1) e janela vigente no INÍCIO da execução (R2);
+   * prova ausente/forjada/reutilizada ou com qualquer divergência permanece
+   * `provider_real_bloqueado`. Campo propositalmente `unknown`: a forma nunca é
+   * inspecionada — só a identidade via `consumePilotEmissionAuthorizationProof`.
+   */
+  pilotEmissionExternalAuthorization?: unknown
 }
 
 export type FiscalQueueAuditEvent = {

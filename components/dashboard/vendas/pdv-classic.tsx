@@ -90,6 +90,7 @@ import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
@@ -245,7 +246,7 @@ export function PdvClassic({
   const { config } = useConfigEmpresa()
   const { empresaDocumentos, getEnderecoDocumentos, lojaAtivaId, opsStorageKey, storesRefreshNonce } =
     useLojaAtiva()
-  const { pdvParams, impressaoConfig, settings, storeId } = useStoreSettings()
+  const { pdvParams, impressaoConfig, settings, storeId, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("classic")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
@@ -309,6 +310,19 @@ export function PdvClassic({
   const [bipeCode, setBipeCode] = useState("")
   /** Aviso transitório de código não encontrado (um único aviso vivo). */
   const scanFeedback = usePdvScanNotFoundFeedback()
+  // GOAL 007 — política por loja "quando bipar um produto não cadastrado" (server-first).
+  const scanUnregisteredPolicy = useMemo(
+    () => resolvePdvScanUnregisteredPolicy(pdvScanUnregisteredAction),
+    [pdvScanUnregisteredAction],
+  )
+  /** Código do último miss scan-like — contexto do Item Avulso nos modos B/C. */
+  const missedScanCodeRef = useRef<string | null>(null)
+  const [avulsoSeedCodigo, setAvulsoSeedCodigo] = useState<string | null>(null)
+  /** Único caminho de abertura do Item Avulso: TODO abrir é explícito sobre o contexto. */
+  const openItemAvulso = useCallback((seedCodigo: string | null) => {
+    setAvulsoSeedCodigo(seedCodigo)
+    setShowItemAvulsoModal(true)
+  }, [])
   const [shellNextQty, setShellNextQty] = useState("1")
   const [shellSeller, setShellSeller] = useState("01 — Caixa 1")
   const [shellInfo, setShellInfo] = useState("Sistema pronto. Bipe um produto ou pressione F3 para pesquisar.")
@@ -975,11 +989,26 @@ export function PdvClassic({
         setBipeCode("")
         return
       }
-      scanFeedback.notify(query)
+      scanFeedback.notify(query, {
+        suggestAvulso: scanLike && scanUnregisteredPolicy.showInsertHint,
+      })
       setShellInfo(`✕ Produto não encontrado nesta loja para o código: ${query}`)
+      // GOAL 007 — a política por loja só age APÓS o fluxo existente determinar
+      // PRODUTO NÃO ENCONTRADO (match exato, fuzzy, parciais e busca textual tratados acima).
+      // Miss de busca textual invalida o contexto do último código SCAN-like.
+      missedScanCodeRef.current = scanLike ? query : null
+      // Autoabertura (modo C) SÓ para scan-like: miss de busca textual (ex.: "capinha
+      // samsung") preserva a semântica do GOAL 005 — nunca abre modal sozinho.
+      if (scanLike && scanUnregisteredPolicy.autoOpenAvulso && !hasBlockingPdvDialog()) {
+        // Modo C: abre o Item Avulso UMA vez por scan, com o código como contexto.
+        // (2º Enter/CR-LF encontra o campo já vazio e nunca chega aqui; hasBlockingPdvDialog
+        // impede abrir por cima de modal crítico que tenha surgido durante o await.)
+        openItemAvulso(query)
+        return
+      }
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
-    [addToCart, bipeCode, cart, products, shellNextQty, scanFeedback, lojaKey, setInventory]
+    [addToCart, bipeCode, cart, products, shellNextQty, scanFeedback, lojaKey, setInventory, scanUnregisteredPolicy, openItemAvulso]
   )
 
   const handleBipeSuggestionSelect = useCallback(
@@ -1485,7 +1514,14 @@ export function PdvClassic({
       // Agora vive no keymap operacional do Clássico, igual a Assistência/Supermercado.
       if (e.key === "Insert") {
         e.preventDefault()
-        setShowItemAvulsoModal(true)
+        // GOAL 007 (modos B/C): Insert abre o Item Avulso com o último código não
+        // cadastrado como contexto — seguro apenas se o bipe segue vazio (nada digitado
+        // depois do miss). Modo A abre limpo, como sempre. Leitura via ref: live, sem
+        // depender do closure do efeito.
+        const stash = missedScanCodeRef.current
+        missedScanCodeRef.current = null
+        const campoVazio = (shellBipeRef.current?.value ?? "").trim() === ""
+        openItemAvulso(scanUnregisteredPolicy.offersAvulsoContext && campoVazio ? stash : null)
         return
       }
       if (!fnKeys.has(e.key)) return
@@ -1506,7 +1542,7 @@ export function PdvClassic({
       window.removeEventListener("keydown", down)
       window.removeEventListener("keyup", up)
     }
-  }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe, scanFeedback])
+  }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
 
   // Autofocus operacional (GOAL 006): ao entrar/retornar ao PDV o Código/Bipe já está focado —
   // o leitor bipa sem clique no mouse. Uma leitura do guard por efeito (nada de interval/loop
@@ -1901,12 +1937,16 @@ export function PdvClassic({
 
       <ItemAvulsoModal
         open={showItemAvulsoModal}
+        initialCodigo={avulsoSeedCodigo}
         onOpenChange={(open) => {
           setShowItemAvulsoModal(open)
-          // Cancelou/fechou: estado operacional limpo, sem código antigo no campo de bipe.
+          // Cancelou/fechou: estado operacional limpo, sem código antigo no campo de bipe
+          // e sem contexto transitório de scan (GOAL 007).
           if (!open) {
             setBipeCode("")
             scanFeedback.dismiss()
+            missedScanCodeRef.current = null
+            setAvulsoSeedCodigo(null)
           }
         }}
         onCloseAutoFocus={(e) => {
@@ -2237,7 +2277,7 @@ export function PdvClassic({
               <Button
                 variant="outline"
                 className="w-full justify-start border-primary/30 hover:bg-primary/10"
-                onClick={() => { setShowOperationsMenu(false); setShowItemAvulsoModal(true) }}
+                onClick={() => { setShowOperationsMenu(false); openItemAvulso(null) }}
               >
                 Item Avulso
                 <span className="ml-auto text-xs text-muted-foreground">INS</span>

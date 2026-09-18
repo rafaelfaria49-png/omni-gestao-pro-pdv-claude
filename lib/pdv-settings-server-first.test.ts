@@ -17,6 +17,7 @@ import {
   mergePrinterConfigServerSide,
   resolvePdvClassicLayoutServerFirst,
   resolvePdvMainLayoutServerFirst,
+  resolvePdvScanUnregisteredActionServerFirst,
   resolvePdvShortcutsServerFirst,
 } from "./pdv-settings-server-first"
 import {
@@ -444,5 +445,53 @@ describe("N3 — Ciclo de Vida do Provider, Troca de Loja e Falhas de Rede", () 
     const classification = classifySettingKey("assistec-controle-consumo-mesas-v1")
     expect(classification).toBe("OPERATIONAL_LOCAL")
     expect(isMigratableServerSetting("assistec-controle-consumo-mesas-v1")).toBe(false)
+  })
+})
+
+describe("resolvePdvScanUnregisteredActionServerFirst — GOAL 007 (bipe não cadastrado)", () => {
+  it("servidor explícito válido vence (3 valores canônicos)", () => {
+    for (const v of ["warn_continue", "warn_offer_avulso", "open_avulso"] as const) {
+      const r = resolvePdvScanUnregisteredActionServerFirst(v)
+      expect(r.value).toBe(v)
+      expect(r.source).toBe("server")
+      expect(r.isEligibleForBackfill).toBe(false)
+    }
+  })
+
+  it("configuração ausente (loja antiga sem o campo) → default warn_offer_avulso, sem autoabertura", () => {
+    const r = resolvePdvScanUnregisteredActionServerFirst(undefined)
+    expect(r.value).toBe("warn_offer_avulso")
+    expect(r.source).toBe("default")
+    expect(r.value).not.toBe("open_avulso")
+  })
+
+  it("valor inválido no servidor é fail-safe para o default", () => {
+    for (const v of [null, "", "AUTO", "abrir", 42, { mode: "open_avulso" }]) {
+      const r = resolvePdvScanUnregisteredActionServerFirst(v)
+      expect(r.value).toBe("warn_offer_avulso")
+      expect(r.source).toBe("default")
+    }
+  })
+
+  it("merge do servidor preserva a chave e os irmãos desconhecidos (save normal)", () => {
+    const existing = { pdvScanUnregisteredAction: "warn_continue", impressao: { vias: 2 } }
+    const merged = mergePrinterConfigServerSide(existing, { pdvScanUnregisteredAction: "open_avulso" }, false)
+    expect(merged.pdvScanUnregisteredAction).toBe("open_avulso")
+    expect(merged.impressao).toEqual({ vias: 2 })
+  })
+
+  it("classificação da chave é SERVER_SETTING (área canônica de configurações)", () => {
+    expect(classifySettingKey("printerConfig.pdvScanUnregisteredAction")).toBe("SERVER_SETTING")
+    expect(isMigratableServerSetting("printerConfig.pdvScanUnregisteredAction")).toBe(true)
+  })
+
+  it("isolamento por loja: a chave vive no printerConfig de CADA loja (sem fonte global)", () => {
+    // A resolução é função do printerConfig da loja requisitada (GET /api/stores/[id]/settings);
+    // não existe localStorage/global na precedência desta chave — lojas distintas têm blobs distintos.
+    const lojaA = resolvePdvScanUnregisteredActionServerFirst("warn_continue")
+    const lojaB = resolvePdvScanUnregisteredActionServerFirst(undefined)
+    expect(lojaA.value).not.toBe(lojaB.value)
+    expect(lojaA.source).toBe("server")
+    expect(lojaB.source).toBe("default")
   })
 })

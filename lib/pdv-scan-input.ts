@@ -25,20 +25,20 @@ export type PdvScanFeedbackHandle = { dismiss: () => void }
 
 export type PdvScanNotFoundFeedback = {
   /** Mostra o aviso do código e encerra na hora o aviso anterior, se ainda estiver visível. */
-  notify: (code: string) => void
+  notify: (code: string, opts?: PdvScanNotifyOptions) => void
   /** Encerra o aviso vivo (novo bipe, Esc, Item Avulso). Idempotente. */
   dismiss: () => void
 }
 
 /** Mantém um único aviso vivo: o próximo bipe nunca espera o tempo do aviso anterior. */
 export function createPdvScanNotFoundFeedback(
-  show: (code: string) => PdvScanFeedbackHandle,
+  show: (code: string, opts?: PdvScanNotifyOptions) => PdvScanFeedbackHandle,
 ): PdvScanNotFoundFeedback {
   let current: PdvScanFeedbackHandle | null = null
   return {
-    notify(code) {
+    notify(code, opts) {
       current?.dismiss()
-      current = show(code)
+      current = show(code, opts)
     },
     dismiss() {
       current?.dismiss()
@@ -47,12 +47,19 @@ export function createPdvScanNotFoundFeedback(
   }
 }
 
-/** Estado do aviso INLINE no campo Código/Bipe (GOAL PDV-SCAN-INLINE-FEEDBACK-AUTOFOCUS-006). */
+/** Estado do aviso INLINE no campo Código/Bipe (GOAL 006; hint de Insert no GOAL 007). */
 export type PdvScanInlineFeedbackState = {
   /** Código não cadastrado exibido; null quando nenhum aviso está visível. */
   code: string | null
   /** Incrementa a cada novo aviso — permite re-anúncio/mount mesmo para o mesmo código. */
   seq: number
+  /** GOAL 007 (modo "avisar e oferecer"): a copy indica que Insert abre o Item Avulso. */
+  suggestsAvulso?: boolean
+}
+
+export type PdvScanNotifyOptions = {
+  /** Hint de Insert na copy do aviso (decisão da política por loja, GOAL 007). */
+  suggestAvulso?: boolean
 }
 
 /**
@@ -72,10 +79,10 @@ export function createPdvScanInlineNotFoundFeedback(
     clearTimeout(timer)
     timer = null
   }
-  return createPdvScanNotFoundFeedback((code) => {
+  return createPdvScanNotFoundFeedback((code, opts) => {
     clearTimer()
     const id = ++seq
-    onViewChange({ code, seq: id })
+    onViewChange({ code, seq: id, suggestsAvulso: opts?.suggestAvulso ?? false })
     timer = setTimeout(() => {
       timer = null
       onViewChange({ code: null, seq: id })
