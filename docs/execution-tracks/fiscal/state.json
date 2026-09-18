@@ -7,12 +7,12 @@
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
-    "goals_done": 5,
+    "goals_done": 6,
     "goals_blocked": 1,
     "goals_imported": 0,
-    "ledger_lines": 6
+    "ledger_lines": 7
   },
-  "last_goal": "FISCAL-PILOT-HOMOLOGATION-UNBLOCK-022B",
+  "last_goal": "FISCAL-PILOT-EMISSION-AUTHORIZATION-HANDOFF-022D",
   "last_result": "DONE",
-  "last_ratified_at": "2026-09-17T11:52:46.577Z"
+  "last_ratified_at": "2026-09-18T00:14:08.701Z"
 }

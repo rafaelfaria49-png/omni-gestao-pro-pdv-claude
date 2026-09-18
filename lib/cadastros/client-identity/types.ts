@@ -151,6 +151,6 @@ export type ClientWriteIdentityHandoff = {
 
 export const CLIENT_IDENTITY_AUTO_MERGE = false as const
 export const CLIENT_IDENTITY_AI_DECISION = false as const
-/** CAD-R2-008: ClientWriteService implementado. Merge (018-B) continua fora. */
+/** CAD-R2-008: ClientWriteService implementado. CAD-R2-018-B: merge implementado. */
 export const CLIENT_WRITE_SERVICE_IMPLEMENTED = true as const
-export const CLIENT_MERGE_IMPLEMENTED = false as const
+export const CLIENT_MERGE_IMPLEMENTED = true as const

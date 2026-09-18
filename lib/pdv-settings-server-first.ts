@@ -10,6 +10,7 @@
  */
 
 import type { PdvClassicLayoutKind, PdvMainLayoutKind, StorePdvAtalhoRapido } from "@/lib/store-settings-types"
+import { normalizePdvScanUnregisteredAction } from "@/lib/pdv-scan-unregistered-action"
 import { readStoreScopedString, storeScopedKey, STORE_SCOPED_PDV_LAYOUT_KEY, STORE_SCOPED_PDV_CLASSIC_LAYOUT_KEY, STORE_SCOPED_PDV_MODO_KEY } from "@/lib/store-scoped-storage"
 
 export type ResolvedSetting<T> = {
@@ -121,6 +122,29 @@ export function resolvePdvShortcutsServerFirst(
 
   // 3. Default canônico
   return { value: [], source: "default", isEligibleForBackfill: false }
+}
+
+/**
+ * Resolve a ação ao bipar produto não cadastrado (GOAL 007) na precedência server-first.
+ * Chave nova (sem espelho legado em localStorage): servidor explícito válido vence;
+ * ausente/inválido cai no default canônico (`warn_offer_avulso`) — fail-safe, nunca
+ * ativa autoabertura para loja existente. Nunca elegível a backfill (nada a migrar).
+ */
+export function resolvePdvScanUnregisteredActionServerFirst(
+  serverValue: unknown,
+): ResolvedSetting<ReturnType<typeof normalizePdvScanUnregisteredAction>> {
+  if (
+    serverValue === "warn_continue" ||
+    serverValue === "warn_offer_avulso" ||
+    serverValue === "open_avulso"
+  ) {
+    return { value: serverValue, source: "server", isEligibleForBackfill: false }
+  }
+  return {
+    value: normalizePdvScanUnregisteredAction(serverValue),
+    source: "default",
+    isEligibleForBackfill: false,
+  }
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

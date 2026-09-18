@@ -2,6 +2,11 @@
 
 ## 2026-09-17
 
+### Cadastros — Revisão de duplicados + merge de Cliente (CAD-R2-018-B)
+
+- Capability server-only própria (`ClientMergeService`): discovery read-only store-scoped, preview com plano/fingerprint determinístico e execução em UMA transaction (lock consultivo → revalidar → reassign das 6 referências vivas → campos via ClientWriteService → audit `cliente.merged` → delete do loser).
+- Survivor sempre de escolha humana explícita; sem auto-merge, sem IA, sem merge cross-store/em massa; snapshots históricos (clienteNome, payloads, snapshots fiscais) intactos; sem schema/migration.
+
 ### Cadastros — ClientWriteService canônico (CAD-R2-008)
 
 - Boundary única server-only para criar/editar Cliente: normalização, validação, ownership, identidade/dedupe (`client-identity`), persistência e auditoria atômicas.

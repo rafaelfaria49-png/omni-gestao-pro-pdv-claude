@@ -121,6 +121,11 @@
       "dir": "pdv-scan-inline-feedback-autofocus-006",
       "risk_tier": "MEDIO",
       "titulo": "<PREENCHER>"
+    },
+    "pdv-scan-unregistered-action-settings-007": {
+      "dir": "pdv-scan-unregistered-action-settings-007",
+      "risk_tier": "MEDIO",
+      "titulo": "<PREENCHER>"
     }
   },
   "remote_layer": {

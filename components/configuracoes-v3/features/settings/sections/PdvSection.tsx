@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu, Eye, ArrowLeft } from "lucide-react";
+import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu, Eye, ArrowLeft, ScanBarcode } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/configuracoes-v3/components/ui/radio-group";
@@ -31,6 +31,11 @@ import {
 } from "@/lib/omnigestao-pdv-modo";
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
 import { experimentalPdvEnabled } from "@/lib/feature-flags";
+import {
+  DEFAULT_PDV_SCAN_UNREGISTERED_ACTION,
+  normalizePdvScanUnregisteredAction,
+  type PdvScanUnregisteredAction,
+} from "@/lib/pdv-scan-unregistered-action";
 
 /** Layout principal por unidade — ver `lib/pdv-layout-storage.ts`. */
 
@@ -47,6 +52,13 @@ const V3_PDV_SECTION_CARD_KEY = "v3PdvSectionCard";
  * Runtime: `omnigestao-pdv-modo` + URL `?modo=rapido` quando aplicável.
  */
 const V3_PDV_CLASSIC_MODO_KEY = "v3PdvClassicModoInicial";
+
+/**
+ * Chave canônica (GOAL 007): ação do PDV ao bipar produto não cadastrado.
+ * Server-first por unidade em `printerConfig.pdvScanUnregisteredAction`; o runtime das
+ * superfícies compatíveis lê do provider (sem espelho local — servidor é a autoridade).
+ */
+const PDV_SCAN_UNREGISTERED_KEY = "pdvScanUnregisteredAction";
 
 type PdvFlowId = "classico" | "assistencia" | "supermercado" | "next";
 
@@ -314,6 +326,8 @@ function PdvSectionContent() {
   const [savedFlow, setSavedFlow] = useState<PdvFlowId>("classico");
   const [draftClassicModo, setDraftClassicModo] = useState<ClassicModoInicial>("normal");
   const [savedClassicModo, setSavedClassicModo] = useState<ClassicModoInicial>("normal");
+  const [draftScanAction, setDraftScanAction] = useState<PdvScanUnregisteredAction>(DEFAULT_PDV_SCAN_UNREGISTERED_ACTION);
+  const [savedScanAction, setSavedScanAction] = useState<PdvScanUnregisteredAction>(DEFAULT_PDV_SCAN_UNREGISTERED_ACTION);
   const [saving, setSaving] = useState(false);
   const [previewFlow, setPreviewFlow] = useState<PreviewVariant | null>(null);
 
@@ -347,6 +361,9 @@ function PdvSectionContent() {
     setSavedFlow(flow);
     setDraftClassicModo(modo);
     setSavedClassicModo(modo);
+    const scanAction = normalizePdvScanUnregisteredAction(base[PDV_SCAN_UNREGISTERED_KEY]);
+    setDraftScanAction(scanAction);
+    setSavedScanAction(scanAction);
   }, [lojaAtivaId, settings?.printerConfig]);
 
   useEffect(() => {
@@ -357,8 +374,9 @@ function PdvSectionContent() {
   const dirty = useMemo(() => {
     if (draftFlow !== savedFlow) return true;
     if (draftFlow === "classico" && draftClassicModo !== savedClassicModo) return true;
+    if (draftScanAction !== savedScanAction) return true;
     return false;
-  }, [draftFlow, savedFlow, draftClassicModo, savedClassicModo]);
+  }, [draftFlow, savedFlow, draftClassicModo, savedClassicModo, draftScanAction, savedScanAction]);
 
   const isLightTheme = useMemo(() => {
     if (!previewFlow) return false;
@@ -376,6 +394,7 @@ function PdvSectionContent() {
   const handleCancel = () => {
     setDraftFlow(savedFlow);
     setDraftClassicModo(savedClassicModo);
+    setDraftScanAction(savedScanAction);
   };
 
   const handleSave = async () => {
@@ -405,6 +424,7 @@ function PdvSectionContent() {
         pdvParams: nextPdvParams,
         [V3_PDV_SECTION_CARD_KEY]: draftFlow,
         [V3_PDV_CLASSIC_MODO_KEY]: mirrorModo,
+        [PDV_SCAN_UNREGISTERED_KEY]: draftScanAction,
       };
 
       const res = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
@@ -447,6 +467,7 @@ function PdvSectionContent() {
       setRemotePrinterConfig(nextPrinter);
       setSavedFlow(draftFlow);
       setSavedClassicModo(draftFlow === "classico" ? draftClassicModo : "normal");
+      setSavedScanAction(draftScanAction);
       await refresh();
       toast({
         title: "PDV atualizado",
@@ -878,6 +899,59 @@ function PdvSectionContent() {
             </RadioGroup>
           </div>
         ) : null}
+
+        {/* Leitor de Código de Barras — ação ao bipar produto não cadastrado (GOAL 007) */}
+        <div
+          className="mt-6 rounded-xl border border-border/50 bg-card/50 p-5 shadow-sm"
+          data-testid="pdv-scan-unregistered-action"
+        >
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <ScanBarcode className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Leitor de Código de Barras</h3>
+              <p className="text-xs text-muted-foreground">Quando bipar um produto não cadastrado — vale para Clássico, Assistência, Rápido e Venda Completa.</p>
+            </div>
+          </div>
+
+          <RadioGroup
+            className="gap-3 md:pl-11"
+            value={draftScanAction}
+            onValueChange={(v) => {
+              if (v === "warn_continue" || v === "warn_offer_avulso" || v === "open_avulso") setDraftScanAction(v);
+            }}
+            disabled={controlsDisabled}
+          >
+            <div className="flex items-start space-x-2.5">
+              <RadioGroupItem value="warn_continue" id="pdv-scan-warn-continue" className="mt-0.5" />
+              <Label htmlFor="pdv-scan-warn-continue" className="cursor-pointer text-xs font-medium text-foreground hover:text-foreground/95">
+                Avisar e continuar
+                <span className="block text-[11px] font-normal text-muted-foreground">
+                  Mostra “Produto não cadastrado · código” no campo e segue livre para o próximo bipe.
+                </span>
+              </Label>
+            </div>
+            <div className="flex items-start space-x-2.5">
+              <RadioGroupItem value="warn_offer_avulso" id="pdv-scan-warn-offer" className="mt-0.5" />
+              <Label htmlFor="pdv-scan-warn-offer" className="cursor-pointer text-xs font-medium text-foreground hover:text-foreground/95">
+                Avisar e oferecer Item Avulso
+                <span className="block text-[11px] font-normal text-muted-foreground">
+                  Além do aviso, indica a tecla Insert — que abre o Item Avulso já com o código lido preenchido.
+                </span>
+              </Label>
+            </div>
+            <div className="flex items-start space-x-2.5">
+              <RadioGroupItem value="open_avulso" id="pdv-scan-open-avulso" className="mt-0.5" />
+              <Label htmlFor="pdv-scan-open-avulso" className="cursor-pointer text-xs font-medium text-foreground hover:text-foreground/95">
+                Abrir Item Avulso automaticamente
+                <span className="block text-[11px] font-normal text-muted-foreground">
+                  Confirmado que o código não existe, abre o Item Avulso sozinho com o código preenchido — o operador só completa descrição e preço. Não cadastra produto.
+                </span>
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
 
         {/* Tip Informativo Minimalista */}
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground/80 pl-1">

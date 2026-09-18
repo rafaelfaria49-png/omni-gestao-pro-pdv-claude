@@ -56,6 +56,7 @@ import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
@@ -199,7 +200,7 @@ export function PdvSupermercado({
   const router = useRouter()
   const { toast } = useToast()
   const { lojaAtivaId, opsStorageKey, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
-  const { pdvParams, blob, save: saveStoreSettings, impressaoConfig } = useStoreSettings()
+  const { pdvParams, blob, save: saveStoreSettings, impressaoConfig, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("supermercado")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
@@ -233,6 +234,13 @@ export function PdvSupermercado({
   const [searchTerm, setSearchTerm] = useState("")
   /** Aviso transitório de código não encontrado (um único aviso vivo). */
   const scanFeedback = usePdvScanNotFoundFeedback()
+  // GOAL 007 — política por loja "quando bipar um produto não cadastrado" (server-first).
+  const scanUnregisteredPolicy = useMemo(
+    () => resolvePdvScanUnregisteredPolicy(pdvScanUnregisteredAction),
+    [pdvScanUnregisteredAction],
+  )
+  /** Código do último miss scan-like — contexto do Item Avulso nos modos B/C. */
+  const missedScanCodeRef = useRef<string | null>(null)
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
   const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -270,6 +278,13 @@ export function PdvSupermercado({
   const [accessoryProduct, setAccessoryProduct] = useState<Product | null>(null)
   const accessoryQtyRef = useRef(1)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  /** Contexto transitório (GOAL 007): código bipado não cadastrado semeado no modal. */
+  const [avulsoSeedCodigo, setAvulsoSeedCodigo] = useState<string | null>(null)
+  /** Único caminho de abertura do Item Avulso: TODO abrir é explícito sobre o contexto. */
+  const openItemAvulso = useCallback((seedCodigo: string | null) => {
+    setAvulsoSeedCodigo(seedCodigo)
+    setShowItemAvulsoModal(true)
+  }, [])
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
   const [recebimentoOpen, setRecebimentoOpen] = useState(false)
   const [trocasOpen, setTrocasOpen] = useState(false)
@@ -899,7 +914,19 @@ export function PdvSupermercado({
           return
         }
         if (remote.kind === "none" || remote.kind === "error") {
-          scanFeedback.notify(lookupTerm)
+          scanFeedback.notify(lookupTerm, {
+            suggestAvulso: scanLike && scanUnregisteredPolicy.showInsertHint,
+          })
+          // GOAL 007 — política por loja só age APÓS o fluxo determinar PRODUTO NÃO
+          // ENCONTRADO (match exato, parciais e busca textual nunca chegam aqui).
+          // Miss de busca textual invalida o contexto do último código SCAN-like.
+          missedScanCodeRef.current = scanLike ? lookupTerm : null
+          // Autoabertura (modo C) SÓ para scan-like; miss de busca textual nunca abre modal.
+          if (scanLike && scanUnregisteredPolicy.autoOpenAvulso && !hasBlockingPdvDialog()) {
+            // Modo C: Item Avulso UMA vez por scan, código como contexto.
+            openItemAvulso(lookupTerm)
+            return
+          }
           hardFocusSearch()
           return
         }
@@ -913,7 +940,7 @@ export function PdvSupermercado({
       })
       hardFocusSearch()
     },
-    [addToCart, filterCatalogByTerm, filteredProducts, findProductByEan, hardFocusSearch, searchTerm, toast, lojaKey, setInventory, scanFeedback]
+    [addToCart, filterCatalogByTerm, filteredProducts, findProductByEan, hardFocusSearch, searchTerm, toast, lojaKey, setInventory, scanFeedback, scanUnregisteredPolicy, openItemAvulso]
   )
 
   // Atalhos de teclado (evitar conflitos com o navegador)
@@ -952,7 +979,14 @@ export function PdvSupermercado({
 
       e.preventDefault()
       e.stopPropagation()
-      if (e.key === "Insert") setShowItemAvulsoModal(true)
+      if (e.key === "Insert") {
+        // GOAL 007 (modos B/C): contexto do último código não cadastrado, seguro apenas
+        // se o campo segue vazio (nada digitado depois do miss). Modo A abre limpo.
+        const stash = missedScanCodeRef.current
+        missedScanCodeRef.current = null
+        const campoVazio = (productInputRef.current?.value ?? "").trim() === ""
+        openItemAvulso(scanUnregisteredPolicy.offersAvulsoContext && campoVazio ? stash : null)
+      }
       else if (e.key === "F7") { if (heldSalesEnabled) setVendaEsperaOpen(true) }
       else if (e.key === "F8") {
         appendAuditLog({
@@ -976,7 +1010,7 @@ export function PdvSupermercado({
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado, heldSalesEnabled, customerSearchEnabled, hardFocusSearch, scanFeedback])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado, heldSalesEnabled, customerSearchEnabled, hardFocusSearch, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = useHeldSales(lojaKey, terminalIdForHold, "supermercado")
@@ -1834,12 +1868,16 @@ export function PdvSupermercado({
 
       <ItemAvulsoModal
         open={showItemAvulsoModal}
+        initialCodigo={avulsoSeedCodigo}
         onOpenChange={(open) => {
           setShowItemAvulsoModal(open)
-          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca.
+          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca
+          // e sem contexto transitório de scan (GOAL 007).
           if (!open) {
             setSearchTerm("")
             scanFeedback.dismiss()
+            missedScanCodeRef.current = null
+            setAvulsoSeedCodigo(null)
           }
         }}
         onCloseAutoFocus={(e) => {

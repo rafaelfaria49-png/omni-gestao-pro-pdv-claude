@@ -58,6 +58,13 @@ interface ItemAvulsoModalProps {
    * restaura o foco depois da animação de saída e sobrescreveria um `focus()` feito no fechamento.
    */
   onCloseAutoFocus?: (event: Event) => void
+  /**
+   * Código bipado não cadastrado que originou a abertura (GOAL 007): semeia o campo
+   * "Código de barras / SKU" como CONTEXTO do lançamento avulso — o código lido não se perde.
+   * NÃO cadastra produto e NÃO persiste nada silenciosamente; `null`/ausente abre limpo
+   * (comportamento atual). O foco inicial continua na Descrição.
+   */
+  initialCodigo?: string | null
 }
 
 function parseDecimal(raw: string): number {
@@ -76,6 +83,7 @@ export function ItemAvulsoModal({
   onConfirm,
   checkCodigoExistente,
   onCloseAutoFocus,
+  initialCodigo = null,
 }: ItemAvulsoModalProps) {
   const [description, setDescription] = useState("")
   const [unitPriceInput, setUnitPriceInput] = useState("")
@@ -84,18 +92,19 @@ export function ItemAvulsoModal({
   const [codigoInput, setCodigoInput] = useState("")
   const descriptionRef = useRef<HTMLInputElement | null>(null)
 
-  // Reset + foco no campo de descrição a cada abertura.
+  // Reset + foco no campo de descrição a cada abertura. Com `initialCodigo` (código bipado
+  // não cadastrado, GOAL 007) o campo de código entra SEMEADO — só a descrição/valores resetam.
   useEffect(() => {
     if (!open) return
     setDescription("")
     setUnitPriceInput("")
     setQuantityInput("1")
     setCustoInput("")
-    setCodigoInput("")
+    setCodigoInput(initialCodigo ? initialCodigo.trim() : "")
     // requestAnimationFrame garante que o Dialog terminou o mount antes do focus.
     const t = window.requestAnimationFrame(() => descriptionRef.current?.focus())
     return () => window.cancelAnimationFrame(t)
-  }, [open])
+  }, [open, initialCodigo])
 
   const trimmedDescription = description.trim()
   const unitPrice = parseDecimal(unitPriceInput)
@@ -185,8 +194,13 @@ export function ItemAvulsoModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="item-avulso-codigo" className="text-muted-foreground">
+            <Label htmlFor="item-avulso-codigo" className="flex items-center gap-2 text-muted-foreground">
               Código de barras / SKU — opcional
+              {initialCodigo ? (
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  capturado do bipe
+                </span>
+              ) : null}
             </Label>
             <Input
               id="item-avulso-codigo"

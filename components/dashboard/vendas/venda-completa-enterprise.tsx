@@ -43,6 +43,7 @@ import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
@@ -216,7 +217,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const { sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
   const { empresaDocumentos, lojaAtivaId, getEnderecoDocumentos } = useLojaAtiva()
-  const { pdvParams, impressaoConfig } = useStoreSettings()
+  const { pdvParams, impressaoConfig, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("venda-completa")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
@@ -249,6 +250,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const [productQuery, setProductQuery] = useState("")
   /** Aviso transitório de código não encontrado (um único aviso vivo). */
   const scanFeedback = usePdvScanNotFoundFeedback()
+  // GOAL 007 — política por loja "quando bipar um produto não cadastrado" (server-first).
+  const scanUnregisteredPolicy = useMemo(
+    () => resolvePdvScanUnregisteredPolicy(pdvScanUnregisteredAction),
+    [pdvScanUnregisteredAction],
+  )
+  /** Código do último miss scan-like — contexto do Item Avulso nos modos B/C. */
+  const missedScanCodeRef = useRef<string | null>(null)
   const [showProductDropdown, setShowProductDropdown] = useState(false)
   const productInputRef = useRef<HTMLInputElement>(null)
 
@@ -282,6 +290,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
   // ── Item avulso + venda em espera (paridade com Clássico/Assistência) ──────
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  /** Contexto transitório (GOAL 007): código bipado não cadastrado semeado no modal. */
+  const [avulsoSeedCodigo, setAvulsoSeedCodigo] = useState<string | null>(null)
+  /** Único caminho de abertura do Item Avulso: TODO abrir é explícito sobre o contexto. */
+  const openItemAvulso = useCallback((seedCodigo: string | null) => {
+    setAvulsoSeedCodigo(seedCodigo)
+    setShowItemAvulsoModal(true)
+  }, [])
   const [showVendaEsperaModal, setShowVendaEsperaModal] = useState(false)
   // ── Acessório modelo/cor (mesmo contrato do Clássico/Assistência/Super) ───
   const [accessoryProduct, setAccessoryProduct] = useState<PdvCatalogProduct | null>(null)
@@ -446,7 +461,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         case "Insert":
           // Item Avulso — venda de balcão sem cadastro (igual Clássico/Assistência).
           e.preventDefault()
-          if (!anyModalOpen) setShowItemAvulsoModal(true)
+          if (!anyModalOpen) {
+            // GOAL 007 (modos B/C): contexto do último código não cadastrado, seguro
+            // apenas se o campo segue vazio. Modo A abre limpo, como sempre.
+            const stash = missedScanCodeRef.current
+            missedScanCodeRef.current = null
+            const campoVazio = (productInputRef.current?.value ?? "").trim() === ""
+            openItemAvulso(scanUnregisteredPolicy.offersAvulsoContext && campoVazio ? stash : null)
+          }
           break
         case "F7":
           e.preventDefault()
@@ -464,7 +486,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal, accessoryProduct],
+    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal, accessoryProduct, scanUnregisteredPolicy, openItemAvulso],
   )
 
   useEffect(() => {
@@ -1367,7 +1389,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1 px-2 text-xs"
-                    onClick={() => setShowItemAvulsoModal(true)}
+                    onClick={() => openItemAvulso(null)}
                     title="Item avulso — venda de balcão sem cadastro [INS]"
                   >
                     <PlusCircle className="h-3.5 w-3.5" />
@@ -1466,7 +1488,20 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                         toast({ title: "Vários produtos", description: `Mais de um item para "${parsed.query}". Refine a busca.` })
                         return
                       }
-                      scanFeedback.notify(parsed.query)
+                      scanFeedback.notify(parsed.query, {
+                        suggestAvulso: scanLike && scanUnregisteredPolicy.showInsertHint,
+                      })
+                      // GOAL 007 — política por loja só age APÓS o fluxo determinar PRODUTO
+                      // NÃO ENCONTRADO (match exato, parciais e busca textual nunca chegam aqui).
+                      // Miss de busca textual invalida o contexto do último código SCAN-like.
+                      missedScanCodeRef.current = scanLike ? parsed.query : null
+                      // Autoabertura (modo C) SÓ para scan-like; miss de busca textual nunca abre modal.
+                      if (scanLike && scanUnregisteredPolicy.autoOpenAvulso && !hasBlockingPdvDialog()) {
+                        // Modo C: Item Avulso UMA vez por scan, código como contexto.
+                        setShowProductDropdown(false)
+                        openItemAvulso(parsed.query)
+                        return
+                      }
                       queueMicrotask(() => productInputRef.current?.focus())
                     }
                     if (e.key === "Escape") { setShowProductDropdown(false); setProductQuery(""); scanFeedback.dismiss() }
@@ -2014,12 +2049,16 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       {/* ── Item avulso (INSERT) ── */}
       <ItemAvulsoModal
         open={showItemAvulsoModal}
+        initialCodigo={avulsoSeedCodigo}
         onOpenChange={(open) => {
           setShowItemAvulsoModal(open)
-          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca.
+          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca
+          // e sem contexto transitório de scan (GOAL 007).
           if (!open) {
             setProductQuery("")
             scanFeedback.dismiss()
+            missedScanCodeRef.current = null
+            setAvulsoSeedCodigo(null)
           }
         }}
         onCloseAutoFocus={(e) => {
