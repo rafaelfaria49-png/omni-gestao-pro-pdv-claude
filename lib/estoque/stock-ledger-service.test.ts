@@ -601,6 +601,82 @@ describe("stock-ledger-service — core", () => {
     expect(f.movs.size).toBe(0)
   })
 
+  it("11r. livro em conflito com os dois lados: zero mutação", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 10 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 }],
+      movs: [{
+        id: "m-seed",
+        storeId: "loja-a",
+        produtoId: "p1",
+        tipo: "ajuste",
+        quantidade: 7,
+        documento: null,
+        motivo: null,
+        custoUnitario: 0,
+        estoqueAntes: 0,
+        estoqueDepois: 7,
+        custoMedioAntes: 5,
+        custoMedioDepois: 5,
+        origem: "manual",
+        idempotencyKey: null,
+        createdAt: 1,
+      }],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.drift?.driftReason).toBe("ledger_conflict")
+    expect(f.produtos.get("p1")?.stock).toBe(10)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(4)
+    expect(f.movs.size).toBe(1)
+  })
+
+  it("11s. undercount com dois depósitos positivos: zero mutação", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 10 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }, { id: "d2", storeId: "loja-a" }],
+      pds: [
+        { produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 },
+        { produtoId: "p1", depositoId: "d2", storeId: "loja-a", quantidade: 2 },
+      ],
+      movs: [{
+        id: "m-seed",
+        storeId: "loja-a",
+        produtoId: "p1",
+        tipo: "entrada",
+        quantidade: 10,
+        documento: null,
+        motivo: null,
+        custoUnitario: 0,
+        estoqueAntes: 0,
+        estoqueDepois: 10,
+        custoMedioAntes: 5,
+        custoMedioDepois: 5,
+        origem: "cadastro",
+        idempotencyKey: null,
+        createdAt: 1,
+      }],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv", realinharDepositoAoStock: true, depositoId: "d1" },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.drift?.driftReason).toBe("multi_deposit_ambiguous")
+    expect(f.produtos.get("p1")?.stock).toBe(10)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(4)
+    expect(f.pds.get("p1|d2")?.quantidade).toBe(2)
+    expect(f.movs.size).toBe(1)
+  })
+
   it("12. saída insuficiente bloqueada (agregado e depósito)", async () => {
     const f = makeFake({ produtos: [prod({ stock: 1 })], depositos: [{ id: "d1", storeId: "loja-a" }], pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 1 }] })
     const r = await applyStockMutation(ctx(), { kind: "saida", produtoId: "p1", quantidade: 2, origem: "pdv" }, { db: f.db })

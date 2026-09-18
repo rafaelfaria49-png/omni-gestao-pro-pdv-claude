@@ -711,7 +711,14 @@ interface OperationsContextType {
 
 type PersistPendingSaleResult =
   | { ok: true; pedidoId?: string; serverId?: string; clientSaleId?: string }
-  | { ok: false; reason: string; code?: string; networkError?: boolean; httpStatus?: number }
+  | {
+      ok: false
+      reason: string
+      code?: string
+      networkError?: boolean
+      httpStatus?: number
+      drift?: import("@/lib/estoque/stock-drift-reconcile").StockDriftDetails
+    }
 
 type FinalizeSaleTransactionResult = Awaited<ReturnType<OperationsContextType["finalizeSaleTransaction"]>>
 
@@ -1544,6 +1551,7 @@ export function OperationsProvider({
             reason: `HTTP ${v1.status} — ${v1Parsed.message}`,
             code: v1Code,
             httpStatus: v1.status,
+            ...(v1Parsed.drift ? { drift: v1Parsed.drift } : {}),
           }
         }
         markSaleBlocked(token, { code, httpStatus: res.status, message: parsed.message, networkError: false, drift: parsed.drift })
@@ -1552,6 +1560,7 @@ export function OperationsProvider({
           reason: `HTTP ${res.status} — ${parsed.message}`,
           ...(code ? { code } : {}),
           httpStatus: res.status,
+          ...(parsed.drift ? { drift: parsed.drift } : {}),
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -2680,6 +2689,7 @@ export function OperationsProvider({
         httpStatus: persistResult.httpStatus,
         networkError: persistResult.networkError,
         message: persistResult.reason,
+        drift: persistResult.drift,
       })
       console.error("[venda-persist]", saleRow.id, "lojaId:", lj, persistResult.reason)
       toast({
