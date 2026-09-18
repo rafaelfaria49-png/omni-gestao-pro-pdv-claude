@@ -23,7 +23,12 @@
     "lib/pdv-formas-pagamento.test.ts",
     "lib/pdv-finalize-integrity.test.ts",
     "lib/pdv-pending-post-sale-effects.static.test.ts",
-    "docs/ai-execution/_evidence/**"
+    "docs/ai-execution/_evidence/**",
+    "docs/execution-tracks/REGISTRY.md",
+    "docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/LEDGER.jsonl",
+    "docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json",
+    "docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/_closed/goals/PDV-PARITY-N5-B1-CORE-GAPS-001.md",
+    "docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/_closed/reports/PDV-PARITY-N5-B1-CORE-GAPS-001-a1.md"
   ],
   "gates_liberados": [],
   "read_budget": 200,
