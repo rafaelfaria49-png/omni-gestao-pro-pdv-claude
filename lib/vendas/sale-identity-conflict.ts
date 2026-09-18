@@ -1,4 +1,5 @@
 import { isRecord } from "@/lib/pdv-mount-guards"
+import { classifyPendingSyncFailure, PENDING_SYNC_CLASS } from "@/lib/vendas/pending-sync-classification"
 
 export const SALE_IDENTITY_CONFLICT_CODES = [
   "PEDIDO_ID_DE_OUTRA_LOJA",
@@ -20,9 +21,13 @@ export const SALE_IDENTITY_CONFLICT_GUIDANCE =
 
 export function saleSyncActionsForCode(code: unknown) {
   const quarantined = isSaleIdentityConflictCode(code)
+  const classified = classifyPendingSyncFailure({
+    code: typeof code === "string" ? code : undefined,
+  })
+  const actionRequired = classified === PENDING_SYNC_CLASS.ACTION_REQUIRED
   return {
     quarantined,
-    canAutoRetry: !quarantined,
+    canAutoRetry: !quarantined && !actionRequired,
     canManualRetry: !quarantined,
     canRetroactiveRetry: !quarantined,
     canDiscard: !quarantined,

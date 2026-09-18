@@ -28,7 +28,7 @@ vi.mock("@/lib/auth/session-operator", () => ({
 }))
 
 import { POST } from "./route"
-import { FractionalQuantityError, VendaCreateUniqueConflictError } from "@/lib/ops-upsert-venda"
+import { FractionalQuantityError, StockLedgerBusinessError, VendaCreateUniqueConflictError } from "@/lib/ops-upsert-venda"
 
 function requestSale(total = 100) {
   return {
@@ -197,4 +197,18 @@ describe("POST /api/ops/venda-persist — quantidade fracionada (FRACTIONAL-SALE
       expect(h.findUnique).not.toHaveBeenCalled()
     },
   )
+
+  it("STOCK_INVARIANT_DRIFT vira 409 (nunca 503)", async () => {
+    h.transaction.mockRejectedValue(
+      new StockLedgerBusinessError(
+        "STOCK_INVARIANT_DRIFT",
+        "Divergência estrutural: SUM(depósitos)=5 != Produto.stock=4.",
+        "prod-1",
+      ),
+    )
+    const response = await POST(req({ sale: fractionalSale(1) }))
+    const body = await response.json()
+    expect(response.status).toBe(409)
+    expect(body.code).toBe("STOCK_INVARIANT_DRIFT")
+  })
 })

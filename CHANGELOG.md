@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-18
+
+### PDV — Atomicidade de pending sync (P0)
+
+- Writer V1/V2 passa a devolver HTTP 409 com `STOCK_INVARIANT_DRIFT` em vez de 500, interrompendo o reenvio automático infinito.
+- Saída PDV ao vivo pode realinhar o depósito principal para baixo quando SUM(depósitos) > `Produto.stock` (cadastros continuam fail-closed).
+- PENDING não muta estoque/caixa/ledger até CONFIRMED; a mesma `clientSaleId` não reaplica efeitos; descarte 404 recompõe o estado local.
+
 ## 2026-09-17
 
 ### Cadastros — Revisão de duplicados + merge de Cliente (CAD-R2-018-B)

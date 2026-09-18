@@ -90,6 +90,7 @@ import {
   SALE_IDENTITY_CONFLICT_TITLE,
   saleSyncActionsForCode,
 } from "@/lib/vendas/sale-identity-conflict"
+import { pendingReasonView, PENDING_SYNC_CLASS } from "@/lib/vendas/pending-sync-classification"
 import {
   classifyLocalSaleSync,
   displaySaleNumber,
@@ -340,6 +341,19 @@ export function VendasArquivoGeral() {
   )
   const pendingSaleSyncActions = saleSyncActionsForCode(pendenteLocalLive?.syncBlockedCode)
   const conflitoIdentidade = pendingSaleSyncActions.quarantined
+  const pendingReason = useMemo(
+    () =>
+      pendenteLocalLive
+        ? pendingReasonView({
+            code: pendenteLocalLive.syncBlockedCode,
+            httpStatus: pendenteLocalLive.syncHttpStatus,
+            networkError: pendenteLocalLive.syncNetworkError,
+            message: pendenteLocalLive.syncFailureMessage,
+            pending: true,
+          })
+        : null,
+    [pendenteLocalLive],
+  )
 
   // Cupom modal
   const [cupomOpen, setCupomOpen] = useState(false)
@@ -1969,11 +1983,26 @@ export function VendasArquivoGeral() {
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   <div className="text-sm space-y-1 min-w-0">
                     <p className="font-semibold text-foreground">
-                      Venda pendente de sincronização
+                      {pendingReason?.title ?? "Venda já registrada localmente e aguardando confirmação"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Esta venda ainda não foi confirmada no servidor. Os dados abaixo vêm apenas do dispositivo local.
+                      {pendingReason?.description ??
+                        "Esta venda ainda não foi confirmada no servidor. Os dados abaixo vêm apenas do dispositivo local."}
                     </p>
+                    {pendingReason && (
+                      <p className="text-xs text-muted-foreground">
+                        {pendingReason.class === PENDING_SYNC_CLASS.AUTO_RETRY
+                          ? "Retry automático ativo."
+                          : pendingReason.recommendedAction}
+                        {typeof pendenteLocalLive?.syncAttemptCount === "number" &&
+                          pendenteLocalLive.syncAttemptCount > 0 && (
+                            <> Tentativas: {pendenteLocalLive.syncAttemptCount}.</>
+                          )}
+                        {pendenteLocalLive?.syncLastAttemptAt && (
+                          <> Última tentativa: {fmtDate(pendenteLocalLive.syncLastAttemptAt)}.</>
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
 

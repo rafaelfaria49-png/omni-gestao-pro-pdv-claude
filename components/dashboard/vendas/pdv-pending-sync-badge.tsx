@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { isSaleIdentityConflictCode } from "@/lib/vendas/sale-identity-conflict"
 import { summarizeLocalPendingSales } from "@/lib/vendas/quarantine-local-reconciliation"
+import { pendingReasonView, PENDING_SYNC_CLASS } from "@/lib/vendas/pending-sync-classification"
 
 const SEM_REVISAO: ReadonlySet<string> = new Set()
 
@@ -17,13 +18,7 @@ const SEM_REVISAO: ReadonlySet<string> = new Set()
  * com `syncPending`) e avisa o operador ANTES de limpar os dados do navegador — protege
  * contra perder venda offline.
  *
- * Mostra somente pendência que existe de fato: venda reconciliada sai da contagem. Venda
- * preservada por conflito de identificação é resolvida pela reconciliação automática; só
- * as que o servidor devolveu para revisão viram assunto do administrador.
- *
- * A ação "Reenviar" reusa o fluxo EXISTENTE `retrySyncSale` (uma venda por vez) —
- * NÃO cria mecanismo de sync novo nem apaga pendências. Devoluções/caixa também
- * reenviam automaticamente (online/foco/30s); aqui só ficam visíveis na contagem.
+ * Distingue AUTO_RETRY / ACTION_REQUIRED / QUARANTINED. Não esconde o banner.
  */
 export function PdvPendingSyncBadge({ className }: { className?: string }) {
   const { sales, devolucoes, pendingCaixaOperations, retrySyncSale, quarantineReviewKeys } =
@@ -31,12 +26,28 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
   const { toast } = useToast()
   const [resending, setResending] = useState(false)
 
-  const { salesPend, retryableSales, preservadas, revisao, devPend, caixaPend, total } = useMemo(() => {
+  const { salesPend, retryableSales, preservadas, revisao, devPend, caixaPend, total, headline } = useMemo(() => {
     const sp = sales.filter((s) => s.syncPending === true)
     const retryable = sp.filter((s) => !isSaleIdentityConflictCode(s.syncBlockedCode))
     const resumo = summarizeLocalPendingSales(sp, quarantineReviewKeys ?? SEM_REVISAO)
     const dp = devolucoes.filter((d) => d.syncPending === true).length
     const cp = (pendingCaixaOperations ?? []).filter((o) => o.syncPending === true).length
+    const views = sp.map((s) =>
+      pendingReasonView({
+        code: s.syncBlockedCode,
+        httpStatus: s.syncHttpStatus,
+        networkError: s.syncNetworkError,
+        message: s.syncFailureMessage,
+        pending: true,
+      }),
+    )
+    const actionRequiredViews = views.filter((v) => v.class === PENDING_SYNC_CLASS.ACTION_REQUIRED)
+    const autoRetry = views.filter((v) => v.class === PENDING_SYNC_CLASS.AUTO_RETRY)
+    const quarantined = views.filter((v) => v.class === PENDING_SYNC_CLASS.QUARANTINED)
+    const primary =
+      actionRequiredViews[0] ??
+      (autoRetry.length > 0 ? autoRetry[0] : undefined) ??
+      quarantined[0]
     return {
       salesPend: sp,
       retryableSales: retryable,
@@ -45,6 +56,7 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
       devPend: dp,
       caixaPend: cp,
       total: sp.length + dp + cp,
+      headline: primary,
     }
   }, [sales, devolucoes, pendingCaixaOperations, quarantineReviewKeys])
 
@@ -55,13 +67,21 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
   if (devPend) parts.push(`${devPend} devolução(ões)`)
   if (caixaPend) parts.push(`${caixaPend} caixa`)
 
+  const actionRequired = headline?.class === PENDING_SYNC_CLASS.ACTION_REQUIRED
+  const quarantinedOnly = headline?.class === PENDING_SYNC_CLASS.QUARANTINED
+
+  const reasonLine = quarantinedOnly
+    ? " O sistema envia automaticamente — não limpe os dados do navegador antes de concluir."
+    : headline
+      ? ` ${headline.title}. ${headline.recommendedAction}`
+      : " O sistema envia automaticamente — não limpe os dados do navegador antes de concluir."
+
   const reenviar = async () => {
     if (resending || retryableSales.length === 0) return
     setResending(true)
     try {
       let ok = 0
       let fail = 0
-      // Vendas preservadas não entram no reenvio comum: a reconciliação automática cuida delas.
       let automaticas = preservadas
       for (const s of retryableSales) {
         if (!s.id) continue
@@ -95,8 +115,9 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
     >
       <AlertTriangle className="h-4 w-4 shrink-0" />
       <span className="min-w-0">
-        <strong>{total}</strong> pendência(s) de sincronização ({parts.join(" · ")}). O sistema envia
-        automaticamente — não limpe os dados do navegador antes de concluir.
+        <strong>{total}</strong> pendência(s) de sincronização ({parts.join(" · ")}).
+        {reasonLine}
+        {actionRequired && <> Ação necessária — não reenviar em loop.</>}
         {revisao > 0 && <> {revisao} venda(s) precisam de revisão do administrador em Vendas.</>}
       </span>
       {retryableSales.length > 0 && (

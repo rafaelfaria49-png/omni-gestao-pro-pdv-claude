@@ -60,9 +60,9 @@ export const FINALIZE_IN_FLIGHT_FEEDBACK = {
  * reconfirmar pelo PaymentModal criaria uma segunda identidade.
  */
 export const PENDING_RETRY_GUIDANCE = {
-  title: "Venda pendente de sincronização",
+  title: "Venda já registrada localmente e aguardando confirmação",
   description:
-    "Esta venda já tem identidade registrada e está na fila de reenvio (Vendas → Reenviar sync). Confirme pelo modal só depois de resolver a pendência ou iniciar um carrinho novo.",
+    "Aguarde a sincronização ou use Reenviar da mesma venda em Histórico de Vendas. Finalizar de novo criaria outra tentativa.",
 } as const
 
 /** Identidade já criada pelo motor N1 para uma venda PENDING. */

@@ -76,3 +76,15 @@ describe("canStartIndividualQuarantineRecovery", () => {
     )
   })
 })
+
+describe("parseSalePersistError", () => {
+  it("extrai STOCK_INVARIANT_DRIFT de 500 legado sem code", async () => {
+    const { parseSalePersistError } = await import("./sale-client-sync")
+    const parsed = parseSalePersistError(
+      JSON.stringify({
+        error: "[ops/venda-persist/v2] loja-1 [upsert-venda] baixa de estoque falhou: STOCK_INVARIANT_DRIFT Divergência estrutural: SUM(depósitos)=5 != Produto.stock=4.",
+      }),
+    )
+    expect(parsed.code).toBe("STOCK_INVARIANT_DRIFT")
+  })
+})
