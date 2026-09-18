@@ -7,6 +7,7 @@ import type {
   PdvClassicLayoutKind,
   PdvMainLayoutKind,
   StoreCapabilitiesV1,
+  StorePdvAtalhoRapido,
   StorePdvParams,
   StoreSettingsApi,
   StoreSettingsBlob,
@@ -29,6 +30,12 @@ import {
   applyIfLiveStoreSettingsEpoch,
   createStoreSettingsEpochGate,
 } from "@/lib/store-settings-request-epoch"
+import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
+import {
+  sanitizeAtalhosRapidos,
+  sanitizeGarantiaCategorias,
+  sanitizeStringList,
+} from "@/lib/pdv-mount-guards"
 
 export type StoreSettingsContextType = {
   /** ID da unidade ativa; vazio quando nenhuma loja está selecionada (sem fallback silencioso). */
@@ -103,8 +110,14 @@ function mergePdvParams(base: StorePdvParams, patch: Partial<StorePdvParams> | u
     ...base,
     ...p,
     pdvClassicLayout: layout,
-    atalhosRapidos: Array.isArray(p.atalhosRapidos) ? p.atalhosRapidos : base.atalhosRapidos,
-    categoriasOcultasNoPdv: Array.isArray(p.categoriasOcultasNoPdv) ? p.categoriasOcultasNoPdv : base.categoriasOcultasNoPdv,
+    // P0 PDV-RAFACELL-LOAD-CRASH: elementos nulos (settings parcial da loja)
+    // normalizam em vez de lançar no mount do PDV.
+    atalhosRapidos: sanitizeAtalhosRapidos<StorePdvAtalhoRapido>(
+      Array.isArray(p.atalhosRapidos) ? p.atalhosRapidos : base.atalhosRapidos,
+    ),
+    categoriasOcultasNoPdv: sanitizeStringList(
+      Array.isArray(p.categoriasOcultasNoPdv) ? p.categoriasOcultasNoPdv : base.categoriasOcultasNoPdv,
+    ),
     formasPagamento: normalizeFormasPagamento(
       Array.isArray(p.formasPagamento) ? p.formasPagamento : base.formasPagamento,
     ),
@@ -113,11 +126,15 @@ function mergePdvParams(base: StorePdvParams, patch: Partial<StorePdvParams> | u
 
 function mergeTermosGarantia(patch: unknown): TermosGarantia {
   const p = safeObj(patch)
-  const categorias = Array.isArray((p as any).categorias) ? ((p as any).categorias as any[]) : configPadrao.termosGarantia.categorias
-  const mergedCats: CategoriaGarantia[] = categorias.map((c) => ({
-    id: String((c as any).id),
-    servico: String((c as any).servico ?? ""),
-    detalhes: String((c as any).detalhes ?? ""),
+  const rawCategorias = Array.isArray((p as any).categorias)
+    ? ((p as any).categorias as any[])
+    : configPadrao.termosGarantia.categorias
+  // P0 PDV-RAFACELL-LOAD-CRASH: categoria nula (settings parcial da loja)
+  // normaliza em vez de lançar no mount.
+  const mergedCats: CategoriaGarantia[] = sanitizeGarantiaCategorias<CategoriaGarantia>(rawCategorias).map((c) => ({
+    id: String(c.id),
+    servico: String(c.servico ?? ""),
+    detalhes: String(c.detalhes ?? ""),
   }))
   const garantiaLegal = String((p as any).garantiaLegal ?? "").trim() || GARANTIA_LEGAL_CDC
   const tituloGeral = String((p as any).tituloGeral ?? "").trim() || configPadrao.termosGarantia.tituloGeral
@@ -157,10 +174,13 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(j?.settings ?? null)
       })
+      // P0 PDV-RAFACELL-LOAD-CRASH: observabilidade do mount (só status/contagens).
+      markPdvMountStep("settings", storeId, r.ok, { code: r.ok ? undefined : `HTTP_${r.status}` })
     } catch {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(null)
       })
+      markPdvMountStep("settings", storeId, false, { code: "fetch_failed" })
     } finally {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setHydrated(true)

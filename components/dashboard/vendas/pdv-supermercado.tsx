@@ -49,6 +49,7 @@ import {
   toPaymentMethodType,
 } from "@/lib/pdv-formas-pagamento"
 import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
+import { sanitizeInventoryItems } from "@/lib/pdv-mount-guards"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
@@ -334,12 +335,15 @@ export function PdvSupermercado({
   }, [cart.length])
 
   const products = useMemo(
-    () => (Array.isArray(inventory) ? inventory.map(inventoryItemToPdvProduct) : []),
+    // P0 PDV-RAFACELL-LOAD-CRASH: inventário sanitizado no mount — UMA entrada
+    // inválida da loja nunca derruba a superfície.
+    () => sanitizeInventoryItems<InventoryItem>(inventory).map(inventoryItemToPdvProduct),
     [inventory]
   )
 
   const quickItems = useMemo(() => {
-    const byId = new Map(inventory.map((i) => [i.id, i]))
+    const safeInventory = sanitizeInventoryItems<InventoryItem>(inventory)
+    const byId = new Map(safeInventory.map((i) => [i.id, i]))
     const out: PdvCatalogProduct[] = []
     
     // Filtrar apenas os atalhos ativos

@@ -36,6 +36,8 @@ import {
 } from "@/app/actions/terminais"
 import { getDeviceId, lockTerminal, type TerminalSnapshot } from "@/lib/pdv-terminal"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import { sanitizeTerminalCards } from "@/lib/pdv-mount-guards"
+import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
 
 interface TerminalSelectorProps {
   storeId: string
@@ -98,9 +100,14 @@ export function TerminalSelector({
       if (!silent) setLoading(true)
       try {
         const rows = await listTerminais(sid, getDeviceId())
-        setTerminais(rows)
-        setError(rows.length === 0)
+        // P0 PDV-RAFACELL-LOAD-CRASH: normaliza cartões (terminal sem lock cai
+        // para INATIVO em vez de lançar `t.lock.status` no render).
+        const clean = sanitizeTerminalCards<PdvTerminalDTO>(rows)
+        setTerminais(clean)
+        setError(clean.length === 0)
+        markPdvMountStep("terminal", sid, true, { counts: { terminais: clean.length } })
       } catch {
+        markPdvMountStep("terminal", sid, false, { code: "list_failed" })
         if (!silent) {
           setTerminais([])
           setError(true)
@@ -284,8 +291,13 @@ export function TerminalSelector({
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {terminais.map((t) => {
-              const s = t.lock.status
-              const atual = selectedCode != null && t.code === selectedCode
+              // P0 PDV-RAFACELL-LOAD-CRASH: cartão defensivo — dado parcial da
+              // loja nunca derruba a seleção de terminal.
+              if (!t || typeof t !== "object") return null
+              const s = t.lock?.status ?? "INATIVO"
+              const nome = typeof t.name === "string" && t.name ? t.name : (typeof t.code === "string" && t.code ? t.code : "Terminal")
+              const codigo = typeof t.code === "string" ? t.code : ""
+              const atual = selectedCode != null && codigo !== "" && codigo === selectedCode
               const busy = busyId === t.id
               return (
                 <div
@@ -314,13 +326,13 @@ export function TerminalSelector({
                   </div>
 
                   <div className="mt-3 min-w-0">
-                    <p className="truncate text-base font-semibold text-foreground">{t.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{t.code}</p>
+                    <p className="truncate text-base font-semibold text-foreground">{nome}</p>
+                    <p className="truncate text-xs text-muted-foreground">{codigo}</p>
                     {(s === "OCUPADO" || s === "EXPIRADO") && (
                       <p className="mt-1 truncate text-[11px] text-muted-foreground">
-                        {t.lock.lockedByOperador ? `${t.lock.lockedByOperador} · ` : ""}
+                        {t.lock?.lockedByOperador ? `${t.lock.lockedByOperador} · ` : ""}
                         {s === "EXPIRADO" ? "sem sinal desde " : "último sinal "}
-                        {fmtHora(t.lock.heartbeatAt)}
+                        {fmtHora(t.lock?.heartbeatAt ?? null)}
                       </p>
                     )}
                   </div>
@@ -430,7 +442,7 @@ export function TerminalSelector({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm?.kind === "assumir"
-                ? `O ${confirm?.terminal.name} está em uso por ${confirm?.terminal.lock.lockedByOperador || "outro dispositivo"}. Assumir vai desconectar o outro operador imediatamente. Esta ação é registrada nos logs do sistema.`
+                ? `O ${confirm?.terminal.name} está em uso por ${confirm?.terminal.lock?.lockedByOperador || "outro dispositivo"}. Assumir vai desconectar o outro operador imediatamente. Esta ação é registrada nos logs do sistema.`
                 : `Liberar o ${confirm?.terminal.name} vai remover o controle do dispositivo atual. Use apenas se o terminal travou ou foi abandonado.`}
             </AlertDialogDescription>
           </AlertDialogHeader>

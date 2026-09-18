@@ -1,7 +1,8 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useStoreSettings } from "@/lib/store-settings-provider"
+import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
 import type { CapabilityKey } from "@/lib/pdv/capability-types"
 import type { PdvSurfaceId } from "@/lib/pdv/surface-ids"
 import {
@@ -38,6 +39,18 @@ export function usePdvCapabilities(surfaceId: PdvSurfaceId) {
       }),
     [storeId, surfaceId, overrides],
   )
+
+  // P0 PDV-RAFACELL-LOAD-CRASH: marca única por (loja, superfície) para
+  // distinguir no diagnóstico se o mount chegou às capabilities.
+  const markedKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    const markKey = `${storeId}::${surfaceId}`
+    if (markedKeyRef.current === markKey || !storeId) return
+    markedKeyRef.current = markKey
+    markPdvMountStep("capabilities", storeId, true, {
+      counts: { overrides: Object.keys(overrides ?? {}).length },
+    })
+  }, [storeId, surfaceId, overrides])
 
   return {
     storeId,

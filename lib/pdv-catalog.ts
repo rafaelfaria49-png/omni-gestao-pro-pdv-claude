@@ -1,5 +1,6 @@
 import type { InventoryItem, ProdutoAtributoDef } from "@/lib/operations-store"
 import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
+import { sanitizeInventoryItems } from "@/lib/pdv-mount-guards"
 
 export type PdvCatalogProduct = {
   id: string
@@ -30,10 +31,13 @@ export function mergePdvCatalogWithInventory(
   base: PdvCatalogProduct[],
   inventory: InventoryItem[]
 ): PdvCatalogProduct[] {
-  // Guard: if inventory is not yet loaded, return base as-is
-  const safeInventory: InventoryItem[] = Array.isArray(inventory) ? inventory : []
+  // Guard: if inventory is not yet loaded, return base as-is.
+  // P0 PDV-RAFACELL-LOAD-CRASH: entradas nulas/não-objeto (restore parcial ou
+  // payload legado da loja) são normalizadas aqui — UMA entrada inválida não
+  // pode derrubar o catálogo (e a rota) da loja inteira.
+  const safeInventory: InventoryItem[] = sanitizeInventoryItems<InventoryItem>(inventory)
 
-  const baseIds = new Set(base.map((p) => p.id))
+  const baseIds = new Set(base.filter((p) => p && typeof p.id === "string").map((p) => p.id))
 
   // 1. Update base products with live inventory data
   const merged = base.map((p) => {

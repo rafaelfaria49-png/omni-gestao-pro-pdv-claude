@@ -56,7 +56,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
-import { useOperationsStore } from "@/lib/operations-store"
+import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
@@ -145,6 +145,11 @@ import {
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
 import { isServicoDisponivelParaVenda } from "@/lib/servicos/servico-pdv"
+import {
+  sanitizeCartLines,
+  sanitizeInventoryItems,
+  sanitizeServicoRows,
+} from "@/lib/pdv-mount-guards"
 
 // ─── Cart persistence ─────────────────────────────────────────────────────────
 
@@ -959,7 +964,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // Somente itens reais do estoque — única fonte de catálogo no PDV Assistência
   const realCatalog = useMemo((): PdvCatalogProduct[] => {
     if (!Array.isArray(inventory) || inventory.length === 0) return []
-    return inventory.map((inv) => {
+    // P0 PDV-RAFACELL-LOAD-CRASH: UMA entrada inválida da loja não derruba a superfície.
+    return sanitizeInventoryItems<InventoryItem>(inventory).map((inv) => {
       const unit = inv.vendaPorPeso ? (inv.precoPorKg ?? inv.price) : inv.price
       return {
         id: inv.id,
@@ -1001,7 +1007,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { items?: ServicoApiRow[] } | null) => {
         if (cancelled) return
-        setServicosRows(Array.isArray(j?.items) ? j.items : [])
+        // P0 PDV-RAFACELL-LOAD-CRASH: UMA linha inválida da loja não derruba a superfície.
+        setServicosRows(sanitizeServicoRows<ServicoApiRow>(j?.items))
         setServicosLoaded(true)
       })
       .catch(() => {
@@ -1086,7 +1093,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     fetch(`/api/ops/credito-cliente?${params.toString()}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { creditos?: Record<string, { nome: string; saldo: number }> } | null) => {
-        const saldo = j?.creditos ? Object.values(j.creditos).reduce((s, v) => s + v.saldo, 0) : 0
+        // P0 PDV-RAFACELL-LOAD-CRASH: valor de crédito parcial não derruba o mount.
+        const saldo = j?.creditos
+          ? Object.values(j.creditos).reduce(
+              (s, v) => s + (v && typeof v.saldo === "number" && Number.isFinite(v.saldo) ? v.saldo : 0),
+              0,
+            )
+          : 0
         setCustomerCreditFetched(saldo)
       })
       .catch(() => setCustomerCreditFetched(null))
@@ -1207,17 +1220,21 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       if (raw) {
         const data = JSON.parse(raw) as CartPersisted
         const age = Date.now() - new Date(data.savedAt).getTime()
-        if (age < CART_MAX_AGE_MS && Array.isArray(data.cart) && data.cart.length > 0) {
-          const restoredCart = data.cart.map((line) => ({
+        // P0 PDV-RAFACELL-LOAD-CRASH: linhas nulas/parciais do carrinho da loja
+        // são normalizadas (nunca descartadas em bloco) — o restore nunca
+        // derruba o mount e o carrinho legítimo sobrevive.
+        const cleanLines = sanitizeCartLines<CartLine>(data.cart)
+        if (age < CART_MAX_AGE_MS && cleanLines.length > 0) {
+          const restoredCart = cleanLines.map((line) => ({
             ...line,
             itemType: resolveSaleLineItemType(line),
             isAvulso: resolveSaleLineItemType(line) === "avulso" ? true : undefined,
           })) as CartLine[]
           const restoredSubtotal = restoredCart.reduce((s, l) => s + l.price * l.qty, 0)
           setCart(restoredCart)
-          setCustomerName(data.customerName ?? "")
-          setSelectedClienteId(data.clienteId ?? null)
-          setSelectedClienteDoc(data.clienteDoc ?? null)
+          setCustomerName(typeof data.customerName === "string" ? data.customerName : "")
+          setSelectedClienteId(typeof data.clienteId === "string" ? data.clienteId : null)
+          setSelectedClienteDoc(typeof data.clienteDoc === "string" ? data.clienteDoc : null)
           const restoredType: DiscountType = data.discountType === "percent" ? "percent" : "reais"
           setDiscountType(restoredType)
           if (restoredType === "percent") {
@@ -1238,7 +1255,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           window.setTimeout(() => {
             toast({
               title: "Carrinho restaurado",
-              description: `${data.cart.length} item${data.cart.length !== 1 ? "ns" : ""} da sessão anterior recuperados.`,
+              description: `${cleanLines.length} item${cleanLines.length !== 1 ? "ns" : ""} da sessão anterior recuperados.`,
             })
           }, 600)
         }

@@ -72,6 +72,14 @@ import {
   type RecoveryConfirmation,
 } from "@/lib/vendas/quarantine-local-reconciliation"
 import { createConfirmedSaleEmitter } from "@/lib/pdv-finalize-integrity"
+import {
+  countNonRecords,
+  isRecord,
+  keepRecords,
+  sanitizeInventoryItems,
+  sanitizeSaleRecords,
+} from "@/lib/pdv-mount-guards"
+import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
 
 const VENDA_AUTO_RETRY_HOLD_MS = 5 * 60_000
 
@@ -619,6 +627,9 @@ const OperationsContext = createContext<OperationsContextType | null>(null)
 function parseLocalRest(raw: string, prev: OpsState): Partial<OpsState> | null {
   try {
     const parsed = JSON.parse(raw) as Partial<OpsState>
+    // P0 PDV-RAFACELL-LOAD-CRASH: valida ELEMENTOS (não só `Array.isArray`).
+    // Objetos são normalizados e preservados — pending legítima nunca é perdida;
+    // só entradas sem dado (`null`/primitivos) são quarentenadas.
     return {
       dailyLedger: parsed.dailyLedger ? ensureLedger(parsed.dailyLedger as DailyLedger) : prev.dailyLedger,
       caixa: {
@@ -630,14 +641,14 @@ function parseLocalRest(raw: string, prev: OpsState): Partial<OpsState> | null {
         typeof (parsed as { caixaSessaoId?: unknown }).caixaSessaoId === "string"
           ? ((parsed as { caixaSessaoId: string }).caixaSessaoId || null)
           : prev.caixaSessaoId,
-      sales: Array.isArray(parsed.sales) ? parsed.sales : prev.sales,
-      devolucoes: Array.isArray(parsed.devolucoes) ? parsed.devolucoes : prev.devolucoes,
-      pendingCaixaOperations: Array.isArray(parsed.pendingCaixaOperations) ? parsed.pendingCaixaOperations : prev.pendingCaixaOperations,
+      sales: sanitizeSaleRecords<SaleRecord>(parsed.sales),
+      devolucoes: sanitizeSaleRecords<DevolucaoRecord>(parsed.devolucoes),
+      pendingCaixaOperations: keepRecords<CaixaOperacaoRecord>(parsed.pendingCaixaOperations),
       customerCredits:
         parsed.customerCredits && typeof parsed.customerCredits === "object"
           ? parsed.customerCredits
           : prev.customerCredits,
-      orcamentos: Array.isArray(parsed.orcamentos) ? parsed.orcamentos : prev.orcamentos,
+      orcamentos: keepRecords<Orcamento>(parsed.orcamentos),
     }
   } catch {
     return null
@@ -649,8 +660,8 @@ function peekLegacyInventoryOrdens(raw: string | null): { inventory: InventoryIt
   try {
     const parsed = JSON.parse(raw) as Partial<OpsState>
     return {
-      inventory: Array.isArray(parsed.inventory) ? parsed.inventory : [],
-      ordens: Array.isArray(parsed.ordens) ? parsed.ordens : [],
+      inventory: sanitizeInventoryItems<InventoryItem>(parsed.inventory),
+      ordens: keepRecords<OrdemServico>(parsed.ordens),
     }
   } catch {
     return { inventory: [], ordens: [] }
@@ -778,6 +789,29 @@ export function OperationsProvider({
         const partial = parseLocalRest(raw, stateRef.current)
         if (partial) {
           setState((prev) => ({ ...prev, ...partial }))
+        } else {
+          // P0 PDV-RAFACELL-LOAD-CRASH: blob ilegível — quarentena localizada do
+          // bruto (recuperável, com timestamp) em vez de perda silenciosa. A
+          // chave segue com o estado padrão e se autocura no próximo persist.
+          try {
+            localStorage.setItem(`${storageKey}:quarentena:${Date.now()}`, raw)
+          } catch {
+            /* quota: segue sem quarentena */
+          }
+        }
+        // P0 PDV-RAFACELL-LOAD-CRASH: observabilidade do restore (só contagens).
+        try {
+          const parsed = JSON.parse(raw) as { sales?: unknown }
+          const restored = Array.isArray(partial?.sales) ? partial.sales : []
+          markPdvMountStep("pending-restore", lojaId, true, {
+            counts: {
+              sales: restored.length,
+              pending: restored.filter((s) => isRecord(s) && s.syncPending === true).length,
+              quarantined: countNonRecords(parsed?.sales),
+            },
+          })
+        } catch {
+          /* observabilidade nunca quebra o produto */
         }
         const snap = loadCaixaSnapshot(lojaId)
         if (snap) setState((prev) => ({ ...prev, caixa: snap }))
@@ -807,7 +841,11 @@ export function OperationsProvider({
   }, [storageKey])
 
   useEffect(() => {
-    if (!bootstrapDoneRef.current) return
+    // P0 PDV-RAFACELL-LOAD-CRASH: só persiste APÓS a restauração ter commitado.
+    // `caixaHydratedFor` é sinal de COMMIT; `bootstrapDoneRef` é sinal de efeito
+    // e permitiria sobrescrever a fila pending com o estado padrão vazio ainda
+    // no mount (a restauração enfileirada seria lida já sem os pendings).
+    if (caixaHydratedFor !== storageKey) return
     try {
       const persisted = toPersistedRest(state)
       const currentRaw = localStorage.getItem(storageKey)
@@ -821,7 +859,7 @@ export function OperationsProvider({
     } catch {
       // ignore
     }
-  }, [state, storageKey])
+  }, [state, storageKey, caixaHydratedFor])
 
   // Quarentena é monotônica entre abas: o `storage` event traz o código permanente
   // descoberto por outra aba, impedindo foco/online/intervalo de reativar a tentativa.
@@ -875,8 +913,10 @@ export function OperationsProvider({
         }
         const jInv = (await rInv.json()) as { items?: InventoryItem[] }
         const jOs = (await rOs.json()) as { ordens?: OrdemServico[] }
-        let items = jInv.items ?? []
-        let ordens = jOs.ordens ?? []
+        // P0 PDV-RAFACELL-LOAD-CRASH: valida ELEMENTOS das respostas (não só o
+        // array). Uma linha inválida da loja nunca derruba o mount.
+        let items = sanitizeInventoryItems<InventoryItem>(jInv.items)
+        let ordens = keepRecords<OrdemServico>(jOs.ordens)
 
         // Migração legada localStorage → DB: SOMENTE para a loja primária legada.
         // Lojas novas (multiloja) nunca recebem seed/migração automática — server é a
@@ -918,33 +958,49 @@ export function OperationsProvider({
           })
           if (rV.ok) {
             const jV = (await rV.json()) as { sales?: SaleRecord[] }
-            remoteSales = jV.sales ?? []
+            remoteSales = sanitizeSaleRecords<SaleRecord>(jV.sales)
           }
         } catch {
           /* ignore */
         }
 
+        markPdvMountStep("catalog", lj, true, {
+          counts: { inventory: items.length, sales: remoteSales.length },
+        })
+
         if (!cancelled) {
           setState((prev) => {
             const adjustedItems = items.map((i) => ({ ...i }))
             // Deduct pending offline sales
-            const pendingSales = prev.sales.filter((s) => s.syncPending === true)
+            const pendingSales = prev.sales.filter((s) => isRecord(s) && s.syncPending === true)
             for (const sale of pendingSales) {
-              for (const line of sale.lines) {
-                if (isVirtualSaleLine(line.inventoryId)) continue
-                const item = adjustedItems.find((i) => i.id === line.inventoryId)
+              // P0 PDV-RAFACELL-LOAD-CRASH: pending com `lines` ausente ou linha
+              // malformada só ignora a linha — nunca derruba o mount.
+              const lines = Array.isArray(sale.lines) ? sale.lines : []
+              for (const line of lines) {
+                if (!isRecord(line)) continue
+                const lineId = typeof line.inventoryId === "string" ? line.inventoryId : ""
+                const qty = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
+                if (!lineId || qty <= 0) continue
+                if (isVirtualSaleLine(lineId)) continue
+                const item = adjustedItems.find((i) => i.id === lineId)
                 if (item) {
-                  item.stock = Math.max(0, item.stock - line.quantity)
+                  item.stock = Math.max(0, item.stock - qty)
                 }
               }
             }
             // Add back pending offline returns
-            const pendingDevs = prev.devolucoes.filter((d) => d.syncPending === true)
+            const pendingDevs = prev.devolucoes.filter((d) => isRecord(d) && d.syncPending === true)
             for (const dev of pendingDevs) {
-              for (const line of dev.lines) {
-                const item = adjustedItems.find((i) => i.id === line.inventoryId)
+              const lines = Array.isArray(dev.lines) ? dev.lines : []
+              for (const line of lines) {
+                if (!isRecord(line)) continue
+                const lineId = typeof line.inventoryId === "string" ? line.inventoryId : ""
+                const qty = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
+                if (!lineId || qty <= 0) continue
+                const item = adjustedItems.find((i) => i.id === lineId)
                 if (item) {
-                  item.stock += line.quantity
+                  item.stock += qty
                 }
               }
             }
