@@ -679,7 +679,7 @@ export function PdvSupermercado({
       setMultipayMode(false)
       setIsPaymentModalOpen(true)
     },
-    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, paymentBlockedFeedback, toast]
+    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, paymentBlockedFeedback, sales, toast]
   )
 
   /** Pagamento Múltiplo — convergência operacional com PDV Assistência (F12). */

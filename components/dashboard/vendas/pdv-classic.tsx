@@ -1431,7 +1431,7 @@ export function PdvClassic({
       setIsPaymentModalOpen(true)
       return true
     },
-    [focusShellBipe, pdvCapabilities, paymentBlockedFeedback, toast, validateBeforeOpenPayment]
+    [focusShellBipe, pdvCapabilities, paymentBlockedFeedback, sales, toast, validateBeforeOpenPayment]
   )
 
   const openShellShortcut = useCallback(
