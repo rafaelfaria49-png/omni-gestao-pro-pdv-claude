@@ -331,9 +331,13 @@ describe("upsertVendaInTransaction — Writer V2", () => {
       depositos: [{ id: "d-principal", storeId: STORE }],
       pds: [{ storeId: STORE, produtoId: "prod-1", depositoId: "d-principal", quantidade: 4 }],
     })
-    await expect(
-      upsertVendaInTransaction(fake.tx, STORE, sale(), undefined, V2(CLIENT_A, fake.allocate)),
-    ).rejects.toBeInstanceOf(StockLedgerBusinessError)
+    try {
+      await upsertVendaInTransaction(fake.tx, STORE, sale(), undefined, V2(CLIENT_A, fake.allocate))
+      throw new Error("esperava StockLedgerBusinessError")
+    } catch (e) {
+      expect(e).toBeInstanceOf(StockLedgerBusinessError)
+      expect((e as StockLedgerBusinessError).details?.driftReason).toBe("unproven_without_ledger")
+    }
     expect(fake.byId.get("prod-1")!.stock).toBe(10)
     expect(fake.ledger).toHaveLength(0)
     const deps = await (

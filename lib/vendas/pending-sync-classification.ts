@@ -122,7 +122,7 @@ export function pendingReasonView(input: PendingSyncFailureInput & { pending?: b
           title: "Estoque divergente — depósito principal insuficiente",
           description: `${itemLabel}${numbers}A venda não foi gravada. O depósito alvo não absorve a diferença.`,
           recommendedAction:
-            "Não reenvie em loop. Se outros depósitos somam mais que o total desejado, redistribua o físico; o ajuste de cadastro só fecha se o novo total cobrir esses depósitos. Depois use Reenviar da mesma venda.",
+            "Não reenvie em loop. Redistribua o físico no Estoque entre os depósitos; o ajuste absoluto só fecha se o novo total cobrir os outros depósitos. Depois use Reenviar da mesma venda.",
         }
       }
       if (
@@ -135,7 +135,7 @@ export function pendingReasonView(input: PendingSyncFailureInput & { pending?: b
           title: "Estoque divergente — exige decisão",
           description: `${itemLabel}${numbers}Há desacordo entre depósitos e estoque sem autoridade comprovável. A venda não foi gravada.`,
           recommendedAction:
-            "Defina o saldo operacional correto no cadastro (ajuste explícito: o depósito principal absorve o restante se couber) e use Reenviar da mesma venda. Não finalize de novo.",
+            "Abra Estoque e faça o ajuste absoluto do item (novo saldo). O depósito principal absorve o restante se couber. A ficha do produto não fecha este desacordo. Depois use Reenviar da mesma venda. Não finalize de novo.",
         }
       }
       return {
