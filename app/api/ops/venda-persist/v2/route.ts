@@ -218,8 +218,30 @@ export async function POST(req: Request) {
       )
     }
     if (e instanceof StockLedgerBusinessError) {
-      console.warn("[ops/venda-persist/v2] stock-ledger", JSON.stringify({ lojaId, code: e.code }))
-      return jsonError(e.message, e.code, 409)
+      console.warn(
+        "[ops/venda-persist/v2] stock-ledger",
+        JSON.stringify({
+          lojaId,
+          code: e.code,
+          produtoId: e.produtoId ?? null,
+          ...(e.details
+            ? {
+                produtoNome: e.details.produtoNome,
+                stock: e.details.stock,
+                somaDepositos: e.details.somaDepositos,
+                gap: e.details.gap,
+                depositoId: e.details.depositoId,
+                depositoQuantidade: e.details.depositoQuantidade,
+                requestedQty: e.details.requestedQty,
+                driftReason: e.details.driftReason,
+                depositCount: e.details.depositCount,
+                lastLedgerEstoqueDepois: e.details.lastLedgerEstoqueDepois,
+                authority: e.details.authority,
+              }
+            : {}),
+        }),
+      )
+      return jsonError(e.message, e.code, 409, e.details ? { ...e.details } : { produtoId: e.produtoId })
     }
     if (isSaleNumberingError(e)) {
       const code = SALE_NUMBERING_ERROR_CODES.includes(e.code) ? e.code : "SALE_NUMBERING_INVARIANT_BROKEN"

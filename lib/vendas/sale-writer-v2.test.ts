@@ -15,6 +15,7 @@ vi.mock("@/lib/prisma", () => ({
 import {
   ClientSaleIdReusedError,
   InvalidClientSaleIdError,
+  StockLedgerBusinessError,
   VendaClientKeyUniqueConflictError,
   upsertVendaInTransaction,
   type SalePayload,
@@ -40,7 +41,12 @@ function proj(p: FakeProduct) {
   return { id: p.id, stock: p.stock, precoCusto: p.precoCusto, sku: p.sku, name: p.name }
 }
 
-function makeFakeTx(opts?: { products?: FakeProduct[]; existing?: Array<Record<string, unknown>> }) {
+function makeFakeTx(opts?: {
+  products?: FakeProduct[]
+  existing?: Array<Record<string, unknown>>
+  depositos?: Array<{ id: string; storeId: string }>
+  pds?: Array<{ storeId: string; produtoId: string; depositoId: string; quantidade: number }>
+}) {
   const products = opts?.products ?? []
   const byId = new Map(products.map((p) => [p.id, p]))
   const vendas = [...(opts?.existing ?? [])]
@@ -138,7 +144,12 @@ function makeFakeTx(opts?: { products?: FakeProduct[]; existing?: Array<Record<s
   }
 
   // CAD-R2-009: boundary canônico (lock + depósito + ledger + idempotência).
-  attachStockLedgerBoundaryToFakeTx(tx, { products, ledger })
+  attachStockLedgerBoundaryToFakeTx(tx, {
+    products,
+    ledger,
+    depositos: opts?.depositos,
+    pds: opts?.pds,
+  })
 
   return {
     tx: tx as never,
@@ -275,6 +286,64 @@ describe("upsertVendaInTransaction — Writer V2", () => {
       upsertVendaInTransaction(fake.tx, STORE, sale(), undefined, V2("VDA-2026-0615", fake.allocate)),
     ).rejects.toBeInstanceOf(InvalidClientSaleIdError)
     expect(fake.getAllocateCalls()).toBe(0)
+  })
+
+  const PROD1: FakeProduct = {
+    id: "prod-1",
+    storeId: STORE,
+    stock: 4,
+    precoCusto: 5,
+    sku: "TVBOX",
+    barcode: null,
+    name: "CONTROLE TV BOX",
+  }
+
+  it("drift comprovável SUM>stock: mesma venda reconcilia, baixa uma vez e o retry não repete", async () => {
+    const fake = makeFakeTx({
+      products: [{ ...PROD1, stock: 4 }],
+      depositos: [{ id: "d-principal", storeId: STORE }],
+      pds: [{ storeId: STORE, produtoId: "prod-1", depositoId: "d-principal", quantidade: 5 }],
+    })
+    const first = await upsertVendaInTransaction(fake.tx, STORE, sale(), undefined, V2(CLIENT_A, fake.allocate))
+    expect(first.replayed).toBe(false)
+    expect(fake.vendas).toHaveLength(1)
+    expect(fake.byId.get("prod-1")!.stock).toBe(3)
+    expect(fake.ledger.map((row) => row.origem).sort()).toEqual(["estoque-reconcile", "pdv"])
+    const deps = await (
+      fake.tx as {
+        produtoDeposito: { findMany: (a: unknown) => Promise<Array<{ quantidade: number }>> }
+      }
+    ).produtoDeposito.findMany({
+      where: { storeId: STORE, produtoId: "prod-1" },
+    })
+    expect(deps.reduce((s, r) => s + r.quantidade, 0)).toBe(3)
+    const retry = await upsertVendaInTransaction(fake.tx, STORE, sale(), undefined, V2(CLIENT_A, fake.allocate))
+    expect(retry.replayed).toBe(true)
+    expect(fake.vendas).toHaveLength(1)
+    expect(fake.byId.get("prod-1")!.stock).toBe(3)
+    expect(fake.ledger.filter((row) => row.origem === "pdv")).toHaveLength(1)
+    expect(fake.ledger.filter((row) => row.origem === "estoque-reconcile")).toHaveLength(1)
+  })
+
+  it("drift SUM<stock sem livro: bloqueia, zero baixa e diagnóstico estruturado", async () => {
+    const fake = makeFakeTx({
+      products: [{ ...PROD1, stock: 10 }],
+      depositos: [{ id: "d-principal", storeId: STORE }],
+      pds: [{ storeId: STORE, produtoId: "prod-1", depositoId: "d-principal", quantidade: 4 }],
+    })
+    await expect(
+      upsertVendaInTransaction(fake.tx, STORE, sale(), undefined, V2(CLIENT_A, fake.allocate)),
+    ).rejects.toBeInstanceOf(StockLedgerBusinessError)
+    expect(fake.byId.get("prod-1")!.stock).toBe(10)
+    expect(fake.ledger).toHaveLength(0)
+    const deps = await (
+      fake.tx as {
+        produtoDeposito: { findMany: (a: unknown) => Promise<Array<{ quantidade: number }>> }
+      }
+    ).produtoDeposito.findMany({
+      where: { storeId: STORE, produtoId: "prod-1" },
+    })
+    expect(deps[0]?.quantidade).toBe(4)
   })
 })
 

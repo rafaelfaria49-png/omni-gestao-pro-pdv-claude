@@ -18,7 +18,7 @@ import {
   parseClientSaleId,
   type ClientSaleIdRejectionReason,
 } from "@/lib/vendas/sale-identity-contracts"
-import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
+import { StockIdempotency, type StockDriftFailureDetails } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 
 /** Re-exportado para as rotas traduzirem o erro de negócio em HTTP 409. */
@@ -55,11 +55,13 @@ export class InsufficientStockError extends Error {
 export class StockLedgerBusinessError extends Error {
   readonly code: string
   readonly produtoId?: string
-  constructor(code: string, message: string, produtoId?: string) {
+  readonly details?: StockDriftFailureDetails
+  constructor(code: string, message: string, produtoId?: string, details?: StockDriftFailureDetails) {
     super(message)
     this.name = "StockLedgerBusinessError"
     this.code = code
     this.produtoId = produtoId
+    this.details = details
   }
 }
 
@@ -1114,7 +1116,7 @@ export async function upsertVendaInTransaction(
         // Rollback de toda a transação da venda (atomicidade do $transaction).
         throw new InsufficientStockError(produtoId, resolved.name, baixa009.estoqueAntes ?? 0, qty)
       }
-      throw new StockLedgerBusinessError(baixa009.code, baixa009.message, produtoId)
+      throw new StockLedgerBusinessError(baixa009.code, baixa009.message, produtoId, baixa009.drift)
     }
   }
 

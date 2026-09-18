@@ -22,7 +22,16 @@
  */
 
 /** Marcadores locais de sincronização. Fonte única para código, testes e documentação. */
-export const SALE_CLIENT_ONLY_SYNC_FIELDS = ["syncPending", "syncBlockedCode"] as const
+export const SALE_CLIENT_ONLY_SYNC_FIELDS = [
+  "syncPending",
+  "syncBlockedCode",
+  "syncDrift",
+  "syncHttpStatus",
+  "syncFailureMessage",
+  "syncNetworkError",
+  "syncLastAttemptAt",
+  "syncAttemptCount",
+] as const
 
 /** Cópia rasa de `sale` sem os marcadores locais. Não muta o objeto recebido. */
 export function stripClientSyncFlags<T extends object>(sale: T): T {

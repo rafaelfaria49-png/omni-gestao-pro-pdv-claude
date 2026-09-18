@@ -86,6 +86,36 @@ describe("PdvPendingSyncBadge — vendas preservadas", () => {
     expect(render()).toContain(">Reenviar<")
   })
 
+  it("drift estrutural identifica o item e não pede Tente novamente", () => {
+    h.sales = [
+      pending("STOCK_INVARIANT_DRIFT", {
+        total: 20,
+        lines: [{ inventoryId: "prod-1", name: "Película 20", quantity: 1, unitPrice: 20, lineTotal: 20 }],
+        syncHttpStatus: 409,
+        syncDrift: {
+          produtoId: "prod-1",
+          produtoNome: "Película 20",
+          produtoSku: "SKU-20",
+          stock: 7,
+          somaDepositos: 0,
+          gap: -7,
+          depositoId: "dep-1",
+          depositoQuantidade: 0,
+          requestedQty: 1,
+          driftReason: "unmaterialized_zero",
+          depositCount: 1,
+          lastLedgerEstoqueDepois: 7,
+          authority: "bootstrap-equivalente-sem-livro",
+        },
+      }),
+    ]
+    const html = render()
+    expect(html).toContain("Película 20")
+    expect(html).toContain(">Reenviar<")
+    expect(html).not.toContain("Tente novamente")
+    expect(html).not.toContain("não reenviar em loop")
+  })
+
   it("pendência de rede classifica AUTO_RETRY com copy de reenvio", () => {
     h.sales = [pending(undefined, { syncNetworkError: true })]
     const html = render()

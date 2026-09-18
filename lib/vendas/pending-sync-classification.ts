@@ -6,6 +6,8 @@
  * fechado) é ACTION_REQUIRED — nunca vira retry infinito.
  */
 
+import { STOCK_DRIFT_REASON, type StockDriftDetails } from "@/lib/estoque/stock-drift-reconcile"
+
 export const PENDING_SYNC_CLASS = {
   AUTO_RETRY: "AUTO_RETRY",
   ACTION_REQUIRED: "ACTION_REQUIRED",
@@ -47,6 +49,7 @@ export type PendingSyncFailureInput = {
   code?: string | null
   networkError?: boolean
   message?: string | null
+  drift?: StockDriftDetails | null
 }
 
 export function extractStockInvariantDriftCode(message: string | null | undefined): string | undefined {
@@ -100,13 +103,52 @@ export function pendingReasonView(input: PendingSyncFailureInput & { pending?: b
     }
   }
   switch (code) {
-    case STOCK_INVARIANT_DRIFT:
+    case STOCK_INVARIANT_DRIFT: {
+      const drift = input.drift
+      const item = drift?.produtoNome?.trim() || drift?.produtoSku?.trim() || drift?.produtoId || null
+      const itemLabel = item ? `Item: ${item}. ` : ""
+      const numbers =
+        drift != null
+          ? `Depósitos somam ${drift.somaDepositos}; estoque operacional ${drift.stock} (diferença ${drift.gap}). `
+          : ""
+      const recoverable =
+        drift?.driftReason === STOCK_DRIFT_REASON.UNMATERIALIZED_ZERO ||
+        drift?.driftReason === STOCK_DRIFT_REASON.LEGACY_DEPOSIT_OVERHANG ||
+        drift?.driftReason === STOCK_DRIFT_REASON.LEGACY_DEPOSIT_UNDERCOUNT ||
+        drift?.driftReason === STOCK_DRIFT_REASON.LEGACY_STOCK_CACHE_STALE
+      if (drift?.driftReason === STOCK_DRIFT_REASON.PRINCIPAL_CANNOT_ABSORB) {
+        return {
+          class: classified,
+          title: "Estoque divergente — depósito principal insuficiente",
+          description: `${itemLabel}${numbers}A venda não foi gravada. O depósito alvo não absorve a diferença.`,
+          recommendedAction:
+            "Não reenvie em loop. Se outros depósitos somam mais que o total desejado, redistribua o físico; o ajuste de cadastro só fecha se o novo total cobrir esses depósitos. Depois use Reenviar da mesma venda.",
+        }
+      }
+      if (
+        drift?.driftReason === STOCK_DRIFT_REASON.MULTI_DEPOSIT_AMBIGUOUS ||
+        drift?.driftReason === STOCK_DRIFT_REASON.LEDGER_CONFLICT ||
+        drift?.driftReason === STOCK_DRIFT_REASON.UNPROVEN_WITHOUT_LEDGER
+      ) {
+        return {
+          class: classified,
+          title: "Estoque divergente — exige decisão",
+          description: `${itemLabel}${numbers}Há desacordo entre depósitos e estoque sem autoridade comprovável. A venda não foi gravada.`,
+          recommendedAction:
+            "Defina o saldo operacional correto no cadastro (ajuste explícito: o depósito principal absorve o restante se couber) e use Reenviar da mesma venda. Não finalize de novo.",
+        }
+      }
       return {
         class: classified,
-        title: "Estoque divergente — requer revisão",
-        description: "O saldo do produto não fecha com os depósitos. A venda não foi gravada no servidor.",
-        recommendedAction: "Não reenviar em loop. Revise o estoque deste item e use Reenviar da mesma venda.",
+        title: recoverable
+          ? "Estoque divergente — reenviar a mesma venda"
+          : "Estoque divergente — requer revisão",
+        description: `${itemLabel}${numbers}O saldo do produto não fecha com os depósitos. A venda não foi gravada no servidor.`,
+        recommendedAction: recoverable
+          ? "Use Reenviar desta mesma venda. O servidor reconcilia o espelho legado e baixa o estoque uma vez."
+          : "Use Reenviar desta mesma venda após a correção administrativa do item. Não finalize de novo.",
       }
+    }
     case "ESTOQUE_INSUFICIENTE":
       return {
         class: classified,

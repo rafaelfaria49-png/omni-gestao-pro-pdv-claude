@@ -52,6 +52,34 @@ describe("pendingReasonView", () => {
     expect(view.title).toMatch(/Estoque divergente/i)
     expect(view.description.toLowerCase()).not.toContain("stack")
     expect(view.recommendedAction).toMatch(/Reenviar/)
+    expect(view.recommendedAction.toLowerCase()).not.toContain("tente novamente")
+  })
+
+  it("drift com item e motivo principal_cannot_absorb não pede retry", () => {
+    const view = pendingReasonView({
+      httpStatus: 409,
+      code: STOCK_INVARIANT_DRIFT,
+      drift: {
+        produtoId: "prod-1",
+        produtoNome: "Película 20",
+        produtoSku: "SKU-20",
+        stock: 4,
+        somaDepositos: 6,
+        gap: 2,
+        depositoId: "dep-1",
+        depositoQuantidade: 1,
+        requestedQty: 1,
+        driftReason: "principal_cannot_absorb",
+        depositCount: 2,
+        lastLedgerEstoqueDepois: 4,
+        authority: "overhang-alvo-insuficiente",
+      },
+    })
+    expect(view.title).toMatch(/depósito principal/i)
+    expect(view.description).toMatch(/Película 20/)
+    expect(view.recommendedAction.toLowerCase()).toMatch(/não reenvie/)
+    expect(view.recommendedAction.toLowerCase()).not.toContain("tente novamente")
+    expect(view.recommendedAction.toLowerCase()).toMatch(/ajuste/)
   })
 
   it("rede usa copy de auto-retry", () => {

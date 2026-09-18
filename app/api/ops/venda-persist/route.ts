@@ -261,9 +261,32 @@ export async function POST(req: Request) {
     if (error instanceof StockLedgerBusinessError) {
       console.warn(
         "[ops/venda-persist] stock-ledger",
-        JSON.stringify({ lojaId, pedidoId, code: error.code }),
+        JSON.stringify({
+          lojaId,
+          pedidoId,
+          code: error.code,
+          produtoId: error.produtoId ?? null,
+          ...(error.details
+            ? {
+                produtoNome: error.details.produtoNome,
+                stock: error.details.stock,
+                somaDepositos: error.details.somaDepositos,
+                gap: error.details.gap,
+                depositoId: error.details.depositoId,
+                depositoQuantidade: error.details.depositoQuantidade,
+                requestedQty: error.details.requestedQty,
+                driftReason: error.details.driftReason,
+                depositCount: error.details.depositCount,
+                lastLedgerEstoqueDepois: error.details.lastLedgerEstoqueDepois,
+                authority: error.details.authority,
+              }
+            : {}),
+        }),
       )
-      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
+      return NextResponse.json(
+        { error: error.message, code: error.code, ...(error.details ?? { produtoId: error.produtoId }) },
+        { status: 409 },
+      )
     }
     // Invariante linhas × total (PDV-MOTOR-INTEGRITY-N1): request incoerente
     // (cobrança ≠ total, venda sem itens, linha inválida) é falha de negócio

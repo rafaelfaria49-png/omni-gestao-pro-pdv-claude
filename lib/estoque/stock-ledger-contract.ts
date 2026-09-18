@@ -31,6 +31,8 @@ export const STOCK_LEDGER_ORIGENS = [
   "inventario",
   "importacao",
   "cadastro",
+  "correcao_estrutural",
+  "estoque-reconcile",
 ] as const
 export type StockLedgerOrigem = (typeof STOCK_LEDGER_ORIGENS)[number] | (string & {})
 
@@ -86,10 +88,10 @@ export type StockLedgerCommand =
        */
       permitirNegativo?: boolean
       /**
-       * PDV ao vivo apenas: se SUM(depósitos) > Produto.stock e o depósito
-       * principal absorve o gap sem ficar negativo, realinha o depósito para
-       * o saldo operacional (legado PDV que baixava só `Produto.stock`).
-       * Cadastros, OS e ajustes NUNCA ligam esta flag — drift continua fail-closed.
+       * PDV ao vivo apenas: reconcilia drift estrutural COMPROVÁVEL na mesma
+       * transação da baixa (legado PDV / linha-zero / cache obsoleto com livro).
+       * Não alinha SUM!=stock às cegas. Cadastros, OS e ajustes NUNCA ligam
+       * esta flag — drift não comprovado continua fail-closed.
        */
       realinharDepositoAoStock?: boolean
     })
@@ -126,12 +128,30 @@ export type StockLedgerSuccess = {
   idempotente: boolean
 }
 
+export type StockDriftFailureDetails = {
+  produtoId: string
+  produtoNome: string
+  produtoSku: string | null
+  stock: number
+  somaDepositos: number
+  gap: number
+  depositoId: string
+  depositoQuantidade: number
+  requestedQty: number | null
+  driftReason: string
+  depositCount: number
+  lastLedgerEstoqueDepois: number | null
+  authority: string
+}
+
 export type StockLedgerFailure = {
   ok: false
   code: StockLedgerErrorCode
   message: string
   /** Saldo conhecido no momento da falha (para erros de negócio). */
   estoqueAntes?: number
+  /** Diagnóstico estruturado de drift — só em STOCK_INVARIANT_DRIFT. */
+  drift?: StockDriftFailureDetails
 }
 
 export type StockLedgerResult = StockLedgerSuccess | StockLedgerFailure
@@ -271,6 +291,8 @@ export const StockIdempotency = {
   /** OS delta pós-revisão: um ajuste por (OS, revisão, produto). */
   osDelta: (osId: string, revisaoKey: string, produtoId: string) =>
     buildIdempotencyKey("os", osId, "delta", revisaoKey, produtoId),
+  /** Reconciliação estrutural atrelada à baixa comercial (não substitui a chave da venda). */
+  stockReconcile: (vendaKey: string) => buildIdempotencyKey(vendaKey, "stock-reconcile"),
   /** Inventário: um ajuste por (sessão, produto). */
   inventario: (sessaoId: string, produtoId: string) =>
     buildIdempotencyKey("inventario", sessaoId, produtoId),
@@ -280,6 +302,9 @@ export const StockIdempotency = {
   /** Estoque inicial do cadastro: uma entrada por produto. */
   cadastroInicial: (produtoId: string) =>
     buildIdempotencyKey("cadastro", "inicial", produtoId),
+  /** Correção estrutural SUM×stock (mesma transação da operação comercial). */
+  correcaoEstrutural: (produtoId: string, depSum: number, stock: number) =>
+    buildIdempotencyKey("correcao-estrutural", produtoId, depSum, stock),
 } as const
 
 // ─── Erros ───────────────────────────────────────────────────────────────────
@@ -287,7 +312,13 @@ export const StockIdempotency = {
 export function stockFail(
   code: StockLedgerErrorCode,
   message: string,
-  extra?: { estoqueAntes?: number },
+  extra?: { estoqueAntes?: number; drift?: StockDriftFailureDetails },
 ): StockLedgerFailure {
-  return { ok: false, code, message, ...(extra?.estoqueAntes !== undefined ? { estoqueAntes: extra.estoqueAntes } : {}) }
+  return {
+    ok: false,
+    code,
+    message,
+    ...(extra?.estoqueAntes !== undefined ? { estoqueAntes: extra.estoqueAntes } : {}),
+    ...(extra?.drift ? { drift: extra.drift } : {}),
+  }
 }

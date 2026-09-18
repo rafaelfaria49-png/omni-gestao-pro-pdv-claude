@@ -38,6 +38,7 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
         httpStatus: s.syncHttpStatus,
         networkError: s.syncNetworkError,
         message: s.syncFailureMessage,
+        drift: s.syncDrift,
         pending: true,
       }),
     )
@@ -69,11 +70,15 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
 
   const actionRequired = headline?.class === PENDING_SYNC_CLASS.ACTION_REQUIRED
   const quarantinedOnly = headline?.class === PENDING_SYNC_CLASS.QUARANTINED
+  const driftBlocked =
+    actionRequired &&
+    (headline?.title.startsWith("Estoque divergente — depósito") ||
+      headline?.title.startsWith("Estoque divergente — exige"))
 
   const reasonLine = quarantinedOnly
     ? " O sistema envia automaticamente — não limpe os dados do navegador antes de concluir."
     : headline
-      ? ` ${headline.title}. ${headline.recommendedAction}`
+      ? ` ${headline.title}. ${headline.description} ${headline.recommendedAction}`
       : " O sistema envia automaticamente — não limpe os dados do navegador antes de concluir."
 
   const reenviar = async () => {
@@ -91,12 +96,13 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
         else fail += 1
       }
       const sufixoAutomaticas = automaticas ? ` · ${automaticas} sincronizando automaticamente.` : ""
+      const failHint =
+        fail === 0
+          ? `${ok} venda(s) sincronizada(s).${sufixoAutomaticas}`
+          : `${ok} sincronizada(s) · ${fail} ainda pendente(s). ${headline?.recommendedAction ?? "Use Reenviar da mesma venda no Histórico."}${sufixoAutomaticas}`
       toast({
         title: fail === 0 ? "Sincronização reenviada" : "Reenvio parcial",
-        description:
-          fail === 0
-            ? `${ok} venda(s) sincronizada(s).${sufixoAutomaticas}`
-            : `${ok} sincronizada(s) · ${fail} ainda pendente(s). Tente novamente ou use o Histórico de Vendas.${sufixoAutomaticas}`,
+        description: failHint,
         variant: fail === 0 ? "default" : "destructive",
       })
     } finally {
@@ -117,7 +123,7 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
       <span className="min-w-0">
         <strong>{total}</strong> pendência(s) de sincronização ({parts.join(" · ")}).
         {reasonLine}
-        {actionRequired && <> Ação necessária — não reenviar em loop.</>}
+        {actionRequired && driftBlocked && <> Ação administrativa necessária.</>}
         {revisao > 0 && <> {revisao} venda(s) precisam de revisão do administrador em Vendas.</>}
       </span>
       {retryableSales.length > 0 && (
