@@ -276,6 +276,7 @@ function clearSaleSyncFailure(sale: SaleRecord): SaleRecord {
     syncBlockedCode: undefined,
     syncHttpStatus: undefined,
     syncFailureMessage: undefined,
+    syncDrift: undefined,
     syncNetworkError: undefined,
   }
 }
@@ -719,6 +720,7 @@ type SaleSyncFailurePatch = {
   httpStatus?: number
   message?: string
   networkError?: boolean
+  drift?: import("@/lib/estoque/stock-drift-reconcile").StockDriftDetails
 }
 
 /** Recorte do item do planner consumido pela UI. */
@@ -1418,7 +1420,8 @@ export function OperationsProvider({
               ...s,
               ...(next.code ? { syncBlockedCode: next.code } : {}),
               syncHttpStatus: next.httpStatus,
-              syncFailureMessage: next.message ? next.message.slice(0, 240) : s.syncFailureMessage,
+              syncFailureMessage: next.message ? next.message.slice(0, 500) : s.syncFailureMessage,
+              ...(next.drift ? { syncDrift: next.drift } : {}),
               syncNetworkError: next.networkError,
               syncLastAttemptAt: new Date().toISOString(),
               syncAttemptCount: (s.syncAttemptCount ?? 0) + 1,
@@ -1534,7 +1537,7 @@ export function OperationsProvider({
             resolvePendingSyncErrorCode({ httpStatus: v1.status, message: v1Parsed.message })
           markSaleBlocked(
             { id: converted.id, clientSaleId: converted.clientSaleId },
-            { code: v1Code, httpStatus: v1.status, message: v1Parsed.message, networkError: false },
+            { code: v1Code, httpStatus: v1.status, message: v1Parsed.message, networkError: false, drift: v1Parsed.drift },
           )
           return {
             ok: false,
@@ -1543,7 +1546,7 @@ export function OperationsProvider({
             httpStatus: v1.status,
           }
         }
-        markSaleBlocked(token, { code, httpStatus: res.status, message: parsed.message, networkError: false })
+        markSaleBlocked(token, { code, httpStatus: res.status, message: parsed.message, networkError: false, drift: parsed.drift })
         return {
           ok: false,
           reason: `HTTP ${res.status} — ${parsed.message}`,

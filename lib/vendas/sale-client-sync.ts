@@ -7,6 +7,7 @@
  */
 
 import { extractStockInvariantDriftCode } from "@/lib/vendas/pending-sync-classification"
+import { parseStockDriftDetails, type StockDriftDetails } from "@/lib/estoque/stock-drift-reconcile"
 
 export const SALE_WRITER_V1_ACTIVE = "SALE_WRITER_V1_ACTIVE"
 export const CLIENT_SALE_ID_REQUIRED = "CLIENT_SALE_ID_REQUIRED"
@@ -18,9 +19,16 @@ export type SalePersistErrorBody = {
   error?: string
   detail?: string
   code?: string
+  produtoId?: string
+  produtoNome?: string
+  driftReason?: string
 }
 
-export function parseSalePersistError(body: string): { message: string; code?: string } {
+export function parseSalePersistError(body: string): {
+  message: string
+  code?: string
+  drift?: StockDriftDetails
+} {
   try {
     const j = JSON.parse(body) as SalePersistErrorBody
     const parts = [j.error, j.detail, j.code ? `(${j.code})` : ""].filter(Boolean)
@@ -31,7 +39,8 @@ export function parseSalePersistError(body: string): { message: string; code?: s
         : extractStockInvariantDriftCode(j.error) ??
           extractStockInvariantDriftCode(j.detail) ??
           extractStockInvariantDriftCode(body)
-    return { message, ...(code ? { code } : {}) }
+    const drift = parseStockDriftDetails(j)
+    return { message, ...(code ? { code } : {}), ...(drift ? { drift } : {}) }
   } catch {
     const message = body.trim() || "erro"
     const code = extractStockInvariantDriftCode(body)

@@ -3,6 +3,7 @@
 import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
 import type { SaleLineItemType } from "@/lib/sale-line-classification"
 import type { PixQrKind } from "@/lib/fiscal/payment/pix-qr-kind"
+import type { StockDriftDetails } from "@/lib/estoque/stock-drift-reconcile"
 
 export interface APrazoConfig {
   parcelas: number           // 1-24, default 1
@@ -131,6 +132,8 @@ export interface SaleRecord {
   syncAttemptCount?: number
   /** Recorte curto da última falha — sem stack/segredo. */
   syncFailureMessage?: string
+  /** Diagnóstico estruturado de drift de estoque (quando o 409 trouxer). */
+  syncDrift?: StockDriftDetails
   /** true = a última falha foi de rede/abort, não corpo HTTP. */
   syncNetworkError?: boolean
 }

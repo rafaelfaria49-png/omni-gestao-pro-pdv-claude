@@ -2,6 +2,11 @@
 
 ## 2026-09-18
 
+### PDV — Drift residual de estoque (P0-002)
+
+- O PR #212 só reconcilia SUM(depósitos) > `Produto.stock` absorvível no principal. A saída PDV agora reconcilia também linha-zero/bootstrap, undercount com livro e cache obsoleto, sempre com ledger estrutural separado da baixa.
+- Ajuste humano (cadastro/inventário) fecha o depósito alvo quando o novo saldo cabe — não sofre o mesmo bloqueio cego. Casos ambíguos (múltiplos depósitos que não cabem, principal que não absorve, livro em conflito) continuam HTTP 409 com produto, saldos, diferença e motivo. Reenviar usa a mesma `clientSaleId`.
+
 ### PDV — Atomicidade de pending sync (P0)
 
 - Writer V1/V2 passa a devolver HTTP 409 com `STOCK_INVARIANT_DRIFT` em vez de 500, interrompendo o reenvio automático infinito.

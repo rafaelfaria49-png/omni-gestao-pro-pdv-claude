@@ -349,6 +349,7 @@ export function VendasArquivoGeral() {
             httpStatus: pendenteLocalLive.syncHttpStatus,
             networkError: pendenteLocalLive.syncNetworkError,
             message: pendenteLocalLive.syncFailureMessage,
+            drift: pendenteLocalLive.syncDrift,
             pending: true,
           })
         : null,

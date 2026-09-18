@@ -42,6 +42,8 @@ export function attachStockLedgerBoundaryToFakeTx(
     products: StockLedgerFakeProduct[]
     /** Array de ledger do harness (quando existir) para busca de linhas. */
     ledger?: Array<Record<string, unknown>>
+    depositos?: Array<{ id: string; storeId: string }>
+    pds?: Array<{ storeId: string; produtoId: string; depositoId: string; quantidade: number }>
   },
 ): void {
   const byId = new Map<string, StockLedgerFakeProduct>((opts.products ?? []).map((p) => [p.id, p]))
@@ -50,6 +52,10 @@ export function attachStockLedgerBoundaryToFakeTx(
   const seenKeys = new Map<string, string>()
   const depositos = new Map<string, { id: string; storeId: string }>()
   const pds = new Map<string, { storeId: string; produtoId: string; depositoId: string; quantidade: number }>()
+  for (const d of opts.depositos ?? []) depositos.set(d.id, { id: d.id, storeId: d.storeId })
+  for (const row of opts.pds ?? []) {
+    pds.set(`${row.produtoId}|${row.depositoId}`, { ...row })
+  }
   let depSeq = 1
   let movSeq = 1
 
@@ -169,6 +175,24 @@ export function attachStockLedgerBoundaryToFakeTx(
         }
         return hit
       }
+      if (where.produtoId !== undefined) {
+        const hits = ledger.filter((m) => {
+          if (where.storeId !== undefined && m.storeId !== where.storeId) return false
+          if (m.produtoId !== where.produtoId) return false
+          if (where.documento !== undefined && (m.documento ?? null) !== where.documento) return false
+          if (where.origem !== undefined && (m.origem ?? null) !== where.origem) return false
+          if (where.tipo !== undefined && (m.tipo ?? null) !== where.tipo) return false
+          return true
+        })
+        if (args?.orderBy?.createdAt === "desc") {
+          hits.sort((a, b) => {
+            const ta = Number(a.createdAt ?? 0)
+            const tb = Number(b.createdAt ?? 0)
+            return tb - ta
+          })
+        }
+        return (hits[0] as Record<string, unknown> | undefined) ?? origFindFirst(args)
+      }
       return origFindFirst(args)
     }
 
@@ -195,7 +219,8 @@ export function attachStockLedgerBoundaryToFakeTx(
         }
       }
       const id = `mov-fake-${movSeq++}`
-      const ret = (await origCreate({ data: { ...data, id } })) as unknown
+      const createdAt = Date.now() + movSeq
+      const ret = (await origCreate({ data: { ...data, id, createdAt } })) as unknown
       if (key) seenKeys.set(`${data.storeId}|${key}`, id)
       const rid = (ret as Record<string, unknown> | null)?.id
       return { id: typeof rid === "string" && rid ? rid : id }

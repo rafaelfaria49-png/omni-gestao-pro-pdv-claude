@@ -87,4 +87,62 @@ describe("parseSalePersistError", () => {
     )
     expect(parsed.code).toBe("STOCK_INVARIANT_DRIFT")
   })
+
+  it("preserva diagnóstico estruturado de drift", async () => {
+    const { parseSalePersistError } = await import("./sale-client-sync")
+    const parsed = parseSalePersistError(
+      JSON.stringify({
+        error: "Divergência estrutural",
+        code: "STOCK_INVARIANT_DRIFT",
+        produtoId: "prod-1",
+        produtoNome: "Película 20",
+        produtoSku: "SKU-20",
+        stock: 7,
+        somaDepositos: 0,
+        gap: -7,
+        depositoId: "dep-1",
+        depositoQuantidade: 0,
+        requestedQty: 1,
+        driftReason: "unmaterialized_zero",
+        depositCount: 1,
+        lastLedgerEstoqueDepois: 7,
+        authority: "livro-casa-com-stock+deposito-zero",
+      }),
+    )
+    expect(parsed.code).toBe("STOCK_INVARIANT_DRIFT")
+    expect(parsed.drift?.produtoNome).toBe("Película 20")
+    expect(parsed.drift?.stock).toBe(7)
+    expect(parsed.drift?.somaDepositos).toBe(0)
+  })
+
+  it("preserva diagnóstico estruturado de drift no 409", async () => {
+    const { parseSalePersistError } = await import("./sale-client-sync")
+    const parsed = parseSalePersistError(
+      JSON.stringify({
+        error: "Divergência estrutural: SUM(depósitos)=0 != Produto.stock=7.",
+        code: "STOCK_INVARIANT_DRIFT",
+        produtoId: "prod-1",
+        produtoNome: "Película",
+        produtoSku: "SKU-20",
+        stock: 7,
+        somaDepositos: 0,
+        gap: -7,
+        depositoId: "dep-1",
+        depositoQuantidade: 0,
+        requestedQty: 1,
+        driftReason: "unmaterialized_zero",
+        depositCount: 1,
+        lastLedgerEstoqueDepois: 7,
+        authority: "livro-casa-com-stock+deposito-zero",
+      }),
+    )
+    expect(parsed.code).toBe("STOCK_INVARIANT_DRIFT")
+    expect(parsed.drift).toMatchObject({
+      produtoId: "prod-1",
+      produtoNome: "Película",
+      stock: 7,
+      somaDepositos: 0,
+      driftReason: "unmaterialized_zero",
+    })
+  })
 })

@@ -15,8 +15,11 @@
  * - custo médio ponderado só em entrada com custo > 0; saída/ajuste preservam;
  * - ledger append-only com snapshots; reversão = linha compensatória;
  * - drift legado (SUM != stock com rows existentes) falha, nunca corrige
- *   — exceto saída PDV com `realinharDepositoAoStock` (só SUM>stock e só
- *   no depósito principal, sem alterar Produto.stock).
+ *   — exceto (a) saída PDV com `realinharDepositoAoStock` quando a autoridade
+ *   é comprovável (livro, bootstrap-zero, overhang absorvível, cache obsoleto);
+ *   (b) ajuste humano explícito que fecha o depósito alvo em
+ *   `novoSaldo - SUM(outros)` quando esse residual cabe (senão 409).
+ *   Correção estrutural e baixa comercial são ledger separados na mesma tx.
  *
  * COMPOSIÇÃO: `applyStockMutationTx(tx, ...)` participa da transação maior do
  * caller (venda/OS/cancelamento/devolução) — NUNCA abre nested transaction.
@@ -30,12 +33,21 @@ import { ensureDepositoPrincipal } from "@/lib/estoque/deposito-core"
 import {
   normalizeStockCommand,
   stockCommandTipo,
+  StockIdempotency,
   stockFail,
   type NormalizedStockCommand,
   type StockLedgerCommand,
   type StockLedgerContext,
   type StockLedgerResult,
 } from "@/lib/estoque/stock-ledger-contract"
+import {
+  classifyStockDrift,
+  isProvenStructuralRepair,
+  STOCK_DRIFT_REASON,
+  stockDriftFailMessage,
+  toStockDriftDetails,
+  type StockDriftClassification,
+} from "@/lib/estoque/stock-drift-reconcile"
 
 /** Subconjunto do TransactionClient usado pelo boundary (falsificável em testes). */
 export type StockLedgerTx = {
@@ -304,12 +316,21 @@ export async function applyStockMutationTx(
   }
 
   // ── 5. Invariante SUM(depósitos) == stock ──────────────────────────────────
-  const estoqueAntes = prod.stock
+  let estoqueAntes = prod.stock
   const custoMedioAntes = prod.precoCusto ?? 0
   let depRows = await tx.produtoDeposito.findMany({
     where: { storeId: sid, produtoId: pid },
     select: { depositoId: true, quantidade: true },
   } as never) as Array<{ depositoId: string; quantidade: number }>
+  let structuralRepair: {
+    classification: StockDriftClassification
+    stockAntes: number
+    depositoAntes: number
+    alignedStock: number
+    alignedDeposito: number
+  } | null = null
+  let ajusteCloseOnTarget = false
+  let ajusteOthersSum = 0
 
   if (depRows.length === 0) {
     // Bootstrap estrutural legado (UMA vez, na mesma tx): materializa a linha do
@@ -321,28 +342,61 @@ export async function applyStockMutationTx(
     } as never)
     depRows = [{ depositoId, quantidade: estoqueAntes }]
   } else {
-    let soma = 0
-    for (const r of depRows) soma += Math.trunc(Number(r.quantidade)) || 0
-    if (soma !== estoqueAntes && cmd.kind === "saida" && cmd.realinharDepositoAoStock && soma > estoqueAntes) {
-      const gap = soma - estoqueAntes
-      const principalQty = depRows.find((r) => r.depositoId === depositoId)?.quantidade ?? 0
-      if (principalQty >= gap) {
-        const aligned = principalQty - gap
-        await tx.produtoDeposito.upsert({
-          where: { produtoId_depositoId: { produtoId: pid, depositoId } },
-          create: { storeId: sid, produtoId: pid, depositoId, quantidade: aligned },
-          update: { quantidade: aligned },
-        } as never)
-        depRows = depRows.map((r) => (r.depositoId === depositoId ? { ...r, quantidade: aligned } : r))
-        soma = estoqueAntes
+    const lastLedger = await tx.movimentacaoEstoque.findFirst({
+      where: { storeId: sid, produtoId: pid },
+      orderBy: { createdAt: "desc" },
+      select: { estoqueDepois: true },
+    } as never) as { estoqueDepois: number } | null
+    const classification = classifyStockDrift({
+      stock: estoqueAntes,
+      deposits: depRows,
+      targetDepositoId: depositoId,
+      lastLedgerEstoqueDepois: lastLedger?.estoqueDepois ?? null,
+    })
+    if (classification.reason !== STOCK_DRIFT_REASON.ALIGNED) {
+      const requestedQty =
+        cmd.kind === "saida" || cmd.kind === "entrada" ? (cmd.quantidade as number) : (cmd.novoSaldo as number)
+      const drift = toStockDriftDetails(classification, {
+        produtoId: pid,
+        produtoNome: prod.name,
+        produtoSku: prod.sku,
+        depositoId,
+        requestedQty,
+      })
+      const canProvenRepair =
+        cmd.realinharDepositoAoStock === true && isProvenStructuralRepair(classification)
+      const othersSum = classification.soma - classification.targetQty
+      if (canProvenRepair) {
+        const alignedStock = classification.alignedStock as number
+        const alignedDeposito = classification.alignedTargetQty as number
+        structuralRepair = {
+          classification,
+          stockAntes: estoqueAntes,
+          depositoAntes: classification.targetQty,
+          alignedStock,
+          alignedDeposito,
+        }
+        estoqueAntes = alignedStock
+        depRows = depRows.some((r) => r.depositoId === depositoId)
+          ? depRows.map((r) => (r.depositoId === depositoId ? { ...r, quantidade: alignedDeposito } : r))
+          : [...depRows, { depositoId, quantidade: alignedDeposito }]
+      } else if (cmd.kind === "ajuste") {
+        const novo = cmd.novoSaldo as number
+        if (othersSum > novo) {
+          return stockFail(
+            "STOCK_INVARIANT_DRIFT",
+            `Divergência estrutural: SUM(depósitos)=${classification.soma} != Produto.stock=${classification.stock}. Outros depósitos somam ${othersSum}, acima do novo saldo ${novo}.`,
+            { estoqueAntes, drift },
+          )
+        }
+        ajusteCloseOnTarget = true
+        ajusteOthersSum = othersSum
+      } else {
+        return stockFail("STOCK_INVARIANT_DRIFT", stockDriftFailMessage(classification), {
+          estoqueAntes,
+          drift,
+        })
       }
-    }
-    if (soma !== estoqueAntes) {
-      return stockFail(
-        "STOCK_INVARIANT_DRIFT",
-        `Divergência estrutural: SUM(depósitos)=${soma} != Produto.stock=${estoqueAntes}. Correção manual necessária.`,
-        { estoqueAntes },
-      )
     }
   }
   const depositoAntes = depRows.find((r) => r.depositoId === depositoId)?.quantidade ?? 0
@@ -367,15 +421,19 @@ export async function applyStockMutationTx(
   } else {
     estoqueDepois = cmd.novoSaldo as number
     delta = estoqueDepois - estoqueAntes
-    if (delta === 0) return stockFail("VALIDATION", "Novo saldo igual ao atual — nada a ajustar.", { estoqueAntes })
-    if (delta < 0 && !cmd.permitirNegativo) {
+    if (delta < 0 && !cmd.permitirNegativo && !ajusteCloseOnTarget) {
       const reducao = -delta
       if (depositoAntes < reducao) {
         return stockFail("INSUFFICIENT_STOCK", `Ajuste exigiria depósito negativo: disponível ${depositoAntes}, redução ${reducao}.`, { estoqueAntes })
       }
     }
   }
-  const depositoDepois = depositoAntes + delta
+  const depositoDepois = ajusteCloseOnTarget
+    ? (cmd.novoSaldo as number) - ajusteOthersSum
+    : depositoAntes + delta
+  if (cmd.kind === "ajuste" && delta === 0 && depositoDepois === depositoAntes) {
+    return stockFail("VALIDATION", "Novo saldo igual ao atual — nada a ajustar.", { estoqueAntes })
+  }
   if (!cmd.permitirNegativo && depositoDepois < 0) {
     return stockFail("INSUFFICIENT_STOCK", `Operação deixaria o depósito negativo (${depositoDepois}).`, { estoqueAntes })
   }
@@ -397,6 +455,16 @@ export async function applyStockMutationTx(
 
   const tipo = stockCommandTipo(cmd.kind)
   const usuario = operatorLabel(context)
+  const commercialObservacao = structuralRepair
+    ? [
+        cmd.observacao,
+        `reconcile:${structuralRepair.classification.reason}:${structuralRepair.classification.authority}`,
+      ]
+        .filter(Boolean)
+        .join(" | ")
+    : ajusteCloseOnTarget
+      ? [cmd.observacao, `ajuste-fecha-alvo:others=${ajusteOthersSum}`].filter(Boolean).join(" | ")
+      : cmd.observacao
   const ledgerData = {
     storeId: sid,
     produtoId: pid,
@@ -413,7 +481,7 @@ export async function applyStockMutationTx(
     valorTotal: cmd.kind === "entrada" ? arredonda2((cmd.quantidade as number) * custoUnitarioGravado) : arredonda2(Math.abs(delta) * arredonda2(Math.max(0, custoMedioAntes))),
     documento: cmd.documento,
     motivo: cmd.motivo,
-    observacao: cmd.observacao,
+    observacao: commercialObservacao,
     fornecedor: cmd.kind === "entrada" ? cmd.fornecedor : null,
     usuario,
     ...(cmd.idempotencyKey ? { idempotencyKey: cmd.idempotencyKey } : {}),
@@ -421,6 +489,42 @@ export async function applyStockMutationTx(
 
   // ── 8. Writes atômicos (lock já adquirido — set direto, sem lost update) ──
   try {
+    if (structuralRepair) {
+      const stockDelta = structuralRepair.alignedStock - structuralRepair.stockAntes
+      const reconcileKey = cmd.idempotencyKey ? StockIdempotency.stockReconcile(cmd.idempotencyKey) : null
+      await tx.movimentacaoEstoque.create({
+          data: {
+            storeId: sid,
+            produtoId: pid,
+            produtoSku: prod.sku ?? null,
+            produtoNome: prod.name,
+            tipo: "ajuste",
+            origem: "estoque-reconcile",
+            quantidade: stockDelta,
+            estoqueAntes: structuralRepair.stockAntes,
+            estoqueDepois: structuralRepair.alignedStock,
+            custoUnitario: 0,
+            custoMedioAntes,
+            custoMedioDepois: custoMedioAntes,
+            valorTotal: 0,
+            documento: cmd.documento,
+            motivo: `Reconciliação estrutural ${structuralRepair.classification.reason}`,
+            observacao: JSON.stringify({
+              authority: structuralRepair.classification.authority,
+              reason: structuralRepair.classification.reason,
+              stockAntes: structuralRepair.stockAntes,
+              stockDepois: structuralRepair.alignedStock,
+              depositoAntes: structuralRepair.depositoAntes,
+              depositoDepois: structuralRepair.alignedDeposito,
+              somaAntes: structuralRepair.classification.soma,
+              gap: structuralRepair.classification.gap,
+              lastLedgerEstoqueDepois: structuralRepair.classification.lastLedgerEstoqueDepois,
+            }),
+            usuario,
+          ...(reconcileKey ? { idempotencyKey: reconcileKey } : {}),
+          },
+        } as never)
+    }
     await tx.produto.update({
       where: { id: pid },
       data: {
@@ -498,7 +602,7 @@ export async function applyStockMutationTx(
     if (isP2002(e)) {
       return stockFail("IDEMPOTENCY_CONFLICT", "Conflito de unicidade ao persistir movimentação.")
     }
-    return stockFail("PERSISTENCE", `Falha ao persistir mutação: ${e instanceof Error ? e.message : String(e)}`)
+    throw e
   }
 }
 

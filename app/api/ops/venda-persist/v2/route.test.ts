@@ -141,20 +141,42 @@ describe("POST /api/ops/venda-persist/v2", () => {
     h.persist.mockRejectedValue(
       new StockLedgerBusinessError(
         "STOCK_INVARIANT_DRIFT",
-        "Divergência estrutural: SUM(depósitos)=5 != Produto.stock=4. Correção manual necessária.",
+        "Divergência estrutural: SUM(depósitos)=0 != Produto.stock=7. Correção manual necessária.",
         "prod-1",
+        {
+          produtoId: "prod-1",
+          produtoNome: "Película 20",
+          produtoSku: "SKU-20",
+          stock: 7,
+          somaDepositos: 0,
+          gap: -7,
+          depositoId: "dep-1",
+          depositoQuantidade: 0,
+          requestedQty: 1,
+          driftReason: "unmaterialized_zero",
+          depositCount: 1,
+          lastLedgerEstoqueDepois: 7,
+          authority: "livro-casa-com-stock+deposito-zero",
+        },
       ),
     )
     const res = await POST(
       req({
         clientSaleId: "cs_attempt_aaaaaa",
         sale: {
-          total: 18,
-          lines: [{ inventoryId: "SKU-1", name: "Produto", quantity: 1, unitPrice: 18 }],
+          total: 20,
+          lines: [{ inventoryId: "SKU-20", name: "Película 20", quantity: 1, unitPrice: 20 }],
         },
       }),
     )
     expect(res.status).toBe(409)
-    await expect(res.json()).resolves.toMatchObject({ code: "STOCK_INVARIANT_DRIFT" })
+    await expect(res.json()).resolves.toMatchObject({
+      code: "STOCK_INVARIANT_DRIFT",
+      produtoId: "prod-1",
+      produtoNome: "Película 20",
+      stock: 7,
+      somaDepositos: 0,
+      driftReason: "unmaterialized_zero",
+    })
   })
 })
