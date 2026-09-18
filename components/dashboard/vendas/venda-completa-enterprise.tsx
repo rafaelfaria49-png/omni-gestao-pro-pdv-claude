@@ -43,6 +43,7 @@ import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
@@ -53,6 +54,12 @@ import {
   releaseSaleFinalizeLock,
 } from "@/lib/vendas/sale-finalize-busy"
 import { PaymentModal, type PaymentMethod } from "./payment-modal"
+import { createPendingSaleIdentityGuard, FINALIZE_IN_FLIGHT_FEEDBACK, PENDING_RETRY_GUIDANCE, type PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
+import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
+import {
+  CAPABILITY_BLOCKED_COPY,
+  createCapabilityBlockedFeedback,
+} from "@/lib/pdv/capability-blocked-feedback"
 import type { APrazoConfig } from "@/lib/operations-sale-types"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
@@ -169,6 +176,12 @@ type DraftData = {
   tipoVenda?: TipoVenda
   observacaoGeral?: string
   enderecoEntrega?: EnderecoEntrega
+  /**
+   * N5-B1 GOAL 002 (R3): identidade PENDING que sobrevive ao reload — o
+   * restore re-registra no guard da superfície, mantendo a reconfirmação
+   * bloqueada enquanto a pendência original (syncPending) não resolver.
+   */
+  pendingIdentity?: PendingSaleIdentity
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -197,14 +210,14 @@ function pagamentoLabelMethod(p: PaymentMethod): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
-  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
   // Mesma porta de pré-pagamento dos demais PDVs: caixa aberto E sessão do
   // terminal atual. Sem isso a venda saía daqui e voltava recusada por
   // `CAIXA_FECHADO`, virando pendência local (F-02 da readiness 002A).
   const { sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
   const { empresaDocumentos, lojaAtivaId, getEnderecoDocumentos } = useLojaAtiva()
-  const { pdvParams, impressaoConfig } = useStoreSettings()
+  const { pdvParams, impressaoConfig, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("venda-completa")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
@@ -212,6 +225,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const multiplePaymentsEnabled = pdvCapabilities.isEnabled("pdv.multiplePayments")
+  const payMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
   const { toast } = useToast()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
@@ -236,6 +250,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const [productQuery, setProductQuery] = useState("")
   /** Aviso transitório de código não encontrado (um único aviso vivo). */
   const scanFeedback = usePdvScanNotFoundFeedback()
+  // GOAL 007 — política por loja "quando bipar um produto não cadastrado" (server-first).
+  const scanUnregisteredPolicy = useMemo(
+    () => resolvePdvScanUnregisteredPolicy(pdvScanUnregisteredAction),
+    [pdvScanUnregisteredAction],
+  )
+  /** Código do último miss scan-like — contexto do Item Avulso nos modos B/C. */
+  const missedScanCodeRef = useRef<string | null>(null)
   const [showProductDropdown, setShowProductDropdown] = useState(false)
   const productInputRef = useRef<HTMLInputElement>(null)
 
@@ -250,6 +271,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const isProcessingRef = useRef(false)
+  // N5-B1 R2 (P2-06): identidade PENDING já criada pelo motor N1 — enquanto
+  // registrada, o modal de pagamento não pode reconfirmar (nova identidade
+  // geraria segunda venda). Orientação: Reenviar sync com a MESMA identidade.
+  const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
+  if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
+  const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
 
   // ── Cupom ─────────────────────────────────────────────────────────────────
   const [cupomOpen, setCupomOpen] = useState(false)
@@ -262,6 +290,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
   // ── Item avulso + venda em espera (paridade com Clássico/Assistência) ──────
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  /** Contexto transitório (GOAL 007): código bipado não cadastrado semeado no modal. */
+  const [avulsoSeedCodigo, setAvulsoSeedCodigo] = useState<string | null>(null)
+  /** Único caminho de abertura do Item Avulso: TODO abrir é explícito sobre o contexto. */
+  const openItemAvulso = useCallback((seedCodigo: string | null) => {
+    setAvulsoSeedCodigo(seedCodigo)
+    setShowItemAvulsoModal(true)
+  }, [])
   const [showVendaEsperaModal, setShowVendaEsperaModal] = useState(false)
   // ── Acessório modelo/cor (mesmo contrato do Clássico/Assistência/Super) ───
   const [accessoryProduct, setAccessoryProduct] = useState<PdvCatalogProduct | null>(null)
@@ -344,6 +379,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         if (draft.tipoVenda) setTipoVenda(draft.tipoVenda)
         if (draft.observacaoGeral) setObservacaoGeral(draft.observacaoGeral)
         if (draft.enderecoEntrega) setEnderecoEntrega(draft.enderecoEntrega)
+        // N5-B1 GOAL 002 (R3): draft com identidade PENDING restaura a
+        // proteção — após reload, reconfirmar fica bloqueado enquanto a
+        // pendência original (syncPending) não resolver.
+        if (draft.pendingIdentity) pendingSaleIdentityRef.current?.register(draft.pendingIdentity)
         toast({
           title: "Rascunho restaurado",
           description: `${validCart.length} ite${validCart.length === 1 ? "m" : "ns"} recuperado${validCart.length === 1 ? "" : "s"}.`,
@@ -364,6 +403,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           tipoVenda,
           observacaoGeral,
           enderecoEntrega,
+          // N5-B1 GOAL 002: identidade PENDING acompanha o draft (reload-safe).
+          pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
         }
         localStorage.setItem(DRAFT_KEY(storeId), JSON.stringify(draft))
       } else {
@@ -420,7 +461,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         case "Insert":
           // Item Avulso — venda de balcão sem cadastro (igual Clássico/Assistência).
           e.preventDefault()
-          if (!anyModalOpen) setShowItemAvulsoModal(true)
+          if (!anyModalOpen) {
+            // GOAL 007 (modos B/C): contexto do último código não cadastrado, seguro
+            // apenas se o campo segue vazio. Modo A abre limpo, como sempre.
+            const stash = missedScanCodeRef.current
+            missedScanCodeRef.current = null
+            const campoVazio = (productInputRef.current?.value ?? "").trim() === ""
+            openItemAvulso(scanUnregisteredPolicy.offersAvulsoContext && campoVazio ? stash : null)
+          }
           break
         case "F7":
           e.preventDefault()
@@ -438,7 +486,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal, accessoryProduct],
+    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal, accessoryProduct, scanUnregisteredPolicy, openItemAvulso],
   )
 
   useEffect(() => {
@@ -633,6 +681,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         : null,
       discountReais,
       pdvType: "venda-completa",
+      // N5-B1 GOAL 002: identidade PENDING viaja com o hold — o resume
+      // re-registra no guard (holds legados sem este campo seguem válidos).
+      pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
     }
     saveHeldSale(
       storeId,
@@ -648,6 +699,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setTipoVenda("comum")
     setObservacaoGeral("")
     setExpandedLineId(null)
+    // N5-B1 R2 (P2-06): o rascunho saiu da superfície — guard de sessão
+    // liberado; a identidade PENDING continua preservada no próprio hold
+    // (re-registrada no resume) e a venda pendente segue syncing independente.
+    pendingSaleIdentityRef.current?.clear()
     setHeldRefresh((n) => n + 1)
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
   }
@@ -693,6 +748,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       })
     }
     setDiscountReais(discountRestore.discountReais)
+    // N5-B1 GOAL 002: hold com identidade PENDING restaura a proteção —
+    // reconfirmar após o resume ficaria bloqueado (nova identidade = 2ª venda).
+    if (sale.pendingIdentity) pendingSaleIdentityRef.current?.register(sale.pendingIdentity)
     removeHeldSale(storeId, terminalIdForHold, sale.id)
     setHeldRefresh((n) => n + 1)
     toast({ title: "Venda retomada", description: `${sale.label} carregada no carrinho.` })
@@ -728,18 +786,83 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       void garantirSessao()
       return
     }
-    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
+    // N5-B1 R2 (P2-06): venda PENDING com identidade própria — reconfirmar pelo
+    // modal criaria novo clientSaleId (segunda venda). Orienta para o retry.
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
+      toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+      return
+    }
+    // N5-B1 R2 (P2-03): capability off = feedback claro, nunca retorno silencioso.
+    if (!payMethodsEnabled) {
+      paymentBlockedFeedback.notifyBlocked("sales.paymentMethods", CAPABILITY_BLOCKED_COPY["sales.paymentMethods"])
+      return
+    }
     setIsPaymentOpen(true)
+  }
+
+  // ── N5-B1 R2 (GAP-P1-01): "Limpar tudo" inicia uma venda NOVA de verdade ───
+  // Reseta TODO o estado operacional da venda atual (carrinho, cliente,
+  // desconto global, tipo, observação, endereço/entrega, busca/dropdowns,
+  // acessório e transientes) + o rascunho persistido. Preserva StoreSettings,
+  // preferências permanentes, holds já salvos e dados persistidos do cliente.
+  function handleClearAllSale() {
+    if (isSaleFinalizeBusy(isProcessingRef)) {
+      paymentBlockedFeedback.notifyBlocked(FINALIZE_IN_FLIGHT_FEEDBACK.title, FINALIZE_IN_FLIGHT_FEEDBACK)
+      return
+    }
+    const hadItems = cart.length > 0
+    const hadLineCount = cart.length
+    setCart([])
+    setExpandedLineId(null)
+    setProductQuery("")
+    setShowProductDropdown(false)
+    scanFeedback.dismiss()
+    setSelectedCliente(null)
+    setClienteQuery("")
+    setShowClienteDropdown(false)
+    setDiscountReais(0)
+    setTipoVenda("comum")
+    setObservacaoGeral("")
+    setEnderecoEntrega(EMPTY_ENDERECO)
+    setShowEnderecoForm(false)
+    setAccessoryProduct(null)
+    pendingSaleIdentityRef.current?.clear()
+    try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch { /* ignore */ }
+    if (hadItems) {
+      appendAuditLog({
+        action: "pdv_carrinho_limpo",
+        userLabel: operatorLabel,
+        detail: `Venda Completa — limpeza total da venda (${hadLineCount} linha(s), descontos e dados zerados)`,
+      })
+    }
+    toast({ title: "Venda limpa", description: "Sistema pronto para uma venda nova." })
+    productInputRef.current?.focus()
   }
 
   // ── Confirmação e finalização ─────────────────────────────────────────────
   async function handleConfirmPayment(
     payments: PaymentMethod[],
-    meta?: { pixQrKind?: string; cashTendered?: number },
+    meta?: {
+      cashierId?: string
+      discountAuthorizedByAdminId?: string
+      discountReais?: number
+      discountPercent?: number
+      pixQrKind?: string
+      cashTendered?: number
+      creditDoc?: string
+      creditNome?: string
+      creditSaldo?: number
+    },
   ): Promise<boolean> {
     if (!selectedCliente || cart.length === 0 || total <= 0) return false
     if (payments.length === 0) {
       toast({ title: "Selecione a forma de pagamento", variant: "destructive" })
+      return false
+    }
+    // N5-B1 R2 (P2-06): defesa em profundidade — com venda PENDING de
+    // identidade própria registrada, uma nova confirmação não pode nascer.
+    if (pendingSaleIdentityRef.current?.hasPending()) {
+      toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
       return false
     }
     // Segunda porta: a sessão pode ter fechado (ou sido reconciliada para
@@ -799,6 +922,29 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
       const paymentBreakdown = { dinheiro, pix, cartaoDebito, cartaoCredito, aPrazo, carne, creditoVale }
 
+      // N5-B1 R2 (P2-02): crédito/vale consome meta.creditDoc — o servidor
+      // debita ClienteCredito pelo customerCpf da venda, então o doc da venda
+      // é o doc do débito. Cliente selecionado tem precedência quando o
+      // titular é ele mesmo; crédito de terceiro nunca herda o clienteId.
+      const attribution = resolveCreditAttribution({
+        usedCredit: creditoVale > 0.009,
+        meta,
+        selectedCustomer: {
+          id: selectedCliente.id,
+          name: selectedCliente.name,
+          cpf: selectedCliente.document ?? "",
+        },
+      })
+      if (attribution.seedLocalCredit) {
+        sincronizarCreditoLocal(
+          attribution.seedLocalCredit.doc,
+          attribution.seedLocalCredit.nome,
+          attribution.seedLocalCredit.saldo,
+        )
+      }
+      const clienteVendaNome = attribution.saleName ?? selectedCliente.name
+      const clienteVendaDoc = attribution.saleDoc ?? selectedCliente.document ?? undefined
+
       const result = await finalizeSaleTransaction({
         lines: saleLines,
         total,
@@ -808,9 +954,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           discountReais,
           discountPercent: subtotal > 0 ? (discountReais / (subtotal + totalPerLineDiscount)) * 100 : 0,
         },
-        customerCpf: selectedCliente.document ?? undefined,
-        customerName: selectedCliente.name,
-        clienteId: selectedCliente.id || undefined,
+        customerCpf: clienteVendaDoc,
+        customerName: clienteVendaNome,
+        clienteId: attribution.belongsToSelectedCustomer ? selectedCliente.id || undefined : undefined,
         aPrazoConfig,
         pixQrKind: meta?.pixQrKind,
         cashTendered: meta?.cashTendered,
@@ -825,8 +971,29 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       // cupom, sem impressão, sem audit sale_finalizado, sem fila de produtos,
       // sem limpar rascunho/carrinho/cliente. Só informa o estado honesto,
       // preserva tudo e permite retry da MESMA venda (Vendas → Reenviar sync).
-      // Tudo abaixo é CONFIRMED.
+      // N5-B1 R2 (P2-06): a identidade criada é REGISTRADA — o modal não pode
+      // reconfirmar (clientSaleId novo = segunda venda); retry mantém esta
+      // identidade. Tudo abaixo é CONFIRMED.
       if (result.pending) {
+        pendingSaleIdentityRef.current?.register({
+          id: result.saleId,
+          ...(result.clientSaleId ? { clientSaleId: result.clientSaleId } : {}),
+        })
+        // N5-B1 GOAL 002 (R3): persiste o draft COM a identidade registrada —
+        // o carrinho não mudou, então o efeito de draft-save não re-dispararia;
+        // sem isto o reload perderia a referência PENDING (segunda venda).
+        try {
+          const draft: DraftData = {
+            cliente: selectedCliente,
+            cart,
+            discountReais,
+            tipoVenda,
+            observacaoGeral,
+            enderecoEntrega,
+            pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
+          }
+          localStorage.setItem(DRAFT_KEY(storeId), JSON.stringify(draft))
+        } catch { /* ignore */ }
         setIsPaymentOpen(false)
         toast({
           title: PENDING_SALE_TITLE,
@@ -876,7 +1043,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       appendAuditLog({
         action: "sale_finalized",
         userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
-        detail: `${result.pending ? "Venda Completa Enterprise PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda Completa Enterprise "}${displaySaleNumber(result.saleId, result.pending)} | ${selectedCliente.name} | ${pagamentosResumo} | ${brl(total)}`,
+        detail: `${result.pending ? "Venda Completa Enterprise PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda Completa Enterprise "}${displaySaleNumber(result.saleId, result.pending)} | ${clienteVendaNome} | ${pagamentosResumo} | ${brl(total)}`,
       })
 
       const linhasDetalhe = cart
@@ -895,9 +1062,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       const enrichResult = await enrichVendaEnterprise({
         pedidoId: result.saleId,
         storeId,
-        clienteId: selectedCliente.id,
-        clienteNome: selectedCliente.name,
-        clienteDocument: selectedCliente.document ?? undefined,
+        clienteId: attribution.belongsToSelectedCustomer ? selectedCliente.id : undefined,
+        clienteNome: clienteVendaNome,
+        clienteDocument: clienteVendaDoc,
         clienteTelefone: selectedCliente.phone ?? undefined,
         clienteEmail: selectedCliente.email ?? undefined,
         observacoesVenda: observacaoGeral || undefined,
@@ -930,8 +1097,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         lojaNome: storeDisplayName,
         lojaCnpj: empresaDocumentos.cnpj || undefined,
         lojaEndereco: getEnderecoDocumentos() || undefined,
-        clienteNome: selectedCliente.name,
-        clienteCpf: selectedCliente.document ?? null,
+        clienteNome: clienteVendaNome,
+        clienteCpf: clienteVendaDoc ?? null,
         operador: operatorLabel,
         tipoVenda: tipoVenda !== "comum" ? tipoVendaLabel : undefined,
         observacaoGeral: observacaoGeral || undefined,
@@ -1222,7 +1389,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1 px-2 text-xs"
-                    onClick={() => setShowItemAvulsoModal(true)}
+                    onClick={() => openItemAvulso(null)}
                     title="Item avulso — venda de balcão sem cadastro [INS]"
                   >
                     <PlusCircle className="h-3.5 w-3.5" />
@@ -1251,7 +1418,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     <button
                       type="button"
                       className="ml-1 text-xs text-muted-foreground transition-colors hover:text-destructive"
-                      onClick={() => { setCart([]); setExpandedLineId(null); setProductQuery(""); setShowProductDropdown(false) }}
+                      onClick={() => handleClearAllSale()}
                     >
                       Limpar tudo
                     </button>
@@ -1321,7 +1488,20 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                         toast({ title: "Vários produtos", description: `Mais de um item para "${parsed.query}". Refine a busca.` })
                         return
                       }
-                      scanFeedback.notify(parsed.query)
+                      scanFeedback.notify(parsed.query, {
+                        suggestAvulso: scanLike && scanUnregisteredPolicy.showInsertHint,
+                      })
+                      // GOAL 007 — política por loja só age APÓS o fluxo determinar PRODUTO
+                      // NÃO ENCONTRADO (match exato, parciais e busca textual nunca chegam aqui).
+                      // Miss de busca textual invalida o contexto do último código SCAN-like.
+                      missedScanCodeRef.current = scanLike ? parsed.query : null
+                      // Autoabertura (modo C) SÓ para scan-like; miss de busca textual nunca abre modal.
+                      if (scanLike && scanUnregisteredPolicy.autoOpenAvulso && !hasBlockingPdvDialog()) {
+                        // Modo C: Item Avulso UMA vez por scan, código como contexto.
+                        setShowProductDropdown(false)
+                        openItemAvulso(parsed.query)
+                        return
+                      }
                       queueMicrotask(() => productInputRef.current?.focus())
                     }
                     if (e.key === "Escape") { setShowProductDropdown(false); setProductQuery(""); scanFeedback.dismiss() }
@@ -1803,6 +1983,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         discountsEnabled={discountsEnabled}
         storeCreditEnabled={storeCreditEnabled}
         allowMultiplePayments={multiplePaymentsEnabled}
+        requireExplicitResult
         onConfirm={handleConfirmPayment}
       />
 
@@ -1868,12 +2049,16 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       {/* ── Item avulso (INSERT) ── */}
       <ItemAvulsoModal
         open={showItemAvulsoModal}
+        initialCodigo={avulsoSeedCodigo}
         onOpenChange={(open) => {
           setShowItemAvulsoModal(open)
-          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca.
+          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca
+          // e sem contexto transitório de scan (GOAL 007).
           if (!open) {
             setProductQuery("")
             scanFeedback.dismiss()
+            missedScanCodeRef.current = null
+            setAvulsoSeedCodigo(null)
           }
         }}
         onCloseAutoFocus={(e) => {

@@ -7,8 +7,9 @@
  * (toast destructive), audit do CONFIRMED (ver F-04). Apresentação de
  * sucesso VARIA por intenção (#21): Classic shellInfo/impressão,
  * Assistência/Supermercado PdvPostSaleDialog, Venda Completa CupomNaoFiscal.
- * Divergência GAP-P2-03 (fail-closed silencioso nos gates de pagamento)
- * permanece registrada — a prova detalhada vive em parity-payment-props.
+ * N5-B1 R2: GAP-P2-03 CORRIGIDO — gates de pagamento com capability off
+ * produzem feedback audível (com cooldown anti-spam) em todas as bordas;
+ * a prova detalhada vive em parity-payment-props + parity-finalize-behavior.
  */
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -64,15 +65,25 @@ describe("F-06 — feedback pending/erro/sucesso por superfície", () => {
     expect(read(fixtureFor("venda-completa").componentPath)).not.toContain("isModoRapido")
   })
 
-  it("GAP-P2-03: gates com feedback desigual permanecem como estão (F2/F7 escondem; pagamento silencia)", () => {
+  it("GAP-P2-03 CORRIGIDO (R2): F2/F7 gates continuam; gates de pagamento agora são audíveis", () => {
     // F2/F7 checam capability antes do efeito (feedback = nada acontece, gate visível no código).
     const classic = read(fixtureFor("classic").componentPath)
     expect(classic).toContain("if (customerSearchEnabled) setShellClientSearchOpen(true)")
     expect(classic).toContain("if (heldSalesEnabled) setVendaEsperaOpen(true)")
 
-    // O contraste (gates de pagamento retornam false sem toast) está congelado
-    // em parity-payment-props.test.ts — aqui só garantimos que o gap continua
-    // catalogado na superfície de prova correta.
+    // R2: o gate de pagamento do Classic consulta a capability e produz
+    // feedback audível (helper compartilhado com cooldown) antes do return.
     expect(classic).toContain('!pdvCapabilities.isEnabled("sales.paymentMethods")')
+    const openFlow = classic.slice(classic.indexOf("const openPaymentFlow"), classic.indexOf("const openShellShortcut"))
+    expect(openFlow, "gate paymentMethods com feedback (R2)").toContain('notifyBlocked("sales.paymentMethods"')
+    expect(openFlow, "gate múltiplo com feedback (R2)").toContain('notifyBlocked("pdv.multiplePayments"')
+
+    // Assistência/Super/VC: feedback no gate de abertura (sem retorno silencioso).
+    const assist = read(fixtureFor("assistencia").componentPath)
+    expect(assist).toContain('notifyBlocked("sales.paymentMethods"')
+    const superSrc = read(fixtureFor("supermercado").componentPath)
+    expect(superSrc).toContain('notifyBlocked("sales.paymentMethods"')
+    const completa = read(fixtureFor("venda-completa").componentPath)
+    expect(completa).toContain('notifyBlocked("sales.paymentMethods"')
   })
 })

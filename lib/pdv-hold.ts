@@ -11,6 +11,7 @@ import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
 import type { CapabilitiesSnapshot } from "@/lib/pdv/capability-types"
 import { CAPABILITIES_RUNTIME_VERSION } from "@/lib/pdv/capability-types"
 import { sanitizeHeldSales } from "@/lib/pdv-mount-guards"
+import type { PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
 
 const HOLDS_KEY_PREFIX = "@omnigestao:pdv-holds:"
 const HOLDS_CHANGED_EVENT = "omnigestao:pdv-holds-changed"
@@ -70,6 +71,13 @@ export type HeldSale = {
   capabilitiesVersion?: typeof CAPABILITIES_RUNTIME_VERSION
   /** Snapshot imutável do runtime resolvido no momento do hold. */
   capabilitiesSnapshot?: CapabilitiesSnapshot
+  /**
+   * N5-B1 GOAL 002 (R3): identidade PENDING que viaja com o hold. Opcional e
+   * aditivo — holds legados sem este campo continuam válidos. O resume
+   * re-registra no guard da superfície, preservando a proteção contra
+   * segunda venda sem recriar identidade.
+   */
+  pendingIdentity?: PendingSaleIdentity
 }
 
 export function withHoldCapabilitiesSnapshot(

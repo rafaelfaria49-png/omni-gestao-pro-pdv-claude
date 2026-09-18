@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import {
   createPdvScanInlineNotFoundFeedback,
   type PdvScanInlineFeedbackState,
+  type PdvScanNotifyOptions,
 } from "@/lib/pdv-scan-input"
 
 export type { PdvScanInlineFeedbackState }
@@ -34,7 +35,11 @@ export function usePdvScanNotFoundFeedback() {
   useEffect(() => () => feedback.dismiss(), [feedback])
 
   return useMemo(
-    () => ({ notify: feedback.notify, dismiss: feedback.dismiss, inline }),
+    () => ({
+      notify: (code: string, opts?: PdvScanNotifyOptions) => feedback.notify(code, opts),
+      dismiss: feedback.dismiss,
+      inline,
+    }),
     [feedback, inline],
   )
 }

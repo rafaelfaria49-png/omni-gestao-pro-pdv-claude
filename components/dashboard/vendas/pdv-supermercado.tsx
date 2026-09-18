@@ -57,6 +57,7 @@ import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
@@ -119,6 +120,16 @@ import {
   findUnresolvedSaleLines,
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
+import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
+import {
+  resolveWeightUnitPrice,
+  WEIGHT_PRICE_INVALID_FEEDBACK,
+} from "@/lib/pdv/weight-line-guard"
+import {
+  CAPABILITY_BLOCKED_COPY,
+  createCapabilityBlockedFeedback,
+} from "@/lib/pdv/capability-blocked-feedback"
 
 import type { VendasPDVProps } from "./pdv-classic"
 
@@ -190,16 +201,23 @@ export function PdvSupermercado({
   const router = useRouter()
   const { toast } = useToast()
   const { lojaAtivaId, opsStorageKey, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
-  const { pdvParams, blob, save: saveStoreSettings, impressaoConfig } = useStoreSettings()
+  const { pdvParams, blob, save: saveStoreSettings, impressaoConfig, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("supermercado")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
   const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const payMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
+  // N5-B1 R2 (P2-06): identidade PENDING já criada — reconfirmar pelo modal
+  // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
+  const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
+  if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
+  const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
 
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
 
@@ -217,6 +235,13 @@ export function PdvSupermercado({
   const [searchTerm, setSearchTerm] = useState("")
   /** Aviso transitório de código não encontrado (um único aviso vivo). */
   const scanFeedback = usePdvScanNotFoundFeedback()
+  // GOAL 007 — política por loja "quando bipar um produto não cadastrado" (server-first).
+  const scanUnregisteredPolicy = useMemo(
+    () => resolvePdvScanUnregisteredPolicy(pdvScanUnregisteredAction),
+    [pdvScanUnregisteredAction],
+  )
+  /** Código do último miss scan-like — contexto do Item Avulso nos modos B/C. */
+  const missedScanCodeRef = useRef<string | null>(null)
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
   const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -254,6 +279,13 @@ export function PdvSupermercado({
   const [accessoryProduct, setAccessoryProduct] = useState<Product | null>(null)
   const accessoryQtyRef = useRef(1)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  /** Contexto transitório (GOAL 007): código bipado não cadastrado semeado no modal. */
+  const [avulsoSeedCodigo, setAvulsoSeedCodigo] = useState<string | null>(null)
+  /** Único caminho de abertura do Item Avulso: TODO abrir é explícito sobre o contexto. */
+  const openItemAvulso = useCallback((seedCodigo: string | null) => {
+    setAvulsoSeedCodigo(seedCodigo)
+    setShowItemAvulsoModal(true)
+  }, [])
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
   const [recebimentoOpen, setRecebimentoOpen] = useState(false)
   const [trocasOpen, setTrocasOpen] = useState(false)
@@ -629,7 +661,18 @@ export function PdvSupermercado({
 
   const openPaymentModal = useCallback(
     (intent: PaymentMethodType | null) => {
-      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
+      // N5-B1 R2 (P2-03): capability off = feedback claro, nunca retorno silencioso.
+      if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+        paymentBlockedFeedback.notifyBlocked("sales.paymentMethods", CAPABILITY_BLOCKED_COPY["sales.paymentMethods"])
+        return
+      }
+      // N5-B1 R2 (P2-06) / GOAL 002: venda PENDING de identidade própria e
+      // ainda não resolvida (syncPending) — reconfirmar criaria novo
+      // clientSaleId. Orienta para o retry existente.
+      if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
+        toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+        return
+      }
       if (cart.length === 0) {
         toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
         hardFocusSearch()
@@ -640,13 +683,24 @@ export function PdvSupermercado({
       setMultipayMode(false)
       setIsPaymentModalOpen(true)
     },
-    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast]
+    [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, paymentBlockedFeedback, sales, toast]
   )
 
   /** Pagamento Múltiplo — convergência operacional com PDV Assistência (F12). */
   const openMultipayModal = useCallback(() => {
-    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
-    if (!pdvCapabilities.isEnabled("pdv.multiplePayments")) return
+    // N5-B1 R2 (P2-03): capability off = feedback claro nos dois gates.
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+      paymentBlockedFeedback.notifyBlocked("sales.paymentMethods", CAPABILITY_BLOCKED_COPY["sales.paymentMethods"])
+      return
+    }
+    if (!pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+      paymentBlockedFeedback.notifyBlocked("pdv.multiplePayments", CAPABILITY_BLOCKED_COPY["pdv.multiplePayments"])
+      return
+    }
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
+      toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+      return
+    }
     if (cart.length === 0) {
       toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
       hardFocusSearch()
@@ -656,7 +710,7 @@ export function PdvSupermercado({
     setInstantPayIntent(null)
     setMultipayMode(true)
     setIsPaymentModalOpen(true)
-  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, toast])
+  }, [caixaProntoParaFinalizar, cart.length, hardFocusSearch, pdvCapabilities, paymentBlockedFeedback, sales, toast])
 
   const confirmAttrDialog = useCallback(() => {
     if (!attrProduct) return
@@ -689,12 +743,27 @@ export function PdvSupermercado({
       toast({ title: "Peso inválido", description: "Informe o peso em kg.", variant: "destructive" })
       return
     }
+    // N5-B1 R2 (GAP-P2-05): preço efetivo do peso precisa existir e ser > 0 —
+    // 0/negativo/NaN/ausente rejeita a linha (sem inferir preço, sem tocar no
+    // cadastro). O diálogo permanece aberto para correção ou cancelamento.
+    const pesoPreco = resolveWeightUnitPrice({
+      precoPorKg: weightProduct.precoPorKg,
+      price: weightProduct.price,
+    })
+    if (!pesoPreco.ok) {
+      toast({
+        title: WEIGHT_PRICE_INVALID_FEEDBACK.title,
+        description: WEIGHT_PRICE_INVALID_FEEDBACK.description,
+        variant: "destructive",
+      })
+      return
+    }
     const inv = inventory.find((i) => i.id === weightProduct.id)
     if (inv && kg > inv.stock + 0.0001) {
       toast({ title: "Estoque", description: "Peso maior que o disponível.", variant: "destructive" })
       return
     }
-    const pKg = weightProduct.precoPorKg ?? weightProduct.price
+    const pKg = pesoPreco.unitPrice
     const parts = weightProduct.atributos?.length ? weightProduct.atributos.map((a) => attrSelections[a.id]).filter(Boolean) : []
     const baseName = parts.length ? `${weightProduct.name} (${parts.join(" · ")})` : weightProduct.name
     pushCartLine({
@@ -849,7 +918,19 @@ export function PdvSupermercado({
           return
         }
         if (remote.kind === "none" || remote.kind === "error") {
-          scanFeedback.notify(lookupTerm)
+          scanFeedback.notify(lookupTerm, {
+            suggestAvulso: scanLike && scanUnregisteredPolicy.showInsertHint,
+          })
+          // GOAL 007 — política por loja só age APÓS o fluxo determinar PRODUTO NÃO
+          // ENCONTRADO (match exato, parciais e busca textual nunca chegam aqui).
+          // Miss de busca textual invalida o contexto do último código SCAN-like.
+          missedScanCodeRef.current = scanLike ? lookupTerm : null
+          // Autoabertura (modo C) SÓ para scan-like; miss de busca textual nunca abre modal.
+          if (scanLike && scanUnregisteredPolicy.autoOpenAvulso && !hasBlockingPdvDialog()) {
+            // Modo C: Item Avulso UMA vez por scan, código como contexto.
+            openItemAvulso(lookupTerm)
+            return
+          }
           hardFocusSearch()
           return
         }
@@ -863,7 +944,7 @@ export function PdvSupermercado({
       })
       hardFocusSearch()
     },
-    [addToCart, filterCatalogByTerm, filteredProducts, findProductByEan, hardFocusSearch, searchTerm, toast, lojaKey, setInventory, scanFeedback]
+    [addToCart, filterCatalogByTerm, filteredProducts, findProductByEan, hardFocusSearch, searchTerm, toast, lojaKey, setInventory, scanFeedback, scanUnregisteredPolicy, openItemAvulso]
   )
 
   // Atalhos de teclado (evitar conflitos com o navegador)
@@ -902,7 +983,14 @@ export function PdvSupermercado({
 
       e.preventDefault()
       e.stopPropagation()
-      if (e.key === "Insert") setShowItemAvulsoModal(true)
+      if (e.key === "Insert") {
+        // GOAL 007 (modos B/C): contexto do último código não cadastrado, seguro apenas
+        // se o campo segue vazio (nada digitado depois do miss). Modo A abre limpo.
+        const stash = missedScanCodeRef.current
+        missedScanCodeRef.current = null
+        const campoVazio = (productInputRef.current?.value ?? "").trim() === ""
+        openItemAvulso(scanUnregisteredPolicy.offersAvulsoContext && campoVazio ? stash : null)
+      }
       else if (e.key === "F7") { if (heldSalesEnabled) setVendaEsperaOpen(true) }
       else if (e.key === "F8") {
         appendAuditLog({
@@ -926,7 +1014,7 @@ export function PdvSupermercado({
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado, heldSalesEnabled, customerSearchEnabled, hardFocusSearch, scanFeedback])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado, heldSalesEnabled, customerSearchEnabled, hardFocusSearch, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = useHeldSales(lojaKey, terminalIdForHold, "supermercado")
@@ -955,6 +1043,9 @@ export function PdvSupermercado({
       discountReais,
       discountPercent,
       pdvType: "supermercado",
+      // N5-B1 GOAL 002: identidade PENDING viaja com o hold — o resume
+      // re-registra no guard (holds legados sem este campo seguem válidos).
+      pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
     }
     saveHeldSale(
       lojaKey,
@@ -964,6 +1055,10 @@ export function PdvSupermercado({
     setCart([])
     setDiscountReais(0)
     setDiscountPercent(0)
+    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de sessão
+    // liberado; a identidade PENDING continua preservada no próprio hold
+    // (re-registrada no resume) e a venda pendente segue syncing independente.
+    pendingSaleIdentityRef.current?.clear()
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
   }
 
@@ -996,6 +1091,9 @@ export function PdvSupermercado({
         ? { id: sale.customer.id, name: sale.customer.name, cpf: sale.customer.cpf ?? "", phone: sale.customer.phone ?? "" }
         : null,
     )
+    // N5-B1 GOAL 002: hold com identidade PENDING restaura a proteção —
+    // reconfirmar após o resume ficaria bloqueado (nova identidade = 2ª venda).
+    if (sale.pendingIdentity) pendingSaleIdentityRef.current?.register(sale.pendingIdentity)
     removeHeldSale(lojaKey, terminalIdForHold, sale.id)
     return true
   }
@@ -1266,6 +1364,7 @@ export function PdvSupermercado({
                     setDiscountPercent(0)
                     setDiscountReais(0)
                     setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                    pendingSaleIdentityRef.current?.clear()
                     toast({ title: "Carrinho limpo" })
                     queueMicrotask(hardFocusSearch)
                     return
@@ -1280,6 +1379,7 @@ export function PdvSupermercado({
                     setDiscountPercent(0)
                     setDiscountReais(0)
                     setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                    pendingSaleIdentityRef.current?.clear()
                     toast({ title: "Carrinho limpo" })
                     productInputRef.current?.focus()
                     return
@@ -1426,6 +1526,7 @@ export function PdvSupermercado({
                   <Button
                     key={forma.id}
                     type="button"
+                    disabled={!payMethodsEnabled}
                     className={cn(
                       "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
                       formaPagamentoSupermercadoQuickClasses(forma.cor),
@@ -1515,8 +1616,16 @@ export function PdvSupermercado({
         discountsEnabled={discountsEnabled}
         storeCreditEnabled={storeCreditEnabled}
         allowMultiplePayments={pdvCapabilities.isEnabled("pdv.multiplePayments")}
+        requireExplicitResult
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
+          // N5-B1 R2 (P2-06): contrato EXPLÍCITO com o modal — `true` =
+          // desfecho (CONFIRMED ou PENDING registrado), `false` = falha (modal
+          // aberto, busy liberado). Retorno vazio não é sucesso.
+          if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
+            toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+            return false
+          }
           // Capturar dados de impressão ANTES de limpar o cart
           const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || "Loja"
           const _cnpj = (empresaDocumentos?.cnpj || "").trim()
@@ -1553,7 +1662,7 @@ export function PdvSupermercado({
               title: "Item não pode ser vendido",
               description: unresolvedSaleLinesDescription(unresolvedSuper),
             })
-            return
+            return false
           }
           // Todas as linhas resolvem (garantido pelo guard) — nada é descartado.
           const saleLines = cart
@@ -1595,6 +1704,29 @@ export function PdvSupermercado({
             }
           }
 
+          // N5-B1 R2 (P2-02): crédito/vale consome meta.creditDoc (audit
+          // GAP-P2-02 — o Super não tinha o fallback do Classic). O servidor
+          // debita pelo customerCpf da venda: titular de terceiro → doc DELE
+          // na venda, clienteId do selecionado NUNCA herda; titular = cliente
+          // selecionado → identidade dele intacta. Seed local opcional apenas.
+          const usouValeSuper = payments.some((p) => p.type === "credito_vale")
+          const attributionSuper = resolveCreditAttribution({
+            usedCredit: usouValeSuper,
+            meta,
+            selectedCustomer: selectedCustomer
+              ? { id: selectedCustomer.id, name: selectedCustomer.name, cpf: selectedCustomer.cpf }
+              : null,
+          })
+          if (attributionSuper.seedLocalCredit) {
+            sincronizarCreditoLocal(
+              attributionSuper.seedLocalCredit.doc,
+              attributionSuper.seedLocalCredit.nome,
+              attributionSuper.seedLocalCredit.saldo,
+            )
+          }
+          const clienteVendaNome = attributionSuper.saleName ?? selectedCustomer?.name
+          const clienteVendaDoc = attributionSuper.saleDoc ?? selectedCustomer?.cpf
+
           const result = await finalizeSaleTransaction({
             lines: saleLines,
             total,
@@ -1608,9 +1740,9 @@ export function PdvSupermercado({
               aPrazo,
               creditoVale,
             },
-            customerCpf: selectedCustomer?.cpf,
-            customerName: selectedCustomer?.name,
-            clienteId: selectedCustomer?.id || undefined,
+            customerCpf: clienteVendaDoc,
+            customerName: clienteVendaNome,
+            clienteId: attributionSuper.belongsToSelectedCustomer ? selectedCustomer?.id || undefined : undefined,
             auditMeta: {
               cashierId: meta?.cashierId ?? cashierId,
               discountAuthorizedByAdminId: meta?.discountAuthorizedByAdminId,
@@ -1624,14 +1756,19 @@ export function PdvSupermercado({
 
           if (!result.ok) {
             toast({ title: "Falha transacional", description: result.reason })
-            return
+            return false
           }
           // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
           // sem impressão, sem cupom, sem audit sale_finalizado, sem fila de
           // produtos, sem limpar o carrinho. Só informa o estado honesto,
           // preserva carrinho/identidade e permite retry da MESMA venda
-          // (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
+          // (Vendas → Reenviar sync). N5-B1 R2 (P2-06): identidade REGISTRADA —
+          // reconfirmação pelo modal fica bloqueada (nova identidade = 2ª venda).
           if (result.pending) {
+            pendingSaleIdentityRef.current?.register({
+              id: result.saleId,
+              ...(result.clientSaleId ? { clientSaleId: result.clientSaleId } : {}),
+            })
             setIsPaymentModalOpen(false)
             setInstantPayIntent(null)
             toast({
@@ -1645,14 +1782,14 @@ export function PdvSupermercado({
                 window.requestAnimationFrame(() => hardFocusSearch())
               }
             })
-            return
+            return true
           }
           _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
           if (aPrazo > 0.02 && selectedCustomer && !result.pending) {
             appendContaReceberTituloPdvAprazo({
               lojaId: lojaKey,
               saleId: result.saleId,
-              clienteNome: selectedCustomer.name,
+              clienteNome: clienteVendaNome ?? selectedCustomer.name,
               valor: aPrazo,
               aPrazoConfig,
             })
@@ -1729,17 +1866,22 @@ export function PdvSupermercado({
               window.requestAnimationFrame(() => hardFocusSearch())
             }
           })
+          return true
         }}
       />
 
       <ItemAvulsoModal
         open={showItemAvulsoModal}
+        initialCodigo={avulsoSeedCodigo}
         onOpenChange={(open) => {
           setShowItemAvulsoModal(open)
-          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca.
+          // Cancelou/fechou: estado operacional limpo, sem código antigo na busca
+          // e sem contexto transitório de scan (GOAL 007).
           if (!open) {
             setSearchTerm("")
             scanFeedback.dismiss()
+            missedScanCodeRef.current = null
+            setAvulsoSeedCodigo(null)
           }
         }}
         onCloseAutoFocus={(e) => {
@@ -1940,6 +2082,7 @@ export function PdvSupermercado({
                       setDiscountPercent(0)
                       setDiscountReais(0)
                       setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                      pendingSaleIdentityRef.current?.clear()
                       toast({ title: "Carrinho limpo", description: "Autorizado pelo supervisor." })
                     }
                     setSupervisorDialogOpen(false)

@@ -123,6 +123,29 @@ describe.each(SURFACES)("$id — bipe → resposta → limpeza → foco", (s) =>
     expect(bloco).toContain("if (!open) {")
     expect(bloco).toContain(s.clear)
     expect(bloco).toContain("scanFeedback.dismiss()")
+    // GOAL 007: fechar/cancelar limpa o contexto transitório do código bipado.
+    expect(bloco).toContain("initialCodigo={avulsoSeedCodigo}")
+    expect(bloco).toContain("missedScanCodeRef.current = null")
+    expect(bloco).toContain("setAvulsoSeedCodigo(null)")
+  })
+
+  it("GOAL 007 — política por loja age só no miss confirmado: contexto + autoabertura com guarda", () => {
+    // Decisão centralizada (server-first), nunca regra local por superfície.
+    expect(src).toContain('from "@/lib/pdv-scan-unregistered-action"')
+    expect(src).toContain("resolvePdvScanUnregisteredPolicy(")
+    expect(src).toContain("scanFeedback.notify(")
+    // A copy do hint vem do ESTADO do aviso (suggestsAvulso) e SÓ para miss scan-like,
+    // nunca de decisão local.
+    expect(src).toContain("suggestAvulso: scanLike && scanUnregisteredPolicy.showInsertHint")
+    // O código do miss é preservado como contexto (modos B/C).
+    expect(src).toContain("missedScanCodeRef.current = ")
+    // Autoabertura (modo C) SEMPRE guardada: nunca por cima de modal crítico e
+    // NUNCA para miss de busca textual (distinção scan × busca do GOAL 005).
+    expect(src).toContain("scanLike && scanUnregisteredPolicy.autoOpenAvulso && !hasBlockingPdvDialog()")
+    expect(src).toContain("openItemAvulso(")
+    // Insert congelado (N5, marcador por superfície) e agora com contexto seguro — campo vazio decide.
+    expect(src).toContain(s.n5Markers[0])
+    expect(src).toContain("scanUnregisteredPolicy.offersAvulsoContext && campoVazio")
   })
 
   it.runIf(s.rapidoEscStart !== null)("Esc no modo rápido limpa o texto antes de remover item do carrinho", () => {
@@ -184,5 +207,27 @@ describe("peças compartilhadas", () => {
     expect(shell).toContain("PdvScanInlineNotFound")
     expect(shell).toContain("error={!!props.bipeInlineFeedback?.code}")
     expect(shell).toContain("aria-invalid={error || undefined}")
+  })
+
+  it("GOAL 007 — ItemAvulsoModal semeia o código bipado como contexto (initialCodigo)", () => {
+    const modal = read("item-avulso-modal.tsx")
+    expect(modal).toContain("initialCodigo?: string | null")
+    expect(modal).toContain("setCodigoInput(initialCodigo ? initialCodigo.trim() : \"\")")
+    // Foco inicial continua na Descrição (digitação imediata, modo automático).
+    expect(modal).toContain("descriptionRef.current?.focus()")
+  })
+
+  it("GOAL 007 — camada de decisão pura: default seguro e autoabertura nunca por cima de modal", () => {
+    const lib = read("../../../lib/pdv-scan-unregistered-action.ts")
+    expect(lib).toContain('DEFAULT_PDV_SCAN_UNREGISTERED_ACTION: PdvScanUnregisteredAction = "warn_offer_avulso"')
+    expect(lib).toContain("hasBlockingPdvDialog")
+    expect(lib).toContain('doc.querySelector(\'[role="dialog"], [role="alertdialog"]\')')
+  })
+
+  it("GOAL 007 — overlay lê o hint de Insert do estado do aviso (sem decisão local)", () => {
+    const overlay = read("pdv-scan-inline-feedback.tsx")
+    expect(overlay).toContain("feedback.suggestsAvulso")
+    expect(overlay).toContain("Insert")
+    expect(overlay).toContain("para Item Avulso")
   })
 })

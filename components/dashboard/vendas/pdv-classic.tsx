@@ -91,6 +91,7 @@ import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
+import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
 import { usePdvScanNotFoundFeedback } from "./use-pdv-scan-feedback"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
@@ -150,6 +151,16 @@ import {
   findUnresolvedSaleLines,
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
+import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
+import {
+  resolveWeightUnitPrice,
+  WEIGHT_PRICE_INVALID_FEEDBACK,
+} from "@/lib/pdv/weight-line-guard"
+import {
+  CAPABILITY_BLOCKED_COPY,
+  createCapabilityBlockedFeedback,
+} from "@/lib/pdv/capability-blocked-feedback"
 
 type Customer = {
   id: string
@@ -246,13 +257,14 @@ export function PdvClassic({
   const { config } = useConfigEmpresa()
   const { empresaDocumentos, getEnderecoDocumentos, lojaAtivaId, opsStorageKey, storesRefreshNonce } =
     useLojaAtiva()
-  const { pdvParams, impressaoConfig, settings, storeId } = useStoreSettings()
+  const { pdvParams, impressaoConfig, settings, storeId, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("classic")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
   const discountsEnabled = pdvCapabilities.isEnabled("pdv.discounts")
   const storeCreditEnabled = pdvCapabilities.isEnabled("pdv.customerStoreCredit")
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
+  const payMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
   const { mode: studioThemeMode } = useStudioTheme()
@@ -261,12 +273,18 @@ export function PdvClassic({
   // Caixa: apenas leitura do CaixaStatusBar/CaixaProvider via outros consumers.
   // `useCaixa()` legado (adicionarEntrada/Saida/sessaoId) só era usado pelo
   // `saveOperation` removido — fluxo migrado para o CaixaStatusBar compartilhado.
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, ordens } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, ordens, sales } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome(lojaKey)
   const operatorLabel = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
   const { toast } = useToast()
+  // N5-B1 R2 (P2-06): identidade PENDING já criada — reconfirmar pelo modal
+  // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
+  const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
+  if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
+  const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
   const [searchTerm, setSearchTerm] = useState("")
   const [customerSearch, setCustomerSearch] = useState("")
   const { clientes: filteredCustomers, isLoading: buscandoCliente } = useClienteSearch(customerSearch, lojaKey)
@@ -310,6 +328,19 @@ export function PdvClassic({
   const [bipeCode, setBipeCode] = useState("")
   /** Aviso transitório de código não encontrado (um único aviso vivo). */
   const scanFeedback = usePdvScanNotFoundFeedback()
+  // GOAL 007 — política por loja "quando bipar um produto não cadastrado" (server-first).
+  const scanUnregisteredPolicy = useMemo(
+    () => resolvePdvScanUnregisteredPolicy(pdvScanUnregisteredAction),
+    [pdvScanUnregisteredAction],
+  )
+  /** Código do último miss scan-like — contexto do Item Avulso nos modos B/C. */
+  const missedScanCodeRef = useRef<string | null>(null)
+  const [avulsoSeedCodigo, setAvulsoSeedCodigo] = useState<string | null>(null)
+  /** Único caminho de abertura do Item Avulso: TODO abrir é explícito sobre o contexto. */
+  const openItemAvulso = useCallback((seedCodigo: string | null) => {
+    setAvulsoSeedCodigo(seedCodigo)
+    setShowItemAvulsoModal(true)
+  }, [])
   const [shellNextQty, setShellNextQty] = useState("1")
   const [shellSeller, setShellSeller] = useState("01 — Caixa 1")
   const [shellInfo, setShellInfo] = useState("Sistema pronto. Bipe um produto ou pressione F3 para pesquisar.")
@@ -984,11 +1015,26 @@ export function PdvClassic({
         setBipeCode("")
         return
       }
-      scanFeedback.notify(query)
+      scanFeedback.notify(query, {
+        suggestAvulso: scanLike && scanUnregisteredPolicy.showInsertHint,
+      })
       setShellInfo(`✕ Produto não encontrado nesta loja para o código: ${query}`)
+      // GOAL 007 — a política por loja só age APÓS o fluxo existente determinar
+      // PRODUTO NÃO ENCONTRADO (match exato, fuzzy, parciais e busca textual tratados acima).
+      // Miss de busca textual invalida o contexto do último código SCAN-like.
+      missedScanCodeRef.current = scanLike ? query : null
+      // Autoabertura (modo C) SÓ para scan-like: miss de busca textual (ex.: "capinha
+      // samsung") preserva a semântica do GOAL 005 — nunca abre modal sozinho.
+      if (scanLike && scanUnregisteredPolicy.autoOpenAvulso && !hasBlockingPdvDialog()) {
+        // Modo C: abre o Item Avulso UMA vez por scan, com o código como contexto.
+        // (2º Enter/CR-LF encontra o campo já vazio e nunca chega aqui; hasBlockingPdvDialog
+        // impede abrir por cima de modal crítico que tenha surgido durante o await.)
+        openItemAvulso(query)
+        return
+      }
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
-    [addToCart, bipeCode, cart, products, shellNextQty, scanFeedback, lojaKey, setInventory]
+    [addToCart, bipeCode, cart, products, shellNextQty, scanFeedback, lojaKey, setInventory, scanUnregisteredPolicy, openItemAvulso]
   )
 
   const handleBipeSuggestionSelect = useCallback(
@@ -1071,10 +1117,25 @@ export function PdvClassic({
       toast({ title: "Peso inválido", description: "Informe o peso em kg.", variant: "destructive" })
       return
     }
+    // N5-B1 R2 (GAP-P2-05): preço efetivo do peso precisa existir e ser > 0 —
+    // 0/negativo/NaN/ausente rejeita a linha (sem inferir preço, sem tocar no
+    // cadastro). O diálogo permanece aberto para correção ou cancelamento.
+    const pesoPreco = resolveWeightUnitPrice({
+      precoPorKg: weightProduct.precoPorKg,
+      price: weightProduct.price,
+    })
+    if (!pesoPreco.ok) {
+      toast({
+        title: WEIGHT_PRICE_INVALID_FEEDBACK.title,
+        description: WEIGHT_PRICE_INVALID_FEEDBACK.description,
+        variant: "destructive",
+      })
+      return
+    }
     const inv = inventory.find((i) => i.id === weightProduct.id)
     const productForStock = { ...weightProduct, stock: inv?.stock ?? weightProduct.stock }
     if (!validateAggregatedStockForProduct(productForStock, kg)) return
-    const pKg = weightProduct.precoPorKg ?? weightProduct.price
+    const pKg = pesoPreco.unitPrice
     const parts = weightProduct.atributos?.length ? weightProduct.atributos.map((a) => attrSelections[a.id]).filter(Boolean) : []
     const baseName = parts.length > 0 ? `${weightProduct.name} (${parts.join(" · ")})` : weightProduct.name
     pushCartLine({
@@ -1353,10 +1414,21 @@ export function PdvClassic({
 
   const openPaymentFlow = useCallback(
     (intent: PaymentMethodType | null, multiple: boolean) => {
+      // N5-B1 R2 (P2-03): capability off = feedback claro, nunca retorno
+      // silencioso (F1/F10/F12 e cliques chegam aqui pelo mesmo caminho).
       if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+        paymentBlockedFeedback.notifyBlocked("sales.paymentMethods", CAPABILITY_BLOCKED_COPY["sales.paymentMethods"])
         return false
       }
       if (multiple && !pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+        paymentBlockedFeedback.notifyBlocked("pdv.multiplePayments", CAPABILITY_BLOCKED_COPY["pdv.multiplePayments"])
+        return false
+      }
+      // N5-B1 R2 (P2-06) / GOAL 002: venda PENDING de identidade própria e
+      // ainda não resolvida (syncPending) — reconfirmar criaria novo
+      // clientSaleId. Orienta para o retry existente.
+      if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
+        toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
         return false
       }
       if (!validateBeforeOpenPayment()) {
@@ -1368,7 +1440,7 @@ export function PdvClassic({
       setIsPaymentModalOpen(true)
       return true
     },
-    [focusShellBipe, pdvCapabilities, validateBeforeOpenPayment]
+    [focusShellBipe, pdvCapabilities, paymentBlockedFeedback, sales, toast, validateBeforeOpenPayment]
   )
 
   const openShellShortcut = useCallback(
@@ -1494,7 +1566,14 @@ export function PdvClassic({
       // Agora vive no keymap operacional do Clássico, igual a Assistência/Supermercado.
       if (e.key === "Insert") {
         e.preventDefault()
-        setShowItemAvulsoModal(true)
+        // GOAL 007 (modos B/C): Insert abre o Item Avulso com o último código não
+        // cadastrado como contexto — seguro apenas se o bipe segue vazio (nada digitado
+        // depois do miss). Modo A abre limpo, como sempre. Leitura via ref: live, sem
+        // depender do closure do efeito.
+        const stash = missedScanCodeRef.current
+        missedScanCodeRef.current = null
+        const campoVazio = (shellBipeRef.current?.value ?? "").trim() === ""
+        openItemAvulso(scanUnregisteredPolicy.offersAvulsoContext && campoVazio ? stash : null)
         return
       }
       if (!fnKeys.has(e.key)) return
@@ -1515,7 +1594,7 @@ export function PdvClassic({
       window.removeEventListener("keydown", down)
       window.removeEventListener("keyup", up)
     }
-  }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe, scanFeedback])
+  }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
 
   // Autofocus operacional (GOAL 006): ao entrar/retornar ao PDV o Código/Bipe já está focado —
   // o leitor bipa sem clique no mouse. Uma leitura do guard por efeito (nada de interval/loop
@@ -1613,6 +1692,9 @@ export function PdvClassic({
       discountReais,
       discountPercent,
       pdvType: "classic",
+      // N5-B1 GOAL 002: identidade PENDING viaja com o hold — o resume
+      // re-registra no guard (holds legados sem este campo seguem válidos).
+      pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
     }
     saveHeldSale(
       lojaKey,
@@ -1623,6 +1705,10 @@ export function PdvClassic({
     setSelectedCustomer(null)
     setDiscountReais(0)
     setDiscountPercent(0)
+    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de sessão
+    // liberado; a identidade PENDING continua preservada no próprio hold
+    // (re-registrada no resume) e a venda pendente segue syncing independente.
+    pendingSaleIdentityRef.current?.clear()
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
   }
 
@@ -1664,6 +1750,9 @@ export function PdvClassic({
     }
     setDiscountReais(discountRestore.discountReais)
     setDiscountPercent(discountRestore.discountPercent)
+    // N5-B1 GOAL 002: hold com identidade PENDING restaura a proteção —
+    // reconfirmar após o resume ficaria bloqueado (nova identidade = 2ª venda).
+    if (sale.pendingIdentity) pendingSaleIdentityRef.current?.register(sale.pendingIdentity)
     removeHeldSale(lojaKey, terminalIdForHold, sale.id)
     return true
   }
@@ -1877,6 +1966,9 @@ export function PdvClassic({
                 setShellNextQty("1")
                 setSelectedCustomer(null)
                 setShellCustomerField("CONSUMIDOR")
+                // N5-B1 R2 (P2-06): rascunho encerrado conscientemente — guard
+                // de identidade PENDING liberado (pendência segue syncing).
+                pendingSaleIdentityRef.current?.clear()
                 setShellCancelSaleOpen(false)
                 setShellInfo("Venda cancelada. Sistema limpo.")
                 focusShellBipe()
@@ -1910,12 +2002,16 @@ export function PdvClassic({
 
       <ItemAvulsoModal
         open={showItemAvulsoModal}
+        initialCodigo={avulsoSeedCodigo}
         onOpenChange={(open) => {
           setShowItemAvulsoModal(open)
-          // Cancelou/fechou: estado operacional limpo, sem código antigo no campo de bipe.
+          // Cancelou/fechou: estado operacional limpo, sem código antigo no campo de bipe
+          // e sem contexto transitório de scan (GOAL 007).
           if (!open) {
             setBipeCode("")
             scanFeedback.dismiss()
+            missedScanCodeRef.current = null
+            setAvulsoSeedCodigo(null)
           }
         }}
         onCloseAutoFocus={(e) => {
@@ -2000,8 +2096,16 @@ export function PdvClassic({
         discountsEnabled={discountsEnabled}
         storeCreditEnabled={storeCreditEnabled}
         allowMultiplePayments={pdvCapabilities.isEnabled("pdv.multiplePayments")}
+        requireExplicitResult
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
+          // N5-B1 R2 (P2-06) / GOAL 002: defesa em profundidade — venda PENDING
+          // de identidade própria e ainda não resolvida não pode gerar nova
+          // confirmação.
+          if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
+            toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+            return false
+          }
           // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
           // linha de produto sem cadastro BLOQUEIA com os nomes — nunca filtrada
           // em silêncio enquanto o total cheio segue para cobrança. Carrinho intacto.
@@ -2033,21 +2137,28 @@ export function PdvClassic({
               ...(item.accessorySelection ? { accessorySelection: item.accessorySelection } : {}),
             }))
           // Capturar dados de impressão ANTES de limpar o cart
-          // Vale usado com titular localizado por doc/código no PaymentModal: a
-          // venda precisa carregar o documento que o servidor vai debitar
-          // (ClienteCredito é chaveado por CPF/CNPJ) — pode diferir do cliente
-          // selecionado. O saldo local é semeado com o valor reportado pelo
-          // servidor para o guard do finalize não rejeitar em navegador frio.
-          const usouValeLoc = !!meta?.creditDoc && payments.some((p) => p.type === "credito_vale")
-          const cpfDaVenda =
-            usouValeLoc && meta?.creditDoc ? meta.creditDoc : selectedCustomer?.cpf
-          const nomeDaVenda =
-            usouValeLoc && meta?.creditDoc
-              ? meta.creditNome || selectedCustomer?.name
-              : selectedCustomer?.name
-          if (usouValeLoc && meta?.creditDoc) {
-            sincronizarCreditoLocal(meta.creditDoc, meta.creditNome ?? "", meta.creditSaldo ?? 0)
+          // N5-B1 R2 (P2-02): resolução compartilhada do crédito/vale (audit
+          // GAP-P2-02). O servidor debita ClienteCredito pelo customerCpf da
+          // venda: titular de terceiro → doc DELE na venda, clienteId do
+          // selecionado NUNCA herda; titular = cliente selecionado → identidade
+          // dele intacta (precedência). Seed local só com saldo reportado.
+          const usouValeLoc = payments.some((p) => p.type === "credito_vale")
+          const attributionClassic = resolveCreditAttribution({
+            usedCredit: usouValeLoc,
+            meta,
+            selectedCustomer: selectedCustomer
+              ? { id: selectedCustomer.id, name: selectedCustomer.name, cpf: selectedCustomer.cpf }
+              : null,
+          })
+          if (attributionClassic.seedLocalCredit) {
+            sincronizarCreditoLocal(
+              attributionClassic.seedLocalCredit.doc,
+              attributionClassic.seedLocalCredit.nome,
+              attributionClassic.seedLocalCredit.saldo,
+            )
           }
+          const cpfDaVenda = attributionClassic.saleDoc ?? selectedCustomer?.cpf
+          const nomeDaVenda = attributionClassic.saleName ?? selectedCustomer?.name
           const _rp = buildReceiptPrintPayload()
           const _printInput: PdvReceiptInput = {
             nomeFantasia: _rp.nome,
@@ -2114,7 +2225,9 @@ export function PdvClassic({
             },
             customerCpf: cpfDaVenda,
             customerName: nomeDaVenda,
-            clienteId: usouValeLoc ? undefined : selectedCustomer?.id || undefined,
+            clienteId: attributionClassic.belongsToSelectedCustomer
+              ? selectedCustomer?.id || undefined
+              : undefined,
             aPrazoConfig,
             pixQrKind: meta?.pixQrKind,
             cashTendered: meta?.cashTendered,
@@ -2128,8 +2241,13 @@ export function PdvClassic({
           // fila de produtos, sem marcar total da última venda, sem limpar o
           // carrinho. Só informa o estado honesto, preserva carrinho/identidade
           // e permite retry da MESMA venda (Vendas → Reenviar sync). Tudo
-          // abaixo é CONFIRMED.
+          // abaixo é CONFIRMED. N5-B1 R2 (P2-06): identidade REGISTRADA —
+          // reconfirmação pelo modal fica bloqueada (nova identidade = 2ª venda).
           if (result.pending) {
+            pendingSaleIdentityRef.current?.register({
+              id: result.saleId,
+              ...(result.clientSaleId ? { clientSaleId: result.clientSaleId } : {}),
+            })
             toast({
               title: PENDING_SALE_TITLE,
               description: PENDING_SALE_DESCRIPTION,
@@ -2246,7 +2364,7 @@ export function PdvClassic({
               <Button
                 variant="outline"
                 className="w-full justify-start border-primary/30 hover:bg-primary/10"
-                onClick={() => { setShowOperationsMenu(false); setShowItemAvulsoModal(true) }}
+                onClick={() => { setShowOperationsMenu(false); openItemAvulso(null) }}
               >
                 Item Avulso
                 <span className="ml-auto text-xs text-muted-foreground">INS</span>

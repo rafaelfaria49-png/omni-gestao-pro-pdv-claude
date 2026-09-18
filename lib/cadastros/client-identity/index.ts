@@ -36,6 +36,7 @@ export {
   isValidClientDocument,
   detectDocumentKind,
   toDocumentSignal,
+  toStrongDocumentKey,
 } from "./document"
 
 export { normalizeClientEmail, toEmailSignal } from "./email"

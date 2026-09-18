@@ -72,6 +72,15 @@ import {
   type PixQrKind,
 } from "@/lib/fiscal/payment/pix-qr-kind"
 import { sumCashTendered } from "@/lib/pdv-payments"
+import {
+  FINALIZE_IN_FLIGHT_FEEDBACK,
+  resolveConfirmOutcome,
+  refuseModalCloseWhileConfirming,
+} from "@/lib/pdv/finalize-modal-contract"
+import {
+  CAPABILITY_BLOCKED_COPY,
+  createCapabilityBlockedFeedback,
+} from "@/lib/pdv/capability-blocked-feedback"
 
 function formatMoneyInput(value: string): string {
   const clean = value.replace(/\D/g, "")
@@ -223,6 +232,14 @@ interface PaymentModalProps {
   storeCreditEnabled?: boolean
   /** Default true. Quando false, composição com múltiplas formas fica indisponível. */
   allowMultiplePayments?: boolean
+  /**
+   * N5-B1 R2 (P2-06): quando `true`, o retorno do `onConfirm` é contrato
+   * explícito — `undefined`/`void` NUNCA é interpretado como sucesso (modal
+   * permanece aberto, busy liberado, feedback de resultado indeterminado).
+   * As 4 superfícies oficiais passam `true`; callers legados (Black) que ainda
+   * retornam `void` mantêm o comportamento pré-R2 (default `false`).
+   */
+  requireExplicitResult?: boolean
 }
 
 function PixQrKindPicker({
@@ -292,6 +309,7 @@ export function PaymentModal({
   discountsEnabled = true,
   storeCreditEnabled = true,
   allowMultiplePayments = true,
+  requireExplicitResult = false,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
   const [isConfirming, setIsConfirming] = useState(false)
@@ -726,6 +744,24 @@ export function PaymentModal({
     }
   }, [isConfirming])
 
+  // ── N5-B1 R2 (P2-06): guard de fechamento durante finalização em voo ────────
+  // Cancelar/X/Esc/clique-fora/onOpenChange NÃO fecham o modal enquanto o
+  // request de confirmação está em voo — e portanto não resetam o busy nem
+  // abrem espaço para close → reabrir → reconfirmar. Feedback com cooldown
+  // (sem toast loop/spam). Contrato compartilhado: `finalize-modal-contract`.
+  const blockedCloseFeedback = useMemo(
+    () => createCapabilityBlockedFeedback(toast, { cooldownMs: 1500 }),
+    [toast],
+  )
+  const attemptCloseWhileConfirming = useCallback(() => {
+    // `finalConfirmBusyRef` é a fonte síncrona (setado antes de qualquer await);
+    // `isConfirming` cobre o restante do voo após o re-render.
+    const inFlight = isConfirming || finalConfirmBusyRef.current
+    if (!refuseModalCloseWhileConfirming(inFlight)) return false
+    blockedCloseFeedback.notifyBlocked(FINALIZE_IN_FLIGHT_FEEDBACK.title, FINALIZE_IN_FLIGHT_FEEDBACK)
+    return true
+  }, [blockedCloseFeedback, isConfirming])
+
   const handleFinalConfirm = useCallback(() => {
     if (finalConfirmBusyRef.current || isConfirming) return
     finalConfirmBusyRef.current = true
@@ -755,9 +791,21 @@ export function PaymentModal({
                 }
               : {}),
           })
-          if (success === false) {
+          // N5-B1 R2 (P2-06): desposição EXPLÍCITA — `undefined` só é sucesso
+          // para callers legados (sem requireExplicitResult). FAILED/indeterminado
+          // mantém o modal aberto, libera o busy e devolve o foco para nova
+          // tentativa consciente (contrato de erro da superfície preservado).
+          const outcome = resolveConfirmOutcome(success, requireExplicitResult)
+          if (outcome !== "confirmed") {
             finalConfirmBusyRef.current = false
             setIsConfirming(false)
+            if (success !== false) {
+              toast({
+                variant: "destructive",
+                title: "Finalização não confirmada",
+                description: "O resultado da finalização não foi reportado. Verifique Vendas antes de tentar de novo.",
+              })
+            }
             returnFocusToPaymentConfirm()
             return
           }
@@ -773,7 +821,7 @@ export function PaymentModal({
         }
       })()
     }, 50)
-  }, [isConfirming, payments, total, pixTotal, pixQrKind, descontoManualAtivo, authorizedAdmin, locatedCredit, onConfirm, cashierId, discountReais, discountPercent, onClose, returnFocusToPaymentConfirm, toast])
+  }, [isConfirming, payments, total, pixTotal, pixQrKind, descontoManualAtivo, authorizedAdmin, locatedCredit, onConfirm, cashierId, discountReais, discountPercent, onClose, requireExplicitResult, returnFocusToPaymentConfirm, toast])
 
   // ── Computações à prazo ──────────────────────────────────────────────────────
   const aPrazoBundleTotal = Math.min(
@@ -847,9 +895,21 @@ export function PaymentModal({
     }
   }, [isOpen])
 
+  const multipleBlockedFeedback = useMemo(
+    () => createCapabilityBlockedFeedback(toast, { cooldownMs: 1500 }),
+    [toast],
+  )
+
   const handleAddPayment = useCallback(
     (type: PaymentMethodType, preferFormaId?: FormaPagamentoConfigId) => {
       if (type === "credito_vale" && !storeCreditEnabled) return
+      // N5-B1 R2 (P2-03): capacidade off não cai em retorno silencioso —
+      // segunda forma com `pdv.multiplePayments` off produz feedback claro
+      // (com cooldown anti-spam) e mantém o estado atual.
+      if (!allowMultiplePayments && payments.length > 0) {
+        multipleBlockedFeedback.notifyBlocked("pdv.multiplePayments", CAPABILITY_BLOCKED_COPY["pdv.multiplePayments"])
+        return
+      }
       const forma = resolveFormaForType(type, preferFormaId)
       if (!guardFormaRules(forma, type)) return
       if (type === "a_prazo" && !selectedCustomer) {
@@ -927,6 +987,8 @@ export function PaymentModal({
       onRequireCustomer,
       storeCreditEnabled,
       allowMultiplePayments,
+      payments,
+      multipleBlockedFeedback,
     ]
   )
 
@@ -1258,7 +1320,11 @@ export function PaymentModal({
       <Dialog
         open={isOpen}
         onOpenChange={(open) => {
-          if (!open) onClose()
+          if (!open) {
+            // N5-B1 R2 (P2-06): em voo, o fechamento é recusado — busy preservado.
+            if (attemptCloseWhileConfirming()) return
+            onClose()
+          }
         }}
       >
         <DialogContent
@@ -1276,6 +1342,11 @@ export function PaymentModal({
                 }
           }
           onEscapeKeyDown={(e) => {
+            // N5-B1 R2 (P2-06): finalização em voo — Esc não fecha nem sai do sub-fluxo.
+            if (attemptCloseWhileConfirming()) {
+              e.preventDefault()
+              return
+            }
             // Esc volta uma etapa (sai do sub-fluxo) antes de fechar o modal.
             if (selectedType) {
               e.preventDefault()
@@ -1284,6 +1355,10 @@ export function PaymentModal({
                 if (highlightedFormaId) formaBtnRefs.current[highlightedFormaId]?.focus()
               })
             }
+          }}
+          onInteractOutside={(e) => {
+            // N5-B1 R2 (P2-06): clique/foco fora não descartam a finalização em voo.
+            if (attemptCloseWhileConfirming()) e.preventDefault()
           }}
           onKeyDown={handleMainDialogKeyDown}
           className="w-[94vw] max-w-[1000px] sm:max-w-[1000px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-card border-border"
@@ -1914,7 +1989,15 @@ export function PaymentModal({
               </p>
             )}
             <div className="flex gap-3">
-              <Button ref={cancelBtnRef} type="button" variant="outline" onClick={onClose} className="flex-1 h-11 border-border">
+              <Button
+                ref={cancelBtnRef}
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={isConfirming}
+                title={isConfirming ? "Finalização em andamento — aguarde" : undefined}
+                className="flex-1 h-11 border-border"
+              >
                 Cancelar
               </Button>
               <Button
@@ -1992,11 +2075,21 @@ export function PaymentModal({
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
-        if (!open) onClose()
+        if (!open) {
+          // N5-B1 R2 (P2-06): em voo, o fechamento é recusado — busy preservado.
+          if (attemptCloseWhileConfirming()) return
+          onClose()
+        }
       }}
     >
       <DialogContent
         onKeyDown={handleMainDialogKeyDown}
+        onEscapeKeyDown={(e) => {
+          if (attemptCloseWhileConfirming()) e.preventDefault()
+        }}
+        onInteractOutside={(e) => {
+          if (attemptCloseWhileConfirming()) e.preventDefault()
+        }}
         className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card border-border"
       >
         <DialogHeader className="p-6 pb-2 border-b border-border shrink-0">
@@ -2711,6 +2804,8 @@ export function PaymentModal({
               type="button"
               variant="outline"
               onClick={onClose}
+              disabled={isConfirming}
+              title={isConfirming ? "Finalização em andamento — aguarde" : undefined}
               className="flex-1 h-12 border-border"
             >
               Cancelar

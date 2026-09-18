@@ -15,9 +15,14 @@
  *    (`postFinalizeDisposition`) declara CONFIRMED apenas com `{ok:true}` sem
  *    pendência, e retry idempotente emite exatamente uma vez.
  *
- * GAP-P2-06 registrado como evidência N5-B: mutex (`claimSaleFinalizeLock`)
- * existe SÓ na Venda Completa; as demais dependem do `finalConfirmBusyRef` do
- * modal. NADA é corrigido aqui e nenhum mutex novo é implementado.
+ * N5-B1 R2 (GAP-P2-06 CORRIGIDO): a máquina de estados do modal é o contrato
+ * compartilhado `lib/pdv/finalize-modal-contract.ts` — fechamento durante o
+ * voo é recusado, resultado explícito é exigido das 4 superfícies
+ * (`requireExplicitResult`) e PENDING registra identidade estável. A prova
+ * COMPORTAMENTAL vive em `parity-finalize-behavior.test.ts`; aqui ficam os
+ * drift guards estáticos de wiring. O mutex `claimSaleFinalizeLock` continua
+ * exclusivo da Venda Completa (as demais superfícies usam o busy-ref do
+ * modal + gate de intenção — não há mutex novo por superfície).
  */
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -34,6 +39,8 @@ import {
 } from "../pdv-finalize-integrity"
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
+
+const MODAL = "components/dashboard/vendas/payment-modal.tsx"
 
 function read(relativePath: string): string {
   return readFileSync(resolve(repoRoot, relativePath), "utf8")
@@ -77,7 +84,7 @@ describe("F-04 — single entry e guards de borda por superfície", () => {
     })
   }
 
-  it("GAP-P2-06 (evidência N5-B): mutex de finalização existe SÓ na Venda Completa", () => {
+  it("GAP-P2-06 (R2): mutex claimSaleFinalizeLock continua exclusivo da Venda Completa", () => {
     const vc = read(fixtureFor("venda-completa").componentPath)
     expect(vc).toContain("claimSaleFinalizeLock(isProcessingRef)")
     expect(vc).toContain("releaseSaleFinalizeLock(isProcessingRef)")
@@ -86,12 +93,42 @@ describe("F-04 — single entry e guards de borda por superfície", () => {
       const source = read(fixtureFor(surfaceId).componentPath)
       expect(
         source,
-        `${surfaceId}: sem mutex novo (N5-A não implementa; N5-B decide prova)`,
+        `${surfaceId}: sem mutex novo (busy da finalização vive no modal compartilhado)`,
       ).not.toContain("claimSaleFinalizeLock")
     }
   })
 
-  it("Venda Completa: F1 respeita o mutex (isSaleFinalizeBusy) — evidência P2-06", () => {
+  it("GAP-P2-06 (R2): as 4 bordas exigem resultado explícito do modal (requireExplicitResult)", () => {
+    for (const fixture of OFFICIAL_SURFACE_FIXTURES) {
+      const source = read(fixture.componentPath)
+      expect(source, `${fixture.surfaceId}: requireExplicitResult no PaymentModal`).toContain(
+        "requireExplicitResult",
+      )
+    }
+  })
+
+  it("GAP-P2-06 (R2): modal recusa fechamento durante o voo (contrato compartilhado importado)", () => {
+    const modal = read(MODAL)
+    expect(modal).toContain("refuseModalCloseWhileConfirming")
+    expect(modal).toContain("resolveConfirmOutcome")
+    expect(modal).toContain("attemptCloseWhileConfirming")
+    // Busy síncrono cobre a janela entre o clique e o re-render.
+    expect(modal).toContain("finalConfirmBusyRef.current")
+  })
+
+  it("GAP-P2-06 (R2): identidade PENDING registrada nas 4 bordas (guarda de reconfirmação)", () => {
+    for (const fixture of OFFICIAL_SURFACE_FIXTURES) {
+      const source = read(fixture.componentPath)
+      expect(source, `${fixture.surfaceId}: guard de identidade PENDING`).toContain(
+        "pendingSaleIdentityRef",
+      )
+      expect(source, `${fixture.surfaceId}: registra identidade no PENDING`).toContain(
+        "pendingSaleIdentityRef.current?.register(",
+      )
+    }
+  })
+
+  it("GAP-P2-06 (R2): Venda Completa: F1 respeita o mutex (isSaleFinalizeBusy)", () => {
     const vc = read(fixtureFor("venda-completa").componentPath)
     const f1Case = vc.slice(vc.indexOf('case "F1":'), vc.indexOf("case \"F2\":"))
     expect(f1Case).toContain("isSaleFinalizeBusy(isProcessingRef)")

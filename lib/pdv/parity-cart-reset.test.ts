@@ -12,11 +12,11 @@
  *   desconto, busca, seleção;
  * - supermercado (Limpar, PIN-gated — GAP-P2-01 NÃO corrigido): total —
  *   carrinho, descontos, busca, nos 3 caminhos (modo-rápido/admin/PIN);
- * - venda-completa ("Limpar tudo"): PARCIAL — GAP-P1-01 REGISTRADO como
- *   comportamento atual esperado (mantém cliente/desconto/tipo/obs/endereço),
- *   enquanto hold e CONFIRMED resetam total. O teste documenta a divergência
- *   sem escondê-la e sem corrigi-la; quando N5-B corrigir o P1, este teste
- *   muda DE PROPÓSITO junto com o fix.
+ * - venda-completa ("Limpar tudo"): TOTAL desde o N5-B1 R2 (GAP-P1-01
+ *   CORRIGIDO) — carrinho, cliente, desconto, tipo, observação,
+ *   endereço/entrega, busca/dropdowns, transientes e rascunho persistido.
+ *   StoreSettings, preferências permanentes, holds e dados persistidos do
+ *   cliente permanecem intactos.
  */
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -71,22 +71,36 @@ describe("F-05 — reset total nas superfícies do switcher", () => {
   })
 })
 
-describe("F-05 — venda-completa: GAP-P1-01 registrado (NÃO corrigir aqui)", () => {
-  it("'Limpar tudo' é PARCIAL por design atual: só carrinho + UI da busca", () => {
+describe("F-05 — venda-completa: GAP-P1-01 CORRIGIDO no N5-B1 R2 (reset total)", () => {
+  it("'Limpar tudo' chama o reset total (handleClearAllSale) — sem resíduo de venda anterior", () => {
     const source = read(fixtureFor("venda-completa").componentPath)
-    const HANDLER = 'onClick={() => { setCart([]); setExpandedLineId(null); setProductQuery(""); setShowProductDropdown(false) }}'
-    const handlerIdx = source.indexOf(HANDLER)
-    expect(handlerIdx, "handler atual do 'Limpar tudo' (mudou? revise GAP-P1-01)").toBeGreaterThan(-1)
-    // Dentro do handler NÃO há reset de cliente/desconto/tipo/obs/endereço.
-    const handler = source.slice(handlerIdx, handlerIdx + HANDLER.length)
-    expect(handler).not.toContain("setSelectedCliente(null)")
-    expect(handler).not.toContain("setDiscountReais(0)")
-    expect(handler).not.toContain('setTipoVenda("comum")')
-    expect(handler).not.toContain("setObservacaoGeral(\"\")")
-    expect(handler).not.toContain("setEnderecoEntrega(")
+    const BUTTON = 'onClick={() => handleClearAllSale()}'
+    expect(source.indexOf(BUTTON), "botão 'Limpar tudo' ligado ao reset total").toBeGreaterThan(-1)
+    const fnIdx = source.indexOf("function handleClearAllSale()")
+    expect(fnIdx, "handler do reset total existe").toBeGreaterThan(-1)
+    const fnBlock = source.slice(fnIdx, source.indexOf("handleConfirmPayment"))
+    // Reset TOTAL do estado operacional da venda (contrato R2).
+    for (const marker of [
+      "setCart([])",
+      "setSelectedCliente(null)",
+      "setClienteQuery(\"\")",
+      "setDiscountReais(0)",
+      'setTipoVenda("comum")',
+      'setObservacaoGeral("")',
+      "setEnderecoEntrega(EMPTY_ENDERECO)",
+      "setShowEnderecoForm(false)",
+      "setProductQuery(\"\")",
+      "setShowProductDropdown(false)",
+      "setAccessoryProduct(null)",
+      "localStorage.removeItem(DRAFT_KEY(storeId))",
+    ]) {
+      expect(fnBlock, `Limpar tudo reseta ${marker}`).toContain(marker)
+    }
+    // Rascunho da venda atual sai; holds (armazenamento próprio) intocados.
+    expect(fnBlock, "não toca holds").not.toContain("removeHeldSale")
   })
 
-  it("hold na VC reseta total — a divergência é só do botão 'Limpar tudo' (GAP-P1-01)", () => {
+  it("hold na VC reseta total — contraste consistente com o novo 'Limpar tudo'", () => {
     const source = read(fixtureFor("venda-completa").componentPath)
     const holdIdx = source.indexOf("function handleHoldSale()")
     const resumeIdx = source.indexOf("function handleResumeSale(")
@@ -96,7 +110,7 @@ describe("F-05 — venda-completa: GAP-P1-01 registrado (NÃO corrigir aqui)", (
     }
   })
 
-  it("CONFIRMED na VC reseta total — pós-venda não deixa resíduo (contrast GAP-P1-01)", () => {
+  it("CONFIRMED na VC reseta total — pós-venda não deixa resíduo (contraste)", () => {
     const source = read(fixtureFor("venda-completa").componentPath)
     const confirmedIdx = source.indexOf("// CONFIRMED: cupom definitivo")
     const confirmedBlock = source.slice(confirmedIdx, source.indexOf("const canFinalize ="))
