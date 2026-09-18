@@ -28,9 +28,10 @@ export type SurfaceFixture = {
     allowMultiplePaymentsKey: "pdv.multiplePayments"
   }
   /**
-   * Mutex de finalização (`claimSaleFinalizeLock`) existe SÓ na Venda Completa.
-   * GAP-P2-06: evidência registrada para N5-B — não é defeito confirmado e
-   * NÃO deve ser "corrigido" aqui.
+   * Mutex `claimSaleFinalizeLock` continua exclusivo da Venda Completa.
+   * N5-B1 R2 (GAP-P2-06): o anti-duplo-submit das demais superfícies vive no
+   * modal compartilhado (contrato `finalize-modal-contract` + busy-ref) e a
+   * identidade PENDING é protegida por guard por superfície — sem mutex novo.
    */
   hasFinalizeMutex: boolean
   auditRefs: string[]

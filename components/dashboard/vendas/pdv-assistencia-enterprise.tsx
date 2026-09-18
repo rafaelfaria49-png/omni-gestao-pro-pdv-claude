@@ -145,6 +145,12 @@ import {
   findUnresolvedSaleLines,
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
+import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
+import {
+  CAPABILITY_BLOCKED_COPY,
+  createCapabilityBlockedFeedback,
+} from "@/lib/pdv/capability-blocked-feedback"
 import { isServicoDisponivelParaVenda } from "@/lib/servicos/servico-pdv"
 
 // ─── Cart persistence ─────────────────────────────────────────────────────────
@@ -919,7 +925,10 @@ function EditarAtalhosModal({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  // Reconciliação R3+main: `sales` é do guard PENDING (GOAL 002), `sincronizarCreditoLocal`
+  // é do P2-02 (R2, ainda não mergeado na main) e `pdvScanUnregisteredAction` é o GOAL 007
+  // (main). Os três convivem — nenhum lado sobrescreve o contrato do outro.
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("assistencia")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
@@ -928,6 +937,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const quickServicesEnabled = pdvCapabilities.isEnabled("pdv.quickServices")
+  const payMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   // Chave dos atalhos: estritamente a unidade ativa, sem fallback silencioso para
   // loja-1 (alinhado à política multi-loja). A grade só monta com unidade ativa.
@@ -1124,6 +1134,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     discountReais: number
     discountPercent: number
   } | null>(null)
+  // N5-B1 R2 (P2-06): identidade PENDING já criada — reconfirmar pelo modal
+  // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
+  const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
+  if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
+  const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
   const [trocasOpen, setTrocasOpen] = useState(false)
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -1362,8 +1378,23 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // seletor de cliente (com cadastro rápido) via onRequireCustomer. `method = null`
   // abre em estado neutro (ex.: F10 = Desconto), sem pré-selecionar forma.
   const openPaymentModal = (method: PayMethod | null = null) => {
-    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) return
-    if (method === "multiplo" && !pdvCapabilities.isEnabled("pdv.multiplePayments")) return
+    // N5-B1 R2 (P2-03): capability off = feedback claro, nunca retorno silencioso
+    // (teclado F1/F12 e cliques chegam aqui pelo mesmo caminho).
+    if (!pdvCapabilities.isEnabled("sales.paymentMethods")) {
+      paymentBlockedFeedback.notifyBlocked("sales.paymentMethods", CAPABILITY_BLOCKED_COPY["sales.paymentMethods"])
+      return
+    }
+    if (method === "multiplo" && !pdvCapabilities.isEnabled("pdv.multiplePayments")) {
+      paymentBlockedFeedback.notifyBlocked("pdv.multiplePayments", CAPABILITY_BLOCKED_COPY["pdv.multiplePayments"])
+      return
+    }
+    // N5-B1 R2 (P2-06) / GOAL 002: venda PENDING de identidade própria e
+    // ainda não resolvida (syncPending) — reconfirmar criaria novo
+    // clientSaleId. Orienta para o retry existente.
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
+      toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+      return
+    }
     if (method && !payMethods.some((p) => p.id === method)) return
     if (cart.length === 0) return
     if (discountOverTotal) {
@@ -1854,11 +1885,33 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }
 
   // ── Payment confirm ────────────────────────────────────────────────────────────
+  // N5-B1 R2 (P2-06): contrato EXPLÍCITO com o modal — `true` = desfecho
+  // (CONFIRMED ou PENDING registrado), `false` = falha (modal permanece aberto,
+  // busy liberado para nova tentativa consciente). Nunca `void`: retorno vazio
+  // não pode ser lido como sucesso.
   const handlePaymentConfirm = async (
     payments: PaymentMethod[],
-    meta?: { cashierId?: string; discountAuthorizedByAdminId?: string; discountReais?: number; discountPercent?: number; pixQrKind?: string; cashTendered?: number },
-  ) => {
-    if (cart.length === 0 || discountOverTotal) return
+    meta?: {
+      cashierId?: string
+      discountAuthorizedByAdminId?: string
+      discountReais?: number
+      discountPercent?: number
+      pixQrKind?: string
+      cashTendered?: number
+      creditDoc?: string
+      creditNome?: string
+      creditSaldo?: number
+    },
+  ): Promise<boolean> => {
+    if (cart.length === 0 || discountOverTotal) return false
+
+    // N5-B1 R2 (P2-06) / GOAL 002: defesa em profundidade — venda PENDING de
+    // identidade própria e ainda não resolvida não pode gerar nova confirmação
+    // (nova identidade = 2ª venda).
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
+      toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
+      return false
+    }
 
     // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
     // linha de produto sem cadastro BLOQUEIA com os nomes — o motor segue como
@@ -1878,7 +1931,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         title: "Item não pode ser vendido",
         description: unresolvedSaleLinesDescription(unresolvedAssist),
       })
-      return
+      return false
     }
 
     // Reduz as formas do modal compartilhado para o breakdown do motor (mesma regra
@@ -1899,14 +1952,39 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || "Loja"
     const _cnpj = (empresaDocumentos?.cnpj || "").trim()
     const _footer = resolveCupomRodape(impressaoConfig, undefined)
+    // N5-B1 R2 (P2-02): crédito/vale consome meta.creditDoc (audit GAP-P2-02 —
+    // antes a Assistência descartava o titular localizado). O servidor debita
+    // ClienteCredito pelo customerCpf da venda: titular de terceiro → doc DELE
+    // na venda e clienteId do selecionado NUNCA herda; titular = cliente
+    // selecionado → identidade dele intacta (precedência). Sem saldo/ledger
+    // aqui — apenas o seed local opcional para o guard do motor em navegador frio.
+    const usouValeAssist = payments.some((p) => p.type === "credito_vale")
+    const attributionAssist = resolveCreditAttribution({
+      usedCredit: usouValeAssist,
+      meta,
+      selectedCustomer: {
+        id: selectedClienteId ?? undefined,
+        name: customerName.trim() || undefined,
+        cpf: selectedClienteDoc ?? "",
+      },
+    })
+    if (attributionAssist.seedLocalCredit) {
+      sincronizarCreditoLocal(
+        attributionAssist.seedLocalCredit.doc,
+        attributionAssist.seedLocalCredit.nome,
+        attributionAssist.seedLocalCredit.saldo,
+      )
+    }
+    const clienteVendaNome = (attributionAssist.saleName ?? customerName.trim()) || undefined
+    const clienteVendaDoc = attributionAssist.saleDoc ?? selectedClienteDoc ?? undefined
     const _printInput: PdvReceiptInput = {
       nomeFantasia: _nomeFantasia,
       cnpj: _cnpj,
       enderecoLinha: getEnderecoDocumentos?.() ?? "",
       receiptFooter: _footer,
       operador: operatorLabel,
-      clienteNome: customerName.trim() || undefined,
-      clienteCpf: selectedClienteDoc ?? undefined,
+      clienteNome: clienteVendaNome,
+      clienteCpf: clienteVendaDoc,
       pagamentos: buildPagamentosResumo({
         dinheiro,
         pix,
@@ -1961,9 +2039,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         aPrazo,
         creditoVale,
       },
-      customerName: customerName.trim() || undefined,
-      customerCpf: selectedClienteDoc ?? undefined,
-      clienteId: selectedClienteId ?? undefined,
+      customerName: clienteVendaNome,
+      customerCpf: clienteVendaDoc,
+      clienteId: attributionAssist.belongsToSelectedCustomer ? selectedClienteId ?? undefined : undefined,
       openCaixaIfClosed: false,
       auditMeta: {
         cashierId,
@@ -1978,15 +2056,21 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
     if (!result.ok) {
       toast({ title: "Falha ao finalizar", description: result.reason, variant: "destructive" })
-      return
+      return false
     }
 
     // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo — sem
     // impressão, sem cupom, sem fila de produtos, sem limpar carrinho nem a
     // persistência local. Só informa o estado honesto, preserva
     // carrinho/identidade e permite retry da MESMA venda (Vendas → Reenviar
-    // sync). Tudo abaixo é CONFIRMED.
+    // sync). N5-B1 R2 (P2-06): a identidade criada é REGISTRADA — reconfirmar
+    // pelo modal ficaria bloqueado (nova identidade = segunda venda); retorno
+    // `true` informa ao modal que o desfecho foi resolvido pela superfície.
     if (result.pending) {
+      pendingSaleIdentityRef.current?.register({
+        id: result.saleId,
+        ...(result.clientSaleId ? { clientSaleId: result.clientSaleId } : {}),
+      })
       closePaymentModal(false)
       toast({ title: PENDING_SALE_TITLE, description: PENDING_SALE_DESCRIPTION, duration: 6000 })
       queueMicrotask(() => {
@@ -1995,16 +2079,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           window.requestAnimationFrame(() => inputRef.current?.focus())
         }
       })
-      return
+      return true
     }
 
     _printInput.numeroVenda = displaySaleNumber(result.saleId, result.pending)
     // Saldo à prazo → Conta a Receber (cache local; o servidor é a fonte da verdade).
-    if (aPrazo > 0.02 && (customerName.trim() || selectedClienteId) && !result.pending) {
+    if (aPrazo > 0.02 && (clienteVendaNome || selectedClienteId) && !result.pending) {
       appendContaReceberTituloPdvAprazo({
         lojaId: storeIdKey,
         saleId: result.saleId,
-        clienteNome: customerName.trim() || "Cliente",
+        clienteNome: clienteVendaNome || "Cliente",
         valor: aPrazo,
         aPrazoConfig,
       })
@@ -2065,6 +2149,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         window.requestAnimationFrame(() => inputRef.current?.focus())
       }
     })
+    return true
   }
 
   useEffect(() => {
@@ -2130,6 +2215,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       discountReais,
       discountPercent,
       pdvType: "assistencia",
+      // N5-B1 GOAL 002: identidade PENDING viaja com o hold — o resume
+      // re-registra no guard (holds legados sem este campo seguem válidos).
+      pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
     }
     saveHeldSale(
       storeIdKey,
@@ -2142,6 +2230,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setSelectedClienteDoc(null)
     setDiscountReais(0)
     setDiscountPercent(0)
+    // N5-B1 R2 (P2-06): rascunho saiu da superfície — guard de sessão
+    // liberado; a identidade PENDING continua preservada no próprio hold
+    // (re-registrada no resume) e a venda pendente segue syncing independente.
+    pendingSaleIdentityRef.current?.clear()
     toast({ title: "Venda em espera", description: `${held.label} guardada.` })
   }
 
@@ -2184,6 +2276,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     setDiscountReais(discountRestore.discountReais)
     setDiscountPercent(discountRestore.discountPercent)
+    // N5-B1 GOAL 002: hold com identidade PENDING restaura a proteção —
+    // reconfirmar após o resume ficaria bloqueado (nova identidade = 2ª venda).
+    if (sale.pendingIdentity) pendingSaleIdentityRef.current?.register(sale.pendingIdentity)
     removeHeldSale(storeIdKey, terminalIdForHold, sale.id)
     return true
   }
@@ -2949,7 +3044,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               <Button
                   key={m.id}
                 type="button"
-                  disabled={cart.length === 0 || !caixa.isOpen || discountOverTotal}
+                  disabled={cart.length === 0 || !caixa.isOpen || discountOverTotal || !payMethodsEnabled}
                   onClick={() => openPaymentModal(m.id)}
                 className={cn(
                     "relative rounded-xl text-xs font-bold text-white",
@@ -3021,6 +3116,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         discountsEnabled={discountsEnabled}
         storeCreditEnabled={storeCreditEnabled}
         allowMultiplePayments={pdvCapabilities.isEnabled("pdv.multiplePayments")}
+        requireExplicitResult
         onConfirm={handlePaymentConfirm}
         onClose={() => closePaymentModal(true)}
       />
@@ -3049,6 +3145,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 setSearch("") // limpa termo + resultados de busca ao cancelar/limpar (GOAL limpeza pós-ação)
                 resetDiscountState()
                 setSelectedLineId(null)
+                // N5-B1 R2 (P2-06): rascunho encerrado conscientemente — o guard
+                // de identidade PENDING libera (pendência segue syncing).
+                pendingSaleIdentityRef.current?.clear()
                 setClearConfirmOpen(false)
               }}
             >
