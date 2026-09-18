@@ -64,7 +64,8 @@ export function osPecasInventoryId(osId: string): string {
 }
 
 export function servicoInventoryId(serviceId: string): string {
-  return `${SERVICO_PREFIX}${serviceId.trim()}`
+  // P0 PDV-RAFACELL-LOAD-CRASH: id ausente normaliza em vez de lançar no mount.
+  return `${SERVICO_PREFIX}${String(serviceId ?? "").trim()}`
 }
 
 /** Recupera a identidade do Serviço tanto do formato atual quanto do legado. */

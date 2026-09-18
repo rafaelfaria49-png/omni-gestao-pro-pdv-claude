@@ -86,6 +86,7 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { isRecord, safeCategoryLower } from "@/lib/pdv-mount-guards"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
@@ -453,13 +454,19 @@ export function PdvClassic({
       }
       sessionStorage.removeItem(PDV_IMPORT_COMANDA_KEY)
       comandaImportDone.current = true
+      // P0 PDV-RAFACELL-LOAD-CRASH: linha parcial da comanda é ignorada em vez
+      // de lançar `newPdvLineId(line.inventoryId)` no mount.
+      const cleanLines = (data.lines.filter(isRecord) as PdvImportComandaPayload["lines"]).filter(
+        (line) => typeof line.inventoryId === "string" && line.inventoryId.trim() !== "",
+      )
+      if (cleanLines.length === 0) return
       setCart(
-        data.lines.map((line) => ({
+        cleanLines.map((line) => ({
           lineId: newPdvLineId(line.inventoryId),
           inventoryId: line.inventoryId,
-          name: line.name,
-          price: line.price,
-          quantity: line.quantity,
+          name: typeof line.name === "string" ? line.name : "",
+          price: typeof line.price === "number" && Number.isFinite(line.price) ? line.price : 0,
+          quantity: typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 1,
           complementos: [],
           vendaPorPeso: line.vendaPorPeso,
           atributosLabel: line.atributosLabel,
@@ -489,14 +496,16 @@ export function PdvClassic({
   const searchTrim = searchTerm.trim()
   const hideCategoriesPdv = pdvParams.ocultarCategoriasNoPdv === true
   const hiddenCategoriesSet = useMemo(
-    () => new Set((pdvParams.categoriasOcultasNoPdv ?? []).map((c) => c.toLowerCase())),
+    // P0 PDV-RAFACELL-LOAD-CRASH: categoria não-string (settings parcial da
+    // loja) é ignorada em vez de lançar no mount.
+    () => new Set((pdvParams.categoriasOcultasNoPdv ?? []).map((c) => (typeof c === "string" ? c.toLowerCase() : ""))),
     [pdvParams.categoriasOcultasNoPdv]
   )
 
   const filteredProducts = useMemo(() => {
     if (searchTrim.length === 0) {
       return products.filter((p) => {
-        const catLower = p.category.toLowerCase()
+        const catLower = safeCategoryLower(p?.category)
         if (PDV_CATEGORIAS_OCULTAS_ATE_BUSCA.has(catLower)) return false
         if (hideCategoriesPdv && hiddenCategoriesSet.has(catLower)) return false
         return true

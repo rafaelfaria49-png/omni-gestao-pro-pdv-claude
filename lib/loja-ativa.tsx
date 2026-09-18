@@ -19,6 +19,7 @@ import {
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name"
 import { resolveSeedStoreId } from "@/lib/loja-ativa-seed"
+import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
 
 const LOJA_ATIVA_STORAGE = "assistec-pro-loja-ativa-v1"
 
@@ -192,6 +193,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       if (!resolved) return
       setLojaAtivaIdState(resolved)
       setActiveStoreCookie(resolved)
+      markPdvMountStep("loja", resolved, true)
       // Só reescreve o storage quando o valor mudou (migração de sentinela ou semente inicial).
       if (resolved !== (raw ?? "").trim()) {
         localStorage.setItem(LOJA_ATIVA_STORAGE, resolved)
@@ -234,9 +236,27 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
           ])
           if (!rSettings.ok || !rInv.ok) throw new Error("unavailable")
         } catch {
-          // limpa cache de vendas/ops desta unidade para evitar estado quebrado
+          markPdvMountStep("loja", next, false, { code: "unidade_indisponivel" })
+          // P0 PDV-RAFACELL-LOAD-CRASH: NUNCA deletar o ops da unidade aqui — a
+          // chave pode conter vendas pending ainda não sincronizadas. Move para
+          // quarentena com sufixo de timestamp (recuperável, sem perda).
           try {
-            localStorage.removeItem(opsKeyForLoja(next))
+            const key = opsKeyForLoja(next)
+            const raw = localStorage.getItem(key)
+            if (raw) {
+              const quarantineKey = `${key}:quarentena:${Date.now()}`
+              try {
+                localStorage.setItem(quarantineKey, raw)
+              } catch {
+                /* quota: mantém o original */
+              }
+              // Só remove o original se a cópia de quarentena foi gravada.
+              try {
+                if (localStorage.getItem(quarantineKey) === raw) localStorage.removeItem(key)
+              } catch {
+                /* mantém o original em caso de dúvida */
+              }
+            }
           } catch {
             /* ignore */
           }

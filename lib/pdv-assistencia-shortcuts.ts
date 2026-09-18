@@ -63,20 +63,29 @@ export type PdvAtalhoEntry = {
 export const SERVICO_STOCK_SENTINEL = 999_999
 
 export function normalizeServicoRow(s: ServicoApiRow): PdvServicoCatalogItem {
+  // P0 PDV-RAFACELL-LOAD-CRASH: campos nulos (resposta parcial da API da loja)
+  // normalizam em vez de lançar no mount da Assistência.
+  const id = typeof s?.id === "string" ? s.id : ""
+  const nome = typeof s?.nome === "string" ? s.nome.trim() : ""
+  const categoria = typeof s?.categoria === "string" ? s.categoria : ""
+  const custo = typeof s?.custo === "number" ? s.custo : 0
+  const preco = typeof s?.preco === "number" ? s.preco : 0
+  const garantia = typeof s?.garantia === "number" ? s.garantia : 0
+  const termo = typeof s?.termo === "string" ? s.termo : ""
   return {
-    id: servicoInventoryId(s.id),
-    name: s.nome.trim(),
-    price: Number.isFinite(s.preco) ? s.preco : 0,
+    id: servicoInventoryId(id),
+    name: nome,
+    price: Number.isFinite(preco) ? preco : 0,
     stock: SERVICO_STOCK_SENTINEL,
     // Categoria operacional genérica do PdvCatalogProduct. A categoria real vive
     // em `serviceCategory` e nunca é usada para descobrir o tipo da linha.
     category: "Serviços",
     catalogSource: "servico",
-    serviceId: s.id,
-    custoServico: Number.isFinite(s.custo) ? s.custo : 0,
-    warrantyDays: Math.max(0, Math.trunc(s.garantia ?? 0)),
-    serviceTerms: s.termo ?? "",
-    serviceCategory: s.categoria && s.categoria !== "—" ? s.categoria : "",
+    serviceId: id,
+    custoServico: Number.isFinite(custo) ? custo : 0,
+    warrantyDays: Math.max(0, Math.trunc(garantia ?? 0)),
+    serviceTerms: termo ?? "",
+    serviceCategory: categoria && categoria !== "—" ? categoria : "",
   }
 }
 
@@ -198,6 +207,9 @@ export function resolveActiveShortcutItems(
 ): Array<PdvCatalogProduct | PdvServicoCatalogItem> {
   const result: Array<PdvCatalogProduct | PdvServicoCatalogItem> = []
   for (const shortcut of saved) {
+    // P0 PDV-RAFACELL-LOAD-CRASH: atalho nulo (settings parcial da loja) é
+    // ignorado em vez de derrubar o mount.
+    if (!shortcut || typeof shortcut !== "object") continue
     if (shortcut.ativo === false || (options?.favoritesOnly && shortcut.favorito !== true)) continue
     const resolved = resolveSavedShortcut(shortcut, products, services)
     if (options?.kind && resolved.kind !== options.kind) continue

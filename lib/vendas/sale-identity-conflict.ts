@@ -1,3 +1,5 @@
+import { isRecord } from "@/lib/pdv-mount-guards"
+
 export const SALE_IDENTITY_CONFLICT_CODES = [
   "PEDIDO_ID_DE_OUTRA_LOJA",
   "PEDIDO_ID_CONFLITO_MESMA_LOJA",
@@ -34,12 +36,16 @@ export function saleSyncActionsForCode(code: unknown) {
 export function preserveSaleIdentityConflictCodes<
   T extends { id: string; syncPending?: boolean; syncBlockedCode?: string },
 >(target: readonly T[], source: readonly T[]): T[] {
+  // P0 PDV-RAFACELL-LOAD-CRASH: entradas nulas (restore parcial) são ignoradas
+  // em vez de lançar e travar a persistência da fila pending.
+  const cleanTarget = target.filter(isRecord)
+  const cleanSource = source.filter(isRecord)
   const protectedById = new Map(
-    source
+    cleanSource
       .filter((sale) => isSaleIdentityConflictCode(sale.syncBlockedCode))
       .map((sale) => [sale.id, sale.syncBlockedCode] as const),
   )
-  return target.map((sale) => {
+  return cleanTarget.map((sale) => {
     const code = isSaleIdentityConflictCode(sale.syncBlockedCode)
       ? sale.syncBlockedCode
       : protectedById.get(sale.id)

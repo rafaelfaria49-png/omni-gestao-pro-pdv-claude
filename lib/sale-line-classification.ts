@@ -14,6 +14,9 @@ export type SaleLineClassificationInput = {
 }
 /** Compatibilidade de leitura para linhas antigas sem `itemType`. */
 export function resolveSaleLineItemType(input: SaleLineClassificationInput): SaleLineItemType {
+  // P0 PDV-RAFACELL-LOAD-CRASH: linha nula (restore parcial de carrinho/hold)
+  // classifica como produto em vez de derrubar o mount.
+  if (!input || typeof input !== "object") return "produto"
   if (
     input.itemType === "produto" ||
     input.itemType === "servico" ||

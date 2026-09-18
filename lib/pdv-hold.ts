@@ -10,6 +10,7 @@ import { useEffect, useState } from "react"
 import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
 import type { CapabilitiesSnapshot } from "@/lib/pdv/capability-types"
 import { CAPABILITIES_RUNTIME_VERSION } from "@/lib/pdv/capability-types"
+import { sanitizeHeldSales } from "@/lib/pdv-mount-guards"
 import type { PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
 
 const HOLDS_KEY_PREFIX = "@omnigestao:pdv-holds:"
@@ -120,7 +121,9 @@ export function getHeldSales(
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    const sales = parsed as HeldSale[]
+    // P0 PDV-RAFACELL-LOAD-CRASH: entradas nulas (hold parcial da loja) são
+    // quarentenadas em vez de lançar no render (`sale.pdvType` em nulo).
+    const sales = sanitizeHeldSales<HeldSale>(parsed)
     return pdvType ? sales.filter((sale) => sale.pdvType === pdvType) : sales
   } catch {
     return []

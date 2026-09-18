@@ -1,6 +1,7 @@
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { isSaleIdentityConflictCode } from "@/lib/vendas/sale-identity-conflict"
 import { stripClientSyncFlags } from "@/lib/vendas/sale-sync-flags"
+import { compareSaleAtAsc, isRecord } from "@/lib/pdv-mount-guards"
 
 function reconcileConfirmed(
   local: SaleRecord,
@@ -40,16 +41,25 @@ function isDistinctIdentityCollision(local: SaleRecord, remote: SaleRecord): boo
  * a cópia local — as duas entidades permanecem na projeção.
  */
 export function mergeSalesById(local: SaleRecord[], remote: SaleRecord[]): SaleRecord[] {
+  // P0 PDV-RAFACELL-LOAD-CRASH: entradas nulas/não-objeto (restore parcial,
+  // payload legado) não carregam dado — descartar aqui impede que UMA entrada
+  // inválida derrube o mount do PDV inteiro. Objetos são sempre preservados.
+  const localArr = Array.isArray(local) ? local : []
+  const remoteArr = Array.isArray(remote) ? remote : []
+  const cleanLocal = localArr.filter(isRecord) as SaleRecord[]
+  const cleanRemote = remoteArr.filter(isRecord) as SaleRecord[]
+  // Preserva identidade de referência quando nada foi saneado (evita re-render).
+  const localKept = cleanLocal.length === localArr.length ? localArr : cleanLocal
   const remoteByClientSaleId = new Map<string, SaleRecord>()
   const remoteById = new Map<string, SaleRecord>()
-  for (const r of remote) {
+  for (const r of cleanRemote) {
     if (r.clientSaleId) remoteByClientSaleId.set(r.clientSaleId, r)
     if (r.id) remoteById.set(r.id, r)
   }
 
   let changed = false
   const consumedRemote = new Set<SaleRecord>()
-  const mergedLocal = local.map((s) => {
+  const mergedLocal = cleanLocal.map((s) => {
     const remoteByKey = s.clientSaleId ? remoteByClientSaleId.get(s.clientSaleId) : undefined
     if (remoteByKey) {
       consumedRemote.add(remoteByKey)
@@ -88,9 +98,11 @@ export function mergeSalesById(local: SaleRecord[], remote: SaleRecord[]): SaleR
     return s
   })
 
-  const extra = remote
+  const extra = cleanRemote
     .filter((s) => s.id && !consumedRemote.has(s))
     .map((s) => stripClientSyncFlags(s))
-  if (extra.length === 0 && !changed) return local
-  return [...mergedLocal, ...extra].sort((a, b) => a.at.localeCompare(b.at))
+  if (extra.length === 0 && !changed) return localKept
+  // P0 PDV-RAFACELL-LOAD-CRASH: `at` ausente/não-string (venda legada ou restore
+  // parcial) não pode lançar no sort e derrubar a rota.
+  return [...mergedLocal, ...extra].sort(compareSaleAtAsc)
 }

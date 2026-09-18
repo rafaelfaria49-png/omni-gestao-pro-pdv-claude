@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { useOperationsStore } from "@/lib/operations-store"
+import { sanitizeMesas } from "@/lib/pdv-mount-guards"
 import {
   mergePdvCatalogWithInventory,
   newPdvLineId,
@@ -57,7 +58,16 @@ function loadMesas(): MesaRecord[] {
     if (!raw) return defaultMesas()
     const parsed = JSON.parse(raw) as MesaRecord[]
     if (!Array.isArray(parsed) || parsed.length === 0) return defaultMesas()
-    return parsed
+    // P0 PDV-RAFACELL-LOAD-CRASH: mesa parcial (restore de outra versão) cai
+    // para o default em vez de lançar no `useState` inicial.
+    const clean = sanitizeMesas<MesaRecord>(parsed)
+    if (clean.length === 0) return defaultMesas()
+    // Garante pelo menos a estrutura mínima esperada pelo seletor.
+    return clean.map((m) => ({
+      id: m.id,
+      label: m.label || m.id,
+      itens: Array.isArray(m.itens) ? m.itens : [],
+    }))
   } catch {
     return defaultMesas()
   }
