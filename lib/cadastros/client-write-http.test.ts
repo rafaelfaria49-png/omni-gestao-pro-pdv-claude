@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { mapClientWriteFailureToResponse } from "@/lib/cadastros/client-write-http"
 import { CLIENT_WRITE_MESSAGES } from "@/lib/cadastros/client-write-contract"
+import { mapDocumentUniqueViolationToFailure } from "@/lib/cadastros/client-write-service"
 
 describe("mapClientWriteFailureToResponse", () => {
   it("VALIDATION → 400", async () => {
@@ -39,7 +40,7 @@ describe("mapClientWriteFailureToResponse", () => {
     expect(JSON.stringify(body)).not.toMatch(/@|cpf|telefone/i)
   })
 
-  it("UNTRUSTED_SCOPE → 401; PERSISTENCE → 503", () => {
+  it("UNTRUSTED_SCOPE → 401; PERSISTENCE → 503", async () => {
     expect(
       mapClientWriteFailureToResponse({
         ok: false,
@@ -54,5 +55,14 @@ describe("mapClientWriteFailureToResponse", () => {
         message: CLIENT_WRITE_MESSAGES.persist,
       }).status,
     ).toBe(503)
+  })
+
+  it("CAD-R2-019: colisão de unique (P2002 mapeada) → 409, nunca 503", async () => {
+    const res = mapClientWriteFailureToResponse(mapDocumentUniqueViolationToFailure())
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { code: string; outcome: string }
+    expect(body.code).toBe("IDENTITY_REVIEW_REQUIRED")
+    expect(body.outcome).toBe("EXACT_DOCUMENT_MATCH")
+    expect(JSON.stringify(body)).not.toMatch(/\d{11}|\d{14}/)
   })
 })

@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest"
 import { Prisma } from "@/generated/prisma"
 import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
 import type { ClientIdentityRecord } from "@/lib/cadastros/client-identity"
-import { createMemoryClientIdentitySource } from "@/lib/cadastros/client-identity"
+import { createMemoryClientIdentitySource, toStrongDocumentKey } from "@/lib/cadastros/client-identity"
 import type { ClientMergeContext } from "@/lib/cadastros/client-merge-contract"
 import { CLIENT_MERGE_AUDIT_ACTION, CLIENT_MERGE_AUDIT_SOURCE } from "@/lib/cadastros/client-merge-contract"
 import {
@@ -54,10 +54,13 @@ type LinkRow = {
 type AuditRow = { action: string; userLabel: string; detail: string; metadata: string; source: string }
 
 function seedClient(partial: Partial<FakeClient> & { id: string; storeId: string }): FakeClient {
+  const document = partial.document ?? ""
   return {
     name: "Cliente",
     kind: "PF",
-    document: "",
+    document,
+    // Estado pós-backfill CAD-R2-019: chave derivada do legado.
+    documentKey: partial.documentKey !== undefined ? partial.documentKey : toStrongDocumentKey(document),
     phone: null,
     email: null,
     city: "",
@@ -78,6 +81,8 @@ type FakeOpts = {
   failAudit?: boolean
   failReassign?: LinkKey | null
   failDelete?: "P2003" | "P2025" | "ERROR" | null
+  /** Simula terceiro concorrente: o banco trava o update com P2002. */
+  failSurvivorUpdate?: "P2002" | null
 }
 
 function knownError(code: "P2002" | "P2003" | "P2025", message: string): Error {
@@ -117,12 +122,26 @@ function makeFake(seedClients: FakeClient[] = [], seedLinks: Partial<Record<Link
     },
     update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
       calls.push("tx.cliente.update")
+      // CAD-R2-019: terceiro concorrente com a mesma chave trava no banco.
+      if (opts.failSurvivorUpdate === "P2002") throw knownError("P2002", "unique documentKey")
       const row = clientes.get(args.where.id)
       if (!row) throw knownError("P2025", "not found")
       const next = { ...row }
       if (args.data.name !== undefined) next.name = String(args.data.name)
       if (args.data.kind !== undefined) next.kind = String(args.data.kind)
       if (args.data.document !== undefined) next.document = String(args.data.document)
+      if (args.data.documentKey !== undefined) {
+        const key = (args.data.documentKey as string | null) ?? null
+        // CAD-R2-019: UNIQUE (storeId, documentKey) como no PostgreSQL.
+        if (key !== null) {
+          for (const other of clientes.values()) {
+            if (other.id !== next.id && other.storeId === next.storeId && other.documentKey === key) {
+              throw knownError("P2002", "unique documentKey")
+            }
+          }
+        }
+        next.documentKey = key
+      }
       if (args.data.phone !== undefined) next.phone = (args.data.phone as string | null) ?? null
       if (args.data.email !== undefined) next.email = (args.data.email as string | null) ?? null
       if (args.data.city !== undefined) next.city = String(args.data.city)
@@ -658,6 +677,62 @@ describe("executeMerge", () => {
     expect(res).toMatchObject({ ok: false, code: "AMBIGUOUS" })
     expect(fake.clientes.has("c-l")).toBe(true)
     expect(fake.clientes.get("c-s")?.phone).toBe(PHONE_A)
+    expect(fake.audits).toHaveLength(0)
+  })
+
+  it("CAD-R2-019: loser com documento → survivor recebe (chave liberada, sem P2002)", async () => {
+    const fake = makeFake([
+      seedClient({ id: "c-s", storeId: STORE_A, name: "Ana", phone: PHONE_A }),
+      seedClient({ id: "c-l", storeId: STORE_A, name: "Ana S.", document: CPF_A, phone: PHONE_A }),
+    ])
+    const plan = await buildMergePlan(
+      ctx(),
+      { survivorId: "c-s", loserId: "c-l", resolution: { documento: CPF_A_DIGITS } },
+      { db: fake.db, identitySource: fake.identitySource },
+    )
+    if (!("fingerprint" in plan)) throw new Error("plano esperado")
+    const res = await executeMerge(ctx(), execInput(plan.fingerprint, { documento: CPF_A_DIGITS }), {
+      db: fake.db,
+      identitySource: fake.identitySource,
+    })
+    expect(res).toMatchObject({ ok: true, survivorId: "c-s", loserId: "c-l" })
+    expect(fake.clientes.has("c-l")).toBe(false)
+    expect(fake.clientes.get("c-s")?.documentKey).toBe(CPF_A_DIGITS)
+    // Nunca dois vivos com a mesma chave na mesma store.
+    const keys = [...fake.clientes.values()]
+      .filter((r) => r.storeId === STORE_A)
+      .map((r) => r.documentKey)
+      .filter((k) => k !== null)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it("CAD-R2-019: survivor já com o mesmo documento + campo → ok", async () => {
+    const { fake, plan } = await planned({ nome: "Ana Consolidada" })
+    const res = await executeMerge(ctx(), execInput(plan.fingerprint, { nome: "Ana Consolidada" }), {
+      db: fake.db,
+      identitySource: fake.identitySource,
+    })
+    expect(res).toMatchObject({ ok: true })
+    expect(fake.clientes.get("c-s")?.documentKey).toBe(CPF_A_DIGITS)
+    expect(fake.clientes.has("c-l")).toBe(false)
+  })
+
+  it("CAD-R2-019: P2002 no update do survivor → AMBIGUOUS com rollback total", async () => {
+    const { clients, links } = stdSeed()
+    const clean = makeFake(structuredClone(clients), structuredClone(links))
+    const plan = await buildMergePlan(ctx(), { survivorId: "c-s", loserId: "c-l", resolution: { nome: "Ana X" } }, {
+      db: clean.db,
+      identitySource: clean.identitySource,
+    })
+    if (!("fingerprint" in plan)) throw new Error("plano esperado")
+    const fake = makeFake(clients, links, { failSurvivorUpdate: "P2002" })
+    const res = await executeMerge(ctx(), execInput(plan.fingerprint, { nome: "Ana X" }), {
+      db: fake.db,
+      identitySource: fake.identitySource,
+    })
+    expect(res).toMatchObject({ ok: false, code: "AMBIGUOUS" })
+    expect(fake.clientes.has("c-l")).toBe(true)
+    expect(fake.clientes.get("c-s")?.name).toBe("Ana Souza")
     expect(fake.audits).toHaveLength(0)
   })
 

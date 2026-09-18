@@ -637,6 +637,15 @@ model Cliente {
    * CPF/CNPJ (normalizado ou com máscara).
    */
   document       String    @default("") @map("document")
+  /**
+   * CAD-R2-019 — Chave canônica de unicidade de documento forte.
+   *
+   * - Somente dígitos de CPF/CNPJ com DV válido (`toStrongDocumentKey`).
+   * - NULL para vazio/ausente/inválido: não participa da unique.
+   * - `document` permanece como display/legado; esta coluna é a identidade.
+   * - Unique composta (storeId, documentKey): múltiplos NULL liberados.
+   */
+  documentKey    String?   @map("documentKey")
   phone          String?   @map("phone")
   email          String?   @map("email")
   /**
@@ -663,6 +672,8 @@ model Cliente {
   omniAgentMemories     OmniAgentMemory[]
 
   @@index([storeId])
+  @@index([storeId, documentKey])
+  @@unique([storeId, documentKey])
   @@map("clientes_importados")
 }
 

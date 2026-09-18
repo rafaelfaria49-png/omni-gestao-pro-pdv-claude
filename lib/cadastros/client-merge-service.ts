@@ -7,6 +7,13 @@
  * execute em UMA transaction (lock → revalidar → fingerprint → reassign →
  * campos via ClientWriteService → audit CLIENT_MERGED → delete loser).
  *
+ * CAD-R2-019 — compatibilidade com a unique (storeId, documentKey):
+ * - Quando o survivor recebe o documento forte do loser, a chave do loser é
+ *   liberada (`documentKey = NULL`) ANTES do update do survivor, na MESMA
+ *   transaction — sem estado duplicado após commit (o loser é deletado).
+ * - P2002 de terceiro concorrente vira AMBIGUOUS fail-closed, nunca
+ *   PERSISTENCE genérico.
+ *
  * O QUE ESTE SERVIÇO FAZ
  * - Reutiliza `lib/cadastros/client-identity/**` (classificação do par,
  *   sem segundo motor de dedupe, sem IA, sem auto-merge).
@@ -42,7 +49,7 @@ import {
   normalizeDocumentDigits,
   signalsFromRecord,
   toClientIdentitySignals,
-  toDocumentSignal as toDocumentSignalFn,
+  toStrongDocumentKey,
   type ClientIdentityMatchReason,
   type ClientIdentityPairOutcome,
   type ClientIdentityRecordSource,
@@ -51,6 +58,7 @@ import { createPrismaClientIdentitySource } from "@/lib/cadastros/client-identit
 import { CLIENT_WRITE_MESSAGES, type ClientWriteFailure } from "@/lib/cadastros/client-write-contract"
 import {
   updateClientTx,
+  isClientDocumentUniqueViolation,
   type ClientWriteTx,
 } from "@/lib/cadastros/client-write-service"
 import {
@@ -77,6 +85,8 @@ export type ClientMergeRow = {
   name: string
   kind: string
   document: string
+  /** Chave canônica CAD-R2-019 (null = vazio/inválido, fora da unique). */
+  documentKey: string | null
   phone: string | null
   email: string | null
   city: string
@@ -95,6 +105,12 @@ type CountDelegate = {
 export type ClientMergeTx = {
   cliente: {
     findFirst(args: Prisma.ClienteFindFirstArgs): Promise<ClientMergeRow | null>
+    /**
+     * CAD-R2-019: uso restrito à liberação da chave do loser
+     * (`documentKey = NULL`) antes do update do survivor. Campos finais do
+     * survivor passam SOMENTE por `updateClientTx`.
+     */
+    update(args: { where: { id: string }; data: { documentKey: null } }): Promise<unknown>
     delete(args: { where: { id: string } }): Promise<unknown>
   }
   ordemServico: CountDelegate
@@ -138,6 +154,7 @@ const MERGE_SELECT = {
   name: true,
   kind: true,
   document: true,
+  documentKey: true,
   phone: true,
   email: true,
   city: true,
@@ -209,11 +226,15 @@ function docDigits(value: string | null | undefined): string {
 }
 
 function strongDocDigits(row: Pick<ClientMergeRow, "document">): string | null {
-  const digits = docDigits(row.document)
-  if (!digits) return null
-  // DV válido = identidade forte (mesma regra do client-identity/document.ts).
-  const signal = toDocumentSignalFn(row.document)
-  return signal.present && signal.strong ? digits : null
+  // DV válido = identidade forte (mesma regra do client-identity/document.ts,
+  // via a chave canônica CAD-R2-019 — sem validador duplicado).
+  return toStrongDocumentKey(row.document)
+}
+
+/** Chave armazenada do registro (fonte da verdade para a constraint). */
+function storedDocKey(row: Pick<ClientMergeRow, "document" | "documentKey">): string | null {
+  if (row.documentKey !== undefined && row.documentKey !== null) return row.documentKey
+  return toStrongDocumentKey(row.document)
 }
 
 function decideEligibility(args: {
@@ -855,6 +876,20 @@ export async function executeMerge(
       // do CRUD). O loser é excluído do gate de identidade porque está sendo
       // absorvido; terceiros continuam bloqueando.
       if (resolved.changedFields.length > 0) {
+        // CAD-R2-019-LOSER-KEY-RELEASE: se o survivor vai persistir a mesma
+        // chave forte que o loser ainda detém, libera a chave do loser ANTES
+        // (mesma tx). Sem isso a unique (storeId, documentKey) bloquearia a
+        // transferência. O loser é deletado nesta mesma transaction: nenhum
+        // estado duplicado existe após commit. Escopo restrito a
+        // documentKey=NULL no loser — campos finais seguem via updateClientTx.
+        const finalKey = resolved.document !== undefined ? toStrongDocumentKey(finalDocument(survivor, resolved)) : null
+        if (finalKey !== null && storedDocKey(loser) === finalKey) {
+          try {
+            await tx.cliente.update({ where: { id: loser.id }, data: { documentKey: null } })
+          } catch {
+            throw new MergeHalt({ ok: false, code: "PERSISTENCE", message: CLIENT_MERGE_MESSAGES.persist })
+          }
+        }
         const writeInput = {
           ...(resolved.name !== undefined ? { name: resolved.name } : {}),
           ...(resolved.kind !== undefined ? { kind: resolved.kind } : {}),
@@ -875,7 +910,19 @@ export async function executeMerge(
             undefined,
             { identitySource: excludingSource(baseSource, loser.id) },
           )
-        } catch {
+        } catch (e) {
+          // CAD-R2-019: terceiro concorrente com o mesmo documento forte
+          // trava no banco → AMBIGUOUS fail-closed (revisão humana), nunca
+          // PERSISTENCE genérico.
+          if (isClientDocumentUniqueViolation(e)) {
+            throw new MergeHalt({
+              ok: false,
+              code: "AMBIGUOUS",
+              message: CLIENT_MERGE_MESSAGES.ambiguous,
+              pairOutcome: "EXACT_DOCUMENT_MATCH",
+              pairReasons: ["strong_document"],
+            })
+          }
           throw new MergeHalt({ ok: false, code: "PERSISTENCE", message: CLIENT_MERGE_MESSAGES.persist })
         }
         if (!written.ok) {
@@ -941,6 +988,17 @@ export async function executeMerge(
     })
   } catch (e) {
     if (e instanceof MergeHalt) return e.failure
+    // CAD-R2-019: P2002 escapando de outro ponto da transaction (terceiro
+    // concorrente) também é colisão de documento forte → fail-closed.
+    if (isClientDocumentUniqueViolation(e)) {
+      return {
+        ok: false,
+        code: "AMBIGUOUS",
+        message: CLIENT_MERGE_MESSAGES.ambiguous,
+        pairOutcome: "EXACT_DOCUMENT_MATCH",
+        pairReasons: ["strong_document"],
+      }
+    }
     if (isPrismaKnownError(e, "P2003") || isPrismaKnownError(e, "P2025")) {
       return { ok: false, code: "PERSISTENCE", message: CLIENT_MERGE_MESSAGES.persist }
     }

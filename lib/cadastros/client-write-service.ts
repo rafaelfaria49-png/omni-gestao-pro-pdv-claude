@@ -12,16 +12,19 @@
  * - Recebe `ClientWriteContext` JÁ PROVADO. `storeId`/`actor`/`principal`
  *   no payload são ignorados.
  * - Reusa `lib/cadastros/client-identity/**` (sem segundo motor de dedupe).
+ * - Mantém `Cliente.documentKey` (chave canônica de documento forte,
+ *   CAD-R2-019) atomicamente em CREATE/UPDATE, na mesma transação.
+ * - Converte violação da unique (storeId, documentKey) em erro de domínio
+ *   fail-closed (409), nunca 500 genérico.
  * - UPDATE parcial: campo ausente ≠ clear explícito.
  * - Create/update + audit na mesma transação.
  * - Erros estruturados sem PII (documento/telefone/email bruto).
  *
  * O QUE ESTE SERVIÇO NÃO FAZ
  * - Hard delete, cleanup destrutivo, merge (018-B).
- * - Unique DB por documento (019) — a proteção aqui é lookup+write na
- *   mesma transação; corrida concorrente sem unique permanece um gap.
  * - Validação global de DV de CPF/CNPJ na persistência (compat. histórica).
- *   Documento só é identidade FORTE com DV válido (018-A).
+ *   Documento só é identidade FORTE com DV válido (018-A); vazio/inválido
+ *   gera `documentKey = NULL` e não participa da unique (019).
  * - Auto-merge. `force=true` é ignorado.
  */
 import "server-only"
@@ -33,6 +36,7 @@ import {
   classifyClientIdentity,
   lookupKeysFromSignals,
   toClientIdentitySignals,
+  toStrongDocumentKey,
   type ClientIdentityOutcome,
   type ClientIdentityRecordSource,
   type ClientIdentitySignals,
@@ -54,9 +58,9 @@ import {
 
 export const CLIENT_WRITE_AUDIT_SOURCE = "client-write-service"
 
-/** Gap explícito até CAD-R2-019 (unique store-scoped por documento forte). */
+/** Garantia fechada em CAD-R2-019: unique (storeId, documentKey) no schema. */
 export const CLIENT_WRITE_CONCURRENCY_GAP =
-  "CAD-R2-019: sem unique (storeId, document) no schema. Lookup+write na mesma transação reduz a janela, mas não elimina corrida concorrente." as const
+  "CAD-R2-019: unique (storeId, documentKey) no schema. Lookup+write na mesma transação + constraint fecham a corrida concorrente." as const
 
 export type ClientWriteFoundRow = {
   id: string
@@ -64,6 +68,8 @@ export type ClientWriteFoundRow = {
   name: string
   kind: string
   document: string
+  /** Chave canônica CAD-R2-019 (null = vazio/inválido, fora da unique). */
+  documentKey: string | null
   phone: string | null
   email: string | null
   city: string
@@ -105,6 +111,7 @@ const FOUND_SELECT = {
   name: true,
   kind: true,
   document: true,
+  documentKey: true,
   phone: true,
   email: true,
   city: true,
@@ -148,6 +155,40 @@ function isPrismaKnownError(e: unknown, code: "P2002" | "P2025"): boolean {
   if (e instanceof Prisma.PrismaClientKnownRequestError) return e.code === code
   const record = e as { code?: unknown; name?: unknown } | null
   return record?.code === code && String(record?.name ?? "").includes("PrismaClientKnown")
+}
+
+/**
+ * CAD-R2-019 — Detecta violação da unique (storeId, documentKey).
+ *
+ * A única UNIQUE mutável de `Cliente` além da PK é a de documento forte por
+ * loja; qualquer P2002 em create/update de Cliente nesta boundary é, por
+ * construção, colisão de documento forte na MESMA store (fail-closed).
+ * O `target` é checado quando disponível; sem metadados, mantém o
+ * mapeamento fail-closed (nunca vira 500 genérico nem vaza existência
+ * cross-store — a constraint é store-scoped).
+ */
+export function isClientDocumentUniqueViolation(e: unknown): boolean {
+  if (!isPrismaKnownError(e, "P2002")) return false
+  const meta = (e as { meta?: { target?: unknown } } | null)?.meta?.target
+  if (meta === undefined) return true
+  const targets = Array.isArray(meta) ? meta.map(String) : [String(meta)]
+  return targets.some((t) => t.includes("documentKey"))
+}
+
+/**
+ * CAD-R2-019 — Mapeia a colisão de banco para erro de domínio seguro:
+ * revisão de identidade de documento (409 no REST), sem PII, sem IDs de
+ * terceiros (o banco não devolve o candidato — só o veredito).
+ */
+export function mapDocumentUniqueViolationToFailure(): ClientWriteFailure {
+  return {
+    ok: false,
+    code: "IDENTITY_REVIEW_REQUIRED",
+    message: CLIENT_WRITE_MESSAGES.exactDocument,
+    outcome: "EXACT_DOCUMENT_MATCH",
+    candidateIds: [],
+    reasons: ["strong_document"],
+  }
 }
 
 type NormalizedPatch = {
@@ -505,11 +546,14 @@ export async function createClientTx(
   const review = applyReviewDecision(verdict, "create", opts?.reviewDecision, ctx.principal)
   if (!review.ok) return review.error
 
+  const incomingDocument = patch.documentTouched ? (patch.document ?? "") : ""
   const data: Prisma.ClienteUncheckedCreateInput = {
     storeId: ctx.storeId,
     name: patch.name,
     kind: patch.kind ?? "PF",
-    document: patch.documentTouched ? (patch.document ?? "") : "",
+    document: incomingDocument,
+    // CAD-R2-019: chave canônica mantida atomicamente com o legado.
+    documentKey: toStrongDocumentKey(incomingDocument),
     phone: patch.phoneTouched ? patch.phone ?? null : null,
     email: patch.emailTouched ? patch.email ?? null : null,
     city: patch.city ?? "",
@@ -554,6 +598,11 @@ export async function createClient(
   try {
     return await db.$transaction((tx) => createClientTx(tx, context, input, opts, deps))
   } catch (e) {
+    // CAD-R2-019: corrida concorrente fechada pelo banco vira conflito de
+    // identidade (409), nunca 500 genérico. Sem PII no log.
+    if (isClientDocumentUniqueViolation(e)) {
+      return mapDocumentUniqueViolationToFailure()
+    }
     if (isPrismaKnownError(e, "P2002")) {
       return {
         ok: false,
@@ -628,7 +677,12 @@ async function persistUpdate(
   const data: Prisma.ClienteUpdateInput = {}
   if (patch.name !== undefined) data.name = patch.name
   if (patch.kind !== undefined) data.kind = patch.kind
-  if (patch.documentTouched) data.document = patch.document ?? ""
+  if (patch.documentTouched) {
+    data.document = patch.document ?? ""
+    // CAD-R2-019: chave canônica recalculada junto com o legado, no mesmo
+    // UPDATE (vazio/inválido → NULL, fora da unique).
+    data.documentKey = toStrongDocumentKey(patch.document ?? "")
+  }
   if (patch.phoneTouched) data.phone = patch.phone ?? null
   if (patch.emailTouched) data.email = patch.email ?? null
   if (patch.city !== undefined) data.city = patch.city
@@ -679,6 +733,11 @@ export async function updateClient(
   try {
     return await db.$transaction((tx) => updateClientTx(tx, context, clientId, input, opts, deps))
   } catch (e) {
+    // CAD-R2-019: update concorrente para o mesmo documento forte vira
+    // conflito de identidade (409). Sem PII no log.
+    if (isClientDocumentUniqueViolation(e)) {
+      return mapDocumentUniqueViolationToFailure()
+    }
     console.error("[client-write-service] update transacional falhou:", e instanceof Error ? e.message : String(e))
     return { ok: false, code: "PERSISTENCE", message: CLIENT_WRITE_MESSAGES.persist }
   }
