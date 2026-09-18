@@ -80,6 +80,42 @@ describe("pendingReasonView", () => {
     expect(view.recommendedAction.toLowerCase()).toMatch(/não reenvie/)
     expect(view.recommendedAction.toLowerCase()).not.toContain("tente novamente")
     expect(view.recommendedAction.toLowerCase()).toMatch(/ajuste/)
+    expect(view.recommendedAction.toLowerCase()).not.toContain("cadastro")
+    expect(view.recommendedAction.toLowerCase()).toMatch(/estoque/)
+  })
+
+  it.each([
+    "unproven_without_ledger",
+    "ledger_conflict",
+    "multi_deposit_ambiguous",
+  ] as const)("drift %s exige decisão no Estoque, sem reconciliação automática", (driftReason) => {
+    const view = pendingReasonView({
+      httpStatus: 409,
+      code: STOCK_INVARIANT_DRIFT,
+      drift: {
+        produtoId: "prod-1",
+        produtoNome: "Película 20",
+        produtoSku: "SKU-20",
+        stock: 10,
+        somaDepositos: 4,
+        gap: -6,
+        depositoId: "dep-1",
+        depositoQuantidade: 4,
+        requestedQty: 1,
+        driftReason,
+        depositCount: driftReason === "multi_deposit_ambiguous" ? 2 : 1,
+        lastLedgerEstoqueDepois: driftReason === "ledger_conflict" ? 7 : null,
+        authority: "test",
+      },
+    })
+    expect(view.title).toMatch(/exige decisão/i)
+    expect(view.description).toMatch(/Película 20/)
+    expect(view.recommendedAction.toLowerCase()).toMatch(/estoque/)
+    expect(view.recommendedAction.toLowerCase()).toMatch(/ajuste absoluto/)
+    expect(view.recommendedAction.toLowerCase()).not.toContain("cadastro")
+    expect(view.recommendedAction.toLowerCase()).not.toContain("servidor reconcilia")
+    expect(view.recommendedAction.toLowerCase()).not.toContain("tente novamente")
+    expect(view.recommendedAction).toMatch(/Reenviar/)
   })
 
   it("rede usa copy de auto-retry", () => {
