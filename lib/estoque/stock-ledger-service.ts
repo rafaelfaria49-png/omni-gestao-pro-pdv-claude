@@ -14,7 +14,9 @@
  * - saída bloqueada quando agregado ou depósito insuficientes (sem negativo);
  * - custo médio ponderado só em entrada com custo > 0; saída/ajuste preservam;
  * - ledger append-only com snapshots; reversão = linha compensatória;
- * - drift legado (SUM != stock com rows existentes) falha, nunca corrige.
+ * - drift legado (SUM != stock com rows existentes) falha, nunca corrige
+ *   — exceto saída PDV com `realinharDepositoAoStock` (só SUM>stock e só
+ *   no depósito principal, sem alterar Produto.stock).
  *
  * COMPOSIÇÃO: `applyStockMutationTx(tx, ...)` participa da transação maior do
  * caller (venda/OS/cancelamento/devolução) — NUNCA abre nested transaction.
@@ -321,6 +323,20 @@ export async function applyStockMutationTx(
   } else {
     let soma = 0
     for (const r of depRows) soma += Math.trunc(Number(r.quantidade)) || 0
+    if (soma !== estoqueAntes && cmd.kind === "saida" && cmd.realinharDepositoAoStock && soma > estoqueAntes) {
+      const gap = soma - estoqueAntes
+      const principalQty = depRows.find((r) => r.depositoId === depositoId)?.quantidade ?? 0
+      if (principalQty >= gap) {
+        const aligned = principalQty - gap
+        await tx.produtoDeposito.upsert({
+          where: { produtoId_depositoId: { produtoId: pid, depositoId } },
+          create: { storeId: sid, produtoId: pid, depositoId, quantidade: aligned },
+          update: { quantidade: aligned },
+        } as never)
+        depRows = depRows.map((r) => (r.depositoId === depositoId ? { ...r, quantidade: aligned } : r))
+        soma = estoqueAntes
+      }
+    }
     if (soma !== estoqueAntes) {
       return stockFail(
         "STOCK_INVARIANT_DRIFT",

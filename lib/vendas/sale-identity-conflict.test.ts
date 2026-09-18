@@ -20,14 +20,18 @@ describe("sale-identity-conflict", () => {
     })
   })
 
-  it("mantém ações atuais para pendências comuns", () => {
+  it("CAIXA_ORIGINAL_FECHADO é ACTION_REQUIRED: retry só manual/retroativo", () => {
     expect(saleSyncActionsForCode("CAIXA_ORIGINAL_FECHADO")).toEqual({
       quarantined: false,
-      canAutoRetry: true,
+      canAutoRetry: false,
       canManualRetry: true,
       canRetroactiveRetry: true,
       canDiscard: true,
     })
+  })
+
+  it("STOCK_INVARIANT_DRIFT não entra em retry automático", () => {
+    expect(saleSyncActionsForCode("STOCK_INVARIANT_DRIFT").canAutoRetry).toBe(false)
   })
 
   it("propaga a quarentena entre snapshots sem reativá-la", () => {

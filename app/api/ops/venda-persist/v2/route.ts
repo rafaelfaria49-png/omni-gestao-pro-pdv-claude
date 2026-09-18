@@ -10,12 +10,14 @@ import {
   UnresolvedProductError,
   CaixaSessaoInvalidaError,
   CaixaOriginalFechadoError,
+  CreditoValeInsuficienteError,
   PedidoIdDeOutraLojaError,
   PedidoIdConflitoMesmaLojaError,
   InvalidClientSaleIdError,
   ClientSaleIdReusedError,
   SalePaymentsMismatchError,
   InvalidSaleLinesError,
+  StockLedgerBusinessError,
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
 import { persistSaleV2 } from "@/lib/vendas/sale-writer-v2"
@@ -209,11 +211,24 @@ export async function POST(req: Request) {
         { status: 409 },
       )
     }
+    if (e instanceof CreditoValeInsuficienteError) {
+      return NextResponse.json(
+        { error: e.message, code: e.code, detail: e.detail },
+        { status: 409 },
+      )
+    }
+    if (e instanceof StockLedgerBusinessError) {
+      console.warn("[ops/venda-persist/v2] stock-ledger", JSON.stringify({ lojaId, code: e.code }))
+      return jsonError(e.message, e.code, 409)
+    }
     if (isSaleNumberingError(e)) {
       const code = SALE_NUMBERING_ERROR_CODES.includes(e.code) ? e.code : "SALE_NUMBERING_INVARIANT_BROKEN"
       return jsonError(e.message, code, 409)
     }
     const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes("STOCK_INVARIANT_DRIFT")) {
+      return jsonError(msg, "STOCK_INVARIANT_DRIFT", 409)
+    }
     const code =
       e && typeof e === "object" && "code" in e && typeof (e as { code: unknown }).code === "string"
         ? (e as { code: string }).code

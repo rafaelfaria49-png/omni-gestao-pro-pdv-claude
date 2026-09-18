@@ -135,4 +135,26 @@ describe("POST /api/ops/venda-persist/v2", () => {
     expect(res.status).toBe(409)
     await expect(res.json()).resolves.toMatchObject({ code: "FRACTIONAL_QUANTITY_UNSUPPORTED" })
   })
+
+  it("STOCK_INVARIANT_DRIFT vira 409 (nunca 500) e expõe o code", async () => {
+    const { StockLedgerBusinessError } = await import("@/lib/ops-upsert-venda")
+    h.persist.mockRejectedValue(
+      new StockLedgerBusinessError(
+        "STOCK_INVARIANT_DRIFT",
+        "Divergência estrutural: SUM(depósitos)=5 != Produto.stock=4. Correção manual necessária.",
+        "prod-1",
+      ),
+    )
+    const res = await POST(
+      req({
+        clientSaleId: "cs_attempt_aaaaaa",
+        sale: {
+          total: 18,
+          lines: [{ inventoryId: "SKU-1", name: "Produto", quantity: 1, unitPrice: 18 }],
+        },
+      }),
+    )
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ code: "STOCK_INVARIANT_DRIFT" })
+  })
 })

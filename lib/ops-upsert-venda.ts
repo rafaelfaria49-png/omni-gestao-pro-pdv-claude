@@ -48,6 +48,22 @@ export class InsufficientStockError extends Error {
 }
 
 /**
+ * Outros códigos do boundary CAD-R2-009 que são falha de negócio (não 5xx).
+ * Principalmente `STOCK_INVARIANT_DRIFT`: o PDV via V2 vinha mascarando como 500
+ * e o cliente reenviava para sempre.
+ */
+export class StockLedgerBusinessError extends Error {
+  readonly code: string
+  readonly produtoId?: string
+  constructor(code: string, message: string, produtoId?: string) {
+    super(message)
+    this.name = "StockLedgerBusinessError"
+    this.code = code
+    this.produtoId = produtoId
+  }
+}
+
+/**
  * Lançada no fluxo PDV ao vivo (`enforceStock`) quando uma linha de produto físico
  * referencia um `inventoryId` que não casa com nenhum `Produto` (id/sku/barcode) da
  * loja. Antes (P1 OPS-SALE-SAFETY) a venda era gravada mesmo assim e só logava
@@ -1084,6 +1100,7 @@ export async function upsertVendaInTransaction(
         motivo: pedidoId,
         idempotencyKey: StockIdempotency.venda(pedidoId, produtoId),
         permitirNegativo: !enforceStock,
+        realinharDepositoAoStock: enforceStock === true,
         // A baixa acontece no saldo AGORA (a conciliação de inventário lê
         // `createdAt` como o instante da mudança de saldo); a data real da venda
         // histórica fica registrada na observação.
@@ -1097,7 +1114,7 @@ export async function upsertVendaInTransaction(
         // Rollback de toda a transação da venda (atomicidade do $transaction).
         throw new InsufficientStockError(produtoId, resolved.name, baixa009.estoqueAntes ?? 0, qty)
       }
-      throw new Error(`[upsert-venda] baixa de estoque falhou: ${baixa009.code} ${baixa009.message}`)
+      throw new StockLedgerBusinessError(baixa009.code, baixa009.message, produtoId)
     }
   }
 

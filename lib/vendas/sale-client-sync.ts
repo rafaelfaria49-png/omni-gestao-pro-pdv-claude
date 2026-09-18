@@ -6,6 +6,8 @@
  * `IDEMPOTENCY_KEY_REUSED` NÃO viram V1.
  */
 
+import { extractStockInvariantDriftCode } from "@/lib/vendas/pending-sync-classification"
+
 export const SALE_WRITER_V1_ACTIVE = "SALE_WRITER_V1_ACTIVE"
 export const CLIENT_SALE_ID_REQUIRED = "CLIENT_SALE_ID_REQUIRED"
 export const IDEMPOTENCY_KEY_REUSED = "IDEMPOTENCY_KEY_REUSED"
@@ -22,12 +24,18 @@ export function parseSalePersistError(body: string): { message: string; code?: s
   try {
     const j = JSON.parse(body) as SalePersistErrorBody
     const parts = [j.error, j.detail, j.code ? `(${j.code})` : ""].filter(Boolean)
-    return {
-      message: parts.length > 0 ? parts.join(" — ") : body.trim() || "erro",
-      code: typeof j.code === "string" ? j.code : undefined,
-    }
+    const message = parts.length > 0 ? parts.join(" — ") : body.trim() || "erro"
+    const code =
+      typeof j.code === "string"
+        ? j.code
+        : extractStockInvariantDriftCode(j.error) ??
+          extractStockInvariantDriftCode(j.detail) ??
+          extractStockInvariantDriftCode(body)
+    return { message, ...(code ? { code } : {}) }
   } catch {
-    return { message: body.trim() || "erro" }
+    const message = body.trim() || "erro"
+    const code = extractStockInvariantDriftCode(body)
+    return { message, ...(code ? { code } : {}) }
   }
 }
 

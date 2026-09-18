@@ -304,6 +304,30 @@ describe("stock-ledger-service — core", () => {
     expect(f.movs.size).toBe(0)
   })
 
+  it("11c. SUM>stock sem flag continua fail-closed", async () => {
+    const f = makeFake({ produtos: [prod({ stock: 4 })], depositos: [{ id: "d1", storeId: "loja-a" }], pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 5 }] })
+    const r = await applyStockMutation(ctx(), { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv" }, { db: f.db })
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.code).toBe("STOCK_INVARIANT_DRIFT")
+    expect(f.produtos.get("p1")?.stock).toBe(4)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(5)
+    expect(f.movs.size).toBe(0)
+  })
+
+  it("11d. PDV saida com realinharDepositoAoStock: SUM=5 stock=4 → alinha e baixa 1", async () => {
+    const f = makeFake({ produtos: [prod({ stock: 4 })], depositos: [{ id: "d1", storeId: "loja-a" }], pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 5 }] })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(true)
+    expect(f.produtos.get("p1")?.stock).toBe(3)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(3)
+    expect(f.movs.size).toBe(1)
+  })
+
   it("12. saída insuficiente bloqueada (agregado e depósito)", async () => {
     const f = makeFake({ produtos: [prod({ stock: 1 })], depositos: [{ id: "d1", storeId: "loja-a" }], pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 1 }] })
     const r = await applyStockMutation(ctx(), { kind: "saida", produtoId: "p1", quantidade: 2, origem: "pdv" }, { db: f.db })

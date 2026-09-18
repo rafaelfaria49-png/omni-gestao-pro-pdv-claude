@@ -248,7 +248,7 @@ describe("R2 — caso 6: PENDING seguido de tentativa de RECONFIRMAR (identidade
     // Operador reabre o modal e tenta confirmar de novo — a borda consulta:
     const reconfirmAllowed = !guard.hasPending()
     expect(reconfirmAllowed, "reconfirm não pode nascer (novo clientSaleId = 2ª venda)").toBe(false)
-    expect(PENDING_RETRY_GUIDANCE.title).toContain("pendente")
+    expect(PENDING_RETRY_GUIDANCE.title).toMatch(/aguardando confirmação/i)
   })
 
   it("identidade registrada é EXATAMENTE a criada pelo motor (retry/reenvio mantém a original)", () => {

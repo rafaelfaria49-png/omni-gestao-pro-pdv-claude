@@ -17,6 +17,7 @@ import {
   VendaCreateUniqueConflictError,
   SalePaymentsMismatchError,
   InvalidSaleLinesError,
+  StockLedgerBusinessError,
   classifyExistingVendaReplay,
   VENDA_REPLAY_SELECT,
   type SalePayload,
@@ -257,6 +258,13 @@ export async function POST(req: Request) {
         { status: 409 },
       )
     }
+    if (error instanceof StockLedgerBusinessError) {
+      console.warn(
+        "[ops/venda-persist] stock-ledger",
+        JSON.stringify({ lojaId, pedidoId, code: error.code }),
+      )
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
+    }
     // Invariante linhas × total (PDV-MOTOR-INTEGRITY-N1): request incoerente
     // (cobrança ≠ total, venda sem itens, linha inválida) é falha de negócio
     // (409), nunca erro de servidor. Nada foi gravado — os guards rodam antes
@@ -276,6 +284,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
     }
     const msg = error instanceof Error ? error.message : String(error)
+    if (msg.includes("STOCK_INVARIANT_DRIFT")) {
+      return NextResponse.json(
+        { error: msg, code: "STOCK_INVARIANT_DRIFT" },
+        { status: 409 },
+      )
+    }
     // Extrai code do PrismaClientKnownRequestError (P2002 unique, P2003 FK, P2025 not found, etc.)
     const code =
       error && typeof error === "object" && "code" in error && typeof (error as { code: unknown }).code === "string"

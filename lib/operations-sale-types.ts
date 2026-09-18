@@ -116,6 +116,23 @@ export interface SaleRecord {
    * local puro para a UI decidir como orientar o operador. Limpo em qualquer sucesso.
    */
   syncBlockedCode?: string
+  /**
+   * Efeitos locais (estoque/caixa/ledger/crédito) desta tentativa.
+   * `false` = PENDING sem efeito econômico (contrato atual).
+   * `true` = aplicados uma vez, na confirmação.
+   * Ausente = legado: finalize já tinha mutado caixa/ledger antes do persist.
+   */
+  localEffectsApplied?: boolean
+  /** HTTP da última tentativa de persistência (quando houver resposta). */
+  syncHttpStatus?: number
+  /** Instantâneo ISO da última tentativa de sync. */
+  syncLastAttemptAt?: string
+  /** Quantas vezes esta identidade tentou persistir. */
+  syncAttemptCount?: number
+  /** Recorte curto da última falha — sem stack/segredo. */
+  syncFailureMessage?: string
+  /** true = a última falha foi de rede/abort, não corpo HTTP. */
+  syncNetworkError?: boolean
 }
 
 export interface DevolucaoRecord {

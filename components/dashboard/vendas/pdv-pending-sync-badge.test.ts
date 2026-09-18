@@ -86,6 +86,13 @@ describe("PdvPendingSyncBadge — vendas preservadas", () => {
     expect(render()).toContain(">Reenviar<")
   })
 
+  it("pendência de rede classifica AUTO_RETRY com copy de reenvio", () => {
+    h.sales = [pending(undefined, { syncNetworkError: true })]
+    const html = render()
+    expect(html).toMatch(/Falha de rede/i)
+    expect(html).toContain(">Reenviar<")
+  })
+
   it("depois que as 12 vendas preservadas são reconciliadas, o aviso some", () => {
     const preservadas = Array.from({ length: 12 }, (_, index) =>
       pending("PEDIDO_ID_CONFLITO_MESMA_LOJA", {

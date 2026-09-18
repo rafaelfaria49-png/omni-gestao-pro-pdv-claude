@@ -85,6 +85,13 @@ export type StockLedgerCommand =
        * NUNCA usam.
        */
       permitirNegativo?: boolean
+      /**
+       * PDV ao vivo apenas: se SUM(depósitos) > Produto.stock e o depósito
+       * principal absorve o gap sem ficar negativo, realinha o depósito para
+       * o saldo operacional (legado PDV que baixava só `Produto.stock`).
+       * Cadastros, OS e ajustes NUNCA ligam esta flag — drift continua fail-closed.
+       */
+      realinharDepositoAoStock?: boolean
     })
   | (StockLedgerCommandBase & {
       kind: "ajuste"
@@ -159,6 +166,7 @@ export type NormalizedStockCommand = {
   novoSaldo: number | null
   custoUnitario: number
   permitirNegativo: boolean
+  realinharDepositoAoStock: boolean
   origem: string
   documento: string | null
   motivo: string | null
@@ -185,6 +193,7 @@ export function normalizeStockCommand(cmd: StockLedgerCommand): NormalizedStockC
     novoSaldo,
     custoUnitario: Number.isFinite(custoRaw) ? Math.max(0, custoRaw) : 0,
     permitirNegativo: cmd.kind === "saida" ? (cmd.permitirNegativo === true) : false,
+    realinharDepositoAoStock: cmd.kind === "saida" ? cmd.realinharDepositoAoStock === true : false,
     origem: cleanId(cmd.origem) || "manual",
     documento: cleanText(cmd.documento),
     motivo: cleanText(cmd.motivo),
