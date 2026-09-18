@@ -326,7 +326,7 @@ describe("política de dedupe", () => {
     expect(CLIENT_IDENTITY_AI_DECISION).toBe(false)
     expect(CLIENT_IDENTITY_AUTO_MERGE).toBe(false)
     expect(CLIENT_WRITE_SERVICE_IMPLEMENTED).toBe(true)
-    expect(CLIENT_MERGE_IMPLEMENTED).toBe(false)
+    expect(CLIENT_MERGE_IMPLEMENTED).toBe(true)
   })
 })
 
@@ -442,6 +442,6 @@ describe("inventário de writers (entrada do CAD-R2-008)", () => {
       expect.arrayContaining(["storeId", "name", "document", "phone", "email"]),
     )
     expect(CLIENT_WRITE_SERVICE_IMPLEMENTED).toBe(true)
-    expect(CLIENT_MERGE_IMPLEMENTED).toBe(false)
+    expect(CLIENT_MERGE_IMPLEMENTED).toBe(true)
   })
 })

@@ -52,6 +52,7 @@ import { formatPhoneBrInput, isValidPhoneBr } from "@/lib/phone-br"
 import { useToast } from "@/hooks/use-toast"
 import { EmptyState } from "@/components/ui/states/EmptyState"
 import { LoadingState } from "@/components/ui/states/LoadingState"
+import { DuplicateMergeDialog } from "./DuplicateMergeDialog"
 import {
   Sheet,
   SheetContent,
@@ -278,6 +279,9 @@ export default function DashboardClientesPage() {
 
   // Modal de Exclusão
   const [deleteTarget, setDeleteTarget] = useState<ClienteRow | null>(null)
+
+  // CAD-R2-018-B — Revisão de duplicidades + merge
+  const [mergeOpen, setMergeOpen] = useState(false)
 
   const qFromUrl = searchParams.get("q")?.trim() ?? ""
 
@@ -844,6 +848,14 @@ export default function DashboardClientesPage() {
                 className="h-10 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-muted-foreground transition-smooth hover:bg-muted"
               >
                 Limpar filtros
+              </button>
+              <button
+                type="button"
+                onClick={() => setMergeOpen(true)}
+                title="Revisar clientes potencialmente duplicados e consolidar com auditoria"
+                className="h-10 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 text-sm font-semibold text-amber-700 transition-smooth hover:bg-amber-500/20 dark:text-amber-300"
+              >
+                Revisar duplicidades
               </button>
             </div>
           </div>
@@ -2209,6 +2221,14 @@ export default function DashboardClientesPage() {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      {/* ── CAD-R2-018-B — REVISÃO DE DUPLICIDADES + MERGE ── */}
+      <DuplicateMergeDialog
+        open={mergeOpen}
+        lojaId={lojaHeader}
+        onClose={() => setMergeOpen(false)}
+        onMerged={() => void reload()}
+      />
 
       {/* ── DIÁLOGO DE EXCLUSÃO DE CLIENTE ── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
