@@ -5,6 +5,13 @@
  * Nenhuma escrita (`create`/`update`/`upsert`/`delete`) neste arquivo.
  *
  * `storeId` efetivo = scope autorizado. O body do caller não entra no WHERE.
+ *
+ * CAD-R2-019 — documento forte usa a chave canônica (`documentKey`, exata)
+ * como caminho preferencial: máscara vs. dígitos equivalentes colidem no
+ * banco. O predicado legado (`document contains`) permanece como fallback
+ * de rollout para linhas ainda não backfilladas; ambos alimentam o MESMO
+ * classificador (sem segundo motor de identidade — o `classifyClientIdentity`
+ * revalida DV e igualdade exata dos dígitos).
  */
 import "server-only"
 
@@ -63,6 +70,9 @@ export function createPrismaClientIdentitySource(
       if (!sid) return []
       const or: Array<Record<string, unknown>> = []
       if (keys.documentDigits) {
+        // Preferencial/exato: chave canônica CAD-R2-019.
+        or.push({ documentKey: keys.documentDigits })
+        // Fallback de rollout: linhas legadas ainda sem `documentKey`.
         or.push({ document: { contains: keys.documentDigits } })
       }
       if (keys.phoneDigits) {

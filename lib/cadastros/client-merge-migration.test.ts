@@ -37,9 +37,17 @@ describe("CAD-R2-018-B — atomicidade", () => {
     const src = semComentarios(ler(SERVICE))
     expect(src).toMatch(/updateClientTx\s*\(/)
     expect(src).not.toMatch(/tx\.cliente\.create\s*\(/)
-    expect(src).not.toMatch(/tx\.cliente\.update\s*\(/)
     expect(src).not.toMatch(/tx\.cliente\.upsert\s*\(/)
     expect(src).not.toMatch(/createClient\s*\(/)
+    // CAD-R2-019: única escrita direta permitida é a liberação da chave do
+    // loser (documentKey = NULL, mesma tx, loser deletado em seguida).
+    // Campos finais do survivor continuam SOMENTE via updateClientTx.
+    const releaseRe =
+      /await tx\.cliente\.update\(\{\s*where:\s*\{\s*id:\s*loser\.id\s*\}\s*,\s*data:\s*\{\s*documentKey:\s*null\s*\}\s*\}\)/g
+    const releases = src.match(releaseRe) ?? []
+    expect(releases).toHaveLength(1)
+    const without = src.replace(releaseRe, "")
+    expect(without).not.toMatch(/tx\.cliente\.update\s*\(/)
   })
 
   it("lock consultivo serializa merges concorrentes do mesmo par", () => {

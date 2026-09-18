@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest"
 import { Prisma } from "@/generated/prisma"
 import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
 import type { ClientIdentityRecord } from "@/lib/cadastros/client-identity"
-import { createMemoryClientIdentitySource } from "@/lib/cadastros/client-identity"
+import { createMemoryClientIdentitySource, toStrongDocumentKey } from "@/lib/cadastros/client-identity"
 import type { ClientWriteContext, ClientWriteInput } from "@/lib/cadastros/client-write-contract"
 import {
   CLIENT_WRITE_AUDIT_SOURCE,
@@ -51,10 +51,13 @@ type AuditRow = {
 }
 
 function seedRow(partial: Partial<FakeRow> & { id: string; storeId: string }): FakeRow {
+  const document = partial.document ?? ""
   return {
     name: "Cliente",
     kind: "PF",
-    document: "",
+    document,
+    // Estado pós-backfill: chave derivada do legado (idempotente).
+    documentKey: partial.documentKey !== undefined ? partial.documentKey : toStrongDocumentKey(document),
     phone: null,
     email: null,
     city: "",
@@ -77,6 +80,8 @@ function matchIdentityWhere(row: FakeRow, where: Record<string, unknown> | undef
   const or = where.OR as Array<Record<string, unknown>> | undefined
   if (Array.isArray(or) && or.length > 0) {
     const hit = or.some((cond) => {
+      // CAD-R2-019: caminho canônico exato (documentKey) + fallback legado.
+      if (typeof cond.documentKey === "string") return row.documentKey === cond.documentKey
       const doc = cond.document as { contains?: string } | undefined
       if (doc?.contains) return contains(row.document, doc.contains)
       const phone = cond.phone as { contains?: string } | undefined
@@ -88,6 +93,24 @@ function matchIdentityWhere(row: FakeRow, where: Record<string, unknown> | undef
     if (!hit) return false
   }
   return true
+}
+
+function duplicateKeyError(): Error {
+  // Equivalente fiel à UNIQUE (storeId, documentKey) do PostgreSQL.
+  return new Prisma.PrismaClientKnownRequestError("Unique constraint failed on the constraint: Cliente_storeId_documentKey_key", {
+    code: "P2002",
+    clientVersion: "test",
+    meta: { target: ["storeId", "documentKey"] },
+  } as never)
+}
+
+function assertNoDuplicateKey(rows: Map<string, FakeRow>, storeId: string, key: string | null, excludeId?: string): void {
+  if (key === null) return
+  for (const row of rows.values()) {
+    if (row.id !== excludeId && row.storeId === storeId && row.documentKey === key) {
+      throw duplicateKeyError()
+    }
+  }
 }
 
 function makeFakeDb(seed: FakeRow[] = [], opts?: { failAudit?: boolean }) {
@@ -112,12 +135,17 @@ function makeFakeDb(seed: FakeRow[] = [], opts?: { failAudit?: boolean }) {
     create: async (args: { data: Record<string, unknown>; select?: { id: true } }) => {
       calls.push("tx.cliente.create")
       const id = `c-${idSeq++}`
+      const storeId = String(args.data.storeId)
+      const documentKey = (args.data.documentKey as string | null) ?? null
+      // CAD-R2-019: UNIQUE (storeId, documentKey) como no PostgreSQL.
+      assertNoDuplicateKey(rows, storeId, documentKey)
       const row = seedRow({
         id,
-        storeId: String(args.data.storeId),
+        storeId,
         name: String(args.data.name),
         kind: String(args.data.kind ?? "PF"),
         document: String(args.data.document ?? ""),
+        documentKey,
         phone: (args.data.phone as string | null) ?? null,
         email: (args.data.email as string | null) ?? null,
         city: String(args.data.city ?? ""),
@@ -139,6 +167,11 @@ function makeFakeDb(seed: FakeRow[] = [], opts?: { failAudit?: boolean }) {
       if (args.data.name !== undefined) next.name = String(args.data.name)
       if (args.data.kind !== undefined) next.kind = String(args.data.kind)
       if (args.data.document !== undefined) next.document = String(args.data.document)
+      if (args.data.documentKey !== undefined) {
+        const key = (args.data.documentKey as string | null) ?? null
+        assertNoDuplicateKey(rows, next.storeId, key, next.id)
+        next.documentKey = key
+      }
       if (args.data.phone !== undefined) next.phone = (args.data.phone as string | null) ?? null
       if (args.data.email !== undefined) next.email = (args.data.email as string | null) ?? null
       if (args.data.city !== undefined) next.city = String(args.data.city)

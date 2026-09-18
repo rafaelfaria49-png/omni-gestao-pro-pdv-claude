@@ -96,4 +96,21 @@ describe("lookup Prisma store-scoped", () => {
     expect(findMany).toHaveBeenCalledTimes(1)
     expect(h.findMany).not.toHaveBeenCalled()
   })
+
+  it("CAD-R2-019: documento forte usa chave canônica exata + fallback legado", async () => {
+    const source = createPrismaClientIdentitySource()
+    await source.findByIdentityKeys("loja-a", {
+      documentDigits: "52998224725",
+      phoneDigits: null,
+      email: null,
+    })
+    const arg = h.findMany.mock.calls[0]?.[0] as {
+      where: { storeId: string; OR: Array<Record<string, unknown>> }
+    }
+    expect(arg.where.storeId).toBe("loja-a")
+    // Caminho preferencial: igualdade exata na chave canônica.
+    expect(arg.where.OR).toContainEqual({ documentKey: "52998224725" })
+    // Fallback de rollout: linhas legadas ainda sem documentKey.
+    expect(arg.where.OR).toContainEqual({ document: { contains: "52998224725" } })
+  })
 })

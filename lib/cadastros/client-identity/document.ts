@@ -64,3 +64,23 @@ export function toDocumentSignal(raw: unknown): ClientDocumentSignal {
     (kind === "CPF" && isValidCpf(digits)) || (kind === "CNPJ" && isValidCnpj(digits))
   return { present: true, digits, kind, strong }
 }
+
+/**
+ * CAD-R2-019 — Chave canônica de unicidade de documento forte.
+ *
+ * - CPF válido → 11 dígitos; CNPJ válido → 14 dígitos (somente dígitos).
+ * - Vazio/ausente → null (não participa da unique).
+ * - Inválido (comprimento, DV, repetido) → null (nunca identidade forte).
+ * - Nunca inventa/corrige DV: deriva SOMENTE de `toDocumentSignal`.
+ * - Determinística e idempotente: máscara vs. dígitos equivalentes geram a
+ *   mesma chave (`toStrongDocumentKey("529.982.247-25") ===
+ *   toStrongDocumentKey("52998224725")`).
+ *
+ * Persiste em `Cliente.documentKey` (nullable); a unique composta é
+ * `(storeId, documentKey)` — múltiplos NULL liberados pelo PostgreSQL.
+ */
+export function toStrongDocumentKey(raw: unknown): string | null {
+  const signal = toDocumentSignal(raw)
+  if (!signal.present || !signal.strong) return null
+  return signal.digits
+}
