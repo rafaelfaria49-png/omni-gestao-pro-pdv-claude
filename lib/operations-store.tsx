@@ -85,8 +85,10 @@ import {
 } from "@/lib/pdv/pending-local-effects"
 import {
   clearPersistedSaleAttempt,
+  closePersistedSaleAttemptIfIdentity,
   findMatchingPendingSale,
-  readPersistedSaleAttempt,
+  reconcilePersistedSaleAttempts,
+  resolvePersistedAttemptForNewSale,
   saleAttemptFingerprint,
   saleRecordAttemptFingerprint,
   writePersistedSaleAttempt,
@@ -934,6 +936,9 @@ export function OperationsProvider({
         const partial = parseLocalRest(raw, stateRef.current)
         if (partial) {
           setState((prev) => ({ ...prev, ...partial }))
+          if (Array.isArray(partial.sales)) {
+            reconcilePersistedSaleAttempts(lojaId, partial.sales)
+          }
         } else {
           // P0 PDV-RAFACELL-LOAD-CRASH: blob ilegível — quarentena localizada do
           // bruto (recuperável, com timestamp) em vez de perda silenciosa. A
@@ -1132,11 +1137,13 @@ export function OperationsProvider({
                 }
               }
             }
+            const sales = mergeSalesById(prev.sales, remoteSales)
+            reconcilePersistedSaleAttempts(lj, sales)
             return {
               ...prev,
               inventory: adjustedItems,
               ordens,
-              sales: mergeSalesById(prev.sales, remoteSales),
+              sales,
             }
           })
         }
@@ -1412,9 +1419,13 @@ export function OperationsProvider({
     (token: { id: string; clientSaleId?: string }, confirmed?: { pedidoId: string; id: string; clientSaleId?: string | null }) => {
       vendaAutoRetryHoldRef.current.delete(token.id)
       if (token.clientSaleId) vendaAutoRetryHoldRef.current.delete(token.clientSaleId)
+      closePersistedSaleAttemptIfIdentity(opsLojaIdFromStorageKey(storageKey), {
+        clientSaleId: confirmed?.clientSaleId ?? token.clientSaleId,
+        saleId: token.id,
+      })
       setState((prev) => applyLocalConfirmationToState(prev, token, confirmed))
     },
-    [],
+    [storageKey],
   )
 
   const markSaleBlocked = useCallback((token: { id: string; clientSaleId?: string }, patch?: string | SaleSyncFailurePatch) => {
@@ -1624,6 +1635,7 @@ export function OperationsProvider({
         const remoteSales = jV.sales ?? []
         setState((prev) => {
           const merged = mergeSalesById(prev.sales, remoteSales)
+          reconcilePersistedSaleAttempts(lj, merged)
           return merged === prev.sales ? prev : { ...prev, sales: merged }
         })
       } catch {
@@ -2094,7 +2106,10 @@ export function OperationsProvider({
       }
       const lj = opsLojaIdFromStorageKey(storageKey)
       const dropLocal = () => {
-        clearPersistedSaleAttempt(lj, saleRecordAttemptFingerprint(sale))
+        clearPersistedSaleAttempt(lj, saleRecordAttemptFingerprint(sale), {
+          clientSaleId: sale.clientSaleId,
+          saleId: sale.id,
+        })
         setState((prev) => discardPendingSaleFromState(prev, sale))
         void refreshInventoryFromServer()
       }
@@ -2199,6 +2214,13 @@ export function OperationsProvider({
       }
     }
     if (reconciledIds.size > 0) {
+      for (const sale of pending) {
+        if (!reconciledIds.has(sale.id)) continue
+        closePersistedSaleAttemptIfIdentity(lj, {
+          clientSaleId: sale.clientSaleId,
+          saleId: sale.id,
+        })
+      }
       setState((prev) => ({
         ...prev,
         sales: prev.sales.map((s) => (reconciledIds.has(s.id) ? { ...s, syncPending: false } : s)),
@@ -2517,7 +2539,8 @@ export function OperationsProvider({
       })
       const matching = findMatchingPendingSale(stateRef.current.sales, fingerprint)
       if (matching) return reusePending(matching)
-      const persistedAttempt = readPersistedSaleAttempt(lj, fingerprint)
+      reconcilePersistedSaleAttempts(lj, stateRef.current.sales)
+      const persistedAttempt = resolvePersistedAttemptForNewSale(lj, fingerprint, stateRef.current.sales)
       if (persistedAttempt) {
         const byIdentity = stateRef.current.sales.find(
           (s) =>
@@ -2606,7 +2629,7 @@ export function OperationsProvider({
 
       const capability = await probeWriterCapability(lj)
       const useV2 = capability !== "v1"
-      const reusedIdentity = readPersistedSaleAttempt(lj, fingerprint)
+      const reusedIdentity = resolvePersistedAttemptForNewSale(lj, fingerprint, stateRef.current.sales)
       const clientSaleId = useV2
         ? reusedIdentity?.clientSaleId ?? assertGeneratedClientSaleId(generateClientSaleId())
         : undefined
@@ -2672,7 +2695,10 @@ export function OperationsProvider({
 
       const persistResult = await persistPendingSale(saleRow, lj, false)
       if (persistResult.ok) {
-        clearPersistedSaleAttempt(lj, fingerprint)
+        clearPersistedSaleAttempt(lj, fingerprint, {
+          clientSaleId: persistResult.clientSaleId ?? saleRow.clientSaleId,
+          saleId: saleRow.id,
+        })
         const confirmedId = persistResult.pedidoId ?? saleRow.id
         const pending = isProvisionalSaleRef(confirmedId)
         return {
