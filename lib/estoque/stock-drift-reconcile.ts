@@ -6,7 +6,9 @@
  * - livro (`MovimentacaoEstoque.estoqueDepois` mais recente) quando casa com
  *   um dos lados;
  * - materialização equivalente ao bootstrap (sem linhas OU linhas só em zero);
- * - overhang SUM>stock absorvível no depósito alvo (legado PDV · PR #212).
+ * - overhang SUM>stock absorvível no único depósito com saldo (legado PDV · PR #212).
+ * Múltiplos depósitos positivos com gap ≠ 0 não são reparo comprovado: absorver
+ * no alvo não prova qual bin deve perder (ou ganhar) as unidades.
  * Qualquer outro desacordo permanece bloqueado.
  */
 
@@ -169,6 +171,18 @@ export function classifyStockDrift(input: ClassifyStockDriftInput): StockDriftCl
   }
 
   if (gap > 0 && (ledger === null || ledgerMatchesStock)) {
+    if (positiveDepositCount > 1) {
+      return classified(input, {
+        reason: STOCK_DRIFT_REASON.MULTI_DEPOSIT_AMBIGUOUS,
+        proven: false,
+        authority: ledgerMatchesStock
+          ? "livro-casa-com-stock-multiplos-depositos-overhang"
+          : "overhang-multiplos-depositos-sem-distribuicao-comprovada",
+        alignedTargetQty: null,
+        alignedStock: null,
+        canAbsorbOverhang: false,
+      })
+    }
     if (!canAbsorbOverhang) {
       return classified(input, {
         reason: STOCK_DRIFT_REASON.PRINCIPAL_CANNOT_ABSORB,

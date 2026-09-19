@@ -400,4 +400,26 @@ describe("persistSaleV2 — retry e replay concorrente", () => {
     expect(result.venda.pedidoId).toBe("VDA-RC02-2026-000001")
     expect(h.transaction).toHaveBeenCalledTimes(1)
   })
+
+  it("P2002 após aborto da tx consulta a venda durável e não cria segunda", async () => {
+    h.transaction.mockRejectedValueOnce({ code: "P2002", meta: { target: ["storeId", "idempotencyKey"] } })
+    h.findFirst.mockResolvedValueOnce({
+      id: "venda-1",
+      storeId: STORE,
+      pedidoId: "VDA-RC02-2026-000001",
+      clientSaleId: CLIENT_A,
+      payload: sale(),
+      total: 18,
+      at: new Date("2026-08-16T12:00:00.000Z"),
+      clienteNome: "Consumidor",
+      clienteId: null,
+      terminalId: null,
+      status: "concluida",
+    })
+    const result = await persistSaleV2({ storeId: STORE, sale: sale(), clientSaleId: CLIENT_A })
+    expect(result.replayed).toBe(true)
+    expect(result.venda.pedidoId).toBe("VDA-RC02-2026-000001")
+    expect(h.transaction).toHaveBeenCalledTimes(1)
+    expect(h.findFirst).toHaveBeenCalledTimes(1)
+  })
 })

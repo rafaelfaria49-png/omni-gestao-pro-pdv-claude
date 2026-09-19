@@ -77,7 +77,7 @@ describe("classifyStockDrift", () => {
     expect(isProvenStructuralRepair(r)).toBe(false)
   })
 
-  it("principal não absorve overhang", () => {
+  it("dois depósitos positivos com SUM>stock não cortam o alvo por conveniência", () => {
     const r = c({
       stock: 4,
       deposits: [
@@ -85,8 +85,25 @@ describe("classifyStockDrift", () => {
         { depositoId: "d2", quantidade: 5 },
       ],
     })
-    expect(r.reason).toBe(STOCK_DRIFT_REASON.PRINCIPAL_CANNOT_ABSORB)
+    expect(r.reason).toBe(STOCK_DRIFT_REASON.MULTI_DEPOSIT_AMBIGUOUS)
     expect(r.proven).toBe(false)
+    expect(isProvenStructuralRepair(r)).toBe(false)
+    expect(r.alignedTargetQty).toBeNull()
+  })
+
+  it("overhang absorvível no principal com outro depósito positivo permanece ambíguo", () => {
+    const r = c({
+      stock: 6,
+      deposits: [
+        { depositoId: target, quantidade: 6 },
+        { depositoId: "d2", quantidade: 2 },
+      ],
+    })
+    expect(r.reason).toBe(STOCK_DRIFT_REASON.MULTI_DEPOSIT_AMBIGUOUS)
+    expect(r.proven).toBe(false)
+    expect(isProvenStructuralRepair(r)).toBe(false)
+    expect(r.alignedTargetQty).toBeNull()
+    expect(r.alignedStock).toBeNull()
   })
 
   it("livro casa com a soma — cache de stock obsoleto", () => {
@@ -98,6 +115,21 @@ describe("classifyStockDrift", () => {
     expect(r.reason).toBe(STOCK_DRIFT_REASON.LEGACY_STOCK_CACHE_STALE)
     expect(r.alignedStock).toBe(4)
     expect(isProvenStructuralRepair(r)).toBe(true)
+  })
+
+  it("cache obsoleto com dois depósitos não escolhe bin", () => {
+    const r = c({
+      stock: 10,
+      deposits: [
+        { depositoId: target, quantidade: 6 },
+        { depositoId: "d2", quantidade: 2 },
+      ],
+      lastLedgerEstoqueDepois: 8,
+    })
+    expect(r.reason).toBe(STOCK_DRIFT_REASON.LEGACY_STOCK_CACHE_STALE)
+    expect(r.proven).toBe(true)
+    expect(r.alignedStock).toBe(8)
+    expect(r.alignedTargetQty).toBe(6)
   })
 
   it("múltiplos depósitos com SUM<stock mesmo com livro no stock", () => {

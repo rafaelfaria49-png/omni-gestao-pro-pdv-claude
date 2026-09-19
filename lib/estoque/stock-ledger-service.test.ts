@@ -44,6 +44,7 @@ function makeFake(opts?: {
   movs?: MovRow[]
   failLedgerCreate?: boolean
   failLedgerCreateAfter?: number
+  skipIdempotencyPrecheckOnce?: boolean
 }) {
   const produtos = new Map((opts?.produtos ?? []).map((p) => [p.id, { ...p }]))
   const depositos = new Map((opts?.depositos ?? []).map((d) => [d.id, { ...d }]))
@@ -52,7 +53,12 @@ function makeFake(opts?: {
   const lockCalls: string[] = []
   let movSeq = 100
   let depSeq = 50
-  const state = { failLedgerCreate: opts?.failLedgerCreate ?? false, failLedgerCreateAfter: opts?.failLedgerCreateAfter, ledgerCreates: 0 }
+  const state = {
+    failLedgerCreate: opts?.failLedgerCreate ?? false,
+    failLedgerCreateAfter: opts?.failLedgerCreateAfter,
+    ledgerCreates: 0,
+    skipIdempotencyPrecheckOnce: opts?.skipIdempotencyPrecheckOnce ?? false,
+  }
 
   function matchProdFirst(where: Record<string, unknown>): ProdRow | null {
     for (const p of produtos.values()) {
@@ -149,6 +155,10 @@ function makeFake(opts?: {
           if (w.produtoId !== undefined && m.produtoId !== w.produtoId) continue
           if (w.idempotencyKey !== undefined && m.idempotencyKey !== w.idempotencyKey) continue
           hits.push(m)
+        }
+        if (w.idempotencyKey !== undefined && state.skipIdempotencyPrecheckOnce) {
+          state.skipIdempotencyPrecheckOnce = false
+          return null
         }
         if (a.orderBy?.createdAt === "desc") {
           hits.sort((x, y) => y.createdAt - x.createdAt)
@@ -427,10 +437,33 @@ describe("stock-ledger-service — core", () => {
     )
     expect(r.ok).toBe(false)
     if (r.ok) return
-    expect(r.drift?.driftReason).toBe("principal_cannot_absorb")
+    expect(r.drift?.driftReason).toBe("multi_deposit_ambiguous")
     expect(f.produtos.get("p1")?.stock).toBe(4)
     expect(f.pds.get("p1|d1")?.quantidade).toBe(1)
     expect(f.pds.get("p1|d2")?.quantidade).toBe(5)
+    expect(f.movs.size).toBe(0)
+  })
+
+  it("11h2. overhang absorvível no principal com segundo depósito positivo não muta", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 6 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }, { id: "d2", storeId: "loja-a" }],
+      pds: [
+        { produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 6 },
+        { produtoId: "p1", depositoId: "d2", storeId: "loja-a", quantidade: 2 },
+      ],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv", realinharDepositoAoStock: true, depositoId: "d1" },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.drift?.driftReason).toBe("multi_deposit_ambiguous")
+    expect(f.produtos.get("p1")?.stock).toBe(6)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(6)
+    expect(f.pds.get("p1|d2")?.quantidade).toBe(2)
     expect(f.movs.size).toBe(0)
   })
 
@@ -504,6 +537,48 @@ describe("stock-ledger-service — core", () => {
     ).rejects.toThrow(/LEDGER_FAIL_AFTER|PERSISTENCE/)
     expect(f.produtos.get("p1")?.stock).toBe(4)
     expect(f.pds.get("p1|d1")?.quantidade).toBe(5)
+  })
+
+  it("11k2. P2002 após writes aborta e o replay lê o vencedor durável", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 4 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 5 }],
+    })
+    const first = await applyStockMutation(
+      ctx(),
+      {
+        kind: "saida",
+        produtoId: "p1",
+        quantidade: 1,
+        origem: "pdv",
+        realinharDepositoAoStock: true,
+        idempotencyKey: "pdv:v-p2002:p1",
+      },
+      { db: f.db },
+    )
+    expect(first.ok).toBe(true)
+    expect(f.produtos.get("p1")?.stock).toBe(3)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(3)
+    const movCount = f.movs.size
+    f.state.skipIdempotencyPrecheckOnce = true
+    const retry = await applyStockMutation(
+      ctx(),
+      {
+        kind: "saida",
+        produtoId: "p1",
+        quantidade: 1,
+        origem: "pdv",
+        realinharDepositoAoStock: true,
+        idempotencyKey: "pdv:v-p2002:p1",
+      },
+      { db: f.db },
+    )
+    expect(retry.ok).toBe(true)
+    if (retry.ok) expect(retry.idempotente).toBe(true)
+    expect(f.produtos.get("p1")?.stock).toBe(3)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(3)
+    expect(f.movs.size).toBe(movCount)
   })
 
   it("11l. duas lojas: drift em A não altera B", async () => {

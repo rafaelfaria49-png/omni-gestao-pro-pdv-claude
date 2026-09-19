@@ -9,6 +9,7 @@ import {
   classifyExistingVendaReplayByClientSaleId,
   upsertVendaInTransaction,
   VENDA_REPLAY_SELECT,
+  isPrismaUniqueConstraintError,
   type SalePayload,
   type UpsertVendaOptions,
   type UpsertVendaResult,
@@ -92,6 +93,11 @@ export async function persistSaleV2(input: PersistSaleV2Input): Promise<UpsertVe
       }
       if (error instanceof VendaClientKeyUniqueConflictError) {
         const replay = await lookupReplayByClientSaleId(storeId, sale, error.clientSaleId)
+        if (replay) return replay
+        throw error
+      }
+      if (isPrismaUniqueConstraintError(error)) {
+        const replay = await lookupReplayByClientSaleId(storeId, sale, clientSaleId)
         if (replay) return replay
         throw error
       }
