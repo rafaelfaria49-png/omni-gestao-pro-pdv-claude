@@ -893,4 +893,290 @@ describe("stock-ledger-service — core", () => {
     const n = norm({ kind: "entrada", produtoId: "p1", quantidade: 1, origem: "manual", usuario: "hacker" } as unknown as Parameters<typeof norm>[0])
     expect((n as Record<string, unknown>).usuario).toBeUndefined()
   })
+
+  function seedLedger(estoqueDepois: number): MovRow {
+    return {
+      id: "m-seed",
+      storeId: "loja-a",
+      produtoId: "p1",
+      tipo: "saida",
+      quantidade: -1,
+      documento: null,
+      motivo: null,
+      custoUnitario: 0,
+      estoqueAntes: estoqueDepois + 1,
+      estoqueDepois,
+      custoMedioAntes: 12.5,
+      custoMedioDepois: 12.5,
+      origem: "pdv",
+      idempotencyKey: null,
+      createdAt: 1,
+    }
+  }
+
+  it("A. stock=0 depósito=4 livro prova 0 · Entrada +2 reconcilia 4→0 e entra 0→2", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0, precoCusto: 12.5 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 }],
+      movs: [seedLedger(0)],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, custoUnitario: 12.5, origem: "manual", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.structuralRepairApplied).toBe(true)
+    expect(f.produtos.get("p1")?.stock).toBe(2)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(2)
+    const origens = [...f.movs.values()].map((m) => m.origem).sort()
+    expect(origens).toEqual(["manual", "estoque-reconcile", "pdv"].sort())
+    const reconcile = [...f.movs.values()].find((m) => m.origem === "estoque-reconcile")
+    const entrada = [...f.movs.values()].find((m) => m.origem === "manual")
+    expect(reconcile?.tipo).toBe("ajuste")
+    expect(entrada?.quantidade).toBe(2)
+    expect(entrada?.estoqueAntes).toBe(0)
+    expect(entrada?.estoqueDepois).toBe(2)
+  })
+
+  it("B. stock=4 depósito=0 livro prova 4 · Entrada +2 → 6", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 4 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 0 }],
+      movs: [seedLedger(4)],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(true)
+    expect(f.produtos.get("p1")?.stock).toBe(6)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(6)
+  })
+
+  it("C. stock=0 depósito=4 sem livro · Entrada bloqueada · zero writes", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 }],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.code).toBe("STOCK_INVARIANT_DRIFT")
+    expect(f.produtos.get("p1")?.stock).toBe(0)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(4)
+    expect(f.movs.size).toBe(0)
+  })
+
+  it("D. C → Ajuste total=2 → Entrada +2 → final 4", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 }],
+    })
+    const blocked = await applyStockMutation(
+      ctx(),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(blocked.ok).toBe(false)
+    const adj = await applyStockMutation(
+      ctx(),
+      { kind: "ajuste", produtoId: "p1", novoSaldo: 2, origem: "manual", motivo: "contagem física" },
+      { db: f.db },
+    )
+    expect(adj.ok).toBe(true)
+    expect(f.produtos.get("p1")?.stock).toBe(2)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(2)
+    const ent = await applyStockMutation(
+      ctx(),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(ent.ok).toBe(true)
+    expect(f.produtos.get("p1")?.stock).toBe(4)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(4)
+  })
+
+  it("E. multi-depósito ambíguo · Entrada não corta nenhum bin", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }, { id: "d2", storeId: "loja-a" }],
+      pds: [
+        { produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 },
+        { produtoId: "p1", depositoId: "d2", storeId: "loja-a", quantidade: 2 },
+      ],
+      movs: [seedLedger(0)],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", realinharDepositoAoStock: true, depositoId: "d1" },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.drift?.driftReason).toBe("multi_deposit_ambiguous")
+    expect(f.produtos.get("p1")?.stock).toBe(0)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(4)
+    expect(f.pds.get("p1|d2")?.quantidade).toBe(2)
+    expect([...f.movs.values()].filter((m) => m.id !== "m-seed")).toHaveLength(0)
+  })
+
+  it("F. entrada alinhada sem drift preserva comportamento", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 3 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 3 }],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.structuralRepairApplied).toBeFalsy()
+    expect(f.produtos.get("p1")?.stock).toBe(5)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(5)
+    expect(f.movs.size).toBe(1)
+  })
+
+  it("G. custo médio 2@10 + entrada 2@20 = 15 também após reconcile", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 2, precoCusto: 10 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 2 }],
+    })
+    const r = await applyStockMutation(
+      ctx(),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, custoUnitario: 20, origem: "manual", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.custoMedioDepois).toBe(15)
+    expect(f.produtos.get("p1")?.precoCusto).toBe(15)
+  })
+
+  it("H. falha depois do repair estrutural de Entrada faz rollback integral", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 }],
+      movs: [seedLedger(0)],
+      failLedgerCreateAfter: 1,
+    })
+    await expect(
+      f.db.$transaction(async (tx) => {
+        const r = await applyStockMutationTx(tx, ctx(), {
+          kind: "entrada",
+          produtoId: "p1",
+          quantidade: 2,
+          origem: "manual",
+          realinharDepositoAoStock: true,
+        })
+        if (!r.ok) throw new Error(r.code)
+        return r
+      }),
+    ).rejects.toThrow()
+    expect(f.produtos.get("p1")?.stock).toBe(0)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(4)
+    expect(f.movs.size).toBe(1)
+  })
+
+  it("I. retry/idempotência de Entrada com reconcile não duplica", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 }],
+      movs: [seedLedger(0)],
+    })
+    const cmd = {
+      kind: "entrada" as const,
+      produtoId: "p1",
+      quantidade: 2,
+      origem: "manual" as const,
+      realinharDepositoAoStock: true,
+      idempotencyKey: "entrada:nf-1:p1",
+    }
+    const r1 = await applyStockMutation(ctx(), cmd, { db: f.db })
+    const r2 = await applyStockMutation(ctx(), cmd, { db: f.db })
+    expect(r1.ok && r2.ok).toBe(true)
+    if (!r1.ok || !r2.ok) return
+    expect(r2.idempotente).toBe(true)
+    expect(r2.movimentacaoId).toBe(r1.movimentacaoId)
+    expect(f.produtos.get("p1")?.stock).toBe(2)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(2)
+    expect([...f.movs.values()].filter((m) => m.origem === "manual")).toHaveLength(1)
+  })
+
+  it("J. duas entradas concorrentes após baseline · lock FOR UPDATE · saldo 0+2+3=5", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 0 }],
+    })
+    const a = await applyStockMutation(ctx(), { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", idempotencyKey: "e1" }, { db: f.db })
+    const b = await applyStockMutation(ctx(), { kind: "entrada", produtoId: "p1", quantidade: 3, origem: "manual", idempotencyKey: "e2" }, { db: f.db })
+    expect(a.ok && b.ok).toBe(true)
+    expect(f.produtos.get("p1")?.stock).toBe(5)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(5)
+    expect(f.lockCalls.length).toBe(2)
+  })
+
+  it("K. isolate loja A / loja B na Entrada com drift", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0 }), prod({ id: "p2", storeId: "loja-b", stock: 8, sku: "B" })],
+      depositos: [{ id: "d1", storeId: "loja-a" }, { id: "d2", storeId: "loja-b" }],
+      pds: [
+        { produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 },
+        { produtoId: "p2", depositoId: "d2", storeId: "loja-b", quantidade: 8 },
+      ],
+    })
+    const blocked = await applyStockMutation(
+      ctx("loja-a"),
+      { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    const other = await applyStockMutation(
+      ctx("loja-b"),
+      { kind: "entrada", produtoId: "p2", quantidade: 1, origem: "manual", depositoId: "d2", realinharDepositoAoStock: true },
+      { db: f.db },
+    )
+    expect(blocked.ok).toBe(false)
+    expect(other.ok).toBe(true)
+    expect(f.produtos.get("p2")?.stock).toBe(9)
+    expect(f.pds.get("p2|d2")?.quantidade).toBe(9)
+    expect(f.produtos.get("p1")?.stock).toBe(0)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(4)
+  })
+
+  it("entrada sem flag continua fail-closed mesmo com livro comprovando overhang", async () => {
+    const f = makeFake({
+      produtos: [prod({ stock: 0 })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 4 }],
+      movs: [seedLedger(0)],
+    })
+    const r = await applyStockMutation(ctx(), { kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual" }, { db: f.db })
+    expect(r.ok).toBe(false)
+    expect(f.produtos.get("p1")?.stock).toBe(0)
+    expect(f.pds.get("p1|d1")?.quantidade).toBe(4)
+  })
+
+  it("normalizeStockCommand aceita flag na Entrada e recusa em ajuste", async () => {
+    const { normalizeStockCommand: norm } = await import("@/lib/estoque/stock-ledger-contract")
+    const e = norm({ kind: "entrada", produtoId: "p1", quantidade: 2, origem: "manual", realinharDepositoAoStock: true })
+    expect(e.realinharDepositoAoStock).toBe(true)
+    const a = norm({ kind: "ajuste", produtoId: "p1", novoSaldo: 2, origem: "manual", motivo: "x", realinharDepositoAoStock: true } as unknown as Parameters<typeof norm>[0])
+    expect(a.realinharDepositoAoStock).toBe(false)
+  })
 })

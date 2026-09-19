@@ -12,6 +12,15 @@ import {
   applyStockMutationTx,
   type StockLedgerTx,
 } from "@/lib/estoque/stock-ledger-service";
+import {
+  classifyStockDrift,
+  isProvenEntradaBaselineRepair,
+  stockDriftBlockedEntradaMessage,
+  stockDriftFailMessage,
+  stockDriftOperatorMessage,
+  STOCK_DRIFT_REASON,
+} from "@/lib/estoque/stock-drift-reconcile";
+import { DEPOSITO_PRINCIPAL_CODIGO } from "@/lib/estoque/deposito-core";
 
 /**
  * Movimentação de estoque (livro-razão) — CAD-R2-009.
@@ -47,9 +56,54 @@ export type MovimentacaoEstoqueDTO = {
   createdAt: string;
 };
 
+export type EstoqueDriftPublico = {
+  produtoId: string;
+  produtoNome: string;
+  produtoSku: string | null;
+  stock: number;
+  somaDepositos: number;
+  gap: number;
+  driftReason: string;
+  authority: string;
+  lastLedgerEstoqueDepois: number | null;
+  depositCount: number;
+  entradaPodeReconciliar: boolean;
+};
+
 export type EntradaEstoqueResult =
-  | { ok: true; movimentacaoId: string; estoqueDepois: number; custoMedioDepois: number }
-  | { ok: false; reason: string };
+  | {
+      ok: true;
+      movimentacaoId: string;
+      estoqueDepois: number;
+      custoMedioDepois: number;
+      reconciliado?: boolean;
+    }
+  | {
+      ok: false;
+      reason: string;
+      detalhe?: string;
+      code?: string;
+      drift?: EstoqueDriftPublico;
+      acaoSugerida?: "ajuste";
+    };
+
+export type DiagnosticoSaldoEstoque =
+  | { ok: false; reason: string }
+  | {
+      ok: true;
+      aligned: boolean;
+      stock: number;
+      somaDepositos: number;
+      gap: number;
+      driftReason: string;
+      authority: string;
+      lastLedgerEstoqueDepois: number | null;
+      depositCount: number;
+      positiveDepositCount: number;
+      entradaPodeReconciliar: boolean;
+      operatorMessage: string;
+      detalhe: string;
+    };
 
 function arredonda2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
@@ -73,6 +127,42 @@ function boundaryReason(
     default:
       return fallback;
   }
+}
+
+function failFromBoundary(
+  code: string,
+  message: string,
+  fallback: string,
+  extra?: { drift?: NonNullable<import("@/lib/estoque/stock-ledger-contract").StockLedgerFailure["drift"]> },
+): Extract<EntradaEstoqueResult, { ok: false }> {
+  const drift = extra?.drift;
+  if (code === "STOCK_INVARIANT_DRIFT" && drift) {
+    return {
+      ok: false,
+      reason: stockDriftBlockedEntradaMessage({
+        reason: drift.driftReason,
+        stock: drift.stock,
+        soma: drift.somaDepositos,
+      }),
+      detalhe: message,
+      code,
+      drift: {
+        produtoId: drift.produtoId,
+        produtoNome: drift.produtoNome,
+        produtoSku: drift.produtoSku,
+        stock: drift.stock,
+        somaDepositos: drift.somaDepositos,
+        gap: drift.gap,
+        driftReason: drift.driftReason,
+        authority: drift.authority,
+        lastLedgerEstoqueDepois: drift.lastLedgerEstoqueDepois,
+        depositCount: drift.depositCount,
+        entradaPodeReconciliar: false,
+      },
+      acaoSugerida: "ajuste",
+    };
+  }
+  return { ok: false, reason: boundaryReason(code, message, fallback), code };
 }
 
 /**
@@ -131,14 +221,16 @@ export async function registrarEntradaEstoque(
           fornecedor: input.fornecedor,
           observacao: input.observacao,
           idempotencyKey: input.idempotencyKey,
+          realinharDepositoAoStock: true,
         },
       );
-      if (!r.ok) return { ok: false as const, reason: boundaryReason(r.code, r.message, "Falha ao registrar entrada") };
+      if (!r.ok) return failFromBoundary(r.code, r.message, "Falha ao registrar entrada", { drift: r.drift });
       return {
         ok: true as const,
         movimentacaoId: r.movimentacaoId,
         estoqueDepois: r.estoqueDepois,
         custoMedioDepois: r.custoMedioDepois,
+        ...(r.structuralRepairApplied ? { reconciliado: true } : {}),
       };
     });
 
@@ -201,7 +293,7 @@ export async function registrarAjusteEstoque(
           idempotencyKey: input.idempotencyKey,
         },
       );
-      if (!r.ok) return { ok: false as const, reason: boundaryReason(r.code, r.message, "Falha ao registrar ajuste") };
+      if (!r.ok) return failFromBoundary(r.code, r.message, "Falha ao registrar ajuste", { drift: r.drift });
       return {
         ok: true as const,
         movimentacaoId: r.movimentacaoId,
@@ -215,6 +307,72 @@ export async function registrarAjusteEstoque(
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar ajuste" };
   }
+}
+
+/**
+ * Diagnóstico read-only de SUM(depósitos) vs Produto.stock.
+ * Não trava linha, não cria depósito, não escreve ledger.
+ */
+export async function diagnosticarSaldoEstoque(
+  storeId: string,
+  produtoId: string,
+): Promise<DiagnosticoSaldoEstoque> {
+  let sid: string;
+  try {
+    const gate = await requireCadastrosActionAccess(storeId, "shared");
+    sid = gate.storeId;
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
+  }
+  const pid = produtoId?.trim() ?? "";
+  if (!pid) return { ok: false, reason: "Produto inválido" };
+
+  const prod = await prisma.produto.findFirst({
+    where: { id: pid, storeId: sid },
+    select: { id: true, name: true, sku: true, stock: true },
+  });
+  if (!prod) return { ok: false, reason: "Produto não encontrado nesta loja" };
+
+  const [depRows, lastLedger, principal] = await Promise.all([
+    prisma.produtoDeposito.findMany({
+      where: { storeId: sid, produtoId: pid },
+      select: { depositoId: true, quantidade: true },
+    }),
+    prisma.movimentacaoEstoque.findFirst({
+      where: { storeId: sid, produtoId: pid },
+      orderBy: { createdAt: "desc" },
+      select: { estoqueDepois: true },
+    }),
+    prisma.deposito.findFirst({
+      where: { storeId: sid, OR: [{ principal: true }, { codigo: DEPOSITO_PRINCIPAL_CODIGO }] },
+      select: { id: true },
+    }),
+  ]);
+
+  const targetDepositoId = principal?.id ?? depRows[0]?.depositoId ?? "";
+  const classification = classifyStockDrift({
+    stock: prod.stock,
+    deposits: depRows,
+    targetDepositoId,
+    lastLedgerEstoqueDepois: lastLedger?.estoqueDepois ?? null,
+  });
+  const aligned = classification.reason === STOCK_DRIFT_REASON.ALIGNED;
+  const entradaPodeReconciliar = isProvenEntradaBaselineRepair(classification);
+  return {
+    ok: true,
+    aligned,
+    stock: classification.stock,
+    somaDepositos: classification.soma,
+    gap: classification.gap,
+    driftReason: classification.reason,
+    authority: classification.authority,
+    lastLedgerEstoqueDepois: classification.lastLedgerEstoqueDepois,
+    depositCount: classification.depositCount,
+    positiveDepositCount: classification.positiveDepositCount,
+    entradaPodeReconciliar,
+    operatorMessage: aligned ? "" : stockDriftOperatorMessage(classification),
+    detalhe: aligned ? "" : stockDriftFailMessage(classification),
+  };
 }
 
 export type EstoqueResumo = {
