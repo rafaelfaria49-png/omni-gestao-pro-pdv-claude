@@ -266,6 +266,44 @@ export function isProvenStructuralRepair(classification: StockDriftClassificatio
   )
 }
 
+/**
+ * Entrada de mercadoria NOVA. Não herda o haircut PDV sem livro
+ * (`legado-pdv-sum-gt-stock-absorvivel`): SUM>stock sem evidência pode ser
+ * depósito stale OU cache stale — zerar o depósito e somar a entrada
+ * escolheria saldo. Exige livro (ou bootstrap de linha-zero).
+ */
+export function isProvenEntradaBaselineRepair(classification: StockDriftClassification): boolean {
+  if (!isProvenStructuralRepair(classification)) return false
+  if (
+    classification.reason === STOCK_DRIFT_REASON.LEGACY_DEPOSIT_OVERHANG &&
+    classification.lastLedgerEstoqueDepois === null
+  ) {
+    return false
+  }
+  return true
+}
+
+export function stockDriftOperatorMessage(classification: StockDriftClassification): string {
+  const stock = classification.stock
+  const soma = classification.soma
+  if (isProvenEntradaBaselineRepair(classification)) {
+    return `Estoque precisa de reconciliação. Saldo do cadastro: ${stock}. Saldo nos depósitos: ${soma}. Esta divergência pode ser corrigida automaticamente junto com a operação.`
+  }
+  return stockDriftBlockedEntradaMessage(classification)
+}
+
+/** Mensagem operacional quando a Entrada NÃO pode escolher o saldo. */
+export function stockDriftBlockedEntradaMessage(input: {
+  reason: string
+  stock: number
+  soma: number
+}): string {
+  if (input.reason === STOCK_DRIFT_REASON.MULTI_DEPOSIT_AMBIGUOUS) {
+    return `Há divergência no saldo deste produto. Saldo do cadastro: ${input.stock}. Saldo nos depósitos: ${input.soma}. Há mais de um depósito com saldo — confirme o total físico na aba Ajuste sem redistribuir unidades entre depósitos.`
+  }
+  return `Há divergência no saldo deste produto. Saldo do cadastro: ${input.stock}. Saldo nos depósitos: ${input.soma}. Antes de receber novas unidades, confirme a quantidade física atual.`
+}
+
 export function toStockDriftDetails(
   classification: StockDriftClassification,
   meta: {

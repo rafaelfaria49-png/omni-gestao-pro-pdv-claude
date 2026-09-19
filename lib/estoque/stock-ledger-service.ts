@@ -18,9 +18,11 @@
  *   — exceto (a) saída PDV com `realinharDepositoAoStock` quando a autoridade
  *   é comprovável (livro, bootstrap-zero, overhang no único depósito com saldo,
  *   cache obsoleto); distribuição ambígua entre depósitos positivos não repara;
- *   (b) ajuste humano explícito que fecha o depósito alvo em
+ *   (b) entrada humana com a mesma flag, porém sem haircut PDV sem livro —
+ *   reconcilia o baseline comprovado, depois aplica a mercadoria nova;
+ *   (c) ajuste humano explícito que fecha o depósito alvo em
  *   `novoSaldo - SUM(outros)` quando esse residual cabe (senão 409).
- *   Correção estrutural e baixa comercial são ledger separados na mesma tx.
+ *   Correção estrutural e operação comercial são ledger separados na mesma tx.
  *
  * COMPOSIÇÃO: `applyStockMutationTx(tx, ...)` participa da transação maior do
  * caller (venda/OS/cancelamento/devolução) — NUNCA abre nested transaction.
@@ -43,6 +45,7 @@ import {
 } from "@/lib/estoque/stock-ledger-contract"
 import {
   classifyStockDrift,
+  isProvenEntradaBaselineRepair,
   isProvenStructuralRepair,
   STOCK_DRIFT_REASON,
   stockDriftFailMessage,
@@ -312,6 +315,7 @@ export async function applyStockMutationTx(
         custoMedioAntes: existing.custoMedioAntes,
         custoMedioDepois: existing.custoMedioDepois,
         idempotente: true,
+        structuralRepairApplied: false,
       }
     }
   }
@@ -365,7 +369,10 @@ export async function applyStockMutationTx(
         requestedQty,
       })
       const canProvenRepair =
-        cmd.realinharDepositoAoStock === true && isProvenStructuralRepair(classification)
+        cmd.realinharDepositoAoStock === true &&
+        (cmd.kind === "entrada"
+          ? isProvenEntradaBaselineRepair(classification)
+          : isProvenStructuralRepair(classification))
       const othersSum = classification.soma - classification.targetQty
       if (canProvenRepair) {
         const alignedStock = classification.alignedStock as number
@@ -554,6 +561,7 @@ export async function applyStockMutationTx(
       custoMedioAntes,
       custoMedioDepois,
       idempotente: false,
+      structuralRepairApplied: structuralRepair != null,
     }
 }
 

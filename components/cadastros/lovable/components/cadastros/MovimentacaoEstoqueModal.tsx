@@ -7,7 +7,9 @@ import {
   registrarEntradaEstoque,
   registrarAjusteEstoque,
   listMovimentacoesEstoque,
+  diagnosticarSaldoEstoque,
   type MovimentacaoEstoqueDTO,
+  type DiagnosticoSaldoEstoque,
 } from "@/app/actions/estoque";
 
 /** Strip de prefixos de importador (gc-, imp-, ...) só para exibição. SKU bruto preservado no banco. */
@@ -24,6 +26,9 @@ function origemLabel(origem: string): string {
   if (origem === "os") return "O.S.";
   if (origem === "pdv") return "PDV";
   if (origem === "importacao") return "Importação";
+  if (origem === "estoque-reconcile") return "Reconciliação";
+  if (origem === "cadastro") return "Cadastro";
+  if (origem === "inventario") return "Inventário";
   return origem || "—";
 }
 
@@ -97,6 +102,9 @@ export function MovimentacaoEstoqueModal({
   const [hist, setHist] = useState<MovimentacaoEstoqueDTO[]>([]);
   const [loadingHist, setLoadingHist] = useState(false);
   const [saving, startSaving] = useTransition();
+  const [diag, setDiag] = useState<Extract<DiagnosticoSaldoEstoque, { ok: true }> | null>(null);
+  const [voltarEntradaAposAjuste, setVoltarEntradaAposAjuste] = useState(false);
+  const [mostrarDetalheTecnico, setMostrarDetalheTecnico] = useState(false);
 
   // Reset quando abre ou troca de produto.
   useEffect(() => {
@@ -111,6 +119,22 @@ export function MovimentacaoEstoqueModal({
     setMotivo("");
     setErro(null);
     setOkMsg(null);
+    setDiag(null);
+    setVoltarEntradaAposAjuste(false);
+    setMostrarDetalheTecnico(false);
+  }, [open, produto?.id]);
+
+  const carregarDiag = () => {
+    if (!produto) return;
+    diagnosticarSaldoEstoque(storeId, produto.id)
+      .then((r) => {
+        if (r.ok) setDiag(r);
+      })
+      .catch(() => setDiag(null));
+  };
+  useEffect(() => {
+    if (open && produto) carregarDiag();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, produto?.id]);
 
   const carregarHist = () => {
@@ -146,12 +170,34 @@ export function MovimentacaoEstoqueModal({
         observacao: obs,
       });
       if (res.ok) {
-        setOkMsg(`Entrada registrada. Saldo: ${res.estoqueDepois} · custo médio ${fmtMoney(res.custoMedioDepois)}.`);
+        setOkMsg(
+          res.reconciliado
+            ? `Reconciliação e entrada registradas. Saldo: ${res.estoqueDepois} · custo médio ${fmtMoney(res.custoMedioDepois)}.`
+            : `Entrada registrada. Saldo: ${res.estoqueDepois} · custo médio ${fmtMoney(res.custoMedioDepois)}.`,
+        );
         setQtd("");
         setObs("");
         onSaved?.();
+        carregarDiag();
       } else {
         setErro(res.reason);
+        if (res.drift) {
+          setDiag((prev) => ({
+            ok: true,
+            aligned: false,
+            stock: res.drift!.stock,
+            somaDepositos: res.drift!.somaDepositos,
+            gap: res.drift!.gap,
+            driftReason: res.drift!.driftReason,
+            authority: res.drift!.authority,
+            lastLedgerEstoqueDepois: res.drift!.lastLedgerEstoqueDepois,
+            depositCount: res.drift!.depositCount,
+            positiveDepositCount: prev?.positiveDepositCount ?? 0,
+            entradaPodeReconciliar: res.drift!.entradaPodeReconciliar,
+            operatorMessage: res.reason,
+            detalhe: res.detalhe ?? "",
+          }));
+        }
       }
     });
   };
@@ -179,6 +225,11 @@ export function MovimentacaoEstoqueModal({
         setOkMsg(`Ajuste registrado. Novo saldo: ${res.estoqueDepois}.`);
         setObs("");
         onSaved?.();
+        carregarDiag();
+        if (voltarEntradaAposAjuste) {
+          setAba("entrada");
+          setVoltarEntradaAposAjuste(false);
+        }
       } else {
         setErro(res.reason);
       }
@@ -221,8 +272,8 @@ export function MovimentacaoEstoqueModal({
           <span className="text-muted-foreground">
             SKU <span className="font-mono text-foreground" title={produto.sku && displaySku(produto.sku) !== produto.sku ? `Código no banco: ${produto.sku}` : undefined}>{displaySku(produto.sku) || "—"}</span>
           </span>
-          <span className="text-muted-foreground">
-            Saldo atual <span className="font-semibold text-foreground">{produto.estoque}</span>
+          <span className="min-w-0 text-muted-foreground">
+            Saldo atual <span className="font-semibold text-foreground">{diag && !diag.aligned ? diag.stock : produto.estoque}</span>
           </span>
           <span className="text-muted-foreground">
             Custo <span className="text-foreground">{produto.custo ? fmtMoney(produto.custo) : "—"}</span>
@@ -240,6 +291,54 @@ export function MovimentacaoEstoqueModal({
             Histórico
           </button>
         </div>
+
+        {diag && !diag.aligned && (
+          <div className="min-w-0 space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            <p className="font-medium">{diag.operatorMessage || "Estoque precisa de reconciliação."}</p>
+            <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+              <span className="min-w-0">
+                Saldo do cadastro: <span className="font-semibold tabular-nums text-foreground">{diag.stock}</span>
+              </span>
+              <span className="min-w-0">
+                Saldo nos depósitos: <span className="font-semibold tabular-nums text-foreground">{diag.somaDepositos}</span>
+              </span>
+            </div>
+            {diag.entradaPodeReconciliar ? (
+              <p>Esta divergência pode ser corrigida automaticamente junto com a operação.</p>
+            ) : (
+              <p>Confirme primeiro o saldo físico na aba Ajuste.</p>
+            )}
+            {!diag.entradaPodeReconciliar && aba === "entrada" && (
+              <button
+                type="button"
+                className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+                onClick={() => {
+                  setErro(null);
+                  setOkMsg(null);
+                  setAba("ajuste");
+                  setNovoSaldo("");
+                  setVoltarEntradaAposAjuste(true);
+                }}
+              >
+                Resolver saldo
+              </button>
+            )}
+            {diag.detalhe && (
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => setMostrarDetalheTecnico((v) => !v)}
+                >
+                  {mostrarDetalheTecnico ? "Ocultar detalhes" : "Detalhes"}
+                </button>
+                {mostrarDetalheTecnico && (
+                  <p className="mt-1 font-mono text-[11px] text-muted-foreground">{diag.detalhe}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {erro && (
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{erro}</div>
@@ -297,7 +396,7 @@ export function MovimentacaoEstoqueModal({
               <button type="button" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-accent" onClick={onClose} disabled={saving}>
                 Fechar
               </button>
-              <button type="button" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onClick={submitEntrada} disabled={saving}>
+              <button type="button" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onClick={submitEntrada} disabled={saving || (diag != null && !diag.aligned && !diag.entradaPodeReconciliar)}>
                 {saving ? "Registrando…" : "Registrar entrada"}
               </button>
             </div>
@@ -311,6 +410,7 @@ export function MovimentacaoEstoqueModal({
               <span>
                 <strong className="font-semibold">Operação sensível.</strong> Use apenas para correção de inventário, perda,
                 quebra ou contagem. Não altera o custo médio.
+                {voltarEntradaAposAjuste ? " Informe o TOTAL físico atual; depois a entrada de mercadoria nova volta a ficar disponível." : ""}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-3">

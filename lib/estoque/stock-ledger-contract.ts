@@ -75,6 +75,13 @@ export type StockLedgerCommand =
       quantidade: number
       /** Custo unitário da entrada real; ausente/0 preserva o custo médio. */
       custoUnitario?: number
+      /**
+       * Entrada humana (estoque-actions): reconcilia baseline estrutural
+       * COMPROVÁVEL (livro / bootstrap de linha-zero) na mesma transação,
+       * depois aplica a mercadoria nova. Não herda o haircut PDV sem livro.
+       * Importação, cadastro e cancelamento NÃO ligam esta flag.
+       */
+      realinharDepositoAoStock?: boolean
     })
   | (StockLedgerCommandBase & {
       kind: "saida"
@@ -90,8 +97,9 @@ export type StockLedgerCommand =
       /**
        * PDV ao vivo apenas: reconcilia drift estrutural COMPROVÁVEL na mesma
        * transação da baixa (legado PDV / linha-zero / cache obsoleto com livro).
-       * Não alinha SUM!=stock às cegas. Cadastros, OS e ajustes NUNCA ligam
-       * esta flag — drift não comprovado continua fail-closed.
+       * Não alinha SUM!=stock às cegas. OS, cadastro, importação e cancelamento
+       * NUNCA ligam esta flag — drift não comprovado continua fail-closed.
+       * Entrada humana usa o mesmo campo com autoridade mais estrita (livro).
        */
       realinharDepositoAoStock?: boolean
     })
@@ -126,6 +134,8 @@ export type StockLedgerSuccess = {
   custoMedioDepois: number
   /** true = retry deduplicado, saldo NÃO reaplicado. */
   idempotente: boolean
+  /** true = houve reconciliação estrutural na mesma transação, ledger separado. */
+  structuralRepairApplied?: boolean
 }
 
 export type StockDriftFailureDetails = {
@@ -213,7 +223,8 @@ export function normalizeStockCommand(cmd: StockLedgerCommand): NormalizedStockC
     novoSaldo,
     custoUnitario: Number.isFinite(custoRaw) ? Math.max(0, custoRaw) : 0,
     permitirNegativo: cmd.kind === "saida" ? (cmd.permitirNegativo === true) : false,
-    realinharDepositoAoStock: cmd.kind === "saida" ? cmd.realinharDepositoAoStock === true : false,
+    realinharDepositoAoStock:
+      cmd.kind === "saida" || cmd.kind === "entrada" ? cmd.realinharDepositoAoStock === true : false,
     origem: cleanId(cmd.origem) || "manual",
     documento: cleanText(cmd.documento),
     motivo: cleanText(cmd.motivo),

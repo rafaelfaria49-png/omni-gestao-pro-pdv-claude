@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
   classifyStockDrift,
+  isProvenEntradaBaselineRepair,
   isProvenStructuralRepair,
   STOCK_DRIFT_REASON,
+  stockDriftBlockedEntradaMessage,
   sumDepositQuantities,
 } from "./stock-drift-reconcile"
 
@@ -22,6 +24,34 @@ function c(over: {
 }
 
 describe("classifyStockDrift", () => {
+  it("overhang SUM>stock sem livro NÃO é baseline seguro para Entrada", () => {
+    const r = c({ stock: 0, deposits: [{ depositoId: target, quantidade: 4 }] })
+    expect(r.reason).toBe(STOCK_DRIFT_REASON.LEGACY_DEPOSIT_OVERHANG)
+    expect(isProvenStructuralRepair(r)).toBe(true)
+    expect(isProvenEntradaBaselineRepair(r)).toBe(false)
+  })
+
+  it("overhang com livro no stock É baseline seguro para Entrada", () => {
+    const r = c({
+      stock: 0,
+      deposits: [{ depositoId: target, quantidade: 4 }],
+      lastLedgerEstoqueDepois: 0,
+    })
+    expect(r.reason).toBe(STOCK_DRIFT_REASON.LEGACY_DEPOSIT_OVERHANG)
+    expect(isProvenEntradaBaselineRepair(r)).toBe(true)
+    expect(r.alignedTargetQty).toBe(0)
+    expect(r.alignedStock).toBe(0)
+  })
+
+  it("mensagem operacional bloqueia Entrada ambígua sem escolher 0 nem 4", () => {
+    const r = c({ stock: 0, deposits: [{ depositoId: target, quantidade: 4 }] })
+    const msg = stockDriftBlockedEntradaMessage(r)
+    expect(msg).toContain("Saldo do cadastro: 0")
+    expect(msg).toContain("Saldo nos depósitos: 4")
+    expect(msg).toMatch(/quantidade física/i)
+    expect(msg).not.toMatch(/automaticamente/)
+  })
+
   it("saldos iguais", () => {
     const r = c({ stock: 4, deposits: [{ depositoId: target, quantidade: 4 }] })
     expect(r.reason).toBe(STOCK_DRIFT_REASON.ALIGNED)

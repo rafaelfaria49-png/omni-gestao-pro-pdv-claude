@@ -26,7 +26,7 @@ const h = vi.hoisted(() => ({
   depositoCreate: vi.fn(async () => ({ id: "d1", storeId: "loja-a" })),
   produtoDepositoFindMany: vi.fn(async () => [{ depositoId: "d1", quantidade: 1 }]),
   produtoDepositoUpsert: vi.fn(async () => ({})),
-  movimentacaoFindFirst: vi.fn(async () => null),
+  movimentacaoFindFirst: vi.fn(async (): Promise<Record<string, unknown> | null> => null),
 }))
 
 vi.mock("@/auth", () => ({ auth: h.auth }))
@@ -66,7 +66,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }))
 
-import { registrarAjusteEstoque, registrarEntradaEstoque } from "@/app/actions/estoque"
+import { registrarAjusteEstoque, registrarEntradaEstoque, diagnosticarSaldoEstoque } from "@/app/actions/estoque"
 
 function sessionAtiva(role: string, stores: string[] | "all") {
   h.getSessionEntitlement.mockResolvedValue({ ok: true })
@@ -89,9 +89,13 @@ beforeEach(() => {
   h.produtoFindFirst.mockReset()
   h.produtoUpdate.mockReset()
   h.movimentacaoCreate.mockReset()
+  h.produtoDepositoFindMany.mockReset()
+  h.movimentacaoFindFirst.mockReset()
   h.auth.mockResolvedValue(null)
   h.getSessionEntitlement.mockResolvedValue({ ok: false })
   h.produtoFindFirst.mockResolvedValue(null)
+  h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 1 }])
+  h.movimentacaoFindFirst.mockResolvedValue(null)
 })
 
 describe("estoque actions — só boundary", () => {
@@ -128,5 +132,82 @@ describe("estoque actions — só boundary", () => {
     expect(data.usuario).toBe("U")
     expect(data.usuario).not.toBe("Rafael")
     expect(data.usuario).not.toBe("Operador")
+  })
+
+  it("entrada com SUM=4 stock=0 sem livro bloqueia e sugere ajuste", async () => {
+    sessionAtiva("VENDEDOR", ["loja-a"])
+    h.produtoFindFirst.mockResolvedValue({
+      id: "p1",
+      name: "fone de ouvido redmi",
+      sku: "3817019322732",
+      stock: 0,
+      precoCusto: 12.5,
+    })
+    h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 4 }])
+    h.movimentacaoFindFirst.mockResolvedValue(null)
+    const r = await registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 2 })
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.acaoSugerida).toBe("ajuste")
+    expect(r.reason).toContain("Saldo do cadastro: 0")
+    expect(r.reason).toContain("Saldo nos depósitos: 4")
+    expect(h.produtoUpdate).not.toHaveBeenCalled()
+    expect(h.movimentacaoCreate).not.toHaveBeenCalled()
+  })
+
+  it("entrada com SUM=4 stock=0 e livro=0 reconcilia e entra +2", async () => {
+    sessionAtiva("VENDEDOR", ["loja-a"])
+    h.produtoFindFirst.mockResolvedValue({
+      id: "p1",
+      name: "fone de ouvido redmi",
+      sku: "3817019322732",
+      stock: 0,
+      precoCusto: 12.5,
+    })
+    h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 4 }])
+    h.movimentacaoFindFirst.mockResolvedValue({
+      id: "m0",
+      tipo: "saida",
+      produtoId: "p1",
+      quantidade: -1,
+      documento: null,
+      motivo: null,
+      custoUnitario: 0,
+      estoqueAntes: 1,
+      estoqueDepois: 0,
+      custoMedioAntes: 12.5,
+      custoMedioDepois: 12.5,
+    })
+    const r = await registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 2, custoUnitario: 12.5 })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.estoqueDepois).toBe(2)
+    expect(r.reconciliado).toBe(true)
+    expect(h.movimentacaoCreate).toHaveBeenCalledTimes(2)
+    const origens = h.movimentacaoCreate.mock.calls.map((c) => (c[0].data as { origem: string }).origem)
+    expect(origens).toContain("estoque-reconcile")
+    expect(origens).toContain("manual")
+  })
+
+  it("diagnóstico read-only não escreve e classifica overhang sem livro como bloqueio de entrada", async () => {
+    sessionAtiva("VENDEDOR", ["loja-a"])
+    h.produtoFindFirst.mockResolvedValue({
+      id: "p1",
+      name: "fone de ouvido redmi",
+      sku: "3817019322732",
+      stock: 0,
+      precoCusto: 12.5,
+    })
+    h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 4 }])
+    h.movimentacaoFindFirst.mockResolvedValue(null)
+    const r = await diagnosticarSaldoEstoque("loja-a", "p1")
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.aligned).toBe(false)
+    expect(r.entradaPodeReconciliar).toBe(false)
+    expect(r.stock).toBe(0)
+    expect(r.somaDepositos).toBe(4)
+    expect(h.produtoUpdate).not.toHaveBeenCalled()
+    expect(h.movimentacaoCreate).not.toHaveBeenCalled()
   })
 })
