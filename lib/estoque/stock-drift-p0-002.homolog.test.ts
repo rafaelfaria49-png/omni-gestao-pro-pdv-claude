@@ -6,7 +6,12 @@
 import { afterAll, describe, expect, it } from "vitest"
 import { prisma } from "@/lib/prisma"
 import { applyStockMutation } from "@/lib/estoque/stock-ledger-service"
-import { StockLedgerBusinessError, upsertVendaInTransaction, type SalePayload } from "@/lib/ops-upsert-venda"
+import {
+  StockLedgerBusinessError,
+  upsertVendaInTransaction,
+  type SalePayload,
+  type UpsertVendaResult,
+} from "@/lib/ops-upsert-venda"
 
 const RUN = process.env.RUN_P0_002_HOMOLOG === "1"
 const STORE_A = "loja-1"
@@ -14,7 +19,7 @@ const STORE_B = "loja-visual-dev"
 const RUN_ID = `p0002h${Date.now().toString(36)}`
 const ctx = (storeId: string) => ({
   storeId,
-  principal: { userId: "homolog-p0-002" },
+  principal: { userId: "homolog-p0-002", displayLabel: "homolog-p0-002" },
   source: "pdv" as const,
   operatorLabel: "homolog-p0-002",
 })
@@ -251,6 +256,111 @@ describe.skipIf(!RUN)("P0-002 homologação (serviço real, banco não-prod)", (
     expect(await prisma.venda.count({ where: { clientSaleId } })).toBe(0)
     expect((await prisma.produto.findUnique({ where: { id: prod.id } }))?.stock).toBe(10)
     expect(await prisma.movimentacaoEstoque.count({ where: { produtoId: prod.id } })).toBe(0)
+  })
+
+  it("writer real: dois depósitos positivos com overhang não cortam o principal", async () => {
+    const prod = await seedProduct({ storeId: STORE_A, stock: 6, depositQty: 6, suffix: "md" })
+    const aux = await prisma.deposito.create({
+      data: {
+        storeId: STORE_A,
+        nome: `Aux ${RUN_ID}`,
+        codigo: `AUX${RUN_ID}`.slice(0, 20),
+        ativo: true,
+        principal: false,
+      },
+      select: { id: true },
+    })
+    await prisma.produtoDeposito.create({
+      data: {
+        storeId: STORE_A,
+        produtoId: prod.id,
+        depositoId: aux.id,
+        quantidade: 2,
+      },
+    })
+    const r = await applyStockMutation(ctx(STORE_A), {
+      kind: "saida",
+      produtoId: prod.id,
+      quantidade: 1,
+      origem: "pdv",
+      realinharDepositoAoStock: true,
+      depositoId: prod.depositoId,
+    })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.drift?.driftReason).toBe("multi_deposit_ambiguous")
+    expect((await prisma.produto.findUnique({ where: { id: prod.id } }))?.stock).toBe(6)
+    const deps = await prisma.produtoDeposito.findMany({ where: { produtoId: prod.id } })
+    expect(deps.map((d) => d.quantidade).sort()).toEqual([2, 6])
+    expect(await prisma.movimentacaoEstoque.count({ where: { produtoId: prod.id } })).toBe(0)
+    await prisma.produtoDeposito.deleteMany({ where: { depositoId: aux.id } }).catch(() => undefined)
+    await prisma.deposito.delete({ where: { id: aux.id } }).catch(() => undefined)
+  })
+
+  it("postgres: corrida P2002 na chave comercial não duplica saldo", async () => {
+    const prod = await seedProduct({ storeId: STORE_A, stock: 4, depositQty: 5, suffix: "p2" })
+    const key = `pdv:p0002:${RUN_ID}:p2`
+    const cmd = {
+      kind: "saida" as const,
+      produtoId: prod.id,
+      quantidade: 1,
+      origem: "pdv" as const,
+      realinharDepositoAoStock: true,
+      idempotencyKey: key,
+    }
+    const settled = await Promise.allSettled([
+      applyStockMutation(ctx(STORE_A), cmd),
+      applyStockMutation(ctx(STORE_A), cmd),
+    ])
+    const oks = settled.filter((s) => s.status === "fulfilled" && s.value.ok)
+    expect(oks.length).toBeGreaterThanOrEqual(1)
+    expect((await prisma.produto.findUnique({ where: { id: prod.id } }))?.stock).toBe(3)
+    const deps = await prisma.produtoDeposito.findMany({ where: { produtoId: prod.id } })
+    expect(deps.reduce((s, r) => s + r.quantidade, 0)).toBe(3)
+    const movs = await prisma.movimentacaoEstoque.findMany({ where: { produtoId: prod.id } })
+    expect(movs.filter((m) => m.origem === "pdv")).toHaveLength(1)
+    expect(movs.filter((m) => m.origem === "estoque-reconcile")).toHaveLength(1)
+  })
+
+  it("writer V2: corrida no mesmo clientSaleId confirma uma venda", async () => {
+    const prod = await seedProduct({ storeId: STORE_A, stock: 4, depositQty: 4, suffix: "c2" })
+    const clientSaleId = `cs${RUN_ID}cccccc`
+    const sale: SalePayload = {
+      id: `PEND-${clientSaleId}`,
+      at: new Date().toISOString(),
+      total: 20,
+      customerName: "Homolog P0-002",
+      paymentBreakdown: { dinheiro: 20 },
+      lines: [{ inventoryId: prod.id, name: "P0-002 homolog c2", quantity: 1, unitPrice: 20 }],
+    }
+    const sid = serieId
+    expect(sid).toBeTruthy()
+    const allocate = async () => ({
+      pedidoId: `VDA-P0002C-${RUN_ID}`,
+      serieVendaId: sid as string,
+      anoNumero: 2099,
+      numeroSequencial: 3,
+    })
+    const settled = await Promise.allSettled([
+      prisma.$transaction((tx) =>
+        upsertVendaInTransaction(tx, STORE_A, sale, "homolog-p0-002", {
+          enforceStock: true,
+          requireCaixaSession: false,
+          v2: { clientSaleId, allocate },
+        }),
+      ),
+      prisma.$transaction((tx) =>
+        upsertVendaInTransaction(tx, STORE_A, sale, "homolog-p0-002", {
+          enforceStock: true,
+          requireCaixaSession: false,
+          v2: { clientSaleId, allocate },
+        }),
+      ),
+    ])
+    const fulfilled = settled.filter((s): s is PromiseFulfilledResult<UpsertVendaResult> => s.status === "fulfilled")
+    expect(fulfilled.length).toBeGreaterThanOrEqual(1)
+    createdVendaIds.push(...fulfilled.map((s) => s.value.venda.id))
+    expect(await prisma.venda.count({ where: { clientSaleId } })).toBe(1)
+    expect((await prisma.produto.findUnique({ where: { id: prod.id } }))?.stock).toBe(3)
   })
 
   afterAll(async () => {

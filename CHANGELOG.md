@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-19
+
+### PDV — Ciclo de vida da tentativa após confirmação
+
+- Confirmação (sucesso imediato, Reenviar, retry automático, merge da lista) encerra só a identidade daquela tentativa, por loja. Não apaga o mapa inteiro.
+- Nova venda legítima com o mesmo conteúdo recebe `clientSaleId` nova. Retry/reload da mesma pending reutiliza a identidade.
+- Confirmação tardia de A não apaga tentativa B mais nova no mesmo fingerprint.
+
 ## 2026-09-18
 
 ### PDV — Drift residual de estoque (P0-002)

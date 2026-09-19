@@ -88,6 +88,50 @@ export type PersistedSaleAttempt = {
   at: string
 }
 
+export type SaleAttemptIdentity = {
+  clientSaleId?: string
+  saleId?: string
+}
+
+export type SaleAttemptListRow = {
+  id: string
+  clientSaleId?: string
+  syncPending?: boolean
+}
+
+function trimId(value: unknown): string {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+export function persistedAttemptMatchesIdentity(
+  attempt: Pick<PersistedSaleAttempt, "clientSaleId" | "saleId">,
+  identity: SaleAttemptIdentity,
+): boolean {
+  const clientSaleId = trimId(identity.clientSaleId)
+  if (clientSaleId && attempt.clientSaleId === clientSaleId) return true
+  const saleId = trimId(identity.saleId)
+  if (saleId && attempt.saleId === saleId) return true
+  return false
+}
+
+/**
+ * Retry/reload da MESMA tentativa: reutiliza.
+ * Identidade já confirmada na lista local: não reutiliza (nova venda legítima).
+ * Ausência na lista: preserva — lista parcial não prova que o servidor não tem a venda.
+ */
+export function shouldReusePersistedSaleAttempt(
+  attempt: Pick<PersistedSaleAttempt, "clientSaleId" | "saleId">,
+  sales: readonly SaleAttemptListRow[],
+): boolean {
+  const hit = sales.find(
+    (sale) =>
+      (attempt.clientSaleId && sale.clientSaleId === attempt.clientSaleId) ||
+      (attempt.saleId && sale.id === attempt.saleId),
+  )
+  if (!hit) return true
+  return hit.syncPending === true
+}
+
 export function saleAttemptStorageKey(storeId: string): string {
   return `omnigestao:pdv-sale-attempt:${storeId}`
 }
@@ -123,15 +167,70 @@ export function readPersistedSaleAttempt(storeId: string, fingerprint: string): 
   return row
 }
 
+export function resolvePersistedAttemptForNewSale(
+  storeId: string,
+  fingerprint: string,
+  sales: readonly SaleAttemptListRow[],
+): PersistedSaleAttempt | null {
+  const row = readPersistedSaleAttempt(storeId, fingerprint)
+  if (!row) return null
+  if (!shouldReusePersistedSaleAttempt(row, sales)) return null
+  return row
+}
+
 export function writePersistedSaleAttempt(storeId: string, attempt: PersistedSaleAttempt): void {
   const map = readAttemptMap(storeId)
   map[attempt.fingerprint] = attempt
   writeAttemptMap(storeId, map)
 }
 
-export function clearPersistedSaleAttempt(storeId: string, fingerprint: string): void {
+/**
+ * Encerra a referência transitória só se o slot ainda aponta para a identidade
+ * confirmada. Confirmação tardia de A não apaga tentativa B mais nova no mesmo
+ * fingerprint. Nunca limpa o mapa inteiro.
+ */
+export function closePersistedSaleAttemptIfIdentity(storeId: string, identity: SaleAttemptIdentity): void {
+  if (!trimId(identity.clientSaleId) && !trimId(identity.saleId)) return
+  const map = readAttemptMap(storeId)
+  let changed = false
+  for (const [key, row] of Object.entries(map)) {
+    if (!row || !persistedAttemptMatchesIdentity(row, identity)) continue
+    delete map[key]
+    changed = true
+  }
+  if (changed) writeAttemptMap(storeId, map)
+}
+
+export function clearPersistedSaleAttempt(
+  storeId: string,
+  fingerprint: string,
+  identity?: SaleAttemptIdentity,
+): void {
+  if (identity && (trimId(identity.clientSaleId) || trimId(identity.saleId))) {
+    closePersistedSaleAttemptIfIdentity(storeId, identity)
+    return
+  }
   const map = readAttemptMap(storeId)
   if (!map[fingerprint]) return
   delete map[fingerprint]
   writeAttemptMap(storeId, map)
+}
+
+/**
+ * Slots cuja identidade já está confirmada na lista local são encerrados.
+ * Pending e ausentes permanecem.
+ */
+export function reconcilePersistedSaleAttempts(
+  storeId: string,
+  sales: readonly SaleAttemptListRow[],
+): void {
+  const map = readAttemptMap(storeId)
+  let changed = false
+  for (const [key, row] of Object.entries(map)) {
+    if (!row) continue
+    if (shouldReusePersistedSaleAttempt(row, sales)) continue
+    delete map[key]
+    changed = true
+  }
+  if (changed) writeAttemptMap(storeId, map)
 }

@@ -16,7 +16,8 @@
  * - ledger append-only com snapshots; reversão = linha compensatória;
  * - drift legado (SUM != stock com rows existentes) falha, nunca corrige
  *   — exceto (a) saída PDV com `realinharDepositoAoStock` quando a autoridade
- *   é comprovável (livro, bootstrap-zero, overhang absorvível, cache obsoleto);
+ *   é comprovável (livro, bootstrap-zero, overhang no único depósito com saldo,
+ *   cache obsoleto); distribuição ambígua entre depósitos positivos não repara;
  *   (b) ajuste humano explícito que fecha o depósito alvo em
  *   `novoSaldo - SUM(outros)` quando esse residual cabe (senão 409).
  *   Correção estrutural e baixa comercial são ledger separados na mesma tx.
@@ -488,8 +489,7 @@ export async function applyStockMutationTx(
   }
 
   // ── 8. Writes atômicos (lock já adquirido — set direto, sem lost update) ──
-  try {
-    if (structuralRepair) {
+  if (structuralRepair) {
       const stockDelta = structuralRepair.alignedStock - structuralRepair.stockAntes
       const reconcileKey = cmd.idempotencyKey ? StockIdempotency.stockReconcile(cmd.idempotencyKey) : null
       await tx.movimentacaoEstoque.create({
@@ -537,51 +537,8 @@ export async function applyStockMutationTx(
       create: { storeId: sid, produtoId: pid, depositoId, quantidade: depositoDepois },
       update: { quantidade: depositoDepois },
     } as never)
-    let movimentacaoId: string
-    try {
-      const mov = await tx.movimentacaoEstoque.create({ data: ledgerData } as never) as { id: string }
-      movimentacaoId = mov.id
-    } catch (e) {
-      if (cmd.idempotencyKey && isP2002(e)) {
-        // Corrida: outro worker inseriu a mesma chave entre o check e o create.
-        const winner = await tx.movimentacaoEstoque.findFirst({
-          where: { storeId: sid, idempotencyKey: cmd.idempotencyKey },
-        } as never) as {
-          id: string
-          tipo: string
-          produtoId: string | null
-          quantidade: number
-          documento: string | null
-          motivo: string | null
-          custoUnitario: number
-          estoqueAntes: number
-          estoqueDepois: number
-          custoMedioAntes: number
-          custoMedioDepois: number
-        } | null
-        if (winner) {
-          if (!storedMatchesExpected(winner, cmd, pid)) {
-            return stockFail("IDEMPOTENCY_CONFLICT", "Idempotency key já usada com conteúdo diferente.")
-          }
-          return {
-            ok: true,
-            movimentacaoId: winner.id,
-            produtoId: pid,
-            depositoId,
-            tipo: winner.tipo as "entrada" | "saida" | "ajuste",
-            quantidade: winner.quantidade,
-            estoqueAntes: winner.estoqueAntes,
-            estoqueDepois: winner.estoqueDepois,
-            depositoAntes,
-            depositoDepois: depositoAntes,
-            custoMedioAntes: winner.custoMedioAntes,
-            custoMedioDepois: winner.custoMedioDepois,
-            idempotente: true,
-          }
-        }
-      }
-      throw e
-    }
+    const mov = await tx.movimentacaoEstoque.create({ data: ledgerData } as never) as { id: string }
+    const movimentacaoId = mov.id
 
     return {
       ok: true,
@@ -598,17 +555,14 @@ export async function applyStockMutationTx(
       custoMedioDepois,
       idempotente: false,
     }
-  } catch (e) {
-    if (isP2002(e)) {
-      return stockFail("IDEMPOTENCY_CONFLICT", "Conflito de unicidade ao persistir movimentação.")
-    }
-    throw e
-  }
 }
 
 /**
  * Variante standalone: abre a sua própria transação.
  * Callers que JÁ estão em `$transaction` DEVEM usar `applyStockMutationTx`.
+ *
+ * P2002 após writes aborta a transação. O replay só consulta estado durável
+ * numa transação nova, sem reaplicar saldo.
  */
 export async function applyStockMutation(
   context: StockLedgerContext,
@@ -616,5 +570,12 @@ export async function applyStockMutation(
   deps?: { db?: DbLike },
 ): Promise<StockLedgerResult> {
   const db = deps?.db ?? (prisma as unknown as DbLike)
-  return db.$transaction((tx) => applyStockMutationTx(tx, context, command))
+  try {
+    return await db.$transaction((tx) => applyStockMutationTx(tx, context, command))
+  } catch (e) {
+    if (!isP2002(e)) throw e
+    const key = typeof command.idempotencyKey === "string" ? command.idempotencyKey.trim() : ""
+    if (!key) throw e
+    return await db.$transaction((tx) => applyStockMutationTx(tx, context, command))
+  }
 }
