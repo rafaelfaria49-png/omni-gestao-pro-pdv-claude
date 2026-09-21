@@ -38,6 +38,12 @@
       "familia": "humano",
       "classes": ["C1", "C2", "C3", "C4", "R"],
       "verificado": false
+    },
+    {
+      "slug": "muse-spark",
+      "familia": "meta",
+      "classes": ["C1", "C2", "C3"],
+      "verificado": false
     }
   ]
 }

@@ -64,7 +64,7 @@
   ],
   "read_budget": 45,
   "revisao_independente": true,
-  "familia_executor": "muse-spark",
+  "familia_executor": "meta",
   "reversibilidade": "media"
 }
 -->
@@ -207,7 +207,7 @@ Seguir 02_CONTRATO_COMUM.md integralmente. O comando 00_RETOMAR_GOAL_001.txt inc
 
 ## Envelope operacional R2 — limites que complementam o META
 
-A família `muse-spark` identifica o executor declarado no relatório recebido, não uma verificação do fornecedor/modelo. Se a execução usar outra família, registrar o identificador efetivo, de acordo com a declaração do ambiente e a tabela vigente, ANTES do open. A revisão R exige outra família efetivamente identificada.
+A família `meta` (executor `muse-spark`, modelo `muse-spark-1.3-contributor-free`, fornecedor declarado Meta MSL) é efetivamente declarada em `docs/ai-execution/executors.json` (entrada `slug: muse-spark`, `familia: meta`, classes C1–C3, `verificado: false`). O valor anterior `muse-spark` identificava o executor do relatório recebido e foi corrigido para a família factual antes do open, sem inventar verificação. A revisão R exige outra família efetivamente identificada e declarada; família não declarada não cumpre R.
 
 A allowlist inclui os arquivos exatos de testes adjacentes aos contratos; isso não afirma que todos já existam e não obriga modificá-los. Não ampliar para seus diretórios pais. A gramática é a lida no parser AEP/1.0-R2 de `scripts/track.mjs` na base 469b3aa2ce9fd2bd35abc10856fea4f4dc8dac16.
 
@@ -228,3 +228,5 @@ Fontes R2 (pacote recebido em d2b3142: `00_RETOMAR_GOAL_001.txt`, `02_CONTRATO_C
 `G-CONFIG-DEPLOY` liberado EXCLUSIVAMENTE para devDependencies de teste em `package.json` e lockfile correspondente: `jsdom`, `@testing-library/react`, `@testing-library/dom` e `@testing-library/user-event`, somente os necessários e em versões verificadas compatíveis com Node/React/Vitest atuais. Não atualizar engines, React, Next, Prisma ou scripts de build/deploy. Não `npm audit fix`/upgrade geral. `G-AEP-CORE` permanece restrito ao cadastro/registro documental já autorizado, sem mudanças de algoritmos/gates/limites/hooks. Reclassificar para cima se a regra real exigir, nunca reduzir R/risco. Classe C3 e risco ALTO não redutíveis.
 
 Criar configuração específica em `test/ops-v4-fluxo-curto/` com descoberta explícita de `.test.tsx`, ambiente DOM só nesses testes, aliases necessários e runner que falhe se não descobrir/executar casos. Não alterar silenciosamente o include/exclude da suíte global. `test_command` no META atualizado antes do open para o runner real da tarefa (`typecheck` + config específica + readback/integração + Playwright do spec 001); typecheck, montagem, integração e E2E obrigatórios não podem ser omitidos no fechamento. Ambiente ausente deve resultar em bloqueio explícito, não skip convertido em PASS.
+
+Correção documental (sem alterar escopo rev 4): `familia_executor` corrigida de `muse-spark` para `meta`, família factual do executor Muse Spark (Meta MSL) efetivamente declarada via entrada `muse-spark/meta` em `executors.json` (tabela substituível, fora do núcleo; `verificado: false`, sem inventar verificação). Classe C3, risco ALTO e R obrigatória preservados; allowlist, `test_command` e gates da rev 4 inalterados.
