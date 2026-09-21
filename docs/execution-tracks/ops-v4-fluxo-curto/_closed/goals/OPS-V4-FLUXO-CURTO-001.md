@@ -4,7 +4,7 @@
   "id": "OPS-V4-FLUXO-CURTO-001",
   "track": "ops-v4-fluxo-curto",
   "title": "Preenchimento único: criação, leitura e edição coerentes",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "plan_rev": 4,
