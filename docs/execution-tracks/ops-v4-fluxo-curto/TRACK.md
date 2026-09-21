@@ -5,7 +5,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
   "title": "Operações V4 — fluxo curto",
-  "plan_rev": 2,
+  "plan_rev": 4,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -23,7 +23,7 @@ Branch goal/ops-v4-fluxo-curto-001; worktree C:/Projetos/omni-gestao-ops-v4-flux
 02_CONTRATO_COMUM.md, GOAL 001 e 04_MATRIZ_ACEITE.md em docs/roadmaps/ops-v4-fluxo-curto/. Não duplicar outra trilha funcional existente que já contenha comprovadamente este mesmo trabalho.
 
 ## Gates
-G-AEP-CORE restrito ao cadastro desta trilha, sem mudanças nas regras. Autorizações narrativas de dados básicos/read-back de Operações V3/V4 apenas nos paths exatos do GOAL. Schema, auth, financeiro, estoque, CI, .env e produção mutante continuam fechados.
+G-AEP-CORE restrito ao cadastro desta trilha, sem mudanças nas regras. G-CONFIG-DEPLOY liberado EXCLUSIVAMENTE para devDependencies de teste em `package.json`/lockfile (jsdom, @testing-library/react, @testing-library/dom, @testing-library/user-event). Autorizações narrativas de dados básicos/read-back de Operações V3/V4 apenas nos paths exatos do GOAL rev 4. Schema, auth, financeiro, estoque, CI, .env e produção mutante continuam fechados.
 
 ## Prova de resultado
 T01–T11, typecheck, regressões de mapeadores/readers/actions tocadas, componente/E2E, concorrência em base descartável, lint, build seguro e revisão R de outra família. O test_command do GOAL não é prova isolada de homologação. Sem revisão ou ambiente exigido, preservar trabalho e informar pendência; não ratificar DONE.

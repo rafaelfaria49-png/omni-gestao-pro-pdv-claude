@@ -7,10 +7,10 @@
   "status": "READY",
   "class": "C3",
   "risk_tier": "ALTO",
-  "plan_rev": 2,
+  "plan_rev": 4,
   "branch": "goal/ops-v4-fluxo-curto-001",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-001",
-  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v4/entrada-readback.test.ts",
+  "test_command": "npm run typecheck && npx --no-install vitest run --config test/ops-v4-fluxo-curto/vitest.config.ts && npx --no-install vitest run lib/operacoes-v4/entrada-readback.test.ts lib/operacoes-v4/entrada-readback.integration.test.ts lib/operacoes-v3/prova-entrada-actions.test.ts && npx playwright test e2e/specs/operacoes-v4-fluxo-curto-001.spec.ts",
   "allowlist": [
     "components/operacoes-v4-preview/use-ordens-v4.ts",
     "components/operacoes-v4-preview/use-v4-preview.ts",
@@ -39,6 +39,19 @@
     "lib/operacoes-v3/dados-basicos-actions.test.ts",
     "lib/operacoes-v3/nova-os-model.test.ts",
     "lib/operacoes-v3/nova-os-actions.test.ts",
+    "lib/operacoes-v3/prova-entrada-actions.ts",
+    "lib/operacoes-v3/prova-entrada-actions.test.ts",
+    "lib/operacoes-v4/entrada-readback.integration.test.ts",
+    "package.json",
+    "package-lock.json",
+    "test/ops-v4-fluxo-curto/**",
+    "components/operacoes-v4-preview/OperacoesV4Preview.tsx",
+    "components/operacoes-v4-preview/parts/StagePanel.tsx",
+    "components/operacoes-v4-preview/parts/WorkspaceView.tsx",
+    "components/operacoes-v4-preview/use-entrada-draft-guard.ts",
+    "components/operacoes-v4-preview/use-entrada-draft-guard.test.tsx",
+    "lib/loja-ativa.tsx",
+    "lib/loja-ativa.test.tsx",
     "docs/roadmaps/ops-v4-fluxo-curto/**",
     "docs/execution-tracks/ops-v4-fluxo-curto/**",
     "docs/execution-tracks/REGISTRY.md",
@@ -46,18 +59,19 @@
     "docs/ai-execution/protocol.json"
   ],
   "gates_liberados": [
-    "G-AEP-CORE"
+    "G-AEP-CORE",
+    "G-CONFIG-DEPLOY"
   ],
   "read_budget": 45,
   "revisao_independente": true,
-  "familia_executor": "muse-spark",
+  "familia_executor": "meta",
   "reversibilidade": "media"
 }
 -->
 
 # OPS-V4-FLUXO-CURTO-001 — Preenchimento único: criação, leitura e edição coerentes
 
-**Revisão funcional:** 1, preservada · **Envelope operacional:** 2. O estado READY abaixo destina-se à instalação autorizada; não significa que houve implementação ou abertura da trilha nesta entrega.
+**Revisão funcional:** 1, preservada · **Envelope operacional:** 2, preservado como histórico · **Revisão vigente do plano (META plan_rev): 4 — aditivo de 21/09/2026 no PR #219 ainda aberto.** Fontes R2 (docs/roadmaps/ops-v4-fluxo-curto/ em d2b3142) preservadas como históricas, não reescritas. Derivados (state.json, REGISTRY.md, GATES.md) gerados somente por `node scripts/track.mjs registry`. O estado READY abaixo destina-se à instalação autorizada; não significa que houve implementação ou abertura da trilha nesta entrega.
 **Nível técnico:** 4/5 · **Classe formal:** C3 · **Risco:** ALTO · **R:** obrigatório, outra família declarada.
 **Dependências:** nenhuma entrega desta trilha; pré-flight/ambiente são internos a este GOAL.
 **Achados principais:** V4-02, V4-03, V4-11.
@@ -128,6 +142,23 @@ Arquivos novos propostos (nomes planejados, não alegados como existentes):
 - `lib/operacoes-v4/entrada-readback.test.ts`
 - `e2e/specs/operacoes-v4-fluxo-curto-001.spec.ts`
 
+Revisão 3 — mantida: `lib/operacoes-v3/prova-entrada-actions.ts`, `lib/operacoes-v3/prova-entrada-actions.test.ts`, `lib/operacoes-v4/entrada-readback.integration.test.ts` (para R01/R02).
+
+Revisão 4 — aditivo exato, somente para T01–T11/R01–R05 (propostos, não alegados existentes; não há obrigação de tocar todos):
+
+- `package.json`
+- `package-lock.json`
+- `test/ops-v4-fluxo-curto/**`
+- `components/operacoes-v4-preview/OperacoesV4Preview.tsx`
+- `components/operacoes-v4-preview/parts/StagePanel.tsx`
+- `components/operacoes-v4-preview/parts/WorkspaceView.tsx`
+- `components/operacoes-v4-preview/use-entrada-draft-guard.ts`
+- `components/operacoes-v4-preview/use-entrada-draft-guard.test.tsx`
+- `lib/loja-ativa.tsx`
+- `lib/loja-ativa.test.tsx`
+
+`lib/loja-ativa.tsx` só pode receber ponte opt-in mínima para salvar/descartar/cancelar troca da loja quando houver edição V4, com teste provando comportamento anterior sem registro; sem alterar ACL, seleção automática, cookies/persistência ou comportamento dos demais módulos. Priorizar integração local já disponível.
+
 Testes adjacentes permitidos constam por caminho exato no META desta revisão. Outros caminhos precisam de revisão explícita do contrato antes de editar. Documentação da própria trilha entra somente no caminho dela. No GOAL 008, correção de código fora da allowlist de testes exige a revisão/gate do contrato de origem; não existe autorização genérica de consertar qualquer coisa.
 
 ## Autorizações sensíveis
@@ -176,16 +207,26 @@ Seguir 02_CONTRATO_COMUM.md integralmente. O comando 00_RETOMAR_GOAL_001.txt inc
 
 ## Envelope operacional R2 — limites que complementam o META
 
-A família `muse-spark` identifica o executor declarado no relatório recebido, não uma verificação do fornecedor/modelo. Se a execução usar outra família, registrar o identificador efetivo, de acordo com a declaração do ambiente e a tabela vigente, ANTES do open. A revisão R exige outra família efetivamente identificada.
+A família `meta` (executor `muse-spark`, modelo `muse-spark-1.3-contributor-free`, fornecedor declarado Meta MSL) é efetivamente declarada em `docs/ai-execution/executors.json` (entrada `slug: muse-spark`, `familia: meta`, classes C1–C3, `verificado: false`). O valor anterior `muse-spark` identificava o executor do relatório recebido e foi corrigido para a família factual antes do open, sem inventar verificação. A revisão R exige outra família efetivamente identificada e declarada; família não declarada não cumpre R.
 
 A allowlist inclui os arquivos exatos de testes adjacentes aos contratos; isso não afirma que todos já existam e não obriga modificá-los. Não ampliar para seus diretórios pais. A gramática é a lida no parser AEP/1.0-R2 de `scripts/track.mjs` na base 469b3aa2ce9fd2bd35abc10856fea4f4dc8dac16.
 
 A liberação `G-AEP-CORE` é EXCLUSIVAMENTE para cadastrar a entrada `tracks["ops-v4-fluxo-curto"]` se ausente e mantê-la consistente com o TRACK. Todo o resto de protocol.json deve permanecer semanticamente idêntico. Scripts do AEP, algoritmos, gates, limites, hooks e default branch permanecem proibidos. REGISTRY/GATES/state/LEDGER são escritos somente pelo script oficial; não editar derivados à mão. Não alterar dados ou contratos de outras trilhas.
 
-O META inclui a preparação porque o check pode avaliar o diff cumulativo desde a base comum da main. Não esconder o commit de preparação da revisão e não trocar a definição de base do protocolo para fazê-lo passar.
+O META inclui a preparação porque o check pode avaliar o diff cumulativo desde a base comum da main. Não esconder o commit de preparação da revisão e não trocar a definição de base do protocolo para fazê-lo passar. Allowlist não dispensa o check 8 (`docs/execution-tracks/*/goals/**` não alterado no diff de produto): a preparação documental permanece visível à revisão e o check 8 continua exigido na base real; não alterar o núcleo para fazê-lo passar.
 
 O test_command é um gate automatizado mínimo e FALHÁVEL: `entrada-readback.test.ts` é um arquivo planejado a ser implementado, não um teste já existente/passado. Não usar `echo`, `--passWithNoTests`, asserts triviais, teste duplicando a implementação ou skips para ratificar. Ele não substitui T01–T11, testes de componente, concorrência no banco isolado, E2E, lint, build seguro e R. A lista de evidências deve distinguir claramente o que cada camada prova.
 
 Antes do código, é permitida somente a vinculação factual de branch/worktree/família/comandos ao ambiente real, sem trocar objetivo, reduzir aceites ou ampliar caminhos produtivos. Se a base vigente usa outro caminho indispensável não autorizado, apresentar a divergência específica. Depois do open, não ampliar allowlist por conta própria.
 
 Nenhum comando destrutivo nem efeito de produção foi autorizado para teste. Usar a OS sintética e guardar os resultados em documentos da própria trilha. Não corrigir garantia, aprovar OS, movimentar estoque ou receber valores no GOAL 001.
+
+## Revisão 4 — aditivo 21/09/2026 (vigente; R2 preservado como histórico)
+
+Fontes R2 (pacote recebido em d2b3142: `00_RETOMAR_GOAL_001.txt`, `02_CONTRATO_COMUM.md`, `04_MATRIZ_ACEITE.md`, `TRACK.md` e GOAL em `docs/roadmaps/ops-v4-fluxo-curto/`) preservadas como históricas, não reescritas. A revisão vigente é a 4 neste arquivo + `TRACK.md` do `execution-tracks` (`plan_rev: 4`). Sem outro GOAL documental. Se o #219 já tiver sido integrado, usar atualização documental vinculada ao mesmo 001; não reescrever o merge. A aprovação de d2b3142 não aprova automaticamente o delta posterior: conferir este aditivo contra a autorização humana e cumprir a revisão exigida sem autodeclarar R.
+
+`G-CONFIG-DEPLOY` liberado EXCLUSIVAMENTE para devDependencies de teste em `package.json` e lockfile correspondente: `jsdom`, `@testing-library/react`, `@testing-library/dom` e `@testing-library/user-event`, somente os necessários e em versões verificadas compatíveis com Node/React/Vitest atuais. Não atualizar engines, React, Next, Prisma ou scripts de build/deploy. Não `npm audit fix`/upgrade geral. `G-AEP-CORE` permanece restrito ao cadastro/registro documental já autorizado, sem mudanças de algoritmos/gates/limites/hooks. Reclassificar para cima se a regra real exigir, nunca reduzir R/risco. Classe C3 e risco ALTO não redutíveis.
+
+Criar configuração específica em `test/ops-v4-fluxo-curto/` com descoberta explícita de `.test.tsx`, ambiente DOM só nesses testes, aliases necessários e runner que falhe se não descobrir/executar casos. Não alterar silenciosamente o include/exclude da suíte global. `test_command` no META atualizado antes do open para o runner real da tarefa (`typecheck` + config específica + readback/integração + Playwright do spec 001); typecheck, montagem, integração e E2E obrigatórios não podem ser omitidos no fechamento. Ambiente ausente deve resultar em bloqueio explícito, não skip convertido em PASS.
+
+Correção documental (sem alterar escopo rev 4): `familia_executor` corrigida de `muse-spark` para `meta`, família factual do executor Muse Spark (Meta MSL) efetivamente declarada via entrada `muse-spark/meta` em `executors.json` (tabela substituível, fora do núcleo; `verificado: false`, sem inventar verificação). Classe C3, risco ALTO e R obrigatória preservados; allowlist, `test_command` e gates da rev 4 inalterados.
