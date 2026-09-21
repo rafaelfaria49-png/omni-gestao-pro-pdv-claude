@@ -16,6 +16,7 @@ import {
   type EntradaSectionId,
 } from "@/lib/operacoes-v4/entrada-workspace";
 import {
+  mesclarNaoTocadas,
   toAcessoriosInput,
   toChecklistInput,
   toIdentificacaoInput,
@@ -29,8 +30,9 @@ import { EntradaSections } from "./EntradaSections";
 import styles from "./entrada-workspace.module.css";
 
 // T03/T04 (OPS-V4-FLUXO-CURTO-001): fatias mescláveis do rascunho.
-// Cada chave compara de forma independente: fatia NÃO tocada adota o servidor;
-// fatia tocada é preservada e, se o servidor também mudou, vira conflito explícito.
+// Cada chave compara de forma independente (ver `mesclarNaoTocadas` em
+// lib/operacoes-v4/entrada-form.ts): fatia NÃO tocada adota o servidor;
+// fatia tocada é preservada e, se o servidor também mudou, vira conflito.
 const FATIAS_ED = ["identificacao", "estadoFisico", "avarias", "credenciais", "acessorios", "checklist"] as const;
 type FatiaEd = (typeof FATIAS_ED)[number];
 const FATIAS_DB = ["defeitoRelatado", "prioridade", "origem", "recebidoPor", "localFisico", "previsaoLocal", "observacoes"] as const;
@@ -40,31 +42,44 @@ function igual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/**
- * Adota do servidor (`novo`) as chaves NÃO tocadas (iguais à linha de base
- * `salvo`); preserva as tocadas. Devolve o objeto mesclado e se algo mudou.
- */
-function mesclarNaoTocadas<T extends Record<string, unknown>>(atual: T, salvo: T, novo: T): { valor: T; mudou: boolean } {
-  const base: Record<string, unknown> = { ...atual };
-  let mudou = false;
-  for (const k of Object.keys(novo)) {
-    if (!(k in atual) || !(k in salvo)) continue;
-    if (igual(atual[k], salvo[k]) && !igual(atual[k], novo[k])) {
-      base[k] = novo[k];
-      mudou = true;
-    }
-  }
-  return { valor: base as T, mudou };
+/** Rascunho do workspace por contexto (R04): sobrevive à troca de OS/loja. */
+export interface RascunhoEntradaV4 {
+  ed: EntradaEditorV4;
+  db: DadosBasicosEditorV4;
+  savedEd: EntradaEditorV4;
+  savedDb: DadosBasicosEditorV4;
 }
 
-export function EntradaWorkspace({ v }: { v: V4Vals }) {
+export function EntradaWorkspace({
+  v,
+  rascunhoInicial,
+  onRascunhoChange,
+}: {
+  v: V4Vals;
+  /** R04: rascunho salvo da chave loja+OS atual (restaura digitação ao voltar). */
+  rascunhoInicial?: RascunhoEntradaV4 | undefined;
+  /** R04: publica o rascunho a cada mudança (undefined = chave limpa). */
+  onRascunhoChange?: ((rascunho: RascunhoEntradaV4 | undefined) => void) | undefined;
+}) {
   const [active, setActive] = useState<EntradaGroupId>("recepcao");
-  const [ed, setEd] = useState<EntradaEditorV4>(() => v.entradaEditorSeed);
-  const [db, setDb] = useState<DadosBasicosEditorV4>(() => v.dadosBasicosSeed);
-  const [savedEd, setSavedEd] = useState<EntradaEditorV4>(() => v.entradaEditorSeed);
-  const [savedDb, setSavedDb] = useState<DadosBasicosEditorV4>(() => v.dadosBasicosSeed);
+  const [ed, setEd] = useState<EntradaEditorV4>(() => rascunhoInicial?.ed ?? v.entradaEditorSeed);
+  const [db, setDb] = useState<DadosBasicosEditorV4>(() => rascunhoInicial?.db ?? v.dadosBasicosSeed);
+  const [savedEd, setSavedEd] = useState<EntradaEditorV4>(() => rascunhoInicial?.savedEd ?? v.entradaEditorSeed);
+  const [savedDb, setSavedDb] = useState<DadosBasicosEditorV4>(() => rascunhoInicial?.savedDb ?? v.dadosBasicosSeed);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // R04: publica o rascunho para o pai (stash por loja+OS). Compara por JSON
+  // para não religar o pai a cada render sem mudança real.
+  const rascunhoJson = JSON.stringify({ ed, db, savedEd, savedDb });
+  const rascunhoPublicadoRef = useRef("");
+  useEffect(() => {
+    if (!onRascunhoChange) return;
+    if (rascunhoPublicadoRef.current === rascunhoJson) return;
+    rascunhoPublicadoRef.current = rascunhoJson;
+    onRascunhoChange({ ed, db, savedEd, savedDb });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rascunhoJson]);
 
   // T01/T03/T05: quando a semente do servidor muda (detalhe confirmado chegou,
   // refresh ou troca de seleção sem remount), adota as fatias NÃO tocadas e

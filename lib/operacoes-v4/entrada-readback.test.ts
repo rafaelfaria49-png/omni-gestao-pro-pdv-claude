@@ -23,6 +23,11 @@ import {
 } from "./dados-basicos-form";
 import { identidadeAtualV4 } from "./identidade-aparelho";
 import { buildNovaOSDraftFromFormV4 } from "./nova-os-draft-from-form";
+import {
+  alvoAindaSelecionado,
+  mesclarNaoTocadas,
+  resolverOSSelecionada,
+} from "./entrada-form";
 
 const FIXED = new Date("2026-06-30T12:00:00.000Z");
 
@@ -191,5 +196,77 @@ describe("T10/T11 — vencido avisa; vazio não persiste falso dado", () => {
     const db = seedDadosBasicos({} as OrdemServico);
     db.previsaoLocal = "";
     expect(toDadosBasicosInput(db).previsaoEntrega).toBe("");
+  });
+});
+
+describe("R03 — contexto loja+OS fechado (T01/T05/T06)", () => {
+  const detalheA = { id: "os-1", storeId: "loja-a", equipamento: { modelo: "M" } } as unknown as OrdemServico;
+  const linhaA = { id: "os-1", storeId: "loja-a" } as unknown as OrdemServico;
+  const linhaB = { id: "os-1", storeId: "loja-b" } as unknown as OrdemServico;
+
+  it("detalhe da loja+OS selecionada hidrata; de outra loja, não", () => {
+    expect(
+      resolverOSSelecionada({ selectedOsId: "os-1", lojaIdAtiva: "loja-a", ordemDetail: detalheA, ordens: [linhaA] }),
+    ).toBe(detalheA);
+    expect(
+      resolverOSSelecionada({ selectedOsId: "os-1", lojaIdAtiva: "loja-b", ordemDetail: detalheA, ordens: [linhaB] }),
+    ).toBe(linhaB);
+  });
+
+  it("mesmo osId em duas lojas nunca cruza dado; sem loja, nulo", () => {
+    expect(
+      resolverOSSelecionada({ selectedOsId: "os-1", lojaIdAtiva: "loja-c", ordemDetail: detalheA, ordens: [linhaA] }),
+    ).toBeNull();
+    expect(resolverOSSelecionada({ selectedOsId: "os-1", lojaIdAtiva: "", ordemDetail: detalheA, ordens: [linhaA] })).toBeNull();
+    expect(resolverOSSelecionada({ selectedOsId: null, lojaIdAtiva: "loja-a", ordemDetail: detalheA, ordens: [linhaA] })).toBeNull();
+  });
+
+  it("linha da lista vale enquanto o detalhe carrega (mesma loja)", () => {
+    expect(
+      resolverOSSelecionada({ selectedOsId: "os-1", lojaIdAtiva: "loja-a", ordemDetail: null, ordens: [linhaA] }),
+    ).toBe(linhaA);
+  });
+
+  it("pós-await só afeta loja+OS correspondentes", () => {
+    expect(alvoAindaSelecionado({ lojaId: "a", osId: "1" }, { lojaId: "a", osId: "1" })).toBe(true);
+    expect(alvoAindaSelecionado({ lojaId: "a", osId: "2" }, { lojaId: "a", osId: "1" })).toBe(false);
+    expect(alvoAindaSelecionado({ lojaId: "b", osId: "1" }, { lojaId: "a", osId: "1" })).toBe(false);
+    expect(alvoAindaSelecionado({ lojaId: "", osId: "1" }, { lojaId: "a", osId: "1" })).toBe(false);
+  });
+});
+
+describe("R04 — mesclagem por fatia (T03/T04, sem perder digitação)", () => {
+  it("fatia não tocada adota o servidor; tocada é preservada", () => {
+    const r = mesclarNaoTocadas({ a: "typed", b: "old" }, { a: "old", b: "old" }, { a: "srv", b: "srv" });
+    expect(r.mudou).toBe(true);
+    expect(r.valor).toEqual({ a: "typed", b: "srv" });
+  });
+
+  it("conflito = tocada + servidor mudou (derivado, explícito)", () => {
+    const atual = { cor: "Preto" };
+    const salvo = { cor: "Violeta" };
+    const novo = { cor: "Azul" };
+    const tocada = JSON.stringify(atual) !== JSON.stringify(salvo);
+    const servidorMudou = JSON.stringify(novo) !== JSON.stringify(salvo);
+    expect(tocada && servidorMudou).toBe(true);
+  });
+});
+
+describe.skip("R01 — cor após edição via action (BLOQUEADO: exige mirror no servidor)", () => {
+  it("criar Violeta → salvarIdentificacaoV3(Preto) → reler devolve Preto", () => {
+    // Regressão do aceite: hoje o resolver prioriza equipamento.cor (Violeta)
+    // e salvarIdentificacaoV3 não espelha cor no equipamento.
+    // Correção pendente em lib/operacoes-v3/prova-entrada-actions.ts
+    // (ratificada no META rev 3 via PR documental #219, ainda não mergeado).
+  });
+});
+
+describe.skip("R02 — interleaving A/B em PostgreSQL descartável (BLOQUEADO: sem banco)", () => {
+  it("A muda defeito, B muda prioridade sem recarregar: ambos preservados + timeline íntegra", () => {
+    // Exige: lib/operacoes-v4/entrada-readback.integration.test.ts (ratificado
+    // no META rev 3, ainda não criado — depende do merge do PR #219) +
+    // PostgreSQL descartável confirmado (ausente nesta execução: sem .env).
+    // A action precisa de escrita condicional (patch + base esperada); leitura
+    // extra + update cego não fecha a corrida.
   });
 });

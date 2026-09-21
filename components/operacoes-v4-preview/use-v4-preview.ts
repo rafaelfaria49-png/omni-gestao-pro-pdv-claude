@@ -131,7 +131,7 @@ import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operaco
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
-import { seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
+import { alvoAindaSelecionado, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
 import { seedDadosBasicos, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
 import {
   PIPELINE_OPERACIONAL_IDS_V4,
@@ -1617,12 +1617,16 @@ export function useV4Preview(): V4Vals {
   // Wrapper único: resolve loja/OS ativas (sem fallback loja-1), executa a action
   // real da V3, recarrega lista+detalhe e dá toast honesto. Devolve `true`/`false`.
   const selectedOsId = st.selectedOsId;
-  // T05: espelho da seleção para comparar DEPOIS do await — a seleção pode ter
-  // mudado (troca de OS/loja) enquanto a action rodava.
+  // T05 + R03: espelhos da seleção para comparar DEPOIS do await — a seleção
+  // (loja e/ou OS) pode ter mudado enquanto a action rodava.
   const selectedRef = useRef(st.selectedOsId);
   useEffect(() => {
     selectedRef.current = st.selectedOsId;
   }, [st.selectedOsId]);
+  const lojaRef = useRef(lojaAtivaId);
+  useEffect(() => {
+    lojaRef.current = lojaAtivaId;
+  }, [lojaAtivaId]);
   const runWrite = useCallback(
     async (
       fn: (sid: string, osId: string) => Promise<unknown>,
@@ -1645,17 +1649,19 @@ export function useV4Preview(): V4Vals {
         notify("A OS não carregou corretamente. Recarregue antes de salvar.");
         return false;
       }
-      const alvoSid = sid;
-      const alvoOsId = osId;
+      const alvo = { lojaId: sid, osId };
       try {
-        await fn(alvoSid, alvoOsId);
-        // T05: recarrega o detalhe/financeiro só se a seleção continua no alvo
-        // gravado — mutação de A nunca força refetch do detalhe atual de B.
-        reloadOrdens();
-        if ((selectedRef.current ?? "").trim() === alvoOsId) {
-          reloadDetail();
-          reloadFinancial();
+        await fn(alvo.lojaId, alvo.osId);
+        // R03: pós-await só toca o contexto correspondente (loja+OS). Com a
+        // seleção mudada, só a lista recarrega — sem reload de detalhe, sem
+        // after() e sem toast de outro contexto sobre a nova seleção.
+        if (!alvoAindaSelecionado({ lojaId: lojaRef.current ?? "", osId: selectedRef.current ?? "" }, alvo)) {
+          reloadOrdens();
+          return true;
         }
+        reloadOrdens();
+        reloadDetail();
+        reloadFinancial();
         if (after) after();
         notify(okMsg);
         return true;
@@ -1663,7 +1669,7 @@ export function useV4Preview(): V4Vals {
         // A action pode falhar porque outra sessão alterou a OS/retorno. Nesse
         // caso a UI preserva o formulário, mas recarrega a autoridade server.
         reloadOrdens();
-        if ((selectedRef.current ?? "").trim() === alvoOsId) {
+        if (alvoAindaSelecionado({ lojaId: lojaRef.current ?? "", osId: selectedRef.current ?? "" }, alvo)) {
           reloadDetail();
           reloadFinancial();
         }
@@ -2094,27 +2100,23 @@ export function useV4Preview(): V4Vals {
   );
 
   // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
-  // T05/T06: a chave é storeId+osId — detalhe ou linha de outra loja nunca
-  // hidrata a seleção atual (mesmo osId em duas lojas não cruza dado).
+  // T05/T06 + R03: a chave é storeId+osId e a resolução é fechada — detalhe ou
+  // linha de outra loja nunca hidrata a seleção atual; sem loja, nulo.
   const lojaIdAtiva = (lojaAtivaId ?? "").trim();
-  const realOS = useMemo<OrdemServico | null>(() => {
-    const sel = (st.selectedOsId ?? "").trim();
-    if (!sel) return null;
-    if (ordemDetail && ordemDetail.id === sel && (!lojaIdAtiva || ordemDetail.storeId === lojaIdAtiva)) {
-      return ordemDetail;
-    }
-    const daLista = ordens.find((o) => o.id === sel) ?? null;
-    if (daLista && lojaIdAtiva && daLista.storeId !== lojaIdAtiva) return null;
-    return daLista;
-  }, [st.selectedOsId, ordemDetail, ordens, lojaIdAtiva]);
+  const realOS = useMemo<OrdemServico | null>(
+    () => resolverOSSelecionada({ selectedOsId: st.selectedOsId, lojaIdAtiva, ordemDetail, ordens }),
+    [st.selectedOsId, ordemDetail, ordens, lojaIdAtiva],
+  );
 
-  // T01: detalhe da seleção atual confirmado (loja+OS, sem loading nem erro).
+  // T01 + R03: detalhe da seleção atual confirmado (loja+OS, sem loading nem
+  // erro). Sem loja ou sem detalhe correspondente: falso (falha fechada).
   const detailCarregada =
+    !!lojaIdAtiva &&
     !detailLoading &&
     !detailError &&
     !!ordemDetail &&
     ordemDetail.id === (st.selectedOsId ?? "").trim() &&
-    (!lojaIdAtiva || ordemDetail.storeId === lojaIdAtiva);
+    ordemDetail.storeId === lojaIdAtiva;
 
   const osDaLista = useCallback(
     (osId: string): OrdemServico | null => {

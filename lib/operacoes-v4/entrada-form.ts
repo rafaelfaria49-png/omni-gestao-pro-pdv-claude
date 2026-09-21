@@ -171,6 +171,74 @@ export function toChecklistInput(editor: EntradaEditorV4): ChecklistEntradaItemV
   return editor.checklist.map((c) => ({ ...c }));
 }
 
+// ---- Contexto de seleção loja+OS (R03 — puro, testável) --------------------
+//
+// O editor de Entrada vincula-se a UMA OS de UMA loja. A chave é loja+OS:
+// sem loja, sem seleção ou com loja divergente, a resolução é nula — detalhe
+// antigo nunca hidrata outro contexto, mesmo com o mesmo osId em duas lojas.
+// Pós-await, mutação só afeta o contexto correspondente ao alvo capturado.
+
+export interface ContextoSelecaoOSV4 {
+  selectedOsId: string | null;
+  lojaIdAtiva: string;
+  ordemDetail: OrdemServico | null;
+  ordens: OrdemServico[];
+}
+
+/** Resolve a OS da seleção atual de forma fechada (nulo = nada a hidratar). */
+export function resolverOSSelecionada(args: ContextoSelecaoOSV4): OrdemServico | null {
+  const sel = (args.selectedOsId ?? "").trim();
+  const loja = (args.lojaIdAtiva ?? "").trim();
+  if (!sel || !loja) return null;
+  const detalhe = args.ordemDetail;
+  if (detalhe && detalhe.id === sel && detalhe.storeId === loja) return detalhe;
+  const daLista = args.ordens.find((o) => o.id === sel) ?? null;
+  if (daLista && daLista.storeId !== loja) return null;
+  return daLista;
+}
+
+/** O alvo capturado no disparo ainda é a seleção atual? */
+export function alvoAindaSelecionado(
+  selecaoAtual: { lojaId: string; osId: string },
+  alvo: { lojaId: string; osId: string },
+): boolean {
+  const loja = (selecaoAtual.lojaId ?? "").trim();
+  const os = (selecaoAtual.osId ?? "").trim();
+  if (!loja || !os) return false;
+  return loja === (alvo.lojaId ?? "").trim() && os === (alvo.osId ?? "").trim();
+}
+
+// ---- Mesclagem servidor ↔ rascunho (T03/T04/R04 — pura, testável) ---------
+//
+// Adota do servidor (`novo`) as chaves NÃO tocadas (iguais à linha de base
+// `salvo`); preserva as tocadas. Cada chave compara de forma independente:
+// fatia tocada + servidor mudado = conflito explícito (derivado no chamador).
+
+export function igualValorV4(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Mescla `atual` (rascunho) com `novo` (servidor) usando `salvo` (linha de
+ * base) para distinguir tocada de intocada. Nunca inventa chave.
+ */
+export function mesclarNaoTocadas<T extends Record<string, unknown>>(
+  atual: T,
+  salvo: T,
+  novo: T,
+): { valor: T; mudou: boolean } {
+  const base: Record<string, unknown> = { ...atual };
+  let mudou = false;
+  for (const k of Object.keys(novo)) {
+    if (!(k in atual) || !(k in salvo)) continue;
+    if (igualValorV4(atual[k], salvo[k]) && !igualValorV4(atual[k], novo[k])) {
+      base[k] = novo[k];
+      mudou = true;
+    }
+  }
+  return { valor: base as T, mudou };
+}
+
 // ---- Toggles puros (devolvem um novo editor) -------------------------------
 
 export function setEstadoFisicoStatus(
