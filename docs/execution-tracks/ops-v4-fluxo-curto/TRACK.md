@@ -5,7 +5,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
   "title": "Operações V4 — fluxo curto",
-  "plan_rev": 2,
+  "plan_rev": 3,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
