@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useState, useEffect, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useSession } from "next-auth/react";
 import { Camera, ShieldCheck, Trash2 } from "lucide-react";
 import { SignaturePadV3 } from "@/components/operacoes-v3/components/SignaturePadV3";
 import { CATEGORIAS_FOTO_V3, FOTO_MAX_V3, lerProvaEntradaV3, type CategoriaFotoV3 } from "@/lib/operacoes-v3/prova-entrada-model";
@@ -25,9 +26,14 @@ import {
   LOCAL_FISICO_V3,
   ORIGEM_V3,
   PRIORIDADE_V3,
+  FUSO_LOJA_LABEL_V4,
+  formatPrevisaoComFuso,
+  isPrevisaoVencida,
+  localInputToIsoInTZ,
   setDadosBasicos,
   type DadosBasicosEditorV4,
 } from "@/lib/operacoes-v4/dados-basicos-form";
+import { lerDadosBasicosV3 } from "@/lib/operacoes-v3/dados-basicos-model";
 import type { EntradaGroupId } from "@/lib/operacoes-v4/entrada-workspace";
 import { lerAberturaRecepcionV4, resolverIdentidadeAparelhoV4 } from "@/lib/operacoes-v4/identidade-aparelho";
 import { rotuloChecklistExibidoV4 } from "@/lib/operacoes-v4/checklist-aplicabilidade";
@@ -95,16 +101,25 @@ export function EntradaSections(props: Props) {
 function ConferenciaSnapshot({ v }: { v: V4Vals }) {
   const identidade = resolverIdentidadeAparelhoV4(v.realOS);
   const abertura = lerAberturaRecepcionV4(v.realOS);
+  const basicos = lerDadosBasicosV3(v.realOS ?? null);
   const aparelho = [identidade.marca.value, identidade.modelo.value].filter(Boolean).join(" ") || v.os.aparelho;
+  const previsaoIso = basicos.previsaoEntrega;
   const rows = [
     ["Cliente", v.os.cliente],
     ["Tipo", identidade.tipo.value],
     ["Aparelho", aparelho],
     ["IMEI", identidade.imei.value || v.os.imei],
     ["Série", identidade.serial.value],
+    // T07: cor em linha própria — nunca fundida à condição física.
+    ["Cor", identidade.cor.value],
+    ["Operadora", identidade.operadora.value],
     ["Defeito", abertura.defeitoRelatado || v.os.defeito],
     ["Origem", v.os.origem !== NI ? v.os.origem : abertura.origem],
     ["Recebido por", abertura.recebidoPor],
+    ["Prioridade", basicos.prioridade],
+    ["Localização", basicos.localFisico],
+    // T09: previsão com o fuso explícito — mesmo instante em qualquer navegador.
+    ["Previsão", previsaoIso ? formatPrevisaoComFuso(previsaoIso) : ""],
   ].filter(([, value]) => value && value !== NI);
 
   if (rows.length === 0) return null;
@@ -128,6 +143,19 @@ function DadosBasicosSection({ db, setDb }: Props) {
   const setBasico = <K extends keyof DadosBasicosEditorV4>(key: K, value: DadosBasicosEditorV4[K]) =>
     setDb((current) => setDadosBasicos(current, key, value));
   const aberturaJaInformada = Boolean(db.defeitoRelatado.trim() || db.recebidoPor.trim());
+  // Atendente real: preenche pela identidade autenticada quando o campo vem
+  // vazio (override manual continua valendo — visível no input).
+  const { data: session } = useSession();
+  const nomeSessao = ((session?.user as { name?: unknown } | undefined)?.name ?? session?.user?.email ?? "").toString().trim();
+  useEffect(() => {
+    if (!db.recebidoPor.trim() && nomeSessao) {
+      setDb((current) => (current.recebidoPor.trim() ? current : setDadosBasicos(current, "recebidoPor", nomeSessao)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nomeSessao]);
+  // T10: previsão no passado exige aviso — nunca correção silenciosa.
+  const previsaoIso = db.previsaoLocal.trim() ? localInputToIsoInTZ(db.previsaoLocal) : "";
+  const previsaoVencida = isPrevisaoVencida(previsaoIso);
 
   return (
     <>
@@ -159,7 +187,11 @@ function DadosBasicosSection({ db, setDb }: Props) {
             </select>
           </Field>
           <Field label="Previsão de entrega / SLA" className={styles.span2}>
-            <input className={styles.input} type="datetime-local" value={db.previsaoLocal} onChange={(event) => setBasico("previsaoLocal", event.target.value)} />
+            <input className={styles.input} type="datetime-local" value={db.previsaoLocal} onChange={(event) => setBasico("previsaoLocal", event.target.value)} aria-describedby="previsao-fuso" />
+            <span id="previsao-fuso" className={styles.groupHint}>{FUSO_LOJA_LABEL_V4}{previsaoIso ? ` · ${formatPrevisaoComFuso(previsaoIso)}` : ""}</span>
+            {previsaoVencida ? (
+              <span className={styles.error} role="alert">Data no passado — confirme com o cliente antes de salvar.</span>
+            ) : null}
           </Field>
         </div>
         {aberturaJaInformada ? (

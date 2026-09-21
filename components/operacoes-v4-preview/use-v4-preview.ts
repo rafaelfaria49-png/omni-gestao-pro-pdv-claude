@@ -205,6 +205,13 @@ export interface V4DataCtx {
   /** OS selecionada já hidratada (detalhe) ou linha da lista enquanto carrega. */
   realOS: OrdemServico | null;
   detailLoading: boolean;
+  /** Falha do detalhe (quando há erro, o fallback da lista não autoriza escrita). */
+  detailError?: string | null;
+  /**
+   * T01 (OPS-V4-FLUXO-CURTO-001): detalhe da seleção atual confirmado
+   * (mesmo storeId+osId, sem loading nem erro). Salvar só com carga estabelecida.
+   */
+  detailCarregada?: boolean;
   /** Projeção financeira server-side da OS selecionada; nunca contém payload bruto. */
   financialProjection: FinancialProjectionStateV4;
   /** Projeções server-side carregadas em lote exclusivamente para o rail PDV. */
@@ -1469,6 +1476,14 @@ export function buildVals(
     ordensError: ctx.ordensError,
     reloadOrdens: ctx.reloadOrdens,
     detailLoading: ctx.detailLoading,
+    detailError: ctx.detailError ?? null,
+    // T01: carga estabelecida = seleção + detalhe confirmado (storeId+osId),
+    // sem loading nem erro. Salvar sem isso é recusado no workspace/runWrite.
+    cargaEntradaEstabelecida:
+      !!st.selectedOsId &&
+      ctx.detailCarregada === true &&
+      !!ctx.realOS &&
+      ctx.realOS.id === st.selectedOsId,
 
     // ---- telas de rail (identidade própria; dado real ou empty honesto) ----
     moduleId: st.module,
@@ -1520,7 +1535,7 @@ export function useV4Preview(): V4Vals {
     error: ordensError,
     reload: reloadOrdens,
   } = useOrdensV4(lojaAtivaId);
-  const { ordem: ordemDetail, loading: detailLoading, reload: reloadDetail } = useOrdemV4(lojaAtivaId, st.selectedOsId);
+  const { ordem: ordemDetail, loading: detailLoading, error: detailError, reload: reloadDetail } = useOrdemV4(lojaAtivaId, st.selectedOsId);
   // Workspace lê a OS selecionada; o módulo PDV usa somente o reader em lote do rail.
   // Assim uma mesma OS não dispara dois readers concorrentes na troca de módulo.
   const selectedFinancial = useFinancialProjectionV4(
@@ -1602,6 +1617,12 @@ export function useV4Preview(): V4Vals {
   // Wrapper único: resolve loja/OS ativas (sem fallback loja-1), executa a action
   // real da V3, recarrega lista+detalhe e dá toast honesto. Devolve `true`/`false`.
   const selectedOsId = st.selectedOsId;
+  // T05: espelho da seleção para comparar DEPOIS do await — a seleção pode ter
+  // mudado (troca de OS/loja) enquanto a action rodava.
+  const selectedRef = useRef(st.selectedOsId);
+  useEffect(() => {
+    selectedRef.current = st.selectedOsId;
+  }, [st.selectedOsId]);
   const runWrite = useCallback(
     async (
       fn: (sid: string, osId: string) => Promise<unknown>,
@@ -1614,11 +1635,27 @@ export function useV4Preview(): V4Vals {
         notify("Selecione uma OS na loja ativa para concluir a ação.");
         return false;
       }
+      // T01: sem carga estabelecida (detalhe ainda carregando ou com erro),
+      // a escrita parte de semente da lista — recusar em vez de persistir parcial.
+      if (detailLoading) {
+        notify("Aguarde a carga da OS antes de salvar.");
+        return false;
+      }
+      if (detailError) {
+        notify("A OS não carregou corretamente. Recarregue antes de salvar.");
+        return false;
+      }
+      const alvoSid = sid;
+      const alvoOsId = osId;
       try {
-        await fn(sid, osId);
+        await fn(alvoSid, alvoOsId);
+        // T05: recarrega o detalhe/financeiro só se a seleção continua no alvo
+        // gravado — mutação de A nunca força refetch do detalhe atual de B.
         reloadOrdens();
-        reloadDetail();
-        reloadFinancial();
+        if ((selectedRef.current ?? "").trim() === alvoOsId) {
+          reloadDetail();
+          reloadFinancial();
+        }
         if (after) after();
         notify(okMsg);
         return true;
@@ -1626,13 +1663,15 @@ export function useV4Preview(): V4Vals {
         // A action pode falhar porque outra sessão alterou a OS/retorno. Nesse
         // caso a UI preserva o formulário, mas recarrega a autoridade server.
         reloadOrdens();
-        reloadDetail();
-        reloadFinancial();
+        if ((selectedRef.current ?? "").trim() === alvoOsId) {
+          reloadDetail();
+          reloadFinancial();
+        }
         notify(e instanceof Error ? e.message : "Não foi possível concluir a ação.");
         return false;
       }
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify],
+    [lojaAtivaId, selectedOsId, detailLoading, detailError, reloadOrdens, reloadDetail, reloadFinancial, notify],
   );
 
   // Mutations da Bancada / produção: mesma loja ativa e mesmo reload, mas o
@@ -2055,11 +2094,27 @@ export function useV4Preview(): V4Vals {
   );
 
   // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
+  // T05/T06: a chave é storeId+osId — detalhe ou linha de outra loja nunca
+  // hidrata a seleção atual (mesmo osId em duas lojas não cruza dado).
+  const lojaIdAtiva = (lojaAtivaId ?? "").trim();
   const realOS = useMemo<OrdemServico | null>(() => {
-    if (!st.selectedOsId) return null;
-    if (ordemDetail && ordemDetail.id === st.selectedOsId) return ordemDetail;
-    return ordens.find((o) => o.id === st.selectedOsId) ?? null;
-  }, [st.selectedOsId, ordemDetail, ordens]);
+    const sel = (st.selectedOsId ?? "").trim();
+    if (!sel) return null;
+    if (ordemDetail && ordemDetail.id === sel && (!lojaIdAtiva || ordemDetail.storeId === lojaIdAtiva)) {
+      return ordemDetail;
+    }
+    const daLista = ordens.find((o) => o.id === sel) ?? null;
+    if (daLista && lojaIdAtiva && daLista.storeId !== lojaIdAtiva) return null;
+    return daLista;
+  }, [st.selectedOsId, ordemDetail, ordens, lojaIdAtiva]);
+
+  // T01: detalhe da seleção atual confirmado (loja+OS, sem loading nem erro).
+  const detailCarregada =
+    !detailLoading &&
+    !detailError &&
+    !!ordemDetail &&
+    ordemDetail.id === (st.selectedOsId ?? "").trim() &&
+    (!lojaIdAtiva || ordemDetail.storeId === lojaIdAtiva);
 
   const osDaLista = useCallback(
     (osId: string): OrdemServico | null => {
@@ -2211,6 +2266,8 @@ export function useV4Preview(): V4Vals {
       reloadDetail,
       realOS,
       detailLoading,
+      detailError,
+      detailCarregada,
       financialProjection,
       financialProjectionsByOsId: railFinancial.projectionsByOsId,
       financialRailLoading: railFinancial.loading,
@@ -2275,6 +2332,8 @@ export function useV4Preview(): V4Vals {
       reloadDetail,
       realOS,
       detailLoading,
+      detailError,
+      detailCarregada,
       financialProjection,
       railFinancial.projectionsByOsId,
       railFinancial.loading,

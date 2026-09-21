@@ -5,8 +5,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  formatPrevisaoComFuso,
+  isPrevisaoVencida,
   isoToLocalInput,
+  isoToLocalInputInTZ,
   localInputToIso,
+  localInputToIsoInTZ,
   seedDadosBasicos,
   setDadosBasicos,
   toDadosBasicosInput,
@@ -137,6 +141,43 @@ describe("setDadosBasicos (patch imutável)", () => {
     expect(e2.prioridade).toBe("alta");
     expect(e.prioridade).toBe("media");
     expect(e2).not.toBe(e);
+  });
+});
+
+describe("fuso canônico da loja — T09 (America/Sao_Paulo explícito)", () => {
+  it("17h de parede na loja vira o mesmo instante, independente do fuso da máquina", () => {
+    // 17:00 em SP (UTC-3, sem DST em 2026) = 20:00Z.
+    expect(localInputToIsoInTZ("2026-07-01T17:00", "America/Sao_Paulo")).toBe("2026-07-01T20:00:00.000Z");
+    expect(isoToLocalInputInTZ("2026-07-01T20:00:00.000Z", "America/Sao_Paulo")).toBe("2026-07-01T17:00");
+  });
+
+  it("mesmo instante em outro fuso de exibição = outra parede, mesmo ISO", () => {
+    const iso = "2026-07-01T20:00:00.000Z";
+    expect(isoToLocalInputInTZ(iso, "America/Sao_Paulo")).toBe("2026-07-01T17:00");
+    expect(isoToLocalInputInTZ(iso, "UTC")).toBe("2026-07-01T20:00");
+    expect(localInputToIsoInTZ(isoToLocalInputInTZ(iso, "UTC"), "UTC")).toBe(iso);
+  });
+
+  it("formatPrevisaoComFuso explicita o fuso aplicado", () => {
+    expect(formatPrevisaoComFuso("2026-07-01T20:00:00.000Z")).toBe("01/07/2026 17:00 (America/Sao_Paulo)");
+    expect(formatPrevisaoComFuso("")).toBe("");
+    expect(formatPrevisaoComFuso("não-data")).toBe("");
+  });
+
+  it("recusa parede impossível sem normalizar em silêncio", () => {
+    expect(localInputToIsoInTZ("2026-02-30T10:00", "America/Sao_Paulo")).toBe("");
+    expect(localInputToIsoInTZ("2026-13-01T10:00", "America/Sao_Paulo")).toBe("");
+  });
+});
+
+describe("prazo vencido e padrão — T10", () => {
+  it("isPrevisaoVencida: passado avisa, futuro/ausente/inválido não", () => {
+    const agora = new Date("2026-07-01T20:00:00.000Z");
+    expect(isPrevisaoVencida("2026-07-01T19:59:59.000Z", agora)).toBe(true);
+    expect(isPrevisaoVencida("2026-07-01T20:00:00.000Z", agora)).toBe(false);
+    expect(isPrevisaoVencida("2026-07-02T00:00:00.000Z", agora)).toBe(false);
+    expect(isPrevisaoVencida("", agora)).toBe(false);
+    expect(isPrevisaoVencida("não-data", agora)).toBe(false);
   });
 });
 

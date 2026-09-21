@@ -50,16 +50,21 @@ function field(value: string, source: FonteIdentidadeAparelhoV4, informedAtOpeni
  * Resolve a identidade operacional atual do aparelho.
  * Preferência: equipamento (cadastro vivo) → prova de entrada (legado/snapshot)
  * → campos de abertura (defeito/condição).
+ *
+ * T07/T08 (OPS-V4-FLUXO-CURTO-001): a cor vive em campo próprio
+ * (`equipamento.cor` → `provaEntradaV3.identificacao.cor`). Texto legado de
+ * `condicaoAparelho` NUNCA vira cor: registro ambíguo permanece legível na
+ * nota original e a cor fica vazia até confirmação explícita do operador.
  */
 export function resolverIdentidadeAparelhoV4(os: OrdemServico | null | undefined): IdentidadeAparelhoV4 {
   const eq = os?.equipamento;
   const prova = lerProvaEntradaV3(os ?? null).identificacao;
-  const condicao = txt((os as { problema?: { condicaoAparelho?: unknown } } | null | undefined)?.problema?.condicaoAparelho);
 
   const tipoEq = txt(eq?.tipo);
   const marcaEq = txt(eq?.marca);
   const modeloEq = txt(eq?.modelo);
   const imeiEq = txt(eq?.numeroSerie);
+  const corEq = txt((eq as { cor?: unknown } | undefined)?.cor);
   const modeloProva = txt(prova.modelo);
   const imeiProva = txt(prova.imei);
   const serialProva = txt(prova.serial);
@@ -72,7 +77,7 @@ export function resolverIdentidadeAparelhoV4(os: OrdemServico | null | undefined
     modelo: field(modeloEq || modeloProva, modeloEq ? "equipamento" : "prova", !!modeloEq),
     imei: field(imeiEq || imeiProva, imeiEq ? "equipamento" : "prova", !!imeiEq),
     serial: field(serialProva, "prova", false),
-    cor: field(corProva || condicao, corProva ? "prova" : "abertura", !!condicao && !corProva),
+    cor: field(corEq || corProva, corEq ? "equipamento" : "prova", !!corEq),
     operadora: field(operadoraProva, "prova", false),
   };
 }

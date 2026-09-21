@@ -8,10 +8,15 @@
  * O PatternPadV4 e a condição senhaTipo === "padrao" vivem em EntradaSections.
  */
 import type { V4Vals } from "../../use-v4-preview";
+import { useLojaAtiva } from "@/lib/loja-ativa";
 import { EntradaWorkspace } from "./EntradaWorkspace";
 
 export function EntradaStage({ v }: { v: V4Vals }) {
+  const { lojaAtivaId } = useLojaAtiva();
   if (!v.osSelected) return null;
 
-  return <EntradaWorkspace key={v.selectedOsId ?? "none"} v={v} />;
+  // T05: a chave do workspace é loja+OS — trocar de loja com o mesmo osId
+  // descarta o rascunho de A em vez de reutilizar a instância.
+  const chave = `${(lojaAtivaId ?? "").trim() || "sem-loja"}::${v.selectedOsId ?? "none"}`;
+  return <EntradaWorkspace key={chave} v={v} />;
 }

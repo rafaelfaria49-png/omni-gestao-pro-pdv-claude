@@ -34,23 +34,109 @@ export interface DadosBasicosEditorV4 {
   observacoes: string;
 }
 
-// ---- Conversão ISO ↔ datetime-local (pura; round-trip estável no mesmo fuso) ----
+// ---- Conversão ISO ↔ datetime-local (T09: fuso explícito da loja) ----------
+//
+// Fuso canônico da loja (mesmo padrão do repositório: America/Sao_Paulo).
+// O <input type="datetime-local"> carrega HORA DE PAREDE da loja; o servidor
+// persiste INSTANTE (ISO UTC). A conversão é determinística e não depende do
+// fuso da máquina que roda o navegador ou a suíte de testes.
 
-export function isoToLocalInput(iso: string): string {
+/** Fuso canônico da loja para previsão/entrega. */
+export const FUSO_LOJA_V4 = "America/Sao_Paulo" as const;
+/** Rótulo exibido junto à previsão para explicitar o fuso aplicado. */
+export const FUSO_LOJA_LABEL_V4 = "Horário da loja (America/Sao_Paulo)";
+
+function partesEmFuso(d: Date, timeZone: string): { ano: number; mes: number; dia: number; hora: number; minuto: number } {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const partes = Object.fromEntries(fmt.formatToParts(d).map((p) => [p.type, p.value]));
+  return {
+    ano: Number(partes.year),
+    mes: Number(partes.month),
+    dia: Number(partes.day),
+    hora: Number(partes.hour),
+    minuto: Number(partes.minute),
+  };
+}
+
+function offsetMinutosEm(timeZone: string, utcMs: number): number {
+  const p = partesEmFuso(new Date(utcMs), timeZone);
+  return (Date.UTC(p.ano, p.mes - 1, p.dia, p.hora, p.minuto) - utcMs) / 60000;
+}
+
+const LOCAL_INPUT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+/** ISO (instante) → "YYYY-MM-DDTHH:mm" em hora de parede do fuso informado. */
+export function isoToLocalInputInTZ(iso: string, timeZone: string = FUSO_LOJA_V4): string {
   const s = (iso ?? "").trim();
   if (!s) return "";
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  const tz = (timeZone ?? "").trim() || FUSO_LOJA_V4;
+  const p = partesEmFuso(d, tz);
+  const n = (v: number) => String(v).padStart(2, "0");
+  return `${p.ano}-${n(p.mes)}-${n(p.dia)}T${n(p.hora)}:${n(p.minuto)}`;
+}
+
+/** "YYYY-MM-DDTHH:mm" (parede no fuso informado) → ISO UTC. */
+export function localInputToIsoInTZ(local: string, timeZone: string = FUSO_LOJA_V4): string {
+  const s = (local ?? "").trim();
+  const m = LOCAL_INPUT_RE.exec(s);
+  if (!m) return "";
+  const ano = Number(m[1]);
+  const mes = Number(m[2]);
+  const dia = Number(m[3]);
+  const hora = Number(m[4]);
+  const minuto = Number(m[5]);
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31 || hora > 23 || minuto > 59) return "";
+  const tz = (timeZone ?? "").trim() || FUSO_LOJA_V4;
+  const paredeUtc = Date.UTC(ano, mes - 1, dia, hora, minuto);
+  let utc = paredeUtc;
+  for (let i = 0; i < 2; i += 1) utc = paredeUtc - offsetMinutosEm(tz, utc) * 60000;
+  const out = new Date(utc);
+  if (Number.isNaN(out.getTime())) return "";
+  // Revalida o round-trip (recusa 31/02 e afins normalizados pelo Date.UTC).
+  if (isoToLocalInputInTZ(out.toISOString(), tz) !== s) return "";
+  return out.toISOString();
+}
+
+export function isoToLocalInput(iso: string): string {
+  return isoToLocalInputInTZ(iso, FUSO_LOJA_V4);
 }
 
 export function localInputToIso(local: string): string {
-  const s = (local ?? "").trim();
+  return localInputToIsoInTZ(local, FUSO_LOJA_V4);
+}
+
+/** Formata a previsão com o fuso explícito ("dd/mm/aaaa HH:mm (America/Sao_Paulo)"). */
+export function formatPrevisaoComFuso(iso: string, timeZone: string = FUSO_LOJA_V4): string {
+  const s = (iso ?? "").trim();
   if (!s) return "";
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString();
+  const tz = (timeZone ?? "").trim() || FUSO_LOJA_V4;
+  const p = partesEmFuso(d, tz);
+  const n = (v: number) => String(v).padStart(2, "0");
+  return `${n(p.dia)}/${n(p.mes)}/${p.ano} ${n(p.hora)}:${n(p.minuto)} (${tz})`;
+}
+
+/**
+ * T10: previsão no passado exige aviso — nunca correção silenciosa.
+ * ISO inválido/vazio → false (sem dado, sem aviso).
+ */
+export function isPrevisaoVencida(iso: string, agora: Date = new Date()): boolean {
+  const s = (iso ?? "").trim();
+  if (!s) return false;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.getTime() < agora.getTime();
 }
 
 /** Semeia o editor a partir da OS real (defaults seguros p/ os selects). */
