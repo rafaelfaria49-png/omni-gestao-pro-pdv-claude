@@ -1,9 +1,9 @@
 {
   "aep": "1.0-R2",
   "track": "fiscal",
-  "status": "BLOCKED",
+  "status": "RUNNING",
   "risk_tier": "ALTO",
-  "current_goal": null,
+  "current_goal": "FISCAL-SEFAZ-CSTAT588-COMPACT-MESSAGE-023",
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
