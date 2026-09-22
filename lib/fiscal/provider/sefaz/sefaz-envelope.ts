@@ -44,6 +44,7 @@
  * de ninguém a montante — o adapter prova por si que os bytes são exatamente um elemento raiz.
  */
 import { childElements, parseXml } from "@/lib/fiscal/signing/c14n"
+import { d01eViolation } from "@/lib/fiscal/xml/d01e-backstop"
 import { sefazServiceNamespace, type SefazServico } from "./sefaz-endpoint-catalog"
 
 /** Content-Type obrigatório do SOAP 1.2 (MOC 7.00). */
@@ -58,6 +59,7 @@ export type SefazEnvelopeRejectionCode =
   | "bytes_fiscais_nao_utf8"
   | "bytes_fiscais_com_declaracao_xml"
   | "bytes_fiscais_nao_embutiveis"
+  | "bytes_fiscais_com_espaco_d01e"
   | "envelope_mal_formado"
 
 export type SefazSoapEnvelope = {
@@ -404,6 +406,18 @@ export function buildSefazSoap12Envelope(input: {
 
   const fronteira = violacaoDeFronteiraDaRaiz(conteudo)
   if (fronteira) return recusaDeFronteira(fronteira)
+
+  // Backstop D01e (GOAL-023 · cStat 588): a área de dados não pode carregar
+  // whitespace de formatação antes/depois da raiz nem entre tags (espaço/TAB/CR/LF).
+  // Espaços legítimos DENTRO de texto/atributos não casam aqui. Apenas RECUSA —
+  // nunca limpa bytes já assinados (ADR-0017/0018).
+  const d01e = d01eViolation(conteudo)
+  if (d01e) {
+    return recusa(
+      "bytes_fiscais_com_espaco_d01e",
+      `Bytes fiscais com whitespace de formatação proibido pela regra D01e (${d01e}); transporte bloqueado sem transformação.`,
+    )
+  }
 
   const namespace = sefazServiceNamespace(input.servico)
   const encoder = new TextEncoder()

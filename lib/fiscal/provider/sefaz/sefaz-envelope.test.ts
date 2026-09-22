@@ -23,12 +23,13 @@ import {
 import type { SefazServico } from "./sefaz-endpoint-catalog"
 
 /**
- * Fixture fiscal VÁLIDA: um elemento embutível, **sem declaração XML**, com particularidades
- * (espaços internos, acentos, assinatura) que um re-serializador destruiria.
+ * Fixture fiscal VÁLIDA: um elemento embutível, **sem declaração XML**, D01e-seguro
+ * (GOAL-023 · zero whitespace de formatação entre `><`), com particularidades
+ * (espaços internos em texto/atributo, acentos, assinatura) que um re-serializador destruiria.
  */
 const XML_ASSINADO =
   `<NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe Id="NFe35260812345678000199650010000000011000000017" versao="4.00">` +
-  `<ide><tpAmb>2</tpAmb></ide>   <espaco   preservado="sim"/>` +
+  `<ide><tpAmb>2</tpAmb></ide><espaco preservado="sim"/>` +
   `<acentos>São Paulo · ção</acentos>` +
   `<Signature><SignatureValue>QUJDRA==</SignatureValue></Signature>` +
   `</infNFe></NFe>`
@@ -310,7 +311,7 @@ describe("byte-exatidão dos bytes fiscais", () => {
     const original = bytesDoXml(XML_ASSINADO)
     const env = envelopeOk({ servico: "NFeAutorizacao4", exactBytes: original })
     const texto = new TextDecoder().decode(env.bytes)
-    expect(texto).toContain("   <espaco   preservado=\"sim\"/>")
+    expect(texto).toContain("<espaco preservado=\"sim\"/>")
     expect(texto).toContain("São Paulo · ção")
     expect(texto).toContain("<SignatureValue>QUJDRA==</SignatureValue>")
   })
@@ -489,7 +490,7 @@ describe("chamarizes que NÃO podem mover a fronteira da raiz (GOAL-016D-C1)", (
     ["fecho com espaço antes do `>`", `<NFe><infNFe/></NFe >`],
     ["elementos internos legítimos em série", `<NFe><a/><b/><c/></NFe>`],
     ["raiz com prefixo de namespace", `<nfe:NFe xmlns:nfe="urn:x"><nfe:infNFe/></nfe:NFe>`],
-    ["texto e espaços INTERNOS preservados", `<NFe>  <a/>   <b/>  </NFe>`],
+    ["texto com espaços INTERNOS preservado", `<NFe><obs>texto com espaços internos</obs></NFe>`],
   ]
 
   for (const [nome, payload] of legitimos) {
