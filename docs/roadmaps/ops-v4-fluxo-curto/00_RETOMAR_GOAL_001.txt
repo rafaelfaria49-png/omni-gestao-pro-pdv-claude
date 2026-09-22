@@ -1,0 +1,19 @@
+# RETOMADA AUTOCONTIDA — OPS-V4-FLUXO-CURTO-001 (cópia do comando)
+
+GOAL=OPS-V4-FLUXO-CURTO-001 · TRILHA=ops-v4-fluxo-curto · REVISAO_OPERACIONAL=2
+MODO=RETOMADA_COM_INSTALACAO_DO_CONTRATO_E_IMPLEMENTACAO · NIVEL_TECNICO=4/5
+CLASSE_AEP=C3 · RISCO=ALTO · MESMO GOAL 001 (sem 000/-RETRY/-FIX/001B, sem replanejar 002–008).
+
+Repositório: rafaelfaria49-png/omni-gestao-pro-pdv-claude
+Principal: C:/Projetos/omni-gestao (somente leituras Git e criação da worktree; sem checkout/switch/stage/commit/init/open/close/block nela; sem tocar .aep-active do PDV).
+Worktree prevista: C:/Projetos/omni-gestao-ops-v4-fluxo-curto-001
+Branch prevista: goal/ops-v4-fluxo-curto-001
+Base de referência consultada: 469b3aa2ce9fd2bd35abc10856fea4f4dc8dac16 (usar a main verificada, não impor SHA antigo).
+
+Autorização humana explícita para a preparação do AEP: transformar a especificação no cadastro executável do AEP vigente (init/registry ou import válido, SOMENTE esta trilha; pacote NÃO é manifesto — não passar 07_RASTREABILIDADE.json ao import). Instalar 02_CONTRATO_COMUM.md, 04_MATRIZ_ACEITE.md, este comando e a fonte do GOAL em docs/roadmaps/ops-v4-fluxo-curto/. Instalar TRACK.md e GOAL com META nos caminhos da trilha. Completar template sem <PREENCHER>, sem valores inventados, sem aguardar nova mensagem. Alteração de protocol.json autorizada: apenas tracks["ops-v4-fluxo-curto"] com dir="ops-v4-fluxo-curto", risk_tier="ALTO" e título real. G-AEP-CORE liberado EXCLUSIVAMENTE para esse registro. Não alterar funções, gates, limites, hooks, scripts, default branch, CI ou outras entradas. Gerar state/registry/gates/ledger somente pelo script oficial. Commit documental pelo ritual oficial, caminhos explícitos, sem --no-verify. Família muse-spark; classe C3 e risco ALTO não redutíveis. test_command aponta para TESTE NOVO PLANEJADO (lib/operacoes-v4/entrada-readback.test.ts) — não é teste já passado; não torná-lo trivial.
+
+Implementação: continuar além da preparação; T01–T11; sem pedir passos mecânicos; sem auditoria geral; sem contratos 002–008; sem resolver autorização comercial/garantia/financeiro no 001. Preservar V3/PDV/estoque e alterações paralelas. Typecheck canônico, Vitest real, lint relevante, componente/E2E e build seguro. Somente banco descartável confirmado; sem .env produtivo; sem OS das fotos. Falta de banco/navegador bloqueia evidência dependente, não autoriza falso PASS.
+
+Revisão/publicação: R de outra família obrigatória no candidato; sem R não ratificar DONE nem merge. Sem revisor não impede implementar/testar/committar/preparar PR. CI ausente/pendente não aborta implementação. Release condicionado: push + PR; checks + R aprovados; só então merge, deploy canônico e smoke read-only comprovado. Sem ferramentas/autoridade, deixar PR preparado com UMA lista de pendências. Sem push direto main/force/rebase/cherry-pick/bypass. Não mudar CI/envs/schema/gates para publicar. Tentativas reais no AEP; sem imputar ao GOAL do PDV; sem reiniciar contadores. Relatório anterior de contrato ausente não é tentativa de implementação. Respeitar close/check e veredito. Encerrar após 001; não iniciar 002.
+
+Regra contra pré-flight interminável: uma passagem focal; não repetir doctor/verify/grep sem nova hipótese; insumo inacessível informar nome/caminho/comando; se presente no pacote, materializar e seguir.

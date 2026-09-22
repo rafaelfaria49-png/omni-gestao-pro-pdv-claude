@@ -126,6 +126,11 @@
       "dir": "pdv-scan-unregistered-action-settings-007",
       "risk_tier": "MEDIO",
       "titulo": "<PREENCHER>"
+    },
+    "ops-v4-fluxo-curto": {
+      "dir": "ops-v4-fluxo-curto",
+      "risk_tier": "ALTO",
+      "titulo": "Operações V4 — fluxo curto"
     }
   },
   "remote_layer": {
