@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C3",
   "risk_tier": "ALTO",
-  "plan_rev": 4,
+  "plan_rev": 5,
   "branch": "goal/ops-v4-fluxo-curto-001",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-001",
   "test_command": "npm run typecheck && npx --no-install vitest run --config test/ops-v4-fluxo-curto/vitest.config.ts && npx --no-install vitest run lib/operacoes-v4/entrada-readback.test.ts lib/operacoes-v4/entrada-readback.integration.test.ts lib/operacoes-v3/prova-entrada-actions.test.ts && npx playwright test e2e/specs/operacoes-v4-fluxo-curto-001.spec.ts",
@@ -41,6 +41,8 @@
     "lib/operacoes-v3/nova-os-actions.test.ts",
     "lib/operacoes-v3/prova-entrada-actions.ts",
     "lib/operacoes-v3/prova-entrada-actions.test.ts",
+    "lib/operacoes-v3/workspace-actions.ts",
+    "lib/operacoes-v3/workspace-actions.test.ts",
     "lib/operacoes-v4/entrada-readback.integration.test.ts",
     "package.json",
     "package-lock.json",
@@ -71,7 +73,7 @@
 
 # OPS-V4-FLUXO-CURTO-001 — Preenchimento único: criação, leitura e edição coerentes
 
-**Revisão funcional:** 1, preservada · **Envelope operacional:** 2, preservado como histórico · **Revisão vigente do plano (META plan_rev): 4 — aditivo de 21/09/2026 no PR #219 ainda aberto.** Fontes R2 (docs/roadmaps/ops-v4-fluxo-curto/ em d2b3142) preservadas como históricas, não reescritas. Derivados (state.json, REGISTRY.md, GATES.md) gerados somente por `node scripts/track.mjs registry`. O estado READY abaixo destina-se à instalação autorizada; não significa que houve implementação ou abertura da trilha nesta entrega.
+**Revisão funcional:** 1, preservada · **Envelope operacional:** 2, preservado como histórico · **Revisão vigente do plano (META plan_rev): 5 — aditivo checklist concorrente-safe (T04), pendente de ratificação/reabertura oficial; R2–R4 preservados como histórico (rev 4: aditivo de 21/09/2026, PR #219).** Fontes R2 (docs/roadmaps/ops-v4-fluxo-curto/ em d2b3142) preservadas como históricas, não reescritas. Derivados (state.json, REGISTRY.md, GATES.md) gerados somente por `node scripts/track.mjs registry`. O estado READY abaixo destina-se à instalação autorizada; não significa que houve implementação ou abertura da trilha nesta entrega.
 **Nível técnico:** 4/5 · **Classe formal:** C3 · **Risco:** ALTO · **R:** obrigatório, outra família declarada.
 **Dependências:** nenhuma entrega desta trilha; pré-flight/ambiente são internos a este GOAL.
 **Achados principais:** V4-02, V4-03, V4-11.
@@ -230,3 +232,14 @@ Fontes R2 (pacote recebido em d2b3142: `00_RETOMAR_GOAL_001.txt`, `02_CONTRATO_C
 Criar configuração específica em `test/ops-v4-fluxo-curto/` com descoberta explícita de `.test.tsx`, ambiente DOM só nesses testes, aliases necessários e runner que falhe se não descobrir/executar casos. Não alterar silenciosamente o include/exclude da suíte global. `test_command` no META atualizado antes do open para o runner real da tarefa (`typecheck` + config específica + readback/integração + Playwright do spec 001); typecheck, montagem, integração e E2E obrigatórios não podem ser omitidos no fechamento. Ambiente ausente deve resultar em bloqueio explícito, não skip convertido em PASS.
 
 Correção documental (sem alterar escopo rev 4): `familia_executor` corrigida de `muse-spark` para `meta`, família factual do executor Muse Spark (Meta MSL) efetivamente declarada via entrada `muse-spark/meta` em `executors.json` (tabela substituível, fora do núcleo; `verificado: false`, sem inventar verificação). Classe C3, risco ALTO e R obrigatória preservados; allowlist, `test_command` e gates da rev 4 inalterados.
+
+## Revisão 5 — aditivo checklist concorrente-safe T04 (pendente de ratificação/reabertura oficial)
+
+Objetivo exclusivo: tornar `salvarChecklistEntradaV3` concorrente-safe com a mesma disciplina dos demais write-paths (releitura no LATEST + `updateMany` condicionado a `updatedAt` + `CONFLITO_CONCORRENCIA` explícito), sem alterar `salvarDiagnosticoV3`, `salvarSenhaAcessoriosV3` ou outros motores. Bloqueio conhecido: snapshot amplo + `update` cego em `lib/operacoes-v3/workspace-actions.ts` pode clobber gravação concorrente de outra seção (aceite T04).
+
+Caminhos adicionados à allowlist, somente estes (sem ampliar para `lib/operacoes-v3/**`):
+
+- `lib/operacoes-v3/workspace-actions.ts`
+- `lib/operacoes-v3/workspace-actions.test.ts` (regressão específica da disciplina; arquivo ainda inexistente — a allowlist não alega existência, só autoriza o caminho)
+
+Todo o resto da rev 4 preservado: allowlist, `test_command`, gates (`G-AEP-CORE`, `G-CONFIG-DEPLOY`), classe C3, risco ALTO, R obrigatória, `read_budget`, `revisao_independente`, `familia_executor`, `reversibilidade`. Sem GOAL 002. Implementar o corretivo somente após ratificação/reabertura oficial.
