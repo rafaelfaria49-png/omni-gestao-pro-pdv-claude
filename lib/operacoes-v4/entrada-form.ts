@@ -25,13 +25,18 @@ import {
   acessorioEntradaLabelV3,
   componenteFisicoLabelV3,
   tipoAvariaLabelV3,
-  type AcessorioEntradaIdV3,
   type AcessorioEntradaV3,
+  type AcessorioEntradaIdV3,
+  type AssinaturaV3,
   type AvariaV3,
+  type CategoriaFotoV3,
   type ComponenteFisicoV3,
+  type CredenciaisEntradaV3,
   type EstadoFisicoItemV3,
   type EstadoFisicoStatusV3,
+  type FotoEntradaV3,
   type IdentificacaoV3,
+  type ProvaEntradaV3,
   type SenhaTipoV3,
   type TipoAvariaV3,
 } from "@/lib/operacoes-v3/prova-entrada-model";
@@ -131,6 +136,166 @@ export function seedEntradaEditor(os: OrdemServico | null | undefined): EntradaE
     acessorios: prova.acessorios.map((a) => ({ ...a })),
     checklist: checklist.map((c) => ({ ...c })),
   };
+}
+
+// ---- Limpeza explícita (R02 — pura, testável) ------------------------------
+//
+// Compara o editor atual com a linha de base salva: chave com valor na base e
+// vazia no atual = o operador ESCOLHEU limpar (entra na lista `limpar`).
+// Chave vazia nos dois = intocada (preserva no servidor). Vazio nunca exclui
+// sozinho — só a lista explícita autoriza a remoção campo a campo.
+
+export function limpezasExplicitas(
+  atual: Record<string, string>,
+  salvo: Record<string, string>,
+): string[] {
+  const lista: string[] = [];
+  for (const k of Object.keys(atual)) {
+    if (!(k in salvo)) continue;
+    if ((atual[k] ?? "").trim() === "" && (salvo[k] ?? "").trim() !== "") lista.push(k);
+  }
+  return lista;
+}
+
+// ---- Patch intencional + conflito de concorrência (R01/R02 — puros) -------
+//
+// Casa pura e testável do mecanismo que os write-paths V3 executam no
+// servidor (releitura no LATEST + updateMany condicionado a `updatedAt`).
+// Vive aqui (mapeamento editor → contratos V3, sem I/O) porque arquivos
+// `"use server"` só podem exportar funções assíncronas — e estes blocos
+// precisam ser importáveis por testes e por mais de um write-path.
+//
+// `undefined` em `valores` significa AUSENTE (preserva o atual) — vazio NÃO
+// exclui. Exclusão exige lista explícita em `limpar`. Fatias ausentes do
+// intent preservam o servidor; chaves desconhecidas nunca são tocadas.
+
+export interface PatchProvaEntradaV3 {
+  identificacao?: {
+    valores: Partial<IdentificacaoV3>;
+    limpar?: (keyof IdentificacaoV3)[];
+  };
+  estadoFisico?: EstadoFisicoItemV3[];
+  avarias?: AvariaV3[];
+  credenciais?: {
+    valores: Partial<CredenciaisEntradaV3>;
+    limpar?: (keyof CredenciaisEntradaV3)[];
+  };
+  acessorios?: AcessorioEntradaV3[];
+  fotos?: FotoEntradaV3[];
+  /** Valor definido = grava; `null` = limpeza explícita; chave ausente = preserva. */
+  assinaturaCliente?: AssinaturaV3 | null;
+}
+
+function aplicarValoresPatch<T extends Record<string, unknown>>(
+  base: T,
+  valores: Partial<T> | undefined,
+  limpar: (keyof T)[] | undefined,
+): T {
+  const next: Record<string, unknown> = { ...base };
+  if (valores) {
+    for (const k of Object.keys(valores) as (keyof T)[]) {
+      const v = valores[k];
+      if (v !== undefined) next[k as string] = v;
+    }
+  }
+  if (limpar) {
+    for (const k of limpar) delete next[k as string];
+  }
+  return next as T;
+}
+
+/** Puro (sem I/O): aplica o intent sobre a prova ATUAL (latest). */
+export function aplicarPatchIntencionalProvaEntrada(
+  provaAtual: ProvaEntradaV3,
+  intent: PatchProvaEntradaV3,
+): ProvaEntradaV3 {
+  const next: ProvaEntradaV3 = { ...provaAtual };
+  if (intent.identificacao) {
+    next.identificacao = aplicarValoresPatch(
+      { ...(provaAtual.identificacao ?? {}) } as Record<string, unknown>,
+      intent.identificacao.valores as Record<string, unknown>,
+      intent.identificacao.limpar as string[],
+    ) as unknown as IdentificacaoV3;
+  }
+  if (intent.estadoFisico !== undefined) next.estadoFisico = [...intent.estadoFisico];
+  if (intent.avarias !== undefined) next.avarias = [...intent.avarias];
+  if (intent.credenciais) {
+    next.credenciais = aplicarValoresPatch(
+      { ...(provaAtual.credenciais ?? {}) } as Record<string, unknown>,
+      intent.credenciais.valores as Record<string, unknown>,
+      intent.credenciais.limpar as string[],
+    ) as unknown as CredenciaisEntradaV3;
+  }
+  if (intent.acessorios !== undefined) next.acessorios = [...intent.acessorios];
+  if (intent.fotos !== undefined) next.fotos = [...intent.fotos];
+  if ("assinaturaCliente" in intent) {
+    next.assinaturaCliente = intent.assinaturaCliente ?? undefined;
+  }
+  return next;
+}
+
+/**
+ * Puro: mescla o espelho legado `equipamento` (preserva chaves alheias do
+ * LATEST; chaves definidas no patch vencem). Só este espelho tem semântica
+ * de mesclagem no `patchPayload` — as demais chaves de topo seguem o intent.
+ */
+export function mesclarEspelhoEquipamento(
+  atual: unknown,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const base = atual && typeof atual === "object" ? { ...(atual as Record<string, unknown>) } : {};
+  return { ...base, ...patch };
+}
+
+/** Código do erro explícito de concorrência (outra sessão gravou no meio). */
+export const CONFLITO_CONCORRENCIA_V3 = "CONFLITO_CONCORRENCIA";
+
+export function erroConflitoConcorrenciaV3(recurso: string): Error {
+  const e = new Error(
+    `A OS foi alterada por outra sessão enquanto você editava ${recurso}. Recarregue a OS e revise antes de salvar — suas alterações foram preservadas na tela.`,
+  );
+  (e as Error & { code?: string }).code = CONFLITO_CONCORRENCIA_V3;
+  return e;
+}
+
+export function ehConflitoConcorrenciaV3(e: unknown): boolean {
+  return (
+    !!e &&
+    typeof e === "object" &&
+    (e as { code?: unknown }).code === CONFLITO_CONCORRENCIA_V3
+  );
+}
+
+// ---- Intenção de limpeza para os wrappers (R02 — pura, testável) -----------
+//
+// Deriva a lista `limpar` comparando o input ( predominantamente `undefined`
+// quando vazio) com a semente do servidor: valor na semente + ausente no
+// input = o operador escolheu limpar. Ausente nos dois = intocado.
+
+export function intencaoLimpezaIdentificacao(
+  input: Partial<Record<"imei" | "serial" | "operadora" | "modelo" | "cor", string | undefined>>,
+  semente: Record<"imei" | "serial" | "operadora" | "modelo" | "cor", string>,
+): string[] {
+  const atual: Record<string, string> = {};
+  const base: Record<string, string> = {};
+  for (const k of ["imei", "serial", "operadora", "modelo", "cor"] as const) {
+    atual[k] = input[k] ?? "";
+    base[k] = semente[k] ?? "";
+  }
+  return limpezasExplicitas(atual, base);
+}
+
+export function intencaoLimpezaCredenciais(
+  input: Partial<Record<"pin" | "senha" | "contaGoogle" | "contaApple", string | undefined>>,
+  semente: Record<"pin" | "senha" | "contaGoogle" | "contaApple", string>,
+): string[] {
+  const atual: Record<string, string> = {};
+  const base: Record<string, string> = {};
+  for (const k of ["pin", "senha", "contaGoogle", "contaApple"] as const) {
+    atual[k] = input[k] ?? "";
+    base[k] = semente[k] ?? "";
+  }
+  return limpezasExplicitas(atual, base);
 }
 
 // ---- Mapeadores editor → inputs das actions V3 -----------------------------

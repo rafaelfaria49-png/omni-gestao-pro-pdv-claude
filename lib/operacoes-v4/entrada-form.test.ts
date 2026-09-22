@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 import {
   addAvaria,
   cycleChecklistEstado,
+  intencaoLimpezaCredenciais,
+  intencaoLimpezaIdentificacao,
+  limpezasExplicitas,
   removeAvaria,
   seedEntradaEditor,
   setAvaria,
@@ -163,5 +166,36 @@ describe("togglePadraoPonto (Padrão 3×3 — slice OPS-V4-SEGURANCA-ACESSO-PARI
     const v = togglePadraoPonto(original, 6);
     expect(v).toBe("2-3-7");
     expect(original).toBe("2-3");
+  });
+});
+
+describe("limpezasExplicitas (R02 - somente escolha expl�cita remove)", () => {
+  it("valor na base + vazio no atual = limpeza expl�cita", () => {
+    expect(limpezasExplicitas({ cor: "", imei: "1" }, { cor: "Violeta", imei: "1" })).toEqual(["cor"]);
+  });
+
+  it("vazio nos dois = intocado (preserva, sem lista)", () => {
+    expect(limpezasExplicitas({ cor: "" }, { cor: "" })).toEqual([]);
+  });
+
+  it("chave fora da base � ignorada (sem inventar campo)", () => {
+    expect(limpezasExplicitas({ cor: "", nova: "" }, { cor: "" })).toEqual([]);
+  });
+
+  it("valor novo n�o � limpeza", () => {
+    expect(limpezasExplicitas({ cor: "Preto" }, { cor: "Violeta" })).toEqual([]);
+  });
+});
+
+describe("intencaoLimpezaIdentificacao/intencaoLimpezaCredenciais (R02)", () => {
+  it("semente com valor + input ausente = limpar; ausente nos dois = preservar", () => {
+    expect(intencaoLimpezaIdentificacao({ cor: undefined }, { imei: "", serial: "", operadora: "", modelo: "", cor: "Violeta" })).toEqual(["cor"]);
+    expect(intencaoLimpezaIdentificacao({ cor: undefined }, { imei: "", serial: "", operadora: "", modelo: "", cor: "" })).toEqual([]);
+    expect(intencaoLimpezaCredenciais({ pin: undefined }, { pin: "1234", senha: "", contaGoogle: "", contaApple: "" })).toEqual(["pin"]);
+    expect(intencaoLimpezaCredenciais({ pin: undefined }, { pin: "", senha: "", contaGoogle: "", contaApple: "" })).toEqual([]);
+  });
+
+  it("valor novo nunca � limpeza", () => {
+    expect(intencaoLimpezaIdentificacao({ cor: "Preto" }, { imei: "", serial: "", operadora: "", modelo: "", cor: "Violeta" })).toEqual([]);
   });
 });

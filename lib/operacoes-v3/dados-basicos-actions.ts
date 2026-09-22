@@ -30,6 +30,7 @@ import {
   isPrioridadeV3,
   type SalvarDadosBasicosInputV3,
 } from "./dados-basicos-model";
+import { erroConflitoConcorrenciaV3 } from "@/lib/operacoes-v4/entrada-form";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -72,17 +73,15 @@ async function carregar(
 }
 
 /**
- * Salva os dados básicos da OS (recepção). NÃO altera status/orçamento/diagnóstico/
- * financeiro/estoque/caixa. Retorna o payload atualizado (mesmo shape que `getOrdem`).
+ * Monta o próximo payload a partir do LATEST (puro, sem I/O): mesma
+ * sanitização/validação de antes, aplicada sobre o estado mais recente para
+ * preservar edições independentes de outra sessão (R02).
  */
-export async function salvarDadosBasicosOSV3(
-  storeId: string,
-  osId: string,
+function montarProximosDadosBasicos(
+  payload: OSPayloadFull,
   input: SalvarDadosBasicosInputV3,
-): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
-  const operador = operadorLabel(session);
-
+  operador: string,
+): { next: OSPayloadFull; defeito: string } {
   // Sanitização/validação com os contratos puros (defaults seguros).
   const defeito = str(input?.defeitoRelatado);
   const prioridade = isPrioridadeV3(input?.prioridade) ? input.prioridade : "media";
@@ -140,14 +139,48 @@ export async function salvarDadosBasicosOSV3(
     atualizadoEm: nowIso(),
   } as OSPayloadFull;
 
-  // Escreve o payload + a coluna denormalizada `defeito` (usada em busca e como
-  // fallback de hidratação). NÃO toca status/valorBase/valorTotal nem qualquer
-  // outra coluna. Sem `updateOSPayload` do V2 → sem sync de Financeiro.
-  const data: Prisma.OrdemServicoUpdateInput = {
-    payload: next as unknown as Prisma.InputJsonValue,
-    defeito,
-  };
-  await prisma.ordemServico.update({ where: { id }, data });
+  return { next, defeito };
+}
+
+/**
+ * Salva os dados básicos da OS (recepção). NÃO altera status/orçamento/diagnóstico/
+ * financeiro/estoque/caixa. Retorna o payload atualizado (mesmo shape que `getOrdem`).
+ *
+ * R02: releitura dentro da transação + escrita condicionada a `updatedAt`.
+ * Gravação concorrente de outra sessão não é sobrescrita em silêncio — vira
+ * erro de conflito explícito (sem motor global: só este write-path).
+ */
+export async function salvarDadosBasicosOSV3(
+  storeId: string,
+  osId: string,
+  input: SalvarDadosBasicosInputV3,
+): Promise<OrdemServico> {
+  const { id, session } = await carregar(storeId, osId);
+  const sid = (storeId ?? "").trim();
+  const operador = operadorLabel(session);
+
+  const saida = await prisma.$transaction(async (tx) => {
+    const latest = await tx.ordemServico.findFirst({
+      where: { id },
+      select: { id: true, storeId: true, payload: true, updatedAt: true },
+    });
+    if (!latest || latest.storeId !== sid) throw new Error("OS não encontrada.");
+    const payload = latest.payload as unknown as OSPayloadFull | null;
+    if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
+    const { next, defeito } = montarProximosDadosBasicos(payload, input, operador);
+    // Escreve o payload + a coluna denormalizada `defeito` (usada em busca e como
+    // fallback de hidratação). NÃO toca status/valorBase/valorTotal nem qualquer
+    // outra coluna. Sem `updateOSPayload` do V2 → sem sync de Financeiro.
+    const data: Prisma.OrdemServicoUpdateInput = {
+      payload: next as unknown as Prisma.InputJsonValue,
+      defeito,
+    };
+    const r = await tx.ordemServico.updateMany({ where: { id, updatedAt: latest.updatedAt }, data });
+    if (r.count === 0) throw erroConflitoConcorrenciaV3("os dados básicos");
+    const row = await tx.ordemServico.findFirst({ where: { id }, select: { payload: true } });
+    if (!row) throw new Error("OS não encontrada.");
+    return row.payload as unknown as OrdemServico;
+  });
   revalidatePath("/dashboard/operacoes-v3");
-  return next as unknown as OrdemServico;
+  return saida;
 }

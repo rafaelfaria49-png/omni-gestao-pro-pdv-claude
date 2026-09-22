@@ -25,9 +25,16 @@ import {
 } from "@/lib/operacoes-v4/entrada-form";
 import { toDadosBasicosInput, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
 import type { V4Vals } from "../../use-v4-preview";
+import type { AcaoSaidaRascunhoV4 } from "../../use-entrada-draft-guard";
 import { EntradaSectionRail } from "./EntradaSectionRail";
 import { EntradaSections } from "./EntradaSections";
 import styles from "./entrada-workspace.module.css";
+
+/** Metadados publicados com o rascunho (R04): sujeira + ações de saída. */
+export interface MetaPublicacaoRascunhoV4 {
+  sujo: boolean;
+  acoes: AcaoSaidaRascunhoV4 | null;
+}
 
 // T03/T04 (OPS-V4-FLUXO-CURTO-001): fatias mescláveis do rascunho.
 // Cada chave compara de forma independente (ver `mesclarNaoTocadas` em
@@ -59,7 +66,9 @@ export function EntradaWorkspace({
   /** R04: rascunho salvo da chave loja+OS atual (restaura digitação ao voltar). */
   rascunhoInicial?: RascunhoEntradaV4 | undefined;
   /** R04: publica o rascunho a cada mudança (undefined = chave limpa). */
-  onRascunhoChange?: ((rascunho: RascunhoEntradaV4 | undefined) => void) | undefined;
+  onRascunhoChange?:
+    | ((rascunho: RascunhoEntradaV4 | undefined, meta?: MetaPublicacaoRascunhoV4) => void)
+    | undefined;
 }) {
   const [active, setActive] = useState<EntradaGroupId>("recepcao");
   const [ed, setEd] = useState<EntradaEditorV4>(() => rascunhoInicial?.ed ?? v.entradaEditorSeed);
@@ -69,15 +78,20 @@ export function EntradaWorkspace({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  // R04: publica o rascunho para o pai (stash por loja+OS). Compara por JSON
-  // para não religar o pai a cada render sem mudança real.
+  // R04: publica o rascunho para a guarda (stash por loja+OS), com sujeira e
+  // ações de saída. Compara por JSON para não republicar sem mudança real.
+  // (`dirty`, `salvarTudoParaSaida` e `descartarAlteracoes` vivem abaixo; o
+  // efeito só roda pós-render, com tudo inicializado.)
   const rascunhoJson = JSON.stringify({ ed, db, savedEd, savedDb });
   const rascunhoPublicadoRef = useRef("");
   useEffect(() => {
     if (!onRascunhoChange) return;
     if (rascunhoPublicadoRef.current === rascunhoJson) return;
     rascunhoPublicadoRef.current = rascunhoJson;
-    onRascunhoChange({ ed, db, savedEd, savedDb });
+    onRascunhoChange(
+      { ed, db, savedEd, savedDb },
+      { sujo: Object.values(dirty).some(Boolean), acoes: { salvar: salvarTudoParaSaida, descartar: descartarAlteracoes } },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rascunhoJson]);
 
@@ -201,6 +215,8 @@ export function EntradaWorkspace({
     if (section === "fotos") return true;
     let saved = false;
     if (section === "dados-basicos") saved = await v.salvarDadosBasicos(toDadosBasicosInput(db));
+    // R02: a limpeza explícita é derivada no wrapper (input × semente do
+    // servidor) — esta chamada mantém o contrato pinado de cinco handlers.
     if (section === "identificacao") saved = await v.salvarIdentificacao(toIdentificacaoInput(ed));
     if (section === "seguranca" || section === "estado-fisico") saved = await v.salvarProvaEntrada(toProvaEntradaInput(ed));
     if (section === "checklist") saved = await v.salvarChecklist(toChecklistInput(ed));
@@ -260,6 +276,46 @@ export function EntradaWorkspace({
     setSavedEd(v.entradaEditorSeed);
     setSavedDb(v.dadosBasicosSeed);
     setError("");
+  };
+
+  // R04: salva TODOS os grupos sujos (a saída com edição suja persiste tudo,
+  // não só o grupo visível). Falha recuperável: mantém o rascunho e o erro.
+  const salvarTudoParaSaida = async (): Promise<boolean> => {
+    if (busy) return false;
+    if (!v.cargaEntradaEstabelecida) {
+      setError(
+        v.detailLoading
+          ? "Aguarde a carga da OS antes de salvar."
+          : "A OS não carregou corretamente. Recarregue antes de salvar.",
+      );
+      return false;
+    }
+    if (conflitos.length > 0) {
+      setError(`O servidor atualizou ${conflitos.join(", ")} enquanto você editava. Descarte suas alterações ou revise antes de salvar.`);
+      return false;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      for (const group of ENTRADA_GROUP_IDS) {
+        const sections = getEntradaGroup(group).sections.filter((section) =>
+          section !== "fotos" && isEntradaSectionDirty(section, edRef.current, dbRef.current, savedEdRef.current, savedDbRef.current),
+        );
+        for (const section of sections) {
+          const saved = await persistSection(section);
+          if (!saved) {
+            setError("Não foi possível salvar. Revise os campos e tente novamente.");
+            return false;
+          }
+        }
+      }
+      return true;
+    } catch {
+      setError("Não foi possível salvar. Tente novamente.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
   };
 
   const selectGroup = (group: EntradaGroupId) => {

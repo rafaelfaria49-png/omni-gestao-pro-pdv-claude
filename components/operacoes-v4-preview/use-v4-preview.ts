@@ -29,7 +29,9 @@ import {
 import { C, fmt } from "./tokens";
 import type { V4State, V4Stage } from "./types";
 import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
-import { useLojaAtiva } from "@/lib/loja-ativa";
+import { useLojaAtiva, registrarGuardaTrocaLojaV4 } from "@/lib/loja-ativa";
+import { useGuardaRascunhos, type GuardaRascunhosV4 } from "./use-entrada-draft-guard";
+import type { RascunhoEntradaV4 } from "./parts/stages/EntradaWorkspace";
 import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
 // Actions REAIS reaproveitadas da V3 (sem criar backend novo) — slices OPS-V4-ORCAMENTO-REAL-002 / -ENTRADA-RECEPCAO-REAL-003.
@@ -111,7 +113,7 @@ import {
   type AdicionarFotoEntradaInputV3,
   type SalvarProvaEntradaInputV3,
 } from "@/lib/operacoes-v3/prova-entrada-actions";
-import type { IdentificacaoV3, AcessorioEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
+import type { IdentificacaoV3, AcessorioEntradaV3, CredenciaisEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
 import type { ChecklistEntradaItemV3 } from "@/lib/operacoes-v3/workspace-model";
 import { salvarDadosBasicosOSV3 } from "@/lib/operacoes-v3/dados-basicos-actions";
 import type { SalvarDadosBasicosInputV3 } from "@/lib/operacoes-v3/dados-basicos-model";
@@ -131,7 +133,7 @@ import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operaco
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
-import { alvoAindaSelecionado, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
+import { alvoAindaSelecionado, intencaoLimpezaCredenciais, intencaoLimpezaIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
 import { seedDadosBasicos, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
 import {
   PIPELINE_OPERACIONAL_IDS_V4,
@@ -199,6 +201,12 @@ export interface V4DataCtx {
   ordensLoading: boolean;
   ordensPrimeiraCarga: boolean;
   ordensError: string | null;
+  /** Loja ativa atual (para chavear rascunho e saídas por loja+OS). Opcional por
+   *  compatibilidade com fixtures legados de teste (ausente = sem chave). */
+  lojaAtivaId?: string | null;
+  /** R04: guarda de rascunhos da Entrada (memória da sessão, por loja+OS).
+   *  Opcional por compatibilidade (ausente = saídas imediatas, sem guarda). */
+  rascunhos?: GuardaRascunhosV4<RascunhoEntradaV4>;
   reloadOrdens: () => void;
   /** Recarrega o detalhe da OS selecionada após uma escrita. */
   reloadDetail: () => void;
@@ -708,7 +716,10 @@ export function buildVals(
   // seleção; nunca auto-abre outra OS por fallback). Definido antes dos menus
   // porque "Trocar OS" reusa este fluxo real (GOAL 006 — fim do no-op).
   const goToOSSearch = () =>
-    update({ selectedOsId: null, focus: false, left: true, module: "workspace", view: "cockpit", menu: null });
+    sairComGuarda(
+      () => update({ selectedOsId: null, focus: false, left: true, module: "workspace", view: "cockpit", menu: null }),
+      "voltar à busca de OS",
+    );
 
   // ---- menus ----
   // GOAL OPS-V4-DOCUMENTOS-ASSINATURA-ANEXOS-015: o menu Docs abre o MESMO
@@ -941,22 +952,40 @@ export function buildVals(
   const slaOperacionalComCadastro = { ...slaOperacional, tecnicosConhecidos: tecnicosSeletor };
   const pdvView = buildPdvView(ctx.ordens, ctx.financialProjectionsByOsId);
 
+  // R04: chave do rascunho da seleção ATUAL (loja+OS) para as saídas reais.
+  const chaveRascunhoAtual = () =>
+    `${((ctx.lojaAtivaId ?? "") as string).trim()}::${(st.selectedOsId ?? "").trim()}`;
+  // R04: saídas reais passam pela guarda quando presente; sem guarda, imediatas.
+  const sairComGuarda = (sair: () => void, descricao: string) => {
+    const guarda = ctx.rascunhos;
+    if (!guarda) {
+      sair();
+      return;
+    }
+    guarda.solicitarSaida(sair, { chave: chaveRascunhoAtual(), descricao });
+  };
   // Seleciona a OS REAL (identidade/financeiro reais no workspace). Único caminho de
   // seleção — sempre por clique explícito do operador, nunca por fallback automático.
+  // R04: com edição suja, a troca BLOQUEIA e abre salvar/descartar/cancelar.
   const selectOS = (o: OrdemServico, stageOverride?: V4Stage) => {
-    update({
-      selectedOsId: o.id,
-      status: resolverStatusV4(o),
-      prioridade: realPrioridadeToV4(o.prioridade),
-      stage: stageOverride ?? stageForStatus(resolverStatusV4(o)),
-      module: "workspace",
-      view: "cockpit",
-      menu: null,
-      focus: true,
-      left: false,
-      right: false,
-    });
-    notify("OS " + (o.codigo || "") + " carregada");
+    sairComGuarda(
+      () => {
+        update({
+          selectedOsId: o.id,
+          status: resolverStatusV4(o),
+          prioridade: realPrioridadeToV4(o.prioridade),
+          stage: stageOverride ?? stageForStatus(resolverStatusV4(o)),
+          module: "workspace",
+          view: "cockpit",
+          menu: null,
+          focus: true,
+          left: false,
+          right: false,
+        });
+        notify("OS " + (o.codigo || "") + " carregada");
+      },
+      `trocar para a OS ${o.codigo || o.id}`,
+    );
   };
   /**
    * Abrir a OS de uma linha de rail (Fila/Bancada/SLA/PDV) → leva ao workspace real.
@@ -982,21 +1011,28 @@ export function buildVals(
   // e recarrega a lista. Recebe apenas o id resultante; a identidade/financeiro são
   // hidratados pelo detalhe (`useOrdemV4`). Uma OS nova nasce "aberta" → etapa "entrada".
   const onOSCriada = (osId: string) => {
-    update({
-      novaOS: false,
-      novoAtendimento: false,
-      selectedOsId: osId,
-      status: "aberta",
-      stage: "entrada",
-      module: "workspace",
-      view: "cockpit",
-      menu: null,
-      focus: true,
-      left: false,
-      right: false,
-    });
-    ctx.reloadOrdens();
-    notify("OS criada e aberta no workspace.");
+    // R04: criar outra OS com edição suja pendente também passa pela guarda
+    // (a OS criada já existe no servidor; só a SELEÇÃO é bloqueada).
+    sairComGuarda(
+      () => {
+        update({
+          novaOS: false,
+          novoAtendimento: false,
+          selectedOsId: osId,
+          status: "aberta",
+          stage: "entrada",
+          module: "workspace",
+          view: "cockpit",
+          menu: null,
+          focus: true,
+          left: false,
+          right: false,
+        });
+        ctx.reloadOrdens();
+        notify("OS criada e aberta no workspace.");
+      },
+      `abrir a OS criada ${osId}`,
+    );
   };
 
   // Atendimento rápido concluído (REAL, GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014)
@@ -1468,6 +1504,9 @@ export function buildVals(
     openOSFromRail,
     openOSProducao,
     goToOSSearch,
+    // R04: guarda de rascunhos da Entrada (memória da sessão, por loja+OS).
+    // Sempre presente no hook real; fixtures legados podem omitir no ctx.
+    rascunhos: ctx.rascunhos ?? null,
     clearSelection: () => update({ selectedOsId: null, focus: false, left: true }),
     // lista real para o seletor
     ordens: ctx.ordens,
@@ -1524,6 +1563,20 @@ export function useV4Preview(): V4Vals {
 
   const router = useRouter();
   const { lojaAtivaId } = useLojaAtiva();
+  // R04: guarda de rascunhos da Entrada — memória da sessão (morre ao sair da
+  // V4); ponte opt-in para a troca de loja (lib/loja-ativa) com limpeza ao
+  // desmontar e ao perder a loja.
+  const rascunhos = useGuardaRascunhos<RascunhoEntradaV4>();
+  useEffect(() => {
+    registrarGuardaTrocaLojaV4({
+      temRascunhoSujo: () => rascunhos.temSujo(),
+      solicitarSaida: (trocar, descricao) => rascunhos.solicitarSaida(trocar, { descricao }),
+    });
+    return () => registrarGuardaTrocaLojaV4(null);
+  }, [rascunhos]);
+  useEffect(() => {
+    if (!lojaAtivaId) rascunhos.limparTudo();
+  }, [lojaAtivaId, rascunhos]);
   const tecnicosCadastro = useTecnicosCadastroV4(lojaAtivaId);
   const irParaConfiguracoes = useCallback(() => {
     router.push("/dashboard/configuracoes");
@@ -1627,6 +1680,12 @@ export function useV4Preview(): V4Vals {
   useEffect(() => {
     lojaRef.current = lojaAtivaId;
   }, [lojaAtivaId]);
+  // R03: geração de escrita por alvo (loja+OS). Capturada no disparo e
+  // conferida no pós-await junto com loja+OS: seleção mudada (A→B), retorno
+  // (A→B→A) ou escrita mais nova superando a anterior nunca sofrem
+  // after/toast/reload de detalhe de outro contexto. A lista recarrega sempre.
+  const writeSeqRef = useRef(0);
+  const writeGenRef = useRef(new Map<string, number>());
   const runWrite = useCallback(
     async (
       fn: (sid: string, osId: string) => Promise<unknown>,
@@ -1650,16 +1709,19 @@ export function useV4Preview(): V4Vals {
         return false;
       }
       const alvo = { lojaId: sid, osId };
+      const chave = `${alvo.lojaId}::${alvo.osId}`;
+      const geracao = ++writeSeqRef.current;
+      writeGenRef.current.set(chave, geracao);
+      const contextoAtual = () =>
+        writeGenRef.current.get(chave) === geracao &&
+        alvoAindaSelecionado({ lojaId: lojaRef.current ?? "", osId: selectedRef.current ?? "" }, alvo);
       try {
-        await fn(alvo.lojaId, alvo.osId);
-        // R03: pós-await só toca o contexto correspondente (loja+OS). Com a
-        // seleção mudada, só a lista recarrega — sem reload de detalhe, sem
-        // after() e sem toast de outro contexto sobre a nova seleção.
-        if (!alvoAindaSelecionado({ lojaId: lojaRef.current ?? "", osId: selectedRef.current ?? "" }, alvo)) {
-          reloadOrdens();
-          return true;
-        }
+        await fn(sid, osId);
+        // R03: pós-await só toca o contexto correspondente (loja+OS+geração).
+        // Com a seleção mudada ou escrita mais nova, só a lista recarrega —
+        // sem reload de detalhe, sem after() e sem toast sobre outra seleção.
         reloadOrdens();
+        if (!contextoAtual()) return true;
         reloadDetail();
         reloadFinancial();
         if (after) after();
@@ -1668,11 +1730,11 @@ export function useV4Preview(): V4Vals {
       } catch (e) {
         // A action pode falhar porque outra sessão alterou a OS/retorno. Nesse
         // caso a UI preserva o formulário, mas recarrega a autoridade server.
+        // R03: falha também não notifica outro contexto (toast só no alvo).
         reloadOrdens();
-        if (alvoAindaSelecionado({ lojaId: lojaRef.current ?? "", osId: selectedRef.current ?? "" }, alvo)) {
-          reloadDetail();
-          reloadFinancial();
-        }
+        if (!contextoAtual()) return false;
+        reloadDetail();
+        reloadFinancial();
         notify(e instanceof Error ? e.message : "Não foi possível concluir a ação.");
         return false;
       }
@@ -1695,10 +1757,22 @@ export function useV4Preview(): V4Vals {
         notify(gate.motivo);
         return false;
       }
+      // R03: captura loja+OS+geração da linha; o pós-await confere contra os
+      // refs (valores EFETIVOS após o await, não o closure do disparo).
+      const alvo = { lojaId: sid, osId };
+      const chave = `${alvo.lojaId}::${alvo.osId}`;
+      const geracao = ++writeSeqRef.current;
+      writeGenRef.current.set(chave, geracao);
+      const contextoAtual = () =>
+        writeGenRef.current.get(chave) === geracao &&
+        (lojaRef.current ?? "").trim() === alvo.lojaId;
+      const linhaSelecionada = () =>
+        contextoAtual() && (selectedRef.current ?? "").trim() === alvo.osId;
       try {
         await fn(sid, osId);
         reloadOrdens();
-        if ((selectedOsId ?? "").trim() === osId) {
+        if (!contextoAtual()) return true;
+        if (linhaSelecionada()) {
           reloadDetail();
           reloadFinancial();
         }
@@ -1706,7 +1780,8 @@ export function useV4Preview(): V4Vals {
         return true;
       } catch (e) {
         reloadOrdens();
-        if ((selectedOsId ?? "").trim() === osId) {
+        if (!contextoAtual()) return false;
+        if (linhaSelecionada()) {
           reloadDetail();
           reloadFinancial();
         }
@@ -1714,7 +1789,8 @@ export function useV4Preview(): V4Vals {
         return false;
       }
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify],
+    // R03: seleção lida via refs no pós-await — fora das deps de propósito.
+    [lojaAtivaId, reloadOrdens, reloadDetail, reloadFinancial, notify],
   );
 
   // ---- PDV de Serviço / recebimento real: envolve `receber` para também
@@ -2056,16 +2132,6 @@ export function useV4Preview(): V4Vals {
   );
 
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
-  const salvarIdentificacao = useCallback(
-    (input: IdentificacaoV3) =>
-      runWrite((sid, osId) => salvarIdentificacaoV3(sid, osId, input), "Identificação salva."),
-    [runWrite],
-  );
-  const salvarProvaEntrada = useCallback(
-    (input: SalvarProvaEntradaInputV3) =>
-      runWrite((sid, osId) => salvarProvaEntradaV3(sid, osId, input), "Prova de entrada salva."),
-    [runWrite],
-  );
   const salvarAcessorios = useCallback(
     (acessorios: AcessorioEntradaV3[]) =>
       runWrite((sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios), "Acessórios salvos."),
@@ -2106,6 +2172,33 @@ export function useV4Preview(): V4Vals {
   const realOS = useMemo<OrdemServico | null>(
     () => resolverOSSelecionada({ selectedOsId: st.selectedOsId, lojaIdAtiva, ordemDetail, ordens }),
     [st.selectedOsId, ordemDetail, ordens, lojaIdAtiva],
+  );
+
+  // R02: limpeza explícita derivada no wrapper (input × semente do servidor):
+  // campo com valor na semente e vazio no input = o operador escolheu limpar.
+  // Vazio nos dois = intocado (o servidor preserva). A chamada do workspace
+  // mantém o contrato de cinco handlers (mapeador puro, sem baseline local).
+  const salvarIdentificacao = useCallback(
+    (input: IdentificacaoV3) => {
+      const base = seedEntradaEditor(realOS).identificacao;
+      const limpar = intencaoLimpezaIdentificacao(input, base) as (keyof IdentificacaoV3)[];
+      return runWrite(
+        (sid, osId) => salvarIdentificacaoV3(sid, osId, input, limpar.length > 0 ? limpar : undefined),
+        "Identificação salva.",
+      );
+    },
+    [runWrite, realOS],
+  );
+  const salvarProvaEntrada = useCallback(
+    (input: SalvarProvaEntradaInputV3) => {
+      const base = seedEntradaEditor(realOS).credenciais;
+      const limparCred = intencaoLimpezaCredenciais(input.credenciais ?? {}, base) as (keyof CredenciaisEntradaV3)[];
+      return runWrite(
+        (sid, osId) => salvarProvaEntradaV3(sid, osId, input, limparCred.length > 0 ? limparCred : undefined),
+        "Prova de entrada salva.",
+      );
+    },
+    [runWrite, realOS],
   );
 
   // T01 + R03: detalhe da seleção atual confirmado (loja+OS, sem loading nem
@@ -2264,6 +2357,8 @@ export function useV4Preview(): V4Vals {
       ordensLoading,
       ordensPrimeiraCarga,
       ordensError,
+      lojaAtivaId,
+      rascunhos,
       reloadOrdens,
       reloadDetail,
       realOS,
@@ -2330,6 +2425,8 @@ export function useV4Preview(): V4Vals {
       ordensLoading,
       ordensPrimeiraCarga,
       ordensError,
+      lojaAtivaId,
+      rascunhos,
       reloadOrdens,
       reloadDetail,
       realOS,

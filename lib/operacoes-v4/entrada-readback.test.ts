@@ -252,21 +252,54 @@ describe("R04 — mesclagem por fatia (T03/T04, sem perder digitação)", () => 
   });
 });
 
-describe.skip("R01 — cor após edição via action (BLOQUEADO: exige mirror no servidor)", () => {
-  it("criar Violeta → salvarIdentificacaoV3(Preto) → reler devolve Preto", () => {
-    // Regressão do aceite: hoje o resolver prioriza equipamento.cor (Violeta)
-    // e salvarIdentificacaoV3 não espelha cor no equipamento.
-    // Correção pendente em lib/operacoes-v3/prova-entrada-actions.ts
-    // (ratificada no META rev 3 via PR documental #219, ainda não mergeado).
+describe("R01 — coerência de leitura após edição (invariante do servidor)", () => {
+  it("prova + espelho sincronizados em Preto: leitura efetiva devolve Preto", () => {
+    // Invariante que salvarIdentificacaoV3 mantém: prova.identificacao.cor e
+    // equipamento.cor (espelho legado) recebem o valor editado juntos — a
+    // leitura prioriza equipamento.* (pinado em identidade-aparelho.test.ts).
+    const os = osPersistidaDeAbertura() as unknown as {
+      equipamento: Record<string, unknown>;
+      provaEntradaV3: { identificacao: Record<string, unknown> };
+    };
+    os.equipamento.cor = "Preto";
+    os.provaEntradaV3.identificacao.cor = "Preto";
+    expect(identidadeAtualV4(os as unknown as OrdemServico).cor).toBe("Preto");
+  });
+
+  it("espelho dessincronizado documenta por que o mirror é obrigatório", () => {
+    // Se só a prova tivesse Preto (espelho ainda Violeta), a leitura
+    // devolveria o valor antigo — é exatamente o que o espelho evita.
+    const os = osPersistidaDeAbertura() as unknown as {
+      provaEntradaV3: { identificacao: Record<string, unknown> };
+    };
+    os.provaEntradaV3.identificacao.cor = "Preto";
+    expect(identidadeAtualV4(os as unknown as OrdemServico).cor).toBe("Violeta");
+  });
+
+  it("write-path da edição espelha cor/modelo/imei (guarda estática)", () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "operacoes-v3");
+    const actions = readFileSync(join(dir, "prova-entrada-actions.ts"), "utf8");
+    expect(actions).toContain("equipamentoPatch.cor = valores.cor");
+    expect(actions).toContain("equipamentoPatch.modelo = valores.modelo");
+    expect(actions).toContain("equipamentoPatch.numeroSerie = valores.imei");
   });
 });
 
-describe.skip("R02 — interleaving A/B em PostgreSQL descartável (BLOQUEADO: sem banco)", () => {
-  it("A muda defeito, B muda prioridade sem recarregar: ambos preservados + timeline íntegra", () => {
-    // Exige: lib/operacoes-v4/entrada-readback.integration.test.ts (ratificado
-    // no META rev 3, ainda não criado — depende do merge do PR #219) +
-    // PostgreSQL descartável confirmado (ausente nesta execução: sem .env).
-    // A action precisa de escrita condicional (patch + base esperada); leitura
-    // extra + update cego não fecha a corrida.
+describe("R02 — escrita condicionada presente nos write-paths (guarda estática)", () => {
+  it("prova de entrada e dados básicos condicionam por updatedAt e conflitam explícito", () => {
+    // Guarda de regressão: o mecanismo (releitura no LATEST + updateMany por
+    // { id, updatedAt } + erro CONFLITO_CONCORRENCIA) não pode regredir para
+    // update cego. O EFEITO (duas conexões PG, timeline/campos desconhecidos)
+    // é provado em lib/operacoes-v4/entrada-readback.integration.test.ts
+    // (falha explícita sem banco descartável — nunca skip).
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "operacoes-v3");
+    const prova = readFileSync(join(dir, "prova-entrada-actions.ts"), "utf8");
+    const basicos = readFileSync(join(dir, "dados-basicos-actions.ts"), "utf8");
+    for (const [nome, src] of [["prova", prova], ["basicos", basicos]] as const) {
+      expect(src, `${nome}: sem update cego`).not.toContain("ordemServico.update({");
+      expect(src, `${nome}: condicional`).toContain("ordemServico.updateMany");
+      expect(src, `${nome}: precondição`).toContain("updatedAt: latest.updatedAt");
+      expect(src, `${nome}: conflito explícito`).toContain("erroConflitoConcorrenciaV3");
+    }
   });
 });

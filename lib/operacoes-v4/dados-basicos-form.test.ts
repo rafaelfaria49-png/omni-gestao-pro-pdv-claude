@@ -210,8 +210,14 @@ describe("salvarDadosBasicosOSV3 — action segura (guarda estática)", () => {
     }
   });
 
-  it("grava o payload direto via prisma.ordemServico.update (payload-only + coluna defeito)", () => {
-    expect(action).toContain("prisma.ordemServico.update");
+  it("grava o payload direto via updateMany condicionado a updatedAt (R02)", () => {
+    // Escrita condicionada: releitura no LATEST + updateMany por { id, updatedAt };
+    // concorrência vira erro de conflito explícito em vez de overwrite cego.
+    expect(action).toContain("ordemServico.updateMany");
+    expect(action).toContain("updatedAt: latest.updatedAt");
+    expect(action).toContain("erroConflitoConcorrenciaV3");
+    // Sem update cego por id: nenhum `ordemServico.update({` direto existe mais.
+    expect(action).not.toContain("ordemServico.update({");
     // Não altera status/valor: as colunas financeiras/estado não são atribuídas no
     // `data` (checa a forma de atribuição `campo:` — menção em comentário é permitida).
     expect(action).not.toContain("valorTotal:");
