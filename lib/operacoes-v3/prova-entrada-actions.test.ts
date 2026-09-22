@@ -3,11 +3,14 @@ import {
   aplicarPatchIntencionalProvaEntrada,
   ehConflitoConcorrenciaV3,
   erroConflitoConcorrenciaV3,
+  espelhoPatchIdentificacao,
   mesclarEspelhoEquipamento,
   CONFLITO_CONCORRENCIA_V3,
   type PatchProvaEntradaV3,
 } from "@/lib/operacoes-v4/entrada-form";
-import type { ProvaEntradaV3 } from "./prova-entrada-model";
+import { identidadeAtualV4 } from "@/lib/operacoes-v4/identidade-aparelho";
+import type { OrdemServico } from "@/types/os";
+import type { AcessorioEntradaV3, ProvaEntradaV3 } from "./prova-entrada-model";
 
 // OPS-V4-FLUXO-CURTO-001 / R01+R02 — patch intencional e erro de conflito.
 //
@@ -175,6 +178,184 @@ describe("R02 — baseline por campo: sequencial stale preserva; mesmo campo con
     });
     expect(next.identificacao.cor).toBe("Preto");
     expect(next.identificacao.modelo).toBe("M1");
+  });
+});
+
+describe("R independente 9464b00 — 1. baseline efetiva da identificação", () => {
+  const provaSemCor = () =>
+    provaBase({ identificacao: { imei: "1", serial: "S", operadora: "Vivo", modelo: "M1" } });
+
+  it("equipamento.cor=Violeta + prova.cor ausente → editar Preto com expected=Violeta = sucesso", () => {
+    const next = aplicarPatchIntencionalProvaEntrada(
+      provaSemCor(),
+      {
+        identificacao: { valores: { cor: "Preto" } },
+        esperados: { identificacao: { cor: "Violeta" } },
+      },
+      { identidadeEfetiva: { cor: "Violeta" } },
+    );
+    expect(next.identificacao.cor).toBe("Preto");
+    expect(next.identificacao.modelo).toBe("M1");
+  });
+
+  it('campo realmente ausente (""/undefined) → primeiro preenchimento = sucesso', () => {
+    const base = provaBase({ identificacao: {} });
+    const porVazio = aplicarPatchIntencionalProvaEntrada(base, {
+      identificacao: { valores: { cor: "Preto" } },
+      esperados: { identificacao: { cor: "" } },
+    });
+    expect(porVazio.identificacao.cor).toBe("Preto");
+    const semEsperados = aplicarPatchIntencionalProvaEntrada(base, {
+      identificacao: { valores: { serial: "S9" } },
+    });
+    expect(semEsperados.identificacao.serial).toBe("S9");
+  });
+
+  it("alteração concorrente real no mesmo campo = conflito (efetiva Verde × baseline Violeta)", () => {
+    let erro: unknown = null;
+    try {
+      aplicarPatchIntencionalProvaEntrada(
+        provaBase({ identificacao: { imei: "1", modelo: "M1", cor: "Verde" } }),
+        {
+          identificacao: { valores: { cor: "Preto" } },
+          esperados: { identificacao: { cor: "Violeta" } },
+        },
+        { identidadeEfetiva: { cor: "Verde" } },
+      );
+    } catch (e) {
+      erro = e;
+    }
+    expect(ehConflitoConcorrenciaV3(erro)).toBe(true);
+    expect(String((erro as Error).message)).toMatch(/identificacao\.cor/);
+  });
+});
+
+describe("R independente 9464b00 — 2. limpeza dos espelhos", () => {
+  it("espelhoPatchIdentificacao: valores espelham; limpar remove o espelho (undefined)", () => {
+    expect(espelhoPatchIdentificacao({ cor: "Preto", modelo: "M", imei: "9" })).toEqual({
+      cor: "Preto",
+      modelo: "M",
+      numeroSerie: "9",
+    });
+    const patch = espelhoPatchIdentificacao({}, ["cor", "modelo", "imei"]);
+    expect("cor" in patch && patch.cor).toBeUndefined();
+    expect("modelo" in patch && patch.modelo).toBeUndefined();
+    expect("numeroSerie" in patch && patch.numeroSerie).toBeUndefined();
+    // Serial/operadora não têm espelho.
+    expect(espelhoPatchIdentificacao({}, ["serial", "operadora"])).toEqual({});
+  });
+
+  it("mesclarEspelhoEquipamento: undefined remove a chave e preserva as demais", () => {
+    const next = mesclarEspelhoEquipamento(
+      { modelo: "M1", cor: "Violeta", numeroSerie: "111", garantia: "g1" },
+      { cor: undefined },
+    );
+    expect(next).toEqual({ modelo: "M1", numeroSerie: "111", garantia: "g1" });
+    expect("cor" in next).toBe(false);
+  });
+
+  it("Violeta → limpar cor → reload efetivo = cor vazia, sem ressuscitar Violeta", () => {
+    // Prova limpa o campo…
+    const prova = aplicarPatchIntencionalProvaEntrada(
+      provaBase({ identificacao: { imei: "1", modelo: "M1", cor: "Violeta" } }),
+      { identificacao: { valores: {}, limpar: ["cor"] }, esperados: { identificacao: { cor: "Violeta" } } },
+      { identidadeEfetiva: { cor: "Violeta", modelo: "M1", imei: "1" } },
+    );
+    expect(prova.identificacao.cor).toBeUndefined();
+    // …e o espelho acompanha, preservando as demais chaves…
+    const equipamento = mesclarEspelhoEquipamento(
+      { modelo: "M1", cor: "Violeta", numeroSerie: "1", tipo: "celular" },
+      espelhoPatchIdentificacao({}, ["cor"]),
+    );
+    expect(equipamento).toEqual({ modelo: "M1", numeroSerie: "1", tipo: "celular" });
+    // …logo a leitura efetiva (equipamento tem prioridade) volta vazia.
+    const os = { equipamento, provaEntradaV3: JSON.parse(JSON.stringify(prova)) } as unknown as OrdemServico;
+    expect(identidadeAtualV4(os).cor).toBe("");
+    expect(identidadeAtualV4(os).modelo).toBe("M1");
+  });
+});
+
+describe("R independente 9464b00 — 3. credenciais stale por campo", () => {
+  const basePinGoogle = () => provaBase({ credenciais: { pin: "1111", contaGoogle: "a" } });
+
+  it("B muda Google=b; A stale muda só PIN=2222 → final PIN=2222 + Google=b", () => {
+    const latest = basePinGoogle();
+    latest.credenciais.contaGoogle = "b"; // sessão B gravou
+    const next = aplicarPatchIntencionalProvaEntrada(latest, {
+      credenciais: { valores: { pin: "2222" } },
+      esperados: { credenciais: { pin: "1111" } },
+    });
+    expect(next.credenciais.pin).toBe("2222");
+    expect(next.credenciais.contaGoogle).toBe("b");
+  });
+
+  it("mesmo campo alterado pelas duas sessões = conflito (PIN 1111→b por B, A tenta 2222)", () => {
+    const latest = basePinGoogle();
+    latest.credenciais.pin = "9999"; // sessão B gravou outro PIN
+    let erro: unknown = null;
+    try {
+      aplicarPatchIntencionalProvaEntrada(latest, {
+        credenciais: { valores: { pin: "2222" } },
+        esperados: { credenciais: { pin: "1111" } },
+      });
+    } catch (e) {
+      erro = e;
+    }
+    expect(ehConflitoConcorrenciaV3(erro)).toBe(true);
+    expect(String((erro as Error).message)).toMatch(/credenciais\.pin/);
+    expect(latest.credenciais.pin).toBe("9999");
+  });
+
+  it('primeiro preenchimento de campo ausente (""/ausente) = sucesso', () => {
+    const base = provaBase({ credenciais: {} });
+    const next = aplicarPatchIntencionalProvaEntrada(base, {
+      credenciais: { valores: { pin: "2222" } },
+      esperados: { credenciais: { pin: "" } },
+    });
+    expect(next.credenciais.pin).toBe("2222");
+  });
+});
+
+describe("R independente 9464b00 — 4. acessórios com baseline", () => {
+  const NENHUM: AcessorioEntradaV3[] = [
+    { id: "chip", presente: false },
+    { id: "carregador", presente: false },
+    { id: "capinha", presente: false },
+  ];
+  const COM_CARREGADOR: AcessorioEntradaV3[] = [
+    { id: "chip", presente: false },
+    { id: "carregador", presente: true },
+    { id: "capinha", presente: false },
+  ];
+  const COM_CAPINHA_SEM_CARREGADOR: AcessorioEntradaV3[] = [
+    { id: "chip", presente: false },
+    { id: "carregador", presente: false },
+    { id: "capinha", presente: true },
+  ];
+
+  it("baseline igual + sem divergência = aplica", () => {
+    const base = provaBase({ acessorios: NENHUM });
+    const next = aplicarPatchIntencionalProvaEntrada(base as ProvaEntradaV3, {
+      acessorios: COM_CARREGADOR,
+      esperados: { acessorios: NENHUM },
+    } as unknown as PatchProvaEntradaV3);
+    expect(next.acessorios).toEqual(COM_CARREGADOR);
+  });
+
+  it("B marca Carregador; A stale marca Capinha sem ver Carregador → conflito, sem remoção silenciosa", () => {
+    const latest = provaBase({ acessorios: COM_CARREGADOR });
+    let erro: unknown = null;
+    try {
+      aplicarPatchIntencionalProvaEntrada(latest as ProvaEntradaV3, {
+        acessorios: COM_CAPINHA_SEM_CARREGADOR,
+        esperados: { acessorios: NENHUM },
+      } as unknown as PatchProvaEntradaV3);
+    } catch (e) {
+      erro = e;
+    }
+    expect(ehConflitoConcorrenciaV3(erro)).toBe(true);
+    expect(String((erro as Error).message)).toMatch(/acessorios/);
+    expect(latest.acessorios).toEqual(COM_CARREGADOR);
   });
 });
 

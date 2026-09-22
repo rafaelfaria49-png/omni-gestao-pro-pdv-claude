@@ -41,10 +41,12 @@ import {
 import {
   aplicarPatchIntencionalProvaEntrada,
   erroConflitoConcorrenciaV3,
+  espelhoPatchIdentificacao,
   mesclarEspelhoEquipamento,
   type EsperadosProvaEntradaV3,
   type PatchProvaEntradaV3,
 } from "@/lib/operacoes-v4/entrada-form";
+import { identidadeAtualV4 } from "@/lib/operacoes-v4/identidade-aparelho";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -117,7 +119,19 @@ async function persistirPatchProva(
         ? { ...intent, fotos: fotosOp.aplicarFotos(base.fotos) }
         : intent;
     const evento = fazerEvento(jaCriada, operador, base);
-    const aplicada = aplicarPatchIntencionalProvaEntrada(base, intentFinal);
+    // Baseline efetiva da identificação: a UI semeia da identidade efetiva
+    // (equipamento tem prioridade — `identidadeAtualV4`), mas a prova crua pode
+    // não ter o campo (ex.: cor só no equipamento). Conferir o esperado contra
+    // o efetivo evita falso conflito; a escrita continua mirando a prova.
+    const idEfetiva = identidadeAtualV4(payload as unknown as OrdemServico);
+    const identidadeEfetiva = {
+      imei: idEfetiva.imei || undefined,
+      serial: idEfetiva.serial || undefined,
+      operadora: idEfetiva.operadora || undefined,
+      modelo: idEfetiva.modelo || undefined,
+      cor: idEfetiva.cor || undefined,
+    };
+    const aplicada = aplicarPatchIntencionalProvaEntrada(base, intentFinal, { identidadeEfetiva });
     // Compatibilidade de exibição (era `str(por) || nome do cliente`): quando o
     // chamador não informa `por`, deriva do cliente do LATEST (nunca do stale).
     if (aplicada.assinaturaCliente && !str(aplicada.assinaturaCliente.por)) {
@@ -231,7 +245,18 @@ export async function salvarProvaEntradaV3(
   const ini = input ?? ({} as SalvarProvaEntradaInputV3);
   const estadoFisico = temEstado ? sanitEstadoFisico(ini.estadoFisico ?? []) : [];
   const avarias = temAvarias ? sanitAvarias(ini.avarias ?? []) : [];
-  const credenciais = temCred ? sanitCredenciais((ini.credenciais ?? {}) as CredenciaisEntradaV3) : {};
+  const credSanitizadas = temCred ? sanitCredenciais((ini.credenciais ?? {}) as CredenciaisEntradaV3) : {};
+  // Contrato novo (wrapper V4): aplicam-se SOMENTE as credenciais tocadas
+  // (chaves com baseline em `esperados.credenciais`); não tocadas preservam o
+  // LATEST mesmo quando presentes no input (stale nunca clobbera em silêncio).
+  // Sem `esperados.credenciais`, aplicam-se todas as definidas (chamadores
+  // legados sem baseline — hub V3 via `use-prova-entrada-v3`, sem `incluir`).
+  const credenciais =
+    temCred && esperados?.credenciais !== undefined
+      ? Object.fromEntries(
+          Object.entries(credSanitizadas).filter(([k]) => k in (esperados.credenciais as Record<string, unknown>)),
+        ) as CredenciaisEntradaV3
+      : credSanitizadas;
   const resumo = estadoFisico.filter((i) => i.status !== "ok").length;
   // Consolidação (item 4): a senha agora é editada aqui — sincroniza o campo legado
   // `senhaEquipamento` (lido pela impressão da OS / pad 3×3) para fonte única.
@@ -289,10 +314,9 @@ export async function salvarIdentificacaoV3(
   // R01: espelho legado (leitura efetiva prioriza equipamento.* — ver
   // identidade-aparelho.test.ts). A prova continua o alvo canônico da escrita;
   // o espelho só sincroniza o que foi informado, sem apagar chaves alheias.
-  const equipamentoPatch: Record<string, unknown> = {};
-  if (valores.modelo) equipamentoPatch.modelo = valores.modelo;
-  if (valores.imei) equipamentoPatch.numeroSerie = valores.imei;
-  if (valores.cor) equipamentoPatch.cor = valores.cor;
+  // Limpeza explícita de campo espelhado (cor/modelo/IMEI) limpa também o
+  // espelho correspondente — sem isso o valor antigo ressuscitaria no reload.
+  const equipamentoPatch = espelhoPatchIdentificacao(valores, limpar);
   return persistirPatchProva(
     id,
     (storeId ?? "").trim(),

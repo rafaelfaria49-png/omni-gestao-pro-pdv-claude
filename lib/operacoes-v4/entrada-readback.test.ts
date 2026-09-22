@@ -276,12 +276,21 @@ describe("R01 — coerência de leitura após edição (invariante do servidor)"
     expect(identidadeAtualV4(os as unknown as OrdemServico).cor).toBe("Violeta");
   });
 
-  it("write-path da edição espelha cor/modelo/imei (guarda estática)", () => {
+  it("write-path da edição espelha cor/modelo/imei — valores e limpeza (guarda estática)", () => {
     const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "operacoes-v3");
     const actions = readFileSync(join(dir, "prova-entrada-actions.ts"), "utf8");
-    expect(actions).toContain("equipamentoPatch.cor = valores.cor");
-    expect(actions).toContain("equipamentoPatch.modelo = valores.modelo");
-    expect(actions).toContain("equipamentoPatch.numeroSerie = valores.imei");
+    // O write-path monta o espelho pelo helper puro (valores + limpeza).
+    expect(actions).toContain("espelhoPatchIdentificacao(valores, limpar)");
+    const formDir = join(dirname(fileURLToPath(import.meta.url)));
+    const form = readFileSync(join(formDir, "entrada-form.ts"), "utf8");
+    // O helper espelha valores (modelo→modelo, imei→numeroSerie, cor→cor)…
+    expect(form).toContain("patch.modelo = valores.modelo");
+    expect(form).toContain("patch.numeroSerie = valores.imei");
+    expect(form).toContain("patch.cor = valores.cor");
+    // …e a limpeza explícita remove o espelho (sem ressuscitar no reload).
+    expect(form).toContain('patch.modelo = undefined');
+    expect(form).toContain('patch.numeroSerie = undefined');
+    expect(form).toContain('patch.cor = undefined');
   });
 });
 

@@ -2134,11 +2134,7 @@ export function useV4Preview(): V4Vals {
   );
 
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
-  const salvarAcessorios = useCallback(
-    (acessorios: AcessorioEntradaV3[]) =>
-      runWrite((sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios), "Acessórios salvos."),
-    [runWrite],
-  );
+  // (salvarAcessorios vive após `realOS` — usa a seleção atual como baseline.)
   const salvarChecklist = useCallback(
     (itens: ChecklistEntradaItemV3[]) =>
       runWrite((sid, osId) => salvarChecklistEntradaV3(sid, osId, itens), "Checklist salvo."),
@@ -2167,6 +2163,19 @@ export function useV4Preview(): V4Vals {
   const realOS = useMemo<OrdemServico | null>(
     () => resolverOSSelecionada({ selectedOsId: st.selectedOsId, lojaIdAtiva, ordemDetail, ordens }),
     [st.selectedOsId, ordemDetail, ordens, lojaIdAtiva],
+  );
+
+  // Acessórios com baseline (R independente do candidato 9464b00): a semente
+  // viaja como `esperados` — fatia intocada nunca escreve; fatia tocada com
+  // servidor divergente conflita em vez de remover em silêncio o que outra
+  // sessão marcou. Definido após `realOS` (usa a seleção atual como semente).
+  const salvarAcessorios = useCallback(
+    (acessorios: AcessorioEntradaV3[]) => {
+      const seed = seedEntradaEditor(realOS).acessorios;
+      if (!fatiaTocada(acessorios, seed)) return Promise.resolve(true);
+      return runWrite((sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios, seed), "Acessórios salvos.");
+    },
+    [runWrite, realOS],
   );
 
   // R02: somente tocados viajam, sempre com baseline (input × semente do
@@ -2214,8 +2223,16 @@ export function useV4Preview(): V4Vals {
         if (t.limpar.length > 0) limparCred = t.limpar;
       }
       if (incluir.length === 0) return Promise.resolve(true);
+      // Credenciais stale: viajam SOMENTE os valores tocados (+ limpar e
+      // baseline); o input completo nunca é enviado — a action sanitiza e
+      // aplica só o baselined, preservando o LATEST das não tocadas.
+      const inputEnxuto: SalvarProvaEntradaInputV3 = {
+        estadoFisico: incluir.includes("estadoFisico") ? input.estadoFisico : [],
+        avarias: incluir.includes("avarias") ? input.avarias : [],
+        credenciais: { ...t.valores },
+      };
       return runWrite(
-        (sid, osId) => salvarProvaEntradaV3(sid, osId, input, limparCred, esp, incluir),
+        (sid, osId) => salvarProvaEntradaV3(sid, osId, inputEnxuto, limparCred, esp, incluir),
         "Prova de entrada salva.",
       );
     },

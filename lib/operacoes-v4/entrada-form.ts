@@ -229,13 +229,42 @@ function aplicarValoresPatch<T extends Record<string, unknown>>(
 }
 
 /**
+ * Opções do patch intencional (R independente do candidato 9464b00).
+ *
+ * `identidadeEfetiva`: a identidade EFETIVA vista pelo operador na UI
+ * (equipamento tem prioridade — ver `identidadeAtualV4`). Quando informada, a
+ * conferência da baseline de identificação compara o esperado contra o valor
+ * efetivo (equipamento || prova) em vez do snapshot cru da prova — sem ela,
+ * Nova OS com equipamento.cor=Violeta e prova sem cor geraria falso conflito
+ * ao editar para Preto com expected=Violeta. Ausente = compara contra a prova
+ * crua (compat com chamadores que já normalizam a base).
+ */
+export interface OpcoesPatchProvaEntradaV3 {
+  identidadeEfetiva?: Partial<IdentificacaoV3>;
+}
+
+/** Normaliza texto para comparação de baseline: undefined/null ≡ "" (trim). */
+function textoCampoV4(v: unknown): string {
+  if (typeof v === "string") return v.trim();
+  if (v === undefined || v === null) return "";
+  return String(v).trim();
+}
+
+/**
  * Puro (sem I/O): aplica o intent sobre a prova ATUAL (latest), conferindo a
  * baseline por campo. Lança erroConflitoConcorrenciaV3 listando os campos
  * quando o servidor divergiu da baseline — nunca sobrescreve em silêncio.
+ *
+ * Normalização de vazio: campo realmente ausente (undefined) ≡ "" — o
+ * primeiro preenchimento aplica; o segundo (latest já preenchido × baseline
+ * vazia) conflita. Booleanos ausentes ≡ false; senhaTipo ausente ≡ "numerica"
+ * (defaults que o editor exibe) — a primeira troca aplica, a divergente
+ * conflita.
  */
 export function aplicarPatchIntencionalProvaEntrada(
   provaAtual: ProvaEntradaV3,
   intent: PatchProvaEntradaV3,
+  opcoes?: OpcoesPatchProvaEntradaV3,
 ): ProvaEntradaV3 {
   const esperados = intent.esperados ?? {};
   const emConflito: string[] = [];
@@ -249,6 +278,7 @@ export function aplicarPatchIntencionalProvaEntrada(
   if (intent.identificacao) {
     const base = { ...(provaAtual.identificacao ?? {}) } as Record<string, unknown>;
     const esp = esperados.identificacao ?? {};
+    const efetiva = (opcoes?.identidadeEfetiva ?? {}) as Record<string, unknown>;
     const chaves = new Set<string>([
       ...Object.keys(intent.identificacao.valores ?? {}),
       ...((intent.identificacao.limpar ?? []) as string[]),
@@ -259,7 +289,17 @@ export function aplicarPatchIntencionalProvaEntrada(
       const emLimpeza = ((intent.identificacao.limpar ?? []) as string[]).includes(k);
       if (v === undefined && !emLimpeza) continue;
       tocou = true;
-      if (!confere(`identificacao.${k}`, base[k], (esp as Record<string, unknown>)[k])) continue;
+      const esperadoV = (esp as Record<string, unknown>)[k];
+      if (esperadoV !== undefined) {
+        // Baseline efetiva: equipamento tem prioridade; ausente no snapshot
+        // cai para a identidade efetiva vista pelo operador.
+        const cru = base[k];
+        const atualEfetivo = cru === undefined || cru === null ? efetiva[k] : cru;
+        if (textoCampoV4(atualEfetivo) !== textoCampoV4(esperadoV)) {
+          emConflito.push(`identificacao.${k}`);
+          continue;
+        }
+      }
       if (emLimpeza) delete base[k];
       else base[k] = v;
     }
@@ -292,7 +332,23 @@ export function aplicarPatchIntencionalProvaEntrada(
       const emLimpeza = ((intent.credenciais.limpar ?? []) as string[]).includes(k);
       if (v === undefined && !emLimpeza) continue;
       tocou = true;
-      if (!confere(`credenciais.${k}`, base[k], esp[k])) continue;
+      const esperadoV = esp[k];
+      if (esperadoV !== undefined) {
+        let igual: boolean;
+        if (k === "faceId" || k === "biometria") {
+          igual = (base[k] ?? false) === (esperadoV ?? false);
+        } else if (k === "senhaTipo") {
+          const atualNorm = typeof base[k] === "string" && (base[k] as string) ? base[k] : "numerica";
+          const espNorm = typeof esperadoV === "string" && (esperadoV as string) ? esperadoV : "numerica";
+          igual = atualNorm === espNorm;
+        } else {
+          igual = textoCampoV4(base[k]) === textoCampoV4(esperadoV);
+        }
+        if (!igual) {
+          emConflito.push(`credenciais.${k}`);
+          continue;
+        }
+      }
       if (emLimpeza) delete base[k];
       else base[k] = v;
     }
@@ -317,15 +373,48 @@ export function aplicarPatchIntencionalProvaEntrada(
 
 /**
  * Puro: mescla o espelho legado `equipamento` (preserva chaves alheias do
- * LATEST; chaves definidas no patch vencem). Só este espelho tem semântica
- * de mesclagem no `patchPayload` — as demais chaves de topo seguem o intent.
+ * LATEST; chaves definidas no patch vencem). Valor `undefined` no patch =
+ * limpeza explícita do espelho (remove a chave) — usado para espelhar a
+ * limpeza de cor/modelo/IMEI da prova, sem ressuscitar o valor antigo no
+ * reload (a leitura efetiva prioriza equipamento.*). Só este espelho tem
+ * semântica de mesclagem no `patchPayload` — as demais chaves de topo seguem
+ * o intent.
  */
 export function mesclarEspelhoEquipamento(
   atual: unknown,
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
   const base = atual && typeof atual === "object" ? { ...(atual as Record<string, unknown>) } : {};
-  return { ...base, ...patch };
+  const next: Record<string, unknown> = { ...base };
+  for (const k of Object.keys(patch)) {
+    if (patch[k] === undefined) delete next[k];
+    else next[k] = patch[k];
+  }
+  return next;
+}
+
+/**
+ * Puro: monta o patch do espelho `equipamento` a partir do intent de
+ * identificação já sanitizado. Valores definidos espelham (modelo→modelo,
+ * imei→numeroSerie, cor→cor); limpeza explícita (`limpar`) espelha com
+ * `undefined` para remover a chave do equipamento (ver
+ * `mesclarEspelhoEquipamento`). Serial/operadora não têm espelho (vivem só na
+ * prova). Chaves alheias do equipamento nunca são tocadas aqui.
+ */
+export function espelhoPatchIdentificacao(
+  valores: Partial<IdentificacaoV3>,
+  limpar?: (keyof IdentificacaoV3)[],
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (typeof valores.modelo === "string" && valores.modelo.trim()) patch.modelo = valores.modelo;
+  if (typeof valores.imei === "string" && valores.imei.trim()) patch.numeroSerie = valores.imei;
+  if (typeof valores.cor === "string" && valores.cor.trim()) patch.cor = valores.cor;
+  for (const k of limpar ?? []) {
+    if (k === "modelo") patch.modelo = undefined;
+    else if (k === "imei") patch.numeroSerie = undefined;
+    else if (k === "cor") patch.cor = undefined;
+  }
+  return patch;
 }
 
 /** Código do erro explícito de concorrência (outra sessão gravou no meio). */
