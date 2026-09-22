@@ -166,6 +166,35 @@ export function toDadosBasicosInput(editor: DadosBasicosEditorV4): SalvarDadosBa
   };
 }
 
+// ---- Intenção tocada (R02 — pura, testável) -------------------------------
+//
+// Baseline em TERMOS DO SERVIDOR (input × input): campo diferente da base
+// entra em `esperados` com o valor antigo. `previsaoEntrega` vazia significa
+// "manter" (nunca tocada). Sem baseline, o servidor preserva (modo estrito).
+
+const CAMPOS_DB_TOCAVEIS = [
+  "defeitoRelatado",
+  "prioridade",
+  "origem",
+  "localFisico",
+  "recebidoPor",
+  "observacoes",
+] as const;
+
+export function intencaoDadosBasicos(
+  input: SalvarDadosBasicosInputV3,
+  base: SalvarDadosBasicosInputV3,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of CAMPOS_DB_TOCAVEIS) {
+    if ((input[k] ?? "") !== (base[k] ?? "")) out[k] = base[k] ?? "";
+  }
+  if (input.previsaoEntrega !== "" && input.previsaoEntrega !== base.previsaoEntrega) {
+    out.previsaoEntrega = base.previsaoEntrega ?? "";
+  }
+  return out;
+}
+
 /** Patch imutável de um campo do editor. */
 export function setDadosBasicos<K extends keyof DadosBasicosEditorV4>(
   editor: DadosBasicosEditorV4,

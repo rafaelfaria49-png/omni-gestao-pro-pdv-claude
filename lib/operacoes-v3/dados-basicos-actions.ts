@@ -18,27 +18,22 @@
 import { revalidatePath } from "next/cache";
 import type { Session } from "next-auth";
 import type { Prisma } from "@/generated/prisma";
-import type { EventoTimeline, OrdemServico } from "@/types/os";
+import type { OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
+import type { SalvarDadosBasicosInputV3 } from "./dados-basicos-model";
 import {
-  collapseOrigemV3,
-  isLocalFisicoV3,
-  isOrigemV3,
-  isPrioridadeV3,
-  type SalvarDadosBasicosInputV3,
-} from "./dados-basicos-model";
-import { erroConflitoConcorrenciaV3 } from "@/lib/operacoes-v4/entrada-form";
+  erroConflitoConcorrenciaV3,
+  montarProximosDadosBasicos,
+  type EsperadosDadosBasicosV3,
+} from "@/lib/operacoes-v4/entrada-form";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
 function nowIso(): string {
   return new Date().toISOString();
-}
-function eventId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `ev_${Date.now()}`;
 }
 function operadorLabel(session: Session | null): string {
   const u = session?.user;
@@ -46,9 +41,6 @@ function operadorLabel(session: Session | null): string {
 }
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
-}
-function makeEvento(autor: string, conteudo: string, metadata?: Record<string, unknown>): EventoTimeline {
-  return { id: eventId(), tipo: "observacao", autor, autorTipo: "usuario", conteudo, metadata, criadoEm: nowIso() };
 }
 
 async function carregar(
@@ -73,76 +65,6 @@ async function carregar(
 }
 
 /**
- * Monta o próximo payload a partir do LATEST (puro, sem I/O): mesma
- * sanitização/validação de antes, aplicada sobre o estado mais recente para
- * preservar edições independentes de outra sessão (R02).
- */
-function montarProximosDadosBasicos(
-  payload: OSPayloadFull,
-  input: SalvarDadosBasicosInputV3,
-  operador: string,
-): { next: OSPayloadFull; defeito: string } {
-  // Sanitização/validação com os contratos puros (defaults seguros).
-  const defeito = str(input?.defeitoRelatado);
-  const prioridade = isPrioridadeV3(input?.prioridade) ? input.prioridade : "media";
-  const origem = isOrigemV3(input?.origem) ? input.origem : "balcao";
-  const localFisico = isLocalFisicoV3(input?.localFisico) ? input.localFisico : "balcao";
-  const recebidoPor = str(input?.recebidoPor);
-  const observacoes = str(input?.observacoes);
-  const previsao = str(input?.previsaoEntrega); // ISO ou "" (vazio = manter previsão atual)
-
-  // Espelhos/estruturas atuais (aberturaV3 e recepcao viajam soltos no payload).
-  const aberturaAtual =
-    payload.aberturaV3 && typeof payload.aberturaV3 === "object"
-      ? (payload.aberturaV3 as Record<string, unknown>)
-      : {};
-  const recepcaoAtual =
-    aberturaAtual.recepcao && typeof aberturaAtual.recepcao === "object"
-      ? (aberturaAtual.recepcao as Record<string, unknown>)
-      : {};
-  const slaAtual =
-    payload.sla && typeof payload.sla === "object" ? (payload.sla as unknown as Record<string, unknown>) : {};
-
-  // Previsão/SLA: só atualiza quando veio ISO; vazio mantém o prazo operacional atual.
-  const previsaoFinal = previsao || str(recepcaoAtual.previsaoEntrega) || str(slaAtual.prazo);
-  const sla = previsao ? { ...slaAtual, prazo: previsao } : slaAtual;
-
-  const equipamento = { ...(payload.equipamento ?? {}), defeitoRelatado: defeito };
-
-  const aberturaV3 = {
-    ...aberturaAtual,
-    recepcao: {
-      ...recepcaoAtual,
-      dataEntrada: str(recepcaoAtual.dataEntrada) || str(payload.criadoEm) || nowIso(),
-      origem,
-      recebidoPor: recebidoPor || undefined,
-      prioridade,
-      localFisico,
-      previsaoEntrega: previsaoFinal || undefined,
-    },
-    observacoesInternas: observacoes || undefined,
-  };
-
-  const evento = makeEvento(operador, "Dados básicos da OS atualizados (recepção).", {
-    evento: "dados_basicos_atualizados",
-  });
-  const timeline: EventoTimeline[] = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-
-  const next: OSPayloadFull = {
-    ...payload,
-    equipamento: equipamento as OSPayloadFull["equipamento"],
-    prioridade,
-    origem: collapseOrigemV3(origem),
-    sla: sla as unknown as OSPayloadFull["sla"],
-    aberturaV3,
-    timeline: [...timeline, evento],
-    atualizadoEm: nowIso(),
-  } as OSPayloadFull;
-
-  return { next, defeito };
-}
-
-/**
  * Salva os dados básicos da OS (recepção). NÃO altera status/orçamento/diagnóstico/
  * financeiro/estoque/caixa. Retorna o payload atualizado (mesmo shape que `getOrdem`).
  *
@@ -154,6 +76,7 @@ export async function salvarDadosBasicosOSV3(
   storeId: string,
   osId: string,
   input: SalvarDadosBasicosInputV3,
+  esperados?: EsperadosDadosBasicosV3,
 ): Promise<OrdemServico> {
   const { id, session } = await carregar(storeId, osId);
   const sid = (storeId ?? "").trim();
@@ -167,7 +90,7 @@ export async function salvarDadosBasicosOSV3(
     if (!latest || latest.storeId !== sid) throw new Error("OS não encontrada.");
     const payload = latest.payload as unknown as OSPayloadFull | null;
     if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-    const { next, defeito } = montarProximosDadosBasicos(payload, input, operador);
+    const { next, defeito } = montarProximosDadosBasicos(payload, input, operador, esperados);
     // Escreve o payload + a coluna denormalizada `defeito` (usada em busca e como
     // fallback de hidratação). NÃO toca status/valorBase/valorTotal nem qualquer
     // outra coluna. Sem `updateOSPayload` do V2 → sem sync de Financeiro.

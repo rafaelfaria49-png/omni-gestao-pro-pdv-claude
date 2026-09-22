@@ -111,6 +111,7 @@ import {
   removerFotoEntradaV3,
   salvarAssinaturaClienteV3,
   type AdicionarFotoEntradaInputV3,
+  type FatiaProvaEntradaV3,
   type SalvarProvaEntradaInputV3,
 } from "@/lib/operacoes-v3/prova-entrada-actions";
 import type { IdentificacaoV3, AcessorioEntradaV3, CredenciaisEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
@@ -133,7 +134,8 @@ import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operaco
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
-import { alvoAindaSelecionado, intencaoLimpezaCredenciais, intencaoLimpezaIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
+import { alvoAindaSelecionado, fatiaTocada, patchTocadoCredenciais, patchTocadoIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4, type EsperadosDadosBasicosV3, type EsperadosProvaEntradaV3 } from "@/lib/operacoes-v4/entrada-form";
+import { intencaoDadosBasicos, toDadosBasicosInput } from "@/lib/operacoes-v4/dados-basicos-form";
 import { seedDadosBasicos, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
 import {
   PIPELINE_OPERACIONAL_IDS_V4,
@@ -2158,13 +2160,6 @@ export function useV4Preview(): V4Vals {
     [runWrite],
   );
 
-  // ---- Dados básicos da OS (slice 003B): handler real (payload-only, sem financeiro) ----
-  const salvarDadosBasicos = useCallback(
-    (input: SalvarDadosBasicosInputV3) =>
-      runWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input), "Dados básicos salvos."),
-    [runWrite],
-  );
-
   // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
   // T05/T06 + R03: a chave é storeId+osId e a resolução é fechada — detalhe ou
   // linha de outra loja nunca hidrata a seleção atual; sem loja, nulo.
@@ -2174,16 +2169,25 @@ export function useV4Preview(): V4Vals {
     [st.selectedOsId, ordemDetail, ordens, lojaIdAtiva],
   );
 
-  // R02: limpeza explícita derivada no wrapper (input × semente do servidor):
-  // campo com valor na semente e vazio no input = o operador escolheu limpar.
-  // Vazio nos dois = intocado (o servidor preserva). A chamada do workspace
-  // mantém o contrato de cinco handlers (mapeador puro, sem baseline local).
+  // R02: somente tocados viajam, sempre com baseline (input × semente do
+  // servidor). Não tocado nunca entra no intent (nunca escreve); tocado com
+  // servidor igual à baseline aplica; divergente conflita no servidor. A
+  // chamada do workspace mantém o contrato de cinco handlers (mapeador puro).
   const salvarIdentificacao = useCallback(
     (input: IdentificacaoV3) => {
-      const base = seedEntradaEditor(realOS).identificacao;
-      const limpar = intencaoLimpezaIdentificacao(input, base) as (keyof IdentificacaoV3)[];
+      const seed = seedEntradaEditor(realOS).identificacao;
+      const t = patchTocadoIdentificacao(input, seed);
+      if (Object.keys(t.valores).length === 0 && t.limpar.length === 0) return Promise.resolve(true);
+      const esperados = Object.keys(t.esperados).length > 0 ? t.esperados : undefined;
       return runWrite(
-        (sid, osId) => salvarIdentificacaoV3(sid, osId, input, limpar.length > 0 ? limpar : undefined),
+        (sid, osId) =>
+          salvarIdentificacaoV3(
+            sid,
+            osId,
+            t.valores,
+            t.limpar.length > 0 ? t.limpar : undefined,
+            esperados,
+          ),
         "Identificação salva.",
       );
     },
@@ -2191,10 +2195,27 @@ export function useV4Preview(): V4Vals {
   );
   const salvarProvaEntrada = useCallback(
     (input: SalvarProvaEntradaInputV3) => {
-      const base = seedEntradaEditor(realOS).credenciais;
-      const limparCred = intencaoLimpezaCredenciais(input.credenciais ?? {}, base) as (keyof CredenciaisEntradaV3)[];
+      const seed = seedEntradaEditor(realOS);
+      const incluir: FatiaProvaEntradaV3[] = [];
+      const esp: EsperadosProvaEntradaV3 = {};
+      let limparCred: (keyof CredenciaisEntradaV3)[] | undefined;
+      if (fatiaTocada(input.estadoFisico, seed.estadoFisico)) {
+        incluir.push("estadoFisico");
+        esp.estadoFisico = seed.estadoFisico;
+      }
+      if (fatiaTocada(input.avarias, seed.avarias)) {
+        incluir.push("avarias");
+        esp.avarias = seed.avarias;
+      }
+      const t = patchTocadoCredenciais(input.credenciais, seed.credenciais);
+      if (Object.keys(t.valores).length > 0 || t.limpar.length > 0) {
+        incluir.push("credenciais");
+        esp.credenciais = t.esperados;
+        if (t.limpar.length > 0) limparCred = t.limpar;
+      }
+      if (incluir.length === 0) return Promise.resolve(true);
       return runWrite(
-        (sid, osId) => salvarProvaEntradaV3(sid, osId, input, limparCred.length > 0 ? limparCred : undefined),
+        (sid, osId) => salvarProvaEntradaV3(sid, osId, input, limparCred, esp, incluir),
         "Prova de entrada salva.",
       );
     },
@@ -2217,6 +2238,19 @@ export function useV4Preview(): V4Vals {
       return ordens.find((o) => o.id === osId) ?? null;
     },
     [realOS, ordens],
+  );
+
+  // ---- Dados básicos da OS (slice 003B): handler real (payload-only, sem financeiro) ----
+  const salvarDadosBasicos = useCallback(
+    (input: SalvarDadosBasicosInputV3) => {
+      // R02 estrito: só campos com baseline viajam; o servidor preserva o
+      // resto e conflita o que divergiu (nada tocado = nada a escrever).
+      const base = toDadosBasicosInput(seedDadosBasicos(realOS));
+      const esperados = intencaoDadosBasicos(input, base) as EsperadosDadosBasicosV3;
+      if (Object.keys(esperados).length === 0) return Promise.resolve(true);
+      return runWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input, esperados), "Dados básicos salvos.");
+    },
+    [runWrite, realOS],
   );
 
   const atribuirTecnico = useCallback(

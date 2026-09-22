@@ -1,11 +1,21 @@
 // Testes PUROS do editor de Dados básicos V4 (OPS-V4-DADOS-BASICOS-OS-REAL-003B).
 // Ambiente node: helper + lerDadosBasicosV3 são puros (sem next-auth/Prisma).
-import { describe, expect, it } from "vitest";
+// montarProximosDadosBasicos (server, sem I/O direto) é exercitado com o grafo
+// servidor isolado por mocks — mesma técnica de prova-entrada-actions.test.ts.
+import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+vi.mock("@/auth", () => ({ auth: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: vi.fn() }));
+
+import { ehConflitoConcorrenciaV3, montarProximosDadosBasicos } from "./entrada-form";
 import {
   formatPrevisaoComFuso,
+  intencaoDadosBasicos,
   isPrevisaoVencida,
   isoToLocalInput,
   isoToLocalInputInTZ,
@@ -229,5 +239,75 @@ describe("salvarDadosBasicosOSV3 — action segura (guarda estática)", () => {
     for (const lit of ['"loja-1"', "'loja-1'", "`loja-1`"]) {
       expect(both, `fallback literal: ${lit}`).not.toContain(lit);
     }
+  });
+});
+
+describe("montarProximosDadosBasicos — modo estrito por campo (R02)", () => {
+  type PayloadDb = Parameters<typeof montarProximosDadosBasicos>[0];
+  const inputBase = {
+    defeitoRelatado: "D1",
+    prioridade: "media",
+    origem: "balcao",
+    recebidoPor: "QA",
+    localFisico: "balcao",
+    previsaoEntrega: "",
+    observacoes: "",
+  } as const;
+  const payloadCom = (recepcao: Record<string, unknown>, defeito = "D1") =>
+    ({
+      equipamento: { defeitoRelatado: defeito },
+      aberturaV3: { recepcao, observacoesInternas: "" },
+      sla: {},
+      timeline: [],
+      criadoEm: "2026-01-01T00:00:00.000Z",
+    }) as unknown as PayloadDb;
+
+  it("B salva prioridade=alta; A stale salva defeito=D2 → alta preservada + D2 aplicado", () => {
+    const latest = payloadCom({ origem: "balcao", recebidoPor: "QA", prioridade: "alta", localFisico: "balcao" });
+    const { next, defeito } = montarProximosDadosBasicos(
+      latest,
+      { ...inputBase, defeitoRelatado: "D2" },
+      "QA",
+      { defeitoRelatado: "D1" },
+    );
+    expect(defeito).toBe("D2");
+    const recepcao = (next.aberturaV3 as unknown as Record<string, Record<string, unknown>>).recepcao;
+    expect(recepcao.prioridade).toBe("alta");
+    expect((next.equipamento as unknown as Record<string, unknown>).defeitoRelatado).toBe("D2");
+  });
+
+  it("mesmo campo: latest D9 × baseline D1 → conflito, nada aplicado", () => {
+    const latest = payloadCom({ origem: "balcao", recebidoPor: "QA", prioridade: "media", localFisico: "balcao" }, "D9");
+    let erro: unknown = null;
+    try {
+      montarProximosDadosBasicos(latest, { ...inputBase, defeitoRelatado: "D2" }, "QA", { defeitoRelatado: "D1" });
+    } catch (e) {
+      erro = e;
+    }
+    expect(ehConflitoConcorrenciaV3(erro)).toBe(true);
+    expect(String((erro as Error).message)).toMatch(/dadosBasicos\.defeitoRelatado/);
+  });
+
+  it("sem baseline, tudo é preservado do LATEST (modo estrito, nunca escreve)", () => {
+    const latest = payloadCom({ origem: "balcao", recebidoPor: "QA", prioridade: "alta", localFisico: "balcao" }, "D9");
+    const { next, defeito } = montarProximosDadosBasicos(
+      latest,
+      { ...inputBase, defeitoRelatado: "D2", prioridade: "media" },
+      "QA",
+    );
+    expect(defeito).toBe("D9");
+    const recepcao = (next.aberturaV3 as Record<string, Record<string, unknown>>).recepcao;
+    expect(recepcao.prioridade).toBe("alta");
+  });
+});
+
+describe("intencaoDadosBasicos — só tocados viajam com baseline (R02)", () => {
+  it("extrai tocados com a base; vazio em previsão = manter (sem baseline)", () => {
+    const base = { ...toDadosBasicosInput(seedDadosBasicos({} as OrdemServico)) };
+    const atual = { ...base, defeitoRelatado: "D2" };
+    expect(intencaoDadosBasicos(atual, base)).toEqual({ defeitoRelatado: base.defeitoRelatado });
+    expect(intencaoDadosBasicos(base, base)).toEqual({});
+    const comPrazo = { ...base, previsaoEntrega: "2030-07-01T20:00:00.000Z" };
+    expect(intencaoDadosBasicos(comPrazo, base)).toEqual({ previsaoEntrega: base.previsaoEntrega });
   });
 });

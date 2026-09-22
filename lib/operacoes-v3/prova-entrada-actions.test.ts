@@ -122,6 +122,62 @@ describe("R02 — espelho legado de equipamento mescla sem apagar alheios", () =
   });
 });
 
+describe("R02 — baseline por campo: sequencial stale preserva; mesmo campo conflita", () => {
+  const baseM1Violeta = () =>
+    provaBase({
+      identificacao: { imei: "1", serial: "S", operadora: "Vivo", modelo: "M1", cor: "Violeta" },
+    });
+
+  it("B salva modelo=M2; A stale (M1) salva só cor=Preto → final M2 + Preto", () => {
+    // A envia SOMENTE o tocado (cor), com baseline Violeta; modelo não viaja.
+    const latest = baseM1Violeta();
+    latest.identificacao.modelo = "M2";
+    const next = aplicarPatchIntencionalProvaEntrada(latest, {
+      identificacao: { valores: { cor: "Preto" } },
+      esperados: { identificacao: { cor: "Violeta" } },
+    });
+    expect(next.identificacao.cor).toBe("Preto");
+    expect(next.identificacao.modelo).toBe("M2");
+  });
+
+  it("mesmo campo: B salva cor=Verde; A (baseline Violeta) tenta Preto → conflito, Verde preservado", () => {
+    const latest = baseM1Violeta();
+    latest.identificacao.cor = "Verde";
+    let erro: unknown = null;
+    try {
+      aplicarPatchIntencionalProvaEntrada(latest, {
+        identificacao: { valores: { cor: "Preto" } },
+        esperados: { identificacao: { cor: "Violeta" } },
+      });
+    } catch (e) {
+      erro = e;
+    }
+    expect(ehConflitoConcorrenciaV3(erro)).toBe(true);
+    expect(String((erro as Error).message)).toMatch(/identificacao\.cor/);
+    // Nada aplicado: o latest segue intacto para releitura.
+    expect(latest.identificacao.cor).toBe("Verde");
+  });
+
+  it("fatia de lista com baseline divergente conflita em vez de clobber", () => {
+    const latest = provaBase();
+    latest.estadoFisico = [{ componente: "tela", status: "avariado" }];
+    expect(() =>
+      aplicarPatchIntencionalProvaEntrada(latest, {
+        estadoFisico: [{ componente: "tela", status: "ok" }],
+        esperados: { estadoFisico: [{ componente: "tela", status: "ok" }] },
+      }),
+    ).toThrowError(/estadoFisico/);
+  });
+
+  it("sem esperados aplica direto (chamadores legados sem baseline)", () => {
+    const next = aplicarPatchIntencionalProvaEntrada(baseM1Violeta(), {
+      identificacao: { valores: { cor: "Preto" } },
+    });
+    expect(next.identificacao.cor).toBe("Preto");
+    expect(next.identificacao.modelo).toBe("M1");
+  });
+});
+
 describe("R02 — conflito de concorrência é explícito", () => {
   it("erro carrega código e orienta recarregar sem sobrescrever", () => {
     const e = erroConflitoConcorrenciaV3("a prova de entrada");

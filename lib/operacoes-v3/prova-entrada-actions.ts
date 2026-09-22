@@ -42,6 +42,7 @@ import {
   aplicarPatchIntencionalProvaEntrada,
   erroConflitoConcorrenciaV3,
   mesclarEspelhoEquipamento,
+  type EsperadosProvaEntradaV3,
   type PatchProvaEntradaV3,
 } from "@/lib/operacoes-v4/entrada-form";
 
@@ -170,6 +171,9 @@ export interface SalvarProvaEntradaInputV3 {
   credenciais: CredenciaisEntradaV3;
 }
 
+/** Fatias da prova que entram no intent (R02: só tocadas viajam). */
+export type FatiaProvaEntradaV3 = "estadoFisico" | "avarias" | "credenciais";
+
 const COMPONENTE_IDS = new Set(COMPONENTES_FISICOS_V3.map((c) => c.id));
 const STATUS_IDS = new Set(Object.keys(ESTADO_FISICO_STATUS_META_V3) as EstadoFisicoStatusV3[]);
 const AVARIA_IDS = new Set(TIPOS_AVARIA_V3.map((a) => a.id));
@@ -211,24 +215,42 @@ export async function salvarProvaEntradaV3(
   osId: string,
   input: SalvarProvaEntradaInputV3,
   limparCredenciais?: (keyof CredenciaisEntradaV3)[],
+  esperados?: EsperadosProvaEntradaV3,
+  incluir?: FatiaProvaEntradaV3[],
 ): Promise<OrdemServico> {
   const { id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
 
-  const estadoFisico = sanitEstadoFisico(input.estadoFisico);
-  const avarias = sanitAvarias(input.avarias);
-  const credenciais = sanitCredenciais(input.credenciais);
+  // R02: só fatias em `incluir` entram no intent (o wrapper filtra pelo diff
+  // contra a semente; sem `incluir`, entram todas — chamadores legados, ex.:
+  // hub V3, mandam tudo como antes). `esperados` confere a baseline.
+  const quais: FatiaProvaEntradaV3[] = incluir ?? ["estadoFisico", "avarias", "credenciais"];
+  const temEstado = quais.includes("estadoFisico");
+  const temAvarias = quais.includes("avarias");
+  const temCred = quais.includes("credenciais");
+  const ini = input ?? ({} as SalvarProvaEntradaInputV3);
+  const estadoFisico = temEstado ? sanitEstadoFisico(ini.estadoFisico ?? []) : [];
+  const avarias = temAvarias ? sanitAvarias(ini.avarias ?? []) : [];
+  const credenciais = temCred ? sanitCredenciais((ini.credenciais ?? {}) as CredenciaisEntradaV3) : {};
   const resumo = estadoFisico.filter((i) => i.status !== "ok").length;
   // Consolidação (item 4): a senha agora é editada aqui — sincroniza o campo legado
   // `senhaEquipamento` (lido pela impressão da OS / pad 3×3) para fonte única.
-  const patch = credenciais.senha
-    ? { senhaEquipamento: credenciais.senha, senhaEquipamentoTipo: credenciais.senhaTipo ?? "texto" }
+  const patch = (credenciais as CredenciaisEntradaV3).senha
+    ? {
+        senhaEquipamento: (credenciais as CredenciaisEntradaV3).senha,
+        senhaEquipamentoTipo: (credenciais as CredenciaisEntradaV3).senhaTipo ?? "texto",
+      }
     : undefined;
   return persistirPatchProva(
     id,
     (storeId ?? "").trim(),
     operador,
-    { estadoFisico, avarias, credenciais: { valores: credenciais, limpar: limparCredenciais } },
+    {
+      ...(temEstado ? { estadoFisico } : {}),
+      ...(temAvarias ? { avarias } : {}),
+      ...(temCred ? { credenciais: { valores: credenciais, limpar: limparCredenciais } } : {}),
+      ...(esperados ? { esperados } : {}),
+    },
     (jaCriada, op) =>
       makeEvento(
         "observacao",
@@ -249,11 +271,14 @@ export async function salvarIdentificacaoV3(
   osId: string,
   input: IdentificacaoV3,
   limpar?: (keyof IdentificacaoV3)[],
+  esperados?: Partial<IdentificacaoV3>,
 ): Promise<OrdemServico> {
   const { id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
   // R01/R02: somente chaves DEFINIDAS entram no intent (ausente = preserva).
   // Limpeza exige lista explícita `limpar` — vazio nunca exclui sozinho.
+  // `esperados` (baseline por campo, enviada pelo contrato novo) é conferida
+  // no LATEST: divergência vira CONFLITO em vez de clobber sequencial.
   const valores: Partial<IdentificacaoV3> = {};
   const ini = input ?? ({} as IdentificacaoV3);
   if (str(ini.imei)) valores.imei = str(ini.imei);
@@ -272,7 +297,7 @@ export async function salvarIdentificacaoV3(
     id,
     (storeId ?? "").trim(),
     operador,
-    { identificacao: { valores, limpar } },
+    { identificacao: { valores, limpar }, esperados: esperados ? { identificacao: esperados } : undefined },
     (_jaCriada, op) =>
       makeEvento("observacao", op, "Identificação do aparelho atualizada (IMEI/serial/operadora).", { evento: "identificacao_atualizada" }),
     // Sincroniza o espelho legado `equipamento` sobre o LATEST (mescla, sem
@@ -313,7 +338,12 @@ export async function salvarAssinaturaClienteV3(storeId: string, osId: string, d
 
 const ACESSORIO_IDS = new Set(ACESSORIOS_ENTRADA_V3.map((a) => a.id));
 
-export async function salvarAcessoriosEntradaV3(storeId: string, osId: string, acessorios: AcessorioEntradaV3[]): Promise<OrdemServico> {
+export async function salvarAcessoriosEntradaV3(
+  storeId: string,
+  osId: string,
+  acessorios: AcessorioEntradaV3[],
+  esperados?: AcessorioEntradaV3[],
+): Promise<OrdemServico> {
   const { id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
 
@@ -328,7 +358,7 @@ export async function salvarAcessoriosEntradaV3(storeId: string, osId: string, a
     id,
     (storeId ?? "").trim(),
     operador,
-    { acessorios: lista },
+    { acessorios: lista, ...(esperados !== undefined ? { esperados: { acessorios: esperados } } : {}) },
     (_jaCriada, op) =>
       makeEvento("observacao", op, `Acessórios recebidos registrados (${presentes} item(ns)).`, {
         evento: "acessorio_registrado",

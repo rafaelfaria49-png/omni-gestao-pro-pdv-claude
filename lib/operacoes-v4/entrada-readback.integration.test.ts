@@ -29,6 +29,7 @@ import { salvarIdentificacaoV3 } from "@/lib/operacoes-v3/prova-entrada-actions"
 import { ehConflitoConcorrenciaV3 } from "@/lib/operacoes-v4/entrada-form";
 import { salvarDadosBasicosOSV3 } from "@/lib/operacoes-v3/dados-basicos-actions";
 import type { OrdemServico } from "@/types/os";
+import type { SalvarDadosBasicosInputV3 } from "@/lib/operacoes-v3/dados-basicos-model";
 
 function exigirBancoLocal(): string {
   const raw = (process.env.OPS_V4_FLUXO_CURTO_TEST_DATABASE_URL ?? "").trim();
@@ -150,16 +151,28 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
   it("cor e defeito de sessões distintas coexistem com eventos de ambas", async () => {
     const sid = await criarLojaQA();
     const { id } = await criarOS(sid, "Modelo R02");
-    await salvarIdentificacaoV3(sid, id, { cor: "Verde" });
-    await salvarDadosBasicosOSV3(sid, id, {
-      defeitoRelatado: "Tela trincada",
-      prioridade: "media",
-      recebidoPor: "QA",
-      localFisico: "balcao",
-      previsaoEntrega: "",
-      origem: "balcao",
-      observacoes: "",
-    });
+    await salvarIdentificacaoV3(sid, id, { cor: "Verde" }, undefined, { cor: "" });
+    await salvarDadosBasicosOSV3(
+      sid,
+      id,
+      {
+        defeitoRelatado: "Tela trincada",
+        prioridade: "media",
+        recebidoPor: "QA",
+        localFisico: "balcao",
+        previsaoEntrega: "",
+        origem: "balcao",
+        observacoes: "",
+      },
+      {
+        defeitoRelatado: "",
+        prioridade: "",
+        origem: "",
+        recebidoPor: "",
+        localFisico: "",
+        observacoes: "",
+      },
+    );
     const payload = await lerPayload(id);
     const v = lerProvaEntradaV3({ payload } as unknown as OrdemServico);
     expect(v.identificacao.cor).toBe("Verde");
@@ -194,6 +207,106 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
     const v = lerProvaEntradaV3({ payload } as unknown as OrdemServico);
     expect(v.identificacao.cor).toBe("Violeta");
   }, 30000);
+
+  it("stale sequencial: B salva modelo=M2; A com baseline M1 salva só cor → M2 + Preto", async () => {
+    const sid = await criarLojaQA();
+    const { id } = await criarOS(sid, "M1");
+    // Baseline M1/Violeta (primeira escrita com baseline vazia, como a UI).
+    await salvarIdentificacaoV3(
+      sid,
+      id,
+      { modelo: "M1", cor: "Violeta" },
+      undefined,
+      { modelo: "", cor: "" },
+    );
+    // Sessão B (atualizada): muda só o modelo.
+    await salvarIdentificacaoV3(sid, id, { modelo: "M2" }, undefined, { modelo: "M1" });
+    // Sessão A (stale em M1/Violeta): muda só a cor — modelo intocado nunca viaja.
+    await salvarIdentificacaoV3(sid, id, { cor: "Preto" }, undefined, { cor: "Violeta" });
+    const v = lerProvaEntradaV3({ payload: await lerPayload(id) } as unknown as OrdemServico);
+    expect(v.identificacao.modelo).toBe("M2");
+    expect(v.identificacao.cor).toBe("Preto");
+  });
+
+  it("mesmo campo: B salva cor=Verde; A com baseline Violeta tenta Preto → conflito, Verde fica", async () => {
+    const sid = await criarLojaQA();
+    const { id } = await criarOS(sid, "M1");
+    await salvarIdentificacaoV3(sid, id, { cor: "Violeta" }, undefined, { cor: "" });
+    await salvarIdentificacaoV3(sid, id, { cor: "Verde" }, undefined, { cor: "Violeta" });
+    await expect(salvarIdentificacaoV3(sid, id, { cor: "Preto" }, undefined, { cor: "Violeta" })).rejects.toSatisfy(
+      ehConflitoConcorrenciaV3,
+    );
+    const v = lerProvaEntradaV3({ payload: await lerPayload(id) } as unknown as OrdemServico);
+    expect(v.identificacao.cor).toBe("Verde");
+  });
+
+  it("limpeza explícita via opts remove só o campo com baseline", async () => {
+    const sid = await criarLojaQA();
+    const { id } = await criarOS(sid, "M1");
+    await salvarIdentificacaoV3(sid, id, { serial: "S1", cor: "Violeta" }, undefined, { serial: "", cor: "" });
+    await salvarIdentificacaoV3(sid, id, {}, ["serial"], { serial: "S1" });
+    const v = lerProvaEntradaV3({ payload: await lerPayload(id) } as unknown as OrdemServico);
+    expect(v.identificacao.serial).toBeUndefined();
+    expect(v.identificacao.cor).toBe("Violeta");
+  });
+
+  it("dados básicos stale: B salva prioridade=alta; A com baseline D1 salva defeito=D2", async () => {
+    const sid = await criarLojaQA();
+    const { id } = await criarOS(sid, "Modelo DB");
+    const base: SalvarDadosBasicosInputV3 = {
+      defeitoRelatado: "D1",
+      prioridade: "media",
+      recebidoPor: "QA",
+      localFisico: "balcao",
+      previsaoEntrega: "",
+      origem: "balcao",
+      observacoes: "",
+    };
+    await salvarDadosBasicosOSV3(sid, id, base, {
+      defeitoRelatado: "",
+      prioridade: "",
+      origem: "",
+      recebidoPor: "",
+      localFisico: "",
+      observacoes: "",
+    });
+    // Sessão B (atualizada): muda só a prioridade.
+    await salvarDadosBasicosOSV3(sid, id, { ...base, prioridade: "alta" }, { prioridade: "media" });
+    // Sessão A (stale): muda só o defeito, com baseline D1.
+    await salvarDadosBasicosOSV3(sid, id, { ...base, defeitoRelatado: "D2" }, { defeitoRelatado: "D1" });
+    const payload = await lerPayload(id);
+    const recepcao = (payload.aberturaV3 as Record<string, Record<string, unknown>>).recepcao;
+    expect(recepcao.prioridade).toBe("alta");
+    expect((payload.equipamento as Record<string, unknown>).defeitoRelatado).toBe("D2");
+  });
+
+  it("dados básicos mesmo campo: B salva D9; A com baseline D1 tenta D2 → conflito", async () => {
+    const sid = await criarLojaQA();
+    const { id } = await criarOS(sid, "Modelo DB2");
+    const base: SalvarDadosBasicosInputV3 = {
+      defeitoRelatado: "D1",
+      prioridade: "media",
+      recebidoPor: "QA",
+      localFisico: "balcao",
+      previsaoEntrega: "",
+      origem: "balcao",
+      observacoes: "",
+    };
+    await salvarDadosBasicosOSV3(sid, id, base, {
+      defeitoRelatado: "",
+      prioridade: "",
+      origem: "",
+      recebidoPor: "",
+      localFisico: "",
+      observacoes: "",
+    });
+    await salvarDadosBasicosOSV3(sid, id, { ...base, defeitoRelatado: "D9" }, { defeitoRelatado: "D1" });
+    await expect(
+      salvarDadosBasicosOSV3(sid, id, { ...base, defeitoRelatado: "D2" }, { defeitoRelatado: "D1" }),
+    ).rejects.toSatisfy(ehConflitoConcorrenciaV3);
+    const payload = await lerPayload(id);
+    expect((payload.equipamento as Record<string, unknown>).defeitoRelatado).toBe("D9");
+  });
 
   it("duas conexões: dados básicos sobrepostos também conflitam", async () => {
     const sid = await criarLojaQA();

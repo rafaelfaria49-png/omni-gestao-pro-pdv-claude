@@ -13,8 +13,15 @@
 // por conta própria. Re-exporta as tabelas de rótulo da V3 para a UI da V4.
 // ============================================================================
 
-import type { OrdemServico } from "@/types/os";
+import type { EventoTimeline, OrdemServico } from "@/types/os";
 import { identidadeAtualV4 } from "./identidade-aparelho";
+import {
+  collapseOrigemV3,
+  isLocalFisicoV3,
+  isOrigemV3,
+  isPrioridadeV3,
+  type SalvarDadosBasicosInputV3,
+} from "@/lib/operacoes-v3/dados-basicos-model";
 import {
   lerProvaEntradaV3,
   ACESSORIOS_ENTRADA_V3,
@@ -169,6 +176,22 @@ export function limpezasExplicitas(
 // exclui. Exclusão exige lista explícita em `limpar`. Fatias ausentes do
 // intent preservam o servidor; chaves desconhecidas nunca são tocadas.
 
+/**
+ * Baseline por campo/fatia (R02): o que o editor VIA quando tocou. No servidor,
+ * cada chave enviada com `esperados` é conferida contra o LATEST: igual aplica,
+ * divergiu vira CONFLITO_CONCORRENCIA. Chave enviada SEM `esperados` aplica
+ * direto (chamadores legados sem baseline, ex.: hub V3) — o contrato novo
+ * (UI V4) sempre envia `esperados` para tudo que envia.
+ */
+export interface EsperadosProvaEntradaV3 {
+  identificacao?: Partial<IdentificacaoV3>;
+  credenciais?: Partial<CredenciaisEntradaV3>;
+  estadoFisico?: EstadoFisicoItemV3[];
+  avarias?: AvariaV3[];
+  acessorios?: AcessorioEntradaV3[];
+  fotos?: FotoEntradaV3[];
+}
+
 export interface PatchProvaEntradaV3 {
   identificacao?: {
     valores: Partial<IdentificacaoV3>;
@@ -184,6 +207,7 @@ export interface PatchProvaEntradaV3 {
   fotos?: FotoEntradaV3[];
   /** Valor definido = grava; `null` = limpeza explícita; chave ausente = preserva. */
   assinaturaCliente?: AssinaturaV3 | null;
+  esperados?: EsperadosProvaEntradaV3;
 }
 
 function aplicarValoresPatch<T extends Record<string, unknown>>(
@@ -204,30 +228,87 @@ function aplicarValoresPatch<T extends Record<string, unknown>>(
   return next as T;
 }
 
-/** Puro (sem I/O): aplica o intent sobre a prova ATUAL (latest). */
+/**
+ * Puro (sem I/O): aplica o intent sobre a prova ATUAL (latest), conferindo a
+ * baseline por campo. Lança erroConflitoConcorrenciaV3 listando os campos
+ * quando o servidor divergiu da baseline — nunca sobrescreve em silêncio.
+ */
 export function aplicarPatchIntencionalProvaEntrada(
   provaAtual: ProvaEntradaV3,
   intent: PatchProvaEntradaV3,
 ): ProvaEntradaV3 {
+  const esperados = intent.esperados ?? {};
+  const emConflito: string[] = [];
+  const confere = (rotulo: string, atual: unknown, esperado: unknown | undefined): boolean => {
+    if (esperado === undefined) return true;
+    if (igualValorV4(atual, esperado)) return true;
+    emConflito.push(rotulo);
+    return false;
+  };
   const next: ProvaEntradaV3 = { ...provaAtual };
   if (intent.identificacao) {
-    next.identificacao = aplicarValoresPatch(
-      { ...(provaAtual.identificacao ?? {}) } as Record<string, unknown>,
-      intent.identificacao.valores as Record<string, unknown>,
-      intent.identificacao.limpar as string[],
-    ) as unknown as IdentificacaoV3;
+    const base = { ...(provaAtual.identificacao ?? {}) } as Record<string, unknown>;
+    const esp = esperados.identificacao ?? {};
+    const chaves = new Set<string>([
+      ...Object.keys(intent.identificacao.valores ?? {}),
+      ...((intent.identificacao.limpar ?? []) as string[]),
+    ]);
+    let tocou = false;
+    for (const k of chaves) {
+      const v = (intent.identificacao.valores as Record<string, unknown> | undefined)?.[k];
+      const emLimpeza = ((intent.identificacao.limpar ?? []) as string[]).includes(k);
+      if (v === undefined && !emLimpeza) continue;
+      tocou = true;
+      if (!confere(`identificacao.${k}`, base[k], (esp as Record<string, unknown>)[k])) continue;
+      if (emLimpeza) delete base[k];
+      else base[k] = v;
+    }
+    if (tocou) next.identificacao = base as unknown as IdentificacaoV3;
   }
-  if (intent.estadoFisico !== undefined) next.estadoFisico = [...intent.estadoFisico];
-  if (intent.avarias !== undefined) next.avarias = [...intent.avarias];
+  const confereFatia = <T,>(rotulo: string, atual: T, esperado: T | undefined): boolean =>
+    confere(rotulo, atual, esperado);
+  if (intent.estadoFisico !== undefined) {
+    if (!confereFatia("estadoFisico", provaAtual.estadoFisico, esperados.estadoFisico)) {
+      /* registrado em emConflito; fatia preservada abaixo via throw */
+    } else {
+      next.estadoFisico = [...intent.estadoFisico];
+    }
+  }
+  if (intent.avarias !== undefined) {
+    if (confereFatia("avarias", provaAtual.avarias, esperados.avarias)) {
+      next.avarias = [...intent.avarias];
+    }
+  }
   if (intent.credenciais) {
-    next.credenciais = aplicarValoresPatch(
-      { ...(provaAtual.credenciais ?? {}) } as Record<string, unknown>,
-      intent.credenciais.valores as Record<string, unknown>,
-      intent.credenciais.limpar as string[],
-    ) as unknown as CredenciaisEntradaV3;
+    const base = { ...(provaAtual.credenciais ?? {}) } as Record<string, unknown>;
+    const esp = (esperados.credenciais ?? {}) as Record<string, unknown>;
+    const chaves = new Set<string>([
+      ...Object.keys(intent.credenciais.valores ?? {}),
+      ...((intent.credenciais.limpar ?? []) as string[]),
+    ]);
+    let tocou = false;
+    for (const k of chaves) {
+      const v = (intent.credenciais.valores as Record<string, unknown> | undefined)?.[k];
+      const emLimpeza = ((intent.credenciais.limpar ?? []) as string[]).includes(k);
+      if (v === undefined && !emLimpeza) continue;
+      tocou = true;
+      if (!confere(`credenciais.${k}`, base[k], esp[k])) continue;
+      if (emLimpeza) delete base[k];
+      else base[k] = v;
+    }
+    if (tocou) next.credenciais = base as unknown as CredenciaisEntradaV3;
   }
-  if (intent.acessorios !== undefined) next.acessorios = [...intent.acessorios];
-  if (intent.fotos !== undefined) next.fotos = [...intent.fotos];
+  if (intent.acessorios !== undefined) {
+    if (confereFatia("acessorios", provaAtual.acessorios, esperados.acessorios)) {
+      next.acessorios = [...intent.acessorios];
+    }
+  }
+  if (intent.fotos !== undefined) {
+    if (confereFatia("fotos", provaAtual.fotos, esperados.fotos)) {
+      next.fotos = [...intent.fotos];
+    }
+  }
+  if (emConflito.length > 0) throw erroConflitoConcorrenciaV3("a prova de entrada", emConflito);
   if ("assinaturaCliente" in intent) {
     next.assinaturaCliente = intent.assinaturaCliente ?? undefined;
   }
@@ -250,9 +331,10 @@ export function mesclarEspelhoEquipamento(
 /** Código do erro explícito de concorrência (outra sessão gravou no meio). */
 export const CONFLITO_CONCORRENCIA_V3 = "CONFLITO_CONCORRENCIA";
 
-export function erroConflitoConcorrenciaV3(recurso: string): Error {
+export function erroConflitoConcorrenciaV3(recurso: string, campos?: string[]): Error {
+  const detalhe = campos && campos.length > 0 ? ` (campo(s): ${campos.join(", ")})` : "";
   const e = new Error(
-    `A OS foi alterada por outra sessão enquanto você editava ${recurso}. Recarregue a OS e revise antes de salvar — suas alterações foram preservadas na tela.`,
+    `A OS foi alterada por outra sessão enquanto você editava ${recurso}${detalhe}. Recarregue a OS e revise antes de salvar — suas alterações foram preservadas na tela.`,
   );
   (e as Error & { code?: string }).code = CONFLITO_CONCORRENCIA_V3;
   return e;
@@ -272,30 +354,235 @@ export function ehConflitoConcorrenciaV3(e: unknown): boolean {
 // quando vazio) com a semente do servidor: valor na semente + ausente no
 // input = o operador escolheu limpar. Ausente nos dois = intocado.
 
-export function intencaoLimpezaIdentificacao(
-  input: Partial<Record<"imei" | "serial" | "operadora" | "modelo" | "cor", string | undefined>>,
-  semente: Record<"imei" | "serial" | "operadora" | "modelo" | "cor", string>,
-): string[] {
-  const atual: Record<string, string> = {};
-  const base: Record<string, string> = {};
-  for (const k of ["imei", "serial", "operadora", "modelo", "cor"] as const) {
-    atual[k] = input[k] ?? "";
-    base[k] = semente[k] ?? "";
+export function patchTocadoCredenciais(
+  input: Partial<CredenciaisEntradaV3>,
+  semente: EntradaCredenciaisEditorV4,
+): PatchTocadoCredenciais {
+  const texto = patchTocadoTextoCredenciais(
+    {
+      pin: input.pin,
+      senha: input.senha,
+      contaGoogle: input.contaGoogle,
+      contaApple: input.contaApple,
+    },
+    { pin: semente.pin, senha: semente.senha, contaGoogle: semente.contaGoogle, contaApple: semente.contaApple },
+  );
+  const valores: Partial<CredenciaisEntradaV3> = { ...texto.valores };
+  const esperados: Partial<CredenciaisEntradaV3> = { ...texto.esperados };
+  if (input.senhaTipo !== undefined && input.senhaTipo !== semente.senhaTipo) {
+    valores.senhaTipo = input.senhaTipo;
+    esperados.senhaTipo = semente.senhaTipo;
   }
-  return limpezasExplicitas(atual, base);
+  if (input.faceId !== undefined && input.faceId !== semente.faceId) {
+    valores.faceId = input.faceId;
+    esperados.faceId = semente.faceId;
+  }
+  if (input.biometria !== undefined && input.biometria !== semente.biometria) {
+    valores.biometria = input.biometria;
+    esperados.biometria = semente.biometria;
+  }
+  return { valores, limpar: texto.limpar, esperados };
 }
 
-export function intencaoLimpezaCredenciais(
-  input: Partial<Record<"pin" | "senha" | "contaGoogle" | "contaApple", string | undefined>>,
-  semente: Record<"pin" | "senha" | "contaGoogle" | "contaApple", string>,
-): string[] {
-  const atual: Record<string, string> = {};
-  const base: Record<string, string> = {};
-  for (const k of ["pin", "senha", "contaGoogle", "contaApple"] as const) {
-    atual[k] = input[k] ?? "";
-    base[k] = semente[k] ?? "";
+function patchTocadoTextoCredenciais(
+  input: Partial<Record<ChaveCredTexto, string | undefined>>,
+  semente: Record<ChaveCredTexto, string>,
+): PatchTocadoCredenciais {
+  const valores: Partial<CredenciaisEntradaV3> = {};
+  const limpar: (keyof CredenciaisEntradaV3)[] = [];
+  const esperados: Partial<CredenciaisEntradaV3> = {};
+  for (const k of CHAVES_CRED_TEXTO) {
+    const novo = (input[k] ?? "").trim();
+    const base = (semente[k] ?? "").trim();
+    if (novo === base) continue;
+    esperados[k] = base;
+    if (novo === "") limpar.push(k);
+    else valores[k] = novo;
   }
-  return limpezasExplicitas(atual, base);
+  return { valores, limpar, esperados };
+}
+
+// ---- Intenção tocada (R02 — pura, testável) ---------------------------------
+//
+// Filtra o input pelos campos REALMENTE alterados contra a semente do
+// servidor: não tocado nunca entra no intent (nunca escreve); tocado carrega
+// a baseline (`esperados`) para a conferência no servidor. O wrapper monta o
+// intent; a action confere e aplica.
+
+const CHAVES_IDENTIFICACAO = ["imei", "serial", "operadora", "modelo", "cor"] as const;
+type ChaveIdentificacao = (typeof CHAVES_IDENTIFICACAO)[number];
+
+const CHAVES_CRED_TEXTO = ["pin", "senha", "contaGoogle", "contaApple"] as const;
+type ChaveCredTexto = (typeof CHAVES_CRED_TEXTO)[number];
+
+export interface PatchTocadoIdentificacao {
+  valores: Partial<IdentificacaoV3>;
+  limpar: (keyof IdentificacaoV3)[];
+  esperados: Partial<IdentificacaoV3>;
+}
+
+export interface PatchTocadoCredenciais {
+  valores: Partial<CredenciaisEntradaV3>;
+  limpar: (keyof CredenciaisEntradaV3)[];
+  esperados: Partial<CredenciaisEntradaV3>;
+}
+
+export function patchTocadoIdentificacao(
+  input: Partial<IdentificacaoV3>,
+  semente: Record<ChaveIdentificacao, string>,
+): PatchTocadoIdentificacao {
+  const valores: Partial<IdentificacaoV3> = {};
+  const limpar: (keyof IdentificacaoV3)[] = [];
+  const esperados: Partial<IdentificacaoV3> = {};
+  for (const k of CHAVES_IDENTIFICACAO) {
+    const novo = (input[k] ?? "").trim();
+    const base = (semente[k] ?? "").trim();
+    if (novo === base) continue;
+    esperados[k] = base;
+    if (novo === "") limpar.push(k);
+    else valores[k] = novo;
+  }
+  return { valores, limpar, esperados };
+}
+
+/** Fatia de lista tocada? Compara por valor (semente do servidor). */
+export function fatiaTocada(atual: unknown, semente: unknown): boolean {
+  return !igualValorV4(atual ?? null, semente ?? null);
+}
+
+// ---- Montagem estrita dos dados básicos (R02 — pura, testável) -------------
+//
+// Casa pura do write-path de dados básicos: mesma sanitização/validação,
+// aplicada SOMENTE aos campos com baseline (`esperados`); sem baseline, o
+// campo preserva o LATEST (nunca escreve). Com baseline, confere antes de
+// aplicar (divergiu = CONFLITO_CONCORRENCIA com o campo nomeado). Vive aqui —
+// e não no `"use server"` — porque precisa ser importável por testes e o
+// Next só permite exportar funções assíncronas de server-actions.
+
+export type EsperadosDadosBasicosV3 = Partial<
+  Record<
+    | "defeitoRelatado"
+    | "prioridade"
+    | "origem"
+    | "localFisico"
+    | "recebidoPor"
+    | "observacoes"
+    | "previsaoEntrega",
+    string
+  >
+>;
+
+type PayloadSoltoV4 = Record<string, unknown> & {
+  timeline?: EventoTimeline[];
+  criadoEm?: string;
+};
+
+function eventoDbV4(operador: string): EventoTimeline {
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `ev_${Date.now()}`;
+  return {
+    id,
+    tipo: "observacao",
+    autor: operador,
+    autorTipo: "usuario",
+    conteudo: "Dados básicos da OS atualizados (recepção).",
+    metadata: { evento: "dados_basicos_atualizados" },
+    criadoEm: new Date().toISOString(),
+  };
+}
+
+export function montarProximosDadosBasicos(
+  payload: OrdemServico & Record<string, unknown>,
+  input: SalvarDadosBasicosInputV3,
+  operador: string,
+  esperados?: EsperadosDadosBasicosV3,
+): { next: OrdemServico & Record<string, unknown>; defeito: string } {
+  const solto = payload as unknown as PayloadSoltoV4;
+  const aberturaAtual =
+    solto.aberturaV3 && typeof solto.aberturaV3 === "object"
+      ? (solto.aberturaV3 as Record<string, unknown>)
+      : {};
+  const recepcaoAtual =
+    aberturaAtual.recepcao && typeof aberturaAtual.recepcao === "object"
+      ? (aberturaAtual.recepcao as Record<string, unknown>)
+      : {};
+  const slaAtual =
+    solto.sla && typeof solto.sla === "object" ? (solto.sla as unknown as Record<string, unknown>) : {};
+  const equipamentoAtual =
+    solto.equipamento && typeof solto.equipamento === "object"
+      ? (solto.equipamento as unknown as Record<string, unknown>)
+      : {};
+
+  const esp = esperados ?? {};
+  const emConflito: string[] = [];
+  const usar = (campo: keyof EsperadosDadosBasicosV3, atualLatest: string, novoSanitizado: string): string => {
+    if (esp[campo] === undefined) return atualLatest;
+    if ((atualLatest ?? "") !== (esp[campo] ?? "")) {
+      emConflito.push(`dadosBasicos.${campo}`);
+      return atualLatest;
+    }
+    return novoSanitizado;
+  };
+  const txt = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+  const defeito = usar("defeitoRelatado", txt(equipamentoAtual.defeitoRelatado), txt(input?.defeitoRelatado));
+  const prioridade = usar(
+    "prioridade",
+    txt(recepcaoAtual.prioridade) || txt((payload as Record<string, unknown>).prioridade),
+    isPrioridadeV3(input?.prioridade) ? (input?.prioridade as string) : "media",
+  );
+  const origem = usar(
+    "origem",
+    txt(recepcaoAtual.origem) || txt((payload as Record<string, unknown>).origem),
+    isOrigemV3(input?.origem) ? (input?.origem as string) : "balcao",
+  );
+  const localFisico = usar(
+    "localFisico",
+    txt(recepcaoAtual.localFisico),
+    isLocalFisicoV3(input?.localFisico) ? (input?.localFisico as string) : "balcao",
+  );
+  const recebidoPor = usar("recebidoPor", txt(recepcaoAtual.recebidoPor), txt(input?.recebidoPor));
+  const observacoes = usar("observacoes", txt(aberturaAtual.observacoesInternas), txt(input?.observacoes));
+  const prazoLatest = txt(recepcaoAtual.previsaoEntrega) || txt(slaAtual.prazo);
+  const previsao = txt(input?.previsaoEntrega);
+  if (esp.previsaoEntrega !== undefined && prazoLatest !== (esp.previsaoEntrega ?? "")) {
+    emConflito.push("dadosBasicos.previsaoEntrega");
+  }
+  if (emConflito.length > 0) throw erroConflitoConcorrenciaV3("os dados básicos", emConflito);
+  const previsaoFinal = previsao || prazoLatest;
+  const sla = previsao ? { ...slaAtual, prazo: previsao } : slaAtual;
+
+  const equipamento = { ...equipamentoAtual, defeitoRelatado: defeito };
+
+  const aberturaV3 = {
+    ...aberturaAtual,
+    recepcao: {
+      ...recepcaoAtual,
+      dataEntrada: txt(recepcaoAtual.dataEntrada) || txt(solto.criadoEm) || new Date().toISOString(),
+      origem,
+      recebidoPor: recebidoPor || undefined,
+      prioridade,
+      localFisico,
+      previsaoEntrega: previsaoFinal || undefined,
+    },
+    observacoesInternas: observacoes || undefined,
+  };
+
+  const timeline: EventoTimeline[] = Array.isArray(solto.timeline) ? solto.timeline : [];
+  const next = {
+    ...(payload as Record<string, unknown>),
+    equipamento,
+    prioridade,
+    origem: collapseOrigemV3(origem as Parameters<typeof collapseOrigemV3>[0]),
+    sla,
+    aberturaV3,
+    timeline: [...timeline, eventoDbV4(operador)],
+    atualizadoEm: new Date().toISOString(),
+  } as unknown as OrdemServico & Record<string, unknown>;
+
+  return { next, defeito };
 }
 
 // ---- Mapeadores editor → inputs das actions V3 -----------------------------

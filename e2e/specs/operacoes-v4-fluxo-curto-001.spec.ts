@@ -31,8 +31,8 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     const atendente = `Atendente E2E ${sufixo}`
     const previsaoExata = "01/07/2030 17:00 (America/Sao_Paulo)"
 
-    // Rota real + launcher real (sem fallback).
-    await page.goto("/dashboard/operacoes-v4")
+    // Rota canônica real + launcher real (sem fallback, sem redirect).
+    await page.goto("/dashboard/operacoes-v4-preview")
     await dismissFirstAccessWizardIfPresent(page)
     const botaoNovo = page.getByRole("button", { name: "+ Novo", exact: true })
     await expect(botaoNovo).toHaveCount(1, { timeout: 45_000 })
