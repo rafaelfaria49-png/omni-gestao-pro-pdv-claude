@@ -34,17 +34,37 @@ ZERO transmissão SEFAZ, ZERO Neon writes, nenhum XML/certificado/CSC/secret rea
 - Preservados: 100, 103/105, 108/109, 204, 217 (só consulta), 656, CONSULTA
   022B/022E, one-shot, default deny, Production block, authority opaca, zero retry,
   inutilização, contingência, standalone pretty, evento/inutilização compactos.
-- Suíte do GOAL local: `lib/fiscal/xml` + `signing` + `provider/sefaz` +
-  `homologation` + `queue` + `scenario-battery` — 939 passed; 4 failed sendo
-  3 `xmllint ausente no PATH` (ambiente Windows) + 0 de código (versão da bateria
-  já atualizada para 023.0). `typecheck`, `eslint` focado e `git diff --check` verdes.
-- E2E offline (`cstat588-compact-message.test.ts`, 25 testes): cadeia sintética até
+- Suíte do GOAL local (`lib/fiscal/xml` + `signing` + `provider/sefaz` +
+  `homologation` + `queue` + `scenario-battery`): 940 passed / 3 failed / 19 skipped.
+  As 3 falhas são exclusivas de ambiente (`xmllint ausente no PATH` no Windows,
+  sem shim e sem skip); zero falha de código. `npm run typecheck` exit 0,
+  `eslint` focado zero erros, `git diff --check` limpo.
+- E2E offline (`cstat588-compact-message.test.ts`, 25/25): cadeia sintética até
   transporte fake com `D01E_SAFE=true` e pretty parado ANTES do fake socket
   (`send` nunca chamado); `fetch` global com spy prova zero rede externa.
 
+## CI (run 35751426049, work PR #222)
+
+- `Unit and contract (ubuntu-24.04)` = PASS — autoridade XSD: xmllint/libxml2 real
+  executado; `nfce-xml-builder.test.ts` 67/67, `sefaz-envelope.test.ts` 107/107,
+  `scenario-battery` 13/13.
+- `Unit and contract (windows-2022)` = PASS.
+- `Vercel` = PASS.
+- `Container, offline integration and supply chain` = RED por 14 falhas
+  exclusivamente em `app/api/import/advanced/route.test.ts`, causa observada em
+  `lib/cadastros/hub-api-gate.ts` (`getVerifiedSubscriptionFromCookies()` null).
+  Esses arquivos NÃO pertencem ao diff do PR #222 (só `lib/fiscal/**`,
+  `test/fiscal/**` e esta evidência); falha pré-existente fora do escopo Fiscal,
+  com precedente no GOAL 022B. Reproduzida localmente idêntica (14/14).
+
 ## Publicação
 
-- Plan PR #221 (plan-only) aberto; trabalho (código + testes + esta evidência) ainda
-  NÃO commitado localmente nesta sessão — commit `goal(fiscal-023): ...`, push, work PR
-  e `close` seguem após merge do #221 + sync + re-open (precedente #217/#220).
-  Sem merge do work PR. Revisão independente obrigatória (risco ALTO).
+- `PLAN_PR_221=MERGED` · `PLAN_MERGE_SHA=63c902c` (merge normal, plan-only).
+- `WORK_COMMIT=b9212e5` (`goal(fiscal-023): mensagem compacta D01e + backstop +
+  matriz cStat 588 (zero SEFAZ)`, 11 arquivos, +654/−18, sem amend/squash).
+- `WORK_PR=#222 OPEN / UNMERGED` — `WORK_PR_MERGE_AUTHORIZED=false`.
+  Revisão independente obrigatória (risco ALTO).
+- `HUMAN_WAIVER_SCOPE=review-readiness-only` — waiver humano cobre somente o avanço
+  até `READY_FOR_INDEPENDENT_REVIEW_WITH_WAIVER` (container RED pré-existente +
+  xmllint local); não autoriza merge, SEFAZ, Production, `fiscalEnabled=true`,
+  documento fiscal novo ou G-F7.
