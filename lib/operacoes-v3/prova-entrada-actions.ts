@@ -42,6 +42,7 @@ import {
   aplicarPatchIntencionalProvaEntrada,
   erroConflitoConcorrenciaV3,
   espelhoPatchIdentificacao,
+  espelhoPatchSenhaCredenciais,
   mesclarEspelhoEquipamento,
   type EsperadosProvaEntradaV3,
   type PatchProvaEntradaV3,
@@ -162,6 +163,18 @@ async function persistirPatchProva(
       timeline: [...(Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : []), evento],
       atualizadoEm: agora,
     } as OSPayloadFull;
+    // Espelho de senha (legado senhaEquipamento/senhaEquipamentoTipo): deriva
+    // do resultado APLICADO sobre o LATEST — tipo efetivo preservado (nunca
+    // força "texto" com efetivo numerica/padrao); limpeza de senha limpa o
+    // espelho. `undefined` remove a chave; demais campos nunca tocados aqui.
+    const espelhoSenha = espelhoPatchSenhaCredenciais(aplicada.credenciais ?? {}, intentFinal.credenciais);
+    if (espelhoSenha) {
+      const topo = next as unknown as Record<string, unknown>;
+      for (const k of Object.keys(espelhoSenha)) {
+        if (espelhoSenha[k] === undefined) delete topo[k];
+        else topo[k] = espelhoSenha[k];
+      }
+    }
     const r = await tx.ordemServico.updateMany({
       where: { id, updatedAt: latest.updatedAt },
       data: { payload: next as unknown as Prisma.InputJsonValue },
@@ -258,14 +271,10 @@ export async function salvarProvaEntradaV3(
         ) as CredenciaisEntradaV3
       : credSanitizadas;
   const resumo = estadoFisico.filter((i) => i.status !== "ok").length;
-  // Consolidação (item 4): a senha agora é editada aqui — sincroniza o campo legado
-  // `senhaEquipamento` (lido pela impressão da OS / pad 3×3) para fonte única.
-  const patch = (credenciais as CredenciaisEntradaV3).senha
-    ? {
-        senhaEquipamento: (credenciais as CredenciaisEntradaV3).senha,
-        senhaEquipamentoTipo: (credenciais as CredenciaisEntradaV3).senhaTipo ?? "texto",
-      }
-    : undefined;
+  // Consolidação (item 4): a senha agora é editada aqui — o espelho legado
+  // `senhaEquipamento`/`senhaEquipamentoTipo` (lido pela impressão da OS / pad
+  // 3×3) deriva do resultado aplicado sobre o LATEST dentro de
+  // `persistirPatchProva` (tipo efetivo preservado; limpeza limpa o espelho).
   return persistirPatchProva(
     id,
     (storeId ?? "").trim(),
@@ -283,7 +292,7 @@ export async function salvarProvaEntradaV3(
         jaCriada ? "Prova de entrada atualizada." : "Prova de entrada registrada (estado físico, avarias e credenciais).",
         { evento: jaCriada ? "prova_entrada_atualizada" : "prova_entrada_criada", avariados: resumo, avarias: avarias.length },
       ),
-    patch,
+    undefined,
   );
 }
 

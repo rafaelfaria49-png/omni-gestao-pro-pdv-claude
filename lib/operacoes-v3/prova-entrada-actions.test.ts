@@ -4,6 +4,7 @@ import {
   ehConflitoConcorrenciaV3,
   erroConflitoConcorrenciaV3,
   espelhoPatchIdentificacao,
+  espelhoPatchSenhaCredenciais,
   mesclarEspelhoEquipamento,
   CONFLITO_CONCORRENCIA_V3,
   type PatchProvaEntradaV3,
@@ -356,6 +357,115 @@ describe("R independente 9464b00 — 4. acessórios com baseline", () => {
     expect(ehConflitoConcorrenciaV3(erro)).toBe(true);
     expect(String((erro as Error).message)).toMatch(/acessorios/);
     expect(latest.acessorios).toEqual(COM_CARREGADOR);
+  });
+});
+
+describe("R independente e57eb49 — 1. precedência do reader efetivo nos espelhados", () => {
+  it("prova.cor=Azul + equipamento.cor=Violeta (UI vê Violeta) → Preto com expected Violeta = sucesso", () => {
+    const next = aplicarPatchIntencionalProvaEntrada(
+      provaBase({ identificacao: { imei: "1", modelo: "M1", cor: "Azul" } }),
+      {
+        identificacao: { valores: { cor: "Preto" } },
+        esperados: { identificacao: { cor: "Violeta" } },
+      },
+      { identidadeEfetiva: { imei: "1", modelo: "M1", cor: "Violeta" } },
+    );
+    expect(next.identificacao.cor).toBe("Preto");
+  });
+
+  it("efetivo mudou para Verde + expected Violeta = conflito (não segue a prova defasada)", () => {
+    let erro: unknown = null;
+    try {
+      aplicarPatchIntencionalProvaEntrada(
+        provaBase({ identificacao: { imei: "1", modelo: "M1", cor: "Azul" } }),
+        {
+          identificacao: { valores: { cor: "Preto" } },
+          esperados: { identificacao: { cor: "Violeta" } },
+        },
+        { identidadeEfetiva: { imei: "1", modelo: "M1", cor: "Verde" } },
+      );
+    } catch (e) {
+      erro = e;
+    }
+    expect(ehConflitoConcorrenciaV3(erro)).toBe(true);
+    expect(String((erro as Error).message)).toMatch(/identificacao\.cor/);
+  });
+
+  it("serial/operadora (sem espelho) conferem contra a prova, não contra a efetiva", () => {
+    const next = aplicarPatchIntencionalProvaEntrada(
+      provaBase({ identificacao: { serial: "S1", operadora: "Vivo" } }),
+      {
+        identificacao: { valores: { serial: "S2" } },
+        esperados: { identificacao: { serial: "S1" } },
+      },
+      { identidadeEfetiva: { cor: "Violeta" } },
+    );
+    expect(next.identificacao.serial).toBe("S2");
+    let erro: unknown = null;
+    try {
+      aplicarPatchIntencionalProvaEntrada(
+        provaBase({ identificacao: { serial: "S9", operadora: "Vivo" } }),
+        {
+          identificacao: { valores: { serial: "S2" } },
+          esperados: { identificacao: { serial: "S1" } },
+        },
+        { identidadeEfetiva: { cor: "Violeta" } },
+      );
+    } catch (e) {
+      erro = e;
+    }
+    expect(ehConflitoConcorrenciaV3(erro)).toBe(true);
+  });
+});
+
+describe("R independente e57eb49 — 2. espelho de senha (valor + tipo + limpeza)", () => {
+  it("só senha tocada preserva o tipo efetivo (numerica, não força texto)", () => {
+    expect(
+      espelhoPatchSenhaCredenciais({ senha: "nova", senhaTipo: "numerica" }, { valores: { senha: "nova" } }),
+    ).toEqual({ senhaEquipamento: "nova", senhaEquipamentoTipo: "numerica" });
+    expect(
+      espelhoPatchSenhaCredenciais({ senha: "nova", senhaTipo: "padrao" }, { valores: { senha: "nova" } }),
+    ).toEqual({ senhaEquipamento: "nova", senhaEquipamentoTipo: "padrao" });
+  });
+
+  it("sem tipo em lugar algum, default texto (comportamento legado)", () => {
+    expect(espelhoPatchSenhaCredenciais({ senha: "nova" }, { valores: { senha: "nova" } })).toEqual({
+      senhaEquipamento: "nova",
+      senhaEquipamentoTipo: "texto",
+    });
+  });
+
+  it("limpar senha limpa senhaEquipamento e o tipo", () => {
+    const patch = espelhoPatchSenhaCredenciais({}, { valores: {}, limpar: ["senha"] });
+    expect(patch).not.toBeNull();
+    expect(patch!.senhaEquipamento).toBeUndefined();
+    expect(patch!.senhaEquipamentoTipo).toBeUndefined();
+    expect("senhaEquipamento" in patch!).toBe(true);
+  });
+
+  it("sem toque em senha/senhaTipo, espelho intocado (null)", () => {
+    expect(espelhoPatchSenhaCredenciais({ senha: "x", senhaTipo: "numerica" }, undefined)).toBeNull();
+    expect(espelhoPatchSenhaCredenciais({ senha: "x" }, { valores: { pin: "1" } })).toBeNull();
+  });
+
+  it("só tipo tocado, com senha efetiva → atualiza o tipo mantendo o valor", () => {
+    expect(
+      espelhoPatchSenhaCredenciais({ senha: "x", senhaTipo: "padrao" }, { valores: { senhaTipo: "padrao" } }),
+    ).toEqual({ senhaEquipamento: "x", senhaEquipamentoTipo: "padrao" });
+  });
+
+  it("só tipo tocado, sem senha alguma → null (nada para tipar)", () => {
+    expect(espelhoPatchSenhaCredenciais({}, { valores: { senhaTipo: "padrao" } })).toBeNull();
+  });
+
+  it("patch intencional preserva o tipo do LATEST quando só a senha viaja", () => {
+    const base = provaBase({ credenciais: { senha: "antiga", senhaTipo: "numerica" } });
+    const next = aplicarPatchIntencionalProvaEntrada(base, {
+      credenciais: { valores: { senha: "nova" } },
+      esperados: { credenciais: { senha: "antiga" } },
+    });
+    expect(next.credenciais.senha).toBe("nova");
+    expect(next.credenciais.senhaTipo).toBe("numerica");
   });
 });
 

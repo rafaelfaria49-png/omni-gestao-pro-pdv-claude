@@ -30,7 +30,7 @@ import { C, fmt } from "./tokens";
 import type { V4State, V4Stage } from "./types";
 import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
 import { useLojaAtiva, registrarGuardaTrocaLojaV4 } from "@/lib/loja-ativa";
-import { useGuardaRascunhos, type GuardaRascunhosV4 } from "./use-entrada-draft-guard";
+import { useGuardaRascunhos, saidaEtapaExigeGuardaV4, type GuardaRascunhosV4 } from "./use-entrada-draft-guard";
 import type { RascunhoEntradaV4 } from "./parts/stages/EntradaWorkspace";
 import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
@@ -522,8 +522,17 @@ export function buildVals(
   // o snapshot local `st.status` é só fallback enquanto nenhuma OS está selecionada.
   const status = realOS ? resolverStatusV4(realOS) : st.status;
 
-  const go = (stage: V4Stage) =>
-    update({ stage, view: "cockpit", module: "workspace", menu: null });
+  const go = (stage: V4Stage) => {
+    const sair = () => update({ stage, view: "cockpit", module: "workspace", menu: null });
+    // T11: sair da Entrada para outra etapa com rascunho sujo passa pelo
+    // pêndulo salvar/descartar/cancelar (mesma guarda da troca de OS/loja) —
+    // Cancelar permanece na Entrada. Sem sujeira, navegação imediata.
+    if (saidaEtapaExigeGuardaV4(st.stage, stage)) {
+      sairComGuarda(sair, `ir para a etapa ${stage}`);
+      return;
+    }
+    sair();
+  };
   const setModule = (m: V4State["module"]) =>
     update({ module: m, view: "cockpit", menu: null });
   const setView = (v: V4State["view"]) => update({ view: v, menu: null });

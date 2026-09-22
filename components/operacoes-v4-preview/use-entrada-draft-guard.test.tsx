@@ -13,6 +13,7 @@ import userEvent from "@testing-library/user-event";
 import { useEffect, useRef } from "react";
 import {
   criarGuardaRascunhos,
+  saidaEtapaExigeGuardaV4,
   useGuardaRascunhos,
   type GuardaRascunhosV4,
 } from "./use-entrada-draft-guard";
@@ -155,6 +156,39 @@ describe("R04 — nenhum fluxo toca storage genérico", () => {
     g.limparTudo();
     expect(setSpy).not.toHaveBeenCalled();
     expect(getSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("T11 — sair da Entrada para outra etapa com rascunho sujo exige o pêndulo", () => {
+  it("saidaEtapaExigeGuardaV4: só Entrada → outra etapa", () => {
+    expect(saidaEtapaExigeGuardaV4("entrada", "execucao")).toBe(true);
+    expect(saidaEtapaExigeGuardaV4("entrada", "diagnostico")).toBe(true);
+    expect(saidaEtapaExigeGuardaV4("entrada", "entrada")).toBe(false);
+    expect(saidaEtapaExigeGuardaV4("execucao", "diagnostico")).toBe(false);
+    expect(saidaEtapaExigeGuardaV4("diagnostico", "entrada")).toBe(false);
+    expect(saidaEtapaExigeGuardaV4("", "execucao")).toBe(false);
+  });
+
+  it("go(stage) sai da Entrada pelo pêndulo; demais deslocamentos são diretos (guarda estática)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const dir = dirname(fileURLToPath(import.meta.url));
+    const hook = readFileSync(join(dir, "use-v4-preview.ts"), "utf8");
+    const go = hook.slice(hook.indexOf("const go = (stage"), hook.indexOf("// ---- rail ----"));
+    expect(go).toContain("saidaEtapaExigeGuardaV4(st.stage, stage)");
+    expect(go).toContain("sairComGuarda(sair,");
+    // Sem sujeira a guarda libera imediato (livre) — o fluxo direto segue igual.
+    const g = criarGuardaRascunhos<string>();
+    const sair = vi.fn();
+    expect(g.solicitarSaida(sair, { chave: CHAVE_A, descricao: "ir para a etapa execucao" })).toBe("livre");
+    expect(sair).toHaveBeenCalledTimes(1);
+    // Com sujeira bloqueia; Cancelar permanece (saída não roda).
+    g.publicar(CHAVE_A, "digitado", true, acoesSpy());
+    expect(g.solicitarSaida(sair, { chave: CHAVE_A, descricao: "ir para a etapa execucao" })).toBe("bloqueada");
+    g.cancelarSaida();
+    expect(sair).toHaveBeenCalledTimes(1);
+    expect(g.sujo(CHAVE_A)).toBe(true);
   });
 });
 

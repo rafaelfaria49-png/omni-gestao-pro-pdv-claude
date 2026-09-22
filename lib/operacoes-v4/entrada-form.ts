@@ -232,12 +232,12 @@ function aplicarValoresPatch<T extends Record<string, unknown>>(
  * Opções do patch intencional (R independente do candidato 9464b00).
  *
  * `identidadeEfetiva`: a identidade EFETIVA vista pelo operador na UI
- * (equipamento tem prioridade — ver `identidadeAtualV4`). Quando informada, a
- * conferência da baseline de identificação compara o esperado contra o valor
- * efetivo (equipamento || prova) em vez do snapshot cru da prova — sem ela,
- * Nova OS com equipamento.cor=Violeta e prova sem cor geraria falso conflito
- * ao editar para Preto com expected=Violeta. Ausente = compara contra a prova
- * crua (compat com chamadores que já normalizam a base).
+ * (equipamento tem prioridade — `identidadeAtualV4`). Quando informada, a
+ * conferência da baseline dos campos ESPELHADOS (modelo/imei/cor) segue a
+ * MESMA precedência do reader efetivo: vale o efetivo (equipamento || prova),
+ * mesmo quando a prova crua tem outro valor. Serial/operadora não têm espelho
+ * e conferem sempre contra a prova. Ausente = compara contra a prova crua
+ * (compat com chamadores que já normalizam a base).
  */
 export interface OpcoesPatchProvaEntradaV3 {
   identidadeEfetiva?: Partial<IdentificacaoV3>;
@@ -291,10 +291,13 @@ export function aplicarPatchIntencionalProvaEntrada(
       tocou = true;
       const esperadoV = (esp as Record<string, unknown>)[k];
       if (esperadoV !== undefined) {
-        // Baseline efetiva: equipamento tem prioridade; ausente no snapshot
-        // cai para a identidade efetiva vista pelo operador.
-        const cru = base[k];
-        const atualEfetivo = cru === undefined || cru === null ? efetiva[k] : cru;
+        // Baseline efetiva com a precedência do reader: campos espelhados
+        // (modelo/imei/cor) conferem contra o EFETIVO (equipamento || prova,
+        // que a UI exibe) — a prova crua pode ter valor defasado. Serial e
+        // operadora vivem só na prova e conferem contra ela.
+        const espelhado = k === "modelo" || k === "imei" || k === "cor";
+        const efetivoV = efetiva[k];
+        const atualEfetivo = espelhado && efetivoV !== undefined && efetivoV !== null ? efetivoV : base[k];
         if (textoCampoV4(atualEfetivo) !== textoCampoV4(esperadoV)) {
           emConflito.push(`identificacao.${k}`);
           continue;
@@ -369,6 +372,40 @@ export function aplicarPatchIntencionalProvaEntrada(
     next.assinaturaCliente = intent.assinaturaCliente ?? undefined;
   }
   return next;
+}
+
+/**
+ * Puro: monta o patch do espelho legado `senhaEquipamento`/`senhaEquipamentoTipo`
+ * (lido pela impressão da OS / pad 3×3) a partir do resultado APLICADO.
+ *
+ * - Retorna `null` quando o intent não tocou senha nem senhaTipo (espelho
+ *   intocado — preserva os demais campos).
+ * - Senha definida → espelha valor + tipo EFETIVO (`aplicada`, que preserva o
+ *   tipo do LATEST quando o intent não o tocou). Nunca força "texto" quando o
+ *   efetivo continua numerica/padrao; "texto" só como default sem tipo algum.
+ * - Senha limpa (ausente no aplicado) → `undefined` nos dois espelhos para
+ *   remover as chaves (quem mescla apaga `undefined`, como no equipamento).
+ * - Só tipo tocado, com senha efetiva → atualiza o tipo mantendo o valor.
+ * - Só tipo tocado, sem senha alguma → `null` (nada para tipar).
+ */
+export function espelhoPatchSenhaCredenciais(
+  aplicada: CredenciaisEntradaV3,
+  intent?: { valores?: Partial<CredenciaisEntradaV3>; limpar?: (keyof CredenciaisEntradaV3)[] },
+): Record<string, unknown> | null {
+  const valores = (intent?.valores ?? {}) as Record<string, unknown>;
+  const limpar = ((intent?.limpar ?? []) as string[]);
+  const tocouSenha = valores.senha !== undefined || limpar.includes("senha");
+  const tocouTipo = valores.senhaTipo !== undefined;
+  if (!tocouSenha && !tocouTipo) return null;
+  const senha = typeof aplicada.senha === "string" ? aplicada.senha.trim() : "";
+  if (!senha) {
+    if (!tocouSenha) return null;
+    return { senhaEquipamento: undefined, senhaEquipamentoTipo: undefined };
+  }
+  return {
+    senhaEquipamento: senha,
+    senhaEquipamentoTipo: aplicada.senhaTipo ?? "texto",
+  };
 }
 
 /**

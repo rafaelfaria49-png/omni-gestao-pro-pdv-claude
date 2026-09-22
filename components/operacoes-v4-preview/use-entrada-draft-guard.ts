@@ -54,9 +54,17 @@ export interface GuardaRascunhosV4<T = unknown> {
   cancelarSaida(): void;
 }
 
+/**
+ * Puro: T11 — sair da etapa Entrada para outra etapa com rascunho sujo exige
+ * o pêndulo salvar/descartar/cancelar. Qualquer outro deslocamento (entrar na
+ * Entrada, navegar entre demais etapas, permanecer) nunca exige a guarda.
+ */
+export function saidaEtapaExigeGuardaV4(etapaAtual: string, etapaDestino: string): boolean {
+  return (etapaAtual ?? "").trim() === "entrada" && (etapaDestino ?? "").trim() !== "entrada";
+}
+
 /** Puro (sem React): Map por chave + pêndulo de saída com inscritos. */
-export function criarGuardaRascunhos<T = unknown>(): GuardaRascunhosV4<T> & {
-  subscribe: (fn: () => void) => () => void;
+export function criarGuardaRascunhos<T = unknown>(): GuardaRascunhosV4<T> & {  subscribe: (fn: () => void) => () => void;
 } {
   const rascunhos = new Map<string, RascunhoGuardadoV4<T>>();
   let pendente: PendenteInterno | null = null;
