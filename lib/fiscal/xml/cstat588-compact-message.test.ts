@@ -11,8 +11,18 @@
  *    e NÃO generaliza 588 para consulta como rejeição de documento.
  *
  * Nenhum XML real do 022E, nenhum certificado/CSC/secret real, nenhum socket SEFAZ.
+ *
+ * P1-followup (revisão independente): a perna XSD do e2e usa xmllint/libxml2
+ * OFICIAL sobre os bytes exatos do cenário — sem tautologia, sem mock como
+ * prova XSD. Sem xmllint no PATH o teste falha explicitamente como limitação
+ * de ambiente (mesmo padrão de nfce-xml-builder.test.ts); no CI Ubuntu o
+ * xmllint real executa e precisa passar.
  */
+import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import { buildVendaFiscalSnapshot, type BuildSnapshotInput, type SnapshotLojaInput } from "@/lib/fiscal/venda-fiscal-snapshot"
 import { sanitizeProdutoFiscal } from "@/lib/produto-fiscal"
@@ -134,6 +144,9 @@ function portas(): SefazGuardPorts {
   return {
     resolvePilotStoreId: vi.fn(async () => LOJA_PILOTO),
     loadFiscalConfig: vi.fn(async () => ({ provider: "SEFAZ_DIRETO" })),
+    // Mock APENAS para exercitar a fiação dos guards (guard 8 exige um
+    // atestado). NÃO é prova XSD: a prova XSD real é o xmllint abaixo,
+    // sobre os mesmos bytes (P1-followup da revisão independente).
     readXsdAttestation: vi.fn(async (input: { bytesSha256: string }) => ({
       outcome: "VALIDACAO_APROVADA",
       xmlSha256: input.bytesSha256,
@@ -147,6 +160,65 @@ function portas(): SefazGuardPorts {
       senhaRef: "FISCAL_A1_SENHA_SINTETICO",
       provider: "env-sintetico",
     })),
+  }
+}
+
+// ── Harness xmllint oficial (mesmo padrão de nfce-xml-builder.test.ts) ───────
+// Schema de entrada oficial versionado: o elemento raiz NFe (TNFe).
+const NFE_XSD_OFICIAL = resolve(
+  process.cwd(),
+  "lib/fiscal/xsd/schemas/PL_010e_v1.02/NFe/nfe_v4.00.xsd",
+)
+const XMLLINT_SCHEMA_ARGS = ["--noout", "--nonet", "--schema"] as const
+
+type XmllintSchemaResult =
+  | { kind: "ok"; stdout: string }
+  | { kind: "missing"; bin: string }
+  | { kind: "failed"; status: number | null; stdout: string; stderr: string }
+
+function runXmllintSchema(xsdPath: string, xmlPath: string, bin = "xmllint"): XmllintSchemaResult {
+  try {
+    const stdout = execFileSync(bin, [...XMLLINT_SCHEMA_ARGS, xsdPath, xmlPath], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    return { kind: "ok", stdout }
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException & { status?: number | null; stdout?: string; stderr?: string }
+    if (err.code === "ENOENT") return { kind: "missing", bin }
+    return {
+      kind: "failed",
+      status: typeof err.status === "number" ? err.status : null,
+      stdout: String(err.stdout ?? ""),
+      stderr: String(err.stderr ?? err.message ?? ""),
+    }
+  }
+}
+
+function requireXmllintResult(result: XmllintSchemaResult): Exclude<XmllintSchemaResult, { kind: "missing" }> {
+  if (result.kind === "missing") {
+    throw new Error(
+      `xmllint ausente no PATH (${result.bin}). No Ubuntu instale o pacote oficial libxml2-utils; a validação XSD do cenário 588 não pode ser pulada.`,
+    )
+  }
+  return result
+}
+
+/**
+ * Valida os EXATOS bytes fiscais contra o XSD oficial com xmllint real.
+ * Escreve os bytes verbatim num arquivo temporário (fora do repo) e remove
+ * depois. Falha explicitamente sem xmllint (limitação de ambiente, sem
+ * shim e sem skip); reprovação do schema falha como defeito de código.
+ */
+function assertExactBytesPassamNoXsdOficial(exactBytes: Uint8Array): void {
+  const dir = mkdtempSync(join(tmpdir(), "cstat588-xsd-"))
+  try {
+    const xmlPath = join(dir, "nfe588-exact-bytes.xml")
+    writeFileSync(xmlPath, exactBytes)
+    const result = requireXmllintResult(runXmllintSchema(NFE_XSD_OFICIAL, xmlPath))
+    expect(result.kind, result.kind === "failed" ? result.stderr : "").toBe("ok")
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 }
 
@@ -343,8 +415,18 @@ describe("e2e offline: snapshot → compacto → XMLDSig → XSD → enviNFe →
       const XMLDSIG = verificacao.valido && verificacao.digestConfere && verificacao.assinaturaConfere
       expect(XMLDSIG).toBe(true)
 
-      // 3. XSD oficial (via atestado vinculado aos mesmos bytes, como o guard exige).
+      // 3. XSD OFICIAL REAL sobre os EXATOS bytes fiscais do cenário 588
+      // (xmllint/libxml2, --noout --nonet --schema nfe_v4.00.xsd versionado).
+      // Sem xmllint no PATH o teste falha explicitamente como limitação de
+      // ambiente (sem shim, sem skip); no CI Ubuntu o xmllint real executa.
       const exactBytes = bytes(assinado.xml)
+      assertExactBytesPassamNoXsdOficial(exactBytes)
+      const XSD = "VALIDACAO_APROVADA_XSD_OFICIAL_XMLLINT"
+      expect(XSD).toBe("VALIDACAO_APROVADA_XSD_OFICIAL_XMLLINT")
+
+      // 3b. Guards pré-transporte (fiação): o atestado aqui é mock e prova
+      // apenas que o guard 8 exige atestado vinculado aos mesmos bytes —
+      // NÃO é prova XSD (a prova é o xmllint acima).
       const bytesSha256 = sha256Hex(exactBytes)
       const guards = await runSefazPreTransportGuards({
         document: documento(built.chaveAcesso),
@@ -354,8 +436,6 @@ describe("e2e offline: snapshot → compacto → XMLDSig → XSD → enviNFe →
         ports: portas(),
       })
       expect(guards.ok).toBe(true)
-      const XSD = "VALIDACAO_APROVADA"
-      expect(XSD).toBe("VALIDACAO_APROVADA")
 
       // 4. enviNFe.
       const envi = composeEnviNFeRequest({ exactBytes })
@@ -398,7 +478,7 @@ describe("e2e offline: snapshot → compacto → XMLDSig → XSD → enviNFe →
 
       // Métricas exigidas pelo GOAL.
       expect(XMLDSIG).toBe(true)
-      expect(XSD).toBe("VALIDACAO_APROVADA")
+      expect(XSD).toBe("VALIDACAO_APROVADA_XSD_OFICIAL_XMLLINT")
       expect(D01E_SAFE).toBe(true)
       expect(INTERTAG_FORMATTING_WHITESPACE).toBe(0)
     } finally {
