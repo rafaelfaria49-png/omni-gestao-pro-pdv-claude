@@ -32,17 +32,23 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     const previsaoExata = "01/07/2030 17:00 (America/Sao_Paulo)"
 
     // Rota canônica real + launcher real (sem fallback, sem redirect).
+    // R OpenAI (check 10 em dev frio): espera determinística até o launcher
+    // estar utilizável E o wizard ausente. Se o wizard surgir tardiamente na
+    // janela, dispensa e continua aguardando — sem sleep fixo como garantia,
+    // sem skip, sem catch, sem .first() arbitrário.
+    const wizard = page.getByRole("dialog", { name: /Boas-vindas/ })
+    const botaoNovo = page.getByTitle(/Novo atendimento/)
     await page.goto("/dashboard/operacoes-v4-preview")
-    // Hidratação em dev frio: o wizard pode renderizar tarde; dar janela antes
-    // de dispensar, dispensar, e exigir wizard oculto (sem skip, sem catch).
-    await page.waitForTimeout(3000)
-    await dismissFirstAccessWizardIfPresent(page)
-    await expect(page.getByRole("dialog", { name: /Boas-vindas/ })).toBeHidden({ timeout: 15_000 })
+    await expect(async () => {
+      if (await wizard.isVisible()) {
+        await dismissFirstAccessWizardIfPresent(page)
+      }
+      await expect(wizard).toBeHidden({ timeout: 5_000 })
+      await expect(botaoNovo).toHaveCount(1, { timeout: 5_000 })
+    }).toPass({ timeout: 90_000 })
     // Launcher canônico no TopBar, escopado pelo título nomeado (o seletor de
     // OS tem segundo `+ Novo` com a mesma ação openNovoAtendimento — escopo
     // determinístico, sem .first() arbitrário, com guarda de contagem).
-    const botaoNovo = page.getByTitle(/Novo atendimento/)
-    await expect(botaoNovo).toHaveCount(1, { timeout: 45_000 })
     await botaoNovo.click()
     await expect(page.getByText("Novo atendimento", { exact: true })).toBeVisible({ timeout: 30_000 })
     const opcaoNovaOS = page.getByRole("button", { name: "Nova OS" })
@@ -103,8 +109,16 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     // T01: ao criar e abrir imediatamente, resumo e formulário exibem o mesmo dado.
     // Escopo à seção imediata (filho direto h3) — `section:has(texto)` casaria
     // ancestrais aninhados; contagem determinística sem .first() arbitrário.
+    // Mesma espera determinística do launcher: se o wizard reaparecer na
+    // navegação pós-criação, dispensa e continua até o resumo estar pronto.
     const grupoResumo = page.locator("section:has(> h3:text-is('Informado na abertura'))")
-    await expect(grupoResumo).toHaveCount(1, { timeout: 30_000 })
+    await expect(async () => {
+      if (await wizard.isVisible()) {
+        await dismissFirstAccessWizardIfPresent(page)
+      }
+      await expect(wizard).toBeHidden({ timeout: 5_000 })
+      await expect(grupoResumo).toHaveCount(1, { timeout: 5_000 })
+    }).toPass({ timeout: 60_000 })
     const resumo = grupoResumo.locator("dl")
     await expect(resumo).toHaveCount(1)
     await expect(resumo.getByText(modelo, { exact: false })).toBeVisible({ timeout: 15_000 })
@@ -146,8 +160,15 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     await linhaOS.click()
 
     // Nova leitura do servidor: tudo igual ao informado, com a cor editada.
+    // Mesma espera determinística (wizard pode reaparecer na reabertura).
     const grupoResumo2 = page.locator("section:has(> h3:text-is('Informado na abertura'))")
-    await expect(grupoResumo2).toHaveCount(1, { timeout: 30_000 })
+    await expect(async () => {
+      if (await wizard.isVisible()) {
+        await dismissFirstAccessWizardIfPresent(page)
+      }
+      await expect(wizard).toBeHidden({ timeout: 5_000 })
+      await expect(grupoResumo2).toHaveCount(1, { timeout: 5_000 })
+    }).toPass({ timeout: 60_000 })
     const resumo2 = grupoResumo2.locator("dl")
     await expect(resumo2).toHaveCount(1)
     await expect(resumo2.getByText(modelo, { exact: false })).toBeVisible({ timeout: 15_000 })
