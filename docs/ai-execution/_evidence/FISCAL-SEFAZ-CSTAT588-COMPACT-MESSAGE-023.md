@@ -75,7 +75,8 @@ ZERO transmissão SEFAZ, ZERO Neon writes, nenhum XML/certificado/CSC/secret rea
   `const XSD = "VALIDACAO_APROVADA"` eliminada; perna XSD do e2e agora é
   xmllint real sobre os bytes exatos (mesmo pipeline até enviNFe/SOAP).
   Validação total no Windows: 24/25 (1 falha = `xmllint ausente`, ambiente
-  por desenho); prova total requer CI Ubuntu verde (seção CI abaixo).
+  por desenho); prova total com xmllint real registrada na seção CI acima
+  (`FOLLOWUP_CODE_CI_RUN=35790939892`: 25/25 no container).
 - `P1_588_OFFICIAL_DOC_VERSIONED=true` —
   `docs/fiscal/FISCAL_CSTAT588_AUTORIDADE_OFICIAL_023.md` (fatos oficiais
   A+B com verbatim SEFAZ-SP verificado em 2026-09-22, corroboração 022E,
@@ -85,13 +86,37 @@ ZERO transmissão SEFAZ, ZERO Neon writes, nenhum XML/certificado/CSC/secret rea
 - `EVENT_COMPACT_TEST=8/8` (`cstat588-produtores-compactos.test.ts`:
   evento 4/4 + inutilização 4/4) · `INUTILIZACAO_COMPACT_TEST=4/4`.
 - `ENTITY_WHITESPACE_P2_DEFERRED=true` (ver bloco causa/correção).
-- `EVIDENCE_CI_RUN_FIXED=true` — este arquivo agora referencia o run final.
 
-## CI (run 35755411332 — `CI_RUN_FINAL`, work PR #222)
+## CI — runs observados (work PR #222; sem `CI_RUN_FINAL` — rótulo aposentado para não re-stalar a evidência a cada commit)
 
-> Último run observado antes do follow-up (run 35751426049) para referência;
-> após o push do follow-up exige-se run novo com Ubuntu Fiscal/XSD verde e
-> assinatura idêntica no vermelho conhecido de `import/advanced`.
+- Run 35751426049: observado antes do follow-up (referência histórica).
+- Run 35755411332: observado no ponto da revisão independente (referência
+  histórica). NENHUM dos dois é chamado de final: o run que validou o código
+  do follow-up é o abaixo.
+- `FOLLOWUP_CODE_HEAD=2c967440fdcc45cd31a930bb64d19e914d8b5cd7`
+  (commit de código do follow-up P1/P2/P3; PR com 13 arquivos no total,
+  delta do follow-up com 4 arquivos).
+- `FOLLOWUP_CODE_CI_RUN=35790939892` — run que efetivamente validou o
+  `FOLLOWUP_CODE_HEAD`:
+  - `FOLLOWUP_CODE_CI_UBUNTU=PASS` (`Unit and contract ubuntu-24.04`, 2m22s).
+  - `FOLLOWUP_CODE_CI_WINDOWS=PASS` (`Unit and contract windows-2022`, 2m28s).
+  - `FOLLOWUP_CODE_CI_XSD=PASS` (xmllint provisionado no job; `nfce-xml-builder`
+    67/67; e, na suíte completa do container com libxml2 2.15.3 compilado da
+    fonte oficial: `cstat588-compact-message.test.ts` 25/25 com xmllint real
+    sobre os bytes exatos do cenário 588, `cstat588-produtores-compactos`
+    8/8, zero falha Fiscal nova).
+  - `CONTAINER_KNOWN_RED=true` ·
+    `CONTAINER_FAILURE_SIGNATURE_SAME=true` — `Container, offline integration
+    and supply chain` RED SOMENTE por 14 falhas em
+    `app/api/import/advanced/route.test.ts` (mesma família/arquivo/contagem do
+    vermelho conhecido, causa em `lib/cadastros/hub-api-gate.ts`).
+- `PR_TOTAL_CHANGED_FILES=13` · `FOLLOWUP_DELTA_FILES=4`.
+- Escopo do PR: `lib/fiscal/**`, `test/fiscal/**`, `docs/fiscal/**`
+  (autoridade oficial 588) e esta evidência — `app/api/import/advanced` e
+  `lib/cadastros` NÃO pertencem ao diff; falha pré-existente fora do escopo
+  Fiscal, com precedente no GOAL 022B.
+
+## CI histórico (runs de referência, não finais)
 
 - `Unit and contract (ubuntu-24.04)` = PASS — autoridade XSD: xmllint/libxml2 real
   executado; `nfce-xml-builder.test.ts` 67/67, `sefaz-envelope.test.ts` 107/107,
@@ -101,9 +126,10 @@ ZERO transmissão SEFAZ, ZERO Neon writes, nenhum XML/certificado/CSC/secret rea
 - `Container, offline integration and supply chain` = RED por 14 falhas
   exclusivamente em `app/api/import/advanced/route.test.ts`, causa observada em
   `lib/cadastros/hub-api-gate.ts` (`getVerifiedSubscriptionFromCookies()` null).
-  Esses arquivos NÃO pertencem ao diff do PR #222 (só `lib/fiscal/**`,
-  `test/fiscal/**` e esta evidência); falha pré-existente fora do escopo Fiscal,
-  com precedente no GOAL 022B. Reproduzida localmente idêntica (14/14).
+  Esses arquivos NÃO pertencem ao diff do PR #222; falha pré-existente fora do
+  escopo Fiscal, com precedente no GOAL 022B. Reproduzida localmente idêntica
+  (14/14). Para o run que validou o follow-up, ver seção CI acima
+  (`FOLLOWUP_CODE_CI_RUN=35790939892`, mesma assinatura).
 
 ## Publicação
 
