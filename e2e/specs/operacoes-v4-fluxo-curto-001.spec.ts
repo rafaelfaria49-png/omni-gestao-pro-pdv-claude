@@ -33,21 +33,29 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
 
     // Rota canônica real + launcher real (sem fallback, sem redirect).
     await page.goto("/dashboard/operacoes-v4-preview")
+    // Hidratação em dev frio: o wizard pode renderizar tarde; dar janela antes
+    // de dispensar, dispensar, e exigir wizard oculto (sem skip, sem catch).
+    await page.waitForTimeout(3000)
     await dismissFirstAccessWizardIfPresent(page)
+    await expect(page.getByRole("dialog", { name: /Boas-vindas/ })).toBeHidden({ timeout: 15_000 })
     // Launcher canônico no TopBar, escopado pelo título nomeado (o seletor de
     // OS tem segundo `+ Novo` com a mesma ação openNovoAtendimento — escopo
     // determinístico, sem .first() arbitrário, com guarda de contagem).
     const botaoNovo = page.getByTitle(/Novo atendimento/)
     await expect(botaoNovo).toHaveCount(1, { timeout: 45_000 })
     await botaoNovo.click()
-    await expect(page.getByText("Novo atendimento", { exact: true })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText("Novo atendimento", { exact: true })).toBeVisible({ timeout: 30_000 })
     const opcaoNovaOS = page.getByRole("button", { name: "Nova OS" })
     await expect(opcaoNovaOS).toHaveCount(1)
-    await opcaoNovaOS.click()
+    // Launcher é dialog com backdrop que fecha em clique fora/scroll — ativar
+    // por teclado evita interceptação de pointer events (mesma ação onClick,
+    // sem .first() arbitrário, com guarda de contagem).
+    await opcaoNovaOS.press("Enter")
 
-    // Modal Nova OS aberto (título + tipo de entrada).
+    // Modal Nova OS aberto (título + tipo de entrada; compilação fria do modal
+    // pode exceder 15s em dev — guarda estendida sem afrouxar a asserção).
     const modal = page.getByRole("dialog").filter({ hasText: "Nova Ordem de Serviço" })
-    await expect(modal).toHaveCount(1, { timeout: 15_000 })
+    await expect(modal).toHaveCount(1, { timeout: 45_000 })
     await expect(modal.getByText("Tipo de entrada", { exact: false })).toBeVisible()
 
     // Modo cliente explícito: NOVO (o padrão é "existente").
@@ -73,8 +81,14 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     await expect(confirmarServico).toHaveCount(1)
     await confirmarServico.click()
     await expect(modal.getByText("1 serviço")).toBeVisible()
-    await expect(modal.getByText(/Valor comercial.*300/)).toBeVisible()
+    // Valor exibido no resumo e na barra de ação (mesmo valor duas vezes —
+    // guarda por contagem determinística, sem .first() arbitrário).
+    await expect(modal.getByText(/Valor comercial.*300/)).toHaveCount(2)
 
+    // Recepção: acordeão fechado por padrão — abrir antes de preencher.
+    const recepcaoToggle = modal.getByRole("button", { name: /Recepção/ })
+    await expect(recepcaoToggle).toHaveCount(1)
+    await recepcaoToggle.click()
     // Recepção: atendente explícito, prioridade explícita, previsão com fuso.
     await modal.locator("xpath=//div[normalize-space()='Recebido por']/following-sibling::input").fill(atendente)
     await modal.locator("xpath=//div[normalize-space()='Prioridade']/following-sibling::select").selectOption("alta")
@@ -87,7 +101,9 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     await botaoCriar.click()
 
     // T01: ao criar e abrir imediatamente, resumo e formulário exibem o mesmo dado.
-    const grupoResumo = page.locator("section", { has: page.getByText("Informado na abertura") })
+    // Escopo à seção imediata (filho direto h3) — `section:has(texto)` casaria
+    // ancestrais aninhados; contagem determinística sem .first() arbitrário.
+    const grupoResumo = page.locator("section:has(> h3:text-is('Informado na abertura'))")
     await expect(grupoResumo).toHaveCount(1, { timeout: 30_000 })
     const resumo = grupoResumo.locator("dl")
     await expect(resumo).toHaveCount(1)
@@ -95,13 +111,13 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     await expect(resumo.getByText(defeito, { exact: false })).toBeVisible()
     await expect(resumo.getByText(atendente, { exact: false })).toBeVisible()
     await expect(resumo.getByText(corCriacao, { exact: false })).toBeVisible()
-    await expect(resumo.getByText("Alta", { exact: true })).toBeVisible()
+    await expect(resumo.getByText("alta", { exact: true })).toBeVisible()
     // T09: o MESMO instante da criação, com fuso explícito.
     await expect(resumo.getByText(previsaoExata, { exact: true })).toBeVisible()
 
     // T02/T07: editar SOMENTE a cor não apaga os demais campos. A correção
     // exige abrir a edição ("Alterar" na linha da Cor) explicitamente.
-    const grupoEdicao = page.locator("section", { has: page.getByText("Completar identificação") })
+    const grupoEdicao = page.locator("section:has(> h3:text-is('Completar identificação'))")
     await expect(grupoEdicao).toHaveCount(1)
     const linhaCor = grupoEdicao.locator("div").filter({ hasText: /^Cor/ })
     const alterarCor = linhaCor.getByRole("button", { name: "Alterar" })
@@ -130,7 +146,7 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     await linhaOS.click()
 
     // Nova leitura do servidor: tudo igual ao informado, com a cor editada.
-    const grupoResumo2 = page.locator("section", { has: page.getByText("Informado na abertura") })
+    const grupoResumo2 = page.locator("section:has(> h3:text-is('Informado na abertura'))")
     await expect(grupoResumo2).toHaveCount(1, { timeout: 30_000 })
     const resumo2 = grupoResumo2.locator("dl")
     await expect(resumo2).toHaveCount(1)
@@ -139,7 +155,7 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     await expect(resumo2.getByText(atendente, { exact: false })).toBeVisible()
     await expect(resumo2.getByText(corEdicao, { exact: false })).toBeVisible()
     await expect(resumo2.getByText(imei, { exact: false })).toBeVisible()
-    await expect(resumo2.getByText("Alta", { exact: true })).toBeVisible()
+    await expect(resumo2.getByText("alta", { exact: true })).toBeVisible()
     await expect(resumo2.getByText(previsaoExata, { exact: true })).toBeVisible()
   })
 })

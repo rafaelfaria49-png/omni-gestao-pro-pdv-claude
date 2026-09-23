@@ -138,21 +138,27 @@ function ConferenciaSnapshot({ v }: { v: V4Vals }) {
   );
 }
 
-function DadosBasicosSection({ db, setDb }: Props) {
+function DadosBasicosSection({ db, setDb, v }: Props) {
   const [corrigirAbertura, setCorrigirAbertura] = useState(false);
   const setBasico = <K extends keyof DadosBasicosEditorV4>(key: K, value: DadosBasicosEditorV4[K]) =>
     setDb((current) => setDadosBasicos(current, key, value));
   const aberturaJaInformada = Boolean(db.defeitoRelatado.trim() || db.recebidoPor.trim());
   // Atendente real: preenche pela identidade autenticada quando o campo vem
-  // vazio (override manual continua valendo — visível no input).
+  // vazio (override manual continua valendo — visível no input). Só após carga
+  // estabelecida e com semente vazia no servidor (legado sem recepção) — sem
+  // isso, o preenchimento correria com a semente recém-criada (T01) e geraria
+  // falso conflito em "recebido por" bloqueando o Save sem edição real.
   const { data: session } = useSession();
   const nomeSessao = ((session?.user as { name?: unknown } | undefined)?.name ?? session?.user?.email ?? "").toString().trim();
+  const seedRecebidoPor = (v.dadosBasicosSeed?.recebidoPor ?? "").trim();
   useEffect(() => {
+    if (!v.cargaEntradaEstabelecida) return;
+    if (seedRecebidoPor) return;
     if (!db.recebidoPor.trim() && nomeSessao) {
       setDb((current) => (current.recebidoPor.trim() ? current : setDadosBasicos(current, "recebidoPor", nomeSessao)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nomeSessao]);
+  }, [nomeSessao, v.cargaEntradaEstabelecida, seedRecebidoPor]);
   // T10: previsão no passado exige aviso — nunca correção silenciosa.
   const previsaoIso = db.previsaoLocal.trim() ? localInputToIsoInTZ(db.previsaoLocal) : "";
   const previsaoVencida = isPrevisaoVencida(previsaoIso);
