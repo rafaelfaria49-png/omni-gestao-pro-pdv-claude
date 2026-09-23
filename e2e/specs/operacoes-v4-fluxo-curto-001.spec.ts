@@ -34,7 +34,10 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
     // Rota canônica real + launcher real (sem fallback, sem redirect).
     await page.goto("/dashboard/operacoes-v4-preview")
     await dismissFirstAccessWizardIfPresent(page)
-    const botaoNovo = page.getByRole("button", { name: "+ Novo", exact: true })
+    // Launcher canônico no TopBar, escopado pelo título nomeado (o seletor de
+    // OS tem segundo `+ Novo` com a mesma ação openNovoAtendimento — escopo
+    // determinístico, sem .first() arbitrário, com guarda de contagem).
+    const botaoNovo = page.getByTitle(/Novo atendimento/)
     await expect(botaoNovo).toHaveCount(1, { timeout: 45_000 })
     await botaoNovo.click()
     await expect(page.getByText("Novo atendimento", { exact: true })).toBeVisible({ timeout: 15_000 })

@@ -102,7 +102,7 @@ describe("R01 — criar Violeta, editar Preto, persistir e reler", () => {
     const sid = await criarLojaQA();
     const { id } = await criarOS(sid, "E2E-Modelo R01");
     await salvarIdentificacaoV3(sid, id, { cor: "Violeta", modelo: "E2E-Modelo R01", imei: "111222333444555" });
-    const v1 = lerProvaEntradaV3({ payload: await lerPayload(id) } as unknown as OrdemServico);
+    const v1 = lerProvaEntradaV3((await lerPayload(id)) as unknown as OrdemServico);
     expect(v1.identificacao.cor).toBe("Violeta");
     expect(v1.identificacao.modelo).toBe("E2E-Modelo R01");
     // Condição física e demais fatias intactas após a escrita.
@@ -110,7 +110,7 @@ describe("R01 — criar Violeta, editar Preto, persistir e reler", () => {
     expect(v1.estadoFisico.every((e) => e.status === "ok")).toBe(true);
 
     await salvarIdentificacaoV3(sid, id, { cor: "Preto" });
-    const v2 = lerProvaEntradaV3({ payload: await lerPayload(id) } as unknown as OrdemServico);
+    const v2 = lerProvaEntradaV3((await lerPayload(id)) as unknown as OrdemServico);
     expect(v2.identificacao.cor).toBe("Preto");
     expect(v2.identificacao.imei).toBe("111222333444555");
     expect(v2.identificacao.modelo).toBe("E2E-Modelo R01");
@@ -142,7 +142,7 @@ describe("R01 — criar Violeta, editar Preto, persistir e reler", () => {
     const timeline = payload["timeline"] as unknown[];
     expect(timeline.length).toBe(2);
     expect(timeline[0]).toMatchObject({ id: "ev-legado" });
-    const v = lerProvaEntradaV3({ payload } as unknown as OrdemServico);
+    const v = lerProvaEntradaV3(payload as unknown as OrdemServico);
     expect(v.identificacao.cor).toBe("Azul");
   });
 });
@@ -174,7 +174,7 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
       },
     );
     const payload = await lerPayload(id);
-    const v = lerProvaEntradaV3({ payload } as unknown as OrdemServico);
+    const v = lerProvaEntradaV3(payload as unknown as OrdemServico);
     expect(v.identificacao.cor).toBe("Verde");
     const timeline = payload["timeline"] as { metadata?: { evento?: string } }[];
     const eventos = timeline.map((e) => e.metadata?.evento);
@@ -204,26 +204,27 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
 
     const payload = await lerPayload(id);
     expect(payload["marcadoConcorrente"]).toBe(true);
-    const v = lerProvaEntradaV3({ payload } as unknown as OrdemServico);
+    const v = lerProvaEntradaV3(payload as unknown as OrdemServico);
     expect(v.identificacao.cor).toBe("Violeta");
   }, 30000);
 
   it("stale sequencial: B salva modelo=M2; A com baseline M1 salva só cor → M2 + Preto", async () => {
     const sid = await criarLojaQA();
     const { id } = await criarOS(sid, "M1");
-    // Baseline M1/Violeta (primeira escrita com baseline vazia, como a UI).
+    // Baseline M1/Violeta (primeira escrita como a UI: modelo M1 já visível via
+    // equipamento.semente, cor vazia; só cor é preenchida de fato).
     await salvarIdentificacaoV3(
       sid,
       id,
       { modelo: "M1", cor: "Violeta" },
       undefined,
-      { modelo: "", cor: "" },
+      { modelo: "M1", cor: "" },
     );
     // Sessão B (atualizada): muda só o modelo.
     await salvarIdentificacaoV3(sid, id, { modelo: "M2" }, undefined, { modelo: "M1" });
     // Sessão A (stale em M1/Violeta): muda só a cor — modelo intocado nunca viaja.
     await salvarIdentificacaoV3(sid, id, { cor: "Preto" }, undefined, { cor: "Violeta" });
-    const v = lerProvaEntradaV3({ payload: await lerPayload(id) } as unknown as OrdemServico);
+    const v = lerProvaEntradaV3((await lerPayload(id)) as unknown as OrdemServico);
     expect(v.identificacao.modelo).toBe("M2");
     expect(v.identificacao.cor).toBe("Preto");
   });
@@ -236,7 +237,7 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
     await expect(salvarIdentificacaoV3(sid, id, { cor: "Preto" }, undefined, { cor: "Violeta" })).rejects.toSatisfy(
       ehConflitoConcorrenciaV3,
     );
-    const v = lerProvaEntradaV3({ payload: await lerPayload(id) } as unknown as OrdemServico);
+    const v = lerProvaEntradaV3((await lerPayload(id)) as unknown as OrdemServico);
     expect(v.identificacao.cor).toBe("Verde");
   });
 
@@ -245,7 +246,7 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
     const { id } = await criarOS(sid, "M1");
     await salvarIdentificacaoV3(sid, id, { serial: "S1", cor: "Violeta" }, undefined, { serial: "", cor: "" });
     await salvarIdentificacaoV3(sid, id, {}, ["serial"], { serial: "S1" });
-    const v = lerProvaEntradaV3({ payload: await lerPayload(id) } as unknown as OrdemServico);
+    const v = lerProvaEntradaV3((await lerPayload(id)) as unknown as OrdemServico);
     expect(v.identificacao.serial).toBeUndefined();
     expect(v.identificacao.cor).toBe("Violeta");
   });
