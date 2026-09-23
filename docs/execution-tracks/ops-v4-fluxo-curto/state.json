@@ -1,9 +1,9 @@
 {
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
-  "status": "BLOCKED",
+  "status": "RUNNING",
   "risk_tier": "ALTO",
-  "current_goal": null,
+  "current_goal": "OPS-V4-FLUXO-CURTO-001",
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
