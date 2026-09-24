@@ -7,10 +7,9 @@
  * (Simples Nacional CSOSN 102 → ICMSSN102 + PIS/COFINS CST 49). Nunca recalcula tributo.
  */
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
-import { pathToFileURL } from "node:url"
 import { describe, it, expect } from "vitest"
 import { encodeNfceQrV3OfflineUrl, encodeNfceQrV3OnlineUrl, createQrV3OfflinePemSigner } from "@/lib/fiscal/danfce/qr-v3"
 import { sanitizeProdutoFiscal, PRODUTO_FISCAL_VAZIO } from "@/lib/produto-fiscal"
@@ -1052,10 +1051,6 @@ function extractXsdPattern(source: string, marker: string): string {
 
 const XMLLINT_SCHEMA_ARGS = ["--noout", "--nonet", "--schema"] as const
 
-function localFileSchemaLocation(filePath: string): string {
-  return pathToFileURL(filePath).href
-}
-
 function infNfeSuplElementDef(leiauteSource: string): string {
   const start = leiauteSource.indexOf('<xs:element name="infNFeSupl" minOccurs="0">')
   const end = leiauteSource.indexOf('<xs:element ref="ds:Signature"/>')
@@ -1066,14 +1061,15 @@ function infNfeSuplElementDef(leiauteSource: string): string {
 function writeTempInfNfeSuplSchema(
   dir: string,
   elementDef: string,
-  schemaLocation = localFileSchemaLocation(TIPOS_XSD),
+  schemaLocation?: string,
 ): string {
   const xsdPath = join(dir, "infnfesupl.xsd")
+  if (schemaLocation === undefined) copyFileSync(TIPOS_XSD, join(dir, "tiposBasico_v4.00.xsd"))
   writeFileSync(
     xsdPath,
     `<?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns="http://www.portalfiscal.inf.br/nfe" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://www.portalfiscal.inf.br/nfe" elementFormDefault="qualified" attributeFormDefault="unqualified">
-  <xs:include schemaLocation="${schemaLocation}"/>
+  <xs:include schemaLocation="${schemaLocation ?? "tiposBasico_v4.00.xsd"}"/>
   ${elementDef}
 </xs:schema>`,
   )
@@ -1451,12 +1447,18 @@ describe("buildNfceXml · QR v3 offline opt-in (infNFeSupl, tpEmis=9)", () => {
 describe("xmllint harness · regressão de infraestrutura (infNFeSupl)", () => {
   const leiaute = readFileSync(LEIAUTE_XSD, "utf8")
 
-  it("schemaLocation local é URI file: cross-platform e --nonet permanece ativo", () => {
-    const location = localFileSchemaLocation(TIPOS_XSD)
-    expect(XMLLINT_SCHEMA_ARGS).toEqual(["--noout", "--nonet", "--schema"])
-    expect(location.startsWith("file:")).toBe(true)
-    expect(location).not.toContain("\\")
-    expect(location).toContain("tiposBasico_v4.00.xsd")
+  it("schemaLocation relativo usa cópia byte a byte do tiposBasico oficial e --nonet permanece ativo", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nfce-infnfesupl-reg-"))
+    try {
+      const xsdPath = writeTempInfNfeSuplSchema(dir, infNfeSuplElementDef(leiaute))
+      const tiposPath = join(dir, "tiposBasico_v4.00.xsd")
+      expect(XMLLINT_SCHEMA_ARGS).toEqual(["--noout", "--nonet", "--schema"])
+      expect(readFileSync(xsdPath, "utf8")).toContain('<xs:include schemaLocation="tiposBasico_v4.00.xsd"/>')
+      expect(existsSync(tiposPath)).toBe(true)
+      expect(readFileSync(tiposPath)).toEqual(readFileSync(TIPOS_XSD))
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it("recorte XSD inválido e schemaLocation quebrado continuam falhando", () => {
@@ -1469,11 +1471,13 @@ describe("xmllint harness · regressão de infraestrutura (infNFeSupl)", () => {
       )
       assertXmllintRejects(writeTempInfNfeSuplSchema(dir, "<xs:element name=\"infNFeSupl\"><xs:broken"), xmlPath)
 
+      rmSync(join(dir, "tiposBasico_v4.00.xsd"))
       const brokenLocation = writeTempInfNfeSuplSchema(
         dir,
         infNfeSuplElementDef(leiaute),
         "C:\\not-a-valid-uri\\tiposBasico_v4.00.xsd",
       )
+      expect(existsSync(join(dir, "tiposBasico_v4.00.xsd"))).toBe(false)
       const brokenXml = writeInfNfeSuplInstance(dir, "broken-location.xml", "<qrCode>x</qrCode><urlChave>https://qr.example.test/consulta</urlChave>")
       assertXmllintRejects(brokenLocation, brokenXml)
     } finally {
