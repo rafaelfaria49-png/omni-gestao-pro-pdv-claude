@@ -21,6 +21,37 @@ import { dismissFirstAccessWizardIfPresent } from "../helpers"
  */
 test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => {
   test("criar, reabrir, editar cor e reler os mesmos dados", async ({ page }) => {
+    test.setTimeout(240_000)
+    let compilacoesPendentes = 0
+    let compilacoesIniciadas = 0
+    let ultimoEventoHmr = Date.now()
+    let ultimoWizard = Date.now()
+    page.on("console", (mensagem) => {
+      const texto = mensagem.text()
+      if (texto.includes("[Fast Refresh] rebuilding")) {
+        compilacoesPendentes += 1
+        compilacoesIniciadas += 1
+        ultimoEventoHmr = Date.now()
+      } else if (texto.includes("[Fast Refresh] done")) {
+        compilacoesPendentes = Math.max(0, compilacoesPendentes - 1)
+        ultimoEventoHmr = Date.now()
+      }
+    })
+    const aguardarCompilacaoFria = async () => {
+      await page.waitForLoadState("networkidle", { timeout: 60_000 })
+      await expect.poll(
+        async () => {
+          if (await wizard.isVisible()) {
+            await dismissFirstAccessWizardIfPresent(page)
+            ultimoWizard = Date.now()
+          }
+          return compilacoesPendentes === 0 &&
+            Date.now() - Math.max(ultimoEventoHmr, ultimoWizard) >= 1_500 &&
+            !(await wizard.isVisible())
+        },
+        { timeout: 60_000 },
+      ).toBe(true)
+    }
     const sufixo = Date.now().toString(36)
     const clienteNome = `E2E FluxoCurto ${sufixo}`
     const modelo = `E2E-Modelo ${sufixo}`
@@ -46,79 +77,138 @@ test.describe("Operações V4 — fluxo curto 001 (E2E determinístico)", () => 
       await expect(wizard).toBeHidden({ timeout: 5_000 })
       await expect(botaoNovo).toHaveCount(1, { timeout: 5_000 })
     }).toPass({ timeout: 90_000 })
-    // Launcher canônico no TopBar, escopado pelo título nomeado (o seletor de
-    // OS tem segundo `+ Novo` com a mesma ação openNovoAtendimento — escopo
-    // determinístico, sem .first() arbitrário, com guarda de contagem).
-    await botaoNovo.click()
-    await expect(page.getByText("Novo atendimento", { exact: true })).toBeVisible({ timeout: 30_000 })
-    const opcaoNovaOS = page.getByRole("button", { name: "Nova OS" })
-    await expect(opcaoNovaOS).toHaveCount(1)
-    // Launcher é dialog com backdrop que fecha em clique fora/scroll — ativar
-    // por teclado evita interceptação de pointer events (mesma ação onClick,
-    // sem .first() arbitrário, com guarda de contagem).
-    await opcaoNovaOS.press("Enter")
-
-    // Modal Nova OS aberto (título + tipo de entrada; compilação fria do modal
-    // pode exceder 15s em dev — guarda estendida sem afrouxar a asserção).
+    await aguardarCompilacaoFria()
+    if (await wizard.isVisible()) await dismissFirstAccessWizardIfPresent(page)
+    await expect(wizard).toBeHidden({ timeout: 5_000 })
     const modal = page.getByRole("dialog").filter({ hasText: "Nova Ordem de Serviço" })
-    await expect(modal).toHaveCount(1, { timeout: 45_000 })
-    await expect(modal.getByText("Tipo de entrada", { exact: false })).toBeVisible()
+    const opcaoNovaOS = page.getByRole("button", { name: "Nova OS" })
+    let formularioPronto = false
+    // Antes do submit, repetir a digitação apenas se uma compilação fria
+    // comprovada desmontou o modal. Nenhuma OS é enviada nesta etapa.
+    for (let abertura = 0; abertura < 3; abertura += 1) {
+      const hmrAntesDaAbertura = compilacoesIniciadas
+      // Launcher canônico no TopBar, escopado pelo título nomeado (o seletor de
+      // OS tem segundo `+ Novo` com a mesma ação openNovoAtendimento — escopo
+      // determinístico, sem .first() arbitrário, com guarda de contagem).
+      const tituloLauncher = page.getByText("Novo atendimento", { exact: true })
+      await expect(async () => {
+        if (await wizard.isVisible()) await dismissFirstAccessWizardIfPresent(page)
+        await expect(wizard).toBeHidden({ timeout: 5_000 })
+        if (!(await tituloLauncher.isVisible())) await botaoNovo.click()
+        await expect(tituloLauncher).toBeVisible({ timeout: 5_000 })
+      }).toPass({ timeout: 90_000 })
+      // Launcher é dialog com backdrop que fecha em clique fora/scroll — ativar
+      // por teclado evita interceptação de pointer events (mesma ação onClick,
+      // sem .first() arbitrário, com guarda de contagem).
+      await expect(async () => {
+        if (await wizard.isVisible()) await dismissFirstAccessWizardIfPresent(page)
+        await expect(wizard).toBeHidden({ timeout: 5_000 })
+        if (!(await modal.isVisible())) {
+          if (!(await tituloLauncher.isVisible())) await botaoNovo.click()
+          await expect(tituloLauncher).toBeVisible({ timeout: 5_000 })
+          await expect(opcaoNovaOS).toHaveCount(1)
+          await opcaoNovaOS.press("Enter")
+        }
+        await expect(modal).toHaveCount(1, { timeout: 5_000 })
+      }).toPass({ timeout: 90_000 })
 
-    // Modo cliente explícito: NOVO (o padrão é "existente").
-    const abaNovo = modal.getByRole("button", { name: "Novo", exact: true })
-    await expect(abaNovo).toHaveCount(1)
-    await abaNovo.click()
-    await modal.getByPlaceholder("Nome do cliente").fill(clienteNome)
+      // Modal Nova OS aberto (título + tipo de entrada; compilação fria do modal
+      // pode exceder 15s em dev — guarda estendida sem afrouxar a asserção).
+      await aguardarCompilacaoFria()
+      if (!(await modal.isVisible())) {
+        expect(compilacoesIniciadas, "modal desmontado sem compilação fria comprova falha real").toBeGreaterThan(hmrAntesDaAbertura)
+        continue
+      }
+      await expect(modal.getByText("Tipo de entrada", { exact: false })).toBeVisible()
 
-    // Aparelho: placeholders únicos + xpath determinístico a partir do rótulo
-    // (IMEI/Cor usam placeholder genérico "opcional" — o rótulo desambigua).
-    await modal.getByPlaceholder("Samsung").fill("MarcaE2E")
-    await modal.getByPlaceholder("Galaxy S22").fill(modelo)
-    await modal.locator("xpath=//div[normalize-space()='IMEI / serial']/following-sibling::input").fill(imei)
-    await modal.locator("xpath=//div[normalize-space()='Cor']/following-sibling::input").fill(corCriacao)
-    await modal.getByPlaceholder(/Tela quebrada/).fill(defeito)
+      // Modo cliente explícito: NOVO (o padrão é "existente").
+      const abaNovo = modal.getByRole("button", { name: "Novo", exact: true })
+      await expect(abaNovo).toHaveCount(1)
+      await abaNovo.click()
+      await modal.getByPlaceholder("Nome do cliente").fill(clienteNome)
 
-    // Serviço válido (tipo servico_autorizado exige ao menos um confirmado).
-    await modal.getByLabel("Nome do serviço").fill("Troca de tela")
-    await modal.getByLabel("Valor de venda").fill("300")
-    await modal.getByLabel("Custo interno").fill("92")
-    await modal.getByLabel("Garantia em dias").fill("90")
-    const confirmarServico = modal.getByRole("button", { name: /Confirmar serviço/ })
-    await expect(confirmarServico).toHaveCount(1)
-    await confirmarServico.click()
-    await expect(modal.getByText("1 serviço")).toBeVisible()
-    // Valor exibido no resumo e na barra de ação (mesmo valor duas vezes —
-    // guarda por contagem determinística, sem .first() arbitrário).
-    await expect(modal.getByText(/Valor comercial.*300/)).toHaveCount(2)
+      // Aparelho: placeholders únicos + xpath determinístico a partir do rótulo
+      // (IMEI/Cor usam placeholder genérico "opcional" — o rótulo desambigua).
+      await modal.getByPlaceholder("Samsung").fill("MarcaE2E")
+      await modal.getByPlaceholder("Galaxy S22").fill(modelo)
+      await modal.locator("xpath=//div[normalize-space()='IMEI / serial']/following-sibling::input").fill(imei)
+      await modal.locator("xpath=//div[normalize-space()='Cor']/following-sibling::input").fill(corCriacao)
+      await modal.getByPlaceholder(/Tela quebrada/).fill(defeito)
 
-    // Recepção: acordeão fechado por padrão — abrir antes de preencher.
-    const recepcaoToggle = modal.getByRole("button", { name: /Recepção/ })
-    await expect(recepcaoToggle).toHaveCount(1)
-    await recepcaoToggle.click()
-    // Recepção: atendente explícito, prioridade explícita, previsão com fuso.
-    await modal.locator("xpath=//div[normalize-space()='Recebido por']/following-sibling::input").fill(atendente)
-    await modal.locator("xpath=//div[normalize-space()='Prioridade']/following-sibling::select").selectOption("alta")
-    await modal.locator('input[type="datetime-local"]').fill("2030-07-01T17:00")
-    await expect(modal.getByText("Horário da loja (America/Sao_Paulo)")).toBeVisible({ timeout: 10_000 })
-    await expect(modal.getByText(`Horário da loja (America/Sao_Paulo) · ${previsaoExata}`)).toBeVisible()
+      // Serviço válido (tipo servico_autorizado exige ao menos um confirmado).
+      await modal.getByLabel("Nome do serviço").fill("Troca de tela")
+      await modal.getByLabel("Valor de venda").fill("300")
+      await modal.getByLabel("Custo interno").fill("92")
+      await modal.getByLabel("Garantia em dias").fill("90")
+      const confirmarServico = modal.getByRole("button", { name: /Confirmar serviço/ })
+      await expect(confirmarServico).toHaveCount(1)
+      await confirmarServico.click()
+      await expect(modal.getByText("1 serviço")).toBeVisible()
+      // Valor exibido no resumo e na barra de ação (mesmo valor duas vezes —
+      // guarda por contagem determinística, sem .first() arbitrário).
+      await expect(modal.getByText(/Valor comercial.*300/)).toHaveCount(2)
+
+      // Recepção: acordeão fechado por padrão — abrir antes de preencher.
+      const recepcaoToggle = modal.getByRole("button", { name: /Recepção/ })
+      await expect(recepcaoToggle).toHaveCount(1)
+      await recepcaoToggle.click()
+      // Recepção: atendente explícito, prioridade explícita, previsão com fuso.
+      await modal.locator("xpath=//div[normalize-space()='Recebido por']/following-sibling::input").fill(atendente)
+      await modal.locator("xpath=//div[normalize-space()='Prioridade']/following-sibling::select").selectOption("alta")
+      await modal.locator('input[type="datetime-local"]').fill("2030-07-01T17:00")
+      await expect(modal.getByText("Horário da loja (America/Sao_Paulo)")).toBeVisible({ timeout: 10_000 })
+      await expect(modal.getByText(`Horário da loja (America/Sao_Paulo) · ${previsaoExata}`)).toBeVisible()
+
+      await aguardarCompilacaoFria()
+      if (await modal.isVisible()) {
+        formularioPronto = true
+        break
+      }
+      expect(compilacoesIniciadas, "modal desmontado sem compilação fria comprova falha real").toBeGreaterThan(hmrAntesDaAbertura)
+    }
+    expect(formularioPronto, "formulário não estabilizou após a compilação fria").toBe(true)
+    if (await wizard.isVisible()) await dismissFirstAccessWizardIfPresent(page)
+    await expect(wizard).toBeHidden({ timeout: 5_000 })
+    // Marca a raiz somente agora: a recuperação pós-criação depende de remount
+    // ocorrido DEPOIS do submit, não dos remounts de preparação do formulário.
+    await botaoNovo.evaluate((node, marca) => { node.dataset.opsV4E2eAnchor = marca }, sufixo)
 
     const botaoCriar = modal.getByRole("button", { name: "Criar Ordem de Serviço" })
     await expect(botaoCriar).toHaveCount(1)
+    await expect(botaoCriar).toBeEnabled()
     await botaoCriar.click()
+    await expect(modal).toBeHidden({ timeout: 30_000 })
 
     // T01: ao criar e abrir imediatamente, resumo e formulário exibem o mesmo dado.
     // Escopo à seção imediata (filho direto h3) — `section:has(texto)` casaria
     // ancestrais aninhados; contagem determinística sem .first() arbitrário.
-    // Mesma espera determinística do launcher: se o wizard reaparecer na
-    // navegação pós-criação, dispensa e continua até o resumo estar pronto.
+    // No Next dev frio a compilação pode remontar a V4 depois da criação,
+    // zerando o estado local de seleção. Nesse caso, só recupera a OS se o
+    // seletor estiver visível E a antiga raiz V4 tiver sido desconectada.
+    // A busca exata pelo cliente único confirma que a criação persistiu.
     const grupoResumo = page.locator("section:has(> h3:text-is('Informado na abertura'))")
-    await expect(async () => {
+    const tituloSeletor = page.getByRole("heading", { name: "Selecione uma Ordem de Serviço", exact: true })
+    await expect.poll(async () => {
       if (await wizard.isVisible()) {
         await dismissFirstAccessWizardIfPresent(page)
       }
-      await expect(wizard).toBeHidden({ timeout: 5_000 })
-      await expect(grupoResumo).toHaveCount(1, { timeout: 5_000 })
-    }).toPass({ timeout: 60_000 })
+      if (await wizard.isVisible()) return "aguardando"
+      if (await grupoResumo.isVisible()) return "workspace"
+      if (await tituloSeletor.isVisible()) return "seletor"
+      return "aguardando"
+    }, { timeout: 60_000 }).not.toBe("aguardando")
+    if (await tituloSeletor.isVisible()) {
+      await expect(botaoNovo).toHaveCount(1)
+      const mesmaArvoreV4 = await botaoNovo.evaluate((node, marca) => node.dataset.opsV4E2eAnchor === marca, sufixo)
+      expect(mesmaArvoreV4, "seletor sem remount da V4 indica falha de seleção do produto").toBe(false)
+      const buscaCriada = page.getByPlaceholder(/Buscar por Nº da OS/)
+      await expect(buscaCriada).toHaveCount(1)
+      await buscaCriada.fill(clienteNome)
+      const linhaCriada = page.getByRole("button").filter({ hasText: clienteNome })
+      await expect(linhaCriada).toHaveCount(1, { timeout: 15_000 })
+      await linhaCriada.click()
+    }
+    await expect(grupoResumo).toHaveCount(1, { timeout: 60_000 })
     const resumo = grupoResumo.locator("dl")
     await expect(resumo).toHaveCount(1)
     await expect(resumo.getByText(modelo, { exact: false })).toBeVisible({ timeout: 15_000 })
