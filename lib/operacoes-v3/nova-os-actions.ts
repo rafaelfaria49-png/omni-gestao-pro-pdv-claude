@@ -203,6 +203,8 @@ export async function criarOSEnterpriseV3(
       marca: draft.equipamento.marca.trim(),
       modelo: draft.equipamento.modelo.trim(),
       numeroSerie: draft.equipamento.imei?.trim() || undefined,
+      // T07: cor em campo próprio — nunca em condicaoAparelho.
+      cor: draft.equipamento.cor?.trim() || undefined,
       acessorios: draft.equipamento.acessorios.filter(Boolean),
       defeitoRelatado: draft.problema.defeitoRelatado.trim(),
     },

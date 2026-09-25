@@ -184,6 +184,8 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
       marca: clean(form.marca) ?? "",
       modelo: clean(form.modelo) ?? "",
       imei: clean(form.imei),
+      // T07: cor em campo próprio do equipamento — nunca em condicaoAparelho.
+      cor: clean(form.cor),
     },
     recepcao: {
       ...base.recepcao,
@@ -197,7 +199,9 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
       ...base.problema,
       defeitoRelatado: clean(form.defeitoRelatado) ?? "",
       observacoesInternas: clean(form.observacoes),
-      condicaoAparelho: clean(form.cor),
+      // T07/T08: condicaoAparelho é nota física — a cor viaja em
+      // equipamento.cor (campo próprio). Não converter cor em condição.
+      condicaoAparelho: undefined,
     },
     itens,
     garantia: comGarantia

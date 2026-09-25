@@ -223,3 +223,30 @@ describe("buildNovaOSDraftFromFormV4 — validação mínima (integra com valida
     expect(validarNovaOSDraftV3(draft)).toMatch(/defeito/i);
   });
 });
+
+describe("buildNovaOSDraftFromFormV4 — cor em campo próprio (T07/T08)", () => {
+  it("cor vai para equipamento.cor e NUNCA para condicaoAparelho", () => {
+    const draft = buildNovaOSDraftFromFormV4(
+      form({
+        clienteNovo: { nome: "C" },
+        marca: "Apple",
+        modelo: "iPhone 13",
+        defeitoRelatado: "Tela",
+        cor: "  Violeta  ",
+      }),
+      FIXED,
+    );
+    expect(draft.equipamento.cor).toBe("Violeta");
+    expect(draft.problema.condicaoAparelho).toBeUndefined();
+    expect(validarNovaOSDraftV3(draft)).toBeNull();
+  });
+
+  it("sem cor → equipamento.cor undefined (não inventa valor)", () => {
+    const draft = buildNovaOSDraftFromFormV4(
+      form({ clienteNovo: { nome: "C" }, marca: "A", modelo: "B", defeitoRelatado: "D" }),
+      FIXED,
+    );
+    expect(draft.equipamento.cor).toBeUndefined();
+    expect(draft.problema.condicaoAparelho).toBeUndefined();
+  });
+});

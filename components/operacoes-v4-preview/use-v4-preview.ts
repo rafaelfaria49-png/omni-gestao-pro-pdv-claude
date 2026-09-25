@@ -29,7 +29,9 @@ import {
 import { C, fmt } from "./tokens";
 import type { V4State, V4Stage } from "./types";
 import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
-import { useLojaAtiva } from "@/lib/loja-ativa";
+import { useLojaAtiva, registrarGuardaTrocaLojaV4 } from "@/lib/loja-ativa";
+import { useGuardaRascunhos, saidaEtapaExigeGuardaV4, type GuardaRascunhosV4 } from "./use-entrada-draft-guard";
+import type { RascunhoEntradaV4 } from "./parts/stages/EntradaWorkspace";
 import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
 // Actions REAIS reaproveitadas da V3 (sem criar backend novo) — slices OPS-V4-ORCAMENTO-REAL-002 / -ENTRADA-RECEPCAO-REAL-003.
@@ -109,9 +111,10 @@ import {
   removerFotoEntradaV3,
   salvarAssinaturaClienteV3,
   type AdicionarFotoEntradaInputV3,
+  type FatiaProvaEntradaV3,
   type SalvarProvaEntradaInputV3,
 } from "@/lib/operacoes-v3/prova-entrada-actions";
-import type { IdentificacaoV3, AcessorioEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
+import type { IdentificacaoV3, AcessorioEntradaV3, CredenciaisEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
 import type { ChecklistEntradaItemV3 } from "@/lib/operacoes-v3/workspace-model";
 import { salvarDadosBasicosOSV3 } from "@/lib/operacoes-v3/dados-basicos-actions";
 import type { SalvarDadosBasicosInputV3 } from "@/lib/operacoes-v3/dados-basicos-model";
@@ -131,7 +134,8 @@ import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operaco
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
-import { seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
+import { alvoAindaSelecionado, fatiaTocada, patchTocadoCredenciais, patchTocadoIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4, type EsperadosDadosBasicosV3, type EsperadosProvaEntradaV3 } from "@/lib/operacoes-v4/entrada-form";
+import { intencaoDadosBasicos, toDadosBasicosInput } from "@/lib/operacoes-v4/dados-basicos-form";
 import { seedDadosBasicos, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
 import {
   PIPELINE_OPERACIONAL_IDS_V4,
@@ -199,12 +203,25 @@ export interface V4DataCtx {
   ordensLoading: boolean;
   ordensPrimeiraCarga: boolean;
   ordensError: string | null;
+  /** Loja ativa atual (para chavear rascunho e saídas por loja+OS). Opcional por
+   *  compatibilidade com fixtures legados de teste (ausente = sem chave). */
+  lojaAtivaId?: string | null;
+  /** R04: guarda de rascunhos da Entrada (memória da sessão, por loja+OS).
+   *  Opcional por compatibilidade (ausente = saídas imediatas, sem guarda). */
+  rascunhos?: GuardaRascunhosV4<RascunhoEntradaV4>;
   reloadOrdens: () => void;
   /** Recarrega o detalhe da OS selecionada após uma escrita. */
   reloadDetail: () => void;
   /** OS selecionada já hidratada (detalhe) ou linha da lista enquanto carrega. */
   realOS: OrdemServico | null;
   detailLoading: boolean;
+  /** Falha do detalhe (quando há erro, o fallback da lista não autoriza escrita). */
+  detailError?: string | null;
+  /**
+   * T01 (OPS-V4-FLUXO-CURTO-001): detalhe da seleção atual confirmado
+   * (mesmo storeId+osId, sem loading nem erro). Salvar só com carga estabelecida.
+   */
+  detailCarregada?: boolean;
   /** Projeção financeira server-side da OS selecionada; nunca contém payload bruto. */
   financialProjection: FinancialProjectionStateV4;
   /** Projeções server-side carregadas em lote exclusivamente para o rail PDV. */
@@ -505,8 +522,17 @@ export function buildVals(
   // o snapshot local `st.status` é só fallback enquanto nenhuma OS está selecionada.
   const status = realOS ? resolverStatusV4(realOS) : st.status;
 
-  const go = (stage: V4Stage) =>
-    update({ stage, view: "cockpit", module: "workspace", menu: null });
+  const go = (stage: V4Stage) => {
+    const sair = () => update({ stage, view: "cockpit", module: "workspace", menu: null });
+    // T11: sair da Entrada para outra etapa com rascunho sujo passa pelo
+    // pêndulo salvar/descartar/cancelar (mesma guarda da troca de OS/loja) —
+    // Cancelar permanece na Entrada. Sem sujeira, navegação imediata.
+    if (saidaEtapaExigeGuardaV4(st.stage, stage)) {
+      sairComGuarda(sair, `ir para a etapa ${stage}`);
+      return;
+    }
+    sair();
+  };
   const setModule = (m: V4State["module"]) =>
     update({ module: m, view: "cockpit", menu: null });
   const setView = (v: V4State["view"]) => update({ view: v, menu: null });
@@ -701,7 +727,10 @@ export function buildVals(
   // seleção; nunca auto-abre outra OS por fallback). Definido antes dos menus
   // porque "Trocar OS" reusa este fluxo real (GOAL 006 — fim do no-op).
   const goToOSSearch = () =>
-    update({ selectedOsId: null, focus: false, left: true, module: "workspace", view: "cockpit", menu: null });
+    sairComGuarda(
+      () => update({ selectedOsId: null, focus: false, left: true, module: "workspace", view: "cockpit", menu: null }),
+      "voltar à busca de OS",
+    );
 
   // ---- menus ----
   // GOAL OPS-V4-DOCUMENTOS-ASSINATURA-ANEXOS-015: o menu Docs abre o MESMO
@@ -934,22 +963,40 @@ export function buildVals(
   const slaOperacionalComCadastro = { ...slaOperacional, tecnicosConhecidos: tecnicosSeletor };
   const pdvView = buildPdvView(ctx.ordens, ctx.financialProjectionsByOsId);
 
+  // R04: chave do rascunho da seleção ATUAL (loja+OS) para as saídas reais.
+  const chaveRascunhoAtual = () =>
+    `${((ctx.lojaAtivaId ?? "") as string).trim()}::${(st.selectedOsId ?? "").trim()}`;
+  // R04: saídas reais passam pela guarda quando presente; sem guarda, imediatas.
+  const sairComGuarda = (sair: () => void, descricao: string) => {
+    const guarda = ctx.rascunhos;
+    if (!guarda) {
+      sair();
+      return;
+    }
+    guarda.solicitarSaida(sair, { chave: chaveRascunhoAtual(), descricao });
+  };
   // Seleciona a OS REAL (identidade/financeiro reais no workspace). Único caminho de
   // seleção — sempre por clique explícito do operador, nunca por fallback automático.
+  // R04: com edição suja, a troca BLOQUEIA e abre salvar/descartar/cancelar.
   const selectOS = (o: OrdemServico, stageOverride?: V4Stage) => {
-    update({
-      selectedOsId: o.id,
-      status: resolverStatusV4(o),
-      prioridade: realPrioridadeToV4(o.prioridade),
-      stage: stageOverride ?? stageForStatus(resolverStatusV4(o)),
-      module: "workspace",
-      view: "cockpit",
-      menu: null,
-      focus: true,
-      left: false,
-      right: false,
-    });
-    notify("OS " + (o.codigo || "") + " carregada");
+    sairComGuarda(
+      () => {
+        update({
+          selectedOsId: o.id,
+          status: resolverStatusV4(o),
+          prioridade: realPrioridadeToV4(o.prioridade),
+          stage: stageOverride ?? stageForStatus(resolverStatusV4(o)),
+          module: "workspace",
+          view: "cockpit",
+          menu: null,
+          focus: true,
+          left: false,
+          right: false,
+        });
+        notify("OS " + (o.codigo || "") + " carregada");
+      },
+      `trocar para a OS ${o.codigo || o.id}`,
+    );
   };
   /**
    * Abrir a OS de uma linha de rail (Fila/Bancada/SLA/PDV) → leva ao workspace real.
@@ -975,21 +1022,28 @@ export function buildVals(
   // e recarrega a lista. Recebe apenas o id resultante; a identidade/financeiro são
   // hidratados pelo detalhe (`useOrdemV4`). Uma OS nova nasce "aberta" → etapa "entrada".
   const onOSCriada = (osId: string) => {
-    update({
-      novaOS: false,
-      novoAtendimento: false,
-      selectedOsId: osId,
-      status: "aberta",
-      stage: "entrada",
-      module: "workspace",
-      view: "cockpit",
-      menu: null,
-      focus: true,
-      left: false,
-      right: false,
-    });
-    ctx.reloadOrdens();
-    notify("OS criada e aberta no workspace.");
+    // R04: criar outra OS com edição suja pendente também passa pela guarda
+    // (a OS criada já existe no servidor; só a SELEÇÃO é bloqueada).
+    sairComGuarda(
+      () => {
+        update({
+          novaOS: false,
+          novoAtendimento: false,
+          selectedOsId: osId,
+          status: "aberta",
+          stage: "entrada",
+          module: "workspace",
+          view: "cockpit",
+          menu: null,
+          focus: true,
+          left: false,
+          right: false,
+        });
+        ctx.reloadOrdens();
+        notify("OS criada e aberta no workspace.");
+      },
+      `abrir a OS criada ${osId}`,
+    );
   };
 
   // Atendimento rápido concluído (REAL, GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014)
@@ -1461,6 +1515,9 @@ export function buildVals(
     openOSFromRail,
     openOSProducao,
     goToOSSearch,
+    // R04: guarda de rascunhos da Entrada (memória da sessão, por loja+OS).
+    // Sempre presente no hook real; fixtures legados podem omitir no ctx.
+    rascunhos: ctx.rascunhos ?? null,
     clearSelection: () => update({ selectedOsId: null, focus: false, left: true }),
     // lista real para o seletor
     ordens: ctx.ordens,
@@ -1469,6 +1526,14 @@ export function buildVals(
     ordensError: ctx.ordensError,
     reloadOrdens: ctx.reloadOrdens,
     detailLoading: ctx.detailLoading,
+    detailError: ctx.detailError ?? null,
+    // T01: carga estabelecida = seleção + detalhe confirmado (storeId+osId),
+    // sem loading nem erro. Salvar sem isso é recusado no workspace/runWrite.
+    cargaEntradaEstabelecida:
+      !!st.selectedOsId &&
+      ctx.detailCarregada === true &&
+      !!ctx.realOS &&
+      ctx.realOS.id === st.selectedOsId,
 
     // ---- telas de rail (identidade própria; dado real ou empty honesto) ----
     moduleId: st.module,
@@ -1509,6 +1574,20 @@ export function useV4Preview(): V4Vals {
 
   const router = useRouter();
   const { lojaAtivaId } = useLojaAtiva();
+  // R04: guarda de rascunhos da Entrada — memória da sessão (morre ao sair da
+  // V4); ponte opt-in para a troca de loja (lib/loja-ativa) com limpeza ao
+  // desmontar e ao perder a loja.
+  const rascunhos = useGuardaRascunhos<RascunhoEntradaV4>();
+  useEffect(() => {
+    registrarGuardaTrocaLojaV4({
+      temRascunhoSujo: () => rascunhos.temSujo(),
+      solicitarSaida: (trocar, descricao) => rascunhos.solicitarSaida(trocar, { descricao }),
+    });
+    return () => registrarGuardaTrocaLojaV4(null);
+  }, [rascunhos]);
+  useEffect(() => {
+    if (!lojaAtivaId) rascunhos.limparTudo();
+  }, [lojaAtivaId, rascunhos]);
   const tecnicosCadastro = useTecnicosCadastroV4(lojaAtivaId);
   const irParaConfiguracoes = useCallback(() => {
     router.push("/dashboard/configuracoes");
@@ -1520,7 +1599,7 @@ export function useV4Preview(): V4Vals {
     error: ordensError,
     reload: reloadOrdens,
   } = useOrdensV4(lojaAtivaId);
-  const { ordem: ordemDetail, loading: detailLoading, reload: reloadDetail } = useOrdemV4(lojaAtivaId, st.selectedOsId);
+  const { ordem: ordemDetail, loading: detailLoading, error: detailError, reload: reloadDetail } = useOrdemV4(lojaAtivaId, st.selectedOsId);
   // Workspace lê a OS selecionada; o módulo PDV usa somente o reader em lote do rail.
   // Assim uma mesma OS não dispara dois readers concorrentes na troca de módulo.
   const selectedFinancial = useFinancialProjectionV4(
@@ -1602,6 +1681,22 @@ export function useV4Preview(): V4Vals {
   // Wrapper único: resolve loja/OS ativas (sem fallback loja-1), executa a action
   // real da V3, recarrega lista+detalhe e dá toast honesto. Devolve `true`/`false`.
   const selectedOsId = st.selectedOsId;
+  // T05 + R03: espelhos da seleção para comparar DEPOIS do await — a seleção
+  // (loja e/ou OS) pode ter mudado enquanto a action rodava.
+  const selectedRef = useRef(st.selectedOsId);
+  useEffect(() => {
+    selectedRef.current = st.selectedOsId;
+  }, [st.selectedOsId]);
+  const lojaRef = useRef(lojaAtivaId);
+  useEffect(() => {
+    lojaRef.current = lojaAtivaId;
+  }, [lojaAtivaId]);
+  // R03: geração de escrita por alvo (loja+OS). Capturada no disparo e
+  // conferida no pós-await junto com loja+OS: seleção mudada (A→B), retorno
+  // (A→B→A) ou escrita mais nova superando a anterior nunca sofrem
+  // after/toast/reload de detalhe de outro contexto. A lista recarrega sempre.
+  const writeSeqRef = useRef(0);
+  const writeGenRef = useRef(new Map<string, number>());
   const runWrite = useCallback(
     async (
       fn: (sid: string, osId: string) => Promise<unknown>,
@@ -1614,9 +1709,30 @@ export function useV4Preview(): V4Vals {
         notify("Selecione uma OS na loja ativa para concluir a ação.");
         return false;
       }
+      // T01: sem carga estabelecida (detalhe ainda carregando ou com erro),
+      // a escrita parte de semente da lista — recusar em vez de persistir parcial.
+      if (detailLoading) {
+        notify("Aguarde a carga da OS antes de salvar.");
+        return false;
+      }
+      if (detailError) {
+        notify("A OS não carregou corretamente. Recarregue antes de salvar.");
+        return false;
+      }
+      const alvo = { lojaId: sid, osId };
+      const chave = `${alvo.lojaId}::${alvo.osId}`;
+      const geracao = ++writeSeqRef.current;
+      writeGenRef.current.set(chave, geracao);
+      const contextoAtual = () =>
+        writeGenRef.current.get(chave) === geracao &&
+        alvoAindaSelecionado({ lojaId: lojaRef.current ?? "", osId: selectedRef.current ?? "" }, alvo);
       try {
         await fn(sid, osId);
+        // R03: pós-await só toca o contexto correspondente (loja+OS+geração).
+        // Com a seleção mudada ou escrita mais nova, só a lista recarrega —
+        // sem reload de detalhe, sem after() e sem toast sobre outra seleção.
         reloadOrdens();
+        if (!contextoAtual()) return true;
         reloadDetail();
         reloadFinancial();
         if (after) after();
@@ -1625,14 +1741,16 @@ export function useV4Preview(): V4Vals {
       } catch (e) {
         // A action pode falhar porque outra sessão alterou a OS/retorno. Nesse
         // caso a UI preserva o formulário, mas recarrega a autoridade server.
+        // R03: falha também não notifica outro contexto (toast só no alvo).
         reloadOrdens();
+        if (!contextoAtual()) return false;
         reloadDetail();
         reloadFinancial();
         notify(e instanceof Error ? e.message : "Não foi possível concluir a ação.");
         return false;
       }
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify],
+    [lojaAtivaId, selectedOsId, detailLoading, detailError, reloadOrdens, reloadDetail, reloadFinancial, notify],
   );
 
   // Mutations da Bancada / produção: mesma loja ativa e mesmo reload, mas o
@@ -1650,10 +1768,22 @@ export function useV4Preview(): V4Vals {
         notify(gate.motivo);
         return false;
       }
+      // R03: captura loja+OS+geração da linha; o pós-await confere contra os
+      // refs (valores EFETIVOS após o await, não o closure do disparo).
+      const alvo = { lojaId: sid, osId };
+      const chave = `${alvo.lojaId}::${alvo.osId}`;
+      const geracao = ++writeSeqRef.current;
+      writeGenRef.current.set(chave, geracao);
+      const contextoAtual = () =>
+        writeGenRef.current.get(chave) === geracao &&
+        (lojaRef.current ?? "").trim() === alvo.lojaId;
+      const linhaSelecionada = () =>
+        contextoAtual() && (selectedRef.current ?? "").trim() === alvo.osId;
       try {
         await fn(sid, osId);
         reloadOrdens();
-        if ((selectedOsId ?? "").trim() === osId) {
+        if (!contextoAtual()) return true;
+        if (linhaSelecionada()) {
           reloadDetail();
           reloadFinancial();
         }
@@ -1661,7 +1791,8 @@ export function useV4Preview(): V4Vals {
         return true;
       } catch (e) {
         reloadOrdens();
-        if ((selectedOsId ?? "").trim() === osId) {
+        if (!contextoAtual()) return false;
+        if (linhaSelecionada()) {
           reloadDetail();
           reloadFinancial();
         }
@@ -1669,7 +1800,8 @@ export function useV4Preview(): V4Vals {
         return false;
       }
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify],
+    // R03: seleção lida via refs no pós-await — fora das deps de propósito.
+    [lojaAtivaId, reloadOrdens, reloadDetail, reloadFinancial, notify],
   );
 
   // ---- PDV de Serviço / recebimento real: envolve `receber` para também
@@ -2011,21 +2143,7 @@ export function useV4Preview(): V4Vals {
   );
 
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
-  const salvarIdentificacao = useCallback(
-    (input: IdentificacaoV3) =>
-      runWrite((sid, osId) => salvarIdentificacaoV3(sid, osId, input), "Identificação salva."),
-    [runWrite],
-  );
-  const salvarProvaEntrada = useCallback(
-    (input: SalvarProvaEntradaInputV3) =>
-      runWrite((sid, osId) => salvarProvaEntradaV3(sid, osId, input), "Prova de entrada salva."),
-    [runWrite],
-  );
-  const salvarAcessorios = useCallback(
-    (acessorios: AcessorioEntradaV3[]) =>
-      runWrite((sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios), "Acessórios salvos."),
-    [runWrite],
-  );
+  // (salvarAcessorios vive após `realOS` — usa a seleção atual como baseline.)
   const salvarChecklist = useCallback(
     (itens: ChecklistEntradaItemV3[]) =>
       runWrite((sid, osId) => salvarChecklistEntradaV3(sid, osId, itens), "Checklist salvo."),
@@ -2047,19 +2165,98 @@ export function useV4Preview(): V4Vals {
     [runWrite],
   );
 
-  // ---- Dados básicos da OS (slice 003B): handler real (payload-only, sem financeiro) ----
-  const salvarDadosBasicos = useCallback(
-    (input: SalvarDadosBasicosInputV3) =>
-      runWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input), "Dados básicos salvos."),
-    [runWrite],
+  // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
+  // T05/T06 + R03: a chave é storeId+osId e a resolução é fechada — detalhe ou
+  // linha de outra loja nunca hidrata a seleção atual; sem loja, nulo.
+  const lojaIdAtiva = (lojaAtivaId ?? "").trim();
+  const realOS = useMemo<OrdemServico | null>(
+    () => resolverOSSelecionada({ selectedOsId: st.selectedOsId, lojaIdAtiva, ordemDetail, ordens }),
+    [st.selectedOsId, ordemDetail, ordens, lojaIdAtiva],
   );
 
-  // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
-  const realOS = useMemo<OrdemServico | null>(() => {
-    if (!st.selectedOsId) return null;
-    if (ordemDetail && ordemDetail.id === st.selectedOsId) return ordemDetail;
-    return ordens.find((o) => o.id === st.selectedOsId) ?? null;
-  }, [st.selectedOsId, ordemDetail, ordens]);
+  // Acessórios com baseline (R independente do candidato 9464b00): a semente
+  // viaja como `esperados` — fatia intocada nunca escreve; fatia tocada com
+  // servidor divergente conflita em vez de remover em silêncio o que outra
+  // sessão marcou. Definido após `realOS` (usa a seleção atual como semente).
+  const salvarAcessorios = useCallback(
+    (acessorios: AcessorioEntradaV3[]) => {
+      const seed = seedEntradaEditor(realOS).acessorios;
+      if (!fatiaTocada(acessorios, seed)) return Promise.resolve(true);
+      return runWrite((sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios, seed), "Acessórios salvos.");
+    },
+    [runWrite, realOS],
+  );
+
+  // R02: somente tocados viajam, sempre com baseline (input × semente do
+  // servidor). Não tocado nunca entra no intent (nunca escreve); tocado com
+  // servidor igual à baseline aplica; divergente conflita no servidor. A
+  // chamada do workspace mantém o contrato de cinco handlers (mapeador puro).
+  const salvarIdentificacao = useCallback(
+    (input: IdentificacaoV3) => {
+      const seed = seedEntradaEditor(realOS).identificacao;
+      const t = patchTocadoIdentificacao(input, seed);
+      if (Object.keys(t.valores).length === 0 && t.limpar.length === 0) return Promise.resolve(true);
+      const esperados = Object.keys(t.esperados).length > 0 ? t.esperados : undefined;
+      return runWrite(
+        (sid, osId) =>
+          salvarIdentificacaoV3(
+            sid,
+            osId,
+            t.valores,
+            t.limpar.length > 0 ? t.limpar : undefined,
+            esperados,
+          ),
+        "Identificação salva.",
+      );
+    },
+    [runWrite, realOS],
+  );
+  const salvarProvaEntrada = useCallback(
+    (input: SalvarProvaEntradaInputV3) => {
+      const seed = seedEntradaEditor(realOS);
+      const incluir: FatiaProvaEntradaV3[] = [];
+      const esp: EsperadosProvaEntradaV3 = {};
+      let limparCred: (keyof CredenciaisEntradaV3)[] | undefined;
+      if (fatiaTocada(input.estadoFisico, seed.estadoFisico)) {
+        incluir.push("estadoFisico");
+        esp.estadoFisico = seed.estadoFisico;
+      }
+      if (fatiaTocada(input.avarias, seed.avarias)) {
+        incluir.push("avarias");
+        esp.avarias = seed.avarias;
+      }
+      const t = patchTocadoCredenciais(input.credenciais, seed.credenciais);
+      if (Object.keys(t.valores).length > 0 || t.limpar.length > 0) {
+        incluir.push("credenciais");
+        esp.credenciais = t.esperados;
+        if (t.limpar.length > 0) limparCred = t.limpar;
+      }
+      if (incluir.length === 0) return Promise.resolve(true);
+      // Credenciais stale: viajam SOMENTE os valores tocados (+ limpar e
+      // baseline); o input completo nunca é enviado — a action sanitiza e
+      // aplica só o baselined, preservando o LATEST das não tocadas.
+      const inputEnxuto: SalvarProvaEntradaInputV3 = {
+        estadoFisico: incluir.includes("estadoFisico") ? input.estadoFisico : [],
+        avarias: incluir.includes("avarias") ? input.avarias : [],
+        credenciais: { ...t.valores },
+      };
+      return runWrite(
+        (sid, osId) => salvarProvaEntradaV3(sid, osId, inputEnxuto, limparCred, esp, incluir),
+        "Prova de entrada salva.",
+      );
+    },
+    [runWrite, realOS],
+  );
+
+  // T01 + R03: detalhe da seleção atual confirmado (loja+OS, sem loading nem
+  // erro). Sem loja ou sem detalhe correspondente: falso (falha fechada).
+  const detailCarregada =
+    !!lojaIdAtiva &&
+    !detailLoading &&
+    !detailError &&
+    !!ordemDetail &&
+    ordemDetail.id === (st.selectedOsId ?? "").trim() &&
+    ordemDetail.storeId === lojaIdAtiva;
 
   const osDaLista = useCallback(
     (osId: string): OrdemServico | null => {
@@ -2067,6 +2264,19 @@ export function useV4Preview(): V4Vals {
       return ordens.find((o) => o.id === osId) ?? null;
     },
     [realOS, ordens],
+  );
+
+  // ---- Dados básicos da OS (slice 003B): handler real (payload-only, sem financeiro) ----
+  const salvarDadosBasicos = useCallback(
+    (input: SalvarDadosBasicosInputV3) => {
+      // R02 estrito: só campos com baseline viajam; o servidor preserva o
+      // resto e conflita o que divergiu (nada tocado = nada a escrever).
+      const base = toDadosBasicosInput(seedDadosBasicos(realOS));
+      const esperados = intencaoDadosBasicos(input, base) as EsperadosDadosBasicosV3;
+      if (Object.keys(esperados).length === 0) return Promise.resolve(true);
+      return runWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input, esperados), "Dados básicos salvos.");
+    },
+    [runWrite, realOS],
   );
 
   const atribuirTecnico = useCallback(
@@ -2207,10 +2417,14 @@ export function useV4Preview(): V4Vals {
       ordensLoading,
       ordensPrimeiraCarga,
       ordensError,
+      lojaAtivaId,
+      rascunhos,
       reloadOrdens,
       reloadDetail,
       realOS,
       detailLoading,
+      detailError,
+      detailCarregada,
       financialProjection,
       financialProjectionsByOsId: railFinancial.projectionsByOsId,
       financialRailLoading: railFinancial.loading,
@@ -2271,10 +2485,14 @@ export function useV4Preview(): V4Vals {
       ordensLoading,
       ordensPrimeiraCarga,
       ordensError,
+      lojaAtivaId,
+      rascunhos,
       reloadOrdens,
       reloadDetail,
       realOS,
       detailLoading,
+      detailError,
+      detailCarregada,
       financialProjection,
       railFinancial.projectionsByOsId,
       railFinancial.loading,

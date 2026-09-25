@@ -34,6 +34,9 @@ export function useOrdensV4(storeId: string | null): OrdensV4State {
 
   useEffect(() => {
     const sid = (storeId ?? "").trim();
+    // R03: toda (re)avaliação consome uma geração nova — inclusive o ramo sem
+    // loja. Assim, uma resposta anterior nunca repovoa o hook depois de limpo.
+    const reqId = ++reqRef.current;
     if (!sid) {
       setOrdens([]);
       setLoading(false);
@@ -41,7 +44,6 @@ export function useOrdensV4(storeId: string | null): OrdensV4State {
       setPrimeiraCarga(false);
       return;
     }
-    const reqId = ++reqRef.current;
     setLoading(true);
     setError(null);
     listOrdens(sid)
@@ -57,6 +59,11 @@ export function useOrdensV4(storeId: string | null): OrdensV4State {
         setLoading(false);
         setPrimeiraCarga(false);
       });
+    // R03: desmontar invalida a geração — resposta tardia não toca estado morto
+    // nem vaza para a próxima montagem.
+    return () => {
+      reqRef.current += 1;
+    };
   }, [storeId, nonce]);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
@@ -82,13 +89,15 @@ export function useOrdemV4(storeId: string | null, osId: string | null): OrdemV4
   useEffect(() => {
     const sid = (storeId ?? "").trim();
     const id = (osId ?? "").trim();
+    // R03: idem à lista — limpar seleção/loja invalida a geração pendente e o
+    // desmonte cancela o contexto (sem loja/OS, detalhe e erro zeram).
+    const reqId = ++reqRef.current;
     if (!sid || !id) {
       setOrdem(null);
       setLoading(false);
       setError(null);
       return;
     }
-    const reqId = ++reqRef.current;
     setLoading(true);
     setError(null);
     // `readOnly: true` → não dispara `expirarGarantiasVencidas` (updateMany). Preview sem escrita.
@@ -103,6 +112,9 @@ export function useOrdemV4(storeId: string | null, osId: string | null): OrdemV4
         setError(e instanceof Error ? e.message : "Falha ao carregar a OS.");
         setLoading(false);
       });
+    return () => {
+      reqRef.current += 1;
+    };
   }, [storeId, osId, nonce]);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);

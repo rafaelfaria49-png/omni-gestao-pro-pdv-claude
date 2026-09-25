@@ -40,6 +40,44 @@ export function opsKeyForLoja(lojaId: string): string {
   return `assistec-pro-ops-v1-${lojaId}`
 }
 
+// ---- OPS-V4-FLUXO-CURTO-001 / R04 · ponte opt-in para a troca de loja ----
+//
+// Sem guarda registrada, `setLojaAtivaId` comporta-se exatamente como antes
+// (troca imediata). Com guarda registrada E rascunho sujo na V4, a troca
+// BLOQUEIA e abre salvar/descartar/cancelar na árvore da V4: Cancelar impede
+// a saída; salvar/descartar executam a troca original. Sem ACL, sem seleção
+// automática, sem cookies/persistência novos, sem efeito nos demais módulos.
+
+export interface GuardaTrocaLojaV4 {
+  temRascunhoSujo: () => boolean;
+  solicitarSaida: (trocar: () => void, descricao: string) => "livre" | "bloqueada";
+}
+
+let guardaTrocaLojaV4: GuardaTrocaLojaV4 | null = null;
+
+/** Registra (ou remove com `null`) a guarda de rascunhos da V4. Opt-in. */
+export function registrarGuardaTrocaLojaV4(guarda: GuardaTrocaLojaV4 | null): void {
+  guardaTrocaLojaV4 = guarda;
+}
+
+/**
+ * Puro (sem React): decide a troca de loja diante da guarda. Sem guarda ou
+ * sem sujeira, `trocar` executa na hora ("trocada"). Com sujeira, delega ao
+ * pêndulo ("bloqueada" = diálogo aberto; "livre" = `trocar` já executou).
+ */
+export function aplicarTrocaLojaComGuarda(args: {
+  guarda: GuardaTrocaLojaV4 | null;
+  trocar: () => void;
+  descricao: string;
+}): "trocada" | "bloqueada" {
+  const guarda = args.guarda;
+  if (guarda && guarda.temRascunhoSujo()) {
+    return guarda.solicitarSaida(args.trocar, args.descricao) === "bloqueada" ? "bloqueada" : "trocada";
+  }
+  args.trocar();
+  return "trocada";
+}
+
 /** Mescla o cadastro matriz com o perfil da unidade (documentos / térmica). */
 export function mergeEmpresaComLoja(
   base: ConfiguracaoEmpresa,
@@ -203,9 +241,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     }
   }, [configHydrated, lojas])
 
-  const setLojaAtivaId = useCallback((id: string) => {
-    const next = id.trim()
-    if (!next) return
+  const executarTrocaLoja = useCallback((next: string) => {
     const prev = (lojaAtivaIdRef.current || "").trim()
     setLojaAtivaIdState(next)
     try {
@@ -276,6 +312,18 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       })()
     }
   }, [lojas])
+
+  const setLojaAtivaId = useCallback((id: string) => {
+    const next = id.trim()
+    if (!next) return
+    // R04: com guarda V4 registrada e rascunho sujo, a troca passa pelo
+    // pêndulo salvar/descartar/cancelar (Cancelar impede a saída).
+    aplicarTrocaLojaComGuarda({
+      guarda: guardaTrocaLojaV4,
+      trocar: () => executarTrocaLoja(next),
+      descricao: `troca de loja para ${next}`,
+    })
+  }, [executarTrocaLoja])
 
   const lojaSelecionada = useMemo(() => {
     if (lojas.length === 0) return undefined
