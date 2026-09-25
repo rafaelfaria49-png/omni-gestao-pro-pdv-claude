@@ -37,6 +37,14 @@ export {
   group,
 } from "./xml-writer"
 export {
+  d01eViolation,
+  isD01eSafe,
+  assertD01eSafe,
+  countIntertagFormattingWhitespace,
+  D01eBackstopError,
+} from "./d01e-backstop"
+export type { D01eViolationCode } from "./d01e-backstop"
+export {
   NFCE_XML_VERSAO,
   NFCE_MODELO,
   NFCE_XMLNS,

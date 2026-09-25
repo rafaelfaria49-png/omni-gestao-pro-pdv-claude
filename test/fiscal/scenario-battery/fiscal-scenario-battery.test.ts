@@ -1702,7 +1702,7 @@ describe("Bateria de Cenários Fiscais Offline C01–C10 (GOAL 021)", () => {
     expect(COVERAGE_GAP_UNMODELED_CSTAT).toBe(false)
     expect(SP_ONLY).toBe(true)
     expect(FISCAL_OFF).toBe(true)
-    expect(SEFAZ_CSTAT_MATRIX_VERSION).toBe("018.2")
+    expect(SEFAZ_CSTAT_MATRIX_VERSION).toBe("023.0")
   })
 
   it("Derivação determinística de prontidão técnica para G-F7 (sem constante literal hardcoded)", () => {
