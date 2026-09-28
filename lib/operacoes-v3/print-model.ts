@@ -290,6 +290,9 @@ export function observacoesClienteV3(os: OrdemServico): string[] {
 export function termoGarantiaDaOSV3(os: OrdemServico): TermoGarantiaV3 {
   const prevista = (os as { aberturaV3?: { garantiaPrevista?: { modelo?: unknown; prazoDias?: unknown; termo?: unknown } } }).aberturaV3?.garantiaPrevista;
   const garantia = lerGarantiaV3(os);
+  if (!garantia.temGarantia) {
+    return { modeloId: "nao_definida", titulo: "Garantia não definida", semCobertura: false, cobertura: [], exclusoes: [] };
+  }
   const modeloId = s(prevista?.modelo) || (garantia.temGarantia ? garantia.semCobertura ? "sem_garantia" : "personalizado" : undefined);
   const prazoDias = garantia.temGarantia ? garantia.prazoDias : undefined;
   const termoCustom = s(prevista?.termo) || s(os.garantia?.termo) || undefined;

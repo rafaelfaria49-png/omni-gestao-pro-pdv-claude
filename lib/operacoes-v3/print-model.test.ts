@@ -212,6 +212,25 @@ describe("print — garantia", () => {
     expect(sem).toMatchObject({ modeloId: "sem_garantia", semCobertura: true });
     expect(sem.prazoDias).toBeUndefined();
   });
+
+  it("garantia ausente permanece não definida no termo e na OS cliente", () => {
+    const ordem = os({});
+    const termo = termoGarantiaDaOSV3(ordem);
+    expect(termo).toEqual({
+      modeloId: "nao_definida",
+      titulo: "Garantia não definida",
+      semCobertura: false,
+      cobertura: [],
+      exclusoes: [],
+    });
+    expect(termo.prazoDias).toBeUndefined();
+    expect(termo.observacao).toBeUndefined();
+    expect(termoGarantiaTextoV3(termo)).not.toMatch(/sem garantia|acordado/i);
+
+    const doc = montarDocumentoOSV3(ordem, undefined, { variante: "cliente" });
+    expect(doc.garantia).toEqual(termo);
+    expect(termoGarantiaTextoV3(doc.garantia)).toBe("Garantia não definida");
+  });
 });
 
 describe("1E — biblioteca de garantias", () => {
