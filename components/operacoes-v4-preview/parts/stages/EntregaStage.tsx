@@ -25,13 +25,13 @@
  * `salvarGarantiaOSV3` via `v.salvarGarantia`). Paridade com `GarantiaOSV3.tsx`
  * da V3: só modelo + prazo (sem termo customizado nesta etapa).
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { C, card, cardTitle, fmt, upLabel, pill, inputBase } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import { SignaturePadV3 } from "@/components/operacoes-v3/components/SignaturePadV3";
 import { CATEGORIAS_FOTO_SAIDA_V3, lerGarantiaV3, type CategoriaFotoSaidaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { FOTO_MAX_V3 } from "@/lib/operacoes-v3/prova-entrada-model";
-import { GARANTIA_CATALOGO_V3, prazoPadraoGarantiaV3 } from "@/lib/operacoes-v3/garantia-textos";
+import { GARANTIA_CATALOGO_V3, garantiaCatalogoV3, normalizarGarantiaPrevistaV3, prazoPadraoGarantiaV3 } from "@/lib/operacoes-v3/garantia-textos";
 import type { EntregaSemCobrancaCategoriaV3, EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import { RealActionNotice } from "../RealActionNotice";
 
@@ -308,7 +308,7 @@ function AssinaturaRetiradaCard({ v }: { v: V4Vals }) {
  * resolve o texto pronto para exibição). Salva via `v.salvarGarantia`, reuso
  * direto de `salvarGarantiaOSV3` (mesmo contrato/payload que a V3 grava).
  */
-function GarantiaFormCard({ v }: { v: V4Vals }) {
+export function GarantiaFormCard({ v }: { v: V4Vals }) {
   const seed = lerGarantiaV3(v.realOS);
   const seedModeloId = seed.temGarantia ? seed.modeloId : "sem_garantia";
   const seedPrazoDias = seed.temGarantia ? seed.prazoDias : prazoPadraoGarantiaV3("sem_garantia");
@@ -317,28 +317,43 @@ function GarantiaFormCard({ v }: { v: V4Vals }) {
   const [prazoDias, setPrazoDias] = useState(seedPrazoDias);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const osIdRef = useRef(v.realOS?.id ?? "");
+  const semCobertura = garantiaCatalogoV3(modeloId).semCobertura;
 
   // Reseta o formulário quando a OS/garantia muda (troca de OS ou reload pós-save).
   const seedKey = `${v.realOS?.id ?? ""}:${v.realOS?.atualizadoEm ?? ""}`;
   useEffect(() => {
+    const osId = v.realOS?.id ?? "";
+    // Uma falha pode recarregar o detalhe; não descarte a edição ainda suja.
+    if (dirty && osIdRef.current === osId) return;
+    osIdRef.current = osId;
     setModeloId(seedModeloId);
     setPrazoDias(seedPrazoDias);
     setDirty(false);
+    setErro(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seedKey]);
 
   const aplicarModelo = (id: string) => {
-    setModeloId(id);
-    setPrazoDias(prazoPadraoGarantiaV3(id));
+    const garantia = normalizarGarantiaPrevistaV3({ modeloId: id });
+    setModeloId(garantia.modelo.id);
+    setPrazoDias(garantia.prazoDias);
     setDirty(true);
+    setErro(null);
   };
 
   const onSalvar = async () => {
     if (busy || !dirty) return;
     setBusy(true);
+    setErro(null);
     try {
-      const ok = await v.salvarGarantia({ modeloId, prazoDias });
+      const garantia = normalizarGarantiaPrevistaV3({ modeloId, prazoDias });
+      const ok = await v.salvarGarantia({ modeloId: garantia.modelo.id, prazoDias: garantia.prazoDias });
       if (ok) setDirty(false);
+      else setErro("Não foi possível salvar. Revise a mensagem e tente novamente.");
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Não foi possível salvar. Tente novamente.");
     } finally {
       setBusy(false);
     }
@@ -357,14 +372,16 @@ function GarantiaFormCard({ v }: { v: V4Vals }) {
           </select>
         </label>
         <label>
-          <div style={{ ...upLabel, marginBottom: 4 }}>Prazo em dias</div>
+          <div style={{ ...upLabel, marginBottom: 4 }}>{semCobertura ? "Sem cobertura — prazo 0" : "Prazo em dias"}</div>
           <input
             type="number"
-            min={0}
+            min={semCobertura ? 0 : 1}
             value={prazoDias}
+            disabled={semCobertura || busy}
             onChange={(e) => {
-              setPrazoDias(Math.max(0, Math.trunc(Number(e.target.value) || 0)));
+              setPrazoDias(Math.max(1, Math.trunc(Number(e.target.value) || 0)));
               setDirty(true);
+              setErro(null);
             }}
             style={inputBase}
           />
@@ -383,6 +400,7 @@ function GarantiaFormCard({ v }: { v: V4Vals }) {
       >
         {busy ? "Salvando…" : "Salvar garantia"}
       </button>
+      {erro && <div role="alert" style={{ color: C.danger, fontSize: 11, marginTop: 8 }}>{erro}</div>}
       <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>
         A garantia fica prevista na OS e passa a valer na entrega.
       </div>
@@ -484,7 +502,8 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
   );
 }
 
-function DocumentosEntregaCard({ v }: { v: V4Vals }) {
+export function DocumentosEntregaCard({ v }: { v: V4Vals }) {
+  const garantiaDefinida = lerGarantiaV3(v.realOS).temGarantia;
   const btn: React.CSSProperties = {
     height: 32,
     padding: "0 12px",
@@ -500,10 +519,11 @@ function DocumentosEntregaCard({ v }: { v: V4Vals }) {
     <div style={card}>
       <div style={{ ...cardTitle, marginBottom: 10 }}>Documentos</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        <button type="button" style={btn} onClick={() => v.openDocPrint("termo_garantia")}>Imprimir Termo de Garantia</button>
+        <button type="button" style={btn} disabled={!garantiaDefinida} onClick={() => v.openDocPrint("termo_garantia")}>Imprimir Termo de Garantia</button>
         <button type="button" style={btn} onClick={() => v.openDocPrint("termo_entrega")}>Imprimir Termo de Entrega</button>
         <button type="button" style={btn} onClick={() => v.openDocPrint("os_cliente")}>Imprimir OS (cliente)</button>
       </div>
+      {!garantiaDefinida && <div style={{ fontSize: 11, color: C.subtle, marginTop: 8 }}>Defina a garantia da OS antes de emitir o termo.</div>}
       <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>
         Reimpressão abre o mesmo documento. WhatsApp no modal, quando o cliente tiver telefone válido.
       </div>
@@ -527,6 +547,20 @@ export function EntregaStage({ v }: { v: V4Vals }) {
           </div>
         </div>
         <FotosSaidaCard v={v} />
+        <div style={card}>
+          <div style={{ ...cardTitle, marginBottom: 10 }}>🛡 Garantia da OS</div>
+          {g.temGarantia ? (
+            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
+              <Field label="Prazo" value={g.prazo} />
+              <Field label="Cobertura" value={g.cobertura} />
+              <Field label="Início" value={g.inicio} />
+              <Field label="Validade" value={g.fim} />
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div>
+          )}
+          <GarantiaFormCard v={v} />
+        </div>
         <DocumentosEntregaCard v={v} />
       </div>
     );
@@ -638,7 +672,7 @@ export function EntregaStage({ v }: { v: V4Vals }) {
             </div>
           </>
         )}
-        {!g.temGarantia && <GarantiaFormCard v={v} />}
+        {!g.temGarantia && <><div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div><GarantiaFormCard v={v} /></>}
       </div>
       </div>
     </div>

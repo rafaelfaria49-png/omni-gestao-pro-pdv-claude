@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
-import { garantiaCatalogoV3 } from "./garantia-textos";
+import { normalizarGarantiaPrevistaV3 } from "./garantia-textos";
 import type { DocumentoTipoV3 } from "./documentos";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 
@@ -73,9 +73,7 @@ export async function salvarGarantiaOSV3(
   input: { modeloId: string; prazoDias?: number; termoCustom?: string },
 ): Promise<OrdemServico> {
   const { id, session, payload } = await carregar(storeId, osId);
-  const modelo = garantiaCatalogoV3(input.modeloId);
-  const prazoDias =
-    typeof input.prazoDias === "number" && input.prazoDias >= 0 ? Math.trunc(input.prazoDias) : modelo.prazoDiasPadrao;
+  const { modelo, prazoDias } = normalizarGarantiaPrevistaV3(input);
 
   const abertura = (payload.aberturaV3 && typeof payload.aberturaV3 === "object" ? payload.aberturaV3 : {}) as Record<string, unknown>;
   const anterior = abertura.garantiaPrevista as { modelo?: string } | undefined;

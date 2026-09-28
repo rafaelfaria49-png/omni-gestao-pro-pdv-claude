@@ -11,7 +11,7 @@
 // ============================================================================
 
 import type { OrdemServico } from "@/types/os";
-import { garantiaCatalogoV3 } from "./garantia-textos";
+import { garantiaCatalogoV3, normalizarGarantiaPrevistaV3 } from "./garantia-textos";
 
 const DIA_MS = 86400000;
 
@@ -149,11 +149,13 @@ export function lerGarantiaV3(os: OrdemServico | null | undefined, now: Date = n
   const modeloId = s(gp?.modelo) || "personalizado";
   const cat = garantiaCatalogoV3(modeloId);
   const label = s(gp?.label) || cat.titulo;
-  const prazoDias = numOr(gp?.prazoDias, numOr(g2?.prazoDias, numOr(g2op?.prazoDias, cat.prazoDiasPadrao)));
+  const prazoDias = gp
+    ? normalizarGarantiaPrevistaV3({ modeloId, prazoDias: gp.prazoDias }).prazoDias
+    : numOr(g2?.prazoDias, numOr(g2op?.prazoDias, cat.prazoDiasPadrao));
 
   const definida = !!gp || !!g2?.fimEm || !!g2?.ativa || !!g2op || !!g2Inicio;
   if (!definida) {
-    return { temGarantia: false, modeloId, label, prazoDias, semCobertura: cat.semCobertura, situacao: "nenhuma" };
+    return { temGarantia: false, modeloId, label: "Garantia não definida", prazoDias: 0, semCobertura: false, situacao: "nenhuma" };
   }
 
   const semCobertura = cat.semCobertura || prazoDias <= 0;

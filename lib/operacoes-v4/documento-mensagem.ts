@@ -4,7 +4,7 @@
 import type { OrdemServico } from "@/types/os";
 import { documentoMetaV3, type DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { termoGarantiaTextoV3 } from "@/lib/operacoes-v3/garantia-textos";
-import { lerEntregaV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { termoGarantiaDaOSV3 } from "@/lib/operacoes-v3/print-model";
 import { statusMetaV3, statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { montarOrcamentoClienteViewV4 } from "./orcamento-cliente-view";
@@ -39,6 +39,7 @@ export function montarMensagemDocumentoV4(tipo: DocumentoTipoV3, os: OrdemServic
 
   switch (tipo) {
     case "termo_garantia": {
+      if (!lerGarantiaV3(os).temGarantia) return "";
       const linhas = [`Termo de Garantia — ${codigo}`];
       if (cliente) linhas.push(`Cliente: ${cliente}`);
       if (aparelho) linhas.push(`Aparelho: ${aparelho}`);
