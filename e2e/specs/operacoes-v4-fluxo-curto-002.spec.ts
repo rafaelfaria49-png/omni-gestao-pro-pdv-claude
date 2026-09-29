@@ -9,7 +9,11 @@ test("OPS-V4-FLUXO-CURTO-002 — garantia e identidade documental coerentes", as
   const aparelho = `Galaxy E2E ${sufixo}`;
   const loja = "Loja E2E Garantia 002";
 
+  // Aguarda a loja ativa e a lista inicial antes de interagir com a V4 hidratada.
+  const lojasProntas = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/stores" && r.ok());
+  const ordensProntas = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/ops/ordens" && r.ok());
   await page.goto("/dashboard/operacoes-v4-preview");
+  await Promise.all([lojasProntas, ordensProntas]);
   await dismissFirstAccessWizardIfPresent(page);
   const launcher = page.getByRole("main").getByTitle(/Novo atendimento/);
   await expect(launcher).toHaveCount(1);
