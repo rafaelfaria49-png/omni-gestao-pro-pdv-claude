@@ -24,8 +24,13 @@ Cobertura com PostgreSQL real: dois empregadores/lojas com inscrição igual sem
 
 ## AEP
 
-A trilha foi inicializada pela CLI oficial, o plano versionado em commit próprio e `status/open pessoas` executados antes da implementação. O check preliminar falhou no item 8: `base_commit..HEAD` inclui `docs/execution-tracks/pessoas/goals/.gitkeep` e o GOAL recém-criado pelo bootstrap, enquanto a regra exige `goals/**` intocado. Isso impede `close` sem mudar a regra ou incluir o plano em `main`, ações fora da autorização deste GOAL. O item 10 também falha nessa worktree porque `npx vitest` não dispõe de `node_modules`/Prisma Client e a allowlist não autoriza escrever esses artefatos nela; a suíte foi executada em cópia temporária com o banco local verificado. O check preliminar apontou ainda árvore suja antes do commit e impossibilidade de escrever `FETCH_HEAD` sob o sandbox; o resultado após commit será relatado separadamente. Nenhum PASS AEP é afirmado aqui.
+A trilha foi inicializada pela CLI oficial, o plano versionado em commit próprio e status/open pessoas executados antes da implementação. Após o commit de implementação 5ca432d, o check oficial passou em branch, worktree, árvore limpa, ancestralidade, allowlist, gates, ledger e upstream. A tentativa oficial de close foi abortada, sem escrita de estado; .aep-active foi preservado e o GOAL não está ratificado como DONE.
 
+- Item 8 FAIL: o diff desde origin/main inclui docs/execution-tracks/pessoas/goals/.gitkeep e o GOAL criado pelo bootstrap obrigatório, mas o check exige que goals/** esteja intocado. A origem é estrutural neste fluxo de trilha nova; não alteramos a lógica do protocolo nem incluímos o plano em main.
+- Item 10 FAIL: o comando registrado no GOAL, npx vitest run lib/pessoas, não encontra Vitest na worktree sem node_modules nem Prisma Client gerado. A allowlist não autoriza escrever esses artefatos ali. A suíte de 19 testes foi executada em cópia temporária com banco PostgreSQL local isolado e guard de destino.
+- Item 12 AVISO é apenas informativo: não há GOAL seguinte elegível. Nenhum outro item falhou no check após o commit.
+
+A revisão independente deverá resolver o fluxo de bootstrap/execução de testes do AEP antes de ratificar o fechamento. Nenhum PASS AEP ou aprovação independente é afirmado aqui.
 ## Antes de uso real
 
 Provisionar as chaves e o transporte privado apenas no servidor, revisar independentemente o diff e a migration, autorizar merge e aplicação em produção em fluxo próprio. A flag permanece OFF por padrão. O GOAL 001 completo aguarda 001B; este backend não calcula folha nem publica holerite do Omni.
