@@ -131,6 +131,7 @@ import { montarMensagemAtualizacaoOSV4 } from "@/lib/operacoes-v4/documento-mens
 import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
 import type { EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operacoes-v3/garantia-actions";
+import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
@@ -736,7 +737,13 @@ export function buildVals(
   // GOAL OPS-V4-DOCUMENTOS-ASSINATURA-ANEXOS-015: o menu Docs abre o MESMO
   // modal V3 (`PrintPreviewV3`) para todos os tipos com motor real. Portal do
   // cliente continua fora — não há contrato de leitura/envio.
-  const openDocPrint = (tipo: DocumentoTipoV3) => update({ docPrint: tipo, menu: null });
+  const openDocPrint = (tipo: DocumentoTipoV3) => {
+    if (tipo === "termo_garantia" && !lerGarantiaV3(realOS).temGarantia) {
+      notify("Defina a garantia da OS antes de emitir o termo.");
+      return;
+    }
+    update({ docPrint: tipo, menu: null });
+  };
   // GOAL 023: "Orçamento (via cliente)" só aparece no menu com orçamento REAL
   // materializado (`estado === "persistido"`) — prévia/ausente não têm o que
   // mostrar; empty honesto = item nem aparece (mesmo padrão de gating do resto

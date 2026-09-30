@@ -171,6 +171,22 @@ export function prazoPadraoGarantiaV3(id?: string): number {
   return garantiaCatalogoV3(id).prazoDiasPadrao;
 }
 
+/** Snapshot coerente de modelo e prazo, inclusive para callers sem UI. */
+export function normalizarGarantiaPrevistaV3(input: { modeloId: string; prazoDias?: number }): {
+  modelo: GarantiaModeloCatalogoV3;
+  prazoDias: number;
+} {
+  const modelo = garantiaCatalogoV3(input.modeloId);
+  if (modelo.semCobertura) return { modelo, prazoDias: 0 };
+  const prazo = input.prazoDias;
+  return {
+    modelo,
+    prazoDias: typeof prazo === "number" && Number.isFinite(prazo) && prazo > 0
+      ? Math.trunc(prazo) || modelo.prazoDiasPadrao
+      : modelo.prazoDiasPadrao,
+  };
+}
+
 // ----------------------------------------------------------------------------
 // Gerador do termo
 // ----------------------------------------------------------------------------

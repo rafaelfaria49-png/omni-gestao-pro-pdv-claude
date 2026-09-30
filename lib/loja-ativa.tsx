@@ -103,6 +103,8 @@ export function formatEnderecoEmpresa(e: ConfiguracaoEmpresa["endereco"]): strin
   return `${rua}, ${numero} - ${bairro}, ${cidade}/${estado} - CEP: ${cep}`
 }
 
+type LojaPerfilRemoto = PerfilLojaUnidade & { telefone?: string }
+
 type LojaAtivaContextType = {
   lojas: PerfilLojaUnidade[]
   lojaAtivaId: string | null
@@ -113,6 +115,8 @@ type LojaAtivaContextType = {
   storesRefreshNonce: number
   /** Dados brutos da unidade ativa (sem fallback de nome). */
   lojaAtivaRaw: PerfilLojaUnidade | null
+  /** Cadastro da unidade ativa confirmado pelo reader remoto de /api/stores. */
+  lojaAtivaRemota: LojaPerfilRemoto | null
   /** Primeiro acesso: cadastro básico ainda não preenchido (nome fantasia e CNPJ). */
   cadastroBasicoIncompleto: boolean
   /** Verdadeiro apenas após a primeira hidratação remota (refreshStoresList) ter terminado. Usado para evitar avaliar onboarding antes da carga real. */
@@ -131,7 +135,7 @@ function parseStoreProfile(raw: unknown): NonNullable<PerfilLojaUnidade["storePr
   return "ASSISTENCIA"
 }
 
-function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): PerfilLojaUnidade[] {
+function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): LojaPerfilRemoto[] {
   return stores
     .map((s) => {
       const addr = s.address && typeof s.address === "object" ? (s.address as Record<string, unknown>) : {}
@@ -140,6 +144,7 @@ function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): Perf
         nomeFantasia: String(s.name || "").trim(),
         razaoSocial: String(s.name || "").trim(),
         cnpj: String(s.cnpj || "").trim(),
+        telefone: String(s.phone || "").trim(),
         endereco: {
           rua: String(addr.rua || ""),
           numero: String(addr.numero || ""),
@@ -163,7 +168,7 @@ function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): Perf
 export function LojaAtivaProvider({ children }: { children: ReactNode }) {
   const { config, configHydrated } = useConfigEmpresa()
   const lojasConfig = useMemo(() => config.minhasLojas?.lojas ?? [], [config.minhasLojas?.lojas])
-  const [lojasRemote, setLojasRemote] = useState<PerfilLojaUnidade[] | null>(null)
+  const [lojasRemote, setLojasRemote] = useState<LojaPerfilRemoto[] | null>(null)
   const [storesRefreshNonce, setStoresRefreshNonce] = useState(0)
   const [storesLoaded, setStoresLoaded] = useState(false)
   const lojas = useMemo(() => {
@@ -356,6 +361,10 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     () => mergeEmpresaComLoja(config.empresa, lojaSelecionada),
     [config.empresa, lojaSelecionada]
   )
+  const lojaAtivaRemota = useMemo(
+    () => lojasRemote?.find((loja) => loja.id === lojaSelecionada?.id) ?? null,
+    [lojasRemote, lojaSelecionada?.id]
+  )
 
   const getEnderecoDocumentos = useCallback(() => {
     const e = { ...configPadrao.empresa.endereco, ...empresaDocumentos.endereco }
@@ -376,6 +385,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       refreshStoresList,
       storesRefreshNonce,
       lojaAtivaRaw: lojaSelecionada ?? null,
+      lojaAtivaRemota,
       cadastroBasicoIncompleto,
       storesLoaded,
       empresaDocumentos,
@@ -389,6 +399,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       refreshStoresList,
       storesRefreshNonce,
       lojaSelecionada,
+      lojaAtivaRemota,
       cadastroBasicoIncompleto,
       storesLoaded,
       empresaDocumentos,
@@ -411,6 +422,7 @@ export function useLojaAtiva(): LojaAtivaContextType {
       refreshStoresList: async () => {},
       storesRefreshNonce: 0,
       lojaAtivaRaw: null,
+      lojaAtivaRemota: null,
       cadastroBasicoIncompleto: false,
       storesLoaded: false,
       empresaDocumentos: fallbackEmpresa,
