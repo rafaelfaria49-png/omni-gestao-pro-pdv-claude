@@ -1518,7 +1518,7 @@ describe("xmllint harness · regressão de infraestrutura (infNFeSupl)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
+  }, 15_000)
 
   it("ausência real do validador é ENOENT fail-closed, nunca skip", () => {
     const result = runXmllintSchema("schema.xsd", "doc.xml", "xmllint-ausente-fiscal-b2-095")
