@@ -207,3 +207,32 @@ describe("KPIs de pós-venda", () => {
     expect(kpi.taxaRetorno).toBe(50); // 1 de 2 entregues
   });
 });
+
+describe("OPS-V4-FLUXO-CURTO-002 — leitura canônica da garantia", () => {
+  it("legado sem fonte inequívoca fica não definido e sem prazo fantasma", () => {
+    expect(lerGarantiaV3(os({}))).toMatchObject({
+      temGarantia: false,
+      situacao: "nenhuma",
+      prazoDias: 0,
+      label: "Garantia não definida",
+    });
+  });
+
+  it("sem_garantia com prazo histórico contraditório lê sem cobertura e zero", () => {
+    expect(lerGarantiaV3(comGarantia("sem_garantia", 90))).toMatchObject({
+      temGarantia: true,
+      situacao: "sem_garantia",
+      semCobertura: true,
+      prazoDias: 0,
+    });
+  });
+
+  it("tela com prazo zero lê o prazo padrão coberto, como o termo", () => {
+    expect(lerGarantiaV3(comGarantia("tela", 0))).toMatchObject({
+      temGarantia: true,
+      situacao: "prevista",
+      semCobertura: false,
+      prazoDias: 90,
+    });
+  });
+});

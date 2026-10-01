@@ -19,6 +19,7 @@ import {
   type NovaOSDraftV3,
   type NovaOSOrigemV3,
 } from "@/lib/operacoes-v3/nova-os-model";
+import { normalizarGarantiaPrevistaV3, sugerirGarantiaPorDescricaoV3 } from "@/lib/operacoes-v3/garantia-textos";
 
 /** Chave de tipo de equipamento usada pelos botões do modal V4. */
 export type NovaOSEquipV4 = "celular" | "tablet" | "notebook" | "videogame" | "outro";
@@ -174,6 +175,12 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
 
   // Garantia da OS: snapshot do 1º serviço com garantia (singular legado = o único).
   const comGarantia = validos.find((s) => s.garantiaDias > 0);
+  const garantiaServico = comGarantia
+    ? normalizarGarantiaPrevistaV3({
+        modeloId: sugerirGarantiaPorDescricaoV3(comGarantia.descricao) ?? "personalizado",
+        prazoDias: comGarantia.garantiaDias,
+      })
+    : null;
 
   return {
     ...base,
@@ -184,6 +191,8 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
       marca: clean(form.marca) ?? "",
       modelo: clean(form.modelo) ?? "",
       imei: clean(form.imei),
+      // T07: cor em campo próprio do equipamento — nunca em condicaoAparelho.
+      cor: clean(form.cor),
     },
     recepcao: {
       ...base.recepcao,
@@ -197,11 +206,13 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
       ...base.problema,
       defeitoRelatado: clean(form.defeitoRelatado) ?? "",
       observacoesInternas: clean(form.observacoes),
-      condicaoAparelho: clean(form.cor),
+      // T07/T08: condicaoAparelho é nota física — a cor viaja em
+      // equipamento.cor (campo próprio). Não converter cor em condição.
+      condicaoAparelho: undefined,
     },
     itens,
-    garantia: comGarantia
-      ? { ...base.garantia, prazoDias: comGarantia.garantiaDias }
+    garantia: garantiaServico
+      ? { modelo: garantiaServico.modelo.id, label: garantiaServico.modelo.titulo, prazoDias: garantiaServico.prazoDias }
       : base.garantia,
   };
 }

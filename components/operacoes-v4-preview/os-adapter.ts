@@ -1383,7 +1383,7 @@ export interface V4GarantiaView {
 
 export const EMPTY_GARANTIA_VIEW: V4GarantiaView = {
   temGarantia: false,
-  situacao: NI,
+  situacao: "Garantia não definida",
   situacaoTone: "neutro",
   prazo: NI,
   inicio: NI,
@@ -1409,10 +1409,10 @@ function adaptGarantia(os: OrdemServico): V4GarantiaView {
     temGarantia: true,
     situacao: view.situacaoLabel,
     situacaoTone: view.tone,
-    prazo: !view.semCobertura && view.prazoDias > 0 ? `${view.prazoDias} dias` : NI,
+    prazo: view.semCobertura ? "0 dias" : view.prazoDias > 0 ? `${view.prazoDias} dias` : NI,
     inicio: view.inicio ? fmtData(view.inicio) : NI,
     fim: view.vencimento ? fmtData(view.vencimento) : NI,
-    cobertura: view.cobertura.length ? view.cobertura.join(" · ") : NI,
+    cobertura: view.semCobertura ? "Sem cobertura" : view.cobertura.length ? view.cobertura.join(" · ") : NI,
     observacoes: view.observacoes ?? "",
     acionamentos: acionamentos > 0 ? String(acionamentos) : "",
   };

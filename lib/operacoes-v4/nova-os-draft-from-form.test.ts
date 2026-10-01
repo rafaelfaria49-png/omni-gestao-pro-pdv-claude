@@ -114,6 +114,51 @@ describe("buildNovaOSDraftFromFormV4 — cliente", () => {
   });
 });
 
+describe("G01–G03 — garantia da Nova OS", () => {
+  it("Troca de tela 90 usa o modelo tela e mantém prazo da linha comercial", () => {
+    const draft = buildNovaOSDraftFromFormV4(form({
+      tipoEntrada: "servico_autorizado",
+      defeitoRelatado: "Bateria descarrega",
+      servicoAutorizado: { descricao: "Troca de tela", valor: 300, custo: 92, garantiaDias: 90 },
+    }), FIXED);
+    expect(draft.garantia).toMatchObject({ modelo: "tela", prazoDias: 90 });
+    expect(draft.itens[0]).toMatchObject({ garantiaDias: 90, custoUnitario: 92, valorUnitario: 300 });
+  });
+
+  it("serviço desconhecido com prazo usa personalizado", () => {
+    const draft = buildNovaOSDraftFromFormV4(form({
+      tipoEntrada: "servico_autorizado",
+      servicoAutorizado: { descricao: "Ajuste especial", valor: 300, custo: 92, garantiaDias: 90 },
+    }), FIXED);
+    expect(draft.garantia).toMatchObject({ modelo: "personalizado", prazoDias: 90 });
+  });
+
+  it("sem serviço com garantia não deixa prazo positivo fantasma", () => {
+    const draft = buildNovaOSDraftFromFormV4(form({
+      tipoEntrada: "servico_autorizado",
+      servicosAutorizados: [
+        { descricao: "Troca de tela", valor: 300, custo: 92, garantiaDias: 0 },
+        { descricao: "Inválido", valor: 0, custo: 0, garantiaDias: 90 },
+      ],
+    }), FIXED);
+    expect(draft.garantia).toMatchObject({ modelo: "sem_garantia", prazoDias: 0 });
+    expect(draft.itens[0]?.garantiaDias).toBeUndefined();
+  });
+
+  it("snapshot geral usa primeiro serviço válido com garantia; linhas preservam seus prazos", () => {
+    const draft = buildNovaOSDraftFromFormV4(form({
+      tipoEntrada: "servico_autorizado",
+      servicosAutorizados: [
+        { descricao: "Diagnóstico", valor: 50, custo: 10, garantiaDias: 0 },
+        { descricao: "Troca de tela", valor: 300, custo: 92, garantiaDias: 90 },
+        { descricao: "Troca de bateria", valor: 200, custo: 60, garantiaDias: 60 },
+      ],
+    }), FIXED);
+    expect(draft.garantia).toMatchObject({ modelo: "tela", prazoDias: 90 });
+    expect(draft.itens.map((item) => item.garantiaDias)).toEqual([undefined, 90, 60]);
+  });
+});
+
 describe("buildNovaOSDraftFromFormV4 — equipamento e origem", () => {
   it("mapeia as chaves de equipamento para os rótulos canônicos da V3", () => {
     expect(equipTipoLabelV4("celular")).toBe("Smartphone");
@@ -221,5 +266,32 @@ describe("buildNovaOSDraftFromFormV4 — validação mínima (integra com valida
       FIXED,
     );
     expect(validarNovaOSDraftV3(draft)).toMatch(/defeito/i);
+  });
+});
+
+describe("buildNovaOSDraftFromFormV4 — cor em campo próprio (T07/T08)", () => {
+  it("cor vai para equipamento.cor e NUNCA para condicaoAparelho", () => {
+    const draft = buildNovaOSDraftFromFormV4(
+      form({
+        clienteNovo: { nome: "C" },
+        marca: "Apple",
+        modelo: "iPhone 13",
+        defeitoRelatado: "Tela",
+        cor: "  Violeta  ",
+      }),
+      FIXED,
+    );
+    expect(draft.equipamento.cor).toBe("Violeta");
+    expect(draft.problema.condicaoAparelho).toBeUndefined();
+    expect(validarNovaOSDraftV3(draft)).toBeNull();
+  });
+
+  it("sem cor → equipamento.cor undefined (não inventa valor)", () => {
+    const draft = buildNovaOSDraftFromFormV4(
+      form({ clienteNovo: { nome: "C" }, marca: "A", modelo: "B", defeitoRelatado: "D" }),
+      FIXED,
+    );
+    expect(draft.equipamento.cor).toBeUndefined();
+    expect(draft.problema.condicaoAparelho).toBeUndefined();
   });
 });

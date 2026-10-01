@@ -8,6 +8,7 @@ import {
   montarDocumentoOSV3,
   montarEtiquetaV3,
   montarTermoGarantiaDocV3,
+  montarTermoEntregaV3,
   observacoesClienteV3,
   resumoFinanceiroImprimivelV3,
   senhaImprimivelV3,
@@ -135,6 +136,35 @@ describe("print — empresa (fallback honesto)", () => {
     expect(e.temDados).toBe(false);
     expect(e.cnpj).toBe("");
   });
+
+  it("V4 com cadastro remoto ausente não imprime identidade fabricada", () => {
+    const e = dadosEmpresaPrintV3({ semFallback: true });
+    expect(e).toMatchObject({ nome: "", cnpj: "", endereco: "", telefone: "", email: "", temDados: false });
+  });
+
+  it("OS cliente, termo e entrega recebem a mesma identidade real", () => {
+    const empresa = {
+      semFallback: true,
+      nomeFantasia: "Loja E2E Garantia 002",
+      cnpj: "12.345.678/0001-90",
+      contato: { telefone: "11999998888" },
+      endereco: { rua: "Rua QA", numero: "20", cidade: "São Paulo", estado: "SP" },
+    };
+    const ordem = os({
+      cliente: { nome: "E2E Garantia 002" },
+      equipamento: { marca: "Samsung", modelo: "A15" },
+      aberturaV3: { garantiaPrevista: { modelo: "tela", prazoDias: 90 } },
+      orcamento: orcamento([{ id: "s1", descricao: "Troca de tela", valor: 300, kindV3: "cobrado" }], []),
+    });
+    const documentos = [
+      montarDocumentoOSV3(ordem, empresa),
+      montarTermoGarantiaDocV3(ordem, empresa),
+      montarTermoEntregaV3(ordem, empresa),
+    ];
+    for (const doc of documentos) {
+      expect(doc.empresa).toMatchObject({ nome: empresa.nomeFantasia, cnpj: empresa.cnpj, telefone: empresa.contato.telefone });
+    }
+  });
 });
 
 describe("print — garantia", () => {
@@ -172,6 +202,34 @@ describe("print — garantia", () => {
     const t = termoGarantiaDaOSV3(os({ aberturaV3: { garantiaPrevista: { modelo: "bateria", prazoDias: 90 } } }));
     expect(t.modeloId).toBe("bateria");
     expect(t.prazoDias).toBe(90);
+  });
+
+  it("termo tela 90 e sem garantia usam a mesma fonte canônica da OS", () => {
+    const tela = termoGarantiaDaOSV3(os({ aberturaV3: { garantiaPrevista: { modelo: "tela", prazoDias: 90 } } }));
+    expect(tela).toMatchObject({ modeloId: "tela", prazoDias: 90, semCobertura: false });
+    expect(tela.titulo).not.toContain("Sem garantia");
+    const sem = termoGarantiaDaOSV3(os({ aberturaV3: { garantiaPrevista: { modelo: "sem_garantia", prazoDias: 0 } } }));
+    expect(sem).toMatchObject({ modeloId: "sem_garantia", semCobertura: true });
+    expect(sem.prazoDias).toBeUndefined();
+  });
+
+  it("garantia ausente permanece não definida no termo e na OS cliente", () => {
+    const ordem = os({});
+    const termo = termoGarantiaDaOSV3(ordem);
+    expect(termo).toEqual({
+      modeloId: "nao_definida",
+      titulo: "Garantia não definida",
+      semCobertura: false,
+      cobertura: [],
+      exclusoes: [],
+    });
+    expect(termo.prazoDias).toBeUndefined();
+    expect(termo.observacao).toBeUndefined();
+    expect(termoGarantiaTextoV3(termo)).not.toMatch(/sem garantia|acordado/i);
+
+    const doc = montarDocumentoOSV3(ordem, undefined, { variante: "cliente" });
+    expect(doc.garantia).toEqual(termo);
+    expect(termoGarantiaTextoV3(doc.garantia)).toBe("Garantia não definida");
   });
 });
 

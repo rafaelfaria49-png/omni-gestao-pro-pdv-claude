@@ -32,6 +32,20 @@ describe("montarMensagemDocumentoV4", () => {
     );
     expect(txt).toContain("Termo de Garantia — OS-88");
     expect(txt).toContain("90 dias");
+    expect(txt).not.toContain("Sem garantia");
+  });
+
+  it("sem garantia não anuncia prazo antigo na mensagem", () => {
+    const txt = montarMensagemDocumentoV4("termo_garantia", os({
+      aberturaV3: { garantiaPrevista: { modelo: "sem_garantia", prazoDias: 0 } },
+      itensV3: [{ descricao: "Troca de tela", garantiaDias: 90 }],
+    }));
+    expect(txt).toMatch(/sem garantia/i);
+    expect(txt).not.toContain("90 dias");
+  });
+
+  it("garantia não definida não fabrica mensagem de termo", () => {
+    expect(montarMensagemDocumentoV4("termo_garantia", os())).toBe("");
   });
 
   it("termo de entrega lê retirada real", () => {

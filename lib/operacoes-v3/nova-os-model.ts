@@ -58,6 +58,11 @@ export interface NovaOSEquipamentoV3 {
   modelo: string;
   /** IMEI / número de série. */
   imei?: string;
+  /**
+   * Cor do aparelho em campo próprio (OPS-V4-FLUXO-CURTO-001 / T07).
+   * Nunca reutilizar `condicaoAparelho` (nota física) para cor.
+   */
+  cor?: string;
   senha?: string;
   senhaTipo: NovaOSSenhaTipoV3;
   acessorios: string[];

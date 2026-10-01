@@ -5,6 +5,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { useLojaAtiva } from "@/lib/loja-ativa";
@@ -14,6 +15,12 @@ import {
   buildNovaOSDraftFromFormV4,
   type TipoEntradaOSV4,
 } from "@/lib/operacoes-v4/nova-os-draft-from-form";
+import {
+  FUSO_LOJA_LABEL_V4,
+  formatPrevisaoComFuso,
+  isPrevisaoVencida,
+  localInputToIsoInTZ,
+} from "@/lib/operacoes-v4/dados-basicos-form";
 import {
   atualizarLinhaServicoV4,
   erroLinhaServicoV4,
@@ -69,9 +76,16 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
   const [prioridade, setPrioridade] = useState<"baixa" | "media" | "alta">("media");
   const [localFisico, setLocalFisico] = useState<"balcao" | "bancada" | "aguardando_diagnostico">("balcao");
   const [previsao, setPrevisao] = useState("");
+  const [aceitaVencida, setAceitaVencida] = useState(false);
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [abertos, setAbertos] = useState({ cliente: true, aparelho: true, comercial: true, recepcao: false, prova: false });
+  // Atendente real: identidade autenticada como padrão (override manual vale).
+  const { data: session } = useSession();
+  const nomeSessao = ((session?.user as { name?: unknown } | undefined)?.name ?? session?.user?.email ?? "").toString().trim();
+  // T09: parede da loja → instante ISO pelo fuso canônico (nunca a string crua).
+  const previsaoIso = previsao.trim() ? localInputToIsoInTZ(previsao) : "";
+  const previsaoVencida = isPrevisaoVencida(previsaoIso);
 
   /** Remove uma linha; se era a última, abre um editor vazio (validação segue no submit). */
   const removerLinha = (key: string) => {
@@ -107,6 +121,11 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
       setErro("Informe ao menos um serviço com descrição e valor de venda.");
       return;
     }
+    // T10: previsão no passado exige aceite explícito — nunca entra em silêncio.
+    if (previsaoVencida && !aceitaVencida) {
+      setErro("A previsão está no passado. Marque o aceite explícito para abrir a OS assim mesmo.");
+      return;
+    }
     const draft = buildNovaOSDraftFromFormV4({
       clienteExistente: cliente.modo === "existente" ? cliente.existente : null,
       clienteNovo: cliente.novo,
@@ -116,12 +135,12 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
       imei: aparelho.imei,
       cor: aparelho.cor,
       defeitoRelatado: aparelho.defeitoRelatado,
-      recebidoPor,
+      recebidoPor: recebidoPor.trim() ? recebidoPor : nomeSessao,
       origem: tipo === "retorno_garantia" ? "garantia" : origemComercialParaV3(origem),
       tipoEntrada: tipo,
       prioridade,
       localFisico,
-      previsaoEntrega: previsao || undefined,
+      previsaoEntrega: previsaoIso || undefined,
       // Somente linhas válidas viram contrato (item fantasma vazio nunca persiste).
       servicosAutorizados: tipo === "servico_autorizado" ? paraServicosAutorizadosV4(servicos) : undefined,
     });
@@ -282,27 +301,36 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
           <div>
             <div style={atendLabel}>Recebido por</div>
-            <input value={recebidoPor} onChange={(e) => setRecebidoPor(e.target.value)} placeholder="Nome do atendente" style={atendInput} autoComplete="off" />
+            <input value={recebidoPor} onChange={(e) => setRecebidoPor(e.target.value)} placeholder={nomeSessao ? `${nomeSessao} (padrão da sessão)` : "Nome do atendente"} style={atendInput} autoComplete="off" />
           </div>
           <div>
             <div style={atendLabel}>Prioridade</div>
             <select value={prioridade} onChange={(e) => setPrioridade(e.target.value as typeof prioridade)} style={atendInput}>
               <option value="baixa">Baixa</option>
-              <option value="media">Normal</option>
+              <option value="media">Normal (padrão)</option>
               <option value="alta">Alta</option>
             </select>
           </div>
           <div>
             <div style={atendLabel}>Localização</div>
             <select value={localFisico} onChange={(e) => setLocalFisico(e.target.value as typeof localFisico)} style={atendInput}>
-              <option value="balcao">Balcão</option>
+              <option value="balcao">Balcão (padrão)</option>
               <option value="bancada">Bancada</option>
               <option value="aguardando_diagnostico">Aguardando diagnóstico</option>
             </select>
           </div>
           <div>
             <div style={atendLabel}>Previsão / SLA</div>
-            <input type="datetime-local" value={previsao} onChange={(e) => setPrevisao(e.target.value)} style={atendInput} autoComplete="off" />
+            <input type="datetime-local" value={previsao} onChange={(e) => { setPrevisao(e.target.value); setAceitaVencida(false); }} style={atendInput} autoComplete="off" aria-describedby="novaos-previsao-fuso" />
+            <div id="novaos-previsao-fuso" style={{ fontSize: 11, color: C.subtle, marginTop: 4 }}>
+              {FUSO_LOJA_LABEL_V4}{previsaoIso ? ` · ${formatPrevisaoComFuso(previsaoIso)}` : ""}
+            </div>
+            {previsaoVencida ? (
+              <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, color: C.dangerFg, marginTop: 6 }}>
+                <input type="checkbox" checked={aceitaVencida} onChange={(e) => setAceitaVencida(e.target.checked)} autoComplete="off" />
+                <span>Data no passado — confirmo com o cliente antes de abrir.</span>
+              </label>
+            ) : null}
           </div>
         </div>
       </AtendimentoAccordionSection>

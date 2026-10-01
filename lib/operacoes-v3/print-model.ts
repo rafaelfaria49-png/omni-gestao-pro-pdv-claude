@@ -40,7 +40,7 @@ import {
   type GarantiaModeloIdV3,
   type TermoGarantiaV3,
 } from "./garantia-textos";
-import { lerEntregaV3 } from "./pos-venda-model";
+import { lerEntregaV3, lerGarantiaV3 } from "./pos-venda-model";
 import {
   ACESSORIOS_ENTRADA_V3,
   componenteFisicoLabelV3,
@@ -59,6 +59,8 @@ import {
 // ----------------------------------------------------------------------------
 
 export interface EmpresaPrintInputV3 {
+  /** A V4 fornece vazio explícito quando o cadastro remoto da loja não existe. */
+  semFallback?: boolean;
   nomeFantasia?: string;
   razaoSocial?: string;
   cnpj?: string;
@@ -89,7 +91,7 @@ function s(v: unknown): string {
 
 export function dadosEmpresaPrintV3(input?: EmpresaPrintInputV3): EmpresaPrintV3 {
   const e = input ?? {};
-  const nome = s(e.nomeFantasia) || s(e.razaoSocial) || EMPRESA_FALLBACK_NOME;
+  const nome = s(e.nomeFantasia) || s(e.razaoSocial) || (e.semFallback ? "" : EMPRESA_FALLBACK_NOME);
   const cnpj = s(e.cnpj);
   const end = e.endereco ?? {};
   const ruaNum = [s(end.rua), s(end.numero)].filter(Boolean).join(", ");
@@ -287,9 +289,12 @@ export function observacoesClienteV3(os: OrdemServico): string[] {
 /** Termo de garantia da OS, derivado da garantia prevista (Nova OS) ou da garantia efetiva. */
 export function termoGarantiaDaOSV3(os: OrdemServico): TermoGarantiaV3 {
   const prevista = (os as { aberturaV3?: { garantiaPrevista?: { modelo?: unknown; prazoDias?: unknown; termo?: unknown } } }).aberturaV3?.garantiaPrevista;
-  const modeloId = s(prevista?.modelo) || undefined;
-  const prazoDias =
-    typeof prevista?.prazoDias === "number" ? prevista.prazoDias : typeof os.garantia?.prazoDias === "number" ? os.garantia.prazoDias : undefined;
+  const garantia = lerGarantiaV3(os);
+  if (!garantia.temGarantia) {
+    return { modeloId: "nao_definida", titulo: "Garantia não definida", semCobertura: false, cobertura: [], exclusoes: [] };
+  }
+  const modeloId = s(prevista?.modelo) || (garantia.temGarantia ? garantia.semCobertura ? "sem_garantia" : "personalizado" : undefined);
+  const prazoDias = garantia.temGarantia ? garantia.prazoDias : undefined;
   const termoCustom = s(prevista?.termo) || s(os.garantia?.termo) || undefined;
   return gerarTermoGarantiaV3({ modeloId, prazoDias, termoCustom });
 }

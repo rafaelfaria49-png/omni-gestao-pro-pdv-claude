@@ -38,6 +38,16 @@ import {
   type IdentificacaoV3,
   type ProvaEntradaV3,
 } from "./prova-entrada-model";
+import {
+  aplicarPatchIntencionalProvaEntrada,
+  erroConflitoConcorrenciaV3,
+  espelhoPatchIdentificacao,
+  espelhoPatchSenhaCredenciais,
+  mesclarEspelhoEquipamento,
+  type EsperadosProvaEntradaV3,
+  type PatchProvaEntradaV3,
+} from "@/lib/operacoes-v4/entrada-form";
+import { identidadeAtualV4 } from "@/lib/operacoes-v4/identidade-aparelho";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -58,7 +68,7 @@ function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-async function carregar(storeId: string, osId: string): Promise<{ id: string; session: Session | null; payload: OSPayloadFull }> {
+async function autorizar(storeId: string, osId: string): Promise<{ id: string; session: Session | null }> {
   const sid = (storeId ?? "").trim();
   const id = (osId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
@@ -67,43 +77,115 @@ async function carregar(storeId: string, osId: string): Promise<{ id: string; se
   if (!session?.user?.id) throw new Error("Faça login para registrar a prova de entrada.");
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar esta OS.");
   if (!guard.ok) throw new Error(guard.error);
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-  return { id, session, payload };
+  return { id, session };
 }
 
-async function gravar(id: string, next: OSPayloadFull): Promise<OrdemServico> {
-  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
-  revalidatePath("/dashboard/operacoes-v3");
-  return next as unknown as OrdemServico;
-}
+// ----------------------------------------------------------------------------
+// R01/R02 — escrita condicionada (sem motor global). O mecanismo puro
+// (patch intencional, espelho, erro de conflito) vive em
+// lib/operacoes-v4/entrada-form.ts — este arquivo "use server" só pode
+// exportar funções assíncronas, e os testes importam o bloco puro de lá.
+// ----------------------------------------------------------------------------
 
-/** Aplica a prova + evento ao payload e persiste. Define versão/criadoEm/criadoPor.
- *  `patchPayload` permite sincronizar campos legados (ex.: senhaEquipamento). */
-async function persistirProva(
+type TxV3 = Prisma.TransactionClient;
+
+/**
+ * Releitura + mesclagem + escrita condicionada, tudo na mesma transação.
+ * `patchPayload` sincroniza campos legados (ex.: senhaEquipamento) sobre o
+ * LATEST. Timeline do servidor é preservada (só anexa o evento).
+ */
+async function persistirPatchProva(
   id: string,
-  payload: OSPayloadFull,
-  prova: ProvaEntradaV3,
+  storeId: string,
   operador: string,
-  evento: EventoTimeline,
+  intent: PatchProvaEntradaV3,
+  fazerEvento: (jaCriada: boolean, operador: string, base: ProvaEntradaV3) => EventoTimeline,
   patchPayload?: Record<string, unknown>,
+  fotosOp?: { aplicarFotos?: (atuais: FotoEntradaV3[]) => FotoEntradaV3[] },
 ): Promise<OrdemServico> {
-  const next: OSPayloadFull = {
-    ...payload,
-    ...(patchPayload ?? {}),
-    provaEntradaV3: {
-      ...prova,
-      versao: Math.max(1, prova.versao || 0) || 1,
-      criadoEm: str(prova.criadoEm) || nowIso(),
-      criadoPor: prova.criadoPor || operador,
-      atualizadoEm: nowIso(),
-    },
-    timeline: [...(Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : []), evento],
-    atualizadoEm: nowIso(),
-  } as OSPayloadFull;
-  return gravar(id, next);
+  const saida = await prisma.$transaction(async (tx: TxV3) => {
+    const latest = await tx.ordemServico.findFirst({
+      where: { id },
+      select: { id: true, storeId: true, payload: true, updatedAt: true },
+    });
+    if (!latest || latest.storeId !== storeId) throw new Error("OS não encontrada.");
+    const payload = latest.payload as unknown as OSPayloadFull | null;
+    if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
+    const jaCriada = provaEntradaCriadaV3(payload as unknown as OrdemServico);
+    const base = lerProvaEntradaV3(payload as unknown as OrdemServico);
+    // Operações de lista (fotos) calculadas sobre o LATEST: validação de
+    // limite/existência e resultado derivam do estado mais recente.
+    const intentFinal =
+      fotosOp?.aplicarFotos !== undefined
+        ? { ...intent, fotos: fotosOp.aplicarFotos(base.fotos) }
+        : intent;
+    const evento = fazerEvento(jaCriada, operador, base);
+    // Baseline efetiva da identificação: a UI semeia da identidade efetiva
+    // (equipamento tem prioridade — `identidadeAtualV4`), mas a prova crua pode
+    // não ter o campo (ex.: cor só no equipamento). Conferir o esperado contra
+    // o efetivo evita falso conflito; a escrita continua mirando a prova.
+    const idEfetiva = identidadeAtualV4(payload as unknown as OrdemServico);
+    const identidadeEfetiva = {
+      imei: idEfetiva.imei || undefined,
+      serial: idEfetiva.serial || undefined,
+      operadora: idEfetiva.operadora || undefined,
+      modelo: idEfetiva.modelo || undefined,
+      cor: idEfetiva.cor || undefined,
+    };
+    const aplicada = aplicarPatchIntencionalProvaEntrada(base, intentFinal, { identidadeEfetiva });
+    // Compatibilidade de exibição (era `str(por) || nome do cliente`): quando o
+    // chamador não informa `por`, deriva do cliente do LATEST (nunca do stale).
+    if (aplicada.assinaturaCliente && !str(aplicada.assinaturaCliente.por)) {
+      const nomeCliente = str((payload as unknown as OrdemServico).cliente?.nome);
+      if (nomeCliente) aplicada.assinaturaCliente = { ...aplicada.assinaturaCliente, por: nomeCliente };
+    }
+    const agora = nowIso();
+    const espelho =
+      patchPayload && patchPayload.equipamento && typeof patchPayload.equipamento === "object"
+        ? {
+            equipamento: mesclarEspelhoEquipamento(
+              (payload as Record<string, unknown>).equipamento,
+              patchPayload.equipamento as Record<string, unknown>,
+            ),
+          }
+        : null;
+    const next: OSPayloadFull = {
+      ...payload,
+      ...(patchPayload ?? {}),
+      ...(espelho ?? {}),
+      provaEntradaV3: {
+        ...aplicada,
+        versao: base.versao > 0 ? base.versao : 1,
+        criadoEm: str(base.criadoEm) || agora,
+        criadoPor: base.criadoPor || operador,
+        atualizadoEm: agora,
+      },
+      timeline: [...(Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : []), evento],
+      atualizadoEm: agora,
+    } as OSPayloadFull;
+    // Espelho de senha (legado senhaEquipamento/senhaEquipamentoTipo): deriva
+    // do resultado APLICADO sobre o LATEST — tipo efetivo preservado (nunca
+    // força "texto" com efetivo numerica/padrao); limpeza de senha limpa o
+    // espelho. `undefined` remove a chave; demais campos nunca tocados aqui.
+    const espelhoSenha = espelhoPatchSenhaCredenciais(aplicada.credenciais ?? {}, intentFinal.credenciais);
+    if (espelhoSenha) {
+      const topo = next as unknown as Record<string, unknown>;
+      for (const k of Object.keys(espelhoSenha)) {
+        if (espelhoSenha[k] === undefined) delete topo[k];
+        else topo[k] = espelhoSenha[k];
+      }
+    }
+    const r = await tx.ordemServico.updateMany({
+      where: { id, updatedAt: latest.updatedAt },
+      data: { payload: next as unknown as Prisma.InputJsonValue },
+    });
+    if (r.count === 0) throw erroConflitoConcorrenciaV3("a prova de entrada");
+    const row = await tx.ordemServico.findFirst({ where: { id }, select: { payload: true } });
+    if (!row) throw new Error("OS não encontrada.");
+    return row.payload as unknown as OrdemServico;
+  });
+  revalidatePath("/dashboard/operacoes-v3");
+  return saida;
 }
 
 // ----------------------------------------------------------------------------
@@ -115,6 +197,9 @@ export interface SalvarProvaEntradaInputV3 {
   avarias: AvariaV3[];
   credenciais: CredenciaisEntradaV3;
 }
+
+/** Fatias da prova que entram no intent (R02: só tocadas viajam). */
+export type FatiaProvaEntradaV3 = "estadoFisico" | "avarias" | "credenciais";
 
 const COMPONENTE_IDS = new Set(COMPONENTES_FISICOS_V3.map((c) => c.id));
 const STATUS_IDS = new Set(Object.keys(ESTADO_FISICO_STATUS_META_V3) as EstadoFisicoStatusV3[]);
@@ -152,60 +237,106 @@ function sanitCredenciais(input: CredenciaisEntradaV3): CredenciaisEntradaV3 {
   };
 }
 
-export async function salvarProvaEntradaV3(storeId: string, osId: string, input: SalvarProvaEntradaInputV3): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+export async function salvarProvaEntradaV3(
+  storeId: string,
+  osId: string,
+  input: SalvarProvaEntradaInputV3,
+  limparCredenciais?: (keyof CredenciaisEntradaV3)[],
+  esperados?: EsperadosProvaEntradaV3,
+  incluir?: FatiaProvaEntradaV3[],
+): Promise<OrdemServico> {
+  const { id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
-  const atual = lerProvaEntradaV3(payload as unknown as OrdemServico);
-  const jaCriada = provaEntradaCriadaV3(payload as unknown as OrdemServico);
 
-  const next: ProvaEntradaV3 = {
-    ...atual,
-    estadoFisico: sanitEstadoFisico(input.estadoFisico),
-    avarias: sanitAvarias(input.avarias),
-    credenciais: sanitCredenciais(input.credenciais),
-  };
-
-  const resumo = next.estadoFisico.filter((i) => i.status !== "ok").length;
-  const evento = makeEvento(
-    "observacao",
+  // R02: só fatias em `incluir` entram no intent (o wrapper filtra pelo diff
+  // contra a semente; sem `incluir`, entram todas — chamadores legados, ex.:
+  // hub V3, mandam tudo como antes). `esperados` confere a baseline.
+  const quais: FatiaProvaEntradaV3[] = incluir ?? ["estadoFisico", "avarias", "credenciais"];
+  const temEstado = quais.includes("estadoFisico");
+  const temAvarias = quais.includes("avarias");
+  const temCred = quais.includes("credenciais");
+  const ini = input ?? ({} as SalvarProvaEntradaInputV3);
+  const estadoFisico = temEstado ? sanitEstadoFisico(ini.estadoFisico ?? []) : [];
+  const avarias = temAvarias ? sanitAvarias(ini.avarias ?? []) : [];
+  const credSanitizadas = temCred ? sanitCredenciais((ini.credenciais ?? {}) as CredenciaisEntradaV3) : {};
+  // Contrato novo (wrapper V4): aplicam-se SOMENTE as credenciais tocadas
+  // (chaves com baseline em `esperados.credenciais`); não tocadas preservam o
+  // LATEST mesmo quando presentes no input (stale nunca clobbera em silêncio).
+  // Sem `esperados.credenciais`, aplicam-se todas as definidas (chamadores
+  // legados sem baseline — hub V3 via `use-prova-entrada-v3`, sem `incluir`).
+  const credenciais =
+    temCred && esperados?.credenciais !== undefined
+      ? Object.fromEntries(
+          Object.entries(credSanitizadas).filter(([k]) => k in (esperados.credenciais as Record<string, unknown>)),
+        ) as CredenciaisEntradaV3
+      : credSanitizadas;
+  const resumo = estadoFisico.filter((i) => i.status !== "ok").length;
+  // Consolidação (item 4): a senha agora é editada aqui — o espelho legado
+  // `senhaEquipamento`/`senhaEquipamentoTipo` (lido pela impressão da OS / pad
+  // 3×3) deriva do resultado aplicado sobre o LATEST dentro de
+  // `persistirPatchProva` (tipo efetivo preservado; limpeza limpa o espelho).
+  return persistirPatchProva(
+    id,
+    (storeId ?? "").trim(),
     operador,
-    jaCriada ? "Prova de entrada atualizada." : "Prova de entrada registrada (estado físico, avarias e credenciais).",
-    { evento: jaCriada ? "prova_entrada_atualizada" : "prova_entrada_criada", avariados: resumo, avarias: next.avarias.length },
+    {
+      ...(temEstado ? { estadoFisico } : {}),
+      ...(temAvarias ? { avarias } : {}),
+      ...(temCred ? { credenciais: { valores: credenciais, limpar: limparCredenciais } } : {}),
+      ...(esperados ? { esperados } : {}),
+    },
+    (jaCriada, op) =>
+      makeEvento(
+        "observacao",
+        op,
+        jaCriada ? "Prova de entrada atualizada." : "Prova de entrada registrada (estado físico, avarias e credenciais).",
+        { evento: jaCriada ? "prova_entrada_atualizada" : "prova_entrada_criada", avariados: resumo, avarias: avarias.length },
+      ),
+    undefined,
   );
-  // Consolidação (item 4): a senha agora é editada aqui — sincroniza o campo legado
-  // `senhaEquipamento` (lido pela impressão da OS / pad 3×3) para fonte única.
-  const senha = next.credenciais.senha;
-  const patch = senha
-    ? { senhaEquipamento: senha, senhaEquipamentoTipo: next.credenciais.senhaTipo ?? "texto" }
-    : undefined;
-  return persistirProva(id, payload, next, operador, evento, patch);
 }
 
 // ----------------------------------------------------------------------------
 // SPRINT_3E.2 — Identificação completa (item 1)
 // ----------------------------------------------------------------------------
 
-export async function salvarIdentificacaoV3(storeId: string, osId: string, input: IdentificacaoV3): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+export async function salvarIdentificacaoV3(
+  storeId: string,
+  osId: string,
+  input: IdentificacaoV3,
+  limpar?: (keyof IdentificacaoV3)[],
+  esperados?: Partial<IdentificacaoV3>,
+): Promise<OrdemServico> {
+  const { id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
-  const atual = lerProvaEntradaV3(payload as unknown as OrdemServico);
-  const next: ProvaEntradaV3 = {
-    ...atual,
-    identificacao: {
-      imei: str(input?.imei) || undefined,
-      serial: str(input?.serial) || undefined,
-      operadora: str(input?.operadora) || undefined,
-      modelo: str(input?.modelo) || undefined,
-      cor: str(input?.cor) || undefined,
-    },
-  };
-  const evento = makeEvento("observacao", operador, "Identificação do aparelho atualizada (IMEI/serial/operadora).", { evento: "identificacao_atualizada" });
-  const equipamentoAtual = payload.equipamento && typeof payload.equipamento === "object"
-    ? { ...(payload.equipamento as unknown as Record<string, unknown>) }
-    : {};
-  if (next.identificacao.modelo) equipamentoAtual.modelo = next.identificacao.modelo;
-  if (next.identificacao.imei) equipamentoAtual.numeroSerie = next.identificacao.imei;
-  return persistirProva(id, payload, next, operador, evento, { equipamento: equipamentoAtual });
+  // R01/R02: somente chaves DEFINIDAS entram no intent (ausente = preserva).
+  // Limpeza exige lista explícita `limpar` — vazio nunca exclui sozinho.
+  // `esperados` (baseline por campo, enviada pelo contrato novo) é conferida
+  // no LATEST: divergência vira CONFLITO em vez de clobber sequencial.
+  const valores: Partial<IdentificacaoV3> = {};
+  const ini = input ?? ({} as IdentificacaoV3);
+  if (str(ini.imei)) valores.imei = str(ini.imei);
+  if (str(ini.serial)) valores.serial = str(ini.serial);
+  if (str(ini.operadora)) valores.operadora = str(ini.operadora);
+  if (str(ini.modelo)) valores.modelo = str(ini.modelo);
+  if (str(ini.cor)) valores.cor = str(ini.cor);
+  // R01: espelho legado (leitura efetiva prioriza equipamento.* — ver
+  // identidade-aparelho.test.ts). A prova continua o alvo canônico da escrita;
+  // o espelho só sincroniza o que foi informado, sem apagar chaves alheias.
+  // Limpeza explícita de campo espelhado (cor/modelo/IMEI) limpa também o
+  // espelho correspondente — sem isso o valor antigo ressuscitaria no reload.
+  const equipamentoPatch = espelhoPatchIdentificacao(valores, limpar);
+  return persistirPatchProva(
+    id,
+    (storeId ?? "").trim(),
+    operador,
+    { identificacao: { valores, limpar }, esperados: esperados ? { identificacao: esperados } : undefined },
+    (_jaCriada, op) =>
+      makeEvento("observacao", op, "Identificação do aparelho atualizada (IMEI/serial/operadora).", { evento: "identificacao_atualizada" }),
+    // Sincroniza o espelho legado `equipamento` sobre o LATEST (mescla, sem
+    // apagar chaves alheias do equipamento).
+    Object.keys(equipamentoPatch).length > 0 ? { equipamento: equipamentoPatch } : undefined,
+  );
 }
 
 // ----------------------------------------------------------------------------
@@ -213,21 +344,25 @@ export async function salvarIdentificacaoV3(storeId: string, osId: string, input
 // ----------------------------------------------------------------------------
 
 export async function salvarAssinaturaClienteV3(storeId: string, osId: string, dataUrl: string, por?: string): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { id, session } = await autorizar(storeId, osId);
   const veredito = validarAssinaturaV3(dataUrl ?? "");
   if (!veredito.ok) throw new Error(veredito.motivo ?? "Assinatura inválida.");
   const operador = operadorLabel(session);
-  const atual = lerProvaEntradaV3(payload as unknown as OrdemServico);
-  const next: ProvaEntradaV3 = {
-    ...atual,
-    assinaturaCliente: {
-      dataUrl: dataUrl.trim(),
-      criadoEm: nowIso(),
-      por: str(por) || str((payload as unknown as OrdemServico).cliente?.nome) || undefined,
+  const porLimpo = str(por);
+  return persistirPatchProva(
+    id,
+    (storeId ?? "").trim(),
+    operador,
+    {
+      assinaturaCliente: {
+        dataUrl: dataUrl.trim(),
+        criadoEm: nowIso(),
+        por: porLimpo || undefined,
+      },
     },
-  };
-  const evento = makeEvento("observacao", operador, "Assinatura do cliente capturada (entrada).", { evento: "assinatura_cliente_capturada" });
-  return persistirProva(id, payload, next, operador, evento);
+    (_jaCriada, op) =>
+      makeEvento("observacao", op, "Assinatura do cliente capturada (entrada).", { evento: "assinatura_cliente_capturada" }),
+  );
 }
 
 // ----------------------------------------------------------------------------
@@ -236,26 +371,33 @@ export async function salvarAssinaturaClienteV3(storeId: string, osId: string, d
 
 const ACESSORIO_IDS = new Set(ACESSORIOS_ENTRADA_V3.map((a) => a.id));
 
-export async function salvarAcessoriosEntradaV3(storeId: string, osId: string, acessorios: AcessorioEntradaV3[]): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+export async function salvarAcessoriosEntradaV3(
+  storeId: string,
+  osId: string,
+  acessorios: AcessorioEntradaV3[],
+  esperados?: AcessorioEntradaV3[],
+): Promise<OrdemServico> {
+  const { id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
-  const atual = lerProvaEntradaV3(payload as unknown as OrdemServico);
 
   const porId = new Map<string, boolean>();
   for (const a of Array.isArray(acessorios) ? acessorios : []) {
     if (ACESSORIO_IDS.has(a?.id)) porId.set(a.id, a.presente === true);
   }
-  const next: ProvaEntradaV3 = {
-    ...atual,
-    acessorios: ACESSORIOS_ENTRADA_V3.map((a) => ({ id: a.id, presente: porId.get(a.id) ?? false })),
-  };
+  const lista = ACESSORIOS_ENTRADA_V3.map((a) => ({ id: a.id, presente: porId.get(a.id) ?? false }));
 
-  const presentes = next.acessorios.filter((a) => a.presente).length;
-  const evento = makeEvento("observacao", operador, `Acessórios recebidos registrados (${presentes} item(ns)).`, {
-    evento: "acessorio_registrado",
-    presentes,
-  });
-  return persistirProva(id, payload, next, operador, evento);
+  const presentes = lista.filter((a) => a.presente).length;
+  return persistirPatchProva(
+    id,
+    (storeId ?? "").trim(),
+    operador,
+    { acessorios: lista, ...(esperados !== undefined ? { esperados: { acessorios: esperados } } : {}) },
+    (_jaCriada, op) =>
+      makeEvento("observacao", op, `Acessórios recebidos registrados (${presentes} item(ns)).`, {
+        evento: "acessorio_registrado",
+        presentes,
+      }),
+  );
 }
 
 // ----------------------------------------------------------------------------
@@ -270,12 +412,9 @@ export interface AdicionarFotoEntradaInputV3 {
 }
 
 export async function adicionarFotoEntradaV3(storeId: string, osId: string, input: AdicionarFotoEntradaInputV3): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
-  const atual = lerProvaEntradaV3(payload as unknown as OrdemServico);
 
-  const veredito = validarFotoEntradaV3(input?.dataUrl ?? "", atual.fotos.length);
-  if (!veredito.ok) throw new Error(veredito.motivo ?? "Foto inválida.");
   const categoria: CategoriaFotoV3 =
     input?.categoria === "frontal" || input?.categoria === "traseira" || input?.categoria === "lateral" || input?.categoria === "defeito"
       ? input.categoria
@@ -285,24 +424,57 @@ export async function adicionarFotoEntradaV3(storeId: string, osId: string, inpu
     id: uid("foto"),
     categoria,
     nome: str(input?.nome) || undefined,
-    dataUrl: input.dataUrl.trim(),
-    tamanho: bytesDeDataUrlV3(input.dataUrl),
+    dataUrl: (input?.dataUrl ?? "").trim(),
+    tamanho: bytesDeDataUrlV3(input?.dataUrl ?? ""),
     criadoEm: nowIso(),
   };
-  const next: ProvaEntradaV3 = { ...atual, fotos: [...atual.fotos, foto] };
-  const evento = makeEvento("anexo_adicionado", operador, `Foto de entrada adicionada (${categoria}).`, { evento: "foto_adicionada", categoria, fotoId: foto.id });
-  return persistirProva(id, payload, next, operador, evento);
+  // R02: o limite de fotos avalia o LATEST dentro da transação (operação de
+  // lista sobre o estado mais recente, com escrita condicionada).
+  return persistirPatchProva(
+    id,
+    (storeId ?? "").trim(),
+    operador,
+    {},
+    (_jaCriada, op) =>
+      makeEvento("anexo_adicionado", op, `Foto de entrada adicionada (${categoria}).`, { evento: "foto_adicionada", categoria, fotoId: foto.id }),
+    undefined,
+    {
+      aplicarFotos: (atuais) => {
+        const veredito = validarFotoEntradaV3(input?.dataUrl ?? "", atuais.length);
+        if (!veredito.ok) throw new Error(veredito.motivo ?? "Foto inválida.");
+        return [...atuais, foto];
+      },
+    },
+  );
 }
 
 export async function removerFotoEntradaV3(storeId: string, osId: string, fotoId: string): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
-  const atual = lerProvaEntradaV3(payload as unknown as OrdemServico);
   const fid = str(fotoId);
-  const alvo = atual.fotos.find((f) => f.id === fid);
-  if (!alvo) throw new Error("Foto não encontrada nesta OS.");
+  if (!fid) throw new Error("Foto não encontrada nesta OS.");
 
-  const next: ProvaEntradaV3 = { ...atual, fotos: atual.fotos.filter((f) => f.id !== fid) };
-  const evento = makeEvento("anexo_removido", operador, `Foto de entrada removida (${alvo.categoria}).`, { evento: "foto_removida", categoria: alvo.categoria, fotoId: fid });
-  return persistirProva(id, payload, next, operador, evento);
+  return persistirPatchProva(
+    id,
+    (storeId ?? "").trim(),
+    operador,
+    {},
+    (_jaCriada, op, base) => {
+      const alvo = base.fotos.find((f) => f.id === fid);
+      return makeEvento(
+        "anexo_removido",
+        op,
+        `Foto de entrada removida (${alvo?.categoria ?? "defeito"}).`,
+        { evento: "foto_removida", categoria: alvo?.categoria ?? "defeito", fotoId: fid },
+      );
+    },
+    undefined,
+    {
+      aplicarFotos: (atuais) => {
+        const alvo = atuais.find((f) => f.id === fid);
+        if (!alvo) throw new Error("Foto não encontrada nesta OS.");
+        return atuais.filter((f) => f.id !== fid);
+      },
+    },
+  );
 }

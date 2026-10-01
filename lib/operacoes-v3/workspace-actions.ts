@@ -21,6 +21,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
+import { erroConflitoConcorrenciaV3 } from "@/lib/operacoes-v4/entrada-form";
 import type { ChecklistEntradaItemV3, ChecklistEstadoV3, DiagnosticoTecnicoV3, SenhaTipoV3 } from "./workspace-model";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
@@ -80,17 +81,49 @@ export async function salvarChecklistEntradaV3(
   osId: string,
   itens: ChecklistEntradaItemV3[],
 ): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  // Autorização/storeId preservados (carregar valida auth/guard; payload stale
+  // ignorado — a escrita usa exclusivamente o LATEST relido na transação).
+  const { id, sid, session } = await carregar(storeId, osId);
   const checklist = (Array.isArray(itens) ? itens : []).map((i) => {
     const estado: ChecklistEstadoV3 = i.estado === "ok" || i.estado === "ruim" ? i.estado : "nao_testado";
     return { id: String(i.id), label: String(i.label), estado };
   });
   const okCount = checklist.filter((c) => c.estado === "ok").length;
   const ruimCount = checklist.filter((c) => c.estado === "ruim").length;
-  const evento = makeEvento("checklist_finalizado", operadorLabel(session), `Checklist de entrada atualizado (${okCount} OK · ${ruimCount} ruim).`);
+  const operador = operadorLabel(session);
 
-  const next: OSPayloadFull = { ...payload, checklist, timeline: appendTimeline(payload, evento), atualizadoEm: nowIso() };
-  return gravar(id, next);
+  // Concorrente-safe T04: releitura LATEST + updateMany condicionado a
+  // updatedAt. Somente checklist + evento + atualizadoEm viajam; todo o resto
+  // (identificação/prova/dados básicos/status/valor/financeiro/caixa/estoque/
+  // garantia/WhatsApp/fiscal + campos desconhecidos + timeline LATEST) é
+  // preservado por spread do LATEST. Corrida sobreposta vira
+  // CONFLITO_CONCORRENCIA explícito em vez de clobber.
+  const saida = await prisma.$transaction(async (tx) => {
+    const latest = await tx.ordemServico.findFirst({
+      where: { id },
+      select: { id: true, storeId: true, payload: true, updatedAt: true },
+    });
+    if (!latest || latest.storeId !== sid) throw new Error("OS não encontrada.");
+    const payload = latest.payload as unknown as OSPayloadFull | null;
+    if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
+    const evento = makeEvento("checklist_finalizado", operador, `Checklist de entrada atualizado (${okCount} OK · ${ruimCount} ruim).`);
+    const next: OSPayloadFull = {
+      ...payload,
+      checklist,
+      timeline: appendTimeline(payload, evento),
+      atualizadoEm: nowIso(),
+    };
+    const r = await tx.ordemServico.updateMany({
+      where: { id, updatedAt: latest.updatedAt },
+      data: { payload: next as unknown as Prisma.InputJsonValue },
+    });
+    if (r.count === 0) throw erroConflitoConcorrenciaV3("o checklist de entrada");
+    const row = await tx.ordemServico.findFirst({ where: { id }, select: { payload: true } });
+    if (!row) throw new Error("OS não encontrada.");
+    return row.payload as unknown as OrdemServico;
+  });
+  revalidatePath("/dashboard/operacoes-v3");
+  return saida;
 }
 
 export async function salvarSenhaAcessoriosV3(

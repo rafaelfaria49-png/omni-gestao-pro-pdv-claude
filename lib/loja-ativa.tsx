@@ -40,6 +40,44 @@ export function opsKeyForLoja(lojaId: string): string {
   return `assistec-pro-ops-v1-${lojaId}`
 }
 
+// ---- OPS-V4-FLUXO-CURTO-001 / R04 · ponte opt-in para a troca de loja ----
+//
+// Sem guarda registrada, `setLojaAtivaId` comporta-se exatamente como antes
+// (troca imediata). Com guarda registrada E rascunho sujo na V4, a troca
+// BLOQUEIA e abre salvar/descartar/cancelar na árvore da V4: Cancelar impede
+// a saída; salvar/descartar executam a troca original. Sem ACL, sem seleção
+// automática, sem cookies/persistência novos, sem efeito nos demais módulos.
+
+export interface GuardaTrocaLojaV4 {
+  temRascunhoSujo: () => boolean;
+  solicitarSaida: (trocar: () => void, descricao: string) => "livre" | "bloqueada";
+}
+
+let guardaTrocaLojaV4: GuardaTrocaLojaV4 | null = null;
+
+/** Registra (ou remove com `null`) a guarda de rascunhos da V4. Opt-in. */
+export function registrarGuardaTrocaLojaV4(guarda: GuardaTrocaLojaV4 | null): void {
+  guardaTrocaLojaV4 = guarda;
+}
+
+/**
+ * Puro (sem React): decide a troca de loja diante da guarda. Sem guarda ou
+ * sem sujeira, `trocar` executa na hora ("trocada"). Com sujeira, delega ao
+ * pêndulo ("bloqueada" = diálogo aberto; "livre" = `trocar` já executou).
+ */
+export function aplicarTrocaLojaComGuarda(args: {
+  guarda: GuardaTrocaLojaV4 | null;
+  trocar: () => void;
+  descricao: string;
+}): "trocada" | "bloqueada" {
+  const guarda = args.guarda;
+  if (guarda && guarda.temRascunhoSujo()) {
+    return guarda.solicitarSaida(args.trocar, args.descricao) === "bloqueada" ? "bloqueada" : "trocada";
+  }
+  args.trocar();
+  return "trocada";
+}
+
 /** Mescla o cadastro matriz com o perfil da unidade (documentos / térmica). */
 export function mergeEmpresaComLoja(
   base: ConfiguracaoEmpresa,
@@ -65,6 +103,8 @@ export function formatEnderecoEmpresa(e: ConfiguracaoEmpresa["endereco"]): strin
   return `${rua}, ${numero} - ${bairro}, ${cidade}/${estado} - CEP: ${cep}`
 }
 
+type LojaPerfilRemoto = PerfilLojaUnidade & { telefone?: string }
+
 type LojaAtivaContextType = {
   lojas: PerfilLojaUnidade[]
   lojaAtivaId: string | null
@@ -75,6 +115,8 @@ type LojaAtivaContextType = {
   storesRefreshNonce: number
   /** Dados brutos da unidade ativa (sem fallback de nome). */
   lojaAtivaRaw: PerfilLojaUnidade | null
+  /** Cadastro da unidade ativa confirmado pelo reader remoto de /api/stores. */
+  lojaAtivaRemota: LojaPerfilRemoto | null
   /** Primeiro acesso: cadastro básico ainda não preenchido (nome fantasia e CNPJ). */
   cadastroBasicoIncompleto: boolean
   /** Verdadeiro apenas após a primeira hidratação remota (refreshStoresList) ter terminado. Usado para evitar avaliar onboarding antes da carga real. */
@@ -93,7 +135,7 @@ function parseStoreProfile(raw: unknown): NonNullable<PerfilLojaUnidade["storePr
   return "ASSISTENCIA"
 }
 
-function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): PerfilLojaUnidade[] {
+function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): LojaPerfilRemoto[] {
   return stores
     .map((s) => {
       const addr = s.address && typeof s.address === "object" ? (s.address as Record<string, unknown>) : {}
@@ -102,6 +144,7 @@ function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): Perf
         nomeFantasia: String(s.name || "").trim(),
         razaoSocial: String(s.name || "").trim(),
         cnpj: String(s.cnpj || "").trim(),
+        telefone: String(s.phone || "").trim(),
         endereco: {
           rua: String(addr.rua || ""),
           numero: String(addr.numero || ""),
@@ -125,7 +168,7 @@ function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): Perf
 export function LojaAtivaProvider({ children }: { children: ReactNode }) {
   const { config, configHydrated } = useConfigEmpresa()
   const lojasConfig = useMemo(() => config.minhasLojas?.lojas ?? [], [config.minhasLojas?.lojas])
-  const [lojasRemote, setLojasRemote] = useState<PerfilLojaUnidade[] | null>(null)
+  const [lojasRemote, setLojasRemote] = useState<LojaPerfilRemoto[] | null>(null)
   const [storesRefreshNonce, setStoresRefreshNonce] = useState(0)
   const [storesLoaded, setStoresLoaded] = useState(false)
   const lojas = useMemo(() => {
@@ -203,9 +246,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     }
   }, [configHydrated, lojas])
 
-  const setLojaAtivaId = useCallback((id: string) => {
-    const next = id.trim()
-    if (!next) return
+  const executarTrocaLoja = useCallback((next: string) => {
     const prev = (lojaAtivaIdRef.current || "").trim()
     setLojaAtivaIdState(next)
     try {
@@ -277,6 +318,18 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     }
   }, [lojas])
 
+  const setLojaAtivaId = useCallback((id: string) => {
+    const next = id.trim()
+    if (!next) return
+    // R04: com guarda V4 registrada e rascunho sujo, a troca passa pelo
+    // pêndulo salvar/descartar/cancelar (Cancelar impede a saída).
+    aplicarTrocaLojaComGuarda({
+      guarda: guardaTrocaLojaV4,
+      trocar: () => executarTrocaLoja(next),
+      descricao: `troca de loja para ${next}`,
+    })
+  }, [executarTrocaLoja])
+
   const lojaSelecionada = useMemo(() => {
     if (lojas.length === 0) return undefined
     const id = lojaAtivaId?.trim()
@@ -308,6 +361,10 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     () => mergeEmpresaComLoja(config.empresa, lojaSelecionada),
     [config.empresa, lojaSelecionada]
   )
+  const lojaAtivaRemota = useMemo(
+    () => lojasRemote?.find((loja) => loja.id === lojaSelecionada?.id) ?? null,
+    [lojasRemote, lojaSelecionada?.id]
+  )
 
   const getEnderecoDocumentos = useCallback(() => {
     const e = { ...configPadrao.empresa.endereco, ...empresaDocumentos.endereco }
@@ -328,6 +385,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       refreshStoresList,
       storesRefreshNonce,
       lojaAtivaRaw: lojaSelecionada ?? null,
+      lojaAtivaRemota,
       cadastroBasicoIncompleto,
       storesLoaded,
       empresaDocumentos,
@@ -341,6 +399,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       refreshStoresList,
       storesRefreshNonce,
       lojaSelecionada,
+      lojaAtivaRemota,
       cadastroBasicoIncompleto,
       storesLoaded,
       empresaDocumentos,
@@ -363,6 +422,7 @@ export function useLojaAtiva(): LojaAtivaContextType {
       refreshStoresList: async () => {},
       storesRefreshNonce: 0,
       lojaAtivaRaw: null,
+      lojaAtivaRemota: null,
       cadastroBasicoIncompleto: false,
       storesLoaded: false,
       empresaDocumentos: fallbackEmpresa,

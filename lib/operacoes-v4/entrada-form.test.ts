@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 import {
   addAvaria,
   cycleChecklistEstado,
+  fatiaTocada,
+  limpezasExplicitas,
+  patchTocadoCredenciais,
+  patchTocadoIdentificacao,
   removeAvaria,
   seedEntradaEditor,
   setAvaria,
@@ -163,5 +167,81 @@ describe("togglePadraoPonto (Padrão 3×3 — slice OPS-V4-SEGURANCA-ACESSO-PARI
     const v = togglePadraoPonto(original, 6);
     expect(v).toBe("2-3-7");
     expect(original).toBe("2-3");
+  });
+});
+
+describe("limpezasExplicitas (R02 - somente escolha explícita remove)", () => {
+  it("valor na base + vazio no atual = limpeza explícita", () => {
+    expect(limpezasExplicitas({ cor: "", imei: "1" }, { cor: "Violeta", imei: "1" })).toEqual(["cor"]);
+  });
+
+  it("vazio nos dois = intocado (preserva, sem lista)", () => {
+    expect(limpezasExplicitas({ cor: "" }, { cor: "" })).toEqual([]);
+  });
+
+  it("chave fora da base é ignorada (sem inventar campo)", () => {
+    expect(limpezasExplicitas({ cor: "", nova: "" }, { cor: "" })).toEqual([]);
+  });
+
+  it("valor novo não é limpeza", () => {
+    expect(limpezasExplicitas({ cor: "Preto" }, { cor: "Violeta" })).toEqual([]);
+  });
+});
+
+describe("patchTocadoIdentificacao/patchTocadoCredenciais/fatiaTocada (R02)", () => {
+  const seedId = { imei: "1", serial: "S", operadora: "Vivo", modelo: "M1", cor: "Violeta" };
+  const seedCred = {
+    pin: "",
+    senha: "",
+    senhaTipo: "numerica",
+    contaGoogle: "",
+    contaApple: "",
+    faceId: false,
+    biometria: false,
+  } as const;
+
+  it("só tocado entra no intent, com baseline; intocado nunca escreve", () => {
+    const r = patchTocadoIdentificacao(
+      { imei: "1", serial: "S", operadora: "Vivo", modelo: "M1", cor: "Preto" },
+      seedId,
+    );
+    expect(r.valores).toEqual({ cor: "Preto" });
+    expect(r.limpar).toEqual([]);
+    expect(r.esperados).toEqual({ cor: "Violeta" });
+  });
+
+  it("esvaziar campo com valor vira limpar explícito com baseline", () => {
+    const r = patchTocadoIdentificacao(
+      { imei: "1", serial: "S", operadora: "Vivo", modelo: "M1", cor: undefined },
+      seedId,
+    );
+    expect(r.valores).toEqual({});
+    expect(r.limpar).toEqual(["cor"]);
+    expect(r.esperados).toEqual({ cor: "Violeta" });
+  });
+
+  it("nada tocado = intent vazio (nenhuma escrita)", () => {
+    const r = patchTocadoIdentificacao(
+      { imei: "1", serial: "S", operadora: "Vivo", modelo: "M1", cor: "Violeta" },
+      seedId,
+    );
+    expect(r.valores).toEqual({});
+    expect(r.limpar).toEqual([]);
+    expect(r.esperados).toEqual({});
+  });
+
+  it("credenciais: texto, enum e booleanos com baseline própria", () => {
+    const r = patchTocadoCredenciais({ pin: "9999", faceId: true }, { ...seedCred });
+    expect(r.valores).toEqual({ pin: "9999", faceId: true });
+    expect(r.esperados).toEqual({ pin: "", faceId: false });
+    const limpo = patchTocadoCredenciais({ pin: undefined }, { ...seedCred, pin: "1234" });
+    expect(limpo.limpar).toEqual(["pin"]);
+    expect(limpo.esperados).toEqual({ pin: "1234" });
+  });
+
+  it("fatiaTocada compara por valor contra a semente", () => {
+    expect(fatiaTocada([{ a: 1 }], [{ a: 1 }])).toBe(false);
+    expect(fatiaTocada([{ a: 2 }], [{ a: 1 }])).toBe(true);
+    expect(fatiaTocada(undefined, [])).toBe(true);
   });
 });
