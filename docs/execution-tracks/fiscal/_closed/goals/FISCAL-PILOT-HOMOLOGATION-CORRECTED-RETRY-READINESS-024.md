@@ -4,7 +4,7 @@
   "id": "FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024",
   "track": "fiscal",
   "title": "Auditoria e readiness da terceira tentativa corrigida NFC-e em homologação; zero transmissão",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "branch": "goal/fiscal-024-corrected-retry-readiness",
   "worktree": "C:/workspace",
