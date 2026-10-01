@@ -52,14 +52,19 @@ function isPresentChild(c: XmlNode | null | undefined | false): c is XmlNode {
 /**
  * Serializa um nó XML em string com indentação determinística (2 espaços por nível).
  * Folha sem `text` definido vira tag vazia `<tag/>`.
+ *
+ * Modo `compact` (GOAL-023 · D01e): zero CR/LF/TAB e zero whitespace de formatação
+ * entre `><`, sem espaço antes/depois da raiz. Espaços DENTRO de texto e atributos
+ * são preservados (só o esqueleto é colapsado, nunca o conteúdo).
  */
 export function serializeXml(
   node: XmlNode,
-  opts: { indentUnit?: string; level?: number } = {},
+  opts: { indentUnit?: string; level?: number; compact?: boolean } = {},
 ): string {
+  const compact = opts.compact === true
   const indentUnit = opts.indentUnit ?? "  "
   const level = opts.level ?? 0
-  const pad = indentUnit.repeat(level)
+  const pad = compact ? "" : indentUnit.repeat(level)
   const open = `<${node.tag}${serializeAttrs(node.attrs)}`
 
   const children = (node.children ?? []).filter(isPresentChild)
@@ -72,7 +77,13 @@ export function serializeXml(
     return `${pad}${open}>${escapeXmlText(String(node.text))}</${node.tag}>`
   }
 
-  // Contêiner — filhos em linhas próprias, ordenados conforme o array.
+  // Contêiner compacto: filhos colados, sem indentação nem quebras.
+  if (compact) {
+    const inner = children.map((child) => serializeXml(child, { indentUnit, compact: true })).join("")
+    return `${open}>${inner}</${node.tag}>`
+  }
+
+  // Contêiner pretty — filhos em linhas próprias, ordenados conforme o array.
   const inner = children
     .map((child) => serializeXml(child, { indentUnit, level: level + 1 }))
     .join("\n")
@@ -207,15 +218,19 @@ export function assertEmbeddableXml(xml: string): void {
 /**
  * Fragmento XML EMBUTÍVEL — o contrato de conteúdo que entra dentro de outro XML.
  *
- * Produz exatamente o corpo serializado, sem declaração e sem BOM, e PROVA o contrato antes de
- * devolver. É o produtor destinado a assinatura/transmissão fiscal: os bytes daqui são os mesmos
- * que serão assinados, hasheados, persistidos e concatenados no `nfeDadosMsg` do envelope SOAP.
+ * Produz o corpo serializado em modo COMPACTO (GOAL-023 · D01e), sem declaração e sem BOM,
+ * e PROVA o contrato antes de devolver. É o produtor destinado a assinatura/transmissão
+ * fiscal: os bytes daqui são os mesmos que serão assinados, hasheados, persistidos e
+ * concatenados no `nfeDadosMsg` do envelope SOAP. `indentUnit` é aceito por compatibilidade
+ * mas não produz mais whitespace: o esqueleto é sempre colado (`><`), preservando espaços
+ * legítimos DENTRO de texto e atributos.
  */
 export function serializeXmlEmbeddable(
   root: XmlNode,
   opts: { indentUnit?: string } = {},
 ): string {
-  const xml = serializeXml(root, { indentUnit: opts.indentUnit })
+  void opts.indentUnit
+  const xml = serializeXml(root, { compact: true })
   assertEmbeddableXml(xml)
   return xml
 }

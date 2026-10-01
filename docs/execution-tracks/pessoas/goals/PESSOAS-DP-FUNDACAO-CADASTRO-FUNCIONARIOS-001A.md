@@ -9,7 +9,7 @@
   "risk_tier": "ALTO",
   "branch": "goal/pessoas-001a-fundacao-backend",
   "worktree": "C:/Projetos/omni-gestao-pessoas-001a-backend",
-  "test_command": "npx vitest run lib/pessoas",
+  "test_command": "node scripts/pessoas/run-official-tests.mjs",
   "allowlist": [
     "lib/pessoas/**",
     "app/actions/pessoas/**",
@@ -86,5 +86,6 @@ Entregar dados persistentes, serviços, autorização própria, documentos priva
 - Banco de homologação isolado com dados sintéticos e destino conferido antes da escrita. Validar schema, gerar Prisma Client e aplicar migration somente nele; CRUD com leitura posterior e isolamento entre dois empregadores/lojas.
 - Cobrir grants revogados, bootstrap indevido, IDs de outro escopo, CPF/matrícula, datas, Decimal, versões/concorrência/atomicidade, chaves ausentes, flag OFF, documento e integridade.
 - Executar testes focados e de integração, typecheck, lint focado, build, diff check e check/close do AEP. Infra indisponível é pendência explícita, nunca PASS.
+- Teste oficial (`test_command`): `node scripts/pessoas/run-official-tests.mjs`, entregue por este GOAL em `scripts/pessoas/**`, sem alterar package.json. Testa o HEAD commitado em workspace temporário externo (`git archive` + `npm ci`), em PostgreSQL descartável com a baseline da base e as migrations da branch, com gate de drift migration × schema; falha se algum teste for pulado ou se a integração não executar; limpa os artefatos e propaga o exit code.
 - Commit/push somente nesta branch. Revisão independente e autorização humana antes de merge; nenhum banco de produção, nenhum dado real.
 - Ponto de parada: BACKEND PRONTO PARA REVISÃO — FRONT-END AGUARDA ESCOLHA DE IA.

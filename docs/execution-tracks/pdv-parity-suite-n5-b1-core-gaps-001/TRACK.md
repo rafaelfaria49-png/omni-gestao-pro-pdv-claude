@@ -68,3 +68,15 @@ npx vitest run lib/pdv lib/pdv-hold.test.ts lib/pdv-payments.test.ts lib/pdv-for
 
 O estado ratificado vive em `state.json` (derivado) e `LEDGER.jsonl` (append-only).
 Não edite nenhum dos dois à mão: `node scripts/track.mjs verify` detecta a divergência.
+
+## GOAL sucessor 003 — corretivo sobre a main corrente (R4)
+
+- Autorização humana: PDV-N5-B1-CURRENT-MAIN-CORRECTION-AEP-PLAN-003 (01/10/2026).
+- Contrato e allowlist específicos: [PDV-PARITY-N5-B1-CURRENT-MAIN-CORRECTION-003](goals/PDV-PARITY-N5-B1-CURRENT-MAIN-CORRECTION-003.md).
+- Branch futura: goal/pdv-parity-n5-b1-current-main-correction-r4.
+- Worktree futura: C:/Projetos/omni-gestao-pdv-n5b1-current-main-correction-r4.
+- Base: origin/main corrente, após merge humano do plano; pré-flight registrado em ceeffeb05681e094f4e711c13387ba95851bcf24.
+- R3 já integrado historicamente pelo PR #210; não há sync/integração de candidato antigo. GOALs 001/002 seguem DONE e imutáveis.
+- Classe C3, risco ALTO, revisão independente obrigatória. Cache real da Assistência, sales corrente nos atalhos e gate único são os únicos gaps do sucessor.
+- O test_command do GOAL 003 amplia a regressão read-only N5-B1 com N1, N3, N4 e scanner 005/006/007; paths_base desta trilha não ampliam sua allowlist.
+- Planejamento governance-only: goal/pdv-n5-b1-current-main-correction-aep-plan, em worktree dedicada. Não executar open nesta sessão nem implementar antes do merge humano.

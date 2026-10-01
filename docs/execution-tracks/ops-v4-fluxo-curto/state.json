@@ -3,16 +3,16 @@
   "track": "ops-v4-fluxo-curto",
   "status": "RUNNING",
   "risk_tier": "ALTO",
-  "current_goal": "OPS-V4-FLUXO-CURTO-002",
+  "current_goal": "OPS-V4-FLUXO-CURTO-003",
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
-    "goals_done": 1,
+    "goals_done": 2,
     "goals_blocked": 0,
     "goals_imported": 0,
-    "ledger_lines": 3
+    "ledger_lines": 4
   },
-  "last_goal": "OPS-V4-FLUXO-CURTO-001",
+  "last_goal": "OPS-V4-FLUXO-CURTO-002",
   "last_result": "DONE",
-  "last_ratified_at": "2026-09-25T15:41:57.503Z"
+  "last_ratified_at": "2026-09-30T02:51:02.890Z"
 }
