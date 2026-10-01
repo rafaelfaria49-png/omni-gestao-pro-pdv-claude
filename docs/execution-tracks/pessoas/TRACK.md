@@ -32,8 +32,10 @@ Frontend, navegação, motor/fechamento de folha, holerites próprios, pagamento
 ## Comando de teste da trilha
 
 ```
-npx vitest run lib/pessoas
+node scripts/pessoas/run-official-tests.mjs
 ```
+
+Runner do GOAL em `scripts/pessoas/**`: HEAD commitado, workspace temporário externo, PostgreSQL descartável, sem teste pulado.
 
 ## Gates extras exigidos por esta trilha
 
