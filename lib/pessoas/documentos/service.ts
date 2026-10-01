@@ -6,11 +6,11 @@ import { executarComando } from "../commands"
 import { exigirModulo, PessoasError, sha256, texto } from "../domain"
 import { exigirEscopo } from "../scope"
 import { emitirIntent, verificarIntent, type Intent } from "./intent"
+import { categoriaValida, categoriasLegiveis, classificacaoDe, nomeDownloadNeutro, podeLerDocumento } from "./politica"
 
 const MAX_BYTES = 25 * 1024 * 1024
 const MIME = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg" } as const
 type Extensao = keyof typeof MIME
-const CATEGORIAS = new Set(["contrato", "identificacao", "holerite_externo", "comprovante", "outro"])
 
 function storage(): StorageDocumentosPort {
   exigirModulo()
@@ -33,7 +33,7 @@ function metadados(input: { bytes: unknown; sha256: unknown; categoria: unknown;
   }
   const hash = typeof input.sha256 === "string" ? input.sha256.toLowerCase() : ""
   if (!/^[a-f0-9]{64}$/.test(hash)) throw new PessoasError("HASH_INVALIDO")
-  if (typeof input.categoria !== "string" || !CATEGORIAS.has(input.categoria)) throw new PessoasError("CATEGORIA_INVALIDA")
+  if (!categoriaValida(input.categoria)) throw new PessoasError("CATEGORIA_INVALIDA")
   if (input.origem !== "INTERNO" && input.origem !== "CONTADOR_EXTERNO") throw new PessoasError("ORIGEM_INVALIDA")
   if (input.categoria === "holerite_externo" && input.origem !== "CONTADOR_EXTERNO") {
     throw new PessoasError("ORIGEM_INVALIDA")
@@ -70,6 +70,7 @@ export async function criarUploadIntent(input: {
   if (!v) throw new PessoasError("NAO_ENCONTRADO", 404)
   const { nome, mime } = nomeMime(input)
   const meta = metadados(input)
+  if (!podeLerDocumento(meta.categoria, escopo.capacidades)) throw new PessoasError("ESCOPO_NEGADO", 403)
   const documentoId = randomUUID()
   const dados = {
     empregadorId: escopo.empregadorId, storeId: escopo.storeId, userId: escopo.userId,
@@ -95,6 +96,7 @@ export async function confirmarUpload(token: unknown) {
   if (!escopo.capacidades.includes("viewDocumento") ||
       intent.userId !== escopo.userId || intent.storeId !== escopo.storeId ||
       intent.storageRef !== refCanonica(intent)) throw new PessoasError("INTENT_INVALIDO", 403)
+  if (!podeLerDocumento(intent.categoria, escopo.capacidades)) throw new PessoasError("ESCOPO_NEGADO", 403)
   const vinculo = await prisma.dpVinculo.findFirst({
     where: {
       id: intent.vinculoId, pessoaId: intent.pessoaId,
@@ -126,7 +128,7 @@ export async function confirmarUpload(token: unknown) {
       data: {
         id: intent.documentoId, empregadorId: escopo.empregadorId,
         pessoaId: intent.pessoaId, vinculoId: intent.vinculoId, storeId: escopo.storeId,
-        categoria: intent.categoria, classificacao: "COMUM", origem: intent.origem,
+        categoria: intent.categoria, classificacao: classificacaoDe(intent.categoria), origem: intent.origem,
         nomeArquivo: intent.nomeArquivo, storageRef: intent.storageRef,
         mime: intent.mime, bytes: intent.bytes, sha256: intent.sha256, enviadoPorId: escopo.userId,
       },
@@ -142,7 +144,7 @@ type Doc = Awaited<ReturnType<typeof prisma.dpDocumento.findUnique>>
 function dtoDocumento(doc: NonNullable<Doc>) {
   return {
     id: doc.id, vinculoId: doc.vinculoId, categoria: doc.categoria,
-    classificacao: doc.classificacao, origem: doc.origem,
+    classificacao: classificacaoDe(doc.categoria), origem: doc.origem,
     nomeArquivo: doc.nomeArquivo, mime: doc.mime, bytes: doc.bytes,
     sha256: doc.sha256, createdAt: doc.createdAt.toISOString(),
   }
@@ -156,7 +158,10 @@ export async function listarDocumentos(empregadorId: string, vinculoId: string) 
   })
   if (!vinculo) throw new PessoasError("NAO_ENCONTRADO", 404)
   const docs = await prisma.dpDocumento.findMany({
-    where: { empregadorId: escopo.empregadorId, storeId: escopo.storeId, vinculoId },
+    where: {
+      empregadorId: escopo.empregadorId, storeId: escopo.storeId, vinculoId,
+      categoria: { in: categoriasLegiveis(escopo.capacidades) },
+    },
     orderBy: { createdAt: "desc" },
   })
   return docs.map(dtoDocumento)
@@ -168,8 +173,10 @@ export async function autorizarDownload(empregadorId: string, documentoId: strin
     where: { id: documentoId, empregadorId: escopo.empregadorId, storeId: escopo.storeId },
   })
   if (!doc || doc.storageRef !== refCanonica({ empregadorId: doc.empregadorId, storeId: doc.storeId, documentoId: doc.id })) throw new PessoasError("NAO_ENCONTRADO", 404)
+  if (!podeLerDocumento(doc.categoria, escopo.capacidades)) throw new PessoasError("ESCOPO_NEGADO", 403)
+  const nomeNeutro = nomeDownloadNeutro(doc.mime)
   if (!await storage().verificarExistencia(doc.storageRef)) throw new PessoasError("DOCUMENTO_INDISPONIVEL", 503)
-  const url = await storage().criarDownloadAssinado(doc.storageRef, doc.nomeArquivo, 300)
+  const url = await storage().criarDownloadAssinado(doc.storageRef, nomeNeutro, 300)
   await executarComando(escopo, "DOCUMENTO_DOWNLOAD_AUTORIZAR", randomUUID(), {
     documentoId: doc.id,
   }, async () => ({

@@ -27,6 +27,28 @@ export type FuncionarioInput = {
   contractValidFrom?: string
 }
 
+/** Campos do contrato inicial (DpContratoVersao v1): dado contratual/remuneratório. */
+const CAMPOS_CONTRATO = [
+  "cargo", "cbo", "tipoContrato", "salarioBase", "unidadeSalario",
+  "jornadaSemanal", "divisor", "cctRef", "contractValidFrom",
+] as const satisfies readonly (keyof FuncionarioInput)[]
+const CAMPOS_FUNCIONARIO: ReadonlySet<string> = new Set<keyof FuncionarioInput>([
+  "empregadorId", "comandoId", "motivo", "nome", "cpf", "nascimento",
+  "matricula", "admissao", "regime", "categoria", ...CAMPOS_CONTRATO,
+])
+
+/**
+ * editCadastro cria pessoa/vínculo/rascunho; contrato exige editContrato.
+ * Campo contratual sem capacidade ou campo desconhecido é recusado, nunca descartado.
+ */
+function exigirCamposPermitidos(escopo: EscopoPessoas, input: FuncionarioInput) {
+  if (Object.keys(input).some((k) => !CAMPOS_FUNCIONARIO.has(k))) throw new PessoasError("CAMPO_DESCONHECIDO")
+  const contratual = CAMPOS_CONTRATO.some((c) => input[c] != null && input[c] !== "")
+  if (contratual && !escopo.capacidades.includes("editContrato")) {
+    throw new PessoasError("CONTRATO_NAO_AUTORIZADO", 403)
+  }
+}
+
 function camposInput(input: FuncionarioInput): CamposCadastro {
   const divisor = input.divisor == null ? null : input.divisor
   if (divisor !== null && (!Number.isInteger(divisor) || divisor <= 0 || divisor > 1000)) {
@@ -51,6 +73,7 @@ function camposInput(input: FuncionarioInput): CamposCadastro {
 
 export async function criarFuncionario(input: FuncionarioInput) {
   const escopo = await exigirEscopo(input.empregadorId, "editCadastro")
+  exigirCamposPermitidos(escopo, input)
   const campos = camposInput(input)
   const nascimento = dataCivil(input.nascimento)
   const tipoContrato = texto(input.tipoContrato, 80)

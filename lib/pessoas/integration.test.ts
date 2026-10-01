@@ -21,7 +21,11 @@ vi.mock("@/lib/contador/documentos/storage-r2", () => ({
     },
     removerObjeto: async (ref: string) => { blobs.delete(ref) },
     verificarExistencia: async (ref: string) => blobs.has(ref),
-    criarDownloadAssinado: async () => ({ signedUrl: "https://example.invalid/download", expiresInSec: 300 }),
+    // Como o adaptador R2 real: o nome recebido vai para a query string da URL assinada.
+    criarDownloadAssinado: async (ref: string, nomeArquivo: string) => ({
+      signedUrl: `https://example.invalid/${ref}?response-content-disposition=${encodeURIComponent(`attachment; filename="${nomeArquivo}"`)}`,
+      expiresInSec: 300,
+    }),
   },
 }))
 
@@ -59,6 +63,28 @@ function ator(userId: string, storeId: string) {
   sessao.storeId = storeId
 }
 function id() { return randomUUID() }
+function cpfSintetico(seed: number): string {
+  const d = String(100000000 + ((seed * 7919) % 899999999)).slice(0, 9).split("").map(Number)
+  for (const t of [9, 10]) {
+    const resto = (d.slice(0, t).reduce((a, n, i) => a + n * (t + 1 - i), 0) * 10) % 11
+    d.push(resto === 10 ? 0 : resto)
+  }
+  return d.join("")
+}
+async function usuario(prefixo: string, storeId: string) {
+  return (await prisma.adminUser.create({
+    data: { email: `dp-${prefixo}-${sufix}@example.invalid`, password: "synthetic", role: "OPERADOR", lojaId: storeId },
+  })).id
+}
+async function documento(categoria: string, origem: "INTERNO" | "CONTADOR_EXTERNO", nomeArquivo = categoria + ".pdf") {
+  const pdf = Buffer.from(`%PDF-1.7\n${categoria} sintetico ${randomUUID()}`)
+  const upload = await criarUploadIntent({
+    empregadorId: empA, vinculoId: funcionarioA, categoria, origem, nomeArquivo,
+    mime: "application/pdf", bytes: pdf.length, sha256: createHash("sha256").update(pdf).digest("hex"),
+  })
+  blobs.set(verificarIntent(upload.uploadIntent).storageRef, pdf)
+  return confirmarUpload(upload.uploadIntent)
+}
 
 describe.skipIf(!executa).sequential("Pessoas: integração real em PostgreSQL isolado", () => {
   beforeAll(async () => {
@@ -320,5 +346,146 @@ describe.skipIf(!executa).sequential("Pessoas: integração real em PostgreSQL i
     await expect(confirmarUpload(ruim.uploadIntent)).rejects.toMatchObject({ code: "INTEGRIDADE_INVALIDA" })
     expect(blobs.has(ri.storageRef)).toBe(false)
     expect(await prisma.dpDocumento.findUnique({ where: { id: ri.documentoId } })).toBeNull()
+  })
+
+  it("P1-01: editCadastro sem editContrato não grava contrato inicial; nada é descartado em silêncio", async () => {
+    const clerk = await usuario("clerk", storeA)
+    ator(adminA, storeA)
+    await concederAcesso({
+      empregadorId: empA, comandoId: id(), adminUserId: clerk, storeId: storeA,
+      capacidades: ["viewCadastro", "editCadastro"], motivo: "Cadastro sem contrato",
+    })
+    ator(clerk, storeA)
+    const cpf = cpfSintetico(101)
+    const base = { empregadorId: empA, motivo: "Tentativa contratual", nome: "Sem Contrato", cpf, matricula: "P1-NEG" }
+    const comando = id()
+    await expect(criarFuncionario({ ...base, comandoId: comando, salarioBase: "99999.00" }))
+      .rejects.toMatchObject({ code: "CONTRATO_NAO_AUTORIZADO", status: 403 })
+    const contratuais: Partial<Parameters<typeof criarFuncionario>[0]>[] = [
+      { cargo: "Atendente" }, { cbo: "521110" }, { tipoContrato: "PRAZO_INDETERMINADO" },
+      { unidadeSalario: "MENSAL" }, { jornadaSemanal: "44.00" }, { divisor: 220 },
+      { cctRef: "CCT sintética" }, { contractValidFrom: "2022-01-01" },
+    ]
+    for (const campo of contratuais) {
+      await expect(criarFuncionario({ ...base, comandoId: id(), ...campo }))
+        .rejects.toMatchObject({ code: "CONTRATO_NAO_AUTORIZADO", status: 403 })
+    }
+    await expect(criarFuncionario({ ...base, comandoId: id(), estabelecimentoId: "estab-sintetico" } as never))
+      .rejects.toMatchObject({ code: "CAMPO_DESCONHECIDO" })
+    expect(await prisma.dpPessoa.count({ where: { empregadorId: empA, cpfHash: protegerCpf(cpf, empA).cpfHash } })).toBe(0)
+    expect(await prisma.dpVinculo.count({ where: { empregadorId: empA, matricula: "P1-NEG" } })).toBe(0)
+    expect(await prisma.dpAuditoria.count({ where: { comandoId: comando } })).toBe(0)
+
+    const rascunho = await criarFuncionario({
+      ...base, comandoId: id(), matricula: "P1-RASC", admissao: "2022-02-01",
+      regime: "CLT", categoria: "101", motivo: "Rascunho sem contrato",
+    })
+    expect(rascunho.status).toBe("RASCUNHO")
+    expect(rascunho.pendencias).toContain("salarioBase")
+    const contrato = await prisma.dpContratoVersao.findFirstOrThrow({ where: { vinculoId: rascunho.id } })
+    expect([contrato.salarioBase, contrato.cargo, contrato.cbo, contrato.jornadaSemanal, contrato.divisor, contrato.validFrom])
+      .toEqual([null, null, null, null, null, null])
+  })
+
+  it("P1-01: editContrato grava o contrato, mas não concede leitura salarial", async () => {
+    const contratista = await usuario("contr", storeA)
+    // Grant inserido direto (concederAcesso exige viewRemuneracao junto): prova que a leitura depende só dela.
+    await prisma.dpAcesso.create({
+      data: {
+        empregadorId: empA, storeId: storeA, adminUserId: contratista, concedidoPorId: adminA,
+        capacidades: ["viewCadastro", "editCadastro", "editContrato"], motivo: "Separação sintética",
+      },
+    })
+    ator(contratista, storeA)
+    const f = await criarFuncionario({
+      empregadorId: empA, comandoId: id(), motivo: "Com contrato", nome: "Com Contrato", cpf: cpfSintetico(102),
+      matricula: "P1-POS", admissao: "2022-03-01", regime: "CLT", categoria: "101", cargo: "Atendente",
+      cbo: "521110", salarioBase: "2700.00", unidadeSalario: "MENSAL", jornadaSemanal: "44.00", divisor: 220,
+      contractValidFrom: "2022-03-01",
+    })
+    expect(f.status).toBe("ATIVO")
+    expect(f.contrato?.salarioBase).toBeNull()
+    expect(f.contrato?.remuneracaoOculta).toBe(true)
+    const gravado = await prisma.dpContratoVersao.findFirstOrThrow({ where: { vinculoId: f.id } })
+    expect(gravado.salarioBase?.toFixed(2)).toBe("2700.00")
+  })
+
+  it("P2-02: documento remuneratório exige viewRemuneracao em listagem, download por ID e envio", async () => {
+    ator(adminA, storeA)
+    const docs = {
+      holerite_externo: await documento("holerite_externo", "CONTADOR_EXTERNO"),
+      contrato: await documento("contrato", "INTERNO"),
+      comprovante: await documento("comprovante", "INTERNO"),
+      outro: await documento("outro", "INTERNO"),
+      identificacao: await documento("identificacao", "INTERNO"),
+    }
+    const remuneratorios = ["holerite_externo", "contrato", "comprovante", "outro"] as const
+    expect(docs.identificacao.classificacao).toBe("COMUM")
+    for (const c of remuneratorios) {
+      expect(docs[c].classificacao).toBe("REMUNERATORIO")
+      expect((await prisma.dpDocumento.findUniqueOrThrow({ where: { id: docs[c].id } })).classificacao).toBe("REMUNERATORIO")
+    }
+    const soDocumento = await usuario("doc", storeA)
+    const comRemuneracao = await usuario("rem", storeA)
+    const editor = await usuario("edoc", storeA)
+    const conceder = (adminUserId: string, capacidades: Parameters<typeof concederAcesso>[0]["capacidades"]) =>
+      concederAcesso({ empregadorId: empA, comandoId: id(), adminUserId, storeId: storeA, capacidades, motivo: "Documentos sintéticos" })
+    await conceder(soDocumento, ["viewDocumento"])
+    await conceder(comRemuneracao, ["viewDocumento", "viewRemuneracao"])
+    await conceder(editor, ["viewCadastro", "editCadastro", "viewDocumento"])
+
+    ator(soDocumento, storeA)
+    const visiveis = await listarDocumentos(empA, funcionarioA)
+    expect(visiveis.map((d) => d.id)).toContain(docs.identificacao.id)
+    expect(visiveis.filter((d) => d.categoria !== "identificacao")).toEqual([])
+    expect((await autorizarDownload(empA, docs.identificacao.id)).expiresInSec).toBeLessThanOrEqual(300)
+    for (const c of remuneratorios) {
+      await expect(autorizarDownload(empA, docs[c].id)).rejects.toMatchObject({ code: "ESCOPO_NEGADO", status: 403 })
+    }
+
+    ator(comRemuneracao, storeA)
+    const todos = new Set((await listarDocumentos(empA, funcionarioA)).map((d) => d.id))
+    for (const d of Object.values(docs)) {
+      expect(todos.has(d.id)).toBe(true)
+      expect((await autorizarDownload(empA, d.id)).expiresInSec).toBeLessThanOrEqual(300)
+    }
+
+    ator(editor, storeA)
+    const pdf = Buffer.from("%PDF-1.7\nholerite sintetico")
+    const meta = { mime: "application/pdf", bytes: pdf.length, sha256: createHash("sha256").update(pdf).digest("hex") }
+    await expect(criarUploadIntent({
+      empregadorId: empA, vinculoId: funcionarioA, categoria: "holerite_externo", origem: "CONTADOR_EXTERNO",
+      nomeArquivo: "h.pdf", ...meta,
+    })).rejects.toMatchObject({ code: "ESCOPO_NEGADO" })
+    const comum = await criarUploadIntent({
+      empregadorId: empA, vinculoId: funcionarioA, categoria: "identificacao", origem: "INTERNO", nomeArquivo: "rg.pdf", ...meta,
+    })
+    expect(comum.uploadIntent).toBeTruthy()
+  })
+
+  it("P2-01: URL assinada, log e erro não carregam o nome original do arquivo", async () => {
+    ator(adminA, storeA)
+    const original = "CTPS Maria Sintetica da Silva 529.982.247-25.pdf"
+    const doc = await documento("identificacao", "INTERNO", original)
+    expect(doc.nomeArquivo).toBe(original)
+    const saida: string[] = []
+    const espioes = (["log", "info", "warn", "error", "debug"] as const).map((m) =>
+      vi.spyOn(console, m).mockImplementation((...a: unknown[]) => { saida.push(a.map(String).join(" ")) }))
+    try {
+      const { signedUrl } = await autorizarDownload(empA, doc.id)
+      const url = decodeURIComponent(signedUrl)
+      expect(url).toContain('filename="documento.pdf"')
+      blobs.delete((await prisma.dpDocumento.findUniqueOrThrow({ where: { id: doc.id } })).storageRef)
+      const erro = await autorizarDownload(empA, doc.id).catch((e: unknown) => e)
+      expect(erro).toMatchObject({ code: "DOCUMENTO_INDISPONIVEL" })
+      const textoErro = erro instanceof Error ? `${erro.message}\n${erro.stack ?? ""}` : String(erro)
+      for (const fragmento of ["Maria", "Sintetica", "Silva", "CTPS", "529.982.247-25", "52998224725", "982.247"]) {
+        expect(url).not.toContain(fragmento)
+        expect(textoErro).not.toContain(fragmento)
+        expect(saida.join("\n")).not.toContain(fragmento)
+      }
+    } finally {
+      espioes.forEach((s) => s.mockRestore())
+    }
   })
 })

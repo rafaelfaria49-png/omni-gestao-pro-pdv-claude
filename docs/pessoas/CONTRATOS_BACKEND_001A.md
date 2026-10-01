@@ -22,16 +22,18 @@ Comandos exigem `comandoId` ASCII de 8–100 caracteres (UUID recomendado) e `mo
 
 Datas civis entram/saem como `AAAA-MM-DD`, sem horário. Dinheiro entra como string decimal canônica de duas casas, por exemplo `"2500.00"`; números JS e vírgulas são recusados. CPF pode vir formatado e é normalizado; não deve ser usado em URL. Rascunho tem `status: RASCUNHO`, campos nulos e `pendencias[]`; `ATIVO` requer dados mínimos completos. A admissão original é entrada explícita, inclusive para empregados existentes.
 
-`listarFuncionarios` e `obterFuncionario` exigem `viewCadastro`. Sem `viewRemuneracao`, `salarioBase: null` e `remuneracaoOculta: true`; null não deve ser interpretado como salário zero. `editContrato` só é concedido junto de `viewRemuneracao` e `viewCadastro`. `viewDocumento` é grant separado.
+`listarFuncionarios` e `obterFuncionario` exigem `viewCadastro`. Sem `viewRemuneracao`, `salarioBase: null` e `remuneracaoOculta: true`; null não deve ser interpretado como salário zero. `editContrato` só é concedido junto de `viewRemuneracao` e `viewCadastro`; a leitura salarial depende sempre de `viewRemuneracao`, nunca de `editContrato`. `viewDocumento` é grant separado.
+
+`criarFuncionario` com `editCadastro` cria pessoa, vínculo e contrato v1 em rascunho. Qualquer campo do contrato inicial (`cargo`, `cbo`, `tipoContrato`, `salarioBase`, `unidadeSalario`, `jornadaSemanal`, `divisor`, `cctRef`, `contractValidFrom`) exige também `editContrato` e, sem ele, a operação inteira é recusada com `CONTRATO_NAO_AUTORIZADO` (403) — nada é descartado em silêncio. Campo fora do contrato da action devolve `CAMPO_DESCONHECIDO`; o estabelecimento contratual vem do mapeamento da Store, não do cliente.
 
 ## API privada de documentos
 
 - `POST /api/pessoas/documentos/upload-intent`: body `{empregadorId,vinculoId,categoria,origem,nomeArquivo,mime,bytes,sha256}`. Devolve `signedUrl`, `headersObrigatorios`, `expiresInSec`, `documentoId`, `uploadIntent`. O cliente faz PUT bruto na URL com os headers assinados; não persistir/logar a URL ou token.
 - `POST /api/pessoas/documentos/complete`: body `{uploadIntent}`. Revalida sessão/grant/Store e o objeto físico; devolve metadados sem `storageRef`. O intent expira em 10 minutos. Para retry idêntico, usar o mesmo intent dentro dessa janela.
 - `GET /api/pessoas/documentos?empregadorId=...&vinculoId=...`: lista metadados autorizados.
-- `POST /api/pessoas/documentos/{id}/download`: body `{empregadorId}`. Devolve URL assinada por até 300 segundos após nova autorização e auditoria.
+- `POST /api/pessoas/documentos/{id}/download`: body `{empregadorId}`. Devolve URL assinada por até 300 segundos após nova autorização e auditoria. O arquivo baixado chama-se `documento.pdf|png|jpg` (derivado do MIME); o nome original fica só no metadado autorizado e nunca entra na URL.
 
-Categorias aceitas: `contrato`, `identificacao`, `holerite_externo`, `comprovante`, `outro`. MIME/extensão: PDF, PNG, JPG; limite 25 MiB. Arquivos de saúde não são aceitos. Todas as respostas são `private, no-store`; o frontend 001B deve manter esses dados fora de cache persistente/offline.
+Categorias aceitas: `contrato`, `identificacao`, `holerite_externo`, `comprovante`, `outro`. Política server-side deny-by-default: só `identificacao` é `COMUM` (exige `viewDocumento`); `holerite_externo`, `contrato`, `comprovante` e `outro` são `REMUNERATORIO`, porque podem revelar salário, e exigem `viewDocumento` + `viewRemuneracao` para enviar, listar e baixar. Sem `viewRemuneracao` eles somem da listagem e o download por ID devolve `ESCOPO_NEGADO`. MIME/extensão: PDF, PNG, JPG; limite 25 MiB. Arquivos de saúde não são aceitos. Todas as respostas são `private, no-store`; o frontend 001B deve manter esses dados fora de cache persistente/offline.
 
 ## Estados e limitações para a interface
 
