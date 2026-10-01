@@ -21,7 +21,7 @@ import type { OrdemServico } from "@/types/os";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
-import { criarOS as criarOSImpl } from "@/api/os";
+import { criarOS as criarOSImpl } from "@/components/operacoes/lovable/api/os";
 import { resolverClienteOperacoesV3 } from "./cliente-resolver";
 import {
   computeTotaisNovaOSV3,
@@ -31,6 +31,9 @@ import {
   validarNovaOSDraftV3,
 } from "./nova-os-model";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
+import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
+import { recalcOrcamentoV3, type OrcamentoV3, type OrcamentoVersaoV3 } from "./orcamento-model";
+import { projetarStatusV2 } from "./status-machine";
 
 function operadorLabel(session: Session | null): string {
   const u = session?.user;
@@ -59,6 +62,23 @@ export async function criarOSEnterpriseV3(
   draft: NovaOSDraftV3,
   extras?: Record<string, unknown>,
 ): Promise<CriarOSEnterpriseV3Result> {
+  return criarOSCore(storeId, draft, false, extras);
+}
+
+/** A escolha explícita de serviço já autorizado chega a createOS com o estado comercial final. */
+export async function criarOSServicoAutorizadoV3(
+  storeId: string,
+  draft: NovaOSDraftV3,
+): Promise<CriarOSEnterpriseV3Result> {
+  return criarOSCore(storeId, draft, true);
+}
+
+async function criarOSCore(
+  storeId: string,
+  draft: NovaOSDraftV3,
+  autorizado: boolean,
+  extras?: Record<string, unknown>,
+): Promise<CriarOSEnterpriseV3Result> {
   const sid = (storeId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
 
@@ -69,6 +89,14 @@ export async function criarOSEnterpriseV3(
 
   const erro = validarNovaOSDraftV3(draft);
   if (erro) throw new Error(erro);
+  if (autorizado) {
+    if (!draft.itens.some((it) => it.categoria === "servico" && it.kind === "cobrado" && it.valorUnitario > 0)) {
+      throw new Error("Informe ao menos um serviço autorizado com valor de venda.");
+    }
+    if (draft.itens.some((it) => it.categoria === "peca") || draft.desconto !== 0) {
+      throw new Error("Esta abertura curta aceita serviços sem peças ou desconto; use o fluxo completo para outros itens.");
+    }
+  }
 
   const operador = operadorLabel(session);
 
@@ -186,6 +214,32 @@ export async function criarOSEnterpriseV3(
     itensV3: draft.itens,
   };
 
+  // Orçamento e autorização compõem o snapshot antes da única chamada de criação.
+  // O total vem do cálculo canônico; autorização presencial não fabrica envio.
+  const aprovadoEm = autorizado ? nowIso() : "";
+  const orcamentoAprovado = autorizado
+    ? recalcOrcamentoV3({
+        ...(buildOrcamentoRascunhoFromOS(
+          { servicosCatalogo, pecas } as Pick<OrdemServico, "servicosCatalogo" | "pecas">,
+          { uid: (prefix) => `${prefix}-${crypto.randomUUID()}`, nowIso: () => aprovadoEm },
+        ) as OrcamentoV3),
+        status: "aprovado",
+        respondidoEm: aprovadoEm,
+        atualizadoEm: aprovadoEm,
+      })
+    : null;
+  const versaoAprovacao: OrcamentoVersaoV3[] = orcamentoAprovado
+    ? [{
+        versao: 1,
+        status: "aprovado",
+        total: orcamentoAprovado.total,
+        desconto: orcamentoAprovado.desconto ?? 0,
+        registradoEm: aprovadoEm,
+        registradoPor: operador,
+        snapshot: orcamentoAprovado,
+      }]
+    : [];
+
   const input = {
     storeId: sid,
     clienteId,
@@ -208,7 +262,7 @@ export async function criarOSEnterpriseV3(
       acessorios: draft.equipamento.acessorios.filter(Boolean),
       defeitoRelatado: draft.problema.defeitoRelatado.trim(),
     },
-    status: "aberta" as const,
+    status: autorizado ? projetarStatusV2("aprovado") : ("aberta" as const),
     prioridade: draft.recepcao.prioridade,
     origem: origemV2(draft.recepcao.origem),
     sla: { prazo: slaPrazo, status: "ok" as const },
@@ -220,8 +274,21 @@ export async function criarOSEnterpriseV3(
     senhaEquipamentoTipo: draft.equipamento.senha?.trim() ? draft.equipamento.senhaTipo : undefined,
     servicosCatalogo,
     // Extras V3 (sobrevivem ao spread do payload):
-    operacaoStatusV3: "aberta",
+    operacaoStatusV3: autorizado ? "aprovado" : "aberta",
     aberturaV3,
+    ...(orcamentoAprovado ? {
+      orcamento: orcamentoAprovado,
+      orcamentoVersoesV3: versaoAprovacao,
+      valorTotal: orcamentoAprovado.total,
+      autorizacaoComercialV3: {
+        autorizada: true,
+        registradaEm: aprovadoEm,
+        registradaPor: operador,
+        origem: draft.recepcao.origem,
+        escopo: "servicos_da_abertura",
+        total: orcamentoAprovado.total,
+      },
+    } : {}),
     ...(extras ?? {}),
   };
 

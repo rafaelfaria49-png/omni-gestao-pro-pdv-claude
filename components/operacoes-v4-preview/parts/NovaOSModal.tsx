@@ -1,6 +1,6 @@
 /**
  * Operações V4 — Nova OS (GOAL OPS-V4-NOVO-ATENDIMENTO-COMERCIAL-001).
- * Continua em `criarOSEnterpriseV3`. Serviço autorizado materializa valor.
+ * Serviço autorizado cria o snapshot comercial aprovado antes da persistência.
  */
 "use client";
 
@@ -9,7 +9,7 @@ import { useSession } from "next-auth/react";
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { useLojaAtiva } from "@/lib/loja-ativa";
-import { criarOSEnterpriseV3 } from "@/lib/operacoes-v3/nova-os-actions";
+import { criarOSEnterpriseV3, criarOSServicoAutorizadoV3 } from "@/lib/operacoes-v3/nova-os-actions";
 import { validarNovaOSDraftV3 } from "@/lib/operacoes-v3/nova-os-model";
 import {
   buildNovaOSDraftFromFormV4,
@@ -78,6 +78,7 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
   const [previsao, setPrevisao] = useState("");
   const [aceitaVencida, setAceitaVencida] = useState(false);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [erro, setErro] = useState<string | null>(null);
   const [abertos, setAbertos] = useState({ cliente: true, aparelho: true, comercial: true, recepcao: false, prova: false });
   // Atendente real: identidade autenticada como padrão (override manual vale).
@@ -111,6 +112,7 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
   };
 
   const handleCriar = async () => {
+    if (busyRef.current) return;
     setErro(null);
     const sid = (lojaAtivaId ?? "").trim();
     if (!sid) {
@@ -149,13 +151,17 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
       setErro(invalido);
       return;
     }
+    busyRef.current = true;
     setBusy(true);
     try {
-      const { os } = await criarOSEnterpriseV3(sid, draft);
-      v.onOSCriada(os.id);
+      const { os } = tipo === "servico_autorizado"
+        ? await criarOSServicoAutorizadoV3(sid, draft)
+        : await criarOSEnterpriseV3(sid, draft);
+      v.onOSCriada(os);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir a OS.");
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
