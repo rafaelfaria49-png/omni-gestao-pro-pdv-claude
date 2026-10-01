@@ -1,4 +1,112 @@
-# FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024 — evidência de bloqueio
+# FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024 — evidência sanitizada
+
+Data: 2026-10-01 (America/Sao_Paulo). Resultado vigente da retomada: CANONICAL_DB_NOT_IDENTIFIED.
+O mesmo GOAL 024 foi reativado por autorização humana e a obtenção efêmera via Vercel foi executada. Nenhuma fonte recuperada produziu uma URI PostgreSQL interpretável. A identificação canônica não pôde ser comprovada; a retomada para no item 4 da autorização, antes de qualquer conexão DB, leitura funcional, teste offline ou preparação de retry. Nenhuma condição de readiness foi presumida.
+
+## Retomada humana e preflight
+
+- Worktree: C:/workspace; árvore limpa; branch goal/fiscal-024-corrected-retry-readiness; HEAD de entrada 2d6a7f7ecd1262aa662f42ac8567d0b23aff08f0, exatamente o esperado.
+- git fetch origin concluído. origin/main=e65630f9943b53aaf5983111faf62f54d45dc095, exatamente o observado externamente. Base do 024/merge-base=bfbdf01087433738134f5ee308475c2ef9841fbe.
+- git diff --name-status 2d6a7f7ecd1262aa662f42ac8567d0b23aff08f0 origin/main -- lib/fiscal test/fiscal docs/fiscal: saída vazia, exit 0.
+- git log bfbdf01087433738134f5ee308475c2ef9841fbe..origin/main -- lib/fiscal test/fiscal docs/fiscal: saída vazia, exit 0. Nenhuma mudança upstream nesses caminhos fiscais.
+- GOAL fechado movido de volta para goals/; somente status BLOCKED -> READY e authorization_source sanitizado foram alterados no metadado. A linha BLOCKED anterior permaneceu intacta no LEDGER.jsonl, com hash SHA-256 idêntico antes/depois da reativação.
+- node scripts/track.mjs registry e node scripts/track.mjs verify --all: exit 0, oito trilhas sem divergências. Somente GOAL 024, estado fiscal derivado e REGISTRY tiveram diferenças versionadas; outros artefatos regenerados ficaram sem diferença.
+- Commit separado de reativação: 14b49d4dc7476e77fbb9206f8ba1219abe79f050, mensagem aep(fiscal): reactivate FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024. Push normal concluído na mesma branch.
+- node scripts/track.mjs open fiscal: exit 0, tentativa 1/3; mesmo ID, allowlist original, gates liberados vazios, família openai e revisão independente R obrigatória antes de eventual DONE.
+
+## Obtenção efêmera das fontes autorizadas
+
+Vercel CLI instalada 57.0.0; vercel whoami confirmou autenticação, exit 0, com saída integralmente suprimida para não revelar login. Não houve HUMAN_VERCEL_LOGIN_REQUIRED.
+
+Somente os projetos conhecidos omni-gestao e omni-gestao-pro, ambiente Production, foram consultados com vercel env pull --environment=production --project=<projeto> --yes --non-interactive, executado em diretórios TEMP isolados fora do repo. Não houve vercel link no repo, deploy, mudança de variáveis cloud ou uso dos .env locais divergentes.
+
+A revisão automática recusou duas propostas anteriores: primeiro o pull completo sem demonstrar suficientemente o escopo autorizado; depois a retenção intermediária em db-urls.json sem limpeza na mesma chamada. Ambas foram recusadas antes de executar. A autorização textual foi conferida e a alternativa autocontida foi aprovada: arquivos Production apenas em TEMP, extração em memória somente de DATABASE_URL/DIRECT_URL, nenhum arquivo intermediário de URLs e limpeza na mesma execução. A primeira execução aceita parou na estrutura da primeira URL; a inspeção seguinte verificou os quatro valores dos dois projetos.
+
+Os arquivos foram lidos por linhas, selecionando apenas as duas chaves autorizadas. Nenhum valor, host, login, senha, token, certificado, CSC ou XML foi impresso. A interpretação usou dotenv.parse e new URL, sem remover aspas extras, reescrever credenciais ou trocar database.
+
+| Fonte Vercel Production | Chave | Presente | URI interpretável | Candidato PostgreSQL utilizável |
+| --- | --- | --- | --- | --- |
+| omni-gestao | DATABASE_URL | true | false | false |
+| omni-gestao | DIRECT_URL | true | false | false |
+| omni-gestao-pro | DATABASE_URL | true | false | false |
+| omni-gestao-pro | DIRECT_URL | true | false | false |
+
+Indicadores sanitizados dos quatro valores: sem quebra de linha, sem marcador de template, sem aspas no início/fim. Isso não identifica a database nem comprova divergência do nome: a interpretação da URI falhou antes de qualquer conexão. Nenhum candidato apontou inequivocamente a omnigestao_prod. Não se tentou inventar, corrigir ou substituir URLs.
+
+Todos os arquivos Production foram apagados imediatamente após a extração/inspeção. Locks transitórios deixados pela CLI foram resolvidos na limpeza com caminhos absolutos verificados; ao final, os diretórios TEMP de autenticação, obtenção, inspeção e driver PostgreSQL estavam removidos. O driver pg 8.16.3 foi preparado somente em TEMP, com ignore-scripts, e removido sem uso. Nenhuma dependência do repo foi alterada.
+
+## Ponto de parada e limites da comprovação
+
+CANONICAL_DB_NOT_IDENTIFIED é o blocker vigente. BEGIN READ ONLY, SHOW transaction_read_only, SELECT current_database() e SELECT current_user NÃO foram executados: nenhuma URI PostgreSQL válida foi disponibilizada ao driver. Não há afirmação transaction_read_only=on sem conexão/prova.
+
+O relacionamento SALE_ID -> payload.sessaoId -> sessoes_caixa não foi lido. A divergência entre cmubufytz000ah2mcib062l0n (pedido) e cmubufytz000ch2mcib062l0n (022E) permanece sem resolução DB. NOTA_ID, jobs EMISSAO/CONSULTA, configuração fiscal, retry pendente e UNCERTAIN atuais continuam NOT_VERIFIED. A janela versionada está dormente (activationId/notBeforeUtc/expiresAtUtc=null); esse fato de código não comprova ausência de janela injetada em runtime nem estado atual de produção fiscal.
+
+Não se avançou para numeração/reuso, allocator/constraints/lineage, caminho SOAP ou candidato da terceira tentativa. Os quatro testes focados e o comando canônico do GOAL 023 continuam NOT_RUN nesta retomada, por parada obrigatória anterior à auditoria funcional. A etapa de PATH/xmllint da continuação não foi alcançada. PASS históricos do 023 não foram promovidos a PASS do 024. Revisão independente R não foi executada; nenhum DONE ou readiness foi declarado.
+
+É necessária uma fonte Vercel Production autorizada que disponibilize uma URI PostgreSQL interpretável e permita comprovar omnigestao_prod em transação READ ONLY. Nenhum segredo deve ser colado no chat. Nova retomada do mesmo ID exige reativação humana conforme AEP; nenhum GOAL novo foi criado. Não se solicita transmissão.
+
+## Relatório vigente da retomada
+
+~~~text
+GOAL=FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024
+BASE_MAIN=bfbdf01087433738134f5ee308475c2ef9841fbe
+ORIGIN_MAIN_PREFLIGHT=e65630f9943b53aaf5983111faf62f54d45dc095
+FISCAL_UPSTREAM_CHANGES=false
+REACTIVATION_COMMIT=14b49d4dc7476e77fbb9206f8ba1219abe79f050
+VERCEL_CLI_AUTHENTICATED=true
+VERCEL_PRODUCTION_PROJECTS_INSPECTED=omni-gestao,omni-gestao-pro
+CANONICAL_DB_SOURCE=NOT_IDENTIFIED
+CANONICAL_DB_NAME=NOT_VERIFIED
+EXPECTED_CANONICAL_DB_NAME=omnigestao_prod
+CANONICAL_DB_IDENTIFIED=false
+TRANSACTION_READ_ONLY=NOT_VERIFIED_NO_CONNECTION
+CURRENT_DATABASE_QUERY=NOT_RUN
+CURRENT_USER_QUERY=NOT_RUN
+DB_CONNECTION_ATTEMPTS=0
+DB_CONNECTIONS=0
+DB_READ_QUERIES=0
+DB_WRITES=0
+DATABASE_STATE_VERIFIED=false
+CAIXA_ID_FROM_SALE_RELATION=NOT_VERIFIED
+CAIXA_ID_DIVERGENCE_RESOLVED=false
+NO_PENDING_AUTOMATIC_RETRY=NOT_VERIFIED
+NO_UNCERTAIN_STATE=NOT_VERIFIED
+FISCAL_ENABLED=NOT_VERIFIED
+PRODUCTION=NOT_VERIFIED
+TRANSMISSION_WINDOW_ARMED=NOT_VERIFIED_AT_RUNTIME
+VERSIONED_TRANSMISSION_WINDOW_ARMED=false
+NUMBER_REUSE_POLICY_VERIFIED=NOT_VERIFIED
+CANDIDATE_NUMBER=NOT_DETERMINED
+CANDIDATE_SERIES=NOT_DETERMINED
+CANDIDATE_CHNFE_EXPECTED=NOT_DETERMINED
+CANDIDATE_JOB_STRATEGY=NOT_DETERMINED
+FOCUSED_OFFLINE_TESTS=NOT_RUN
+GOAL_023_REGRESSION=NOT_RUN
+INDEPENDENT_REVIEW_R=NOT_RUN
+TYPECHECK=NOT_APPLICABLE_DOCUMENTATION_ONLY
+BUILD=NOT_APPLICABLE_DOCUMENTATION_ONLY
+TEMPORARY_FILES_AND_DIRECTORIES_REMOVED=true
+EXTERNAL_SEFAZ_CONTACT=false
+SEFAZ_SOAP_POST_COUNT=0
+REAL_SEFAZ_DOCUMENT_TRANSMISSIONS=0
+PRODUCTION_FISCAL_CONTACT=false
+FISCAL_ACTIVATION_WRITES=0
+TRANSMISSION_WINDOWS_ARMED_BY_THIS_GOAL=0
+DOCUMENTS_CREATED=0
+JOBS_CREATED=0
+G_F7_AUTHORIZED=false
+G_F12_AUTHORIZED=false
+READY_FOR_THIRD_ATTEMPT_GATE=false
+TRANSMISSION_AUTHORIZATION_REQUESTED=false
+BLOCKERS=CANONICAL_DB_NOT_IDENTIFIED
+FINAL_DECISION=CANONICAL_DB_NOT_IDENTIFIED
+STOP=CANONICAL_DB_NOT_IDENTIFIED
+~~~
+
+## Registro histórico preservado — execução anterior à reativação
+
+O texto abaixo registra a primeira execução e seu blocker anterior; não substitui o relatório vigente acima.
+
 
 Data: 2026-10-01 (America/Sao_Paulo). Resultado: BLOCKED_BY_READONLY_DB_ACCESS.
 A auditoria foi interrompida no item 4 do pedido humano. Nenhum resultado atual do banco ou readiness de transmissão foi presumido. Este relatório não autoriza G-F7, G-F12, emissão, janela ou retry.
