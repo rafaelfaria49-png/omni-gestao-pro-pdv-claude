@@ -163,13 +163,14 @@ describe("matriz de cStat — default fail-closed", () => {
   it("REJECTED existe apenas para códigos explicitamente marcados", () => {
     expect(SEFAZ_CSTAT_MATRIX.filter((e) => e.outcome === "REJECTED").map((e) => e.cStat)).toEqual([
       "110",
+      "588",
     ])
   })
 })
 
 describe("matriz de cStat — imutabilidade e versionamento", () => {
   it("expõe uma versão estável", () => {
-    expect(SEFAZ_CSTAT_MATRIX_VERSION).toBe("018.2")
+    expect(SEFAZ_CSTAT_MATRIX_VERSION).toBe("023.0")
   })
 
   it("entradas, listas de serviço e consequências estão congeladas", () => {

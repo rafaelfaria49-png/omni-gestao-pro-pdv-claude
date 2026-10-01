@@ -7,10 +7,10 @@
  * (Simples Nacional CSOSN 102 → ICMSSN102 + PIS/COFINS CST 49). Nunca recalcula tributo.
  */
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
-import { pathToFileURL } from "node:url"
+import { dirname, join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, it, expect } from "vitest"
 import { encodeNfceQrV3OfflineUrl, encodeNfceQrV3OnlineUrl, createQrV3OfflinePemSigner } from "@/lib/fiscal/danfce/qr-v3"
 import { sanitizeProdutoFiscal, PRODUTO_FISCAL_VAZIO } from "@/lib/produto-fiscal"
@@ -27,6 +27,8 @@ import {
 import { buildNfceXml, buildNfceXmlResult } from "./nfce-xml-builder"
 import { NFCE_VER_PROC, NfceXmlError } from "./nfce-xml.types"
 import { validateNfceSnapshot } from "./nfce-xml-validation"
+
+const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 
 const LOJA_OK: SnapshotLojaInput = {
   cnpj: "11.222.333/0001-81",
@@ -386,7 +388,7 @@ describe("buildNfceXml · pagamento fiscal canônico (GOAL 030)", () => {
 
 describe("nfce-xml-builder · fronteira fail-closed (fonte)", () => {
   it("não contém fallback tPag=01, MAP_TPAG, parse heurístico nem imports vivos", () => {
-    const src = readFileSync(resolve(process.cwd(), "lib/fiscal/xml/nfce-xml-builder.ts"), "utf8")
+    const src = readFileSync(resolve(TEST_DIR, "nfce-xml-builder.ts"), "utf8")
     expect(src).not.toContain("MAP_TPAG")
     expect(src).not.toContain("parsePagamentos")
     expect(src).not.toContain("tPagDe")
@@ -1030,14 +1032,8 @@ const QR_ONLINE_V3 = {
   urlChave: "https://qr.example.test/consulta",
 } as const
 
-const LEIAUTE_XSD = resolve(
-  process.cwd(),
-  "lib/fiscal/xsd/schemas/PL_010e_v1.02/NFe/leiauteNFe_v4.00.xsd",
-)
-const TIPOS_XSD = resolve(
-  process.cwd(),
-  "lib/fiscal/xsd/schemas/PL_010e_v1.02/NFe/tiposBasico_v4.00.xsd",
-)
+const LEIAUTE_XSD = resolve(TEST_DIR, "../xsd/schemas/PL_010e_v1.02/NFe/leiauteNFe_v4.00.xsd")
+const TIPOS_XSD = resolve(TEST_DIR, "../xsd/schemas/PL_010e_v1.02/NFe/tiposBasico_v4.00.xsd")
 
 function nfeChildOpenings(xml: string): string[] {
   return [...xml.matchAll(/<(infNFeSupl|infNFe|Signature)(?:\s|>)/g)].map((m) => m[1] ?? "")
@@ -1052,10 +1048,6 @@ function extractXsdPattern(source: string, marker: string): string {
 
 const XMLLINT_SCHEMA_ARGS = ["--noout", "--nonet", "--schema"] as const
 
-function localFileSchemaLocation(filePath: string): string {
-  return pathToFileURL(filePath).href
-}
-
 function infNfeSuplElementDef(leiauteSource: string): string {
   const start = leiauteSource.indexOf('<xs:element name="infNFeSupl" minOccurs="0">')
   const end = leiauteSource.indexOf('<xs:element ref="ds:Signature"/>')
@@ -1066,14 +1058,15 @@ function infNfeSuplElementDef(leiauteSource: string): string {
 function writeTempInfNfeSuplSchema(
   dir: string,
   elementDef: string,
-  schemaLocation = localFileSchemaLocation(TIPOS_XSD),
+  schemaLocation?: string,
 ): string {
   const xsdPath = join(dir, "infnfesupl.xsd")
+  if (schemaLocation === undefined) copyFileSync(TIPOS_XSD, join(dir, "tiposBasico_v4.00.xsd"))
   writeFileSync(
     xsdPath,
     `<?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns="http://www.portalfiscal.inf.br/nfe" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://www.portalfiscal.inf.br/nfe" elementFormDefault="qualified" attributeFormDefault="unqualified">
-  <xs:include schemaLocation="${schemaLocation}"/>
+  <xs:include schemaLocation="${schemaLocation ?? "tiposBasico_v4.00.xsd"}"/>
   ${elementDef}
 </xs:schema>`,
   )
@@ -1280,8 +1273,8 @@ describe("buildNfceXml · QR v3 online opt-in (infNFeSupl)", () => {
     expect(sig).toBeGreaterThan(supl)
     expect(leiaute).toContain("QRCODE V3 ONLINE")
     expect(leiaute).toContain('whiteSpace value="preserve"')
-    const helper = readFileSync(resolve(process.cwd(), "lib/fiscal/xml/nfce-infnfesupl-online.ts"), "utf8")
-    const writer = readFileSync(resolve(process.cwd(), "lib/fiscal/xml/xml-writer.ts"), "utf8")
+    const helper = readFileSync(resolve(TEST_DIR, "nfce-infnfesupl-online.ts"), "utf8")
+    const writer = readFileSync(resolve(TEST_DIR, "xml-writer.ts"), "utf8")
     expect(helper).not.toMatch(/CDATA/)
     expect(writer).not.toMatch(/CDATA/)
   })
@@ -1451,15 +1444,41 @@ describe("buildNfceXml · QR v3 offline opt-in (infNFeSupl, tpEmis=9)", () => {
 describe("xmllint harness · regressão de infraestrutura (infNFeSupl)", () => {
   const leiaute = readFileSync(LEIAUTE_XSD, "utf8")
 
-  it("schemaLocation local é URI file: cross-platform e --nonet permanece ativo", () => {
-    const location = localFileSchemaLocation(TIPOS_XSD)
-    expect(XMLLINT_SCHEMA_ARGS).toEqual(["--noout", "--nonet", "--schema"])
-    expect(location.startsWith("file:")).toBe(true)
-    expect(location).not.toContain("\\")
-    expect(location).toContain("tiposBasico_v4.00.xsd")
+  it("schemaLocation relativo usa cópia byte a byte do tiposBasico oficial e --nonet permanece ativo", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nfce-infnfesupl-reg-"))
+    try {
+      const xsdPath = writeTempInfNfeSuplSchema(dir, infNfeSuplElementDef(leiaute))
+      const tiposPath = join(dir, "tiposBasico_v4.00.xsd")
+      expect(XMLLINT_SCHEMA_ARGS).toEqual(["--noout", "--nonet", "--schema"])
+      expect(readFileSync(xsdPath, "utf8")).toContain('<xs:include schemaLocation="tiposBasico_v4.00.xsd"/>')
+      expect(existsSync(tiposPath)).toBe(true)
+      expect(readFileSync(tiposPath)).toEqual(readFileSync(TIPOS_XSD))
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
-  it("recorte XSD inválido e schemaLocation quebrado continuam falhando", () => {
+  it("independe do cwd: XSDs oficiais e cópia do tiposBasico resolvem ancorados no módulo", () => {
+    const originalCwd = process.cwd()
+    const outside = mkdtempSync(join(tmpdir(), "nfce-infnfesupl-cwd-"))
+    const dir = mkdtempSync(join(tmpdir(), "nfce-infnfesupl-reg-"))
+    try {
+      process.chdir(outside)
+      expect(process.cwd()).not.toBe(originalCwd)
+      expect(existsSync(LEIAUTE_XSD)).toBe(true)
+      expect(existsSync(TIPOS_XSD)).toBe(true)
+      const xsdPath = writeTempInfNfeSuplSchema(dir, infNfeSuplElementDef(readFileSync(LEIAUTE_XSD, "utf8")))
+      expect(existsSync(xsdPath)).toBe(true)
+      expect(readFileSync(join(dir, "tiposBasico_v4.00.xsd"))).toEqual(readFileSync(TIPOS_XSD))
+    } finally {
+      process.chdir(originalCwd)
+      rmSync(dir, { recursive: true, force: true })
+      rmSync(outside, { recursive: true, force: true })
+    }
+    expect(process.cwd()).toBe(originalCwd)
+  })
+
+  it("recorte XSD sintaticamente quebrado é rejeitado", () => {
     const dir = mkdtempSync(join(tmpdir(), "nfce-infnfesupl-reg-"))
     try {
       const xmlPath = writeInfNfeSuplInstance(
@@ -1468,18 +1487,38 @@ describe("xmllint harness · regressão de infraestrutura (infNFeSupl)", () => {
         `<qrCode>${"https://qr.example.test/nfce?p=35123456789012345678901234567890123456789012|3|2"}</qrCode><urlChave>https://qr.example.test/consulta</urlChave>`,
       )
       assertXmllintRejects(writeTempInfNfeSuplSchema(dir, "<xs:element name=\"infNFeSupl\"><xs:broken"), xmlPath)
-
-      const brokenLocation = writeTempInfNfeSuplSchema(
-        dir,
-        infNfeSuplElementDef(leiaute),
-        "C:\\not-a-valid-uri\\tiposBasico_v4.00.xsd",
-      )
-      const brokenXml = writeInfNfeSuplInstance(dir, "broken-location.xml", "<qrCode>x</qrCode><urlChave>https://qr.example.test/consulta</urlChave>")
-      assertXmllintRejects(brokenLocation, brokenXml)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it("schemaLocation quebrado é o único motivo da falha (XML válido passa no schema correto)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nfce-infnfesupl-reg-"))
+    try {
+      const r = buildNfceXmlResult(snap(), { serie: 1, numero: 42, qrOnlineV3: { ...QR_ONLINE_V3 } })
+      const supl = r.xml.match(/<infNFeSupl>[\s\S]*?<\/infNFeSupl>/)?.[0]
+      expect(supl).toBeTruthy()
+      const xmlPath = join(dir, "valid.xml")
+      writeFileSync(
+        xmlPath,
+        `<?xml version="1.0" encoding="UTF-8"?>\n${supl!.replace("<infNFeSupl>", '<infNFeSupl xmlns="http://www.portalfiscal.inf.br/nfe">')}\n`,
+      )
+      const elementDef = infNfeSuplElementDef(leiaute)
+
+      // Controle positivo: mesmo XML + schema correto (tiposBasico copiado) => aceito.
+      assertXmllintAccepts(writeTempInfNfeSuplSchema(dir, elementDef), xmlPath)
+
+      // Só o schemaLocation muda; sem cópia automática e sem correção do valor.
+      rmSync(join(dir, "tiposBasico_v4.00.xsd"))
+      const badLocation = "C:\\not-a-valid-uri\\tiposBasico_v4.00.xsd"
+      const brokenLocation = writeTempInfNfeSuplSchema(dir, elementDef, badLocation)
+      expect(readFileSync(brokenLocation, "utf8")).toContain(`schemaLocation="${badLocation}"`)
+      expect(existsSync(join(dir, "tiposBasico_v4.00.xsd"))).toBe(false)
+      assertXmllintRejects(brokenLocation, xmlPath)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15_000)
 
   it("ausência real do validador é ENOENT fail-closed, nunca skip", () => {
     const result = runXmllintSchema("schema.xsd", "doc.xml", "xmllint-ausente-fiscal-b2-095")
