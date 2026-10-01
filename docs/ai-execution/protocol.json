@@ -131,6 +131,11 @@
       "dir": "ops-v4-fluxo-curto",
       "risk_tier": "ALTO",
       "titulo": "Operações V4 — fluxo curto"
+    },
+    "pessoas": {
+      "dir": "pessoas",
+      "risk_tier": "ALTO",
+      "titulo": "<PREENCHER>"
     }
   },
   "remote_layer": {
