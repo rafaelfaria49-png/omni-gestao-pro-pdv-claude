@@ -72,7 +72,11 @@ describe("serializeXmlEmbeddable · contrato do fragmento", () => {
     expect(a).toBe(b)
     expect(a.includes("<?xml")).toBe(false)
     expect(a.includes(BOM)).toBe(false)
-    expect(a).toBe(serializeXmlDocument({ tag: "NFe", children: [{ tag: "infNFe", text: "x" }] }, { declaration: false }))
+    // GOAL-023 · D01e: o fragmento embutível é COMPACTO (standalone pretty preservado).
+    expect(a).toBe("<NFe><infNFe>x</infNFe></NFe>")
+    expect(a.includes("\n")).toBe(false)
+    expect(a.includes("\r")).toBe(false)
+    expect(a.includes("\t")).toBe(false)
   })
 
   it("não deixa espaço fora da raiz", () => {
@@ -210,9 +214,19 @@ describe("buildNfceXmlAssinavel · produtor do caminho de assinatura/transmissã
     expect(sha256Hex(bytes(assinavel()))).toBe(sha256Hex(bytes(assinavel())))
   })
 
-  it("difere do standalone SOMENTE pela declaração — o conteúdo fiscal é idêntico", () => {
+  it("standalone segue pretty com declaração; assinável é compacto D01e (mesmo fiscal, outro esqueleto)", () => {
     const standalone = buildNfceXml(dryRunSnapshot("simples"), CTX)
-    expect(standalone).toBe(`${DECLARACAO}\n${assinavel()}`)
+    const emb = assinavel()
+    expect(standalone.startsWith(`${DECLARACAO}\n<NFe`)).toBe(true)
+    expect(standalone.includes("\n")).toBe(true)
+    expect(emb.includes("<?xml")).toBe(false)
+    expect(emb.includes("\n")).toBe(false)
+    expect(emb.includes("\r")).toBe(false)
+    expect(emb.includes("\t")).toBe(false)
+    // Mesmo documento fiscal: mesma chave e mesma estrutura parseada.
+    expect(parseXml(standalone.replace(`${DECLARACAO}\n`, "")).name).toBe("NFe")
+    expect(parseXml(emb).name).toBe("NFe")
+    expect(childElements(parseXml(emb)).length).toBe(1)
   })
 
   it("devolve o mesmo diagnóstico rico que o builder standalone", () => {

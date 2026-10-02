@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "fiscal",
-  "status": "RUNNING",
+  "status": "BLOCKED",
   "risk_tier": "ALTO",
-  "current_goal": "FISCAL-SEFAZ-CSTAT588-COMPACT-MESSAGE-023",
+  "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
-    "goals_done": 7,
+    "goals_done": 8,
     "goals_blocked": 1,
     "goals_imported": 0,
-    "ledger_lines": 8
+    "ledger_lines": 9
   },
-  "last_goal": "FISCAL-PILOT-HOMOLOGATION-SECOND-ATTEMPT-022E",
+  "last_goal": "FISCAL-SEFAZ-CSTAT588-COMPACT-MESSAGE-023",
   "last_result": "DONE",
-  "last_ratified_at": "2026-09-22T09:44:09.481Z"
+  "last_ratified_at": "2026-09-30T20:10:05.016Z"
 }

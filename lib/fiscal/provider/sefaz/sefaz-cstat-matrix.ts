@@ -39,7 +39,7 @@ import type { SefazServico } from "./sefaz-endpoint-catalog"
  * alterada — vai para a trilha de auditoria junto com a classificação, de modo que se saiba
  * QUAL matriz classificou um documento.
  */
-export const SEFAZ_CSTAT_MATRIX_VERSION = "018.2" as const
+export const SEFAZ_CSTAT_MATRIX_VERSION = "023.0" as const
 
 /**
  * Desfecho canônico de um `cStat`.
@@ -73,6 +73,8 @@ export type SefazResponseReason =
   | "EVENTO_REGISTRADO"
   /** Rejeição definitiva lida e reconhecida na matriz. */
   | "REJEICAO_TERMINAL"
+  /** `588` em NFeAutorizacao4 — rejeição de formato por caracteres de edição (regra D01e). */
+  | "REJEICAO_FORMATO_D01E"
   /** `103`/`105` — lote com a SEFAZ, aguardando processamento. */
   | "LOTE_EM_PROCESSAMENTO"
   /** `656` — consumo indevido. Parada dura. */
@@ -318,6 +320,27 @@ const ENTRADAS: readonly SefazCStatEntry[] = Object.freeze([
      * como erro nem como autorização para retransmitir (D7).
      */
     consequencias: consequencias({ numeroConsumido: true, requiresConsultation: true }),
+  }),
+  Object.freeze({
+    cStat: "588",
+    outcome: "REJECTED",
+    reason: "REJEICAO_FORMATO_D01E",
+    rotulo: "Rejeicao por caracteres de edicao entre tags ou nas bordas (D01e)",
+    /**
+     * ⛔ SOMENTE em NFeAutorizacao4. Em consulta, 588 pode significar rejeição da
+     * PRÓPRIA mensagem de consulta — generalizá-lo como rejeição do documento
+     * autorizaria conclusões fiscais sobre transmissão que nunca ocorreu. Fora da
+     * autorização, o lookup devolve SERVICE_MISMATCH (incerto, nunca REJECTED).
+     */
+    servicos: Object.freeze(["NFeAutorizacao4"] as const),
+    exigeProtocolo: false,
+    exigeXmlAutorizado: false,
+    exigeRecibo: false,
+    /**
+     * Rejeição de formato: o documento NÃO foi processado, o número NÃO foi consumido,
+     * nada há a inutilizar e nada há a consultar. Terminal sem retry automático.
+     */
+    consequencias: consequencias({ terminal: true }),
   }),
   Object.freeze({
     cStat: "217",
