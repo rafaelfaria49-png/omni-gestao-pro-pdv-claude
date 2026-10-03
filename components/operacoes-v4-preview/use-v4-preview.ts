@@ -1025,10 +1025,11 @@ export function buildVals(
   /** Fila / Bancada / SLA abrem o workspace na Execução — identidade de produção, não o stage genérico. */
   const openOSProducao = (id: string) => openOSFromRail(id, false, "execucao");
 
-  // Nova OS criada (REAL) pelo modal → fecha o modal, abre a OS recém-criada no workspace
-  // e recarrega a lista. Recebe apenas o id resultante; a identidade/financeiro são
-  // hidratados pelo detalhe (`useOrdemV4`). Uma OS nova nasce "aberta" → etapa "entrada".
-  const onOSCriada = (osId: string) => {
+  // Nova OS criada (REAL) pelo modal → o status/stage inicial vêm da OS canônica
+  // retornada pelo servidor; o detalhe (`useOrdemV4`) completa a hidratação.
+  const onOSCriada = (criada: OrdemServico | string) => {
+    const osId = typeof criada === "string" ? criada : criada.id;
+    const status = typeof criada === "string" ? "aberta" : resolverStatusV4(criada);
     // R04: criar outra OS com edição suja pendente também passa pela guarda
     // (a OS criada já existe no servidor; só a SELEÇÃO é bloqueada).
     sairComGuarda(
@@ -1037,8 +1038,8 @@ export function buildVals(
           novaOS: false,
           novoAtendimento: false,
           selectedOsId: osId,
-          status: "aberta",
-          stage: "entrada",
+          status,
+          stage: stageForStatus(status),
           module: "workspace",
           view: "cockpit",
           menu: null,
