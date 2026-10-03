@@ -1,130 +1,128 @@
-﻿# TRACK — Operações V4 / fluxo curto
+# TRACK — Operações V4 / fluxo curto
 
 <!-- AEP:TRACK
 {
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
   "title": "Operações V4 — fluxo curto",
-  "plan_rev": 7,
+  "plan_rev": 8,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
 -->
 
 Fonte de intenção: plano funcional de 19/09/2026 e contrato humano
-OPS-V4-FLUXO-CURTO-003, plan_rev 7, fornecido em 30/09/2026.
+OPS-V4-FLUXO-CURTO-004, plan_rev 8, fornecido em 03/10/2026.
 
 ## Escopo ativo
 
-Somente OPS-V4-FLUXO-CURTO-003 está ativo/elegível, com contrato em
-goals/OPS-V4-FLUXO-CURTO-003.md.
+Somente OPS-V4-FLUXO-CURTO-004 está ativo/elegível, com contrato em
+goals/OPS-V4-FLUXO-CURTO-004.md.
 
-OPS-V4-FLUXO-CURTO-001 e OPS-V4-FLUXO-CURTO-002 permanecem DONE.
+OPS-V4-FLUXO-CURTO-001, 002 e 003 permanecem DONE.
 Não reabrir.
 
-GOALs 004–008 não são elegíveis.
-Não criar outro GOAL para corrigir o 003.
+GOALs 005–008 não são elegíveis.
+Não criar outro GOAL para corrigir o 004 (004B, 004-FIX, 004-RETRY, 004C).
 
-O objetivo é criar a OS de Serviço já autorizado já comercialmente
-aprovada, com orçamento real aprovado e autorização auditável,
-abrindo Execução em estado Aprovada/Aguardando início.
-O início da execução continua sendo decisão explícita do operador.
+O objetivo é transformar a etapa Entrada da Operações V4 em espaço de
+complementação operacional: dados da abertura aparecem como registrados,
+pendências honestas (registrado / falta complementar / opcional) derivam
+da OS real, a navegação entre Recepção, Segurança, Inspeção e Evidências
+é livre e o salvamento é explícito e localizado, sem segundo wizard.
 
-Não criar V5, duplicar funcionalidades nem reconstruir Nova OS.
-Entrada como complementação pertence ao GOAL 004.
+Não criar V5, duplicar actions V3 nem reconstruir a Nova OS.
 Retorno/garantia do GOAL 007 permanece fora deste escopo.
 
 ## Materialização humana e ativação
 
-O EXECUTION_PROTOCOL.md, §2, determina:
-“Adicionar ou remover um GOAL em `goals/` é ato **humano**”.
+O EXECUTION_PROTOCOL.md, §2, determina que adicionar ou remover um GOAL
+em goals/ é ato humano.
 
-O proprietário materializa o GOAL 003 e este TRACK rev 7 em checkout
-de planejamento baseado em origin/main.
+O proprietário materializa o GOAL 004 e este TRACK rev 8 no checkout de
+planejamento C:/Projetos/omni-gestao-ops-v4-fluxo-curto-004-plan,
+branch plan/ops-v4-fluxo-curto-004, baseado em origin/main.
 
 Depois, seguir o rito oficial:
-registry → verify → commit/PR exclusivo de planejamento → integração
-em main → criação da worktree de produto sobre a main atualizada
-→ status → open.
+registry → verify → verify --all → commit/PR exclusivo de planejamento
+→ merge normal em main → criação da worktree de produto sobre a main
+atualizada → status → open.
 
 Não editar state.json, LEDGER.jsonl, REGISTRY.md ou GATES.md à mão.
 Não deixar alterações de goals/** no diff de produto do check 8.
 
 ## Ambiente planejado
 
-Branch: goal/ops-v4-fluxo-curto-003.
-Worktree: C:/Projetos/omni-gestao-ops-v4-fluxo-curto-003.
+Branch: goal/ops-v4-fluxo-curto-004.
+Worktree: C:/Projetos/omni-gestao-ops-v4-fluxo-curto-004.
 Base: origin/main vigente na ativação, após integração do planejamento.
 
-Base conferida em 30/09/2026:
-c3073f18efa9cbed2d1a1b0f63594b5747274832.
+Base conferida em 03/10/2026:
+556256859408e070d72365cc5fd3cdc999893d91.
 
-A base de produto deve conter esse merge do GOAL 002 ou descendente.
-Preservar outras branches/worktrees e processos externos.
+A base de produto deve conter esse merge do GOAL 003 ou descendente.
+Preservar outras branches/worktrees (inclusive C:/Projetos/omni-gestao,
+ocupada por outra frente) e processos externos.
 
 ## Contrato funcional
 
-Somente a escolha explícita Serviço já autorizado registra aprovação.
+A Entrada deixa de ser wizard: sem numeração de passos, sem progresso
+"x de 4", sem Anterior, sem Salvar e continuar, sem avanço automático.
+Os quatro grupos viram áreas independentes de complementação.
 
-Criar server-side o snapshot comercial final antes de createOS:
-itens, serviços, orçamento materializado aprovado, autorização comercial,
-status aprovado, garantia prevista e total canônico.
+Na entrada inicial da instância (loja+OS), com carga estabelecida, a área
+selecionada é a primeira pendência real "falta complementar"; sem
+pendência acionável, estado honesto "Entrada já complementada".
+Escolha manual ou edição congelam a área: refresh não a troca.
 
-Timestamp e operador da autorização nascem no servidor/sessão.
-Não fabricar enviadoEm.
-Não compor a abertura por três actions independentes no browser.
+Pendências derivam só de derivarPendenciasEntradaV4(realOS):
+registrado, falta complementar, opcional. Opcional nunca é erro.
+Nenhuma pendência bloqueia status, etapa ou navegação.
 
-Usar o retorno canônico para abrir a OS Aprovada no stage Execução,
-com CTA Iniciar execução. Não iniciar serviço automaticamente.
+"Nenhum acessório" é resposta válida (evento acessorio_registrado com
+presentes 0). Fotos e assinatura são opcionais. Estado físico padrão só
+vira registro depois de salvamento real que inclua estado físico.
+Face ID/biometria ausentes são "não informado", nunca "não".
 
-Preservar múltiplos serviços e aceitar a linha atual válida no submit,
-sem confirmação redundante. Busy-lock impede criação duplicada pela
-mesma interação; falha preserva dados e modal.
-
-precisa_diagnostico continua aberta/Entrada, sem preço obrigatório,
-autorização comercial ou orçamento aprovado.
-retorno_garantia mantém o comportamento vigente.
-Nenhum backfill ou reclassificação de OS legadas.
+Salvar complementos não muda operacaoStatusV3, status comercial,
+orçamento, valorTotal, execução ou entrega. Sem autosave.
+Rascunho, mesclagem, conflito e guarda salvar/descartar/cancelar do
+GOAL 001 permanecem intactos.
 
 ## Gates
 
-Somente G-AEP-CORE está liberado, restrito ao cadastro e à reconciliação
-desta trilha. Não alterar as regras que julgam o GOAL.
+Nenhum gate de caminho liberado (gates_liberados vazio).
 
-A autorização anterior de G-CONFIG-DEPLOY para dependências de teste
-não se aplica ao GOAL 003. Não editar package.json, lockfile ou
-configuração global por esta revisão.
-
-Schema, migrations, seeds, auth, CI, configuração de deploy, .env e
-produção mutante continuam fechados.
+Schema, migrations, seeds, auth, proxy, CI, package.json, lockfile,
+Node/Vercel, configuração de deploy, .env e produção mutante continuam
+fechados.
 
 Não alterar app/actions/operacoes.ts.
 Escrever somente na allowlist do GOAL/open.
 
-Path indispensável fora da allowlist exige parada antes da edição
-e indicação do motivo técnico concreto.
+Única exceção fora de lib/operacoes-v4 e components/operacoes-v4-preview:
+lib/operacoes-v3/prova-entrada-actions.ts, metadata aditivo (fatias) no
+evento da prova de entrada, conforme demonstração do GOAL. Qualquer outro
+path de lib/operacoes-v3/** exige parada antes da edição e indicação do
+motivo técnico concreto.
 
-Não abrir caixa, receber pagamento, criar venda/recebimento/título
-financeiro, movimentar caixa ou estoque, reservar estoque novo,
-entregar OS, iniciar garantia operacional, enviar WhatsApp, emitir
-fiscal, iniciar execução ou criar/atribuir técnico.
+Não abrir/fechar caixa, receber pagamento, criar venda/recebimento/título,
+movimentar caixa ou estoque, entregar OS, iniciar execução ou diagnóstico,
+aprovar orçamento, enviar WhatsApp, emitir fiscal, fazer backfill ou
+reclassificar OS antigas.
 
 ## Prova de resultado
 
-Executar A01–A10, U01–U07, test_command do GOAL, regressões diretamente
-tocadas e relevantes dos GOALs 001/002, typecheck, ESLint focado,
-build seguro, diff --check, AEP verify, verify --all e check.
+Executar A01–A14, U01–U12, test_command do GOAL, regressões dos GOALs
+001/002/003, typecheck, ESLint focado, build, diff --check, AEP verify,
+verify --all e check.
 
 Usar PostgreSQL local descartável, nunca produção.
+Cenário P1 (autorizado) e P2 (diagnóstico) com read-back de status
+preservado e ausência de efeitos financeiros, caixa, estoque, entrega,
+início de execução ou diagnóstico.
 
-Provar criação/read-back de uma única OS no storeId correto,
-Troca de tela 300/92/90, status aprovado, orçamento real aprovado,
-total 300, custo 92, garantias coerentes e autorização persistida,
-sem efeitos financeiros, caixa, estoque, entrega ou início de execução.
-
-Executar cenário separado de diagnóstico sem preço.
-
-E2E em e2e/specs/operacoes-v4-fluxo-curto-003.spec.ts.
+E2E em e2e/specs/operacoes-v4-fluxo-curto-004.spec.ts.
 Usar porta isolada 3010 ou próxima disponível, sem matar processos.
 Sincronizar prontidão real; não usar sleeps arbitrários, skip/fixme,
 .first() arbitrário, catch para engolir falha ou reload para mascarar race.
@@ -134,18 +132,19 @@ O test_command isolado não substitui homologação e R.
 ## Publicação e revisão independente
 
 Após validação, conferir diff e allowlist, criar commits normais,
-push e PR contra main, com Vercel Preview e candidato final.
+push e PR contra main, com Vercel omni-gestao e omni-gestao-pro em SUCCESS.
 
 Sem amend, rebase, force ou contorno de checks.
 
-Executor OpenAI exige R de outra família, preferencialmente
-Anthropic/Claude, sobre o HEAD candidato e suas evidências.
+Executor Anthropic exige R de outra família: OpenAI, preferencialmente
+GPT-6.1, sobre o HEAD candidato exato e suas evidências.
 
-Entregar o pacote de R definido no GOAL e parar com:
+Sem R OpenAI real disponível, entregar o pacote de R definido no GOAL e
+parar com:
 
-R_STATUS=AGUARDANDO_ANTHROPIC
+R_STATUS=AGUARDANDO_OPENAI
 AEP_CLOSE=PENDENTE
 MERGE=PENDENTE
 
 Não executar AEP close nem mergear o produto antes da R.
-Não autodeclarar R e não iniciar GOAL 004.
+Não autodeclarar R e não iniciar GOAL 005.
