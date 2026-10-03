@@ -1,47 +1,49 @@
 import { describe, expect, it } from "vitest";
 import { seedDadosBasicos } from "./dados-basicos-form";
 import { seedEntradaEditor } from "./entrada-form";
-import type { PendenciaEntradaV4 } from "./entrada-pendencias";
+import type { ChavePendenciaEntradaV4, EstadoPendenciaEntradaV4, PendenciaEntradaV4 } from "./entrada-pendencias";
+import * as workspace from "./entrada-workspace";
 import {
   ENTRADA_GROUPS,
   ENTRADA_GROUP_IDS,
+  ENTRADA_PENDENCIAS_POR_GRUPO,
   ENTRADA_SECTIONS,
   ENTRADA_SECTION_IDS,
-  deriveEntradaGroupCompletion,
-  deriveEntradaSectionCompletion,
-  entradaGroupProgress,
+  classificarGruposEntradaV4,
+  entradaComplementadaV4,
   getEntradaGroup,
   getEntradaSection,
   isEntradaGroupDirty,
   isEntradaSectionDirty,
-  nextEntradaGroup,
-  previousEntradaGroup,
+  primeiraAreaEntradaV4,
 } from "./entrada-workspace";
 
-function pendencias(values: Partial<Record<PendenciaEntradaV4["chave"], boolean>> = {}): PendenciaEntradaV4[] {
-  return [
-    ["dados-basicos", true],
-    ["identificacao", true],
-    ["estado-avarias-acesso", true],
-    ["checklist", true],
-    ["acessorios", true],
-    ["fotos", false],
-  ].map(([chave, temContrato]) => ({
-    chave: chave as PendenciaEntradaV4["chave"],
-    rotulo: String(chave),
-    preenchido: values[chave as PendenciaEntradaV4["chave"]] === true,
-    temContrato: temContrato as boolean,
-  }));
+const OPCIONAIS: ChavePendenciaEntradaV4[] = ["acesso", "fotos", "assinatura"];
+const TODAS: ChavePendenciaEntradaV4[] = [
+  "dados-basicos", "identificacao", "acesso", "acessorios", "estado-fisico", "checklist", "fotos", "assinatura",
+];
+
+/** Lista sintética: chaves em `registradas` têm dado real; as demais faltam ou são opcionais. */
+function pendencias(registradas: ChavePendenciaEntradaV4[] = []): PendenciaEntradaV4[] {
+  return TODAS.map((chave) => {
+    const preenchido = registradas.includes(chave);
+    const opcional = OPCIONAIS.includes(chave);
+    const estado: EstadoPendenciaEntradaV4 = preenchido ? "registrado" : opcional ? "opcional" : "falta_complementar";
+    return { chave, rotulo: chave, preenchido, temContrato: true, opcional, estado };
+  });
 }
 
-describe("workspace da Entrada — 4 grupos operacionais", () => {
-  it("1. navega por quatro grupos, não por sete etapas artificiais", () => {
+describe("workspace da Entrada — áreas independentes de complementação (GOAL 004)", () => {
+  it("1. quatro áreas independentes, sem numeração de passos", () => {
     expect(ENTRADA_GROUP_IDS).toEqual(["recepcao", "seguranca-custodia", "inspecao", "evidencias"]);
-    expect(ENTRADA_GROUPS.map((group) => group.step)).toEqual([1, 2, 3, 4]);
+    expect(ENTRADA_GROUPS.every((group) => !("step" in group))).toBe(true);
+    expect(new Set(ENTRADA_GROUPS.map((group) => group.label)).size).toBe(4);
   });
 
-  it("2. cada grupo tem rótulo único", () => {
-    expect(new Set(ENTRADA_GROUPS.map((group) => group.label)).size).toBe(4);
+  it("2. A04/A05 — não há helpers de avanço sequencial (sem anterior/próximo grupo)", () => {
+    expect("nextEntradaGroup" in workspace).toBe(false);
+    expect("previousEntradaGroup" in workspace).toBe(false);
+    expect("entradaGroupProgress" in workspace).toBe(false);
   });
 
   it("3. preserva os contratos internos das sete seções de persistência", () => {
@@ -57,55 +59,65 @@ describe("workspace da Entrada — 4 grupos operacionais", () => {
     expect(ENTRADA_SECTIONS.filter((section) => !section.canSave).map((section) => section.id)).toEqual(["fotos"]);
   });
 
-  it("4. Recepção agrupa o que já veio da abertura da OS", () => {
+  it("4. Recepção agrupa o que já veio da abertura; Evidências não tem salvar de grupo", () => {
     expect([...getEntradaGroup("recepcao").sections]).toEqual(["dados-basicos", "identificacao"]);
     expect([...getEntradaGroup("seguranca-custodia").sections]).toEqual(["seguranca", "acessorios"]);
     expect([...getEntradaGroup("evidencias").sections]).toEqual(["fotos"]);
+    expect(getEntradaGroup("evidencias").canSave).toBe(false);
+    expect(ENTRADA_PENDENCIAS_POR_GRUPO.evidencias).toEqual(["fotos", "assinatura"]);
   });
 
-  it("5. avança pelos grupos sem saltos", () => {
-    expect(ENTRADA_GROUP_IDS.slice(0, -1).map(nextEntradaGroup)).toEqual(ENTRADA_GROUP_IDS.slice(1));
-    expect(ENTRADA_GROUP_IDS.slice(1).map(previousEntradaGroup)).toEqual(ENTRADA_GROUP_IDS.slice(0, -1));
+  it("5. sem OS real nada é afirmado (status nulo, Recepção como área neutra)", () => {
+    expect(classificarGruposEntradaV4([])).toBeNull();
+    expect(primeiraAreaEntradaV4(null)).toBe("recepcao");
+    expect(entradaComplementadaV4(null)).toBe(false);
   });
 
-  it("6. não oferece grupo anterior em Recepção nem posterior em Evidências", () => {
-    expect(previousEntradaGroup("recepcao")).toBeNull();
-    expect(nextEntradaGroup("evidencias")).toBeNull();
+  it("6. A01 — com a abertura registrada, Recepção é 'registrado' (não 'faltando tudo')", () => {
+    const status = classificarGruposEntradaV4(pendencias(["dados-basicos", "identificacao"]))!;
+    expect(status.recepcao).toBe("registrado");
+    expect(status["seguranca-custodia"]).toBe("falta_complementar");
+    expect(status.inspecao).toBe("falta_complementar");
+    expect(status.evidencias).toBe("opcional");
   });
 
-  it("7. grupos nascem pendentes quando a OS não tem dados reais", () => {
-    expect(Object.values(deriveEntradaGroupCompletion(pendencias()))).toEqual([false, false, false, false]);
+  it("7. A02 — área inicial = primeira com complemento faltando", () => {
+    expect(primeiraAreaEntradaV4(classificarGruposEntradaV4(pendencias(["dados-basicos", "identificacao"])))).toBe(
+      "seguranca-custodia",
+    );
+    expect(primeiraAreaEntradaV4(classificarGruposEntradaV4(pendencias()))).toBe("recepcao");
+    expect(
+      primeiraAreaEntradaV4(
+        classificarGruposEntradaV4(pendencias(["dados-basicos", "identificacao", "acessorios"])),
+      ),
+    ).toBe("inspecao");
   });
 
-  it("8. Recepção só fecha com recepção e identificação reais", () => {
-    const soRecepcao = deriveEntradaGroupCompletion(pendencias({ "dados-basicos": true }));
-    expect(soRecepcao.recepcao).toBe(false);
-    const completa = deriveEntradaGroupCompletion(pendencias({ "dados-basicos": true, identificacao: true }));
-    expect(completa.recepcao).toBe(true);
+  it("8. A06 — acessórios registrados (inclusive nenhum) fecham Segurança mesmo com acesso opcional vazio", () => {
+    const status = classificarGruposEntradaV4(pendencias(["dados-basicos", "identificacao", "acessorios"]))!;
+    expect(status["seguranca-custodia"]).toBe("registrado");
   });
 
-  it("9. Inspeção usa prova de entrada + checklist", () => {
-    const completion = deriveEntradaGroupCompletion(pendencias({ "estado-avarias-acesso": true, checklist: true }));
-    expect(completion["seguranca-custodia"]).toBe(true);
-    expect(completion.inspecao).toBe(true);
+  it("9. A07 — Evidências vazia é opcional e não impede 'Entrada já complementada'", () => {
+    const status = classificarGruposEntradaV4(
+      pendencias(["dados-basicos", "identificacao", "acessorios", "estado-fisico", "checklist"]),
+    )!;
+    expect(status.evidencias).toBe("opcional");
+    expect(entradaComplementadaV4(status)).toBe(true);
+    expect(primeiraAreaEntradaV4(status)).toBe("recepcao");
   });
 
-  it("10. Evidências só fecha com fotos ou assinatura reais", () => {
-    expect(deriveEntradaGroupCompletion(pendencias({ acessorios: true })).evidencias).toBe(false);
-    expect(deriveEntradaGroupCompletion(pendencias({ fotos: true })).evidencias).toBe(true);
-    expect(entradaGroupProgress(deriveEntradaGroupCompletion(pendencias()))).toEqual({ completed: 0, total: 4 });
+  it("10. Inspeção só fica registrada com estado físico e checklist reais", () => {
+    const soEstado = classificarGruposEntradaV4(pendencias(["estado-fisico"]))!;
+    expect(soEstado.inspecao).toBe("falta_complementar");
+    const ambos = classificarGruposEntradaV4(pendencias(["estado-fisico", "checklist"]))!;
+    expect(ambos.inspecao).toBe("registrado");
   });
 
-  it("11. progresso completo é 4 de 4", () => {
-    const all = pendencias({
-      "dados-basicos": true,
-      identificacao: true,
-      "estado-avarias-acesso": true,
-      checklist: true,
-      acessorios: true,
-      fotos: true,
-    });
-    expect(entradaGroupProgress(deriveEntradaGroupCompletion(all))).toEqual({ completed: 4, total: 4 });
+  it("11. evidência real vira registrado; complementada exige nada faltando", () => {
+    const status = classificarGruposEntradaV4(pendencias(["fotos"]))!;
+    expect(status.evidencias).toBe("registrado");
+    expect(entradaComplementadaV4(status)).toBe(false);
   });
 
   it("12. rascunho em Dados básicos suja só Recepção", () => {

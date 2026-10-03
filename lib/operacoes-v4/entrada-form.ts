@@ -79,15 +79,32 @@ export type {
   TipoAvariaV3,
 };
 
-/** Credenciais no editor (campos controlados — strings/booleans, sem opcionais). */
+/**
+ * Credenciais no editor (campos controlados). Face ID/biometria são tri-estado
+ * (OPS-V4-FLUXO-CURTO-004): `null` = não informado — ausente nunca vira "não".
+ */
 export interface EntradaCredenciaisEditorV4 {
   pin: string;
   senha: string;
   senhaTipo: SenhaTipoV3;
   contaGoogle: string;
   contaApple: string;
-  faceId: boolean;
-  biometria: boolean;
+  faceId: boolean | null;
+  biometria: boolean | null;
+}
+
+/** Wrapper `salvarAcessorios`: registro explícito mesmo sem diferença da semente ("nenhum acessório"). */
+export interface OpcoesSalvarAcessoriosV4 {
+  registrarSemAlteracao?: boolean;
+}
+
+/** Wrapper `salvarProvaEntrada`: confirmação explícita do estado físico exibido (inclui estado e avarias). */
+export interface OpcoesSalvarProvaEntradaV4 {
+  confirmarEstadoFisico?: boolean;
+}
+
+function triEstado(v: unknown): boolean | null {
+  return v === true ? true : v === false ? false : null;
 }
 
 /** Estado completo do editor de Entrada da V4. */
@@ -137,8 +154,8 @@ export function seedEntradaEditor(os: OrdemServico | null | undefined): EntradaE
       senhaTipo: cred.senhaTipo ?? "numerica",
       contaGoogle: str(cred.contaGoogle),
       contaApple: str(cred.contaApple),
-      faceId: cred.faceId === true,
-      biometria: cred.biometria === true,
+      faceId: triEstado(cred.faceId),
+      biometria: triEstado(cred.biometria),
     },
     acessorios: prova.acessorios.map((a) => ({ ...a })),
     checklist: checklist.map((c) => ({ ...c })),
@@ -495,19 +512,30 @@ export function patchTocadoCredenciais(
   );
   const valores: Partial<CredenciaisEntradaV3> = { ...texto.valores };
   const esperados: Partial<CredenciaisEntradaV3> = { ...texto.esperados };
+  const limpar = [...texto.limpar];
   if (input.senhaTipo !== undefined && input.senhaTipo !== semente.senhaTipo) {
     valores.senhaTipo = input.senhaTipo;
     esperados.senhaTipo = semente.senhaTipo;
   }
-  if (input.faceId !== undefined && input.faceId !== semente.faceId) {
-    valores.faceId = input.faceId;
-    esperados.faceId = semente.faceId;
+  // Tri-estado (GOAL 004): chave presente com `undefined` = não informado; chave
+  // ausente = intocada. A baseline do servidor compara ausente ≡ false, por isso
+  // semente não informada viaja como false. Voltar a "não informado" usa a
+  // limpeza explícita já existente.
+  for (const k of ["faceId", "biometria"] as const) {
+    if (!(k in input)) continue;
+    const novo = input[k];
+    const base = semente[k];
+    if (novo !== undefined) {
+      if (novo !== base) {
+        valores[k] = novo;
+        esperados[k] = base ?? false;
+      }
+    } else if (base !== null && base !== undefined) {
+      limpar.push(k);
+      esperados[k] = base;
+    }
   }
-  if (input.biometria !== undefined && input.biometria !== semente.biometria) {
-    valores.biometria = input.biometria;
-    esperados.biometria = semente.biometria;
-  }
-  return { valores, limpar: texto.limpar, esperados };
+  return { valores, limpar, esperados };
 }
 
 function patchTocadoTextoCredenciais(
@@ -735,8 +763,9 @@ export function toProvaEntradaInput(editor: EntradaEditorV4): SalvarProvaEntrada
       senhaTipo: c.senhaTipo,
       contaGoogle: clean(c.contaGoogle),
       contaApple: clean(c.contaApple),
-      faceId: c.faceId,
-      biometria: c.biometria,
+      // Não informado não viaja (nunca vira false no intent).
+      faceId: c.faceId ?? undefined,
+      biometria: c.biometria ?? undefined,
     },
   };
 }

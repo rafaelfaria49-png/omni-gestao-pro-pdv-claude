@@ -36,7 +36,21 @@ describe("seedEntradaEditor", () => {
     expect(e.checklist.every((c) => c.estado === "nao_testado")).toBe(true);
     expect(e.identificacao.imei).toBe("");
     expect(e.credenciais.senhaTipo).toBe("numerica");
+    // A09 (GOAL 004): ausente é "não informado" (null), nunca "não" (false).
+    expect(e.credenciais.faceId).toBeNull();
+    expect(e.credenciais.biometria).toBeNull();
+  });
+
+  it("A09 — Face ID/biometria persistidos mantêm sim/não; ausentes ficam não informados", () => {
+    const os = {
+      provaEntradaV3: { versao: 1, criadoEm: "x", credenciais: { faceId: false, biometria: true } },
+    } as unknown as OrdemServico;
+    const e = seedEntradaEditor(os);
     expect(e.credenciais.faceId).toBe(false);
+    expect(e.credenciais.biometria).toBe(true);
+    const so = seedEntradaEditor({ provaEntradaV3: { versao: 1, criadoEm: "x", credenciais: { faceId: true } } } as unknown as OrdemServico);
+    expect(so.credenciais.faceId).toBe(true);
+    expect(so.credenciais.biometria).toBeNull();
   });
 
   it("semeia dos campos legados (IMEI, senha, acessórios)", () => {
@@ -96,6 +110,16 @@ describe("mapeadores → inputs das actions V3", () => {
     expect(out.estadoFisico.find((c) => c.componente === "tela")!.status).toBe("avariado");
     expect(out.credenciais.senha).toBe("abcd");
     expect(out.credenciais.contaGoogle).toBeUndefined();
+  });
+
+  it("A09 — toProvaEntradaInput não transforma 'não informado' em false", () => {
+    const e = seedEntradaEditor(osVazia);
+    const out = toProvaEntradaInput(e);
+    expect("faceId" in out.credenciais).toBe(true);
+    expect(out.credenciais.faceId).toBeUndefined();
+    expect(out.credenciais.biometria).toBeUndefined();
+    e.credenciais.faceId = false;
+    expect(toProvaEntradaInput(e).credenciais.faceId).toBe(false);
   });
 
   it("toAcessoriosInput e toChecklistInput devolvem cópias do estado", () => {
@@ -237,6 +261,24 @@ describe("patchTocadoIdentificacao/patchTocadoCredenciais/fatiaTocada (R02)", ()
     const limpo = patchTocadoCredenciais({ pin: undefined }, { ...seedCred, pin: "1234" });
     expect(limpo.limpar).toEqual(["pin"]);
     expect(limpo.esperados).toEqual({ pin: "1234" });
+  });
+
+  it("A09 — tri-estado: não informado intocado não escreve; escolher sim/não escreve; voltar limpa", () => {
+    const naoInformado = { ...seedCred, faceId: null, biometria: null };
+    const intocado = patchTocadoCredenciais({ faceId: undefined, biometria: undefined }, naoInformado);
+    expect(intocado.valores).toEqual({});
+    expect(intocado.limpar).toEqual([]);
+    expect(intocado.esperados).toEqual({});
+
+    const nao = patchTocadoCredenciais({ faceId: false, biometria: undefined }, naoInformado);
+    expect(nao.valores).toEqual({ faceId: false });
+    // A baseline do servidor compara ausente ≡ false (contrato existente).
+    expect(nao.esperados).toEqual({ faceId: false });
+
+    const voltar = patchTocadoCredenciais({ faceId: undefined, biometria: true }, { ...naoInformado, faceId: true, biometria: true });
+    expect(voltar.valores).toEqual({});
+    expect(voltar.limpar).toEqual(["faceId"]);
+    expect(voltar.esperados).toEqual({ faceId: true });
   });
 
   it("fatiaTocada compara por valor contra a semente", () => {
