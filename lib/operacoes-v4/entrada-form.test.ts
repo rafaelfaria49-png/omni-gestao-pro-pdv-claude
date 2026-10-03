@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addAvaria,
+  aplicarPatchIntencionalProvaEntrada,
   cycleChecklistEstado,
   fatiaTocada,
   limpezasExplicitas,
@@ -21,6 +22,7 @@ import {
   toggleAcessorio,
 } from "./entrada-form";
 import type { OrdemServico } from "@/types/os";
+import { lerProvaEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
 
 const osVazia = {} as OrdemServico;
 
@@ -257,7 +259,7 @@ describe("patchTocadoIdentificacao/patchTocadoCredenciais/fatiaTocada (R02)", ()
   it("credenciais: texto, enum e booleanos com baseline própria", () => {
     const r = patchTocadoCredenciais({ pin: "9999", faceId: true }, { ...seedCred });
     expect(r.valores).toEqual({ pin: "9999", faceId: true });
-    expect(r.esperados).toEqual({ pin: "", faceId: false });
+    expect(r.esperados).toEqual({ pin: "", faceId: { informado: true, valor: false } });
     const limpo = patchTocadoCredenciais({ pin: undefined }, { ...seedCred, pin: "1234" });
     expect(limpo.limpar).toEqual(["pin"]);
     expect(limpo.esperados).toEqual({ pin: "1234" });
@@ -272,18 +274,70 @@ describe("patchTocadoIdentificacao/patchTocadoCredenciais/fatiaTocada (R02)", ()
 
     const nao = patchTocadoCredenciais({ faceId: false, biometria: undefined }, naoInformado);
     expect(nao.valores).toEqual({ faceId: false });
-    // A baseline do servidor compara ausente ≡ false (contrato existente).
-    expect(nao.esperados).toEqual({ faceId: false });
+    expect(nao.esperados).toEqual({ faceId: { informado: false } });
 
     const voltar = patchTocadoCredenciais({ faceId: undefined, biometria: true }, { ...naoInformado, faceId: true, biometria: true });
     expect(voltar.valores).toEqual({});
     expect(voltar.limpar).toEqual(["faceId"]);
-    expect(voltar.esperados).toEqual({ faceId: true });
+    expect(voltar.esperados).toEqual({ faceId: { informado: true, valor: true } });
   });
 
   it("fatiaTocada compara por valor contra a semente", () => {
     expect(fatiaTocada([{ a: 1 }], [{ a: 1 }])).toBe(false);
     expect(fatiaTocada([{ a: 2 }], [{ a: 1 }])).toBe(true);
     expect(fatiaTocada(undefined, [])).toBe(true);
+  });
+});
+
+describe.each(["faceId", "biometria"] as const)("R P2 #1 — baseline de presença: %s", (chave) => {
+  const casos = [
+    { id: "C1", base: undefined, editado: true, servidor: false, conflito: true },
+    { id: "C2", base: undefined, editado: false, servidor: true, conflito: true },
+    { id: "C3", base: false, editado: true, servidor: undefined, conflito: true },
+    { id: "C4", base: true, editado: false, servidor: undefined, conflito: true },
+    { id: "C5", base: undefined, editado: true, servidor: undefined, conflito: false },
+    { id: "C6", base: false, editado: undefined, servidor: false, conflito: false },
+    { id: "C7", base: false, editado: undefined, servidor: true, conflito: true },
+  ];
+  const osCom = (valor: boolean | undefined) => ({
+    provaEntradaV3: { versao: 1, credenciais: valor === undefined ? {} : { [chave]: valor } },
+  }) as unknown as OrdemServico;
+
+  it.each(casos)("$id — atravessa o comparador real do write-path após serialização", (caso) => {
+    const semente = seedEntradaEditor(osCom(caso.base));
+    const editor = { ...semente, credenciais: { ...semente.credenciais, [chave]: caso.editado ?? null } };
+    const tocado = patchTocadoCredenciais(toProvaEntradaInput(editor).credenciais, semente.credenciais);
+    // Mesma fronteira JSON da server-action: ausência não pode desaparecer.
+    const intent = JSON.parse(JSON.stringify({
+      credenciais: { valores: tocado.valores, limpar: tocado.limpar },
+      esperados: { credenciais: tocado.esperados },
+    })) as Parameters<typeof aplicarPatchIntencionalProvaEntrada>[1];
+    const aplicar = () => aplicarPatchIntencionalProvaEntrada(lerProvaEntradaV3(osCom(caso.servidor)), intent);
+    if (caso.conflito) {
+      expect(aplicar).toThrow(expect.objectContaining({ code: "CONFLITO_CONCORRENCIA" }));
+    } else {
+      const salva = aplicar();
+      if (caso.editado === undefined) {
+        expect(tocado.limpar).toEqual([chave]);
+        expect(Object.hasOwn(salva.credenciais, chave)).toBe(false);
+      } else {
+        expect(salva.credenciais[chave]).toBe(caso.editado);
+      }
+    }
+  });
+
+  it("baseline booleana legada mantém a compatibilidade ausente equivalente a false", () => {
+    const salva = aplicarPatchIntencionalProvaEntrada(lerProvaEntradaV3(osCom(undefined)), {
+      credenciais: { valores: { [chave]: true } },
+      esperados: { credenciais: { [chave]: false } },
+    });
+    expect(salva.credenciais[chave]).toBe(true);
+  });
+
+  it("chamador legado sem baseline continua aplicando o valor explícito", () => {
+    const salva = aplicarPatchIntencionalProvaEntrada(lerProvaEntradaV3(osCom(false)), {
+      credenciais: { valores: { [chave]: true } },
+    });
+    expect(salva.credenciais[chave]).toBe(true);
   });
 });

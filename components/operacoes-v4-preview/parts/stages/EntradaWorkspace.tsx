@@ -81,6 +81,7 @@ export function EntradaWorkspace({
     cargaInicialPronta ? primeiraAreaEntradaV4(grupos) : "recepcao",
   );
   const areaDecididaRef = useRef(cargaInicialPronta);
+  const interagiuNaEntradaRef = useRef(false);
   const [ed, setEd] = useState<EntradaEditorV4>(() => rascunhoInicial?.ed ?? v.entradaEditorSeed);
   const [db, setDb] = useState<DadosBasicosEditorV4>(() => rascunhoInicial?.db ?? v.dadosBasicosSeed);
   const [savedEd, setSavedEd] = useState<EntradaEditorV4>(() => rascunhoInicial?.savedEd ?? v.entradaEditorSeed);
@@ -208,12 +209,11 @@ export function EntradaWorkspace({
   // C: decide a área inicial quando a carga chega (uma vez). Se o operador já
   // editou antes da carga, a área atual fica.
   useEffect(() => {
-    if (areaDecididaRef.current) return;
+    if (areaDecididaRef.current || interagiuNaEntradaRef.current) return;
     if (!cargaOk || !grupos) return;
     areaDecididaRef.current = true;
-    if (algumDirty) return;
     setActive(primeiraAreaEntradaV4(grupos));
-  }, [cargaOk, grupos, algumDirty]);
+  }, [cargaOk, grupos]);
 
   const markSectionSaved = (section: EntradaSectionId) => {
     if (section === "dados-basicos") setSavedDb(db);
@@ -423,7 +423,15 @@ export function EntradaWorkspace({
             </div>
           ) : null}
 
-          <div className={styles.formBody}>
+          <div
+            className={styles.formBody}
+            onChangeCapture={() => { interagiuNaEntradaRef.current = true; }}
+            onClickCapture={(event) => {
+              if (event.target instanceof Element && event.target.closest("button")) {
+                interagiuNaEntradaRef.current = true;
+              }
+            }}
+          >
             <EntradaSections group={active}
               v={v}
               ed={ed}

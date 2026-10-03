@@ -273,3 +273,65 @@ describe("OPS-V4-FLUXO-CURTO-004 — PostgreSQL descartável", () => {
     console.log(`[OPS-V4-FLUXO-CURTO-004][PG] P2 os=${osId} status=${os.status}/${os.operacaoStatusV3} fatias=credenciais`);
   });
 });
+
+describe.each(["faceId", "biometria"] as const)("R P2 #1 — action PostgreSQL: %s", (chave) => {
+  const casos = [
+    { id: "C1", base: undefined, editado: true, servidor: false, conflito: true },
+    { id: "C2", base: undefined, editado: false, servidor: true, conflito: true },
+    { id: "C3", base: false, editado: true, servidor: undefined, conflito: true },
+    { id: "C4", base: true, editado: false, servidor: undefined, conflito: true },
+    { id: "C5", base: undefined, editado: true, servidor: undefined, conflito: false },
+    { id: "C6", base: false, editado: undefined, servidor: false, conflito: false },
+    { id: "C7", base: false, editado: undefined, servidor: true, conflito: true },
+  ];
+
+  it.each(casos)("$id — sessão stale compara presença no latest e preserva efeitos", async (caso) => {
+    const osId = await criarOS(
+      `OS-PG-004-${chave}-${caso.id}-${sufixo}`,
+      {
+        ...aberturaComum, status: "aberta", operacaoStatusV3: "aberta",
+        provaEntradaV3: { versao: 1, credenciais: caso.base === undefined ? {} : { [chave]: caso.base } },
+      },
+      "Aberto", 0,
+    );
+    const efeitosAntes = await contagensEfeitos();
+    const semente = seedEntradaEditor((await lerOS(osId)).os);
+    const editado = { ...semente, credenciais: { ...semente.credenciais, [chave]: caso.editado ?? null } };
+    const t = JSON.parse(JSON.stringify(
+      patchTocadoCredenciais(toProvaEntradaInput(editado).credenciais, semente.credenciais),
+    )) as ReturnType<typeof patchTocadoCredenciais>;
+
+    if (caso.base !== caso.servidor) {
+      await salvarProvaEntradaV3(
+        storeId, osId,
+        { estadoFisico: [], avarias: [], credenciais: caso.servidor === undefined ? {} : { [chave]: caso.servidor } },
+        caso.servidor === undefined ? [chave] : undefined, undefined, ["credenciais"],
+      );
+    }
+    const antes = await lerOS(osId);
+    const salvar = salvarProvaEntradaV3(
+      storeId, osId, { estadoFisico: [], avarias: [], credenciais: t.valores },
+      t.limpar, { credenciais: t.esperados }, ["credenciais"],
+    );
+    if (caso.conflito) {
+      await expect(salvar).rejects.toMatchObject({ code: "CONFLITO_CONCORRENCIA" });
+      expect((await lerOS(osId)).os).toEqual(antes.os);
+    } else {
+      await salvar;
+      const credenciais = (await lerOS(osId)).os.provaEntradaV3!.credenciais!;
+      if (caso.editado === undefined) {
+        expect(t.limpar).toEqual([chave]);
+        expect(Object.hasOwn(credenciais, chave)).toBe(false);
+      } else expect(credenciais[chave]).toBe(caso.editado);
+    }
+    const lido = await lerOS(osId);
+    expect(lido.row.status).toBe("Aberto");
+    expect(lido.row.valorTotal).toBe(0);
+    expect(lido.os.status).toBe("aberta");
+    expect(lido.os.operacaoStatusV3).toBe("aberta");
+    expect(lido.os.orcamento).toEqual(antes.os.orcamento);
+    expect(lido.os.timeline.some((e) => ["servico_iniciado", "mudanca_status"].includes(e.tipo))).toBe(false);
+    expect(lido.os.entregueEm).toBeUndefined();
+    expect(await contagensEfeitos()).toEqual(efeitosAntes);
+  });
+});

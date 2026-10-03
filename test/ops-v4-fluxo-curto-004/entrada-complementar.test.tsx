@@ -101,14 +101,14 @@ describe("A02/A03 — abrir no que realmente falta, uma vez por instância", () 
     expect(within(chip(/Evidências/)).getByText("Opcional")).toBeTruthy();
   });
 
-  it("A02 — hidratação assíncrona: decide a área só quando a carga chega", () => {
+  it("D3/A02 — sem interação: decide a primeira pendência quando a carga chega", () => {
     const { rerender } = montar(<EntradaWorkspace v={vPara(null, { cargaEntradaEstabelecida: false, detailLoading: true })} />);
     expect(areaAtiva()).toBe("Recepção");
     rerender(<EntradaWorkspace v={vPara(osAbertura())} />);
     expect(areaAtiva()).toBe("Segurança");
   });
 
-  it("A03 — escolha manual congela a área: refresh do detalhe não troca", async () => {
+  it("D5/A03 — escolha manual congela a área: refresh do detalhe não troca", async () => {
     const { rerender } = montar(<EntradaWorkspace v={vPara(osAbertura())} />);
     await userEvent.setup().click(chip(/Inspeção/));
     expect(areaAtiva()).toBe("Inspeção");
@@ -116,7 +116,7 @@ describe("A02/A03 — abrir no que realmente falta, uma vez por instância", () 
     expect(areaAtiva()).toBe("Inspeção");
   });
 
-  it("A03 — escolha manual antes da carga também vence a seleção automática", async () => {
+  it("D4/A03 — escolha manual antes da carga também vence a seleção automática", async () => {
     const { rerender } = montar(<EntradaWorkspace v={vPara(null, { cargaEntradaEstabelecida: false, detailLoading: true })} />);
     await userEvent.setup().click(chip(/Evidências/));
     rerender(<EntradaWorkspace v={vPara(osAbertura())} />);
@@ -396,5 +396,42 @@ describe("U09/U11/U12/A14 — rascunho, guarda e conflito do GOAL 001 intactos",
     expect((screen.getByRole("button", { name: "Registrar: nenhum acessório recebido" }) as HTMLButtonElement).disabled).toBe(true);
     await user.click(screen.getByRole("button", { name: "Descartar alterações" }));
     expect(screen.queryByText(/O servidor atualizou/)).toBeNull();
+  });
+});
+
+describe("R P2 #2 — interação de edição é independente do dirty", () => {
+  it("D1 — editar Cor antes da carga congela Recepção", () => {
+    const os = osAbertura();
+    const { rerender } = montar(<EntradaWorkspace v={vPara(os, { cargaEntradaEstabelecida: false, detailLoading: true })} />);
+    expect(areaAtiva()).toBe("Recepção");
+    fireEvent.change(screen.getByLabelText("Cor"), { target: { value: "Azul" } });
+    rerender(<EntradaWorkspace v={vPara(os)} />);
+    expect(areaAtiva()).toBe("Recepção");
+    expect((screen.getByLabelText("Cor") as HTMLInputElement).value).toBe("Azul");
+  });
+
+  it("D2 — editar e desfazer antes da carga mantém Recepção mesmo com dirty=false", () => {
+    const os = osAbertura();
+    const v = vPara(os, { cargaEntradaEstabelecida: false, detailLoading: true });
+    const { rerender } = montar(<EntradaWorkspace v={v} />);
+    fireEvent.change(screen.getByLabelText("Cor"), { target: { value: "Azul" } });
+    fireEvent.change(screen.getByLabelText("Cor"), { target: { value: "" } });
+    expect(screen.queryByText("Alterações não salvas")).toBeNull();
+    rerender(<EntradaWorkspace v={vPara(os)} />);
+    expect(areaAtiva()).toBe("Recepção");
+    expect(v.salvarIdentificacao).not.toHaveBeenCalled();
+    expect(v.salvarDadosBasicos).not.toHaveBeenCalled();
+  });
+
+  it("D6 — hidratação programática do editor não congela a seleção automática", () => {
+    const os = osAbertura();
+    const { rerender } = montar(<EntradaWorkspace v={vPara(os, { cargaEntradaEstabelecida: false, detailLoading: true })} />);
+    const servidor = osAbertura({ equipamento: { ...os.equipamento, cor: "Azul" } });
+    // Seed muda antes de estabelecer a carga; nenhuma interação DOM.
+    rerender(<EntradaWorkspace v={vPara(servidor, { cargaEntradaEstabelecida: false, detailLoading: true })} />);
+    expect(areaAtiva()).toBe("Recepção");
+    expect(screen.queryByText("Alterações não salvas")).toBeNull();
+    rerender(<EntradaWorkspace v={vPara(servidor)} />);
+    expect(areaAtiva()).toBe("Segurança");
   });
 });

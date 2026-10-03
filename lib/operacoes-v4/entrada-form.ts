@@ -193,6 +193,16 @@ export function limpezasExplicitas(
 // exclui. Exclusão exige lista explícita em `limpar`. Fatias ausentes do
 // intent preservam o servidor; chaves desconhecidas nunca são tocadas.
 
+/** Presença explícita na baseline transitória; não integra a prova persistida. */
+export type BaselineBiometriaV4 =
+  | { informado: false }
+  | { informado: true; valor: boolean };
+
+export type EsperadosCredenciaisEntradaV3 = Omit<Partial<CredenciaisEntradaV3>, "faceId" | "biometria"> & {
+  faceId?: boolean | BaselineBiometriaV4;
+  biometria?: boolean | BaselineBiometriaV4;
+};
+
 /**
  * Baseline por campo/fatia (R02): o que o editor VIA quando tocou. No servidor,
  * cada chave enviada com `esperados` é conferida contra o LATEST: igual aplica,
@@ -202,7 +212,7 @@ export function limpezasExplicitas(
  */
 export interface EsperadosProvaEntradaV3 {
   identificacao?: Partial<IdentificacaoV3>;
-  credenciais?: Partial<CredenciaisEntradaV3>;
+  credenciais?: EsperadosCredenciaisEntradaV3;
   estadoFisico?: EstadoFisicoItemV3[];
   avarias?: AvariaV3[];
   acessorios?: AcessorioEntradaV3[];
@@ -274,9 +284,9 @@ function textoCampoV4(v: unknown): string {
  *
  * Normalização de vazio: campo realmente ausente (undefined) ≡ "" — o
  * primeiro preenchimento aplica; o segundo (latest já preenchido × baseline
- * vazia) conflita. Booleanos ausentes ≡ false; senhaTipo ausente ≡ "numerica"
- * (defaults que o editor exibe) — a primeira troca aplica, a divergente
- * conflita.
+ * vazia) conflita. A baseline V4 distingue biometria ausente de false/true.
+ * Baselines booleanas legadas mantêm ausente ≡ false; senhaTipo ausente
+ * mantém o default "numerica".
  */
 export function aplicarPatchIntencionalProvaEntrada(
   provaAtual: ProvaEntradaV3,
@@ -356,7 +366,13 @@ export function aplicarPatchIntencionalProvaEntrada(
       if (esperadoV !== undefined) {
         let igual: boolean;
         if (k === "faceId" || k === "biometria") {
-          igual = (base[k] ?? false) === (esperadoV ?? false);
+          if (typeof esperadoV === "object" && esperadoV !== null) {
+            const baseline = esperadoV as BaselineBiometriaV4;
+            igual = triEstado(base[k]) === (baseline.informado ? baseline.valor : null);
+          } else {
+            // Compatibilidade com os callers anteriores à baseline de presença.
+            igual = (base[k] ?? false) === (esperadoV ?? false);
+          }
         } else if (k === "senhaTipo") {
           const atualNorm = typeof base[k] === "string" && (base[k] as string) ? base[k] : "numerica";
           const espNorm = typeof esperadoV === "string" && (esperadoV as string) ? esperadoV : "numerica";
@@ -511,16 +527,15 @@ export function patchTocadoCredenciais(
     { pin: semente.pin, senha: semente.senha, contaGoogle: semente.contaGoogle, contaApple: semente.contaApple },
   );
   const valores: Partial<CredenciaisEntradaV3> = { ...texto.valores };
-  const esperados: Partial<CredenciaisEntradaV3> = { ...texto.esperados };
+  const esperados: EsperadosCredenciaisEntradaV3 = { ...texto.esperados };
   const limpar = [...texto.limpar];
   if (input.senhaTipo !== undefined && input.senhaTipo !== semente.senhaTipo) {
     valores.senhaTipo = input.senhaTipo;
     esperados.senhaTipo = semente.senhaTipo;
   }
-  // Tri-estado (GOAL 004): chave presente com `undefined` = não informado; chave
-  // ausente = intocada. A baseline do servidor compara ausente ≡ false, por isso
-  // semente não informada viaja como false. Voltar a "não informado" usa a
-  // limpeza explícita já existente.
+  // Tri-estado (GOAL 004): chave presente com `undefined` = não informado;
+  // chave ausente = intocada. A baseline conserva presença e valor, inclusive
+  // após serialização. Voltar a "não informado" usa a limpeza explícita.
   for (const k of ["faceId", "biometria"] as const) {
     if (!(k in input)) continue;
     const novo = input[k];
@@ -528,11 +543,13 @@ export function patchTocadoCredenciais(
     if (novo !== undefined) {
       if (novo !== base) {
         valores[k] = novo;
-        esperados[k] = base ?? false;
+        esperados[k] = base === null || base === undefined
+          ? { informado: false }
+          : { informado: true, valor: base };
       }
     } else if (base !== null && base !== undefined) {
       limpar.push(k);
-      esperados[k] = base;
+      esperados[k] = { informado: true, valor: base };
     }
   }
   return { valores, limpar, esperados };
@@ -578,7 +595,7 @@ export interface PatchTocadoIdentificacao {
 export interface PatchTocadoCredenciais {
   valores: Partial<CredenciaisEntradaV3>;
   limpar: (keyof CredenciaisEntradaV3)[];
-  esperados: Partial<CredenciaisEntradaV3>;
+  esperados: EsperadosCredenciaisEntradaV3;
 }
 
 export function patchTocadoIdentificacao(
