@@ -1,6 +1,6 @@
 import type { DadosBasicosEditorV4 } from "./dados-basicos-form";
 import type { EntradaEditorV4 } from "./entrada-form";
-import type { PendenciaEntradaV4 } from "./entrada-pendencias";
+import type { ChavePendenciaEntradaV4, EstadoPendenciaEntradaV4, PendenciaEntradaV4 } from "./entrada-pendencias";
 
 export const ENTRADA_SECTION_IDS = [
   "dados-basicos",
@@ -27,9 +27,9 @@ export type EntradaSectionMeta = {
   canSave: boolean;
 };
 
+/** Áreas independentes de complementação (GOAL 004): sem ordem obrigatória. */
 export type EntradaGroupMeta = {
   id: EntradaGroupId;
-  step: number;
   label: string;
   eyebrow: string;
   description: string;
@@ -51,25 +51,22 @@ export const ENTRADA_SECTIONS: readonly EntradaSectionMeta[] = [
 export const ENTRADA_GROUPS: readonly EntradaGroupMeta[] = [
   {
     id: "recepcao",
-    step: 1,
     label: "Recepção",
     eyebrow: "Recepção e aparelho",
-    description: "Aparelho e recepção já informados na abertura. Confira e complete só o que faltou.",
+    description: "Dados da abertura já registrados. Confira e complemente só o que faltou.",
     sections: ["dados-basicos", "identificacao"],
     canSave: true,
   },
   {
     id: "seguranca-custodia",
-    step: 2,
     label: "Segurança",
-    eyebrow: "Segurança e custódia",
-    description: "Acesso ao aparelho e itens recebidos com ele.",
+    eyebrow: "Acesso e custódia",
+    description: "Acesso ao aparelho (opcional) e itens recebidos com ele.",
     sections: ["seguranca", "acessorios"],
     canSave: true,
   },
   {
     id: "inspecao",
-    step: 3,
     label: "Inspeção",
     eyebrow: "Condição e testes",
     description: "Condição física e testes funcionais na entrada.",
@@ -78,12 +75,11 @@ export const ENTRADA_GROUPS: readonly EntradaGroupMeta[] = [
   },
   {
     id: "evidencias",
-    step: 4,
     label: "Evidências",
     eyebrow: "Fotos e assinatura",
-    description: "Fotos da entrada e assinatura do cliente na prova de entrada.",
+    description: "Evidências adicionais da entrada — opcionais, gravadas na hora pelas próprias ações.",
     sections: ["fotos"],
-    canSave: true,
+    canSave: false,
   },
 ] as const;
 
@@ -105,42 +101,7 @@ export function nextEntradaSection(id: EntradaSectionId): EntradaSectionId | nul
   return index >= 0 && index < ENTRADA_SECTION_IDS.length - 1 ? ENTRADA_SECTION_IDS[index + 1] : null;
 }
 
-export function previousEntradaGroup(id: EntradaGroupId): EntradaGroupId | null {
-  const index = ENTRADA_GROUP_IDS.indexOf(id);
-  return index > 0 ? ENTRADA_GROUP_IDS[index - 1] : null;
-}
-
-export function nextEntradaGroup(id: EntradaGroupId): EntradaGroupId | null {
-  const index = ENTRADA_GROUP_IDS.indexOf(id);
-  return index >= 0 && index < ENTRADA_GROUP_IDS.length - 1 ? ENTRADA_GROUP_IDS[index + 1] : null;
-}
-
 export type EntradaSectionCompletion = Record<EntradaSectionId, boolean>;
-export type EntradaGroupCompletion = Record<EntradaGroupId, boolean>;
-
-export function deriveEntradaSectionCompletion(pendencias: PendenciaEntradaV4[]): EntradaSectionCompletion {
-  const byKey = new Map(pendencias.map((item) => [item.chave, item.preenchido]));
-  const prova = byKey.get("estado-avarias-acesso") === true;
-  return {
-    "dados-basicos": byKey.get("dados-basicos") === true,
-    identificacao: byKey.get("identificacao") === true,
-    seguranca: prova,
-    "estado-fisico": prova,
-    checklist: byKey.get("checklist") === true,
-    acessorios: byKey.get("acessorios") === true,
-    fotos: byKey.get("fotos") === true,
-  };
-}
-
-export function deriveEntradaGroupCompletion(pendencias: PendenciaEntradaV4[]): EntradaGroupCompletion {
-  const sections = deriveEntradaSectionCompletion(pendencias);
-  return {
-    recepcao: sections["dados-basicos"] && sections.identificacao,
-    "seguranca-custodia": sections.seguranca,
-    inspecao: sections["estado-fisico"] && sections.checklist,
-    evidencias: sections.fotos,
-  };
-}
 
 export function entradaCompletionProgress(completion: EntradaSectionCompletion) {
   return {
@@ -149,12 +110,56 @@ export function entradaCompletionProgress(completion: EntradaSectionCompletion) 
   };
 }
 
-export function entradaGroupProgress(completion: EntradaGroupCompletion) {
-  return {
-    completed: ENTRADA_GROUP_IDS.filter((id) => completion[id]).length,
-    total: ENTRADA_GROUP_IDS.length,
-  };
+// ---- Classificação por área (GOAL 004 — pura, derivada da OS real) ---------
+
+/** Blocos de pendência exibidos em cada área da Entrada. */
+export const ENTRADA_PENDENCIAS_POR_GRUPO: Record<EntradaGroupId, readonly ChavePendenciaEntradaV4[]> = {
+  recepcao: ["dados-basicos", "identificacao"],
+  "seguranca-custodia": ["acesso", "acessorios"],
+  inspecao: ["estado-fisico", "checklist"],
+  evidencias: ["fotos", "assinatura"],
+};
+
+export type EntradaGroupStatus = Record<EntradaGroupId, EstadoPendenciaEntradaV4>;
+
+/**
+ * Estado de cada área: falta complementar se algum bloco falta; senão
+ * registrado se algum bloco tem dado real; senão opcional. Sem OS real
+ * (lista vazia), `null` — nada é afirmado.
+ */
+export function classificarGruposEntradaV4(pendencias: PendenciaEntradaV4[]): EntradaGroupStatus | null {
+  if (pendencias.length === 0) return null;
+  const porChave = new Map(pendencias.map((p) => [p.chave, p.estado]));
+  const out = {} as EntradaGroupStatus;
+  for (const id of ENTRADA_GROUP_IDS) {
+    const estados = ENTRADA_PENDENCIAS_POR_GRUPO[id]
+      .map((chave) => porChave.get(chave))
+      .filter((e): e is EstadoPendenciaEntradaV4 => e !== undefined);
+    out[id] = estados.includes("falta_complementar")
+      ? "falta_complementar"
+      : estados.includes("registrado")
+        ? "registrado"
+        : "opcional";
+  }
+  return out;
 }
+
+/** Área inicial: a primeira com complemento faltando; tudo registrado → Recepção. */
+export function primeiraAreaEntradaV4(status: EntradaGroupStatus | null): EntradaGroupId {
+  if (!status) return "recepcao";
+  return ENTRADA_GROUP_IDS.find((id) => status[id] === "falta_complementar") ?? "recepcao";
+}
+
+/** "Entrada já complementada": dado real e nenhuma área com complemento faltando. */
+export function entradaComplementadaV4(status: EntradaGroupStatus | null): boolean {
+  return status !== null && ENTRADA_GROUP_IDS.every((id) => status[id] !== "falta_complementar");
+}
+
+export const ROTULO_ESTADO_ENTRADA_V4: Record<EstadoPendenciaEntradaV4, string> = {
+  registrado: "Registrado",
+  falta_complementar: "Falta complementar",
+  opcional: "Opcional",
+};
 
 export function isEntradaGroupDirty(
   id: EntradaGroupId,

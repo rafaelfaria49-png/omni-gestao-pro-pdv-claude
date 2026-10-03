@@ -5,13 +5,13 @@ import { cn } from "@/lib/utils";
 import { derivarPendenciasEntradaV4 } from "@/lib/operacoes-v4/entrada-pendencias";
 import {
   ENTRADA_GROUP_IDS,
-  deriveEntradaGroupCompletion,
-  entradaGroupProgress,
+  ROTULO_ESTADO_ENTRADA_V4,
+  classificarGruposEntradaV4,
+  entradaComplementadaV4,
   getEntradaGroup,
   isEntradaGroupDirty,
   isEntradaSectionDirty,
-  nextEntradaGroup,
-  previousEntradaGroup,
+  primeiraAreaEntradaV4,
   type EntradaGroupId,
   type EntradaSectionId,
 } from "@/lib/operacoes-v4/entrada-workspace";
@@ -70,7 +70,17 @@ export function EntradaWorkspace({
     | ((rascunho: RascunhoEntradaV4 | undefined, meta?: MetaPublicacaoRascunhoV4) => void)
     | undefined;
 }) {
-  const [active, setActive] = useState<EntradaGroupId>("recepcao");
+  // C (OPS-V4-FLUXO-CURTO-004): pendências e áreas derivam SÓ da OS real do
+  // servidor. A área inicial é a primeira com complemento faltando, decidida
+  // uma única vez por instância (chave loja+OS) com a carga estabelecida;
+  // escolha manual ou edição congelam a área — refresh nunca a troca.
+  const pendencias = useMemo(() => derivarPendenciasEntradaV4(v.realOS), [v.realOS]);
+  const grupos = useMemo(() => classificarGruposEntradaV4(pendencias), [pendencias]);
+  const cargaInicialPronta = v.cargaEntradaEstabelecida === true && grupos !== null;
+  const [active, setActive] = useState<EntradaGroupId>(() =>
+    cargaInicialPronta ? primeiraAreaEntradaV4(grupos) : "recepcao",
+  );
+  const areaDecididaRef = useRef(cargaInicialPronta);
   const [ed, setEd] = useState<EntradaEditorV4>(() => rascunhoInicial?.ed ?? v.entradaEditorSeed);
   const [db, setDb] = useState<DadosBasicosEditorV4>(() => rascunhoInicial?.db ?? v.dadosBasicosSeed);
   const [savedEd, setSavedEd] = useState<EntradaEditorV4>(() => rascunhoInicial?.savedEd ?? v.entradaEditorSeed);
@@ -184,29 +194,32 @@ export function EntradaWorkspace({
     return mapa[f] ?? f;
   }
 
-  const completion = useMemo(
-    () => deriveEntradaGroupCompletion(derivarPendenciasEntradaV4(v.realOS)),
-    [v.realOS],
-  );
-  const progress = entradaGroupProgress(completion);
   const dirty = Object.fromEntries(
     ENTRADA_GROUP_IDS.map((id) => [id, isEntradaGroupDirty(id, ed, db, savedEd, savedDb)]),
   ) as Record<EntradaGroupId, boolean>;
   const algumDirty = Object.values(dirty).some(Boolean);
   const meta = getEntradaGroup(active);
-  const previous = previousEntradaGroup(active);
-  const next = nextEntradaGroup(active);
+  const estadoAtivo = grupos?.[active] ?? null;
 
   // T01: salvar exige carga estabelecida (detalhe confirmado da seleção).
   const cargaOk = v.cargaEntradaEstabelecida === true;
   const podeSalvar = cargaOk && !busy && conflitos.length === 0;
 
+  // C: decide a área inicial quando a carga chega (uma vez). Se o operador já
+  // editou antes da carga, a área atual fica.
+  useEffect(() => {
+    if (areaDecididaRef.current) return;
+    if (!cargaOk || !grupos) return;
+    areaDecididaRef.current = true;
+    if (algumDirty) return;
+    setActive(primeiraAreaEntradaV4(grupos));
+  }, [cargaOk, grupos, algumDirty]);
+
   const markSectionSaved = (section: EntradaSectionId) => {
     if (section === "dados-basicos") setSavedDb(db);
     if (section === "identificacao") setSavedEd((current) => ({ ...current, identificacao: ed.identificacao }));
-    if (section === "seguranca" || section === "estado-fisico") {
-      setSavedEd((current) => ({ ...current, credenciais: ed.credenciais, estadoFisico: ed.estadoFisico, avarias: ed.avarias }));
-    }
+    if (section === "seguranca") setSavedEd((current) => ({ ...current, credenciais: ed.credenciais }));
+    if (section === "estado-fisico") setSavedEd((current) => ({ ...current, estadoFisico: ed.estadoFisico, avarias: ed.avarias }));
     if (section === "checklist") setSavedEd((current) => ({ ...current, checklist: ed.checklist }));
     if (section === "acessorios") setSavedEd((current) => ({ ...current, acessorios: ed.acessorios }));
   };
@@ -218,7 +231,11 @@ export function EntradaWorkspace({
     // R02: a limpeza explícita é derivada no wrapper (input × semente do
     // servidor) — esta chamada mantém o contrato pinado de cinco handlers.
     if (section === "identificacao") saved = await v.salvarIdentificacao(toIdentificacaoInput(ed));
-    if (section === "seguranca" || section === "estado-fisico") saved = await v.salvarProvaEntrada(toProvaEntradaInput(ed));
+    // B (GOAL 004): salvar é localizado — Segurança leva só credenciais e
+    // Inspeção só estado/avarias; a outra fatia viaja como a linha de base
+    // (igual ao servidor), então o wrapper não a inclui.
+    if (section === "seguranca") saved = await v.salvarProvaEntrada(toProvaEntradaInput({ ...ed, estadoFisico: savedEd.estadoFisico, avarias: savedEd.avarias }));
+    if (section === "estado-fisico") saved = await v.salvarProvaEntrada(toProvaEntradaInput({ ...ed, credenciais: savedEd.credenciais }));
     if (section === "checklist") saved = await v.salvarChecklist(toChecklistInput(ed));
     if (section === "acessorios") saved = await v.salvarAcessorios(toAcessoriosInput(ed));
     if (!saved) return false;
@@ -263,10 +280,47 @@ export function EntradaWorkspace({
     }
   };
 
-  const saveAndContinue = async () => {
-    const saved = await saveGroup(active);
-    if (saved && next) setActive(next);
+  // F/H (GOAL 004): registros explícitos de resposta válida sem alteração —
+  // "nenhum acessório" e "estado exibido" (inclusive íntegro). Mesmas guardas
+  // do salvar (carga, conflito, busy-lock); a baseline viaja pelo wrapper.
+  // Falha mantém a área e o rascunho.
+  const registrarExplicito = async (section: "acessorios" | "estado-fisico", gravar: () => Promise<boolean>) => {
+    if (busy) return;
+    if (!v.cargaEntradaEstabelecida) {
+      setError(
+        v.detailLoading
+          ? "Aguarde a carga da OS antes de salvar."
+          : "A OS não carregou corretamente. Recarregue antes de salvar.",
+      );
+      return;
+    }
+    if (conflitos.length > 0) {
+      setError(`O servidor atualizou ${conflitos.join(", ")} enquanto você editava. Descarte suas alterações ou revise antes de salvar.`);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      if (!(await gravar())) {
+        setError("Não foi possível registrar. Tente novamente.");
+        return;
+      }
+      markSectionSaved(section);
+    } catch {
+      setError("Não foi possível registrar. Tente novamente.");
+    } finally {
+      setBusy(false);
+    }
   };
+  const registrarNenhumAcessorio = () =>
+    void registrarExplicito("acessorios", () => v.salvarAcessorios(toAcessoriosInput(ed), { registrarSemAlteracao: true }));
+  const confirmarEstadoFisico = () =>
+    void registrarExplicito("estado-fisico", () =>
+      v.salvarProvaEntrada(
+        toProvaEntradaInput({ ...savedEd, estadoFisico: ed.estadoFisico, avarias: ed.avarias }),
+        { confirmarEstadoFisico: true },
+      ),
+    );
 
   // T11: descartar volta o rascunho ao dado confirmado do servidor (sem PIN,
   // sem cópia em storage — só estado em memória).
@@ -318,7 +372,10 @@ export function EntradaWorkspace({
     }
   };
 
+  // B: navegação livre — trocar de área é imediato (o rascunho fica no pai) e
+  // congela a escolha (C: refresh não troca a área).
   const selectGroup = (group: EntradaGroupId) => {
+    areaDecididaRef.current = true;
     setError("");
     setActive(group);
   };
@@ -327,23 +384,32 @@ export function EntradaWorkspace({
     <div className={styles.workspace}>
       <EntradaSectionRail
         active={active}
-        completion={completion}
+        grupos={grupos}
         dirty={dirty}
-        completed={progress.completed}
-        total={progress.total}
+        complementada={entradaComplementadaV4(grupos)}
         onSelect={selectGroup}
       />
       <section className={styles.canvas} aria-labelledby={`entrada-title-${active}`}>
         <div className={styles.canvasInner}>
           <header className={styles.sectionHeader}>
             <div>
-              <div className={styles.eyebrow}>{String(meta.step).padStart(2, "0")} · {meta.eyebrow}</div>
+              <div className={styles.eyebrow}>{meta.eyebrow}</div>
               <h2 className={styles.sectionTitle} id={`entrada-title-${active}`}>{meta.label}</h2>
               <p className={styles.sectionDescription}>{meta.description}</p>
             </div>
-            <span className={cn(styles.stateBadge, dirty[active] ? styles.stateBadgeDirty : completion[active] ? styles.stateBadgeComplete : undefined)}>
-              {dirty[active] ? "Alterações não salvas" : completion[active] ? "Concluído" : "Pendente"}
-            </span>
+            {dirty[active] ? (
+              <span className={cn(styles.stateBadge, styles.stateBadgeDirty)}>Alterações não salvas</span>
+            ) : estadoAtivo ? (
+              <span
+                className={cn(
+                  styles.stateBadge,
+                  estadoAtivo === "registrado" && styles.stateBadgeComplete,
+                  estadoAtivo === "falta_complementar" && styles.stateBadgePending,
+                )}
+              >
+                {ROTULO_ESTADO_ENTRADA_V4[estadoAtivo]}
+              </span>
+            ) : null}
           </header>
 
           {!cargaOk ? (
@@ -358,20 +424,38 @@ export function EntradaWorkspace({
           ) : null}
 
           <div className={styles.formBody}>
-            <EntradaSections group={active} v={v} ed={ed} setEd={setEd} db={db} setDb={setDb} />
+            <EntradaSections group={active}
+              v={v}
+              ed={ed}
+              setEd={setEd}
+              db={db}
+              setDb={setDb}
+              pendencias={pendencias}
+              acessoriosSujos={isEntradaSectionDirty("acessorios", ed, db, savedEd, savedDb)}
+              estadoFisicoSujo={isEntradaSectionDirty("estado-fisico", ed, db, savedEd, savedDb)}
+              podeRegistrar={podeSalvar}
+              onRegistrarNenhumAcessorio={registrarNenhumAcessorio}
+              onConfirmarEstadoFisico={confirmarEstadoFisico}
+            />
             {error ? <div className={styles.error} role="alert">{error}</div> : null}
           </div>
 
           <footer className={styles.actionBar}>
             <div>
-              {previous ? <button type="button" className={styles.button} onClick={() => selectGroup(previous)} disabled={busy}>Anterior</button> : null}
               {algumDirty && !busy ? <button type="button" className={styles.button} onClick={descartarAlteracoes}>Descartar alterações</button> : null}
             </div>
             {meta.canSave ? (
               <div className={styles.actionGroup}>
                 <span className={styles.saveNote}>Sem salvamento automático</span>
-                <button type="button" className={styles.button} onClick={() => void saveGroup(active)} disabled={!podeSalvar} title={!cargaOk ? "Aguarde a carga da OS" : undefined}>{busy ? "Salvando…" : "Salvar"}</button>
-                {next ? <button type="button" className={cn(styles.button, styles.buttonPrimary)} onClick={() => void saveAndContinue()} disabled={!podeSalvar} title={!cargaOk ? "Aguarde a carga da OS" : undefined}>{busy ? "Salvando…" : "Salvar e continuar"}</button> : null}
+                <button
+                  type="button"
+                  className={cn(styles.button, styles.buttonPrimary)}
+                  onClick={() => void saveGroup(active)}
+                  disabled={!podeSalvar || !dirty[active]}
+                  title={!cargaOk ? "Aguarde a carga da OS" : !dirty[active] ? "Nada a salvar nesta área" : undefined}
+                >
+                  {busy ? "Salvando…" : "Salvar alterações"}
+                </button>
               </div>
             ) : null}
           </footer>

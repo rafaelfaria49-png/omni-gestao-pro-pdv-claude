@@ -100,7 +100,8 @@ describe("R04 — editor montado: refresh durante digitação (T03)", () => {
     // Servidor também mudou a identificação (outra sessão).
     rerender(<EntradaWorkspace v={vEditor({ entradaEditorSeed: semente("Azul", "M9") })} />);
     expect(await screen.findByText(/O servidor atualizou.*identificação/)).toBeTruthy();
-    const salvar = screen.getByRole("button", { name: "Salvar" }) as HTMLButtonElement;
+    // GOAL 004: o salvar da área chama-se "Salvar alterações" (sem "Salvar e continuar").
+    const salvar = screen.getByRole("button", { name: "Salvar alterações" }) as HTMLButtonElement;
     expect(salvar.disabled).toBe(true);
   });
 });
@@ -112,7 +113,7 @@ describe("R05 — editor montado: salvar com intent e descartar (T02/T11)", () =
     fireEvent.change(screen.getByLabelText("Cor"), { target: { value: "Preto" } });
     expect(screen.getByText("Alterações não salvas")).toBeTruthy();
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
     expect(salvarIdentificacao).toHaveBeenCalledTimes(1);
     // Contrato pinado de cinco handlers: mapeador puro em argumento único (a
     // limpeza explícita é derivada no wrapper, coberta em entrada-form.test.ts).
