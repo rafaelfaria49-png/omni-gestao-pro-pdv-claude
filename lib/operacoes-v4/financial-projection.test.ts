@@ -138,6 +138,57 @@ describe("FinancialProjectionOSV4 — contrato puro e reconciliação", () => {
     ]);
   });
 
+  // OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 (R/P2): o espelho `aPrazoV3` antigo não pode
+  // continuar aparecendo como cobrança/parcela pendente quando o título diz outra coisa.
+  const aPrazoPendente = (valor: number) => ({
+    aPrazoV3: {
+      modo: "a_prazo", status: "pendente", valor, vencimento: "2026-11-10",
+      tituloLocalKey: localKey, autorizadoEntrega: true, autorizadoEm: "2026-10-03T10:00:00.000Z", autorizadoPor: "Operador",
+    },
+  });
+
+  it("caso G2: depois da quitação o espelho a prazo não vira parcela nem cobrança", () => {
+    const result = project({
+      payload: payload(400, aPrazoPendente(50)),
+      prismaValorTotal: 400,
+      titulo: title(400, "pago", [
+        { tipo: "pagamento", valor: 350 },
+        { tipo: "a_prazo_autorizado", valor: 50 },
+        { tipo: "liquidacao", valor: 50 },
+      ]),
+    });
+    expect(result).toMatchObject({ financialStatus: "PAID", receivedTotal: 400, balance: 0, authorizedCredit: false, collectionMode: null });
+    expect(result.installments).toEqual([]);
+  });
+
+  it("caso G3: estorno deixa a autorização menor que o saldo → sem parcela a prazo", () => {
+    const result = project({
+      payload: payload(400, aPrazoPendente(50)),
+      prismaValorTotal: 400,
+      titulo: title(400, "pendente", [
+        { tipo: "pagamento", valor: 350 },
+        { tipo: "a_prazo_autorizado", valor: 50 },
+        { tipo: "estorno_pagamento", valor: 350 },
+      ]),
+    });
+    expect(result).toMatchObject({ balance: 400, authorizedCredit: false, canDeliver: false, collectionMode: null });
+    expect(result.installments).toEqual([]);
+  });
+
+  it("caso G4: pagamento parcial depois do a prazo → parcela limitada ao saldo real", () => {
+    const result = project({
+      payload: payload(400, aPrazoPendente(50)),
+      prismaValorTotal: 400,
+      titulo: title(400, "parcial", [
+        { tipo: "pagamento", valor: 350 },
+        { tipo: "a_prazo_autorizado", valor: 50 },
+        { tipo: "pagamento", valor: 20 },
+      ]),
+    });
+    expect(result).toMatchObject({ financialStatus: "AUTHORIZED_CREDIT", balance: 30, collectionMode: "a_prazo" });
+    expect(result.installments).toEqual([expect.objectContaining({ dueAt: "2026-11-10", amount: 30, status: "pendente" })]);
+  });
+
   it("caso H: total zero só vira AUTHORIZED_NO_CHARGE com autorização persistida válida", () => {
     const authorization = criarAutorizacaoEntregaSemCobrancaV3({
       solicitacao: { categoria: "garantia", motivo: "Retorno coberto" },

@@ -194,13 +194,27 @@ function readPaymentMethods(payload: OrdemServico & Record<string, unknown>, tit
   return legacy ? [legacy] : [];
 }
 
-function readInstallments(titlePayload: unknown, payload: Record<string, unknown>): FinancialInstallmentV4[] {
+/**
+ * O espelho `aPrazoV3` só vira parcela/cobrança enquanto a autorização a prazo VALE contra
+ * o saldo autoritativo do título (guard de entrega). Quitado o saldo — ou com a autorização
+ * menor que o saldo após estorno — ele é histórico, nunca parcela pendente. O valor exibido
+ * nunca passa do saldo real.
+ */
+function aPrazoVigente(
+  payload: Record<string, unknown>,
+  guard: ReturnType<typeof projetarEntregaFinanceiraV3>,
+): Record<string, unknown> | null {
+  if (!guard.autorizacaoAPrazo || guard.saldo == null || !isRecord(payload.aPrazoV3)) return null;
+  const valor = money(payload.aPrazoV3.valor);
+  return { ...payload.aPrazoV3, valor: valor == null ? null : Math.min(valor, guard.saldo) };
+}
+
+function readInstallments(titlePayload: unknown, payload: Record<string, unknown>, aPrazo: Record<string, unknown> | null): FinancialInstallmentV4[] {
   const persisted = isRecord(titlePayload) && Array.isArray(titlePayload.parcelas)
     ? titlePayload.parcelas
     : Array.isArray(payload.faturamentoParcelas)
       ? payload.faturamentoParcelas
       : [];
-  const aPrazo = isRecord(payload.aPrazoV3) ? payload.aPrazoV3 : null;
   const raw = persisted.length > 0
     ? persisted
     : aPrazo
@@ -303,7 +317,8 @@ export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): Financia
   const status = financialStatus(guard, rawReceivableStatus);
   const consistency = consistencyStatus(guard);
   const noCharge = isRecord(input.payload.entregaSemCobrancaV3) ? input.payload.entregaSemCobrancaV3 : {};
-  const aPrazo = isRecord(input.payload.aPrazoV3) ? input.payload.aPrazoV3 : {};
+  const aPrazoAtual = aPrazoVigente(input.payload, guard);
+  const aPrazo = aPrazoAtual ?? {};
   const canReceive =
     (status === "OPEN" || status === "PARTIAL" || status === "AUTHORIZED_CREDIT") &&
     consistency === "CONSISTENT" &&
@@ -335,7 +350,7 @@ export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): Financia
     consistencyIssues: guard.motivoBloqueio ? [guard.motivoBloqueio] : [],
     paymentMethods: readPaymentMethods(input.payload, input.titulo?.payload),
     collectionMode: text(aPrazo.modo ?? input.payload.faturamentoModoCobranca ?? input.payload.modoCobranca) || null,
-    installments: readInstallments(input.titulo?.payload, input.payload),
+    installments: readInstallments(input.titulo?.payload, input.payload, aPrazoAtual),
     authorizedCredit: guard.autorizacaoAPrazo,
     authorizedNoCharge: guard.autorizacaoSemCobranca,
     noChargeCategory: guard.autorizacaoSemCobranca ? text(noCharge.categoria) || null : null,

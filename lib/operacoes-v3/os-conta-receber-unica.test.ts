@@ -57,6 +57,10 @@ const h = vi.hoisted(() => {
   }
 
   const prisma: any = {
+    // Gravação do espelho da OS roda numa transação com trava SQL: aqui o callback roda no
+    // próprio cliente em memória (a concorrência real é provada em PostgreSQL).
+    $transaction: async (fn: (tx: unknown) => unknown) => fn(prisma),
+    $queryRaw: async () => [],
     contaReceberTitulo: {
       findUnique: async ({ where }: any) => {
         const { storeId, localKey } = where.storeId_localKey;
@@ -460,5 +464,59 @@ describe("Fase 2B — split, intenção, estorno", () => {
   it("estorno sem recebimento prévio é rejeitado", async () => {
     seedOS(480);
     await expect(estornarRecebimentoOSV3(STORE, OS, { sessaoId: "sess-1" })).rejects.toThrow();
+  });
+});
+
+// OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 (R/P1 e P2): o espelho da OS é gravado sobre o
+// payload ATUAL (trava + releitura) e reconcilia o "a prazo" com o saldo real.
+describe("receberOSV3 — espelho sobre o payload atual e a prazo reconciliado", () => {
+  const aPrazo = (valor: number) => ({
+    modo: "a_prazo", status: "pendente", valor, vencimento: "2026-11-10",
+    tituloLocalKey: localKeyContaReceberOSV3(STORE, OS), autorizadoEntrega: true,
+    autorizadoEm: "2026-10-03T10:00:00.000Z", autorizadoPor: "Operador",
+  });
+
+  it("o que outra operação gravou depois da leitura inicial (a prazo, timeline) não é apagado", async () => {
+    seedOS(480);
+    const original = h.prisma.ordemServico.findFirst;
+    let leituras = 0;
+    h.prisma.ordemServico.findFirst = async (args: unknown) => {
+      leituras += 1;
+      // 1ª leitura = snapshot inicial da action; antes da 2ª (releitura sob trava), outra
+      // operação grava a autorização a prazo e um evento na timeline.
+      if (leituras === 2) {
+        const r = h.ordens.get(OS);
+        r.payload = { ...r.payload, aPrazoV3: aPrazo(280), timeline: [...r.payload.timeline, { id: "ev-outra-operacao", tipo: "financeiro_conta_receber_criada" }] };
+      }
+      return original(args);
+    };
+    try {
+      await receberOSV3(STORE, OS, { valor: 200, forma: dinheiro, sessaoId: "sess-1" });
+    } finally {
+      h.prisma.ordemServico.findFirst = original;
+    }
+    const payload = h.ordens.get(OS).payload;
+    expect(payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 280 });
+    expect(payload.timeline.map((e: { id: string }) => e.id)).toContain("ev-outra-operacao");
+    expect(payload.pagamentoV3).toMatchObject({ recebido: 200, saldo: 280, status: "parcial" });
+  });
+
+  it("baixa que quita o saldo encerra o espelho a prazo (status 'quitado')", async () => {
+    seedOS(480);
+    h.ordens.get(OS).payload.aPrazoV3 = aPrazo(480);
+    const res = await receberOSV3(STORE, OS, { valor: 480, forma: dinheiro, sessaoId: "sess-1" });
+    expect(res.pagamento.status).toBe("quitado");
+    expect(h.ordens.get(OS).payload.aPrazoV3).toMatchObject({ status: "quitado" });
+    const lido = await lerPagamentoOSV3(STORE, OS);
+    expect(lido.aPrazo).toBeNull();
+  });
+
+  it("baixa parcial do saldo a prazo → valor a prazo acompanha o saldo real", async () => {
+    seedOS(480);
+    h.ordens.get(OS).payload.aPrazoV3 = aPrazo(480);
+    await receberOSV3(STORE, OS, { valor: 100, forma: dinheiro, sessaoId: "sess-1" });
+    expect(h.ordens.get(OS).payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 380 });
+    const lido = await lerPagamentoOSV3(STORE, OS);
+    expect(lido.aPrazo).toMatchObject({ valor: 380 });
   });
 });

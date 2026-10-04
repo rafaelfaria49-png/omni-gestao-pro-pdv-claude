@@ -222,7 +222,8 @@ export function montarPagamentoMirrorV3(input: {
 // (quando o cliente pagar) segue pelo fluxo normal (`receberOSV3`), sem relação
 // direta com este espelho.
 
-export type APrazoStatusV3 = "pendente" | "cancelado";
+/** "quitado": o saldo autorizado a prazo foi pago — o espelho vira histórico, não cobrança. */
+export type APrazoStatusV3 = "pendente" | "cancelado" | "quitado";
 
 /**
  * Status canônico a gravar no `ContaReceberTitulo` ao lançar "a prazo": preserva
@@ -247,6 +248,24 @@ export interface APrazoV3 {
   observacao?: string;
   /** Recebimento misto: identidade da confirmação que formalizou este saldo. */
   operacaoId?: string;
+  /** Quando uma baixa posterior zerou o saldo (status "quitado"). */
+  quitadoEm?: string;
+}
+
+/**
+ * Reconcilia o espelho "a prazo" com o saldo REAL do título depois de uma baixa
+ * (`receberOSV3`): saldo zerado → "quitado" (deixa de ser cobrança/parcela pendente);
+ * saldo menor que o autorizado → o valor a prazo acompanha o saldo que resta. Espelho
+ * ausente, não pendente ou já coberto é devolvido intacto. Nunca AMPLIA a autorização.
+ */
+export function reconciliarAPrazoAposBaixaV3(aPrazo: unknown, saldo: number, agora: string): unknown {
+  if (!aPrazo || typeof aPrazo !== "object" || Array.isArray(aPrazo)) return aPrazo;
+  const mirror = aPrazo as Partial<APrazoV3>;
+  if (mirror.modo !== "a_prazo" || mirror.status !== "pendente") return aPrazo;
+  const s = money(saldo);
+  if (s <= EPS) return { ...mirror, status: "quitado", quitadoEm: agora };
+  if (s + EPS < money(mirror.valor ?? 0)) return { ...mirror, valor: s };
+  return aPrazo;
 }
 
 /** Monta o espelho "a prazo" a gravar no payload da OS (sem tocar `pagamentoV3`). */

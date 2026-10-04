@@ -156,6 +156,19 @@ function guard(storeId: string, osId: string, s: Awaited<ReturnType<typeof estad
   });
 }
 
+function v4(storeId: string, osId: string, s: Awaited<ReturnType<typeof estado>>) {
+  return projectFinancialOSV4({
+    storeId,
+    osId,
+    payload: s.payload as never,
+    prismaValorTotal: s.os.valorTotal,
+    titulo: s.titulo
+      ? { id: s.titulo.id, storeId, localKey: s.titulo.localKey, valor: s.titulo.valor, status: s.titulo.status, payload: s.titulo.payload }
+      : null,
+    loadedAt: new Date().toISOString(),
+  });
+}
+
 afterAll(async () => {
   await prisma.$disconnect();
 });
@@ -317,6 +330,31 @@ describe("PG · pagamento posterior dos 50", () => {
     expect(s.saldo).toBe(0);
     expect(s.caixa.map((c) => c.valor)).toEqual([350, 50]);
     expect(guard(storeId, osId, s).decisao).toBe("ALLOW_PAID");
+    // R/P2: depois da quitação o espelho a prazo é histórico — nenhuma cobrança/parcela pendente.
+    expect(s.payload.aPrazoV3).toMatchObject({ status: "quitado" });
+    expect((await lerPagamentoOSV3(storeId, osId)).aPrazo).toBeNull();
+    const proj = v4(storeId, osId, s);
+    expect(proj).toMatchObject({ financialStatus: "PAID", balance: 0, collectionMode: null, authorizedCredit: false });
+    expect(proj.installments).toEqual([]);
+  });
+
+  it("pagamento PARCIAL posterior (R$20): movimentação lançada e a prazo acompanha o saldo real (R$30)", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    expect((await registrarRecebimentoMistoOSV3(storeId, osId, entrada({ sessaoId }))).ok).toBe(true);
+    await receberOSV3(storeId, osId, { valor: 20, forma: "dinheiro", sessaoId });
+
+    const s = await estado(storeId, osId);
+    expect(s.recebido).toBe(370);
+    expect(s.saldo).toBe(30);
+    // Uma movimentação por baixa: os R$20 não são suprimidos por já haver R$350 lançados.
+    expect(s.movs.map((m) => m.valor).sort((a, b) => a - b)).toEqual([20, 350]);
+    expect(s.caixa.map((c) => c.valor)).toEqual([350, 20]);
+    expect(s.payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 30 });
+    expect((await lerPagamentoOSV3(storeId, osId)).aPrazo).toMatchObject({ valor: 30 });
+    expect(guard(storeId, osId, s).decisao).toBe("ALLOW_AUTHORIZED_CREDIT");
+    expect(v4(storeId, osId, s).installments).toEqual([expect.objectContaining({ amount: 30, dueAt: VENC, status: "pendente" })]);
   });
 });
 
@@ -569,6 +607,52 @@ describe("PG · concorrência com recebimento canônico (receberOSV3 / V4)", () 
     expect(s.recebido).toBe(350);
     expect(s.saldo).toBe(50);
     expect(s.caixa.map((c) => c.valor)).toEqual([350]);
+  });
+
+  it("R/P1: recebimento canônico pausado DEPOIS da baixa e antes de gravar a OS não apaga o a prazo commitado no meio", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+
+    // Trava a sessão de caixa: o receberOSV3 baixa o título (autocommit) e para no INSERT
+    // da operação de caixa (FK) — exatamente entre a baixa e a gravação do payload da OS.
+    let liberarSessao!: () => void;
+    const segurar = new Promise<void>((r) => (liberarSessao = r));
+    let sessaoTravada!: () => void;
+    const travou = new Promise<void>((r) => (sessaoTravada = r));
+    const trava = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "sessoes_caixa" WHERE "id" = ${sessaoId} FOR UPDATE`;
+        sessaoTravada();
+        await segurar;
+      },
+      { maxWait: 10_000, timeout: 60_000 },
+    );
+    await travou;
+    const canonico = receberOSV3(storeId, osId, { valor: 100, forma: "pix", sessaoId });
+    await esperarBloqueioNoBanco();
+
+    // Enquanto isso, o restante (R$300) é formalizado 100% a prazo e COMMITA.
+    const misto = await registrarRecebimentoMistoOSV3(
+      storeId,
+      osId,
+      entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 300, vencimento: VENC }, saldoEsperado: 300 }),
+    );
+    expect(misto.ok).toBe(true);
+
+    liberarSessao();
+    await trava;
+    const res = await canonico;
+    expect(res.pagamento).toMatchObject({ total: 400, recebido: 100, saldo: 300, status: "parcial" });
+
+    const s = await estado(storeId, osId);
+    // Nada do que o misto gravou some: autorização a prazo, eventos e espelho coerente.
+    expect(s.payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 300, vencimento: VENC });
+    expect(s.payload.timeline.map((e: Payload) => e.tipo)).toEqual(["os_criada", "financeiro_conta_receber_criada", "operacao_cobranca_gerada"]);
+    expect(s.payload.pagamentoV3).toMatchObject({ recebido: 100, saldo: 300, status: "parcial" });
+    expect(s.recebido).toBe(100);
+    expect(s.saldo).toBe(300);
+    expect(guard(storeId, osId, s).decisao).toBe("ALLOW_AUTHORIZED_CREDIT");
   });
 
   it("saldo mudou desde a tela → conflito recuperável com o saldo atual, sem efeitos", async () => {
