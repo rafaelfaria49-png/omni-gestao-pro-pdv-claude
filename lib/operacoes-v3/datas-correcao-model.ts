@@ -28,6 +28,7 @@ import {
   formatarDataOperacionalV3,
   formatarDiaDeIsoNaLojaV3,
   lerDatasOSV3,
+  prazoInternoPadraoIsoV3,
   validarDatasPropostaV3,
   validarEntradaDataV3,
   diasEntreCivisV3,
@@ -335,10 +336,27 @@ export function planejarCorrecaoDatasV3(
       sla.prazo = iso;
       sla.origemV3 = "informada";
     } else {
+      const previsaoRemovida = txt(recepcao.previsaoEntrega);
       delete recepcao.previsaoEntrega;
       delete recepcao.previsaoEntregaMeta;
-      // O prazo interno continua valendo como REGRA interna — nunca como promessa.
-      if (txt(sla.prazo)) sla.origemV3 = "automatico";
+      // O espelho da previsão removida NÃO vira "prazo interno" (seria a promessa
+      // apagada com outro nome): volta à regra padrão da Nova OS (cadastro + 2 dias).
+      // Um prazo interno próprio (não espelhado) continua valendo como regra interna.
+      const espelho =
+        sla.origemV3 === "informada" ||
+        (!!previsaoRemovida && !!txt(sla.prazo) && Date.parse(txt(sla.prazo)) === Date.parse(previsaoRemovida));
+      if (espelho) {
+        const padrao = prazoInternoPadraoIsoV3(base.criadoEm);
+        if (padrao) {
+          sla.prazo = padrao;
+          sla.origemV3 = "automatico";
+        } else {
+          delete sla.prazo;
+          delete sla.origemV3;
+        }
+      } else if (txt(sla.prazo)) {
+        sla.origemV3 = "automatico";
+      }
     }
     next.sla = sla;
     mexeuAbertura = true;
@@ -398,23 +416,43 @@ export function planejarCorrecaoDatasV3(
       (!!garantia.inicioAntes && (garantia.inicioAntes !== garantia.inicioDepois || garantia.vencimentoAntes !== garantia.vencimentoDepois));
 
     // Retorno registrado "com garantia ativa" que ficaria fora do novo período → impedimento.
+    // Vale para TODA cobertura que se move com a entrega: a visão V3 (derivada) e
+    // cada linha ativa real de `garantia_ordem_servico` deslocada (com o prazo dela,
+    // que pode divergir do payload). Cobertura que já não incluía o retorno não piora.
+    const janelas: Array<{ antes: [number, number] | null; depois: [number, number]; inicioIso: string; fimIso: string }> = [];
     if (g3Depois.temGarantia && !g3Depois.semCobertura && g3Depois.inicio && g3Depois.vencimento) {
-      const ini = Date.parse(g3Depois.inicio);
-      const fim = Date.parse(g3Depois.vencimento);
-      for (const r of lerRetornosV3(base as unknown as OrdemServico)) {
-        if (r.garantiaAtivaNaAbertura !== true) continue;
-        const t = Date.parse(r.criadoEm);
-        if (!Number.isFinite(t) || (t >= ini && t <= fim)) continue;
-        return {
-          ok: false,
-          tipo: "impedimento",
-          campo: "dataEntrega",
-          garantia,
-          mensagem:
-            `O retorno aberto em ${formatarDiaDeIsoNaLojaV3(r.criadoEm, tz)} foi registrado com garantia ativa e ficaria fora do novo período ` +
-            `(${formatarDiaDeIsoNaLojaV3(g3Depois.inicio, tz)} a ${formatarDiaDeIsoNaLojaV3(g3Depois.vencimento, tz)}). A correção não foi aplicada.`,
-        };
-      }
+      janelas.push({
+        antes: garantia.inicioAntes && garantia.vencimentoAntes ? [Date.parse(garantia.inicioAntes), Date.parse(garantia.vencimentoAntes)] : null,
+        depois: [Date.parse(g3Depois.inicio), Date.parse(g3Depois.vencimento)],
+        inicioIso: g3Depois.inicio,
+        fimIso: g3Depois.vencimento,
+      });
+    }
+    for (const l of garantia.linhas) {
+      janelas.push({
+        antes: [Date.parse(l.dataInicioAntes), Date.parse(l.dataFimAntes)],
+        depois: [Date.parse(l.dataInicio), Date.parse(l.dataFim)],
+        inicioIso: l.dataInicio,
+        fimIso: l.dataFim,
+      });
+    }
+    const dentro = (t: number, j: [number, number] | null) => !!j && t >= j[0] && t <= j[1];
+    for (const r of lerRetornosV3(base as unknown as OrdemServico)) {
+      if (r.garantiaAtivaNaAbertura !== true) continue;
+      const t = Date.parse(r.criadoEm);
+      if (!Number.isFinite(t)) continue;
+      // Sem janela "antes" conhecida (visão V3 sem cobertura prévia), qualquer saída conta.
+      const perdida = janelas.find((j) => !dentro(t, j.depois) && (j.antes === null || dentro(t, j.antes)));
+      if (!perdida) continue;
+      return {
+        ok: false,
+        tipo: "impedimento",
+        campo: "dataEntrega",
+        garantia,
+        mensagem:
+          `O retorno aberto em ${formatarDiaDeIsoNaLojaV3(r.criadoEm, tz)} foi registrado com garantia ativa e ficaria fora do novo período ` +
+          `(${formatarDiaDeIsoNaLojaV3(perdida.inicioIso, tz)} a ${formatarDiaDeIsoNaLojaV3(perdida.fimIso, tz)}). A correção não foi aplicada.`,
+      };
     }
     if (garantia.temImpacto && input.confirmarImpactoGarantia !== true) {
       return { ok: false, tipo: "confirmacao", campo: "dataEntrega", garantia, mensagem: "Confira o impacto na garantia e confirme antes de salvar." };

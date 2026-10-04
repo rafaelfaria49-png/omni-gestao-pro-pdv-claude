@@ -416,11 +416,19 @@ export const ORCAMENTO_STATUS_META_V3: Record<OrcamentoStatus, { label: string; 
  * é mostrado como "expirado" (sem reescrever o persistido).
  */
 export function statusEfetivoOrcamentoV3(orc: Pick<Orcamento, "status" | "validoAte">, now = Date.now()): OrcamentoStatus {
-  if (orc.status === "enviado" && orc.validoAte) {
-    const t = Date.parse(orc.validoAte);
-    if (Number.isFinite(t) && t < now) return "expirado";
-  }
+  if (orc.status === "enviado" && validadeExpiradaV3(orc.validoAte, now)) return "expirado";
   return orc.status;
+}
+
+/**
+ * A validade gravada já passou? Regra ÚNICA do status efetivo e dos leitores
+ * (selo "vencida"), para nunca divergirem. Validade nova é gravada como o fim do
+ * dia civil na loja, então só vence depois do último dia de validade.
+ */
+export function validadeExpiradaV3(validoAte: string | null | undefined, now = Date.now()): boolean {
+  if (!validoAte) return false;
+  const t = Date.parse(validoAte);
+  return Number.isFinite(t) && t < now;
 }
 
 // ----------------------------------------------------------------------------

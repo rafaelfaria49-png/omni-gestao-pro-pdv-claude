@@ -56,12 +56,31 @@ async function carregar(storeId: string, osId: string): Promise<{ id: string; pa
   return { id, payload, autor };
 }
 
-async function gravar(id: string, next: OSPayloadFull): Promise<OrdemServico> {
-  const data: Prisma.OrdemServicoUpdateInput = { payload: next as unknown as Prisma.InputJsonValue };
-  await prisma.ordemServico.update({ where: { id }, data });
+/**
+ * Grava sob a MESMA trava por OS da conversão e dos writers de pagamento
+ * (advisory lock + FOR UPDATE + releitura): o patch é calculado sobre o estado
+ * ATUAL — um carimbo/status atrasado nunca desfaz uma conversão já gravada.
+ * `aplicar` devolve `null` quando não há o que gravar (ex.: já convertido).
+ */
+async function gravarComTrava(storeId: string, id: string, aplicar: (payload: OSPayloadFull) => OSPayloadFull | null): Promise<OrdemServico> {
+  const sid = (storeId ?? "").trim();
+  const salvo = await prisma.$transaction(
+    async (tx) => {
+      await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
+      if (!(await travarOS(tx, sid, id))) throw new Error("OS não encontrada.");
+      const row = await tx.ordemServico.findFirst({ where: { id, storeId: sid }, select: { payload: true } });
+      const payload = row?.payload as unknown as OSPayloadFull | null;
+      if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
+      const next = aplicar(payload);
+      if (!next) return payload;
+      await tx.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+      return next;
+    },
+    { maxWait: 5_000, timeout: 15_000 },
+  );
   revalidatePath("/dashboard/operacoes-v3");
   revalidatePath("/dashboard/operacoes-v4-preview");
-  return next as unknown as OrdemServico;
+  return salvo as unknown as OrdemServico;
 }
 
 export interface MarcarPreOsInputV3 {
@@ -76,50 +95,51 @@ export interface MarcarPreOsInputV3 {
 }
 
 export async function marcarOrcamentoPreOsV3(storeId: string, osId: string, input: MarcarPreOsInputV3 = {}): Promise<OrdemServico> {
-  const { id, payload, autor } = await carregar(storeId, osId);
-  const atual = lerComercialV4(payload);
-  if (atual?.statusComercial === "convertido") return payload as unknown as OrdemServico;
+  const { id, autor } = await carregar(storeId, osId);
+  return gravarComTrava(storeId, id, (payload) => {
+    const atual = lerComercialV4(payload);
+    if (atual?.statusComercial === "convertido") return null;
 
-  const comercialV4: ComercialV4 = {
-    // Preserva campos já gravados (ex.: data da proposta definida na criação).
-    ...(atual ?? {}),
-    tipo: "orcamento_pre_os",
-    statusComercial: input.statusComercial ?? atual?.statusComercial ?? "rascunho",
-    origemAtendimento: input.origemAtendimento ?? atual?.origemAtendimento,
-    validadeDias: input.validadeDias ?? atual?.validadeDias,
-    prazoEstimado: input.prazoEstimado ?? atual?.prazoEstimado,
-    observacaoCliente: input.observacaoCliente ?? atual?.observacaoCliente,
-    observacaoInterna: input.observacaoInterna ?? atual?.observacaoInterna,
-    diagnosticoInicial: input.diagnosticoInicial ?? atual?.diagnosticoInicial,
-    opcaoAprovadaId: atual?.opcaoAprovadaId,
-    opcaoAprovadaRotulo: atual?.opcaoAprovadaRotulo,
-    convertidoEm: atual?.convertidoEm,
-    convertidoPor: atual?.convertidoPor,
-  };
+    const comercialV4: ComercialV4 = {
+      // Preserva campos já gravados (ex.: data da proposta definida na criação).
+      ...(atual ?? {}),
+      tipo: "orcamento_pre_os",
+      statusComercial: input.statusComercial ?? atual?.statusComercial ?? "rascunho",
+      origemAtendimento: input.origemAtendimento ?? atual?.origemAtendimento,
+      validadeDias: input.validadeDias ?? atual?.validadeDias,
+      prazoEstimado: input.prazoEstimado ?? atual?.prazoEstimado,
+      observacaoCliente: input.observacaoCliente ?? atual?.observacaoCliente,
+      observacaoInterna: input.observacaoInterna ?? atual?.observacaoInterna,
+      diagnosticoInicial: input.diagnosticoInicial ?? atual?.diagnosticoInicial,
+      opcaoAprovadaId: atual?.opcaoAprovadaId,
+      opcaoAprovadaRotulo: atual?.opcaoAprovadaRotulo,
+      convertidoEm: atual?.convertidoEm,
+      convertidoPor: atual?.convertidoPor,
+    };
 
-  const equipamentoAtual = payload.equipamento && typeof payload.equipamento === "object"
-    ? (payload.equipamento as unknown as Record<string, unknown>)
-    : {};
-  const equipamento = {
-    ...equipamentoAtual,
-    ...(input.aparelho?.tipo ? { tipo: input.aparelho.tipo } : {}),
-    ...(input.aparelho?.imei ? { numeroSerie: input.aparelho.imei } : {}),
-    ...(input.aparelho?.cor ? { cor: input.aparelho.cor } : {}),
-  };
+    const equipamentoAtual = payload.equipamento && typeof payload.equipamento === "object"
+      ? (payload.equipamento as unknown as Record<string, unknown>)
+      : {};
+    const equipamento = {
+      ...equipamentoAtual,
+      ...(input.aparelho?.tipo ? { tipo: input.aparelho.tipo } : {}),
+      ...(input.aparelho?.imei ? { numeroSerie: input.aparelho.imei } : {}),
+      ...(input.aparelho?.cor ? { cor: input.aparelho.cor } : {}),
+    };
 
-  const evento: EventoTimeline = {
-    id: eventId(),
-    tipo: "observacao",
-    autor,
-    autorTipo: "usuario",
-    conteudo: "Orçamento comercial classificado como pré-OS.",
-    metadata: { evento: "orcamento_pre_os" },
-    criadoEm: nowIso(),
-  };
-  const timeline: EventoTimeline[] = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const evento: EventoTimeline = {
+      id: eventId(),
+      tipo: "observacao",
+      autor,
+      autorTipo: "usuario",
+      conteudo: "Orçamento comercial classificado como pré-OS.",
+      metadata: { evento: "orcamento_pre_os" },
+      criadoEm: nowIso(),
+    };
+    const timeline: EventoTimeline[] = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
 
-  const next = { ...payload, comercialV4, equipamento, timeline: [...timeline, evento], atualizadoEm: nowIso() } as unknown as OSPayloadFull;
-  return gravar(id, next);
+    return { ...payload, comercialV4, equipamento, timeline: [...timeline, evento], atualizadoEm: nowIso() } as unknown as OSPayloadFull;
+  });
 }
 
 export async function atualizarStatusComercialV3(
@@ -128,26 +148,27 @@ export async function atualizarStatusComercialV3(
   statusComercial: StatusComercialOrcamentoV4,
   extra: Partial<ComercialV4> = {},
 ): Promise<OrdemServico> {
-  const { id, payload, autor } = await carregar(storeId, osId);
-  const atual = lerComercialV4(payload);
-  if (!atual || atual.tipo !== "orcamento_pre_os") {
-    throw new Error("Este registro não é um orçamento pré-OS.");
-  }
-  if (atual.statusComercial === "convertido") return payload as unknown as OrdemServico;
+  const { id, autor } = await carregar(storeId, osId);
+  return gravarComTrava(storeId, id, (payload) => {
+    const atual = lerComercialV4(payload);
+    if (!atual || atual.tipo !== "orcamento_pre_os") {
+      throw new Error("Este registro não é um orçamento pré-OS.");
+    }
+    if (atual.statusComercial === "convertido") return null;
 
-  const comercialV4: ComercialV4 = { ...atual, ...extra, tipo: "orcamento_pre_os", statusComercial };
-  const evento: EventoTimeline = {
-    id: eventId(),
-    tipo: "observacao",
-    autor,
-    autorTipo: "usuario",
-    conteudo: `Status comercial do orçamento: ${statusComercial}.`,
-    metadata: { evento: "status_comercial", statusComercial },
-    criadoEm: nowIso(),
-  };
-  const timeline: EventoTimeline[] = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const next = { ...payload, comercialV4, timeline: [...timeline, evento], atualizadoEm: nowIso() } as OSPayloadFull;
-  return gravar(id, next);
+    const comercialV4: ComercialV4 = { ...atual, ...extra, tipo: "orcamento_pre_os", statusComercial };
+    const evento: EventoTimeline = {
+      id: eventId(),
+      tipo: "observacao",
+      autor,
+      autorTipo: "usuario",
+      conteudo: `Status comercial do orçamento: ${statusComercial}.`,
+      metadata: { evento: "status_comercial", statusComercial },
+      criadoEm: nowIso(),
+    };
+    const timeline: EventoTimeline[] = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    return { ...payload, comercialV4, timeline: [...timeline, evento], atualizadoEm: nowIso() } as OSPayloadFull;
+  });
 }
 
 export interface ConverterOrcamentoInputV3 {

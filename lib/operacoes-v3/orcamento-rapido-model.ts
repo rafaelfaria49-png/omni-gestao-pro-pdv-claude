@@ -20,6 +20,7 @@ import {
   diasEntreCivisV3,
   erroFatoFuturoV3,
   fimDoDiaLojaIsoV3,
+  hojeNaLojaV3,
   montarDataOperacionalV3,
   somarDiasCivisV3,
   validarDatasPropostaV3,
@@ -97,7 +98,7 @@ export interface OrcamentoRapidoInputV3 {
   defeitoRelatado: string;
   itensFixos?: OrcamentoRapidoItemFixoInputV3[];
   grupo: OrcamentoRapidoGrupoInputV3;
-  /** Ausente = chamada antiga (comportamento anterior preservado). */
+  /** Ausente = padrão do servidor (proposta hoje, validade padrão, sem entrada física). */
   datas?: OrcamentoRapidoDatasInputV3;
 }
 
@@ -163,6 +164,18 @@ export interface CamposDatasOrcamentoV3 {
 /** Validade padrão: data do orçamento + `VALIDADE_PADRAO_DIAS` (mesma regra do envio). */
 export function validadePadraoDiaV3(dataPropostaDia: string): string {
   return somarDiasCivisV3(dataPropostaDia, VALIDADE_PADRAO_DIAS);
+}
+
+/**
+ * Datas do servidor quando o chamador não envia o bloco "Datas e prazos":
+ * proposta hoje (só o dia), validade padrão e NENHUMA entrada física — um
+ * orçamento nunca fabrica a presença do aparelho na loja.
+ */
+export function datasOrcamentoRapidoPadraoV3(agora: Date = new Date()): OrcamentoRapidoDatasInputV3 {
+  const hoje = hojeNaLojaV3(agora);
+  const proposta = montarDataOperacionalV3({ dia: hoje, hora: "" });
+  if (!proposta.ok) throw new Error("Não foi possível determinar a data de hoje na loja.");
+  return { dataProposta: { iso: proposta.valor.iso, meta: proposta.valor.meta }, validoAteDia: validadePadraoDiaV3(hoje), entradaAparelho: null };
 }
 
 /** Troca a data do orçamento; a validade acompanha enquanto não foi editada à mão. */

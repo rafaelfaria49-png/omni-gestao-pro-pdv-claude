@@ -57,6 +57,20 @@ describe("montarMensagemDocumentoV4", () => {
     );
     expect(txt).toContain("Termo de Entrega — OS-88");
     expect(txt).toContain("Maria Silva");
+    // Legado sem metadata: horário real, no fuso da loja (12:00Z = 09:00 em São Paulo).
+    expect(txt).toContain("Entregue em: 01/08/2026 09:00");
+  });
+
+  it("termo de entrega com data só-dia mostra só o dia (nunca ISO cru nem âncora 12:00)", () => {
+    const txt = montarMensagemDocumentoV4(
+      "termo_entrega",
+      os({
+        entregueEm: "2026-08-01T15:00:00.000Z",
+        entregaV3: { entregueEm: "2026-08-01T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-08-01" }, recebidoPor: "Maria Silva" },
+      }),
+    );
+    expect(txt).toContain("Entregue em: 01/08/2026");
+    expect(txt).not.toMatch(/12:00|T15:00/);
   });
 
   it("OS cliente não inventa valor", () => {

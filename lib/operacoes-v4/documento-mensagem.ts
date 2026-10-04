@@ -5,6 +5,7 @@ import type { OrdemServico } from "@/types/os";
 import { documentoMetaV3, type DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { termoGarantiaTextoV3 } from "@/lib/operacoes-v3/garantia-textos";
 import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { formatarDataOperacionalV3, lerDatasOSV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 import { termoGarantiaDaOSV3 } from "@/lib/operacoes-v3/print-model";
 import { statusMetaV3, statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { montarOrcamentoClienteViewV4 } from "./orcamento-cliente-view";
@@ -52,7 +53,9 @@ export function montarMensagemDocumentoV4(tipo: DocumentoTipoV3, os: OrdemServic
       if (cliente) linhas.push(`Cliente: ${cliente}`);
       if (aparelho) linhas.push(`Aparelho: ${aparelho}`);
       if (e.recebidoPor) linhas.push(`Retirado por: ${e.recebidoPor}`);
-      if (e.entregueEm) linhas.push(`Entregue em: ${e.entregueEm}`);
+      // Data efetiva no fuso da loja, com a precisão gravada (nunca o ISO cru nem a âncora 12:00).
+      const entregaTexto = formatarDataOperacionalV3(lerDatasOSV3(os).entrega);
+      if (entregaTexto) linhas.push(`Entregue em: ${entregaTexto}`);
       return linhas.join("\n");
     }
     case "os_cliente": {

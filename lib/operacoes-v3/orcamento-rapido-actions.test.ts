@@ -16,10 +16,15 @@ const criarOSMock = vi.fn<AnyFn>(async () => {
   const id = `os-${proximoOsId++}`;
   return { os: { id, codigo: `OS-${id}` } };
 });
-vi.mock("./nova-os-actions", () => ({ criarOSEnterpriseV3: (...args: unknown[]) => criarOSMock(...args) }));
+const criarOSEnterpriseMock = vi.fn<AnyFn>();
+// Orçamento é sempre pré-OS (sem entrada física fabricada): o caminho é `criarOSPreOrcamentoV3`.
+vi.mock("./nova-os-actions", () => ({
+  criarOSEnterpriseV3: (...args: unknown[]) => criarOSEnterpriseMock(...args),
+  criarOSPreOrcamentoV3: (...args: unknown[]) => criarOSMock(...args),
+}));
 
 const gerarOrcamentoMock = vi.fn<AnyFn>(async () => ({}));
-type SalvarOrcamentoInputTest = { servicos: ServicoV3[]; pecas: PecaV3[]; gruposV3?: OrcamentoGrupoV3[] };
+type SalvarOrcamentoInputTest = { servicos: ServicoV3[]; pecas: PecaV3[]; gruposV3?: OrcamentoGrupoV3[]; validoAte?: string };
 const salvarOrcamentoMock = vi.fn<AnyFn>(async (_sid: string, _osId: string, input: SalvarOrcamentoInputTest) => {
   // Espelha o comportamento REAL wired (GOAL 024): valida grupos antes de "gravar".
   const erros = validarGruposOrcamentoV3({ pecas: input.pecas, servicos: input.servicos });
@@ -55,6 +60,36 @@ function inputBase(over: Partial<OrcamentoRapidoInputV3> = {}): OrcamentoRapidoI
 afterEach(() => {
   vi.clearAllMocks();
   proximoOsId = 1;
+});
+
+describe("criarOrcamentoRapidoV3 — sem o bloco de datas (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001)", () => {
+  it("chamada sem `datas`: pré-OS com proposta hoje (só o dia), validade padrão e NENHUMA entrada física", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    // 04/10/2026 15:00 na loja (America/Sao_Paulo).
+    vi.setSystemTime(new Date("2026-10-04T18:00:00.000Z"));
+    try {
+      resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente Teste", telefone: "11999990000" });
+      await criarOrcamentoRapidoV3("loja-x", inputBase());
+
+      expect(criarOSEnterpriseMock).not.toHaveBeenCalled();
+      expect(criarOSMock).toHaveBeenCalledTimes(1);
+      const [, draft, extras] = criarOSMock.mock.calls[0]!;
+      expect(draft.recepcao.dataEntrada).toBe("");
+      expect(draft.recepcao.dataEntradaMeta).toBeUndefined();
+      expect(extras.comercialV4).toMatchObject({
+        tipo: "orcamento_pre_os",
+        statusComercial: "rascunho",
+        dataProposta: "2026-10-04T15:00:00.000Z",
+        dataPropostaMeta: { precisao: "dia", dia: "2026-10-04" },
+        validadeDias: 7,
+      });
+      // Validade = fim do dia 11/10 na loja (definida uma vez, no dia civil).
+      const [, , salvarInput] = salvarOrcamentoMock.mock.calls[0]!;
+      expect(salvarInput.validoAte).toBe("2026-10-12T02:59:59.999Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("criarOrcamentoRapidoV3 — happy path", () => {

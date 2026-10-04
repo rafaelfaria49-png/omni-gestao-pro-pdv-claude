@@ -55,7 +55,15 @@ import {
 } from "./orcamento-model";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { salvarGarantiaOSV3 } from "./garantia-actions";
-import { isoInstanteValidoV3 } from "./datas-operacionais-model";
+import {
+  diaNaLojaV3,
+  fimDoDiaLojaIsoV3,
+  formatarDataOperacionalV3,
+  hojeNaLojaV3,
+  isoInstanteValidoV3,
+  lerDatasOSV3,
+  somarDiasCivisV3,
+} from "./datas-operacionais-model";
 
 /** Materializa o rascunho a partir dos itens da OS (reuso seguro do @/api/os). */
 export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise<OrdemServico> {
@@ -175,7 +183,14 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
   if (input.validoAte !== undefined) {
     if (atual.validoAte) throw new Error("A validade deste orçamento já foi definida. Use “Corrigir datas” para alterá-la.");
     if (!isoInstanteValidoV3(input.validoAte)) throw new Error("Validade do orçamento inválida.");
-    validoAte = new Date(input.validoAte).toISOString();
+    // "Válido até" é um DIA civil na loja: vale até o fim desse dia e nunca antes
+    // da data do orçamento (mesma regra do formulário e da correção).
+    const dia = diaNaLojaV3(input.validoAte);
+    const proposta = lerDatasOSV3(payload).proposta;
+    if (proposta && dia < proposta.dia) {
+      throw new Error(`A validade não pode ser anterior à data do orçamento (${formatarDataOperacionalV3(proposta)}).`);
+    }
+    validoAte = fimDoDiaLojaIsoV3(dia);
   }
 
   const editado = recalcOrcamentoV3({
@@ -290,8 +305,9 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
     // Evento REAL do envio (nunca a data retroativa da proposta).
     enviadoEm: atual.enviadoEm ?? nowIso(),
     // Validade já definida (na proposta ou num envio anterior) é preservada:
-    // reenviar nunca prorroga em silêncio; sem validade, vale o padrão a partir de agora.
-    validoAte: atual.validoAte ?? new Date(Date.now() + VALIDADE_PADRAO_DIAS * 86400000).toISOString(),
+    // reenviar nunca prorroga em silêncio. Sem validade, vale o padrão contado em
+    // DIAS CIVIS a partir de hoje, até o fim do dia na loja (como as telas leem).
+    validoAte: atual.validoAte ?? fimDoDiaLojaIsoV3(somarDiasCivisV3(hojeNaLojaV3(), VALIDADE_PADRAO_DIAS)),
     atualizadoEm: nowIso(),
   });
   const reenvio = atual.status === "enviado";

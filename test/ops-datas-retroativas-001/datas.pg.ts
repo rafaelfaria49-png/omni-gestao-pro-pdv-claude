@@ -20,11 +20,11 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import type { Prisma } from "@/generated/prisma";
 import type { OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
-import { criarOSEnterpriseV3 } from "@/lib/operacoes-v3/nova-os-actions";
+import { criarOSEnterpriseV3, criarOSPreOrcamentoV3 } from "@/lib/operacoes-v3/nova-os-actions";
 import { novaOSDraftVazioV3, type NovaOSDraftV3 } from "@/lib/operacoes-v3/nova-os-model";
 import { criarOrcamentoRapidoV3 } from "@/lib/operacoes-v3/orcamento-rapido-actions";
-import { converterOrcamentoEmOSV3, marcarOrcamentoPreOsV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
-import { enviarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
+import { atualizarStatusComercialV3, converterOrcamentoEmOSV3, marcarOrcamentoPreOsV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
+import { enviarOrcamentoV3, gerarOrcamentoDaOS, salvarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
 import { finalizarAtendimentoRapidoV3 } from "@/lib/operacoes-v3/atendimento-rapido-actions";
 import { registrarEntregaV3 } from "@/lib/operacoes-v3/entrega-actions";
 import { receberOSV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
@@ -279,6 +279,32 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect(p.orcamento.validoAte).toBe(fimDoDiaLojaIsoV3(validoAteDia));
   });
 
+  it("orçamento comum: o primeiro envio grava a validade no FIM do dia civil (hoje + 7), nunca agora + 7×24h", async () => {
+    const storeId = await novaLoja();
+    const { os } = await criarOSEnterpriseV3(storeId, draftBase());
+    await gerarOrcamentoDaOS(storeId, os.id);
+    await salvarOrcamentoV3(storeId, os.id, { servicos: [{ id: `s-${++seq}`, descricao: "Troca de tela", valor: 200 }], pecas: [], desconto: 0 });
+    await enviarOrcamentoV3(storeId, os.id);
+    const { p } = await lerOS(os.id);
+    expect(p.orcamento.validoAte).toBe(fimDoDiaLojaIsoV3(somarDiasCivisV3(hojeNaLojaV3(), 7)));
+    expect(pertoDeAgora(p.orcamento.enviadoEm)).toBe(true);
+  });
+
+  it("validade informada anterior à data do orçamento é recusada no servidor; válida é gravada no fim do dia civil", async () => {
+    const storeId = await novaLoja();
+    const proposta = data(dia(-5));
+    const { os } = await criarOSPreOrcamentoV3(storeId, draftBase({ dataEntrada: "", dataEntradaMeta: undefined }), {
+      comercialV4: { tipo: "orcamento_pre_os", statusComercial: "rascunho", dataProposta: proposta.iso, dataPropostaMeta: proposta.meta, validadeDias: 7 },
+    });
+    await gerarOrcamentoDaOS(storeId, os.id);
+    const itens = { servicos: [{ id: `s-${++seq}`, descricao: "Troca de tela", valor: 200 }], pecas: [], desconto: 0 };
+    await expect(salvarOrcamentoV3(storeId, os.id, { ...itens, validoAte: fimDoDiaLojaIsoV3(dia(-6)) })).rejects.toThrow(/não pode ser anterior à data do orçamento/);
+    expect((await lerOS(os.id)).p.orcamento.validoAte).toBeUndefined();
+    // Instante qualquer do dia vira o fim do dia civil (o "Válido até" é um dia).
+    await salvarOrcamentoV3(storeId, os.id, { ...itens, validoAte: data(dia(2)).iso });
+    expect((await lerOS(os.id)).p.orcamento.validoAte).toBe(fimDoDiaLojaIsoV3(dia(2)));
+  });
+
   it("D09: com o aparelho na loja a entrada é gravada e a conversão em OS a preserva", async () => {
     const storeId = await novaLoja();
     const proposta = data(dia(-3));
@@ -298,6 +324,27 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: entrada.iso, previsaoEntrega: previsao.iso, previsaoEntregaMeta: previsao.meta });
     expect(depois.comercialV4).toMatchObject({ statusComercial: "convertido", dataProposta: proposta.iso });
     expect(depois.sla).toMatchObject({ prazo: previsao.iso, origemV3: "informada" });
+  });
+
+  it("conversão × status/carimbo comercial simultâneos: em qualquer ordem a conversão nunca é revertida", async () => {
+    const storeId = await novaLoja();
+    const entrada = data(dia(-2), "10:30");
+    const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: data(dia(-3)), validoAteDia: dia(4), entradaAparelho: entrada } });
+    const { p } = await lerOS(r.osId);
+    await prisma.ordemServico.update({
+      where: { id: r.osId },
+      data: { payload: { ...p, comercialV4: { ...p.comercialV4, statusComercial: "aprovado" }, orcamento: { ...p.orcamento, status: "aprovado" } } as Prisma.InputJsonValue },
+    });
+    const resultados = await Promise.allSettled([
+      atualizarStatusComercialV3(storeId, r.osId, "aprovado"),
+      converterOrcamentoEmOSV3(storeId, r.osId),
+      marcarOrcamentoPreOsV3(storeId, r.osId, { origemAtendimento: "whatsapp", statusComercial: "aprovado" }),
+    ]);
+    expect(resultados.map((x) => x.status)).toEqual(["fulfilled", "fulfilled", "fulfilled"]);
+    const depois = (await lerOS(r.osId)).p;
+    expect(depois.comercialV4.statusComercial).toBe("convertido");
+    expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: entrada.iso, dataEntradaMeta: entrada.meta });
+    expect(depois.timeline.filter((e: Payload) => e.metadata?.evento === "orcamento_convertido_os")).toHaveLength(1);
   });
 
   it("D08: conversão sem entrada registrada exige a entrada real (nunca presume a data da proposta)", async () => {
@@ -582,6 +629,43 @@ describe("PG · Concorrência (D16/D17)", () => {
     expect(conflito).toMatchObject({ ok: false, tipo: "conflito", campo: "dataEntrada" });
     const { p } = await lerOS(osId);
     expect(p.timeline.filter((e: Payload) => e.metadata?.evento === "datas_corrigidas")).toHaveLength(1);
+  });
+
+  it("entregas simultâneas com datas diferentes: uma entrega, a outra recebe conflito; efeitos e eventos uma única vez", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOSPronta(storeId, data(dia(-9)));
+    const sessaoId = await abrirCaixa(storeId);
+    await receberOSV3(storeId, osId, { valor: 100, forma: "dinheiro", sessaoId });
+    const caixaAntes = await prisma.caixaOperacao.count({ where: { storeId } });
+    const resultados = await Promise.allSettled([
+      registrarEntregaV3(storeId, osId, { dataEntrega: data(dia(-3)) }),
+      registrarEntregaV3(storeId, osId, { dataEntrega: data(dia(-2)) }),
+    ]);
+    expect(resultados.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const recusada = resultados.find((r): r is PromiseRejectedResult => r.status === "rejected")!;
+    expect(String((recusada.reason as Error).message)).toMatch(/já foi entregue em .*Corrigir datas/);
+    const { p } = await lerOS(osId);
+    expect(p.status).toBe("entregue");
+    expect(p.timeline.filter((e: Payload) => e.tipo === "entrega_cliente")).toHaveLength(1);
+    expect([dia(-3), dia(-2)]).toContain(p.entregaV3.entregueEmMeta.dia);
+    expect(p.entregueEm).toBe(p.entregaV3.entregueEm);
+    expect(p.retirada.retiradoEm).toBe(p.entregaV3.entregueEm);
+    expect(await prisma.caixaOperacao.count({ where: { storeId } })).toBe(caixaAntes);
+  });
+
+  it("duplo clique com a MESMA data: no-op idempotente — uma única entrega e um único evento", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOSPronta(storeId, data(dia(-9)));
+    const sessaoId = await abrirCaixa(storeId);
+    await receberOSV3(storeId, osId, { valor: 100, forma: "dinheiro", sessaoId });
+    const resultados = await Promise.allSettled([
+      registrarEntregaV3(storeId, osId, { dataEntrega: data(dia(-3)) }),
+      registrarEntregaV3(storeId, osId, { dataEntrega: data(dia(-3)) }),
+    ]);
+    expect(resultados.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+    const { p } = await lerOS(osId);
+    expect(p.timeline.filter((e: Payload) => e.tipo === "entrega_cliente")).toHaveLength(1);
+    expect(p.entregaV3.entregueEmMeta).toEqual({ precisao: "dia", dia: dia(-3) });
   });
 });
 

@@ -18,7 +18,7 @@
 // nunca chega a esta projeção — ver `KIND_META_V3` em `orcamento-model.ts`.
 // ============================================================================
 
-import { diaNaLojaV3, formatarDataOperacionalV3, formatarDiaDeIsoNaLojaV3, lerDatasOSV3, validadeVencidaV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
+import { formatarDataOperacionalV3, formatarDiaDeIsoNaLojaV3, lerDatasOSV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 import type { OrdemServico } from "@/types/os";
 import {
   computeTotaisV3,
@@ -27,6 +27,7 @@ import {
   pecaValorCliente,
   servicoValorCliente,
   VALIDADE_PADRAO_DIAS,
+  validadeExpiradaV3,
   type OrcamentoLinhaKindV3,
   type PecaV3,
   type ServicoV3,
@@ -228,7 +229,8 @@ export function montarOrcamentoClienteViewV4(os: OrdemServico, empresa?: Empresa
     ? {
         validoAte: orc.validoAte,
         validoAteTexto: formatarDiaDeIsoNaLojaV3(orc.validoAte),
-        vencida: validadeVencidaV3(diaNaLojaV3(orc.validoAte)),
+        // Mesma regra do status efetivo (`statusEfetivoOrcamentoV3`): nunca divergem.
+        vencida: validadeExpiradaV3(orc.validoAte),
       }
     : { politicaTexto: `Validade de ${VALIDADE_PADRAO_DIAS} dias a partir do envio ao cliente.` };
   const datasOS = lerDatasOSV3(os);

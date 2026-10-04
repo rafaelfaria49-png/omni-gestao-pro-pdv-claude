@@ -13,6 +13,7 @@ import {
   MOTIVO_RECUSA_LABEL_V3,
   recalcOrcamentoV3,
   statusEfetivoOrcamentoV3,
+  validadeExpiradaV3,
   validarGruposOrcamentoV3,
   validarSelecaoCompletaV3,
   VALIDADE_PADRAO_DIAS,
@@ -80,6 +81,17 @@ describe("orçamento V3 — estados", () => {
     expect(statusEfetivoOrcamentoV3({ ...base, validoAte: "2026-06-01T00:00:00Z" }, now)).toBe("expirado");
     expect(statusEfetivoOrcamentoV3({ ...base, validoAte: "2026-06-20T00:00:00Z" }, now)).toBe("enviado");
     expect(statusEfetivoOrcamentoV3({ ...base, validoAte: undefined }, now)).toBe("enviado");
+  });
+
+  it("validade no fim do dia civil: vale o último dia inteiro e só vence no dia seguinte (regra única do status e do selo)", () => {
+    const validoAte = "2026-10-12T02:59:59.999Z"; // fim de 11/10 na loja (America/Sao_Paulo)
+    const dia11as20h = Date.parse("2026-10-11T23:00:00.000Z");
+    const dia12a0h = Date.parse("2026-10-12T03:00:00.000Z");
+    expect(statusEfetivoOrcamentoV3({ ...base, validoAte }, dia11as20h)).toBe("enviado");
+    expect(statusEfetivoOrcamentoV3({ ...base, validoAte }, dia12a0h)).toBe("expirado");
+    expect(validadeExpiradaV3(validoAte, dia11as20h)).toBe(false);
+    expect(validadeExpiradaV3(validoAte, dia12a0h)).toBe(true);
+    expect(validadeExpiradaV3(undefined, dia12a0h)).toBe(false);
   });
 
   it("rascunho/aprovado/recusado não expiram", () => {

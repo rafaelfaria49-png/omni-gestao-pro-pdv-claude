@@ -154,6 +154,23 @@ describe("round-trip formulário → gravação → leitura → formulário", ()
     expect(lerDataOperacionalV3("", { precisao: "dia", dia: "2026-09-25" })).toBeNull();
     expect(lerDataOperacionalV3("lixo")).toBeNull();
   });
+
+  it("só-dia só vale com a âncora EXATA do dia; ISO alterada por outro caminho vira leitura legada", () => {
+    // Âncora de 24/09 = 15:00Z: coerente.
+    expect(lerDataOperacionalV3("2026-09-24T15:00:00.000Z", { precisao: "dia", dia: "2026-09-24" })).toEqual({
+      iso: "2026-09-24T15:00:00.000Z",
+      precisao: "dia",
+      dia: "2026-09-24",
+      origem: "informada",
+    });
+    // ISO ancorada em 25/09 com metadata de 24/09: nunca exibe 24/09.
+    const outroDia = lerDataOperacionalV3("2026-09-25T15:00:00.000Z", { precisao: "dia", dia: "2026-09-24" });
+    expect(outroDia).toMatchObject({ precisao: "data_hora", dia: "2026-09-25", origem: "legado" });
+    // Mesmo dia, horário diferente da âncora (ISO regravada sem a metadata): mostra o horário real.
+    const mesmoDia = lerDataOperacionalV3("2026-09-24T18:30:00.000Z", { precisao: "dia", dia: "2026-09-24" });
+    expect(mesmoDia).toMatchObject({ precisao: "data_hora", dia: "2026-09-24", origem: "legado" });
+    expect(formatarDataOperacionalV3(mesmoDia)).toBe("24/09/2026 15:30");
+  });
 });
 
 describe("validarEntradaDataV3 — validação estrita no servidor", () => {

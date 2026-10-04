@@ -290,10 +290,24 @@ export function lerDataOperacionalV3(iso: unknown, meta?: unknown, tz?: string):
   const instante = d.toISOString();
   const diaIso = diaNaLojaV3(instante, tz);
   if (metaFormaValida(meta)) {
-    if (meta.precisao === "dia") return { iso: instante, precisao: "dia", dia: meta.dia, origem: "informada" };
-    if (meta.dia === diaIso) return { iso: instante, precisao: "data_hora", dia: diaIso, origem: "informada" };
+    // Só-dia vale apenas se a ISO for exatamente a âncora desse dia (mesma regra do
+    // escritor): ISO alterada por outro caminho sem a metadata → leitura legada.
+    if (meta.precisao === "dia") {
+      if (ancoraDiaIsoV3(meta.dia, tz) === instante) return { iso: instante, precisao: "dia", dia: meta.dia, origem: "informada" };
+    } else if (meta.dia === diaIso) {
+      return { iso: instante, precisao: "data_hora", dia: diaIso, origem: "informada" };
+    }
   }
   return { iso: instante, precisao: "data_hora", dia: diaIso, origem: "legado" };
+}
+
+/** Regra do prazo interno padrão da Nova OS (sem previsão combinada): cadastro + 2 dias. */
+export const PRAZO_INTERNO_PADRAO_DIAS_V3 = 2;
+
+/** Prazo interno padrão a partir do cadastro (ISO). "" quando o cadastro é inválido. */
+export function prazoInternoPadraoIsoV3(cadastroIso: unknown): string {
+  const d = dataValida(cadastroIso);
+  return d ? new Date(d.getTime() + PRAZO_INTERNO_PADRAO_DIAS_V3 * 86_400_000).toISOString() : "";
 }
 
 const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;

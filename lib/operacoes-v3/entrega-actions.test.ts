@@ -11,13 +11,26 @@ const mocks = vi.hoisted(() => ({
   emitirEvento: vi.fn(),
   revalidatePath: vi.fn(),
   autoClose: vi.fn(),
+  lock: vi.fn(),
+  travarOS: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate },
-    contaReceberTitulo: { findUnique: mocks.tituloFindUnique },
-  },
+vi.mock("@/lib/prisma", () => {
+  const tx = { ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate } };
+  return {
+    prisma: {
+      ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate },
+      contaReceberTitulo: { findUnique: mocks.tituloFindUnique },
+      // Trava por OS: o callback recebe o mesmo cliente de OS mockado (a trava real
+      // é provada no PostgreSQL em test/ops-datas-retroativas-001/datas.pg.ts).
+      $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
+    },
+  };
+});
+vi.mock("@/lib/financeiro/services/recebimento-lote-service", () => ({ recebimentoLoteAdvisoryLock: mocks.lock }));
+vi.mock("./recebimento-misto-service", () => ({
+  chaveLockRecebimentoMistoV3: (sid: string, id: string) => `lock:${sid}:${id}`,
+  travarOS: mocks.travarOS,
 }));
 vi.mock("@/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: mocks.requireEnterpriseWith }));
@@ -76,6 +89,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-07-15T15:30:00.000Z"));
   mocks.osFindFirst.mockReset().mockResolvedValue(row());
   mocks.osUpdate.mockReset().mockResolvedValue({});
+  mocks.lock.mockReset().mockResolvedValue(undefined);
+  mocks.travarOS.mockReset().mockResolvedValue(true);
   mocks.tituloFindUnique.mockReset().mockResolvedValue(titulo());
   mocks.auth.mockReset().mockResolvedValue({ user: { id: "server-user", name: "Operadora Server", email: "server@example.com" } });
   mocks.requireEnterpriseWith.mockReset().mockResolvedValue({ ok: true });
@@ -238,6 +253,46 @@ describe("registrarEntregaV3 — guard financeiro server-side", () => {
       storeId,
       osFilha: expect.objectContaining({ id: osId }),
     }));
+  });
+
+  // GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001 — confirmação concorrente perdedora.
+  it("decide e grava sob a trava por OS (advisory lock + FOR UPDATE) antes de qualquer efeito", async () => {
+    await registrarEntregaV3(storeId, osId);
+    expect(mocks.lock).toHaveBeenCalledWith(expect.anything(), `lock:${storeId}:${osId}`);
+    expect(mocks.travarOS).toHaveBeenCalledWith(expect.anything(), storeId, osId);
+    expect(mocks.lock.mock.invocationCallOrder[0]).toBeLessThan(mocks.osFindFirst.mock.invocationCallOrder[0]);
+    expect(mocks.osUpdate.mock.invocationCallOrder[0]).toBeLessThan(mocks.consumirEstoque.mock.invocationCallOrder[0]);
+  });
+
+  it("OS já entregue com OUTRA data efetiva pedida: conflito explícito, sem gravar nem repetir efeitos", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregueEm: "2026-07-10T15:00:00.000Z",
+      entregaV3: { entregueEm: "2026-07-10T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-07-10" } },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-12T15:00:00.000Z", meta: { precisao: "dia", dia: "2026-07-12" } } }),
+    ).rejects.toThrow('Esta OS já foi entregue em 10/07/2026. Para ajustar a data, use "Corrigir datas".');
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+    expect(mocks.consumirEstoque).not.toHaveBeenCalled();
+    expect(mocks.emitirEvento).not.toHaveBeenCalled();
+    expect(mocks.autoClose).not.toHaveBeenCalled();
+  });
+
+  it("OS já entregue com a MESMA data efetiva: continua no-op idempotente", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-10T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-07-10" } },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-10T15:00:00.000Z", meta: { precisao: "dia", dia: "2026-07-10" } } }),
+    ).resolves.toBe(entregue);
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+    expect(mocks.emitirEvento).not.toHaveBeenCalled();
   });
 
   it("após persistir a entrega, tenta finalizar o retorno original vinculado", async () => {

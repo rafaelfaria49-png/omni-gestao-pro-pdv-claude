@@ -194,6 +194,46 @@ describe("planejarCorrecaoDatasV3 — D14 corrigir entrega sem refazer nada", ()
   });
 });
 
+describe("planejarCorrecaoDatasV3 — retorno × linha real de garantia divergente do payload", () => {
+  it("linha ativa de 30 dias (payload diz 90): antecipar a entrega deixaria o retorno fora DELA → impedimento", () => {
+    // Visão V3 (90 dias) continuaria cobrindo 20/10; a linha real deslocada termina em 15/10.
+    const linhas: GarantiaOperacionalLinhaV3[] = [{ id: "g-30", status: "ativa", dataInicio: ENTREGA.iso, dataFim: "2026-10-29T19:00:00.000Z" }];
+    const base = osEntregue({
+      retornosV3: [{ id: "r1", osOriginalId: "os-1", motivo: "Tela piscando", criadoEm: "2026-10-20T15:00:00.000Z", status: "aberto", garantiaAtivaNaAbertura: true }],
+    });
+    const r = planejarCorrecaoDatasV3(
+      base,
+      input({
+        alteracoes: { dataEntrega: data("2026-09-15", "16:00"), dataEntrada: data("2026-09-14") },
+        esperados: { dataEntrega: ENTREGA.iso, dataEntrada: ENTRADA.iso },
+        confirmarImpactoGarantia: true,
+      }),
+      { ...CTX, garantias: linhas },
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.tipo).toBe("impedimento");
+    expect(r.mensagem).toContain("retorno aberto em 20/10/2026");
+    expect(r.mensagem).toContain("(15/09/2026 a 15/10/2026)");
+  });
+
+  it("a mesma antecipação sem retorno dependente é permitida e desloca a linha com o prazo dela", () => {
+    const linhas: GarantiaOperacionalLinhaV3[] = [{ id: "g-30", status: "ativa", dataInicio: ENTREGA.iso, dataFim: "2026-10-29T19:00:00.000Z" }];
+    const r = planejarCorrecaoDatasV3(
+      osEntregue(),
+      input({
+        alteracoes: { dataEntrega: data("2026-09-15", "16:00"), dataEntrada: data("2026-09-14") },
+        esperados: { dataEntrega: ENTREGA.iso, dataEntrada: ENTRADA.iso },
+        confirmarImpactoGarantia: true,
+      }),
+      { ...CTX, garantias: linhas },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.garantia.linhas[0]).toMatchObject({ id: "g-30", dataFim: "2026-10-15T19:00:00.000Z" });
+  });
+});
+
 describe("planejarCorrecaoDatasV3 — regras e concorrência (D05/D17)", () => {
   it("D17: snapshot velho (esperado ≠ gravado) recebe conflito, sem sobrescrita", () => {
     const r = planejarCorrecaoDatasV3(
@@ -241,7 +281,7 @@ describe("planejarCorrecaoDatasV3 — regras e concorrência (D05/D17)", () => {
 });
 
 describe("planejarCorrecaoDatasV3 — previsão, atendimento rápido e proposta", () => {
-  it("D06: remover a previsão volta a 'não informada'; o prazo interno continua como regra, marcado como automático", () => {
+  it("D06: remover a previsão volta a 'não informada'; o espelho NÃO vira prazo interno — volta à regra padrão (cadastro + 2 dias)", () => {
     const prev = data("2026-09-28", "18:00");
     const base = osEntregue({
       aberturaV3: { versao: 1, recepcao: { dataEntrada: ENTRADA.iso, dataEntradaMeta: ENTRADA.meta, previsaoEntrega: prev.iso, previsaoEntregaMeta: prev.meta } },
@@ -252,7 +292,22 @@ describe("planejarCorrecaoDatasV3 — previsão, atendimento rápido e proposta"
     if (!r.ok) return;
     const datas = lerDatasOSV3(r.next);
     expect(datas.previsao).toBeNull();
+    // Cadastro 04/10 17:00Z + 2 dias — nunca a promessa apagada (28/09 18:00).
     expect(datas.prazoInterno).toMatchObject({ origem: "automatico" });
+    expect(datas.prazoInterno?.data.iso).toBe("2026-10-06T17:00:00.000Z");
+    expect((r.next as any).sla).toMatchObject({ prazo: "2026-10-06T17:00:00.000Z", origemV3: "automatico" });
+  });
+
+  it("remover a previsão preserva um prazo interno PRÓPRIO (não espelhado)", () => {
+    const prev = data("2026-09-28", "18:00");
+    const base = osEntregue({
+      aberturaV3: { versao: 1, recepcao: { dataEntrada: ENTRADA.iso, dataEntradaMeta: ENTRADA.meta, previsaoEntrega: prev.iso, previsaoEntregaMeta: prev.meta } },
+      sla: { prazo: "2026-09-27T12:00:00.000Z", status: "ok", origemV3: "automatico" },
+    });
+    const r = planejarCorrecaoDatasV3(base, input({ alteracoes: { previsaoEntrega: null }, esperados: { previsaoEntrega: prev.iso } }), CTX);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect((r.next as any).sla).toMatchObject({ prazo: "2026-09-27T12:00:00.000Z", origemV3: "automatico" });
   });
 
   it("D12: corrigir atendimento rápido muda só datas (concluidoEm + espelhos), nunca recebimento", () => {
