@@ -270,6 +270,39 @@ async function montarReplay(
   return { jaRegistrado: true, operacaoId: n.operacaoId, tituloId: titulo.id, pagamento, aPrazo, valorRecebidoAgora, valorAPrazo, recibo };
 }
 
+/** Replay / conflito pela identidade persistida no ledger do título (chamar SOB a trava da OS). */
+async function replayDaOperacao(
+  tx: RecebimentoMistoTxV3,
+  ctx: ContextoRecebimentoMistoV3,
+  n: RecebimentoMistoNormalizadoV3,
+): Promise<ResultadoRecebimentoMistoV3 | null> {
+  const titulo = await getContaReceberByLocalKey(ctx.storeId, localKeyContaReceberOSV3(ctx.storeId, ctx.osId), tx);
+  const marcador = titulo ? marcadorDaOperacao(titulo.payload, n.operacaoId) : null;
+  if (!titulo || !marcador) return null;
+  if (marcador.requestFingerprint !== fingerprintRecebimentoMistoV3({ storeId: ctx.storeId, osId: ctx.osId }, n)) {
+    throw new RecebimentoMistoErroV3(
+      "idempotencia_conflito",
+      "Esta confirmação já foi registrada com outros valores. Atualize a OS antes de lançar outra operação.",
+    );
+  }
+  return montarReplay(tx, ctx, n, titulo, marcador);
+}
+
+/**
+ * SÓ o replay: a confirmação com esta `operacaoId` já está gravada? Para quando a operação
+ * NOVA seria recusada antes da transação (período fechado, vencimento que virou passado) —
+ * reenviar uma confirmação já gravada continua devolvendo o que foi gravado, nunca uma
+ * recusa que faria a tela trocar de chave. `null` = nada gravado com esta chave.
+ */
+export async function buscarRecebimentoMistoGravadoV3(
+  tx: RecebimentoMistoTxV3,
+  ctx: ContextoRecebimentoMistoV3,
+  n: RecebimentoMistoNormalizadoV3,
+): Promise<ResultadoRecebimentoMistoV3 | null> {
+  await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(ctx.storeId, ctx.osId));
+  return replayDaOperacao(tx, ctx, n);
+}
+
 // ─── execução ─────────────────────────────────────────────────────────────────
 
 export async function executarRecebimentoMistoOSV3(
@@ -286,17 +319,8 @@ export async function executarRecebimentoMistoOSV3(
 
   // 2. Replay / conflito pela identidade persistida no ledger do título. Vem antes
   // da sessão: repetir uma confirmação já gravada continua válido com o caixa fechado.
-  const tituloExistente = await getContaReceberByLocalKey(storeId, localKey, tx);
-  const marcador = tituloExistente ? marcadorDaOperacao(tituloExistente.payload, n.operacaoId) : null;
-  if (tituloExistente && marcador) {
-    if (marcador.requestFingerprint !== requestFingerprint) {
-      throw new RecebimentoMistoErroV3(
-        "idempotencia_conflito",
-        "Esta confirmação já foi registrada com outros valores. Atualize a OS antes de lançar outra operação.",
-      );
-    }
-    return montarReplay(tx, ctx, n, tituloExistente, marcador);
-  }
+  const replay = await replayDaOperacao(tx, ctx, n);
+  if (replay) return replay;
 
   // 3. Caixa aberto da loja — exigido só quando há dinheiro entrando agora.
   let sessaoId: string | null = null;

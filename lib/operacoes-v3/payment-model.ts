@@ -291,6 +291,18 @@ export function montarAPrazoMirrorV3(input: {
 }
 
 /** Lê o espelho "a prazo" da OS (`payload.aPrazoV3`). Null quando ausente/não pendente. */
+/**
+ * Saldo a prazo que a TELA exibe: só enquanto há saldo em aberto e nunca acima do saldo
+ * real (baixas por outro caminho não atualizam o espelho). Mesma regra na leitura do
+ * servidor e no estado local depois de cada operação.
+ */
+export function aPrazoVisivelV3(os: unknown, saldo: number): APrazoV3 | null {
+  const s = money(saldo);
+  if (!(s > EPS)) return null;
+  const lido = lerAPrazoV3(os as OrdemServico | null | undefined);
+  return lido ? { ...lido, valor: Math.min(lido.valor, s) } : null;
+}
+
 export function lerAPrazoV3(os: OrdemServico | null | undefined): APrazoV3 | null {
   const mirror = (os as { aPrazoV3?: Partial<APrazoV3> } | null | undefined)?.aPrazoV3;
   if (!mirror || typeof mirror !== "object" || mirror.modo !== "a_prazo" || mirror.status !== "pendente") return null;

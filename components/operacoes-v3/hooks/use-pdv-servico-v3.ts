@@ -22,7 +22,7 @@ import {
   type RegistrarRecebimentoMistoInputV3,
   type RegistrarRecebimentoMistoResultV3,
 } from "@/lib/operacoes-v3/pdv-servico-actions";
-import type { APrazoV3, ComprovanteReciboV3, PagamentoV3 } from "@/lib/operacoes-v3/payment-model";
+import { aPrazoVisivelV3, type APrazoV3, type ComprovanteReciboV3, type PagamentoV3 } from "@/lib/operacoes-v3/payment-model";
 import { gerarOperacaoIdV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 
 export interface PdvServicoState {
@@ -108,9 +108,11 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   const recebendoRef = useRef(false);
   const mistoEmVooRef = useRef(false);
   const pendenciaMistoRef = useRef<PendenciaRecebimentoMistoV3 | null>(null);
-  // Recebimento cujo resultado não foi confirmado: reenviar o MESMO conteúdo reaproveita a
-  // chave — se a 1ª tentativa gravou (resposta perdida), o servidor devolve o já gravado.
-  const receberPendenteRef = useRef<{ conteudo: string; operacaoId: string } | null>(null);
+  // Recebimentos sem resultado confirmado, por loja/OS/conteúdo: reenviar o MESMO conteúdo
+  // reaproveita a chave — se a tentativa original gravou (resposta perdida), o servidor
+  // devolve o já gravado. Só o sucesso DAQUELE conteúdo libera a chave; outro recebimento
+  // no meio do caminho não a descarta.
+  const receberPendentesRef = useRef(new Map<string, string>());
   // Atualização síncrona no render: a primeira renderização da OS B já mascara
   // qualquer snapshot que ainda pertença à OS A, antes mesmo de o effect rodar.
   activeKeyRef.current = targetKey;
@@ -164,16 +166,17 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       if (recebendoRef.current) return false;
       recebendoRef.current = true;
       const conteudo = JSON.stringify([sid, id, { ...input, operacaoId: undefined }]);
-      const pendente = receberPendenteRef.current?.conteudo === conteudo ? receberPendenteRef.current : null;
-      const operacaoId = input.operacaoId ?? pendente?.operacaoId ?? gerarOperacaoIdV3();
+      const operacaoId = input.operacaoId ?? receberPendentesRef.current.get(conteudo) ?? gerarOperacaoIdV3();
       setRecebendo(true);
       setError(null);
       try {
         const res = await receberOSV3(sid, id, { ...input, operacaoId });
-        receberPendenteRef.current = null;
+        receberPendentesRef.current.delete(conteudo);
         const key = JSON.stringify([sid, id]);
         if (activeKeyRef.current === key) {
           setPagamento(res.pagamento);
+          // O servidor reconcilia o "a prazo" com o saldo real: a tela acompanha.
+          setAPrazo(aPrazoVisivelV3(res.os, res.pagamento.saldo));
           setLoadedKey(key);
           setErrorKey(null);
           setUltimoRecibo(res.recibo);
@@ -181,7 +184,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         }
         return true;
       } catch (e) {
-        receberPendenteRef.current = { conteudo, operacaoId };
+        receberPendentesRef.current.set(conteudo, operacaoId);
         if (activeKeyRef.current === JSON.stringify([sid, id])) {
           setErrorKey(JSON.stringify([sid, id]));
           setError(e instanceof Error ? e.message : "Não foi possível registrar o recebimento.");
@@ -212,7 +215,10 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       setError(null);
       try {
         const res = await registrarRecebimentoMistoOSV3(sid, id, input);
-        if (pendenciaMistoRef.current?.operacaoId === input.operacaoId) {
+        // A chave de uma operação incerta só é liberada quando o servidor RESOLVE a identidade:
+        // gravada (ok) ou conferida como não gravada. Recusa sem conferência (sessão,
+        // permissão) mantém a pendência — trocar de chave poderia lançar a operação de novo.
+        if ((res.ok || res.naoRegistrada) && pendenciaMistoRef.current?.operacaoId === input.operacaoId) {
           pendenciaMistoRef.current = null;
           setPendenciaMisto(null);
         }
@@ -225,7 +231,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         }
         if (activeKeyRef.current === key) {
           setPagamento(res.pagamento);
-          setAPrazo(res.aPrazo);
+          setAPrazo(aPrazoVisivelV3({ aPrazoV3: res.aPrazo }, res.pagamento.saldo));
           setLoadedKey(key);
           setErrorKey(null);
           setUltimoRecibo(res.recibo);
@@ -263,6 +269,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         const key = JSON.stringify([sid, id]);
         if (activeKeyRef.current === key) {
           setPagamento(res.pagamento);
+          setAPrazo(aPrazoVisivelV3(res.os, res.pagamento.saldo));
           setLoadedKey(key);
           setErrorKey(null);
         }

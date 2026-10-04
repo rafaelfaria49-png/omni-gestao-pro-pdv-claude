@@ -883,3 +883,54 @@ describe("PG · recebimento canônico com identidade da operação", () => {
     await semEscrita(storeId, osId, payloadAntes);
   });
 });
+
+// ─── reenvio quando uma operação NOVA seria recusada antes da transação (R3/P1) ─
+
+describe("PG · reenvio do misto com período fechado ou vencimento que virou passado", () => {
+  it("período fechado depois do commit: a MESMA confirmação devolve o gravado; uma nova é recusada e conferida", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const input = entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 400, vencimento: VENC }, saldoEsperado: 400 });
+    expect((await registrarRecebimentoMistoOSV3(storeId, osId, input)).ok).toBe(true);
+
+    const [ano, mes] = new Date().toISOString().slice(0, 7).split("-").map(Number);
+    await prisma.fechamentoFinanceiro.create({
+      data: { storeId, tipo: "mensal", dataReferencia: `${ano}-${String(mes).padStart(2, "0")}-01`, mes: mes!, ano: ano!, status: "fechado" },
+    });
+
+    // Resposta perdida + período fechado: o reenvio NÃO vira recusa (a tela não troca de chave).
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, input)).toMatchObject({ ok: true, jaRegistrado: true, valorAPrazo: 400 });
+    // Uma confirmação NOVA continua barrada — e a recusa diz que nada foi gravado com a chave.
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, { ...input, operacaoId: opId() })).toMatchObject({
+      ok: false,
+      code: "periodo_fechado",
+      naoRegistrada: true,
+    });
+
+    const s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "a_prazo_autorizado")).toHaveLength(1);
+    expect(s.payload.timeline.filter((e: Payload) => e.tipo === "financeiro_conta_receber_criada")).toHaveLength(1);
+  });
+
+  it("vencimento que virou passado: a MESMA confirmação ainda devolve o gravado; uma nova é recusada e conferida", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const input = entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 400, vencimento: VENC }, saldoEsperado: 400 });
+    expect((await registrarRecebimentoMistoOSV3(storeId, osId, input)).ok).toBe(true);
+
+    // Só o relógio do processo avança para depois do vencimento (timers continuam reais).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(Date.parse(`${VENC}T12:00:00.000Z`) + 2 * 86_400_000));
+      expect(await registrarRecebimentoMistoOSV3(storeId, osId, input)).toMatchObject({ ok: true, jaRegistrado: true, valorAPrazo: 400 });
+      expect(await registrarRecebimentoMistoOSV3(storeId, osId, { ...input, operacaoId: opId() })).toMatchObject({
+        ok: false,
+        code: "entrada_invalida",
+        naoRegistrada: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect((await estado(storeId, osId)).historico.filter((e) => e.tipo === "a_prazo_autorizado")).toHaveLength(1);
+  });
+});

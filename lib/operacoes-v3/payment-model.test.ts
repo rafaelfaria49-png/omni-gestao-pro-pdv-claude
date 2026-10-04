@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import { buildContaReceberLocalKey } from "@/lib/financeiro/contracts/local-key";
 import {
+  aPrazoVisivelV3,
   computeSaldoV3,
   formaSuportadaV3,
   lerAPrazoV3,
@@ -185,5 +186,22 @@ describe("reconciliarAPrazoAposBaixaV3", () => {
     expect(reconciliarAPrazoAposBaixaV3(undefined, 0, agora)).toBeUndefined();
     const cancelado = { ...aPrazo, status: "cancelado" };
     expect(reconciliarAPrazoAposBaixaV3(cancelado, 0, agora)).toBe(cancelado);
+  });
+});
+
+// R3/P2: a tela usa a MESMA regra do servidor depois de cada operação.
+describe("aPrazoVisivelV3", () => {
+  const aPrazo = montarAPrazoMirrorV3({ valor: 50, vencimento: "2026-11-10", now: "2026-10-03T10:00:00.000Z" });
+
+  it("com saldo em aberto: mostra o espelho pendente, limitado ao saldo real", () => {
+    expect(aPrazoVisivelV3(os({ aPrazoV3: aPrazo }), 50)).toMatchObject({ valor: 50, vencimento: "2026-11-10" });
+    expect(aPrazoVisivelV3(os({ aPrazoV3: aPrazo }), 30)).toMatchObject({ valor: 30 });
+  });
+
+  it("sem saldo, sem espelho ou espelho encerrado: nada a exibir", () => {
+    expect(aPrazoVisivelV3(os({ aPrazoV3: aPrazo }), 0)).toBeNull();
+    expect(aPrazoVisivelV3(os({}), 50)).toBeNull();
+    expect(aPrazoVisivelV3(os({ aPrazoV3: { ...aPrazo, status: "quitado" } }), 50)).toBeNull();
+    expect(aPrazoVisivelV3(null, 50)).toBeNull();
   });
 });
