@@ -135,7 +135,7 @@ import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
-import { alvoAindaSelecionado, fatiaTocada, patchTocadoCredenciais, patchTocadoIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4, type EsperadosDadosBasicosV3, type EsperadosProvaEntradaV3 } from "@/lib/operacoes-v4/entrada-form";
+import { alvoAindaSelecionado, fatiaTocada, patchTocadoCredenciais, patchTocadoIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4, type EsperadosDadosBasicosV3, type EsperadosProvaEntradaV3, type OpcoesSalvarAcessoriosV4, type OpcoesSalvarProvaEntradaV4 } from "@/lib/operacoes-v4/entrada-form";
 import { intencaoDadosBasicos, toDadosBasicosInput } from "@/lib/operacoes-v4/dados-basicos-form";
 import { seedDadosBasicos, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
 import {
@@ -303,8 +303,8 @@ export interface V4DataCtx {
   lancarAPrazo: (input: LancarAPrazoInputV3) => Promise<boolean>;
   // ---- Entrada/Recepção (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
   salvarIdentificacao: (input: IdentificacaoV3) => Promise<boolean>;
-  salvarProvaEntrada: (input: SalvarProvaEntradaInputV3) => Promise<boolean>;
-  salvarAcessorios: (acessorios: AcessorioEntradaV3[]) => Promise<boolean>;
+  salvarProvaEntrada: (input: SalvarProvaEntradaInputV3, opcoes?: OpcoesSalvarProvaEntradaV4) => Promise<boolean>;
+  salvarAcessorios: (acessorios: AcessorioEntradaV3[], opcoes?: OpcoesSalvarAcessoriosV4) => Promise<boolean>;
   salvarChecklist: (itens: ChecklistEntradaItemV3[]) => Promise<boolean>;
   adicionarFotoEntrada: (input: AdicionarFotoEntradaInputV3) => Promise<boolean>;
   removerFotoEntrada: (fotoId: string) => Promise<boolean>;
@@ -2186,11 +2186,18 @@ export function useV4Preview(): V4Vals {
   // viaja como `esperados` — fatia intocada nunca escreve; fatia tocada com
   // servidor divergente conflita em vez de remover em silêncio o que outra
   // sessão marcou. Definido após `realOS` (usa a seleção atual como semente).
+  // OPS-V4-FLUXO-CURTO-004: "nenhum acessório" é resposta válida — o registro
+  // explícito grava mesmo igual à semente (evento acessorio_registrado com
+  // presentes 0), sempre com a mesma baseline.
   const salvarAcessorios = useCallback(
-    (acessorios: AcessorioEntradaV3[]) => {
+    (acessorios: AcessorioEntradaV3[], opcoes?: OpcoesSalvarAcessoriosV4) => {
       const seed = seedEntradaEditor(realOS).acessorios;
-      if (!fatiaTocada(acessorios, seed)) return Promise.resolve(true);
-      return runWrite((sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios, seed), "Acessórios salvos.");
+      const explicito = opcoes?.registrarSemAlteracao === true;
+      if (!explicito && !fatiaTocada(acessorios, seed)) return Promise.resolve(true);
+      return runWrite(
+        (sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios, seed),
+        explicito ? "Acessórios registrados." : "Acessórios salvos.",
+      );
     },
     [runWrite, realOS],
   );
@@ -2219,17 +2226,21 @@ export function useV4Preview(): V4Vals {
     },
     [runWrite, realOS],
   );
+  // OPS-V4-FLUXO-CURTO-004: `confirmarEstadoFisico` registra o estado exibido
+  // (inclusive "tudo íntegro", igual à semente) com baseline — só assim o
+  // padrão vira registro; sem a opção, o comportamento R02 é o mesmo.
   const salvarProvaEntrada = useCallback(
-    (input: SalvarProvaEntradaInputV3) => {
+    (input: SalvarProvaEntradaInputV3, opcoes?: OpcoesSalvarProvaEntradaV4) => {
       const seed = seedEntradaEditor(realOS);
+      const confirmarEstado = opcoes?.confirmarEstadoFisico === true;
       const incluir: FatiaProvaEntradaV3[] = [];
       const esp: EsperadosProvaEntradaV3 = {};
       let limparCred: (keyof CredenciaisEntradaV3)[] | undefined;
-      if (fatiaTocada(input.estadoFisico, seed.estadoFisico)) {
+      if (confirmarEstado || fatiaTocada(input.estadoFisico, seed.estadoFisico)) {
         incluir.push("estadoFisico");
         esp.estadoFisico = seed.estadoFisico;
       }
-      if (fatiaTocada(input.avarias, seed.avarias)) {
+      if (confirmarEstado || fatiaTocada(input.avarias, seed.avarias)) {
         incluir.push("avarias");
         esp.avarias = seed.avarias;
       }
@@ -2250,7 +2261,7 @@ export function useV4Preview(): V4Vals {
       };
       return runWrite(
         (sid, osId) => salvarProvaEntradaV3(sid, osId, inputEnxuto, limparCred, esp, incluir),
-        "Prova de entrada salva.",
+        confirmarEstado ? "Estado físico registrado." : "Prova de entrada salva.",
       );
     },
     [runWrite, realOS],
