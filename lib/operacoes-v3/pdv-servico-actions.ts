@@ -21,6 +21,11 @@
 // SEPARADA para "a prazo" — NÃO é recebimento (nunca liquida o título, nunca
 // movimenta caixa, nunca exige caixa aberto); só formaliza o saldo como Conta a
 // Receber PENDENTE com vencimento, autorizando a entrega.
+//
+// GOAL OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001: `registrarRecebimentoMistoOSV3`
+// combina, numa ÚNICA confirmação e numa ÚNICA transação, pagamento imediato +
+// saldo restante a prazo no MESMO título (ver `recebimento-misto-service.ts`).
+// `receberOSV3` e `lancarOSAPrazoV3` seguem intactos para os chamadores atuais.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
@@ -46,6 +51,7 @@ import {
   descreverSplitV3,
   formaLabelRecebimentoV3,
   formaSuportadaV3,
+  lerAPrazoV3,
   localKeyContaReceberOSV3,
   montarAPrazoMirrorV3,
   montarComprovanteReciboV3,
@@ -62,6 +68,17 @@ import {
   type RecebimentoIntencaoV3,
   type SplitLinhaV3,
 } from "./payment-model";
+import {
+  hojeLojaV3,
+  normalizarRecebimentoMistoV3,
+  type RecebimentoMistoErroCodigoV3,
+  type RecebimentoMistoInputV3,
+} from "./recebimento-misto-model";
+import {
+  executarRecebimentoMistoOSV3,
+  isRecebimentoMistoErroV3,
+  type ResultadoRecebimentoMistoV3,
+} from "./recebimento-misto-service";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -158,29 +175,45 @@ async function resolverTituloOS(storeId: string, osId: string, loaded: OSCarrega
     // Leitura (PDV abrindo a OS): NÃO cria título — só deriva do orçamento.
     if (!opts.create) return { localKey, total, recebido: 0, saldo: total };
     if (total <= 0) throw new Error("Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de receber.");
-    titulo = await upsertContaReceber({
-      storeId,
-      localKey,
-      descricao: `OS ${os.codigo ?? osId}`,
-      cliente: os.cliente?.nome ?? "",
-      valor: total,
-      vencimento: ((payload.aberturaV3 as { pagamentoPrevisto?: { vencimentoPrevisto?: string } } | undefined)?.pagamentoPrevisto?.vencimentoPrevisto) || nowIso(),
-      status: "pendente",
-      payloadPatch: { origem: "operacoes-v3", ordemServicoId: osId, codigo: os.codigo },
+    // Cria SÓ se ainda não existir (ON CONFLICT DO NOTHING) e relê. Um upsert aqui
+    // sobrescreveria o histórico de um título criado em paralelo por outro
+    // recebimento (lost update); com DO NOTHING o título concorrente é preservado.
+    await prisma.contaReceberTitulo.createMany({
+      data: [
+        {
+          storeId,
+          localKey,
+          descricao: `OS ${os.codigo ?? osId}`,
+          cliente: os.cliente?.nome ?? "",
+          valor: total,
+          vencimento: ((payload.aberturaV3 as { pagamentoPrevisto?: { vencimentoPrevisto?: string } } | undefined)?.pagamentoPrevisto?.vencimentoPrevisto) || nowIso(),
+          status: "pendente",
+          payload: { origem: "operacoes-v3", ordemServicoId: osId, codigo: os.codigo } as Prisma.InputJsonValue,
+        },
+      ],
+      skipDuplicates: true,
     });
+    titulo = await getContaReceberByLocalKey(storeId, localKey);
+    if (!titulo) throw new Error("Título financeiro da OS não encontrado.");
   }
   const recebido = sumPagamentosFromHistoricoPayload(titulo.payload);
   return { localKey, total: money(titulo.valor), recebido, saldo: Math.max(0, money(titulo.valor) - recebido) };
 }
 
 /** Estado de pagamento atual da OS (com o título já garantido). Leitura para a tela do PDV. */
-export async function lerPagamentoOSV3(storeId: string, osId: string): Promise<PagamentoV3 & { sessao: CaixaSessaoV3 }> {
+export async function lerPagamentoOSV3(
+  storeId: string,
+  osId: string,
+): Promise<PagamentoV3 & { sessao: CaixaSessaoV3; aPrazo: APrazoV3 | null }> {
   const sid = (storeId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
   const loaded = await carregarOS(sid, osId);
   const t = await resolverTituloOS(sid, osId, loaded, { create: false });
   const sessao = await getCaixaSessaoAbertaV3(sid);
-  return { ...montarPagamentoMirrorV3({ total: t.total, recebido: t.recebido, tituloLocalKey: t.localKey }), sessao };
+  const mirror = montarPagamentoMirrorV3({ total: t.total, recebido: t.recebido, tituloLocalKey: t.localKey });
+  // Saldo a prazo PERSISTIDO (reabrir a OS mostra valor/vencimento); sem saldo, não há o que exibir.
+  const aPrazo = mirror.saldo > 0 ? lerAPrazoV3(loaded.payload) : null;
+  return { ...mirror, sessao, aPrazo };
 }
 
 // ----------------------------------------------------------------------------
@@ -553,4 +586,84 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
 
   revalidatePath("/dashboard/operacoes-v3");
   return { os: nextPayload as unknown as OrdemServico, aPrazo, valorFormalizado: titulo.saldo };
+}
+
+// ----------------------------------------------------------------------------
+// GOAL OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 — pagamento imediato + saldo a prazo
+// ----------------------------------------------------------------------------
+// Uma confirmação = UMA transação (`executarRecebimentoMistoOSV3`): baixa só do
+// dinheiro recebido agora, movimentação e caixa por forma desse valor, e o
+// restante formalizado a prazo no MESMO título da OS, com vencimento. Não chama
+// `receberOSV3` + `lancarOSAPrazoV3` em sequência. Recusas de negócio voltam como
+// `{ ok: false }` (nada gravado); erro inesperado é relançado para a tela tratar
+// como resultado DESCONHECIDO e reenviar com a MESMA `operacaoId` (replay).
+
+export type RegistrarRecebimentoMistoInputV3 = RecebimentoMistoInputV3;
+
+export type RegistrarRecebimentoMistoResultV3 =
+  | ({ ok: true } & ResultadoRecebimentoMistoV3)
+  | { ok: false; code: RecebimentoMistoErroCodigoV3; mensagem: string; saldoAtual?: number };
+
+function falhaMistaV3(code: RecebimentoMistoErroCodigoV3, mensagem: string, saldoAtual?: number): RegistrarRecebimentoMistoResultV3 {
+  return saldoAtual === undefined ? { ok: false, code, mensagem } : { ok: false, code, mensagem, saldoAtual };
+}
+
+/** Conflito de escrita concorrente detectado pelo banco (título criado em paralelo, deadlock). */
+function conflitoConcorrenteV3(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code;
+  return code === "P2002" || code === "P2034";
+}
+
+export async function registrarRecebimentoMistoOSV3(
+  storeId: string,
+  osId: string,
+  input: RegistrarRecebimentoMistoInputV3,
+): Promise<RegistrarRecebimentoMistoResultV3> {
+  const sid = (storeId ?? "").trim();
+  const id = (osId ?? "").trim();
+  if (!sid) return falhaMistaV3("entrada_invalida", "Selecione uma unidade ativa para continuar (Operações V3).");
+  if (!id) return falhaMistaV3("entrada_invalida", "OS não informada.");
+
+  const normal = normalizarRecebimentoMistoV3(input, hojeLojaV3());
+  if (!normal.ok) return falhaMistaV3(normal.code, normal.mensagem);
+
+  const session = await auth();
+  if (!session?.user?.id) return falhaMistaV3("nao_autenticado", "Faça login para registrar o recebimento.");
+  // A prazo é formalização de crédito ao cliente: além de editar a OS, exige a
+  // permissão canônica de gerar cobrança. Nunca vale só porque o browser pediu.
+  const guard = await requireEnterpriseWith(
+    sid,
+    (p) => p.operacoes.editarOs && p.operacoes.gerarCobranca,
+    "Sem permissão para registrar recebimento a prazo nesta OS.",
+  );
+  if (!guard.ok) return falhaMistaV3("sem_permissao", guard.error);
+
+  const lock = await verificarPeriodoFechado(sid, new Date());
+  if (lock.fechado) return falhaMistaV3("periodo_fechado", "Período financeiro fechado. Reabra o fechamento para registrar o recebimento.");
+
+  try {
+    const resultado = await prisma.$transaction(
+      (tx) =>
+        executarRecebimentoMistoOSV3(
+          tx,
+          { storeId: sid, osId: id, operador: operadorLabel(session), operadorId: session.user.id, agora: nowIso() },
+          normal.valor,
+        ),
+      // Transação curta: pooler em modo transação (mesmos limites do recebimento em lote).
+      { maxWait: 5_000, timeout: 15_000 },
+    );
+    // Pós-commit: atualizar a tela nunca pode provocar nova cobrança.
+    try {
+      revalidatePath("/dashboard/operacoes-v3");
+    } catch (e) {
+      console.error("[registrarRecebimentoMistoOSV3 revalidatePath]", e);
+    }
+    return { ok: true, ...resultado };
+  } catch (e) {
+    if (isRecebimentoMistoErroV3(e)) return falhaMistaV3(e.code, e.message, e.saldoAtual);
+    if (conflitoConcorrenteV3(e)) {
+      return falhaMistaV3("titulo_alterado", "A OS foi alterada por outra operação ao mesmo tempo. Atualize o saldo e confirme de novo.");
+    }
+    throw e;
+  }
 }

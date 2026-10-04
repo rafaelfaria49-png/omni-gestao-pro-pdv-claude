@@ -6,7 +6,8 @@
 // Carrega o pagamento da OS (saldo/status + sessão de caixa) e expõe `receber`
 // (com split + intenção), `estornar` (correção do último recebimento) e o
 // `ultimoRecibo` para impressão do comprovante. Toda a lógica financeira fica no
-// servidor (`pdv-servico-actions`).
+// servidor (`pdv-servico-actions`). `registrarMisto` = pagamento imediato + saldo
+// a prazo numa única confirmação, com `operacaoId` estável por confirmação.
 // ============================================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -14,11 +15,15 @@ import {
   estornarRecebimentoOSV3,
   lerPagamentoOSV3,
   receberOSV3,
+  registrarRecebimentoMistoOSV3,
   type CaixaSessaoV3,
   type EstornarRecebimentoInputV3,
   type ReceberOSInputV3,
+  type RegistrarRecebimentoMistoInputV3,
+  type RegistrarRecebimentoMistoResultV3,
 } from "@/lib/operacoes-v3/pdv-servico-actions";
-import type { ComprovanteReciboV3, PagamentoV3 } from "@/lib/operacoes-v3/payment-model";
+import type { APrazoV3, ComprovanteReciboV3, PagamentoV3 } from "@/lib/operacoes-v3/payment-model";
+import { gerarOperacaoIdV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 
 export interface PdvServicoState {
   pagamento: PagamentoV3 | null;
@@ -32,6 +37,31 @@ export interface PdvServicoState {
   receber: (input: ReceberOSInputV3) => Promise<boolean>;
   estornar: (input: EstornarRecebimentoInputV3) => Promise<boolean>;
   limparRecibo: () => void;
+}
+
+/** Dados de UMA confirmação mista (a `operacaoId` é do hook, estável por confirmação). */
+export type DadosRecebimentoMistoV3 = Omit<RegistrarRecebimentoMistoInputV3, "operacaoId">;
+
+/** Confirmação cujo resultado é DESCONHECIDO (erro de transporte): só pode ser reenviada com a mesma chave. */
+export interface PendenciaRecebimentoMistoV3 {
+  key: string;
+  operacaoId: string;
+  input: RegistrarRecebimentoMistoInputV3;
+}
+
+export type RegistroMistoResultadoUIV3 =
+  | { status: "ok"; resultado: Extract<RegistrarRecebimentoMistoResultV3, { ok: true }> }
+  | { status: "recusado"; code: string; mensagem: string; saldoAtual?: number }
+  | { status: "incerto"; mensagem: string }
+  | { status: "em_andamento" };
+
+/** Superfície da V3 (aditiva). A V4 continua consumindo só `PdvServicoState`. */
+export interface PdvServicoV3Completo extends PdvServicoState {
+  /** Saldo a prazo PERSISTIDO na OS (lido do servidor), quando ainda há saldo. */
+  aPrazo: APrazoV3 | null;
+  registrandoMisto: boolean;
+  pendenciaMisto: PendenciaRecebimentoMistoV3 | null;
+  registrarMisto: (dados: DadosRecebimentoMistoV3) => Promise<RegistroMistoResultadoUIV3>;
 }
 
 export function projetarLeituraAtualPdvServicoV3(input: {
@@ -54,7 +84,7 @@ export function projetarLeituraAtualPdvServicoV3(input: {
   };
 }
 
-export function usePdvServicoV3(storeId: string | null, osId: string | null): PdvServicoState {
+export function usePdvServicoV3(storeId: string | null, osId: string | null): PdvServicoV3Completo {
   const sidAtual = (storeId ?? "").trim();
   const osIdAtual = (osId ?? "").trim();
   const targetKey = sidAtual && osIdAtual ? JSON.stringify([sidAtual, osIdAtual]) : null;
@@ -65,11 +95,19 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   const [estornando, setEstornando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ultimoRecibo, setUltimoRecibo] = useState<ComprovanteReciboV3 | null>(null);
+  const [reciboKey, setReciboKey] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [aPrazo, setAPrazo] = useState<APrazoV3 | null>(null);
+  const [registrandoMisto, setRegistrandoMisto] = useState(false);
+  const [pendenciaMisto, setPendenciaMisto] = useState<PendenciaRecebimentoMistoV3 | null>(null);
   const reqRef = useRef(0);
   const activeKeyRef = useRef(targetKey);
+  // Travas SÍNCRONAS (antes do primeiro await): duplo clique nunca dispara 2 envios.
+  const recebendoRef = useRef(false);
+  const mistoEmVooRef = useRef(false);
+  const pendenciaMistoRef = useRef<PendenciaRecebimentoMistoV3 | null>(null);
   // Atualização síncrona no render: a primeira renderização da OS B já mascara
   // qualquer snapshot que ainda pertença à OS A, antes mesmo de o effect rodar.
   activeKeyRef.current = targetKey;
@@ -80,6 +118,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
     const reqId = ++reqRef.current;
     setPagamento(null);
     setSessao(null);
+    setAPrazo(null);
     setLoadedKey(null);
     setErrorKey(null);
     setError(null);
@@ -91,9 +130,10 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
     lerPagamentoOSV3(sid, id)
       .then((res) => {
         if (reqRef.current !== reqId || activeKeyRef.current !== targetKey) return;
-        const { sessao: s, ...pag } = res;
+        const { sessao: s, aPrazo: ap, ...pag } = res;
         setPagamento(pag);
         setSessao(s);
+        setAPrazo(ap ?? null);
         setLoadedKey(targetKey);
         setLoading(false);
       })
@@ -101,6 +141,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         if (reqRef.current !== reqId || activeKeyRef.current !== targetKey) return;
         setPagamento(null);
         setSessao(null);
+        setAPrazo(null);
         setLoadedKey(null);
         setErrorKey(targetKey);
         setError(e instanceof Error ? e.message : "Falha ao carregar o pagamento da OS.");
@@ -116,6 +157,9 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       const sid = (storeId ?? "").trim();
       const id = (osId ?? "").trim();
       if (!sid || !id) return false;
+      // Duplo clique: o 2º chamado volta antes de qualquer await (sem 2º recebimento).
+      if (recebendoRef.current) return false;
+      recebendoRef.current = true;
       setRecebendo(true);
       setError(null);
       try {
@@ -126,6 +170,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
           setLoadedKey(key);
           setErrorKey(null);
           setUltimoRecibo(res.recibo);
+          setReciboKey(key);
         }
         return true;
       } catch (e) {
@@ -135,7 +180,64 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         }
         return false;
       } finally {
+        recebendoRef.current = false;
         setRecebendo(false);
+      }
+    },
+    [storeId, osId],
+  );
+
+  const registrarMisto = useCallback(
+    async (dados: DadosRecebimentoMistoV3): Promise<RegistroMistoResultadoUIV3> => {
+      const sid = (storeId ?? "").trim();
+      const id = (osId ?? "").trim();
+      if (!sid || !id) return { status: "recusado", code: "entrada_invalida", mensagem: "Selecione a OS." };
+      // Trava síncrona ANTES do primeiro await: o 2º clique nunca chega ao servidor.
+      if (mistoEmVooRef.current) return { status: "em_andamento" };
+      mistoEmVooRef.current = true;
+      const key = JSON.stringify([sid, id]);
+      // Resultado anterior DESCONHECIDO nesta OS: reenvia exatamente a mesma operação
+      // (mesma chave) para reconciliar — nunca gera chave nova por conta própria.
+      const pendente = pendenciaMistoRef.current?.key === key ? pendenciaMistoRef.current : null;
+      const input: RegistrarRecebimentoMistoInputV3 = pendente ? pendente.input : { ...dados, operacaoId: gerarOperacaoIdV3() };
+      setRegistrandoMisto(true);
+      setError(null);
+      try {
+        const res = await registrarRecebimentoMistoOSV3(sid, id, input);
+        if (pendenciaMistoRef.current?.operacaoId === input.operacaoId) {
+          pendenciaMistoRef.current = null;
+          setPendenciaMisto(null);
+        }
+        if (!res.ok) {
+          if (activeKeyRef.current === key) {
+            setErrorKey(key);
+            setError(res.mensagem);
+          }
+          return { status: "recusado", code: res.code, mensagem: res.mensagem, saldoAtual: res.saldoAtual };
+        }
+        if (activeKeyRef.current === key) {
+          setPagamento(res.pagamento);
+          setAPrazo(res.aPrazo);
+          setLoadedKey(key);
+          setErrorKey(null);
+          setUltimoRecibo(res.recibo);
+          setReciboKey(key);
+        }
+        return { status: "ok", resultado: res };
+      } catch {
+        const pendencia: PendenciaRecebimentoMistoV3 = { key, operacaoId: input.operacaoId, input };
+        pendenciaMistoRef.current = pendencia;
+        setPendenciaMisto(pendencia);
+        const mensagem =
+          "Não foi possível confirmar se o registro foi gravado. Reenvie a MESMA operação para verificar — não haverá lançamento em dobro.";
+        if (activeKeyRef.current === key) {
+          setErrorKey(key);
+          setError(mensagem);
+        }
+        return { status: "incerto", mensagem };
+      } finally {
+        mistoEmVooRef.current = false;
+        setRegistrandoMisto(false);
       }
     },
     [storeId, osId],
@@ -171,6 +273,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   );
 
   const leituraAtual = projetarLeituraAtualPdvServicoV3({ targetKey, loadedKey, errorKey, pagamento, sessao, loading, error });
+  const carregadoParaAlvo = targetKey !== null && loadedKey === targetKey;
   return {
     pagamento: leituraAtual.pagamento,
     sessao: leituraAtual.sessao,
@@ -178,10 +281,15 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
     recebendo,
     estornando,
     error: leituraAtual.error,
-    ultimoRecibo,
+    // Comprovante pertence à OS em que foi emitido: trocar de OS/loja nunca o reaproveita.
+    ultimoRecibo: targetKey !== null && reciboKey === targetKey ? ultimoRecibo : null,
     reload,
     receber,
     estornar,
     limparRecibo,
+    aPrazo: carregadoParaAlvo ? aPrazo : null,
+    registrandoMisto,
+    pendenciaMisto: pendenciaMisto && pendenciaMisto.key === targetKey ? pendenciaMisto : null,
+    registrarMisto,
   };
 }

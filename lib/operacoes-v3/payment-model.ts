@@ -245,6 +245,8 @@ export interface APrazoV3 {
   autorizadoEm?: string;
   autorizadoPor?: string;
   observacao?: string;
+  /** Recebimento misto: identidade da confirmação que formalizou este saldo. */
+  operacaoId?: string;
 }
 
 /** Monta o espelho "a prazo" a gravar no payload da OS (sem tocar `pagamentoV3`). */
@@ -283,6 +285,7 @@ export function lerAPrazoV3(os: OrdemServico | null | undefined): APrazoV3 | nul
     autorizadoEm: typeof mirror.autorizadoEm === "string" ? mirror.autorizadoEm : undefined,
     autorizadoPor: typeof mirror.autorizadoPor === "string" ? mirror.autorizadoPor : undefined,
     observacao: typeof mirror.observacao === "string" ? mirror.observacao : undefined,
+    operacaoId: typeof mirror.operacaoId === "string" ? mirror.operacaoId : undefined,
   };
 }
 
@@ -312,6 +315,15 @@ export interface ComprovanteReciboV3 {
   dataHora: string;
   operador: string;
   observacao?: string;
+  /**
+   * Recebimento misto (aditivo): `formas`/`valorPago` continuam sendo SÓ o dinheiro
+   * recebido nesta operação; o saldo formalizado a prazo vem em `aPrazo`.
+   * "formalizacao_a_prazo" = nenhum dinheiro recebido (resumo, não recibo).
+   */
+  tipoComprovante?: "recebimento" | "recebimento_misto" | "formalizacao_a_prazo";
+  recebidoAnteriormente?: number;
+  situacaoLabel?: string;
+  aPrazo?: { valor: number; vencimento: string; observacao?: string };
 }
 
 /** Monta o comprovante a partir da OS + linhas + estado de pagamento (após o recebimento). */

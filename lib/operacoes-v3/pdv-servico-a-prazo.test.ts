@@ -97,6 +97,33 @@ describe("statusTituloAPrazoV3 — preserva 'parcial' quando já houve recebimen
   });
 });
 
+// GOAL OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 — a confirmação mista é UMA transação.
+describe("registrarRecebimentoMistoOSV3 — imediato + a prazo numa única transação", () => {
+  const body = extractFunctionBody(source, "registrarRecebimentoMistoOSV3");
+  const service = readFileSync(join(DIR, "recebimento-misto-service.ts"), "utf8");
+
+  it("delega a UMA prisma.$transaction com o serviço transacional", () => {
+    expect(body).toContain("prisma.$transaction(");
+    expect(body).toContain("executarRecebimentoMistoOSV3(");
+  });
+
+  it("nunca encadeia receberOSV3 + lancarOSAPrazoV3 (duas operações independentes)", () => {
+    expect(body).not.toContain("receberOSV3(");
+    expect(body).not.toContain("lancarOSAPrazoV3(");
+  });
+
+  it("exige permissão real de gerar cobrança além de editar a OS", () => {
+    expect(body).toMatch(/p\.operacoes\.editarOs && p\.operacoes\.gerarCobranca/);
+  });
+
+  it("serviço: nenhuma escrita financeira best-effort (sem .catch engolindo erro)", () => {
+    expect(service).not.toContain(".catch(");
+    expect(service).toContain("idempotenciaDoChamador: true");
+    expect(service).toContain('tipo: "recebimento_cr"');
+    expect(service).toContain("tipo: MARCADOR_A_PRAZO");
+  });
+});
+
 describe("receberOSV3 — recebimento imediato continua com todos os passos originais (inalterado)", () => {
   const body = extractFunctionBody(source, "receberOSV3");
 

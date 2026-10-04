@@ -99,6 +99,19 @@ const h = vi.hoisted(() => {
         return { count: 1 };
       },
       create: async ({ data }: any) => snapshot(put(makeRow(data))),
+      // INSERT ... ON CONFLICT DO NOTHING: título já existente NUNCA é sobrescrito.
+      createMany: async ({ data, skipDuplicates }: any) => {
+        let count = 0;
+        for (const d of Array.isArray(data) ? data : [data]) {
+          if (titulos.has(ck(d.storeId, d.localKey))) {
+            if (skipDuplicates) continue;
+            throw new Error("Unique constraint failed on the fields: (`storeId`,`localKey`)");
+          }
+          put(makeRow(d));
+          count += 1;
+        }
+        return { count };
+      },
     },
     ordemServico: {
       findFirst: async ({ where }: any) => {
