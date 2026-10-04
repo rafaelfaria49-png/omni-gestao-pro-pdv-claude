@@ -475,6 +475,21 @@ async function executarSobATrava(
   const saldoAtual = buildContaReceberAuditTrail([titulo])[0]?.saldoAberto ?? 0;
   const distribuicao = validarDistribuicaoMistaV3(n, Math.round(saldoAtual * 100));
   if (!distribuicao.ok) throw new RecebimentoMistoErroV3(distribuicao.code, distribuicao.mensagem, saldoAtual);
+  // Sem dinheiro agora, o saldo não muda — o saldo esperado não distingue uma repetição. Uma
+  // formalização IDÊNTICA à que já vale (mesmo valor e vencimento) não lança nada de novo,
+  // mesmo com outra chave (ex.: a chave da tela se perdeu num recarregamento).
+  if (n.receberAgoraCentavos === 0) {
+    const vigente = lerAPrazoV3(payload);
+    const temMarcador = Array.isArray(tituloPayload.historico)
+      && tituloPayload.historico.some((e) => isRecord(e) && String(e.tipo ?? "").toLowerCase() === MARCADOR_A_PRAZO);
+    if (vigente && temMarcador && Math.round(vigente.valor * 100) === n.aPrazo.centavos && vigente.vencimento === n.aPrazo.vencimento) {
+      throw new RecebimentoMistoErroV3(
+        "a_prazo_ja_formalizado",
+        `Este saldo já está formalizado a prazo (${formatarCentavosBRLV3(n.aPrazo.centavos)}, vencimento ${formatarVencimentoV3(n.aPrazo.vencimento)}). Nada foi lançado de novo.`,
+        saldoAtual,
+      );
+    }
+  }
   const recebidoAnteriormente = sumPagamentosFromHistoricoPayload(titulo.payload);
 
   const linhas: SplitLinhaV3[] = n.pagamentosAgora.map((l) => ({ forma: l.forma, valor: deCentavosV3(l.centavos) }));

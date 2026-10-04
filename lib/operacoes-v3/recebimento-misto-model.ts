@@ -88,6 +88,7 @@ export type RecebimentoMistoErroCodigoV3 =
   | "valor_acima_do_saldo"
   | "titulo_alterado"
   | "idempotencia_conflito"
+  | "a_prazo_ja_formalizado"
   | "movimentacao_falhou";
 
 export type ValidacaoMistaV3<T> =

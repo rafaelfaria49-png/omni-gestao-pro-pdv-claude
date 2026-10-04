@@ -1081,3 +1081,35 @@ describe("PG · recebimento canônico: identidade econômica e saldo esperado", 
     expect(s.movs).toHaveLength(1);
   });
 });
+
+// ─── formalização a prazo idêntica com outra chave (chave perdida no recarregamento) ─
+
+describe("PG · misto: a prazo idêntico ao vigente não lança de novo", () => {
+  it("100% a prazo com OUTRA chave e mesmo valor/vencimento → recusa sem 2º marcador; outro vencimento reformaliza", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const input = entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 400, vencimento: VENC }, saldoEsperado: 400 });
+    expect((await registrarRecebimentoMistoOSV3(storeId, osId, input)).ok).toBe(true);
+
+    // A tela recarregou e perdeu a chave: a mesma formalização volta com chave nova.
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, { ...input, operacaoId: opId() })).toMatchObject({
+      ok: false,
+      code: "a_prazo_ja_formalizado",
+      naoRegistrada: true,
+    });
+    let s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "a_prazo_autorizado")).toHaveLength(1);
+    expect(s.payload.timeline.filter((e: Payload) => e.tipo === "financeiro_conta_receber_criada")).toHaveLength(1);
+
+    // Outro vencimento é uma reformalização legítima.
+    const outroVencimento = new Date(Date.parse(`${VENC}T12:00:00.000Z`) + 7 * 86_400_000).toISOString().slice(0, 10);
+    expect(
+      await registrarRecebimentoMistoOSV3(storeId, osId, { ...input, operacaoId: opId(), saldoAPrazo: { valor: 400, vencimento: outroVencimento } }),
+    ).toMatchObject({ ok: true, jaRegistrado: false });
+    s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "a_prazo_autorizado")).toHaveLength(2);
+    expect(s.payload.aPrazoV3).toMatchObject({ vencimento: outroVencimento, valor: 400, status: "pendente" });
+    expect(s.recebido).toBe(0);
+    expect(s.caixa).toHaveLength(0);
+  });
+});
