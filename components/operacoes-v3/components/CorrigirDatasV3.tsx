@@ -304,7 +304,7 @@ export function CorrigirDatasCampos({
               erro={estado.erros[c.campo] ?? null}
               estilos={estilosCampo}
             />
-            {renderAtual ? renderAtual(`Gravado hoje: ${atualTexto || "não registrada"}`) : null}
+            {renderAtual ? renderAtual(`Valor atual: ${atualTexto || "não registrada"}`) : null}
             {c.permiteLimpar && valor.dia ? (
               <button
                 type="button"

@@ -140,6 +140,41 @@ describe("workspace — timeline operacional", () => {
     expect(byKey.diagnostico.atingido).toBe(false);
     expect(byKey.criada.atingido).toBe(true);
   });
+
+  // GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001: datas efetivas, sem âncora técnica.
+  it("Recebida/Entregue usam as datas efetivas com a precisão gravada (só-dia nunca mostra 12:00)", () => {
+    const steps = construirTimelineOperacionalV3(
+      os({
+        operacaoStatusV3: "entregue",
+        aberturaV3: { recepcao: { dataEntrada: "2026-09-24T15:00:00.000Z", dataEntradaMeta: { precisao: "dia", dia: "2026-09-24" }, recebidoPor: "Ana" } },
+        entregueEm: "2026-10-01T15:00:00.000Z",
+        entregaV3: { entregueEm: "2026-10-01T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-10-01" }, registradoEm: "2026-10-04T20:00:00.000Z" },
+        timeline: [
+          // Registro real da entrega (retroativa) e o status intermediário emitido no mesmo instante.
+          ev({ tipo: "mudanca_status", autor: "Bia", metadata: { para: "recebida" }, criadoEm: "2026-10-04T20:00:00.000Z" }),
+          ev({ tipo: "entrega_cliente", autor: "Bia", criadoEm: "2026-10-04T20:00:00.000Z" }),
+        ],
+      }),
+    );
+    const byKey = Object.fromEntries(steps.map((s) => [s.key, s]));
+    expect(byKey.recebida).toMatchObject({ atingido: true, em: "2026-09-24T15:00:00.000Z", emTexto: "24/09/2026", responsavel: "Ana" });
+    expect(byKey.entregue).toMatchObject({ atingido: true, em: "2026-10-01T15:00:00.000Z", emTexto: "01/10/2026", responsavel: "Bia" });
+  });
+
+  it("entrada com horário informado mostra o horário na loja", () => {
+    const steps = construirTimelineOperacionalV3(
+      os({ aberturaV3: { recepcao: { dataEntrada: "2026-09-24T12:30:00.000Z", dataEntradaMeta: { precisao: "data_hora", dia: "2026-09-24" } } } }),
+    );
+    expect(steps.find((s) => s.key === "recebida")!.emTexto).toBe("24/09/2026 09:30");
+  });
+
+  it("orçamento sem o aparelho na loja: 'Recebida' não acende nem ganha data fabricada", () => {
+    const steps = construirTimelineOperacionalV3(os({ comercialV4: { tipo: "orcamento_pre_os" }, aberturaV3: { recepcao: {} } }));
+    const recebida = steps.find((s) => s.key === "recebida")!;
+    expect(recebida.atingido).toBe(false);
+    expect(recebida.em).toBeUndefined();
+    expect(recebida.emTexto).toBeUndefined();
+  });
 });
 
 describe("workspace — histórico", () => {

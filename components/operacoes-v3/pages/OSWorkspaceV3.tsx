@@ -38,6 +38,14 @@ import { useGarantiaV3 } from "../hooks/use-garantia-v3";
 import { SCREEN_COPY } from "../data/screen-copy";
 import { formatBRL, formatDataHora } from "../lib/format";
 import { matchOrdem } from "../lib/os-derive";
+import { formatarDataOperacionalV3, lerDatasOSV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
+
+/** Entrega/retirada com a precisão gravada: a entrega efetiva só-dia nunca mostra a âncora técnica. */
+function formatarEntregaV3(os: OrdemServico, iso: string | undefined): string {
+  if (!iso) return "";
+  const entrega = lerDatasOSV3(os).entrega;
+  return entrega && entrega.iso === iso ? formatarDataOperacionalV3(entrega) : formatDataHora(iso);
+}
 
 function KV({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -356,8 +364,8 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             {os.retirada?.confirmado || os.entregueEm ? (
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <KV label="Retirado por" value={os.retirada?.retiradoPor} />
-                <KV label="Retirado em" value={os.retirada?.retiradoEm ? formatDataHora(os.retirada.retiradoEm) : ""} />
-                <KV label="Entregue em" value={os.entregueEm ? formatDataHora(os.entregueEm) : ""} />
+                <KV label="Retirado em" value={formatarEntregaV3(os, os.retirada?.retiradoEm)} />
+                <KV label="Entregue em" value={formatarEntregaV3(os, os.entregueEm)} />
                 {os.retirada?.observacao ? <KV label="Observação" value={os.retirada.observacao} /> : null}
               </dl>
             ) : undefined}

@@ -217,6 +217,8 @@ export interface TimelineStepV3 {
   atingido: boolean;
   /** ISO do evento que marca a etapa (quando há evento real). */
   em?: string;
+  /** Texto pronto de uma data operacional (respeita a precisão: só-dia nunca mostra a âncora). */
+  emTexto?: string;
   /** Responsável pelo evento (autor), quando há evento real. */
   responsavel?: string;
 }
@@ -269,21 +271,44 @@ export function construirTimelineOperacionalV3(os: OrdemServico | null | undefin
   const ordemAtual = statusMetaV3(statusAtual).order;
   const cancelada = statusAtual === "cancelada";
   const recepcao = lerRecepcaoV3(os);
+  const datas = lerDatasOSV3(os);
 
   return STEPS_DEF.map((def) => {
     const ev = eventoDaEtapa(timeline, def);
     let atingido = !!ev;
     if (!cancelada && def.minOrder > 0 && ordemAtual >= def.minOrder) atingido = true;
     if (def.key === "criada") atingido = true;
-    if (def.key === "recebida") atingido = atingido || !!os; // se a OS existe, o aparelho foi recebido
+    // Se a OS existe, o aparelho foi recebido — exceto orçamento sem o aparelho na loja.
+    if (def.key === "recebida") atingido = atingido || (!!os && !datas.semEntradaFisica);
 
     let em = ev?.criadoEm;
+    let emTexto: string | undefined;
     let responsavel = ev?.autor;
     if (def.key === "criada" && !em) em = os?.criadoEm;
-    if (def.key === "recebida" && !em) em = recepcao.dataEntrada;
-    if (def.key === "entregue" && !em && os?.entregueEm) em = os.entregueEm;
+    // Recebida/Entregue mostram as datas EFETIVAS (com a precisão gravada); o
+    // horário real de cada registro continua no Histórico.
+    if (def.key === "recebida") {
+      if (datas.entrada) {
+        em = datas.entrada.iso;
+        emTexto = formatarDataOperacionalV3(datas.entrada);
+        responsavel = recepcao.recebidoPor;
+      } else if (datas.semEntradaFisica) {
+        em = undefined;
+        responsavel = undefined;
+      } else if (!em) {
+        em = recepcao.dataEntrada;
+      }
+    }
+    if (def.key === "entregue") {
+      if (datas.entrega) {
+        em = datas.entrega.iso;
+        emTexto = formatarDataOperacionalV3(datas.entrega);
+      } else if (!em && os?.entregueEm) {
+        em = os.entregueEm;
+      }
+    }
 
-    return { key: def.key, label: def.label, tone: def.tone, atingido, em, responsavel };
+    return { key: def.key, label: def.label, tone: def.tone, atingido, em, emTexto, responsavel };
   });
 }
 

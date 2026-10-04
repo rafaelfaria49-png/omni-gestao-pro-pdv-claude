@@ -195,7 +195,7 @@ describe("Corrigir datas — V3", () => {
     const onSalvo = vi.fn();
     mocks.corrigirDatasOSV3.mockResolvedValue({ ok: true, diff: [], garantia: { temImpacto: true, linhas: [], encerradasIntocadas: 0, payloadDeslocado: false }, os: {} });
     render(<CorrigirDatasModalV3 open os={osEntregue()} storeId="loja-qa" onClose={vi.fn()} onSalvo={onSalvo} />);
-    expect(screen.getAllByText(/Gravado hoje: 29\/09\/2026 16:00/).length).toBe(1);
+    expect(screen.getAllByText(/Valor atual: 29\/09\/2026 16:00/).length).toBe(1);
     fireEvent.change(screen.getByLabelText(/^Data da entrega/), { target: { value: "2026-09-27" } });
     expect(await screen.findByText(/A garantia muda junto com a entrega/)).toBeTruthy();
     expect(screen.getByText(/Início: 29\/09\/2026 → 27\/09\/2026/)).toBeTruthy();
