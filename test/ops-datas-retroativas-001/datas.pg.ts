@@ -140,7 +140,7 @@ async function novaOSPronta(storeId: string, entrada: DataOperacionalV3): Promis
           garantiaPrevista: { modelo: "tela", label: "Troca de Tela", prazoDias: 90 },
         },
         timeline: [{ id: `ev-${n}`, tipo: "criacao", autor: "QA", autorTipo: "usuario", conteudo: "OS criada.", criadoEm: new Date().toISOString() }],
-      } as Prisma.InputJsonValue,
+      } as unknown as Prisma.InputJsonValue,
     },
   });
   return row.id;
