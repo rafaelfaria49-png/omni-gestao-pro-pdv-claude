@@ -53,9 +53,23 @@ Runner do GOAL em `scripts/pessoas/**`: HEAD commitado, workspace temporário ex
 ## Plano de origem
 
 - plan_ref: OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15
-- plan_rev: 1
+- plan_rev: 2
 - recorte: PESSOAS-000 incorporado ao pre-flight; PESSOAS-001A backend; 001B frontend posterior.
 
 ## Estado
 
 O estado ratificado vive em `state.json` e `LEDGER.jsonl`. Gerar derivados somente pela CLI AEP.
+
+## Sucessor obrigatório antes do frontend 001B — revisão 2
+
+- Predecessor DONE: PESSOAS-DP-FUNDACAO-CADASTRO-FUNCIONARIOS-001A.
+- Sucessor READY: PESSOAS-DP-HARDENING-P2-PRE-001B-001, exclusivamente P2034/retry bounded, jornada/PII em log e cache/offline Pessoas. Os 13 P3 permanecem fora do recorte.
+- Branch de planejamento: plan/pessoas-hardening-p2-pre-001b-001; PR governance-only para main, sem open/close, implementação ou merge pelo agente.
+- Branch futura: goal/pessoas-hardening-p2-pre-001b-001.
+- Worktree futura: C:/Projetos/omni-gestao-pessoas-hardening-p2-pre-001b.
+- Base inspecionada do planejamento: origin/main d63b557d04fe446f3627bfdca6827c2c6e059b8c (04/10/2026), contendo o merge 001A ed0454d91a5e3e447922068bc9d2dbc0eae88e36. Execução parte da origin/main corrente após merge humano do plano.
+- Teste do sucessor: node scripts/pessoas/run-hardening-tests.mjs, reutilizando o runner oficial e exigindo build real/inspeção PWA, sem testes pulados.
+- Classe C3, risco ALTO, familia_executor openai, revisao_independente true; plan_rev 2.
+- G-CONFIG-DEPLOY: aprovado pelo usuário nesta conversa em 01/10/2026 exclusivamente para next.config.mjs e exclusivamente para excluir Pessoas de cache/offline com NetworkOnly same-origin. Esse path integra o recorte do sucessor; preservar caches dos demais módulos e cacheOnFrontEndNav global.
+- Nenhum outro gate liberado para o sucessor. Os paths, gates, teste, branch e worktree do 001A acima são históricos e não ampliam a allowlist do novo GOAL.
+- Hardening concluído/revisado é pré-requisito obrigatório do frontend 001B; este planejamento não autoriza UI, flag DP, migration de ambiente, produção, folha ou GOAL 002.
