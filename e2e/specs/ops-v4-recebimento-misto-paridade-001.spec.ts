@@ -86,3 +86,53 @@ test("V4: débito 350 + a prazo 50 em confirmação única; depois 50 quitam e a
     console.log(`QA_V4: titulo=${titulos[0]!.id} recebido=400 saldo=0 caixa_imediato=350`);
   } finally { await prisma.$disconnect(); }
 });
+
+test("R1: recusa por saldo concorrente atualiza a projeção e permite corrigir o mesmo rascunho", async ({ page, context }) => {
+  test.setTimeout(180_000);
+  const origem = new URL(test.info().project.use.baseURL!);
+  expect(origem.hostname).toBe("127.0.0.1"); expect(origem.port).not.toBe("3000");
+  await context.addInitScript((loja) => sessionStorage.setItem(`@omnigestao:first-access-wizard:dismissed:${loja}`, "1"), LOJA_QA_ID);
+  const prisma = new PrismaClient({ datasourceUrl: bancoDescartavel() });
+  const marca = Date.now().toString(36), codigo = `OS-QA-R1-${marca}`, storeId = LOJA_QA_ID;
+  const concorrente = await context.newPage();
+  try {
+    const os = await prisma.ordemServico.create({ data: { storeId, numero: codigo, status: "Pronto", equipamento: "Samsung A54", defeito: "Concorrência QA", valorTotal: 400,
+      payload: { codigo, storeId, cliente: { nome: "Cliente QA R1" }, equipamento: { tipo: "Smartphone", marca: "Samsung", modelo: "A54" }, status: "pronta", operacaoStatusV3: "pronta", valorTotal: 400, orcamento: { id: `orc-${marca}`, status: "aprovado", pecas: [], servicos: [{ id: "s1", descricao: "Serviço QA", valor: 400 }], desconto: 0, total: 400, criadoEm: new Date().toISOString() }, timeline: [] },
+    } });
+    await abrirOS(page, codigo);
+    const modal = page.getByRole("dialog", { name: "Receber pagamento" });
+    await modal.getByLabel("Forma da linha 1").selectOption("debito");
+    await modal.getByLabel("Valor da linha 1").fill("350");
+    await modal.getByRole("button", { name: /Dividir pagamento/ }).click();
+    await modal.getByLabel("Forma da linha 2").selectOption("a_prazo");
+    await modal.getByLabel("Vencimento da parte a prazo").fill("2099-12-31");
+    await expect(modal.getByTestId("resumo-misto")).toContainText(/Já recebidoR\$\s0,00/);
+
+    // Outra sessão registra 20 pelo recebimento normal; a primeira mantém 350+50.
+    await abrirOS(concorrente, codigo);
+    const outroModal = concorrente.getByRole("dialog", { name: "Receber pagamento" });
+    await outroModal.getByRole("button", { name: "Pagamento parcial", exact: true }).click();
+    await outroModal.getByLabel("Forma da linha 1").selectOption("pix");
+    await outroModal.getByLabel("Valor da linha 1").fill("20");
+    await outroModal.getByRole("button", { name: /Confirmar R\$\s20,00/ }).click();
+    await expect(outroModal).toBeHidden();
+    const aposOutro = await prisma.ordemServico.findUniqueOrThrow({ where: { id: os.id } });
+    expect(aposOutro.payload).toMatchObject({ pagamentoV3: { recebido: 20, saldo: 380 } });
+    await expect(modal.getByTestId("resumo-misto")).toContainText(/Já recebidoR\$\s0,00/);
+
+    await modal.getByRole("button", { name: /Registrar R\$\s350,00 \+ R\$\s50,00 a prazo/ }).click();
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole("alert").filter({ hasText: "380,00" }).first()).toBeVisible();
+    await expect(modal.getByTestId("resumo-misto")).toContainText(/Já recebidoR\$\s20,00/);
+    await expect(modal.getByLabel("Valor da linha 1")).toHaveValue("350");
+    await expect(modal.getByLabel("Valor da linha 2")).toHaveValue("50,00");
+    await modal.getByRole("button", { name: "Usar restante", exact: true }).nth(1).click();
+    await expect(modal.getByLabel("Valor da linha 2")).toHaveValue("30,00");
+    const confirmar = modal.getByRole("button", { name: /Registrar R\$\s350,00 \+ R\$\s30,00 a prazo/ });
+    await expect(confirmar).toBeEnabled(); await confirmar.click(); await expect(modal).toBeHidden();
+    const titulos = await prisma.contaReceberTitulo.findMany({ where: { storeId, localKey: `os-faturamento:${storeId}:${os.id}` } });
+    expect(titulos).toHaveLength(1);
+    const final = await prisma.ordemServico.findUniqueOrThrow({ where: { id: os.id } });
+    expect(final.payload).toMatchObject({ pagamentoV3: { recebido: 370, saldo: 30, status: "parcial" }, aPrazoV3: { valor: 30, status: "pendente" } });
+  } finally { await concorrente.close(); await prisma.$disconnect(); }
+});

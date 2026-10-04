@@ -62,8 +62,8 @@ function ReceberPagamentoFormV4({ v }: { v: V4Vals }) {
   }, [pendencia, saldo]);
   useEffect(() => { ativo.current = true; setMounted(true); return () => { ativo.current = false; }; }, []);
   useEffect(() => {
-    if (v.receberPagamentoOpen && !open) { seedForm(); setOpen(true); }
-  }, [v.receberPagamentoOpen, open, seedForm]);
+    if (v.receberPagamentoOpen && !open && !v.financial.loading && !v.financial.error && projection?.expectedTotal != null) { seedForm(); setOpen(true); }
+  }, [v.receberPagamentoOpen, open, v.financial.loading, v.financial.error, projection?.expectedTotal, seedForm]);
   useEffect(() => {
     if (!formAberto || !mounted) return;
     const anterior = document.activeElement;

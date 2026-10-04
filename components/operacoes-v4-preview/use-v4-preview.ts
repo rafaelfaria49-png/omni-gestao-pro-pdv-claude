@@ -1640,6 +1640,7 @@ export function useV4Preview(): V4Vals {
     limparRecibo: limparReciboPdvV3,
     receber: receberPdvV3,
     registrarMisto: registrarMistoPdvV3,
+    reload: reloadPdvV3,
     estornar: estornarPdvV3,
   } = pdvServicoV3;
   // Troca de OS não deve arrastar o recibo da OS anterior para a próxima seleção.
@@ -1822,9 +1823,9 @@ export function useV4Preview(): V4Vals {
     async (input: ReceberOSInputV3) => {
       const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
       const ok = await receberPdvV3(input);
+      if (ok) reloadOrdens();
       if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return false;
       if (ok) {
-        reloadOrdens();
         reloadDetail();
         reloadFinancial();
       } else {
@@ -1850,21 +1851,24 @@ export function useV4Preview(): V4Vals {
     [estornarPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
   );
   // A chave/idempotência e o comprovante continuam inteiramente no hook V3.
-  // Só a seleção que disparou a confirmação recebe reloads; nenhuma resposta
-  // da OS/loja anterior produz aviso ou comprovante na seleção atual.
+  // A lista atualiza após resultado terminal; detalhe/financeiro só no alvo.
+  // Recusa relê a autoridade server e preserva o rascunho para correção.
+  // Nenhuma resposta da OS/loja anterior produz aviso ou comprovante na atual.
   const registrarMistoV4 = useCallback(
     async (input: DadosRecebimentoMistoV3) => {
       const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
       const resultado = await registrarMistoPdvV3(input);
+      const recarregar = resultado.status === "ok" || resultado.status === "recusado";
+      if (recarregar) reloadOrdens();
       if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return { status: "em_andamento" } as const;
-      if (resultado.status === "ok") {
-        reloadOrdens();
+      if (recarregar) {
+        if (resultado.status === "recusado") void reloadPdvV3();
         reloadDetail();
         reloadFinancial();
       }
       return resultado;
     },
-    [registrarMistoPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
+    [registrarMistoPdvV3, reloadPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
   );
   const pdvServico = useMemo<PdvServicoV3Completo>(
     () => ({ ...pdvServicoV3, receber: receberPagamentoV4, registrarMisto: registrarMistoV4, estornar: estornarRecebimentoV4 }),

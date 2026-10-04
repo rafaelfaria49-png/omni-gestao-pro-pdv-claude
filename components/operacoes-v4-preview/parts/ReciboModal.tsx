@@ -25,7 +25,7 @@ export function ReciboModal({ v }: { v: V4Vals }) {
     <div style={{ position: "absolute", inset: 0, zIndex: 70, background: "rgba(17,19,26,.42)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: 380, maxWidth: "100%", background: C.surface, borderRadius: 14, boxShadow: "0 24px 60px rgba(17,19,26,.3)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${C.line2}` }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>🧾 Recibo de pagamento</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>🧾 {recibo?.tipoComprovante === "formalizacao_a_prazo" ? "Resumo de formalização a prazo" : "Recibo de pagamento"}</div>
           <button type="button" onClick={v.closeRecibo} style={{ width: 26, height: 26, border: "none", background: C.muted50, borderRadius: 7, color: C.muted, fontSize: 15, cursor: "pointer" }}>×</button>
         </div>
         <div style={{ padding: 22 }}>

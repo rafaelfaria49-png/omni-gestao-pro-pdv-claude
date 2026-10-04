@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { ReceberPagamentoV4 } from "@/components/operacoes-v4-preview/parts/ReceberPagamentoV4";
+import { FinanceiroStage } from "@/components/operacoes-v4-preview/parts/stages/FinanceiroStage";
 import { ReciboModal } from "@/components/operacoes-v4-preview/parts/ReciboModal";
 import { usePdvServicoV3 } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
 import type { V4Vals } from "@/components/operacoes-v4-preview/use-v4-preview";
@@ -20,17 +21,18 @@ const recibo = () => montarComprovanteMistoV3({ os, pagamentosAgora: [{ forma: "
 const resultado = () => ({ ok: true, jaRegistrado: false, operacaoId: "retorno-qa", tituloId: "titulo-qa", pagamento: { total: 400, recebido: 350, saldo: 50, status: "parcial" }, aPrazo: { modo: "a_prazo", status: "pendente", valor: 50, vencimento: VENC, autorizadoEntrega: true }, valorRecebidoAgora: 350, valorAPrazo: 50, recibo: recibo() });
 const abrirRecibo = vi.fn();
 
-function Harness({ osId = "os-a", loja = "loja-qa", credito = false }: { osId?: string; loja?: string; credito?: boolean }) {
+function Harness({ osId = "os-a", loja = "loja-qa", credito = false, financialLoading = false, saldoProjetado, stage = false }: { osId?: string; loja?: string; credito?: boolean; financialLoading?: boolean; saldoProjetado?: number; stage?: boolean }) {
   const pdv = usePdvServicoV3(loja, osId);
   const [modal, setModal] = useState(false);
   const v = {
     osSelected: true, selectedOsId: osId, recebimentoContextKey: JSON.stringify([loja, osId]), pdvServico: pdv,
     receberPagamentoOpen: modal, closeReceberPagamento: () => setModal(false), openRecibo: abrirRecibo,
-    financial: { loading: false, error: null, projection: { expectedTotal: 400, receivedTotal: credito ? 350 : 0, balance: credito ? 50 : 400, canReceive: true, financialStatus: credito ? "AUTHORIZED_CREDIT" : "OPEN", consistencyIssues: [], installments: credito ? [{ amount: 50, dueAt: VENC }] : [] } },
+    financial: { loading: financialLoading, error: null, projection: financialLoading ? null : { expectedTotal: 400, receivedTotal: 400 - (saldoProjetado ?? (credito ? 50 : 400)), balance: saldoProjetado ?? (credito ? 50 : 400), canReceive: true, financialStatus: credito ? "AUTHORIZED_CREDIT" : "OPEN", consistencyIssues: [], financialEvents: [], installments: credito ? [{ amount: 50, dueAt: VENC }] : [] } },
+    os: { codigo: "OS-QA-A", cliente: "Cliente QA" }, financeiroResumo: { situacaoLabel: "Parcial" }, estorno: { podeEstornar: false },
     recebimento: { semTotal: false, previaNaoMaterializada: false, quitado: false, caixaAberto: !!pdv.sessao?.aberta },
     entrega: { entregue: false }, goEntrega: vi.fn(),
   } as unknown as V4Vals;
-  return <><button onClick={() => setModal(true)}>Abrir pelo header</button><ReceberPagamentoV4 v={v} /></>;
+  return <><button onClick={() => setModal(true)}>Abrir pelo header</button>{stage ? <FinanceiroStage v={v} /> : <ReceberPagamentoV4 v={v} />}</>;
 }
 async function abrir(props: Parameters<typeof Harness>[0] = {}) {
   const view = render(<Harness {...props} />);
@@ -172,4 +174,34 @@ describe("V4 — paridade sobre o hook V3 real (montado)", () => {
     const p = projectFinancialOSV4({ storeId: "loja-qa", osId: "os-a", prismaValorTotal: 400, loadedAt: "2026-10-04T15:00:00Z", payload: { ...os, valorTotal: 400, orcamento: { id: "orc-qa", status: "aprovado", total: 400, pecas: [], servicos: [{ id: "s1", descricao: "Serviço QA", valor: 400 }], desconto: 0, criadoEm: "2026-10-01T15:00:00Z" }, aPrazoV3: { modo: "a_prazo", status: "pendente", valor: 50, vencimento: VENC, autorizadoEntrega: true } }, titulo: { id: "titulo-qa", storeId: "loja-qa", localKey: "os-faturamento:loja-qa:os-a", valor: 400, status: "pago", payload: { historico: [{ tipo: "pagamento", valor: 350 }, { tipo: "pagamento", valor: 50 }] } } });
     expect(p).toMatchObject({ financialStatus: "PAID", balance: 0, installments: [] });
   });
+  it("R1: recusa conserva o rascunho durante a recarga e aceita a nova distribuição de 380", async () => {
+    mocks.registrarRecebimentoMistoOSV3.mockResolvedValueOnce({ ok: false, code: "saldo_divergente", mensagem: "Saldo mudou para R$ 380,00." });
+    const view = await abrir({ stage: true }); linha(1, "debito", "350"); dividir(); linha(2, "a_prazo"); prazo();
+    fireEvent.click(confirmar()); await screen.findByText("Saldo mudou para R$ 380,00.");
+    view.rerender(<Harness stage financialLoading />); expect(screen.queryByRole("dialog")).toBeNull();
+    view.rerender(<Harness stage saldoProjetado={380} />); await screen.findByRole("dialog");
+    expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("350");
+    expect((screen.getByLabelText("Valor da linha 2") as HTMLInputElement).value).toBe("50,00");
+    fireEvent.click(screen.getAllByRole("button", { name: "Usar restante" })[1]);
+    expect((screen.getByLabelText("Valor da linha 2") as HTMLInputElement).value).toBe("30,00"); expect(disabled()).toBe(false);
+    fireEvent.click(confirmar()); await waitFor(() => expect(abrirRecibo).toHaveBeenCalledTimes(1));
+    const [recusado, corrigido] = mocks.registrarRecebimentoMistoOSV3.mock.calls;
+    expect(corrigido[2]).toMatchObject({ saldoEsperado: 380, pagamentosAgora: [{ forma: "debito", valor: 350 }], saldoAPrazo: { valor: 30, vencimento: VENC } });
+    expect(corrigido[2].operacaoId).not.toBe(recusado[2].operacaoId);
+  });
+  it("R1: abertura pelo header aguarda a projeção e semeia o saldo carregado", async () => {
+    const view = render(<Harness financialLoading />); fireEvent.click(screen.getByRole("button", { name: "Abrir pelo header" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    view.rerender(<Harness saldoProjetado={380} />); await screen.findByRole("dialog");
+    expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("380"); expect(disabled()).toBe(false);
+  });
+  it("R1: 100% a prazo apresenta resumo de formalização, sem rotular recibo de pagamento", () => {
+    const formalizacao = montarComprovanteMistoV3({ os, pagamentosAgora: [], valorRecebidoAgora: 0, recebidoAnteriormente: 0, pagamento: { total: 400, recebido: 0, saldo: 400, status: "aberto" }, aPrazo: { valor: 400, vencimento: VENC }, operador: "QA", dataHora: "2026-10-04T15:00:00Z" });
+    expect(formalizacao.tipoComprovante).toBe("formalizacao_a_prazo");
+    render(<ReciboModal v={{ reciboOpen: true, closeRecibo: vi.fn(), pdvServico: { ultimoRecibo: formalizacao } } as unknown as V4Vals} />);
+    expect(screen.getByText("🧾 Resumo de formalização a prazo", { exact: true })).toBeTruthy();
+    expect(screen.queryByText("🧾 Recibo de pagamento", { exact: true })).toBeNull();
+    expect(document.body.textContent).toMatch(/Recebido nesta operaçãoR\$\s0,00/);
+  });
+
 });
