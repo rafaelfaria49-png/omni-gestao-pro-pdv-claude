@@ -222,7 +222,8 @@ export function montarPagamentoMirrorV3(input: {
 // (quando o cliente pagar) segue pelo fluxo normal (`receberOSV3`), sem relação
 // direta com este espelho.
 
-export type APrazoStatusV3 = "pendente" | "cancelado";
+/** "quitado": o saldo autorizado a prazo foi pago — o espelho vira histórico, não cobrança. */
+export type APrazoStatusV3 = "pendente" | "cancelado" | "quitado";
 
 /**
  * Status canônico a gravar no `ContaReceberTitulo` ao lançar "a prazo": preserva
@@ -245,6 +246,26 @@ export interface APrazoV3 {
   autorizadoEm?: string;
   autorizadoPor?: string;
   observacao?: string;
+  /** Recebimento misto: identidade da confirmação que formalizou este saldo. */
+  operacaoId?: string;
+  /** Quando uma baixa posterior zerou o saldo (status "quitado"). */
+  quitadoEm?: string;
+}
+
+/**
+ * Reconcilia o espelho "a prazo" com o saldo REAL do título depois de uma baixa
+ * (`receberOSV3`): saldo zerado → "quitado" (deixa de ser cobrança/parcela pendente);
+ * saldo menor que o autorizado → o valor a prazo acompanha o saldo que resta. Espelho
+ * ausente, não pendente ou já coberto é devolvido intacto. Nunca AMPLIA a autorização.
+ */
+export function reconciliarAPrazoAposBaixaV3(aPrazo: unknown, saldo: number, agora: string): unknown {
+  if (!aPrazo || typeof aPrazo !== "object" || Array.isArray(aPrazo)) return aPrazo;
+  const mirror = aPrazo as Partial<APrazoV3>;
+  if (mirror.modo !== "a_prazo" || mirror.status !== "pendente") return aPrazo;
+  const s = money(saldo);
+  if (s <= EPS) return { ...mirror, status: "quitado", quitadoEm: agora };
+  if (s + EPS < money(mirror.valor ?? 0)) return { ...mirror, valor: s };
+  return aPrazo;
 }
 
 /** Monta o espelho "a prazo" a gravar no payload da OS (sem tocar `pagamentoV3`). */
@@ -270,6 +291,18 @@ export function montarAPrazoMirrorV3(input: {
 }
 
 /** Lê o espelho "a prazo" da OS (`payload.aPrazoV3`). Null quando ausente/não pendente. */
+/**
+ * Saldo a prazo que a TELA exibe: só enquanto há saldo em aberto e nunca acima do saldo
+ * real (baixas por outro caminho não atualizam o espelho). Mesma regra na leitura do
+ * servidor e no estado local depois de cada operação.
+ */
+export function aPrazoVisivelV3(os: unknown, saldo: number): APrazoV3 | null {
+  const s = money(saldo);
+  if (!(s > EPS)) return null;
+  const lido = lerAPrazoV3(os as OrdemServico | null | undefined);
+  return lido ? { ...lido, valor: Math.min(lido.valor, s) } : null;
+}
+
 export function lerAPrazoV3(os: OrdemServico | null | undefined): APrazoV3 | null {
   const mirror = (os as { aPrazoV3?: Partial<APrazoV3> } | null | undefined)?.aPrazoV3;
   if (!mirror || typeof mirror !== "object" || mirror.modo !== "a_prazo" || mirror.status !== "pendente") return null;
@@ -283,6 +316,7 @@ export function lerAPrazoV3(os: OrdemServico | null | undefined): APrazoV3 | nul
     autorizadoEm: typeof mirror.autorizadoEm === "string" ? mirror.autorizadoEm : undefined,
     autorizadoPor: typeof mirror.autorizadoPor === "string" ? mirror.autorizadoPor : undefined,
     observacao: typeof mirror.observacao === "string" ? mirror.observacao : undefined,
+    operacaoId: typeof mirror.operacaoId === "string" ? mirror.operacaoId : undefined,
   };
 }
 
@@ -312,6 +346,15 @@ export interface ComprovanteReciboV3 {
   dataHora: string;
   operador: string;
   observacao?: string;
+  /**
+   * Recebimento misto (aditivo): `formas`/`valorPago` continuam sendo SÓ o dinheiro
+   * recebido nesta operação; o saldo formalizado a prazo vem em `aPrazo`.
+   * "formalizacao_a_prazo" = nenhum dinheiro recebido (resumo, não recibo).
+   */
+  tipoComprovante?: "recebimento" | "recebimento_misto" | "formalizacao_a_prazo";
+  recebidoAnteriormente?: number;
+  situacaoLabel?: string;
+  aPrazo?: { valor: number; vencimento: string; observacao?: string };
 }
 
 /** Monta o comprovante a partir da OS + linhas + estado de pagamento (após o recebimento). */

@@ -331,7 +331,7 @@ export async function cancelContaReceber(params: {
 }
 
 /**
- * Grava a baixa no título.
+ * Grava a baixa (ou o estorno) no título.
  *
  * A escrita sempre carrega um **token otimista** (`updatedAt` lido junto com a linha).
  * `status` e `payload` são calculados em JS a partir da leitura de
@@ -491,8 +491,12 @@ export async function estornarContaReceber(params: {
   modo: EstornoContaReceberModo
   motivo?: string
   userLabel?: string
+  /** Quando informado, o estorno participa da transação (e das travas) do chamador. */
+  db?: ContaReceberDbClient
 }): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
-  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey })
+  // Escrita com token otimista (`gravarBaixaNoTitulo`): um update cego apagaria uma baixa
+  // gravada por outra transação entre esta leitura e a escrita (lost update).
+  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey, db: params.db })
   if (!row) return { ok: false, reason: "not_found" }
 
   const cur = normalizeReceberStatus(row.status)
@@ -513,14 +517,7 @@ export async function estornarContaReceber(params: {
       motivo: safeStr(params.motivo) || undefined,
       userLabel: safeStr(params.userLabel) || undefined,
     })
-    const updated = await prisma.contaReceberTitulo.update({
-      where: { id: row.id },
-      data: {
-        status: RECEBER_STATUS.ESTORNADO,
-        payload: withHist as unknown as Prisma.InputJsonValue,
-      },
-    })
-    return { ok: true, data: updated }
+    return gravarBaixaNoTitulo(dbOf(params.db), row, { status: RECEBER_STATUS.ESTORNADO, payload: withHist })
   }
 
   let lastIdx = -1
@@ -554,14 +551,7 @@ export async function estornarContaReceber(params: {
   else if (pago + PAY_EPS >= total) nextStatus = RECEBER_STATUS.PAGO
   else nextStatus = RECEBER_STATUS.PENDENTE
 
-  const updated = await prisma.contaReceberTitulo.update({
-    where: { id: row.id },
-    data: {
-      status: nextStatus,
-      payload: merged as unknown as Prisma.InputJsonValue,
-    },
-  })
-  return { ok: true, data: updated }
+  return gravarBaixaNoTitulo(dbOf(params.db), row, { status: nextStatus, payload: merged })
 }
 
 export type ContaReceberAuditItem = {

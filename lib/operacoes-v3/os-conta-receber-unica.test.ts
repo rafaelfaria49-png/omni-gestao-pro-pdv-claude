@@ -56,7 +56,28 @@ const h = vi.hoisted(() => {
     return row ? { ...row } : null;
   }
 
+  // Ganchos de teste: rodam quando a action pede a trava por OS (advisory lock) — simulam
+  // outra operação que commitou enquanto esta esperava a trava.
+  const aoTravarOS: Array<() => void> = [];
+
   const prisma: any = {
+    // Os writers de pagamento rodam numa transação com travas SQL: aqui o callback roda no
+    // próprio cliente em memória (a concorrência real é provada em PostgreSQL).
+    $transaction: async (fn: (tx: unknown) => unknown) => fn(prisma),
+    // Travas SQL (tagged template): advisory lock, sessão FOR SHARE, OS/título FOR UPDATE.
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = strings.join("?");
+      if (sql.includes("pg_advisory_xact_lock")) {
+        for (const gancho of aoTravarOS.splice(0)) gancho();
+        return [{ lock: "" }];
+      }
+      if (sql.includes("sessoes_caixa")) return caixaAberta ? [{ id: values[0], status: "ABERTA" }] : [];
+      if (sql.includes("ordens_servico")) {
+        const r = ordens.get(values[0] as string);
+        return r && r.storeId === values[1] ? [{ id: r.id }] : [];
+      }
+      return [];
+    },
     contaReceberTitulo: {
       findUnique: async ({ where }: any) => {
         const { storeId, localKey } = where.storeId_localKey;
@@ -99,6 +120,19 @@ const h = vi.hoisted(() => {
         return { count: 1 };
       },
       create: async ({ data }: any) => snapshot(put(makeRow(data))),
+      // INSERT ... ON CONFLICT DO NOTHING: título já existente NUNCA é sobrescrito.
+      createMany: async ({ data, skipDuplicates }: any) => {
+        let count = 0;
+        for (const d of Array.isArray(data) ? data : [data]) {
+          if (titulos.has(ck(d.storeId, d.localKey))) {
+            if (skipDuplicates) continue;
+            throw new Error("Unique constraint failed on the fields: (`storeId`,`localKey`)");
+          }
+          put(makeRow(d));
+          count += 1;
+        }
+        return { count };
+      },
     },
     ordemServico: {
       findFirst: async ({ where }: any) => {
@@ -117,10 +151,21 @@ const h = vi.hoisted(() => {
     },
     caixaOperacao: {
       create: async ({ data }: any) => {
-        const row = { id: `op-${++seq}`, ...data };
+        const row = { id: `op-${++seq}`, at: tick(), ...data };
         caixaOps.push(row);
         return row;
       },
+      // Replay do recebimento canônico: operações da sessão carimbadas com a `operacaoId`.
+      findMany: async ({ where }: any) =>
+        caixaOps
+          .filter(
+            (o) =>
+              o.storeId === where.storeId &&
+              o.sessaoId === where.sessaoId &&
+              o.tipo === where.tipo &&
+              o.payload?.[where.payload.path[0]] === where.payload.equals,
+          )
+          .map((o) => ({ valor: o.valor, payload: o.payload })),
     },
   };
 
@@ -129,6 +174,7 @@ const h = vi.hoisted(() => {
     titulos,
     ordens,
     caixaOps,
+    aoTravarOS,
     setCaixa: (v: boolean) => {
       caixaAberta = v;
     },
@@ -137,6 +183,7 @@ const h = vi.hoisted(() => {
       byId.clear();
       ordens.clear();
       caixaOps.length = 0;
+      aoTravarOS.length = 0;
       seq = 0;
       caixaAberta = true;
       relogio = Date.parse("2026-09-04T12:00:00.000Z");
@@ -153,7 +200,7 @@ vi.mock("@/lib/financeiro/services/fechamento-service", () => ({
   verificarPeriodoFechado: vi.fn(async () => ({ fechado: false })),
 }));
 vi.mock("@/lib/financeiro/services/movimentacoes-service", () => ({
-  createMovimentacaoEntradaFromReceber: vi.fn(async () => ({})),
+  createMovimentacaoEntradaFromReceber: vi.fn(async () => ({ ok: true, action: "created" })),
 }));
 // GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019: cancelamento restaura estoque via
 // adapter oficial — mockado aqui porque este arquivo testa a chave única de CR
@@ -447,5 +494,99 @@ describe("Fase 2B — split, intenção, estorno", () => {
   it("estorno sem recebimento prévio é rejeitado", async () => {
     seedOS(480);
     await expect(estornarRecebimentoOSV3(STORE, OS, { sessaoId: "sess-1" })).rejects.toThrow();
+  });
+});
+
+// OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 (R/P1 e P2): o recebimento lê a OS e o título só
+// DEPOIS da trava por OS e reconcilia o "a prazo" com o saldo real.
+describe("receberOSV3 — leitura sob a trava por OS e a prazo reconciliado", () => {
+  const aPrazo = (valor: number) => ({
+    modo: "a_prazo", status: "pendente", valor, vencimento: "2026-11-10",
+    tituloLocalKey: localKeyContaReceberOSV3(STORE, OS), autorizadoEntrega: true,
+    autorizadoEm: "2026-10-03T10:00:00.000Z", autorizadoPor: "Operador",
+  });
+
+  it("o que outra operação commitou enquanto esta esperava a trava (a prazo, timeline) não é apagado", async () => {
+    seedOS(480);
+    // Enquanto o recebimento espera a trava, outra operação grava a autorização a prazo e
+    // um evento na timeline. Nada foi lido antes da trava — logo, nada disso se perde.
+    h.aoTravarOS.push(() => {
+      const r = h.ordens.get(OS);
+      r.payload = { ...r.payload, aPrazoV3: aPrazo(280), timeline: [...r.payload.timeline, { id: "ev-outra-operacao", tipo: "financeiro_conta_receber_criada" }] };
+    });
+    await receberOSV3(STORE, OS, { valor: 200, forma: dinheiro, sessaoId: "sess-1" });
+    const payload = h.ordens.get(OS).payload;
+    expect(payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 280 });
+    expect(payload.timeline.map((e: { id: string }) => e.id)).toContain("ev-outra-operacao");
+    expect(payload.pagamentoV3).toMatchObject({ recebido: 200, saldo: 280, status: "parcial" });
+  });
+
+  it("baixa que outra operação gravou enquanto esta esperava a trava entra no saldo validado", async () => {
+    seedOS(480);
+    await receberOSV3(STORE, OS, { valor: 100, forma: dinheiro, sessaoId: "sess-1" });
+    // Snapshot "da tela" diria saldo 380; outra baixa de 300 commita antes da trava.
+    h.aoTravarOS.push(() => {
+      const t = h.titulos.get(`${STORE}::${localKeyContaReceberOSV3(STORE, OS)}`);
+      t.payload = { ...t.payload, historico: [...t.payload.historico, { tipo: "pagamento", valor: 300, at: "2026-10-03T10:00:00.000Z" }] };
+      t.status = "parcial";
+      t.updatedAt = new Date(t.updatedAt.getTime() + 1);
+    });
+    await expect(receberOSV3(STORE, OS, { valor: 380, forma: dinheiro, sessaoId: "sess-1" })).rejects.toThrow(/saldo/i);
+    const lido = await lerPagamentoOSV3(STORE, OS);
+    expect(lido).toMatchObject({ recebido: 400, saldo: 80 });
+    expect(h.caixaOps.filter((o) => o.tipo === "recebimento_cr").map((o) => o.valor)).toEqual([100]);
+  });
+
+  it("baixa que quita o saldo encerra o espelho a prazo (status 'quitado')", async () => {
+    seedOS(480);
+    h.ordens.get(OS).payload.aPrazoV3 = aPrazo(480);
+    const res = await receberOSV3(STORE, OS, { valor: 480, forma: dinheiro, sessaoId: "sess-1" });
+    expect(res.pagamento.status).toBe("quitado");
+    expect(h.ordens.get(OS).payload.aPrazoV3).toMatchObject({ status: "quitado" });
+    const lido = await lerPagamentoOSV3(STORE, OS);
+    expect(lido.aPrazo).toBeNull();
+  });
+
+  it("baixa parcial do saldo a prazo → valor a prazo acompanha o saldo real", async () => {
+    seedOS(480);
+    h.ordens.get(OS).payload.aPrazoV3 = aPrazo(480);
+    await receberOSV3(STORE, OS, { valor: 100, forma: dinheiro, sessaoId: "sess-1" });
+    expect(h.ordens.get(OS).payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 380 });
+    const lido = await lerPagamentoOSV3(STORE, OS);
+    expect(lido.aPrazo).toMatchObject({ valor: 380 });
+  });
+});
+
+// OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 (R2/P1): o recebimento canônico tem identidade
+// persistente — reenviar a MESMA operação nunca baixa, movimenta nem lança caixa em dobro.
+describe("receberOSV3 — identidade da operação (replay sem duplicar)", () => {
+  it("mesma operacaoId reenviada → devolve o já gravado, sem 2ª baixa nem 2º caixa", async () => {
+    seedOS(480);
+    const input = { valor: 200, forma: dinheiro, sessaoId: "sess-1", operacaoId: "op-unit-0001" };
+    const a = await receberOSV3(STORE, OS, input);
+    const b = await receberOSV3(STORE, OS, input);
+    expect(a.jaRegistrado).toBe(false);
+    expect(b).toMatchObject({ jaRegistrado: true, operacaoId: "op-unit-0001", valorRecebido: 200, op: "parcial" });
+    expect(b.recibo).toEqual(a.recibo);
+    expect((await lerPagamentoOSV3(STORE, OS)).recebido).toBe(200);
+    expect(h.caixaOps.filter((o) => o.tipo === "recebimento_cr")).toHaveLength(1);
+  });
+
+  it("mesma operacaoId com outro conteúdo → conflito, sem efeito", async () => {
+    seedOS(480);
+    await receberOSV3(STORE, OS, { valor: 200, forma: dinheiro, sessaoId: "sess-1", operacaoId: "op-unit-0002" });
+    await expect(
+      receberOSV3(STORE, OS, { valor: 150, forma: dinheiro, sessaoId: "sess-1", operacaoId: "op-unit-0002" }),
+    ).rejects.toThrow(/outros valores/);
+    expect((await lerPagamentoOSV3(STORE, OS)).recebido).toBe(200);
+    expect(h.caixaOps.filter((o) => o.tipo === "recebimento_cr")).toHaveLength(1);
+  });
+
+  it("caixa fechado → recusa antes de criar título ou lançar qualquer coisa", async () => {
+    seedOS(480);
+    h.setCaixa(false);
+    await expect(receberOSV3(STORE, OS, { valor: 200, forma: dinheiro, sessaoId: "sess-1" })).rejects.toThrow(/Caixa fechado/);
+    expect(h.titulos.size).toBe(0);
+    expect(h.caixaOps).toHaveLength(0);
   });
 });
