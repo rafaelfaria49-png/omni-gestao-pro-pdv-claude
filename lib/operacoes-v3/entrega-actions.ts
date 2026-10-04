@@ -185,13 +185,13 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
       ? { ...payload, entregaSemCobrancaV3: autorizacaoSolicitada }
       : payload;
 
-    // Título lido fora da transação, mas sob a trava: os writers de pagamento
-    // esperam a mesma advisory lock, então o título não muda até o commit. Uma
-    // falha de leitura bloqueia a entrega sem abortar a transação.
+    // Título lido NA transação (sob a trava, os writers de pagamento esperam: ele
+    // não muda até o commit; e nunca disputa uma 2ª conexão do pool). Se a leitura
+    // falhar, a guarda bloqueia e nenhuma outra consulta roda na transação.
     let titulo: Awaited<ReturnType<typeof prisma.contaReceberTitulo.findUnique>> = null;
     let falhaLeituraTitulo = false;
     try {
-      titulo = await prisma.contaReceberTitulo.findUnique({
+      titulo = await tx.contaReceberTitulo.findUnique({
         where: { storeId_localKey: { storeId: sid, localKey: localKeyContaReceberOSV3(sid, id) } },
       });
     } catch {

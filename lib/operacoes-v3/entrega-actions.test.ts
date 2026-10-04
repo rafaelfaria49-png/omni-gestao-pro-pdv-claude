@@ -16,7 +16,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/prisma", () => {
-  const tx = { ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate } };
+  const tx = {
+    ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate },
+    contaReceberTitulo: { findUnique: mocks.tituloFindUnique },
+  };
   return {
     prisma: {
       ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate },
