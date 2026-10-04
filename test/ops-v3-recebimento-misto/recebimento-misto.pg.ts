@@ -32,7 +32,7 @@ import {
 import { hojeLojaV3, normalizarRecebimentoMistoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { projetarEntregaFinanceiraV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
-import { buildContaReceberAuditTrail, estornarContaReceber } from "@/lib/financeiro/services/contas-receber-service";
+import { buildContaReceberAuditTrail, estornarContaReceber, registrarPagamentoParcial } from "@/lib/financeiro/services/contas-receber-service";
 import { projectFinancialOSV4 } from "@/lib/operacoes-v4/financial-projection";
 
 // ─── ambiente: só PostgreSQL loopback descartável ─────────────────────────────
@@ -1111,5 +1111,77 @@ describe("PG · misto: a prazo idêntico ao vigente não lança de novo", () => 
     expect(s.payload.aPrazoV3).toMatchObject({ vencimento: outroVencimento, valor: 400, status: "pendente" });
     expect(s.recebido).toBe(0);
     expect(s.caixa).toHaveLength(0);
+  });
+});
+
+// ─── R5/P1: replay antes do período, recusas sem expiração, a prazo vigente ─
+
+describe("PG · R5: replay e resultado terminal duráveis", () => {
+  it("recebimento canônico: gravado, resposta perdida e período FECHADO → o reenvio devolve o gravado; chave nova é barrada", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    const input = { valor: 100, forma: "pix" as const, sessaoId, operacaoId: opId(), saldoEsperado: 400 };
+    const original = await receberOSV3(storeId, osId, input);
+    expect(original.jaRegistrado).toBe(false);
+
+    const [ano, mes] = new Date().toISOString().slice(0, 7).split("-").map(Number);
+    await prisma.fechamentoFinanceiro.create({
+      data: { storeId, tipo: "mensal", dataReferencia: `${ano}-${String(mes).padStart(2, "0")}-01`, mes: mes!, ano: ano!, status: "fechado" },
+    });
+
+    const reenvio = await receberOSV3(storeId, osId, input);
+    expect(reenvio).toMatchObject({ jaRegistrado: true, operacaoId: input.operacaoId, valorRecebido: 100 });
+    expect(reenvio.recibo).toEqual(original.recibo);
+    await expect(receberOSV3(storeId, osId, { ...input, operacaoId: opId(), saldoEsperado: 300 })).rejects.toThrow(/Período financeiro fechado/);
+
+    const s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "pagamento").map((e) => e.valor)).toEqual([100]);
+    expect(s.caixa).toHaveLength(1);
+  });
+
+  it("misto: uma recusa terminal NÃO expira — nem depois de muitas outras recusas na mesma OS", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const input = entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 400, vencimento: VENC }, saldoEsperado: 400 });
+    const [ano, mes] = new Date().toISOString().slice(0, 7).split("-").map(Number);
+    const fechamento = await prisma.fechamentoFinanceiro.create({
+      data: { storeId, tipo: "mensal", dataReferencia: `${ano}-${String(mes).padStart(2, "0")}-01`, mes: mes!, ano: ano!, status: "fechado" },
+    });
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, input)).toMatchObject({ ok: false, code: "periodo_fechado", naoRegistrada: true });
+    for (let i = 0; i < 35; i += 1) {
+      expect(await registrarRecebimentoMistoOSV3(storeId, osId, { ...input, operacaoId: opId() })).toMatchObject({ ok: false, code: "periodo_fechado" });
+    }
+    await prisma.fechamentoFinanceiro.update({ where: { id: fechamento.id }, data: { status: "reaberto" } });
+
+    // Reenvio atrasado da PRIMEIRA chave, com o período já reaberto: continua recusado.
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, input)).toMatchObject({ ok: false, code: "periodo_fechado", naoRegistrada: true });
+    const s = await estado(storeId, osId);
+    expect(s.titulos).toHaveLength(0);
+    expect((s.payload.recebimentoMistoRecusasV3 as Payload[]).length).toBe(36);
+  });
+
+  it("100% a prazo idêntico ao VIGENTE (espelho limitado ao saldo após baixa direta no Financeiro) → recusa sem 2º marcador", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const input = entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 400, vencimento: VENC }, saldoEsperado: 400 });
+    expect((await registrarRecebimentoMistoOSV3(storeId, osId, input)).ok).toBe(true);
+
+    // Baixa de R$100 feita direto no Financeiro: o título vai a 300, o espelho da OS fica em 400.
+    const baixa = await registrarPagamentoParcial({ storeId, localKey: localKeyContaReceberOSV3(storeId, osId), valorPago: 100, userLabel: "Financeiro QA" });
+    expect(baixa.ok).toBe(true);
+    expect((await estado(storeId, osId)).payload.aPrazoV3).toMatchObject({ valor: 400 });
+
+    expect(
+      await registrarRecebimentoMistoOSV3(storeId, osId, {
+        ...input,
+        operacaoId: opId(),
+        saldoAPrazo: { valor: 300, vencimento: VENC },
+        saldoEsperado: 300,
+      }),
+    ).toMatchObject({ ok: false, code: "a_prazo_ja_formalizado", naoRegistrada: true });
+    const s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "a_prazo_autorizado")).toHaveLength(1);
+    expect(s.saldo).toBe(300);
   });
 });

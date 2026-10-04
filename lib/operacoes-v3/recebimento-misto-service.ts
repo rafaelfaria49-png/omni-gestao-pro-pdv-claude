@@ -30,6 +30,7 @@ import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/
 import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
 import { statusV3FromOS } from "./status-machine";
 import {
+  aPrazoVisivelV3,
   descreverSplitV3,
   formaLabelRecebimentoV3,
   lerAPrazoV3,
@@ -295,9 +296,11 @@ export type DecisaoRecebimentoMistoV3 =
   | { tipo: "gravada"; resultado: ResultadoRecebimentoMistoV3 }
   | { tipo: "recusada"; recusa: RecusaMistaV3 };
 
-/** Recusas terminais por chave, no payload da OS (as mais recentes). */
+/**
+ * Recusas terminais por chave, no payload da OS: um registro por `operacaoId`, SEM expiração —
+ * esquecer uma recusa deixaria um reenvio atrasado da mesma chave executar depois.
+ */
 const RECUSAS_CAMPO = "recebimentoMistoRecusasV3";
-const RECUSAS_MAX = 30;
 
 interface RecusaTerminalGravadaV3 extends RecusaMistaV3 {
   operacaoId: string;
@@ -328,7 +331,7 @@ async function gravarRecusaTerminal(
   if (!row || !isRecord(row.payload)) return recusaDe(recusa);
   const registro: RecusaTerminalGravadaV3 = { ...recusaDe(recusa), operacaoId: n.operacaoId, requestFingerprint, at: ctx.agora };
   const outras = recusasGravadas(row.payload).filter((r) => r.operacaoId !== n.operacaoId);
-  const payload = { ...row.payload, [RECUSAS_CAMPO]: [...outras, registro].slice(-RECUSAS_MAX) };
+  const payload = { ...row.payload, [RECUSAS_CAMPO]: [...outras, registro] };
   await tx.ordemServico.update({ where: { id: row.id }, data: { payload: payload as unknown as Prisma.InputJsonValue } });
   return recusaDe(recusa);
 }
@@ -479,7 +482,9 @@ async function executarSobATrava(
   // formalização IDÊNTICA à que já vale (mesmo valor e vencimento) não lança nada de novo,
   // mesmo com outra chave (ex.: a chave da tela se perdeu num recarregamento).
   if (n.receberAgoraCentavos === 0) {
-    const vigente = lerAPrazoV3(payload);
+    // Valor VIGENTE = espelho limitado ao saldo real: baixas feitas fora da V3 (ex.: direto no
+    // Financeiro) não atualizam o espelho, mas a autorização continua cobrindo o saldo.
+    const vigente = aPrazoVisivelV3(payload, saldoAtual);
     const temMarcador = Array.isArray(tituloPayload.historico)
       && tituloPayload.historico.some((e) => isRecord(e) && String(e.tipo ?? "").toLowerCase() === MARCADOR_A_PRAZO);
     if (vigente && temMarcador && Math.round(vigente.valor * 100) === n.aPrazo.centavos && vigente.vencimento === n.aPrazo.vencimento) {

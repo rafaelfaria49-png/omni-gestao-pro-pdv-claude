@@ -380,9 +380,10 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
   const operacaoId = (input.operacaoId ?? "").trim() || gerarOperacaoIdV3();
   if (!OPERACAO_ID_PATTERN_V3.test(operacaoId)) throw new Error("Identificador da operação inválido.");
 
-  // Período financeiro fechado?
-  const lock = await verificarPeriodoFechado(sid, new Date());
-  if (lock.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para receber.");
+  // Período financeiro fechado? Consultado aqui, mas só barra uma operação NOVA — e só depois
+  // do replay, sob a trava: reenviar um recebimento já gravado devolve o gravado mesmo com o
+  // período fechado (a consulta fica fora da transação: o cliente global não entra nela).
+  const periodo = await verificarPeriodoFechado(sid, new Date());
 
   const sessaoId = (input.sessaoId ?? "").trim();
   const operador = operadorLabel(session);
@@ -412,6 +413,7 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
     if (gravadas.length > 0) {
       return replayRecebimentoOSV3(tx, { storeId: sid, osId: id, operacaoId, requestFingerprint, gravadas, operador, dataHora });
     }
+    if (periodo.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para receber.");
 
     // 3) Sessão de caixa ABERTA da loja, travada: o fechamento do caixa espera este recebimento.
     const sessao = sessaoId ? await travarSessaoCaixa(tx, sid, sessaoId) : null;
