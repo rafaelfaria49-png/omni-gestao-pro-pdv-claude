@@ -29,7 +29,7 @@ describe("Operações V4 — superfícies financeiras unificadas", () => {
     const receber = source("parts/ReceberPagamentoV4.tsx");
     const estorno = source("parts/EstornoRecebimentoModal.tsx");
     expect(receber).toContain("v.financial.projection")
-    expect(receber).toContain("projection.balance")
+    expect(receber).toContain("projection?.balance")
     expect(receber).toContain("projection.installments")
     expect(receber).not.toContain("pdv.pagamento")
     expect(receber).not.toContain("v.aPrazo")
