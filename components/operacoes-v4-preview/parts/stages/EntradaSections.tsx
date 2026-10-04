@@ -34,7 +34,8 @@ import {
   type DadosBasicosEditorV4,
 } from "@/lib/operacoes-v4/dados-basicos-form";
 import { lerDadosBasicosV3 } from "@/lib/operacoes-v3/dados-basicos-model";
-import type { EntradaGroupId } from "@/lib/operacoes-v4/entrada-workspace";
+import { ROTULO_ESTADO_ENTRADA_V4, type EntradaGroupId } from "@/lib/operacoes-v4/entrada-workspace";
+import type { ChavePendenciaEntradaV4, PendenciaEntradaV4 } from "@/lib/operacoes-v4/entrada-pendencias";
 import { lerAberturaRecepcionV4, resolverIdentidadeAparelhoV4 } from "@/lib/operacoes-v4/identidade-aparelho";
 import { rotuloChecklistExibidoV4 } from "@/lib/operacoes-v4/checklist-aplicabilidade";
 import { NI } from "../../os-adapter";
@@ -48,16 +49,47 @@ type Props = {
   setEd: Dispatch<SetStateAction<EntradaEditorV4>>;
   db: DadosBasicosEditorV4;
   setDb: Dispatch<SetStateAction<DadosBasicosEditorV4>>;
+  /** Pendências derivadas da OS real (servidor) — nunca de flag local. */
+  pendencias: PendenciaEntradaV4[];
+  acessoriosSujos: boolean;
+  estadoFisicoSujo: boolean;
+  podeRegistrar: boolean;
+  onRegistrarNenhumAcessorio: () => void;
+  onConfirmarEstadoFisico: () => void;
 };
 
 function Field({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
   return <label className={cn(styles.field, className)}><span className={styles.label}>{label}</span>{children}</label>;
 }
 
-function Group({ title, hint, children }: { title?: string; hint?: string; children: ReactNode }) {
+function pendencia(props: Props, chave: ChavePendenciaEntradaV4): PendenciaEntradaV4 | undefined {
+  return props.pendencias.find((p) => p.chave === chave);
+}
+
+/** Estado honesto do bloco: registrado, falta complementar ou opcional (nunca erro). */
+function EstadoBloco({ item }: { item: PendenciaEntradaV4 }) {
   return (
-    <section className={styles.group}>
+    <span
+      className={cn(
+        styles.stateBadge,
+        styles.groupState,
+        item.estado === "registrado" && styles.stateBadgeComplete,
+        item.estado === "falta_complementar" && styles.stateBadgePending,
+      )}
+    >
+      {ROTULO_ESTADO_ENTRADA_V4[item.estado]}
+    </span>
+  );
+}
+
+// O título continua filho direto da seção (contrato `section > h3` usado por
+// testes/E2E); o estado é irmão, alinhado na mesma linha pelo grid.
+function Group({ title, hint, estado, children }: { title?: string; hint?: string; estado?: PendenciaEntradaV4; children: ReactNode }) {
+  const comEstado = Boolean(title && estado);
+  return (
+    <section className={cn(styles.group, comEstado && styles.groupComEstado)}>
       {title ? <h3 className={styles.groupTitle}>{title}</h3> : null}
+      {comEstado && estado ? <EstadoBloco item={estado} /> : null}
       {hint ? <p className={styles.groupHint}>{hint}</p> : null}
       {children}
     </section>
@@ -138,7 +170,8 @@ function ConferenciaSnapshot({ v }: { v: V4Vals }) {
   );
 }
 
-function DadosBasicosSection({ db, setDb, v }: Props) {
+function DadosBasicosSection(props: Props) {
+  const { db, setDb, v } = props;
   const [corrigirAbertura, setCorrigirAbertura] = useState(false);
   const setBasico = <K extends keyof DadosBasicosEditorV4>(key: K, value: DadosBasicosEditorV4[K]) =>
     setDb((current) => setDadosBasicos(current, key, value));
@@ -162,12 +195,15 @@ function DadosBasicosSection({ db, setDb, v }: Props) {
   // T10: previsão no passado exige aviso — nunca correção silenciosa.
   const previsaoIso = db.previsaoLocal.trim() ? localInputToIsoInTZ(db.previsaoLocal) : "";
   const previsaoVencida = isPrevisaoVencida(previsaoIso);
+  // GOAL 004: o que já veio da abertura fica no resumo; "Recebido por" aparece
+  // sozinho quando é ele que falta no servidor (complemento real, não reentrada).
+  const mostrarCorrecao = !aberturaJaInformada || corrigirAbertura;
 
   return (
     <>
-      <Group title="Ajustes da recepção" hint="Prioridade, localização e previsão. Cliente, aparelho e defeito já estão no resumo acima.">
+      <Group title="Ajustes da recepção" hint="Prioridade, localização e previsão. Cliente, aparelho e defeito já estão no resumo acima." estado={pendencia(props, "dados-basicos")}>
         <div className={styles.fields}>
-          {(!aberturaJaInformada || corrigirAbertura) ? (
+          {mostrarCorrecao ? (
             <>
               <Field label="Defeito relatado" className={styles.span2}>
                 <textarea className={styles.textarea} value={db.defeitoRelatado} onChange={(event) => setBasico("defeitoRelatado", event.target.value)} maxLength={600} placeholder="Descreva o problema informado pelo cliente…" />
@@ -177,22 +213,24 @@ function DadosBasicosSection({ db, setDb, v }: Props) {
                   {ORIGEM_V3.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                 </select>
               </Field>
-              <Field label="Recebido por">
-                <input className={styles.input} value={db.recebidoPor} onChange={(event) => setBasico("recebidoPor", event.target.value)} maxLength={80} placeholder="Nome do atendente" />
-              </Field>
             </>
+          ) : null}
+          {mostrarCorrecao || !seedRecebidoPor ? (
+            <Field label="Recebido por">
+              <input className={styles.input} value={db.recebidoPor} onChange={(event) => setBasico("recebidoPor", event.target.value)} maxLength={80} placeholder="Nome do atendente" />
+            </Field>
           ) : null}
           <Field label="Prioridade">
             <select className={styles.select} value={db.prioridade} onChange={(event) => setBasico("prioridade", event.target.value as DadosBasicosEditorV4["prioridade"])}>
               {PRIORIDADE_V3.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </Field>
-          <Field label="Localização física">
+          <Field label="Localização física (opcional)">
             <select className={styles.select} value={db.localFisico} onChange={(event) => setBasico("localFisico", event.target.value as DadosBasicosEditorV4["localFisico"])}>
               {LOCAL_FISICO_V3.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </Field>
-          <Field label="Previsão de entrega / SLA" className={styles.span2}>
+          <Field label="Previsão de entrega / SLA (opcional)" className={styles.span2}>
             <input className={styles.input} type="datetime-local" value={db.previsaoLocal} onChange={(event) => setBasico("previsaoLocal", event.target.value)} aria-describedby="previsao-fuso" />
             <span id="previsao-fuso" className={styles.groupHint}>{FUSO_LOJA_LABEL_V4}{previsaoIso ? ` · ${formatPrevisaoComFuso(previsaoIso)}` : ""}</span>
             {previsaoVencida ? (
@@ -206,8 +244,8 @@ function DadosBasicosSection({ db, setDb, v }: Props) {
           </button>
         ) : null}
       </Group>
-      <Group title="Uso interno" hint="Não é impresso para o cliente.">
-        <Field label="Observações internas">
+      <Group title="Uso interno" hint="Opcional. Não é impresso para o cliente.">
+        <Field label="Observações internas (opcional)">
           <textarea className={styles.textarea} value={db.observacoes} onChange={(event) => setBasico("observacoes", event.target.value)} maxLength={800} placeholder="Notas úteis para a equipe técnica…" />
         </Field>
       </Group>
@@ -215,7 +253,8 @@ function DadosBasicosSection({ db, setDb, v }: Props) {
   );
 }
 
-function IdentificacaoSection({ ed, setEd, v }: Props) {
+function IdentificacaoSection(props: Props) {
+  const { ed, setEd, v } = props;
   const identidade = resolverIdentidadeAparelhoV4(v.realOS);
   const [unlock, setUnlock] = useState<Record<string, boolean>>({});
   const patch = (values: Partial<EntradaEditorV4["identificacao"]>) => setEd((current) => ({ ...current, identificacao: { ...current.identificacao, ...values } }));
@@ -253,7 +292,7 @@ function IdentificacaoSection({ ed, setEd, v }: Props) {
   };
 
   return (
-    <Group title="Completar identificação" hint="Preencha só o que faltou na abertura — IMEI, série, cor ou operadora.">
+    <Group title="Completar identificação" hint="Opcional: preencha só o que faltou na abertura — IMEI, série, cor ou operadora." estado={pendencia(props, "identificacao")}>
       <div className={styles.fields}>
         {field("imei", "IMEI", ed.identificacao.imei, identidade.imei.informedAtOpening, { mono: true, inputMode: "numeric" })}
         {field("serial", "Número de série", ed.identificacao.serial, Boolean(identidade.serial.value), { mono: true })}
@@ -265,11 +304,45 @@ function IdentificacaoSection({ ed, setEd, v }: Props) {
   );
 }
 
-function SegurancaSection({ ed, setEd }: Props) {
+const OPCOES_TRI_ESTADO: { rotulo: string; valor: boolean | null }[] = [
+  { rotulo: "Não informado", valor: null },
+  { rotulo: "Sim", valor: true },
+  { rotulo: "Não", valor: false },
+];
+
+/** I (GOAL 004): não informado / sim / não — ausente nunca é apresentado como "não". */
+function TriEstadoBiometria({
+  nome,
+  rotulo,
+  valor,
+  onChange,
+}: {
+  nome: string;
+  rotulo: string;
+  valor: boolean | null;
+  onChange: (valor: boolean | null) => void;
+}) {
+  return (
+    <fieldset className={styles.triState}>
+      <legend className={styles.label}>{rotulo}</legend>
+      <div className={styles.triStateOptions}>
+        {OPCOES_TRI_ESTADO.map((opcao) => (
+          <label key={opcao.rotulo} className={cn(styles.triStateOption, valor === opcao.valor && styles.triStateOptionOn)}>
+            <input type="radio" name={nome} checked={valor === opcao.valor} onChange={() => onChange(opcao.valor)} />
+            {opcao.rotulo}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function SegurancaSection(props: Props) {
+  const { ed, setEd } = props;
   const patch = (values: Partial<EntradaEditorV4["credenciais"]>) => setEd((current) => ({ ...current, credenciais: { ...current.credenciais, ...values } }));
   return (
     <>
-      <Group title="Acesso ao aparelho" hint="Registre apenas o necessário para diagnóstico. As credenciais permanecem mascaradas na impressão entregue ao cliente.">
+      <Group title="Acesso ao aparelho" hint="Opcional: registre só o necessário para diagnóstico. As credenciais permanecem mascaradas na impressão entregue ao cliente." estado={pendencia(props, "acesso")}>
         <div className={styles.fields}>
           <Field label="Tipo de senha">
             <select className={styles.select} value={ed.credenciais.senhaTipo} onChange={(event) => patch({ senhaTipo: event.target.value as EntradaEditorV4["credenciais"]["senhaTipo"] })}>
@@ -290,10 +363,10 @@ function SegurancaSection({ ed, setEd }: Props) {
           <PatternPadV4 value={ed.credenciais.senha} onChange={(value) => patch({ senha: value })} />
         </Group>
       ) : null}
-      <Group title="Biometria disponível">
-        <div className={styles.checks}>
-          <label className={styles.checkLabel}><input type="checkbox" checked={ed.credenciais.faceId} onChange={(event) => patch({ faceId: event.target.checked })} /> Face ID</label>
-          <label className={styles.checkLabel}><input type="checkbox" checked={ed.credenciais.biometria} onChange={(event) => patch({ biometria: event.target.checked })} /> Biometria</label>
+      <Group title="Biometria disponível" hint="Sem resposta fica “não informado” — nunca vira “não”.">
+        <div className={styles.triStateList}>
+          <TriEstadoBiometria nome="entrada-face-id" rotulo="Face ID" valor={ed.credenciais.faceId} onChange={(faceId) => patch({ faceId })} />
+          <TriEstadoBiometria nome="entrada-biometria" rotulo="Biometria" valor={ed.credenciais.biometria} onChange={(biometria) => patch({ biometria })} />
         </div>
       </Group>
       <div className={styles.error} style={{ borderLeftColor: "var(--border)", color: "var(--muted-foreground)", background: "var(--muted)" }}><ShieldCheck size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />Acesso restrito à equipe autorizada da OS.</div>
@@ -301,22 +374,46 @@ function SegurancaSection({ ed, setEd }: Props) {
   );
 }
 
-function EstadoFisicoSection({ ed, setEd }: Props) {
+function EstadoFisicoSection(props: Props) {
+  const { ed, setEd } = props;
+  // H (GOAL 004): sem salvamento real do estado físico, o "íntegro" exibido é
+  // só o padrão do editor — rascunho não confirmado, nunca fato registrado.
+  const estado = pendencia(props, "estado-fisico");
+  const registrado = estado?.estado === "registrado";
+  const podeConfirmar = Boolean(estado) && !registrado && !props.estadoFisicoSujo;
   return (
     <>
-      <Group title="Condição física" hint="Revise cada componente com o cliente presente sempre que possível.">
+      <Group
+        title="Condição física"
+        estado={estado}
+        hint={
+          registrado
+            ? "Registrado na prova de entrada. Ajuste e salve se algo mudou."
+            : "Ainda não conferido: os valores abaixo são o padrão (íntegro), um rascunho não confirmado. Só viram registro ao confirmar ou salvar."
+        }
+      >
         <div className={styles.inspectionList}>
           {ed.estadoFisico.map((item) => (
             <label key={item.componente} className={styles.inspectionRow}>
               <span className={styles.inspectionLabel}>{componenteFisicoLabelV3(item.componente)}</span>
               <select className={styles.select} value={item.status} onChange={(event) => setEd((current) => setEstadoFisicoStatus(current, item.componente, event.target.value as EstadoFisicoStatusV3))}>
                 {(Object.keys(ESTADO_FISICO_STATUS_META_V3) as EstadoFisicoStatusV3[]).map((status) => (
-                  <option key={status} value={status}>{status === "ok" ? "Íntegro" : ESTADO_FISICO_STATUS_META_V3[status].label}</option>
+                  <option key={status} value={status}>
+                    {status === "ok" ? (registrado ? "Íntegro" : "Íntegro (não confirmado)") : ESTADO_FISICO_STATUS_META_V3[status].label}
+                  </option>
                 ))}
               </select>
             </label>
           ))}
         </div>
+        {podeConfirmar ? (
+          <div className={styles.inlineAction}>
+            <button type="button" className={styles.button} onClick={props.onConfirmarEstadoFisico} disabled={!props.podeRegistrar}>
+              Confirmar estado exibido
+            </button>
+            <span className={styles.groupHint}>Registra o estado como está na tela, inclusive “íntegro”.</span>
+          </div>
+        ) : null}
       </Group>
       <Group title={`Avarias registradas${ed.avarias.length ? ` · ${ed.avarias.length}` : ""}`} hint="Adicione somente danos visíveis no momento da entrada.">
         <div className={styles.damageTypes}>
@@ -334,10 +431,13 @@ function EstadoFisicoSection({ ed, setEd }: Props) {
   );
 }
 
-function ChecklistSection({ ed, setEd }: Props) {
-  const credenciais = { faceId: ed.credenciais.faceId, biometria: ed.credenciais.biometria };
+function ChecklistSection(props: Props) {
+  const { ed, setEd } = props;
+  // I (GOAL 004): N/A só quando a Segurança registrou explicitamente "não";
+  // não informado mantém o teste aplicável.
+  const credenciais = { faceId: ed.credenciais.faceId !== false, biometria: ed.credenciais.biometria !== false };
   return (
-    <Group title="Testes funcionais" hint="Clique em cada item para alternar entre OK, ruim e não testado. Recursos inexistentes ficam N/A.">
+    <Group title="Testes funcionais" estado={pendencia(props, "checklist")} hint="Clique em cada item para alternar entre OK, ruim e não testado. Recursos marcados como inexistentes em Segurança ficam N/A.">
       <div className={styles.choiceGrid}>
         {ed.checklist.map((item) => {
           const shown = rotuloChecklistExibidoV4(item.id, item.estado, credenciais);
@@ -362,9 +462,24 @@ function ChecklistSection({ ed, setEd }: Props) {
   );
 }
 
-function AcessoriosSection({ ed, setEd }: Props) {
+function AcessoriosSection(props: Props) {
+  const { ed, setEd } = props;
+  // F (GOAL 004): "nenhum acessório" é resposta válida, registrada só por ação
+  // explícita (evento acessorio_registrado com presentes = 0).
+  const estado = pendencia(props, "acessorios");
+  const registrado = estado?.estado === "registrado";
+  const nenhumMarcado = ed.acessorios.every((item) => !item.presente);
+  const podeRegistrarNenhum = Boolean(estado) && !registrado && nenhumMarcado && !props.acessoriosSujos;
   return (
-    <Group title="Itens recebidos com o aparelho" hint="Marque apenas o que permaneceu na assistência junto com o aparelho.">
+    <Group
+      title="Itens recebidos com o aparelho"
+      estado={estado}
+      hint={
+        registrado && estado?.detalhe
+          ? `Registrado: ${estado.detalhe}. Marque apenas o que permaneceu na assistência junto com o aparelho.`
+          : "Marque apenas o que permaneceu na assistência junto com o aparelho. Nenhum item também é resposta válida."
+      }
+    >
       <div className={styles.choiceGrid}>
         {ed.acessorios.map((item) => (
           <button key={item.id} type="button" className={cn(styles.choice, item.presente && styles.choiceOn)} onClick={() => setEd((current) => toggleAcessorio(current, item.id))} aria-pressed={item.presente}>
@@ -373,6 +488,13 @@ function AcessoriosSection({ ed, setEd }: Props) {
           </button>
         ))}
       </div>
+      {podeRegistrarNenhum ? (
+        <div className={styles.inlineAction}>
+          <button type="button" className={styles.button} onClick={props.onRegistrarNenhumAcessorio} disabled={!props.podeRegistrar}>
+            Registrar: nenhum acessório recebido
+          </button>
+        </div>
+      ) : null}
     </Group>
   );
 }
@@ -400,7 +522,8 @@ async function comprimirFotoEntrada(file: File): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.6);
 }
 
-function FotosSection({ v }: Props) {
+function FotosSection(props: Props) {
+  const { v } = props;
   const [categoria, setCategoria] = useState<CategoriaFotoV3>("frontal");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -422,7 +545,7 @@ function FotosSection({ v }: Props) {
   };
 
   return (
-    <Group title="Fotos da entrada" hint={`${v.entradaFotos.length} de ${FOTO_MAX_V3} fotos. Frontal, traseira, lateral ou defeito.`}>
+    <Group title="Fotos da entrada" estado={pendencia(props, "fotos")} hint={`Opcional. ${v.entradaFotos.length} de ${FOTO_MAX_V3} fotos. Frontal, traseira, lateral ou defeito.`}>
       <div className={styles.fields}>
         <Field label="Categoria">
           <select className={styles.select} value={categoria} onChange={(event) => setCategoria(event.target.value as CategoriaFotoV3)}>
@@ -464,7 +587,8 @@ function FotosSection({ v }: Props) {
   );
 }
 
-function AssinaturaEntradaSection({ v }: Props) {
+function AssinaturaEntradaSection(props: Props) {
+  const { v } = props;
   const prova = lerProvaEntradaV3(v.realOS);
   const assinatura = prova.assinaturaCliente;
   const quando = assinatura?.criadoEm
@@ -472,7 +596,7 @@ function AssinaturaEntradaSection({ v }: Props) {
     : "";
 
   return (
-    <Group title="Assinatura do cliente" hint="Vinculada à prova de entrada — não é a assinatura de entrega.">
+    <Group title="Assinatura do cliente" estado={pendencia(props, "assinatura")} hint="Opcional. Vinculada à prova de entrada — não é a assinatura de entrega.">
       {assinatura?.dataUrl ? (
         <div className={styles.snapshotGrid}>
           <div className={styles.snapshotRow}>

@@ -285,12 +285,15 @@ export async function salvarProvaEntradaV3(
       ...(temCred ? { credenciais: { valores: credenciais, limpar: limparCredenciais } } : {}),
       ...(esperados ? { esperados } : {}),
     },
+    // OPS-V4-FLUXO-CURTO-004: `fatias` registra quais partes viajaram (aditivo).
+    // Sem ele, salvar só credenciais seria indistinguível de conferir o estado
+    // físico; eventos antigos sem `fatias` mantêm o significado anterior.
     (jaCriada, op) =>
       makeEvento(
         "observacao",
         op,
         jaCriada ? "Prova de entrada atualizada." : "Prova de entrada registrada (estado físico, avarias e credenciais).",
-        { evento: jaCriada ? "prova_entrada_atualizada" : "prova_entrada_criada", avariados: resumo, avarias: avarias.length },
+        { evento: jaCriada ? "prova_entrada_atualizada" : "prova_entrada_criada", avariados: resumo, avarias: avarias.length, fatias: quais },
       ),
     undefined,
   );
