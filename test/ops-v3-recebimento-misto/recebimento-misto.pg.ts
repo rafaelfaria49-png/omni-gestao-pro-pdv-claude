@@ -17,6 +17,7 @@ import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import {
   estornarRecebimentoOSV3,
+  lancarOSAPrazoV3,
   lerPagamentoOSV3,
   receberOSV3,
   registrarRecebimentoMistoOSV3,
@@ -26,7 +27,7 @@ import { executarRecebimentoMistoOSV3 } from "@/lib/operacoes-v3/recebimento-mis
 import { hojeLojaV3, normalizarRecebimentoMistoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { projetarEntregaFinanceiraV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
-import { buildContaReceberAuditTrail } from "@/lib/financeiro/services/contas-receber-service";
+import { buildContaReceberAuditTrail, estornarContaReceber } from "@/lib/financeiro/services/contas-receber-service";
 import { projectFinancialOSV4 } from "@/lib/operacoes-v4/financial-projection";
 
 // ─── ambiente: só PostgreSQL loopback descartável ─────────────────────────────
@@ -522,21 +523,41 @@ describe("PG · falha injetada no meio da operação", () => {
 
 // ─── concorrência, conflitos e permissões ─────────────────────────────────────
 
-async function esperarBloqueioNoBanco(timeoutMs = 15_000): Promise<void> {
+async function esperarBloqueioNoBanco(timeoutMs = 15_000, minimo = 1): Promise<void> {
   const fim = Date.now() + timeoutMs;
   while (Date.now() < fim) {
     const rows = await prisma.$queryRaw<Array<{ n: number }>>`
       SELECT count(*)::int AS n FROM pg_stat_activity
       WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()
     `;
-    if ((rows[0]?.n ?? 0) > 0) return;
+    if ((rows[0]?.n ?? 0) >= minimo) return;
     await new Promise((r) => setTimeout(r, 50));
   }
-  throw new Error("o recebimento concorrente não chegou a esperar a trava do título");
+  throw new Error("a operação concorrente não chegou a esperar a trava");
+}
+
+/** Misto parado DENTRO da transação (trava da OS + título travado, baixa e marcador já gravados), antes de gravar a OS. */
+async function mistoPausadoNaGravacaoDaOS(storeId: string, osId: string, input: RegistrarRecebimentoMistoInputV3) {
+  let liberar!: () => void;
+  const barreira = new Promise<void>((r) => (liberar = r));
+  let chegou!: () => void;
+  const naBarreira = new Promise<void>((r) => (chegou = r));
+  const ctx = { storeId, osId, operador: "Operador QA", operadorId: "qa-misto-admin", agora: new Date().toISOString() };
+  const misto = prisma.$transaction(
+    (tx) =>
+      executarRecebimentoMistoOSV3(
+        txInstrumentado(tx, { modelo: "ordemServico", metodo: "update", antes: async () => { chegou(); await barreira; } }),
+        ctx,
+        normal(input),
+      ),
+    { maxWait: 10_000, timeout: 60_000 },
+  );
+  await naBarreira;
+  return { misto, liberar };
 }
 
 describe("PG · concorrência com recebimento canônico (receberOSV3 / V4)", () => {
-  it("título existente: o concorrente espera a trava e falha no CAS — sem lost update nem duplicidade", async () => {
+  it("título existente: o concorrente espera a trava da OS e relê o saldo já commitado — sem lost update nem duplicidade", async () => {
     const { storeId, osId, sessaoId } = await osComTituloCanonico();
     let liberar!: () => void;
     const barreira = new Promise<void>((r) => (liberar = r));
@@ -561,7 +582,9 @@ describe("PG · concorrência com recebimento canônico (receberOSV3 / V4)", () 
     await esperarBloqueioNoBanco();
     liberar();
     await expect(misto).resolves.toMatchObject({ jaRegistrado: false, valorRecebidoAgora: 350 });
-    expect(await concorrente).toMatch(/titulo_alterado/);
+    // Serializado pela trava da OS: só lê o título depois do commit (saldo 50) e recusa os 100
+    // antes de qualquer escrita.
+    expect(await concorrente).toMatch(/Valor acima do saldo a receber \(50\.00\)/);
 
     const s = await estado(storeId, osId);
     expect(s.historico.filter((e) => e.tipo === "pagamento").map((e) => e.valor)).toEqual([350]);
@@ -597,7 +620,7 @@ describe("PG · concorrência com recebimento canônico (receberOSV3 / V4)", () 
     await esperarBloqueioNoBanco();
     liberar();
     await expect(misto).resolves.toMatchObject({ jaRegistrado: false });
-    // O concorrente esperou o INSERT (DO NOTHING) e releu o título JÁ commitado:
+    // O concorrente esperou a trava da OS e leu o título JÁ commitado (criado pelo misto):
     // saldo 50 (a prazo) → 100 passa do saldo e é recusado antes de qualquer escrita.
     expect(await concorrente).toMatch(/Valor acima do saldo a receber \(50\.00\)/);
 
@@ -609,13 +632,13 @@ describe("PG · concorrência com recebimento canônico (receberOSV3 / V4)", () 
     expect(s.caixa.map((c) => c.valor)).toEqual([350]);
   });
 
-  it("R/P1: recebimento canônico pausado DEPOIS da baixa e antes de gravar a OS não apaga o a prazo commitado no meio", async () => {
+  it("R/P1: recebimento canônico parado DENTRO da trava da OS — o misto espera, e nada se perde em nenhuma das duas", async () => {
     const storeId = await novaLoja();
     const osId = await novaOS(storeId);
     const sessaoId = await abrirCaixa(storeId);
 
-    // Trava a sessão de caixa: o receberOSV3 baixa o título (autocommit) e para no INSERT
-    // da operação de caixa (FK) — exatamente entre a baixa e a gravação do payload da OS.
+    // Trava a sessão de caixa: o receberOSV3 pega a trava da OS e para na sessão (FOR SHARE),
+    // SEGURANDO a trava — antes de ler ou gravar qualquer coisa.
     let liberarSessao!: () => void;
     const segurar = new Promise<void>((r) => (liberarSessao = r));
     let sessaoTravada!: () => void;
@@ -632,27 +655,105 @@ describe("PG · concorrência com recebimento canônico (receberOSV3 / V4)", () 
     const canonico = receberOSV3(storeId, osId, { valor: 100, forma: "pix", sessaoId });
     await esperarBloqueioNoBanco();
 
-    // Enquanto isso, o restante (R$300) é formalizado 100% a prazo e COMMITA.
-    const misto = await registrarRecebimentoMistoOSV3(
+    // O restante (R$300) 100% a prazo NÃO passa na frente: espera a trava da OS.
+    const misto = registrarRecebimentoMistoOSV3(
       storeId,
       osId,
       entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 300, vencimento: VENC }, saldoEsperado: 300 }),
     );
-    expect(misto.ok).toBe(true);
+    await esperarBloqueioNoBanco(15_000, 2);
+    expect((await estado(storeId, osId)).titulos).toHaveLength(0);
 
     liberarSessao();
     await trava;
     const res = await canonico;
     expect(res.pagamento).toMatchObject({ total: 400, recebido: 100, saldo: 300, status: "parcial" });
+    expect((await misto).ok).toBe(true);
 
     const s = await estado(storeId, osId);
-    // Nada do que o misto gravou some: autorização a prazo, eventos e espelho coerente.
+    // Os dois gravaram, em ordem: espelho, autorização a prazo e os dois eventos.
     expect(s.payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 300, vencimento: VENC });
-    expect(s.payload.timeline.map((e: Payload) => e.tipo)).toEqual(["os_criada", "financeiro_conta_receber_criada", "operacao_cobranca_gerada"]);
+    expect(s.payload.timeline.map((e: Payload) => e.tipo)).toEqual(["os_criada", "operacao_cobranca_gerada", "financeiro_conta_receber_criada"]);
     expect(s.payload.pagamentoV3).toMatchObject({ recebido: 100, saldo: 300, status: "parcial" });
     expect(s.recebido).toBe(100);
     expect(s.saldo).toBe(300);
     expect(guard(storeId, osId, s).decisao).toBe("ALLOW_AUTHORIZED_CREDIT");
+  });
+
+  it("R2/P0: lançar a prazo (V4) concorrente espera a trava da OS e relê o título — a baixa do misto sobrevive", async () => {
+    const { storeId, osId, sessaoId } = await osComTituloCanonico();
+    const { misto, liberar } = await mistoPausadoNaGravacaoDaOS(storeId, osId, entrada({ sessaoId }));
+    const lancamento = lancarOSAPrazoV3(storeId, osId, { vencimento: VENC, observacao: "V4" });
+    await esperarBloqueioNoBanco();
+    liberar();
+    await expect(misto).resolves.toMatchObject({ jaRegistrado: false, valorRecebidoAgora: 350 });
+    // Leu o título DEPOIS do commit do misto: formaliza o saldo real (50), nunca os 400.
+    await expect(lancamento).resolves.toMatchObject({ valorFormalizado: 50 });
+
+    const s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "pagamento").map((e) => e.valor)).toEqual([350]);
+    expect(s.historico.filter((e) => e.tipo === "a_prazo_autorizado").map((e) => e.valor)).toEqual([50, 50]);
+    expect(s.titulo!.status).toBe("parcial");
+    expect(s.recebido).toBe(350);
+    expect(s.saldo).toBe(50);
+    expect(s.caixa.map((c) => c.valor)).toEqual([350]);
+    expect(s.movs.map((m) => m.valor)).toEqual([350]);
+    expect(s.payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 50 });
+    expect(guard(storeId, osId, s).decisao).toBe("ALLOW_AUTHORIZED_CREDIT");
+  });
+
+  it("R2/P0: estorno concorrente espera a trava da OS e estorna o recebimento REALMENTE último — nada sobrescrito", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    await receberOSV3(storeId, osId, { valor: 100, forma: "dinheiro", sessaoId });
+    const { misto, liberar } = await mistoPausadoNaGravacaoDaOS(
+      storeId,
+      osId,
+      entrada({ sessaoId, pagamentosAgora: [{ forma: "debito", valor: 250 }], saldoAPrazo: { valor: 50, vencimento: VENC }, saldoEsperado: 300 }),
+    );
+    const estorno = estornarRecebimentoOSV3(storeId, osId, { sessaoId, motivo: "QA concorrente" });
+    await esperarBloqueioNoBanco();
+    liberar();
+    await expect(misto).resolves.toMatchObject({ valorRecebidoAgora: 250 });
+    await expect(estorno).resolves.toMatchObject({ estornado: 250 });
+
+    const s = await estado(storeId, osId);
+    expect(s.historico.map((e) => e.tipo)).toEqual(["pagamento", "pagamento", "a_prazo_autorizado", "estorno_pagamento"]);
+    expect(s.recebido).toBe(100);
+    expect(s.saldo).toBe(300);
+    expect(s.caixa.map((c) => [c.tipo, c.valor])).toEqual([
+      ["recebimento_cr", 100],
+      ["recebimento_cr", 250],
+      ["estorno_recebimento_cr", 250],
+    ]);
+    expect(s.payload.pagamentoV3).toMatchObject({ recebido: 100, saldo: 300 });
+    // A autorização de 50 não cobre mais o saldo de 300: entrega bloqueada, nada ampliado.
+    expect(s.payload.aPrazoV3).toMatchObject({ status: "pendente", valor: 50 });
+    expect(guard(storeId, osId, s).decisao).toBe("BLOCK_PENDING_BALANCE");
+  });
+
+  it("R2/P0: estorno pelo Financeiro (fora da trava da OS) não sobrescreve a baixa do misto — o CAS recusa", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    await receberOSV3(storeId, osId, { valor: 100, forma: "dinheiro", sessaoId });
+    const { misto, liberar } = await mistoPausadoNaGravacaoDaOS(
+      storeId,
+      osId,
+      entrada({ sessaoId, pagamentosAgora: [{ forma: "debito", valor: 250 }], saldoAPrazo: { valor: 50, vencimento: VENC }, saldoEsperado: 300 }),
+    );
+    // Mesmo caminho das rotas do Financeiro: leu o título ANTES do commit do misto.
+    const financeiro = estornarContaReceber({ storeId, localKey: localKeyContaReceberOSV3(storeId, osId), modo: "ultimo_pagamento", motivo: "Financeiro QA" });
+    await esperarBloqueioNoBanco();
+    liberar();
+    await expect(misto).resolves.toMatchObject({ valorRecebidoAgora: 250 });
+    expect(await financeiro).toEqual({ ok: false, reason: "titulo_alterado" });
+
+    const s = await estado(storeId, osId);
+    expect(s.historico.map((e) => e.tipo)).toEqual(["pagamento", "pagamento", "a_prazo_autorizado"]);
+    expect(s.recebido).toBe(350);
+    expect(s.saldo).toBe(50);
   });
 
   it("saldo mudou desde a tela → conflito recuperável com o saldo atual, sem efeitos", async () => {
@@ -730,5 +831,55 @@ describe("PG · estorno do recebimento de 350", () => {
     const lido = await lerPagamentoOSV3(storeId, osId);
     expect(lido.saldo).toBe(400);
     expect(lido.aPrazo?.valor).toBe(50);
+  });
+});
+
+// ─── recebimento canônico: identidade e atomicidade (R2/P1) ──────────────────
+
+describe("PG · recebimento canônico com identidade da operação", () => {
+  it("mesma operação simultânea e repetida → UMA baixa, UM caixa, UMA movimentação; outro conteúdo → conflito", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    const input = { valor: 100, forma: "pix" as const, sessaoId, operacaoId: opId() };
+
+    const [a, b] = await Promise.all([receberOSV3(storeId, osId, input), receberOSV3(storeId, osId, input)]);
+    expect([a.jaRegistrado, b.jaRegistrado].sort()).toEqual([false, true]);
+    const original = a.jaRegistrado ? b : a;
+
+    // Resposta "perdida": a tela reenvia a MESMA operação.
+    const c = await receberOSV3(storeId, osId, input);
+    expect(c).toMatchObject({ jaRegistrado: true, operacaoId: input.operacaoId, valorRecebido: 100, op: "parcial" });
+    expect(c.recibo).toEqual(original.recibo);
+
+    // Mesma chave com outro valor → conflito, sem efeito.
+    await expect(receberOSV3(storeId, osId, { ...input, valor: 90 })).rejects.toThrow(/outros valores/);
+
+    const s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "pagamento").map((e) => e.valor)).toEqual([100]);
+    expect(s.historico.find((e) => e.tipo === "pagamento")).toMatchObject({ loteId: input.operacaoId });
+    expect(s.caixa.map((c) => c.valor)).toEqual([100]);
+    expect(s.movs.map((m) => m.valor)).toEqual([100]);
+    expect(s.recebido).toBe(100);
+    expect(s.payload.timeline.filter((e: Payload) => e.tipo === "operacao_cobranca_gerada")).toHaveLength(1);
+  });
+
+  it("falha ao lançar o caixa → rollback total: nem título, nem baixa, nem movimentação, nem espelho", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    const payloadAntes = (await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } })).payload;
+    // Falha injetada no banco descartável, só para ESTA loja sintética.
+    await prisma.$executeRawUnsafe(
+      `CREATE OR REPLACE FUNCTION qa_misto_falha_caixa() RETURNS trigger AS $$ BEGIN IF NEW."storeId" = '${storeId}' THEN RAISE EXCEPTION 'FALHA_INJETADA_CAIXA'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql`,
+    );
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER qa_misto_falha_caixa_trg BEFORE INSERT ON caixa_operacoes FOR EACH ROW EXECUTE FUNCTION qa_misto_falha_caixa()`);
+    try {
+      await expect(receberOSV3(storeId, osId, { valor: 100, forma: "pix", sessaoId })).rejects.toThrow(/FALHA_INJETADA_CAIXA/);
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS qa_misto_falha_caixa_trg ON caixa_operacoes`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS qa_misto_falha_caixa()`);
+    }
+    await semEscrita(storeId, osId, payloadAntes);
   });
 });

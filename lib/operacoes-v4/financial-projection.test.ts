@@ -189,6 +189,50 @@ describe("FinancialProjectionOSV4 — contrato puro e reconciliação", () => {
     expect(result.installments).toEqual([expect.objectContaining({ dueAt: "2026-11-10", amount: 30, status: "pendente" })]);
   });
 
+  // R2/P2: parcelas PERSISTIDAS (título do faturamento / payload legado) também são cobrança
+  // a vencer — quitado o título, viram histórico; com a prazo vigente, ele prevalece.
+  const parcelasFaturamento = [
+    { numero: "1", vencimento: "2026-10-10", valor: 200, status: "pendente" },
+    { numero: "2", vencimento: "2026-11-10", valor: 200, status: "pendente" },
+  ];
+
+  it("caso G5: título quitado com parcelas persistidas e modo legado → sem parcela nem cobrança", () => {
+    const result = project({
+      payload: payload(400, { ...aPrazoPendente(50), faturamentoModoCobranca: "parcelado", faturamentoParcelas: parcelasFaturamento }),
+      prismaValorTotal: 400,
+      titulo: title(400, "pago", [
+        { tipo: "pagamento", valor: 350 },
+        { tipo: "a_prazo_autorizado", valor: 50 },
+        { tipo: "liquidacao", valor: 50 },
+      ], { parcelas: parcelasFaturamento }),
+    });
+    expect(result).toMatchObject({ financialStatus: "PAID", balance: 0, collectionMode: null });
+    expect(result.installments).toEqual([]);
+  });
+
+  it("caso G6: misto ativo → a parcela exibida é o a prazo reconciliado, não o plano persistido", () => {
+    const result = project({
+      payload: payload(400, aPrazoPendente(50)),
+      prismaValorTotal: 400,
+      titulo: title(400, "parcial", [
+        { tipo: "pagamento", valor: 350 },
+        { tipo: "a_prazo_autorizado", valor: 50 },
+      ], { parcelas: parcelasFaturamento }),
+    });
+    expect(result).toMatchObject({ financialStatus: "AUTHORIZED_CREDIT", balance: 50, collectionMode: "a_prazo" });
+    expect(result.installments).toEqual([{ number: "1", dueAt: "2026-11-10", amount: 50, status: "pendente" }]);
+  });
+
+  it("caso G7: saldo em aberto sem a prazo vigente → plano persistido continua visível (legado)", () => {
+    const result = project({
+      payload: payload(400, { faturamentoModoCobranca: "parcelado" }),
+      prismaValorTotal: 400,
+      titulo: title(400, "parcial", [{ tipo: "pagamento", valor: 100 }], { parcelas: parcelasFaturamento }),
+    });
+    expect(result).toMatchObject({ financialStatus: "PARTIAL", balance: 300, collectionMode: "parcelado" });
+    expect(result.installments.map((item) => item.dueAt)).toEqual(["2026-10-10", "2026-11-10"]);
+  });
+
   it("caso H: total zero só vira AUTHORIZED_NO_CHARGE com autorização persistida válida", () => {
     const authorization = criarAutorizacaoEntregaSemCobrancaV3({
       solicitacao: { categoria: "garantia", motivo: "Retorno coberto" },

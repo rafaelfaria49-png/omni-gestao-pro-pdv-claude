@@ -290,4 +290,31 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     expect(mocks.receberOSV3.mock.calls[0]![2]).toMatchObject({ valor: 400, forma: "pix", sessaoId: "sessao-1" });
     expect(mocks.registrarRecebimentoMistoOSV3).not.toHaveBeenCalled();
   });
+
+  it("resposta perdida no recebimento comum: reenviar o MESMO recebimento reaproveita a operacaoId", async () => {
+    mocks.receberOSV3
+      .mockImplementationOnce(async () => {
+        throw new Error("Failed to fetch");
+      })
+      .mockImplementation(async () => ({
+        os: {},
+        pagamento: { total: 400, recebido: 400, saldo: 0, status: "quitado" },
+        valorRecebido: 400,
+        op: "liquidar",
+        recibo: okMisto().recibo,
+        jaRegistrado: true,
+      }));
+    montar();
+    await screen.findByText(/Saldo a receber/);
+    await waitFor(() => expect(txt(document.body.textContent)).toContain("R$ 400,00"));
+    fireEvent.click(screen.getByRole("button", { name: /^PIX$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Quitar OS/ }));
+    await screen.findByText(/Failed to fetch/);
+    await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /Quitar OS/ }))).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: /Quitar OS/ }));
+    await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
+    const [primeira, segunda] = mocks.receberOSV3.mock.calls.map((c) => c[2] as { operacaoId?: string });
+    expect(primeira!.operacaoId).toMatch(/^[A-Za-z0-9._-]{8,120}$/);
+    expect(segunda!.operacaoId).toBe(primeira!.operacaoId);
+  });
 });

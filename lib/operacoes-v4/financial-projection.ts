@@ -209,17 +209,27 @@ function aPrazoVigente(
   return { ...payload.aPrazoV3, valor: valor == null ? null : Math.min(valor, guard.saldo) };
 }
 
-function readInstallments(titlePayload: unknown, payload: Record<string, unknown>, aPrazo: Record<string, unknown> | null): FinancialInstallmentV4[] {
+/**
+ * Parcela é cobrança A VENCER: só existe enquanto o título tem saldo em aberto conhecido.
+ * Quitado (ou saldo indeterminável), parcelas persistidas são histórico — nunca "Vencimento"
+ * pendente. Com a prazo vigente, ele (já reconciliado com o saldo real) prevalece sobre o
+ * plano persistido no título/faturamento.
+ */
+function readInstallments(
+  titlePayload: unknown,
+  payload: Record<string, unknown>,
+  aPrazo: Record<string, unknown> | null,
+  saldoEmAberto: boolean,
+): FinancialInstallmentV4[] {
+  if (!saldoEmAberto) return [];
   const persisted = isRecord(titlePayload) && Array.isArray(titlePayload.parcelas)
     ? titlePayload.parcelas
     : Array.isArray(payload.faturamentoParcelas)
       ? payload.faturamentoParcelas
       : [];
-  const raw = persisted.length > 0
-    ? persisted
-    : aPrazo
-      ? [{ numero: "1", vencimento: aPrazo.vencimento, valor: aPrazo.valor, status: aPrazo.status }]
-      : [];
+  const raw = aPrazo
+    ? [{ numero: "1", vencimento: aPrazo.vencimento, valor: aPrazo.valor, status: aPrazo.status }]
+    : persisted;
   return raw.flatMap((entry, index) => {
     if (!isRecord(entry)) return [];
     return [{
@@ -319,6 +329,8 @@ export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): Financia
   const noCharge = isRecord(input.payload.entregaSemCobrancaV3) ? input.payload.entregaSemCobrancaV3 : {};
   const aPrazoAtual = aPrazoVigente(input.payload, guard);
   const aPrazo = aPrazoAtual ?? {};
+  // Modo de cobrança e parcelas descrevem dívida EM ABERTO: sem saldo conhecido > 0, somem.
+  const saldoEmAberto = guard.saldo != null && guard.saldo > 0;
   const canReceive =
     (status === "OPEN" || status === "PARTIAL" || status === "AUTHORIZED_CREDIT") &&
     consistency === "CONSISTENT" &&
@@ -349,8 +361,8 @@ export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): Financia
     consistencyStatus: consistency,
     consistencyIssues: guard.motivoBloqueio ? [guard.motivoBloqueio] : [],
     paymentMethods: readPaymentMethods(input.payload, input.titulo?.payload),
-    collectionMode: text(aPrazo.modo ?? input.payload.faturamentoModoCobranca ?? input.payload.modoCobranca) || null,
-    installments: readInstallments(input.titulo?.payload, input.payload, aPrazoAtual),
+    collectionMode: saldoEmAberto ? text(aPrazo.modo ?? input.payload.faturamentoModoCobranca ?? input.payload.modoCobranca) || null : null,
+    installments: readInstallments(input.titulo?.payload, input.payload, aPrazoAtual, saldoEmAberto),
     authorizedCredit: guard.autorizacaoAPrazo,
     authorizedNoCharge: guard.autorizacaoSemCobranca,
     noChargeCategory: guard.autorizacaoSemCobranca ? text(noCharge.categoria) || null : null,

@@ -25,17 +25,21 @@
 // GOAL OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001: `registrarRecebimentoMistoOSV3`
 // combina, numa ÚNICA confirmação e numa ÚNICA transação, pagamento imediato +
 // saldo restante a prazo no MESMO título (ver `recebimento-misto-service.ts`).
-// `receberOSV3` e `lancarOSAPrazoV3` seguem intactos para os chamadores atuais.
+// TODOS os writers de pagamento da OS (`receberOSV3`, `estornarRecebimentoOSV3`,
+// `lancarOSAPrazoV3` e o misto) rodam numa transação sob a MESMA trava por OS
+// (advisory lock → sessão → OS → título, nessa ordem): nenhum deles lê o título ou
+// o payload antes de a operação concorrente commitar — sem lost update entre eles.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
 import type { Session } from "next-auth";
-import type { ContaReceberTitulo, Prisma } from "@/generated/prisma";
+import type { Prisma } from "@/generated/prisma";
 import type { EventoTimeline, OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
+import { normalizeReceberStatus, RECEBER_STATUS } from "@/lib/financeiro/contracts/status";
 import {
   getContaReceberByLocalKey,
   buildContaReceberAuditTrail,
@@ -71,15 +75,22 @@ import {
   type SplitLinhaV3,
 } from "./payment-model";
 import {
+  gerarOperacaoIdV3,
   hojeLojaV3,
   normalizarRecebimentoMistoV3,
+  OPERACAO_ID_PATTERN_V3,
   type RecebimentoMistoErroCodigoV3,
   type RecebimentoMistoInputV3,
 } from "./recebimento-misto-model";
 import {
   chaveLockRecebimentoMistoV3,
   executarRecebimentoMistoOSV3,
+  fingerprintRecebimentoCanonicoV3,
+  garantirTituloOSTravadoV3,
   isRecebimentoMistoErroV3,
+  travarOS,
+  travarSessaoCaixa,
+  travarTitulo,
   type ResultadoRecebimentoMistoV3,
 } from "./recebimento-misto-service";
 
@@ -99,33 +110,38 @@ function money(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }
+function isRecordV3(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
 
-/**
- * Grava espelho/timeline da OS sobre o payload MAIS RECENTE: mesma trava por OS do
- * recebimento misto, linha da OS travada e releitura dentro da transação. Nunca regrava
- * o snapshot lido no início da action — isso apagaria `aPrazoV3`, eventos da timeline ou
- * o espelho de pagamento gravados por outra operação no meio do caminho (lost update).
- * `aplicar` recebe o payload atual e o título da OS relido na mesma transação.
- */
-async function gravarPayloadOSComTravaV3(
-  storeId: string,
-  osId: string,
-  aplicar: (atual: OSPayloadFull, titulo: ContaReceberTitulo | null) => OSPayloadFull,
-): Promise<OSPayloadFull> {
-  return prisma.$transaction(
-    async (tx) => {
-      await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(storeId, osId));
-      await tx.$queryRaw`SELECT "id" FROM "ordens_servico" WHERE "id" = ${osId} AND "storeId" = ${storeId} FOR UPDATE`;
-      const row = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, select: { id: true, payload: true } });
-      const atual = row?.payload as unknown as OSPayloadFull | null;
-      if (!row || !atual || typeof atual !== "object") throw new Error("OS não encontrada.");
-      const titulo = await getContaReceberByLocalKey(storeId, localKeyContaReceberOSV3(storeId, osId), tx);
-      const next = aplicar(atual, titulo);
-      await tx.ordemServico.update({ where: { id: row.id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
-      return next;
-    },
-    { maxWait: 5_000, timeout: 15_000 },
-  );
+/** Transação curta dos writers de pagamento (pooler em modo transação; mesmos limites do lote). */
+const TX_PAGAMENTO_OS_V3 = { maxWait: 5_000, timeout: 15_000 } as const;
+
+/** OS travada (FOR UPDATE) e relida dentro da transação, já sob a trava por OS. */
+async function lerOSTravadaV3(tx: Prisma.TransactionClient, storeId: string, osId: string): Promise<{ rowId: string; payload: OSPayloadFull; os: OrdemServico }> {
+  if (!(await travarOS(tx, storeId, osId))) throw new Error("OS não encontrada.");
+  const row = await tx.ordemServico.findFirst({
+    where: { id: osId, storeId },
+    select: { id: true, payload: true, valorTotal: true, valorBase: true },
+  });
+  const payload = row?.payload as unknown as OSPayloadFull | null;
+  if (!row || !payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
+  // Mesma fonte de total do seletor/Workspace: orçamento REAL no payload, senão a coluna Prisma.
+  const os = {
+    ...payload,
+    prismaValorTotal: Number(row.valorTotal ?? 0) || 0,
+    prismaValorBase: Number(row.valorBase ?? 0) || 0,
+  } as unknown as OrdemServico;
+  return { rowId: row.id, payload, os };
+}
+
+/** Pós-commit: atualizar a tela nunca pode desfazer nem repetir a operação. */
+function revalidarOperacoesV3(origem: string): void {
+  try {
+    revalidatePath("/dashboard/operacoes-v3");
+  } catch (e) {
+    console.error(`[${origem} revalidatePath]`, e);
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -191,8 +207,10 @@ interface TituloOSResolvido {
 
 // Correção 2A.1: CHAVE ÚNICA por OS (idêntica à do adapter V2, `os-faturamento:*`).
 // Se o título já existe — criado pelo faturamento V2 OU por um recebimento V3 anterior —
-// ele é REAPROVEITADO; nunca se cria um segundo título para a mesma OS.
-async function resolverTituloOS(storeId: string, osId: string, loaded: OSCarregadaV3, opts: { create: boolean }): Promise<TituloOSResolvido> {
+// ele é REAPROVEITADO; nunca se cria um segundo título para a mesma OS. Esta é a LEITURA
+// (PDV abrindo a OS): sem título, só deriva do orçamento. A criação acontece apenas nos
+// writers, dentro da transação e sob a trava da OS (`garantirTituloOSTravadoV3`).
+async function resolverTituloOS(storeId: string, osId: string, loaded: OSCarregadaV3): Promise<TituloOSResolvido> {
   const { payload, prismaValorTotal, prismaValorBase } = loaded;
   // Mesma fonte de verdade do seletor/Workspace: orçamento REAL no payload (se houver),
   // senão a coluna Prisma `valorTotal` (exposta como `prismaValorTotal`). Sem esse
@@ -201,32 +219,8 @@ async function resolverTituloOS(storeId: string, osId: string, loaded: OSCarrega
   const total = totalCobravelV3(os);
   const localKey = localKeyContaReceberOSV3(storeId, osId);
 
-  let titulo = await getContaReceberByLocalKey(storeId, localKey);
-  if (!titulo) {
-    // Leitura (PDV abrindo a OS): NÃO cria título — só deriva do orçamento.
-    if (!opts.create) return { localKey, total, recebido: 0, saldo: total };
-    if (total <= 0) throw new Error("Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de receber.");
-    // Cria SÓ se ainda não existir (ON CONFLICT DO NOTHING) e relê. Um upsert aqui
-    // sobrescreveria o histórico de um título criado em paralelo por outro
-    // recebimento (lost update); com DO NOTHING o título concorrente é preservado.
-    await prisma.contaReceberTitulo.createMany({
-      data: [
-        {
-          storeId,
-          localKey,
-          descricao: `OS ${os.codigo ?? osId}`,
-          cliente: os.cliente?.nome ?? "",
-          valor: total,
-          vencimento: ((payload.aberturaV3 as { pagamentoPrevisto?: { vencimentoPrevisto?: string } } | undefined)?.pagamentoPrevisto?.vencimentoPrevisto) || nowIso(),
-          status: "pendente",
-          payload: { origem: "operacoes-v3", ordemServicoId: osId, codigo: os.codigo } as Prisma.InputJsonValue,
-        },
-      ],
-      skipDuplicates: true,
-    });
-    titulo = await getContaReceberByLocalKey(storeId, localKey);
-    if (!titulo) throw new Error("Título financeiro da OS não encontrado.");
-  }
+  const titulo = await getContaReceberByLocalKey(storeId, localKey);
+  if (!titulo) return { localKey, total, recebido: 0, saldo: total };
   const recebido = sumPagamentosFromHistoricoPayload(titulo.payload);
   return { localKey, total: money(titulo.valor), recebido, saldo: Math.max(0, money(titulo.valor) - recebido) };
 }
@@ -239,7 +233,7 @@ export async function lerPagamentoOSV3(
   const sid = (storeId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
   const loaded = await carregarOS(sid, osId);
-  const t = await resolverTituloOS(sid, osId, loaded, { create: false });
+  const t = await resolverTituloOS(sid, osId, loaded);
   const sessao = await getCaixaSessaoAbertaV3(sid);
   const mirror = montarPagamentoMirrorV3({ total: t.total, recebido: t.recebido, tituloLocalKey: t.localKey });
   // Saldo a prazo PERSISTIDO (reabrir a OS mostra valor/vencimento); sem saldo, não há o que
@@ -264,6 +258,12 @@ export interface ReceberOSInputV3 {
   /** Rótulo do recebimento (sinal/entrada/parcial). "Quitação" é derivada do saldo. */
   intencao?: RecebimentoIntencaoV3;
   observacao?: string;
+  /**
+   * Identidade desta confirmação, gerada pela tela e ESTÁVEL entre reenvios: repetir a
+   * mesma operação (resposta perdida, reenvio) devolve o que já foi gravado — nunca baixa,
+   * movimenta ou lança caixa em dobro. Ausente (chamada interna), o servidor gera uma.
+   */
+  operacaoId?: string;
 }
 
 export interface ReceberOSResultV3 {
@@ -273,6 +273,72 @@ export interface ReceberOSResultV3 {
   op: "liquidar" | "parcial";
   /** Dados para o comprovante imprimível deste recebimento. */
   recibo: ComprovanteReciboV3;
+  operacaoId?: string;
+  /** `true` = esta confirmação já estava gravada; nada foi lançado de novo. */
+  jaRegistrado?: boolean;
+}
+
+/**
+ * Replay de um recebimento canônico já gravado (âncora: as operações de caixa da operação,
+ * mesma família do recebimento em lote). Devolve o que foi lançado, sem lançar de novo;
+ * a mesma `operacaoId` com outro conteúdo é conflito.
+ */
+async function replayRecebimentoOSV3(
+  tx: Prisma.TransactionClient,
+  p: {
+    storeId: string;
+    osId: string;
+    operacaoId: string;
+    requestFingerprint: string;
+    gravadas: Array<{ valor: number; payload: Prisma.JsonValue }>;
+    operador: string;
+    dataHora: string;
+  },
+): Promise<ReceberOSResultV3> {
+  const primeira = isRecordV3(p.gravadas[0]?.payload) ? (p.gravadas[0]!.payload as Record<string, unknown>) : {};
+  if (primeira.requestFingerprint !== p.requestFingerprint) {
+    throw new Error("Esta confirmação já foi registrada com outros valores. Atualize a OS antes de lançar outro recebimento.");
+  }
+  const linhas: SplitLinhaV3[] = p.gravadas.map((g) => ({
+    forma: (isRecordV3(g.payload) ? g.payload.formaPagamento : "") as FormaRecebimentoV3,
+    valor: money(g.valor),
+  }));
+  const valorRecebido = somaSplitV3(linhas);
+  const localKey = localKeyContaReceberOSV3(p.storeId, p.osId);
+  const titulo = await getContaReceberByLocalKey(p.storeId, localKey, tx);
+  const osRow = await tx.ordemServico.findFirst({ where: { id: p.osId, storeId: p.storeId }, select: { payload: true } });
+  const payload = (isRecordV3(osRow?.payload) ? osRow!.payload : {}) as unknown as OSPayloadFull;
+  const pagamento = montarPagamentoMirrorV3({
+    total: money(titulo?.valor),
+    recebido: titulo ? sumPagamentosFromHistoricoPayload(titulo.payload) : 0,
+    ultimaForma: linhas.map((l) => formaLabelRecebimentoV3(l.forma)).join(" + "),
+    tituloLocalKey: localKey,
+    now: p.dataHora,
+  });
+  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+  const metadataDaOperacao = timeline
+    .map((e) => (isRecordV3(e?.metadata) ? (e.metadata as Record<string, unknown>) : null))
+    .find((m) => m?.operacaoId === p.operacaoId && isRecordV3(m.comprovante));
+  const recibo =
+    (metadataDaOperacao?.comprovante as ComprovanteReciboV3 | undefined) ??
+    montarComprovanteReciboV3({
+      os: payload,
+      linhas,
+      valorPago: valorRecebido,
+      pagamento,
+      intencaoLabel: typeof primeira.intencao === "string" ? primeira.intencao : "Recebimento",
+      operador: p.operador,
+      dataHora: p.dataHora,
+    });
+  return {
+    os: payload,
+    pagamento,
+    valorRecebido,
+    op: primeira.op === "liquidar" ? "liquidar" : "parcial",
+    recibo,
+    operacaoId: p.operacaoId,
+    jaRegistrado: true,
+  };
 }
 
 /** Normaliza a entrada em linhas de split (forma única vira 1 linha). */
@@ -304,73 +370,115 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
     if (!formaSuportadaV3(l.forma)) throw new Error(`Forma "${formaLabelRecebimentoV3(l.forma)}" ainda não suportada para recebimento real.`);
   }
 
+  const operacaoId = (input.operacaoId ?? "").trim() || gerarOperacaoIdV3();
+  if (!OPERACAO_ID_PATTERN_V3.test(operacaoId)) throw new Error("Identificador da operação inválido.");
+
   // Período financeiro fechado?
   const lock = await verificarPeriodoFechado(sid, new Date());
   if (lock.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para receber.");
 
-  // Sessão de caixa ABERTA (exigida).
-  const sessao = await prisma.sessaoCaixa.findFirst({ where: { id: input.sessaoId, storeId: sid, status: "ABERTA" }, select: { id: true } });
-  if (!sessao) throw new Error("Caixa fechado: abra o caixa no PDV antes de receber.");
-
-  const loaded = await carregarOS(sid, id);
-  const { payload } = loaded;
-  const titulo = await resolverTituloOS(sid, id, loaded, { create: true });
-  const tituloSnapshot = await getContaReceberByLocalKey(sid, titulo.localKey);
-  if (!tituloSnapshot) throw new Error("Título financeiro da OS não encontrado.");
-
-  // Valida a SOMA do split contra o saldo (proteção contra valor > saldo no motor único).
-  const total = somaSplitV3(linhas);
-  const saldoSnapshot = buildContaReceberAuditTrail([tituloSnapshot])[0]?.saldoAberto ?? 0;
-  const veredito = validarSplitV3(linhas, saldoSnapshot);
-  if (!veredito.ok) throw new Error(veredito.motivo ?? "Recebimento inválido.");
-  const op: "liquidar" | "parcial" = veredito.op ?? "parcial";
-
+  const sessaoId = (input.sessaoId ?? "").trim();
   const operador = operadorLabel(session);
-  const splitDesc = descreverSplitV3(linhas);
-  const intencaoLabel = rotuloIntencaoV3(input.intencao, op === "liquidar");
+  const total = somaSplitV3(linhas);
   const obsBase = (input.observacao ?? "").trim();
-  const codigo = (payload as unknown as OrdemServico).codigo ?? id;
-  const obs = `${obsBase ? obsBase + " · " : ""}OS ${codigo} · PDV Serviço · ${intencaoLabel} · ${splitDesc}`;
+  const requestFingerprint = fingerprintRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas, intencao: input.intencao, observacao: obsBase });
+  const dataHora = nowIso();
 
-  // 3) Baixa do título: o MESMO snapshot que definiu saldo/op/total fornece o token CAS.
-  // Se outro writer tocar a linha, nada financeiro posterior é executado.
-  const baixa = op === "liquidar"
-    ? await liquidarContaReceber({
-        storeId: sid,
-        localKey: titulo.localKey,
-        observacao: obs,
-        userLabel: operador,
-        tituloSnapshot,
-      })
-    : await registrarPagamentoParcial({
-        storeId: sid,
-        localKey: titulo.localKey,
-        valorPago: total,
-        observacao: obs,
-        userLabel: operador,
-        tituloSnapshot,
-      });
-  if (!baixa.ok) {
-    const prefixo = op === "liquidar" ? "quitar" : "registrar o pagamento";
-    throw new Error(`Não foi possível ${prefixo} (${baixa.reason}).`);
-  }
-  const tituloRow = baixa.data;
-  const recebidoTotal = sumPagamentosFromHistoricoPayload(tituloRow.payload);
+  // UMA transação sob a MESMA trava por OS de todos os writers de pagamento da V3 (misto,
+  // estorno, a prazo): nada é lido antes dela, e baixa, movimentação, caixa e espelho da
+  // OS entram juntos ou não entram.
+  const resultado = await prisma.$transaction(async (tx): Promise<ReceberOSResultV3> => {
+    // 1) Serialização por OS — PRIMEIRA instrução, antes de qualquer leitura de estado.
+    await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
 
-  // 4) Movimentação financeira (best-effort). UMA movimentação por baixa gravada: a baixa
-  // acima (CAS no título) já é a identidade deste recebimento. A heurística de soma do
-  // helper ("já gravei ≥ este valor ⇒ é retry") suprimia um recebimento parcial legítimo
-  // menor que os anteriores (ex.: R$ 20 depois de R$ 350) — dinheiro sumia do financeiro.
-  await createMovimentacaoEntradaFromReceber(
-    { id: tituloRow.id, storeId: tituloRow.storeId, descricao: tituloRow.descricao, cliente: tituloRow.cliente },
-    total,
-    { parcial: op === "parcial", idempotenciaDoChamador: true },
-  ).catch((e) => console.error("[receberOSV3 mov]", e));
+    // 2) Replay: esta confirmação já foi gravada (resposta perdida, reenvio)? Identidade =
+    // (sessão de caixa, operacaoId) — mesma família do recebimento em lote, cujo `localId`
+    // também carrega a sessão; a sessão entra no fingerprint. Vem antes da checagem da
+    // sessão: repetir uma operação já gravada continua válido com o caixa fechado.
+    const gravadas = sessaoId
+      ? await tx.caixaOperacao.findMany({
+          where: { storeId: sid, sessaoId, tipo: "recebimento_cr", payload: { path: ["operacaoId"], equals: operacaoId } },
+          orderBy: { at: "asc" },
+          select: { valor: true, payload: true },
+        })
+      : [];
+    if (gravadas.length > 0) {
+      return replayRecebimentoOSV3(tx, { storeId: sid, osId: id, operacaoId, requestFingerprint, gravadas, operador, dataHora });
+    }
 
-  // 5) Operação de caixa POR FORMA → fechamento separa por forma; dinheiro entra na gaveta.
-  for (const l of linhas) {
-    await prisma.caixaOperacao
-      .create({
+    // 3) Sessão de caixa ABERTA da loja, travada: o fechamento do caixa espera este recebimento.
+    const sessao = sessaoId ? await travarSessaoCaixa(tx, sid, sessaoId) : null;
+    if (!sessao || sessao.status !== "ABERTA") throw new Error("Caixa fechado: abra o caixa no PDV antes de receber.");
+
+    // 4) OS travada, com o payload MAIS RECENTE.
+    const { rowId, payload, os } = await lerOSTravadaV3(tx, sid, id);
+    const codigo = os.codigo ?? id;
+
+    // 5) Título ÚNICO da OS, travado e relido (criado se ausente) — fornece o token CAS.
+    const tituloSnapshot = await garantirTituloOSTravadoV3(tx, {
+      storeId: sid,
+      osId: id,
+      codigo,
+      cliente: os.cliente?.nome ?? "",
+      total: totalCobravelV3(os),
+      vencimento: ((payload.aberturaV3 as { pagamentoPrevisto?: { vencimentoPrevisto?: string } } | undefined)?.pagamentoPrevisto?.vencimentoPrevisto) || dataHora,
+    });
+    if (!tituloSnapshot) throw new Error("Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de receber.");
+    const localKey = localKeyContaReceberOSV3(sid, id);
+
+    // Valida a SOMA do split contra o saldo REAL (proteção contra valor > saldo no motor único).
+    const saldoSnapshot = buildContaReceberAuditTrail([tituloSnapshot])[0]?.saldoAberto ?? 0;
+    const veredito = validarSplitV3(linhas, saldoSnapshot);
+    if (!veredito.ok) throw new Error(veredito.motivo ?? "Recebimento inválido.");
+    const op: "liquidar" | "parcial" = veredito.op ?? "parcial";
+
+    const splitDesc = descreverSplitV3(linhas);
+    const intencaoLabel = rotuloIntencaoV3(input.intencao, op === "liquidar");
+    const obs = `${obsBase ? obsBase + " · " : ""}OS ${codigo} · PDV Serviço · ${intencaoLabel} · ${splitDesc}`;
+
+    // 6) Baixa do título sobre o snapshot TRAVADO (token CAS). `loteId` carimba no histórico
+    // a identidade desta operação — o mesmo campo que o recebimento em lote usa para isso.
+    const baixa = op === "liquidar"
+      ? await liquidarContaReceber({
+          storeId: sid,
+          localKey,
+          observacao: obs,
+          userLabel: operador,
+          loteId: operacaoId,
+          tituloSnapshot,
+          db: tx,
+        })
+      : await registrarPagamentoParcial({
+          storeId: sid,
+          localKey,
+          valorPago: total,
+          observacao: obs,
+          userLabel: operador,
+          loteId: operacaoId,
+          tituloSnapshot,
+          db: tx,
+        });
+    if (!baixa.ok) {
+      const prefixo = op === "liquidar" ? "quitar" : "registrar o pagamento";
+      throw new Error(`Não foi possível ${prefixo} (${baixa.reason}).`);
+    }
+    const tituloRow = baixa.data;
+    const recebidoTotal = sumPagamentosFromHistoricoPayload(tituloRow.payload);
+
+    // 7) Movimentação financeira: UMA por baixa gravada. A identidade é desta operação
+    // (trava + `operacaoId` com replay acima), por isso a heurística de soma do helper fica
+    // desligada — ela suprimia um recebimento parcial legítimo menor que os anteriores
+    // (ex.: R$ 20 depois de R$ 350). Falha aborta a transação inteira.
+    const mov = await createMovimentacaoEntradaFromReceber(
+      { id: tituloRow.id, storeId: tituloRow.storeId, descricao: tituloRow.descricao, cliente: tituloRow.cliente },
+      total,
+      { parcial: op === "parcial", db: tx, idempotenciaDoChamador: true },
+    );
+    if (!mov.ok) throw new Error(`Falha ao lançar a movimentação financeira (${mov.reason}).`);
+
+    // 8) Operação de caixa POR FORMA → fechamento separa por forma; dinheiro entra na gaveta.
+    for (const [indice, l] of linhas.entries()) {
+      await tx.caixaOperacao.create({
         data: {
           sessaoId: sessao.id,
           storeId: sid,
@@ -382,65 +490,69 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
             origem: "operacoes-v3-os",
             ordemServicoId: id,
             tituloId: tituloRow.id,
-            localKey: titulo.localKey,
+            localKey,
             formaPagamento: l.forma,
             intencao: intencaoLabel,
             op: op,
+            operacaoId,
+            requestFingerprint,
+            localId: `ops-v3-receber:${sid}:${id}:${operacaoId}:${indice}`,
           } as Prisma.InputJsonValue,
         },
-      })
-      .catch((e) => console.error("[receberOSV3 caixaOperacao]", e));
-  }
-
-  // 6) Espelho no payload da OS + timeline + comprovante — sobre o payload MAIS RECENTE
-  // (gravação com trava + releitura). O espelho de pagamento sai do título relido, e o
-  // "a prazo" é reconciliado: quitado o saldo, deixa de ser cobrança pendente.
-  const formasLabel = linhas.map((l) => formaLabelRecebimentoV3(l.forma)).join(" + ");
-  const dataHora = nowIso();
-  let mirror = montarPagamentoMirrorV3({ total: titulo.total, recebido: recebidoTotal, ultimaForma: formasLabel, tituloLocalKey: titulo.localKey, now: dataHora });
-  const nextPayload = await gravarPayloadOSComTravaV3(sid, id, (atual, tituloAtual) => {
-    if (tituloAtual) {
-      mirror = montarPagamentoMirrorV3({
-        total: money(tituloAtual.valor),
-        recebido: sumPagamentosFromHistoricoPayload(tituloAtual.payload),
-        ultimaForma: formasLabel,
-        tituloLocalKey: titulo.localKey,
-        now: dataHora,
       });
     }
+
+    // 9) Espelho + timeline + comprovante sobre o payload TRAVADO (mais recente). O espelho
+    // sai do título recém-baixado e o "a prazo" é reconciliado: quitado o saldo, deixa de
+    // ser cobrança pendente.
+    const formasLabel = linhas.map((l) => formaLabelRecebimentoV3(l.forma)).join(" + ");
+    const mirror = montarPagamentoMirrorV3({ total: money(tituloRow.valor), recebido: recebidoTotal, ultimaForma: formasLabel, tituloLocalKey: localKey, now: dataHora });
+    const recibo = montarComprovanteReciboV3({
+      os,
+      linhas,
+      valorPago: total,
+      pagamento: mirror,
+      intencaoLabel,
+      operador,
+      dataHora,
+      observacao: obsBase || undefined,
+    });
     const evento: EventoTimeline = {
       id: eventId(),
       tipo: "operacao_cobranca_gerada",
       autor: operador,
       autorTipo: "usuario",
       conteudo: `${intencaoLabel}: ${splitDesc} (total R$ ${total.toFixed(2)}) · saldo R$ ${mirror.saldo.toFixed(2)} (${mirror.status}).`,
-      metadata: { intencao: input.intencao ?? (op === "liquidar" ? "quitacao" : "parcial"), intencaoLabel, total, linhas, op, saldo: mirror.saldo, status: mirror.status, sessaoId: sessao.id },
+      metadata: {
+        intencao: input.intencao ?? (op === "liquidar" ? "quitacao" : "parcial"),
+        intencaoLabel,
+        total,
+        linhas,
+        op,
+        saldo: mirror.saldo,
+        status: mirror.status,
+        sessaoId: sessao.id,
+        operacaoId,
+        comprovante: recibo,
+      },
       criadoEm: dataHora,
     };
-    const timeline = Array.isArray(atual.timeline) ? (atual.timeline as EventoTimeline[]) : [];
-    const aPrazoV3 = reconciliarAPrazoAposBaixaV3(atual.aPrazoV3, mirror.saldo, dataHora);
-    return {
-      ...atual,
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const aPrazoV3 = reconciliarAPrazoAposBaixaV3(payload.aPrazoV3, mirror.saldo, dataHora);
+    const nextPayload = {
+      ...payload,
       pagamentoV3: mirror,
       ...(aPrazoV3 !== undefined ? { aPrazoV3 } : {}),
       timeline: [...timeline, evento],
       atualizadoEm: dataHora,
     } as OSPayloadFull;
-  });
+    await tx.ordemServico.update({ where: { id: rowId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
 
-  const recibo = montarComprovanteReciboV3({
-    os: nextPayload as unknown as OrdemServico,
-    linhas,
-    valorPago: total,
-    pagamento: mirror,
-    intencaoLabel,
-    operador,
-    dataHora,
-    observacao: obsBase || undefined,
-  });
+    return { os: nextPayload as unknown as OrdemServico, pagamento: mirror, valorRecebido: total, op: op, recibo, operacaoId, jaRegistrado: false };
+  }, TX_PAGAMENTO_OS_V3);
 
-  revalidatePath("/dashboard/operacoes-v3");
-  return { os: nextPayload as unknown as OrdemServico, pagamento: mirror, valorRecebido: total, op: op, recibo };
+  revalidarOperacoesV3("receberOSV3");
+  return resultado;
 }
 
 // ----------------------------------------------------------------------------
@@ -475,64 +587,62 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
 
   const lock = await verificarPeriodoFechado(sid, new Date());
   if (lock.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para estornar.");
-  const sessao = await prisma.sessaoCaixa.findFirst({ where: { id: input.sessaoId, storeId: sid, status: "ABERTA" }, select: { id: true } });
-  if (!sessao) throw new Error("Caixa fechado: abra o caixa para estornar o recebimento.");
 
-  const loaded = await carregarOS(sid, id);
-  const { payload } = loaded;
-  const titulo = await resolverTituloOS(sid, id, loaded, { create: false });
-  if (titulo.recebido <= 0) throw new Error("Não há recebimento para estornar nesta OS.");
-  const recebidoAntes = titulo.recebido;
-
+  const sessaoId = (input.sessaoId ?? "").trim();
   const operador = operadorLabel(session);
-  const res = await estornarContaReceber({
-    storeId: sid,
-    localKey: titulo.localKey,
-    modo: "ultimo_pagamento",
-    motivo: input.motivo || "Estorno de recebimento (Operações V3).",
-    userLabel: operador,
-  });
-  if (!res.ok) throw new Error(`Não foi possível estornar (${res.reason}).`);
-  const recebidoDepois = sumPagamentosFromHistoricoPayload(res.data.payload);
-  const estornado = Math.max(0, money(recebidoAntes - recebidoDepois));
+  const dataHora = nowIso();
 
-  // Caixa: registra o estorno para AUDITORIA da sessão. (O fechamento agrega
-  // hoje só sangria/suprimento/recebimento_cr; a baixa deste estorno na gaveta é
-  // follow-up — ver relatório. Não modificamos o helper de caixa/PDV.)
-  await prisma.caixaOperacao
-    .create({
+  // UMA transação sob a trava por OS: o título é lido DEPOIS de qualquer recebimento
+  // concorrente (misto/canônico) ter commitado — o estorno nunca reverte com base num
+  // snapshot velho nem sobrescreve uma baixa gravada no meio do caminho.
+  const resultado = await prisma.$transaction(async (tx): Promise<EstornarRecebimentoResultV3> => {
+    await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
+    const sessao = sessaoId ? await travarSessaoCaixa(tx, sid, sessaoId) : null;
+    if (!sessao || sessao.status !== "ABERTA") throw new Error("Caixa fechado: abra o caixa para estornar o recebimento.");
+    const { rowId, payload, os } = await lerOSTravadaV3(tx, sid, id);
+
+    const localKey = localKeyContaReceberOSV3(sid, id);
+    await travarTitulo(tx, sid, localKey);
+    const titulo = await getContaReceberByLocalKey(sid, localKey, tx);
+    const recebidoAntes = titulo ? sumPagamentosFromHistoricoPayload(titulo.payload) : 0;
+    if (!titulo || recebidoAntes <= 0) throw new Error("Não há recebimento para estornar nesta OS.");
+
+    const res = await estornarContaReceber({
+      storeId: sid,
+      localKey,
+      modo: "ultimo_pagamento",
+      motivo: input.motivo || "Estorno de recebimento (Operações V3).",
+      userLabel: operador,
+      db: tx,
+    });
+    if (!res.ok) throw new Error(`Não foi possível estornar (${res.reason}).`);
+    const recebidoDepois = sumPagamentosFromHistoricoPayload(res.data.payload);
+    const estornado = Math.max(0, money(recebidoAntes - recebidoDepois));
+
+    // Caixa: registra o estorno para AUDITORIA da sessão. (O fechamento agrega
+    // hoje só sangria/suprimento/recebimento_cr; a baixa deste estorno na gaveta é
+    // follow-up — ver relatório. Não modificamos o helper de caixa/PDV.)
+    await tx.caixaOperacao.create({
       data: {
         sessaoId: sessao.id,
         storeId: sid,
         tipo: "estorno_recebimento_cr",
         valor: estornado,
-        motivo: `Estorno OS ${(payload as unknown as OrdemServico).codigo ?? id}${input.motivo ? " — " + input.motivo : ""}`,
+        motivo: `Estorno OS ${os.codigo ?? id}${input.motivo ? " — " + input.motivo : ""}`,
         operador,
         payload: {
           origem: "operacoes-v3-os",
           ordemServicoId: id,
           tituloId: res.data.id,
-          localKey: titulo.localKey,
+          localKey,
         } as Prisma.InputJsonValue,
       },
-    })
-    .catch((e) => console.error("[estornarRecebimentoOSV3 caixaOperacao]", e));
+    });
 
-  // Espelho + timeline sobre o payload MAIS RECENTE (trava + releitura). O "a prazo" NÃO é
-  // tocado: estorno reverte só dinheiro; uma autorização menor que o novo saldo deixa de
-  // valer no guard de entrega, sem ser ampliada.
-  const dataHora = nowIso();
-  let mirror = montarPagamentoMirrorV3({ total: titulo.total, recebido: recebidoDepois, ultimaForma: "Estorno", tituloLocalKey: titulo.localKey, now: dataHora });
-  const nextPayload = await gravarPayloadOSComTravaV3(sid, id, (atual, tituloAtual) => {
-    if (tituloAtual) {
-      mirror = montarPagamentoMirrorV3({
-        total: money(tituloAtual.valor),
-        recebido: sumPagamentosFromHistoricoPayload(tituloAtual.payload),
-        ultimaForma: "Estorno",
-        tituloLocalKey: titulo.localKey,
-        now: dataHora,
-      });
-    }
+    // Espelho + timeline sobre o payload TRAVADO. O "a prazo" NÃO é tocado: estorno reverte
+    // só dinheiro; uma autorização menor que o novo saldo deixa de valer no guard de entrega,
+    // sem ser ampliada.
+    const mirror = montarPagamentoMirrorV3({ total: money(res.data.valor), recebido: recebidoDepois, ultimaForma: "Estorno", tituloLocalKey: localKey, now: dataHora });
     const evento: EventoTimeline = {
       id: eventId(),
       tipo: "financeiro_conta_receber_atualizada",
@@ -542,12 +652,14 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
       metadata: { estornado, saldo: mirror.saldo, status: mirror.status, sessaoId: sessao.id, modo: "ultimo_pagamento" },
       criadoEm: dataHora,
     };
-    const timeline = Array.isArray(atual.timeline) ? (atual.timeline as EventoTimeline[]) : [];
-    return { ...atual, pagamentoV3: mirror, timeline: [...timeline, evento], atualizadoEm: dataHora } as OSPayloadFull;
-  });
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const nextPayload = { ...payload, pagamentoV3: mirror, timeline: [...timeline, evento], atualizadoEm: dataHora } as OSPayloadFull;
+    await tx.ordemServico.update({ where: { id: rowId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
+    return { os: nextPayload as unknown as OrdemServico, pagamento: mirror, estornado };
+  }, TX_PAGAMENTO_OS_V3);
 
-  revalidatePath("/dashboard/operacoes-v3");
-  return { os: nextPayload as unknown as OrdemServico, pagamento: mirror, estornado };
+  revalidarOperacoesV3("estornarRecebimentoOSV3");
+  return resultado;
 }
 
 // ----------------------------------------------------------------------------
@@ -566,9 +678,9 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
 // que leia o status canônico). O único lançamento no histórico do título é um
 // marcador de auditoria (`tipo: "a_prazo_autorizado"`) — `sumPagamentosFromHistoricoPayload`
 // só soma "pagamento"/"liquidacao"/"estorno_pagamento", então este marcador NUNCA
-// conta como dinheiro recebido. Reusa o MESMO título único da OS (`resolverTituloOS`/
+// conta como dinheiro recebido. Reusa o MESMO título único da OS (`garantirTituloOSTravadoV3`/
 // `localKeyContaReceberOSV3`) — nunca cria um segundo título. Quando o cliente
-// pagar de verdade, a baixa segue pelo fluxo normal (`receberOSV3`), inalterado.
+// pagar de verdade, a baixa segue pelo fluxo normal (`receberOSV3`).
 
 export interface LancarAPrazoInputV3 {
   vencimento: string;
@@ -602,61 +714,86 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
   const lock = await verificarPeriodoFechado(sid, new Date());
   if (lock.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para lançar a prazo.");
 
-  const loaded = await carregarOS(sid, id);
-  const { payload } = loaded;
-  const titulo = await resolverTituloOS(sid, id, loaded, { create: true });
-  if (titulo.saldo <= 0) throw new Error("Esta OS já está quitada — não há saldo para lançar a prazo.");
-
   const operador = operadorLabel(session);
-  const codigo = (payload as unknown as OrdemServico).codigo ?? id;
   const obs = (input.observacao ?? "").trim();
+  const dataHora = nowIso();
 
-  // Preserva a classificação real do título (ver `statusTituloAPrazoV3`, pura em
-  // payment-model.ts) — nunca regride um título "parcial" para "pendente".
-  const statusTituloAPrazo = statusTituloAPrazoV3(titulo.recebido);
+  // UMA transação sob a MESMA trava por OS dos recebimentos: saldo e status saem do título
+  // relido DEPOIS de qualquer baixa concorrente — a formalização nunca grava sobre um
+  // snapshot velho (o que apagaria uma baixa commitada no meio do caminho).
+  const resultado = await prisma.$transaction(async (tx): Promise<LancarAPrazoResultV3> => {
+    await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
+    const { rowId, payload, os } = await lerOSTravadaV3(tx, sid, id);
+    const codigo = os.codigo ?? id;
 
-  // Só atualiza vencimento/observação/status do MESMO título — NUNCA liquida/paga.
-  await upsertContaReceber({
-    storeId: sid,
-    localKey: titulo.localKey,
-    vencimento,
-    status: statusTituloAPrazo,
-    historicoEntrada: {
-      tipo: "a_prazo_autorizado",
+    // MESMO título único da OS (localKey canônica), travado e relido — criado se ausente.
+    const tituloRow = await garantirTituloOSTravadoV3(tx, {
+      storeId: sid,
+      osId: id,
+      codigo,
+      cliente: os.cliente?.nome ?? "",
+      total: totalCobravelV3(os),
+      vencimento,
+    });
+    if (!tituloRow) throw new Error("Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de lançar a prazo.");
+    const statusAtual = normalizeReceberStatus(tituloRow.status);
+    if (statusAtual === RECEBER_STATUS.CANCELADO || statusAtual === RECEBER_STATUS.ESTORNADO) {
+      throw new Error("O título desta OS está cancelado/estornado — não há saldo para lançar a prazo.");
+    }
+    const titulo = {
+      localKey: localKeyContaReceberOSV3(sid, id),
+      recebido: sumPagamentosFromHistoricoPayload(tituloRow.payload),
+      saldo: buildContaReceberAuditTrail([tituloRow])[0]?.saldoAberto ?? 0,
+    };
+    if (titulo.saldo <= 0) throw new Error("Esta OS já está quitada — não há saldo para lançar a prazo.");
+
+    // Preserva a classificação real do título (ver `statusTituloAPrazoV3`, pura em
+    // payment-model.ts) — nunca regride um título "parcial" para "pendente".
+    const statusTituloAPrazo = statusTituloAPrazoV3(titulo.recebido);
+
+    // Só atualiza vencimento/observação/status do MESMO título — NUNCA liquida/paga.
+    // Linha travada acima: o upsert lê e grava sem ninguém no meio.
+    await upsertContaReceber({
+      storeId: sid,
+      localKey: titulo.localKey,
+      vencimento,
+      status: statusTituloAPrazo,
+      historicoEntrada: {
+        tipo: "a_prazo_autorizado",
+        valor: titulo.saldo,
+        vencimento,
+        observacao: obs || undefined,
+        userLabel: operador,
+      },
+      db: tx,
+    });
+
+    const aPrazo = montarAPrazoMirrorV3({
       valor: titulo.saldo,
       vencimento,
+      tituloLocalKey: titulo.localKey,
+      autorizadoPor: operador,
       observacao: obs || undefined,
-      userLabel: operador,
-    },
-  });
+      now: dataHora,
+    });
 
-  const dataHora = nowIso();
-  const aPrazo = montarAPrazoMirrorV3({
-    valor: titulo.saldo,
-    vencimento,
-    tituloLocalKey: titulo.localKey,
-    autorizadoPor: operador,
-    observacao: obs || undefined,
-    now: dataHora,
-  });
+    const evento: EventoTimeline = {
+      id: eventId(),
+      tipo: "financeiro_conta_receber_criada",
+      autor: operador,
+      autorTipo: "usuario",
+      conteudo: `Entrega autorizada a prazo (OS ${codigo}): R$ ${titulo.saldo.toFixed(2)} · vencimento ${vencimento}. Nenhum valor recebido — não movimenta caixa.`,
+      metadata: { modo: "a_prazo", valor: titulo.saldo, vencimento, tituloLocalKey: titulo.localKey, autorizadoEntrega: true },
+      criadoEm: dataHora,
+    };
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const nextPayload = { ...payload, aPrazoV3: aPrazo, timeline: [...timeline, evento], atualizadoEm: dataHora } as OSPayloadFull;
+    await tx.ordemServico.update({ where: { id: rowId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
+    return { os: nextPayload as unknown as OrdemServico, aPrazo, valorFormalizado: titulo.saldo };
+  }, TX_PAGAMENTO_OS_V3);
 
-  const evento: EventoTimeline = {
-    id: eventId(),
-    tipo: "financeiro_conta_receber_criada",
-    autor: operador,
-    autorTipo: "usuario",
-    conteudo: `Entrega autorizada a prazo (OS ${codigo}): R$ ${titulo.saldo.toFixed(2)} · vencimento ${vencimento}. Nenhum valor recebido — não movimenta caixa.`,
-    metadata: { modo: "a_prazo", valor: titulo.saldo, vencimento, tituloLocalKey: titulo.localKey, autorizadoEntrega: true },
-    criadoEm: dataHora,
-  };
-  // Payload MAIS RECENTE (trava + releitura): nunca regrava o snapshot lido no início.
-  const nextPayload = await gravarPayloadOSComTravaV3(sid, id, (atual) => {
-    const timeline = Array.isArray(atual.timeline) ? (atual.timeline as EventoTimeline[]) : [];
-    return { ...atual, aPrazoV3: aPrazo, timeline: [...timeline, evento], atualizadoEm: dataHora } as OSPayloadFull;
-  });
-
-  revalidatePath("/dashboard/operacoes-v3");
-  return { os: nextPayload as unknown as OrdemServico, aPrazo, valorFormalizado: titulo.saldo };
+  revalidarOperacoesV3("lancarOSAPrazoV3");
+  return resultado;
 }
 
 // ----------------------------------------------------------------------------

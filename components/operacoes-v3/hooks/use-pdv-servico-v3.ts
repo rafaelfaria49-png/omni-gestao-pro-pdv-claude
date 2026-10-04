@@ -108,6 +108,9 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   const recebendoRef = useRef(false);
   const mistoEmVooRef = useRef(false);
   const pendenciaMistoRef = useRef<PendenciaRecebimentoMistoV3 | null>(null);
+  // Recebimento cujo resultado não foi confirmado: reenviar o MESMO conteúdo reaproveita a
+  // chave — se a 1ª tentativa gravou (resposta perdida), o servidor devolve o já gravado.
+  const receberPendenteRef = useRef<{ conteudo: string; operacaoId: string } | null>(null);
   // Atualização síncrona no render: a primeira renderização da OS B já mascara
   // qualquer snapshot que ainda pertença à OS A, antes mesmo de o effect rodar.
   activeKeyRef.current = targetKey;
@@ -160,10 +163,14 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       // Duplo clique: o 2º chamado volta antes de qualquer await (sem 2º recebimento).
       if (recebendoRef.current) return false;
       recebendoRef.current = true;
+      const conteudo = JSON.stringify([sid, id, { ...input, operacaoId: undefined }]);
+      const pendente = receberPendenteRef.current?.conteudo === conteudo ? receberPendenteRef.current : null;
+      const operacaoId = input.operacaoId ?? pendente?.operacaoId ?? gerarOperacaoIdV3();
       setRecebendo(true);
       setError(null);
       try {
-        const res = await receberOSV3(sid, id, input);
+        const res = await receberOSV3(sid, id, { ...input, operacaoId });
+        receberPendenteRef.current = null;
         const key = JSON.stringify([sid, id]);
         if (activeKeyRef.current === key) {
           setPagamento(res.pagamento);
@@ -174,6 +181,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         }
         return true;
       } catch (e) {
+        receberPendenteRef.current = { conteudo, operacaoId };
         if (activeKeyRef.current === JSON.stringify([sid, id])) {
           setErrorKey(JSON.stringify([sid, id]));
           setError(e instanceof Error ? e.message : "Não foi possível registrar o recebimento.");

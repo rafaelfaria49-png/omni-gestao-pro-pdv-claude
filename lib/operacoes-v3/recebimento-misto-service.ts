@@ -127,14 +127,33 @@ function marcadorDaOperacao(payload: unknown, operacaoId: string): Record<string
   return null;
 }
 
+/**
+ * Identidade de conteúdo de um recebimento CANÔNICO (`receberOSV3`): mesma `operacaoId`
+ * com outro conteúdo econômico é conflito, nunca replay.
+ */
+export function fingerprintRecebimentoCanonicoV3(p: {
+  storeId: string;
+  osId: string;
+  sessaoId: string;
+  linhas: SplitLinhaV3[];
+  intencao?: string | null;
+  observacao?: string | null;
+}): string {
+  const linhas = p.linhas.map((l) => [l.forma, Math.round(money(l.valor) * 100)]);
+  const canonico = JSON.stringify([p.storeId, p.osId, p.sessaoId, linhas, p.intencao ?? null, (p.observacao ?? "").trim()]);
+  return createHash("sha256").update(canonico).digest("hex");
+}
+
 // ─── travas dentro da transação ───────────────────────────────────────────────
+// Compartilhadas por TODOS os writers de pagamento da OS na V3 (misto, recebimento
+// canônico, estorno, lançamento a prazo): advisory lock por OS → sessão → OS → título.
 
 /**
  * Sessão de caixa relida e travada em modo COMPARTILHADO: o fechamento do caixa
  * (UPDATE) espera esta transação; outros recebimentos na mesma sessão (FK das
  * `CaixaOperacao`) não esperam — evita ciclo de espera com a rota F5.
  */
-async function travarSessaoCaixa(tx: RecebimentoMistoTxV3, storeId: string, sessaoId: string): Promise<{ id: string; status: string } | null> {
+export async function travarSessaoCaixa(tx: RecebimentoMistoTxV3, storeId: string, sessaoId: string): Promise<{ id: string; status: string } | null> {
   const rows = await tx.$queryRaw<Array<{ id: string; status: string }>>`
     SELECT "id", "status"::text AS status
     FROM "sessoes_caixa"
@@ -145,7 +164,7 @@ async function travarSessaoCaixa(tx: RecebimentoMistoTxV3, storeId: string, sess
 }
 
 /** OS travada: o payload lido a seguir é o mais recente e nenhum outro writer o troca até o commit. */
-async function travarOS(tx: RecebimentoMistoTxV3, storeId: string, osId: string): Promise<boolean> {
+export async function travarOS(tx: RecebimentoMistoTxV3, storeId: string, osId: string): Promise<boolean> {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT "id" FROM "ordens_servico" WHERE "id" = ${osId} AND "storeId" = ${storeId} FOR UPDATE
   `;
@@ -157,10 +176,43 @@ async function travarOS(tx: RecebimentoMistoTxV3, storeId: string, osId: string)
  * esperam o commit e então falham no `updatedAt` — nenhum lost update em nenhum
  * dos lados. Também protege o `upsertContaReceber` da formalização (sem CAS).
  */
-async function travarTitulo(tx: RecebimentoMistoTxV3, storeId: string, localKey: string): Promise<void> {
+export async function travarTitulo(tx: RecebimentoMistoTxV3, storeId: string, localKey: string): Promise<void> {
   await tx.$queryRaw`
     SELECT "id" FROM "contas_receber_titulos" WHERE "storeId" = ${storeId} AND "localKey" = ${localKey} FOR UPDATE
   `;
+}
+
+/**
+ * Título canônico ÚNICO da OS (mesma localKey do V2/V3), travado e relido na transação;
+ * criado se ausente. ON CONFLICT DO NOTHING: um título criado em paralelo é preservado (um
+ * upsert sobrescreveria o histórico dele) e passa a ser o alvo. `null` = não existe e não há
+ * valor a cobrar para criá-lo (ou a releitura falhou) — o chamador decide a recusa.
+ */
+export async function garantirTituloOSTravadoV3(
+  tx: RecebimentoMistoTxV3,
+  p: { storeId: string; osId: string; codigo: string; cliente: string; total: number; vencimento: string },
+): Promise<ContaReceberTitulo | null> {
+  const localKey = localKeyContaReceberOSV3(p.storeId, p.osId);
+  await travarTitulo(tx, p.storeId, localKey);
+  const existente = await getContaReceberByLocalKey(p.storeId, localKey, tx);
+  if (existente || !(p.total > 0)) return existente;
+  await tx.contaReceberTitulo.createMany({
+    data: [
+      {
+        storeId: p.storeId,
+        localKey,
+        descricao: `OS ${p.codigo}`,
+        cliente: p.cliente,
+        valor: p.total,
+        vencimento: p.vencimento,
+        status: "pendente",
+        payload: { origem: "operacoes-v3", ordemServicoId: p.osId, codigo: p.codigo } as Prisma.InputJsonValue,
+      },
+    ],
+    skipDuplicates: true,
+  });
+  await travarTitulo(tx, p.storeId, localKey);
+  return getContaReceberByLocalKey(p.storeId, localKey, tx);
 }
 
 // ─── replay ───────────────────────────────────────────────────────────────────
@@ -277,32 +329,18 @@ export async function executarRecebimentoMistoOSV3(
   const codigo = payload.codigo ?? osId;
 
   // 5. Título canônico ÚNICO da OS (mesma localKey do V2/V3), travado; criado se ausente.
-  await travarTitulo(tx, storeId, localKey);
-  let titulo = await getContaReceberByLocalKey(storeId, localKey, tx);
+  const titulo = await garantirTituloOSTravadoV3(tx, {
+    storeId,
+    osId,
+    codigo,
+    cliente: payload.cliente?.nome ?? "",
+    total: totalCobravel,
+    vencimento: n.aPrazo.vencimento,
+  });
   if (!titulo) {
-    if (!(totalCobravel > 0)) {
-      throw new RecebimentoMistoErroV3("sem_valor", "Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de receber.");
-    }
-    // ON CONFLICT DO NOTHING: se outro recebimento criou o título em paralelo, ele é
-    // preservado (um upsert aqui sobrescreveria o histórico dele) e passa a ser o alvo.
-    await tx.contaReceberTitulo.createMany({
-      data: [
-        {
-          storeId,
-          localKey,
-          descricao: `OS ${codigo}`,
-          cliente: payload.cliente?.nome ?? "",
-          valor: totalCobravel,
-          vencimento: n.aPrazo.vencimento,
-          status: "pendente",
-          payload: { origem: "operacoes-v3", ordemServicoId: osId, codigo } as Prisma.InputJsonValue,
-        },
-      ],
-      skipDuplicates: true,
-    });
-    await travarTitulo(tx, storeId, localKey);
-    titulo = await getContaReceberByLocalKey(storeId, localKey, tx);
-    if (!titulo) throw new RecebimentoMistoErroV3("titulo_inconsistente", "Não foi possível garantir o título da OS.");
+    throw totalCobravel > 0
+      ? new RecebimentoMistoErroV3("titulo_inconsistente", "Não foi possível garantir o título da OS.")
+      : new RecebimentoMistoErroV3("sem_valor", "Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de receber.");
   }
   const tituloPayload = isRecord(titulo.payload) ? titulo.payload : {};
   if (
