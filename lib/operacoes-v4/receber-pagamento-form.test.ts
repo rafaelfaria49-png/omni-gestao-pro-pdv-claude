@@ -134,7 +134,7 @@ describe("formulário de recebimento V4 — contrato V3", () => {
   it("44–48. a prazo exige vencimento válido e não monta pagamento imediato", () => {
     expect(vencimentoAPrazoValidoV4("")).toBe(false);
     expect(vencimentoAPrazoValidoV4("nao-e-data")).toBe(false);
-    expect(vencimentoAPrazoValidoV4("2026-09-10")).toBe(true);
+    expect(vencimentoAPrazoValidoV4("2099-12-31")).toBe(true);
     const pagamento = buildReceberOSInputV4({
       linhas: [{ forma: "pix", valor: 10 }],
       sessaoId: "s",

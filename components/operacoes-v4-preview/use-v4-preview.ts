@@ -98,7 +98,7 @@ import { podeTransicionarV3, statusV3FromOS, type OperacaoStatusV3 } from "@/lib
 // já pronto (carrega pagamento+sessão de caixa, expõe receber/estornar/reload) —
 // reaproveitado tal como é, sem motor novo. A V4 só adiciona o reload da lista/
 // detalhe da OS depois do recebimento (ver `receberPagamentoV4` abaixo).
-import { usePdvServicoV3, type PdvServicoState } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
+import { usePdvServicoV3, type PdvServicoState, type PdvServicoV3Completo, type DadosRecebimentoMistoV3 } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
 import type { EstornarRecebimentoInputV3, ReceberOSInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 // GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006: action separada de `receberOSV3` —
 // nunca liquida título, nunca movimenta caixa, nunca exige caixa aberto.
@@ -296,7 +296,7 @@ export interface V4DataCtx {
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
   // recarregar lista+detalhe da V4 depois do sucesso.
-  pdvServico: PdvServicoState;
+  pdvServico: PdvServicoState & Partial<Pick<PdvServicoV3Completo, "registrarMisto" | "registrandoMisto" | "pendenciaMisto" | "aPrazo">>;
   // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
   // Action SEPARADA de `receberOSV3`/`pdvServico.receber` — formaliza o saldo
   // aberto como Conta a Receber PENDENTE (vencimento), sem receber dinheiro.
@@ -1469,6 +1469,7 @@ export function buildVals(
     // Sessão de caixa/recibo e ações do motor V3; totais vêm da projeção server-side.
     // `recebimento` é o gating pré-computado dessa projeção com a sessão do caixa.
     pdvServico: ctx.pdvServico,
+    recebimentoContextKey: JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]),
     recebimento,
     estorno,
     // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
@@ -1638,6 +1639,7 @@ export function useV4Preview(): V4Vals {
   const {
     limparRecibo: limparReciboPdvV3,
     receber: receberPdvV3,
+    registrarMisto: registrarMistoPdvV3,
     estornar: estornarPdvV3,
   } = pdvServicoV3;
   // Troca de OS não deve arrastar o recibo da OS anterior para a próxima seleção.
@@ -1818,7 +1820,9 @@ export function useV4Preview(): V4Vals {
   // NUNCA rodam se `receber` falhar, porque só entram no `if (ok)` abaixo).
   const receberPagamentoV4 = useCallback(
     async (input: ReceberOSInputV3) => {
+      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
       const ok = await receberPdvV3(input);
+      if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return false;
       if (ok) {
         reloadOrdens();
         reloadDetail();
@@ -1845,9 +1849,26 @@ export function useV4Preview(): V4Vals {
     },
     [estornarPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
   );
-  const pdvServico = useMemo<PdvServicoState>(
-    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, estornar: estornarRecebimentoV4 }),
-    [pdvServicoV3, receberPagamentoV4, estornarRecebimentoV4],
+  // A chave/idempotência e o comprovante continuam inteiramente no hook V3.
+  // Só a seleção que disparou a confirmação recebe reloads; nenhuma resposta
+  // da OS/loja anterior produz aviso ou comprovante na seleção atual.
+  const registrarMistoV4 = useCallback(
+    async (input: DadosRecebimentoMistoV3) => {
+      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
+      const resultado = await registrarMistoPdvV3(input);
+      if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return { status: "em_andamento" } as const;
+      if (resultado.status === "ok") {
+        reloadOrdens();
+        reloadDetail();
+        reloadFinancial();
+      }
+      return resultado;
+    },
+    [registrarMistoPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
+  );
+  const pdvServico = useMemo<PdvServicoV3Completo>(
+    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, registrarMisto: registrarMistoV4, estornar: estornarRecebimentoV4 }),
+    [pdvServicoV3, receberPagamentoV4, registrarMistoV4, estornarRecebimentoV4],
   );
 
   const salvarDiagnostico = useCallback(

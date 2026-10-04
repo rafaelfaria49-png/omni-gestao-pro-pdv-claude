@@ -12,6 +12,7 @@
 
 import { useState } from "react";
 import { C, fmt } from "../tokens";
+import { formatarVencimentoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { fmtDataHora } from "../os-adapter";
 import type { V4Vals } from "../use-v4-preview";
 import { ReciboPreviewV3 } from "@/components/operacoes-v3/components/print/ReciboPreviewV3";
@@ -35,7 +36,7 @@ export function ReciboModal({ v }: { v: V4Vals }) {
                 <div style={{ fontSize: 11, color: C.subtle }}>{recibo.cliente} · {recibo.equipamento}</div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ color: C.subtle }}>{recibo.intencaoLabel}</span>
+                <span style={{ color: C.subtle }}>{recibo.aPrazo ? "Recebido nesta operação" : recibo.intencaoLabel}</span>
                 <span style={{ fontWeight: 700, color: C.ink }}>{fmt(recibo.valorPago)}</span>
               </div>
               {recibo.formas.map((f) => (
@@ -48,6 +49,11 @@ export function ReciboModal({ v }: { v: V4Vals }) {
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.subtle }}>Recebido</span><span style={{ color: C.successFg, fontWeight: 600 }}>{fmt(recibo.recebidoAcumulado)}</span></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.subtle }}>Saldo</span><span style={{ color: recibo.saldoRestante > 0 ? C.warnFg : C.body, fontWeight: 600 }}>{fmt(recibo.saldoRestante)}</span></div>
               </div>
+              {recibo.aPrazo && <div style={{ marginTop: 9, fontSize: 11, color: C.infoFg }}>
+                <div>Saldo a prazo: <b>{fmt(recibo.aPrazo.valor)}</b></div>
+                <div>Vencimento: {formatarVencimentoV3(recibo.aPrazo.vencimento)}</div>
+                <div>{recibo.situacaoLabel}</div>
+              </div>}
               {recibo.observacao && <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 9 }}>{recibo.observacao}</div>}
               <div style={{ fontSize: 10, color: C.faint2, marginTop: 11, textAlign: "center" }}>{fmtDataHora(recibo.dataHora)} · {recibo.operador}</div>
             </div>
