@@ -9,7 +9,7 @@ import { lerRecepcaoV3 } from "@/lib/operacoes-v3/workspace-model";
 import { lerPagamentoV3 } from "@/lib/operacoes-v3/payment-model";
 import { StatusBadgeV3 } from "./StatusBadgeV3";
 import { PaymentBadgeV3 } from "./PaymentBadgeV3";
-import { formatBRL, formatDataHora } from "../lib/format";
+import { formatBRL } from "../lib/format";
 import { isAtrasada, isEmRisco, type PagamentoEstado } from "../lib/os-derive";
 
 function Field({ icon, label, value, tone }: { icon: ReactNode; label: string; value: ReactNode; tone?: string }) {
@@ -60,11 +60,11 @@ export function OSHeaderV3({ os, actions }: { os: OrdemServico; actions?: ReactN
         <Field icon={<Tag className="h-3 w-3" />} label="Marca / modelo" value={[os.equipamento?.marca, os.equipamento?.modelo].filter(Boolean).join(" ")} />
         <Field icon={<Hash className="h-3 w-3" />} label="IMEI / série" value={os.equipamento?.numeroSerie} />
         <Field icon={<Wrench className="h-3 w-3" />} label="Técnico" value={os.tecnico?.nome} />
-        <Field icon={<CalendarClock className="h-3 w-3" />} label="Entrada" value={recepcao.dataEntrada ? formatDataHora(recepcao.dataEntrada) : ""} />
+        <Field icon={<CalendarClock className="h-3 w-3" />} label={recepcao.entradaRotulo ?? "Entrada"} value={recepcao.entradaTexto ?? ""} />
         <Field
           icon={<Clock className="h-3 w-3" />}
-          label="Previsão / SLA"
-          value={recepcao.previsaoEntrega ? formatDataHora(recepcao.previsaoEntrega) : ""}
+          label={recepcao.previsaoTexto ? "Previsão de entrega" : recepcao.prazoInternoTexto ? "Prazo interno" : "Previsão de entrega"}
+          value={recepcao.previsaoTexto || recepcao.prazoInternoTexto || "Não informada"}
           tone={atrasada ? "text-destructive" : risco ? "text-warning" : undefined}
         />
       </div>

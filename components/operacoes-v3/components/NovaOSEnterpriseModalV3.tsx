@@ -8,7 +8,7 @@
 // o recebimento real acontece depois no PDV de Serviço.
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Check,
@@ -49,6 +49,7 @@ import {
   ORIGEM_V3,
   pagamentoFormaLabelV3,
   PRIORIDADE_V3,
+  resolverDatasRecepcaoFormV3,
   TIPO_EQUIPAMENTO_V3,
   validarNovaOSDraftV3,
   type NovaOSClienteV3,
@@ -70,7 +71,20 @@ import {
 } from "@/lib/operacoes-v3/nova-os-draft-storage";
 import type { OrcamentoLinhaKindV3 } from "@/lib/operacoes-v3/orcamento-model";
 import type { ProdutoCatalogoV3 } from "@/lib/operacoes-v3/produto-link";
+import {
+  campoAgoraV3,
+  campoDeDataLidaV3,
+  campoVazioV3,
+  diasAtrasV3,
+  formatarDataOperacionalV3,
+  hojeNaLojaV3,
+  lerDataOperacionalV3,
+  montarDataOperacionalOpcionalV3,
+  previsaoVencidaV3,
+  type CampoDataOperacionalV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
 import { ButtonV3 } from "./UiV3";
+import { DataOperacionalCampoV3 } from "./DataOperacionalCampoV3";
 import { PatternPadV3 } from "./PatternPadV3";
 import { ProductPickerV3 } from "./ProductPickerV3";
 import { formatBRL } from "../lib/format";
@@ -108,6 +122,25 @@ function Campo({ label, children, hint }: { label: string; children: ReactNode; 
   );
 }
 
+/**
+ * Espelha os campos de data no rascunho (ISO + precisão, fuso da loja) para o
+ * auto-save e a restauração. Campo vazio/inválido não inventa data.
+ */
+function comDatasRecepcao(d: NovaOSDraftV3, entrada: CampoDataOperacionalV3, previsao: CampoDataOperacionalV3): NovaOSDraftV3 {
+  const e = montarDataOperacionalOpcionalV3(entrada);
+  const p = montarDataOperacionalOpcionalV3(previsao);
+  return {
+    ...d,
+    recepcao: {
+      ...d.recepcao,
+      dataEntrada: e?.ok ? e.valor.iso : "",
+      dataEntradaMeta: e?.ok ? e.valor.meta : undefined,
+      previsaoEntrega: p?.ok ? p.valor.iso : undefined,
+      previsaoEntregaMeta: p?.ok ? p.valor.meta : undefined,
+    },
+  };
+}
+
 const STEPS: { id: string; label: string; icon: typeof User }[] = [
   { id: "cliente", label: "Cliente", icon: User },
   { id: "equipamento", label: "Equipamento", icon: Smartphone },
@@ -126,6 +159,14 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   const [draft, setDraft] = useState<NovaOSDraftV3>(() => novaOSDraftVazioV3());
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Datas e prazos (passo Recepção): entrada efetiva começa em "hoje, agora";
+  // previsão opcional. Fuso da loja — nunca o do navegador.
+  const [entradaCampo, setEntradaCampo] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
+  const [previsaoCampo, setPrevisaoCampo] = useState<CampoDataOperacionalV3>(() => campoVazioV3());
+  const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
+  const entradaRef = useRef<HTMLInputElement>(null);
+  const previsaoRef = useRef<HTMLInputElement>(null);
 
   // Cliente
   const [clienteBusca, setClienteBusca] = useState("");
@@ -178,7 +219,11 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setPendingDiscard(null);
 
     setStep(0);
-    setDraft(novaOSDraftVazioV3());
+    const entradaInicial = campoAgoraV3();
+    setEntradaCampo(entradaInicial);
+    setPrevisaoCampo(campoVazioV3());
+    setErrosDatas({});
+    setDraft(comDatasRecepcao(novaOSDraftVazioV3(), entradaInicial, campoVazioV3()));
 
     const sid = (storeId ?? "").trim();
     const saved = sid ? readNovaOSDraftV3(sid) : null;
@@ -243,6 +288,10 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   const continuarRascunho = useCallback(() => {
     if (!restoreState) return;
     setDraft(restoreState.draft);
+    // Datas restauradas como estavam (horário gravado nunca vira "automático").
+    const r = restoreState.draft.recepcao;
+    setEntradaCampo(campoDeDataLidaV3(lerDataOperacionalV3(r?.dataEntrada, r?.dataEntradaMeta)));
+    setPrevisaoCampo(campoDeDataLidaV3(lerDataOperacionalV3(r?.previsaoEntrega, r?.previsaoEntregaMeta)));
     // Rascunho com termo de garantia já preenchido = trata como editado à mão
     // (não sobrescrever ao reabrir e trocar de modelo).
     setGarantiaTermoEditado(!!restoreState.draft.garantia?.termo?.trim());
@@ -257,7 +306,11 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     if (pendingDiscard === "close") {
       onClose();
     } else {
-      setDraft(novaOSDraftVazioV3());
+      const entradaInicial = campoAgoraV3();
+      setEntradaCampo(entradaInicial);
+      setPrevisaoCampo(campoVazioV3());
+      setErrosDatas({});
+      setDraft(comDatasRecepcao(novaOSDraftVazioV3(), entradaInicial, campoVazioV3()));
       setStep(0);
     }
     setRestoreState(null);
@@ -407,6 +460,19 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     return step;
   };
 
+  /** Erros de data junto aos campos do passo Recepção, com foco no primeiro. */
+  const marcarErrosDatas = (erros: { campo: string; mensagem: string }[]): boolean => {
+    if (erros.length === 0) {
+      setErrosDatas({});
+      return false;
+    }
+    setErrosDatas(Object.fromEntries(erros.map((e) => [e.campo, e.mensagem])));
+    setStep(STEPS.findIndex((s) => s.id === "recepcao"));
+    const alvo = erros[0]!.campo === "previsaoEntrega" ? previsaoRef : entradaRef;
+    requestAnimationFrame(() => alvo.current?.focus());
+    return true;
+  };
+
   const handleCriar = async () => {
     setErro(null);
     const sid = (storeId ?? "").trim();
@@ -414,7 +480,14 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
       setErro("Selecione uma unidade ativa para abrir a OS.");
       return;
     }
-    const invalido = validarNovaOSDraftV3(draft);
+    // Datas antes de tudo: nada é enviado com data inválida, futura ou fora de ordem.
+    const datas = resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: true });
+    if (marcarErrosDatas(datas.erros)) {
+      setErro("Revise as datas da recepção.");
+      return;
+    }
+    const comDatas = comDatasRecepcao(draft, entradaCampo, previsaoCampo);
+    const invalido = validarNovaOSDraftV3(comDatas);
     if (invalido) {
       setErro(invalido);
       setStep(stepDoErro(invalido));
@@ -422,16 +495,22 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     }
     setSalvando(true);
     try {
-      const { os } = await criarOSEnterpriseV3(sid, draft);
+      const { os } = await criarOSEnterpriseV3(sid, comDatas);
       clearNovaOSDraftV3(sid);
       setSavedAt(null);
       onCreated(os.id);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir a OS.");
+      // O servidor confere de novo com o relógio dele: aponta o campo se for data.
+      marcarErrosDatas(resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: true }).erros);
     } finally {
       setSalvando(false);
     }
   };
+
+  const entradaLida = lerDataOperacionalV3(draft.recepcao.dataEntrada, draft.recepcao.dataEntradaMeta);
+  const previsaoLida = lerDataOperacionalV3(draft.recepcao.previsaoEntrega, draft.recepcao.previsaoEntregaMeta);
+  const diasRetroativo = diasAtrasV3(entradaLida);
 
   if (!open) return null;
 
@@ -655,22 +734,46 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
 
           {stepId === "recepcao" && (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Campo label="Data / hora de entrada">
-                <input
-                  className={inputCls}
-                  type="datetime-local"
-                  value={toLocalInput(draft.recepcao.dataEntrada)}
-                  onChange={(e) => setRecepcao({ dataEntrada: fromLocalInput(e.target.value) ?? draft.recepcao.dataEntrada })}
-                />
-              </Campo>
-              <Campo label="Previsão de entrega">
-                <input
-                  className={inputCls}
-                  type="datetime-local"
-                  value={toLocalInput(draft.recepcao.previsaoEntrega)}
-                  onChange={(e) => setRecepcao({ previsaoEntrega: fromLocalInput(e.target.value) })}
-                />
-              </Campo>
+              <section aria-labelledby="novaos-v3-datas" className="min-w-0 rounded-xl border border-border bg-background/40 p-3 sm:col-span-2">
+                <h3 id="novaos-v3-datas" className="mb-2 text-sm font-semibold text-foreground">Datas e prazos</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DataOperacionalCampoV3
+                    ref={entradaRef}
+                    id="novaos-v3-entrada"
+                    rotulo="Data de entrada do aparelho"
+                    ajuda="Quando o aparelho realmente entrou na loja."
+                    obrigatorio
+                    maxDia={hojeNaLojaV3()}
+                    valor={entradaCampo}
+                    onChange={(c) => {
+                      setEntradaCampo(c);
+                      setDraft((d) => comDatasRecepcao(d, c, previsaoCampo));
+                      setErrosDatas((e) => ({ ...e, dataEntrada: "" }));
+                    }}
+                    erro={errosDatas.dataEntrada || null}
+                    aviso={
+                      diasRetroativo > 0
+                        ? `Entrada há ${diasRetroativo} ${diasRetroativo === 1 ? "dia" : "dias"}. O cadastro da OS continua com a data de hoje.`
+                        : null
+                    }
+                  />
+                  <DataOperacionalCampoV3
+                    ref={previsaoRef}
+                    id="novaos-v3-previsao"
+                    rotulo="Previsão de entrega"
+                    ajuda="Quando você prevê entregar o aparelho ao cliente. Opcional."
+                    minDia={entradaLida?.dia}
+                    valor={previsaoCampo}
+                    onChange={(c) => {
+                      setPrevisaoCampo(c);
+                      setDraft((d) => comDatasRecepcao(d, entradaCampo, c));
+                      setErrosDatas((e) => ({ ...e, previsaoEntrega: "" }));
+                    }}
+                    erro={errosDatas.previsaoEntrega || null}
+                    aviso={previsaoVencidaV3(previsaoLida) ? "Essa previsão já passou. Ela fica registrada como informada." : null}
+                  />
+                </div>
+              </section>
               <Campo label="Origem">
                 <select className={inputCls} value={draft.recepcao.origem} onChange={(e) => setRecepcao({ origem: e.target.value as NovaOSRecepcaoV3["origem"] })}>
                   {ORIGEM_V3.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -929,6 +1032,10 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
               <ResumoBloco titulo="Defeito relatado">
                 <p className="text-sm text-foreground">{draft.problema.defeitoRelatado || "—"}</p>
               </ResumoBloco>
+              <ResumoBloco titulo="Datas e prazos">
+                <p className="text-sm text-foreground">Entrada do aparelho: {formatarDataOperacionalV3(entradaLida) || "—"}</p>
+                <p className="text-xs text-muted-foreground">Previsão de entrega: {formatarDataOperacionalV3(previsaoLida) || "não informada"}</p>
+              </ResumoBloco>
               <ResumoBloco titulo={`Itens (${draft.itens.length})`}>
                 {draft.itens.length ? (
                   <ul className="space-y-1">
@@ -1091,21 +1198,6 @@ function horaCurta(iso: string): string {
 // ---------------------------------------------------------------------------
 // Helpers de data (datetime-local / date) ↔ ISO
 // ---------------------------------------------------------------------------
-
-function toLocalInput(iso?: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const off = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - off * 60000);
-  return local.toISOString().slice(0, 16);
-}
-
-function fromLocalInput(v: string): string | undefined {
-  if (!v) return undefined;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-}
 
 function toDateInput(iso?: string): string {
   if (!iso) return "";

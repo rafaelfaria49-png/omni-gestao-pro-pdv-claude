@@ -69,7 +69,8 @@ export function OrcamentoClienteDocV4({ doc }: { doc: OrcamentoClienteViewV4 }) 
         <div className="shrink-0 text-right">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-zinc-500">Orçamento</p>
           <p className="text-[16px] font-extrabold leading-none text-black">{doc.osNumero}</p>
-          {doc.dataCriacao ? <p className="mt-1 text-[10px] text-zinc-600">Emitido: {formatData(doc.dataCriacao)}</p> : null}
+          {doc.dataPropostaTexto ? <p className="mt-1 text-[10px] text-zinc-600">Data do orçamento: {doc.dataPropostaTexto}</p> : null}
+          {doc.dataCriacao ? <p className={doc.dataPropostaTexto ? "text-[10px] text-zinc-600" : "mt-1 text-[10px] text-zinc-600"}>Emitido: {formatData(doc.dataCriacao)}</p> : null}
         </div>
       </header>
 
@@ -139,7 +140,7 @@ export function OrcamentoClienteDocV4({ doc }: { doc: OrcamentoClienteViewV4 }) 
 
       <section className="mt-2 break-inside-avoid">
         {validade.validoAte ? (
-          <p className="text-[11px] text-black">Válido até: {formatData(validade.validoAte)}</p>
+          <p className="text-[11px] text-black">Válido até: {validade.validoAteTexto || formatData(validade.validoAte)}{validade.vencida ? " (vencido)" : ""}</p>
         ) : validade.politicaTexto ? (
           <p className="text-[11px] text-black">{validade.politicaTexto}</p>
         ) : null}

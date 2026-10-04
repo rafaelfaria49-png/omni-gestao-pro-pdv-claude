@@ -9,6 +9,11 @@
 
 import type { OrdemServico } from "@/types/os";
 import {
+  lerDataOperacionalV3,
+  montarDataOperacionalV3,
+  type DataOperacionalMetaV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
+import {
   LOCAL_FISICO_V3,
   ORIGEM_V3,
   PRIORIDADE_V3,
@@ -29,7 +34,10 @@ export interface DadosBasicosEditorV4 {
   origem: NovaOSOrigemV3;
   recebidoPor: string;
   localFisico: NovaOSLocalFisicoV3;
-  /** Valor do <input type="datetime-local">: "YYYY-MM-DDTHH:mm" (ou ""). */
+  /**
+   * Previsão na parede da loja: "YYYY-MM-DDTHH:mm" (data/hora), "YYYY-MM-DD"
+   * (só o dia — sem horário informado) ou "".
+   */
   previsaoLocal: string;
   observacoes: string;
 }
@@ -142,26 +150,41 @@ export function isPrevisaoVencida(iso: string, agora: Date = new Date()): boolea
 /** Semeia o editor a partir da OS real (defaults seguros p/ os selects). */
 export function seedDadosBasicos(os: OrdemServico | null | undefined): DadosBasicosEditorV4 {
   const d = lerDadosBasicosV3(os ?? null);
+  // Previsão só-dia volta como "YYYY-MM-DD": a âncora técnica nunca vira horário.
+  const previsao = lerDataOperacionalV3(d.previsaoEntrega, d.previsaoEntregaMeta);
   return {
     defeitoRelatado: d.defeitoRelatado,
     prioridade: d.prioridade || "media",
     origem: d.origem || "balcao",
     recebidoPor: d.recebidoPor,
     localFisico: d.localFisico || "balcao",
-    previsaoLocal: isoToLocalInput(d.previsaoEntrega),
+    previsaoLocal: previsao?.precisao === "dia" ? previsao.dia : isoToLocalInput(d.previsaoEntrega),
     observacoes: d.observacoes,
   };
 }
 
+const SO_DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** "YYYY-MM-DDTHH:mm" | "YYYY-MM-DD" → ISO + precisão (fuso da loja). Vazio/inválido → "". */
+export function previsaoLocalParaDataV4(local: string): { iso: string; meta?: DataOperacionalMetaV3 } {
+  const s = (local ?? "").trim();
+  if (!s) return { iso: "" };
+  const [dia, hora = ""] = SO_DIA_RE.test(s) ? [s, ""] : s.split("T");
+  const r = montarDataOperacionalV3({ dia: dia ?? "", hora });
+  return r.ok ? { iso: r.valor.iso, meta: r.valor.meta } : { iso: "" };
+}
+
 /** Mapeia o editor para o input da action V3 (trim + ISO da previsão). */
 export function toDadosBasicosInput(editor: DadosBasicosEditorV4): SalvarDadosBasicosInputV3 {
+  const previsao = previsaoLocalParaDataV4(editor.previsaoLocal);
   return {
     defeitoRelatado: editor.defeitoRelatado.trim(),
     prioridade: editor.prioridade,
     origem: editor.origem,
     recebidoPor: editor.recebidoPor.trim(),
     localFisico: editor.localFisico,
-    previsaoEntrega: localInputToIso(editor.previsaoLocal),
+    previsaoEntrega: previsao.iso,
+    ...(previsao.meta ? { previsaoEntregaMeta: previsao.meta } : {}),
     observacoes: editor.observacoes.trim(),
   };
 }

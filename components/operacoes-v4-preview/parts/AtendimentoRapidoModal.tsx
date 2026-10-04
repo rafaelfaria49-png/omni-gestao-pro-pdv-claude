@@ -4,12 +4,19 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { C, fmt } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { finalizarAtendimentoRapidoV3 } from "@/lib/operacoes-v3/atendimento-rapido-actions";
-import { validarAtendimentoRapidoV3, SERVICOS_RAPIDOS_V3 } from "@/lib/operacoes-v3/atendimento-rapido-model";
+import {
+  resolverDatasAtendimentoFormV3,
+  validarAtendimentoRapidoV3,
+  SERVICOS_RAPIDOS_V3,
+  type CamposDatasAtendimentoV3,
+} from "@/lib/operacoes-v3/atendimento-rapido-model";
+import { formatarDataOperacionalV3, hojeNaLojaV3, lerDataOperacionalV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
+import { DataOperacionalCampoV3 } from "@/components/operacoes-v3/components/DataOperacionalCampoV3";
 import { getCaixaSessaoAbertaV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import { FORMAS_RECEBIMENTO_V3, type FormaRecebimentoV3 } from "@/lib/operacoes-v3/payment-model";
 import {
@@ -21,7 +28,7 @@ import {
 import { AtendimentoModalShell } from "./atendimento/AtendimentoModalShell";
 import { ClienteAtendimentoSection } from "./atendimento/ClienteAtendimentoSection";
 import { ServicoCatalogLookup } from "./atendimento/ServicoCatalogLookup";
-import { atendInput, atendLabel } from "./atendimento/field-styles";
+import { atendDataCampo, atendGradeDatas, atendInput, atendLabel } from "./atendimento/field-styles";
 
 const FORMAS_SUPORTADAS = FORMAS_RECEBIMENTO_V3.filter((f) => f.suportada);
 
@@ -39,6 +46,24 @@ function AtendimentoRapidoModalContent({ v }: { v: V4Vals }) {
   const [erro, setErro] = useState<string | null>(null);
   const [garantiaDias, setGarantiaDias] = useState(0);
   const [custoInterno, setCustoInterno] = useState(0);
+  const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
+  const refsDatas = {
+    dataAtendimento: useRef<HTMLInputElement>(null),
+    dataEntrada: useRef<HTMLInputElement>(null),
+    dataConclusao: useRef<HTMLInputElement>(null),
+  };
+  const setDatas = (patch: Partial<CamposDatasAtendimentoV3>) => {
+    setForm((f) => ({ ...f, datas: { ...f.datas, ...patch } }));
+    setErrosDatas({});
+  };
+  const datasResolvidas = resolverDatasAtendimentoFormV3(form.datas);
+  const hoje = hojeNaLojaV3();
+  const conclusaoLida = datasResolvidas.conclusao
+    ? lerDataOperacionalV3(datasResolvidas.conclusao.iso, datasResolvidas.conclusao.meta)
+    : null;
+  const entradaLida = datasResolvidas.entrada ? lerDataOperacionalV3(datasResolvidas.entrada.iso, datasResolvidas.entrada.meta) : null;
+  // Retroativo = o serviço aconteceu num dia anterior a hoje.
+  const retroativo = !!entradaLida && entradaLida.dia < hoje;
 
   useEffect(() => {
     if (!sid) {
@@ -71,14 +96,26 @@ function AtendimentoRapidoModalContent({ v }: { v: V4Vals }) {
       setErro("Abra o caixa no PDV para finalizar o atendimento rápido (o recebimento entra no fechamento).");
       return;
     }
-    const inputV3 = buildAtendimentoRapidoInputFromFormV4(form);
+    // Datas validadas antes de qualquer efeito (mesma regra do servidor).
+    const datas = resolverDatasAtendimentoFormV3(form.datas);
+    if (datas.erros.length > 0) {
+      setErrosDatas(Object.fromEntries(datas.erros.map((e) => [e.campo, e.mensagem])));
+      const alvo = refsDatas[datas.erros[0]!.campo as keyof typeof refsDatas];
+      requestAnimationFrame(() => alvo?.current?.focus());
+      setErro("Revise a data do atendimento.");
+      return;
+    }
+    const inputV3 = buildAtendimentoRapidoInputFromFormV4(form, datas);
     const invalido = validarAtendimentoRapidoV3(inputV3);
     if (invalido) {
       setErro(invalido);
       return;
     }
+    const dataServico = formatarDataOperacionalV3(conclusaoLida);
     const confirmado = window.confirm(
-      "Finalizar atendimento real: o sistema vai criar a OS, registrar o recebimento no caixa e marcar a OS como entregue. Confirmar?",
+      retroativo
+        ? `Finalizar atendimento real com data de ${dataServico}: o sistema vai criar a OS e marcá-la como entregue nessa data. O recebimento é registrado agora, no caixa atual. Confirmar?`
+        : "Finalizar atendimento real: o sistema vai criar a OS, registrar o recebimento no caixa e marcar a OS como entregue. Confirmar?",
     );
     if (!confirmado) return;
     setBusy(true);
@@ -87,6 +124,8 @@ function AtendimentoRapidoModalContent({ v }: { v: V4Vals }) {
       v.onAtendimentoRapidoConcluido(resultado.osId);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível finalizar o atendimento.");
+      const novamente = resolverDatasAtendimentoFormV3(form.datas);
+      if (novamente.erros.length > 0) setErrosDatas(Object.fromEntries(novamente.erros.map((x) => [x.campo, x.mensagem])));
     } finally {
       setBusy(false);
     }
@@ -204,6 +243,70 @@ function AtendimentoRapidoModalContent({ v }: { v: V4Vals }) {
           <input value={form.equipModelo} onChange={(e) => setForm((f) => ({ ...f, equipModelo: e.target.value }))} style={atendInput} autoComplete="off" />
         </div>
       </div>
+
+      <section aria-label="Datas do atendimento" style={{ border: `1px solid ${C.line2}`, borderRadius: 10, padding: "10px 11px", marginBottom: 10, minWidth: 0 }}>
+        {form.datas.detalhar ? (
+          <div style={atendGradeDatas}>
+            <DataOperacionalCampoV3
+              ref={refsDatas.dataEntrada}
+              id="atend-entrada"
+              rotulo="Entrada"
+              ajuda="Quando o atendimento começou."
+              obrigatorio
+              maxDia={hoje}
+              valor={form.datas.dataEntrada}
+              onChange={(c) => setDatas({ dataEntrada: c })}
+              erro={errosDatas.dataEntrada || null}
+              estilos={atendDataCampo}
+            />
+            <DataOperacionalCampoV3
+              ref={refsDatas.dataConclusao}
+              id="atend-saida"
+              rotulo="Saída"
+              ajuda="Quando o serviço foi concluído e entregue."
+              obrigatorio
+              maxDia={hoje}
+              minDia={form.datas.dataEntrada.dia || undefined}
+              valor={form.datas.dataSaida}
+              onChange={(c) => setDatas({ dataSaida: c })}
+              erro={errosDatas.dataConclusao || null}
+              estilos={atendDataCampo}
+            />
+          </div>
+        ) : (
+          <DataOperacionalCampoV3
+            ref={refsDatas.dataAtendimento}
+            id="atend-data"
+            rotulo="Data do atendimento"
+            ajuda="Quando o serviço aconteceu."
+            obrigatorio
+            maxDia={hoje}
+            valor={form.datas.dataAtendimento}
+            onChange={(c) => setDatas({ dataAtendimento: c })}
+            erro={errosDatas.dataAtendimento || null}
+            estilos={atendDataCampo}
+          />
+        )}
+        <button
+          type="button"
+          onClick={() =>
+            setDatas(
+              form.datas.detalhar
+                ? { detalhar: false }
+                : { detalhar: true, dataEntrada: form.datas.dataAtendimento, dataSaida: form.datas.dataAtendimento },
+            )
+          }
+          aria-expanded={form.datas.detalhar}
+          style={{ marginTop: 8, padding: 0, border: "none", background: "transparent", color: C.primaryHover, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+        >
+          {form.datas.detalhar ? "Usar uma data só" : "Detalhar entrada e saída"}
+        </button>
+        {retroativo ? (
+          <p role="status" style={{ margin: "8px 0 0", fontSize: 11.5, color: C.infoFg, background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 8, padding: "7px 9px", lineHeight: 1.45 }}>
+            A data informa quando o serviço aconteceu. A confirmação registra o recebimento agora, no caixa atual.
+          </p>
+        ) : null}
+      </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.2fr)", gap: 8 }}>
         <div>

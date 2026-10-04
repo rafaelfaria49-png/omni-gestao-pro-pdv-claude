@@ -96,6 +96,12 @@ export interface SalvarOrcamentoV3Input {
    * editor de itens da V4). `[]` explícito remove todos os grupos.
    */
   gruposV3?: OrcamentoGrupoV3[];
+  /**
+   * Validade da proposta (ISO — fim do dia na loja), informada na criação do
+   * orçamento. Só é aceita enquanto o orçamento ainda NÃO tem validade: nunca
+   * reinicia uma validade existente (alterar é só pelo "Corrigir datas", auditado).
+   */
+  validoAte?: string;
 }
 
 export interface TotaisOrcamentoV3 {

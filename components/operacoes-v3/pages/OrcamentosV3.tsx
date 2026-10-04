@@ -1,5 +1,6 @@
 "use client";
 
+import { formatarDiaDeIsoNaLojaV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 import { useMemo } from "react";
 import { FileText } from "lucide-react";
 import type { OrdemServico } from "@/types/os";
@@ -84,7 +85,7 @@ export function OrcamentosV3() {
                           </div>
                           <p className="truncate text-xs text-muted-foreground">{os.cliente?.nome ?? "Cliente"}</p>
                           {os.orcamento?.validoAte ? (
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">Válido até {formatData(os.orcamento.validoAte)}</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">Válido até {formatarDiaDeIsoNaLojaV3(os.orcamento.validoAte) || formatData(os.orcamento.validoAte)}</p>
                           ) : null}
                           <ButtonV3 variant="outline" className="mt-1.5 w-full" onClick={() => openOS(os.id)}>
                             Abrir OS

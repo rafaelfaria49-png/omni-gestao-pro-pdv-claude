@@ -38,6 +38,14 @@ import {
 } from "./delivery-financial-guard";
 import { localKeyContaReceberOSV3 } from "./payment-model";
 import { finalizarRetornoPorEntregaVinculadaV3 } from "./retorno-auto-close-actions";
+import {
+  dataRetroativaV3,
+  lerDatasOSV3,
+  validarDataEntregaV3,
+  validarEntradaDataV3,
+  ROTULO_DATA_ENTREGA_V3,
+  type DataOperacionalMetaV3,
+} from "./datas-operacionais-model";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -63,6 +71,12 @@ export interface RegistrarEntregaInputV3 {
   assinaturaRetirada?: string;
   /** Solicitação do operador; ator, loja e horário são sempre derivados no servidor. */
   semCobranca?: EntregaSemCobrancaSolicitacaoV3;
+  /**
+   * Data EFETIVA da entrega (quando o aparelho saiu de fato). Pode ser anterior
+   * ao registro, nunca no futuro nem antes da entrada. Ausente = agora. NÃO
+   * dispensa saldo, prontidão, autorização a prazo nem regra de entrega.
+   */
+  dataEntrega?: { iso: string; meta?: DataOperacionalMetaV3 | null };
 }
 
 export async function registrarEntregaV3(storeId: string, osId: string, input: RegistrarEntregaInputV3 = {}): Promise<OrdemServico> {
@@ -104,7 +118,21 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
   const operador = operadorLabel(session);
   const recebidoPor = (input.recebidoPor ?? "").trim() || (payload as unknown as OrdemServico).cliente?.nome || "Cliente";
   const observacao = (input.observacao ?? "").trim() || undefined;
+  // `now` = momento REAL do registro (auditoria, eventos, assinatura). A data
+  // efetiva da entrega pode ser anterior; é validada antes de qualquer efeito.
   const now = nowIso();
+  let entregueEm = now;
+  let entregueEmMeta: DataOperacionalMetaV3 | null = null;
+  let entregaRetroativa = false;
+  if (input.dataEntrega) {
+    const v = validarEntradaDataV3(input.dataEntrega.iso, input.dataEntrega.meta, ROTULO_DATA_ENTREGA_V3);
+    if (!v.ok) throw new Error(v.mensagem);
+    const erros = validarDataEntregaV3({ entrega: v.data, entrada: lerDatasOSV3(payload).entrada }, new Date(now));
+    if (erros.length > 0) throw new Error(erros[0]!.mensagem);
+    entregueEm = v.data.iso;
+    entregueEmMeta = v.meta;
+    entregaRetroativa = dataRetroativaV3(v.data, new Date(now));
+  }
 
   // P0: a decisão financeira é refeita no servidor imediatamente antes do
   // primeiro efeito de entrega. Ator, loja e horário nunca vêm do navegador.
@@ -190,6 +218,10 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
       observacao,
       decisaoFinanceira: projecaoFinanceira.decisao,
       entregaSemCobranca: !!autorizacaoSemCobranca,
+      // Data efetiva em campo próprio; o evento continua com o horário real do registro.
+      ...(input.dataEntrega ? { entregueEm } : {}),
+      ...(entregaRetroativa ? { entregaRetroativa: true } : {}),
+      ...(entregueEmMeta ? { precisao: entregueEmMeta.precisao } : {}),
     }),
   );
   if (assinaturaRetirada) {
@@ -203,14 +235,18 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
     operacaoStatusV3: "entregue",
     operacaoStatus: projetarStatusV2("entregue"),
     status: projetarStatusV2("entregue"),
-    entregueEm: now,
-    retirada: { confirmado: true, retiradoPor: recebidoPor, retiradoEm: now, observacao },
+    entregueEm,
+    retirada: { confirmado: true, retiradoPor: recebidoPor, retiradoEm: entregueEm, observacao },
     entregaV3: {
       ...prevEntrega,
-      entregueEm: now,
+      entregueEm,
+      ...(entregueEmMeta ? { entregueEmMeta } : {}),
+      // Momento real do registro (servidor) — nunca a data efetiva escolhida.
+      registradoEm: now,
       entreguePor: operador,
       recebidoPor,
       observacao,
+      // A captura da assinatura é um fato de AGORA (nunca retrodatada).
       ...(assinaturaRetirada ? { assinaturaRetirada: { dataUrl: assinaturaRetirada, criadoEm: now, por: recebidoPor } } : {}),
     },
     ...(autorizacaoSemCobranca ? { entregaSemCobrancaV3: autorizacaoSemCobranca } : {}),

@@ -14,6 +14,7 @@
 
 import type { EventoTimeline, EventoTipo, OrdemServico } from "@/types/os";
 import { statusMetaV3, statusV3FromOS, type OperacaoStatusV3 } from "./status-machine";
+import { formatarDataOperacionalV3, lerDatasOSV3, rotuloEntradaV3 } from "./datas-operacionais-model";
 
 // ----------------------------------------------------------------------------
 // Checklist de entrada (item 4)
@@ -165,22 +166,40 @@ export function diagnosticoPreenchidoV3(d: DiagnosticoTecnicoV3): boolean {
 // ----------------------------------------------------------------------------
 
 export interface RecepcaoV3 {
+  /** ISO bruta (compatível): entrada registrada, ou o cadastro no legado. Para EXIBIR use `entradaTexto`. */
   dataEntrada?: string;
+  /** ISO bruta (compatível, regra de SLA): previsão, ou o prazo interno. Para EXIBIR use `previsaoTexto`. */
   previsaoEntrega?: string;
   recebidoPor?: string;
   origem?: string;
   localFisico?: string;
+  /** "Entrada" ou "Cadastro" — o cadastro nunca aparece como entrada confirmada. */
+  entradaRotulo?: string;
+  /** Entrada no fuso da loja (só-dia sem horário); "" quando não há data. */
+  entradaTexto?: string;
+  /** Previsão de entrega COMBINADA; "" = não informada. */
+  previsaoTexto?: string;
+  /** Prazo interno (automático/legado) quando não é a previsão combinada; "" = nenhum. */
+  prazoInternoTexto?: string;
 }
 
 export function lerRecepcaoV3(os: OrdemServico | null | undefined): RecepcaoV3 {
   const r = (os as { aberturaV3?: { recepcao?: Record<string, unknown> } } | null | undefined)?.aberturaV3?.recepcao;
   const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v : undefined);
+  const datas = lerDatasOSV3(os);
   return {
     dataEntrada: str(r?.dataEntrada) ?? os?.criadoEm,
     previsaoEntrega: str(r?.previsaoEntrega) ?? os?.sla?.prazo,
     recebidoPor: str(r?.recebidoPor),
     origem: str(r?.origem) ?? os?.origem,
     localFisico: str(r?.localFisico),
+    entradaRotulo: datas.semEntradaFisica ? "Entrada" : rotuloEntradaV3(datas.entradaOuCadastro),
+    entradaTexto: datas.semEntradaFisica ? "Aparelho não está na loja" : formatarDataOperacionalV3(datas.entradaOuCadastro),
+    previsaoTexto: formatarDataOperacionalV3(datas.previsao),
+    prazoInternoTexto:
+      !datas.previsao && datas.prazoInterno
+        ? `${formatarDataOperacionalV3(datas.prazoInterno.data)}${datas.prazoInterno.origem === "automatico" ? " (automático)" : ""}`
+        : "",
   };
 }
 

@@ -9,8 +9,14 @@
 // validação mínima é a própria `validarAtendimentoRapidoV3` da V3.
 // ============================================================================
 
-import type { AtendimentoClienteModoV3, AtendimentoRapidoInputV3 } from "@/lib/operacoes-v3/atendimento-rapido-model";
+import {
+  camposDatasAtendimentoAgoraV3,
+  type AtendimentoClienteModoV3,
+  type AtendimentoRapidoInputV3,
+  type CamposDatasAtendimentoV3,
+} from "@/lib/operacoes-v3/atendimento-rapido-model";
 import type { FormaRecebimentoV3 } from "@/lib/operacoes-v3/payment-model";
+import type { DataOperacionalV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 
 /** Cliente existente selecionado pela busca real (read-only) da loja ativa. */
 export interface AtendimentoRapidoClienteExistenteV4 {
@@ -35,11 +41,14 @@ export interface AtendimentoRapidoFormV4 {
   equipModelo: string;
   formaPagamento: FormaRecebimentoV3;
   observacao: string;
+  /** "Data do atendimento" (+ "Detalhar entrada e saída"). Começa em hoje, agora. */
+  datas: CamposDatasAtendimentoV3;
 }
 
 /** Formulário vazio (estado inicial do modal, sempre que abre). */
-export function atendimentoRapidoFormVazioV4(): AtendimentoRapidoFormV4 {
+export function atendimentoRapidoFormVazioV4(agora: Date = new Date()): AtendimentoRapidoFormV4 {
   return {
+    datas: camposDatasAtendimentoAgoraV3(agora),
     clienteModo: "balcao",
     clienteExistente: null,
     clienteNovoNome: "",
@@ -73,7 +82,10 @@ function clean(value: string | undefined | null): string | undefined {
  * use `validarAtendimentoRapidoV3` (V3, reaproveitada) antes de chamar
  * `finalizarAtendimentoRapidoV3`.
  */
-export function buildAtendimentoRapidoInputFromFormV4(form: AtendimentoRapidoFormV4): AtendimentoRapidoInputV3 {
+export function buildAtendimentoRapidoInputFromFormV4(
+  form: AtendimentoRapidoFormV4,
+  datas?: { entrada: DataOperacionalV3 | null; conclusao: DataOperacionalV3 | null },
+): AtendimentoRapidoInputV3 {
   const cliente: AtendimentoRapidoInputV3["cliente"] =
     form.clienteModo === "existente"
       ? {
@@ -99,5 +111,9 @@ export function buildAtendimentoRapidoInputFromFormV4(form: AtendimentoRapidoFor
     equipamento: marca || modelo ? { marca, modelo } : undefined,
     formaPagamento: form.formaPagamento,
     observacao: clean(form.observacao),
+    // Datas do SERVIÇO (resolvidas por `resolverDatasAtendimentoFormV3`). Nunca
+    // viram data do pagamento: o recebimento é registrado agora, no caixa atual.
+    ...(datas?.entrada ? { dataEntrada: datas.entrada.iso, dataEntradaMeta: datas.entrada.meta } : {}),
+    ...(datas?.conclusao ? { dataConclusao: datas.conclusao.iso, dataConclusaoMeta: datas.conclusao.meta } : {}),
   };
 }

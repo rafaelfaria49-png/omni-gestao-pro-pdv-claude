@@ -10,11 +10,26 @@
 
 import {
   MAX_LINHAS_POR_GRUPO_V3,
+  VALIDADE_PADRAO_DIAS,
   type OrcamentoGrupoV3,
   type OrcamentoLinhaKindV3,
   type ServicoV3,
   type VarianteV3,
 } from "./orcamento-model";
+import {
+  diasEntreCivisV3,
+  erroFatoFuturoV3,
+  fimDoDiaLojaIsoV3,
+  montarDataOperacionalV3,
+  somarDiasCivisV3,
+  validarDatasPropostaV3,
+  validarEntradaDataV3,
+  ROTULO_DATA_ENTRADA_V3,
+  ROTULO_DATA_ORCAMENTO_V3,
+  type CampoDataOperacionalV3,
+  type DataOperacionalMetaV3,
+  type ErroCampoDataV3,
+} from "./datas-operacionais-model";
 
 function uid(prefix: string): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -63,12 +78,121 @@ export interface OrcamentoRapidoGrupoInputV3 {
   variantes: OrcamentoRapidoVarianteInputV3[];
 }
 
+/**
+ * Datas da PROPOSTA (aditivo). Data do orçamento e validade não são entrada
+ * física: a entrada só existe quando o aparelho já está na loja.
+ */
+export interface OrcamentoRapidoDatasInputV3 {
+  /** Data da proposta (fato; pode ser anterior). */
+  dataProposta: { iso: string; meta: DataOperacionalMetaV3 };
+  /** Último dia de validade (`YYYY-MM-DD`; vale até o fim do dia na loja). */
+  validoAteDia: string;
+  /** Só quando "Aparelho já está na loja": entrada efetiva do aparelho. */
+  entradaAparelho?: { iso: string; meta: DataOperacionalMetaV3 } | null;
+}
+
 export interface OrcamentoRapidoInputV3 {
   cliente: OrcamentoRapidoClienteInputV3;
   aparelho: OrcamentoRapidoAparelhoInputV3;
   defeitoRelatado: string;
   itensFixos?: OrcamentoRapidoItemFixoInputV3[];
   grupo: OrcamentoRapidoGrupoInputV3;
+  /** Ausente = chamada antiga (comportamento anterior preservado). */
+  datas?: OrcamentoRapidoDatasInputV3;
+}
+
+/** Datas da proposta validadas, prontas para gravar. */
+export interface DatasOrcamentoRapidoV3 {
+  proposta: { iso: string; meta: DataOperacionalMetaV3 };
+  validoAteDia: string;
+  /** ISO do fim do dia da validade na loja (`orcamento.validoAte`). */
+  validoAte: string;
+  validadeDias: number;
+  entrada: { iso: string; meta: DataOperacionalMetaV3 } | null;
+}
+
+/**
+ * Valida as datas da proposta ANTES de qualquer efeito (cliente, OS, orçamento).
+ * Proposta é fato (nunca futura); validade ≥ proposta e pode já estar vencida
+ * (fica vencida — sem prorrogação); entrada só se informada, e nunca futura.
+ */
+export function normalizarDatasOrcamentoRapidoV3(
+  datas: OrcamentoRapidoDatasInputV3,
+  agora: Date = new Date(),
+): { ok: true; datas: DatasOrcamentoRapidoV3 } | { ok: false; erros: ErroCampoDataV3[] } {
+  const erros: ErroCampoDataV3[] = [];
+  const p = validarEntradaDataV3(datas?.dataProposta?.iso, datas?.dataProposta?.meta, ROTULO_DATA_ORCAMENTO_V3);
+  if (!p.ok || !p.meta) erros.push({ campo: "dataProposta", mensagem: p.ok ? `${ROTULO_DATA_ORCAMENTO_V3}: data inválida.` : p.mensagem });
+  const entradaBruta = datas?.entradaAparelho ?? null;
+  const e = entradaBruta ? validarEntradaDataV3(entradaBruta.iso, entradaBruta.meta, ROTULO_DATA_ENTRADA_V3) : null;
+  if (e && (!e.ok || !e.meta)) erros.push({ campo: "dataEntrada", mensagem: e.ok ? `${ROTULO_DATA_ENTRADA_V3}: data inválida.` : e.mensagem });
+  if (erros.length > 0 || !p.ok || !p.meta) return { ok: false, erros };
+
+  const validoAteDia = (datas.validoAteDia ?? "").trim();
+  const regras = validarDatasPropostaV3({ proposta: p.data, validoAteDia }, agora);
+  if (e && e.ok) {
+    const futura = erroFatoFuturoV3("dataEntrada", ROTULO_DATA_ENTRADA_V3, e.data, agora);
+    if (futura) regras.push(futura);
+  }
+  if (regras.length > 0) return { ok: false, erros: regras };
+  return {
+    ok: true,
+    datas: {
+      proposta: { iso: p.data.iso, meta: p.meta },
+      validoAteDia,
+      validoAte: fimDoDiaLojaIsoV3(validoAteDia),
+      validadeDias: Math.max(0, diasEntreCivisV3(p.meta.dia, validoAteDia)),
+      entrada: e && e.ok && e.meta ? { iso: e.data.iso, meta: e.meta } : null,
+    },
+  };
+}
+
+/** Campos do bloco "Datas e prazos" do formulário de orçamento. */
+export interface CamposDatasOrcamentoV3 {
+  /** Data do orçamento (só o dia). */
+  dataProposta: CampoDataOperacionalV3;
+  /** Válido até (`YYYY-MM-DD`). */
+  validoAteDia: string;
+  /** O operador mexeu na validade (não acompanha mais a data do orçamento). */
+  validadeEditada: boolean;
+  /** "Aparelho já está na loja" — só então existe entrada física. */
+  aparelhoNaLoja: boolean;
+  dataEntrada: CampoDataOperacionalV3;
+}
+
+/** Validade padrão: data do orçamento + `VALIDADE_PADRAO_DIAS` (mesma regra do envio). */
+export function validadePadraoDiaV3(dataPropostaDia: string): string {
+  return somarDiasCivisV3(dataPropostaDia, VALIDADE_PADRAO_DIAS);
+}
+
+/** Troca a data do orçamento; a validade acompanha enquanto não foi editada à mão. */
+export function alterarDataPropostaV3(campos: CamposDatasOrcamentoV3, dataProposta: CampoDataOperacionalV3): CamposDatasOrcamentoV3 {
+  const novo = { ...campos, dataProposta: { ...dataProposta, hora: "", horaAutomatica: false } };
+  if (!campos.validadeEditada && dataProposta.dia) novo.validoAteDia = validadePadraoDiaV3(dataProposta.dia) || campos.validoAteDia;
+  return novo;
+}
+
+/**
+ * Formulário → datas do input + erros por campo (mesma regra do servidor).
+ * A data do orçamento vale só pelo dia; a entrada só existe com o aparelho na loja.
+ */
+export function resolverDatasOrcamentoFormV3(
+  campos: CamposDatasOrcamentoV3,
+  agora: Date = new Date(),
+): { datas: OrcamentoRapidoDatasInputV3 | null; erros: ErroCampoDataV3[] } {
+  const erros: ErroCampoDataV3[] = [];
+  const p = montarDataOperacionalV3({ dia: campos.dataProposta.dia, hora: "" });
+  if (!p.ok) erros.push({ campo: "dataProposta", mensagem: p.mensagem });
+  const e = campos.aparelhoNaLoja ? montarDataOperacionalV3(campos.dataEntrada) : null;
+  if (e && !e.ok) erros.push({ campo: "dataEntrada", mensagem: e.mensagem });
+  if (erros.length > 0 || !p.ok || (e && !e.ok)) return { datas: null, erros };
+  const datas: OrcamentoRapidoDatasInputV3 = {
+    dataProposta: p.valor,
+    validoAteDia: campos.validoAteDia,
+    entradaAparelho: e && e.ok ? e.valor : null,
+  };
+  const r = normalizarDatasOrcamentoRapidoV3(datas, agora);
+  return r.ok ? { datas, erros: [] } : { datas: null, erros: r.erros };
 }
 
 export interface CriarOrcamentoRapidoResultV3 {

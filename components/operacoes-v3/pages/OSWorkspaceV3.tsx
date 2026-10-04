@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, Camera, CreditCard, FileText, Globe, History, ListChecks, Lock, Pencil, Plus, Printer, Search, ShieldCheck, Tag } from "lucide-react";
+import { ArrowLeft, CalendarClock, Camera, CreditCard, FileText, Globe, History, ListChecks, Lock, Pencil, Plus, Printer, Search, ShieldCheck, Tag } from "lucide-react";
 import type { OrdemServico } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { OSHeaderV3 } from "../components/OSHeaderV3";
@@ -20,6 +20,7 @@ import { ProducaoTecnicoV3 } from "../components/ProducaoTecnicoV3";
 import { OSHistoricoV3 } from "../components/OSHistoricoV3";
 import { OrcamentoPanelV3 } from "../components/OrcamentoPanelV3";
 import { PrintPreviewV3 } from "../components/print/PrintPreviewV3";
+import { CorrigirDatasModalV3 } from "../components/CorrigirDatasV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
 import { ButtonV3 } from "../components/UiV3";
 import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
@@ -111,6 +112,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
   const osStatus = statusV3FromOS(os);
   const recepcao = lerRecepcaoV3(os);
   const [printTipo, setPrintTipo] = useState<DocumentoTipoV3 | null>(null);
+  const [corrigirDatasAberto, setCorrigirDatasAberto] = useState(false);
 
   // Dados da empresa para o cabeçalho do documento (unidade ativa, com fallback honesto no helper).
   const empresaPrint = useMemo<EmpresaPrintInputV3>(
@@ -195,6 +197,9 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
       </ButtonV3>
       <ButtonV3 variant="outline" onClick={() => irPara("historico")}>
         <History className="h-4 w-4" aria-hidden /> Histórico
+      </ButtonV3>
+      <ButtonV3 variant="outline" onClick={() => setCorrigirDatasAberto(true)}>
+        <CalendarClock className="h-4 w-4" aria-hidden /> Corrigir datas
       </ButtonV3>
     </>
   );
@@ -378,6 +383,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             notificar={notificar}
             onImprimirEntrega={() => setPrintTipo("termo_entrega")}
             onAbrirRetornos={() => navigate("retornos")}
+            onCorrigirDatas={() => setCorrigirDatasAberto(true)}
           />
 
           {/* Fotos consolidadas na Prova de Entrada (SPRINT_3E.2) — AnexosV3 (placeholder) removido. */}
@@ -420,6 +426,17 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
         empresa={empresaPrint}
         onClose={() => setPrintTipo(null)}
         onPrinted={(t) => garantiaActions.registrarImpressao(t)}
+      />
+      <CorrigirDatasModalV3
+        open={corrigirDatasAberto}
+        os={os}
+        storeId={storeId}
+        onClose={() => setCorrigirDatasAberto(false)}
+        onSalvo={() => {
+          setCorrigirDatasAberto(false);
+          refresh();
+          notificar("Datas corrigidas.");
+        }}
       />
     </div>
   );

@@ -198,9 +198,29 @@ export function ContextColumn({ v }: { v: V4Vals }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}><span style={{ color: C.muted }}>Garantia</span><span style={{ color: C.body, fontWeight: 600 }}>{os.garantiaPrazo}</span></div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: C.subtle, marginTop: 12 }}><span>Entrada</span><span style={{ color: C.muted, fontWeight: 500 }}>{os.entrada}</span></div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: C.subtle, marginTop: 5 }}><span>Previsão / SLA</span><span style={{ color: C.successFg, fontWeight: 600 }}>{os.previsao}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11.5, color: C.subtle, marginTop: 12 }}><span>{os.entradaRotulo}</span><span style={{ color: C.muted, fontWeight: 500, textAlign: "right" }}>{os.entrada}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11.5, color: C.subtle, marginTop: 5 }}>
+          <span>Previsão de entrega</span>
+          <span style={{ color: os.previsaoVencida ? C.warnFg : os.previsao === "Não informada" ? C.muted : C.successFg, fontWeight: 600, textAlign: "right" }}>
+            {os.previsao}{os.previsaoVencida ? " · vencida" : ""}
+          </span>
+        </div>
+        {os.prazoInterno ? (
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11.5, color: C.subtle, marginTop: 5 }}><span>Prazo interno</span><span style={{ color: C.muted, fontWeight: 500, textAlign: "right" }}>{os.prazoInterno}</span></div>
+        ) : null}
+        {os.entrega ? (
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11.5, color: C.subtle, marginTop: 5 }}><span>Entrega</span><span style={{ color: C.muted, fontWeight: 500, textAlign: "right" }}>{os.entrega}</span></div>
+        ) : null}
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: C.subtle, marginTop: 5 }}><span>Técnico</span><span style={{ color: C.muted, fontWeight: 500 }}>{os.tecnico}</span></div>
+        {v.realOS ? (
+          <button
+            type="button"
+            onClick={v.openCorrigirDatas}
+            style={{ marginTop: 9, padding: 0, border: "none", background: "transparent", color: C.primaryHover, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+          >
+            Corrigir datas
+          </button>
+        ) : null}
       </div>
     </aside>
   );

@@ -45,14 +45,14 @@ describe("lerDadosBasicosV3 (reader honesto)", () => {
     });
   });
 
-  it("lê defeito/prioridade/sla do top-level + recepção do aberturaV3", () => {
+  it("lê defeito/prioridade do top-level + recepção (previsão COMBINADA) do aberturaV3", () => {
     const os = {
       equipamento: { defeitoRelatado: "Não liga" },
       prioridade: "alta",
       origem: "manual", // origem exclusiva do V2 → não vira origem rica
-      sla: { prazo: "2026-07-01T12:00:00.000Z", status: "ok" },
+      sla: { prazo: "2026-07-03T12:00:00.000Z", status: "ok" },
       aberturaV3: {
-        recepcao: { recebidoPor: "Ana", localFisico: "bancada", origem: "garantia" },
+        recepcao: { recebidoPor: "Ana", localFisico: "bancada", origem: "garantia", previsaoEntrega: "2026-07-01T12:00:00.000Z" },
         observacoesInternas: "Cliente VIP",
       },
     } as unknown as OrdemServico;
@@ -94,11 +94,30 @@ describe("seedDadosBasicos (defaults do form)", () => {
     });
   });
 
-  it("preenche a previsão local a partir do sla.prazo", () => {
+  it("preenche a previsão local a partir da previsão informada (recepção)", () => {
     const iso = localInputToIso("2026-07-01T14:30");
-    const os = { sla: { prazo: iso } } as unknown as OrdemServico;
+    const os = { aberturaV3: { recepcao: { previsaoEntrega: iso } }, sla: { prazo: iso } } as unknown as OrdemServico;
     const e = seedDadosBasicos(os);
     expect(e.previsaoLocal).toBe("2026-07-01T14:30");
+  });
+
+  // OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001: o prazo interno automático (`sla.prazo`
+  // sem previsão informada) nunca é apresentado nem salvo como previsão combinada.
+  it("sla.prazo sozinho (prazo interno) não vira previsão no formulário", () => {
+    const os = { sla: { prazo: localInputToIso("2026-07-01T14:30"), origemV3: "automatico" } } as unknown as OrdemServico;
+    expect(lerDadosBasicosV3(os).previsaoEntrega).toBe("");
+    expect(seedDadosBasicos(os).previsaoLocal).toBe("");
+  });
+
+  it("previsão só-dia volta como YYYY-MM-DD (sem a âncora técnica como horário)", () => {
+    const os = {
+      aberturaV3: { recepcao: { previsaoEntrega: "2026-07-01T15:00:00.000Z", previsaoEntregaMeta: { precisao: "dia", dia: "2026-07-01" } } },
+    } as unknown as OrdemServico;
+    expect(seedDadosBasicos(os).previsaoLocal).toBe("2026-07-01");
+    expect(toDadosBasicosInput(seedDadosBasicos(os))).toMatchObject({
+      previsaoEntrega: "2026-07-01T15:00:00.000Z",
+      previsaoEntregaMeta: { precisao: "dia", dia: "2026-07-01" },
+    });
   });
 });
 

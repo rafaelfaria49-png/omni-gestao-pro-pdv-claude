@@ -18,6 +18,10 @@ export interface ComercialV4 {
   tipo: TipoRegistroComercialV4;
   statusComercial: StatusComercialOrcamentoV4;
   origemAtendimento?: string;
+  /** Data REAL da proposta (ISO; pode ser anterior ao cadastro). A validade vive em `orcamento.validoAte`. */
+  dataProposta?: string;
+  /** Precisão da data da proposta (`{ precisao: "dia", dia }`). */
+  dataPropostaMeta?: { precisao: "dia" | "data_hora"; dia: string };
   validadeDias?: number;
   prazoEstimado?: string;
   observacaoCliente?: string;

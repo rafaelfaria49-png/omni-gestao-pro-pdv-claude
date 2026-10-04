@@ -44,6 +44,8 @@ describe("montarOrcamentoClienteViewV4 — whitelist estrita de chaves", () => {
         "loja",
         "osNumero",
         "dataCriacao",
+        // OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001: data da proposta (texto) — client-safe.
+        "dataPropostaTexto",
         "validade",
         "cliente",
         "aparelho",
@@ -255,7 +257,8 @@ describe("montarOrcamentoClienteViewV4 — validade honesta", () => {
     const view = montarOrcamentoClienteViewV4(
       mkOS({ ...ORCAMENTO_BASE, validoAte: "2026-02-01T00:00:00.000Z", servicos: [{ id: "s1", descricao: "X", valor: 10 }], pecas: [] }),
     )!;
-    expect(view.validade).toEqual({ validoAte: "2026-02-01T00:00:00.000Z" });
+    // Validade formatada no fuso da loja (00:00Z = 31/01 21:00 em São Paulo) e marcada como vencida.
+    expect(view.validade).toEqual({ validoAte: "2026-02-01T00:00:00.000Z", validoAteTexto: "31/01/2026", vencida: true });
   });
 
   it("sem validoAte (ainda não enviado): usa texto de política com o prazo padrão, nunca uma data inventada", () => {

@@ -55,6 +55,7 @@ import {
 } from "./orcamento-model";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { salvarGarantiaOSV3 } from "./garantia-actions";
+import { isoInstanteValidoV3 } from "./datas-operacionais-model";
 
 /** Materializa o rascunho a partir dos itens da OS (reuso seguro do @/api/os). */
 export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise<OrdemServico> {
@@ -169,6 +170,14 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
     snapshot: atual,
   };
 
+  // Validade: definida uma única vez (criação da proposta); editar itens nunca a reinicia.
+  let validoAte = atual.validoAte;
+  if (input.validoAte !== undefined) {
+    if (atual.validoAte) throw new Error("A validade deste orçamento já foi definida. Use “Corrigir datas” para alterá-la.");
+    if (!isoInstanteValidoV3(input.validoAte)) throw new Error("Validade do orçamento inválida.");
+    validoAte = new Date(input.validoAte).toISOString();
+  }
+
   const editado = recalcOrcamentoV3({
     ...atual,
     servicos: servicosInput,
@@ -178,6 +187,7 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
     // GOAL 026: contrato oficial de grupos — ausente preserva os grupos já
     // existentes (chamadores que não editam grupos, ex. editor de itens V4).
     gruposV3: input.gruposV3 ?? atual.gruposV3,
+    ...(validoAte ? { validoAte } : {}),
     atualizadoEm: nowIso(),
   });
 
@@ -277,8 +287,11 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
   const enviado = recalcOrcamentoV3({
     ...atual,
     status: "enviado",
+    // Evento REAL do envio (nunca a data retroativa da proposta).
     enviadoEm: atual.enviadoEm ?? nowIso(),
-    validoAte: new Date(Date.now() + VALIDADE_PADRAO_DIAS * 86400000).toISOString(),
+    // Validade já definida (na proposta ou num envio anterior) é preservada:
+    // reenviar nunca prorroga em silêncio; sem validade, vale o padrão a partir de agora.
+    validoAte: atual.validoAte ?? new Date(Date.now() + VALIDADE_PADRAO_DIAS * 86400000).toISOString(),
     atualizadoEm: nowIso(),
   });
   const reenvio = atual.status === "enviado";
