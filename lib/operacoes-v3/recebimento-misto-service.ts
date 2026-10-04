@@ -47,6 +47,7 @@ import {
 } from "./payment-model";
 import {
   assinaturaRecebimentoMistoV3,
+  conteudoRecebimentoCanonicoV3,
   deCentavosV3,
   formatarCentavosBRLV3,
   formatarVencimentoV3,
@@ -128,20 +129,13 @@ function marcadorDaOperacao(payload: unknown, operacaoId: string): Record<string
 }
 
 /**
- * Identidade de conteúdo de um recebimento CANÔNICO (`receberOSV3`): mesma `operacaoId`
- * com outro conteúdo econômico é conflito, nunca replay.
+ * Identidade de conteúdo de um recebimento CANÔNICO (`receberOSV3`) — a mesma representação
+ * econômica que a tela usa para reaproveitar a chave (`conteudoRecebimentoCanonicoV3`): mesma
+ * `operacaoId` com outro conteúdo econômico é conflito, nunca replay.
  */
-export function fingerprintRecebimentoCanonicoV3(p: {
-  storeId: string;
-  osId: string;
-  sessaoId: string;
-  linhas: SplitLinhaV3[];
-  intencao?: string | null;
-  observacao?: string | null;
-}): string {
-  const linhas = p.linhas.map((l) => [l.forma, Math.round(money(l.valor) * 100)]);
-  const canonico = JSON.stringify([p.storeId, p.osId, p.sessaoId, linhas, p.intencao ?? null, (p.observacao ?? "").trim()]);
-  return createHash("sha256").update(canonico).digest("hex");
+export function fingerprintRecebimentoCanonicoV3(p: { storeId: string; osId: string; sessaoId: string; linhas: SplitLinhaV3[] }): string {
+  const conteudo = conteudoRecebimentoCanonicoV3({ sessaoId: p.sessaoId, linhas: p.linhas });
+  return createHash("sha256").update(JSON.stringify([p.storeId, p.osId, conteudo])).digest("hex");
 }
 
 // ─── travas dentro da transação ───────────────────────────────────────────────
@@ -288,39 +282,128 @@ async function replayDaOperacao(
   return montarReplay(tx, ctx, n, titulo, marcador);
 }
 
-/**
- * SÓ o replay: a confirmação com esta `operacaoId` já está gravada? Para quando a operação
- * NOVA seria recusada antes da transação (período fechado, vencimento que virou passado) —
- * reenviar uma confirmação já gravada continua devolvendo o que foi gravado, nunca uma
- * recusa que faria a tela trocar de chave. `null` = nada gravado com esta chave.
- */
-export async function buscarRecebimentoMistoGravadoV3(
+// ─── resultado TERMINAL da chave ──────────────────────────────────────────────
+
+/** Recusa de UMA confirmação mista (código + mensagem para a tela). */
+export interface RecusaMistaV3 {
+  code: RecebimentoMistoErroCodigoV3;
+  mensagem: string;
+  saldoAtual?: number;
+}
+
+export type DecisaoRecebimentoMistoV3 =
+  | { tipo: "gravada"; resultado: ResultadoRecebimentoMistoV3 }
+  | { tipo: "recusada"; recusa: RecusaMistaV3 };
+
+/** Recusas terminais por chave, no payload da OS (as mais recentes). */
+const RECUSAS_CAMPO = "recebimentoMistoRecusasV3";
+const RECUSAS_MAX = 30;
+
+interface RecusaTerminalGravadaV3 extends RecusaMistaV3 {
+  operacaoId: string;
+  requestFingerprint: string;
+  at: string;
+}
+
+function recusasGravadas(payload: unknown): RecusaTerminalGravadaV3[] {
+  const lista = isRecord(payload) ? payload[RECUSAS_CAMPO] : null;
+  return Array.isArray(lista) ? (lista.filter(isRecord) as unknown as RecusaTerminalGravadaV3[]) : [];
+}
+
+function recusaDe(r: RecusaMistaV3): RecusaMistaV3 {
+  return r.saldoAtual === undefined ? { code: r.code, mensagem: r.mensagem } : { code: r.code, mensagem: r.mensagem, saldoAtual: r.saldoAtual };
+}
+
+/** Grava a recusa como o resultado TERMINAL da chave, no payload da OS travada. */
+async function gravarRecusaTerminal(
   tx: RecebimentoMistoTxV3,
   ctx: ContextoRecebimentoMistoV3,
   n: RecebimentoMistoNormalizadoV3,
-): Promise<ResultadoRecebimentoMistoV3 | null> {
-  await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(ctx.storeId, ctx.osId));
-  return replayDaOperacao(tx, ctx, n);
+  requestFingerprint: string,
+  recusa: RecusaMistaV3,
+): Promise<RecusaMistaV3> {
+  // Sem OS desta loja, nada jamais pode ser gravado com a chave: a recusa já é terminal.
+  if (!(await travarOS(tx, ctx.storeId, ctx.osId))) return recusaDe(recusa);
+  const row = await tx.ordemServico.findFirst({ where: { id: ctx.osId, storeId: ctx.storeId }, select: { id: true, payload: true } });
+  if (!row || !isRecord(row.payload)) return recusaDe(recusa);
+  const registro: RecusaTerminalGravadaV3 = { ...recusaDe(recusa), operacaoId: n.operacaoId, requestFingerprint, at: ctx.agora };
+  const outras = recusasGravadas(row.payload).filter((r) => r.operacaoId !== n.operacaoId);
+  const payload = { ...row.payload, [RECUSAS_CAMPO]: [...outras, registro].slice(-RECUSAS_MAX) };
+  await tx.ordemServico.update({ where: { id: row.id }, data: { payload: payload as unknown as Prisma.InputJsonValue } });
+  return recusaDe(recusa);
+}
+
+/**
+ * Decide UMA confirmação mista sob a trava da OS, de forma TERMINAL por `operacaoId`: já
+ * gravada → replay; já recusada → a MESMA recusa; recusa prévia (período fechado, vencimento
+ * passado) → recusa; senão executa. Toda recusa decidida aqui é gravada na OS como o
+ * resultado da chave — outra requisição com a mesma chave (inclusive a original ainda em voo)
+ * recebe a mesma recusa e nunca grava depois. Um savepoint desfaz só a tentativa recusada.
+ */
+export async function decidirRecebimentoMistoOSV3(
+  tx: RecebimentoMistoTxV3,
+  ctx: ContextoRecebimentoMistoV3,
+  n: RecebimentoMistoNormalizadoV3,
+  recusaPrevia: RecusaMistaV3 | null,
+): Promise<DecisaoRecebimentoMistoV3> {
+  const { storeId, osId } = ctx;
+  await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(storeId, osId));
+  const replay = await replayDaOperacao(tx, ctx, n);
+  if (replay) return { tipo: "gravada", resultado: replay };
+
+  const requestFingerprint = fingerprintRecebimentoMistoV3({ storeId, osId }, n);
+  const os = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const anterior = recusasGravadas(os?.payload).find((r) => r.operacaoId === n.operacaoId);
+  if (anterior) {
+    if (anterior.requestFingerprint !== requestFingerprint) {
+      throw new RecebimentoMistoErroV3(
+        "idempotencia_conflito",
+        "Esta confirmação já foi usada com outros valores. Atualize a OS antes de lançar outra operação.",
+      );
+    }
+    return { tipo: "recusada", recusa: recusaDe(anterior) };
+  }
+  if (recusaPrevia) return { tipo: "recusada", recusa: await gravarRecusaTerminal(tx, ctx, n, requestFingerprint, recusaPrevia) };
+
+  await tx.$executeRaw`SAVEPOINT ops_v3_misto_execucao`;
+  try {
+    return { tipo: "gravada", resultado: await executarSobATrava(tx, ctx, n, requestFingerprint) };
+  } catch (e) {
+    // Erro inesperado: aborta a transação inteira (resultado incerto para a tela).
+    if (!isRecebimentoMistoErroV3(e)) throw e;
+    await tx.$executeRaw`ROLLBACK TO SAVEPOINT ops_v3_misto_execucao`;
+    const recusa: RecusaMistaV3 = { code: e.code, mensagem: e.message, saldoAtual: e.saldoAtual };
+    return { tipo: "recusada", recusa: await gravarRecusaTerminal(tx, ctx, n, requestFingerprint, recusa) };
+  }
 }
 
 // ─── execução ─────────────────────────────────────────────────────────────────
 
+/** Trava + replay + execução; recusa é LANÇADA (rollback). A action usa `decidirRecebimentoMistoOSV3`. */
 export async function executarRecebimentoMistoOSV3(
   tx: RecebimentoMistoTxV3,
   ctx: ContextoRecebimentoMistoV3,
   n: RecebimentoMistoNormalizadoV3,
 ): Promise<ResultadoRecebimentoMistoV3> {
-  const { storeId, osId } = ctx;
-  const localKey = localKeyContaReceberOSV3(storeId, osId);
-  const requestFingerprint = fingerprintRecebimentoMistoV3({ storeId, osId }, n);
-
   // 1. Serialização por OS: PRIMEIRA instrução, antes de qualquer leitura de estado.
-  await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(storeId, osId));
+  await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(ctx.storeId, ctx.osId));
 
   // 2. Replay / conflito pela identidade persistida no ledger do título. Vem antes
   // da sessão: repetir uma confirmação já gravada continua válido com o caixa fechado.
   const replay = await replayDaOperacao(tx, ctx, n);
   if (replay) return replay;
+  return executarSobATrava(tx, ctx, n, fingerprintRecebimentoMistoV3({ storeId: ctx.storeId, osId: ctx.osId }, n));
+}
+
+/** Passos 3–9, já sob a trava da OS e sem registro desta chave. */
+async function executarSobATrava(
+  tx: RecebimentoMistoTxV3,
+  ctx: ContextoRecebimentoMistoV3,
+  n: RecebimentoMistoNormalizadoV3,
+  requestFingerprint: string,
+): Promise<ResultadoRecebimentoMistoV3> {
+  const { storeId, osId } = ctx;
+  const localKey = localKeyContaReceberOSV3(storeId, osId);
 
   // 3. Caixa aberto da loja — exigido só quando há dinheiro entrando agora.
   let sessaoId: string | null = null;

@@ -3,6 +3,7 @@ import type { OrdemServico } from "@/types/os";
 import {
   assinaturaRecebimentoMistoV3,
   avaliarRascunhoMistoV3,
+  conteudoRecebimentoCanonicoV3,
   centavosEstritosV3,
   dataCivilValidaV3,
   formatarVencimentoV3,
@@ -261,5 +262,24 @@ describe("comprovante misto — nunca 'Quitação de R$ 400,00'", () => {
     expect(c.tipoComprovante).toBe("formalizacao_a_prazo");
     expect(c.valorPago).toBe(0);
     expect(c.formas).toEqual([]);
+  });
+});
+
+// R4/P1: a identidade do recebimento canônico é ECONÔMICA — igual na tela e no servidor.
+describe("conteudoRecebimentoCanonicoV3", () => {
+  it("forma única e split com as mesmas formas/valores são o MESMO recebimento, em qualquer ordem", () => {
+    const unica = conteudoRecebimentoCanonicoV3({ sessaoId: "s1", forma: "pix", valor: 100 });
+    expect(conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "pix", valor: 100 }] })).toBe(unica);
+    const ab = conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "pix", valor: 50 }, { forma: "dinheiro", valor: 50 }] });
+    const ba = conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "dinheiro", valor: 50 }, { forma: "pix", valor: 50 }] });
+    expect(ab).toBe(ba);
+  });
+
+  it("linha zerada não conta; outra sessão, outra forma ou outro valor é outro recebimento", () => {
+    const base = conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "pix", valor: 100 }] });
+    expect(conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "pix", valor: 100 }, { forma: "dinheiro", valor: 0 }] })).toBe(base);
+    expect(conteudoRecebimentoCanonicoV3({ sessaoId: "s2", linhas: [{ forma: "pix", valor: 100 }] })).not.toBe(base);
+    expect(conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "debito", valor: 100 }] })).not.toBe(base);
+    expect(conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "pix", valor: 100.01 }] })).not.toBe(base);
   });
 });

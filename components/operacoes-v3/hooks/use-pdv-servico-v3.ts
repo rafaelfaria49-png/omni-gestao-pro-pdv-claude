@@ -23,7 +23,7 @@ import {
   type RegistrarRecebimentoMistoResultV3,
 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import { aPrazoVisivelV3, type APrazoV3, type ComprovanteReciboV3, type PagamentoV3 } from "@/lib/operacoes-v3/payment-model";
-import { gerarOperacaoIdV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
+import { conteudoRecebimentoCanonicoV3, gerarOperacaoIdV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 
 export interface PdvServicoState {
   pagamento: PagamentoV3 | null;
@@ -101,21 +101,35 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [aPrazo, setAPrazo] = useState<APrazoV3 | null>(null);
   const [registrandoMisto, setRegistrandoMisto] = useState(false);
-  const [pendenciaMisto, setPendenciaMisto] = useState<PendenciaRecebimentoMistoV3 | null>(null);
+  // Confirmações mistas com resultado DESCONHECIDO, uma por loja/OS: trocar de OS (ou ter
+  // outra incerteza em outra OS) nunca descarta a pendência desta.
+  const [pendenciasMisto, setPendenciasMisto] = useState<Record<string, PendenciaRecebimentoMistoV3>>({});
   const reqRef = useRef(0);
   const activeKeyRef = useRef(targetKey);
   // Travas SÍNCRONAS (antes do primeiro await): duplo clique nunca dispara 2 envios.
   const recebendoRef = useRef(false);
   const mistoEmVooRef = useRef(false);
-  const pendenciaMistoRef = useRef<PendenciaRecebimentoMistoV3 | null>(null);
-  // Recebimentos sem resultado confirmado, por loja/OS/conteúdo: reenviar o MESMO conteúdo
-  // reaproveita a chave — se a tentativa original gravou (resposta perdida), o servidor
-  // devolve o já gravado. Só o sucesso DAQUELE conteúdo libera a chave; outro recebimento
-  // no meio do caminho não a descarta.
+  const pendenciasMistoRef = useRef<Record<string, PendenciaRecebimentoMistoV3>>({});
+  // Recebimentos sem resultado confirmado, por loja/OS + conteúdo ECONÔMICO (o mesmo do
+  // servidor: forma única e split iguais são o mesmo recebimento): reenviar reaproveita a
+  // chave — se a tentativa original gravou (resposta perdida), o servidor devolve o já
+  // gravado. Só o sucesso DAQUELE conteúdo libera a chave; outro recebimento no meio não.
   const receberPendentesRef = useRef(new Map<string, string>());
+  // Saldo que a tela mostra para a OS carregada: vai junto do recebimento (concorrência
+  // otimista) — gravar sobre um saldo que o operador não viu é recusado no servidor.
+  const saldoVistoRef = useRef<{ key: string; saldo: number } | null>(null);
   // Atualização síncrona no render: a primeira renderização da OS B já mascara
   // qualquer snapshot que ainda pertença à OS A, antes mesmo de o effect rodar.
   activeKeyRef.current = targetKey;
+  saldoVistoRef.current = loadedKey !== null && pagamento ? { key: loadedKey, saldo: pagamento.saldo } : null;
+
+  const definirPendenciaMisto = useCallback((key: string, pendencia: PendenciaRecebimentoMistoV3 | null) => {
+    const proximas = { ...pendenciasMistoRef.current };
+    if (pendencia) proximas[key] = pendencia;
+    else delete proximas[key];
+    pendenciasMistoRef.current = proximas;
+    setPendenciasMisto(proximas);
+  }, []);
 
   useEffect(() => {
     const sid = sidAtual;
@@ -165,14 +179,15 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       // Duplo clique: o 2º chamado volta antes de qualquer await (sem 2º recebimento).
       if (recebendoRef.current) return false;
       recebendoRef.current = true;
-      const conteudo = JSON.stringify([sid, id, { ...input, operacaoId: undefined }]);
+      const key = JSON.stringify([sid, id]);
+      const conteudo = JSON.stringify([sid, id, conteudoRecebimentoCanonicoV3(input)]);
       const operacaoId = input.operacaoId ?? receberPendentesRef.current.get(conteudo) ?? gerarOperacaoIdV3();
+      const saldoEsperado = input.saldoEsperado ?? (saldoVistoRef.current?.key === key ? saldoVistoRef.current.saldo : undefined);
       setRecebendo(true);
       setError(null);
       try {
-        const res = await receberOSV3(sid, id, { ...input, operacaoId });
+        const res = await receberOSV3(sid, id, { ...input, operacaoId, saldoEsperado });
         receberPendentesRef.current.delete(conteudo);
-        const key = JSON.stringify([sid, id]);
         if (activeKeyRef.current === key) {
           setPagamento(res.pagamento);
           // O servidor reconcilia o "a prazo" com o saldo real: a tela acompanha.
@@ -185,10 +200,22 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         return true;
       } catch (e) {
         receberPendentesRef.current.set(conteudo, operacaoId);
-        if (activeKeyRef.current === JSON.stringify([sid, id])) {
-          setErrorKey(JSON.stringify([sid, id]));
+        if (activeKeyRef.current === key) {
+          setErrorKey(key);
           setError(e instanceof Error ? e.message : "Não foi possível registrar o recebimento.");
         }
+        // Resultado incerto ou saldo mudou: relê o saldo REAL (mantendo o erro na tela) para o
+        // operador ver se o recebimento entrou antes de confirmar de novo.
+        lerPagamentoOSV3(sid, id)
+          .then((atual) => {
+            if (activeKeyRef.current !== key) return;
+            const { sessao: s, aPrazo: ap, ...pag } = atual;
+            setPagamento(pag);
+            setSessao(s);
+            setAPrazo(ap ?? null);
+            setLoadedKey(key);
+          })
+          .catch(() => undefined);
         return false;
       } finally {
         recebendoRef.current = false;
@@ -209,18 +236,17 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       const key = JSON.stringify([sid, id]);
       // Resultado anterior DESCONHECIDO nesta OS: reenvia exatamente a mesma operação
       // (mesma chave) para reconciliar — nunca gera chave nova por conta própria.
-      const pendente = pendenciaMistoRef.current?.key === key ? pendenciaMistoRef.current : null;
+      const pendente = pendenciasMistoRef.current[key] ?? null;
       const input: RegistrarRecebimentoMistoInputV3 = pendente ? pendente.input : { ...dados, operacaoId: gerarOperacaoIdV3() };
       setRegistrandoMisto(true);
       setError(null);
       try {
         const res = await registrarRecebimentoMistoOSV3(sid, id, input);
-        // A chave de uma operação incerta só é liberada quando o servidor RESOLVE a identidade:
-        // gravada (ok) ou conferida como não gravada. Recusa sem conferência (sessão,
-        // permissão) mantém a pendência — trocar de chave poderia lançar a operação de novo.
-        if ((res.ok || res.naoRegistrada) && pendenciaMistoRef.current?.operacaoId === input.operacaoId) {
-          pendenciaMistoRef.current = null;
-          setPendenciaMisto(null);
+        // A chave de uma operação incerta só é liberada quando o servidor dá o resultado
+        // TERMINAL dela: gravada (ok) ou recusada de vez (`naoRegistrada`). Recusa sem
+        // conferência (sessão, permissão, conflito transitório) mantém a pendência.
+        if ((res.ok || res.naoRegistrada) && pendenciasMistoRef.current[key]?.operacaoId === input.operacaoId) {
+          definirPendenciaMisto(key, null);
         }
         if (!res.ok) {
           if (activeKeyRef.current === key) {
@@ -239,9 +265,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         }
         return { status: "ok", resultado: res };
       } catch {
-        const pendencia: PendenciaRecebimentoMistoV3 = { key, operacaoId: input.operacaoId, input };
-        pendenciaMistoRef.current = pendencia;
-        setPendenciaMisto(pendencia);
+        definirPendenciaMisto(key, { key, operacaoId: input.operacaoId, input });
         const mensagem =
           "Não foi possível confirmar se o registro foi gravado. Reenvie a MESMA operação para verificar — não haverá lançamento em dobro.";
         if (activeKeyRef.current === key) {
@@ -254,7 +278,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         setRegistrandoMisto(false);
       }
     },
-    [storeId, osId],
+    [storeId, osId, definirPendenciaMisto],
   );
 
   const estornar = useCallback(
@@ -304,7 +328,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
     limparRecibo,
     aPrazo: carregadoParaAlvo ? aPrazo : null,
     registrandoMisto,
-    pendenciaMisto: pendenciaMisto && pendenciaMisto.key === targetKey ? pendenciaMisto : null,
+    pendenciaMisto: targetKey !== null ? (pendenciasMisto[targetKey] ?? null) : null,
     registrarMisto,
   };
 }

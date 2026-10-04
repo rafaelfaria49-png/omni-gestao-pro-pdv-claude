@@ -442,3 +442,23 @@ export function gerarOperacaoIdV3(): string {
   if (c?.randomUUID) return c.randomUUID();
   return `op-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
+
+/**
+ * Conteúdo ECONÔMICO de um recebimento canônico (`receberOSV3`): sessão de caixa + formas e
+ * valores, em qualquer ordem. É a identidade de UMA confirmação, igual na tela e no servidor:
+ * forma única e split com as mesmas formas/valores são o MESMO recebimento; rótulos
+ * (intenção, observação) e o saldo visto não mudam a identidade.
+ */
+export function conteudoRecebimentoCanonicoV3(input: {
+  sessaoId?: string | null;
+  linhas?: ReadonlyArray<{ forma: string; valor: unknown }> | null;
+  forma?: string | null;
+  valor?: unknown;
+}): string {
+  const brutas = Array.isArray(input.linhas) && input.linhas.length > 0 ? input.linhas : input.forma ? [{ forma: input.forma, valor: input.valor }] : [];
+  const linhas = brutas
+    .map((l) => [String(l.forma ?? ""), Math.round(Number(l.valor) * 100)] as [string, number])
+    .filter(([, centavos]) => Number.isFinite(centavos) && centavos > 0)
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
+  return JSON.stringify({ v: 1, sessaoId: (input.sessaoId ?? "").trim(), linhas });
+}

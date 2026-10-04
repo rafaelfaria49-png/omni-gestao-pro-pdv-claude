@@ -378,6 +378,78 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: /Reenviar a mesma operação/ })).toBeNull());
   });
 
+  // R4/P1: pendência do misto é POR OS — uma segunda incerteza em outra OS não apaga a primeira.
+  it("misto incerto em DUAS OS: cada uma guarda a sua pendência; voltar para A reenvia a operação de A", async () => {
+    mocks.registrarRecebimentoMistoOSV3.mockImplementation(async () => {
+      throw new Error("fetch failed");
+    });
+    montar([os("os-a", "OS-A"), os("os-b", "OS-B")], "os-a");
+    await prepararDebito350MaisAPrazo();
+    fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: VENC } });
+    fireEvent.click(screen.getByRole("button", { name: /Registrar R\$\s350,00/ }));
+    await screen.findByRole("alert");
+
+    fireEvent.change(screen.getByDisplayValue(/OS-A/), { target: { value: "os-b" } });
+    await screen.findByRole("heading", { name: /OS-B · Cliente OS-B/ });
+    expect(screen.queryByRole("button", { name: /Reenviar a mesma operação/ })).toBeNull();
+    // O modo dividido continua ligado na troca de OS (só os valores são zerados).
+    await waitFor(() => expect(txt(document.body.textContent)).toContain("R$ 400,00"));
+    fireEvent.change(screen.getByLabelText("Forma da linha 1"), { target: { value: "debito" } });
+    fireEvent.change(screen.getByLabelText("Valor da linha 1"), { target: { value: "350" } });
+    fireEvent.click(screen.getByRole("button", { name: /A prazo \/ crediário/ }));
+    fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: VENC } });
+    fireEvent.click(screen.getByRole("button", { name: /Registrar R\$\s350,00/ }));
+    await screen.findByRole("button", { name: /Reenviar a mesma operação/ });
+    expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(2);
+
+    mocks.registrarRecebimentoMistoOSV3.mockImplementation(async () => okMisto({ jaRegistrado: true }));
+    fireEvent.change(screen.getByDisplayValue(/OS-B/), { target: { value: "os-a" } });
+    await screen.findByRole("heading", { name: /OS-A · Cliente OS-A/ });
+    fireEvent.click(await screen.findByRole("button", { name: /Reenviar a mesma operação/ }));
+    await waitFor(() => expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(3));
+    const [daA, daB, reenvio] = mocks.registrarRecebimentoMistoOSV3.mock.calls;
+    expect([daA![1], daB![1], reenvio![1]]).toEqual(["os-a", "os-b", "os-a"]);
+    expect(reenvio![2]).toEqual(daA![2]);
+    expect((reenvio![2] as { operacaoId: string }).operacaoId).not.toBe((daB![2] as { operacaoId: string }).operacaoId);
+  });
+
+  // R4/P1: a chave do recebimento comum é o conteúdo ECONÔMICO — o formato da tela não importa.
+  it("recebimento comum incerto: reenviar o MESMO conteúdo em split reaproveita a chave; saldo visto vai junto e é relido", async () => {
+    mocks.receberOSV3
+      .mockImplementationOnce(async () => {
+        throw new Error("Failed to fetch");
+      })
+      .mockImplementationOnce(async () => ({
+        os: {},
+        pagamento: { total: 400, recebido: 100, saldo: 300, status: "parcial" },
+        valorRecebido: 100,
+        op: "parcial",
+        recibo: okMisto().recibo,
+        jaRegistrado: true,
+      }));
+    montar();
+    await screen.findByText(/Saldo a receber/);
+    await waitFor(() => expect(txt(document.body.textContent)).toContain("R$ 400,00"));
+    fireEvent.click(screen.getByRole("button", { name: /^PIX$/ }));
+    fireEvent.change(screen.getByLabelText(/Valor a receber/), { target: { value: "100" } });
+    await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /^Receber · / }))).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: /^Receber · / }));
+    await screen.findByText(/Failed to fetch/);
+    // Depois da falha a tela relê o saldo real (o recebimento pode ter entrado).
+    await waitFor(() => expect(mocks.lerPagamentoOSV3).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByLabelText(/Pagamento dividido/));
+    fireEvent.change(screen.getByLabelText("Forma da linha 1"), { target: { value: "pix" } });
+    fireEvent.change(screen.getByLabelText("Valor da linha 1"), { target: { value: "100" } });
+    await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /^Receber · / }))).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: /^Receber · / }));
+    await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
+    const [unica, split] = mocks.receberOSV3.mock.calls.map((c) => c[2] as Record<string, unknown>);
+    expect(unica).toMatchObject({ valor: 100, forma: "pix", sessaoId: "sessao-1", saldoEsperado: 400 });
+    expect(split).toMatchObject({ linhas: [{ forma: "pix", valor: 100 }], sessaoId: "sessao-1", saldoEsperado: 400 });
+    expect(split!.operacaoId).toBe(unica!.operacaoId);
+  });
+
   // R3/P2: depois de um recebimento comum, o cartão "Saldo a prazo" acompanha o servidor.
   it("recebimento comum depois do misto atualiza o cartão a prazo (R$30) e o encerra na quitação", async () => {
     const aPrazoV3 = (valor: number, status = "pendente") => ({

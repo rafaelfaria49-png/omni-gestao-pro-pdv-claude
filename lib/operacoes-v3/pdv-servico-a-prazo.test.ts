@@ -105,9 +105,13 @@ describe("registrarRecebimentoMistoOSV3 — imediato + a prazo numa única trans
   const body = extractFunctionBody(source, "registrarRecebimentoMistoOSV3");
   const service = readFileSync(join(DIR, "recebimento-misto-service.ts"), "utf8");
 
-  it("delega a UMA prisma.$transaction com o serviço transacional", () => {
+  it("delega a UMA prisma.$transaction com o serviço transacional (decisão terminal por chave)", () => {
     expect(body).toContain("prisma.$transaction(");
-    expect(body).toContain("executarRecebimentoMistoOSV3(");
+    expect(body).toContain("decidirRecebimentoMistoOSV3(");
+    // A decisão (replay, recusa terminal, execução) acontece inteira sob a trava da OS.
+    expect(service).toMatch(/export async function decidirRecebimentoMistoOSV3[\s\S]*?recebimentoLoteAdvisoryLock\(tx, chaveLockRecebimentoMistoV3\(storeId, osId\)\);\s*const replay = await replayDaOperacao/);
+    expect(service).toContain("SAVEPOINT ops_v3_misto_execucao");
+    expect(service).toContain("ROLLBACK TO SAVEPOINT ops_v3_misto_execucao");
   });
 
   it("nunca encadeia receberOSV3 + lancarOSAPrazoV3 (duas operações independentes)", () => {

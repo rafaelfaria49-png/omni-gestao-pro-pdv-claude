@@ -83,9 +83,8 @@ import {
   type RecebimentoMistoInputV3,
 } from "./recebimento-misto-model";
 import {
-  buscarRecebimentoMistoGravadoV3,
   chaveLockRecebimentoMistoV3,
-  executarRecebimentoMistoOSV3,
+  decidirRecebimentoMistoOSV3,
   fingerprintRecebimentoCanonicoV3,
   garantirTituloOSTravadoV3,
   isRecebimentoMistoErroV3,
@@ -266,6 +265,12 @@ export interface ReceberOSInputV3 {
    * movimenta ou lança caixa em dobro. Ausente (chamada interna), o servidor gera uma.
    */
   operacaoId?: string;
+  /**
+   * Saldo que o operador VIU ao confirmar (concorrência otimista). Se o saldo real for outro
+   * — outro recebimento no meio, inclusive uma tentativa cuja resposta se perdeu —, nada é
+   * gravado. Ausente (chamada interna), não é conferido.
+   */
+  saldoEsperado?: number;
 }
 
 export interface ReceberOSResultV3 {
@@ -383,7 +388,7 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
   const operador = operadorLabel(session);
   const total = somaSplitV3(linhas);
   const obsBase = (input.observacao ?? "").trim();
-  const requestFingerprint = fingerprintRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas, intencao: input.intencao, observacao: obsBase });
+  const requestFingerprint = fingerprintRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas });
   const dataHora = nowIso();
 
   // UMA transação sob a MESMA trava por OS de todos os writers de pagamento da V3 (misto,
@@ -430,6 +435,15 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
 
     // Valida a SOMA do split contra o saldo REAL (proteção contra valor > saldo no motor único).
     const saldoSnapshot = buildContaReceberAuditTrail([tituloSnapshot])[0]?.saldoAberto ?? 0;
+    // Concorrência otimista: só grava contra o saldo que o operador viu. Um segundo
+    // recebimento sobre um saldo que ele não viu (ex.: a tentativa anterior gravou e a
+    // resposta se perdeu) é recusado antes de qualquer escrita — com ou sem a mesma chave.
+    if (input.saldoEsperado !== undefined && input.saldoEsperado !== null) {
+      const esperadoCentavos = Math.round(Number(input.saldoEsperado) * 100);
+      if (!Number.isFinite(esperadoCentavos) || esperadoCentavos !== Math.round(saldoSnapshot * 100)) {
+        throw new Error(`O saldo desta OS mudou (agora R$ ${saldoSnapshot.toFixed(2)}). Atualize e confirme de novo.`);
+      }
+    }
     const veredito = validarSplitV3(linhas, saldoSnapshot);
     if (!veredito.ok) throw new Error(veredito.motivo ?? "Recebimento inválido.");
     const op: "liquidar" | "parcial" = veredito.op ?? "parcial";
@@ -801,12 +815,13 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
 // ----------------------------------------------------------------------------
 // GOAL OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 — pagamento imediato + saldo a prazo
 // ----------------------------------------------------------------------------
-// Uma confirmação = UMA transação (`executarRecebimentoMistoOSV3`): baixa só do
+// Uma confirmação = UMA transação (`decidirRecebimentoMistoOSV3`): baixa só do
 // dinheiro recebido agora, movimentação e caixa por forma desse valor, e o
 // restante formalizado a prazo no MESMO título da OS, com vencimento. Não chama
-// `receberOSV3` + `lancarOSAPrazoV3` em sequência. Recusas de negócio voltam como
-// `{ ok: false }` (nada gravado); erro inesperado é relançado para a tela tratar
-// como resultado DESCONHECIDO e reenviar com a MESMA `operacaoId` (replay).
+// `receberOSV3` + `lancarOSAPrazoV3` em sequência. O resultado é TERMINAL por
+// `operacaoId`: gravada (replay devolve o mesmo) ou recusada (`{ ok: false }` com
+// `naoRegistrada`, a mesma recusa para sempre). Erro inesperado é relançado para a
+// tela tratar como resultado DESCONHECIDO e reenviar com a MESMA `operacaoId`.
 
 export type RegistrarRecebimentoMistoInputV3 = RecebimentoMistoInputV3;
 
@@ -863,40 +878,37 @@ export async function registrarRecebimentoMistoOSV3(
   if (!guard.ok) return falhaMistaV3("sem_permissao", guard.error);
 
   const ctx = { storeId: sid, osId: id, operador: operadorLabel(session), operadorId: session.user.id, agora: nowIso() };
+  // Identidade da confirmação: a data de hoje não importa para ela (só valida vencimento ≥ hoje).
+  const identidade = normalizarRecebimentoMistoV3(input, DATA_MINIMA_REPLAY_V3);
+  // Malformada: nada jamais pode ser gravado com ela — recusa terminal por construção.
+  if (!identidade.ok) return falhaMistaConferidaV3(identidade.code, identidade.mensagem);
   const normal = normalizarRecebimentoMistoV3(input, hojeLojaV3());
-  const periodo = normal.ok ? await verificarPeriodoFechado(sid, new Date()) : null;
-  if (!normal.ok || periodo?.fechado) {
-    // Uma operação NOVA seria recusada aqui. Antes, confere se esta MESMA confirmação já
-    // está gravada (resposta perdida): o replay vale mesmo com o período fechado ou com um
-    // vencimento que virou passado — senão a tela trocaria de chave e uma operação já
-    // gravada poderia ser lançada de novo.
-    const recusa = normal.ok
+  const periodo = await verificarPeriodoFechado(sid, new Date());
+  // O que barraria uma operação NOVA (vencimento passado, período fechado). Não é decidido
+  // aqui: sob a trava da OS, depois do replay — reenviar uma confirmação já gravada continua
+  // devolvendo o gravado — e então gravado como o resultado terminal da chave.
+  const recusaPrevia = !normal.ok
+    ? { code: normal.code, mensagem: normal.mensagem }
+    : periodo.fechado
       ? { code: "periodo_fechado" as const, mensagem: "Período financeiro fechado. Reabra o fechamento para registrar o recebimento." }
-      : { code: normal.code, mensagem: normal.mensagem };
-    // Para a identidade, a data de hoje não importa (só valida vencimento ≥ hoje).
-    const identidade = normalizarRecebimentoMistoV3(input, DATA_MINIMA_REPLAY_V3);
-    // Malformada: nada pode ter sido gravado com ela.
-    if (!identidade.ok) return falhaMistaConferidaV3(recusa.code, recusa.mensagem);
-    try {
-      const gravado = await prisma.$transaction((tx) => buscarRecebimentoMistoGravadoV3(tx, ctx, identidade.valor), TX_PAGAMENTO_OS_V3);
-      if (gravado) return { ok: true, ...gravado };
-    } catch (e) {
-      if (isRecebimentoMistoErroV3(e)) return falhaMistaConferidaV3(e.code, e.message, e.saldoAtual);
-      throw e;
-    }
-    return falhaMistaConferidaV3(recusa.code, recusa.mensagem);
-  }
+      : null;
 
   try {
-    const resultado = await prisma.$transaction((tx) => executarRecebimentoMistoOSV3(tx, ctx, normal.valor), TX_PAGAMENTO_OS_V3);
+    const decisao = await prisma.$transaction(
+      (tx) => decidirRecebimentoMistoOSV3(tx, ctx, identidade.valor, recusaPrevia),
+      TX_PAGAMENTO_OS_V3,
+    );
+    // Recusa decidida sob a trava e gravada como terminal: a chave nunca mais grava.
+    if (decisao.tipo === "recusada") return falhaMistaConferidaV3(decisao.recusa.code, decisao.recusa.mensagem, decisao.recusa.saldoAtual);
     revalidarOperacoesV3("registrarRecebimentoMistoOSV3");
-    return { ok: true, ...resultado };
+    return { ok: true, ...decisao.resultado };
   } catch (e) {
-    // Recusa ou conflito DENTRO da transação: a identidade já foi conferida sob a trava e o
-    // rollback garante que nada desta chave ficou gravado.
+    // Mesma chave já usada com outro conteúdo: este conteúdo nunca foi gravado com ela.
     if (isRecebimentoMistoErroV3(e)) return falhaMistaConferidaV3(e.code, e.message, e.saldoAtual);
+    // Conflito transitório do banco: nada desta tentativa ficou gravado, mas a chave segue
+    // em aberto (não conferida) — a tela mantém a pendência e reenvia a MESMA operação.
     if (conflitoConcorrenteV3(e)) {
-      return falhaMistaConferidaV3("titulo_alterado", "A OS foi alterada por outra operação ao mesmo tempo. Atualize o saldo e confirme de novo.");
+      return falhaMistaV3("titulo_alterado", "A OS foi alterada por outra operação ao mesmo tempo. Atualize o saldo e confirme de novo.");
     }
     throw e;
   }

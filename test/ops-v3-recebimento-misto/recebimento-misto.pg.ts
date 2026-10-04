@@ -23,7 +23,12 @@ import {
   registrarRecebimentoMistoOSV3,
   type RegistrarRecebimentoMistoInputV3,
 } from "@/lib/operacoes-v3/pdv-servico-actions";
-import { executarRecebimentoMistoOSV3 } from "@/lib/operacoes-v3/recebimento-misto-service";
+import {
+  decidirRecebimentoMistoOSV3,
+  executarRecebimentoMistoOSV3,
+  RecebimentoMistoErroV3,
+  type RecusaMistaV3,
+} from "@/lib/operacoes-v3/recebimento-misto-service";
 import { hojeLojaV3, normalizarRecebimentoMistoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { projetarEntregaFinanceiraV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
@@ -361,12 +366,18 @@ describe("PG · pagamento posterior dos 50", () => {
 
 // ─── 6/7. validação: nenhuma escrita ──────────────────────────────────────────
 
-async function semEscrita(storeId: string, osId: string, payloadAntes: unknown) {
+/**
+ * Nenhuma escrita financeira. A única gravação permitida é o RESULTADO TERMINAL da chave
+ * (recusa decidida sob a trava da OS), em `recebimentoMistoRecusasV3` — com os códigos dados.
+ */
+async function semEscrita(storeId: string, osId: string, payloadAntes: unknown, recusasTerminais: string[] = []) {
   const s = await estado(storeId, osId);
   expect(s.titulos).toHaveLength(0);
   expect(s.caixa).toHaveLength(0);
   expect(s.movs).toHaveLength(0);
-  expect(s.payload).toEqual(payloadAntes);
+  const { recebimentoMistoRecusasV3: recusas, ...resto } = s.payload;
+  expect(resto).toEqual(payloadAntes);
+  expect(((recusas as Payload[] | undefined) ?? []).map((r) => r.code)).toEqual(recusasTerminais);
 }
 
 describe("PG · validações bloqueiam sem escrever", () => {
@@ -377,9 +388,11 @@ describe("PG · validações bloqueiam sem escrever", () => {
     const payloadAntes = (await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } })).payload;
     for (const vencimento of ["", "2026-02-30", "2020-01-01", "10/11/2026"]) {
       const r = await registrarRecebimentoMistoOSV3(storeId, osId, entrada({ sessaoId, saldoAPrazo: { valor: 50, vencimento } }));
-      expect(r).toMatchObject({ ok: false, code: "entrada_invalida" });
+      expect(r).toMatchObject({ ok: false, code: "entrada_invalida", naoRegistrada: true });
     }
-    await semEscrita(storeId, osId, payloadAntes);
+    // Malformadas são terminais por construção; a data real no passado chega à trava e vira
+    // o resultado terminal da chave.
+    await semEscrita(storeId, osId, payloadAntes, ["entrada_invalida"]);
   });
 
   it("valor acima do saldo, distribuição que não fecha e linha zerada → bloqueia", async () => {
@@ -401,7 +414,7 @@ describe("PG · validações bloqueiam sem escrever", () => {
     expect(
       await registrarRecebimentoMistoOSV3(storeId, osId, entrada({ sessaoId, pagamentosAgora: [{ forma: "crediario", valor: 350 }] })),
     ).toMatchObject({ ok: false, code: "entrada_invalida" });
-    await semEscrita(storeId, osId, payloadAntes);
+    await semEscrita(storeId, osId, payloadAntes, ["valor_acima_do_saldo", "distribuicao_inconsistente"]);
   });
 });
 
@@ -446,7 +459,10 @@ describe("PG · mesma confirmação enviada duas vezes", () => {
 type Tx = Prisma.TransactionClient;
 
 /** Envolve o `tx` real: falha (ou pausa) exatamente na chamada `modelo.metodo`. */
-function txInstrumentado(tx: Tx, alvo: { modelo: string; metodo: string; falhar?: boolean; antes?: () => Promise<void> }): Tx {
+function txInstrumentado(
+  tx: Tx,
+  alvo: { modelo: string; metodo: string; falhar?: boolean; erro?: () => Error; antes?: () => Promise<void> },
+): Tx {
   return new Proxy(tx, {
     get(target, prop) {
       const valor = Reflect.get(target, prop);
@@ -457,6 +473,7 @@ function txInstrumentado(tx: Tx, alvo: { modelo: string; metodo: string; falhar?
             if (p2 === alvo.metodo && typeof fn === "function") {
               return async (...args: unknown[]) => {
                 if (alvo.antes) await alvo.antes();
+                if (alvo.erro) throw alvo.erro();
                 if (alvo.falhar) throw new Error(`FALHA_INJETADA:${alvo.modelo}.${alvo.metodo}`);
                 return (fn as (...a: unknown[]) => unknown).apply(t2, args);
               };
@@ -932,5 +949,135 @@ describe("PG · reenvio do misto com período fechado ou vencimento que virou pa
       vi.useRealTimers();
     }
     expect((await estado(storeId, osId)).historico.filter((e) => e.tipo === "a_prazo_autorizado")).toHaveLength(1);
+  });
+});
+
+// ─── resultado TERMINAL por chave no misto (R4/P1) ────────────────────────────
+
+describe("PG · misto: resultado terminal da chave", () => {
+  it("recusa decidida sob a trava vale para sempre: reaberto o período, a MESMA chave continua recusada; outra chave grava", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const input = entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 400, vencimento: VENC }, saldoEsperado: 400 });
+    const [ano, mes] = new Date().toISOString().slice(0, 7).split("-").map(Number);
+    const fechamento = await prisma.fechamentoFinanceiro.create({
+      data: { storeId, tipo: "mensal", dataReferencia: `${ano}-${String(mes).padStart(2, "0")}-01`, mes: mes!, ano: ano!, status: "fechado" },
+    });
+
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, input)).toMatchObject({ ok: false, code: "periodo_fechado", naoRegistrada: true });
+    await prisma.fechamentoFinanceiro.update({ where: { id: fechamento.id }, data: { status: "reaberto" } });
+
+    // A tela já abandonou esta chave; a original, se ainda em voo, recebe a MESMA recusa.
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, input)).toMatchObject({ ok: false, code: "periodo_fechado", naoRegistrada: true });
+    expect((await estado(storeId, osId)).titulos).toHaveLength(0);
+    // Uma confirmação NOVA (outra chave) grava normalmente.
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, { ...input, operacaoId: opId() })).toMatchObject({ ok: true, jaRegistrado: false });
+    expect((await estado(storeId, osId)).historico.filter((e) => e.tipo === "a_prazo_autorizado")).toHaveLength(1);
+  });
+
+  it("original em voo e reenvio da MESMA chave disputando a trava: os dois recebem o MESMO resultado terminal", async () => {
+    for (const reenvioPrimeiro of [true, false]) {
+      const storeId = await novaLoja();
+      const osId = await novaOS(storeId);
+      const n = normal(entrada({ pagamentosAgora: [], saldoAPrazo: { valor: 400, vencimento: VENC }, saldoEsperado: 400 }));
+      const ctx = { storeId, osId, operador: "Operador QA", operadorId: "qa-misto-admin", agora: new Date().toISOString() };
+      // Uma terceira transação segura a trava da OS: as duas requisições da mesma chave esperam.
+      let soltar!: () => void;
+      const segurando = new Promise<void>((r) => (soltar = r));
+      let pegou!: () => void;
+      const travada = new Promise<void>((r) => (pegou = r));
+      const chave = `ops-v3-receb-misto:${storeId}:${osId}`;
+      const trava = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${chave}))::text AS lock`;
+          pegou();
+          await segurando;
+        },
+        { maxWait: 10_000, timeout: 60_000 },
+      );
+      await travada;
+      // O reenvio viu o período fechado; a original passou pela checagem antes do fechamento.
+      const recusaPeriodo: RecusaMistaV3 = { code: "periodo_fechado", mensagem: "Período financeiro fechado." };
+      const decidir = (recusaPrevia: RecusaMistaV3 | null) =>
+        prisma.$transaction((tx) => decidirRecebimentoMistoOSV3(tx, ctx, n, recusaPrevia), { maxWait: 10_000, timeout: 60_000 });
+      const primeira = decidir(reenvioPrimeiro ? recusaPeriodo : null);
+      await esperarBloqueioNoBanco(15_000, 1);
+      const segunda = decidir(reenvioPrimeiro ? null : recusaPeriodo);
+      await esperarBloqueioNoBanco(15_000, 2);
+      soltar();
+      await trava;
+      const [a, b] = await Promise.all([primeira, segunda]);
+      expect(b.tipo).toBe(a.tipo);
+      const s = await estado(storeId, osId);
+      expect(s.historico.filter((e) => e.tipo === "a_prazo_autorizado")).toHaveLength(a.tipo === "gravada" ? 1 : 0);
+      if (a.tipo === "recusada") expect(s.titulos).toHaveLength(0);
+    }
+  });
+
+  it("recusa DEPOIS de escrever: o savepoint desfaz baixa e movimentação; só o resultado terminal fica", async () => {
+    const { storeId, osId, sessaoId, antes } = await osComTituloCanonico();
+    const ctx = { storeId, osId, operador: "Operador QA", operadorId: "qa-misto-admin", agora: new Date().toISOString() };
+    const n = normal(entrada({ sessaoId }));
+    const decisao = await prisma.$transaction((tx) =>
+      decidirRecebimentoMistoOSV3(
+        txInstrumentado(tx, {
+          modelo: "caixaOperacao",
+          metodo: "create",
+          erro: () => new RecebimentoMistoErroV3("movimentacao_falhou", "Falha injetada depois da baixa."),
+        }),
+        ctx,
+        n,
+        null,
+      ),
+    );
+    expect(decisao).toEqual({ tipo: "recusada", recusa: { code: "movimentacao_falhou", mensagem: "Falha injetada depois da baixa." } });
+
+    const s = await estado(storeId, osId);
+    expect(s.titulo!.payload).toEqual(antes.titulo!.payload);
+    expect(s.titulo!.updatedAt.getTime()).toBe(antes.titulo!.updatedAt.getTime());
+    expect(s.caixa).toHaveLength(0);
+    expect(s.movs).toHaveLength(0);
+    const { recebimentoMistoRecusasV3: recusas, ...resto } = s.payload;
+    expect(resto).toEqual(antes.payload);
+    expect(recusas).toEqual([expect.objectContaining({ operacaoId: n.operacaoId, code: "movimentacao_falhou" })]);
+
+    // A MESMA chave de novo: a mesma recusa, sem nova tentativa.
+    expect(await prisma.$transaction((tx) => decidirRecebimentoMistoOSV3(tx, ctx, n, null))).toEqual(decisao);
+    expect((await estado(storeId, osId)).movs).toHaveLength(0);
+  });
+});
+
+// ─── recebimento canônico: identidade econômica e saldo esperado (R4/P1) ──────
+
+describe("PG · recebimento canônico: identidade econômica e saldo esperado", () => {
+  it("forma única e split com o mesmo conteúdo são a MESMA operação; rótulo e saldo visto não viram conflito", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    const operacaoId = opId();
+    const a = await receberOSV3(storeId, osId, { valor: 100, forma: "pix", sessaoId, operacaoId, saldoEsperado: 400 });
+    expect(a.jaRegistrado).toBe(false);
+    // Resposta perdida: a tela reenvia em split, com outro rótulo, já vendo o saldo novo.
+    const b = await receberOSV3(storeId, osId, { linhas: [{ forma: "pix", valor: 100 }], sessaoId, operacaoId, intencao: "entrada", saldoEsperado: 300 });
+    expect(b).toMatchObject({ jaRegistrado: true, valorRecebido: 100 });
+    const s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "pagamento").map((e) => e.valor)).toEqual([100]);
+    expect(s.caixa).toHaveLength(1);
+    expect(s.movs).toHaveLength(1);
+  });
+
+  it("saldo esperado diferente do real → recusa sem gravar: uma chave perdida não duplica o recebimento", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    await receberOSV3(storeId, osId, { valor: 100, forma: "pix", sessaoId, saldoEsperado: 400 });
+    // A tela perdeu a chave e ainda mostra o saldo antigo: chave nova, mesmo conteúdo.
+    await expect(receberOSV3(storeId, osId, { valor: 100, forma: "pix", sessaoId, saldoEsperado: 400 })).rejects.toThrow(
+      /O saldo desta OS mudou \(agora R\$ 300\.00\)/,
+    );
+    const s = await estado(storeId, osId);
+    expect(s.historico.filter((e) => e.tipo === "pagamento").map((e) => e.valor)).toEqual([100]);
+    expect(s.caixa).toHaveLength(1);
+    expect(s.movs).toHaveLength(1);
   });
 });
