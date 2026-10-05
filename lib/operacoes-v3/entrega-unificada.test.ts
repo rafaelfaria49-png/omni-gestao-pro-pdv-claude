@@ -143,6 +143,8 @@ describe("GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019 — bloqueios de cancelame
     ).rejects.toThrow("Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar.");
     expect(prismaMock.update).not.toHaveBeenCalled();
     expect(fin.cancelContaReceber).toHaveBeenCalledWith(expect.objectContaining({ exigirSemRecebimento: true, db: expect.anything() }));
+    // R4: inclui o título JÁ cancelado pelo Financeiro com ledger — recusa ⇒ nenhuma restauração.
+    expect(estoque.restaurarEstoqueOSV3).not.toHaveBeenCalled();
   });
 
   it("cancelContaReceber retorna ok:false por motivo que NÃO é 'not_found': aborta, não muda status", async () => {

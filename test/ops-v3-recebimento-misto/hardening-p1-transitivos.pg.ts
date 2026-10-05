@@ -137,6 +137,7 @@ import { consumeEstoqueFromOS, restoreEstoqueFromOS } from "@/lib/operacoes/adap
 import { POST as persistPOST } from "@/app/api/ops/contas-receber-persist/route";
 import { POST as legacyPOST } from "@/app/api/ops/sync-legacy-financeiro/route";
 import { POST as lotePOST } from "@/app/api/pdv/receber-conta-lote/route";
+import { DELETE as receberDELETE, PATCH as receberPATCH } from "@/app/api/financeiro/receber/route";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
@@ -1525,5 +1526,184 @@ describe("P1-SEED · seed oficial (financeiro:seed → seed-contas-receber-os.mj
     expect.soft(s.saldo).toBe(0);
     expect.soft(s.pagamentos.map((e) => e.valor)).toEqual([400]);
     expect.soft(s.titulo?.valor).toBe(400);
+  });
+});
+
+// ─── P1-R4 · título cancelado pelo Financeiro com recebido → cancelar OS ────────
+//
+// R4: o cancelamento genérico do Financeiro (PATCH op=cancelar / DELETE, SEM
+// `exigirSemRecebimento`) aceita título parcial e conserva ledger/marcador. Depois disso a OS
+// não pode cancelar (nem restaurar o estoque já baixado) enquanto houver recebido não
+// estornado: o caller da OS exige "sem recebimento" sobre a linha TRAVADA, inclusive quando o
+// título já está cancelado. Peça consumida ANTES do recebimento torna a restauração material.
+
+const ROTAS_CANCEL_FINANCEIRO = [
+  {
+    nome: "PATCH op=cancelar",
+    cancelar: (storeId: string, localKey: string) =>
+      receberPATCH(
+        new Request("http://127.0.0.1/api/financeiro/receber", {
+          method: "PATCH",
+          headers: { "content-type": "application/json", "x-assistec-loja-id": storeId },
+          body: JSON.stringify({ op: "cancelar", localKey, motivo: "Cancelado no Financeiro QA" }),
+        }),
+      ),
+  },
+  {
+    nome: "DELETE",
+    cancelar: (storeId: string, localKey: string) =>
+      receberDELETE(
+        new Request(`http://127.0.0.1/api/financeiro/receber?localKey=${encodeURIComponent(localKey)}&motivo=${encodeURIComponent("Cancelado no Financeiro QA")}`, {
+          method: "DELETE",
+          headers: { "x-assistec-loja-id": storeId },
+        }),
+      ),
+  },
+] as const;
+
+/** OS pronta 400 (4 × peça 100) com título real (adapter) e peça JÁ consumida: estoque 10 → 6. */
+async function novaOSFaturavelComPecaConsumida(storeId: string) {
+  const produto = await prisma.produto.create({ data: { storeId, name: `Tela QA R4 ${++seq}`, price: 100, stock: 10 } });
+  const osId = await novaOS(storeId, {
+    orcamento: {
+      ...orcamento(400, "aprovado"),
+      servicos: [],
+      pecas: [{ id: "peca-qa-r4", produtoId: produto.id, nome: "Tela QA", quantidade: 4, valorUnitario: 100, observacao: "rascunho-QA" }],
+    },
+  });
+  await updateOSPayload(storeId, osId, { ...FATURAMENTO_400, faturamentoReferencia: `OS-QA · ${osId}` } as never);
+  expect(await prisma.contaReceberTitulo.count({ where: { storeId } })).toBe(1);
+  await syncOperacaoItensComOrcamento(storeId, osId);
+  expect(await consumeEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true, status: "consumed" });
+  expect(await estoqueDe(produto.id)).toBe(6);
+  return { osId, produtoId: produto.id };
+}
+
+/** Foto financeira + operacional + estoque para comparar antes/depois da tentativa da OS. */
+async function fotoR4(storeId: string, osId: string, produtoId: string) {
+  const s = await estado(storeId, osId);
+  return {
+    titulos: s.titulos.length,
+    tituloId: s.titulo?.id ?? null,
+    status: s.titulo?.status ?? null,
+    valor: s.titulo?.valor ?? null,
+    pagamentos: s.pagamentos.map((e) => e.valor),
+    marcadores: s.marcadores.length,
+    historico: s.historico.length,
+    caixa: s.caixa.map((c) => [c.id, c.valor]),
+    movs: s.movs.map((m) => [m.id, m.valor]),
+    osStatus: s.payload.operacaoStatusV3,
+    osColuna: s.os.status,
+    timeline: s.timeline.map((e) => e.id),
+    estoqueRestaurado: s.payload.estoqueRestaurado ?? null,
+    estoque: await estoqueDe(produtoId),
+    ledgerEstoque: await ledgerEstoqueOS(produtoId),
+    itens: await itens(osId),
+  };
+}
+
+describe("P1-R4 · Financeiro cancela título com recebido (sem flag) → cancelar OS exige estorno", () => {
+  for (const rota of ROTAS_CANCEL_FINANCEIRO) {
+    it(`${rota.nome}: K 350+50 → título cancelado com ledger 350 → OS recusa "Estorne…"; financeiro/OS/estoque intactos`, async () => {
+      const storeId = await novaLoja();
+      const { osId, produtoId } = await novaOSFaturavelComPecaConsumida(storeId);
+      const sessaoId = await abrirCaixa(storeId);
+      const K = opId();
+      expect(await registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K))).toMatchObject({ ok: true, jaRegistrado: false });
+
+      // Cancelamento genérico do Financeiro (contrato vigente, sem flag): parcial é aceito e o
+      // ledger/marcador de K ficam no título cancelado.
+      const res = await rota.cancelar(storeId, localKeyContaReceberOSV3(storeId, osId));
+      expect(res.status).toBe(200);
+      const antes = await fotoR4(storeId, osId, produtoId);
+      console.info(`[P1-R4 ${rota.nome}] antes=${JSON.stringify(antes)}`);
+      expect.soft(antes).toMatchObject({
+        titulos: 1,
+        status: "cancelado",
+        valor: 400,
+        pagamentos: [350],
+        marcadores: 1,
+        osStatus: "pronta",
+        estoqueRestaurado: null,
+        estoque: 6,
+        ledgerEstoque: { saidas: 1, qtdSaida: 4, entradas: 0, qtdEntrada: 0 },
+        itens: { rascunho: 0, ledger: 1, qtdPeca: 4 },
+      });
+      expect.soft(antes.caixa.map(([, v]) => v)).toEqual([350]);
+      expect.soft(antes.movs.map(([, v]) => v)).toEqual([350]);
+
+      const r = await aplicarTransicaoStatusV3(storeId, osId, "cancelada", { motivo: "Cliente desistiu QA" }).then(
+        () => ({ ok: true as const }),
+        (e: Error) => ({ ok: false as const, erro: e.message }),
+      );
+      const depois = await fotoR4(storeId, osId, produtoId);
+      console.info(`[P1-R4 ${rota.nome}] OS=${JSON.stringify(r)} · depois=${JSON.stringify(depois)}`);
+      expect.soft(r).toMatchObject({ ok: false, erro: expect.stringMatching(/Estorne o recebimento antes de cancelar/) });
+      // Nada mudou: título (mesmo id/status/ledger), caixa/movs, OS/timeline, estoque/itens.
+      expect.soft(depois).toEqual(antes);
+
+      // Replay de K continua sem efeito novo.
+      await registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K)).catch(() => null);
+      const f = await fotoR4(storeId, osId, produtoId);
+      expect.soft(f.caixa).toEqual(antes.caixa);
+      expect.soft(f.movs).toEqual(antes.movs);
+      expect.soft(f.pagamentos).toEqual([350]);
+    });
+  }
+
+  it("disputa: Financeiro trava/cancela o título (pausado) → OS trava a OS e espera o título → Financeiro commita → OS relê cancelado+ledger e recusa", async () => {
+    const storeId = await novaLoja();
+    const { osId, produtoId } = await novaOSFaturavelComPecaConsumida(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, opId()))).toMatchObject({ ok: true });
+    const pausa = armarPausa({
+      modelo: "contaReceberTitulo",
+      metodos: ["update", "updateMany"],
+      quando: (a) => dadosGravados(a).some((d) => d.status === "cancelado"),
+    });
+    const pF = cancelContaReceber({ storeId, localKey: localKeyContaReceberOSV3(storeId, osId), motivo: "Financeiro QA" });
+    await pausa.naBarreira;
+    const pO = aplicarTransicaoStatusV3(storeId, osId, "cancelada", { motivo: "Cliente desistiu QA" });
+    const observado = await concluiuOuEsperaTrava(pO);
+    pausa.liberar();
+    const [rF, rO] = await Promise.allSettled([pF, pO]);
+    const s = await fotoR4(storeId, osId, produtoId);
+    console.info(`[P1-R4 disputa] OS=${observado} · F=${JSON.stringify(rF.status === "fulfilled" ? (rF.value as Payload).ok : String(rF.reason))} · O=${rO.status === "fulfilled" ? "ok" : String((rO.reason as Error)?.message)} · ${JSON.stringify(s)}`);
+    naoEhDeadlock(rF);
+    naoEhDeadlock(rO);
+    expect.soft(observado, "OS espera a trava do título").toBe("esperando_trava");
+    expect.soft(rF).toMatchObject({ status: "fulfilled", value: { ok: true } });
+    expect.soft(rO.status).toBe("rejected");
+    if (rO.status === "rejected") expect.soft(String((rO.reason as Error).message)).toMatch(/Estorne o recebimento antes de cancelar/);
+    expect.soft(s).toMatchObject({
+      titulos: 1,
+      status: "cancelado",
+      pagamentos: [350],
+      marcadores: 1,
+      osStatus: "pronta",
+      estoqueRestaurado: null,
+      estoque: 6,
+      ledgerEstoque: { saidas: 1, qtdSaida: 4, entradas: 0, qtdEntrada: 0 },
+    });
+  });
+
+  it("título cancelado SEM recebido: cancelar OS segue idempotente (título intocado) e restaura o estoque consumido", async () => {
+    const storeId = await novaLoja();
+    const { osId, produtoId } = await novaOSFaturavelComPecaConsumida(storeId);
+    const res = await ROTAS_CANCEL_FINANCEIRO[1].cancelar(storeId, localKeyContaReceberOSV3(storeId, osId));
+    expect(res.status).toBe(200);
+    const antes = await estado(storeId, osId);
+    expect(antes.titulo?.status).toBe("cancelado");
+    await aplicarTransicaoStatusV3(storeId, osId, "cancelada", { motivo: "Cliente desistiu QA" });
+    const s = await estado(storeId, osId);
+    expect.soft(s.payload.operacaoStatusV3).toBe("cancelada");
+    expect.soft(s.titulos).toHaveLength(1);
+    // Sucesso idempotente: nenhuma escrita nova no título já cancelado.
+    expect.soft(s.titulo?.updatedAt.toISOString()).toBe(antes.titulo?.updatedAt.toISOString());
+    expect.soft(s.historico).toEqual(antes.historico);
+    expect.soft(s.caixa).toHaveLength(0);
+    expect.soft(s.movs).toHaveLength(0);
+    expect.soft(await estoqueDe(produtoId)).toBe(10);
+    expect.soft(await ledgerEstoqueOS(produtoId)).toEqual({ saidas: 1, qtdSaida: 4, entradas: 1, qtdEntrada: 4 });
   });
 });

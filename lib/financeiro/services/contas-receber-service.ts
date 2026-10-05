@@ -398,7 +398,9 @@ function montarUpsertContaReceber(input: UpsertContaReceberInput, existing: Cont
  * (pago/estornado/recebido) valem sobre o estado mais recente.
  *
  * `exigirSemRecebimento`: recusa (`titulo_com_recebimento`) se o título já tem QUALQUER valor
- * recebido — contrato do cancelamento seguro da OS. `db`: transação do chamador (ex.: a OS já
+ * recebido — contrato do cancelamento seguro da OS —, inclusive quando o título JÁ está
+ * cancelado (sem recebido, o já-cancelado segue sucesso idempotente). Sem a flag, o
+ * cancelamento genérico mantém o contrato atual. `db`: transação do chamador (ex.: a OS já
  * travada antes do título — ordem OS → título).
  */
 export async function cancelContaReceber(params: {
@@ -430,7 +432,14 @@ async function cancelarTituloTravado(
   params: { motivo?: string; userLabel?: string; exigirSemRecebimento?: boolean },
 ): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
   const cur = normalizeReceberStatus(row.status)
-  if (cur === RECEBER_STATUS.CANCELADO) return { ok: true, data: row }
+  // Já cancelado (ex.: pelo Financeiro, que cancela sem a flag e conserva o ledger): o
+  // sucesso idempotente só vale se a pré-condição do chamador também vale na linha travada.
+  if (cur === RECEBER_STATUS.CANCELADO) {
+    if (params.exigirSemRecebimento && sumPagamentosFromHistoricoPayload(row.payload) > PAY_EPS) {
+      return { ok: false, reason: "titulo_com_recebimento" }
+    }
+    return { ok: true, data: row }
+  }
   if (cur === RECEBER_STATUS.ESTORNADO) return { ok: false, reason: "titulo_estornado" }
   if (cur === RECEBER_STATUS.PAGO) return { ok: false, reason: "titulo_pago_nao_cancela_aqui" }
   if (params.exigirSemRecebimento && sumPagamentosFromHistoricoPayload(row.payload) > PAY_EPS) {
