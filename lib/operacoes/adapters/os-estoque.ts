@@ -205,6 +205,11 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
 
       const movimentos: EstoqueMovimentoPayload[] = [];
 
+      // Antes da baixa, itens com produto são só rascunho da sync (pré-baixa). A baixa os
+      // SUBSTITUI pelo ledger real: a restauração/delta somam os itens com produto, e um
+      // rascunho que sobrasse ao lado do ledger seria devolvido ao estoque como consumido.
+      await tx.ordemServicoItem.deleteMany({ where: { ordemServicoId: params.osId, produtoId: { not: null } } });
+
       // Aplica baixa pelo boundary canônico (uma chamada por produto — items já
       // vêm agregados de buildEstoqueMovimentosFromOS). Tudo na mesma tx: falha
       // em qualquer item aborta a OS inteira (sem baixa parcial).

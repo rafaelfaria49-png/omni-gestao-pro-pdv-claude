@@ -8,7 +8,10 @@
  *  P1-T2  serviço compartilhado `upsertContaReceber`/`cancelContaReceber` pelos callers globais
  *         (POST contas-receber-persist / sync-legacy-financeiro) — título existente E inexistente.
  *  P1-T3  cancelar OS (status-actions) × pagamento direto/lote do Financeiro (sem trava da OS).
- *  P2-T4  sync de itens da OS (rascunho) × entrega (consumo) × restauração de estoque.
+ *  P1-T6  (R2) trava do título vazia → título criado/commitado no meio → pagamento travado →
+ *         escrita: rotas globais e adapter nunca gravam sobre leitura sem trava.
+ *  P2-T4  sync de itens da OS (rascunho) × entrega (consumo) × restauração de estoque —
+ *         quantidade real 10→9→10 em ambas as ordens, repetições e peças repetidas legítimas.
  *  P2-T5  intenção de orçamento (hub aprovar/enviar/recusar) e materialização do rascunho
  *         (gerarOrcamentoDaOS) contra edição concorrente.
  *
@@ -67,6 +70,20 @@ vi.mock("@/lib/prisma", async (importOriginal) => {
       get(t, p) {
         const v = Reflect.get(t, p);
         if (typeof p === "string" && MODELOS.has(p) && v && typeof v === "object") return envolverDelegate(p, v);
+        // `$queryRaw` (tagged template) só é envolvido com uma pausa "$queryRaw" armada — o
+        // cliente devolvido fora disso é o original (PrismaPromise intacta para batches).
+        if (p === "$queryRaw" && typeof v === "function" && intercept.pausa?.modelo === "$queryRaw") {
+          return async (strings: TemplateStringsArray, ...values: unknown[]) => {
+            const r = await (v as (...a: unknown[]) => Promise<unknown>).call(t, strings, ...values);
+            const pausa = intercept.pausa;
+            if (pausa && pausa.modelo === "$queryRaw" && pausa.quando({ sql: strings.join("?"), values }, r)) {
+              intercept.pausa = null;
+              pausa.chegou();
+              await pausa.barreira;
+            }
+            return r;
+          };
+        }
         if (p === "$transaction" && typeof v === "function") {
           return (arg: unknown, opts?: unknown) =>
             typeof arg === "function"
@@ -568,6 +585,125 @@ describe("P1-T2 · upsertContaReceber via rotas globais × recebimento misto K",
   });
 });
 
+// ─── P1-T6 · `FOR UPDATE` sem linha → título criado no meio → leitura → pagamento → escrita ──
+//
+// R2: A trava o título AUSENTE (0 linhas — nada travado) e, antes da leitura ORM, B cria e
+// commita o título 400; C trava esse título e paga (pausado antes do commit). A não pode
+// derivar UPDATE de uma leitura cuja trava não adquiriu: deve esperar C e reler sob a trava.
+
+/** Pausa A logo DEPOIS do `SELECT … FOR UPDATE` do título desta loja devolver 0 linhas. */
+const pausaAposTravaVazia = (storeId: string) =>
+  armarPausa({
+    modelo: "$queryRaw",
+    metodos: [],
+    fase: "depois",
+    quando: (a, r) =>
+      /contas_receber_titulos/.test(String(a.sql)) &&
+      /FOR UPDATE/.test(String(a.sql)) &&
+      (a.values as unknown[]).includes(storeId) &&
+      Array.isArray(r) &&
+      r.length === 0,
+  });
+
+const FATURAMENTO_400 = {
+  faturamentoPendente: true,
+  faturamentoStatus: "pendente",
+  faturamentoOrigem: "orcamento_os",
+  faturamentoTotal: 400,
+  faturamentoCriadoEm: "2026-10-01T12:00:00.000Z",
+} as const;
+
+/**
+ * A pausa após a trava vazia → B cria/commita o título 400 → C (`pagar`) trava o título e
+ * pausa no caixa → A retoma e PRECISA esperar a trava de C → C commita → A conclui.
+ */
+async function corridaTravaVazia<A>(p: { storeId: string; iniciarA: () => Promise<A>; criarTitulo: () => Promise<void>; pagar: () => Promise<unknown> }) {
+  const pausaA = pausaAposTravaVazia(p.storeId);
+  const pA = p.iniciarA();
+  await pausaA.naBarreira;
+  await p.criarTitulo();
+  expect(await prisma.contaReceberTitulo.count({ where: { storeId: p.storeId } }), "B commitou o título").toBe(1);
+  const pausaC = pausaRecebimentoNoCaixa();
+  const pC = p.pagar();
+  await pausaC.naBarreira;
+  pausaA.liberar();
+  const observado = await concluiuOuEsperaTrava(pA);
+  pausaC.liberar();
+  const [rA, rC] = await Promise.allSettled([pA, pC]);
+  naoEhDeadlock(rA);
+  naoEhDeadlock(rC);
+  return { rA, rC, observado };
+}
+
+describe("P1-T6 · trava vazia → título criado no meio → A nunca grava sobre leitura sem trava", () => {
+  for (const rota of ROTAS) {
+    it(`${rota.nome} (upsertContaReceber global) × K 350+50: A espera C e relê; baixa/marcador de K sobrevivem`, async () => {
+      const storeId = await novaLoja();
+      const osId = await novaOS(storeId);
+      const sessaoId = await abrirCaixa(storeId);
+      const K = opId();
+      const { rA, rC, observado } = await corridaTravaVazia({
+        storeId,
+        iniciarA: () => postarSnapshot(rota, storeId, osId),
+        criarTitulo: () => tituloOS400(storeId, osId),
+        pagar: () => registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K)),
+      });
+      console.info(`[P1-T6] ${rota.nome} · A após C=${observado} · A=${JSON.stringify(rA.status === "fulfilled" ? rA.value : String(rA.reason))}`);
+      expect(observado, "A esperou a trava de C antes de gravar").toBe("esperando_trava");
+      expect(rA).toMatchObject({ status: "fulfilled", value: { status: 200 } });
+      expect(rC).toMatchObject({ status: "fulfilled", value: { ok: true, jaRegistrado: false } });
+      expect.soft(((await estado(storeId, osId)).titulo?.payload as Payload | undefined)?.snapshotQA).toBe("A");
+      await conferirK350Mais50(storeId, osId, sessaoId, K);
+    });
+  }
+
+  it("adapter os-faturamento (transação própria) × K 350+50: A espera C e relê; baixa/marcador de K sobrevivem", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    const K = opId();
+    const os = { ...((await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } })).payload as Payload), ...FATURAMENTO_400, faturamentoReferencia: `OS-QA · ${osId}` };
+    const { upsertContaReceberFromOS } = await import("@/lib/financeiro/adapters/os-faturamento");
+    const { rA, rC, observado } = await corridaTravaVazia({
+      storeId,
+      iniciarA: () => upsertContaReceberFromOS(os as never),
+      criarTitulo: () => tituloOS400(storeId, osId),
+      pagar: () => registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K)),
+    });
+    console.info(`[P1-T6] adapter · A após C=${observado} · A=${JSON.stringify(rA.status === "fulfilled" ? rA.value : String(rA.reason))}`);
+    expect(observado, "A esperou a trava de C antes de gravar").toBe("esperando_trava");
+    expect(rA).toMatchObject({ status: "fulfilled", value: { ok: true, action: "updated" } });
+    expect(rC).toMatchObject({ status: "fulfilled", value: { ok: true, jaRegistrado: false } });
+    await conferirK350Mais50(storeId, osId, sessaoId, K);
+  });
+
+  it("updateOSPayload → adapter (trava da OS) × lote PDV 350 (só trava do título): baixa preservada; caixa/mov únicos", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    const { rA, rC, observado } = await corridaTravaVazia({
+      storeId,
+      iniciarA: () => updateOSPayload(storeId, osId, { ...FATURAMENTO_400, faturamentoReferencia: `OS-QA · ${osId}` } as never),
+      criarTitulo: () => tituloOS400(storeId, osId),
+      pagar: () => postarLote(storeId, sessaoId, osId, 350),
+    });
+    const s = await estado(storeId, osId);
+    console.info(`[P1-T6] updateOSPayload×lote · A após C=${observado} · C=${JSON.stringify(rC.status === "fulfilled" ? rC.value : String(rC.reason))} · ${JSON.stringify(resumo(s))}`);
+    expect(observado, "A esperou a trava de C antes de gravar").toBe("esperando_trava");
+    expect(rA.status).toBe("fulfilled");
+    expect(rC).toMatchObject({ status: "fulfilled", value: { status: 200 } });
+    expect.soft(s.payload.faturamentoStatus).toBe("pendente");
+    expect.soft(s.titulos).toHaveLength(1);
+    expect.soft(s.titulo?.valor).toBe(400);
+    expect.soft(s.pagamentos.map((e) => e.valor)).toEqual([350]);
+    expect.soft(s.caixa.map((c) => c.valor)).toEqual([350]);
+    expect.soft(s.movs.map((m) => m.valor)).toEqual([350]);
+    expect.soft(s.saldo).toBe(50);
+    expect.soft(s.titulo?.status).toBe("parcial");
+    ledgerCoerente(s);
+  });
+});
+
 // ─── P1-T3 · cancelar OS × pagamento direto/lote do Financeiro ─────────────────
 
 async function tituloOS400(storeId: string, osId: string) {
@@ -667,33 +803,55 @@ describe("P1-T3 · cancelar OS (status-actions) × pagamento sem trava da OS", (
 
 // ─── P2-T4 · itens da OS × entrega × restauração ───────────────────────────────
 
-async function novaOSComPeca(storeId: string) {
+/** `quantidades`: uma peça do orçamento por entrada (o mesmo produto repetido é legítimo). */
+async function novaOSComPeca(storeId: string, quantidades: number[] = [1]) {
   const produto = await prisma.produto.create({ data: { storeId, name: `Tela QA ${++seq}`, price: 100, stock: 10 } });
+  const total = quantidades.reduce((a, q) => a + q * 100, 0);
   const osId = await novaOS(
     storeId,
     {
       status: "em_execucao",
       operacaoStatusV3: "em_execucao",
       orcamento: {
-        ...orcamento(100, "aprovado"),
+        ...orcamento(total, "aprovado"),
         servicos: [],
-        pecas: [{ id: "peca-qa", produtoId: produto.id, nome: "Tela QA", quantidade: 1, valorUnitario: 100, observacao: "rascunho-QA" }],
+        pecas: quantidades.map((quantidade, i) => ({ id: `peca-qa-${i}`, produtoId: produto.id, nome: "Tela QA", quantidade, valorUnitario: 100, observacao: "rascunho-QA" })),
       },
     },
-    100,
+    total,
   );
   return { osId, produtoId: produto.id };
 }
 
+/** `rascunho-QA` é só a marca do orçamento sintético (o rascunho copia a observação da peça). */
 async function itens(osId: string) {
   const rows = await prisma.ordemServicoItem.findMany({ where: { ordemServicoId: osId } });
-  return { rascunho: rows.filter((r) => r.observacao === "rascunho-QA").length, ledger: rows.filter((r) => r.observacao !== "rascunho-QA").length };
+  return {
+    rascunho: rows.filter((r) => r.observacao === "rascunho-QA").length,
+    ledger: rows.filter((r) => r.observacao !== "rascunho-QA").length,
+    qtdPeca: rows.filter((r) => r.produtoId).reduce((a, r) => a + r.quantidade, 0),
+  };
+}
+
+const estoqueDe = async (produtoId: string) => (await prisma.produto.findUniqueOrThrow({ where: { id: produtoId } })).stock;
+
+/** Efeitos reais no ledger de estoque da OS (não flags): Σ saídas e Σ entradas, nº de lançamentos. */
+async function ledgerEstoqueOS(produtoId: string) {
+  const rows = await prisma.movimentacaoEstoque.findMany({ where: { produtoId, origem: "os" } });
+  const saidas = rows.filter((r) => r.tipo === "saida");
+  const entradas = rows.filter((r) => r.tipo === "entrada");
+  return {
+    saidas: saidas.length,
+    qtdSaida: saidas.reduce((a, r) => a + Math.abs(r.quantidade), 0),
+    entradas: entradas.length,
+    qtdEntrada: entradas.reduce((a, r) => a + Math.abs(r.quantidade), 0),
+  };
 }
 
 describe("P2-T4 · sync de itens × consumo × restauração (sem ciclo, sem rascunho stale no ledger)", () => {
-  it("sync pausada com itens apagados → entrega consome → restauração: sem deadlock; todos concluem", async () => {
+  it("sync pausada com itens apagados → entrega consome → restauração: sem deadlock; estoque 10→9→10, saída 1 / entrada 1", async () => {
     const storeId = await novaLoja();
-    const { osId } = await novaOSComPeca(storeId);
+    const { osId, produtoId } = await novaOSComPeca(storeId);
     await syncOperacaoItensComOrcamento(storeId, osId);
     expect((await itens(osId)).rascunho).toBe(1);
 
@@ -704,6 +862,7 @@ describe("P2-T4 · sync de itens × consumo × restauração (sem ciclo, sem ras
     const oC = await concluiuOuEsperaTrava(pC);
     if (oC === "esperando_trava") pausa.liberar();
     const rC = await pC;
+    const aposConsumo = { estoque: await estoqueDe(produtoId), itens: await itens(osId) };
     const pR = restoreEstoqueFromOS({ storeId, osId });
     const oR = await concluiuOuEsperaTrava(pR);
     pausa.liberar();
@@ -717,6 +876,47 @@ describe("P2-T4 · sync de itens × consumo × restauração (sem ciclo, sem ras
     const os = (await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } })).payload as Payload;
     expect.soft(os.estoqueConsumido).toBe(true);
     expect.soft(os.estoqueRestaurado).toBe(true);
+    console.info(`[P2-T4 ciclo] após consumo=${JSON.stringify(aposConsumo)} · final=${await estoqueDe(produtoId)} · ledger=${JSON.stringify(await ledgerEstoqueOS(produtoId))}`);
+    // Quantidade real: a sync que commitou antes da baixa deixou só rascunho — a baixa o
+    // substitui pelo ledger (1 peça), e a restauração devolve exatamente o consumido.
+    expect.soft(aposConsumo).toEqual({ estoque: 9, itens: { rascunho: 0, ledger: 1, qtdPeca: 1 } });
+    expect.soft(await estoqueDe(produtoId)).toBe(10);
+    expect.soft(await ledgerEstoqueOS(produtoId)).toEqual({ saidas: 1, qtdSaida: 1, entradas: 1, qtdEntrada: 1 });
+    expect.soft(await itens(osId)).toEqual({ rascunho: 0, ledger: 0, qtdPeca: 0 });
+  });
+
+  it("sequencial sync → consumo → restauração (+ repetições): 10→9→10; consumo/restauração repetidos sem nova saída/entrada", async () => {
+    const storeId = await novaLoja();
+    const { osId, produtoId } = await novaOSComPeca(storeId);
+    await syncOperacaoItensComOrcamento(storeId, osId);
+    expect(await itens(osId)).toEqual({ rascunho: 1, ledger: 0, qtdPeca: 1 });
+    expect(await consumeEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true, status: "consumed" });
+    expect.soft(await estoqueDe(produtoId)).toBe(9);
+    expect.soft(await itens(osId)).toEqual({ rascunho: 0, ledger: 1, qtdPeca: 1 });
+    // Consumo repetido e sync após a baixa: nada muda.
+    expect.soft(await consumeEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true, status: "already_consumed" });
+    await syncOperacaoItensComOrcamento(storeId, osId);
+    expect.soft(await estoqueDe(produtoId)).toBe(9);
+    expect.soft(await itens(osId)).toEqual({ rascunho: 0, ledger: 1, qtdPeca: 1 });
+    expect.soft(await restoreEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true });
+    expect.soft(await estoqueDe(produtoId)).toBe(10);
+    // Restauração repetida: nenhuma entrada nova.
+    expect.soft(await restoreEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true });
+    expect.soft(await estoqueDe(produtoId)).toBe(10);
+    expect.soft(await ledgerEstoqueOS(produtoId)).toEqual({ saidas: 1, qtdSaida: 1, entradas: 1, qtdEntrada: 1 });
+  });
+
+  it("mesmo produto em duas peças legítimas (1 + 1): consumo 2 e restauração 2 — quantidades iguais não são deduplicadas", async () => {
+    const storeId = await novaLoja();
+    const { osId, produtoId } = await novaOSComPeca(storeId, [1, 1]);
+    await syncOperacaoItensComOrcamento(storeId, osId);
+    expect(await itens(osId)).toEqual({ rascunho: 2, ledger: 0, qtdPeca: 2 });
+    expect(await consumeEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true, status: "consumed" });
+    expect.soft(await estoqueDe(produtoId)).toBe(8);
+    expect.soft(await itens(osId)).toEqual({ rascunho: 0, ledger: 1, qtdPeca: 2 });
+    expect.soft(await restoreEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true });
+    expect.soft(await estoqueDe(produtoId)).toBe(10);
+    expect.soft(await ledgerEstoqueOS(produtoId)).toEqual({ saidas: 1, qtdSaida: 2, entradas: 1, qtdEntrada: 2 });
   });
 
   it("entrega trava a OS → sync lida antes recomeça: ledger consumido intacto, nenhum rascunho stale; restauração devolve exatamente o consumido", async () => {
@@ -738,10 +938,11 @@ describe("P2-T4 · sync de itens × consumo × restauração (sem ciclo, sem ras
     naoEhDeadlock(rS);
     expect.soft(rC).toMatchObject({ status: "fulfilled", value: { ok: true, status: "consumed" } });
     expect.soft(rS.status).toBe("fulfilled");
-    expect.soft(await itens(osId)).toEqual({ rascunho: 0, ledger: 1 });
+    expect.soft(await itens(osId)).toEqual({ rascunho: 0, ledger: 1, qtdPeca: 1 });
     expect.soft((await prisma.produto.findUniqueOrThrow({ where: { id: produtoId } })).stock).toBe(9);
     expect.soft(await restoreEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true });
     expect.soft((await prisma.produto.findUniqueOrThrow({ where: { id: produtoId } })).stock).toBe(10);
+    expect.soft(await ledgerEstoqueOS(produtoId)).toEqual({ saidas: 1, qtdSaida: 1, entradas: 1, qtdEntrada: 1 });
   });
 });
 

@@ -285,8 +285,11 @@ export async function gravarTituloContaReceberTravado(p: {
 }): Promise<{ row: ContaReceberTitulo; criado: boolean }> {
   return naTransacaoDoTituloContaReceber(p.db, async (tx) => {
     for (let tentativa = 0; tentativa < MAX_TENTATIVAS_TITULO; tentativa++) {
-      await travarTituloContaReceber(tx, p.storeId, { localKey: p.localKey })
-      const existente = await getContaReceberByLocalKey(p.storeId, p.localKey, tx)
+      // Só deriva UPDATE de linha que ESTA transação travou. Trava vazia = ausente, mesmo que
+      // uma leitura agora já enxergue o título criado no meio (ainda sem trava): vai para o
+      // INSERT sem sobrescrita, que não grava nada, e a próxima volta trava e relê a linha.
+      const travado = await travarTituloContaReceber(tx, p.storeId, { localKey: p.localKey })
+      const existente = travado ? await getContaReceberByLocalKey(p.storeId, p.localKey, tx) : null
       const data = p.montar(existente)
       if (existente) {
         const row = await tx.contaReceberTitulo.update({ where: { id: existente.id }, data })
