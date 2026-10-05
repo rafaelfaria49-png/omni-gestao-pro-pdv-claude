@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, Camera, CreditCard, FileText, Globe, History, ListChecks, Lock, Pencil, Plus, Printer, Search, ShieldCheck, Tag } from "lucide-react";
+import { ArrowLeft, CalendarClock, Camera, CreditCard, FileText, Globe, History, ListChecks, Lock, Pencil, Plus, Printer, Search, ShieldCheck, Tag } from "lucide-react";
 import type { OrdemServico } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { OSHeaderV3 } from "../components/OSHeaderV3";
@@ -20,6 +20,7 @@ import { ProducaoTecnicoV3 } from "../components/ProducaoTecnicoV3";
 import { OSHistoricoV3 } from "../components/OSHistoricoV3";
 import { OrcamentoPanelV3 } from "../components/OrcamentoPanelV3";
 import { PrintPreviewV3 } from "../components/print/PrintPreviewV3";
+import { CorrigirDatasModalV3 } from "../components/CorrigirDatasV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
 import { ButtonV3 } from "../components/UiV3";
 import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
@@ -37,6 +38,14 @@ import { useGarantiaV3 } from "../hooks/use-garantia-v3";
 import { SCREEN_COPY } from "../data/screen-copy";
 import { formatBRL, formatDataHora } from "../lib/format";
 import { matchOrdem } from "../lib/os-derive";
+import { formatarDataOperacionalV3, lerDatasOSV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
+
+/** Entrega/retirada com a precisão gravada: a entrega efetiva só-dia nunca mostra a âncora técnica. */
+function formatarEntregaV3(os: OrdemServico, iso: string | undefined): string {
+  if (!iso) return "";
+  const entrega = lerDatasOSV3(os).entrega;
+  return entrega && entrega.iso === iso ? formatarDataOperacionalV3(entrega) : formatDataHora(iso);
+}
 
 function KV({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -111,6 +120,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
   const osStatus = statusV3FromOS(os);
   const recepcao = lerRecepcaoV3(os);
   const [printTipo, setPrintTipo] = useState<DocumentoTipoV3 | null>(null);
+  const [corrigirDatasAberto, setCorrigirDatasAberto] = useState(false);
 
   // Dados da empresa para o cabeçalho do documento (unidade ativa, com fallback honesto no helper).
   const empresaPrint = useMemo<EmpresaPrintInputV3>(
@@ -195,6 +205,9 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
       </ButtonV3>
       <ButtonV3 variant="outline" onClick={() => irPara("historico")}>
         <History className="h-4 w-4" aria-hidden /> Histórico
+      </ButtonV3>
+      <ButtonV3 variant="outline" onClick={() => setCorrigirDatasAberto(true)}>
+        <CalendarClock className="h-4 w-4" aria-hidden /> Corrigir datas
       </ButtonV3>
     </>
   );
@@ -351,8 +364,8 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             {os.retirada?.confirmado || os.entregueEm ? (
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <KV label="Retirado por" value={os.retirada?.retiradoPor} />
-                <KV label="Retirado em" value={os.retirada?.retiradoEm ? formatDataHora(os.retirada.retiradoEm) : ""} />
-                <KV label="Entregue em" value={os.entregueEm ? formatDataHora(os.entregueEm) : ""} />
+                <KV label="Retirado em" value={formatarEntregaV3(os, os.retirada?.retiradoEm)} />
+                <KV label="Entregue em" value={formatarEntregaV3(os, os.entregueEm)} />
                 {os.retirada?.observacao ? <KV label="Observação" value={os.retirada.observacao} /> : null}
               </dl>
             ) : undefined}
@@ -378,6 +391,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             notificar={notificar}
             onImprimirEntrega={() => setPrintTipo("termo_entrega")}
             onAbrirRetornos={() => navigate("retornos")}
+            onCorrigirDatas={() => setCorrigirDatasAberto(true)}
           />
 
           {/* Fotos consolidadas na Prova de Entrada (SPRINT_3E.2) — AnexosV3 (placeholder) removido. */}
@@ -420,6 +434,17 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
         empresa={empresaPrint}
         onClose={() => setPrintTipo(null)}
         onPrinted={(t) => garantiaActions.registrarImpressao(t)}
+      />
+      <CorrigirDatasModalV3
+        open={corrigirDatasAberto}
+        os={os}
+        storeId={storeId}
+        onClose={() => setCorrigirDatasAberto(false)}
+        onSalvo={() => {
+          setCorrigirDatasAberto(false);
+          refresh();
+          notificar("Datas corrigidas.");
+        }}
       />
     </div>
   );

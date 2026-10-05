@@ -34,6 +34,7 @@ import { EstornoRecebimentoModal } from "./parts/EstornoRecebimentoModal";
 import { CancelamentoOSModal } from "./parts/CancelamentoOSModal";
 import { ReciboModal } from "./parts/ReciboModal";
 import { DocPrintModal } from "./parts/DocPrintModal";
+import { CorrigirDatasModalV4 } from "./parts/CorrigirDatasModalV4";
 import { Toast } from "./parts/Toast";
 
 export function OperacoesV4Preview() {
@@ -81,6 +82,12 @@ export function OperacoesV4Preview() {
       <CancelamentoOSModal v={v} />
       <ReciboModal v={v} />
       <DocPrintModal v={v} />
+      <CorrigirDatasModalV4
+        open={v.corrigirDatasOpen}
+        os={v.realOS}
+        onClose={v.closeCorrigirDatas}
+        onSalvo={v.onDatasCorrigidas}
+      />
       <Toast v={v} />
     </div>
   );

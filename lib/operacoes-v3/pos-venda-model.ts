@@ -12,6 +12,7 @@
 
 import type { OrdemServico } from "@/types/os";
 import { garantiaCatalogoV3, normalizarGarantiaPrevistaV3 } from "./garantia-textos";
+import { diaNaLojaV3, fimDoDiaLojaIsoV3, lerDatasOSV3 } from "./datas-operacionais-model";
 
 const DIA_MS = 86400000;
 
@@ -133,6 +134,11 @@ export interface GarantiaV3View {
   vencimento?: string;
   /** Dias restantes até o vencimento (negativo = vencida há N dias). */
   diasRestantes?: number;
+  /**
+   * Cobertura contada por DIA civil na loja (entrega só-dia e garantia ancorada
+   * nela): vale até o fim do dia do vencimento. Ausente = vale o instante.
+   */
+  porDia?: boolean;
 }
 
 function garantiaPrevistaDe(os: OrdemServico | null | undefined): { modelo?: string; label?: string; prazoDias?: number; termo?: string } | undefined {
@@ -173,9 +179,33 @@ export function lerGarantiaV3(os: OrdemServico | null | undefined, now: Date = n
   const vencimentoIso = g2?.fimEm && !gp ? (g2.fimEm as string) : addDaysIso(inicioIso, prazoDias);
   const venc = parseIso(vencimentoIso);
   const diasRestantes = venc ? Math.ceil((venc.getTime() - now.getTime()) / DIA_MS) : undefined;
-  const situacao: GarantiaSituacaoV3 = venc && venc.getTime() >= now.getTime() ? "ativa" : "vencida";
+  // Entrega só pelo dia (âncora técnica 12:00): a cobertura ANCORADA nessa entrega
+  // vale até o FIM do último dia civil na loja — nunca vence no meio do dia por
+  // causa da âncora. Com o fim explícito da garantia V2, a origem é o `inicioEm`
+  // dela (pode ter começado na aprovação): só vale por dia se começou na entrega.
+  const entregaData = lerDatasOSV3(os).entrega;
+  const fimExplicitoV2 = !!(g2?.fimEm && !gp);
+  // Sem `inicioEm` válido na V2, a origem canônica é a mesma do início exibido (a entrega).
+  const g2InicioValido = g2Inicio && Number.isFinite(Date.parse(g2Inicio)) ? g2Inicio : undefined;
+  const origemIso = fimExplicitoV2 && g2InicioValido ? g2InicioValido : inicioIso;
+  const porDia =
+    !!entregaData && entregaData.precisao === "dia" && !!origemIso && Date.parse(entregaData.iso) === Date.parse(origemIso);
+  const fimDoDia = porDia ? Date.parse(fimDoDiaLojaIsoV3(diaNaLojaV3(vencimentoIso))) : NaN;
+  const fimCoberturaMs = Number.isFinite(fimDoDia) ? fimDoDia : venc?.getTime() ?? NaN;
+  const situacao: GarantiaSituacaoV3 = venc && fimCoberturaMs >= now.getTime() ? "ativa" : "vencida";
 
-  return { temGarantia: true, modeloId, label, prazoDias, semCobertura: false, situacao, inicio: inicioIso, vencimento: vencimentoIso, diasRestantes };
+  return {
+    temGarantia: true,
+    modeloId,
+    label,
+    prazoDias,
+    semCobertura: false,
+    situacao,
+    inicio: inicioIso,
+    vencimento: vencimentoIso,
+    diasRestantes,
+    ...(porDia ? { porDia: true } : {}),
+  };
 }
 
 export interface GarantiaLinhaV3 {

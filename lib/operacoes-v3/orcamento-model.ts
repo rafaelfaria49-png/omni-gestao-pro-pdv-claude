@@ -96,6 +96,12 @@ export interface SalvarOrcamentoV3Input {
    * editor de itens da V4). `[]` explícito remove todos os grupos.
    */
   gruposV3?: OrcamentoGrupoV3[];
+  /**
+   * Validade da proposta (ISO — fim do dia na loja), informada na criação do
+   * orçamento. Só é aceita enquanto o orçamento ainda NÃO tem validade: nunca
+   * reinicia uma validade existente (alterar é só pelo "Corrigir datas", auditado).
+   */
+  validoAte?: string;
 }
 
 export interface TotaisOrcamentoV3 {
@@ -410,11 +416,32 @@ export const ORCAMENTO_STATUS_META_V3: Record<OrcamentoStatus, { label: string; 
  * é mostrado como "expirado" (sem reescrever o persistido).
  */
 export function statusEfetivoOrcamentoV3(orc: Pick<Orcamento, "status" | "validoAte">, now = Date.now()): OrcamentoStatus {
-  if (orc.status === "enviado" && orc.validoAte) {
-    const t = Date.parse(orc.validoAte);
-    if (Number.isFinite(t) && t < now) return "expirado";
-  }
+  if (orc.status === "enviado" && validadeExpiradaV3(orc.validoAte, now)) return "expirado";
   return orc.status;
+}
+
+// Fuso da loja — mesmo valor de `FUSO_LOJA_V3`. Importá-lo (ou o módulo de datas)
+// aqui criaria o ciclo orcamento-model → recebimento-misto-model → payment-model →
+// orcamento-model; por isso o dia civil é calculado localmente.
+const FUSO_VALIDADE_V3 = "America/Sao_Paulo";
+
+function diaCivilNaLojaV3(ms: number): string {
+  const partes = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO_VALIDADE_V3, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(ms));
+  const p = Object.fromEntries(partes.map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/**
+ * A validade gravada já passou? Regra ÚNICA do status efetivo e dos leitores
+ * (selo "vencida"), para nunca divergirem. "Válido até" é um DIA civil na loja:
+ * vence só depois do último dia de validade — inclusive a validade legada gravada
+ * em outro horário do dia (mesma regra de `validadeVencidaV3`).
+ */
+export function validadeExpiradaV3(validoAte: string | null | undefined, now = Date.now()): boolean {
+  if (!validoAte) return false;
+  const t = Date.parse(validoAte);
+  if (!Number.isFinite(t) || !Number.isFinite(now)) return false;
+  return diaCivilNaLojaV3(t) < diaCivilNaLojaV3(now);
 }
 
 // ----------------------------------------------------------------------------

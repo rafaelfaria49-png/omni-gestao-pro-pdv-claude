@@ -1140,7 +1140,8 @@ describe("OPS-V4-DELIVERY-FINANCIAL-GUARD-SERVER-001 — EntregaStage coleta aut
     expect(entregaStageSrc).toContain("setFormSemCobrancaAberto(true)")
     expect(entregaStageSrc).toContain("Categoria obrigatória")
     expect(entregaStageSrc).toContain("Motivo obrigatório")
-    expect(entregaStageSrc).toContain("v.confirmarEntrega(semCobranca)")
+    // OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001: a data efetiva da entrega viaja junto (validada no servidor).
+    expect(entregaStageSrc).toMatch(/v\.confirmarEntrega\(semCobranca, /)
     expect(entregaStageSrc).toContain("Confirmar entrega sem cobrança")
     expect(entregaStageSrc).toMatch(/useEffect\(\(\) => \{\s*setFormSemCobrancaAberto\(false\);\s*setCategoria\(""\);\s*setMotivo\(""\)/)
   })
@@ -1151,11 +1152,13 @@ describe("OPS-V4-DELIVERY-FINANCIAL-GUARD-SERVER-001 — confirmarEntrega usa a 
   const entregaStage = readFileSync(join(DIR, "parts", "stages", "EntregaStage.tsx"), "utf8")
 
   it("chama registrarEntregaV3 com a solicitação opcional de não cobrança", () => {
-    expect(orquestrador).toContain("registrarEntregaV3(sid, osId, semCobranca ? { semCobranca } : {})")
+    expect(orquestrador).toMatch(/registrarEntregaV3\(sid, osId, \{\s*\.\.\.\(semCobranca \? \{ semCobranca \} : \{\}\),/)
+    // Data efetiva opcional (OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001) — mesma action canônica.
+    expect(orquestrador).toContain("...(dataEntrega ? { dataEntrega } : {}),")
   })
 
   it("passa pelo wrapper runWrite (fonte única de reload/patch-em-sucesso) — falha não muta status", () => {
-    expect(orquestrador).toMatch(/const confirmarEntrega = useCallback\(\s*\(semCobranca\?: EntregaSemCobrancaSolicitacaoV3\)\s*=>\s*runWrite\(/)
+    expect(orquestrador).toMatch(/const confirmarEntrega = useCallback\(\s*\(semCobranca\?: EntregaSemCobrancaSolicitacaoV3, dataEntrega\?: RegistrarEntregaInputV3\["dataEntrega"\]\)\s*=>\s*runWrite\(/)
     // runWrite continua definido uma única vez — confirmarEntrega reaproveita, não duplica.
     expect(orquestrador.match(/const runWrite = useCallback/g)?.length).toBe(1)
   })

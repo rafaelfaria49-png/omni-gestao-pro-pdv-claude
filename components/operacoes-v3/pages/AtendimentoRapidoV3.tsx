@@ -8,8 +8,8 @@
 // do caixa. Sem sistema paralelo, sem schema novo.
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertCircle, Check, Clock, Loader2, Lock, Plus, Search, Sparkles, User, Wallet, Wrench } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AlertCircle, Check, Clock, Info, Loader2, Lock, Plus, Search, Sparkles, User, Wallet, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listClientes } from "@/api/clientes";
 import {
@@ -19,13 +19,18 @@ import {
 import { getCaixaSessaoAbertaV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import {
   SERVICOS_RAPIDOS_V3,
+  camposDatasAtendimentoAgoraV3,
   formatDuracaoV3,
+  resolverDatasAtendimentoFormV3,
   type AtendimentoClienteModoV3,
   type AtendimentoRapidoInputV3,
+  type CamposDatasAtendimentoV3,
 } from "@/lib/operacoes-v3/atendimento-rapido-model";
+import { formatarDataOperacionalV3, hojeNaLojaV3, lerDataOperacionalV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 import { FORMAS_RECEBIMENTO_V3, type FormaRecebimentoV3 } from "@/lib/operacoes-v3/payment-model";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { ButtonV3 } from "../components/UiV3";
+import { DataOperacionalCampoV3 } from "../components/DataOperacionalCampoV3";
 import { useOperacoesV3 } from "../context/OperacoesV3Context";
 import { SCREEN_COPY } from "../data/screen-copy";
 import { formatBRL } from "../lib/format";
@@ -69,19 +74,6 @@ function num(v: string): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
-/** Valor `datetime-local` (sem timezone) para o "agora" local. */
-function nowLocalInput(): string {
-  const d = new Date();
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-}
-
-/** `datetime-local` → ISO (UTC). Vazio/ inválido → undefined. */
-function localInputToIso(v: string): string | undefined {
-  if (!v) return undefined;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-}
-
 export function AtendimentoRapidoV3() {
   const { storeId, reload, notificar, abrirNovaOS, openOS } = useOperacoesV3();
 
@@ -117,9 +109,19 @@ export function AtendimentoRapidoV3() {
   const [forma, setForma] = useState<FormaRecebimentoV3>(FORMAS_SUPORTADAS[0]?.value ?? "dinheiro");
   const [observacao, setObservacao] = useState("");
 
-  // Data/hora (default = agora; editável p/ registro retroativo)
-  const [dataEntrada, setDataEntrada] = useState<string>(() => nowLocalInput());
-  const [dataConclusao, setDataConclusao] = useState<string>(() => nowLocalInput());
+  // Data do atendimento (default = hoje, agora; editável p/ registro retroativo).
+  // Fuso da loja; horário automático descartado ao trocar o dia.
+  const [datas, setDatasState] = useState<CamposDatasAtendimentoV3>(() => camposDatasAtendimentoAgoraV3());
+  const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
+  const refsDatas = {
+    dataAtendimento: useRef<HTMLInputElement>(null),
+    dataEntrada: useRef<HTMLInputElement>(null),
+    dataConclusao: useRef<HTMLInputElement>(null),
+  };
+  const setDatas = (patch: Partial<CamposDatasAtendimentoV3>) => {
+    setDatasState((d) => ({ ...d, ...patch }));
+    setErrosDatas({});
+  };
 
   // Estado de submissão
   const [saving, setSaving] = useState(false);
@@ -190,18 +192,24 @@ export function AtendimentoRapidoV3() {
     setNsDescricao("");
   };
 
-  // Data/hora: duração automática + validação (conclusão não pode ser antes da entrada).
-  const entradaMs = Date.parse(dataEntrada);
-  const conclusaoMs = Date.parse(dataConclusao);
-  const duracaoMs = Number.isFinite(entradaMs) && Number.isFinite(conclusaoMs) ? conclusaoMs - entradaMs : NaN;
-  const dataInvalida = Number.isFinite(duracaoMs) && duracaoMs < 0;
+  // Datas: mesma regra do servidor (fatos, nunca no futuro; saída ≥ entrada).
+  const datasResolvidas = resolverDatasAtendimentoFormV3(datas);
+  const hoje = hojeNaLojaV3();
+  const entradaLida = datasResolvidas.entrada ? lerDataOperacionalV3(datasResolvidas.entrada.iso, datasResolvidas.entrada.meta) : null;
+  const conclusaoLida = datasResolvidas.conclusao ? lerDataOperacionalV3(datasResolvidas.conclusao.iso, datasResolvidas.conclusao.meta) : null;
+  const retroativo = !!entradaLida && entradaLida.dia < hoje;
+  // Duração só quando as duas pontas têm horário (só-dia não inventa duração).
+  const duracaoMs =
+    datas.detalhar && entradaLida?.precisao === "data_hora" && conclusaoLida?.precisao === "data_hora"
+      ? Date.parse(conclusaoLida.iso) - Date.parse(entradaLida.iso)
+      : NaN;
 
   const clienteOk =
     clienteModo === "balcao" ||
     (clienteModo === "existente" && !!clienteSel) ||
     (clienteModo === "novo" && novoNome.trim().length > 0);
   const podeFinalizar =
-    caixaAberta === true && clienteOk && servicoNome.trim().length > 0 && servicoValor > 0 && !dataInvalida && !saving;
+    caixaAberta === true && clienteOk && servicoNome.trim().length > 0 && servicoValor > 0 && !saving;
 
   const resetForm = useCallback(() => {
     setClienteModo("balcao");
@@ -221,13 +229,22 @@ export function AtendimentoRapidoV3() {
     setEquipModelo("");
     setForma(FORMAS_SUPORTADAS[0]?.value ?? "dinheiro");
     setObservacao("");
-    setDataEntrada(nowLocalInput());
-    setDataConclusao(nowLocalInput());
+    setDatasState(camposDatasAtendimentoAgoraV3());
+    setErrosDatas({});
   }, []);
 
   const finalizar = useCallback(async () => {
     if (!sid) {
       setErro("Selecione uma unidade ativa.");
+      return;
+    }
+    // Datas validadas antes de qualquer efeito (mesma regra do servidor).
+    const resolvidas = resolverDatasAtendimentoFormV3(datas);
+    if (resolvidas.erros.length > 0) {
+      setErrosDatas(Object.fromEntries(resolvidas.erros.map((e) => [e.campo, e.mensagem])));
+      const alvo = refsDatas[resolvidas.erros[0]!.campo as keyof typeof refsDatas];
+      requestAnimationFrame(() => alvo?.current?.focus());
+      setErro("Revise a data do atendimento.");
       return;
     }
     const input: AtendimentoRapidoInputV3 = {
@@ -241,8 +258,11 @@ export function AtendimentoRapidoV3() {
       equipamento: equipMarca.trim() || equipModelo.trim() ? { marca: equipMarca, modelo: equipModelo } : undefined,
       formaPagamento: forma,
       observacao: observacao || undefined,
-      dataEntrada: localInputToIso(dataEntrada),
-      dataConclusao: localInputToIso(dataConclusao),
+      // Datas do SERVIÇO — o recebimento continua sendo registrado agora, no caixa atual.
+      dataEntrada: resolvidas.entrada?.iso,
+      dataEntradaMeta: resolvidas.entrada?.meta,
+      dataConclusao: resolvidas.conclusao?.iso,
+      dataConclusaoMeta: resolvidas.conclusao?.meta,
     };
 
     setSaving(true);
@@ -255,10 +275,13 @@ export function AtendimentoRapidoV3() {
       reload();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível finalizar o serviço.");
+      const novamente = resolverDatasAtendimentoFormV3(datas);
+      if (novamente.erros.length > 0) setErrosDatas(Object.fromEntries(novamente.erros.map((x) => [x.campo, x.mensagem])));
     } finally {
       setSaving(false);
     }
-  }, [sid, clienteModo, clienteSel, novoNome, novoTelefone, servicoNome, servicoValor, servicoDescricao, equipMarca, equipModelo, forma, observacao, dataEntrada, dataConclusao, notificar, resetForm, reload]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sid, clienteModo, clienteSel, novoNome, novoTelefone, servicoNome, servicoValor, servicoDescricao, equipMarca, equipModelo, forma, observacao, datas, notificar, resetForm, reload]);
 
   return (
     <SectionShellV3
@@ -428,31 +451,70 @@ export function AtendimentoRapidoV3() {
           </div>
         </Card>
 
-        {/* Data e hora */}
-        <Card icon={<Clock className="h-4 w-4" />} titulo="Data e hora">
-          <p className="mb-2 text-[11px] text-muted-foreground">
-            Use para registrar um atendimento feito em outro horário ou dia. Padrão: agora.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Campo label="Entrada">
-              <input className={inputCls} type="datetime-local" value={dataEntrada} onChange={(e) => setDataEntrada(e.target.value)} />
-            </Campo>
-            <Campo label="Conclusão">
-              <input className={inputCls} type="datetime-local" value={dataConclusao} onChange={(e) => setDataConclusao(e.target.value)} />
-            </Campo>
-          </div>
-          {dataInvalida ? (
-            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-destructive">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden /> A conclusão não pode ser antes da entrada.
-            </p>
-          ) : Number.isFinite(duracaoMs) ? (
+        {/* Data do atendimento */}
+        <Card icon={<Clock className="h-4 w-4" />} titulo="Data do atendimento">
+          {datas.detalhar ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DataOperacionalCampoV3
+                ref={refsDatas.dataEntrada}
+                id="atend-v3-entrada"
+                rotulo="Entrada"
+                ajuda="Quando o atendimento começou."
+                obrigatorio
+                maxDia={hoje}
+                valor={datas.dataEntrada}
+                onChange={(c) => setDatas({ dataEntrada: c })}
+                erro={errosDatas.dataEntrada || null}
+              />
+              <DataOperacionalCampoV3
+                ref={refsDatas.dataConclusao}
+                id="atend-v3-saida"
+                rotulo="Saída"
+                ajuda="Quando o serviço foi concluído e entregue."
+                obrigatorio
+                maxDia={hoje}
+                minDia={datas.dataEntrada.dia || undefined}
+                valor={datas.dataSaida}
+                onChange={(c) => setDatas({ dataSaida: c })}
+                erro={errosDatas.dataConclusao || null}
+              />
+            </div>
+          ) : (
+            <DataOperacionalCampoV3
+              ref={refsDatas.dataAtendimento}
+              id="atend-v3-data"
+              rotulo="Data do atendimento"
+              ajuda="Quando o serviço aconteceu."
+              obrigatorio
+              maxDia={hoje}
+              valor={datas.dataAtendimento}
+              onChange={(c) => setDatas({ dataAtendimento: c })}
+              erro={errosDatas.dataAtendimento || null}
+            />
+          )}
+          <button
+            type="button"
+            className="mt-2 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            aria-expanded={datas.detalhar}
+            onClick={() =>
+              setDatas(datas.detalhar ? { detalhar: false } : { detalhar: true, dataEntrada: datas.dataAtendimento, dataSaida: datas.dataAtendimento })
+            }
+          >
+            {datas.detalhar ? "Usar uma data só" : "Detalhar entrada e saída"}
+          </button>
+          {Number.isFinite(duracaoMs) && duracaoMs >= 0 ? (
             <p className="mt-2 text-[11px] text-muted-foreground">
               Duração: <strong className="text-foreground">{formatDuracaoV3(duracaoMs)}</strong>
             </p>
           ) : null}
-          <p className="mt-1 text-[10px] text-muted-foreground/80">
-            O seletor usa o calendário nativo do navegador (sem botão “OK” próprio).
-          </p>
+          {retroativo ? (
+            <p role="status" className="mt-2 flex items-start gap-1.5 rounded-lg border border-info/30 bg-info/10 px-2.5 py-2 text-[11px] text-info">
+              <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                A data informa quando o serviço aconteceu ({formatarDataOperacionalV3(conclusaoLida)}). A confirmação registra o recebimento agora, no caixa atual.
+              </span>
+            </p>
+          ) : null}
         </Card>
 
         {/* Pagamento */}

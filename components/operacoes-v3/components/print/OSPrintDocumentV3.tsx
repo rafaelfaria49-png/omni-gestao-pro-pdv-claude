@@ -118,8 +118,9 @@ export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
           {!cliente.nome && !cliente.telefone && !cliente.documento ? <p className="text-[11px] text-zinc-400">—</p> : null}
         </Secao>
         <Secao titulo="Recepção">
-          <Campo rotulo="Entrada" valor={recepcao.dataEntrada ? formatDataHora(recepcao.dataEntrada) : undefined} />
-          <Campo rotulo="Previsão de entrega" valor={recepcao.previsaoEntrega ? formatDataHora(recepcao.previsaoEntrega) : undefined} />
+          <Campo rotulo={recepcao.entradaRotulo ?? "Entrada"} valor={recepcao.entradaTexto || undefined} />
+          {/* Só a previsão COMBINADA é impressa; prazo interno não é promessa ao cliente. */}
+          <Campo rotulo="Previsão de entrega" valor={recepcao.previsaoTexto || undefined} />
           {atendimentoRapido ? (
             <p className="text-[12px] leading-snug text-black">
               <span className="text-zinc-500">Origem: </span>
