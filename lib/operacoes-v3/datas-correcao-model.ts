@@ -480,13 +480,20 @@ export function planejarCorrecaoDatasV3(
       const dia = diaNaLojaV3(iso, tz);
       return Date.parse(borda === "inicio" ? inicioDoDiaLojaIsoV3(dia, tz) : fimDoDiaLojaIsoV3(dia, tz));
     };
-    const coberturas: Array<{ fimAntes: string | undefined; fimDepois: string | undefined }> = [];
-    if (g3Antes.temGarantia && !g3Antes.semCobertura) coberturas.push({ fimAntes: g3Antes.vencimento, fimDepois: g3Depois.vencimento });
-    if (garantia.payloadDeslocado) coberturas.push({ fimAntes: txt(obj(base.garantia)?.fimEm) || undefined, fimDepois: txt(obj(next.garantia)?.fimEm) || undefined });
-    for (const l of garantia.linhas) coberturas.push({ fimAntes: l.dataFimAntes, fimDepois: l.dataFim });
+    // Visão V3: a leitura canônica diz se a cobertura conta por dia (ancorada na
+    // entrega só-dia). Garantia V2 deslocada e linhas reais já são as ancoradas na entrega.
+    type CoberturaV3 = { fimAntes: string | undefined; fimDepois: string | undefined; diaAntes: boolean; diaDepois: boolean };
+    const coberturas: CoberturaV3[] = [];
+    if (g3Antes.temGarantia && !g3Antes.semCobertura) {
+      coberturas.push({ fimAntes: g3Antes.vencimento, fimDepois: g3Depois.vencimento, diaAntes: !!g3Antes.porDia, diaDepois: !!g3Depois.porDia });
+    }
+    if (garantia.payloadDeslocado) {
+      coberturas.push({ fimAntes: txt(obj(base.garantia)?.fimEm) || undefined, fimDepois: txt(obj(next.garantia)?.fimEm) || undefined, diaAntes: porDiaAntes, diaDepois: porDiaDepois });
+    }
+    for (const l of garantia.linhas) coberturas.push({ fimAntes: l.dataFimAntes, fimDepois: l.dataFim, diaAntes: porDiaAntes, diaDepois: porDiaDepois });
     const reativada = coberturas.find((c) => {
-      const a = limite(c.fimAntes, "fim", porDiaAntes);
-      const d = limite(c.fimDepois, "fim", porDiaDepois);
+      const a = limite(c.fimAntes, "fim", c.diaAntes);
+      const d = limite(c.fimDepois, "fim", c.diaDepois);
       return Number.isFinite(a) && Number.isFinite(d) && a < agoraMs && d >= agoraMs;
     });
     if (reativada) {
@@ -511,9 +518,9 @@ export function planejarCorrecaoDatasV3(
       janelas.push({
         antes:
           garantia.inicioAntes && garantia.vencimentoAntes
-            ? [limite(garantia.inicioAntes, "inicio", porDiaAntes), limite(garantia.vencimentoAntes, "fim", porDiaAntes)]
+            ? [limite(garantia.inicioAntes, "inicio", !!g3Antes.porDia), limite(garantia.vencimentoAntes, "fim", !!g3Antes.porDia)]
             : null,
-        depois: [limite(g3Depois.inicio, "inicio", porDiaDepois), limite(g3Depois.vencimento, "fim", porDiaDepois)],
+        depois: [limite(g3Depois.inicio, "inicio", !!g3Depois.porDia), limite(g3Depois.vencimento, "fim", !!g3Depois.porDia)],
         inicioIso: g3Depois.inicio,
         fimIso: g3Depois.vencimento,
       });

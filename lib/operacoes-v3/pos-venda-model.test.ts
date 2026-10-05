@@ -115,6 +115,17 @@ describe("garantia — situação", () => {
     expect(lerGarantiaV3(comGarantia("tela", 90, comHora), new Date("2026-04-01T19:00:00.000Z")).situacao).toBe("vencida");
   });
 
+  it("R10: garantia V2 com fim explícito só vale por dia se começou na entrega; iniciada na aprovação vence no instante", () => {
+    const entregaSoDia = { entregaV3: { entregueEm: "2026-01-01T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-01-01" } } };
+    const as16h = new Date("2026-04-01T19:00:00.000Z"); // 01/04 16:00 na loja
+    // Iniciada na APROVAÇÃO (antes da entrega), término explícito 01/04 12:00: vencida às 16:00.
+    const naAprovacao = os({ ...entregaSoDia, garantia: { ativa: true, prazoDias: 90, inicioEm: "2025-12-28T13:00:00.000Z", fimEm: "2026-04-01T15:00:00.000Z" } });
+    expect(lerGarantiaV3(naAprovacao, as16h).situacao).toBe("vencida");
+    // Ancorada na entrega só-dia (mesmo instante): vale o último dia inteiro.
+    const naEntrega = os({ ...entregaSoDia, garantia: { ativa: true, prazoDias: 90, inicioEm: "2026-01-01T15:00:00.000Z", fimEm: "2026-04-01T15:00:00.000Z" } });
+    expect(lerGarantiaV3(naEntrega, as16h).situacao).toBe("ativa");
+  });
+
   it("usa o prazo padrão do catálogo quando não informado", () => {
     const g = lerGarantiaV3(comGarantia("bateria", undefined, entregueEm(NOW.toISOString())), NOW);
     expect(g.prazoDias).toBe(90); // padrão de bateria
