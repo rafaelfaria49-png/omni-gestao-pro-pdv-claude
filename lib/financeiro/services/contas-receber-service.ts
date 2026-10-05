@@ -4,6 +4,7 @@ import type { ContaReceberTitulo } from "@/generated/prisma"
 import { mergeFinanceiroPayload, appendFinanceiroHistorico } from "@/lib/financeiro/contracts/payload"
 import { RECEBER_STATUS, normalizeReceberStatus, type ReceberStatusCanon } from "@/lib/financeiro/contracts/status"
 import { safeMoney, isOverdueDateString, PAY_EPS } from "@/lib/financeiro/contracts/valores"
+import { parseFinanceiroLocalKey } from "@/lib/financeiro/contracts/local-key"
 
 /**
  * Cliente Prisma aceito pelos services de Contas a Receber: o singleton global OU um
@@ -41,6 +42,11 @@ export const CONTA_RECEBER_SERVER_OWNED_PAYLOAD_KEYS = [
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v)
+}
+
+/** Título da OS pela chave do adapter (`os-faturamento:{storeId}:{osId}`). */
+function ehTituloDaOS(localKey: string | null | undefined): boolean {
+  return parseFinanceiroLocalKey(localKey).type === "os_faturamento"
 }
 
 function safeStr(v: unknown): string {
@@ -359,8 +365,12 @@ function montarUpsertContaReceber(input: UpsertContaReceberInput, existing: Cont
     nextPayload = appendFinanceiroHistorico(nextPayload, input.historicoEntrada)
   }
 
+  // Título da OS (`os-faturamento:*`): o valor é derivado da OS — só o adapter o regrava, sob
+  // a trava OS → título. Um snapshot legado inteiro (tela/sync) pode trazer a linha de antes
+  // do faturamento vigente; ele não troca esse valor. Títulos manuais/legados seguem o snapshot.
+  const valorDaOS = !!(input.replacePayload && existing && ehTituloDaOS(existing.localKey))
   const valor =
-    input.valor !== undefined ? safeMoney(input.valor) : safeMoney(existing?.valor ?? 0)
+    input.valor !== undefined && !valorDaOS ? safeMoney(input.valor) : safeMoney(existing?.valor ?? 0)
   const descricao = input.descricao !== undefined ? safeStr(input.descricao) : (existing?.descricao ?? "")
   const cliente = input.cliente !== undefined ? safeStr(input.cliente) : (existing?.cliente ?? "")
   const vencimento = input.vencimento !== undefined ? safeStr(input.vencimento) : (existing?.vencimento ?? "")

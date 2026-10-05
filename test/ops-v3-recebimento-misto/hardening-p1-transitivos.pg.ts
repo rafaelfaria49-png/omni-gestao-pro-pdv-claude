@@ -8,6 +8,8 @@
  *  P1-T2  serviço compartilhado `upsertContaReceber`/`cancelContaReceber` pelos callers globais
  *         (POST contas-receber-persist / sync-legacy-financeiro) — título existente E inexistente.
  *  P1-T3  cancelar OS (status-actions) × pagamento direto/lote do Financeiro (sem trava da OS).
+ *  P1-T7  lista antiga da tela (OS 400) reenviada pelas rotas globais depois do faturamento
+ *         vigente 500 e de K 350+150: o valor do título da OS segue derivado da OS.
  *  P1-T6  (R2) trava do título vazia → título criado/commitado no meio → pagamento travado →
  *         escrita: rotas globais e adapter nunca gravam sobre leitura sem trava.
  *  P2-T4  sync de itens da OS (rascunho) × entrega (consumo) × restauração de estoque —
@@ -634,6 +636,112 @@ async function corridaTravaVazia<A>(p: { storeId: string; iniciarA: () => Promis
   naoEhDeadlock(rC);
   return { rA, rC, observado };
 }
+
+// ─── P1-T7 · snapshot genérico antigo × valor do título derivado da OS ─────────
+//
+// A tela de Contas a Receber (`persist(rows)`) reenvia a LISTA INTEIRA ao salvar QUALQUER
+// título, e as rotas globais repassam o `valor` de cada linha. A linha da OS na tela pode ser
+// de antes de o faturamento vigente da OS mudar (400 → 500). O valor do título `os-faturamento`
+// é derivado da OS (adapter, sob a trava OS → título); o snapshot genérico não é autoridade
+// sobre ele — títulos manuais/legados continuam editáveis pelo mesmo snapshot.
+
+const misto500 = (sessaoId: string, K: string): RegistrarRecebimentoMistoInputV3 => ({
+  operacaoId: K,
+  sessaoId,
+  pagamentosAgora: [{ forma: "debito", valor: 350 }],
+  saldoAPrazo: { valor: 150, vencimento: VENC },
+  saldoEsperado: 500,
+});
+
+/** Writer legítimo REAL do faturamento vigente: orçamento aprovado 500 → adapter grava o título 500 (OS → título). */
+async function faturamentoVigente500(storeId: string, osId: string) {
+  await updateOSPayload(storeId, osId, { orcamento: orcamento(500, "aprovado"), faturamentoTotal: 500 } as never);
+  const s = await estado(storeId, osId);
+  expect(s.titulo?.valor).toBe(500);
+  expect(s.os.valorTotal === null ? null : Number(s.os.valorTotal)).not.toBe(400);
+  expect((s.payload.orcamento as Payload).total).toBe(500);
+}
+
+async function tituloManual(storeId: string, valor: number): Promise<string> {
+  const localKey = `receber:manual:${storeId}:qa-${++seq}`;
+  await prisma.contaReceberTitulo.create({
+    data: { storeId, localKey, descricao: "Manual QA", cliente: "Cliente manual", valor, vencimento: "30/11/2026", status: "pendente", payload: { id: localKey, historico: [] } },
+  });
+  return localKey;
+}
+
+/** A tela salva o título MANUAL (100 → 120) e reenvia toda a lista, com a linha da OS ainda em 400/pendente/sem histórico. */
+async function postarListaAntiga(rota: (typeof ROTAS)[number], storeId: string, osId: string, manualKey: string) {
+  const rows = [
+    { id: manualKey, descricao: "Manual QA editado", cliente: "Cliente manual", valor: 120, vencimento: "30/11/2026", status: "pendente", historico: [] },
+    { id: localKeyContaReceberOSV3(storeId, osId), descricao: "OS snapshot da tela", cliente: "Cliente snapshot", valor: 400, vencimento: "30/11/2026", status: "pendente", historico: [], snapshotQA: "lista-antiga" },
+  ];
+  const res = await rota.post(
+    new Request(rota.url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": storeId },
+      body: JSON.stringify({ rows }),
+    }),
+  );
+  return { status: res.status, body: (await res.json()) as Payload };
+}
+
+describe("P1-T7 · lista antiga da tela (OS 400) depois do faturamento vigente 500 e de K 350+150", () => {
+  for (const rota of ROTAS) {
+    it(`${rota.nome}: título da OS segue 500 (saldo 150); manual editado; replay K sem efeito novo; 150 quita`, async () => {
+      const storeId = await novaLoja();
+      const osId = await novaOSFaturavelComTitulo(storeId); // tela carregou aqui: OS/título 400
+      const manualKey = await tituloManual(storeId, 100);
+      await faturamentoVigente500(storeId, osId);
+      const sessaoId = await abrirCaixa(storeId);
+      const K = opId();
+      const rK = await registrarRecebimentoMistoOSV3(storeId, osId, misto500(sessaoId, K));
+      expect(rK).toMatchObject({ ok: true, jaRegistrado: false });
+
+      const rA = await postarListaAntiga(rota, storeId, osId, manualKey);
+      expect(rA.status).toBe(200);
+
+      const s = await estado(storeId, osId);
+      console.info(`[P1-T7] ${rota.nome} · ${JSON.stringify(resumo(s))}`);
+      // Manual/legado: o snapshot continua sendo a autoridade (edição preservada).
+      const manual = await prisma.contaReceberTitulo.findFirstOrThrow({ where: { storeId, localKey: manualKey } });
+      expect.soft(manual.valor).toBe(120);
+      expect.soft(manual.descricao).toBe("Manual QA editado");
+      // Título da OS: valor derivado da OS (500), ledger e marcador de K intactos.
+      expect.soft(s.titulos.filter((t) => t.localKey === localKeyContaReceberOSV3(storeId, osId))).toHaveLength(1);
+      expect.soft((s.titulo?.payload as Payload | undefined)?.snapshotQA).toBe("lista-antiga");
+      expect.soft(s.titulo?.valor).toBe(500);
+      expect.soft(s.saldo).toBe(150);
+      expect.soft(s.titulo?.status).toBe("parcial");
+      expect.soft(s.pagamentos.map((e) => e.valor)).toEqual([350]);
+      expect.soft(s.marcadores.map((e) => e.valor)).toEqual([150]);
+      expect.soft(s.caixa.map((c) => c.valor)).toEqual([350]);
+      expect.soft(s.movs.map((m) => m.valor)).toEqual([350]);
+      ledgerCoerente(s);
+
+      // Replay de K: mesma decisão, nenhum caixa/movimentação/baixa novos.
+      const replay = await registrarRecebimentoMistoOSV3(storeId, osId, misto500(sessaoId, K));
+      expect.soft(replay).toMatchObject({ ok: true, jaRegistrado: true });
+      const r = await estado(storeId, osId);
+      expect.soft(r.pagamentos).toHaveLength(1);
+      expect.soft(r.marcadores).toHaveLength(1);
+      expect.soft(r.caixa).toHaveLength(1);
+      expect.soft(r.movs).toHaveLength(1);
+
+      // OS 500 × título 500: o recebimento legítimo dos 150 restantes não diverge e quita.
+      const novo = await receberOSV3(storeId, osId, { valor: 150, forma: "pix", sessaoId, operacaoId: opId(), saldoEsperado: 150 });
+      expect.soft(novo.jaRegistrado).toBe(false);
+      const f = await estado(storeId, osId);
+      expect.soft(f.titulo?.valor).toBe(500);
+      expect.soft(f.pagamentos.map((e) => e.valor)).toEqual([350, 150]);
+      expect.soft(f.caixa.map((c) => c.valor)).toEqual([350, 150]);
+      expect.soft(f.movs.map((m) => m.valor)).toEqual([350, 150]);
+      expect.soft(f.saldo).toBe(0);
+      expect.soft(f.titulo?.status).toBe("pago");
+      ledgerCoerente(f);
+    });
+  }
+});
 
 describe("P1-T6 · trava vazia → título criado no meio → A nunca grava sobre leitura sem trava", () => {
   for (const rota of ROTAS) {
