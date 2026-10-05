@@ -1,8 +1,8 @@
 {
   "goal": "OPS-RECEBIMENTO-MISTO-P1-HARDENING-001",
-  "status": "INVENTARIO_POR_FUNCAO_CORRETIVO_R2_PRE_REVISAO_R3",
-  "codeHeadInventoried": "3071c6749730ca138966d46fc9e6271afc211d81",
-  "note": "Inventário do implementador (anthropic), não é veredito de revisão. line = declaração da função no codeHeadInventoried (corretivo R2 só deslocou linhas em contas-receber-service.ts e os-estoque.ts; demais inalteradas desde ce1d806; o commit de docs não altera código). Rodada R2: corrige os transitivos da revisão R1 sobre c21990d (título da OS, serviço de título compartilhado, cancelar OS, itens/estoque, intenções de orçamento) — ver transitiveWriters e r1Findings.",
+  "status": "INVENTARIO_ARVORE_RECONCILIADA_PR237_PRE_REVISAO_R3",
+  "codeHeadInventoried": "5727e5802e202f05eef9aedcf30f17813f6cda8a",
+  "note": "Inventário do implementador (anthropic), não é veredito de revisão. line = declaração da função no codeHeadInventoried (corretivo R2 só deslocou linhas em contas-receber-service.ts e os-estoque.ts; demais inalteradas desde ce1d806; o commit de docs não altera código). Rodada R2: corrige os transitivos da revisão R1 sobre c21990d (título da OS, serviço de título compartilhado, cancelar OS, itens/estoque, intenções de orçamento) — ver transitiveWriters e r1Findings. Árvore reconciliada (merge normal 4ed751c com origin/main a27b37e, PR #237): entrega-actions.ts, comercial-pre-os-actions.ts, orcamento-actions.ts e atendimento-rapido-actions.ts mudaram de linhas; os campos line das entradas que mudaram de forma foram atualizados, nas demais valem como referência aproximada. Código do PR #237 é do upstream, não do implementador deste GOAL.",
   "taxonomy": {
     "SAFE_TRANSACTIONAL": "grava OrdemServico.payload (ou delega a callee listado que grava) somente sobre o payload relido sob SELECT … FOR UPDATE da OS na mesma transação, aplicando só a alteração pretendida. Inclui criação inédita (linha nova na mesma tx/instrução) e writers com trava + CAS (a trava é a garantia primária). Delegação, criação inédita e CAS ficam em strategy/role",
     "SAFE_CAS": "grava só por compare-and-set (updatedAt/versão) com releitura e reaplicação da intenção, SEM row lock. Contagem 0: os 3 CAS existentes rodam sob a trava e estão em SAFE_TRANSACTIONAL",
@@ -34,25 +34,25 @@
     ]
   },
   "counts": {
-    "functionsScanned": 115,
+    "functionsScanned": 118,
     "byClassification": {
-      "SAFE_TRANSACTIONAL": 102,
+      "SAFE_TRANSACTIONAL": 105,
       "SAFE_CAS": 0,
       "WHOLE_PAYLOAD_STALE_RISK": 0,
       "READ_ONLY": 13
     },
     "byRole": {
-      "PRIMITIVE": 8,
-      "WRITER": 37,
+      "PRIMITIVE": 9,
+      "WRITER": 39,
       "READER": 13,
       "CALLER": 57
     },
-    "directPayloadWriters": 37,
+    "directPayloadWriters": 39,
     "staleWritersRemaining": 0,
     "scopesReviewedNotCounted": 10,
     "appendixExcludedNotCounted": 2,
     "previousInventory": "95 registros, não 95 funções: havia globs/function='*', uma entrada combinada, helper puro e escopos de leitura/histórico contados junto, e categorias fora da taxonomia",
-    "note": "114 (c21990d) + aplicarPatchOSPayloadSobTrava + aplicarIntencaoOrcamentoOS − loadOrcamentoFromOsRow = 115"
+    "note": "114 (c21990d) + aplicarPatchOSPayloadSobTrava + aplicarIntencaoOrcamentoOS − loadOrcamentoFromOsRow = 115 | árvore reconciliada PR #237: −mutar(comercial) +gravarComTrava +comOSTravadaV3 +corrigirDatasOSV3 +criarOSPreOrcamentoV3 = 118; converterOrcamentoEmOSV3 passa de CALLER a WRITER"
   },
   "staleRiskReconfirmation": [
     "Cada função foi reclassificada pela prova no código, não pelo rótulo antigo (campo previousCategory nas entradas afetadas).",
@@ -74,8 +74,10 @@
     "estoque_consumo_restauracao_delta": "OS FOR UPDATE → produtos (ledger de estoque) → itens da OS",
     "sync_itens_rascunho": "OS FOR UPDATE → itens da OS (KEY SHARE do INSERT na própria OS)",
     "operacional_e_importacao": "OS FOR UPDATE; depois só garantias/estoque conforme acima",
-    "ciclo": "nenhum: nenhum caminho segura título, produto ou item e depois pede a OS (o Financeiro nunca pede a OS; o sync de itens agora trava a OS antes dos itens); toda aresta que termina em OS parte de advisory/sessão ou de nada; nenhum writer segura duas OS; o serviço de título não adquire advisory/outra tabela antes do título (re-travar no tx da V3 é no-op). Provas: test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts",
-    "helpersSemOS": "travarSessaoCaixa, travarTitulo, garantirTituloOSTravadoV3, travarTituloContaReceber, gravarTituloContaReceberTravado e naTransacaoDoTituloContaReceber travam sessão/título, não a OS (estão em transitiveWriters, não em functions)"
+    "ciclo": "nenhum: nenhum caminho segura título, produto ou item e depois pede a OS (o Financeiro nunca pede a OS; o sync de itens agora trava a OS antes dos itens); toda aresta que termina em OS parte de advisory/sessão ou de nada; nenhum writer segura duas OS; o serviço de título não adquire advisory/outra tabela antes do título (re-travar no tx da V3 é no-op). Provas: test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts Árvore reconciliada (PR #237): os writers do upstream pegam advisory antes da OS (mesma ordem do pagamento) e só leem o título; nenhum pega advisory depois da OS.",
+    "helpersSemOS": "travarSessaoCaixa, travarTitulo, garantirTituloOSTravadoV3, travarTituloContaReceber, gravarTituloContaReceberTravado e naTransacaoDoTituloContaReceber travam sessão/título, não a OS (estão em transitiveWriters, não em functions)",
+    "entrega_assinatura_fotos_comercial_conversao_upstream": "advisory(OS) → OS FOR UPDATE → título (só leitura, no MESMO tx), mesma ordem do pagamento V3",
+    "correcao_datas_upstream": "advisory(OS) → OS FOR UPDATE → garantias FOR UPDATE (garantia nunca é travada antes da OS)"
   },
   "functions": [
     {
@@ -466,14 +468,15 @@
     },
     {
       "file": "lib/operacoes-v3/comercial-pre-os-actions.ts",
-      "function": "mutar",
-      "line": 47,
+      "function": "gravarComTrava",
+      "line": 79,
       "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "helper do módulo; revalidate só se gravou",
-      "callee": "mutarPayloadOSV3",
-      "lock": "FOR UPDATE",
-      "latest": "montar(latest)",
+      "origin": "upstream PR #237",
+      "strategy": "helper do módulo: advisory + travarOS + releitura + aplicar(latest) + update no MESMO tx; null = nada a gravar",
+      "callee": "recebimentoLoteAdvisoryLock → travarOS → tx.ordemServico.update",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237)",
+      "latest": "aplicar(latest)",
       "intent": "do chamador"
     },
     {
@@ -482,11 +485,12 @@
       "line": 78,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "via mutar do módulo",
-      "callee": "mutar → mutarPayloadOSV3",
-      "lock": "FOR UPDATE",
+      "strategy": "via gravarComTrava do módulo",
+      "callee": "gravarComTrava",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237)",
       "latest": "next = { ...latest, <campos pretendidos> }: desconhecidos, recusas e espelhos financeiros preservados; timeline só anexa",
-      "intent": "estado comercial/timeline"
+      "intent": "estado comercial/timeline",
+      "origin": "upstream PR #237 (guardas de status comercial)"
     },
     {
       "file": "lib/operacoes-v3/comercial-pre-os-actions.ts",
@@ -494,23 +498,25 @@
       "line": 126,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "via mutar do módulo",
-      "callee": "mutar → mutarPayloadOSV3",
-      "lock": "FOR UPDATE",
+      "strategy": "via gravarComTrava do módulo",
+      "callee": "gravarComTrava",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237)",
       "latest": "next = { ...latest, <campos pretendidos> }: desconhecidos, recusas e espelhos financeiros preservados; timeline só anexa",
-      "intent": "estado comercial/timeline"
+      "intent": "estado comercial/timeline",
+      "origin": "upstream PR #237 (guardas de status comercial)"
     },
     {
       "file": "lib/operacoes-v3/comercial-pre-os-actions.ts",
       "function": "converterOrcamentoEmOSV3",
       "line": 167,
-      "role": "CALLER",
+      "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "via mutar do módulo",
-      "callee": "mutar → mutarPayloadOSV3",
-      "lock": "FOR UPDATE",
+      "strategy": "transação própria: advisory + travarOS + releitura; CAS da previsão vista; update no MESMO tx",
+      "callee": "tx.ordemServico.update",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237)",
       "latest": "next = { ...latest, <campos pretendidos> }: desconhecidos, recusas e espelhos financeiros preservados; timeline só anexa",
-      "intent": "estado comercial/timeline"
+      "intent": "estado comercial/timeline",
+      "origin": "upstream PR #237"
     },
     {
       "file": "lib/operacoes-v3/dados-basicos-actions.ts",
@@ -665,11 +671,12 @@
       "line": 79,
       "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "status/guard financeiro decididos sobre o latest; depois baixa de estoque e auto-close do retorno (cada um sob sua trava)",
-      "callee": "mutarPayloadOSV3 → consumirEstoqueOSV3 → finalizarRetornoPorEntregaVinculadaV3",
-      "lock": "FOR UPDATE; título lido sem trava (writers de pagamento travam a OS antes do título)",
-      "latest": "mutate sobre o latest",
-      "intent": "entregaV3/status/timeline"
+      "strategy": "decisão/guard financeiro sobre o latest sob comOSTravadaV3; efeitos (estoque, auto-close) só para quem efetivou, cada um sob sua trava",
+      "callee": "comOSTravadaV3 → consumirEstoqueOSV3 → finalizarRetornoPorEntregaVinculadaV3",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237); título lido no MESMO tx (sem trava; writers de pagamento travam advisory/OS antes do título)",
+      "latest": "fn(tx, latest)",
+      "intent": "entregaV3/status/timeline",
+      "origin": "upstream PR #237 (trava + datas efetivas)"
     },
     {
       "file": "lib/operacoes-v3/entrega-actions.ts",
@@ -677,11 +684,12 @@
       "line": 292,
       "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "mutate direto na primitiva",
-      "callee": "mutarPayloadOSV3",
-      "lock": "FOR UPDATE",
+      "strategy": "patch sobre o latest sob comOSTravadaV3",
+      "callee": "comOSTravadaV3",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237)",
       "latest": "next = { ...latest, <campos pretendidos> }: desconhecidos, recusas e espelhos financeiros preservados; timeline só anexa",
-      "intent": "assinatura/fotos de saída + timeline"
+      "intent": "assinatura/fotos de saída + timeline",
+      "origin": "upstream PR #237"
     },
     {
       "file": "lib/operacoes-v3/entrega-actions.ts",
@@ -689,11 +697,12 @@
       "line": 345,
       "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "mutate direto na primitiva",
-      "callee": "mutarPayloadOSV3",
-      "lock": "FOR UPDATE",
+      "strategy": "patch sobre o latest sob comOSTravadaV3",
+      "callee": "comOSTravadaV3",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237)",
       "latest": "next = { ...latest, <campos pretendidos> }: desconhecidos, recusas e espelhos financeiros preservados; timeline só anexa",
-      "intent": "assinatura/fotos de saída + timeline"
+      "intent": "assinatura/fotos de saída + timeline",
+      "origin": "upstream PR #237"
     },
     {
       "file": "lib/operacoes-v3/entrega-actions.ts",
@@ -701,11 +710,12 @@
       "line": 403,
       "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "mutate direto na primitiva",
-      "callee": "mutarPayloadOSV3",
-      "lock": "FOR UPDATE",
+      "strategy": "patch sobre o latest sob comOSTravadaV3",
+      "callee": "comOSTravadaV3",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237)",
       "latest": "next = { ...latest, <campos pretendidos> }: desconhecidos, recusas e espelhos financeiros preservados; timeline só anexa",
-      "intent": "assinatura/fotos de saída + timeline"
+      "intent": "assinatura/fotos de saída + timeline",
+      "origin": "upstream PR #237"
     },
     {
       "file": "lib/operacoes-v3/estoque-sync.ts",
@@ -1481,6 +1491,45 @@
       "lock": "FOR UPDATE (no callee)",
       "latest": "intenção sobre o latest hidratado sob trava",
       "intent": "orcamento/status/garantia/faturamento*/timeline conforme a intenção"
+    },
+    {
+      "file": "lib/operacoes-v3/entrega-actions.ts",
+      "function": "comOSTravadaV3",
+      "line": 83,
+      "role": "PRIMITIVE",
+      "classification": "SAFE_TRANSACTIONAL",
+      "origin": "upstream PR #237",
+      "strategy": "advisory da OS (família de pagamento) → travarOS (FOR UPDATE) → releitura; fn grava no MESMO tx",
+      "callee": "recebimentoLoteAdvisoryLock → travarOS → tx.ordemServico.findFirst",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237)",
+      "latest": "releitura após a trava",
+      "intent": "n/a"
+    },
+    {
+      "file": "lib/operacoes-v3/datas-correcao-actions.ts",
+      "function": "corrigirDatasOSV3",
+      "line": 69,
+      "role": "WRITER",
+      "classification": "SAFE_TRANSACTIONAL",
+      "origin": "upstream PR #237",
+      "strategy": "advisory → travarOS → releitura → (se mexe na entrega) garantias FOR UPDATE + CAS por linha → update do payload no MESMO tx",
+      "callee": "tx.ordemServico.update / tx.garantiaOrdemServico.updateMany",
+      "lock": "advisory(OS) → FOR UPDATE da OS (upstream PR #237) → garantias FOR UPDATE",
+      "latest": "planejarCorrecaoDatasV3(latest): next = {...latest} só datas + auditoria; pagamentoV3/aPrazoV3/recebimentoMistoRecusasV3 preservados",
+      "intent": "datas efetivas/validade/garantia + timeline"
+    },
+    {
+      "file": "lib/operacoes-v3/nova-os-actions.ts",
+      "function": "criarOSPreOrcamentoV3",
+      "line": 99,
+      "role": "CALLER",
+      "classification": "SAFE_TRANSACTIONAL",
+      "origin": "upstream PR #237",
+      "strategy": "criação inédita: proposta validada no servidor → criarOSCore (linha + payload na mesma transação)",
+      "callee": "criarOSCore",
+      "lock": "n/a (linha nova)",
+      "latest": "n/a",
+      "intent": "nova OS pré-orçamento"
     }
   ],
   "scopesReviewed": [
@@ -1600,8 +1649,14 @@
         "function": "upsertContaReceber",
         "line": 319,
         "classification": "TITLE_SAFE_LOCKED",
-        "strategy": "canonicalidade (server-owned keys, temLedgerDoServidor, status canônico) avaliada sobre a linha TRAVADA; snapshot do cliente nunca é autoridade sobre ledger já gravado pelo servidor",
-        "previousCategory": "STALE_RISK (P1 R1: read → upsert cego; título inexistente → UPDATE do ON CONFLICT apagava o payload criado)"
+        "strategy": "canonicalidade (server-owned keys, temLedgerDoServidor, status canônico) avaliada sobre a linha TRAVADA; snapshot do cliente nunca é autoridade sobre ledger já gravado pelo servidor; replacePayload sobre título os-faturamento EXISTENTE mantém o valor gravado (derivado da OS pelo adapter): snapshot de tela/sync anterior ao faturamento vigente não troca 500→400 (P1-T7)",
+        "previousCategory": "STALE_RISK (P1 R1: read → upsert cego; título inexistente → UPDATE do ON CONFLICT apagava o payload criado)",
+        "p1t7": {
+          "fixedIn": "5727e5802e202f05eef9aedcf30f17813f6cda8a",
+          "red": "p1t7-RED.log: 2/2 falham (título 400, saldo 50, receber 150 recusado com OS 500)",
+          "green": "p1t7-GREEN.log: 2/2; PG V3 95/95",
+          "preserved": "manual/legado/importador seguem o snapshot; criação de título ausente inalterada; adapter e V3 (sem replacePayload) seguem regravando o valor"
+        }
       },
       {
         "file": "lib/financeiro/services/contas-receber-service.ts",
@@ -1639,14 +1694,14 @@
         "function": "POST",
         "line": 24,
         "classification": "TITLE_SAFE_LOCKED",
-        "strategy": "caller global: upsertContaReceber sem db (transação curta por linha, só o título)"
+        "strategy": "caller global: upsertContaReceber sem db (transação curta por linha, só o título); valor do título da OS não vem da linha da tela (P1-T7)"
       },
       {
         "file": "app/api/ops/sync-legacy-financeiro/route.ts",
         "function": "POST",
         "line": 23,
         "classification": "TITLE_SAFE_LOCKED",
-        "strategy": "caller global: upsertContaReceber sem db (transação curta por linha, só o título)"
+        "strategy": "caller global: upsertContaReceber sem db (transação curta por linha, só o título); valor do título da OS não vem da linha da tela (P1-T7)"
       },
       {
         "file": "app/api/financeiro/receber/route.ts",
@@ -1728,5 +1783,28 @@
     ],
     "globalDbContract": "naTransacaoDoTituloContaReceber assume que `db` recebido é transação. Nenhum caller real passa o singleton global em `db` (confirmado também pela R2); sem mudança de código, contrato documentado.",
     "regressionTests": "test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts (P1-T6: 4 casos; P2-T4: 4 casos, 2 novos)"
+  },
+  "reconciliation": {
+    "baseOriginal": "1e45f98ade83b3071548d581225928b0fd95b06c",
+    "baseAtual": "a27b37e861ff044666d16535acb292f5d6957fcf",
+    "upstream": "PR #237 (goal/ops-datas-retroativas-001), já mergeado em origin/main",
+    "mergeCommit": "4ed751c7d349f0e8a92e726952aeee861830b31e",
+    "mergeParents": [
+      "d3d9a977f5bdeec74c358bbfa40a71092066e103",
+      "a27b37e861ff044666d16535acb292f5d6957fcf"
+    ],
+    "mergeKind": "merge normal (git merge --no-edit origin/main + git commit --no-edit), sem rebase/amend/reset",
+    "conflictsResolved": {
+      "lib/operacoes-v3/atendimento-rapido-actions.ts": "trava da linha do hardening (mutarAtendimentoRapidoV3) + datas efetivas/registradoEm do upstream dentro do mutate",
+      "lib/operacoes-v3/entrega-actions.ts": "mantida a versão do upstream (comOSTravadaV3: advisory da OS → FOR UPDATE → releitura; título lido no MESMO tx), que cobre a trava do hardening; datas efetivas do upstream preservadas",
+      "lib/operacoes-v3/entrega-actions.test.ts": "mock do upstream (tx + advisory/travarOS)",
+      "lib/operacoes-v3/comercial-pre-os-actions.ts": "mantida a versão do upstream (gravarComTrava/converter sob advisory + FOR UPDATE + releitura), que cobre o mutar do hardening; guardas de status/previsão do upstream preservadas",
+      "lib/operacoes-v3/orcamento-actions.ts": "trava da linha do hardening (gravarSobTrava) + regras do upstream (validade única/dia civil, envio preserva validade, aprovação recusa vencido) aplicadas sobre o payload relido sob a trava; o CAS por updatedAt do upstream fica subsumido pela trava (sem janela entre leitura e escrita)",
+      "lib/operacoes-v3/orcamento-actions.test.ts": "mock transacional do hardening; teste CAS do upstream adaptado para provar a mesma garantia (gravação atrasada não desfaz outra) sob a trava; teste de proposta vencida do upstream mantido"
+    },
+    "autoMergedCheckedForCompat": [
+      "lib/operacoes-v3/retorno-actions.test.ts (R9 do upstream compatível com o mock transacional)"
+    ],
+    "upstreamWritersChecked": "corrigirDatasOSV3 (advisory → OS FOR UPDATE → garantias FOR UPDATE; next = {...latest} só datas/auditoria; pagamentoV3/aPrazoV3/recusas preservados), entrega/assinatura/fotos e comercial/conversão (advisory → OS → título só leitura), criarOSPreOrcamentoV3 (criação inédita via criarOSCore). Nenhum grava estado financeiro V3 nem pede a OS depois do título."
   }
 }
