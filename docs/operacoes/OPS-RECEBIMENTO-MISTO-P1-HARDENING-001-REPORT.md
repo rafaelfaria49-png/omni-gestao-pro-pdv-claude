@@ -55,11 +55,11 @@ PR235_LATER_PAYMENT=PASS_PG_E2E_V3_V4
 UNIT=AMPLO_OPS_FINANCEIRO_APIS_2006_PASS_10_FAIL_PREEXISTENTES_PREVIEW_HONESTY_124_ARQUIVOS_EM_5727e58;CANONICALIDADE_24_24;DATAS_UPSTREAM_30_30
 MOUNTED=PASS_V3_20_V4_29_EM_5727e58
 POSTGRES=PASS_V3_105_INCLUI_TRANSITIVOS_47_P1SEED_10_EM_e02e826;V4_PARIDADE_1_GATED_40_EM_5727e58_SEM_DEPENDENCIA_DO_SEED
-E2E=PASS_CONJUNTO_6_6_SOBRE_BUILD_5727e58;NOVO_E2E_SOBRE_e02e826_PENDENTE_COORDENADOR;FALHAS_NAV_ANTERIORES_4_2_E_5_1_PRESERVADAS
+E2E=PASS_CONJUNTO_6_6_29.3s_WORKERS1_RETRIES0_BUILD_FINAL_9f582cc_FONTE_e02e826
 REGRESSION=PASS_FOCAL_E_AMPLA_OPS
-TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_INCREMENTAL_FALSE_EXIT0_HEAP8192_EM_e02e826_PRE_BUILD;POS_BUILD_PENDENTE_COORDENADOR
-LINT=PASS_ESLINT_2_ARQUIVOS_DO_CORRETIVO_R3_EXIT0;60_ARQUIVOS_EM_5727e58_0_ERROS_1_WARNING_PREEXISTENTE
-BUILD=PASS_EM_5727e58;NOVO_BUILD_OFICIAL_SOBRE_e02e826_PENDENTE_COORDENADOR
+TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_POS_BUILD_INCREMENTAL_FALSE_EXIT0_HEAP8192_HEAD_9f582cc;EXIT_REAL_REGISTRADO
+LINT=PASS_61_ARQUIVOS_CODIGO_TESTES_DIFF_GOAL_EXIT0_0_ERROS_1_AVISO_PREEXISTENTE
+BUILD=PASS_NPM_RUN_BUILD_OFICIAL_EXIT0_COMPILED_62S_STATIC_102_MIGRATION_SKIPPED_HEAD_9f582cc_FONTE_e02e826
 DIFF_CHECK=PASS
 SCHEMA_CHANGED=NO
 MIGRATION_CREATED=NO
@@ -84,7 +84,7 @@ IMPLEMENTADO=SIM
 VALIDADO=SIM_LOCAL_QA_COM_RESSALVAS_DOCUMENTADAS
 PUBLICADO=NO
 HOMOLOGADO=NO
-BLOCKER=BUILD_E2E_TYPECHECK_POS_BUILD_DO_COORDENADOR_E_REVISAO_INDEPENDENTE_R4_EXACT_SHA_PENDENTES
+BLOCKER=REVISAO_INDEPENDENTE_R4_EXACT_SHA_PENDENTE
 ```
 
 ## Correções originais
@@ -231,7 +231,7 @@ Nenhum caso terminou em deadlock nem em timeout (`naoEhDeadlock`). Não houve re
 | `r3fix-lint.log` | eslint dos 2 arquivos alterados: exit 0, sem avisos |
 | `update-writers-r3fix.cjs` | script que atualizou o WRITERS |
 
-PG V4 paridade, PG gated, mounted e unit amplo não foram reexecutados. O corretivo não toca código de app, hooks, rotas ou serviços que eles exercitam; só o script e o arquivo PG acima mudaram (`git diff --name-only 668dfb0..e02e826`). Os resultados válidos continuam os de `5727e58`. O coordenador executará novo build oficial, E2E e typecheck pós-build sobre a fonte final.
+PG V4 paridade, PG gated, mounted e unit amplo não foram reexecutados. O corretivo não toca código de app, hooks, rotas ou serviços que eles exercitam; só o script e o arquivo PG acima mudaram (`git diff --name-only 668dfb0..e02e826`). Os resultados válidos continuam os de `5727e58`. O coordenador executou novo build oficial, E2E e typecheck pós-build sobre a fonte final; as provas estão na seção final da R4.
 
 ## Inventário e ordem de locks
 
@@ -267,7 +267,7 @@ A execução ampla histórica `unit-full-after-import-fix.log` teve 9179 passed/
 
 ## Revisão e publicação pendentes
 
-Os gates anteriores ao corretivo do seed estão preservados na seção histórica seguinte. Novo build oficial, E2E e typecheck pós-build sobre a fonte `e02e826` são necessários antes da R4. A R4 independente deve revisar o SHA final exato da árvore reconciliada, separar o código do upstream (PR #237) do código deste GOAL e tentar quebrar as resoluções de conflito (orçamento sob trava × regras de validade do upstream; entrega/comercial do upstream × recusas/estado financeiro), o P1-T7 (lista antiga após faturamento vigente; manual/import preservados) e a corrida trava vazia → título criado → leitura → pagamento → escrita, a substituição rascunho×ledger em ambas as ordens, e ainda A–O do comando original, os cinco achados R1, a cobrança sobre faturamento vigente, a criação concorrente de título e os candidatos operacionais relatados. P0=P1=P2=0 e APPROVE são obrigatórios. Havendo achado, corrigir neste mesmo GOAL por Anthropic e obter nova R sobre o novo SHA.
+Os gates anteriores ao corretivo do seed estão preservados na seção histórica seguinte. Novo build oficial, E2E e typecheck pós-build sobre a fonte `e02e826` passaram, conforme a seção final da R4. A R4 independente deve revisar o SHA final exato da árvore reconciliada, separar o código do upstream (PR #237) do código deste GOAL e tentar quebrar as resoluções de conflito (orçamento sob trava × regras de validade do upstream; entrega/comercial do upstream × recusas/estado financeiro), o P1-T7 (lista antiga após faturamento vigente; manual/import preservados) e a corrida trava vazia → título criado → leitura → pagamento → escrita, a substituição rascunho×ledger em ambas as ordens, e ainda A–O do comando original, os cinco achados R1, a cobrança sobre faturamento vigente, a criação concorrente de título e os candidatos operacionais relatados. P0=P1=P2=0 e APPROVE são obrigatórios. Havendo achado, corrigir neste mesmo GOAL por Anthropic e obter nova R sobre o novo SHA.
 
 Só então: PR exclusivo com o SHA revisado; checks verdes; merge normal GitHub sem squash/rebase/force; SUCCESS de omni-gestao e omni-gestao-pro no merge SHA; smoke produção somente leitura. Sem sessão, OWNER_PENDING_AUTH, sem pedir credenciais. Nenhum pagamento real, mutation financeira de produção ou acesso à OS-2026-00028 é permitido. A worktree permanece ATIVA até relatório final e dois deploys verdes.
 
@@ -292,4 +292,23 @@ O fetch final anterior à R3 confirmou `origin/main=a27b37e861ff044666d16535acb2
 
 ## Consolidação documental para a R4
 
-Claude criou o commit funcional e concluiu o PostgreSQL V3 105/105, typecheck e lint antes do build. Também redigiu a seção R3 e o inventário (17 transitivos); o coordenador concluiu a consolidação documental e o commit destes dois documentos. O diff desde o SHA funcional é exclusivamente documental. Build/E2E/typecheck pós-build permanecem pendentes no estado acima; seus resultados reais serão acrescentados antes da R4. O parecer R3 é REQUEST_CHANGES sobre 668dfb0, e não aprova e02e826. Uma nova revisão exata é obrigatória.
+Claude criou o commit funcional e concluiu o PostgreSQL V3 105/105, typecheck e lint antes do build. Também redigiu a seção R3 e o inventário (17 transitivos); o coordenador concluiu a consolidação documental e o commit destes dois documentos. O diff desde o SHA funcional é exclusivamente documental. Build/E2E/typecheck pós-build passaram e seus resultados reais foram consolidados na seção seguinte antes da R4. O parecer R3 é REQUEST_CHANGES sobre 668dfb0, e não aprova e02e826. Uma nova revisão exata é obrigatória.
+
+## Gates finais do coordenador antes da R4
+
+Fonte funcional Anthropic `e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e`. O HEAD validado `9f582cc5211931f15b4d4d33a697d14779323b9a` difere dele somente em REPORT/WRITERS; este commit de consolidação também altera somente o REPORT. A R4 deve revisar o SHA exato posterior fornecido no pacote externo, sem autorreferência de hash neste documento. O parecer R3 REQUEST_CHANGES não é uma aprovação do corretivo.
+
+| Gate | Resultado | Evidência local gitignorada |
+| --- | --- | --- |
+| PostgreSQL V3 completo | 105/105, 47 transitivos e dez P1-SEED, no código final Anthropic | `r3fix-pg-v3-full-final.log` |
+| Build oficial | exit 0, compilação 62s, 102 páginas estáticas, `MIGRATION_SKIPPED` no QA | `r3fix-final-build-coordinator.log` |
+| E2E conjunto hardening + regressão PR235 V3 + paridade V4 | 6/6, 29.3s, workers=1, retries=0 | `r3fix-final-e2e-coordinator.log` |
+| Typecheck após build | `tsc --noEmit --incremental false`, heap8192, exit 0 | `r3fix-final-typecheck-coordinator.log` |
+| ESLint de todo código/teste do diff | 61 arquivos, exit 0, zero erros, um aviso preexistente em operacoes.ts | `r3fix-final-lint-coordinator.log` |
+| Diff/schema | diff-check BASE..HEAD e árvore limpos; schema/migrations sem alterações | Git no SHA final |
+
+Os quatro gates do coordenador têm JSON externo com HEAD, horários e exit code real. Os logs incluem `ACTUAL_EXIT_CODE=0 HEAD_VALIDATED=9f582cc...`; o typecheck completo separado é obrigatório porque o build Next ignora tipos. Não se inferiu sucesso apenas de um log vazio.
+
+Mounted V3 20/20 e V4 29/29, PG complementares 40/40, PG V4 paridade 1/1 e unit amplo 2006 PASS/10 FAIL estáticas preexistentes (124 arquivos) continuam qualificados como execuções em 5727e58: o código que exercitam não mudou no corretivo do seed. O diff 668dfb0..e02e826 contém somente o script e os testes PG do seed. A suíte inteira do projeto não é declarada verde. Os REDs e as falhas históricas de navegação continuam preservados.
+
+PR, merge remoto, deploy e smoke ainda não ocorreram. Uma nova sessão OpenAI READ-ONLY revisará este SHA final e todos os caminhos A–O, o P1 do seed, as resoluções do upstream e os corretivos anteriores. Merge normal exige P0=P1=P2=0, APPROVE e checks verdes. Provas operacionais posteriores serão gravadas fora da worktree para preservar o SHA aprovado. Nenhum pagamento real, alteração financeira de produção ou acesso à OS-2026-00028 ocorreu.
