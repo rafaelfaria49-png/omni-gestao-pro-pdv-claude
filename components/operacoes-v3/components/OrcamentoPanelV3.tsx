@@ -28,10 +28,12 @@ import {
   ORCAMENTO_STATUS_META_V3,
   orcamentoRealV3,
   statusEfetivoOrcamentoV3,
+  validadeExpiradaV3,
   type OrcamentoLinhaKindV3,
   type PecaV3,
   type ServicoV3,
 } from "@/lib/operacoes-v3/orcamento-model";
+import { formatarDiaDeIsoNaLojaV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import {
   pecaFromProdutoV3,
@@ -117,6 +119,8 @@ export function OrcamentoPanelV3({
   const versoes = useMemo(() => lerVersoesV3(os), [os]);
 
   const statusEf = orc ? statusEfetivoOrcamentoV3(orc) : null;
+  // Proposta vencida não é aprovada: renovar a validade é a correção auditada.
+  const vencida = !!orc && validadeExpiradaV3(orc.validoAte);
   const editavel = !!orc && (orc.status === "rascunho" || orc.status === "enviado");
   const aprovado = orc?.status === "aprovado";
   const osStatusV3 = statusV3FromOS(os);
@@ -447,7 +451,12 @@ export function OrcamentoPanelV3({
               {actions.pending === "enviar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {orc.status === "enviado" ? "Reenviar" : "Enviar"}
             </ButtonV3>
-            <ButtonV3 variant="outline" disabled={busy || dirty} onClick={aprovar}>
+            <ButtonV3
+              variant="outline"
+              disabled={busy || dirty || vencida}
+              title={vencida ? `Proposta vencida em ${formatarDiaDeIsoNaLojaV3(orc.validoAte)}. Atualize o "Válido até" em "Corrigir datas" para aprovar.` : undefined}
+              onClick={aprovar}
+            >
               {actions.pending === "aprovar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Aprovar
             </ButtonV3>
@@ -456,6 +465,11 @@ export function OrcamentoPanelV3({
               Recusar
             </ButtonV3>
             {dirty ? <span className="text-xs text-warning">Salve as alterações antes de enviar/aprovar.</span> : null}
+            {vencida ? (
+              <span role="status" className="text-xs text-warning">
+                Proposta vencida em {formatarDiaDeIsoNaLojaV3(orc.validoAte)}. Para aprovar, atualize o “Válido até” em “Corrigir datas”.
+              </span>
+            ) : null}
           </div>
         ) : null}
 

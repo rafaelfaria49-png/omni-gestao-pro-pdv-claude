@@ -190,6 +190,39 @@ function osEntregue(): OrdemServico {
   } as unknown as OrdemServico;
 }
 
+describe("Corrigir datas — impacto que só o servidor enxerga (R3)", () => {
+  it("o servidor pede confirmação de garantia que a prévia não via: a janela mostra o impacto e a 2ª tentativa vai confirmada", async () => {
+    // Sem garantia no payload: a prévia local não vê impacto; o servidor vê uma linha real ativa.
+    const os = osEntregue();
+    (os as unknown as { aberturaV3: Record<string, unknown> }).aberturaV3 = {
+      versao: 1,
+      recepcao: { dataEntrada: "2026-09-25T13:00:00.000Z", dataEntradaMeta: { precisao: "data_hora", dia: "2026-09-25" } },
+    };
+    const impacto = {
+      temImpacto: true,
+      payloadDeslocado: false,
+      encerradasIntocadas: 0,
+      linhas: [{ id: "g-1", dataInicioAntes: ENTREGA_ISO, dataFimAntes: "2026-12-28T19:00:00.000Z", dataInicio: "2026-09-27T19:00:00.000Z", dataFim: "2026-12-26T19:00:00.000Z" }],
+    };
+    mocks.corrigirDatasOSV3
+      .mockResolvedValueOnce({ ok: false, tipo: "confirmacao", campo: "dataEntrega", garantia: impacto, mensagem: "Confira o impacto na garantia e confirme antes de salvar." })
+      .mockResolvedValueOnce({ ok: true, diff: [], garantia: impacto, os: {} });
+    const onSalvo = vi.fn();
+    render(<CorrigirDatasModalV3 open os={os} storeId="loja-qa" onClose={vi.fn()} onSalvo={onSalvo} />);
+    fireEvent.change(screen.getByLabelText(/^Data da entrega/), { target: { value: "2026-09-27" } });
+    expect(screen.queryByRole("checkbox", { name: /Confirmo que a garantia passa a contar/ })).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText(/Ex\.: o aparelho foi entregue/), { target: { value: "Entregue na sexta, registrado hoje." } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar correção" }));
+    const caixa = await screen.findByRole("checkbox", { name: /Confirmo que a garantia passa a contar/ });
+    expect(screen.getByText(/A garantia muda junto com a entrega/)).toBeTruthy();
+    fireEvent.click(caixa);
+    fireEvent.click(screen.getByRole("button", { name: "Salvar correção" }));
+    await waitFor(() => expect(mocks.corrigirDatasOSV3).toHaveBeenCalledTimes(2));
+    expect(mocks.corrigirDatasOSV3.mock.calls[1]![2]).toMatchObject({ confirmarImpactoGarantia: true });
+    expect(onSalvo).toHaveBeenCalled();
+  });
+});
+
 describe("Corrigir datas — V3", () => {
   it("D14/D15: mostra antes, exige motivo e confirmação da garantia; envia só o campo alterado com a baseline vista", async () => {
     const onSalvo = vi.fn();

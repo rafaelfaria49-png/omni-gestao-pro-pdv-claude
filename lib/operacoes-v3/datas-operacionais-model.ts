@@ -399,6 +399,19 @@ export function dataFuturaV3(d: DataComparavelV3, agora: Date = new Date(), tz?:
   return Date.parse(d.iso) > agora.getTime() + TOLERANCIA_RELOGIO_MS_V3;
 }
 
+/**
+ * FATO aceito dentro da folga do relógio (até 5 min "à frente", ex.: o minuto
+ * atual digitado num navegador adiantado) é GRAVADO no horário do servidor:
+ * nenhum fato fica no futuro. Só-dia e fatos no passado ficam como estão.
+ */
+export function limitarFatoAoAgoraV3<T extends { iso: string; meta: DataOperacionalMetaV3 | null }>(d: T, agora: Date = new Date(), tz?: string): T {
+  if (d.meta?.precisao === "dia") return d;
+  const t = Date.parse(d.iso);
+  if (!Number.isFinite(t) || t <= agora.getTime()) return d;
+  const iso = agora.toISOString();
+  return { ...d, iso, meta: d.meta ? { precisao: "data_hora", dia: diaNaLojaV3(iso, tz) } : null };
+}
+
 /** Previsão já passou? Só-dia: antes de hoje. Data/hora: antes de agora. */
 export function previsaoVencidaV3(d: DataComparavelV3 | null | undefined, agora: Date = new Date(), tz?: string): boolean {
   if (!d) return false;

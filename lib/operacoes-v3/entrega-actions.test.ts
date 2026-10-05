@@ -308,6 +308,22 @@ describe("registrarEntregaV3 — guard financeiro server-side", () => {
     expect(mocks.autoClose).toHaveBeenCalledTimes(1);
   });
 
+  it("entrega sem data informada valida o 'agora' contra a entrada (entrada no futuro bloqueia, sem efeitos)", async () => {
+    // Relógio do teste: 15/07 15:30Z; entrada legada registrada para 15/07 18:00Z.
+    mocks.osFindFirst.mockResolvedValue(row(100, { aberturaV3: { versao: 1, recepcao: { dataEntrada: "2026-07-15T18:00:00.000Z" } } }));
+    await expect(registrarEntregaV3(storeId, osId)).rejects.toThrow(/anterior à entrada/);
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+    expect(mocks.consumirEstoque).not.toHaveBeenCalled();
+  });
+
+  it("data efetiva dentro da folga do relógio (minuto à frente) é gravada no horário do servidor", async () => {
+    // 15/07 12:33 na loja = 15:33Z, com o servidor em 15:30Z.
+    await registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-15T15:33:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-15" } } });
+    const gravado = mocks.osUpdate.mock.calls[0]![0] as { data: { payload: Record<string, any> } };
+    expect(gravado.data.payload.entregaV3.entregueEm).toBe("2026-07-15T15:30:00.000Z");
+    expect(gravado.data.payload.entregueEm).toBe("2026-07-15T15:30:00.000Z");
+  });
+
   it("OS já entregue com a MESMA data efetiva: continua no-op idempotente", async () => {
     const entregue = payload(100, {
       operacaoStatusV3: "entregue",

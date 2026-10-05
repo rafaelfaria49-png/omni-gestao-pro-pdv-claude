@@ -20,6 +20,7 @@
 import type { OSPrioridade } from "@/types/os";
 import type { OrcamentoLinhaKindV3 } from "./orcamento-model";
 import {
+  limitarFatoAoAgoraV3,
   montarDataOperacionalOpcionalV3,
   validarDatasRecepcaoV3,
   validarEntradaDataV3,
@@ -395,7 +396,8 @@ export function normalizarDatasRecepcaoV3(
   if (regras.length > 0) return { ok: false, erros: regras };
   return {
     ok: true,
-    entrada: e ? { iso: e.data.iso, meta: e.meta } : null,
+    // Fato dentro da folga do relógio é gravado no "agora" de quem normaliza (servidor).
+    entrada: e ? limitarFatoAoAgoraV3({ iso: e.data.iso, meta: e.meta }, agora) : null,
     previsao: p ? { iso: p.data.iso, meta: p.meta } : null,
   };
 }

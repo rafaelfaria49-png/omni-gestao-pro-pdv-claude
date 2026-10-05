@@ -46,6 +46,7 @@ import {
   recalcOrcamentoV3,
   validarGruposOrcamentoV3,
   validarSelecaoCompletaV3,
+  validadeExpiradaV3,
   VALIDADE_PADRAO_DIAS,
   type CanalEnvioOrcamentoV3,
   type OrcamentoV3,
@@ -59,6 +60,7 @@ import {
   diaNaLojaV3,
   fimDoDiaLojaIsoV3,
   formatarDataOperacionalV3,
+  formatarDiaDeIsoNaLojaV3,
   hojeNaLojaV3,
   isoInstanteValidoV3,
   lerDatasOSV3,
@@ -360,6 +362,11 @@ export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise
   const { sid, id, session, payload, lidoEm } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
   assertStatus(atual, ["rascunho", "enviado"], "aprovar");
+  // Proposta vencida continua vencida: renovar a validade é a correção auditada
+  // ("Corrigir datas" → Válido até), nunca um efeito colateral do aceite.
+  if (validadeExpiradaV3(atual.validoAte)) {
+    throw new Error(`Este orçamento venceu em ${formatarDiaDeIsoNaLojaV3(atual.validoAte)}. Para aprovar, atualize o "Válido até" em "Corrigir datas".`);
+  }
 
   const erroSelecao = validarSelecaoCompletaV3(atual);
   if (erroSelecao) throw new Error(erroSelecao);

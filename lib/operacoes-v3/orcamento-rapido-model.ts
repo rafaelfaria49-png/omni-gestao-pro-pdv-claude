@@ -21,6 +21,7 @@ import {
   erroFatoFuturoV3,
   fimDoDiaLojaIsoV3,
   hojeNaLojaV3,
+  limitarFatoAoAgoraV3,
   montarDataOperacionalV3,
   somarDiasCivisV3,
   validarDatasPropostaV3,
@@ -143,7 +144,8 @@ export function normalizarDatasOrcamentoRapidoV3(
       validoAteDia,
       validoAte: fimDoDiaLojaIsoV3(validoAteDia),
       validadeDias: Math.max(0, diasEntreCivisV3(p.meta.dia, validoAteDia)),
-      entrada: e && e.ok && e.meta ? { iso: e.data.iso, meta: e.meta } : null,
+      // Fato dentro da folga do relógio é gravado no "agora" do servidor.
+      entrada: e && e.ok && e.meta ? limitarFatoAoAgoraV3({ iso: e.data.iso, meta: e.meta }, agora) : null,
     },
   };
 }

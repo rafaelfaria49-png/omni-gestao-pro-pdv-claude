@@ -17,10 +17,13 @@ import type { ComercialV4, StatusComercialOrcamentoV4 } from "@/lib/operacoes-v4
 import { lerComercialV4 } from "@/lib/operacoes-v4/orcamento-pre-os";
 import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
 import { chaveLockRecebimentoMistoV3, travarOS } from "./recebimento-misto-service";
+import { validadeExpiradaV3 } from "./orcamento-model";
 import {
   erroFatoFuturoV3,
   erroOrdemV3,
+  formatarDiaDeIsoNaLojaV3,
   lerDatasOSV3,
+  limitarFatoAoAgoraV3,
   validarEntradaDataV3,
   prazoSlaDaPrevisaoV3,
   ROTULO_DATA_ENTRADA_V3,
@@ -167,6 +170,12 @@ export async function atualizarStatusComercialV3(
       throw new Error("Este registro não é um orçamento pré-OS.");
     }
     if (atual.statusComercial === "convertido") return null;
+    // Mesma regra da aprovação do orçamento: proposta vencida não é aprovada sem
+    // antes renovar a validade pela correção auditada.
+    const validoAte = (payload.orcamento as { validoAte?: string } | undefined)?.validoAte;
+    if (statusComercial === "aprovado" && validadeExpiradaV3(validoAte)) {
+      throw new Error(`Este orçamento venceu em ${formatarDiaDeIsoNaLojaV3(validoAte)}. Para aprovar, atualize o "Válido até" em "Corrigir datas".`);
+    }
 
     const comercialV4: ComercialV4 = { ...atual, ...extraPermitido, tipo: "orcamento_pre_os", statusComercial };
     const evento: EventoTimeline = {
@@ -241,8 +250,9 @@ export async function converterOrcamentoEmOSV3(
       if (!v.ok) throw new Error(v.mensagem);
       const futura = erroFatoFuturoV3("dataEntrada", ROTULO_DATA_ENTRADA_V3, v.data, agora);
       if (futura) throw new Error(futura.mensagem);
-      entradaNova = { iso: v.data.iso, meta: v.meta };
-      entradaFinal = v.data;
+      // Dentro da folga do relógio, a entrada é gravada no "agora" do servidor.
+      entradaNova = limitarFatoAoAgoraV3({ iso: v.data.iso, meta: v.meta }, agora);
+      entradaFinal = { ...v.data, iso: entradaNova.iso, dia: entradaNova.meta?.dia ?? v.data.dia };
     }
     let previsao: { iso: string; meta: DataOperacionalMetaV3 | null } | null = null;
     if (input.previsaoEntrega?.trim()) {

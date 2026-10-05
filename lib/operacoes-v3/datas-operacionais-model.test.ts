@@ -17,6 +17,7 @@ import {
   isoInstanteValidoV3,
   lerDataOperacionalV3,
   lerDatasOSV3,
+  limitarFatoAoAgoraV3,
   prazoSlaDaPrevisaoV3,
   montarDataOperacionalOpcionalV3,
   montarDataOperacionalV3,
@@ -157,6 +158,24 @@ describe("round-trip formulário → gravação → leitura → formulário", ()
     expect(d?.dia).toBe("2026-09-25");
     expect(lerDataOperacionalV3("", { precisao: "dia", dia: "2026-09-25" })).toBeNull();
     expect(lerDataOperacionalV3("lixo")).toBeNull();
+  });
+
+  it("fato dentro da folga do relógio é gravado no 'agora' do servidor; passado e só-dia ficam como estão (R3)", () => {
+    const agora = new Date("2026-10-04T18:00:30.000Z"); // 15:00:30 na loja
+    const minutoDigitado = montarDataOperacionalV3({ dia: "2026-10-04", hora: "15:03" });
+    if (!minutoDigitado.ok) throw new Error(minutoDigitado.mensagem);
+    expect(limitarFatoAoAgoraV3(minutoDigitado.valor, agora)).toEqual({ iso: agora.toISOString(), meta: { precisao: "data_hora", dia: "2026-10-04" } });
+    const passado = montarDataOperacionalV3({ dia: "2026-10-04", hora: "14:00" });
+    if (!passado.ok) throw new Error(passado.mensagem);
+    expect(limitarFatoAoAgoraV3(passado.valor, agora)).toEqual(passado.valor);
+    const soDia = montarDataOperacionalV3({ dia: "2026-10-04", hora: "" });
+    if (!soDia.ok) throw new Error(soDia.mensagem);
+    expect(limitarFatoAoAgoraV3(soDia.valor, agora)).toEqual(soDia.valor);
+    // Virada de dia dentro da folga: o dia gravado acompanha o horário do servidor.
+    const virada = montarDataOperacionalV3({ dia: "2026-10-05", hora: "00:02" });
+    if (!virada.ok) throw new Error(virada.mensagem);
+    const antesDaMeiaNoite = new Date("2026-10-05T02:59:00.000Z"); // 04/10 23:59 na loja
+    expect(limitarFatoAoAgoraV3(virada.valor, antesDaMeiaNoite).meta).toEqual({ precisao: "data_hora", dia: "2026-10-04" });
   });
 
   it("SLA espelhado de previsão só-dia vale até o FIM do dia; não vira 'prazo interno' nem 'atrasada' ao meio-dia (R2)", () => {

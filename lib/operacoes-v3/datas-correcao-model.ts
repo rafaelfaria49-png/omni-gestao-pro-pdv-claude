@@ -28,6 +28,7 @@ import {
   formatarDataOperacionalV3,
   formatarDiaDeIsoNaLojaV3,
   lerDatasOSV3,
+  limitarFatoAoAgoraV3,
   prazoInternoPadraoIsoV3,
   prazoSlaDaPrevisaoV3,
   validarDatasPropostaV3,
@@ -39,9 +40,21 @@ import {
 import { lerGarantiaV3, lerRetornosV3 } from "./pos-venda-model";
 import type { OrdemServico } from "@/types/os";
 
+/**
+ * Valor "visto" de um campo para a trava otimista: o instante gravado e, se for
+ * só-dia, a precisão (`ISO|dia`). Trocar só-dia por "12:00" explícito (mesma ISO)
+ * também é mudança — quem abriu a correção antes recebe conflito.
+ */
+export function esperadoCampoDataV3(iso: string, precisao: string | undefined): string {
+  if (!iso) return "";
+  return precisao === "dia" ? `${iso}|dia` : iso;
+}
+
 export type CampoCorrecaoDataV3 = "dataEntrada" | "previsaoEntrega" | "dataEntrega" | "dataProposta" | "validoAte";
 
 export const ORDEM_CAMPOS_CORRECAO_V3: CampoCorrecaoDataV3[] = ["dataEntrada", "previsaoEntrega", "dataEntrega", "dataProposta", "validoAte"];
+/** Datas que registram FATOS (nunca no futuro). Previsão e validade são promessas. */
+const CAMPOS_FATO_V3 = new Set<CampoCorrecaoDataV3>(["dataEntrada", "dataEntrega", "dataProposta"]);
 
 export interface CampoCorrigivelV3 {
   campo: CampoCorrecaoDataV3;
@@ -84,7 +97,7 @@ export function camposCorrigiveisV3(os: unknown, tz?: string): CorrecaoDisponive
     rotulo: atendimentoRapido ? "Entrada do atendimento" : "Data de entrada do aparelho",
     ajuda: atendimentoRapido ? "Quando o atendimento começou." : "Quando o aparelho realmente entrou na loja.",
     atual: datas.entrada,
-    esperado: txt(recepcao.dataEntrada),
+    esperado: esperadoCampoDataV3(txt(recepcao.dataEntrada), datas.entrada?.precisao),
     permiteHora: true,
     permiteLimpar: false,
   });
@@ -94,7 +107,7 @@ export function camposCorrigiveisV3(os: unknown, tz?: string): CorrecaoDisponive
       rotulo: "Previsão de entrega",
       ajuda: "Quando você prevê entregar o aparelho ao cliente. Opcional.",
       atual: datas.previsao,
-      esperado: datas.previsao ? txt(recepcao.previsaoEntrega) : "",
+      esperado: datas.previsao ? esperadoCampoDataV3(txt(recepcao.previsaoEntrega), datas.previsao.precisao) : "",
       permiteHora: true,
       permiteLimpar: true,
     });
@@ -105,7 +118,7 @@ export function camposCorrigiveisV3(os: unknown, tz?: string): CorrecaoDisponive
       rotulo: atendimentoRapido ? "Saída do atendimento" : "Data da entrega",
       ajuda: atendimentoRapido ? "Quando o serviço foi concluído e entregue." : "Quando o aparelho foi realmente entregue ao cliente.",
       atual: datas.entrega,
-      esperado: datas.entrega.iso,
+      esperado: esperadoCampoDataV3(datas.entrega.iso, datas.entrega.precisao),
       permiteHora: true,
       permiteLimpar: false,
     });
@@ -116,23 +129,26 @@ export function camposCorrigiveisV3(os: unknown, tz?: string): CorrecaoDisponive
       rotulo: "Data do orçamento",
       ajuda: "Quando a proposta foi feita ao cliente.",
       atual: datas.proposta,
-      esperado: datas.proposta ? txt(comercial.dataProposta) : "",
+      esperado: datas.proposta ? esperadoCampoDataV3(txt(comercial.dataProposta), datas.proposta.precisao) : "",
       permiteHora: false,
       permiteLimpar: false,
     });
-    const status = txt(orcamento?.status);
-    if (orcamento && orcamento.sintetizado !== true && (status === "rascunho" || status === "enviado")) {
-      const validoAte = datas.validoAte;
-      campos.push({
-        campo: "validoAte",
-        rotulo: "Válido até",
-        ajuda: "Último dia de validade da proposta.",
-        atual: validoAte ? { iso: validoAte, precisao: "dia", dia: diaNaLojaV3(validoAte, tz), origem: "informada" } : null,
-        esperado: validoAte,
-        permiteHora: false,
-        permiteLimpar: false,
-      });
-    }
+  }
+  // Validade: pré-OS ou orçamento da própria OS, enquanto ainda pode ser aprovado.
+  // É o caminho AUDITADO para renovar uma proposta vencida (nunca o aceite em si).
+  const status = txt(orcamento?.status);
+  const validoAte = datas.validoAte;
+  const comValidade = comercial?.tipo === "orcamento_pre_os" || !!validoAte;
+  if (comValidade && orcamento && orcamento.sintetizado !== true && (status === "rascunho" || status === "enviado")) {
+    campos.push({
+      campo: "validoAte",
+      rotulo: "Válido até",
+      ajuda: "Último dia de validade da proposta.",
+      atual: validoAte ? { iso: validoAte, precisao: "dia", dia: diaNaLojaV3(validoAte, tz), origem: "informada" } : null,
+      esperado: validoAte,
+      permiteHora: false,
+      permiteLimpar: false,
+    });
   }
   return { campos, atendimentoRapido };
 }
@@ -261,6 +277,15 @@ export function planejarCorrecaoDatasV3(
     if (!def.permiteHora && valor.meta.precisao !== "dia") return falha("validacao", `${def.rotulo}: informe só o dia.`, campo);
     const v = validarEntradaDataV3(valor.iso, valor.meta, def.rotulo, tz);
     if (!v.ok) return falha("validacao", v.mensagem, campo);
+    if (CAMPOS_FATO_V3.has(campo)) {
+      const futura = erroFatoFuturoV3(campo, def.rotulo, v.data, ctx.agora, tz);
+      if (futura) return falha("validacao", futura.mensagem, campo);
+      // Fato dentro da folga do relógio é gravado no "agora" do servidor — e é esse
+      // valor que o diff e a auditoria mostram.
+      const g = limitarFatoAoAgoraV3({ iso: v.data.iso, meta: valor.meta }, ctx.agora, tz);
+      novos.set(campo, { valor: { iso: g.iso, meta: g.meta ?? valor.meta }, lida: { ...v.data, iso: g.iso, dia: g.meta?.dia ?? v.data.dia } });
+      continue;
+    }
     novos.set(campo, { valor, lida: v.data });
   }
 
@@ -508,7 +533,8 @@ export function planejarCorrecaoDatasV3(
     const propostaDia = valorFinal("dataProposta")?.dia;
     const validoDia = valorFinal("validoAte")?.dia;
     if (propostaDia && validoDia) comercial.validadeDias = Math.max(0, diasEntreCivisV3(propostaDia, validoDia));
-    next.comercialV4 = comercial;
+    // Orçamento da própria OS (sem registro comercial): não cria `comercialV4` vazio.
+    if (obj(base.comercialV4) || alterados.has("dataProposta")) next.comercialV4 = comercial;
   }
 
   const evento: EventoTimeline = {

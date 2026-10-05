@@ -88,6 +88,9 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
   const [tocados, setTocados] = useState<Set<CampoCorrecaoDataV3>>(() => new Set());
   const [motivo, setMotivo] = useState("");
   const [confirmarGarantia, setConfirmarGarantia] = useState(false);
+  // Impacto na garantia que só o servidor enxerga (linhas reais de garantia, ou
+  // uma garantia criada depois que a janela abriu): passa a ser exibido aqui.
+  const [garantiaServidor, setGarantiaServidor] = useState<ImpactoGarantiaV3 | null>(null);
   const [erros, setErros] = useState<CorrigirDatasEstado["erros"]>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -137,7 +140,8 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [os, valores, tocados, motivo]);
 
-  const garantia = previa.plano ? (previa.plano.ok ? previa.plano.garantia : previa.plano.garantia ?? null) : null;
+  const garantiaLocal = previa.plano ? (previa.plano.ok ? previa.plano.garantia : previa.plano.garantia ?? null) : null;
+  const garantia = garantiaServidor?.temImpacto ? garantiaServidor : garantiaLocal;
   const alterados = previa.plano?.ok ? previa.plano.diff.map((d) => d.campo) : [...tocados];
   // Regra violada aparece ao vivo junto do campo (mesma mensagem do servidor).
   const erroRegra =
@@ -194,7 +198,14 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
     try {
       const r = await corrigirDatasOSV3(sid, os.id, input);
       if (!r.ok) {
-        if (r.campo && r.tipo !== "confirmacao") {
+        if (r.tipo === "confirmacao") {
+          // O servidor viu impacto que a prévia não via: mostra-o e pede a confirmação.
+          if (r.garantia) setGarantiaServidor(r.garantia);
+          setErroGeral(r.mensagem);
+          focar("confirmarGarantia");
+          return false;
+        }
+        if (r.campo) {
           setErros({ [r.campo]: r.mensagem });
           focar(r.campo);
         }
@@ -225,7 +236,10 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
         delete resto[campo];
         return resto;
       });
-      if (campo === "dataEntrega") setConfirmarGarantia(false);
+      if (campo === "dataEntrega") {
+        setConfirmarGarantia(false);
+        setGarantiaServidor(null);
+      }
     },
     limpar: (campo) => {
       setValores((atual) => ({ ...atual, [campo]: campoVazioV3() }));

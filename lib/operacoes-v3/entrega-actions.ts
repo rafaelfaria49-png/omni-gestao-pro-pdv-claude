@@ -40,7 +40,9 @@ import { localKeyContaReceberOSV3 } from "./payment-model";
 import { finalizarRetornoPorEntregaVinculadaV3 } from "./retorno-auto-close-actions";
 import {
   dataRetroativaV3,
+  diaNaLojaV3,
   lerDatasOSV3,
+  limitarFatoAoAgoraV3,
   validarDataEntregaV3,
   validarEntradaDataV3,
   ROTULO_DATA_ENTREGA_V3,
@@ -170,12 +172,20 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
     let entregueEm = now;
     let entregueEmMeta: DataOperacionalMetaV3 | null = null;
     let entregaRetroativa = false;
+    const agoraEntrega = new Date(now);
+    const entradaOS = lerDatasOSV3(payload).entrada;
     if (dataValidada?.ok) {
-      const erros = validarDataEntregaV3({ entrega: dataValidada.data, entrada: lerDatasOSV3(payload).entrada }, new Date(now));
+      const erros = validarDataEntregaV3({ entrega: dataValidada.data, entrada: entradaOS }, agoraEntrega);
       if (erros.length > 0) throw new Error(erros[0]!.mensagem);
-      entregueEm = dataValidada.data.iso;
-      entregueEmMeta = dataValidada.meta;
-      entregaRetroativa = dataRetroativaV3(dataValidada.data, new Date(now));
+      // Dentro da folga do relógio, a entrega é gravada no "agora" do servidor.
+      const gravada = limitarFatoAoAgoraV3({ iso: dataValidada.data.iso, meta: dataValidada.meta }, agoraEntrega);
+      entregueEm = gravada.iso;
+      entregueEmMeta = gravada.meta;
+      entregaRetroativa = dataRetroativaV3(dataValidada.data, agoraEntrega);
+    } else {
+      // Sem data informada a entrega é AGORA — que também nunca fica antes da entrada.
+      const erros = validarDataEntregaV3({ entrega: { iso: now, precisao: "data_hora", dia: diaNaLojaV3(now) }, entrada: entradaOS }, agoraEntrega);
+      if (erros.length > 0) throw new Error(erros[0]!.mensagem);
     }
 
     // P0: a decisão financeira é refeita no servidor imediatamente antes do

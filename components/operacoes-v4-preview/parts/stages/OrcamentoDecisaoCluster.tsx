@@ -21,7 +21,8 @@
 import { useState } from "react";
 import { C, card, cardTitle, upLabel } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
-import { MOTIVO_RECUSA_LABEL_V3, statusEfetivoOrcamentoV3, type MotivoRecusaOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-model";
+import { MOTIVO_RECUSA_LABEL_V3, statusEfetivoOrcamentoV3, validadeExpiradaV3, type MotivoRecusaOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-model";
+import { formatarDiaDeIsoNaLojaV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 
 const MOTIVOS: MotivoRecusaOrcamentoV3[] = ["preco", "prazo", "desistiu", "concorrencia", "outro"];
 
@@ -65,7 +66,11 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
   const temGrupos = v.orcamento.temGrupos;
   const todosResolvidos = grupos.every((g) => g.resolvido);
   const totalZero = !!guard && guard.total <= 0;
-  const podeAprovar = (!temGrupos || todosResolvidos) && !totalZero;
+  // Proposta vencida não é aprovada: renovar a validade é a correção auditada.
+  const validoAteRaw = (v.realOS as { orcamento?: { validoAte?: string } } | null)?.orcamento?.validoAte;
+  const vencida = validadeExpiradaV3(validoAteRaw);
+  const avisoVencida = vencida ? `Proposta vencida em ${formatarDiaDeIsoNaLojaV3(validoAteRaw)}. Para aprovar, atualize o "Válido até" em "Corrigir datas".` : "";
+  const podeAprovar = (!temGrupos || todosResolvidos) && !totalZero && !vencida;
 
   const [busySelecao, setBusySelecao] = useState<string | null>(null);
   const [busyDecisao, setBusyDecisao] = useState(false);
@@ -153,11 +158,15 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
           ⚠️ Orçamento total R$ 0. Lance um valor ou marque como sem cobrança em etapa própria.
         </div>
       )}
-      {!totalZero && !podeAprovar && (
+      {vencida ? (
+        <div role="status" style={{ fontSize: 11, color: C.warnFg, marginBottom: 8, lineHeight: 1.5 }}>
+          ⚠️ {avisoVencida}
+        </div>
+      ) : !totalZero && !podeAprovar ? (
         <div style={{ fontSize: 11, color: C.warnFg, marginBottom: 8, lineHeight: 1.5 }}>
           ⚠️ Selecione uma opção em cada grupo antes de aprovar.
         </div>
-      )}
+      ) : null}
 
       {!modoRecusa ? (
         <>
@@ -165,7 +174,7 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
             type="button"
             onClick={() => void aprovar()}
             disabled={busyDecisao || !podeAprovar}
-            title={totalZero ? "Orçamento total R$ 0 — lance um valor antes de aprovar." : !podeAprovar ? "Selecione uma opção em cada grupo antes de aprovar." : undefined}
+            title={totalZero ? "Orçamento total R$ 0 — lance um valor antes de aprovar." : vencida ? avisoVencida : !podeAprovar ? "Selecione uma opção em cada grupo antes de aprovar." : undefined}
             style={{ height: 34, width: "100%", padding: "0 16px", border: "none", background: C.success, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busyDecisao || !podeAprovar ? "default" : "pointer", opacity: busyDecisao || !podeAprovar ? 0.6 : 1, marginBottom: 8 }}
           >
             {busyDecisao ? "Processando…" : guard ? "Salvar e aprovar orçamento" : "Aprovar orçamento"}

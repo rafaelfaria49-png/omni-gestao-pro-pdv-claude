@@ -65,6 +65,17 @@ describe("gravação condicionada (CAS por updatedAt) — GOAL OPS-DATAS-ENTRADA
   });
 });
 
+describe("aprovarOrcamentoV3 — proposta vencida (R3)", () => {
+  it("recusa aprovar orçamento vencido e aponta a renovação auditada; nada é gravado", async () => {
+    findFirstMock.mockResolvedValue(
+      baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }], validoAte: "2020-01-02T02:59:59.999Z" }),
+    );
+    await expect(aprovarOrcamentoV3("loja-1", "os-1")).rejects.toThrow(/venceu em 01\/01\/2020.*Corrigir datas/);
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(salvarGarantiaMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("aprovarOrcamentoV3 — GOAL OPS-V4-ORC-APROVACAO-SELECAO-026", () => {
   it("sem grupos: aprova normalmente (regressão N=0, comportamento idêntico ao anterior)", async () => {
     findFirstMock.mockResolvedValue(baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }));

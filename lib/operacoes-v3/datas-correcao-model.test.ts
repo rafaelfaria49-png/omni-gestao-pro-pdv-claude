@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   camposCorrigiveisV3,
+  esperadoCampoDataV3,
   planejarCorrecaoDatasV3,
   type CorrecaoDatasInputV3,
   type GarantiaOperacionalLinhaV3,
@@ -255,7 +256,7 @@ describe("planejarCorrecaoDatasV3 — garantia vencida nunca é reativada (R2)",
   it("mover a entrega para depois a ponto de a garantia vencida voltar a valer é impedimento", () => {
     const r = planejarCorrecaoDatasV3(
       osAntiga(),
-      input({ alteracoes: { dataEntrega: data("2026-09-15") }, esperados: { dataEntrega: ENTREGA_ANTIGA.iso }, confirmarImpactoGarantia: true }),
+      input({ alteracoes: { dataEntrega: data("2026-09-15") }, esperados: { dataEntrega: esperadoCampoDataV3(ENTREGA_ANTIGA.iso, "dia") }, confirmarImpactoGarantia: true }),
       CTX,
     );
     expect(r.ok).toBe(false);
@@ -271,7 +272,7 @@ describe("planejarCorrecaoDatasV3 — garantia vencida nunca é reativada (R2)",
     const base = osAntiga({ aberturaV3: { versao: 1, recepcao: { dataEntrada: ENTRADA_ANTIGA.iso, dataEntradaMeta: ENTRADA_ANTIGA.meta } } });
     const r = planejarCorrecaoDatasV3(
       base,
-      input({ alteracoes: { dataEntrega: data("2026-09-20") }, esperados: { dataEntrega: ENTREGA_ANTIGA.iso }, confirmarImpactoGarantia: true }),
+      input({ alteracoes: { dataEntrega: data("2026-09-20") }, esperados: { dataEntrega: esperadoCampoDataV3(ENTREGA_ANTIGA.iso, "dia") }, confirmarImpactoGarantia: true }),
       { ...CTX, garantias: linhas },
     );
     expect(r.ok).toBe(false);
@@ -285,7 +286,7 @@ describe("planejarCorrecaoDatasV3 — garantia vencida nunca é reativada (R2)",
       osAntiga(),
       input({
         alteracoes: { dataEntrega: data("2026-05-31") },
-        esperados: { dataEntrega: ENTREGA_ANTIGA.iso },
+        esperados: { dataEntrega: esperadoCampoDataV3(ENTREGA_ANTIGA.iso, "dia") },
         confirmarImpactoGarantia: true,
       }),
       CTX,
@@ -326,6 +327,30 @@ describe("planejarCorrecaoDatasV3 — entrega legada e SLA da previsão (R2)", (
     const datas = lerDatasOSV3(r.next);
     expect(datas.previsao).toMatchObject({ precisao: "dia", dia: "2026-10-08" });
     expect(datas.prazoInterno).toBeNull();
+  });
+});
+
+describe("planejarCorrecaoDatasV3 — trava otimista considera a precisão (R3)", () => {
+  it("trocar só-dia por 12:00 explícito (mesma ISO) é mudança: quem tem o snapshot antigo recebe conflito", () => {
+    const soDia = data("2026-09-29");
+    const comHora = data("2026-09-29", "12:00");
+    expect(comHora.iso).toBe(soDia.iso);
+    const base = osEntregue({
+      entregueEm: soDia.iso,
+      retirada: { confirmado: true, retiradoPor: "Cliente", retiradoEm: soDia.iso },
+      entregaV3: { entregueEm: soDia.iso, entregueEmMeta: soDia.meta, registradoEm: "2026-10-04T17:30:00.000Z" },
+    });
+    const visto = camposCorrigiveisV3(base).campos.find((c) => c.campo === "dataEntrega")!.esperado;
+    expect(visto).toBe(`${soDia.iso}|dia`);
+    const a = planejarCorrecaoDatasV3(base, input({ alteracoes: { dataEntrega: comHora }, esperados: { dataEntrega: visto }, confirmarImpactoGarantia: true }), CTX);
+    expect(a.ok).toBe(true);
+    if (!a.ok) return;
+    const b = planejarCorrecaoDatasV3(
+      a.next,
+      input({ alteracoes: { dataEntrega: data("2026-09-28") }, esperados: { dataEntrega: visto }, confirmarImpactoGarantia: true }),
+      CTX,
+    );
+    expect(b).toMatchObject({ ok: false, tipo: "conflito", campo: "dataEntrega" });
   });
 });
 
@@ -432,7 +457,7 @@ describe("planejarCorrecaoDatasV3 — previsão, atendimento rápido e proposta"
     const validade = { iso: fimDoDiaLojaIsoV3("2026-09-30"), meta: { precisao: "dia" as const, dia: "2026-09-30" } };
     const r = planejarCorrecaoDatasV3(
       os,
-      input({ alteracoes: { dataProposta: data("2026-09-08"), validoAte: validade }, esperados: { dataProposta: proposta.iso, validoAte: fimDoDiaLojaIsoV3("2026-09-17") } }),
+      input({ alteracoes: { dataProposta: data("2026-09-08"), validoAte: validade }, esperados: { dataProposta: esperadoCampoDataV3(proposta.iso, "dia"), validoAte: fimDoDiaLojaIsoV3("2026-09-17") } }),
       CTX,
     );
     expect(r.ok).toBe(true);

@@ -24,11 +24,12 @@ import { criarOSEnterpriseV3, criarOSPreOrcamentoV3 } from "@/lib/operacoes-v3/n
 import { novaOSDraftVazioV3, type NovaOSDraftV3 } from "@/lib/operacoes-v3/nova-os-model";
 import { criarOrcamentoRapidoV3 } from "@/lib/operacoes-v3/orcamento-rapido-actions";
 import { atualizarStatusComercialV3, converterOrcamentoEmOSV3, marcarOrcamentoPreOsV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
-import { enviarOrcamentoV3, gerarOrcamentoDaOS, registrarEnvioOrcamento, salvarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
+import { aprovarOrcamentoV3, enviarOrcamentoV3, gerarOrcamentoDaOS, registrarEnvioOrcamento, salvarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
 import { finalizarAtendimentoRapidoV3 } from "@/lib/operacoes-v3/atendimento-rapido-actions";
 import { registrarEntregaV3 } from "@/lib/operacoes-v3/entrega-actions";
 import { receberOSV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import { corrigirDatasOSV3 } from "@/lib/operacoes-v3/datas-correcao-actions";
+import { esperadoCampoDataV3 } from "@/lib/operacoes-v3/datas-correcao-model";
 import { chaveLockRecebimentoMistoV3 } from "@/lib/operacoes-v3/recebimento-misto-service";
 import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { lerRecepcaoV3 } from "@/lib/operacoes-v3/workspace-model";
@@ -384,6 +385,28 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect([fimDoDiaLojaIsoV3(dia(5)), fimDoDiaLojaIsoV3(dia(9))]).toContain(venc);
   });
 
+  it("orçamento da OS vencido: aprovação recusada; renovar o 'Válido até' pela correção auditada libera a aprovação", async () => {
+    const storeId = await novaLoja();
+    const { os } = await criarOSEnterpriseV3(storeId, draftBase());
+    await gerarOrcamentoDaOS(storeId, os.id);
+    await salvarOrcamentoV3(storeId, os.id, { servicos: [{ id: `s-${++seq}`, descricao: "Troca de tela", valor: 200 }], pecas: [], desconto: 0 });
+    await enviarOrcamentoV3(storeId, os.id);
+    // Setup sintético: a validade já passou.
+    const { p } = await lerOS(os.id);
+    const vencida = fimDoDiaLojaIsoV3(dia(-3));
+    await prisma.ordemServico.update({ where: { id: os.id }, data: { payload: { ...p, orcamento: { ...p.orcamento, validoAte: vencida } } as Prisma.InputJsonValue } });
+    await expect(aprovarOrcamentoV3(storeId, os.id)).rejects.toThrow(/venceu em .*Corrigir datas/);
+    const renovada = { iso: fimDoDiaLojaIsoV3(dia(5)), meta: { precisao: "dia" as const, dia: dia(5) } };
+    const r = await corrigirDatasOSV3(storeId, os.id, { alteracoes: { validoAte: renovada }, esperados: { validoAte: vencida }, motivo: "Cliente pediu mais prazo." });
+    expect(r.ok).toBe(true);
+    await aprovarOrcamentoV3(storeId, os.id);
+    const final = (await lerOS(os.id)).p;
+    expect(final.orcamento).toMatchObject({ status: "aprovado", validoAte: renovada.iso });
+    // Orçamento da própria OS: a correção não cria registro comercial vazio.
+    expect(final.comercialV4).toBeUndefined();
+    expect(final.timeline.filter((e: Payload) => e.metadata?.evento === "datas_corrigidas")).toHaveLength(1);
+  });
+
   it("status comercial não aceita data da proposta nem validade no 'extra' (só campos não temporais)", async () => {
     const storeId = await novaLoja();
     const proposta = data(dia(-3));
@@ -485,7 +508,7 @@ describe("PG · Atendimento rápido retroativo (D11/D12)", () => {
     const nova = data(dia(-6), "11:00");
     const res = await corrigirDatasOSV3(storeId, r.osId, {
       alteracoes: { dataEntrega: nova, dataEntrada: nova },
-      esperados: { dataEntrega: servico.iso, dataEntrada: servico.iso },
+      esperados: { dataEntrega: esperadoCampoDataV3(servico.iso, servico.meta.precisao), dataEntrada: esperadoCampoDataV3(servico.iso, servico.meta.precisao) },
       motivo: "Atendimento foi na véspera.",
       confirmarImpactoGarantia: true,
     });
@@ -552,13 +575,13 @@ describe("PG · Entrega retroativa e correção (D13–D15)", () => {
     const nova = data(dia(-3), "16:00");
 
     // Sem confirmação explícita do impacto na garantia: nada é gravado.
-    const sem = await corrigirDatasOSV3(storeId, osId, { alteracoes: { dataEntrega: nova }, esperados: { dataEntrega: entrega.iso }, motivo: "Entregue um dia antes." });
+    const sem = await corrigirDatasOSV3(storeId, osId, { alteracoes: { dataEntrega: nova }, esperados: { dataEntrega: esperadoCampoDataV3(entrega.iso, entrega.meta.precisao) }, motivo: "Entregue um dia antes." });
     expect(sem).toMatchObject({ ok: false, tipo: "confirmacao" });
     expect((await lerOS(osId)).p).toEqual(pAntes);
 
     const ok = await corrigirDatasOSV3(storeId, osId, {
       alteracoes: { dataEntrega: nova },
-      esperados: { dataEntrega: entrega.iso },
+      esperados: { dataEntrega: esperadoCampoDataV3(entrega.iso, entrega.meta.precisao) },
       motivo: "Entregue um dia antes.",
       confirmarImpactoGarantia: true,
     });
@@ -602,7 +625,7 @@ describe("PG · Entrega retroativa e correção (D13–D15)", () => {
     const { p: pAntes } = await lerOS(osId);
     const r = await corrigirDatasOSV3(storeId, osId, {
       alteracoes: { dataEntrega: data(dia(-150)) },
-      esperados: { dataEntrega: entrega.iso },
+      esperados: { dataEntrega: esperadoCampoDataV3(entrega.iso, entrega.meta.precisao) },
       motivo: "Data errada",
       confirmarImpactoGarantia: true,
     });
@@ -648,7 +671,7 @@ describe("PG · Concorrência (D16/D17)", () => {
     const pagar = receberOSV3(storeId, osId, { valor: 40, forma: "dinheiro", sessaoId });
     const corrigir = corrigirDatasOSV3(storeId, osId, {
       alteracoes: { dataEntrada: nova },
-      esperados: { dataEntrada: entrada.iso },
+      esperados: { dataEntrada: esperadoCampoDataV3(entrada.iso, entrada.meta.precisao) },
       motivo: "Entrada real foi antes.",
     });
     await esperarEsperasAdvisory(2);
@@ -670,8 +693,8 @@ describe("PG · Concorrência (D16/D17)", () => {
     const entrada = data(dia(-6));
     const osId = await novaOSPronta(storeId, entrada);
     const [a, b] = await Promise.all([
-      corrigirDatasOSV3(storeId, osId, { alteracoes: { dataEntrada: data(dia(-7)) }, esperados: { dataEntrada: entrada.iso }, motivo: "Operador A" }),
-      corrigirDatasOSV3(storeId, osId, { alteracoes: { dataEntrada: data(dia(-8)) }, esperados: { dataEntrada: entrada.iso }, motivo: "Operador B" }),
+      corrigirDatasOSV3(storeId, osId, { alteracoes: { dataEntrada: data(dia(-7)) }, esperados: { dataEntrada: esperadoCampoDataV3(entrada.iso, entrada.meta.precisao) }, motivo: "Operador A" }),
+      corrigirDatasOSV3(storeId, osId, { alteracoes: { dataEntrada: data(dia(-8)) }, esperados: { dataEntrada: esperadoCampoDataV3(entrada.iso, entrada.meta.precisao) }, motivo: "Operador B" }),
     ]);
     const resultados = [a, b];
     expect(resultados.filter((r) => r.ok)).toHaveLength(1);
@@ -729,18 +752,18 @@ describe("PG · Permissão e isolamento por loja (D18)", () => {
     try {
       sessao.role = "CAIXA";
       await expect(
-        corrigirDatasOSV3(lojaA, osA, { alteracoes: { dataEntrada: data(dia(-5)) }, esperados: { dataEntrada: entrada.iso }, motivo: "Sem permissão" }),
+        corrigirDatasOSV3(lojaA, osA, { alteracoes: { dataEntrada: data(dia(-5)) }, esperados: { dataEntrada: esperadoCampoDataV3(entrada.iso, entrada.meta.precisao) }, motivo: "Sem permissão" }),
       ).rejects.toThrow(/Sem permissão/);
       await expect(registrarEntregaV3(lojaA, osA, { dataEntrega: data(dia(-1)) })).rejects.toThrow(/Sem permissão/);
       sessao.role = "ADMIN";
       sessao.storeAccess = "restricted";
       sessao.allowedStoreIds = [lojaB];
       await expect(
-        corrigirDatasOSV3(lojaA, osA, { alteracoes: { dataEntrada: data(dia(-5)) }, esperados: { dataEntrada: entrada.iso }, motivo: "Outra loja" }),
+        corrigirDatasOSV3(lojaA, osA, { alteracoes: { dataEntrada: data(dia(-5)) }, esperados: { dataEntrada: esperadoCampoDataV3(entrada.iso, entrada.meta.precisao) }, motivo: "Outra loja" }),
       ).rejects.toThrow(/Sem permissão para esta unidade/);
       sessao.storeAccess = "all";
       sessao.allowedStoreIds = [];
-      const cruzada = await corrigirDatasOSV3(lojaB, osA, { alteracoes: { dataEntrada: data(dia(-5)) }, esperados: { dataEntrada: entrada.iso }, motivo: "Loja errada" });
+      const cruzada = await corrigirDatasOSV3(lojaB, osA, { alteracoes: { dataEntrada: data(dia(-5)) }, esperados: { dataEntrada: esperadoCampoDataV3(entrada.iso, entrada.meta.precisao) }, motivo: "Loja errada" });
       expect(cruzada).toMatchObject({ ok: false, mensagem: "OS não encontrada." });
     } finally {
       sessao.role = "ADMIN";
@@ -768,7 +791,7 @@ describe("PG · Paridade V3×V4 e documentos (D20/D21)", () => {
     expect(v3.entradaTexto).toBe(v4.entrada);
     expect(v3.previsaoTexto).toBe(v4.previsao);
     const nova = data(dia(-13));
-    const r = await corrigirDatasOSV3(storeId, os.id, { alteracoes: { dataEntrada: nova }, esperados: { dataEntrada: entrada.iso }, motivo: "Ajuste" });
+    const r = await corrigirDatasOSV3(storeId, os.id, { alteracoes: { dataEntrada: nova }, esperados: { dataEntrada: esperadoCampoDataV3(entrada.iso, entrada.meta.precisao) }, motivo: "Ajuste" });
     expect(r.ok).toBe(true);
     ({ p } = await lerOS(os.id));
     expect(lerRecepcaoV3(p as OrdemServico).entradaTexto).toBe(adaptOsHeader(p as OrdemServico).entrada);

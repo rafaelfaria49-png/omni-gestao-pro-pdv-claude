@@ -16,6 +16,7 @@ import type { FormaRecebimentoV3 } from "./payment-model";
 import {
   campoAgoraV3,
   diaNaLojaV3,
+  limitarFatoAoAgoraV3,
   montarDataOperacionalV3,
   validarDatasAtendimentoV3,
   validarEntradaDataV3,
@@ -105,8 +106,9 @@ export function normalizarDatasAtendimentoRapidoV3(
   return {
     ok: true,
     datas: {
-      entrada: entrada ? { iso: entrada.data.iso, meta: entrada.meta } : { iso: agoraIso, meta: null },
-      conclusao: conclusao ? { iso: conclusao.data.iso, meta: conclusao.meta } : { iso: agoraIso, meta: null },
+      // Fatos dentro da folga do relógio são gravados no "agora" do servidor.
+      entrada: entrada ? limitarFatoAoAgoraV3({ iso: entrada.data.iso, meta: entrada.meta }, agora) : { iso: agoraIso, meta: null },
+      conclusao: conclusao ? limitarFatoAoAgoraV3({ iso: conclusao.data.iso, meta: conclusao.meta }, agora) : { iso: agoraIso, meta: null },
       informadas: !!(entrada || conclusao),
     },
   };
