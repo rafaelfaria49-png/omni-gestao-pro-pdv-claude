@@ -185,7 +185,9 @@ export function lerGarantiaV3(os: OrdemServico | null | undefined, now: Date = n
   // dela (pode ter começado na aprovação): só vale por dia se começou na entrega.
   const entregaData = lerDatasOSV3(os).entrega;
   const fimExplicitoV2 = !!(g2?.fimEm && !gp);
-  const origemIso = fimExplicitoV2 ? g2Inicio : inicioIso;
+  // Sem `inicioEm` válido na V2, a origem canônica é a mesma do início exibido (a entrega).
+  const g2InicioValido = g2Inicio && Number.isFinite(Date.parse(g2Inicio)) ? g2Inicio : undefined;
+  const origemIso = fimExplicitoV2 && g2InicioValido ? g2InicioValido : inicioIso;
   const porDia =
     !!entregaData && entregaData.precisao === "dia" && !!origemIso && Date.parse(entregaData.iso) === Date.parse(origemIso);
   const fimDoDia = porDia ? Date.parse(fimDoDiaLojaIsoV3(diaNaLojaV3(vencimentoIso))) : NaN;

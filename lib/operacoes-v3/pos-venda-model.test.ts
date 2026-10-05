@@ -124,6 +124,11 @@ describe("garantia — situação", () => {
     // Ancorada na entrega só-dia (mesmo instante): vale o último dia inteiro.
     const naEntrega = os({ ...entregaSoDia, garantia: { ativa: true, prazoDias: 90, inicioEm: "2026-01-01T15:00:00.000Z", fimEm: "2026-04-01T15:00:00.000Z" } });
     expect(lerGarantiaV3(naEntrega, as16h).situacao).toBe("ativa");
+    // Sem `inicioEm` (ou inválido): a origem canônica é a própria entrega só-dia → vale o dia inteiro.
+    const semInicio = os({ ...entregaSoDia, garantia: { ativa: true, prazoDias: 90, fimEm: "2026-04-01T15:00:00.000Z" } });
+    expect(lerGarantiaV3(semInicio, as16h).situacao).toBe("ativa");
+    const inicioInvalido = os({ ...entregaSoDia, garantia: { ativa: true, prazoDias: 90, inicioEm: "não é data", fimEm: "2026-04-01T15:00:00.000Z" } });
+    expect(lerGarantiaV3(inicioInvalido, as16h).situacao).toBe("ativa");
   });
 
   it("usa o prazo padrão do catálogo quando não informado", () => {
