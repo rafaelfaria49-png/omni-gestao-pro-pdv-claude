@@ -1,21 +1,23 @@
-# OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — implementação, corretivo R2, reconciliação com a main e validação para R3
+# OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — implementação, corretivos R2 e R3, reconciliação com a main e validação para R4
 
-Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). O commit funcional anterior era `ce1d806ba962fbf5acac1e015e18a370d7939055`; o corretivo da R2 é o commit funcional `3071c6749730ca138966d46fc9e6271afc211d81` (Claude/Anthropic), seguido deste commit só de documentos. O coordenador OpenAI consolidou este relatório, os logs e o inventário produzido pelo Claude; não implementou as correções. A revisão final R3 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
+Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). Os commits funcionais dos corretivos são `ce1d806ba962fbf5acac1e015e18a370d7939055` (R1), `3071c6749730ca138966d46fc9e6271afc211d81` (R2), `5727e5802e202f05eef9aedcf30f17813f6cda8a` (P1-T7) e `e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e` (P1 do seed, R3). O coordenador OpenAI consolidou os documentos e evidências produzidos pelo Claude; não implementou código ou testes. A revisão final R4 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos e os gates finais. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
 
 Em 05/10/2026, um primeiro `git fetch origin` confirmou `origin/main=1e45f98ade83b3071548d581225928b0fd95b06c`. Um fetch posterior no mesmo dia mostrou `origin/main=a27b37e861ff044666d16535acb292f5d6957fcf` (merge do PR #237, GOAL de datas, já publicado). O coordenador iniciou `git merge --no-edit origin/main`; Claude resolveu os 6 conflitos e concluiu o merge normal de dois pais (`4ed751c7d349f0e8a92e726952aeee861830b31e`, pais `d3d9a97` e `a27b37e`), sem rebase/amend/reset/stash. O código do PR #237 é do upstream, não deste GOAL. Depois do merge, Claude estabilizou a sincronização dos specs E2E (`8aa19326a85adcbab7b7afcd3479b44ea55181db`, só teste) e corrigiu o candidato escalar P1-T7 (`5727e5802e202f05eef9aedcf30f17813f6cda8a`, funcional). A worktree e o trabalho anterior foram preservados. PRs #234 e #235 permanecem na base. A auditoria/baseline original não foi reiniciada; o GOAL de datas não foi iniciado nem alterado.
 
-## Estado antes da revisão R3 (após corretivo R2, reconciliação e P1-T7)
+## Estado antes da revisão R4 (após corretivo R2, reconciliação, P1-T7 e corretivo R3 do seed)
 
 ```text
 GOAL=OPS-RECEBIMENTO-MISTO-P1-HARDENING-001
 BASE=a27b37e861ff044666d16535acb292f5d6957fcf
 BASE_ORIGINAL=1e45f98ade83b3071548d581225928b0fd95b06c
 MERGE_RECONCILIACAO=4ed751c7d349f0e8a92e726952aeee861830b31e;MERGE_NORMAL_2_PAIS_d3d9a97+a27b37e;CONFLITOS_6_RESOLVIDOS_POR_CLAUDE
-FINAL_HEAD=SHA_EXATO_DO_COMMIT_CONTENDO_ESTE_RELATORIO; fornecido no pacote da R3
-FUNCTIONAL_HEAD=5727e5802e202f05eef9aedcf30f17813f6cda8a
+FINAL_HEAD=SHA_EXATO_DO_COMMIT_CONTENDO_ESTE_RELATORIO; fornecido no pacote da R4
+FUNCTIONAL_HEAD=e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e
 E2E_SPEC_SYNC_COMMIT=8aa19326a85adcbab7b7afcd3479b44ea55181db;SO_TESTE
-PREVIOUS_FUNCTIONAL_HEADS=3071c6749730ca138966d46fc9e6271afc211d81;ce1d806ba962fbf5acac1e015e18a370d7939055
+PREVIOUS_FUNCTIONAL_HEADS=5727e5802e202f05eef9aedcf30f17813f6cda8a;3071c6749730ca138966d46fc9e6271afc211d81;ce1d806ba962fbf5acac1e015e18a370d7939055
 P1T7_VALOR_TITULO_OS_SNAPSHOT_LEGADO=FIXED_RED_GREEN_PG_2_ROTAS
+R3_P1_SEED_CONTAS_RECEBER_OS=FIXED_RED_GREEN_PG_CLI_REAL_10_CASOS;SO_CRIA_TITULO_AUSENTE_SOB_OS_FOR_UPDATE_INSERT_ON_CONFLICT_DO_NOTHING
+R3_P3_RETORNO_FILHO=PREEXISTENTE_OPERACIONAL_NAO_ALTERADO
 E2E_NAVEGACAO_RECEBER=CAUSA_REMONTAGEM_OPERATIONSPROVIDER_KEY;SPEC_SINCRONIZADO;PASS_CONJUNTO_6_6_WORKERS1_RETRIES0
 R2_P1_TITULO_TRAVA_VAZIA=FIXED_RED_GREEN_PG_4_CASOS
 R2_P2_ESTOQUE_RASCUNHO_LEDGER=FIXED_RED_GREEN_PG_4_CASOS
@@ -30,13 +32,13 @@ CANONICAL_AGGREGATES_SAME_FORM=PASS
 LEGACY_REPLAY_COMPAT=PASS_PG_SIMPLES_SPLIT_REPETIDO_E_MARCADOR_MISTO_V1
 SAME_ECONOMIC_RETRY_SAME_KEY=PASS_UNIT_MOUNTED_PG_E2E
 DIFFERENT_ECONOMIC_CONTENT_CONFLICT=PASS_FORMA_SESSAO_1_CENTAVO
-OS_PAYLOAD_WRITERS_SCANNED=118_FUNCOES;105_SAFE_TRANSACTIONAL;13_READ_ONLY;39_WRITERS_DIRETOS;16_TRANSITIVOS_SEPARADOS;INCLUI_4_DO_UPSTREAM_PR237
+OS_PAYLOAD_WRITERS_SCANNED=118_FUNCOES;105_SAFE_TRANSACTIONAL;13_READ_ONLY;39_WRITERS_DIRETOS;17_TRANSITIVOS_FINANCEIROS_SEPARADOS_INCLUI_SEED_CR_OS;INCLUI_4_DO_UPSTREAM_PR237
 STALE_WRITERS_FOUND=YES_INCLUINDO_5_ACHADOS_DA_R1
 STALE_WRITERS_FIXED=YES; inventario detalha os caminhos
-STALE_WRITERS_REMAINING=0_IDENTIFICADOS_PELO_IMPLEMENTADOR; confirmar na R3
+STALE_WRITERS_REMAINING=0_IDENTIFICADOS_PELO_IMPLEMENTADOR; confirmar na R4
 ROW_LOCK_STRATEGY=LATEST_READ_DECISION_WRITE_SAME_TX_OS_FOR_UPDATE_AND_TITLE_FOR_UPDATE
 CAS_STRATEGY=CAS_UPDATEDAT_EXISTENTE_PRESERVADO_SOB_TRAVA;ZERO_WRITERS_DEPENDENDO_SO_DE_CAS
-LOCK_ORDER=ADVISORY_OS_SESSAO_OS_TITULO;OS_PRODUTOS_ITENS;SYNC_OS_ITENS;FINANCEIRO_SO_TITULO_SEM_ARESTA_DE_VOLTA_PARA_OS;UPSTREAM_ADVISORY_OS_TITULO_LEITURA_E_ADVISORY_OS_GARANTIAS
+LOCK_ORDER=ADVISORY_OS_SESSAO_OS_TITULO;OS_PRODUTOS_ITENS;SYNC_OS_ITENS;FINANCEIRO_SO_TITULO_SEM_ARESTA_DE_VOLTA_PARA_OS;UPSTREAM_ADVISORY_OS_TITULO_LEITURA_E_ADVISORY_OS_GARANTIAS;SEED_CR_OS_SO_OS_TITULO_INSERT
 DEADLOCK_TEST=PASS_PG_DETERMINISTICO;MAXWAIT5000_TIMEOUT15000_SEM_AUMENTO
 PIX_100_EQ_PIX_50_50=PASS
 RESPONSE_LOSS_REPLAY=PASS_MOUNTED_PG_E2E
@@ -52,22 +54,22 @@ PR235_100_APRAZO=PASS_PG
 PR235_LATER_PAYMENT=PASS_PG_E2E_V3_V4
 UNIT=AMPLO_OPS_FINANCEIRO_APIS_2006_PASS_10_FAIL_PREEXISTENTES_PREVIEW_HONESTY_124_ARQUIVOS_EM_5727e58;CANONICALIDADE_24_24;DATAS_UPSTREAM_30_30
 MOUNTED=PASS_V3_20_V4_29_EM_5727e58
-POSTGRES=PASS_V3_95_INCLUI_TRANSITIVOS_37_V4_PARIDADE_1_GATED_40_EM_5727e58
-E2E=PASS_CONJUNTO_6_6_28_1S_WORKERS1_RETRIES0_SOBRE_BUILD_OFICIAL_5727e58;32a2283_SO_DOCS;FALHAS_NAV_ANTERIORES_4_2_E_5_1_PRESERVADAS
+POSTGRES=PASS_V3_105_INCLUI_TRANSITIVOS_47_P1SEED_10_EM_e02e826;V4_PARIDADE_1_GATED_40_EM_5727e58_SEM_DEPENDENCIA_DO_SEED
+E2E=PASS_CONJUNTO_6_6_SOBRE_BUILD_5727e58;NOVO_E2E_SOBRE_e02e826_PENDENTE_COORDENADOR;FALHAS_NAV_ANTERIORES_4_2_E_5_1_PRESERVADAS
 REGRESSION=PASS_FOCAL_E_AMPLA_OPS
-TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_POS_BUILD_INCREMENTAL_FALSE_EXIT0_HEAP8192;ANTES_DO_BUILD_TAMBEM_PASS_5727e58
-LINT=PASS_60_ARQUIVOS_CODIGO_TESTES_DIFF_DO_GOAL_0_ERROS_1_WARNING_PREEXISTENTE;FOCADO_CLAUDE_TAMBEM_PASS
-BUILD=PASS_NPM_RUN_BUILD_OFICIAL_EXIT0_COMPILED_99S_STATIC_102_MIGRATION_SKIPPED_EM_5727e58;32a2283_SO_DOCS
+TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_INCREMENTAL_FALSE_EXIT0_HEAP8192_EM_e02e826_PRE_BUILD;POS_BUILD_PENDENTE_COORDENADOR
+LINT=PASS_ESLINT_2_ARQUIVOS_DO_CORRETIVO_R3_EXIT0;60_ARQUIVOS_EM_5727e58_0_ERROS_1_WARNING_PREEXISTENTE
+BUILD=PASS_EM_5727e58;NOVO_BUILD_OFICIAL_SOBRE_e02e826_PENDENTE_COORDENADOR
 DIFF_CHECK=PASS
 SCHEMA_CHANGED=NO
 MIGRATION_CREATED=NO
 R_FAMILY=openai
-R_HEAD_REVIEWED=R2_8880b86;R3_PENDENTE
-R_VERDICT=R2_REQUEST_CHANGES;R3_PENDENTE
-P0=R2_0;R3_NOT_REVIEWED
-P1=R2_1_CORRIGIDO;R3_NOT_REVIEWED
-P2=R2_1_CORRIGIDO;R3_NOT_REVIEWED
-P3=R2_1_PREEXISTENTE;R3_NOT_REVIEWED
+R_HEAD_REVIEWED=R2_8880b86;R3_668dfb0;R4_PENDENTE
+R_VERDICT=R2_REQUEST_CHANGES;R3_REQUEST_CHANGES;R4_PENDENTE
+P0=R3_0;R4_NOT_REVIEWED
+P1=R3_1_SEED_CORRIGIDO_e02e826;R4_NOT_REVIEWED
+P2=R3_0;R4_NOT_REVIEWED
+P3=R3_1_RETORNO_FILHO_PREEXISTENTE_NAO_ALTERADO;R4_NOT_REVIEWED
 READY_FOR_MERGE=NO
 PR=NOT_CREATED
 PR_MERGED=NO
@@ -82,7 +84,7 @@ IMPLEMENTADO=SIM
 VALIDADO=SIM_LOCAL_QA_COM_RESSALVAS_DOCUMENTADAS
 PUBLICADO=NO
 HOMOLOGADO=NO
-BLOCKER=REVISAO_INDEPENDENTE_R3_EXACT_SHA_PENDENTE
+BLOCKER=BUILD_E2E_TYPECHECK_POS_BUILD_DO_COORDENADOR_E_REVISAO_INDEPENDENTE_R4_EXACT_SHA_PENDENTES
 ```
 
 ## Correções originais
@@ -188,11 +190,54 @@ GREEN (`p1t7-GREEN.log`, 2/2): título 500, saldo 150, parcial, pagamentos [350]
 
 Os PG do GOAL de datas (`test/ops-datas-retroativas-001/*.pg.ts`), o bootstrap e o E2E de datas não foram executados, conforme a instrução.
 
+## R3 e corretivo do seed oficial (P1) no mesmo GOAL
+
+A R3 OpenAI (sessão nova, READ-ONLY, sobre `668dfb0e810db780d668cf721dce5d56bb5e6439`) devolveu REQUEST_CHANGES com P0=0, P1=1, P2=0, P3=1. O P3 (guarda do retorno filho fora da seção protegida, `retorno-actions.ts`) é preexistente, operacional e sem dinheiro/título; não foi alterado. Este corretivo trata só o P1. O commit funcional é `e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e` (Claude/Anthropic) e altera só `scripts/seed-contas-receber-os.mjs` e `test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts`. Não há mudança em schema/migration, `seed-contas-pagar.mjs`, app ou Financeiro.
+
+**Defeito (confirmado na fonte e por RED).** O caller oficial é `package.json` → `financeiro:seed` → `node scripts/seed-contas-receber-os.mjs --exec`. Para cada OS da `loja-1` com valor, o script montava a chave canônica `os-faturamento` e um payload sem `historico`, lia só o `id` do título (sem trava) e fazia `upsert` com `update: data`. Com isso sobrescrevia payload, status e valor. Assim apagava as baixas e o marcador `a_prazo_autorizado` de K. O replay de K procura esse marcador só no título (`recebimento-misto-service.ts`). Sem o marcador, K aceitava o saldo 400 e lançava caixa/movimentação 350 de novo. O problema é preexistente, depende do comando manual oficial e não exige concorrência.
+
+**Autoridade e contrato.** O seed é de importação: cria o título das OS importadas. O título existente é a autoridade do ledger (baixas, marcadores e replay), do status (pago/parcial/cancelado/estornado) e do valor vigente. Sincronizar um título existente com a OS cabe ao adapter `os-faturamento` (OS → título, sob trava, já auditado). Portanto a estratégia mínima que atende ao contrato é **preencher títulos ausentes e nunca regravar os existentes**. Nenhuma "intenção legítima" do seed sobre um título existente precisaria ser sincronizada.
+
+**Estratégia.** No `--exec`, cada OS usa uma transação curta (`{ maxWait: 5000, timeout: 15000 }`, a mesma convenção dos serviços): `SELECT … FOR UPDATE` da OS → releitura da OS (valor/status mais recentes) → `createMany({ skipDuplicates: true })` (INSERT … ON CONFLICT DO NOTHING). Nenhum UPDATE e nenhuma decisão de escrita baseada em leitura do título. Se outro fluxo cria o título no meio, sem commit, o INSERT espera o índice único e desiste. O dry-run só lê (`findMany` + `findUnique`) e informa CRIADO/PRESERVADO. O módulo exporta `seedContasReceberOS(prisma, opts)`; o CLI é um wrapper que só roda quando o arquivo é executado diretamente. A loja `loja-1` e a política de criação (OS `Entregue` → `pago`, demais `pendente`, vencimento +30 dias, payload `createdFrom: seed_os_import`) não mudaram.
+
+**Ordem de travas.** OS FOR UPDATE → título (INSERT). É um subconjunto da ordem global advisory → sessão → OS → título. Não há advisory, não há aresta título → OS, não há transação aninhada e cada transação segura uma única OS. Os writers do Financeiro, que só travam o título, nunca pedem a OS, então não se forma ciclo.
+
+**Comportamento antes/depois.** Antes: título existente regravado (payload/histórico/marcador apagados, status `pendente`/`pago` pela coluna da OS, valor da coluna `valorTotal`); dry-run informava "ATUALIZADO". Depois: título existente intacto (mesmo hash e `updatedAt`), log "preservado"; título ausente criado uma única vez; resumo "Preservadas" no lugar de "Atualizadas".
+
+**Limites.** (1) O seed não atualiza mais títulos existentes. Corrigir título de OS existente é papel do adapter ou do faturamento da OS. (2) Para título ausente de OS `Entregue`, a criação continua `pago` sem histórico. É a política histórica de importação, sem efeito em caixa/movimentação. O recebimento V3 sempre cria o título antes de registrar dinheiro, por isso uma OS com recebimento V3 nunca fica sem título. (3) A loja segue fixa (`loja-1`). (4) `npm run financeiro:seed` completo não foi executado, porque também chama `seed-contas-pagar`, fora do P1. O componente real foi executado com `--exec` e sem argumento contra o QA.
+
+**Provas (PostgreSQL QA real, `hardening-p1-transitivos.pg.ts` › P1-SEED, 10 casos).** O CLI roda em processo filho com ambiente mínimo: só `DATABASE_URL`/`DIRECT_URL` QA, mais PATH/SystemRoot/TEMP/NODE_ENV. Antes de iniciar, o teste confere loopback + `ops_v3_misto_qa*` e a mesma porta/banco da conexão do teste (`inet_server_port()`, `current_database()`). `loja-1` QA é criada se ausente; todos os fixtures são sintéticos. Nas intercalações em que o seed precisa pausar, a função exportada do mesmo módulo roda sobre o cliente Prisma real envolvido. A barreira é determinística e a espera é observada em `pg_stat_activity`, sem sleep.
+
+1. CLI real: K 350 débito + 50 a prazo → `seed --exec` → título com hash/`updatedAt` idênticos → replay de K `jaRegistrado` sem caixa/mov/baixa novos → 50 legítimos quitam o mesmo título. Resultado: baixas [350, 50], marcador único com `operacaoId=K`, caixa e mov somando 400.
+2. Título ausente: dry-run sem DML (hash de todos os títulos da `loja-1` igual) → `--exec` cria 400/pendente/`seed_os_import` → segunda execução mantém linha e identidade → K e os 50 seguintes no mesmo título → terceira execução preserva tudo.
+3. Pago, parcial, cancelado, estornado (fixture), valor vigente 500 com a coluna da OS em 400 e OS `Entregue` com título pendente: todos intactos depois do CLI.
+4. K segura OS/título (pausado no caixa) → CLI espera a trava → K commita → seed preserva. Testado com título existente e com título ausente (criado por K).
+5. Seed segura a OS antes do INSERT → K espera a trava da OS → seed cria (ausente) ou preserva (existente) → K aplica no título, replay sem efeito, 50 quita. Testado com título existente e ausente.
+6. Seed já observou e está antes do INSERT → rota global cria o título e o Financeiro paga 100 → seed preserva o vencedor (snapshot e pagamento 100, parcial).
+7. Rota global com INSERT feito e sem commit → CLI espera o índice único → rota commita → título da rota preservado.
+8. Seed antes do INSERT × quitação do Financeiro (`liquidarContaReceber`) → quitação preservada (pago, saldo 0).
+
+Nenhum caso terminou em deadlock nem em timeout (`naoEhDeadlock`). Não houve retry, skip, timeout aumentado nem mock de pagamento/DB. Só `@/auth`, `next/cache` e o gate de assinatura da rota legada são simulados, como no restante do arquivo. Os helpers `estado`/`conferirK350Mais50` ganharam um escopo opcional (título/sessão/movimentações da OS) para a loja compartilhada `loja-1`. Sem escopo, o comportamento dos casos anteriores não muda.
+
+| Evidência (em `playwright-report/ops-p1-hardening-001/`) | Resultado |
+| --- | --- |
+| `r3fix-RED-seed-original.mjs.txt`, `r3fix-RED-snapshot.pg.ts.txt`, `r3fix-RED-hashes.txt` | fonte original (sha256 `d593636…`, blob `473333e`) e teste RED, HEAD `668dfb0` |
+| `r3fix-RED1-original.log` | script ORIGINAL: 9 failed / 37 skipped fora do filtro (46). 5 casos CLI falham por comportamento: título `parcial`→`pendente`, baixas [], marcador 0, replay de K `jaRegistrado:false`, caixa/mov duplicados, pago/cancelado/estornado→pendente, Entregue→pago, 500→400. Os 4 casos em processo falham por ausência do export (TypeError → barreira não atingida, 60 s) |
+| `r3fix-RED2-seed-seam-only.mjs.txt`, `r3fix-RED2-seam.log` | só seam (export + wrapper; MESMO findUnique+upsert): 9/9 falham por comportamento, incluindo seed×K (ledger apagado depois de K), rota+pagamento e quitação (pagamentos [], pendente) |
+| `r3fix-RED3-rota-cli.log` | caso 7 com o seam: 1 failed / 46 skipped (snapshot da rota substituído por `seed_os_import`) |
+| `r3fix-GREEN-seed-verbose-2.log` | P1-SEED 10 passed / 37 skipped (47) |
+| `r3fix-pg-v3-full-final.log` | PG V3 completo, 3 arquivos: 105/105 (95 anteriores + 10; transitivos 47) |
+| `r3fix-typecheck.log` | `tsc --noEmit --incremental false`, heap 8192, exit 0 (antes do build) |
+| `r3fix-lint.log` | eslint dos 2 arquivos alterados: exit 0, sem avisos |
+| `update-writers-r3fix.cjs` | script que atualizou o WRITERS |
+
+PG V4 paridade, PG gated, mounted e unit amplo não foram reexecutados. O corretivo não toca código de app, hooks, rotas ou serviços que eles exercitam; só o script e o arquivo PG acima mudaram (`git diff --name-only 668dfb0..e02e826`). Os resultados válidos continuam os de `5727e58`. O coordenador executará novo build oficial, E2E e typecheck pós-build sobre a fonte final.
+
 ## Inventário e ordem de locks
 
-`OPS-RECEBIMENTO-MISTO-P1-HARDENING-001-WRITERS.json` foi atualizado por Claude sobre o SHA funcional ce1d806, no corretivo R2 sobre 3071c67 e, na árvore reconciliada, sobre 5727e58 (`reconciliation`, writers do upstream marcados com `origin`, P1-T7 no upsert genérico): 118 funções, 105 SAFE_TRANSACTIONAL, 13 READ_ONLY, 39 writers diretos. Há 16 entradas transitivas do título/itens, em taxonomia separada; 10 escopos revisados e 2 exclusões não são somados às funções. Categorias e papéis não devem ser confundidos: um caller seguro pode alcançar um callee travado sem ele próprio gravar payload.
+`OPS-RECEBIMENTO-MISTO-P1-HARDENING-001-WRITERS.json` foi atualizado por Claude sobre o SHA funcional ce1d806, no corretivo R2 sobre 3071c67 e, na árvore reconciliada, sobre 5727e58 (`reconciliation`, writers do upstream marcados com `origin`, P1-T7 no upsert genérico): 118 funções, 105 SAFE_TRANSACTIONAL, 13 READ_ONLY, 39 writers diretos. Há 17 entradas transitivas financeiras/do título/itens, incluindo o seed oficial corrigido na R3, em taxonomia separada; 10 escopos revisados e 2 exclusões não são somados às funções. Categorias e papéis não devem ser confundidos: um caller seguro pode alcançar um callee travado sem ele próprio gravar payload.
 
-Recebimentos V3 seguem advisory(OS)→sessão FOR SHARE quando necessário→OS FOR UPDATE→título. OS genérica, orçamento/intenção e cancelamento seguem OS→título na mesma transação. Helpers do Financeiro travam somente título, sem voltar à OS. Estoque segue OS→produtos→itens; sync de rascunho segue OS→itens. O mapa completo e as justificativas estão no inventário; a R2 deve procurar arestas inversas e casos de título inicialmente ausente.
+Recebimentos V3 seguem advisory(OS)→sessão FOR SHARE quando necessário→OS FOR UPDATE→título. OS genérica, orçamento/intenção e cancelamento seguem OS→título na mesma transação. Helpers do Financeiro travam somente título, sem voltar à OS. Estoque segue OS→produtos→itens; sync de rascunho segue OS→itens. O mapa completo e as justificativas estão no inventário; a R4 deve procurar arestas inversas, casos de título inicialmente ausente e o seed financeiro oficial.
 
 O espelho `components/pdv-github-original` não foi editado. Sua UI experimental é alcançável pela rota com flag, mas seu fecho de imports não contém writers de OS. O backend histórico aninhado não é roteado/importado e fica no apêndice como excluído, sem ser contado como aprovado.
 
@@ -222,11 +267,11 @@ A execução ampla histórica `unit-full-after-import-fix.log` teve 9179 passed/
 
 ## Revisão e publicação pendentes
 
-Build oficial e E2E do coordenador passaram sobre o código final da árvore reconciliada, conforme as provas na seção seguinte (o build `3071c67` é anterior ao merge e não foi reutilizado). A R3 independente deve revisar o SHA final exato da árvore reconciliada, separar o código do upstream (PR #237) do código deste GOAL e tentar quebrar as resoluções de conflito (orçamento sob trava × regras de validade do upstream; entrega/comercial do upstream × recusas/estado financeiro), o P1-T7 (lista antiga após faturamento vigente; manual/import preservados) e a corrida trava vazia → título criado → leitura → pagamento → escrita, a substituição rascunho×ledger em ambas as ordens, e ainda A–O do comando original, os cinco achados R1, a cobrança sobre faturamento vigente, a criação concorrente de título e os candidatos operacionais relatados. P0=P1=P2=0 e APPROVE são obrigatórios. Havendo achado, corrigir neste mesmo GOAL por Anthropic e obter nova R sobre o novo SHA.
+Os gates anteriores ao corretivo do seed estão preservados na seção histórica seguinte. Novo build oficial, E2E e typecheck pós-build sobre a fonte `e02e826` são necessários antes da R4. A R4 independente deve revisar o SHA final exato da árvore reconciliada, separar o código do upstream (PR #237) do código deste GOAL e tentar quebrar as resoluções de conflito (orçamento sob trava × regras de validade do upstream; entrega/comercial do upstream × recusas/estado financeiro), o P1-T7 (lista antiga após faturamento vigente; manual/import preservados) e a corrida trava vazia → título criado → leitura → pagamento → escrita, a substituição rascunho×ledger em ambas as ordens, e ainda A–O do comando original, os cinco achados R1, a cobrança sobre faturamento vigente, a criação concorrente de título e os candidatos operacionais relatados. P0=P1=P2=0 e APPROVE são obrigatórios. Havendo achado, corrigir neste mesmo GOAL por Anthropic e obter nova R sobre o novo SHA.
 
 Só então: PR exclusivo com o SHA revisado; checks verdes; merge normal GitHub sem squash/rebase/force; SUCCESS de omni-gestao e omni-gestao-pro no merge SHA; smoke produção somente leitura. Sem sessão, OWNER_PENDING_AUTH, sem pedir credenciais. Nenhum pagamento real, mutation financeira de produção ou acesso à OS-2026-00028 é permitido. A worktree permanece ATIVA até relatório final e dois deploys verdes.
 
-## Gates finais do coordenador antes da R3
+## Histórico: gates finais do coordenador antes da R3
 
 O coordenador executou o build oficial, o E2E conjunto e o typecheck completo após o build sobre o código funcional `5727e5802e202f05eef9aedcf30f17813f6cda8a`. O HEAD `32a2283d6e5ac288c06def5d3034ce86a20a3219` difere desse SHA somente em REPORT/WRITERS, verificado por `git diff --name-only`. Este commit de consolidação também altera somente o REPORT. A R3 deve revisar o SHA exato que contém esta consolidação, fornecido fora do arquivo para evitar autorreferência de hash.
 
@@ -243,3 +288,8 @@ Os logs estão em `playwright-report/ops-p1-hardening-001/`; cópias sanitizadas
 A suíte ampliada final permanece qualificada: 2006 PASS/10 FAIL estáticas preexistentes em `preview-honesty`, 124 arquivos. Não se declara a suíte inteira do projeto verde. Os 95 PG V3, 40 PG complementares, 1 PG V4 e 49 montados passaram integralmente na árvore integrada. O RED R2 correto é 7 FAIL/1 PASS/27 fora do filtro; o RED P1-T7 é 2 FAIL/35 fora do filtro, com GREEN 2/2 e PG V3 completo 95/95.
 
 O fetch final anterior à R3 confirmou `origin/main=a27b37e861ff044666d16535acb292f5d6957fcf`. A implementação e os testes permanecem exclusivamente Anthropic. Não houve PR, merge remoto, deploy, pagamento real, alteração financeira real nem acesso à OS-2026-00028 até este registro. O resultado da R3 e as provas posteriores de publicação serão gravados no relatório operacional fora da worktree, sem alterar o SHA aprovado.
+
+
+## Consolidação documental para a R4
+
+Claude criou o commit funcional e concluiu o PostgreSQL V3 105/105, typecheck e lint antes do build. Também redigiu a seção R3 e o inventário (17 transitivos); o coordenador concluiu a consolidação documental e o commit destes dois documentos. O diff desde o SHA funcional é exclusivamente documental. Build/E2E/typecheck pós-build permanecem pendentes no estado acima; seus resultados reais serão acrescentados antes da R4. O parecer R3 é REQUEST_CHANGES sobre 668dfb0, e não aprova e02e826. Uma nova revisão exata é obrigatória.
