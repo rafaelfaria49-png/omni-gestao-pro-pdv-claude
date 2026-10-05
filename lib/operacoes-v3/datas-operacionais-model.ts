@@ -151,29 +151,50 @@ export function diaCivilValidoV3(dia: unknown): boolean {
 }
 
 /**
+ * Instantes (0, 1 ou 2, em ordem) cuja parede na loja é exatamente `dia` + `hora`
+ * (já validados). 0 = lacuna (horário que não existe); 2 = horário repetido na
+ * troca do horário de verão histórico. Offsets candidatos: o do próprio instante
+ * e os de um dia antes/depois (antes e depois de uma eventual transição).
+ */
+function instantesDaParede(dia: string, hora: string, z: string): number[] {
+  const [ano, mes, diaN] = dia.split("-").map(Number);
+  const [hh, mm] = hora.split(":").map(Number);
+  const paredeUtc = Date.UTC(ano!, mes! - 1, diaN!, hh!, mm!);
+  const offsetEm = (utc: number) => {
+    const p = partesNaLoja(new Date(utc), z);
+    return Date.UTC(p.ano, p.mes - 1, p.dia, p.hora, p.minuto) - utc;
+  };
+  const candidatos = new Set(
+    [paredeUtc - 86_400_000, paredeUtc, paredeUtc + 86_400_000].map((ref) => paredeUtc - offsetEm(ref)),
+  );
+  return [...candidatos]
+    .filter((utc) => {
+      if (!Number.isFinite(utc)) return false;
+      const p = partesNaLoja(new Date(utc), z);
+      return `${p.ano}-${dois(p.mes)}-${dois(p.dia)}` === dia && `${dois(p.hora)}:${dois(p.minuto)}` === hora;
+    })
+    .sort((a, b) => a - b);
+}
+
+/**
  * Parede da loja (`YYYY-MM-DD` + `HH:mm`) → ISO UTC. "" quando o dia/horário é
- * inválido ou não existe no fuso (ex.: lacuna de horário de verão histórico).
+ * inválido, não existe no fuso (lacuna de horário de verão histórico) ou se
+ * repete (fim do horário de verão) — nunca escolhe uma das ocorrências em silêncio.
  */
 export function paredeLojaParaIsoV3(dia: string, hora: string, tz?: string): string {
   const d = (dia ?? "").trim();
   const h = (hora ?? "").trim();
   if (!diaCivilValidoV3(d) || !horaValidaV3(h)) return "";
-  const [ano, mes, diaN] = d.split("-").map(Number);
-  const [hh, mm] = h.split(":").map(Number);
-  const z = fuso(tz);
-  const paredeUtc = Date.UTC(ano!, mes! - 1, diaN!, hh!, mm!);
-  let utc = paredeUtc;
-  for (let i = 0; i < 3; i += 1) {
-    const p = partesNaLoja(new Date(utc), z);
-    const offset = Date.UTC(p.ano, p.mes - 1, p.dia, p.hora, p.minuto) - utc;
-    utc = paredeUtc - offset;
-  }
-  const out = new Date(utc);
-  if (Number.isNaN(out.getTime())) return "";
-  // Round-trip: recusa horários inexistentes no fuso (normalizados pelo Date).
-  const p = partesNaLoja(out, z);
-  if (`${p.ano}-${dois(p.mes)}-${dois(p.dia)}` !== d || `${dois(p.hora)}:${dois(p.minuto)}` !== h) return "";
-  return out.toISOString();
+  const instantes = instantesDaParede(d, h, fuso(tz));
+  return instantes.length === 1 ? new Date(instantes[0]!).toISOString() : "";
+}
+
+/** O horário de parede se repete no fuso da loja (troca do horário de verão histórico)? */
+export function horarioAmbiguoLojaV3(dia: string, hora: string, tz?: string): boolean {
+  const d = (dia ?? "").trim();
+  const h = (hora ?? "").trim();
+  if (!diaCivilValidoV3(d) || !horaValidaV3(h)) return false;
+  return instantesDaParede(d, h, fuso(tz)).length > 1;
 }
 
 /** Âncora técnica de uma data só-dia (12:00 na loja). */
@@ -181,10 +202,21 @@ export function ancoraDiaIsoV3(dia: string, tz?: string): string {
   return paredeLojaParaIsoV3(dia, HORA_ANCORA_DIA_V3, tz);
 }
 
-/** Último instante do dia civil na loja (validade "até o fim do dia"). */
+/** Primeiro instante do dia civil na loja (a meia-noite pode cair numa lacuna de horário de verão). */
+function inicioDoDiaLojaMs(dia: string, z: string): number | null {
+  for (let h = 0; h < 24; h += 1) {
+    const instantes = instantesDaParede(dia, `${dois(h)}:00`, z);
+    if (instantes.length > 0) return instantes[0]!;
+  }
+  return null;
+}
+
+/** Último instante do dia civil na loja (validade "até o fim do dia"): início do dia seguinte − 1 ms. */
 export function fimDoDiaLojaIsoV3(dia: string, tz?: string): string {
-  const iso = paredeLojaParaIsoV3(dia, "23:59", tz);
-  return iso ? new Date(Date.parse(iso) + 59_999).toISOString() : "";
+  const d = (dia ?? "").trim();
+  if (!diaCivilValidoV3(d)) return "";
+  const inicio = inicioDoDiaLojaMs(somarDiasCivisV3(d, 1), fuso(tz));
+  return inicio === null ? "" : new Date(inicio - 1).toISOString();
 }
 
 /** Soma `n` dias a um dia civil, sem passar por fuso. */
@@ -246,7 +278,9 @@ export function campoDeDataLidaV3(d: DataOperacionalLidaV3 | null | undefined, t
 
 export type ResultadoDataOperacionalV3 =
   | { ok: true; valor: DataOperacionalV3 }
-  | { ok: false; codigo: "vazia" | "dia_invalido" | "hora_invalida" | "hora_inexistente"; mensagem: string };
+  | { ok: false; codigo: "vazia" | "dia_invalido" | "hora_invalida" | "hora_inexistente" | "hora_ambigua"; mensagem: string };
+
+const MENSAGEM_HORA_AMBIGUA_V3 = "Esse horário se repete na troca do horário de verão. Informe só o dia ou outro horário.";
 
 /** Converte o campo do formulário em ISO + metadata (fuso da loja). */
 export function montarDataOperacionalV3(campo: Pick<CampoDataOperacionalV3, "dia" | "hora">, tz?: string): ResultadoDataOperacionalV3 {
@@ -256,6 +290,7 @@ export function montarDataOperacionalV3(campo: Pick<CampoDataOperacionalV3, "dia
   if (!diaCivilValidoV3(dia)) return { ok: false, codigo: "dia_invalido", mensagem: "Data inválida. Use um dia real do calendário." };
   if (hora && !horaValidaV3(hora)) return { ok: false, codigo: "hora_invalida", mensagem: "Horário inválido. Use HH:mm." };
   const iso = paredeLojaParaIsoV3(dia, hora || HORA_ANCORA_DIA_V3, tz);
+  if (!iso && horarioAmbiguoLojaV3(dia, hora || HORA_ANCORA_DIA_V3, tz)) return { ok: false, codigo: "hora_ambigua", mensagem: MENSAGEM_HORA_AMBIGUA_V3 };
   if (!iso) return { ok: false, codigo: "hora_inexistente", mensagem: "Esse horário não existe no fuso da loja. Ajuste o horário." };
   return { ok: true, valor: { iso, meta: { precisao: hora ? "data_hora" : "dia", dia } } };
 }
@@ -365,6 +400,8 @@ export function validarEntradaDataV3(iso: unknown, meta: unknown, rotulo: string
     return { ok: true, data: { iso: instante, precisao: "dia", dia: meta.dia, origem: "informada" }, meta: { precisao: "dia", dia: meta.dia } };
   }
   if (diaNaLojaV3(instante, tz) !== meta.dia) return { ok: false, mensagem: `${rotulo}: data inválida.` };
+  // Horário repetido na troca do horário de verão: a ocorrência não é identificável pela parede.
+  if (horarioAmbiguoLojaV3(meta.dia, horaNaLojaV3(instante, tz), tz)) return { ok: false, mensagem: `${rotulo}: ${MENSAGEM_HORA_AMBIGUA_V3.charAt(0).toLowerCase()}${MENSAGEM_HORA_AMBIGUA_V3.slice(1)}` };
   return { ok: true, data: { iso: instante, precisao: "data_hora", dia: meta.dia, origem: "informada" }, meta: { precisao: "data_hora", dia: meta.dia } };
 }
 

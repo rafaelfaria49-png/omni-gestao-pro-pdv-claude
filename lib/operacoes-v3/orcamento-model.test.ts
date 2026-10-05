@@ -94,6 +94,16 @@ describe("orçamento V3 — estados", () => {
     expect(validadeExpiradaV3(undefined, dia12a0h)).toBe(false);
   });
 
+  it("R5: validade legada gravada ao meio-dia vale o dia inteiro (compara o DIA civil na loja, não o instante)", () => {
+    const legadoMeioDia = "2026-10-05T15:00:00.000Z"; // 05/10 12:00 na loja
+    const dia05as18h = Date.parse("2026-10-05T21:00:00.000Z");
+    const dia06a0h = Date.parse("2026-10-06T03:00:00.000Z");
+    expect(validadeExpiradaV3(legadoMeioDia, dia05as18h)).toBe(false);
+    expect(statusEfetivoOrcamentoV3({ ...base, validoAte: legadoMeioDia }, dia05as18h)).toBe("enviado");
+    expect(validadeExpiradaV3(legadoMeioDia, dia06a0h)).toBe(true);
+    expect(validadeExpiradaV3("não é data", dia06a0h)).toBe(false);
+  });
+
   it("rascunho/aprovado/recusado não expiram", () => {
     const now = Date.parse("2026-06-10T00:00:00Z");
     expect(statusEfetivoOrcamentoV3({ status: "rascunho", validoAte: "2020-01-01T00:00:00Z" }, now)).toBe("rascunho");

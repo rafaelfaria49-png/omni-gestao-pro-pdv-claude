@@ -153,14 +153,20 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
         const gravada = lerDatasOSV3(payload).entrega;
         const pedidaMs = Date.parse(dataValidada.data.iso);
         const gravadaMs = gravada ? Date.parse(gravada.iso) : NaN;
+        // A vencedora concorrente que limitou o pedido ao relógio grava a entrega
+        // no próprio instante do registro; só nesse caso, e com registro recente,
+        // o mesmo pedido "à frente" (dentro da folga) é a mesma entrega.
+        const registro = (payload.entregaV3 ?? {}) as { registradoEm?: unknown };
+        const registradoMs = Date.parse(typeof registro.registradoEm === "string" ? registro.registradoEm : "");
+        const limitadaNoRegistroRecente =
+          Number.isFinite(registradoMs) && gravadaMs === registradoMs && Date.now() - registradoMs < JANELA_EFEITOS_ENTREGA_MS;
         const mesma =
           !!gravada &&
           gravada.precisao === dataValidada.data.precisao &&
           (gravada.precisao === "dia"
             ? gravada.dia === dataValidada.data.dia
-            : // Mesmo horário — ou o mesmo pedido "à frente" que a vencedora gravou
-              // limitado ao relógio do servidor (dentro da folga).
-              pedidaMs === gravadaMs || (pedidaMs > gravadaMs && pedidaMs - gravadaMs <= TOLERANCIA_RELOGIO_MS_V3));
+            : pedidaMs === gravadaMs ||
+              (limitadaNoRegistroRecente && pedidaMs > gravadaMs && pedidaMs - gravadaMs <= TOLERANCIA_RELOGIO_MS_V3));
         if (!mesma) {
           throw new Error(`Esta OS já foi entregue${gravada ? ` em ${formatarDataOperacionalV3(gravada)}` : ""}. Para ajustar a data, use "Corrigir datas".`);
         }

@@ -108,7 +108,10 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
   const porCampo = useMemo(() => new Map(baseline.campos.map((c) => [c.campo, c])), [baseline]);
 
   /** Monta o input só com os campos tocados que mudaram de fato. */
-  const montarInput = (confirmar: boolean): { input: CorrecaoDatasInputV3; erros: CorrigirDatasEstado["erros"] } => {
+  const montarInput = (
+    confirmar: boolean,
+    assinaturaImpacto?: string,
+  ): { input: CorrecaoDatasInputV3; erros: CorrigirDatasEstado["erros"] } => {
     const alteracoes: CorrecaoDatasInputV3["alteracoes"] = {};
     const esperados: CorrecaoDatasInputV3["esperados"] = {};
     const errosCampo: CorrigirDatasEstado["erros"] = {};
@@ -124,7 +127,16 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
       alteracoes[campo] = r.valor;
       esperados[campo] = def.esperado;
     }
-    return { input: { alteracoes, esperados, motivo, confirmarImpactoGarantia: confirmar }, erros: errosCampo };
+    return {
+      input: {
+        alteracoes,
+        esperados,
+        motivo,
+        confirmarImpactoGarantia: confirmar,
+        ...(confirmar && assinaturaImpacto ? { assinaturaImpactoGarantia: assinaturaImpacto } : {}),
+      },
+      erros: errosCampo,
+    };
   };
 
   // Prévia local (mesmas regras do servidor) — impacto na garantia e erros por campo.
@@ -162,7 +174,8 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
       setErroGeral("Selecione uma loja ativa para corrigir datas.");
       return false;
     }
-    const { input, erros: errosCampo } = montarInput(confirmarGarantia);
+    // A confirmação leva a assinatura do impacto EXIBIDO: o servidor só aplica esse impacto.
+    const { input, erros: errosCampo } = montarInput(confirmarGarantia, garantia?.assinatura);
     if (Object.keys(errosCampo).length > 0) {
       setErros(errosCampo);
       focar(Object.keys(errosCampo)[0]!);
@@ -199,8 +212,10 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
       const r = await corrigirDatasOSV3(sid, os.id, input);
       if (!r.ok) {
         if (r.tipo === "confirmacao") {
-          // O servidor viu impacto que a prévia não via: mostra-o e pede a confirmação.
+          // O servidor viu impacto diferente do confirmado (linhas reais, ou mudança no
+          // meio): mostra-o e pede uma confirmação NOVA — a anterior não vale para ele.
           if (r.garantia) setGarantiaServidor(r.garantia);
+          setConfirmarGarantia(false);
           setErroGeral(r.mensagem);
           focar("confirmarGarantia");
           return false;

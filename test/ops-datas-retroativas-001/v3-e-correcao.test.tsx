@@ -203,6 +203,7 @@ describe("Corrigir datas — impacto que só o servidor enxerga (R3)", () => {
       payloadDeslocado: false,
       encerradasIntocadas: 0,
       linhas: [{ id: "g-1", dataInicioAntes: ENTREGA_ISO, dataFimAntes: "2026-12-28T19:00:00.000Z", dataInicio: "2026-09-27T19:00:00.000Z", dataFim: "2026-12-26T19:00:00.000Z" }],
+      assinatura: "assinatura-linha-real",
     };
     mocks.corrigirDatasOSV3
       .mockResolvedValueOnce({ ok: false, tipo: "confirmacao", campo: "dataEntrega", garantia: impacto, mensagem: "Confira o impacto na garantia e confirme antes de salvar." })
@@ -218,7 +219,7 @@ describe("Corrigir datas — impacto que só o servidor enxerga (R3)", () => {
     fireEvent.click(caixa);
     fireEvent.click(screen.getByRole("button", { name: "Salvar correção" }));
     await waitFor(() => expect(mocks.corrigirDatasOSV3).toHaveBeenCalledTimes(2));
-    expect(mocks.corrigirDatasOSV3.mock.calls[1]![2]).toMatchObject({ confirmarImpactoGarantia: true });
+    expect(mocks.corrigirDatasOSV3.mock.calls[1]![2]).toMatchObject({ confirmarImpactoGarantia: true, assinaturaImpactoGarantia: "assinatura-linha-real" });
     expect(onSalvo).toHaveBeenCalled();
   });
 });
@@ -251,8 +252,41 @@ describe("Corrigir datas — V3", () => {
       esperados: { dataEntrega: ENTREGA_ISO },
       motivo: "Entregue na sexta, registrado hoje.",
       confirmarImpactoGarantia: true,
+      // Assinatura do impacto exibido (prévia): o servidor só aplica esse impacto.
+      assinaturaImpactoGarantia: expect.stringContaining("2026-09-27T19:00:00.000Z"),
     });
     expect(onSalvo).toHaveBeenCalled();
+  });
+
+  it("R5: servidor devolve impacto diferente do confirmado → caixa desmarcada; reenvio leva a assinatura do servidor", async () => {
+    const os = osEntregue();
+    const impactoServidor = {
+      temImpacto: true,
+      payloadDeslocado: false,
+      encerradasIntocadas: 0,
+      linhas: [{ id: "g-1", dataInicioAntes: ENTREGA_ISO, dataFimAntes: "2026-12-28T19:00:00.000Z", dataInicio: "2026-09-27T19:00:00.000Z", dataFim: "2026-12-26T19:00:00.000Z" }],
+      assinatura: "assinatura-do-servidor",
+    };
+    mocks.corrigirDatasOSV3
+      .mockResolvedValueOnce({ ok: false, tipo: "confirmacao", campo: "dataEntrega", garantia: impactoServidor, mensagem: "O impacto na garantia mudou desde a sua confirmação. Confira o impacto atualizado e confirme de novo." })
+      .mockResolvedValueOnce({ ok: true, diff: [], garantia: impactoServidor, os: {} });
+    render(<CorrigirDatasModalV3 open os={os} storeId="loja-qa" onClose={vi.fn()} onSalvo={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/^Data da entrega/), { target: { value: "2026-09-27" } });
+    fireEvent.change(screen.getByPlaceholderText(/Ex\.: o aparelho foi entregue/), { target: { value: "Entregue na sexta, registrado hoje." } });
+    const caixa = (await screen.findByRole("checkbox", { name: /Confirmo que a garantia passa a contar/ })) as HTMLInputElement;
+    fireEvent.click(caixa);
+    fireEvent.click(screen.getByRole("button", { name: "Salvar correção" }));
+    await waitFor(() => expect(mocks.corrigirDatasOSV3).toHaveBeenCalledTimes(1));
+    const primeira = mocks.corrigirDatasOSV3.mock.calls[0]![2] as { assinaturaImpactoGarantia?: string };
+    expect(primeira.assinaturaImpactoGarantia).toBeTruthy();
+    expect(primeira.assinaturaImpactoGarantia).not.toBe("assinatura-do-servidor");
+    expect(await screen.findByText(/mudou desde a sua confirmação/)).toBeTruthy();
+    const caixaDepois = screen.getByRole("checkbox", { name: /Confirmo que a garantia passa a contar/ }) as HTMLInputElement;
+    expect(caixaDepois.checked).toBe(false);
+    fireEvent.click(caixaDepois);
+    fireEvent.click(screen.getByRole("button", { name: "Salvar correção" }));
+    await waitFor(() => expect(mocks.corrigirDatasOSV3).toHaveBeenCalledTimes(2));
+    expect(mocks.corrigirDatasOSV3.mock.calls[1]![2]).toMatchObject({ confirmarImpactoGarantia: true, assinaturaImpactoGarantia: "assinatura-do-servidor" });
   });
 
   it("entrega LEGADA (sem metadata): o horário era o do registro e é descartado ao trocar o dia", async () => {

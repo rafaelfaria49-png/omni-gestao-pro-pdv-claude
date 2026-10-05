@@ -87,6 +87,28 @@ async function gravarComTrava(storeId: string, id: string, aplicar: (payload: OS
   return salvo as unknown as OrdemServico;
 }
 
+/** Status que as actions de carimbo/status aceitam. "convertido" é exclusivo da conversão. */
+const STATUS_COMERCIAL_GRAVAVEIS_V3: readonly StatusComercialOrcamentoV4[] = ["rascunho", "enviado", "aprovado", "recusado", "vencido"];
+
+/**
+ * Guarda do servidor para um status comercial pedido por carimbo/status: só
+ * valores conhecidos; "convertido" só pela conversão (que exige a entrada real e
+ * registra o evento); "aprovado" nunca para proposta vencida (mesma regra da
+ * aprovação do orçamento — renovar a validade é pela correção auditada).
+ */
+function exigirStatusComercialGravavelV3(statusComercial: unknown, payload: OSPayloadFull): void {
+  if (statusComercial === "convertido") {
+    throw new Error('A conversão em OS é feita só por "Converter em OS" (pede a entrada real do aparelho e registra o evento).');
+  }
+  if (!STATUS_COMERCIAL_GRAVAVEIS_V3.includes(statusComercial as StatusComercialOrcamentoV4)) {
+    throw new Error("Status comercial inválido.");
+  }
+  const validoAte = (payload.orcamento as { validoAte?: string } | undefined)?.validoAte;
+  if (statusComercial === "aprovado" && validadeExpiradaV3(validoAte)) {
+    throw new Error(`Este orçamento venceu em ${formatarDiaDeIsoNaLojaV3(validoAte)}. Para aprovar, atualize o "Válido até" em "Corrigir datas".`);
+  }
+}
+
 export interface MarcarPreOsInputV3 {
   origemAtendimento?: string;
   validadeDias?: number;
@@ -103,6 +125,7 @@ export async function marcarOrcamentoPreOsV3(storeId: string, osId: string, inpu
   return gravarComTrava(storeId, id, (payload) => {
     const atual = lerComercialV4(payload);
     if (atual?.statusComercial === "convertido") return null;
+    if (input.statusComercial !== undefined) exigirStatusComercialGravavelV3(input.statusComercial, payload);
 
     const comercialV4: ComercialV4 = {
       // Preserva campos já gravados (ex.: data da proposta definida na criação).
@@ -170,12 +193,7 @@ export async function atualizarStatusComercialV3(
       throw new Error("Este registro não é um orçamento pré-OS.");
     }
     if (atual.statusComercial === "convertido") return null;
-    // Mesma regra da aprovação do orçamento: proposta vencida não é aprovada sem
-    // antes renovar a validade pela correção auditada.
-    const validoAte = (payload.orcamento as { validoAte?: string } | undefined)?.validoAte;
-    if (statusComercial === "aprovado" && validadeExpiradaV3(validoAte)) {
-      throw new Error(`Este orçamento venceu em ${formatarDiaDeIsoNaLojaV3(validoAte)}. Para aprovar, atualize o "Válido até" em "Corrigir datas".`);
-    }
+    exigirStatusComercialGravavelV3(statusComercial, payload);
 
     const comercialV4: ComercialV4 = { ...atual, ...extraPermitido, tipo: "orcamento_pre_os", statusComercial };
     const evento: EventoTimeline = {

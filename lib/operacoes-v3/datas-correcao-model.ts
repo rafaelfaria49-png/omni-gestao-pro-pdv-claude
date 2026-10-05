@@ -167,6 +167,8 @@ export interface CorrecaoDatasInputV3 {
   motivo: string;
   /** Confirmação explícita depois de ver o impacto na garantia. */
   confirmarImpactoGarantia?: boolean;
+  /** Assinatura do impacto que o operador viu ao confirmar (`ImpactoGarantiaV3.assinatura`). */
+  assinaturaImpactoGarantia?: string;
 }
 
 /** Linha da garantia operacional (tabela `garantia_ordem_servico`) já lida pela action. */
@@ -198,6 +200,27 @@ export interface ImpactoGarantiaV3 {
   linhas: Array<{ id: string; dataInicio: string; dataFim: string; dataInicioAntes: string; dataFimAntes: string }>;
   /** Garantias encerradas ancoradas nesta entrega — ficam como estão. */
   encerradasIntocadas: number;
+  /**
+   * Assinatura do impacto (datas antes/depois + linhas). A confirmação vale só
+   * para o impacto exibido: se ele mudar, o servidor pede a confirmação de novo.
+   */
+  assinatura: string;
+}
+
+/** Assinatura determinística de um impacto na garantia (mesma no navegador e no servidor). */
+export function assinaturaImpactoGarantiaV3(g: Omit<ImpactoGarantiaV3, "assinatura">): string {
+  const linhas = [...g.linhas]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((l) => [l.id, l.dataInicioAntes, l.dataFimAntes, l.dataInicio, l.dataFim]);
+  return JSON.stringify([
+    g.inicioAntes ?? "",
+    g.vencimentoAntes ?? "",
+    g.inicioDepois ?? "",
+    g.vencimentoDepois ?? "",
+    g.payloadDeslocado,
+    g.encerradasIntocadas,
+    linhas,
+  ]);
 }
 
 export type ResultadoCorrecaoDatasV3 =
@@ -229,7 +252,16 @@ function mesmaData(a: DataOperacionalLidaV3 | null, b: NovaDataCorrecaoV3 | null
 export function planejarCorrecaoDatasV3(
   payload: unknown,
   input: CorrecaoDatasInputV3,
-  ctx: { agora: Date; operador: string; operadorId: string; garantias?: GarantiaOperacionalLinhaV3[]; eventoId?: string; tz?: string },
+  ctx: {
+    agora: Date;
+    operador: string;
+    operadorId: string;
+    garantias?: GarantiaOperacionalLinhaV3[];
+    eventoId?: string;
+    tz?: string;
+    /** Servidor: a confirmação só vale com a assinatura do impacto calculado aqui. */
+    exigirAssinaturaGarantia?: boolean;
+  },
 ): ResultadoCorrecaoDatasV3 {
   const base = obj(payload);
   if (!base) return falha("validacao", "OS sem payload compatível.");
@@ -401,7 +433,7 @@ export function planejarCorrecaoDatasV3(
     next.aberturaV3 = abertura;
   }
 
-  const garantia: ImpactoGarantiaV3 = { temImpacto: false, payloadDeslocado: false, linhas: [], encerradasIntocadas: 0 };
+  const garantia: ImpactoGarantiaV3 = { temImpacto: false, payloadDeslocado: false, linhas: [], encerradasIntocadas: 0, assinatura: "" };
   if (alterados.has("dataEntrega")) {
     const n = novos.get("dataEntrega")!.valor!;
     const antes = porCampo.get("dataEntrega")!.atual!;
@@ -451,6 +483,7 @@ export function planejarCorrecaoDatasV3(
       garantia.payloadDeslocado ||
       garantia.linhas.length > 0 ||
       (!!garantia.inicioAntes && (garantia.inicioAntes !== garantia.inicioDepois || garantia.vencimentoAntes !== garantia.vencimentoDepois));
+    garantia.assinatura = assinaturaImpactoGarantiaV3(garantia);
 
     // Garantia VENCIDA nunca volta a valer por correção de data: estender cobertura
     // é decisão comercial (editor de garantia), não correção de cadastro. Vale para
@@ -517,8 +550,22 @@ export function planejarCorrecaoDatasV3(
           `(${formatarDiaDeIsoNaLojaV3(perdida.inicioIso, tz)} a ${formatarDiaDeIsoNaLojaV3(perdida.fimIso, tz)}). A correção não foi aplicada.`,
       };
     }
-    if (garantia.temImpacto && input.confirmarImpactoGarantia !== true) {
-      return { ok: false, tipo: "confirmacao", campo: "dataEntrega", garantia, mensagem: "Confira o impacto na garantia e confirme antes de salvar." };
+    if (garantia.temImpacto) {
+      const confirmou = input.confirmarImpactoGarantia === true;
+      // No servidor a confirmação fica presa ao impacto exibido: linhas ou datas
+      // diferentes (outra operação no meio, ou linhas que a prévia não via) → nova prévia.
+      const mesmoImpacto = !ctx.exigirAssinaturaGarantia || input.assinaturaImpactoGarantia === garantia.assinatura;
+      if (!confirmou || !mesmoImpacto) {
+        return {
+          ok: false,
+          tipo: "confirmacao",
+          campo: "dataEntrega",
+          garantia,
+          mensagem: confirmou
+            ? "O impacto na garantia mudou desde a sua confirmação. Confira o impacto atualizado e confirme de novo."
+            : "Confira o impacto na garantia e confirme antes de salvar.",
+        };
+      }
     }
   }
 

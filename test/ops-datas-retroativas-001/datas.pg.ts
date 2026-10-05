@@ -29,7 +29,7 @@ import { finalizarAtendimentoRapidoV3 } from "@/lib/operacoes-v3/atendimento-rap
 import { registrarEntregaV3 } from "@/lib/operacoes-v3/entrega-actions";
 import { receberOSV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import { corrigirDatasOSV3 } from "@/lib/operacoes-v3/datas-correcao-actions";
-import { esperadoCampoDataV3 } from "@/lib/operacoes-v3/datas-correcao-model";
+import { esperadoCampoDataV3, type CorrecaoDatasInputV3 } from "@/lib/operacoes-v3/datas-correcao-model";
 import { chaveLockRecebimentoMistoV3 } from "@/lib/operacoes-v3/recebimento-misto-service";
 import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { lerRecepcaoV3 } from "@/lib/operacoes-v3/workspace-model";
@@ -420,6 +420,28 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect(p.comercialV4).toMatchObject({ statusComercial: "enviado", dataProposta: proposta.iso, validadeDias: 7, opcaoAprovadaRotulo: "Tela QA A" });
   });
 
+  it("R5: carimbo/status não convertem nem aprovam proposta vencida — 'convertido' só pela conversão (com entrada e evento)", async () => {
+    const storeId = await novaLoja();
+    // Registro retroativo de proposta já vencida (permitido, com aviso honesto).
+    const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: data(dia(-10)), validoAteDia: dia(-3), entradaAparelho: null } });
+    const antes = (await lerOS(r.osId)).p;
+    expect(antes.comercialV4.statusComercial).not.toBe("aprovado");
+    await expect(marcarOrcamentoPreOsV3(storeId, r.osId, { statusComercial: "aprovado" })).rejects.toThrow(/venceu em .*Corrigir datas/);
+    await expect(atualizarStatusComercialV3(storeId, r.osId, "aprovado")).rejects.toThrow(/venceu em .*Corrigir datas/);
+    await expect(atualizarStatusComercialV3(storeId, r.osId, "convertido")).rejects.toThrow(/Converter em OS/);
+    await expect(marcarOrcamentoPreOsV3(storeId, r.osId, { statusComercial: "convertido" })).rejects.toThrow(/Converter em OS/);
+    await expect(
+      atualizarStatusComercialV3(storeId, r.osId, "qualquer" as unknown as Parameters<typeof atualizarStatusComercialV3>[2]),
+    ).rejects.toThrow(/Status comercial inválido/);
+    const depois = (await lerOS(r.osId)).p;
+    expect(depois.comercialV4.statusComercial).toBe(antes.comercialV4.statusComercial);
+    expect(depois.comercialV4.convertidoEm).toBeUndefined();
+    expect(depois.timeline).toHaveLength(antes.timeline.length);
+    // Carimbos legítimos continuam funcionando.
+    await atualizarStatusComercialV3(storeId, r.osId, "enviado");
+    expect((await lerOS(r.osId)).p.comercialV4.statusComercial).toBe("enviado");
+  });
+
   it("D08: conversão sem entrada registrada exige a entrada real (nunca presume a data da proposta)", async () => {
     const storeId = await novaLoja();
     const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: data(dia(-5)), validoAteDia: dia(2), entradaAparelho: null } });
@@ -467,6 +489,13 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect(depois.comercialV4.statusComercial).toBe("convertido");
   });
 });
+
+/** Fluxo real da janela: o 1º envio devolve o impacto na garantia; a confirmação leva a assinatura dele. */
+async function corrigirConfirmandoGarantia(storeId: string, osId: string, input: CorrecaoDatasInputV3) {
+  const previa = await corrigirDatasOSV3(storeId, osId, { ...input, confirmarImpactoGarantia: false });
+  if (previa.ok || previa.tipo !== "confirmacao") return previa;
+  return corrigirDatasOSV3(storeId, osId, { ...input, confirmarImpactoGarantia: true, assinaturaImpactoGarantia: previa.garantia?.assinatura });
+}
 
 // ─── D11–D12 · Atendimento rápido ─────────────────────────────────────────────
 
@@ -536,11 +565,10 @@ describe("PG · Atendimento rápido retroativo (D11/D12)", () => {
     const antes = await contar(storeId);
     const tituloAntes = await prisma.contaReceberTitulo.findFirstOrThrow({ where: { storeId } });
     const nova = data(dia(-6), "11:00");
-    const res = await corrigirDatasOSV3(storeId, r.osId, {
+    const res = await corrigirConfirmandoGarantia(storeId, r.osId, {
       alteracoes: { dataEntrega: nova, dataEntrada: nova },
       esperados: { dataEntrega: esperadoCampoDataV3(servico.iso, servico.meta.precisao), dataEntrada: esperadoCampoDataV3(servico.iso, servico.meta.precisao) },
       motivo: "Atendimento foi na véspera.",
-      confirmarImpactoGarantia: true,
     });
     expect(res.ok).toBe(true);
     expect(await contar(storeId)).toEqual(antes);
@@ -609,12 +637,19 @@ describe("PG · Entrega retroativa e correção (D13–D15)", () => {
     expect(sem).toMatchObject({ ok: false, tipo: "confirmacao" });
     expect((await lerOS(osId)).p).toEqual(pAntes);
 
-    const ok = await corrigirDatasOSV3(storeId, osId, {
+    // Confirmação "solta" (sem a assinatura do impacto exibido) não vale no servidor.
+    const pedido = {
       alteracoes: { dataEntrega: nova },
       esperados: { dataEntrega: esperadoCampoDataV3(entrega.iso, entrega.meta.precisao) },
       motivo: "Entregue um dia antes.",
       confirmarImpactoGarantia: true,
-    });
+    };
+    const solta = await corrigirDatasOSV3(storeId, osId, { ...pedido, assinaturaImpactoGarantia: "impacto-que-o-operador-nao-viu" });
+    expect(solta).toMatchObject({ ok: false, tipo: "confirmacao" });
+    expect((await lerOS(osId)).p).toEqual(pAntes);
+    const assinatura = sem.ok ? undefined : sem.garantia?.assinatura;
+    expect(assinatura).toBeTruthy();
+    const ok = await corrigirDatasOSV3(storeId, osId, { ...pedido, assinaturaImpactoGarantia: assinatura });
     expect(ok.ok).toBe(true);
     const { p } = await lerOS(osId);
     expect(p.entregaV3).toMatchObject({ entregueEm: nova.iso, entregueEmMeta: nova.meta });
@@ -675,6 +710,18 @@ async function esperarEsperasAdvisory(n: number): Promise<void> {
     await new Promise((r) => setTimeout(r, 25));
   }
   throw new Error(`timeout esperando ${n} sessão(ões) na trava advisory`);
+}
+
+/** Espera `n` sessões bloqueadas em trava de LINHA (outra transação segurando a linha). */
+async function esperarEsperasDeLinha(n: number): Promise<void> {
+  for (let i = 0; i < 200; i += 1) {
+    const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*)::bigint AS n FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock' AND wait_event IN ('transactionid', 'tuple')`;
+    if (Number(rows[0]?.n ?? 0) >= n) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error(`timeout esperando ${n} sessão(ões) em trava de linha`);
 }
 
 describe("PG · Concorrência (D16/D17)", () => {
@@ -769,6 +816,59 @@ describe("PG · Concorrência (D16/D17)", () => {
     const { p } = await lerOS(osId);
     expect(p.timeline.filter((e: Payload) => e.tipo === "entrega_cliente")).toHaveLength(1);
     expect(p.entregaV3.entregueEmMeta).toEqual({ precisao: "dia", dia: dia(-3) });
+  });
+
+  it("R5: writer de garantia fora da trava da OS — a correção espera a linha (FOR UPDATE), relê e nunca grava cobertura antiga", async () => {
+    const storeId = await novaLoja();
+    const entrega = data(dia(-2), "16:00");
+    const osId = await osEntregueRetroativa(storeId, data(dia(-9)), entrega);
+    const fim = new Date(Date.parse(entrega.iso) + 90 * 86_400_000);
+    const ativa = await prisma.garantiaOrdemServico.create({
+      data: { storeId, ordemServicoId: osId, prazoDias: 90, cobertura: "Tela", dataInicio: new Date(entrega.iso), dataFim: fim, status: "ativa" },
+    });
+    const nova = data(dia(-3), "16:00");
+    const pedido = {
+      alteracoes: { dataEntrega: nova },
+      esperados: { dataEntrega: esperadoCampoDataV3(entrega.iso, entrega.meta.precisao) },
+      motivo: "Entregue um dia antes.",
+    };
+    // O operador vê o impacto com a cobertura atual.
+    const previa = await corrigirDatasOSV3(storeId, osId, pedido);
+    expect(previa).toMatchObject({ ok: false, tipo: "confirmacao" });
+    const assinaturaVista = previa.ok ? "" : previa.garantia!.assinatura;
+    // Writer legado (sem a trava por OS) estende a cobertura e segura a linha.
+    const fimLegado = new Date(fim.getTime() + 30 * 86_400_000);
+    let liberar!: () => void;
+    const segurando = new Promise<void>((r) => (liberar = r));
+    let travou!: () => void;
+    const travado = new Promise<void>((r) => (travou = r));
+    const legado = prisma.$transaction(
+      async (tx) => {
+        await tx.garantiaOrdemServico.update({ where: { id: ativa.id }, data: { dataFim: fimLegado } });
+        travou();
+        await segurando;
+      },
+      { maxWait: 5_000, timeout: 30_000 },
+    );
+    await travado;
+    const corrigir = corrigirDatasOSV3(storeId, osId, { ...pedido, confirmarImpactoGarantia: true, assinaturaImpactoGarantia: assinaturaVista });
+    await esperarEsperasDeLinha(1);
+    liberar();
+    await legado;
+    // Releu a linha depois do commit do legado: o impacto confirmado já não é o atual.
+    const r = await corrigir;
+    expect(r).toMatchObject({ ok: false, tipo: "confirmacao" });
+    if (r.ok) return;
+    expect(r.garantia?.linhas[0]?.dataFimAntes).toBe(fimLegado.toISOString());
+    const intacta = await prisma.garantiaOrdemServico.findUniqueOrThrow({ where: { id: ativa.id } });
+    expect(intacta.dataFim.getTime()).toBe(fimLegado.getTime());
+    expect(intacta.dataInicio.toISOString()).toBe(entrega.iso);
+    // Confirmando o impacto atualizado: desloca a partir da cobertura NOVA (sem lost update).
+    const ok = await corrigirDatasOSV3(storeId, osId, { ...pedido, confirmarImpactoGarantia: true, assinaturaImpactoGarantia: r.garantia!.assinatura });
+    expect(ok.ok).toBe(true);
+    const depois = await prisma.garantiaOrdemServico.findUniqueOrThrow({ where: { id: ativa.id } });
+    expect(depois.dataInicio.toISOString()).toBe(nova.iso);
+    expect(depois.dataFim.getTime()).toBe(fimLegado.getTime() - 86_400_000);
   });
 });
 

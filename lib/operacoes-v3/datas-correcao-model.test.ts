@@ -187,6 +187,36 @@ describe("planejarCorrecaoDatasV3 — D14 corrigir entrega sem refazer nada", ()
     expect((r.next as any).garantia).toMatchObject({ ativa: true, prazoDias: 90, inicioEm: nova.iso, fimEm: "2026-12-27T19:00:00.000Z" });
   });
 
+  it("R5: no servidor a confirmação vale só para o impacto exibido (assinatura); linha nova ou outra data pedem nova confirmação", () => {
+    const nova = data("2026-09-28", "16:00");
+    const ativa: GarantiaOperacionalLinhaV3 = { id: "g-ativa", status: "ativa", dataInicio: ENTREGA.iso, dataFim: "2026-12-28T19:00:00.000Z" };
+    const servidor = { ...CTX, exigirAssinaturaGarantia: true };
+    const pedido = (extra: Partial<CorrecaoDatasInputV3>) =>
+      input({ alteracoes: { dataEntrega: nova }, esperados: { dataEntrega: ENTREGA.iso }, confirmarImpactoGarantia: true, ...extra });
+
+    // Prévia sem as linhas reais (navegador) × servidor com a linha: impactos diferentes.
+    const previa = planejarCorrecaoDatasV3(osEntregue(), input({ alteracoes: { dataEntrega: nova }, esperados: { dataEntrega: ENTREGA.iso } }), CTX);
+    expect(!previa.ok && previa.tipo).toBe("confirmacao");
+    const assinaturaPrevia = !previa.ok ? previa.garantia!.assinatura : "";
+    const r1 = planejarCorrecaoDatasV3(osEntregue(), pedido({ assinaturaImpactoGarantia: assinaturaPrevia }), { ...servidor, garantias: [ativa] });
+    expect(r1.ok).toBe(false);
+    if (r1.ok) return;
+    expect(r1.tipo).toBe("confirmacao");
+    expect(r1.mensagem).toMatch(/mudou desde a sua confirmação/);
+    expect(r1.garantia?.linhas.map((l) => l.id)).toEqual(["g-ativa"]);
+    // Sem assinatura (confirmação "solta") também não passa no servidor.
+    const semAssinatura = planejarCorrecaoDatasV3(osEntregue(), pedido({}), { ...servidor, garantias: [ativa] });
+    expect(!semAssinatura.ok && semAssinatura.tipo).toBe("confirmacao");
+    // Confirmando o impacto exibido pelo servidor → aplica.
+    const r2 = planejarCorrecaoDatasV3(osEntregue(), pedido({ assinaturaImpactoGarantia: r1.garantia!.assinatura }), { ...servidor, garantias: [ativa] });
+    expect(r2.ok).toBe(true);
+    // Outra garantia ancorada criada no meio: a assinatura antiga não vale mais.
+    const outra: GarantiaOperacionalLinhaV3 = { id: "g-nova", status: "ativa", dataInicio: ENTREGA.iso, dataFim: "2027-01-28T19:00:00.000Z" };
+    const r3 = planejarCorrecaoDatasV3(osEntregue(), pedido({ assinaturaImpactoGarantia: r1.garantia!.assinatura }), { ...servidor, garantias: [ativa, outra] });
+    expect(!r3.ok && r3.tipo).toBe("confirmacao");
+    expect(!r3.ok && r3.garantia?.linhas.map((l) => l.id).sort()).toEqual(["g-ativa", "g-nova"]);
+  });
+
   it("garantia V2 não ancorada na entrega (ex.: aprovação) não é tocada", () => {
     const base = osEntregue({ garantia: { ativa: true, prazoDias: 90, inicioEm: "2026-09-20T12:00:00.000Z", fimEm: "2026-12-19T12:00:00.000Z" } });
     const r = planejarCorrecaoDatasV3(

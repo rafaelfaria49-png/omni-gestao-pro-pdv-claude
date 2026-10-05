@@ -14,6 +14,7 @@ import {
   fimDoDiaLojaIsoV3,
   formatarDataOperacionalV3,
   formatarDiaDeIsoNaLojaV3,
+  horarioAmbiguoLojaV3,
   isoInstanteValidoV3,
   lerDataOperacionalV3,
   lerDatasOSV3,
@@ -342,5 +343,44 @@ describe("conversões auxiliares", () => {
     expect(paredeLojaParaIsoV3("2026-09-25", "")).toBe("");
     expect(paredeLojaParaIsoV3("", "10:00")).toBe("");
     expect(ancoraDiaIsoV3("2026-09-25")).toBe("2026-09-25T15:00:00.000Z");
+  });
+});
+
+describe("R5: horário de verão histórico (America/Sao_Paulo) — nada é escolhido em silêncio", () => {
+  it("horário repetido no fim do horário de verão (17/02/2018 23:30) é recusado com mensagem própria", () => {
+    expect(horarioAmbiguoLojaV3("2018-02-17", "23:30")).toBe(true);
+    expect(paredeLojaParaIsoV3("2018-02-17", "23:30")).toBe("");
+    const r = montarDataOperacionalV3({ dia: "2018-02-17", hora: "23:30" });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.codigo).toBe("hora_ambigua");
+    expect(!r.ok && r.mensagem).toMatch(/se repete na troca do horário de verão/);
+    // Só pelo dia continua possível (âncora 12:00 não é ambígua).
+    expect(montarDataOperacionalV3({ dia: "2018-02-17", hora: "" }).ok).toBe(true);
+    // Fora da faixa repetida: único instante (ainda no horário de verão, UTC−2).
+    expect(horarioAmbiguoLojaV3("2018-02-17", "22:30")).toBe(false);
+    expect(paredeLojaParaIsoV3("2018-02-17", "22:30")).toBe("2018-02-18T00:30:00.000Z");
+  });
+
+  it("o servidor recusa as duas ocorrências do horário repetido informadas com horário", () => {
+    for (const iso of ["2018-02-18T01:30:00.000Z", "2018-02-18T02:30:00.000Z"]) {
+      const r = validarEntradaDataV3(iso, { precisao: "data_hora", dia: "2018-02-17" }, "Entrada");
+      expect(r.ok).toBe(false);
+      expect(!r.ok && r.mensagem).toMatch(/^Entrada: esse horário se repete/);
+    }
+  });
+
+  it("lacuna da meia-noite (04/11/2018 00:30 não existe) continua recusada como inexistente", () => {
+    expect(horarioAmbiguoLojaV3("2018-11-04", "00:30")).toBe(false);
+    expect(paredeLojaParaIsoV3("2018-11-04", "00:30")).toBe("");
+    const r = montarDataOperacionalV3({ dia: "2018-11-04", hora: "00:30" });
+    expect(!r.ok && r.codigo).toBe("hora_inexistente");
+  });
+
+  it("fim do dia = início do dia seguinte − 1 ms (última ocorrência no dia repetido; lacuna no dia seguinte)", () => {
+    expect(fimDoDiaLojaIsoV3("2018-02-17")).toBe("2018-02-18T02:59:59.999Z");
+    expect(fimDoDiaLojaIsoV3("2018-11-03")).toBe("2018-11-04T02:59:59.999Z");
+    expect(fimDoDiaLojaIsoV3("2026-10-05")).toBe("2026-10-06T02:59:59.999Z");
+    expect(diaNaLojaV3(fimDoDiaLojaIsoV3("2018-02-17"))).toBe("2018-02-17");
+    expect(fimDoDiaLojaIsoV3("2026-02-30")).toBe("");
   });
 });

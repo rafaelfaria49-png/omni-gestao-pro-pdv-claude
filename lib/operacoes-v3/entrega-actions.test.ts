@@ -338,6 +338,36 @@ describe("registrarEntregaV3 — guard financeiro server-side", () => {
     expect(mocks.osUpdate).not.toHaveBeenCalled();
   });
 
+  it("R5: a folga não vale para entrega antiga — ontem 10:00 × novo pedido 10:04 é conflito", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-14T13:00:00.000Z", entregueEmMeta: { precisao: "data_hora", dia: "2026-07-14" }, registradoEm: "2026-07-14T13:00:00.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-14T13:04:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-14" } } }),
+    ).rejects.toThrow('Esta OS já foi entregue em 14/07/2026 10:00. Para ajustar a data, use "Corrigir datas".');
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+  });
+
+  it("R5: registro recente com horário informado (não limitado ao relógio) só aceita o MESMO horário", async () => {
+    // Registrada há 30 s com entrega efetiva às 12:00 (15:00Z); pedido de 12:03 é outra data.
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-15T15:00:00.000Z", entregueEmMeta: { precisao: "data_hora", dia: "2026-07-15" }, registradoEm: "2026-07-15T15:29:30.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-15T15:03:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-15" } } }),
+    ).rejects.toThrow(/já foi entregue em 15\/07\/2026 12:00/);
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-15T15:00:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-15" } } }),
+    ).resolves.toBe(entregue);
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+  });
+
   it("OS já entregue com a MESMA data efetiva: continua no-op idempotente", async () => {
     const entregue = payload(100, {
       operacaoStatusV3: "entregue",

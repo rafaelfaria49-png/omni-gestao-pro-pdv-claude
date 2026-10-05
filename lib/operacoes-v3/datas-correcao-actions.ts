@@ -101,6 +101,14 @@ export async function corrigirDatasOSV3(
       if (!row || !payload || typeof payload !== "object") {
         throw new RecusaCorrecaoV3({ ok: false, tipo: "validacao", mensagem: "OS sem payload compatível." });
       }
+      // Linhas de garantia da OS travadas (FOR UPDATE) antes da leitura: um writer
+      // de garantia que não passa pela trava da OS espera este commit para
+      // alterá-las. A leitura seguinte (novo snapshot) parte do estado mais recente.
+      if (mexeEntrega) {
+        await tx.$queryRaw`
+          SELECT "id" FROM "garantia_ordem_servico" WHERE "storeId" = ${sid} AND "ordemServicoId" = ${id} FOR UPDATE
+        `;
+      }
       const garantias = mexeEntrega
         ? (
             await tx.garantiaOrdemServico.findMany({
@@ -110,23 +118,44 @@ export async function corrigirDatasOSV3(
           ).map((g) => ({ id: g.id, status: g.status, dataInicio: g.dataInicio.toISOString(), dataFim: g.dataFim.toISOString() }))
         : [];
 
-      const plano = planejarCorrecaoDatasV3(payload, input, { agora, operador, operadorId, garantias, eventoId: eventId() });
+      const plano = planejarCorrecaoDatasV3(payload, input, {
+        agora,
+        operador,
+        operadorId,
+        garantias,
+        eventoId: eventId(),
+        exigirAssinaturaGarantia: true,
+      });
       if (!plano.ok) throw new RecusaCorrecaoV3(plano);
 
-      // 3) Garantia operacional ATIVA ancorada nesta entrega: mesma transação.
+      const garantiaMudou = () =>
+        new RecusaCorrecaoV3({
+          ok: false,
+          tipo: "conflito",
+          campo: "dataEntrega",
+          mensagem: "A garantia desta OS mudou durante a correção. Reabra a correção e revise.",
+        });
+      // 3) Garantia operacional ATIVA ancorada nesta entrega: mesma transação, com
+      // CAS do status E das datas lidas (nunca grava sobre cobertura alterada).
       for (const linha of plano.garantia.linhas) {
         const r = await tx.garantiaOrdemServico.updateMany({
-          where: { id: linha.id, storeId: sid, ordemServicoId: id, status: "ativa" },
+          where: {
+            id: linha.id,
+            storeId: sid,
+            ordemServicoId: id,
+            status: "ativa",
+            dataInicio: new Date(linha.dataInicioAntes),
+            dataFim: new Date(linha.dataFimAntes),
+          },
           data: { dataInicio: new Date(linha.dataInicio), dataFim: new Date(linha.dataFim) },
         });
-        if (r.count !== 1) {
-          throw new RecusaCorrecaoV3({
-            ok: false,
-            tipo: "conflito",
-            campo: "dataEntrega",
-            mensagem: "A garantia desta OS mudou durante a correção. Reabra a correção e revise.",
-          });
-        }
+        if (r.count !== 1) throw garantiaMudou();
+      }
+      // Garantia criada por outro caminho durante a correção (linha nova): conflito.
+      if (mexeEntrega) {
+        const lidas = new Set(garantias.map((g) => g.id));
+        const agoraNaOS = await tx.garantiaOrdemServico.findMany({ where: { storeId: sid, ordemServicoId: id }, select: { id: true } });
+        if (agoraNaOS.some((g) => !lidas.has(g.id))) throw garantiaMudou();
       }
       // 4) Payload: só datas + auditoria. Prisma atualiza `updatedAt` (trava otimista dos outros editores).
       await tx.ordemServico.update({ where: { id }, data: { payload: plano.next as unknown as Prisma.InputJsonValue } });
