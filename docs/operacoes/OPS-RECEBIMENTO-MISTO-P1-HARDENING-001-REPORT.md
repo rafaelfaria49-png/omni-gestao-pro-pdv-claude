@@ -1,6 +1,6 @@
 # OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — implementação, corretivo R2, reconciliação com a main e validação para R3
 
-Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). O commit funcional anterior era `ce1d806ba962fbf5acac1e015e18a370d7939055`; o corretivo da R2 é o commit funcional `3071c6749730ca138966d46fc9e6271afc211d81` (Claude/Anthropic), seguido deste commit só de documentos. O coordenador OpenAI consolidou este relatório, os logs e o inventário produzido pelo Claude; não implementou as correções. A revisão R2 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
+Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). O commit funcional anterior era `ce1d806ba962fbf5acac1e015e18a370d7939055`; o corretivo da R2 é o commit funcional `3071c6749730ca138966d46fc9e6271afc211d81` (Claude/Anthropic), seguido deste commit só de documentos. O coordenador OpenAI consolidou este relatório, os logs e o inventário produzido pelo Claude; não implementou as correções. A revisão final R3 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
 
 Em 05/10/2026, um primeiro `git fetch origin` confirmou `origin/main=1e45f98ade83b3071548d581225928b0fd95b06c`. Um fetch posterior no mesmo dia mostrou `origin/main=a27b37e861ff044666d16535acb292f5d6957fcf` (merge do PR #237, GOAL de datas, já publicado). O coordenador iniciou `git merge --no-edit origin/main`; Claude resolveu os 6 conflitos e concluiu o merge normal de dois pais (`4ed751c7d349f0e8a92e726952aeee861830b31e`, pais `d3d9a97` e `a27b37e`), sem rebase/amend/reset/stash. O código do PR #237 é do upstream, não deste GOAL. Depois do merge, Claude estabilizou a sincronização dos specs E2E (`8aa19326a85adcbab7b7afcd3479b44ea55181db`, só teste) e corrigiu o candidato escalar P1-T7 (`5727e5802e202f05eef9aedcf30f17813f6cda8a`, funcional). A worktree e o trabalho anterior foram preservados. PRs #234 e #235 permanecem na base. A auditoria/baseline original não foi reiniciada; o GOAL de datas não foi iniciado nem alterado.
 
@@ -16,7 +16,7 @@ FUNCTIONAL_HEAD=5727e5802e202f05eef9aedcf30f17813f6cda8a
 E2E_SPEC_SYNC_COMMIT=8aa19326a85adcbab7b7afcd3479b44ea55181db;SO_TESTE
 PREVIOUS_FUNCTIONAL_HEADS=3071c6749730ca138966d46fc9e6271afc211d81;ce1d806ba962fbf5acac1e015e18a370d7939055
 P1T7_VALOR_TITULO_OS_SNAPSHOT_LEGADO=FIXED_RED_GREEN_PG_2_ROTAS
-E2E_NAVEGACAO_RECEBER=CAUSA_REMONTAGEM_OPERATIONSPROVIDER_KEY;SPEC_SINCRONIZADO;E2E_PENDENTE_NOVO_BUILD
+E2E_NAVEGACAO_RECEBER=CAUSA_REMONTAGEM_OPERATIONSPROVIDER_KEY;SPEC_SINCRONIZADO;PASS_CONJUNTO_6_6_WORKERS1_RETRIES0
 R2_P1_TITULO_TRAVA_VAZIA=FIXED_RED_GREEN_PG_4_CASOS
 R2_P2_ESTOQUE_RASCUNHO_LEDGER=FIXED_RED_GREEN_PG_4_CASOS
 R2_P3_RETORNO_DUPLICADO=PREEXISTENTE_OPERACIONAL_NAO_ALTERADO
@@ -33,7 +33,7 @@ DIFFERENT_ECONOMIC_CONTENT_CONFLICT=PASS_FORMA_SESSAO_1_CENTAVO
 OS_PAYLOAD_WRITERS_SCANNED=118_FUNCOES;105_SAFE_TRANSACTIONAL;13_READ_ONLY;39_WRITERS_DIRETOS;16_TRANSITIVOS_SEPARADOS;INCLUI_4_DO_UPSTREAM_PR237
 STALE_WRITERS_FOUND=YES_INCLUINDO_5_ACHADOS_DA_R1
 STALE_WRITERS_FIXED=YES; inventario detalha os caminhos
-STALE_WRITERS_REMAINING=0_IDENTIFICADOS_PELO_IMPLEMENTADOR; confirmar na R2
+STALE_WRITERS_REMAINING=0_IDENTIFICADOS_PELO_IMPLEMENTADOR; confirmar na R3
 ROW_LOCK_STRATEGY=LATEST_READ_DECISION_WRITE_SAME_TX_OS_FOR_UPDATE_AND_TITLE_FOR_UPDATE
 CAS_STRATEGY=CAS_UPDATEDAT_EXISTENTE_PRESERVADO_SOB_TRAVA;ZERO_WRITERS_DEPENDENDO_SO_DE_CAS
 LOCK_ORDER=ADVISORY_OS_SESSAO_OS_TITULO;OS_PRODUTOS_ITENS;SYNC_OS_ITENS;FINANCEIRO_SO_TITULO_SEM_ARESTA_DE_VOLTA_PARA_OS;UPSTREAM_ADVISORY_OS_TITULO_LEITURA_E_ADVISORY_OS_GARANTIAS
@@ -53,11 +53,11 @@ PR235_LATER_PAYMENT=PASS_PG_E2E_V3_V4
 UNIT=AMPLO_OPS_FINANCEIRO_APIS_2006_PASS_10_FAIL_PREEXISTENTES_PREVIEW_HONESTY_124_ARQUIVOS_EM_5727e58;CANONICALIDADE_24_24;DATAS_UPSTREAM_30_30
 MOUNTED=PASS_V3_20_V4_29_EM_5727e58
 POSTGRES=PASS_V3_95_INCLUI_TRANSITIVOS_37_V4_PARIDADE_1_GATED_40_EM_5727e58
-E2E=PENDENTE_NOVO_BUILD_DO_COORDENADOR_SOBRE_A_ARVORE_RECONCILIADA;BUILD_3071c67_NAO_CORRESPONDE_A_FONTE_ATUAL;ANTERIOR_3071c67_CONJUNTO_4_2_E_5_1
+E2E=PASS_CONJUNTO_6_6_28_1S_WORKERS1_RETRIES0_SOBRE_BUILD_OFICIAL_5727e58;32a2283_SO_DOCS;FALHAS_NAV_ANTERIORES_4_2_E_5_1_PRESERVADAS
 REGRESSION=PASS_FOCAL_E_AMPLA_OPS
-TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_EXIT0_HEAP8192_EM_5727e58
-LINT=PASS_FOCADO_RESOLUCOES_MERGE_SPECS_E_P1T7_0_ERROS_0_WARNINGS
-BUILD=PENDENTE_COORDENADOR_SOBRE_A_ARVORE_RECONCILIADA;ANTERIOR_3071c67_PASS_MIGRATION_SKIPPED_NAO_PROVA_O_MERGE
+TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_POS_BUILD_INCREMENTAL_FALSE_EXIT0_HEAP8192;ANTES_DO_BUILD_TAMBEM_PASS_5727e58
+LINT=PASS_60_ARQUIVOS_CODIGO_TESTES_DIFF_DO_GOAL_0_ERROS_1_WARNING_PREEXISTENTE;FOCADO_CLAUDE_TAMBEM_PASS
+BUILD=PASS_NPM_RUN_BUILD_OFICIAL_EXIT0_COMPILED_99S_STATIC_102_MIGRATION_SKIPPED_EM_5727e58;32a2283_SO_DOCS
 DIFF_CHECK=PASS
 SCHEMA_CHANGED=NO
 MIGRATION_CREATED=NO
@@ -82,7 +82,7 @@ IMPLEMENTADO=SIM
 VALIDADO=SIM_LOCAL_QA_COM_RESSALVAS_DOCUMENTADAS
 PUBLICADO=NO
 HOMOLOGADO=NO
-BLOCKER=BUILD_E2E_DO_COORDENADOR_SOBRE_A_ARVORE_RECONCILIADA_E_REVISAO_INDEPENDENTE_R3_PENDENTES
+BLOCKER=REVISAO_INDEPENDENTE_R3_EXACT_SHA_PENDENTE
 ```
 
 ## Correções originais
@@ -95,7 +95,7 @@ Os writers operacionais, de importação e scripts manuais passam pela releitura
 
 ## R1 e corretivo no mesmo GOAL
 
-A R1 independente sobre `c21990d96f19cc148430142bd8e885991cc8b595`, consolidada com seu adendo, retornou P0=0, P1=2, P2=3, P3=1, REQUEST_CHANGES. Os cinco achados foram corrigidos por Claude no commit funcional `ce1d806`; a R2 ainda deve confirmar o fechamento.
+A R1 independente sobre `c21990d96f19cc148430142bd8e885991cc8b595`, consolidada com seu adendo, retornou P0=0, P1=2, P2=3, P3=1, REQUEST_CHANGES. Os cinco achados foram corrigidos por Claude no commit funcional `ce1d806`; a R2 identificou os dois achados adicionais descritos abaixo; a R3 deve confirmar todas as correções na árvore integrada.
 
 1. Adapter `os-faturamento`: atualização da OS e sincronização de seu título passam a compartilhar a transação OS→título. Leitura, preservação de ledger, decisão e escrita ocorrem sob trava do título; upsert/cancel não restauram histórico antigo.
 2. Serviço genérico `upsertContaReceber`/`cancelContaReceber`: transação curta própria ou reaproveitamento do `db: tx` recebido, FOR UPDATE antes da decisão, inserção sem sobrescrita em conflito para a ausência concorrente e releitura protegida. Não abre transação aninhada nem pede OS/advisory depois de título. Cancelamento da OS usa a mesma transação e rejeita recebimento já registrado, inclusive por Financeiro direto/lote.
@@ -220,8 +220,26 @@ Todos os logs seguintes estão em `playwright-report/ops-p1-hardening-001/`, git
 
 A execução ampla histórica `unit-full-after-import-fix.log` teve 9179 passed/40 failed, incluindo infra fiscal/setup, mocks legados, checks estáticos sem diff, PG gated sem flag e dois validadores privados antigos da coordenação. Não é relatada como suíte inteira verde. As reproduções originais P1-A, P1-B, P2 e a RED de importação foram preservadas; não se repetiu toda a auditoria/baseline.
 
-## Gates finais pendentes
+## Revisão e publicação pendentes
 
-Build oficial e E2E do coordenador sobre o SHA final da árvore reconciliada (o build `3071c67` é anterior ao merge e não a prova). A R3 independente deve revisar o SHA final exato da árvore reconciliada, separar o código do upstream (PR #237) do código deste GOAL e tentar quebrar as resoluções de conflito (orçamento sob trava × regras de validade do upstream; entrega/comercial do upstream × recusas/estado financeiro), o P1-T7 (lista antiga após faturamento vigente; manual/import preservados) e a corrida trava vazia → título criado → leitura → pagamento → escrita, a substituição rascunho×ledger em ambas as ordens, e ainda A–O do comando original, os cinco achados R1, a cobrança sobre faturamento vigente, a criação concorrente de título e os candidatos operacionais relatados. P0=P1=P2=0 e APPROVE são obrigatórios. Havendo achado, corrigir neste mesmo GOAL por Anthropic e obter nova R sobre o novo SHA.
+Build oficial e E2E do coordenador passaram sobre o código final da árvore reconciliada, conforme as provas na seção seguinte (o build `3071c67` é anterior ao merge e não foi reutilizado). A R3 independente deve revisar o SHA final exato da árvore reconciliada, separar o código do upstream (PR #237) do código deste GOAL e tentar quebrar as resoluções de conflito (orçamento sob trava × regras de validade do upstream; entrega/comercial do upstream × recusas/estado financeiro), o P1-T7 (lista antiga após faturamento vigente; manual/import preservados) e a corrida trava vazia → título criado → leitura → pagamento → escrita, a substituição rascunho×ledger em ambas as ordens, e ainda A–O do comando original, os cinco achados R1, a cobrança sobre faturamento vigente, a criação concorrente de título e os candidatos operacionais relatados. P0=P1=P2=0 e APPROVE são obrigatórios. Havendo achado, corrigir neste mesmo GOAL por Anthropic e obter nova R sobre o novo SHA.
 
 Só então: PR exclusivo com o SHA revisado; checks verdes; merge normal GitHub sem squash/rebase/force; SUCCESS de omni-gestao e omni-gestao-pro no merge SHA; smoke produção somente leitura. Sem sessão, OWNER_PENDING_AUTH, sem pedir credenciais. Nenhum pagamento real, mutation financeira de produção ou acesso à OS-2026-00028 é permitido. A worktree permanece ATIVA até relatório final e dois deploys verdes.
+
+## Gates finais do coordenador antes da R3
+
+O coordenador executou o build oficial, o E2E conjunto e o typecheck completo após o build sobre o código funcional `5727e5802e202f05eef9aedcf30f17813f6cda8a`. O HEAD `32a2283d6e5ac288c06def5d3034ce86a20a3219` difere desse SHA somente em REPORT/WRITERS, verificado por `git diff --name-only`. Este commit de consolidação também altera somente o REPORT. A R3 deve revisar o SHA exato que contém esta consolidação, fornecido fora do arquivo para evitar autorreferência de hash.
+
+| Gate | Resultado final | Evidência integral local, gitignorada |
+| --- | --- | --- |
+| Build oficial `npm run build` | exit 0; compilação 99s; 102 páginas estáticas; `MIGRATION_SKIPPED` | `p1t7-build-coordinator.log` |
+| E2E: hardening + PR235 V3 + paridade V4 | 6/6 em 28,1s; workers=1; retries=0 | `p1t7-e2e-coordinator.log` |
+| Typecheck depois do build | `tsc --noEmit --incremental false`; heap8192; exit 0 | `p1t7-typecheck-post-build.log` |
+| ESLint do diff exclusivo do GOAL | 60 arquivos; exit 0; zero erros; um aviso preexistente em `app/actions/operacoes.ts` | `p1t7-lint-goal-all.log` |
+| Diff e schema | `git diff --check BASE..HEAD` exit 0; nenhum diff em schema/migrations | Git na árvore exata |
+
+Os logs estão em `playwright-report/ops-p1-hardening-001/`; cópias sanitizadas do coordenador estão fora da worktree no diretório de artefatos do chat. O build Next informa que ignora tipos, por isso o typecheck completo separado é um gate obrigatório e foi executado. O build anterior `3071c67` não foi reutilizado como prova da árvore reconciliada. As duas falhas anteriores de navegação permanecem registradas (`r2fix-e2e-first-failed.log`: 4 PASS/2 FAIL; `r2fix-e2e-recheck-failed.log`: 5 PASS/1 FAIL), seguidas da correção de sincronização pelo Claude e do novo conjunto 6/6.
+
+A suíte ampliada final permanece qualificada: 2006 PASS/10 FAIL estáticas preexistentes em `preview-honesty`, 124 arquivos. Não se declara a suíte inteira do projeto verde. Os 95 PG V3, 40 PG complementares, 1 PG V4 e 49 montados passaram integralmente na árvore integrada. O RED R2 correto é 7 FAIL/1 PASS/27 fora do filtro; o RED P1-T7 é 2 FAIL/35 fora do filtro, com GREEN 2/2 e PG V3 completo 95/95.
+
+O fetch final anterior à R3 confirmou `origin/main=a27b37e861ff044666d16535acb292f5d6957fcf`. A implementação e os testes permanecem exclusivamente Anthropic. Não houve PR, merge remoto, deploy, pagamento real, alteração financeira real nem acesso à OS-2026-00028 até este registro. O resultado da R3 e as provas posteriores de publicação serão gravados no relatório operacional fora da worktree, sem alterar o SHA aprovado.
