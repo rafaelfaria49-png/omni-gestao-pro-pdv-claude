@@ -8,8 +8,9 @@
 // erro de dentro da transação faria o Prisma commitar o que já tivesse sido
 // escrito. Mesmo padrão do recebimento em lote (`recebimento-lote-service.ts`).
 //
-// Ordem deliberada: lock da OS → replay/conflito → sessão de caixa (só com
-// dinheiro entrando) → OS travada → título travado → saldo real + distribuição
+// Ordem deliberada: advisory lock da OS → sessão de caixa (FOR SHARE, só com
+// dinheiro entrando) → OS travada (FOR UPDATE) → replay/recusa/conflito → título
+// travado → saldo real + distribuição
 // → baixa do imediato → movimentação → caixa por forma → marcador a prazo no
 // MESMO título → espelhos + timeline. Nada é gravado antes da última recusa
 // possível pela validação.
@@ -46,8 +47,11 @@ import {
   type PagamentoV3,
   type SplitLinhaV3,
 } from "./payment-model";
+import { travarLinhaOSV3 } from "./os-payload-lock";
 import {
+  assinaturaRecebimentoMistoLegadaV1,
   assinaturaRecebimentoMistoV3,
+  conteudoRecebimentoCanonicoLegadoV1,
   conteudoRecebimentoCanonicoV3,
   deCentavosV3,
   formatarCentavosBRLV3,
@@ -120,6 +124,17 @@ export function fingerprintRecebimentoMistoV3(escopo: { storeId: string; osId: s
   return createHash("sha256").update(assinaturaRecebimentoMistoV3(escopo, n)).digest("hex");
 }
 
+/**
+ * Fingerprints que identificam ESTA requisição: o atual (agregado por forma) e o v1 gravado
+ * antes do fix, ambos recalculados a partir da própria requisição — compatibilidade estrita.
+ */
+export function fingerprintsAceitosRecebimentoMistoV3(escopo: { storeId: string; osId: string }, n: RecebimentoMistoNormalizadoV3): string[] {
+  return [
+    fingerprintRecebimentoMistoV3(escopo, n),
+    createHash("sha256").update(assinaturaRecebimentoMistoLegadaV1(escopo, n)).digest("hex"),
+  ];
+}
+
 /** Marcador `a_prazo_autorizado` desta confirmação no ledger do título (identidade persistente). */
 function marcadorDaOperacao(payload: unknown, operacaoId: string): Record<string, unknown> | null {
   if (!isRecord(payload) || !Array.isArray(payload.historico)) return null;
@@ -137,6 +152,12 @@ function marcadorDaOperacao(payload: unknown, operacaoId: string): Record<string
 export function fingerprintRecebimentoCanonicoV3(p: { storeId: string; osId: string; sessaoId: string; linhas: SplitLinhaV3[] }): string {
   const conteudo = conteudoRecebimentoCanonicoV3({ sessaoId: p.sessaoId, linhas: p.linhas });
   return createHash("sha256").update(JSON.stringify([p.storeId, p.osId, conteudo])).digest("hex");
+}
+
+/** Atual + v1 (pré-fix) da MESMA requisição: um recebimento gravado antes do deploy continua em replay. */
+export function fingerprintsAceitosRecebimentoCanonicoV3(p: { storeId: string; osId: string; sessaoId: string; linhas: SplitLinhaV3[] }): string[] {
+  const legado = conteudoRecebimentoCanonicoLegadoV1({ sessaoId: p.sessaoId, linhas: p.linhas });
+  return [fingerprintRecebimentoCanonicoV3(p), createHash("sha256").update(JSON.stringify([p.storeId, p.osId, legado])).digest("hex")];
 }
 
 // ─── travas dentro da transação ───────────────────────────────────────────────
@@ -158,12 +179,23 @@ export async function travarSessaoCaixa(tx: RecebimentoMistoTxV3, storeId: strin
   return Array.isArray(rows) && rows.length > 0 ? rows[0]! : null;
 }
 
-/** OS travada: o payload lido a seguir é o mais recente e nenhum outro writer o troca até o commit. */
+/**
+ * OS travada: o payload lido a seguir é o mais recente e nenhum outro writer o troca até o
+ * commit — inclusive os writers operacionais, que travam a MESMA linha (`os-payload-lock`).
+ */
 export async function travarOS(tx: RecebimentoMistoTxV3, storeId: string, osId: string): Promise<boolean> {
-  const rows = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT "id" FROM "ordens_servico" WHERE "id" = ${osId} AND "storeId" = ${storeId} FOR UPDATE
-  `;
-  return Array.isArray(rows) && rows.length > 0;
+  return travarLinhaOSV3(tx, storeId, osId);
+}
+
+/**
+ * Prefixo comum de quem DECIDE uma confirmação mista: advisory lock da OS → sessão (FOR SHARE,
+ * só com dinheiro entrando) → OS (FOR UPDATE). Tudo que é lido depois (marcador, recusas,
+ * payload) é o estado mais recente — nenhum writer de payload grava entre a leitura e a decisão.
+ */
+async function travarParaDecidir(tx: RecebimentoMistoTxV3, ctx: ContextoRecebimentoMistoV3, n: RecebimentoMistoNormalizadoV3): Promise<void> {
+  await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(ctx.storeId, ctx.osId));
+  if (n.receberAgoraCentavos > 0 && n.sessaoId) await travarSessaoCaixa(tx, ctx.storeId, n.sessaoId);
+  await travarOS(tx, ctx.storeId, ctx.osId);
 }
 
 /**
@@ -274,7 +306,7 @@ async function replayDaOperacao(
   const titulo = await getContaReceberByLocalKey(ctx.storeId, localKeyContaReceberOSV3(ctx.storeId, ctx.osId), tx);
   const marcador = titulo ? marcadorDaOperacao(titulo.payload, n.operacaoId) : null;
   if (!titulo || !marcador) return null;
-  if (marcador.requestFingerprint !== fingerprintRecebimentoMistoV3({ storeId: ctx.storeId, osId: ctx.osId }, n)) {
+  if (!fingerprintsAceitosRecebimentoMistoV3({ storeId: ctx.storeId, osId: ctx.osId }, n).includes(String(marcador.requestFingerprint ?? ""))) {
     throw new RecebimentoMistoErroV3(
       "idempotencia_conflito",
       "Esta confirmação já foi registrada com outros valores. Atualize a OS antes de lançar outra operação.",
@@ -350,7 +382,9 @@ export async function decidirRecebimentoMistoOSV3(
   recusaPrevia: RecusaMistaV3 | null,
 ): Promise<DecisaoRecebimentoMistoV3> {
   const { storeId, osId } = ctx;
-  await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(storeId, osId));
+  // Travas ANTES de ler marcador/recusas: a recusa terminal lida aqui não pode ser apagada
+  // por um writer de payload até o commit (e esta transação espera o que já está gravando).
+  await travarParaDecidir(tx, ctx, n);
   const replay = await replayDaOperacao(tx, ctx, n);
   if (replay) return { tipo: "gravada", resultado: replay };
 
@@ -358,7 +392,7 @@ export async function decidirRecebimentoMistoOSV3(
   const os = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
   const anterior = recusasGravadas(os?.payload).find((r) => r.operacaoId === n.operacaoId);
   if (anterior) {
-    if (anterior.requestFingerprint !== requestFingerprint) {
+    if (!fingerprintsAceitosRecebimentoMistoV3({ storeId, osId }, n).includes(String(anterior.requestFingerprint ?? ""))) {
       throw new RecebimentoMistoErroV3(
         "idempotencia_conflito",
         "Esta confirmação já foi usada com outros valores. Atualize a OS antes de lançar outra operação.",
@@ -389,7 +423,7 @@ export async function executarRecebimentoMistoOSV3(
   n: RecebimentoMistoNormalizadoV3,
 ): Promise<ResultadoRecebimentoMistoV3> {
   // 1. Serialização por OS: PRIMEIRA instrução, antes de qualquer leitura de estado.
-  await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(ctx.storeId, ctx.osId));
+  await travarParaDecidir(tx, ctx, n);
 
   // 2. Replay / conflito pela identidade persistida no ledger do título. Vem antes
   // da sessão: repetir uma confirmação já gravada continua válido com o caixa fechado.

@@ -13,12 +13,15 @@ const mocks = vi.hoisted(() => ({
   autoClose: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const prismaTx: Record<string, unknown> = {
     ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate },
     contaReceberTitulo: { findUnique: mocks.tituloFindUnique },
-  },
-}));
+  };
+  prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
+  prismaTx.$queryRaw = async () => [{ id: "os-travada" }];
+  return { prisma: prismaTx };
+});
 vi.mock("@/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: mocks.requireEnterpriseWith }));
 vi.mock("@/lib/operacoes/assert-active-store", () => ({ assertActiveStoreId: vi.fn() }));

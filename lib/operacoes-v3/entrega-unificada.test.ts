@@ -33,7 +33,12 @@ const pdv = vi.hoisted(() => ({
 
 vi.mock("./entrega-actions", () => ({ registrarEntregaV3: entrega.registrarEntregaV3 }));
 vi.mock("@/lib/operacoes/assert-active-store", () => ({ assertActiveStoreId: vi.fn() }));
-vi.mock("@/lib/prisma", () => ({ prisma: { ordemServico: { findFirst: prismaMock.findFirst, update: prismaMock.update } } }));
+vi.mock("@/lib/prisma", () => {
+  const prismaTx: Record<string, unknown> = { ordemServico: { findFirst: prismaMock.findFirst, update: prismaMock.update } };
+  prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
+  prismaTx.$queryRaw = async () => [{ id: "os-travada" }];
+  return { prisma: prismaTx };
+});
 vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "u1", name: "Ana" } })) }));
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/financeiro/services/contas-receber-service", () => ({ cancelContaReceber: fin.cancelContaReceber }));

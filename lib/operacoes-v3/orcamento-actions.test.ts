@@ -11,14 +11,17 @@ vi.mock("./garantia-actions", () => ({ salvarGarantiaOSV3: (...args: unknown[]) 
 
 const findFirstMock = vi.fn<AnyFn>();
 const updateMock = vi.fn<AnyFn>(async () => ({}));
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const prismaTx: Record<string, unknown> = {
     ordemServico: {
       findFirst: (...args: unknown[]) => findFirstMock(...args),
       update: (...args: unknown[]) => updateMock(...args),
     },
-  },
-}));
+  };
+  prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
+  prismaTx.$queryRaw = async () => [{ id: "os-travada" }];
+  return { prisma: prismaTx };
+});
 
 import { aprovarOrcamentoV3, corrigirOrcamentoV3, recusarOrcamentoV3, salvarOrcamentoV3 } from "./orcamento-actions";
 import { totalCobravelV3, lerPagamentoV3 } from "./payment-model";

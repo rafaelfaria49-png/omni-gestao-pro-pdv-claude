@@ -5,6 +5,7 @@ import { nowIso } from "@/lib/operacoes/services/os-helpers";
 import { selectEstoquePecaSource } from "@/lib/operacoes/services/orcamento-builder";
 import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract";
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service";
+import { lerOSTravadaV3 } from "@/lib/operacoes-v3/os-payload-lock";
 
 export type EstoqueMovimentoPayload = {
   id: string;
@@ -182,17 +183,17 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const row = await tx.ordemServico.findFirst({
-        where: { id: params.osId, storeId: params.storeId },
-        select: { id: true, storeId: true, numero: true, payload: true },
-      });
+      // Trava da OS ANTES de ler (ordem: OS → produtos). O payload gravado no fim é o MAIS
+      // RECENTE desta linha; `osPayload` do chamador só define as peças a consumir.
+      const row = await lerOSTravadaV3(tx, params.storeId, params.osId);
       if (!row) throw new Error("OS não encontrada");
       const osNumero = row.numero ?? null;
+      const latest = row.payload as OrdemServico & Record<string, unknown>;
 
-      const payload = (params.osPayload ?? (row.payload as unknown as OrdemServico)) as OrdemServico;
+      const payload = (params.osPayload ?? (latest as OrdemServico)) as OrdemServico;
       if (!isOSEstoqueConsumivel(payload)) throw new Error("OS inválida para consumo de estoque");
 
-      if (hasEstoqueAlreadyConsumed(payload)) {
+      if (hasEstoqueAlreadyConsumed(latest) || hasEstoqueAlreadyConsumed(payload)) {
         return { ok: true as const, status: "already_consumed" as const, movimentos: [] as EstoqueMovimentoPayload[], ignored: [] as EstoqueBuildIgnored[] };
       }
 
@@ -266,10 +267,10 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
 
       const ts = nowIso();
       const nextPayload: OrdemServico & Record<string, unknown> = {
-        ...(payload as OrdemServico & Record<string, unknown>),
+        ...latest,
         estoqueConsumido: true,
         estoqueConsumidoEm: ts,
-        estoqueMovimentos: [...(Array.isArray((payload as any).estoqueMovimentos) ? (payload as any).estoqueMovimentos : []), ...movimentos],
+        estoqueMovimentos: [...(Array.isArray(latest.estoqueMovimentos) ? latest.estoqueMovimentos : []), ...movimentos],
         atualizadoEm: ts,
       };
 
@@ -304,10 +305,11 @@ export async function restoreEstoqueFromOS(params: {
 }): Promise<{ ok: boolean; status: string; error?: string }> {
   try {
     await prisma.$transaction(async (tx) => {
-      const row = await tx.ordemServico.findFirst({ where: { id: params.osId, storeId: params.storeId }, select: { numero: true, payload: true } });
+      // Trava da OS ANTES de ler (ordem: OS → produtos); decide e grava sobre o payload MAIS RECENTE.
+      const row = await lerOSTravadaV3(tx, params.storeId, params.osId);
       if (!row) throw new Error("OS não encontrada");
       const osNumero = row.numero ?? null;
-      const payload = row.payload as unknown as (OrdemServico & Record<string, unknown>);
+      const payload = row.payload as OrdemServico & Record<string, unknown>;
       if (payload.estoqueConsumido !== true) {
         return;
       }
@@ -427,15 +429,18 @@ export async function applyEstoqueDelta(params: {
 }): Promise<{ ok: boolean; status: "applied" | "no_delta" | "already_applied" | "skipped" | "error"; error?: string; delta?: EstoqueDeltaItem[] }> {
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const row = await tx.ordemServico.findFirst({ where: { id: params.osId, storeId: params.storeId }, select: { numero: true, payload: true } });
+      // Trava da OS ANTES de ler (ordem: OS → produtos). Flags/idempotência e o payload
+      // gravado vêm do MAIS RECENTE; `osPayload` do chamador só define as peças desejadas.
+      const row = await lerOSTravadaV3(tx, params.storeId, params.osId);
       if (!row) throw new Error("OS não encontrada");
       const osNumero = row.numero ?? null;
-      const payload = (params.osPayload ?? (row.payload as unknown as OrdemServico)) as (OrdemServico & Record<string, unknown>);
+      const latest = row.payload as OrdemServico & Record<string, unknown>;
+      const payload = (params.osPayload ?? latest) as (OrdemServico & Record<string, unknown>);
 
-      if (payload.estoqueConsumido !== true) return { ok: true as const, status: "skipped" as const };
-      if (payload.estoqueRestaurado === true) return { ok: true as const, status: "skipped" as const };
+      if (latest.estoqueConsumido !== true) return { ok: true as const, status: "skipped" as const };
+      if (latest.estoqueRestaurado === true) return { ok: true as const, status: "skipped" as const };
 
-      const ultima = typeof payload.estoqueUltimaRevisaoEm === "string" ? payload.estoqueUltimaRevisaoEm : "";
+      const ultima = typeof latest.estoqueUltimaRevisaoEm === "string" ? latest.estoqueUltimaRevisaoEm : "";
       if (ultima && ultima === params.revisaoKey) {
         return { ok: true as const, status: "already_applied" as const };
       }
@@ -454,7 +459,7 @@ export async function applyEstoqueDelta(params: {
       if (delta.length === 0) {
         const ts = nowIso();
         const nextPayload = {
-          ...payload,
+          ...latest,
           estoqueUltimaRevisaoEm: params.revisaoKey,
           atualizadoEm: ts,
         };
@@ -539,10 +544,10 @@ export async function applyEstoqueDelta(params: {
       }
 
       const ts = nowIso();
-      const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-      const hist = Array.isArray(payload.estoqueDeltaHistorico) ? (payload.estoqueDeltaHistorico as EstoqueDeltaItem[]) : [];
+      const timeline = Array.isArray(latest.timeline) ? (latest.timeline as EventoTimeline[]) : [];
+      const hist = Array.isArray(latest.estoqueDeltaHistorico) ? (latest.estoqueDeltaHistorico as EstoqueDeltaItem[]) : [];
       const nextPayload = {
-        ...payload,
+        ...latest,
         estoqueUltimaRevisaoEm: params.revisaoKey,
         estoqueDeltaHistorico: [...hist, ...delta],
         atualizadoEm: ts,

@@ -4,7 +4,8 @@
 // Operações V3 — Fase 1E · write-paths de GARANTIA + auditoria de impressão
 // ----------------------------------------------------------------------------
 // Side-effect-free: gravam SOMENTE o payload (garantia prevista) + timeline.
-// NÃO tocam Financeiro/estoque/caixa/V2. Gravam payload direto via Prisma.
+// NÃO tocam Financeiro/estoque/caixa/V2. Gravam o payload MAIS RECENTE sob a
+// trava da linha da OS (`os-payload-lock`).
 //
 //   • salvarGarantiaOSV3        — define/altera o modelo+prazo da garantia da OS.
 //   • registrarImpressaoDocumentoV3 — registra na timeline que um documento foi impresso.
@@ -12,15 +13,14 @@
 
 import { revalidatePath } from "next/cache";
 import type { Session } from "next-auth";
-import type { Prisma } from "@/generated/prisma";
 import type { EventoTimeline, EventoTipo, OrdemServico } from "@/types/os";
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { normalizarGarantiaPrevistaV3 } from "./garantia-textos";
 import type { DocumentoTipoV3 } from "./documentos";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
+import { mutarPayloadOSV3 } from "./os-payload-lock";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -38,7 +38,7 @@ function makeEvento(tipo: EventoTipo, autor: string, conteudo: string, metadata?
   return { id: eventId(), tipo, autor, autorTipo: "usuario", conteudo, metadata, criadoEm: nowIso() };
 }
 
-async function carregar(storeId: string, osId: string): Promise<{ id: string; session: Session | null; payload: OSPayloadFull }> {
+async function autorizar(storeId: string, osId: string): Promise<{ sid: string; id: string; session: Session | null }> {
   const sid = (storeId ?? "").trim();
   const id = (osId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
@@ -47,18 +47,21 @@ async function carregar(storeId: string, osId: string): Promise<{ id: string; se
   if (!session?.user?.id) throw new Error("Faça login para editar a garantia.");
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar a garantia desta OS.");
   if (!guard.ok) throw new Error(guard.error);
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-  return { id, session, payload };
+  return { sid, id, session };
 }
 
-async function gravar(id: string, next: OSPayloadFull): Promise<OrdemServico> {
-  const data: Prisma.OrdemServicoUpdateInput = { payload: next as unknown as Prisma.InputJsonValue };
-  await prisma.ordemServico.update({ where: { id }, data });
+/** Aplica `montar` ao payload MAIS RECENTE sob a trava da OS; revalida após o commit. */
+async function mutar<T>(sid: string, id: string, montar: (payload: OSPayloadFull) => { next: OSPayloadFull; extra: T }): Promise<{ os: OrdemServico; extra: T }> {
+  const r = await mutarPayloadOSV3({
+    storeId: sid,
+    osId: id,
+    mutate: ({ payload }) => {
+      const { next, extra } = montar(payload);
+      return { payload: next, resultado: { os: next as unknown as OrdemServico, extra } };
+    },
+  });
   revalidatePath("/dashboard/operacoes-v3");
-  return next as unknown as OrdemServico;
+  return r;
 }
 
 function appendTimeline(payload: OSPayloadFull, evento: EventoTimeline): EventoTimeline[] {
@@ -72,37 +75,39 @@ export async function salvarGarantiaOSV3(
   osId: string,
   input: { modeloId: string; prazoDias?: number; termoCustom?: string },
 ): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session } = await autorizar(storeId, osId);
   const { modelo, prazoDias } = normalizarGarantiaPrevistaV3(input);
 
-  const abertura = (payload.aberturaV3 && typeof payload.aberturaV3 === "object" ? payload.aberturaV3 : {}) as Record<string, unknown>;
-  const anterior = abertura.garantiaPrevista as { modelo?: string } | undefined;
-  const alterada = !!anterior?.modelo && anterior.modelo !== modelo.id;
+  const { os: salva, extra: alterada } = await mutar(sid, id, (payload) => {
+    const abertura = (payload.aberturaV3 && typeof payload.aberturaV3 === "object" ? payload.aberturaV3 : {}) as Record<string, unknown>;
+    const anterior = abertura.garantiaPrevista as { modelo?: string } | undefined;
+    const alterada = !!anterior?.modelo && anterior.modelo !== modelo.id;
 
-  const nextAbertura = {
-    ...abertura,
-    garantiaPrevista: {
-      modelo: modelo.id,
-      label: modelo.titulo,
-      prazoDias,
-      termo: (input.termoCustom ?? "").trim() || undefined,
-    },
-  };
+    const nextAbertura = {
+      ...abertura,
+      garantiaPrevista: {
+        modelo: modelo.id,
+        label: modelo.titulo,
+        prazoDias,
+        termo: (input.termoCustom ?? "").trim() || undefined,
+      },
+    };
 
-  const evento = makeEvento(
-    "garantia_gerada",
-    operadorLabel(session),
-    alterada ? `Garantia alterada para "${modelo.titulo}" (${prazoDias} dias).` : `Garantia definida: "${modelo.titulo}" (${prazoDias} dias).`,
-    { modelo: modelo.id, prazoDias, alterada },
-  );
+    const evento = makeEvento(
+      "garantia_gerada",
+      operadorLabel(session),
+      alterada ? `Garantia alterada para "${modelo.titulo}" (${prazoDias} dias).` : `Garantia definida: "${modelo.titulo}" (${prazoDias} dias).`,
+      { modelo: modelo.id, prazoDias, alterada },
+    );
 
-  const next: OSPayloadFull = {
-    ...payload,
-    aberturaV3: nextAbertura,
-    timeline: appendTimeline(payload, evento),
-    atualizadoEm: nowIso(),
-  } as OSPayloadFull;
-  const salva = await gravar(id, next);
+    const next: OSPayloadFull = {
+      ...payload,
+      aberturaV3: nextAbertura,
+      timeline: appendTimeline(payload, evento),
+      atualizadoEm: nowIso(),
+    } as OSPayloadFull;
+    return { next, extra: alterada };
+  });
 
   // Espinha de eventos (3C.0): garantia prevista definida/alterada.
   emitirEventoOperacaoV3({
@@ -121,7 +126,7 @@ export async function registrarImpressaoDocumentoV3(
   osId: string,
   tipo: DocumentoTipoV3,
 ): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session } = await autorizar(storeId, osId);
   const label: Record<DocumentoTipoV3, string> = {
     os_cliente: "Ordem de Serviço (via cliente)",
     termo_garantia: "Termo de Garantia",
@@ -131,6 +136,6 @@ export async function registrarImpressaoDocumentoV3(
     orcamento_cliente: "Orçamento (via cliente)",
   };
   const evento = makeEvento("documento_impresso", operadorLabel(session), `Documento impresso: ${label[tipo]}.`, { documento: tipo });
-  const next: OSPayloadFull = { ...payload, timeline: appendTimeline(payload, evento) } as OSPayloadFull;
-  return gravar(id, next);
+  const { os } = await mutar(sid, id, (payload) => ({ next: { ...payload, timeline: appendTimeline(payload, evento) } as OSPayloadFull, extra: null }));
+  return os;
 }

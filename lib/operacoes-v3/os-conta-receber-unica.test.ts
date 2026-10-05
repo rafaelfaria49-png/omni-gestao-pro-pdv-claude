@@ -155,13 +155,14 @@ const h = vi.hoisted(() => {
         caixaOps.push(row);
         return row;
       },
-      // Replay do recebimento canônico: operações da sessão carimbadas com a `operacaoId`.
+      // Replay do recebimento canônico: operações da loja carimbadas com a `operacaoId` (em
+      // qualquer sessão — a sessão entra no fingerprint).
       findMany: async ({ where }: any) =>
         caixaOps
           .filter(
             (o) =>
               o.storeId === where.storeId &&
-              o.sessaoId === where.sessaoId &&
+              (where.sessaoId === undefined || o.sessaoId === where.sessaoId) &&
               o.tipo === where.tipo &&
               o.payload?.[where.payload.path[0]] === where.payload.equals,
           )

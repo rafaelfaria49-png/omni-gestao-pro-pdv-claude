@@ -182,7 +182,11 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
     expect(eventos).toContain("dados_basicos_atualizados");
   });
 
-  it("duas conexões: escrita sobreposta vira conflito, sem clobber", async () => {
+  // OPS-RECEBIMENTO-MISTO-P1-HARDENING-001: a action trava a linha da OS ANTES de ler. Com B
+  // segurando a linha, A espera o commit de B e aplica a SUA mudança sobre o payload de B: o
+  // campo de B sobrevive (sem clobber) e não há conflito espúrio (B não tocou na identificação).
+  // Conflito de MESMO campo continua explícito pelo baseline (`esperados`) — ver R02 acima.
+  it("duas conexões: escrita sobreposta espera a trava e aplica sobre o LATEST, sem clobber", async () => {
     const sid = await criarLojaQA();
     const { id } = await criarOS(sid, "Modelo R02c");
     await salvarIdentificacaoV3(sid, id, { cor: "Violeta" });
@@ -199,13 +203,13 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
     // Dá tempo do lock ser adquirido; a action lê o pré-commit e bloqueia nele.
     await new Promise((r) => setTimeout(r, 400));
     const escrita = salvarIdentificacaoV3(sid, id, { cor: "Preto" });
-    await expect(escrita).rejects.toSatisfy(ehConflitoConcorrenciaV3);
     await seguraLock;
+    await expect(escrita).resolves.toBeTruthy();
 
     const payload = await lerPayload(id);
     expect(payload["marcadoConcorrente"]).toBe(true);
     const v = lerProvaEntradaV3(payload as unknown as OrdemServico);
-    expect(v.identificacao.cor).toBe("Violeta");
+    expect(v.identificacao.cor).toBe("Preto");
   }, 30000);
 
   it("stale sequencial: B salva modelo=M2; A com baseline M1 salva só cor → M2 + Preto", async () => {
@@ -309,7 +313,7 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
     expect((payload.equipamento as Record<string, unknown>).defeitoRelatado).toBe("D9");
   });
 
-  it("duas conexões: dados básicos sobrepostos também conflitam", async () => {
+  it("duas conexões: dados básicos sobrepostos esperam a trava e preservam o campo de B", async () => {
     const sid = await criarLojaQA();
     const { id } = await criarOS(sid, "Modelo R02d");
     const seguraLock = prismaB.$transaction(async (tx) => {
@@ -330,7 +334,9 @@ describe("R02 — edições independentes preservadas; mesmo campo conflita expl
       origem: "balcao",
       observacoes: "",
     });
-    await expect(escrita).rejects.toSatisfy(ehConflitoConcorrenciaV3);
     await seguraLock;
+    await expect(escrita).resolves.toBeTruthy();
+    const payload = await lerPayload(id);
+    expect(payload["marcadoConcorrente"]).toBe(true);
   }, 30000);
 });

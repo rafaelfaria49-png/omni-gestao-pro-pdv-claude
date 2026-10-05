@@ -86,6 +86,7 @@ import {
   chaveLockRecebimentoMistoV3,
   decidirRecebimentoMistoOSV3,
   fingerprintRecebimentoCanonicoV3,
+  fingerprintsAceitosRecebimentoCanonicoV3,
   garantirTituloOSTravadoV3,
   isRecebimentoMistoErroV3,
   travarOS,
@@ -296,14 +297,15 @@ async function replayRecebimentoOSV3(
     storeId: string;
     osId: string;
     operacaoId: string;
-    requestFingerprint: string;
+    /** Fingerprints desta requisição (atual + v1 pré-fix), recalculados a partir dela. */
+    fingerprintsAceitos: string[];
     gravadas: Array<{ valor: number; payload: Prisma.JsonValue }>;
     operador: string;
     dataHora: string;
   },
 ): Promise<ReceberOSResultV3> {
   const primeira = isRecordV3(p.gravadas[0]?.payload) ? (p.gravadas[0]!.payload as Record<string, unknown>) : {};
-  if (primeira.requestFingerprint !== p.requestFingerprint) {
+  if (!p.fingerprintsAceitos.includes(String(primeira.requestFingerprint ?? ""))) {
     throw new Error("Esta confirmação já foi registrada com outros valores. Atualize a OS antes de lançar outro recebimento.");
   }
   const linhas: SplitLinhaV3[] = p.gravadas.map((g) => ({
@@ -389,7 +391,10 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
   const operador = operadorLabel(session);
   const total = somaSplitV3(linhas);
   const obsBase = (input.observacao ?? "").trim();
+  // Identidade = TOTAL por forma (centavos) + sessão + loja/OS. O v1 (pré-fix) da MESMA
+  // requisição também é aceito no replay; novas operações gravam só o atual.
   const requestFingerprint = fingerprintRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas });
+  const fingerprintsAceitos = fingerprintsAceitosRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas });
   const dataHora = nowIso();
 
   // UMA transação sob a MESMA trava por OS de todos os writers de pagamento da V3 (misto,
@@ -399,19 +404,19 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
     // 1) Serialização por OS — PRIMEIRA instrução, antes de qualquer leitura de estado.
     await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
 
-    // 2) Replay: esta confirmação já foi gravada (resposta perdida, reenvio)? Identidade =
-    // (sessão de caixa, operacaoId) — mesma família do recebimento em lote, cujo `localId`
-    // também carrega a sessão; a sessão entra no fingerprint. Vem antes da checagem da
-    // sessão: repetir uma operação já gravada continua válido com o caixa fechado.
+    // 2) Replay: esta confirmação já foi gravada (resposta perdida, reenvio)? A busca é pela
+    // `operacaoId` na loja, em QUALQUER sessão: a sessão, a OS e o conteúdo entram no
+    // fingerprint — a mesma chave noutra sessão/OS é conflito, nunca uma segunda baixa. Vem
+    // antes da checagem da sessão: repetir uma operação já gravada vale com o caixa fechado.
     const gravadas = sessaoId
       ? await tx.caixaOperacao.findMany({
-          where: { storeId: sid, sessaoId, tipo: "recebimento_cr", payload: { path: ["operacaoId"], equals: operacaoId } },
+          where: { storeId: sid, tipo: "recebimento_cr", payload: { path: ["operacaoId"], equals: operacaoId } },
           orderBy: { at: "asc" },
           select: { valor: true, payload: true },
         })
       : [];
     if (gravadas.length > 0) {
-      return replayRecebimentoOSV3(tx, { storeId: sid, osId: id, operacaoId, requestFingerprint, gravadas, operador, dataHora });
+      return replayRecebimentoOSV3(tx, { storeId: sid, osId: id, operacaoId, fingerprintsAceitos, gravadas, operador, dataHora });
     }
     if (periodo.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para receber.");
 

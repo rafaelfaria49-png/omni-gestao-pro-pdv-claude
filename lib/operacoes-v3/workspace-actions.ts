@@ -7,6 +7,8 @@
 // timeline (auditoria). NÃO mudam status, NÃO tocam valorTotal, NÃO disparam
 // Financeiro/estoque/garantia/WhatsApp. Gravam payload direto via Prisma —
 // deliberadamente SEM usar `updateOSPayload` do V2 (que sincroniza Financeiro).
+// Toda gravação relê o payload MAIS RECENTE sob a trava da linha da OS
+// (`os-payload-lock`) — nunca regrava um snapshot lido antes de um `await`.
 //
 //   • salvarChecklistEntradaV3 — payload.checklist + evento checklist_finalizado
 //   • salvarSenhaAcessoriosV3  — senhaEquipamento/Tipo + equipamento.acessorios
@@ -18,6 +20,7 @@ import type { Session } from "next-auth";
 import type { Prisma } from "@/generated/prisma";
 import type { EventoTimeline, EventoTipo, OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
+import { mutarPayloadOSV3, travarLinhaOSV3 } from "./os-payload-lock";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
@@ -40,10 +43,7 @@ function makeEvento(tipo: EventoTipo, autor: string, conteudo: string, metadata?
   return { id: eventId(), tipo, autor, autorTipo: "usuario", conteudo, metadata, criadoEm: nowIso() };
 }
 
-async function carregar(
-  storeId: string,
-  osId: string,
-): Promise<{ sid: string; id: string; session: Session | null; payload: OSPayloadFull }> {
+async function autorizar(storeId: string, osId: string): Promise<{ sid: string; id: string; session: Session | null }> {
   const sid = (storeId ?? "").trim();
   const id = (osId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
@@ -53,18 +53,19 @@ async function carregar(
   if (!session?.user?.id) throw new Error("Faça login para editar a OS.");
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar esta OS.");
   if (!guard.ok) throw new Error(guard.error);
-
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-  return { sid, id, session, payload };
+  return { sid, id, session };
 }
 
-/** Grava o payload (com evento anexado) sem mexer em status/valor/colunas Prisma. */
-async function gravar(id: string, next: OSPayloadFull): Promise<OrdemServico> {
-  const data: Prisma.OrdemServicoUpdateInput = { payload: next as unknown as Prisma.InputJsonValue };
-  await prisma.ordemServico.update({ where: { id }, data });
+/** Aplica `montar` ao payload MAIS RECENTE sob a trava da OS (sem mexer em status/valor/colunas Prisma). */
+async function mutar(sid: string, id: string, montar: (payload: OSPayloadFull) => OSPayloadFull): Promise<OrdemServico> {
+  const next = await mutarPayloadOSV3({
+    storeId: sid,
+    osId: id,
+    mutate: ({ payload }) => {
+      const proximo = montar(payload);
+      return { payload: proximo, resultado: proximo };
+    },
+  });
   revalidatePath("/dashboard/operacoes-v3");
   return next as unknown as OrdemServico;
 }
@@ -81,9 +82,9 @@ export async function salvarChecklistEntradaV3(
   osId: string,
   itens: ChecklistEntradaItemV3[],
 ): Promise<OrdemServico> {
-  // Autorização/storeId preservados (carregar valida auth/guard; payload stale
-  // ignorado — a escrita usa exclusivamente o LATEST relido na transação).
-  const { id, sid, session } = await carregar(storeId, osId);
+  // Autorização/storeId preservados; a escrita usa exclusivamente o LATEST relido
+  // na transação, depois da trava da linha da OS.
+  const { id, sid, session } = await autorizar(storeId, osId);
   const checklist = (Array.isArray(itens) ? itens : []).map((i) => {
     const estado: ChecklistEstadoV3 = i.estado === "ok" || i.estado === "ruim" ? i.estado : "nao_testado";
     return { id: String(i.id), label: String(i.label), estado };
@@ -99,6 +100,8 @@ export async function salvarChecklistEntradaV3(
   // preservado por spread do LATEST. Corrida sobreposta vira
   // CONFLITO_CONCORRENCIA explícito em vez de clobber.
   const saida = await prisma.$transaction(async (tx) => {
+    // Trava ANTES de ler: nenhum outro writer de payload grava entre a leitura e a escrita.
+    if (!(await travarLinhaOSV3(tx, sid, id))) throw new Error("OS não encontrada.");
     const latest = await tx.ordemServico.findFirst({
       where: { id },
       select: { id: true, storeId: true, payload: true, updatedAt: true },
@@ -131,23 +134,23 @@ export async function salvarSenhaAcessoriosV3(
   osId: string,
   input: { senha: string; senhaTipo: SenhaTipoV3; acessorios: string[] },
 ): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session } = await autorizar(storeId, osId);
   const senha = (input.senha ?? "").trim();
   const senhaTipo: SenhaTipoV3 = input.senhaTipo === "texto" || input.senhaTipo === "padrao" ? input.senhaTipo : "numerica";
   const acessorios = (Array.isArray(input.acessorios) ? input.acessorios : []).map((a) => String(a).trim()).filter(Boolean);
-
-  const equipamento = { ...(payload.equipamento ?? {}), acessorios };
   const evento = makeEvento("observacao", operadorLabel(session), `Senha e acessórios atualizados (${acessorios.length} acessório(s)).`);
 
-  const next: OSPayloadFull = {
-    ...payload,
-    equipamento: equipamento as OSPayloadFull["equipamento"],
-    senhaEquipamento: senha || undefined,
-    senhaEquipamentoTipo: senha ? senhaTipo : undefined,
-    timeline: appendTimeline(payload, evento),
-    atualizadoEm: nowIso(),
-  };
-  return gravar(id, next);
+  return mutar(sid, id, (payload) => {
+    const equipamento = { ...(payload.equipamento ?? {}), acessorios };
+    return {
+      ...payload,
+      equipamento: equipamento as OSPayloadFull["equipamento"],
+      senhaEquipamento: senha || undefined,
+      senhaEquipamentoTipo: senha ? senhaTipo : undefined,
+      timeline: appendTimeline(payload, evento),
+      atualizadoEm: nowIso(),
+    };
+  });
 }
 
 export async function salvarDiagnosticoV3(
@@ -155,7 +158,7 @@ export async function salvarDiagnosticoV3(
   osId: string,
   input: { inicial: string; final: string; causa: string; solucao: string },
 ): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session } = await autorizar(storeId, osId);
   const operador = operadorLabel(session);
   const diagnosticoV3: DiagnosticoTecnicoV3 = {
     inicial: (input.inicial ?? "").trim(),
@@ -167,11 +170,10 @@ export async function salvarDiagnosticoV3(
   };
   const evento = makeEvento("diagnostico_registrado", operador, "Diagnóstico técnico atualizado.");
 
-  const next: OSPayloadFull = {
+  return mutar(sid, id, (payload) => ({
     ...payload,
     diagnosticoV3,
     timeline: appendTimeline(payload, evento),
     atualizadoEm: nowIso(),
-  } as OSPayloadFull;
-  return gravar(id, next);
+  }) as OSPayloadFull);
 }

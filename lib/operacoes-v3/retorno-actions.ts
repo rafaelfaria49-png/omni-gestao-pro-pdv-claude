@@ -12,7 +12,6 @@
 
 import { revalidatePath } from "next/cache";
 import type { Session } from "next-auth";
-import type { Prisma } from "@/generated/prisma";
 import type { EventoTimeline, OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -23,6 +22,7 @@ import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { criarOSEnterpriseV3 } from "./nova-os-actions";
 import { validarNovaOSDraftV3 } from "./nova-os-model";
 import { buildRetornoAtendimentoDraftV3 } from "./retorno-atendimento";
+import { mutarPayloadOSV3 } from "./os-payload-lock";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -40,6 +40,7 @@ function makeEvento(tipo: EventoTimeline["tipo"], autor: string, conteudo: strin
   return { id: eventId(), tipo, autor, autorTipo: "usuario", conteudo, metadata, criadoEm: nowIso() };
 }
 
+/** Auth + leitura para DECIDIR (ex.: o atendimento a criar). Gravações relêem sob a trava (`mutar`). */
 async function carregar(storeId: string, osId: string): Promise<{ id: string; session: Session | null; payload: OSPayloadFull }> {
   const sid = (storeId ?? "").trim();
   const id = (osId ?? "").trim();
@@ -56,8 +57,19 @@ async function carregar(storeId: string, osId: string): Promise<{ id: string; se
   return { id, session, payload };
 }
 
-async function gravar(id: string, next: OSPayloadFull): Promise<OrdemServico> {
-  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+/**
+ * Aplica `montar` ao payload MAIS RECENTE da OS (loja + id) sob a trava da linha, na mesma
+ * transação, e revalida após o commit. Nunca regrava o snapshot lido por `carregar`.
+ */
+async function mutar(storeId: string, id: string, montar: (payload: OSPayloadFull) => OSPayloadFull): Promise<OrdemServico> {
+  const next = await mutarPayloadOSV3({
+    storeId,
+    osId: id,
+    mutate: ({ payload }) => {
+      const proximo = montar(payload);
+      return { payload: proximo, resultado: proximo };
+    },
+  });
   revalidatePath("/dashboard/operacoes-v3");
   revalidatePath("/dashboard/operacoes-v4-preview");
   return next as unknown as OrdemServico;
@@ -117,20 +129,17 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: Abrir
       },
     });
     const avisoNova = garantiaAtivaNaAbertura ? "" : " (garantia expirada/não ativa na abertura)";
-    const tlNova = Array.isArray(criado.os.timeline) ? criado.os.timeline : [];
-    atendimento = await gravar(criado.os.id, {
-      ...(criado.os as OSPayloadFull),
-      timeline: [
-        ...tlNova,
-        makeEvento(
-          "garantia_acionada",
-          operador,
-          `Atendimento de retorno da OS ${os.codigo ?? id}. Motivo: ${motivoFinal}${avisoNova}`,
-          { osOriginalId: id, osOriginalCodigo: os.codigo, retornoId, motivo: motivoFinal },
-        ),
-      ],
+    const eventoNova = makeEvento(
+      "garantia_acionada",
+      operador,
+      `Atendimento de retorno da OS ${os.codigo ?? id}. Motivo: ${motivoFinal}${avisoNova}`,
+      { osOriginalId: id, osOriginalCodigo: os.codigo, retornoId, motivo: motivoFinal },
+    );
+    atendimento = await mutar(sid, criado.os.id, (atual) => ({
+      ...atual,
+      timeline: [...(Array.isArray(atual.timeline) ? (atual.timeline as EventoTimeline[]) : []), eventoNova],
       atualizadoEm: nowIso(),
-    });
+    }) as OSPayloadFull);
   } else if (aberto) {
     throw new Error("Já existe um retorno em andamento para esta OS.");
   }
@@ -148,11 +157,8 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: Abrir
     osRetornoId: atendimento?.id,
     osRetornoCodigo: atendimento?.codigo,
   };
-  const retornos = aberto ? existentes.map((item) => (item.id === retornoId ? retorno : item)) : [...existentes, retorno];
-
   const aviso = garantiaAtivaNaAbertura ? "" : " (garantia expirada/não ativa na abertura)";
   const vinculoTxt = atendimento?.codigo ? ` Atendimento ${atendimento.codigo} aberto.` : "";
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
   const evento = aberto
     ? null
     : makeEvento(
@@ -170,13 +176,21 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: Abrir
         },
       );
 
-  const next: OSPayloadFull = {
-    ...payload,
-    retornosV3: retornos,
-    timeline: evento ? [...timeline, evento] : timeline,
-    atualizadoEm: nowIso(),
-  } as OSPayloadFull;
-  const salva = await gravar(id, next);
+  // Gravação sobre o payload MAIS RECENTE (a criação do atendimento acima é outro await):
+  // o retorno entra/atualiza pela própria id, preservando os demais retornos e a timeline.
+  const salva = await mutar(sid, id, (atual) => {
+    const atuais = lerRetornosV3(atual as unknown as OrdemServico);
+    const retornos = atuais.some((item) => item.id === retornoId)
+      ? atuais.map((item) => (item.id === retornoId ? retorno : item))
+      : [...atuais, retorno];
+    const timeline = Array.isArray(atual.timeline) ? (atual.timeline as EventoTimeline[]) : [];
+    return {
+      ...atual,
+      retornosV3: retornos,
+      timeline: evento ? [...timeline, evento] : timeline,
+      atualizadoEm: nowIso(),
+    } as OSPayloadFull;
+  });
 
   if (!aberto) {
     emitirEventoOperacaoV3({
@@ -203,33 +217,36 @@ function textOr(value: string | undefined, fallback: string): string {
 
 /** Finaliza um retorno (conclui o retrabalho). Registra observação + timeline. */
 export async function finalizarRetornoV3(storeId: string, osId: string, retornoId: string, input: { observacao?: string } = {}): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { id, session } = await carregar(storeId, osId);
   const rid = (retornoId ?? "").trim();
   if (!rid) throw new Error("Retorno não informado.");
-
-  const lista = lerRetornosV3(payload as unknown as OrdemServico);
-  const alvo = lista.find((r) => r.id === rid);
-  if (!alvo) throw new Error("Retorno não encontrado nesta OS.");
-  if (alvo.status === "finalizado") throw new Error("Este retorno já está finalizado.");
 
   const operador = operadorLabel(session);
   const observacao = (input.observacao ?? "").trim() || undefined;
   const now = nowIso();
 
-  const retornos = lista.map((r) =>
-    r.id === rid ? { ...r, status: "finalizado" as const, finalizadoEm: now, finalizadoPor: operador, observacaoFinal: observacao } : r,
-  );
+  let motivoAlvo = "";
+  const salva = await mutar((storeId ?? "").trim(), id, (payload) => {
+    const lista = lerRetornosV3(payload as unknown as OrdemServico);
+    const alvo = lista.find((r) => r.id === rid);
+    if (!alvo) throw new Error("Retorno não encontrado nesta OS.");
+    if (alvo.status === "finalizado") throw new Error("Este retorno já está finalizado.");
+    motivoAlvo = alvo.motivo;
 
-  const evento = makeEvento(
-    "observacao",
-    operador,
-    `Retorno finalizado.${observacao ? " " + observacao : ""}`,
-    { retornoId: rid, evento: "retorno_finalizado", motivo: alvo.motivo },
-  );
+    const retornos = lista.map((r) =>
+      r.id === rid ? { ...r, status: "finalizado" as const, finalizadoEm: now, finalizadoPor: operador, observacaoFinal: observacao } : r,
+    );
 
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const next: OSPayloadFull = { ...payload, retornosV3: retornos, timeline: [...timeline, evento], atualizadoEm: now } as OSPayloadFull;
-  const salva = await gravar(id, next);
+    const evento = makeEvento(
+      "observacao",
+      operador,
+      `Retorno finalizado.${observacao ? " " + observacao : ""}`,
+      { retornoId: rid, evento: "retorno_finalizado", motivo: alvo.motivo },
+    );
+
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    return { ...payload, retornosV3: retornos, timeline: [...timeline, evento], atualizadoEm: now } as OSPayloadFull;
+  });
 
   // Espinha de eventos (3C.0): retorno concluído.
   emitirEventoOperacaoV3({
@@ -237,7 +254,7 @@ export async function finalizarRetornoV3(storeId: string, osId: string, retornoI
     os: salva,
     storeId: (storeId ?? "").trim(),
     origem: "retorno",
-    metadata: { retornoId: rid, motivo: alvo.motivo },
+    metadata: { retornoId: rid, motivo: motivoAlvo },
   });
   return salva;
 }

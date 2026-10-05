@@ -50,7 +50,15 @@ const h = vi.hoisted(() => {
   }
 
   const api = {
-    $queryRaw: async () => [] as unknown[],
+    // SELECT … FOR UPDATE da OS (trava antes de ler): devolve a linha se existir na loja.
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      if (strings.join("?").includes("ordens_servico")) {
+        const [osId, storeId] = values as [string, string]
+        const hit = osRows.get(String(osId))
+        return hit && hit.storeId === storeId ? [{ id: hit.id }] : []
+      }
+      return [] as unknown[]
+    },
     produto: {
       findFirst: async ({ where }: { where: Row }) => {
         if (typeof where.id === "string") return produtoBy({ id: where.id as string, storeId: where.storeId as string })

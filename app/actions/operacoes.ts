@@ -32,6 +32,7 @@ import { appendTimelineEvent, makeTimelineEvent } from "@/lib/operacoes/services
 import { toPrismaStatus } from "@/lib/operacoes/services/status-service";
 import { applyApprovedBudgetPolicy } from "@/lib/operacoes/services/orcamento-policy-service";
 import { applyEstoqueDelta, buildEstoqueMovimentosFromOS, consumeEstoqueFromOS, restoreEstoqueFromOS } from "@/lib/operacoes/adapters/os-estoque";
+import { mutarPayloadOSV3, type OSPayloadV3 } from "@/lib/operacoes-v3/os-payload-lock";
 import {
   normalizeOperacaoStatus,
   prismaStatusToOperacaoStatus,
@@ -247,52 +248,57 @@ export async function updateOSStatus(
   status: OSStatus,
   options?: OperacaoTransitionOptions & { appendTimeline?: EventoTimeline[] },
 ): Promise<OperacoesOSPayload> {
-  const existing = await prisma.ordemServico.findFirst({
-    where: { id: osId, storeId },
-    select: { id: true, payload: true, createdAt: true },
-  });
-  if (!existing) throw new Error("OS não encontrada");
-
-  const current = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
-  if (!current) throw new Error("OS sem payload (incompatível)");
-
-  const currentEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
   const effective = normalizeOperacaoStatus(status);
   let statusPerm: (p: EnterprisePermissions) => boolean;
   if (effective === "entregue") statusPerm = (p) => p.operacoes.entregarOs;
   else if (effective === "cancelada") statusPerm = (p) => p.operacoes.cancelarOs;
   else statusPerm = (p) => p.operacoes.editarOs;
   await requireOperacaoAuth(storeId, statusPerm, "Sem permissão para alterar o status desta OS.");
-  assertOperacaoStatusTransition(currentEff, effective, options);
 
-  const next: OperacoesOSPayload = {
-    ...(current as OperacoesOSPayload),
-    status: effective,
-    operacaoStatus: effective,
-    atualizadoEm: nowIso(),
-  };
-  if (effective === "entregue") {
-    const entregueEm = next.entregueEm ?? nowIso();
-    next.entregueEm = entregueEm;
+  // Transição decidida e gravada sobre o payload MAIS RECENTE, sob a trava da linha da OS
+  // (nenhum writer de payload — recebimento, recusa terminal, operacional — grava no meio).
+  const { current, next } = await mutarPayloadOSV3({
+    storeId,
+    osId,
+    aceitarPayloadVazio: true,
+    aoAusente: () => {
+      throw new Error("OS não encontrada");
+    },
+    mutate: async ({ payload }, tx) => {
+      const current = asOperacoesPayload<OperacoesOSPayload>(payload as unknown);
+      if (!current) throw new Error("OS sem payload (incompatível)");
 
-    const snap = snapshotGarantiaOperacional(next, entregueEm);
-    if (snap?.prazoDias && snap.prazoDias > 0) {
-      next.garantia = snap;
-    }
-  }
+      const currentEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
+      assertOperacaoStatusTransition(currentEff, effective, options);
 
-  if (options?.appendTimeline?.length) {
-    next.timeline = [...(next.timeline ?? []), ...options.appendTimeline];
-  }
+      const next: OperacoesOSPayload = {
+        ...(current as OperacoesOSPayload),
+        status: effective,
+        operacaoStatus: effective,
+        atualizadoEm: nowIso(),
+      };
+      if (effective === "entregue") {
+        const entregueEm = next.entregueEm ?? nowIso();
+        next.entregueEm = entregueEm;
 
-  if (currentEff === "entregue" && effective !== "entregue") {
-    await cancelarGarantiasAtivasOrdem(prisma, { storeId, ordemServicoId: osId });
-  }
+        const snap = snapshotGarantiaOperacional(next, entregueEm);
+        if (snap?.prazoDias && snap.prazoDias > 0) {
+          next.garantia = snap;
+        }
+      }
 
-  await prisma.ordemServico.update({
-    where: { id: osId },
-    data: { status: toPrismaStatus(effective), payload: next as unknown as Prisma.InputJsonValue },
+      if (options?.appendTimeline?.length) {
+        next.timeline = [...(next.timeline ?? []), ...options.appendTimeline];
+      }
+
+      if (currentEff === "entregue" && effective !== "entregue") {
+        await cancelarGarantiasAtivasOrdem(tx, { storeId, ordemServicoId: osId });
+      }
+
+      return { payload: next as unknown as OSPayloadV3, colunas: { status: toPrismaStatus(effective) }, resultado: { current, next } };
+    },
   });
+  const currentEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
 
   if (currentEff !== effective) {
     void auditOS({
@@ -383,50 +389,28 @@ export async function updateOSStatus(
   return next as unknown as OperacoesOSPayload;
 }
 
+/**
+ * `patch.timeline` montado pelo chamador a partir de uma leitura ANTERIOR: os eventos do
+ * payload atual são preservados e só os eventos novos (por id, ou conteúdo sem id) entram.
+ */
+function mesclarTimelineDoPatch(current: OperacoesOSPayload, patch: Partial<OperacoesOSPayload>): Partial<OperacoesOSPayload> {
+  if (!Array.isArray(patch.timeline)) return patch;
+  const atual = Array.isArray(current.timeline) ? current.timeline : [];
+  const chave = (e: EventoTimeline) => (e && typeof e.id === "string" && e.id ? `id:${e.id}` : `json:${JSON.stringify(e)}`);
+  const conhecidos = new Set(atual.map(chave));
+  const novos = patch.timeline.filter((e) => !conhecidos.has(chave(e)));
+  return { ...patch, timeline: [...atual, ...novos] };
+}
+
 export async function updateOSPayload(
   storeId: string,
   osId: string,
   patch: Partial<OperacoesOSPayload>,
   transitionOpts?: OperacaoTransitionOptions,
 ): Promise<OperacoesOSPayload> {
-  const existing = await prisma.ordemServico.findFirst({
-    where: { id: osId, storeId },
-    select: { id: true, payload: true },
-  });
-  if (!existing) throw new Error("OS não encontrada");
-  const current = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
-  if (!current) throw new Error("OS sem payload (incompatível)");
   await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
   validatePatchIdentifiers({ storeId, osId, patch });
   const effectiveOperacao = computeEffectiveOperacaoStatus(patch);
-  const next = mergePayload<OperacoesOSPayload>({
-    current: current as unknown as OperacoesOSPayload,
-    patch,
-    storeId,
-    osId,
-    effectiveOperacao,
-  }) satisfies OperacoesOSPayload;
-  const nextWithPolicy = applyApprovedBudgetPolicy<OperacoesOSPayload>({
-    current: current as unknown as OperacoesOSPayload,
-    next,
-    makeTimelineEvent,
-  });
-
-  const nextEff = normalizeOperacaoStatus((nextWithPolicy as OperacoesOSPayload).status);
-  const curEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
-  if (nextEff !== curEff) {
-    assertOperacaoStatusTransition(curEff, nextEff, transitionOpts);
-  }
-
-  const prismaSt = toPrismaStatus(nextEff);
-  const rowUpdate: Prisma.OrdemServicoUpdateInput = {
-    payload: nextWithPolicy as unknown as Prisma.InputJsonValue,
-    status: prismaSt,
-  };
-  const orcTotal = (nextWithPolicy as OperacoesOSPayload).orcamento?.total;
-  if (typeof orcTotal === "number" && Number.isFinite(orcTotal)) {
-    rowUpdate.valorTotal = orcTotal;
-  }
 
   if (shouldSyncFinanceiroFromPatch(patch as Partial<OperacoesSyncPatch>)) {
     const lock = await verificarPeriodoFechado(storeId, new Date());
@@ -437,9 +421,45 @@ export async function updateOSPayload(
     }
   }
 
-  await prisma.ordemServico.update({
-    where: { id: osId },
-    data: rowUpdate,
+  // O patch é aplicado ao payload MAIS RECENTE, sob a trava da linha da OS: campos fora do
+  // patch (inclusive os financeiros e `recebimentoMistoRecusasV3`) nunca voltam a um snapshot
+  // anterior, e uma timeline montada pelo chamador a partir de uma leitura antiga só ANEXA.
+  const nextWithPolicy = await mutarPayloadOSV3({
+    storeId,
+    osId,
+    aceitarPayloadVazio: true,
+    aoAusente: () => {
+      throw new Error("OS não encontrada");
+    },
+    mutate: ({ payload }) => {
+      const current = asOperacoesPayload<OperacoesOSPayload>(payload as unknown);
+      if (!current) throw new Error("OS sem payload (incompatível)");
+      const next = mergePayload<OperacoesOSPayload>({
+        current: current as unknown as OperacoesOSPayload,
+        patch: mesclarTimelineDoPatch(current, patch),
+        storeId,
+        osId,
+        effectiveOperacao,
+      }) satisfies OperacoesOSPayload;
+      const nextWithPolicy = applyApprovedBudgetPolicy<OperacoesOSPayload>({
+        current: current as unknown as OperacoesOSPayload,
+        next,
+        makeTimelineEvent,
+      });
+
+      const nextEff = normalizeOperacaoStatus((nextWithPolicy as OperacoesOSPayload).status);
+      const curEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
+      if (nextEff !== curEff) {
+        assertOperacaoStatusTransition(curEff, nextEff, transitionOpts);
+      }
+
+      const colunas: Omit<Prisma.OrdemServicoUpdateInput, "payload"> = { status: toPrismaStatus(nextEff) };
+      const orcTotal = (nextWithPolicy as OperacoesOSPayload).orcamento?.total;
+      if (typeof orcTotal === "number" && Number.isFinite(orcTotal)) {
+        colunas.valorTotal = orcTotal;
+      }
+      return { payload: nextWithPolicy as unknown as OSPayloadV3, colunas, resultado: nextWithPolicy };
+    },
   });
 
   // Delta de estoque após revisão de orçamento aprovado (se já consumiu estoque real e ainda não restaurou).

@@ -109,7 +109,11 @@ describe("registrarRecebimentoMistoOSV3 — imediato + a prazo numa única trans
     expect(body).toContain("prisma.$transaction(");
     expect(body).toContain("decidirRecebimentoMistoOSV3(");
     // A decisão (replay, recusa terminal, execução) acontece inteira sob a trava da OS.
-    expect(service).toMatch(/export async function decidirRecebimentoMistoOSV3[\s\S]*?recebimentoLoteAdvisoryLock\(tx, chaveLockRecebimentoMistoV3\(storeId, osId\)\);\s*const replay = await replayDaOperacao/);
+    expect(service).toMatch(/export async function decidirRecebimentoMistoOSV3[\s\S]*?await travarParaDecidir\(tx, ctx, n\);\s*const replay = await replayDaOperacao/);
+    // Ordem das travas ANTES de ler marcador/recusas: advisory → sessão (FOR SHARE) → OS (FOR UPDATE).
+    expect(service).toMatch(
+      /async function travarParaDecidir[\s\S]*?recebimentoLoteAdvisoryLock\(tx, chaveLockRecebimentoMistoV3\(ctx\.storeId, ctx\.osId\)\);[\s\S]*?travarSessaoCaixa\(tx, ctx\.storeId, n\.sessaoId\);\s*await travarOS\(tx, ctx\.storeId, ctx\.osId\);/,
+    );
     expect(service).toContain("SAVEPOINT ops_v3_misto_execucao");
     expect(service).toContain("ROLLBACK TO SAVEPOINT ops_v3_misto_execucao");
   });
