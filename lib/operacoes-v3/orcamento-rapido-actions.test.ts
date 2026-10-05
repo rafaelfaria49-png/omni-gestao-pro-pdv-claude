@@ -73,14 +73,12 @@ describe("criarOrcamentoRapidoV3 — sem o bloco de datas (GOAL OPS-DATAS-ENTRAD
 
       expect(criarOSEnterpriseMock).not.toHaveBeenCalled();
       expect(criarOSMock).toHaveBeenCalledTimes(1);
-      const [, draft, extras] = criarOSMock.mock.calls[0]!;
+      const [, draft, proposta] = criarOSMock.mock.calls[0]!;
       expect(draft.recepcao.dataEntrada).toBe("");
       expect(draft.recepcao.dataEntradaMeta).toBeUndefined();
-      expect(extras.comercialV4).toMatchObject({
-        tipo: "orcamento_pre_os",
-        statusComercial: "rascunho",
-        dataProposta: "2026-10-04T15:00:00.000Z",
-        dataPropostaMeta: { precisao: "dia", dia: "2026-10-04" },
+      // Só a proposta tipada (nada de payload livre): o servidor monta o registro comercial.
+      expect(proposta).toEqual({
+        dataProposta: { iso: "2026-10-04T15:00:00.000Z", meta: { precisao: "dia", dia: "2026-10-04" } },
         validadeDias: 7,
       });
       // Validade = fim do dia 11/10 na loja (definida uma vez, no dia civil).

@@ -256,6 +256,39 @@ const ORC_INPUT = {
 };
 
 describe("PG · Orçamento (D08–D10)", () => {
+  it("R6: pré-OS só aceita a proposta tipada — futura recusada antes de criar cliente/OS; payload estranho nunca chega ao registro", async () => {
+    const storeId = await novaLoja();
+    const antes = await contar(storeId);
+    const futura = data(dia(3));
+    const semEntrada = () => draftBase({ dataEntrada: "", dataEntradaMeta: undefined });
+    await expect(criarOSPreOrcamentoV3(storeId, semEntrada(), { dataProposta: futura, validadeDias: 7 })).rejects.toThrow(/não pode ficar no futuro/);
+    await expect(criarOSPreOrcamentoV3(storeId, semEntrada(), { dataProposta: data(dia(-1)), validadeDias: -2 })).rejects.toThrow(/Validade do orçamento inválida/);
+    expect(await contar(storeId)).toEqual(antes);
+    // Chaves além da proposta (como um cliente adulterado mandaria) são ignoradas.
+    const proposta = data(dia(-2));
+    const adulterado = {
+      dataProposta: proposta,
+      validadeDias: 7,
+      comercialV4: { tipo: "orcamento_pre_os", statusComercial: "convertido", dataProposta: futura.iso },
+      aberturaV3: { recepcao: { dataEntrada: futura.iso } },
+    } as unknown as Parameters<typeof criarOSPreOrcamentoV3>[2];
+    const { os } = await criarOSPreOrcamentoV3(storeId, semEntrada(), adulterado);
+    const { p } = await lerOS(os.id);
+    expect(p.comercialV4).toMatchObject({ tipo: "orcamento_pre_os", statusComercial: "rascunho", dataProposta: proposta.iso, validadeDias: 7 });
+    expect(p.aberturaV3.recepcao.dataEntrada).toBeUndefined();
+    // Nova OS: extras fora da lista fechada não sobrescrevem datas/SLA validados; o que é permitido passa.
+    const entrada = data(dia(-1));
+    const { os: os2 } = await criarOSEnterpriseV3(storeId, draftBase({ dataEntrada: entrada.iso, dataEntradaMeta: entrada.meta }), {
+      aberturaV3: { recepcao: { dataEntrada: futura.iso } },
+      sla: { prazo: futura.iso, status: "ok" },
+      tags: ["qa-extra"],
+    });
+    const p2 = (await lerOS(os2.id)).p;
+    expect(p2.aberturaV3.recepcao).toMatchObject({ dataEntrada: entrada.iso, dataEntradaMeta: entrada.meta });
+    expect(p2.sla.origemV3).toBe("automatico");
+    expect(p2.tags).toEqual(["qa-extra"]);
+  });
+
   it("D08/D10: proposta retroativa sem aparelho — sem entrada física; validade gravada; carimbo e envio não reiniciam nada", async () => {
     const storeId = await novaLoja();
     const proposta = data(dia(-24));
@@ -295,7 +328,8 @@ describe("PG · Orçamento (D08–D10)", () => {
     const storeId = await novaLoja();
     const proposta = data(dia(-5));
     const { os } = await criarOSPreOrcamentoV3(storeId, draftBase({ dataEntrada: "", dataEntradaMeta: undefined }), {
-      comercialV4: { tipo: "orcamento_pre_os", statusComercial: "rascunho", dataProposta: proposta.iso, dataPropostaMeta: proposta.meta, validadeDias: 7 },
+      dataProposta: proposta,
+      validadeDias: 7,
     });
     await gerarOrcamentoDaOS(storeId, os.id);
     const itens = { servicos: [{ id: `s-${++seq}`, descricao: "Troca de tela", valor: 200 }], pecas: [], desconto: 0 };
@@ -370,7 +404,8 @@ describe("PG · Orçamento (D08–D10)", () => {
     const storeId = await novaLoja();
     const proposta = data(dia(-1));
     const { os } = await criarOSPreOrcamentoV3(storeId, draftBase({ dataEntrada: "", dataEntradaMeta: undefined }), {
-      comercialV4: { tipo: "orcamento_pre_os", statusComercial: "rascunho", dataProposta: proposta.iso, dataPropostaMeta: proposta.meta, validadeDias: 7 },
+      dataProposta: proposta,
+      validadeDias: 7,
     });
     await gerarOrcamentoDaOS(storeId, os.id);
     const itens = { servicos: [{ id: `s-${++seq}`, descricao: "Troca de tela", valor: 200 }], pecas: [], desconto: 0 };

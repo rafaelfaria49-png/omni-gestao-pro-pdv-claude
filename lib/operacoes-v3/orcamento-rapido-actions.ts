@@ -101,16 +101,11 @@ export async function criarOrcamentoRapidoV3(storeId: string, input: OrcamentoRa
       ...(datas.entrada ? { dataEntradaMeta: datas.entrada.meta } : {}),
     },
   };
+  // Nasce classificado como pré-OS, com a data REAL da proposta (o carimbo
+  // posterior preserva estes campos). O cadastro continua em `criadoEm`.
   const { os } = await criarOSPreOrcamentoV3(sid, draft, {
-    // Nasce classificado como pré-OS, com a data REAL da proposta (o carimbo
-    // posterior preserva estes campos). O cadastro continua em `criadoEm`.
-    comercialV4: {
-      tipo: "orcamento_pre_os",
-      statusComercial: "rascunho",
-      dataProposta: datas.proposta.iso,
-      dataPropostaMeta: datas.proposta.meta,
-      validadeDias: datas.validadeDias,
-    },
+    dataProposta: datas.proposta,
+    validadeDias: datas.validadeDias,
   });
   const osId = os.id;
 

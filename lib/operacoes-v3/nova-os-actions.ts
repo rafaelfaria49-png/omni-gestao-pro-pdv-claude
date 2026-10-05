@@ -31,7 +31,16 @@ import {
   type NovaOSDraftV3,
   validarNovaOSDraftV3,
 } from "./nova-os-model";
-import { prazoInternoPadraoIsoV3, prazoSlaDaPrevisaoV3 } from "./datas-operacionais-model";
+import {
+  erroFatoFuturoV3,
+  limitarFatoAoAgoraV3,
+  prazoInternoPadraoIsoV3,
+  prazoSlaDaPrevisaoV3,
+  ROTULO_DATA_ORCAMENTO_V3,
+  validarEntradaDataV3,
+  type DataOperacionalMetaV3,
+} from "./datas-operacionais-model";
+import type { ComercialV4 } from "@/lib/operacoes-v4/orcamento-pre-os";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
 import { recalcOrcamentoV3, type OrcamentoV3, type OrcamentoVersaoV3 } from "./orcamento-model";
@@ -75,24 +84,57 @@ export async function criarOSServicoAutorizadoV3(
   return criarOSCore(storeId, draft, true);
 }
 
+/** Proposta do orçamento pré-OS: data REAL da proposta + validade em dias. */
+export interface PropostaPreOsV3 {
+  dataProposta: { iso: string; meta: DataOperacionalMetaV3 | null };
+  validadeDias: number;
+}
+
 /**
  * Registro mínimo de um ORÇAMENTO (pré-OS). Única diferença da Nova OS: a
  * entrada do aparelho pode faltar — consulta de preço não fabrica entrada física.
+ * Recebe só a proposta (nada de payload livre): a data é validada aqui, antes de
+ * qualquer efeito, e o registro comercial é montado no servidor.
  */
 export async function criarOSPreOrcamentoV3(
   storeId: string,
   draft: NovaOSDraftV3,
-  extras?: Record<string, unknown>,
+  proposta: PropostaPreOsV3,
 ): Promise<CriarOSEnterpriseV3Result> {
-  return criarOSCore(storeId, draft, false, extras, { entradaOpcional: true });
+  const v = validarEntradaDataV3(proposta?.dataProposta?.iso, proposta?.dataProposta?.meta, ROTULO_DATA_ORCAMENTO_V3);
+  if (!v.ok) throw new Error(v.mensagem);
+  const agora = new Date();
+  const futura = erroFatoFuturoV3("dataProposta", ROTULO_DATA_ORCAMENTO_V3, v.data, agora);
+  if (futura) throw new Error(futura.mensagem);
+  const validadeDias = proposta?.validadeDias;
+  if (typeof validadeDias !== "number" || !Number.isInteger(validadeDias) || validadeDias < 0) {
+    throw new Error("Validade do orçamento inválida.");
+  }
+  // Dentro da folga do relógio, a proposta é gravada no "agora" do servidor.
+  const data = limitarFatoAoAgoraV3({ iso: v.data.iso, meta: v.meta }, agora);
+  const comercialV4: ComercialV4 = {
+    tipo: "orcamento_pre_os",
+    statusComercial: "rascunho",
+    dataProposta: data.iso,
+    ...(data.meta ? { dataPropostaMeta: data.meta } : {}),
+    validadeDias,
+  };
+  return criarOSCore(storeId, draft, false, undefined, { entradaOpcional: true, comercialV4 });
 }
+
+/**
+ * Extras que um chamador pode anexar ao payload da OS nova — lista FECHADA.
+ * Datas, SLA, status e registro comercial nunca vêm de fora: são validados ou
+ * derivados aqui. Hoje: o vínculo do atendimento de retorno.
+ */
+const EXTRAS_PERMITIDOS_V3: readonly string[] = ["tags", "vinculoRetornoV3"];
 
 async function criarOSCore(
   storeId: string,
   draft: NovaOSDraftV3,
   autorizado: boolean,
   extras?: Record<string, unknown>,
-  opcoes?: { entradaOpcional?: boolean },
+  opcoes?: { entradaOpcional?: boolean; comercialV4?: ComercialV4 },
 ): Promise<CriarOSEnterpriseV3Result> {
   const sid = (storeId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
@@ -314,7 +356,8 @@ async function criarOSCore(
         total: orcamentoAprovado.total,
       },
     } : {}),
-    ...(extras ?? {}),
+    ...Object.fromEntries(Object.entries(extras ?? {}).filter(([k]) => EXTRAS_PERMITIDOS_V3.includes(k))),
+    ...(opcoes?.comercialV4 ? { comercialV4: opcoes.comercialV4 } : {}),
   };
 
   const criada = await criarOSImpl(input as unknown as Parameters<typeof criarOSImpl>[0], operador);
