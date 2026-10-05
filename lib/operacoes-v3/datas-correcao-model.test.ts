@@ -227,6 +227,29 @@ describe("planejarCorrecaoDatasV3 — D14 corrigir entrega sem refazer nada", ()
     expect(r.ok && (r.next as any).garantia.inicioEm).toBe("2026-09-20T12:00:00.000Z");
   });
 
+  it("R12: garantia V2 sem inicioEm (ou inválido) é da entrega — fimEm desloca junto e o início é materializado (cobertura preservada)", () => {
+    // Sem garantia prevista V3: a leitura usa o fim explícito da V2.
+    const abertura = { versao: 1, recepcao: { dataEntrada: ENTRADA.iso, dataEntradaMeta: ENTRADA.meta, origem: "balcao" } };
+    const nova = data("2026-09-28", "16:00"); // 1 dia antes, mesmo horário
+    for (const inicioEm of [undefined, "não é data"]) {
+      const g2 = { ativa: true, prazoDias: 90, fimEm: "2026-12-28T19:00:00.000Z", ...(inicioEm !== undefined ? { inicioEm } : {}) };
+      const base = osEntregue({ aberturaV3: abertura, garantia: g2 });
+      const antes = lerGarantiaV3(base as unknown as OrdemServico, AGORA);
+      const r = planejarCorrecaoDatasV3(
+        base,
+        input({ alteracoes: { dataEntrega: nova }, esperados: { dataEntrega: ENTREGA.iso }, confirmarImpactoGarantia: true }),
+        CTX,
+      );
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.garantia.payloadDeslocado).toBe(true);
+      expect((r.next as any).garantia).toMatchObject({ ativa: true, prazoDias: 90, inicioEm: nova.iso, fimEm: "2026-12-27T19:00:00.000Z" });
+      const depois = lerGarantiaV3(r.next as unknown as OrdemServico, AGORA);
+      // Mesma duração de cobertura: início e vencimento andaram juntos.
+      expect(Date.parse(depois.vencimento!) - Date.parse(depois.inicio!)).toBe(Date.parse(antes.vencimento!) - Date.parse(antes.inicio!));
+    }
+  });
+
   it("retorno aberto 'com garantia ativa' fora do novo período é impedimento — nada é gravado", () => {
     const base = osEntregue({
       retornosV3: [{ id: "r1", osOriginalId: "os-1", motivo: "Tela piscando", criadoEm: "2026-12-26T15:00:00.000Z", status: "aberto", garantiaAtivaNaAbertura: true }],

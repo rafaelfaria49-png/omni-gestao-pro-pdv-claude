@@ -429,10 +429,15 @@ export function planejarCorrecaoDatasV3(
     const atendimento = obj(base.atendimentoRapidoV3);
     if (atendimento) next.atendimentoRapidoV3 = { ...atendimento, concluidoEm: iso, concluidoEmMeta: { ...n.meta } };
 
-    // Garantia V2 ancorada nesta entrega (mesmo instante) — desloca junto, preservando o prazo.
+    // Garantia V2 ancorada nesta entrega — desloca junto, preservando o prazo. Mesma
+    // regra de origem da leitura canônica (`lerGarantiaV3`): com `inicioEm` válido, a
+    // origem é ele; sem `inicioEm` válido, a origem é a própria entrega (o início é
+    // materializado na nova data e o `fimEm` desloca pelo mesmo delta).
     const g2 = obj(base.garantia);
-    if (g2 && g2.ativa === true && Date.parse(txt(g2.inicioEm)) === Date.parse(antes.iso)) {
-      next.garantia = { ...g2, inicioEm: deslocarIso(txt(g2.inicioEm), deltaMs), ...(txt(g2.fimEm) ? { fimEm: deslocarIso(txt(g2.fimEm), deltaMs) } : {}) };
+    const g2InicioMs = Date.parse(txt(g2?.inicioEm));
+    const g2Ancorada = !!g2 && g2.ativa === true && (Number.isFinite(g2InicioMs) ? g2InicioMs === Date.parse(antes.iso) : !!txt(g2.fimEm));
+    if (g2 && g2Ancorada) {
+      next.garantia = { ...g2, inicioEm: iso, ...(txt(g2.fimEm) ? { fimEm: deslocarIso(txt(g2.fimEm), deltaMs) } : {}) };
       garantia.payloadDeslocado = true;
     }
     for (const linha of ctx.garantias ?? []) {
