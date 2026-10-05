@@ -1,16 +1,20 @@
-# OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — implementação e validação para R2
+# OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — implementação, corretivo R2 e validação para R3
 
-Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). O commit funcional final é `ce1d806ba962fbf5acac1e015e18a370d7939055`. O coordenador OpenAI consolidou este relatório, os logs e o inventário produzido pelo Claude; não implementou as correções. A revisão R2 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
+Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). O commit funcional anterior era `ce1d806ba962fbf5acac1e015e18a370d7939055`; o corretivo da R2 é o commit funcional `3071c6749730ca138966d46fc9e6271afc211d81` (Claude/Anthropic), seguido deste commit só de documentos. O coordenador OpenAI consolidou este relatório, os logs e o inventário produzido pelo Claude; não implementou as correções. A revisão R2 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
 
 Em 05/10/2026, o novo `git fetch origin` confirmou `origin/main=1e45f98ade83b3071548d581225928b0fd95b06c`. A main não avançou; não há reconciliação pendente. A worktree e o trabalho anterior foram preservados. PRs #234 e #235 permanecem na base. A auditoria/baseline original não foi reiniciada.
 
-## Estado antes da revisão R2
+## Estado antes da revisão R3 (após corretivo R2)
 
 ```text
 GOAL=OPS-RECEBIMENTO-MISTO-P1-HARDENING-001
 BASE=1e45f98ade83b3071548d581225928b0fd95b06c
-FINAL_HEAD=SHA_EXATO_DO_COMMIT_CONTENDO_ESTE_RELATORIO; fornecido no pacote da R2
-FUNCTIONAL_HEAD=ce1d806ba962fbf5acac1e015e18a370d7939055
+FINAL_HEAD=SHA_EXATO_DO_COMMIT_CONTENDO_ESTE_RELATORIO; fornecido no pacote da R3
+FUNCTIONAL_HEAD=3071c6749730ca138966d46fc9e6271afc211d81
+PREVIOUS_FUNCTIONAL_HEAD=ce1d806ba962fbf5acac1e015e18a370d7939055
+R2_P1_TITULO_TRAVA_VAZIA=FIXED_RED_GREEN_PG_4_CASOS
+R2_P2_ESTOQUE_RASCUNHO_LEDGER=FIXED_RED_GREEN_PG_4_CASOS
+R2_P3_RETORNO_DUPLICADO=PREEXISTENTE_OPERACIONAL_NAO_ALTERADO
 BRANCH=goal/ops-recebimento-misto-p1-hardening-001
 WORKTREE=C:\Projetos\omni-gestao-ops-recebimento-misto-p1-hardening-001
 IMPLEMENTER_FAMILY=anthropic
@@ -41,24 +45,24 @@ PR234_REGRESSION=PASS
 PR235_350_50=PASS_PG_E2E_V3_V4
 PR235_100_APRAZO=PASS_PG
 PR235_LATER_PAYMENT=PASS_PG_E2E_V3_V4
-UNIT=R2_830_PASS_14_FAIL_1_EXPECTED_FAIL_EM_29_ARQUIVOS;EXTRA_77_PASS;ver classificacao abaixo
-MOUNTED=PASS_V3_20_V4_29
-POSTGRES=PASS_V3_87_V4_PARIDADE_1_GATED_40
-E2E=PASS_5_CENARIOS_FUNCIONAIS_POR_SPEC_MAIS_AUTH_SETUP;EXECUCAO_CONJUNTA_5_PASS_1_FALHA_NAVEGACAO_DOCUMENTADA
+UNIT=R2FIX_AFETADOS_295_PASS_14_ARQUIVOS;ANTERIOR_R2_830_PASS_14_FAIL_1_EXPECTED_FAIL_EM_29_ARQUIVOS_NAO_REEXECUTADO_INTEGRAL
+MOUNTED=PASS_V3_20_V4_29_REEXECUTADO_EM_3071c67
+POSTGRES=PASS_V3_93_TRANSITIVOS_35_V4_PARIDADE_1_GATED_40_EM_3071c67
+E2E=PENDENTE_NOVO_BUILD_DO_COORDENADOR_SOBRE_3071c67;ANTERIOR_8880b86_CONJUNTO_6_6_COM_QA_PREPARADO
 REGRESSION=PASS_FOCAL
-TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_EXIT0
-LINT=PASS_FOCADO_0_ERROS_1_WARNING_PREEXISTENTE
-BUILD=PASS_NPM_RUN_BUILD_MIGRATION_SKIPPED
+TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_EXIT0_EM_3071c67
+LINT=PASS_FOCADO_ARQUIVOS_DO_CORRETIVO_0_ERROS_0_WARNINGS
+BUILD=PENDENTE_COORDENADOR_SOBRE_3071c67;ANTERIOR_ce1d806_PASS_MIGRATION_SKIPPED
 DIFF_CHECK=PASS
 SCHEMA_CHANGED=NO
 MIGRATION_CREATED=NO
 R_FAMILY=openai
-R_HEAD_REVIEWED=PENDENTE_R2
-R_VERDICT=PENDENTE_R2
-P0=NOT_REVIEWED_R2
-P1=NOT_REVIEWED_R2
-P2=NOT_REVIEWED_R2
-P3=NOT_REVIEWED_R2
+R_HEAD_REVIEWED=R2_8880b86;R3_PENDENTE
+R_VERDICT=R2_REQUEST_CHANGES;R3_PENDENTE
+P0=R2_0;R3_NOT_REVIEWED
+P1=R2_1_CORRIGIDO;R3_NOT_REVIEWED
+P2=R2_1_CORRIGIDO;R3_NOT_REVIEWED
+P3=R2_1_PREEXISTENTE;R3_NOT_REVIEWED
 READY_FOR_MERGE=NO
 PR=NOT_CREATED
 PR_MERGED=NO
@@ -73,7 +77,7 @@ IMPLEMENTADO=SIM
 VALIDADO=SIM_LOCAL_QA_COM_RESSALVAS_DOCUMENTADAS
 PUBLICADO=NO
 HOMOLOGADO=NO
-BLOCKER=REVISAO_INDEPENDENTE_R2_PENDENTE
+BLOCKER=BUILD_E2E_DO_COORDENADOR_E_REVISAO_INDEPENDENTE_R3_PENDENTES
 ```
 
 ## Correções originais
@@ -100,15 +104,46 @@ O caminho irmão `gerarCobrancaOSAction` também passa a decidir parcelas e tít
 
 Os mocks unitários foram atualizados para o contrato transacional, mantendo as asserções de negócio. O fault injection do teste de rollback mudou de `upsert` para `update`, método que agora persiste o título a prazo, no mesmo ponto após caixa e antes de persistir o a prazo. A R2 deve conferir essa equivalência.
 
+## R2 e corretivo no mesmo GOAL
+
+A R2 independente (OpenAI, READ-ONLY) sobre `8880b86e18ad37f3733523e9481cf467ac70a32b` retornou P0=0, P1=1, P2=1, P3=1, REQUEST_CHANGES. Corrigidos por Claude no commit funcional `3071c6749730ca138966d46fc9e6271afc211d81`, sem schema/migration, sem transação aninhada e sem trava título→OS/advisory.
+
+1. **P1 — trava vazia do título.** `gravarTituloContaReceberTravado` ignorava o retorno de `travarTituloContaReceber`. Com `FOR UPDATE` vazio, um título criado e commitado antes do `findUnique` era lido sem trava. O UPDATE derivado dessa leitura esperava o pagamento concorrente. Depois do commit dele, apagava histórico/marcador e restaurava status/saldo, então o replay de K deixava de ser reconhecido e virava nova baixa. Agora só se deriva UPDATE de linha que a própria transação travou: trava vazia = ausente → `createMany skipDuplicates` (não sobrescreve) → nova volta trava e relê a linha (≤3). Alcança o upsert genérico (rotas `contas-receber-persist` e `sync-legacy-financeiro`) e o adapter `os-faturamento`. `cancelContaReceber` e `cancelContaReceberFromOS` já usavam o boolean. Contrato `db`: `naTransacaoDoTituloContaReceber` trata `db` como transação. Nenhum caller real passa o singleton global (busca sem ocorrências, também confirmado pela R2), por isso o contrato só foi documentado.
+2. **P2 — rascunho somado ao ledger de estoque.** Antes da baixa, os itens com produto são só rascunho da sync, único criador runtime pré-baixa; `lib/os-itens-stock.ts` é legado sem callers. `consumeEstoqueFromOS` apendava o ledger ao lado do rascunho e a restauração somava ambos (10→9→11). O delta de revisão também contaria o rascunho como consumido. Sob a trava da OS, a baixa agora substitui os itens com produto pelo ledger; itens sem produto (serviços) são preservados. O ledger consumido nunca é apagado para reconstruir rascunho e `observacao` não é critério. Peças legítimas repetidas do mesmo produto continuam somadas pelo build da baixa.
+3. **P3 — retorno duplicado** (`retorno-actions.ts`): pré-existente, operacional e não financeiro; não alterado neste corretivo.
+
+### REDs antes do fix e GREEN
+
+`hardening-p1-transitivos.pg.ts` ganhou uma pausa logo após o `SELECT … FOR UPDATE` do título devolver 0 linhas; `$queryRaw` só é envolvido com essa pausa armada. Sequência do P1-T6: A conclui a trava vazia e pausa antes da leitura ORM. B cria e commita o título 400. C trava esse título e paga, pausado no caixa antes do commit. A retoma e precisa esperar a trava de C, observada em `pg_stat_activity` sem sleep; C commita e A conclui. Casos: `contas-receber-persist` e `sync-legacy-financeiro` × K 350+50; adapter `os-faturamento` com transação própria × K 350+50; `updateOSPayload` → adapter (com trava da OS) × lote PDV 350, que só trava o título. Conferem título 1, histórico [350], marcador 1, saldo 50/parcial, caixa e movimento únicos, replay K `jaRegistrado`, e depois um 50 legítimo quitando.
+
+P2-T4: S→C→R concorrente agora confere estoque 10→9→10, itens após a baixa e saída 1/entrada 1 no ledger de estoque. Foram acrescentados o sequencial com consumo/restauração repetidos e duas peças legítimas 1+1 do mesmo produto (10→8→10). A ordem inversa C→S→R e a ausência de deadlock continuam cobertas; o timeout não aumentou.
+
+| Evidência (em `playwright-report/ops-p1-hardening-001/`) | Resultado |
+| --- | --- |
+| `r2fix-transitivos-RED-snapshot.pg.ts.txt` | snapshot do teste usado na RED antes do fix |
+| `r2fix-red-p1t6-p2t4.log` | RED: 7/7 falham. Lote: histórico [] com caixa [350]. P2: após a baixa havia rascunho 1 + ledger 1, final 11 e entrada 2 |
+| `r2fix-red-p1t6-motivos.log` | RED P1-T6 4/4: `[estado K]` pendente, saldo 400, histórico [], marcador 0, caixa [350]. Replay de K `jaRegistrado:false`, com Σcaixa 750 contra Σbaixas 400 |
+| `r2fix-green-p1t6-p2t4.log` | GREEN 8/8 |
+| `r2fix-transitivos-green.log` | transitivos 35/35 |
+| `r2fix-pg-v3-full.log` | PG V3 93/93 (3 arquivos) |
+| `r2fix-pg-v4-paridade.log` | 1/1 |
+| `r2fix-pg-gated.log` | 40/40 (lote lock, workspace, entrada-readback, garantia, entrada complementar; flags no mesmo QA local) |
+| `r2fix-mounted-v3.log` / `r2fix-mounted-v4.log` | 20/20 e 29/29 |
+| `r2fix-unit-afetados.log` | 295/295 em 14 arquivos que importam ou simulam o serviço de título, o adapter de faturamento ou o adapter de estoque |
+| `r2fix-typecheck.log` | `tsc --noEmit` completo, heap 8192, exit 0, saída vazia |
+| `r2fix-lint.log` | eslint dos 3 arquivos alterados: 0 erros, 0 warnings |
+
+Build oficial e E2E sobre `3071c67` ficam com o coordenador, com novo build; o web QA anterior não prova este código. A suíte unitária ampla de 830 casos/29 arquivos não foi reexecutada integralmente nesta rodada. O conjunto afetado acima a substitui somente para os dois arquivos-fonte alterados. A R2 não aprovou este SHA: a R3 OpenAI nova, READ-ONLY, deve revisar o novo HEAD.
+
 ## Inventário e ordem de locks
 
-`OPS-RECEBIMENTO-MISTO-P1-HARDENING-001-WRITERS.json` foi atualizado por Claude sobre o SHA funcional ce1d806: 115 funções, 102 SAFE_TRANSACTIONAL, 13 READ_ONLY, 37 writers diretos. Há 16 entradas transitivas do título/itens, em taxonomia separada; 10 escopos revisados e 2 exclusões não são somados às funções. Categorias e papéis não devem ser confundidos: um caller seguro pode alcançar um callee travado sem ele próprio gravar payload.
+`OPS-RECEBIMENTO-MISTO-P1-HARDENING-001-WRITERS.json` foi atualizado por Claude sobre o SHA funcional ce1d806 e, no corretivo R2, sobre 3071c67 (linhas, estratégia do título/estoque e `r2Findings`): 115 funções, 102 SAFE_TRANSACTIONAL, 13 READ_ONLY, 37 writers diretos. Há 16 entradas transitivas do título/itens, em taxonomia separada; 10 escopos revisados e 2 exclusões não são somados às funções. Categorias e papéis não devem ser confundidos: um caller seguro pode alcançar um callee travado sem ele próprio gravar payload.
 
 Recebimentos V3 seguem advisory(OS)→sessão FOR SHARE quando necessário→OS FOR UPDATE→título. OS genérica, orçamento/intenção e cancelamento seguem OS→título na mesma transação. Helpers do Financeiro travam somente título, sem voltar à OS. Estoque segue OS→produtos→itens; sync de rascunho segue OS→itens. O mapa completo e as justificativas estão no inventário; a R2 deve procurar arestas inversas e casos de título inicialmente ausente.
 
 O espelho `components/pdv-github-original` não foi editado. Sua UI experimental é alcançável pela rota com flag, mas seu fecho de imports não contém writers de OS. O backend histórico aninhado não é roteado/importado e fica no apêndice como excluído, sem ser contado como aprovado.
 
-O implementador informou dois candidatos operacionais residuais, sem atribuir severidade final: abertura duplicada de retorno com guarda prévia (P3 na R1) e soma de itens de rascunho/ledger em restauração de estoque (observação pré-existente do implementador). A R2 deve avaliar o alcance, a severidade e eventual relação com o corretivo. Os candidatos de orçamento antes chamados P3 foram promovidos a P2 na R1 e corrigidos.
+O implementador informou dois candidatos operacionais residuais. A abertura duplicada de retorno com guarda prévia foi classificada como P3 na R1 e na R2 e não foi alterada. A soma de rascunho/ledger na restauração de estoque foi classificada como P2 pela R2 e corrigida no corretivo R2. Os candidatos de orçamento antes chamados P3 foram promovidos a P2 na R1 e corrigidos.
 
 ## Evidências locais
 
@@ -134,6 +169,6 @@ A execução ampla histórica `unit-full-after-import-fix.log` teve 9179 passed/
 
 ## Gates finais pendentes
 
-A R2 independente deve tentar quebrar A–O do comando original, os cinco achados R1, a cobrança sobre faturamento vigente, a criação concorrente de título e os candidatos operacionais relatados. P0=P1=P2=0 e APPROVE são obrigatórios. Havendo achado, corrigir neste mesmo GOAL por Anthropic e obter nova R sobre o novo SHA.
+Build oficial e E2E do coordenador sobre o novo SHA. A R3 independente deve tentar quebrar a corrida trava vazia → título criado → leitura → pagamento → escrita, a substituição rascunho×ledger em ambas as ordens, e ainda A–O do comando original, os cinco achados R1, a cobrança sobre faturamento vigente, a criação concorrente de título e os candidatos operacionais relatados. P0=P1=P2=0 e APPROVE são obrigatórios. Havendo achado, corrigir neste mesmo GOAL por Anthropic e obter nova R sobre o novo SHA.
 
 Só então: PR exclusivo com o SHA revisado; checks verdes; merge normal GitHub sem squash/rebase/force; SUCCESS de omni-gestao e omni-gestao-pro no merge SHA; smoke produção somente leitura. Sem sessão, OWNER_PENDING_AUTH, sem pedir credenciais. Nenhum pagamento real, mutation financeira de produção ou acesso à OS-2026-00028 é permitido. A worktree permanece ATIVA até relatório final e dois deploys verdes.
