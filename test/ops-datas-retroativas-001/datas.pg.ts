@@ -26,7 +26,7 @@ import { criarOrcamentoRapidoV3 } from "@/lib/operacoes-v3/orcamento-rapido-acti
 import { atualizarStatusComercialV3, converterOrcamentoEmOSV3, marcarOrcamentoPreOsV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
 import { aprovarOrcamentoV3, enviarOrcamentoV3, gerarOrcamentoDaOS, registrarEnvioOrcamento, salvarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
 import { finalizarAtendimentoRapidoV3 } from "@/lib/operacoes-v3/atendimento-rapido-actions";
-import { registrarEntregaV3 } from "@/lib/operacoes-v3/entrega-actions";
+import { adicionarFotoSaidaV3, registrarEntregaV3, salvarAssinaturaRetiradaV3 } from "@/lib/operacoes-v3/entrega-actions";
 import { receberOSV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import { corrigirDatasOSV3 } from "@/lib/operacoes-v3/datas-correcao-actions";
 import { esperadoCampoDataV3, type CorrecaoDatasInputV3 } from "@/lib/operacoes-v3/datas-correcao-model";
@@ -494,6 +494,55 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect(depois.comercialV4.statusComercial).toBe("convertido");
   });
 
+  it("R7: conversão leva a previsão VISTA — mudou no meio (Corrigir datas) → recusa sem gravar; preservar não reenvia; remover é explícito", async () => {
+    const storeId = await novaLoja();
+    const aprovar = async (osId: string) => {
+      const { p } = await lerOS(osId);
+      await prisma.ordemServico.update({
+        where: { id: osId },
+        data: { payload: { ...p, comercialV4: { ...p.comercialV4, statusComercial: "aprovado" }, orcamento: { ...p.orcamento, status: "aprovado" } } as Prisma.InputJsonValue },
+      });
+    };
+    const novoOrcamentoComPrevisao = async (loja: string, previsaoDia: string) => {
+      const r = await criarOrcamentoRapidoV3(loja, { ...ORC_INPUT, datas: { dataProposta: data(dia(-5)), validoAteDia: dia(4), entradaAparelho: data(dia(-4), "10:00") } });
+      const previsao = data(previsaoDia);
+      const c = await corrigirDatasOSV3(loja, r.osId, { alteracoes: { previsaoEntrega: previsao }, esperados: { previsaoEntrega: "" }, motivo: "Prazo combinado." });
+      expect(c.ok).toBe(true);
+      await aprovar(r.osId);
+      return { osId: r.osId, previsao, vista: esperadoCampoDataV3(previsao.iso, previsao.meta.precisao) };
+    };
+
+    // 1) O operador abriu a conversão vendo P1; alguém corrigiu para P2 no meio.
+    const a = await novoOrcamentoComPrevisao(storeId, dia(2));
+    const p2 = data(dia(5));
+    const corr = await corrigirDatasOSV3(storeId, a.osId, { alteracoes: { previsaoEntrega: p2 }, esperados: { previsaoEntrega: a.vista }, motivo: "Cliente pediu mais prazo." });
+    expect(corr.ok).toBe(true);
+    const antes = (await lerOS(a.osId)).p;
+    await expect(converterOrcamentoEmOSV3(storeId, a.osId, { previsaoEsperada: a.vista })).rejects.toThrow(/mudou para .* desde que você abriu a conversão/);
+    const intacta = (await lerOS(a.osId)).p;
+    expect(intacta).toEqual(antes);
+    expect(intacta.aberturaV3.recepcao).toMatchObject({ previsaoEntrega: p2.iso, previsaoEntregaMeta: p2.meta });
+    // 2) Vendo P2 e limpando o campo: remoção explícita; o SLA volta ao prazo interno padrão.
+    await converterOrcamentoEmOSV3(storeId, a.osId, { previsaoEsperada: esperadoCampoDataV3(p2.iso, "dia"), removerPrevisao: true });
+    const removida = (await lerOS(a.osId)).p;
+    expect(removida.comercialV4.statusComercial).toBe("convertido");
+    expect(removida.aberturaV3.recepcao.previsaoEntrega).toBeUndefined();
+    expect(removida.aberturaV3.recepcao.previsaoEntregaMeta).toBeUndefined();
+    expect(removida.sla).toMatchObject({ prazo: new Date(Date.parse(removida.criadoEm) + 2 * 86_400_000).toISOString(), origemV3: "automatico" });
+    const ev = removida.timeline.find((e: Payload) => e.metadata?.evento === "orcamento_convertido_os");
+    expect(ev.metadata).toMatchObject({ previsaoRemovida: true });
+
+    // 3) Preservar (igual ao visto): nada é reenviado; previsão e SLA ficam como estão.
+    const lojaB = await novaLoja(); // mesmo cliente em outra loja (a loja A recusaria duplicata)
+    const b = await novoOrcamentoComPrevisao(lojaB, dia(3));
+    const slaAntes = (await lerOS(b.osId)).p.sla;
+    await converterOrcamentoEmOSV3(lojaB, b.osId, { previsaoEsperada: b.vista });
+    const preservada = (await lerOS(b.osId)).p;
+    expect(preservada.comercialV4.statusComercial).toBe("convertido");
+    expect(preservada.aberturaV3.recepcao).toMatchObject({ previsaoEntrega: b.previsao.iso, previsaoEntregaMeta: b.previsao.meta });
+    expect(preservada.sla).toEqual(slaAntes);
+  });
+
   it("R4: previsão já gravada antes da entrada informada na conversão é recusada — pede a nova previsão; com ela, converte", async () => {
     const storeId = await novaLoja();
     const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: data(dia(-10)), validoAteDia: dia(2), entradaAparelho: null } });
@@ -904,6 +953,46 @@ describe("PG · Concorrência (D16/D17)", () => {
     const depois = await prisma.garantiaOrdemServico.findUniqueOrThrow({ where: { id: ativa.id } });
     expect(depois.dataInicio.toISOString()).toBe(nova.iso);
     expect(depois.dataFim.getTime()).toBe(fimLegado.getTime() - 86_400_000);
+  });
+
+  it("R7: assinatura e fotos de saída esperam a trava por OS — com a correção de datas na fila, nenhuma gravação apaga a outra", async () => {
+    const storeId = await novaLoja();
+    const entrega = data(dia(-2), "16:00");
+    const osId = await osEntregueRetroativa(storeId, data(dia(-9)), entrega);
+    const nova = data(dia(-3), "16:00");
+    // Segura a trava por OS: correção, foto e assinatura precisam esperar por ela
+    // (antes, foto e assinatura gravavam o payload inteiro sem esperar ninguém).
+    let liberar!: () => void;
+    const segurando = new Promise<void>((r) => (liberar = r));
+    let travou!: () => void;
+    const travado = new Promise<void>((r) => (travou = r));
+    const t0 = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${chaveLockRecebimentoMistoV3(storeId, osId)}))::text AS lock`;
+        travou();
+        await segurando;
+      },
+      { maxWait: 5_000, timeout: 30_000 },
+    );
+    await travado;
+    const corrigir = corrigirConfirmandoGarantia(storeId, osId, {
+      alteracoes: { dataEntrega: nova },
+      esperados: { dataEntrega: esperadoCampoDataV3(entrega.iso, entrega.meta.precisao) },
+      motivo: "Entregue um dia antes.",
+    });
+    const foto = adicionarFotoSaidaV3(storeId, osId, { categoria: "reparado", nome: "depois.jpg", dataUrl: `data:image/jpeg;base64,${"A".repeat(40)}` });
+    const assinatura = salvarAssinaturaRetiradaV3(storeId, osId, `data:image/png;base64,${"B".repeat(40)}`, "Cliente QA");
+    await esperarEsperasAdvisory(3);
+    liberar();
+    await t0;
+    const [rCorrigir] = await Promise.all([corrigir, foto, assinatura]);
+    expect(rCorrigir.ok).toBe(true);
+    const { p } = await lerOS(osId);
+    expect(p.entregaV3).toMatchObject({ entregueEm: nova.iso, entregueEmMeta: nova.meta });
+    expect(p.entregaV3.fotosSaida).toHaveLength(1);
+    expect(p.entregaV3.assinaturaRetirada).toMatchObject({ por: "Cliente QA" });
+    const eventos = p.timeline.map((e: Payload) => e.metadata?.evento);
+    expect(eventos).toEqual(expect.arrayContaining(["datas_corrigidas", "foto_saida_adicionada", "assinatura_retirada_capturada"]));
   });
 });
 

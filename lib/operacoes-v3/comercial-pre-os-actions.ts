@@ -21,17 +21,26 @@ import { validadeExpiradaV3 } from "./orcamento-model";
 import {
   erroFatoFuturoV3,
   erroOrdemV3,
+  esperadoCampoDataV3,
+  formatarDataOperacionalV3,
   formatarDiaDeIsoNaLojaV3,
   lerDatasOSV3,
   limitarFatoAoAgoraV3,
   validarEntradaDataV3,
   prazoSlaDaPrevisaoV3,
+  slaSemPrevisaoV3,
   ROTULO_DATA_ENTRADA_V3,
   ROTULO_PREVISAO_ENTREGA_V3,
   type DataOperacionalMetaV3,
 } from "./datas-operacionais-model";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
+
+/** Recepção sem a previsão combinada (remoção explícita na conversão). */
+function semPrevisao(recepcao: Record<string, unknown>): Record<string, unknown> {
+  const { previsaoEntrega: _p, previsaoEntregaMeta: _m, ...resto } = recepcao;
+  return resto;
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -213,9 +222,16 @@ export async function atualizarStatusComercialV3(
 export interface ConverterOrcamentoInputV3 {
   prioridade?: string;
   localFisico?: string;
-  /** Previsão de entrega combinada (ISO). */
+  /** Previsão de entrega combinada (ISO). Ausente = preservar a gravada. */
   previsaoEntrega?: string;
   previsaoEntregaMeta?: DataOperacionalMetaV3;
+  /** Remover a previsão gravada (escolha explícita do operador). */
+  removerPrevisao?: boolean;
+  /**
+   * Previsão que o operador VIU ao decidir (formato de `esperadoCampoDataV3`;
+   * "" = nenhuma). Se a gravada mudou desde então, a conversão é recusada.
+   */
+  previsaoEsperada?: string;
   recebidoPor?: string;
   /**
    * Entrada REAL do aparelho. Obrigatória quando o orçamento ainda não tem
@@ -272,16 +288,31 @@ export async function converterOrcamentoEmOSV3(
       entradaNova = limitarFatoAoAgoraV3({ iso: v.data.iso, meta: v.meta }, agora);
       entradaFinal = { ...v.data, iso: entradaNova.iso, dia: entradaNova.meta?.dia ?? v.data.dia };
     }
+    const existente = lerDatasOSV3(payload).previsao;
+    // CAS da previsão: o operador decidiu (preservar, trocar ou remover) olhando um
+    // valor; se ele mudou desde então (ex.: "Corrigir datas" no meio), nada é gravado.
+    if (input.previsaoEsperada !== undefined) {
+      const atualVista = existente ? esperadoCampoDataV3(existente.iso, existente.precisao) : "";
+      if (input.previsaoEsperada !== atualVista) {
+        throw new Error(
+          existente
+            ? `A previsão de entrega desta OS mudou para ${formatarDataOperacionalV3(existente)} desde que você abriu a conversão. Confira e converta de novo.`
+            : "A previsão de entrega desta OS foi removida desde que você abriu a conversão. Confira e converta de novo.",
+        );
+      }
+    }
     let previsao: { iso: string; meta: DataOperacionalMetaV3 | null } | null = null;
+    let removerPrevisao = false;
     if (input.previsaoEntrega?.trim()) {
       const v = validarEntradaDataV3(input.previsaoEntrega, input.previsaoEntregaMeta, ROTULO_PREVISAO_ENTREGA_V3);
       if (!v.ok) throw new Error(v.mensagem);
       const ordem = erroOrdemV3("previsaoEntrega", "A previsão de entrega", v.data, "entrada do aparelho", entradaFinal);
       if (ordem) throw new Error(ordem.mensagem);
       previsao = { iso: v.data.iso, meta: v.meta };
+    } else if (input.removerPrevisao === true) {
+      removerPrevisao = !!existente;
     } else {
       // A previsão já gravada (que será preservada) também não pode ficar antes da entrada.
-      const existente = lerDatasOSV3(payload).previsao;
       const ordem = existente ? erroOrdemV3("previsaoEntrega", "A previsão de entrega", existente, "entrada do aparelho", entradaFinal) : null;
       if (ordem) throw new Error(`${ordem.mensagem} Informe a nova previsão de entrega ao abrir a OS.`);
     }
@@ -295,7 +326,7 @@ export async function converterOrcamentoEmOSV3(
     const aberturaV3 = {
       ...aberturaAtual,
       recepcao: {
-        ...recepcaoAtual,
+        ...(removerPrevisao ? semPrevisao(recepcaoAtual) : recepcaoAtual),
         ...(input.prioridade ? { prioridade: input.prioridade } : {}),
         ...(input.localFisico ? { localFisico: input.localFisico } : {}),
         ...(entradaNova ? { dataEntrada: entradaNova.iso, ...(entradaNova.meta ? { dataEntradaMeta: entradaNova.meta } : {}) } : {}),
@@ -320,6 +351,8 @@ export async function converterOrcamentoEmOSV3(
       metadata: {
         evento: "orcamento_convertido_os",
         ...(entradaNova ? { dataEntrada: entradaNova.iso } : {}),
+        ...(previsao ? { previsaoEntrega: previsao.iso } : {}),
+        ...(removerPrevisao ? { previsaoRemovida: true } : {}),
       },
       criadoEm: agora.toISOString(),
     };
@@ -329,6 +362,9 @@ export async function converterOrcamentoEmOSV3(
       comercialV4,
       aberturaV3,
       ...(previsao ? { sla: { ...(slaAtual ?? {}), prazo: prazoSlaDaPrevisaoV3(previsao), origemV3: "informada" } } : {}),
+      ...(removerPrevisao && existente
+        ? { sla: slaSemPrevisaoV3(slaAtual, { iso: existente.iso, meta: existente.precisao === "dia" ? { precisao: "dia", dia: existente.dia } : null }, payload.criadoEm) }
+        : {}),
       timeline: [...timeline, evento],
       atualizadoEm: agora.toISOString(),
     } as OSPayloadFull;

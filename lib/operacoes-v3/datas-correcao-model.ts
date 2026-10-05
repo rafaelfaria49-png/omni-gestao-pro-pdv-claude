@@ -30,7 +30,7 @@ import {
   esperadoCampoDataV3,
   lerDatasOSV3,
   limitarFatoAoAgoraV3,
-  prazoInternoPadraoIsoV3,
+  slaSemPrevisaoV3,
   prazoSlaDaPrevisaoV3,
   validarDatasPropostaV3,
   validarEntradaDataV3,
@@ -389,7 +389,7 @@ export function planejarCorrecaoDatasV3(
   }
   if (alterados.has("previsaoEntrega")) {
     const n = novos.get("previsaoEntrega")!.valor;
-    const sla = { ...(obj(base.sla) ?? {}) };
+    let sla: Record<string, unknown> = { ...(obj(base.sla) ?? {}) };
     if (n) {
       const iso = new Date(n.iso).toISOString();
       recepcao.previsaoEntrega = iso;
@@ -398,32 +398,11 @@ export function planejarCorrecaoDatasV3(
       sla.prazo = prazoSlaDaPrevisaoV3({ iso, meta: n.meta });
       sla.origemV3 = "informada";
     } else {
-      const previsaoRemovida = txt(recepcao.previsaoEntrega);
-      const metaRemovida = recepcao.previsaoEntregaMeta as DataOperacionalMetaV3 | undefined;
+      const removida = { iso: txt(recepcao.previsaoEntrega), meta: recepcao.previsaoEntregaMeta as DataOperacionalMetaV3 | undefined };
       delete recepcao.previsaoEntrega;
       delete recepcao.previsaoEntregaMeta;
-      // O espelho da previsão removida NÃO vira "prazo interno" (seria a promessa
-      // apagada com outro nome): volta à regra padrão da Nova OS (cadastro + 2 dias).
-      // Um prazo interno próprio (não espelhado) continua valendo como regra interna.
-      const prazoAtual = Date.parse(txt(sla.prazo));
-      const espelho =
-        sla.origemV3 === "informada" ||
-        (!!previsaoRemovida &&
-          Number.isFinite(prazoAtual) &&
-          (prazoAtual === Date.parse(previsaoRemovida) ||
-            prazoAtual === Date.parse(prazoSlaDaPrevisaoV3({ iso: previsaoRemovida, meta: metaRemovida }))));
-      if (espelho) {
-        const padrao = prazoInternoPadraoIsoV3(base.criadoEm);
-        if (padrao) {
-          sla.prazo = padrao;
-          sla.origemV3 = "automatico";
-        } else {
-          delete sla.prazo;
-          delete sla.origemV3;
-        }
-      } else if (txt(sla.prazo)) {
-        sla.origemV3 = "automatico";
-      }
+      // Regra única da remoção: o espelho volta ao prazo interno padrão; prazo próprio fica.
+      sla = slaSemPrevisaoV3(sla, removida, base.criadoEm);
     }
     next.sla = sla;
     mexeuAbertura = true;

@@ -43,7 +43,7 @@ vi.mock("./event-publisher", () => ({ emitirEventoOperacaoV3: mocks.emitirEvento
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("./retorno-auto-close-actions", () => ({ finalizarRetornoPorEntregaVinculadaV3: mocks.autoClose }));
 
-import { adicionarFotoSaidaV3, registrarEntregaV3, removerFotoSaidaV3 } from "./entrega-actions";
+import { adicionarFotoSaidaV3, registrarEntregaV3, removerFotoSaidaV3, salvarAssinaturaRetiradaV3 } from "./entrega-actions";
 
 const storeId = "store-a";
 const osId = "os-1";
@@ -428,6 +428,21 @@ describe("fotos de saída", () => {
     await removerFotoSaidaV3(storeId, osId, "f1");
     const write = mocks.osUpdate.mock.calls[0]![0] as { data: { payload: { entregaV3: { fotosSaida: unknown[] } } } };
     expect(write.data.payload.entregaV3.fotosSaida).toEqual([]);
+  });
+
+  it("R7: assinatura e fotos de saída gravam sob a trava por OS (advisory + FOR UPDATE), sobre o estado relido", async () => {
+    const entregue = row(100, { operacaoStatusV3: "entregue", status: "entregue", entregaV3: { entregueEm: "2026-07-10T15:00:00.000Z", recebidoPor: "Cliente" } });
+    mocks.osFindFirst.mockResolvedValue(entregue);
+    await salvarAssinaturaRetiradaV3(storeId, osId, "data:image/png;base64,AAAA");
+    await adicionarFotoSaidaV3(storeId, osId, { dataUrl: `data:image/jpeg;base64,${"A".repeat(40)}` });
+    mocks.osFindFirst.mockResolvedValue(
+      row(100, { operacaoStatusV3: "entregue", status: "entregue", entregaV3: { fotosSaida: [{ id: "f1", categoria: "reparado", dataUrl: "data:image/jpeg;base64,AAAA", tamanho: 4, criadoEm: "2026-07-14T10:00:00.000Z" }] } }),
+    );
+    await removerFotoSaidaV3(storeId, osId, "f1");
+    expect(mocks.lock).toHaveBeenCalledTimes(3);
+    expect(mocks.travarOS).toHaveBeenCalledTimes(3);
+    const assinatura = mocks.osUpdate.mock.calls[0]![0] as { data: { payload: { entregaV3: Record<string, unknown> } } };
+    expect(assinatura.data.payload.entregaV3).toMatchObject({ entregueEm: "2026-07-10T15:00:00.000Z", assinaturaRetirada: { por: "Cliente" } });
   });
 
   it("bloqueia foto de saída em OS cancelada", async () => {

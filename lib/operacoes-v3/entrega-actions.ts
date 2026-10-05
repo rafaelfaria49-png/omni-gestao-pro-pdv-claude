@@ -413,30 +413,30 @@ export async function salvarAssinaturaRetiradaV3(storeId: string, osId: string, 
 
   const veredito = validarAssinaturaV3(dataUrl ?? "");
   if (!veredito.ok) throw new Error(veredito.motivo ?? "Assinatura inválida.");
-
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-
-  if (statusV3FromOS(payload) !== "entregue") {
-    throw new Error("A assinatura de retirada só pode ser registrada após a entrega.");
-  }
-
-  const now = nowIso();
   const operador = operadorLabel(session);
-  const entregaV3 = (payload.entregaV3 && typeof payload.entregaV3 === "object" ? payload.entregaV3 : {}) as Record<string, unknown>;
-  const recebidoPor =
-    (por ?? "").trim() || (typeof entregaV3.recebidoPor === "string" ? entregaV3.recebidoPor : "") || (payload as unknown as OrdemServico).cliente?.nome || "Cliente";
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const next: OSPayloadFull = {
-    ...payload,
-    entregaV3: { ...entregaV3, assinaturaRetirada: { dataUrl: dataUrl.trim(), criadoEm: now, por: recebidoPor } },
-    timeline: [...timeline, makeEvento("observacao", operador, "Assinatura de retirada capturada.", { evento: "assinatura_retirada_capturada" })],
-    atualizadoEm: now,
-  } as OSPayloadFull;
 
-  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+  // Leitura, decisão e gravação sob a MESMA trava por OS da entrega, da correção de
+  // datas e dos writers de pagamento: o patch parte do estado mais recente — nunca
+  // regrava um snapshot antigo por cima de uma correção concorrente.
+  const next = await comOSTravadaV3(sid, id, async (tx, row) => {
+    const payload = row.payload;
+    if (statusV3FromOS(payload) !== "entregue") {
+      throw new Error("A assinatura de retirada só pode ser registrada após a entrega.");
+    }
+    const now = nowIso();
+    const entregaV3 = (payload.entregaV3 && typeof payload.entregaV3 === "object" ? payload.entregaV3 : {}) as Record<string, unknown>;
+    const recebidoPor =
+      (por ?? "").trim() || (typeof entregaV3.recebidoPor === "string" ? entregaV3.recebidoPor : "") || (payload as unknown as OrdemServico).cliente?.nome || "Cliente";
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const proximo: OSPayloadFull = {
+      ...payload,
+      entregaV3: { ...entregaV3, assinaturaRetirada: { dataUrl: dataUrl.trim(), criadoEm: now, por: recebidoPor } },
+      timeline: [...timeline, makeEvento("observacao", operador, "Assinatura de retirada capturada.", { evento: "assinatura_retirada_capturada" })],
+      atualizadoEm: now,
+    } as OSPayloadFull;
+    await tx.ordemServico.update({ where: { id }, data: { payload: proximo as unknown as Prisma.InputJsonValue } });
+    return proximo;
+  });
   revalidatePath("/dashboard/operacoes-v3");
   revalidatePath("/dashboard/operacoes-v4-preview");
   return next as unknown as OrdemServico;
@@ -468,41 +468,41 @@ export async function adicionarFotoSaidaV3(
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar esta OS.");
   if (!guard.ok) throw new Error(guard.error);
 
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-  if (statusV3FromOS(payload) === "cancelada") {
-    throw new Error("Não é possível adicionar foto de saída em OS cancelada.");
-  }
-
-  const atuais = lerFotosSaidaV3(payload as unknown as OrdemServico);
-  const veredito = validarFotoEntradaV3(input?.dataUrl ?? "", atuais.length);
-  if (!veredito.ok) throw new Error(veredito.motivo ?? "Foto inválida.");
-
   const categoria: CategoriaFotoSaidaV3 =
     input?.categoria === "acessorio" || input?.categoria === "outro" || input?.categoria === "reparado"
       ? input.categoria
       : "reparado";
-  const now = nowIso();
-  const foto: FotoSaidaV3 = {
-    id: fotoSaidaId(),
-    categoria,
-    nome: (input?.nome ?? "").trim() || undefined,
-    dataUrl: input.dataUrl.trim(),
-    tamanho: bytesDeDataUrlV3(input.dataUrl),
-    criadoEm: now,
-  };
-  const entregaV3 = payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
   const operador = operadorLabel(session);
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const next: OSPayloadFull = {
-    ...payload,
-    entregaV3: { ...entregaV3, fotosSaida: [...atuais, foto] },
-    timeline: [...timeline, makeEvento("anexo_adicionado", operador, `Foto de saída adicionada (${categoria}).`, { evento: "foto_saida_adicionada", categoria, fotoId: foto.id })],
-    atualizadoEm: now,
-  } as OSPayloadFull;
-  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+
+  // Mesma trava por OS da entrega/correção: limite de fotos e patch sobre o estado atual.
+  const next = await comOSTravadaV3(sid, id, async (tx, row) => {
+    const payload = row.payload;
+    if (statusV3FromOS(payload) === "cancelada") {
+      throw new Error("Não é possível adicionar foto de saída em OS cancelada.");
+    }
+    const atuais = lerFotosSaidaV3(payload as unknown as OrdemServico);
+    const veredito = validarFotoEntradaV3(input?.dataUrl ?? "", atuais.length);
+    if (!veredito.ok) throw new Error(veredito.motivo ?? "Foto inválida.");
+    const now = nowIso();
+    const foto: FotoSaidaV3 = {
+      id: fotoSaidaId(),
+      categoria,
+      nome: (input?.nome ?? "").trim() || undefined,
+      dataUrl: input.dataUrl.trim(),
+      tamanho: bytesDeDataUrlV3(input.dataUrl),
+      criadoEm: now,
+    };
+    const entregaV3 = payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const proximo: OSPayloadFull = {
+      ...payload,
+      entregaV3: { ...entregaV3, fotosSaida: [...atuais, foto] },
+      timeline: [...timeline, makeEvento("anexo_adicionado", operador, `Foto de saída adicionada (${categoria}).`, { evento: "foto_saida_adicionada", categoria, fotoId: foto.id })],
+      atualizadoEm: now,
+    } as OSPayloadFull;
+    await tx.ordemServico.update({ where: { id }, data: { payload: proximo as unknown as Prisma.InputJsonValue } });
+    return proximo;
+  });
   revalidatePath("/dashboard/operacoes-v3");
   revalidatePath("/dashboard/operacoes-v4-preview");
   return next as unknown as OrdemServico;
@@ -519,27 +519,27 @@ export async function removerFotoSaidaV3(storeId: string, osId: string, fotoId: 
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar esta OS.");
   if (!guard.ok) throw new Error(guard.error);
 
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-
-  const atuais = lerFotosSaidaV3(payload as unknown as OrdemServico);
   const fid = (fotoId ?? "").trim();
-  const alvo = atuais.find((f) => f.id === fid);
-  if (!alvo) throw new Error("Foto de saída não encontrada nesta OS.");
-
-  const now = nowIso();
-  const entregaV3 = payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
   const operador = operadorLabel(session);
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const next: OSPayloadFull = {
-    ...payload,
-    entregaV3: { ...entregaV3, fotosSaida: atuais.filter((f) => f.id !== fid) },
-    timeline: [...timeline, makeEvento("anexo_removido", operador, `Foto de saída removida (${alvo.categoria}).`, { evento: "foto_saida_removida", categoria: alvo.categoria, fotoId: fid })],
-    atualizadoEm: now,
-  } as OSPayloadFull;
-  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+
+  // Mesma trava por OS da entrega/correção: remove só a foto pedida do estado atual.
+  const next = await comOSTravadaV3(sid, id, async (tx, row) => {
+    const payload = row.payload;
+    const atuais = lerFotosSaidaV3(payload as unknown as OrdemServico);
+    const alvo = atuais.find((f) => f.id === fid);
+    if (!alvo) throw new Error("Foto de saída não encontrada nesta OS.");
+    const now = nowIso();
+    const entregaV3 = payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const proximo: OSPayloadFull = {
+      ...payload,
+      entregaV3: { ...entregaV3, fotosSaida: atuais.filter((f) => f.id !== fid) },
+      timeline: [...timeline, makeEvento("anexo_removido", operador, `Foto de saída removida (${alvo.categoria}).`, { evento: "foto_saida_removida", categoria: alvo.categoria, fotoId: fid })],
+      atualizadoEm: now,
+    } as OSPayloadFull;
+    await tx.ordemServico.update({ where: { id }, data: { payload: proximo as unknown as Prisma.InputJsonValue } });
+    return proximo;
+  });
   revalidatePath("/dashboard/operacoes-v3");
   revalidatePath("/dashboard/operacoes-v4-preview");
   return next as unknown as OrdemServico;

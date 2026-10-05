@@ -28,8 +28,10 @@ import {
   campoAgoraV3,
   campoDeDataLidaV3,
   campoVazioV3,
+  esperadoCampoDataV3,
   formatarDataOperacionalV3,
   hojeNaLojaV3,
+  intencaoPrevisaoConversaoV3,
   lerDatasOSV3,
   type CampoDataOperacionalV3,
 } from "@/lib/operacoes-v3/datas-operacionais-model";
@@ -137,23 +139,26 @@ function ConverterOrcamentoPanel({ v }: { v: V4Vals }) {
   // informa a entrada REAL (nunca presumida pela data da proposta).
   const [entradaCampo, setEntradaCampo] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
   // A previsão já gravada vem preenchida: é a promessa que será preservada (e conferida contra a entrada).
-  const previsaoGravada = (): CampoDataOperacionalV3 => {
-    const p = lerDatasOSV3(v.realOS).previsao;
-    return p ? campoDeDataLidaV3(p) : campoVazioV3();
-  };
+  // `previsaoVista` é o valor que o operador viu — vai junto na conversão (CAS no servidor).
+  const gravada = lerDatasOSV3(v.realOS).previsao;
+  const assinaturaGravada = gravada ? esperadoCampoDataV3(gravada.iso, gravada.precisao) : "";
+  const previsaoGravada = (): CampoDataOperacionalV3 => (gravada ? campoDeDataLidaV3(gravada) : campoVazioV3());
   const [previsaoCampo, setPrevisaoCampo] = useState<CampoDataOperacionalV3>(previsaoGravada);
+  const [previsaoVista, setPrevisaoVista] = useState(assinaturaGravada);
   const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
   const entradaRef = useRef<HTMLInputElement>(null);
   const previsaoRef = useRef<HTMLInputElement>(null);
   const osKey = v.selectedOsId ?? "";
   const realId = (v.realOS as { id?: string } | null)?.id ?? "";
+  // Outra OS, ou a previsão gravada mudou (ex.: "Corrigir datas"): o painel recomeça do valor atual.
   useEffect(() => {
     setEntradaCampo(campoAgoraV3());
     setPrevisaoCampo(previsaoGravada());
+    setPrevisaoVista(assinaturaGravada);
     setErrosDatas({});
     setErro(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [osKey, realId]);
+  }, [osKey, realId, assinaturaGravada]);
   if (!comercial || comercial.tipo !== "orcamento_pre_os" || comercial.statusComercial === "convertido" || !aprovado) return null;
   const datasOS = lerDatasOSV3(v.realOS);
   const entradaRegistrada = datasOS.entrada;
@@ -232,7 +237,11 @@ function ConverterOrcamentoPanel({ v }: { v: V4Vals }) {
             await converterOrcamentoEmOSV3(sid, osId, {
               recebidoPor,
               ...(entradaRegistrada || !datas.entrada ? {} : { dataEntrada: datas.entrada }),
-              ...(datas.previsao ? { previsaoEntrega: datas.previsao.iso, previsaoEntregaMeta: datas.previsao.meta } : {}),
+              // Preservar (igual ao visto), trocar ou remover (campo limpo) — sempre com a previsão vista.
+              ...intencaoPrevisaoConversaoV3(
+                previsaoVista,
+                datas.previsao ? { iso: datas.previsao.iso, meta: datas.previsao.meta ?? null } : null,
+              ),
               localFisico: "balcao",
               prioridade: "media",
             });

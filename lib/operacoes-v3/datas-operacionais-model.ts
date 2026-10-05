@@ -359,6 +359,21 @@ export function esperadoCampoDataV3(iso: string, precisao: string | undefined): 
   return precisao === "dia" ? `${iso}|dia` : iso;
 }
 
+/**
+ * Intenção sobre a previsão ao converter o orçamento em OS, a partir do que o
+ * operador VIU (`vista`, no formato de `esperadoCampoDataV3`) e do campo: mesmo
+ * valor → preserva (nada é enviado); outro valor → troca; vazio com previsão
+ * vista → remove. A previsão vista vai sempre junto (CAS no servidor).
+ */
+export function intencaoPrevisaoConversaoV3(
+  vista: string,
+  campo: { iso: string; meta: DataOperacionalMetaV3 | null } | null,
+): { previsaoEsperada: string; previsaoEntrega?: string; previsaoEntregaMeta?: DataOperacionalMetaV3; removerPrevisao?: true } {
+  if (!campo) return vista ? { previsaoEsperada: vista, removerPrevisao: true } : { previsaoEsperada: vista };
+  if (esperadoCampoDataV3(campo.iso, campo.meta?.precisao) === vista) return { previsaoEsperada: vista };
+  return { previsaoEsperada: vista, previsaoEntrega: campo.iso, ...(campo.meta ? { previsaoEntregaMeta: campo.meta } : {}) };
+}
+
 /** Regra do prazo interno padrão da Nova OS (sem previsão combinada): cadastro + 2 dias. */
 export const PRAZO_INTERNO_PADRAO_DIAS_V3 = 2;
 
@@ -366,6 +381,41 @@ export const PRAZO_INTERNO_PADRAO_DIAS_V3 = 2;
 export function prazoInternoPadraoIsoV3(cadastroIso: unknown): string {
   const d = dataValida(cadastroIso);
   return d ? new Date(d.getTime() + PRAZO_INTERNO_PADRAO_DIAS_V3 * 86_400_000).toISOString() : "";
+}
+
+/**
+ * SLA depois de REMOVER a previsão combinada. O espelho da previsão removida não
+ * vira "prazo interno" (seria a promessa apagada com outro nome): volta à regra
+ * padrão da Nova OS (cadastro + 2 dias). Um prazo interno próprio (não
+ * espelhado) continua valendo como regra interna.
+ */
+export function slaSemPrevisaoV3(
+  slaAtual: Record<string, unknown> | null | undefined,
+  removida: { iso: string; meta?: DataOperacionalMetaV3 | null } | null | undefined,
+  cadastroIso: unknown,
+): Record<string, unknown> {
+  const sla: Record<string, unknown> = { ...(slaAtual ?? {}) };
+  const prazoTxt = typeof sla.prazo === "string" ? sla.prazo.trim() : "";
+  const prazoAtual = Date.parse(prazoTxt);
+  const removidaIso = (removida?.iso ?? "").trim();
+  const espelho =
+    sla.origemV3 === "informada" ||
+    (!!removidaIso &&
+      Number.isFinite(prazoAtual) &&
+      (prazoAtual === Date.parse(removidaIso) || prazoAtual === Date.parse(prazoSlaDaPrevisaoV3({ iso: removidaIso, meta: removida?.meta }))));
+  if (espelho) {
+    const padrao = prazoInternoPadraoIsoV3(cadastroIso);
+    if (padrao) {
+      sla.prazo = padrao;
+      sla.origemV3 = "automatico";
+    } else {
+      delete sla.prazo;
+      delete sla.origemV3;
+    }
+  } else if (prazoTxt) {
+    sla.origemV3 = "automatico";
+  }
+  return sla;
 }
 
 const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;

@@ -15,6 +15,7 @@ import {
   formatarDataOperacionalV3,
   formatarDiaDeIsoNaLojaV3,
   horarioAmbiguoLojaV3,
+  intencaoPrevisaoConversaoV3,
   isoInstanteValidoV3,
   lerDataOperacionalV3,
   lerDatasOSV3,
@@ -24,6 +25,7 @@ import {
   montarDataOperacionalV3,
   paredeLojaParaIsoV3,
   previsaoVencidaV3,
+  slaSemPrevisaoV3,
   somarDiasCivisV3,
   validadeVencidaV3,
   validarDataEntregaV3,
@@ -382,5 +384,35 @@ describe("R5: horário de verão histórico (America/Sao_Paulo) — nada é esco
     expect(fimDoDiaLojaIsoV3("2026-10-05")).toBe("2026-10-06T02:59:59.999Z");
     expect(diaNaLojaV3(fimDoDiaLojaIsoV3("2018-02-17"))).toBe("2018-02-17");
     expect(fimDoDiaLojaIsoV3("2026-02-30")).toBe("");
+  });
+});
+
+describe("R7: conversão — intenção explícita sobre a previsão e SLA ao remover", () => {
+  const so = (dia: string) => { const r = montarDataOperacionalV3({ dia, hora: "" }); if (!r.ok) throw new Error(r.mensagem); return r.valor; };
+  it("igual ao visto → preserva (nada enviado); outro valor → troca; campo limpo com previsão vista → remove", () => {
+    const p1 = so("2026-10-10");
+    const vista = `${p1.iso}|dia`;
+    expect(intencaoPrevisaoConversaoV3(vista, p1)).toEqual({ previsaoEsperada: vista });
+    const p2 = so("2026-10-12");
+    expect(intencaoPrevisaoConversaoV3(vista, p2)).toEqual({ previsaoEsperada: vista, previsaoEntrega: p2.iso, previsaoEntregaMeta: p2.meta });
+    expect(intencaoPrevisaoConversaoV3(vista, null)).toEqual({ previsaoEsperada: vista, removerPrevisao: true });
+    // Sem previsão vista: vazio não remove nada; preenchido é uma previsão nova.
+    expect(intencaoPrevisaoConversaoV3("", null)).toEqual({ previsaoEsperada: "" });
+    expect(intencaoPrevisaoConversaoV3("", p2)).toMatchObject({ previsaoEsperada: "", previsaoEntrega: p2.iso });
+    // Mesmo instante com outra precisão (12:00 explícito) também é troca.
+    const meioDia = montarDataOperacionalV3({ dia: "2026-10-10", hora: "12:00" });
+    if (!meioDia.ok) throw new Error(meioDia.mensagem);
+    expect(intencaoPrevisaoConversaoV3(vista, meioDia.valor).previsaoEntrega).toBe(p1.iso);
+  });
+
+  it("SLA sem previsão: espelho volta ao prazo interno padrão (cadastro + 2 dias); prazo próprio fica como interno", () => {
+    const p1 = so("2026-10-10");
+    const cadastro = "2026-10-01T13:00:00.000Z";
+    const espelho = slaSemPrevisaoV3({ prazo: fimDoDiaLojaIsoV3("2026-10-10"), status: "ok", origemV3: "informada" }, p1, cadastro);
+    expect(espelho).toEqual({ prazo: "2026-10-03T13:00:00.000Z", status: "ok", origemV3: "automatico" });
+    const espelhoLegado = slaSemPrevisaoV3({ prazo: p1.iso, status: "ok" }, { iso: p1.iso }, cadastro);
+    expect(espelhoLegado.prazo).toBe("2026-10-03T13:00:00.000Z");
+    const proprio = slaSemPrevisaoV3({ prazo: "2026-10-20T15:00:00.000Z", status: "ok" }, p1, cadastro);
+    expect(proprio).toEqual({ prazo: "2026-10-20T15:00:00.000Z", status: "ok", origemV3: "automatico" });
   });
 });
