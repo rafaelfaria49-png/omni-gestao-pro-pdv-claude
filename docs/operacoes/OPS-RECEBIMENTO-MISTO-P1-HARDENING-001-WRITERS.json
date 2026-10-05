@@ -1,0 +1,677 @@
+{
+  "goal": "OPS-RECEBIMENTO-MISTO-P1-HARDENING-001",
+  "status": "FINAL_SEMANTIC_INVENTORY",
+  "scope": "lib/operacoes-v3, lib/operacoes-v4, lib/operacoes, lib/importador-avancado, app/actions, app/api/ops, components (clientes de actions), scripts/*.mjs + importar_backup.mjs; ordemServico.(update|updateMany|upsert|create|createMany|delete*) e SQL cru em ordens_servico",
+  "staleWritersRemaining": 0,
+  "counts": {
+    "SAFE_TRANSACTIONAL": 65,
+    "READ_ONLY": 9,
+    "SAFE_TRANSACTIONAL+CAS": 3,
+    "SAFE_NEW_ROW_TX": 1,
+    "DELEGATES_SAFE": 13,
+    "INSERT_ONLY": 1,
+    "PURE": 1,
+    "NOT_PAYLOAD": 1,
+    "NOT_REACHABLE": 1
+  },
+  "lockOrder": {
+    "pagamento_normal_receberOSV3": "advisory(OS) -> sessao FOR SHARE -> OS FOR UPDATE -> titulo",
+    "estorno": "advisory(OS) -> sessao FOR SHARE -> OS FOR UPDATE -> titulo",
+    "a_prazo_lancarOSAPrazoV3": "advisory(OS) -> OS FOR UPDATE -> titulo",
+    "misto_decidir_executar": "advisory(OS) -> sessao FOR SHARE (so com dinheiro) -> OS FOR UPDATE -> titulo FOR UPDATE",
+    "operacional_e_importacao": "OS FOR UPDATE (folha); depois apenas linhas que ninguem trava antes da OS (produto/estoque/itens, garantias); titulo so lido",
+    "recebimento_lote_financeiro_e_caixa": "nunca trava OS",
+    "ciclo": "nenhum: toda aresta que termina em OS parte de advisory/sessao; nenhum caminho trava OS e depois advisory/sessao; nenhum writer segura duas OS"
+  },
+  "rows": [
+    {
+      "file": "lib/operacoes-v3/atendimento-rapido-actions.ts",
+      "function": "mutarAtendimentoRapidoV3",
+      "line": 166,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/atendimento-rapido-actions.ts",
+      "function": "concluirAtendimentoRapidoV3",
+      "line": 176,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/atendimento-rapido-actions.ts",
+      "function": "cancelarAtendimentoRapidoComErroV3",
+      "line": 210,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/backfill-entregas.ts",
+      "function": "carregarEntregues",
+      "line": 150,
+      "classification": "READ_ONLY",
+      "note": "somente leitura (decisão/auth); nenhuma gravação de payload a partir desta leitura"
+    },
+    {
+      "file": "lib/operacoes-v3/backfill-entregas.ts",
+      "function": "runBackfill",
+      "line": 245,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/comercial-pre-os-actions.ts",
+      "function": "mutar",
+      "line": 47,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/comercial-pre-os-actions.ts",
+      "function": "marcarOrcamentoPreOsV3",
+      "line": 78,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/comercial-pre-os-actions.ts",
+      "function": "atualizarStatusComercialV3",
+      "line": 126,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/comercial-pre-os-actions.ts",
+      "function": "converterOrcamentoEmOSV3",
+      "line": 167,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/dados-basicos-actions.ts",
+      "function": "salvarDadosBasicosOSV3",
+      "line": 68,
+      "classification": "SAFE_TRANSACTIONAL+CAS",
+      "note": "travarLinhaOSV3 antes da releitura; updateMany condicionado a updatedAt (CAS existente preservado)"
+    },
+    {
+      "file": "lib/operacoes-v3/entrega-actions.ts",
+      "function": "registrarEntregaV3",
+      "line": 79,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "mutarPayloadOSV3; status/guard financeiro decididos sobre o latest; título lido sem trava (writers de pagamento travam a OS antes do título)"
+    },
+    {
+      "file": "lib/operacoes-v3/entrega-actions.ts",
+      "function": "salvarAssinaturaRetiradaV3",
+      "line": 292,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/entrega-actions.ts",
+      "function": "adicionarFotoSaidaV3",
+      "line": 345,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/entrega-actions.ts",
+      "function": "removerFotoSaidaV3",
+      "line": 403,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/estoque-sync.ts",
+      "function": "registrarErroEstoqueV3",
+      "line": 30,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/estoque-sync.ts",
+      "function": "consumirEstoqueOSV3",
+      "line": 76,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/estoque-sync.ts",
+      "function": "restaurarEstoqueOSV3",
+      "line": 105,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/garantia-actions.ts",
+      "function": "mutar",
+      "line": 54,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/garantia-actions.ts",
+      "function": "salvarGarantiaOSV3",
+      "line": 73,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/garantia-actions.ts",
+      "function": "registrarImpressaoDocumentoV3",
+      "line": 124,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-actions.ts",
+      "function": "gravarSobTrava",
+      "line": 114,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-actions.ts",
+      "function": "salvarOrcamentoV3",
+      "line": 163,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-actions.ts",
+      "function": "corrigirOrcamentoV3",
+      "line": 242,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-actions.ts",
+      "function": "enviarOrcamentoV3",
+      "line": 300,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-actions.ts",
+      "function": "aprovarOrcamentoV3",
+      "line": 347,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-actions.ts",
+      "function": "recusarOrcamentoV3",
+      "line": 415,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-actions.ts",
+      "function": "registrarEnvioOrcamento",
+      "line": 455,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "function": "lerOSTravadaV3",
+      "line": 125,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "function": "carregarOS",
+      "line": 186,
+      "classification": "READ_ONLY",
+      "note": "somente leitura (decisão/auth); nenhuma gravação de payload a partir desta leitura"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "function": "replayRecebimentoOSV3",
+      "line": 294,
+      "classification": "READ_ONLY",
+      "note": "somente leitura (decisão/auth); nenhuma gravação de payload a partir desta leitura"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "function": "receberOSV3",
+      "line": 364,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "function": "estornarRecebimentoOSV3",
+      "line": 600,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "function": "lancarOSAPrazoV3",
+      "line": 719,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "function": "registrarRecebimentoMistoOSV3",
+      "line": 865,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/producao-actions.ts",
+      "function": "mutar",
+      "line": 65,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/producao-actions.ts",
+      "function": "atribuirTecnicoV3",
+      "line": 90,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/producao-actions.ts",
+      "function": "definirPrioridadeV3",
+      "line": 137,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/producao-actions.ts",
+      "function": "definirLocalFisicoV3",
+      "line": 163,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/producao-actions.ts",
+      "function": "adicionarObservacaoInternaV3",
+      "line": 206,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/producao-actions.ts",
+      "function": "salvarChecklistTecnicoV3",
+      "line": 241,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/prova-entrada-actions.ts",
+      "function": "persistirPatchProva",
+      "line": 99,
+      "classification": "SAFE_TRANSACTIONAL+CAS",
+      "note": "travarLinhaOSV3 antes da releitura; updateMany por updatedAt"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "function": "travarOS",
+      "line": 186,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "function": "travarParaDecidir",
+      "line": 195,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "function": "montarReplay",
+      "line": 247,
+      "classification": "READ_ONLY",
+      "note": "somente leitura (decisão/auth); nenhuma gravação de payload a partir desta leitura"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "function": "gravarRecusaTerminal",
+      "line": 353,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "function": "decidirRecebimentoMistoOSV3",
+      "line": 378,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "function": "executarRecebimentoMistoOSV3",
+      "line": 420,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "function": "executarSobATrava",
+      "line": 436,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/retorno-actions.ts",
+      "function": "carregar",
+      "line": 44,
+      "classification": "READ_ONLY",
+      "note": "somente leitura (decisão/auth); nenhuma gravação de payload a partir desta leitura"
+    },
+    {
+      "file": "lib/operacoes-v3/retorno-actions.ts",
+      "function": "mutar",
+      "line": 64,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/retorno-actions.ts",
+      "function": "abrirRetornoV3",
+      "line": 89,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "decisão (retorno aberto?) sobre leitura prévia; GRAVAÇÕES via mutarPayloadOSV3 sobre o latest, retorno mesclado por id. Residual P3 fora do P1-B: duplo envio concorrente pode abrir 2 atendimentos de retorno"
+    },
+    {
+      "file": "lib/operacoes-v3/retorno-actions.ts",
+      "function": "finalizarRetornoV3",
+      "line": 219,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/retorno-auto-close-actions.ts",
+      "function": "finalizarRetornoPorEntregaVinculadaV3",
+      "line": 33,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/status-actions.ts",
+      "function": "aplicarTransicaoStatusV3",
+      "line": 77,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/workspace-actions.ts",
+      "function": "mutar",
+      "line": 60,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/workspace-actions.ts",
+      "function": "salvarChecklistEntradaV3",
+      "line": 80,
+      "classification": "SAFE_TRANSACTIONAL+CAS",
+      "note": "travarLinhaOSV3 antes da releitura; updateMany por updatedAt"
+    },
+    {
+      "file": "lib/operacoes-v3/workspace-actions.ts",
+      "function": "salvarSenhaAcessoriosV3",
+      "line": 132,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/workspace-actions.ts",
+      "function": "salvarDiagnosticoV3",
+      "line": 156,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "createOS",
+      "line": 186,
+      "classification": "SAFE_NEW_ROW_TX",
+      "note": "create + payload definitivo na MESMA transação (corrigido nesta rodada): ninguém vê/grava a OS com payload provisório"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "updateOSStatus",
+      "line": 245,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "updateOSPayload",
+      "line": 405,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "mutarPayloadOSV3; patch aplicado ao latest; timeline só anexa; campos financeiros do servidor (pagamentoV3/aPrazoV3/recebimentoMistoRecusasV3) removidos do patch (corrigido nesta rodada). Campo editado no patch = última escrita vence NO PRÓPRIO campo (intencional)"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "applyOperacaoHubAcao",
+      "line": 536,
+      "classification": "DELEGATES_SAFE",
+      "note": "decide sobre leitura prévia e grava via updateOSPayload (latest sob trava; transição revalidada no latest). Residual P3 fora do P1-B: orcamento editado a partir de leitura prévia = last-writer-wins no próprio campo orcamento"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "validateOrcamentoEstoqueAction",
+      "line": 820,
+      "classification": "READ_ONLY",
+      "note": "somente leitura (decisão/auth); nenhuma gravação de payload a partir desta leitura"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "gerarCobrancaOSAction",
+      "line": 874,
+      "classification": "DELEGATES_SAFE",
+      "note": "grava faturamento* + timeline via updateOSPayload"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "salvarChecklistTecnicoOperacaoAction",
+      "line": 984,
+      "classification": "DELEGATES_SAFE",
+      "note": "via updateOSPayload"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "confirmarRetiradaOperacaoAction",
+      "line": 1011,
+      "classification": "DELEGATES_SAFE",
+      "note": "via updateOSPayload"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "registrarDocumentoImpressoAction",
+      "line": 1044,
+      "classification": "DELEGATES_SAFE",
+      "note": "via updateOSPayload"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "salvarPreferenciaGarantiaOperacionalAction",
+      "line": 1063,
+      "classification": "DELEGATES_SAFE",
+      "note": "via updateOSPayload"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "criarGarantiaOperacionalManualAction",
+      "line": 1079,
+      "classification": "DELEGATES_SAFE",
+      "note": "via updateOSPayload"
+    },
+    {
+      "file": "app/api/ops/ordens/import/route.ts",
+      "function": "PUT",
+      "line": 80,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "CORRIGIDO nesta rodada: aplicarImportacaoEmOSExistenteV3 (mutarPayloadOSV3) nos 2 caminhos (casada e id existente); patch intencional; estado do servidor (id/storeId/codigo/criadoEm/timeline/*V3/*V4/estoque*) nunca vem do arquivo; com estado financeiro/terminal, valores/status (payload e colunas) protegidos; id de OUTRA loja nunca tocado (cria OS nova). PG: sequencial + concorrente nas 2 ordens"
+    },
+    {
+      "file": "app/api/ops/ordens/route.ts",
+      "function": "GET",
+      "line": 17,
+      "classification": "READ_ONLY",
+      "note": "somente leitura (decisão/auth); nenhuma gravação de payload a partir desta leitura"
+    },
+    {
+      "file": "app/api/ops/ordens/route.ts",
+      "function": "PUT",
+      "line": 58,
+      "classification": "INSERT_ONLY",
+      "note": "migração one-shot só com loja sem OS (409 caso contrário); deleteMany removido nesta rodada (TOCTOU não apaga OS criada entre guard e gravação)"
+    },
+    {
+      "file": "lib/operacoes/adapters/os-estoque.ts",
+      "function": "consumeEstoqueFromOS",
+      "line": 181,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes/adapters/os-estoque.ts",
+      "function": "restoreEstoqueFromOS",
+      "line": 300,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes/adapters/os-estoque.ts",
+      "function": "applyEstoqueDelta",
+      "line": 423,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes/services/timeline-service.ts",
+      "function": "appendTimelineEvent",
+      "line": 25,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/importador-avancado/persistidor.ts",
+      "function": "persistirOS",
+      "line": 680,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "CORRIGIDO nesta rodada: OS existente via aplicarImportacaoEmOSExistenteV3 (mesma regra da rota); criação inalterada. PG: sequencial + concorrente nas 2 ordens"
+    },
+    {
+      "file": "lib/operacoes-v3/os-payload-lock.ts",
+      "function": "lerOSTravadaV3",
+      "line": 54,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/os-payload-lock.ts",
+      "function": "mutarPayloadOSV3",
+      "line": 98,
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "FOR UPDATE da OS (loja+id) antes da leitura do payload; mutação sobre o latest (spread: desconhecidos/timeline preservados); UPDATE na mesma tx"
+    },
+    {
+      "file": "lib/operacoes-v3/os-payload-import.ts",
+      "function": "aplicarImportacaoEmOSExistenteV3",
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "NOVO: patch de importação sob a primitiva; checa título da OS dentro da tx"
+    },
+    {
+      "file": "lib/operacoes-v3/os-payload-lock.ts",
+      "function": "semCamposFinanceirosDoServidorV3",
+      "classification": "PURE",
+      "note": "NOVO: remove pagamentoV3/aPrazoV3/recebimentoMistoRecusasV3 de patch genérico"
+    },
+    {
+      "file": "scripts/lib/os-payload-lock.mjs",
+      "function": "mutarPayloadOS / aplicarImportacaoEmOSExistente",
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "NOVO: mesma regra para scripts .mjs fora do runtime Next; paridade com TS em os-payload-import.test.ts; PG nas 2 ordens"
+    },
+    {
+      "file": "scripts/import-os-csv.mjs",
+      "function": "main (update)",
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "CORRIGIDO: script manual (--exec) gravava o payload do CSV inteiro; agora aplicarImportacaoEmOSExistente"
+    },
+    {
+      "file": "importar_backup.mjs",
+      "function": "upsertOsPrisma",
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "CORRIGIDO: script manual; OS existente via aplicarImportacaoEmOSExistente"
+    },
+    {
+      "file": "scripts/atendimento-rapido-orfas.mjs",
+      "function": "main (--cancel)",
+      "classification": "SAFE_TRANSACTIONAL",
+      "note": "CORRIGIDO: cancelamento lógico sobre o latest sob trava, re-verificando órfã (sem pagamento/a prazo/caixaOperacao/status final) dentro da tx"
+    },
+    {
+      "file": "scripts/migrate-loja-ids.mjs",
+      "function": "main",
+      "classification": "NOT_PAYLOAD",
+      "note": "updateMany só da coluna lojaId; não grava payload"
+    },
+    {
+      "file": "lib/operacoes-v3/nova-os-actions.ts",
+      "function": "criarOSEnterpriseV3",
+      "classification": "DELEGATES_SAFE",
+      "note": "cria via createOS (tx) e grava depois via updateOSPayload"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-envio-actions.ts",
+      "function": "*",
+      "classification": "DELEGATES_SAFE",
+      "note": "grava via enviarOrcamentoV3/registrarEnvioOrcamento (mutarPayloadOSV3)"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-rapido-actions.ts",
+      "function": "*",
+      "classification": "DELEGATES_SAFE",
+      "note": "criarOSEnterpriseV3 + salvarOrcamentoV3 + aplicarTransicaoStatusV3"
+    },
+    {
+      "file": "lib/operacoes-v3/estoque-actions.ts",
+      "function": "*",
+      "classification": "DELEGATES_SAFE",
+      "note": "lê OS para decidir; grava via consumirEstoqueOSV3 (latest sob trava; payload do chamador só define peças)"
+    },
+    {
+      "file": "components/operacoes/lovable/api/os.ts",
+      "function": "*",
+      "classification": "DELEGATES_SAFE",
+      "note": "cliente V2: chama createOS/updateOSPayload com patches por campo; timeline só anexa por id"
+    },
+    {
+      "file": "lib/operacoes-v4/** + components/operacoes-v4-preview/**",
+      "function": "*",
+      "classification": "DELEGATES_SAFE",
+      "note": "V4 não grava OrdemServico diretamente; consome as actions V3 listadas (16 módulos importados)"
+    },
+    {
+      "file": "lib/operacoes-v4/financial-projection-actions.ts",
+      "function": "*",
+      "classification": "READ_ONLY",
+      "note": "findMany para projeção"
+    },
+    {
+      "file": "lib/stores-api-access.ts + lib/whatsapp/ai-conversation-analysis.ts",
+      "function": "*",
+      "classification": "READ_ONLY",
+      "note": "count/aggregate"
+    },
+    {
+      "file": "components/pdv-github-original/**",
+      "function": "*",
+      "classification": "NOT_REACHABLE",
+      "note": "cópia histórica sob components/ (não é rota do App Router nem importada pelo runtime)"
+    }
+  ]
+}

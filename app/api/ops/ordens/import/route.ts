@@ -7,6 +7,8 @@ import type { Prisma, Cliente } from "@/generated/prisma"
 import { docDigitsForDedupe, normalizeNameForMatch } from "@/lib/import-normalize"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { auth } from "@/auth"
+import { TX_PAYLOAD_OS_V3 } from "@/lib/operacoes-v3/os-payload-lock"
+import { aplicarImportacaoEmOSExistenteV3 } from "@/lib/operacoes-v3/os-payload-import"
 
 export const runtime = "nodejs"
 
@@ -154,14 +156,21 @@ export async function PUT(req: Request) {
 
       const defeitoStr = typeof payloadMerged.defeito === "string" ? payloadMerged.defeito.trim() : ""
 
-      if (match) {
-        payloadMerged.id = match.id
-        const updatedRow = await prisma.ordemServico.update({
-          where: { id: match.id },
+      const colunas = {
+        numero: incoming.numero,
+        clienteId,
+        valorTotal,
+        valorBase,
+        equipamento: equipamentoStr,
+        defeito: defeitoStr,
+      }
+      const criar = (tx: Prisma.TransactionClient, id: string) =>
+        tx.ordemServico.create({
           data: {
+            id,
             storeId,
             numero: incoming.numero,
-            payload: payloadMerged as Prisma.InputJsonValue,
+            payload: { ...payloadMerged, id } as Prisma.InputJsonValue,
             clienteId,
             valorTotal,
             valorBase,
@@ -169,41 +178,42 @@ export async function PUT(req: Request) {
             defeito: defeitoStr,
           },
         })
-        const ix = working.findIndex((r) => r.id === match.id)
-        if (ix >= 0) working[ix] = updatedRow
+      const idInformado = typeof o.id === "string" && o.id.trim() ? o.id.trim() : ""
+      const idGerado = () => `os-import-${incoming.numero.replace(/[^a-zA-Z0-9_-]+/g, "-")}-${Date.now()}`
+
+      // OS existente desta loja (por número/documento/nome ou pelo id informado): patch
+      // intencional sobre o payload MAIS RECENTE, sob a trava da linha — nunca o arquivo
+      // inteiro por cima de recusas, espelhos financeiros, timeline ou campos desconhecidos.
+      // Id que pertence a OUTRA loja nunca é tocado: cria uma OS nova nesta loja.
+      const resultado = await prisma.$transaction(async (tx) => {
+        const alvo = match?.id ?? idInformado
+        if (alvo) {
+          const aplicado = await aplicarImportacaoEmOSExistenteV3({
+            tx, storeId, osId: alvo, importado: payloadMerged, colunas, fixarIdNoPayload: true,
+          })
+          if (aplicado) return { tipo: "atualizado" as const, id: alvo, aplicado }
+        }
+        if (idInformado) {
+          const existe = await tx.ordemServico.findUnique({ where: { id: idInformado }, select: { id: true } })
+          if (!existe) return { tipo: "criado" as const, row: await criar(tx, idInformado) }
+        }
+        return { tipo: "criado" as const, row: await criar(tx, idGerado()) }
+      }, TX_PAYLOAD_OS_V3)
+
+      if (resultado.tipo === "atualizado") {
+        const ix = working.findIndex((r) => r.id === resultado.id)
+        const atual = ix >= 0 ? working[ix] : undefined
+        if (atual) {
+          working[ix] = {
+            ...atual,
+            numero: resultado.aplicado.numero ?? atual.numero,
+            payload: resultado.aplicado.payload as Prisma.JsonValue,
+          }
+        }
         updated += 1
         continue
       }
-
-      const id =
-        typeof o.id === "string" && o.id.trim()
-          ? o.id.trim()
-          : `os-import-${incoming.numero.replace(/[^a-zA-Z0-9_-]+/g, "-")}-${Date.now()}`
-      payloadMerged.id = id
-      const row = await prisma.ordemServico.upsert({
-        where: { id },
-        update: {
-          numero: incoming.numero,
-          payload: payloadMerged as Prisma.InputJsonValue,
-          clienteId,
-          valorTotal,
-          valorBase,
-          equipamento: equipamentoStr,
-          defeito: defeitoStr,
-        },
-        create: {
-          id,
-          storeId,
-          numero: incoming.numero,
-          payload: payloadMerged as Prisma.InputJsonValue,
-          clienteId,
-          valorTotal,
-          valorBase,
-          equipamento: equipamentoStr,
-          defeito: defeitoStr,
-        },
-      })
-      working.push(row)
+      working.push(resultado.row)
       created += 1
     }
 

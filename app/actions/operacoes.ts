@@ -32,7 +32,7 @@ import { appendTimelineEvent, makeTimelineEvent } from "@/lib/operacoes/services
 import { toPrismaStatus } from "@/lib/operacoes/services/status-service";
 import { applyApprovedBudgetPolicy } from "@/lib/operacoes/services/orcamento-policy-service";
 import { applyEstoqueDelta, buildEstoqueMovimentosFromOS, consumeEstoqueFromOS, restoreEstoqueFromOS } from "@/lib/operacoes/adapters/os-estoque";
-import { mutarPayloadOSV3, type OSPayloadV3 } from "@/lib/operacoes-v3/os-payload-lock";
+import { mutarPayloadOSV3, semCamposFinanceirosDoServidorV3, TX_PAYLOAD_OS_V3, type OSPayloadV3 } from "@/lib/operacoes-v3/os-payload-lock";
 import {
   normalizeOperacaoStatus,
   prismaStatusToOperacaoStatus,
@@ -200,31 +200,36 @@ export async function createOS(
     atualizadoEm: createdAtIso,
   };
 
-  const created = await prisma.ordemServico.create({
-    data: {
-      storeId,
-      numero: codigo,
-      clienteId: input.clienteId || null,
-      equipamento: `${input.equipamento.marca} ${input.equipamento.modelo}`.trim(),
-      defeito: input.equipamento.defeitoRelatado,
-      valorBase: 0,
-      valorTotal: Number(
-        (input.servicosCatalogo ?? []).reduce((acc, s) => acc + Number(s.valorVenda || 0), 0)
-      ),
-      status: toPrismaStatus(input.status),
-      payload: {} as Prisma.InputJsonValue, // atualizado abaixo com id
-    },
-    select: { id: true, createdAt: true, updatedAt: true },
-  });
+  // Criação + payload definitivo na MESMA transação: nenhum outro writer vê (nem grava em)
+  // a OS com o payload provisório `{}` antes desta gravação.
+  const created = await prisma.$transaction(async (tx) => {
+    const row = await tx.ordemServico.create({
+      data: {
+        storeId,
+        numero: codigo,
+        clienteId: input.clienteId || null,
+        equipamento: `${input.equipamento.marca} ${input.equipamento.modelo}`.trim(),
+        defeito: input.equipamento.defeitoRelatado,
+        valorBase: 0,
+        valorTotal: Number(
+          (input.servicosCatalogo ?? []).reduce((acc, s) => acc + Number(s.valorVenda || 0), 0)
+        ),
+        status: toPrismaStatus(input.status),
+        payload: {} as Prisma.InputJsonValue, // atualizado abaixo com id
+      },
+      select: { id: true, createdAt: true, updatedAt: true },
+    });
 
-  payload.id = created.id;
-  payload.criadoEm = created.createdAt.toISOString();
-  payload.atualizadoEm = created.updatedAt.toISOString();
+    payload.id = row.id;
+    payload.criadoEm = row.createdAt.toISOString();
+    payload.atualizadoEm = row.updatedAt.toISOString();
 
-  await prisma.ordemServico.update({
-    where: { id: created.id },
-    data: { payload: payload as unknown as Prisma.InputJsonValue },
-  });
+    await tx.ordemServico.update({
+      where: { id: row.id },
+      data: { payload: payload as unknown as Prisma.InputJsonValue },
+    });
+    return row;
+  }, TX_PAYLOAD_OS_V3);
 
   void auditOS({
     storeId,
@@ -422,8 +427,9 @@ export async function updateOSPayload(
   }
 
   // O patch é aplicado ao payload MAIS RECENTE, sob a trava da linha da OS: campos fora do
-  // patch (inclusive os financeiros e `recebimentoMistoRecusasV3`) nunca voltam a um snapshot
-  // anterior, e uma timeline montada pelo chamador a partir de uma leitura antiga só ANEXA.
+  // patch nunca voltam a um snapshot anterior; os campos financeiros do servidor
+  // (`pagamentoV3`, `aPrazoV3`, `recebimentoMistoRecusasV3`) nunca vêm do patch; e uma
+  // timeline montada pelo chamador a partir de uma leitura antiga só ANEXA.
   const nextWithPolicy = await mutarPayloadOSV3({
     storeId,
     osId,
@@ -436,7 +442,7 @@ export async function updateOSPayload(
       if (!current) throw new Error("OS sem payload (incompatível)");
       const next = mergePayload<OperacoesOSPayload>({
         current: current as unknown as OperacoesOSPayload,
-        patch: mesclarTimelineDoPatch(current, patch),
+        patch: mesclarTimelineDoPatch(current, semCamposFinanceirosDoServidorV3(patch)),
         storeId,
         osId,
         effectiveOperacao,

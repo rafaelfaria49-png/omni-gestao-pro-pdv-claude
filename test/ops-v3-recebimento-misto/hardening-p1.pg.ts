@@ -75,6 +75,10 @@ import { atribuirTecnicoV3, definirLocalFisicoV3, definirPrioridadeV3 } from "@/
 import { hojeLojaV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { buildContaReceberAuditTrail } from "@/lib/financeiro/services/contas-receber-service";
+import { PUT as importPUT } from "@/app/api/ops/ordens/import/route";
+import { persistirImportacao } from "@/lib/importador-avancado/persistidor";
+import { updateOSPayload } from "@/app/actions/operacoes";
+import { aplicarImportacaoEmOSExistente as aplicarImportacaoEmOSExistenteMjs } from "../../scripts/lib/os-payload-lock.mjs";
 import { exigirBancoQA } from "./qa-bootstrap.mjs";
 
 exigirBancoQA(process.env);
@@ -491,6 +495,7 @@ describe("travas: normal × misto × estorno × a prazo × operacional", () => {
         ["prioridade", definirPrioridadeV3(storeId, osId, rodada % 2 ? "alta" : "urgente")],
         ["tecnico", atribuirTecnicoV3(storeId, osId, { nome: `Tecnico QA ${rodada}` })],
         ["local", definirLocalFisicoV3(storeId, osId, "bancada")],
+        ["importacao", importarViaRota(storeId, [{ id: osId, numero: `OS-QA-H-IMP-${SUFIXO}-${rodada}`, defeito: `Importada ${rodada}` }])],
       ];
       await esperarBloqueioNoBanco(15_000, 3);
       soltar();
@@ -501,12 +506,14 @@ describe("travas: normal × misto × estorno × a prazo × operacional", () => {
         expect(ehDeadlockOuTimeout(motivo), `${nome}: ${motivo instanceof Error ? motivo.message : String(motivo)}`).toBe(false);
       }
       // Writers operacionais nunca falham por concorrência.
-      for (const nome of ["prioridade", "tecnico", "local"]) {
+      for (const nome of ["prioridade", "tecnico", "local", "importacao"]) {
         expect(falhas.find(([n]) => n === nome)).toBeUndefined();
       }
       const s = await estado(storeId, osId);
       expect(s.payload.tecnico).toMatchObject({ nome: `Tecnico QA ${rodada}` });
       expect(s.payload.aberturaV3?.recepcao?.localFisico).toBe("bancada");
+      expect(resultados[ops.findIndex(([n]) => n === "importacao")]).toMatchObject({ status: "fulfilled", value: { status: 200, body: { updated: 1 } } });
+      expect(s.payload.defeito).toBe(`Importada ${rodada}`);
       expect(s.payload.campoDesconhecidoQA).toEqual({ preservar: true });
       expect(s.titulos).toHaveLength(1);
       // Coerência do ledger: saldo = 400 − Σ pagamentos líquidos.
@@ -519,5 +526,317 @@ describe("travas: normal × misto × estorno × a prazo × operacional", () => {
       // Cada pagamento novo do histórico corresponde a UMA movimentação (nenhuma em dobro).
       expect(s.movs.length).toBe(s.pagamentos.length);
     }
+  });
+});
+
+// ─── P1-B · importadores de OS × estado do servidor ────────────────────────────
+// `PUT /api/ops/ordens/import` e `importador-avancado` gravavam o arquivo inteiro por cima da OS:
+// a recusa terminal sumia e a MESMA chave depois baixava dinheiro (RED histórico no código do
+// checkpoint: `playwright-report/ops-p1-hardening-001/import-remaining-red.log`).
+
+async function recusarChave(storeId: string) {
+  const sessaoId = await abrirCaixa(storeId);
+  const fechamentoId = await fecharPeriodo(storeId);
+  const input: RegistrarRecebimentoMistoInputV3 = {
+    operacaoId: opId(),
+    sessaoId,
+    pagamentosAgora: [{ forma: "pix", valor: 100 }],
+    saldoAPrazo: { valor: 300, vencimento: VENC },
+    saldoEsperado: 400,
+  };
+  return { input, fechamentoId };
+}
+
+async function importarViaRota(storeId: string, ordens: Payload[]) {
+  const res = await importPUT(
+    new Request("http://127.0.0.1/api/ops/ordens/import", {
+      method: "PUT",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": storeId },
+      body: JSON.stringify({ ordens }),
+    }),
+  );
+  return { status: res.status, body: (await res.json()) as Payload };
+}
+
+async function importarViaPersistidor(storeId: string, numero: string, defeito: string) {
+  return persistirImportacao(
+    storeId,
+    new Map([
+      [
+        "ordens_servicos",
+        [
+          {
+            chave: numero,
+            dominioPrincipal: "ordens_servicos",
+            campos: {
+              "cliente.nome": "Cliente Importado QA",
+              "equipamento.defeito": defeito,
+              "financeiro.valorTotal": 999,
+              "status.situacao": "Entregue",
+            },
+            fontes: ["qa-sintetico.csv"],
+          },
+        ],
+      ],
+    ]),
+    `qa-batch-${SUFIXO}-${++seq}`,
+  );
+}
+
+/** Snapshot STALE de um arquivo de importação: sem estado do servidor, tentando trocar valores. */
+function arquivoStale(antes: Payload, osId: string, defeito: string, extra: Payload = {}): Payload {
+  const arq: Payload = { ...antes, id: osId, defeito, valorTotal: 999, valorServico: 999, status: "aberta", ...extra };
+  delete arq.recebimentoMistoRecusasV3;
+  delete arq.campoDesconhecidoQA;
+  // Tentativas explícitas de sobrescrever estado do servidor pelo arquivo.
+  arq.timeline = [];
+  arq.operacaoStatusV3 = "aberta";
+  arq.pagamentoV3 = { status: "pago", recebido: 400 };
+  return arq;
+}
+
+async function conferirEstadoServidorPreservado(
+  storeId: string,
+  osId: string,
+  K: RegistrarRecebimentoMistoInputV3,
+  fechamentoId: string,
+  /** `false` = a importação serializou ANTES de existir estado financeiro: seus valores valem. */
+  valoresProtegidos = true,
+) {
+  const s = await estado(storeId, osId);
+  const row = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } });
+  expect(s.recusas).toEqual([expect.objectContaining({ operacaoId: K.operacaoId, code: "periodo_fechado" })]);
+  expect(s.payload.campoDesconhecidoQA).toEqual({ preservar: true });
+  expect(s.timeline[0]).toMatchObject({ tipo: "os_criada" });
+  expect(s.payload.operacaoStatusV3).toBe("pronta");
+  expect(s.payload.pagamentoV3).toBeUndefined();
+  expect(s.payload.aberturaV3).toMatchObject({ defeitoRelatado: "Tela quebrada" });
+  if (valoresProtegidos) {
+    // OS com estado financeiro/terminal: valores e status do arquivo não entram.
+    expect(s.payload.valorTotal).toBe(400);
+    expect(s.payload.valorServico).toBeUndefined();
+    expect(s.payload.status).toBe("pronta");
+    expect(Number(row.valorTotal)).toBe(400);
+  } else {
+    // Importação gravou primeiro (OS ainda sem estado financeiro): os valores do arquivo valem.
+    expect(Number(row.valorTotal)).toBe(999);
+  }
+  // Depois: período reaberto, a MESMA chave segue recusada e não grava dinheiro.
+  await prisma.fechamentoFinanceiro.update({ where: { id: fechamentoId }, data: { status: "reaberto" } });
+  expect(await registrarRecebimentoMistoOSV3(storeId, osId, K)).toMatchObject({ ok: false, code: "periodo_fechado", naoRegistrada: true });
+  const depois = await estado(storeId, osId);
+  expect(depois.recusas).toHaveLength(1);
+  expect(depois.titulos).toHaveLength(0);
+  expect(depois.pagamentos).toHaveLength(0);
+  expect(depois.marcadores).toHaveLength(0);
+  expect(depois.caixa).toHaveLength(0);
+  expect(depois.movs).toHaveLength(0);
+  return { s, row };
+}
+
+describe("P1-B · importadores de OS preservam recusa terminal e estado do servidor", () => {
+  it("rota · OS casada pelo número: patch intencional; recusa, timeline, V3, campo desconhecido e valores protegidos", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const { input: K, fechamentoId } = await recusarChave(storeId);
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, K)).toMatchObject({ ok: false, code: "periodo_fechado" });
+    const antes = (await estado(storeId, osId)).payload;
+    const numero = (await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } })).numero!;
+    const r = await importarViaRota(storeId, [arquivoStale(antes, osId, "Defeito importado QA", { numero })]);
+    expect(r).toMatchObject({ status: 200, body: { ok: true, created: 0, updated: 1 } });
+    const { s, row } = await conferirEstadoServidorPreservado(storeId, osId, K, fechamentoId);
+    expect(s.payload.defeito).toBe("Defeito importado QA");
+    expect(row.defeito).toBe("Defeito importado QA");
+    expect(s.payload.id).toBe(osId);
+  });
+
+  it("rota · id existente com número/cliente novos: atualiza a MESMA OS (não cria), sem apagar estado do servidor", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const { input: K, fechamentoId } = await recusarChave(storeId);
+    await registrarRecebimentoMistoOSV3(storeId, osId, K);
+    const antes = (await estado(storeId, osId)).payload;
+    const numeroNovo = `OS-QA-H-NOVO-${SUFIXO}-${++seq}`;
+    const r = await importarViaRota(storeId, [arquivoStale(antes, osId, "Defeito via id", { numero: numeroNovo, cliente: { nome: "Cliente Novo QA" } })]);
+    expect(r).toMatchObject({ status: 200, body: { ok: true, created: 0, updated: 1 } });
+    expect(await prisma.ordemServico.count({ where: { storeId } })).toBe(1);
+    const { s, row } = await conferirEstadoServidorPreservado(storeId, osId, K, fechamentoId);
+    expect(row.numero).toBe(numeroNovo);
+    expect(s.payload.cliente).toEqual({ nome: "Cliente Novo QA" });
+  });
+
+  it("rota · id de OS de OUTRA loja: a OS alheia não é tocada; a importação cria OS nova na loja do pedido", async () => {
+    const lojaA = await novaLoja();
+    const lojaB = await novaLoja();
+    const osA = await novaOS(lojaA);
+    const antes = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osA } });
+    const r = await importarViaRota(lojaB, [{ id: osA, numero: `OS-QA-H-B-${SUFIXO}-${++seq}`, cliente: { nome: "Outro QA" }, defeito: "Invasão" }]);
+    expect(r).toMatchObject({ status: 200, body: { ok: true, created: 1, updated: 0 } });
+    const depois = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osA } });
+    expect(depois.storeId).toBe(lojaA);
+    expect(depois.payload).toEqual(antes.payload);
+    expect(depois.defeito).toBe(antes.defeito);
+    const criadas = await prisma.ordemServico.findMany({ where: { storeId: lojaB } });
+    expect(criadas).toHaveLength(1);
+    expect(criadas[0]!.id).not.toBe(osA);
+    expect((criadas[0]!.payload as Payload).id).toBe(criadas[0]!.id);
+  });
+
+  it("rota · OS sem estado financeiro: importação legítima ainda atualiza valores; estado V3/timeline/desconhecido preservados", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const antes = (await estado(storeId, osId)).payload;
+    const numero = (await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } })).numero!;
+    const r = await importarViaRota(storeId, [arquivoStale(antes, osId, "Defeito legítimo", { numero, valorServico: 500 })]);
+    expect(r).toMatchObject({ status: 200, body: { updated: 1 } });
+    const s = await estado(storeId, osId);
+    const row = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } });
+    expect(s.payload.valorServico).toBe(500);
+    expect(Number(row.valorTotal)).toBe(500);
+    expect(s.payload.status).toBe("aberta");
+    expect(s.payload.operacaoStatusV3).toBe("pronta");
+    expect(s.payload.pagamentoV3).toBeUndefined();
+    expect(s.timeline[0]).toMatchObject({ tipo: "os_criada" });
+    expect(s.payload.campoDesconhecidoQA).toEqual({ preservar: true });
+  });
+
+  it("importador avançado · OS existente pelo número: recusa/timeline/V3/desconhecido preservados; valores e status protegidos", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const { input: K, fechamentoId } = await recusarChave(storeId);
+    await registrarRecebimentoMistoOSV3(storeId, osId, K);
+    const linha = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } });
+    const res = await importarViaPersistidor(storeId, linha.numero!, "Defeito do importador avançado");
+    expect(res.log.filter((l) => l.dominio === "ordens_servicos")).toEqual([expect.objectContaining({ acao: "atualizado" })]);
+    const { s, row } = await conferirEstadoServidorPreservado(storeId, osId, K, fechamentoId);
+    expect(row.defeito).toBe("Defeito do importador avançado");
+    expect(row.status).toBe(linha.status);
+    expect(s.payload.cliente).toMatchObject({ nome: "Cliente Importado QA" });
+    expect(typeof s.payload.importadoEm).toBe("string");
+    expect(s.payload.financeiro).toBeUndefined();
+  });
+
+  const IMPORTADORES = [
+    {
+      nome: "rota",
+      executar: async (storeId: string, osId: string, antes: Payload, numero: string, defeito: string) => {
+        const r = await importarViaRota(storeId, [arquivoStale(antes, osId, defeito, { numero })]);
+        if (r.status !== 200 || r.body.updated !== 1) throw new Error(`import ${r.status} ${JSON.stringify(r.body)}`);
+        return r;
+      },
+    },
+    {
+      nome: "importador_avancado",
+      executar: async (storeId: string, _osId: string, _antes: Payload, numero: string, defeito: string) => {
+        const res = await importarViaPersistidor(storeId, numero, defeito);
+        if (!res.log.some((l) => l.dominio === "ordens_servicos" && l.acao === "atualizado")) throw new Error(JSON.stringify(res.log));
+        return res;
+      },
+    },
+  ] as const;
+
+  for (const ordem of ["importacao_trava_antes_da_recusa", "recusa_trava_antes_da_importacao"] as const) {
+    for (const imp of IMPORTADORES) {
+      it(`concorrente · ${ordem} · ${imp.nome}: as duas gravações sobrevivem; K segue recusada; 0 efeitos financeiros`, async () => {
+        const storeId = await novaLoja();
+        const osId = await novaOS(storeId);
+        const { input: K, fechamentoId } = await recusarChave(storeId);
+        // Arquivo montado ANTES da recusa (stale por construção).
+        const antes = (await estado(storeId, osId)).payload;
+        const numero = (await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } })).numero!;
+        const defeito = `Defeito concorrente ${imp.nome} ${ordem}`;
+        let pImp: Promise<unknown>;
+        let pRecusa: Promise<unknown>;
+        let observado: string;
+        if (ordem === "importacao_trava_antes_da_recusa") {
+          const pausa = armarPausa((p) => p.defeito === defeito || p.importadoEm != null);
+          pImp = imp.executar(storeId, osId, antes, numero, defeito);
+          await pausa.naBarreira;
+          pRecusa = registrarRecebimentoMistoOSV3(storeId, osId, K);
+          observado = await concluiuOuEsperaTrava(pRecusa);
+          pausa.liberar();
+        } else {
+          const pausa = armarPausa(temRecusa(K.operacaoId));
+          pRecusa = registrarRecebimentoMistoOSV3(storeId, osId, K);
+          await pausa.naBarreira;
+          pImp = imp.executar(storeId, osId, antes, numero, defeito);
+          observado = await concluiuOuEsperaTrava(pImp);
+          pausa.liberar();
+        }
+        console.info(`[P1-B import] ${ordem} · ${imp.nome} · concorrente=${observado}`);
+        expect(observado).toBe("esperando_trava");
+        const [rI, rR] = await Promise.allSettled([pImp, pRecusa]);
+        expect(rI.status).toBe("fulfilled");
+        expect(rR).toMatchObject({ status: "fulfilled", value: { ok: false, code: "periodo_fechado", naoRegistrada: true } });
+        const { row } = await conferirEstadoServidorPreservado(storeId, osId, K, fechamentoId, ordem === "recusa_trava_antes_da_importacao");
+        expect(row.defeito).toBe(defeito);
+      });
+    }
+  }
+});
+
+// ─── P1-B · scripts de manutenção (.mjs) e patch genérico da V2 ────────────────
+
+describe("P1-B · scripts de manutenção e updateOSPayload não apagam recusa terminal", () => {
+  for (const ordem of ["script_trava_antes_da_recusa", "recusa_trava_antes_do_script"] as const) {
+    it(`script de importação (.mjs) · ${ordem}: recusa, timeline e desconhecido preservados; K segue recusada`, async () => {
+      const storeId = await novaLoja();
+      const osId = await novaOS(storeId);
+      const { input: K, fechamentoId } = await recusarChave(storeId);
+      const defeito = `Defeito script ${ordem}`;
+      const antes = (await estado(storeId, osId)).payload;
+      const importar = () =>
+        aplicarImportacaoEmOSExistenteMjs(prisma, {
+          storeId,
+          osId,
+          importado: arquivoStale(antes, osId, defeito),
+          colunas: { defeito, valorTotal: 999, valorBase: 999 },
+        });
+      let pImp: Promise<unknown>;
+      let pRecusa: Promise<unknown>;
+      let observado: string;
+      if (ordem === "script_trava_antes_da_recusa") {
+        const pausa = armarPausa((p) => p.defeito === defeito);
+        pImp = importar();
+        await pausa.naBarreira;
+        pRecusa = registrarRecebimentoMistoOSV3(storeId, osId, K);
+        observado = await concluiuOuEsperaTrava(pRecusa);
+        pausa.liberar();
+      } else {
+        const pausa = armarPausa(temRecusa(K.operacaoId));
+        pRecusa = registrarRecebimentoMistoOSV3(storeId, osId, K);
+        await pausa.naBarreira;
+        pImp = importar();
+        observado = await concluiuOuEsperaTrava(pImp);
+        pausa.liberar();
+      }
+      expect(observado).toBe("esperando_trava");
+      const [rI, rR] = await Promise.allSettled([pImp, pRecusa]);
+      expect(rI).toMatchObject({ status: "fulfilled", value: { financeiroProtegido: ordem === "recusa_trava_antes_do_script" } });
+      expect(rR).toMatchObject({ status: "fulfilled", value: { ok: false, code: "periodo_fechado", naoRegistrada: true } });
+      const { s, row } = await conferirEstadoServidorPreservado(storeId, osId, K, fechamentoId, ordem === "recusa_trava_antes_do_script");
+      expect(row.defeito).toBe(defeito);
+      expect(s.payload.defeito).toBe(defeito);
+    });
+  }
+
+  it("updateOSPayload (V2) com patch trazendo campos financeiros do servidor: ignorados; demais campos aplicados", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    // OS no formato da V2 (`payload.id` presente), exigido pelo writer genérico.
+    const base = (await estado(storeId, osId)).payload;
+    await prisma.ordemServico.update({ where: { id: osId }, data: { payload: { ...base, id: osId } as Prisma.InputJsonValue } });
+    const { input: K, fechamentoId } = await recusarChave(storeId);
+    await registrarRecebimentoMistoOSV3(storeId, osId, K);
+    await updateOSPayload(storeId, osId, {
+      notaQA: "patch V2 QA",
+      recebimentoMistoRecusasV3: [],
+      pagamentoV3: { status: "pago", recebido: 400 },
+      aPrazoV3: { valor: 0 },
+    } as unknown as Parameters<typeof updateOSPayload>[2]);
+    const s = await estado(storeId, osId);
+    expect(s.payload.notaQA).toBe("patch V2 QA");
+    expect(s.payload.aPrazoV3).toBeUndefined();
+    await conferirEstadoServidorPreservado(storeId, osId, K, fechamentoId);
   });
 });

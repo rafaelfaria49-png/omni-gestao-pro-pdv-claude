@@ -27,6 +27,18 @@ import { prisma } from "@/lib/prisma";
 export type OSPayloadV3 = OrdemServico & Record<string, unknown>;
 export type TxOSPayloadV3 = Prisma.TransactionClient;
 
+/**
+ * Campos do payload que SÓ os writers financeiros da V3 (recebimento, estorno, a prazo, misto)
+ * gravam, sob a trava. Patch genérico vindo do cliente nunca os troca.
+ */
+export const CAMPOS_FINANCEIROS_SERVIDOR_V3 = ["pagamentoV3", "aPrazoV3", "recebimentoMistoRecusasV3"] as const;
+
+export function semCamposFinanceirosDoServidorV3<T extends object>(patch: T): T {
+  const limpo = { ...patch } as Record<string, unknown>;
+  for (const campo of CAMPOS_FINANCEIROS_SERVIDOR_V3) delete limpo[campo];
+  return limpo as T;
+}
+
 /** Transação curta de writer de payload (mesmos limites dos writers de pagamento). */
 export const TX_PAYLOAD_OS_V3 = { maxWait: 5_000, timeout: 15_000 } as const;
 
@@ -77,7 +89,7 @@ export async function lerOSTravadaV3(tx: TxOSPayloadV3, storeId: string, osId: s
  */
 export interface MutacaoPayloadOSV3<R> {
   payload: OSPayloadV3 | null;
-  colunas?: Omit<Prisma.OrdemServicoUpdateInput, "payload">;
+  colunas?: Omit<Prisma.OrdemServicoUncheckedUpdateInput, "payload">;
   resultado: R;
 }
 

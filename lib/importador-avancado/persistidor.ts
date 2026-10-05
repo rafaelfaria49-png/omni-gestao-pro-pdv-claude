@@ -22,6 +22,8 @@ import {
 } from "./merger"
 import type { Prisma } from "@/generated/prisma"
 import { StatusOrdemServico } from "@/generated/prisma"
+import { TX_PAYLOAD_OS_V3 } from "@/lib/operacoes-v3/os-payload-lock"
+import { aplicarImportacaoEmOSExistenteV3 } from "@/lib/operacoes-v3/os-payload-import"
 import { upsertContaReceber } from "@/lib/financeiro/services/contas-receber-service"
 import { upsertContaPagar } from "@/lib/financeiro/services/contas-pagar-service"
 import { nomePareceDocumento } from "@/lib/produto-sku-normalize"
@@ -759,20 +761,31 @@ async function persistirOS(
         select: { id: true },
       })
 
-      if (existente) {
-        await prisma.ordemServico.update({
-          where: { id: existente.id },
-          data: {
-            clienteId,
-            valorTotal: campos.valorTotal,
-            valorBase: campos.valorBase,
-            equipamento: campos.equipamento,
-            defeito: campos.defeito,
-            laudoTecnico: campos.laudoTecnico || null,
-            status: toStatusPrisma(campos.status),
-            payload: payloadFinal,
-          },
-        })
+      // OS existente: patch intencional sobre o payload MAIS RECENTE, sob a trava da linha
+      // (recusas, espelhos financeiros, timeline e campos desconhecidos permanecem).
+      const aplicado = existente
+        ? await prisma.$transaction(
+            (tx) =>
+              aplicarImportacaoEmOSExistenteV3({
+                tx,
+                storeId,
+                osId: existente.id,
+                importado: payloadFinal as Record<string, unknown>,
+                colunas: {
+                  clienteId,
+                  valorTotal: campos.valorTotal,
+                  valorBase: campos.valorBase,
+                  equipamento: campos.equipamento,
+                  defeito: campos.defeito,
+                  laudoTecnico: campos.laudoTecnico || null,
+                  status: toStatusPrisma(campos.status),
+                },
+              }),
+            TX_PAYLOAD_OS_V3
+          )
+        : null
+
+      if (aplicado) {
         log.push({ dominio: "ordens_servicos", chave: numeroNorm, acao: "atualizado" })
       } else {
         const id = `os-import-${numeroNorm.replace(/[^a-zA-Z0-9_-]+/g, "-")}-${Date.now()}`

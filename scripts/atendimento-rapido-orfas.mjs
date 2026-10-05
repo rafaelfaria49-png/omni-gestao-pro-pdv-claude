@@ -25,6 +25,7 @@
  */
 
 import { PrismaClient } from "../generated/prisma/index.js";
+import { mutarPayloadOS } from "./lib/os-payload-lock.mjs";
 
 const prisma = new PrismaClient();
 const argv = process.argv.slice(2);
@@ -112,32 +113,54 @@ async function main() {
   console.log(`\nCancelando logicamente ${candidatas.length} OS...`);
   let ok = 0;
   for (const c of candidatas) {
-    const payload = c.payload;
-    const timeline = Array.isArray(payload.timeline) ? payload.timeline : [];
-    const nowIso = new Date().toISOString();
-    const evento = {
-      id: `ev_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
-      tipo: "mudanca_status",
-      autor: "Script de limpeza",
-      autorTipo: "usuario",
-      conteudo: "OS órfã de Atendimento Rápido (recebimento nunca concluído) — cancelada logicamente pela limpeza.",
-      metadata: { para: "cancelada", atendimentoRapido: true, limpezaOrfa: true },
-      criadoEm: nowIso,
-    };
-    const prev = asObj(payload.atendimentoRapidoV3) ?? {};
-    const next = {
-      ...payload,
-      operacaoStatusV3: "cancelada",
-      status: "cancelada",
-      atendimentoRapidoV3: { ...prev, canceladoOrfa: true, canceladoOrfaEm: nowIso },
-      timeline: [...timeline, evento],
-      atualizadoEm: nowIso,
-    };
-    await prisma.ordemServico.update({ where: { id: c.os.id }, data: { payload: next } });
+    // Cancela sobre o payload MAIS RECENTE, sob a trava da OS, e só se ela AINDA for órfã
+    // (um recebimento pode ter entrado depois do diagnóstico).
+    const cancelada = await mutarPayloadOS(prisma, {
+      storeId: c.os.storeId,
+      osId: c.os.id,
+      mutate: async ({ payload }, tx) => {
+        if (STATUS_FINAIS.has(statusV3(payload)) || recebido(payload) > 0 || payload.aPrazoV3 != null) {
+          return { payload: null, resultado: false };
+        }
+        const recebimento = await tx.caixaOperacao.findFirst({
+          where: { storeId: c.os.storeId, tipo: "recebimento_cr", payload: { path: ["ordemServicoId"], equals: c.os.id } },
+          select: { id: true },
+        });
+        if (recebimento) return { payload: null, resultado: false };
+        return { payload: cancelarOrfa(payload), resultado: true };
+      },
+    });
+    if (!cancelada) {
+      console.log(`  [PULADA] ${c.os.numero ?? c.os.id} deixou de ser órfã (ou não existe mais).`);
+      continue;
+    }
     ok += 1;
     console.log(`  [OK] ${c.os.numero ?? c.os.id} cancelada.`);
   }
   console.log(`\nConcluído: ${ok}/${candidatas.length} canceladas logicamente. (Sem delete físico.)`);
+}
+
+function cancelarOrfa(payload) {
+  const timeline = Array.isArray(payload.timeline) ? payload.timeline : [];
+  const nowIso = new Date().toISOString();
+  const evento = {
+    id: `ev_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    tipo: "mudanca_status",
+    autor: "Script de limpeza",
+    autorTipo: "usuario",
+    conteudo: "OS órfã de Atendimento Rápido (recebimento nunca concluído) — cancelada logicamente pela limpeza.",
+    metadata: { para: "cancelada", atendimentoRapido: true, limpezaOrfa: true },
+    criadoEm: nowIso,
+  };
+  const prev = asObj(payload.atendimentoRapidoV3) ?? {};
+  return {
+    ...payload,
+    operacaoStatusV3: "cancelada",
+    status: "cancelada",
+    atendimentoRapidoV3: { ...prev, canceladoOrfa: true, canceladoOrfaEm: nowIso },
+    timeline: [...timeline, evento],
+    atualizadoEm: nowIso,
+  };
 }
 
 main()
