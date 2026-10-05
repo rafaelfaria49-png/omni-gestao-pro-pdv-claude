@@ -211,6 +211,14 @@ function inicioDoDiaLojaMs(dia: string, z: string): number | null {
   return null;
 }
 
+/** Primeiro instante do dia civil na loja (ISO). "" quando inválido. */
+export function inicioDoDiaLojaIsoV3(dia: string, tz?: string): string {
+  const d = (dia ?? "").trim();
+  if (!diaCivilValidoV3(d)) return "";
+  const ms = inicioDoDiaLojaMs(d, fuso(tz));
+  return ms === null ? "" : new Date(ms).toISOString();
+}
+
 /** Último instante do dia civil na loja (validade "até o fim do dia"): início do dia seguinte − 1 ms. */
 export function fimDoDiaLojaIsoV3(dia: string, tz?: string): string {
   const d = (dia ?? "").trim();

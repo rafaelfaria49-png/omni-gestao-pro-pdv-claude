@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   camposCorrigiveisV3,
   esperadoCampoDataV3,
@@ -522,5 +522,65 @@ describe("planejarCorrecaoDatasV3 — previsão, atendimento rápido e proposta"
       CTX,
     );
     expect(!invalida.ok && invalida.campo).toBe("validoAte");
+  });
+});
+
+describe("R8: cobertura por DIA civil quando a entrega vale só pelo dia (retorno protegido no último dia inteiro)", () => {
+  const TZ_ORIGINAL = process.env.TZ;
+  afterEach(() => {
+    if (TZ_ORIGINAL === undefined) delete process.env.TZ;
+    else process.env.TZ = TZ_ORIGINAL;
+  });
+
+  function osEntregueSoDia(entradaDia: string, entregaDia: string, retornoEm: string) {
+    const entrada = data(entradaDia);
+    const entrega = data(entregaDia);
+    const base = osEntregue({
+      aberturaV3: {
+        versao: 1,
+        recepcao: { dataEntrada: entrada.iso, dataEntradaMeta: entrada.meta, origem: "balcao" },
+        garantiaPrevista: { modelo: "tela", label: "Troca de Tela", prazoDias: 90 },
+      },
+      entregueEm: entrega.iso,
+      retirada: { confirmado: true, retiradoPor: "Cliente", retiradoEm: entrega.iso },
+      entregaV3: { entregueEm: entrega.iso, entregueEmMeta: entrega.meta, registradoEm: "2026-10-04T17:30:00.000Z", entreguePor: "Operador" },
+      retornosV3: [{ id: "r1", osOriginalId: "os-1", motivo: "Tela piscando", criadoEm: retornoEm, status: "aberto", garantiaAtivaNaAbertura: true }],
+    });
+    return { base, entrega };
+  }
+  const corrigir = (base: Record<string, unknown>, entrega: DataOperacionalV3, novoDia: string) =>
+    planejarCorrecaoDatasV3(
+      base,
+      input({ alteracoes: { dataEntrega: data(novoDia) }, esperados: { dataEntrega: esperadoCampoDataV3(entrega.iso, "dia") }, confirmarImpactoGarantia: true }),
+      CTX,
+    );
+
+  it("retorno às 16:00 do último dia (âncora técnica 12:00) estava coberto: antecipar a entrega é impedimento", () => {
+    const { base, entrega } = osEntregueSoDia("2025-12-20", "2026-01-01", "2026-04-01T19:00:00.000Z"); // 01/04 16:00 na loja
+    const r = corrigir(base, entrega, "2025-12-31");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.tipo).toBe("impedimento");
+    expect(r.mensagem).toContain("retorno aberto em 01/04/2026");
+  });
+
+  it("mesma regra com outro fuso no processo (process.env.TZ): o dia civil é sempre o da loja", () => {
+    for (const tz of ["Asia/Tokyo", "UTC", "America/Los_Angeles"]) {
+      process.env.TZ = tz;
+      const { base, entrega } = osEntregueSoDia("2025-12-20", "2026-01-01", "2026-04-01T19:00:00.000Z");
+      const r = corrigir(base, entrega, "2025-12-31");
+      expect(!r.ok && r.tipo).toBe("impedimento");
+    }
+  });
+
+  it("horário de verão histórico: retorno na 2ª ocorrência de 17/02/2018 23:30 ainda é o último dia coberto", () => {
+    const { base, entrega } = osEntregueSoDia("2017-11-01", "2017-11-19", "2018-02-18T02:30:00.000Z");
+    const r = corrigir(base, entrega, "2017-11-18");
+    expect(!r.ok && r.tipo).toBe("impedimento");
+  });
+
+  it("adiar a entrega mantém o retorno coberto: a correção segue", () => {
+    const { base, entrega } = osEntregueSoDia("2025-12-20", "2026-01-01", "2026-04-01T19:00:00.000Z");
+    expect(corrigir(base, entrega, "2026-01-02").ok).toBe(true);
   });
 });

@@ -228,10 +228,11 @@ export interface ConverterOrcamentoInputV3 {
   /** Remover a previsão gravada (escolha explícita do operador). */
   removerPrevisao?: boolean;
   /**
-   * Previsão que o operador VIU ao decidir (formato de `esperadoCampoDataV3`;
-   * "" = nenhuma). Se a gravada mudou desde então, a conversão é recusada.
+   * OBRIGATÓRIA: previsão que o operador VIU ao decidir (formato de
+   * `esperadoCampoDataV3`; "" = nenhuma). Ausente, ou diferente da gravada, a
+   * conversão é recusada sem gravar nada.
    */
-  previsaoEsperada?: string;
+  previsaoEsperada: string;
   recebidoPor?: string;
   /**
    * Entrada REAL do aparelho. Obrigatória quando o orçamento ainda não tem
@@ -249,8 +250,12 @@ export interface ConverterOrcamentoInputV3 {
 export async function converterOrcamentoEmOSV3(
   storeId: string,
   osId: string,
-  input: ConverterOrcamentoInputV3 = {},
+  input: ConverterOrcamentoInputV3,
 ): Promise<{ osId: string; jaConvertido: boolean }> {
+  // Exposta como Server Action: chamada sem o pedido (logo, sem a previsão vista) não converte.
+  if (!input || typeof input !== "object") {
+    throw new Error("Confira a previsão de entrega antes de converter: recarregue a OS e converta de novo.");
+  }
   const { id, autor } = await carregar(storeId, osId);
   const sid = (storeId ?? "").trim();
   const agora = new Date();
@@ -289,17 +294,19 @@ export async function converterOrcamentoEmOSV3(
       entradaFinal = { ...v.data, iso: entradaNova.iso, dia: entradaNova.meta?.dia ?? v.data.dia };
     }
     const existente = lerDatasOSV3(payload).previsao;
-    // CAS da previsão: o operador decidiu (preservar, trocar ou remover) olhando um
-    // valor; se ele mudou desde então (ex.: "Corrigir datas" no meio), nada é gravado.
-    if (input.previsaoEsperada !== undefined) {
-      const atualVista = existente ? esperadoCampoDataV3(existente.iso, existente.precisao) : "";
-      if (input.previsaoEsperada !== atualVista) {
-        throw new Error(
-          existente
-            ? `A previsão de entrega desta OS mudou para ${formatarDataOperacionalV3(existente)} desde que você abriu a conversão. Confira e converta de novo.`
-            : "A previsão de entrega desta OS foi removida desde que você abriu a conversão. Confira e converta de novo.",
-        );
-      }
+    // CAS da previsão (obrigatório): o operador decidiu (preservar, trocar ou remover)
+    // olhando um valor — "" quando não havia previsão. Sem esse valor, ou se a
+    // gravada mudou desde então (ex.: "Corrigir datas" no meio), nada é gravado.
+    if (typeof input.previsaoEsperada !== "string") {
+      throw new Error("Confira a previsão de entrega antes de converter: recarregue a OS e converta de novo.");
+    }
+    const atualVista = existente ? esperadoCampoDataV3(existente.iso, existente.precisao) : "";
+    if (input.previsaoEsperada !== atualVista) {
+      throw new Error(
+        existente
+          ? `A previsão de entrega desta OS mudou para ${formatarDataOperacionalV3(existente)} desde que você abriu a conversão. Confira e converta de novo.`
+          : "A previsão de entrega desta OS foi removida desde que você abriu a conversão. Confira e converta de novo.",
+      );
     }
     let previsao: { iso: string; meta: DataOperacionalMetaV3 | null } | null = null;
     let removerPrevisao = false;

@@ -354,7 +354,7 @@ describe("PG · Orçamento (D08–D10)", () => {
     });
     const outra = data(dia(-1));
     const previsao = data(dia(5));
-    await converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: outra, previsaoEntrega: previsao.iso, previsaoEntregaMeta: previsao.meta });
+    await converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: outra, previsaoEntrega: previsao.iso, previsaoEntregaMeta: previsao.meta, previsaoEsperada: "" });
     const depois = (await lerOS(r.osId)).p;
     expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: entrada.iso, previsaoEntrega: previsao.iso, previsaoEntregaMeta: previsao.meta });
     expect(depois.comercialV4).toMatchObject({ statusComercial: "convertido", dataProposta: proposta.iso });
@@ -373,7 +373,7 @@ describe("PG · Orçamento (D08–D10)", () => {
     });
     const resultados = await Promise.allSettled([
       atualizarStatusComercialV3(storeId, r.osId, "aprovado"),
-      converterOrcamentoEmOSV3(storeId, r.osId),
+      converterOrcamentoEmOSV3(storeId, r.osId, { previsaoEsperada: "" }),
       marcarOrcamentoPreOsV3(storeId, r.osId, { origemAtendimento: "whatsapp", statusComercial: "aprovado" }),
     ]);
     expect(resultados.map((x) => x.status)).toEqual(["fulfilled", "fulfilled", "fulfilled"]);
@@ -392,7 +392,7 @@ describe("PG · Orçamento (D08–D10)", () => {
       where: { id: r.osId },
       data: { payload: { ...p, comercialV4: { ...p.comercialV4, statusComercial: "aprovado" }, orcamento: { ...p.orcamento, status: "aprovado" } } as Prisma.InputJsonValue },
     });
-    const [envio, conversao] = await Promise.allSettled([registrarEnvioOrcamento(storeId, r.osId, "whatsapp"), converterOrcamentoEmOSV3(storeId, r.osId)]);
+    const [envio, conversao] = await Promise.allSettled([registrarEnvioOrcamento(storeId, r.osId, "whatsapp"), converterOrcamentoEmOSV3(storeId, r.osId, { previsaoEsperada: "" })]);
     expect(conversao.status).toBe("fulfilled");
     if (envio.status === "rejected") expect(String((envio.reason as Error).message)).toMatch(/alterada por outra operação/);
     const depois = (await lerOS(r.osId)).p;
@@ -485,10 +485,10 @@ describe("PG · Orçamento (D08–D10)", () => {
       where: { id: r.osId },
       data: { payload: { ...p, comercialV4: { ...p.comercialV4, statusComercial: "aprovado" }, orcamento: { ...p.orcamento, status: "aprovado" } } as Prisma.InputJsonValue },
     });
-    await expect(converterOrcamentoEmOSV3(storeId, r.osId, {})).rejects.toThrow(/Informe a data de entrada do aparelho/);
+    await expect(converterOrcamentoEmOSV3(storeId, r.osId, { previsaoEsperada: "" })).rejects.toThrow(/Informe a data de entrada do aparelho/);
     expect((await lerOS(r.osId)).p.comercialV4.statusComercial).toBe("aprovado");
     const real = data(dia(-1), "16:00");
-    await converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: real });
+    await converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: real, previsaoEsperada: "" });
     const depois = (await lerOS(r.osId)).p;
     expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: real.iso, dataEntradaMeta: real.meta });
     expect(depois.comercialV4.statusComercial).toBe("convertido");
@@ -543,6 +543,33 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect(preservada.sla).toEqual(slaAntes);
   });
 
+  it("R8: conversão sem a previsão vista é recusada sem gravar — chamada atrasada não restaura a previsão antiga", async () => {
+    const storeId = await novaLoja();
+    const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: data(dia(-5)), validoAteDia: dia(4), entradaAparelho: data(dia(-4), "10:00") } });
+    const p1 = data(dia(2));
+    const p2 = data(dia(5));
+    expect((await corrigirDatasOSV3(storeId, r.osId, { alteracoes: { previsaoEntrega: p1 }, esperados: { previsaoEntrega: "" }, motivo: "Prazo combinado." })).ok).toBe(true);
+    expect(
+      (await corrigirDatasOSV3(storeId, r.osId, { alteracoes: { previsaoEntrega: p2 }, esperados: { previsaoEntrega: esperadoCampoDataV3(p1.iso, "dia") }, motivo: "Cliente pediu mais prazo." })).ok,
+    ).toBe(true);
+    const { p } = await lerOS(r.osId);
+    await prisma.ordemServico.update({
+      where: { id: r.osId },
+      data: { payload: { ...p, comercialV4: { ...p.comercialV4, statusComercial: "aprovado" }, orcamento: { ...p.orcamento, status: "aprovado" } } as Prisma.InputJsonValue },
+    });
+    const antes = (await lerOS(r.osId)).p;
+    type Pedido = Parameters<typeof converterOrcamentoEmOSV3>[2];
+    // Quem viu P1 e reenvia P1 sem a previsão vista (cliente antigo/adulterado): recusado.
+    await expect(
+      converterOrcamentoEmOSV3(storeId, r.osId, { previsaoEntrega: p1.iso, previsaoEntregaMeta: p1.meta } as unknown as Pedido),
+    ).rejects.toThrow(/Confira a previsão de entrega antes de converter/);
+    await expect(converterOrcamentoEmOSV3(storeId, r.osId, undefined as unknown as Pedido)).rejects.toThrow(/Confira a previsão de entrega antes de converter/);
+    const depois = (await lerOS(r.osId)).p;
+    expect(depois).toEqual(antes);
+    expect(depois.aberturaV3.recepcao).toMatchObject({ previsaoEntrega: p2.iso, previsaoEntregaMeta: p2.meta });
+    expect(depois.comercialV4.statusComercial).toBe("aprovado");
+  });
+
   it("R4: previsão já gravada antes da entrada informada na conversão é recusada — pede a nova previsão; com ela, converte", async () => {
     const storeId = await novaLoja();
     const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: data(dia(-10)), validoAteDia: dia(2), entradaAparelho: null } });
@@ -561,13 +588,14 @@ describe("PG · Orçamento (D08–D10)", () => {
       },
     });
     const entrada = data(dia(-5));
-    await expect(converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: entrada })).rejects.toThrow(/Informe a nova previsão de entrega/);
+    const vistaAntiga = esperadoCampoDataV3(antiga.iso, antiga.meta.precisao);
+    await expect(converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: entrada, previsaoEsperada: vistaAntiga })).rejects.toThrow(/Informe a nova previsão de entrega/);
     const intacta = (await lerOS(r.osId)).p;
     expect(intacta.comercialV4.statusComercial).toBe("aprovado");
     expect(intacta.aberturaV3.recepcao).toMatchObject({ previsaoEntrega: antiga.iso });
     expect(intacta.aberturaV3.recepcao.dataEntrada).toBeUndefined();
     const nova = data(dia(3));
-    await converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: entrada, previsaoEntrega: nova.iso, previsaoEntregaMeta: nova.meta });
+    await converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: entrada, previsaoEntrega: nova.iso, previsaoEntregaMeta: nova.meta, previsaoEsperada: vistaAntiga });
     const depois = (await lerOS(r.osId)).p;
     expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: entrada.iso, previsaoEntrega: nova.iso, previsaoEntregaMeta: nova.meta });
     expect(depois.comercialV4.statusComercial).toBe("convertido");

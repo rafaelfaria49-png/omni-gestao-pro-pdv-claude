@@ -25,6 +25,7 @@ import {
   erroFatoFuturoV3,
   erroOrdemV3,
   fimDoDiaLojaIsoV3,
+  inicioDoDiaLojaIsoV3,
   formatarDataOperacionalV3,
   formatarDiaDeIsoNaLojaV3,
   esperadoCampoDataV3,
@@ -468,13 +469,24 @@ export function planejarCorrecaoDatasV3(
     // é decisão comercial (editor de garantia), não correção de cadastro. Vale para
     // a visão V3, a garantia V2 do payload e cada linha real deslocada.
     const agoraMs = ctx.agora.getTime();
+    // Entrega só pelo dia: a cobertura vale por DIA civil na loja (do início do
+    // primeiro dia ao fim do último, inclusivo) — a âncora técnica 12:00 nunca corta
+    // o último dia. Com horário, vale o instante. Antes = precisão gravada; depois = nova.
+    const porDiaAntes = antes.precisao === "dia";
+    const porDiaDepois = n.meta.precisao === "dia";
+    const limite = (iso: string | undefined, borda: "inicio" | "fim", porDia: boolean): number => {
+      const t = Date.parse(iso ?? "");
+      if (!porDia || !Number.isFinite(t)) return t;
+      const dia = diaNaLojaV3(iso, tz);
+      return Date.parse(borda === "inicio" ? inicioDoDiaLojaIsoV3(dia, tz) : fimDoDiaLojaIsoV3(dia, tz));
+    };
     const coberturas: Array<{ fimAntes: string | undefined; fimDepois: string | undefined }> = [];
     if (g3Antes.temGarantia && !g3Antes.semCobertura) coberturas.push({ fimAntes: g3Antes.vencimento, fimDepois: g3Depois.vencimento });
     if (garantia.payloadDeslocado) coberturas.push({ fimAntes: txt(obj(base.garantia)?.fimEm) || undefined, fimDepois: txt(obj(next.garantia)?.fimEm) || undefined });
     for (const l of garantia.linhas) coberturas.push({ fimAntes: l.dataFimAntes, fimDepois: l.dataFim });
     const reativada = coberturas.find((c) => {
-      const a = Date.parse(c.fimAntes ?? "");
-      const d = Date.parse(c.fimDepois ?? "");
+      const a = limite(c.fimAntes, "fim", porDiaAntes);
+      const d = limite(c.fimDepois, "fim", porDiaDepois);
       return Number.isFinite(a) && Number.isFinite(d) && a < agoraMs && d >= agoraMs;
     });
     if (reativada) {
@@ -497,16 +509,19 @@ export function planejarCorrecaoDatasV3(
     const janelas: Array<{ antes: [number, number] | null; depois: [number, number]; inicioIso: string; fimIso: string }> = [];
     if (g3Depois.temGarantia && !g3Depois.semCobertura && g3Depois.inicio && g3Depois.vencimento) {
       janelas.push({
-        antes: garantia.inicioAntes && garantia.vencimentoAntes ? [Date.parse(garantia.inicioAntes), Date.parse(garantia.vencimentoAntes)] : null,
-        depois: [Date.parse(g3Depois.inicio), Date.parse(g3Depois.vencimento)],
+        antes:
+          garantia.inicioAntes && garantia.vencimentoAntes
+            ? [limite(garantia.inicioAntes, "inicio", porDiaAntes), limite(garantia.vencimentoAntes, "fim", porDiaAntes)]
+            : null,
+        depois: [limite(g3Depois.inicio, "inicio", porDiaDepois), limite(g3Depois.vencimento, "fim", porDiaDepois)],
         inicioIso: g3Depois.inicio,
         fimIso: g3Depois.vencimento,
       });
     }
     for (const l of garantia.linhas) {
       janelas.push({
-        antes: [Date.parse(l.dataInicioAntes), Date.parse(l.dataFimAntes)],
-        depois: [Date.parse(l.dataInicio), Date.parse(l.dataFim)],
+        antes: [limite(l.dataInicioAntes, "inicio", porDiaAntes), limite(l.dataFimAntes, "fim", porDiaAntes)],
+        depois: [limite(l.dataInicio, "inicio", porDiaDepois), limite(l.dataFim, "fim", porDiaDepois)],
         inicioIso: l.dataInicio,
         fimIso: l.dataFim,
       });
