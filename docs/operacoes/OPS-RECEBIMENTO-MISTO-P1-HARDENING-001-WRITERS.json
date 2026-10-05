@@ -1,8 +1,8 @@
 {
   "goal": "OPS-RECEBIMENTO-MISTO-P1-HARDENING-001",
-  "status": "INVENTARIO_CORRETIVO_R3_SEED_PRE_REVISAO_R4",
-  "codeHeadInventoried": "e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e",
-  "note": "Inventário do implementador (anthropic), não é veredito de revisão. line = declaração da função no codeHeadInventoried (corretivo R2 só deslocou linhas em contas-receber-service.ts e os-estoque.ts; demais inalteradas desde ce1d806; o commit de docs não altera código). Rodada R2: corrige os transitivos da revisão R1 sobre c21990d (título da OS, serviço de título compartilhado, cancelar OS, itens/estoque, intenções de orçamento) — ver transitiveWriters e r1Findings. Árvore reconciliada (merge normal 4ed751c com origin/main a27b37e, PR #237): entrega-actions.ts, comercial-pre-os-actions.ts, orcamento-actions.ts e atendimento-rapido-actions.ts mudaram de linhas; os campos line das entradas que mudaram de forma foram atualizados, nas demais valem como referência aproximada. Código do PR #237 é do upstream, não do implementador deste GOAL. Corretivo R3 (e02e826): só scripts/seed-contas-receber-os.mjs mudou no código; nenhuma função de OrdemServico.payload mudou, então functions/counts do recorte OS.payload seguem 118/105/13/39. O seed entra em transitiveWriters (financeiro), não em functions.",
+  "status": "INVENTARIO_CORRETIVO_R4_CANCELAMENTO_PRE_REVISAO_R5",
+  "codeHeadInventoried": "0f5179c9892f86505d017a8cbbcbe0ede9d438a0",
+  "note": "Inventário do implementador (anthropic), não é veredito de revisão. line = declaração da função no codeHeadInventoried (corretivo R2 só deslocou linhas em contas-receber-service.ts e os-estoque.ts; demais inalteradas desde ce1d806; o commit de docs não altera código). Rodada R2: corrige os transitivos da revisão R1 sobre c21990d (título da OS, serviço de título compartilhado, cancelar OS, itens/estoque, intenções de orçamento) — ver transitiveWriters e r1Findings. Árvore reconciliada (merge normal 4ed751c com origin/main a27b37e, PR #237): entrega-actions.ts, comercial-pre-os-actions.ts, orcamento-actions.ts e atendimento-rapido-actions.ts mudaram de linhas; os campos line das entradas que mudaram de forma foram atualizados, nas demais valem como referência aproximada. Código do PR #237 é do upstream, não do implementador deste GOAL. Corretivo R3 (e02e826): só scripts/seed-contas-receber-os.mjs mudou no código; nenhuma função de OrdemServico.payload mudou, então functions/counts do recorte OS.payload seguem 118/105/13/39. O seed entra em transitiveWriters (financeiro), não em functions. Corretivo R4 (0f5179c): só cancelarTituloTravado (contas-receber-service.ts, serviço de título) mudou no código; nenhuma função de OrdemServico.payload mudou, então functions/counts seguem 118/105/13/39. Linha de cancelContaReceber atualizada; as demais linhas desse arquivo continuam aproximadas.",
   "taxonomy": {
     "SAFE_TRANSACTIONAL": "grava OrdemServico.payload (ou delega a callee listado que grava) somente sobre o payload relido sob SELECT … FOR UPDATE da OS na mesma transação, aplicando só a alteração pretendida. Inclui criação inédita (linha nova na mesma tx/instrução) e writers com trava + CAS (a trava é a garantia primária). Delegação, criação inédita e CAS ficam em strategy/role",
     "SAFE_CAS": "grava só por compare-and-set (updatedAt/versão) com releitura e reaplicação da intenção, SEM row lock. Contagem 0: os 3 CAS existentes rodam sob a trava e estão em SAFE_TRANSACTIONAL",
@@ -69,7 +69,7 @@
     "a_prazo_lancarOSAPrazoV3": "advisory(OS) → OS FOR UPDATE → título",
     "misto_decidir_executar": "advisory(OS) → sessão FOR SHARE (só com dinheiro) → OS FOR UPDATE → título FOR UPDATE",
     "updateOSPayload_hub_intencoes_cobranca_V2": "OS FOR UPDATE → título FOR UPDATE (adapter os-faturamento no MESMO tx)",
-    "cancelar_OS_V3": "OS FOR UPDATE → título FOR UPDATE (cancelContaReceber db: tx)",
+    "cancelar_OS_V3": "OS FOR UPDATE → título FOR UPDATE (cancelContaReceber db: tx; exigirSemRecebimento avaliado no título travado também quando já CANCELADO)",
     "financeiro_pdv_lote_rotas_importadores": "SÓ título (FOR UPDATE do serviço ou CAS updatedAt) → movimentação/caixa/carteira; nunca pedem a OS",
     "estoque_consumo_restauracao_delta": "OS FOR UPDATE → produtos (ledger de estoque) → itens da OS",
     "sync_itens_rascunho": "OS FOR UPDATE → itens da OS (KEY SHARE do INSERT na própria OS)",
@@ -1663,10 +1663,11 @@
       {
         "file": "lib/financeiro/services/contas-receber-service.ts",
         "function": "cancelContaReceber",
-        "line": 394,
+        "line": 406,
         "classification": "TITLE_SAFE_LOCKED",
-        "strategy": "trava (id, senão localKey) → relê → pago/estornado/recebido (exigirSemRecebimento) avaliados no latest → UPDATE no mesmo tx (db do chamador ou próprio)",
-        "previousCategory": "STALE_RISK (P1 R1: read → update cego apagava histórico concorrente)"
+        "strategy": "trava (id, senão localKey) → relê → pago/estornado/recebido (exigirSemRecebimento) avaliados no latest → UPDATE no mesmo tx (db do chamador ou próprio). R4: com exigirSemRecebimento, título JÁ cancelado com recebido líquido > 0 recusa titulo_com_recebimento antes do sucesso idempotente; sem recebido segue idempotente; sem a flag o contrato genérico do Financeiro (PATCH/DELETE) não muda",
+        "previousCategory": "STALE_RISK (P1 R1: read → update cego apagava histórico concorrente)",
+        "r4Change": "fixedIn 0f5179c9892f86505d017a8cbbcbe0ede9d438a0"
       },
       {
         "file": "lib/financeiro/services/contas-receber-service.ts",
@@ -1831,5 +1832,18 @@
       "retorno-actions.ts abrirRetornoV3: guarda prévia fora da seção protegida; preexistente operacional, sem dinheiro/título; não alterado neste corretivo."
     ],
     "regressionTests": "hardening-p1-transitivos.pg.ts › P1-SEED: RED1 (script original, CLI) 5/5 comportamentais + 4 sem export; RED2 (refatoração só de seam, mesmo upsert) 9/9; RED3 (rota × CLI) 1/1; GREEN 10/10; PG V3 completo 105/105"
+  },
+  "r4Findings": {
+    "reviewedHead": "01c46e964d0cd479bd04a744d8c0f8d5441b24c9",
+    "verdict": "REQUEST_CHANGES (P0=0, P1=1, P2=0, P3=1)",
+    "fixedIn": "0f5179c9892f86505d017a8cbbcbe0ede9d438a0",
+    "P1": [
+      "contas-receber-service.ts cancelarTituloTravado devolvia ok para status CANCELADO antes de exigirSemRecebimento. Financeiro PATCH op=cancelar/DELETE (sem flag) cancela título parcial conservando ledger/marcador; depois aplicarTransicaoStatusV3(cancelada) aceitava o atalho, cancelava a OS e restaurava estoque com 350 recebidos sem estorno. Regressão do hardening (base a27 barrava via lerPagamentoOSV3). Corrigido: com a flag, o cancelado com recebido líquido > 0 na linha travada recusa titulo_com_recebimento (\"Estorne o recebimento antes de cancelar.\")."
+    ],
+    "P3": [
+      "retorno-actions.ts abrirRetornoV3: OS filhas concorrentes; preexistente operacional, sem dinheiro automático; não alterado."
+    ],
+    "preserved": "cancelado sem recebido (ou totalmente estornado) + flag = sucesso idempotente sem escrita; sem flag = contrato genérico atual; recusas pago/estornado/parcial com razões existentes; ordem OS → título; sem aresta título → OS, transação aninhada, advisory novo ou schema",
+    "regressionTests": "hardening-p1-transitivos.pg.ts › P1-R4: RED (fonte pré-fix, HEAD 01c46e9) 3 FAIL/1 PASS/47 fora do filtro — PATCH e DELETE: OS cancelada, estoque 6→10, entrada 4; disputa de travas: idem; controle sem recebido PASS. GREEN 4/4; PG V3 completo 109/109. Unit contas-receber-cancelar.test.ts 6/6 (escrito depois do fix; sem RED declarado); entrega-unificada.test.ts 13/13 (+assert de nenhuma restauração na recusa)."
   }
 }

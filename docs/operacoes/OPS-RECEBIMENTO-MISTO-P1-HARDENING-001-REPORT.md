@@ -1,23 +1,25 @@
-# OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — implementação, corretivos R2 e R3, reconciliação com a main e validação para R4
+# OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — implementação, corretivos R2, R3 e R4, reconciliação com a main e validação para R5
 
-Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). Os commits funcionais dos corretivos são `ce1d806ba962fbf5acac1e015e18a370d7939055` (R1), `3071c6749730ca138966d46fc9e6271afc211d81` (R2), `5727e5802e202f05eef9aedcf30f17813f6cda8a` (P1-T7) e `e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e` (P1 do seed, R3). O coordenador OpenAI consolidou os documentos e evidências produzidos pelo Claude; não implementou código ou testes. A revisão final R4 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos e os gates finais. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
+Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). Os commits funcionais dos corretivos são `ce1d806ba962fbf5acac1e015e18a370d7939055` (R1), `3071c6749730ca138966d46fc9e6271afc211d81` (R2), `5727e5802e202f05eef9aedcf30f17813f6cda8a` (P1-T7) `e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e` (P1 do seed, R3) e `0f5179c9892f86505d017a8cbbcbe0ede9d438a0` (P1 do cancelamento, R4). O coordenador OpenAI consolidou os documentos e evidências produzidos pelo Claude; não implementou código ou testes. A revisão final R4 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos e os gates finais. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
 
 Em 05/10/2026, um primeiro `git fetch origin` confirmou `origin/main=1e45f98ade83b3071548d581225928b0fd95b06c`. Um fetch posterior no mesmo dia mostrou `origin/main=a27b37e861ff044666d16535acb292f5d6957fcf` (merge do PR #237, GOAL de datas, já publicado). O coordenador iniciou `git merge --no-edit origin/main`; Claude resolveu os 6 conflitos e concluiu o merge normal de dois pais (`4ed751c7d349f0e8a92e726952aeee861830b31e`, pais `d3d9a97` e `a27b37e`), sem rebase/amend/reset/stash. O código do PR #237 é do upstream, não deste GOAL. Depois do merge, Claude estabilizou a sincronização dos specs E2E (`8aa19326a85adcbab7b7afcd3479b44ea55181db`, só teste) e corrigiu o candidato escalar P1-T7 (`5727e5802e202f05eef9aedcf30f17813f6cda8a`, funcional). A worktree e o trabalho anterior foram preservados. PRs #234 e #235 permanecem na base. A auditoria/baseline original não foi reiniciada; o GOAL de datas não foi iniciado nem alterado.
 
-## Estado antes da revisão R4 (após corretivo R2, reconciliação, P1-T7 e corretivo R3 do seed)
+## Estado antes da revisão R5 (após corretivo R2, reconciliação, P1-T7, corretivo R3 do seed e corretivo R4 do cancelamento)
 
 ```text
 GOAL=OPS-RECEBIMENTO-MISTO-P1-HARDENING-001
 BASE=a27b37e861ff044666d16535acb292f5d6957fcf
 BASE_ORIGINAL=1e45f98ade83b3071548d581225928b0fd95b06c
 MERGE_RECONCILIACAO=4ed751c7d349f0e8a92e726952aeee861830b31e;MERGE_NORMAL_2_PAIS_d3d9a97+a27b37e;CONFLITOS_6_RESOLVIDOS_POR_CLAUDE
-FINAL_HEAD=SHA_EXATO_DO_COMMIT_CONTENDO_ESTE_RELATORIO; fornecido no pacote da R4
-FUNCTIONAL_HEAD=e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e
+FINAL_HEAD=SHA_EXATO_DO_COMMIT_CONTENDO_ESTE_RELATORIO; fornecido no pacote da R5
+FUNCTIONAL_HEAD=0f5179c9892f86505d017a8cbbcbe0ede9d438a0
 E2E_SPEC_SYNC_COMMIT=8aa19326a85adcbab7b7afcd3479b44ea55181db;SO_TESTE
-PREVIOUS_FUNCTIONAL_HEADS=5727e5802e202f05eef9aedcf30f17813f6cda8a;3071c6749730ca138966d46fc9e6271afc211d81;ce1d806ba962fbf5acac1e015e18a370d7939055
+PREVIOUS_FUNCTIONAL_HEADS=e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e;5727e5802e202f05eef9aedcf30f17813f6cda8a;3071c6749730ca138966d46fc9e6271afc211d81;ce1d806ba962fbf5acac1e015e18a370d7939055
 P1T7_VALOR_TITULO_OS_SNAPSHOT_LEGADO=FIXED_RED_GREEN_PG_2_ROTAS
 R3_P1_SEED_CONTAS_RECEBER_OS=FIXED_RED_GREEN_PG_CLI_REAL_10_CASOS;SO_CRIA_TITULO_AUSENTE_SOB_OS_FOR_UPDATE_INSERT_ON_CONFLICT_DO_NOTHING
 R3_P3_RETORNO_FILHO=PREEXISTENTE_OPERACIONAL_NAO_ALTERADO
+R4_P1_CANCELAR_OS_TITULO_JA_CANCELADO_COM_RECEBIDO=FIXED_RED_GREEN_PG_PATCH_DELETE_DISPUTA;EXIGIR_SEM_RECEBIMENTO_ANTES_DO_SUCESSO_IDEMPOTENTE_CANCELADO
+R4_P3_RETORNO_FILHO=PREEXISTENTE_OPERACIONAL_NAO_ALTERADO
 E2E_NAVEGACAO_RECEBER=CAUSA_REMONTAGEM_OPERATIONSPROVIDER_KEY;SPEC_SINCRONIZADO;PASS_CONJUNTO_6_6_WORKERS1_RETRIES0
 R2_P1_TITULO_TRAVA_VAZIA=FIXED_RED_GREEN_PG_4_CASOS
 R2_P2_ESTOQUE_RASCUNHO_LEDGER=FIXED_RED_GREEN_PG_4_CASOS
@@ -35,7 +37,7 @@ DIFFERENT_ECONOMIC_CONTENT_CONFLICT=PASS_FORMA_SESSAO_1_CENTAVO
 OS_PAYLOAD_WRITERS_SCANNED=118_FUNCOES;105_SAFE_TRANSACTIONAL;13_READ_ONLY;39_WRITERS_DIRETOS;17_TRANSITIVOS_FINANCEIROS_SEPARADOS_INCLUI_SEED_CR_OS;INCLUI_4_DO_UPSTREAM_PR237
 STALE_WRITERS_FOUND=YES_INCLUINDO_5_ACHADOS_DA_R1
 STALE_WRITERS_FIXED=YES; inventario detalha os caminhos
-STALE_WRITERS_REMAINING=0_IDENTIFICADOS_PELO_IMPLEMENTADOR; confirmar na R4
+STALE_WRITERS_REMAINING=0_IDENTIFICADOS_PELO_IMPLEMENTADOR; confirmar na R5
 ROW_LOCK_STRATEGY=LATEST_READ_DECISION_WRITE_SAME_TX_OS_FOR_UPDATE_AND_TITLE_FOR_UPDATE
 CAS_STRATEGY=CAS_UPDATEDAT_EXISTENTE_PRESERVADO_SOB_TRAVA;ZERO_WRITERS_DEPENDENDO_SO_DE_CAS
 LOCK_ORDER=ADVISORY_OS_SESSAO_OS_TITULO;OS_PRODUTOS_ITENS;SYNC_OS_ITENS;FINANCEIRO_SO_TITULO_SEM_ARESTA_DE_VOLTA_PARA_OS;UPSTREAM_ADVISORY_OS_TITULO_LEITURA_E_ADVISORY_OS_GARANTIAS;SEED_CR_OS_SO_OS_TITULO_INSERT
@@ -52,24 +54,24 @@ PR234_REGRESSION=PASS
 PR235_350_50=PASS_PG_E2E_V3_V4
 PR235_100_APRAZO=PASS_PG
 PR235_LATER_PAYMENT=PASS_PG_E2E_V3_V4
-UNIT=AMPLO_OPS_FINANCEIRO_APIS_2006_PASS_10_FAIL_PREEXISTENTES_PREVIEW_HONESTY_124_ARQUIVOS_EM_5727e58;CANONICALIDADE_24_24;DATAS_UPSTREAM_30_30
-MOUNTED=PASS_V3_20_V4_29_EM_5727e58
-POSTGRES=PASS_V3_105_INCLUI_TRANSITIVOS_47_P1SEED_10_EM_e02e826;V4_PARIDADE_1_GATED_40_EM_5727e58_SEM_DEPENDENCIA_DO_SEED
-E2E=PASS_CONJUNTO_6_6_29.3s_WORKERS1_RETRIES0_BUILD_FINAL_9f582cc_FONTE_e02e826
+UNIT=AFETADOS_R4_17_ARQUIVOS_642_PASS_11_FAIL_ESTATICAS_PREEXISTENTES_10_PREVIEW_HONESTY_1_VENDAS_007A_EM_0f5179c;CANCELAR_TITULO_6_6;ENTREGA_UNIFICADA_13_13;AMPLO_HISTORICO_2006_PASS_10_FAIL_EM_5727e58;CANONICALIDADE_24_24;DATAS_UPSTREAM_30_30
+MOUNTED=PASS_V3_20_V4_29_EM_0f5179c
+POSTGRES=PASS_V3_109_INCLUI_TRANSITIVOS_51_P1SEED_10_P1R4_4_EM_0f5179c;V4_PARIDADE_1_GATED_40_EM_0f5179c
+E2E=HISTORICO_PASS_6_6_FONTE_e02e826;PENDENTE_COORDENADOR_NOVO_BUILD_E_E2E_NA_FONTE_0f5179c
 REGRESSION=PASS_FOCAL_E_AMPLA_OPS
-TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_POS_BUILD_INCREMENTAL_FALSE_EXIT0_HEAP8192_HEAD_9f582cc;EXIT_REAL_REGISTRADO
-LINT=PASS_61_ARQUIVOS_CODIGO_TESTES_DIFF_GOAL_EXIT0_0_ERROS_1_AVISO_PREEXISTENTE
-BUILD=PASS_NPM_RUN_BUILD_OFICIAL_EXIT0_COMPILED_62S_STATIC_102_MIGRATION_SKIPPED_HEAD_9f582cc_FONTE_e02e826
+TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_INCREMENTAL_FALSE_EXIT0_HEAP8192_FONTE_0f5179c_PRE_BUILD;POS_BUILD_PENDENTE_COORDENADOR
+LINT=PASS_4_ARQUIVOS_ALTERADOS_R4_EXIT0_0_ERROS_0_AVISOS;HISTORICO_61_ARQUIVOS_EXIT0_1_AVISO_PREEXISTENTE
+BUILD=HISTORICO_PASS_FONTE_e02e826;PENDENTE_COORDENADOR_NOVO_BUILD_OFICIAL_NA_FONTE_0f5179c
 DIFF_CHECK=PASS
 SCHEMA_CHANGED=NO
 MIGRATION_CREATED=NO
 R_FAMILY=openai
-R_HEAD_REVIEWED=R2_8880b86;R3_668dfb0;R4_PENDENTE
-R_VERDICT=R2_REQUEST_CHANGES;R3_REQUEST_CHANGES;R4_PENDENTE
-P0=R3_0;R4_NOT_REVIEWED
-P1=R3_1_SEED_CORRIGIDO_e02e826;R4_NOT_REVIEWED
-P2=R3_0;R4_NOT_REVIEWED
-P3=R3_1_RETORNO_FILHO_PREEXISTENTE_NAO_ALTERADO;R4_NOT_REVIEWED
+R_HEAD_REVIEWED=R2_8880b86;R3_668dfb0;R4_01c46e9;R5_PENDENTE
+R_VERDICT=R2_REQUEST_CHANGES;R3_REQUEST_CHANGES;R4_REQUEST_CHANGES;R5_PENDENTE
+P0=R4_0;R5_NOT_REVIEWED
+P1=R4_1_CANCELAMENTO_CORRIGIDO_0f5179c;R5_NOT_REVIEWED
+P2=R4_0;R5_NOT_REVIEWED
+P3=R4_1_RETORNO_FILHO_PREEXISTENTE_NAO_ALTERADO;R5_NOT_REVIEWED
 READY_FOR_MERGE=NO
 PR=NOT_CREATED
 PR_MERGED=NO
@@ -84,7 +86,7 @@ IMPLEMENTADO=SIM
 VALIDADO=SIM_LOCAL_QA_COM_RESSALVAS_DOCUMENTADAS
 PUBLICADO=NO
 HOMOLOGADO=NO
-BLOCKER=REVISAO_INDEPENDENTE_R4_EXACT_SHA_PENDENTE
+BLOCKER=GATES_COORDENADOR_BUILD_E2E_TSC_POS_BUILD_E_REVISAO_INDEPENDENTE_R5_EXACT_SHA_PENDENTES
 ```
 
 ## Correções originais
@@ -312,3 +314,44 @@ Os quatro gates do coordenador têm JSON externo com HEAD, horários e exit code
 Mounted V3 20/20 e V4 29/29, PG complementares 40/40, PG V4 paridade 1/1 e unit amplo 2006 PASS/10 FAIL estáticas preexistentes (124 arquivos) continuam qualificados como execuções em 5727e58: o código que exercitam não mudou no corretivo do seed. O diff 668dfb0..e02e826 contém somente o script e os testes PG do seed. A suíte inteira do projeto não é declarada verde. Os REDs e as falhas históricas de navegação continuam preservados.
 
 PR, merge remoto, deploy e smoke ainda não ocorreram. Uma nova sessão OpenAI READ-ONLY revisará este SHA final e todos os caminhos A–O, o P1 do seed, as resoluções do upstream e os corretivos anteriores. Merge normal exige P0=P1=P2=0, APPROVE e checks verdes. Provas operacionais posteriores serão gravadas fora da worktree para preservar o SHA aprovado. Nenhum pagamento real, alteração financeira de produção ou acesso à OS-2026-00028 ocorreu.
+
+## Corretivo R4 — cancelar OS com título já cancelado pelo Financeiro
+
+A R4 (OpenAI nova, READ-ONLY, sobre `01c46e964d0cd479bd04a744d8c0f8d5441b24c9`) retornou INDEPENDENCE=PASS, P0=0, P1=1, P2=0, P3=1, REQUEST_CHANGES, READY_FOR_MERGE=false. Seed R3, R1/R2, P1-T7 e A–O centrais ficaram fechados, sujeitos ao novo P1. O P3 (OS filhas de retorno concorrentes) é preexistente, sem dinheiro automático, e não foi alterado. O revisor não implementou código nem testes.
+
+Causa: `cancelarTituloTravado` (`lib/financeiro/services/contas-receber-service.ts`) devolvia `ok` para status CANCELADO antes de avaliar `exigirSemRecebimento`. O Financeiro (`PATCH op=cancelar` e `DELETE` em `/api/financeiro/receber`) cancela sem a flag: aceita título parcial e conserva ledger e marcador. Depois disso, `aplicarTransicaoStatusV3(…, "cancelada")` (`status-actions.ts`, flag + `db: tx`) recebia o sucesso idempotente, cancelava a OS e restaurava o estoque com 350 recebidos sem estorno. Na base `a27`, `lerPagamentoOSV3` somava o histórico e barrava. A regressão surgiu quando o hardening moveu a decisão para o serviço sobre o título travado.
+
+Fix mínimo (`0f5179c9892f86505d017a8cbbcbe0ede9d438a0`): com a flag, o título já cancelado com recebido líquido > 0 (`sumPagamentosFromHistoricoPayload`, que desconta estornos), lido na linha travada, recusa `titulo_com_recebimento`. O caller já traduz essa razão em "Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar." e aborta antes do status e da restauração. Contrato preservado:
+
+- cancelado sem recebido, ou totalmente estornado, com a flag: sucesso idempotente, sem escrita;
+- sem a flag: o cancelamento genérico do Financeiro e dos demais callers (vendas) não muda;
+- pago, estornado e parcial com a flag continuam com as razões existentes;
+- ordem de travas inalterada: OS `FOR UPDATE` → título `FOR UPDATE` no mesmo tx. O Financeiro trava só o título. Não há aresta título → OS, transação aninhada, advisory novo, snapshot fora da trava ou mudança de schema.
+
+O único caller com a flag é `status-actions.ts`. A V4 cancela pela mesma action.
+
+RED antes do fix, em PostgreSQL real QA (`127.0.0.1:55493/ops_v3_misto_qa_p1_hardening_001`, guardas loopback/nome conferidas), com fonte pré-fix em HEAD `01c46e9` e hashes/fonte em `r4fix-red-snapshot.txt` e `r4fix-red-source-hardening-p1-transitivos.pg.ts.txt`. Novo bloco `P1-R4` em `hardening-p1-transitivos.pg.ts`, com rotas e action reais. Só `@/auth`, `next/cache` e o gate de assinatura são simulados. O Prisma real é envolvido apenas para barreiras. Fixture: OS 400 com peça real 4×100 consumida antes do recebimento (estoque 10→6), título real pelo adapter, K = 350 débito + 50 a prazo, depois cancelamento do Financeiro e então da OS.
+
+| Caso | RED (`r4fix-red-pg.log`) | GREEN (`r4fix-green-pg-focal.log`) |
+| --- | --- | --- |
+| PATCH op=cancelar → cancelar OS | FAIL: OS `{ok:true}`, cancelada; estoque 6→10, entrada 4; itens do ledger removidos; título cancelado com ledger 350, caixa/mov 350 | PASS: recusa "Estorne…"; foto igual antes/depois (título id/status/ledger/marcador, caixa/movs ids, OS/coluna/timeline, estoque 6, saída 4/entrada 0, itens); replay K sem efeito |
+| DELETE → cancelar OS | FAIL: mesmo efeito | PASS: mesmo resultado |
+| Disputa: Financeiro trava/cancela o título (pausado) → OS trava a OS e espera o título (observado no `pg_stat_activity`) → Financeiro commita | FAIL: OS relê cancelado+ledger e cancela; estoque 10 | PASS: OS recusa; sem deadlock; estoque 6 e `estoqueRestaurado` ausente |
+| Controle: título cancelado SEM recebido → cancelar OS | PASS | PASS: idempotente (`updatedAt`/histórico do título intocados), restauração 6→10 |
+
+RED: 3 FAIL/1 PASS/47 fora do filtro (`-t "P1-R4"`), exit 1. GREEN: 4/4, exit 0. Unit novo `lib/financeiro/services/contas-receber-cancelar.test.ts`, 6/6. Ele cobre: cancelado com recebido + flag recusa sem escrita, inclusive com `db` do chamador; totalmente estornado e sem recebido seguem idempotentes; sem flag mantém o contrato e conserva o ledger; razões pago, estornado e parcial. `entrega-unificada.test.ts` (caller) agora também exige que nenhuma restauração ocorra na recusa: 13/13. Os dois foram escritos depois do fix e não têm RED declarado. A prova RED é a do PostgreSQL.
+
+| Gate na fonte `0f5179c` (árvore idêntica ao commit) | Resultado | Evidência em `playwright-report/ops-p1-hardening-001/` |
+| --- | --- | --- |
+| PostgreSQL V3 completo | 109/109, 3 arquivos (105 anteriores + 4 P1-R4), exit 0 | `r4fix-pg-v3-full.log` |
+| PG V4 paridade | 1/1, exit 0 | `r4fix-pg-v4-paridade.log` |
+| PG gated, 5 arquivos (workspace, entrada-readback, lote lock, garantia, entrada complementar); flags no mesmo QA | 40/40, exit 0 | `r4fix-pg-gated.log` |
+| Mounted V3 / V4 | 20/20 e 29/29, exit 0 | `r4fix-mounted-v3.log`, `r4fix-mounted-v4.log` |
+| Unit afetados (importadores do serviço, status-actions e rota; regressões #234/#235), 17 arquivos | 642 PASS/11 FAIL, exit 1. As 11 falhas são estáticas preexistentes: 10 em `preview-honesty` e 1 em `vendas/cancelar/hardening-007a.static`, em arquivos sem diff nesta rodada. Não é suíte verde. | `r4fix-unit-afetados.log` |
+| Typecheck completo `tsc --noEmit --incremental false`, heap 8192 | exit 0, saída vazia (antes do build) | `r4fix-typecheck.log` |
+| ESLint dos 4 arquivos alterados | exit 0, 0 erros, 0 avisos | `r4fix-lint.log` |
+| `git diff --check` | exit 0 | Git |
+
+Observação fora do escopo R4, sem alteração: o caminho legado V2 `applyOperacaoHubAcao("cancelar")` → `updateOSStatus` (`app/actions/operacoes.ts`) cancela e restaura estoque sem guarda de recebido. Na base `a27` ele já se comportava assim. Não é o caminho V3/V4 do P1 nem regressão deste GOAL. Fica registrado para a R5 e o coordenador classificarem.
+
+Pendências: o coordenador deve executar novo build oficial, E2E conjunto e typecheck pós-build na fonte `0f5179c`, sem reaproveitar o build anterior. Depois, uma nova revisão R5 (OpenAI, READ-ONLY) deve avaliar o SHA final exato. PR, merge e deploy só ocorrem com R5 APPROVE, P0=P1=P2=0 e checks verdes. Não houve PR, push, merge, deploy, pagamento real, alteração financeira real nem acesso à OS-2026-00028.
