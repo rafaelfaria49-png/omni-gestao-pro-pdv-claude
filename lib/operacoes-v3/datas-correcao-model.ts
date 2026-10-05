@@ -27,6 +27,7 @@ import {
   fimDoDiaLojaIsoV3,
   formatarDataOperacionalV3,
   formatarDiaDeIsoNaLojaV3,
+  esperadoCampoDataV3,
   lerDatasOSV3,
   limitarFatoAoAgoraV3,
   prazoInternoPadraoIsoV3,
@@ -40,15 +41,8 @@ import {
 import { lerGarantiaV3, lerRetornosV3 } from "./pos-venda-model";
 import type { OrdemServico } from "@/types/os";
 
-/**
- * Valor "visto" de um campo para a trava otimista: o instante gravado e, se for
- * só-dia, a precisão (`ISO|dia`). Trocar só-dia por "12:00" explícito (mesma ISO)
- * também é mudança — quem abriu a correção antes recebe conflito.
- */
-export function esperadoCampoDataV3(iso: string, precisao: string | undefined): string {
-  if (!iso) return "";
-  return precisao === "dia" ? `${iso}|dia` : iso;
-}
+// Valor "visto" para a trava otimista (regra única no módulo de datas).
+export { esperadoCampoDataV3 } from "./datas-operacionais-model";
 
 export type CampoCorrecaoDataV3 = "dataEntrada" | "previsaoEntrega" | "dataEntrega" | "dataProposta" | "validoAte";
 
@@ -134,12 +128,15 @@ export function camposCorrigiveisV3(os: unknown, tz?: string): CorrecaoDisponive
       permiteLimpar: false,
     });
   }
-  // Validade: pré-OS ou orçamento da própria OS, enquanto ainda pode ser aprovado.
-  // É o caminho AUDITADO para renovar uma proposta vencida (nunca o aceite em si).
+  // Validade: no pré-OS acompanha a data da proposta (qualquer status — a regra
+  // "validade ≥ proposta" sempre tem como ser cumprida); no orçamento da própria
+  // OS, enquanto ainda pode ser aprovado. É o caminho AUDITADO para renovar uma
+  // proposta vencida (nunca o aceite em si).
   const status = txt(orcamento?.status);
   const validoAte = datas.validoAte;
-  const comValidade = comercial?.tipo === "orcamento_pre_os" || !!validoAte;
-  if (comValidade && orcamento && orcamento.sintetizado !== true && (status === "rascunho" || status === "enviado")) {
+  const preOs = comercial?.tipo === "orcamento_pre_os";
+  const emAberto = status === "rascunho" || status === "enviado";
+  if (orcamento && orcamento.sintetizado !== true && (preOs || (emAberto && !!validoAte))) {
     campos.push({
       campo: "validoAte",
       rotulo: "Válido até",
@@ -307,8 +304,14 @@ export function planejarCorrecaoDatasV3(
   const alterados = new Set(diff.map((d) => d.campo));
 
   // 3) Regras sobre o estado FINAL (novo valor ou o gravado).
-  const valorFinal = (campo: CampoCorrecaoDataV3): DataOperacionalLidaV3 | null =>
-    novos.has(campo) ? novos.get(campo)!.lida : (porCampo.get(campo)?.atual ?? null);
+  const validoAteGravado = lerDatasOSV3(base, tz).validoAte;
+  const valorFinal = (campo: CampoCorrecaoDataV3): DataOperacionalLidaV3 | null => {
+    if (novos.has(campo)) return novos.get(campo)!.lida;
+    const atual = porCampo.get(campo)?.atual ?? null;
+    if (atual || campo !== "validoAte" || !validoAteGravado) return atual;
+    // Validade fora dos campos corrigíveis continua valendo nas regras do estado final.
+    return { iso: validoAteGravado, precisao: "dia", dia: diaNaLojaV3(validoAteGravado, tz), origem: "informada" };
+  };
   const entrada = valorFinal("dataEntrada");
   const previsao = valorFinal("previsaoEntrega");
   const entrega = valorFinal("dataEntrega");

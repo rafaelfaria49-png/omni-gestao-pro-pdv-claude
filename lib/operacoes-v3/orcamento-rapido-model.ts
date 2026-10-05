@@ -137,13 +137,15 @@ export function normalizarDatasOrcamentoRapidoV3(
     if (futura) regras.push(futura);
   }
   if (regras.length > 0) return { ok: false, erros: regras };
+  // Fato dentro da folga do relógio é gravado no "agora" do servidor (proposta e entrada).
+  const proposta = limitarFatoAoAgoraV3({ iso: p.data.iso, meta: p.meta }, agora);
   return {
     ok: true,
     datas: {
-      proposta: { iso: p.data.iso, meta: p.meta },
+      proposta,
       validoAteDia,
       validoAte: fimDoDiaLojaIsoV3(validoAteDia),
-      validadeDias: Math.max(0, diasEntreCivisV3(p.meta.dia, validoAteDia)),
+      validadeDias: Math.max(0, diasEntreCivisV3(proposta.meta.dia, validoAteDia)),
       // Fato dentro da folga do relógio é gravado no "agora" do servidor.
       entrada: e && e.ok && e.meta ? limitarFatoAoAgoraV3({ iso: e.data.iso, meta: e.meta }, agora) : null,
     },

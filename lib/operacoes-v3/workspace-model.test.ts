@@ -87,6 +87,12 @@ describe("workspace — recepção", () => {
     const r2 = lerRecepcaoV3(os({ criadoEm: "2026-06-01T10:00:00Z" }));
     expect(r2.dataEntrada).toBe("2026-06-01T10:00:00Z");
   });
+
+  it("R4: previsão combinada já passada sinaliza 'vencida' (calculado agora), exceto depois da entrega", () => {
+    const recepcao = { previsaoEntrega: "2020-06-05T15:00:00.000Z", previsaoEntregaMeta: { precisao: "dia", dia: "2020-06-05" } };
+    expect(lerRecepcaoV3(os({ aberturaV3: { versao: 1, recepcao } })).previsaoVencida).toBe(true);
+    expect(lerRecepcaoV3(os({ aberturaV3: { versao: 1, recepcao }, entregueEm: "2020-06-04T15:00:00.000Z" })).previsaoVencida).toBe(false);
+  });
 });
 
 describe("workspace — timeline operacional", () => {

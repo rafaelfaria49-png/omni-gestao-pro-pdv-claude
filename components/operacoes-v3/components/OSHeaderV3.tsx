@@ -64,8 +64,8 @@ export function OSHeaderV3({ os, actions }: { os: OrdemServico; actions?: ReactN
         <Field
           icon={<Clock className="h-3 w-3" />}
           label={recepcao.previsaoTexto ? "Previsão de entrega" : recepcao.prazoInternoTexto ? "Prazo interno" : "Previsão de entrega"}
-          value={recepcao.previsaoTexto || recepcao.prazoInternoTexto || "Não informada"}
-          tone={atrasada ? "text-destructive" : risco ? "text-warning" : undefined}
+          value={recepcao.previsaoTexto ? `${recepcao.previsaoTexto}${recepcao.previsaoVencida ? " · vencida" : ""}` : recepcao.prazoInternoTexto || "Não informada"}
+          tone={atrasada ? "text-destructive" : risco || recepcao.previsaoVencida ? "text-warning" : undefined}
         />
       </div>
     </div>

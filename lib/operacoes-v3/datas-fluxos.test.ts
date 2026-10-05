@@ -164,6 +164,16 @@ describe("Orçamento — proposta não é entrada física (D08/D09/D10)", () => 
     expect(n).toMatchObject({ ok: true, datas: { validoAte: fimDoDiaLojaIsoV3("2026-09-17"), validadeDias: 7, entrada: null } });
   });
 
+  it("R4: proposta com horário dentro da folga do relógio é gravada no 'agora' do servidor", () => {
+    const proposta = montarDataOperacionalV3({ dia: "2026-10-04", hora: "15:03" }); // 3 min à frente de AGORA
+    if (!proposta.ok) throw new Error(proposta.mensagem);
+    const n = normalizarDatasOrcamentoRapidoV3({ dataProposta: proposta.valor, validoAteDia: "2026-10-11" }, AGORA);
+    expect(n).toMatchObject({
+      ok: true,
+      datas: { proposta: { iso: AGORA.toISOString(), meta: { precisao: "data_hora", dia: "2026-10-04" } }, validadeDias: 7 },
+    });
+  });
+
   it("validade antes da proposta, proposta futura e entrada futura são recusadas", () => {
     expect(resolverDatasOrcamentoFormV3(campos({ validoAteDia: "2026-10-03" }), AGORA).erros[0]).toMatchObject({ campo: "validoAte" });
     expect(resolverDatasOrcamentoFormV3(campos({ dataProposta: { dia: "2026-10-05", hora: "", horaAutomatica: false } }), AGORA).erros[0]).toMatchObject({ campo: "dataProposta" });
@@ -212,6 +222,37 @@ describe("leitura canônica da OS (lerDatasOSV3) — precedência e legado", () 
     expect(ar.entregaRegistradaEm).toBe("2026-10-04T18:00:00.000Z");
     expect(formatarDataOperacionalV3(ar.entrega)).toBe("29/09/2026");
     expect(dataRetroativaV3(ar.entrega, AGORA)).toBe(true);
+  });
+});
+
+describe("dados básicos (Entrada V4) — precisão da previsão conta como mudança (R4)", () => {
+  const soDia = data("2026-10-10");
+  const comHora = data("2026-10-10", "12:00");
+  const payload = {
+    criadoEm: "2026-10-04T17:00:00.000Z",
+    equipamento: { defeitoRelatado: "Tela" },
+    aberturaV3: { versao: 1, recepcao: { recebidoPor: "Ana", localFisico: "balcao", origem: "balcao", previsaoEntrega: soDia.iso, previsaoEntregaMeta: soDia.meta } },
+    sla: { prazo: fimDoDiaLojaIsoV3("2026-10-10"), status: "ok", origemV3: "informada" },
+    timeline: [],
+  } as unknown as OrdemServico & Record<string, unknown>;
+  const input = { defeitoRelatado: "Tela", prioridade: "media", origem: "balcao", recebidoPor: "Ana", localFisico: "balcao", observacoes: "" } as const;
+
+  it("só-dia → 12:00 explícito (mesma ISO): grava a nova precisão e o espelho do SLA", () => {
+    expect(comHora.iso).toBe(soDia.iso);
+    const { next } = montarProximosDadosBasicos(
+      payload,
+      { ...input, previsaoEntrega: comHora.iso, previsaoEntregaMeta: comHora.meta },
+      "Op",
+      { previsaoEntrega: `${soDia.iso}|dia` },
+    );
+    expect((next as any).aberturaV3.recepcao.previsaoEntregaMeta).toEqual(comHora.meta);
+    expect((next as any).sla).toMatchObject({ prazo: comHora.iso, origemV3: "informada" });
+  });
+
+  it("valor visto antigo (só o ISO) de uma previsão só-dia recebe conflito", () => {
+    expect(() =>
+      montarProximosDadosBasicos(payload, { ...input, previsaoEntrega: data("2026-10-12").iso, previsaoEntregaMeta: data("2026-10-12").meta }, "Op", { previsaoEntrega: soDia.iso }),
+    ).toThrow();
   });
 });
 

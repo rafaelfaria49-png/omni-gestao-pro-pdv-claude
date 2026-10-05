@@ -136,17 +136,24 @@ function ConverterOrcamentoPanel({ v }: { v: V4Vals }) {
   // Datas da abertura: a entrada já registrada é preservada; sem ela, o operador
   // informa a entrada REAL (nunca presumida pela data da proposta).
   const [entradaCampo, setEntradaCampo] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
-  const [previsaoCampo, setPrevisaoCampo] = useState<CampoDataOperacionalV3>(() => campoVazioV3());
+  // A previsão já gravada vem preenchida: é a promessa que será preservada (e conferida contra a entrada).
+  const previsaoGravada = (): CampoDataOperacionalV3 => {
+    const p = lerDatasOSV3(v.realOS).previsao;
+    return p ? campoDeDataLidaV3(p) : campoVazioV3();
+  };
+  const [previsaoCampo, setPrevisaoCampo] = useState<CampoDataOperacionalV3>(previsaoGravada);
   const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
   const entradaRef = useRef<HTMLInputElement>(null);
   const previsaoRef = useRef<HTMLInputElement>(null);
   const osKey = v.selectedOsId ?? "";
+  const realId = (v.realOS as { id?: string } | null)?.id ?? "";
   useEffect(() => {
     setEntradaCampo(campoAgoraV3());
-    setPrevisaoCampo(campoVazioV3());
+    setPrevisaoCampo(previsaoGravada());
     setErrosDatas({});
     setErro(null);
-  }, [osKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [osKey, realId]);
   if (!comercial || comercial.tipo !== "orcamento_pre_os" || comercial.statusComercial === "convertido" || !aprovado) return null;
   const datasOS = lerDatasOSV3(v.realOS);
   const entradaRegistrada = datasOS.entrada;

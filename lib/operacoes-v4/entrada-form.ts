@@ -24,6 +24,8 @@ import {
 } from "@/lib/operacoes-v3/dados-basicos-model";
 import {
   erroOrdemV3,
+  esperadoCampoDataV3,
+  lerDataOperacionalV3,
   lerDatasOSV3,
   prazoSlaDaPrevisaoV3,
   validarEntradaDataV3,
@@ -728,13 +730,21 @@ export function montarProximosDadosBasicos(
   // materializado como previsão informada só porque o operador salvou outro campo.
   const prazoLatest = txt(recepcaoAtual.previsaoEntrega);
   const previsao = txt(input?.previsaoEntrega);
-  if (esp.previsaoEntrega !== undefined && prazoLatest !== (esp.previsaoEntrega ?? "")) {
+  // Assinatura = ISO + precisão: trocar só-dia por "12:00 explícito" também é mudança.
+  const assinaturaLatest = prazoLatest
+    ? esperadoCampoDataV3(prazoLatest, lerDataOperacionalV3(prazoLatest, recepcaoAtual.previsaoEntregaMeta)?.precisao)
+    : "";
+  const assinaturaNova = previsao
+    ? esperadoCampoDataV3(previsao, lerDataOperacionalV3(previsao, input?.previsaoEntregaMeta)?.precisao)
+    : "";
+  const mudouPrevisao = !!previsao && assinaturaNova !== assinaturaLatest;
+  if (esp.previsaoEntrega !== undefined && assinaturaLatest !== (esp.previsaoEntrega ?? "")) {
     emConflito.push("dadosBasicos.previsaoEntrega");
   }
   if (emConflito.length > 0) throw erroConflitoConcorrenciaV3("os dados básicos", emConflito);
   // Previsão nova: data real e nunca antes da entrada registrada (pode estar vencida).
   let previsaoMeta: DataOperacionalMetaV3 | null = null;
-  if (previsao && previsao !== prazoLatest) {
+  if (mudouPrevisao) {
     const v = validarEntradaDataV3(previsao, input?.previsaoEntregaMeta, ROTULO_PREVISAO_ENTREGA_V3);
     if (!v.ok) throw new Error(v.mensagem);
     const ordem = erroOrdemV3("previsaoEntrega", "A previsão de entrega", v.data, "entrada do aparelho", lerDatasOSV3(payload).entrada);
@@ -743,10 +753,9 @@ export function montarProximosDadosBasicos(
   }
   const previsaoFinal = previsao || prazoLatest;
   // Só a previsão NOVA reescreve o espelho do SLA (só-dia vale até o fim do dia).
-  const sla =
-    previsao && previsao !== prazoLatest
-      ? { ...slaAtual, prazo: prazoSlaDaPrevisaoV3({ iso: previsao, meta: previsaoMeta }), origemV3: "informada" }
-      : slaAtual;
+  const sla = mudouPrevisao
+    ? { ...slaAtual, prazo: prazoSlaDaPrevisaoV3({ iso: previsao, meta: previsaoMeta }), origemV3: "informada" }
+    : slaAtual;
 
   const equipamento = { ...equipamentoAtual, defeitoRelatado: defeito };
 
@@ -760,7 +769,7 @@ export function montarProximosDadosBasicos(
   };
   // A entrada registrada é preservada como está; sem ela, NADA é fabricado a
   // partir do cadastro (`criadoEm` não é entrada confirmada).
-  if (previsao && previsao !== prazoLatest) {
+  if (mudouPrevisao) {
     if (previsaoMeta) recepcaoProxima.previsaoEntregaMeta = previsaoMeta;
     else delete recepcaoProxima.previsaoEntregaMeta;
   }

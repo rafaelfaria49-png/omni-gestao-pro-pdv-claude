@@ -132,8 +132,8 @@ export function OSClienteColV3({
             />
             <StatRow
               label="Previsão de entrega"
-              value={recepcao.previsaoTexto || "Não informada"}
-              tone={atrasada ? "text-[var(--ops-v3-danger)] font-semibold" : risco ? "text-[var(--ops-v3-warning)]" : undefined}
+              value={recepcao.previsaoTexto ? `${recepcao.previsaoTexto}${recepcao.previsaoVencida ? " · vencida" : ""}` : "Não informada"}
+              tone={atrasada ? "text-[var(--ops-v3-danger)] font-semibold" : risco || recepcao.previsaoVencida ? "text-[var(--ops-v3-warning)]" : undefined}
             />
             {recepcao.prazoInternoTexto ? <StatRow label="Prazo interno" value={recepcao.prazoInternoTexto} /> : null}
             {atrasada ? (

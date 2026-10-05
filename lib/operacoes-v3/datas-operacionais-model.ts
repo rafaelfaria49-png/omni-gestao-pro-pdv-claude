@@ -314,6 +314,16 @@ export function prazoSlaDaPrevisaoV3(previsao: { iso: string; meta?: DataOperaci
   return d.toISOString();
 }
 
+/**
+ * Valor "visto" de uma data para travas otimistas (CAS): o instante e, se for
+ * só-dia, a precisão (`ISO|dia`). Trocar só-dia por "12:00 explícito" (mesma ISO)
+ * também é mudança. Com horário, a própria ISO. "" quando ausente.
+ */
+export function esperadoCampoDataV3(iso: string, precisao: string | undefined): string {
+  if (!iso) return "";
+  return precisao === "dia" ? `${iso}|dia` : iso;
+}
+
 /** Regra do prazo interno padrão da Nova OS (sem previsão combinada): cadastro + 2 dias. */
 export const PRAZO_INTERNO_PADRAO_DIAS_V3 = 2;
 

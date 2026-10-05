@@ -436,6 +436,36 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: real.iso, dataEntradaMeta: real.meta });
     expect(depois.comercialV4.statusComercial).toBe("convertido");
   });
+
+  it("R4: previsão já gravada antes da entrada informada na conversão é recusada — pede a nova previsão; com ela, converte", async () => {
+    const storeId = await novaLoja();
+    const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: data(dia(-10)), validoAteDia: dia(2), entradaAparelho: null } });
+    const { p } = await lerOS(r.osId);
+    const antiga = data(dia(-8));
+    // Setup sintético: pré-OS aprovada com uma previsão persistida (só-dia) e sem entrada registrada.
+    await prisma.ordemServico.update({
+      where: { id: r.osId },
+      data: {
+        payload: {
+          ...p,
+          aberturaV3: { ...p.aberturaV3, recepcao: { ...p.aberturaV3?.recepcao, previsaoEntrega: antiga.iso, previsaoEntregaMeta: antiga.meta } },
+          comercialV4: { ...p.comercialV4, statusComercial: "aprovado" },
+          orcamento: { ...p.orcamento, status: "aprovado" },
+        } as Prisma.InputJsonValue,
+      },
+    });
+    const entrada = data(dia(-5));
+    await expect(converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: entrada })).rejects.toThrow(/Informe a nova previsão de entrega/);
+    const intacta = (await lerOS(r.osId)).p;
+    expect(intacta.comercialV4.statusComercial).toBe("aprovado");
+    expect(intacta.aberturaV3.recepcao).toMatchObject({ previsaoEntrega: antiga.iso });
+    expect(intacta.aberturaV3.recepcao.dataEntrada).toBeUndefined();
+    const nova = data(dia(3));
+    await converterOrcamentoEmOSV3(storeId, r.osId, { dataEntrada: entrada, previsaoEntrega: nova.iso, previsaoEntregaMeta: nova.meta });
+    const depois = (await lerOS(r.osId)).p;
+    expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: entrada.iso, previsaoEntrega: nova.iso, previsaoEntregaMeta: nova.meta });
+    expect(depois.comercialV4.statusComercial).toBe("convertido");
+  });
 });
 
 // ─── D11–D12 · Atendimento rápido ─────────────────────────────────────────────

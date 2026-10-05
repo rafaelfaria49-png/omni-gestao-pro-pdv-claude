@@ -9,6 +9,7 @@
 
 import type { OrdemServico } from "@/types/os";
 import {
+  esperadoCampoDataV3,
   lerDataOperacionalV3,
   montarDataOperacionalV3,
   type DataOperacionalMetaV3,
@@ -212,8 +213,12 @@ export function intencaoDadosBasicos(
   for (const k of CAMPOS_DB_TOCAVEIS) {
     if ((input[k] ?? "") !== (base[k] ?? "")) out[k] = base[k] ?? "";
   }
-  if (input.previsaoEntrega !== "" && input.previsaoEntrega !== base.previsaoEntrega) {
-    out.previsaoEntrega = base.previsaoEntrega ?? "";
+  // Previsão: ISO + precisão (trocar só-dia por "12:00 explícito" também é mudança).
+  const assinatura = (iso: string | undefined, meta: unknown) =>
+    iso ? esperadoCampoDataV3(iso, lerDataOperacionalV3(iso, meta)?.precisao) : "";
+  const baseAssinada = assinatura(base.previsaoEntrega, base.previsaoEntregaMeta);
+  if (input.previsaoEntrega !== "" && assinatura(input.previsaoEntrega, input.previsaoEntregaMeta) !== baseAssinada) {
+    out.previsaoEntrega = baseAssinada;
   }
   return out;
 }

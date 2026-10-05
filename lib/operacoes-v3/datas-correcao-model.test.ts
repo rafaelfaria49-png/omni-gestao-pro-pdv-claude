@@ -70,7 +70,7 @@ describe("camposCorrigiveisV3", () => {
     expect(c.campos.find((x) => x.campo === "previsaoEntrega")?.esperado).toBe("");
   });
 
-  it("orçamento pré-OS: data da proposta e validade (só enquanto rascunho/enviado)", () => {
+  it("orçamento pré-OS: data da proposta e validade andam juntas (em qualquer status)", () => {
     const os = {
       comercialV4: { tipo: "orcamento_pre_os", statusComercial: "enviado", dataProposta: data("2026-09-10").iso, dataPropostaMeta: data("2026-09-10").meta },
       orcamento: { id: "o", status: "enviado", servicos: [], pecas: [], desconto: 0, total: 0, criadoEm: "x", validoAte: fimDoDiaLojaIsoV3("2026-09-17") },
@@ -78,8 +78,27 @@ describe("camposCorrigiveisV3", () => {
     };
     const c = camposCorrigiveisV3(os);
     expect(c.campos.map((x) => x.campo)).toEqual(["dataEntrada", "previsaoEntrega", "dataProposta", "validoAte"]);
+    // Aprovado: a validade continua corrigível junto da proposta ("validade ≥ proposta" sempre tem saída).
     const aprovado = camposCorrigiveisV3({ ...os, orcamento: { ...os.orcamento, status: "aprovado" } });
-    expect(aprovado.campos.map((x) => x.campo)).not.toContain("validoAte");
+    expect(aprovado.campos.map((x) => x.campo)).toContain("validoAte");
+  });
+
+  it("R4: mover a proposta para depois da validade gravada é recusado (mesmo com o orçamento aprovado)", () => {
+    const proposta = data("2026-09-10");
+    const os = {
+      comercialV4: { tipo: "orcamento_pre_os", statusComercial: "aprovado", dataProposta: proposta.iso, dataPropostaMeta: proposta.meta, validadeDias: 7 },
+      orcamento: { id: "o", status: "aprovado", servicos: [], pecas: [], desconto: 0, total: 0, criadoEm: "x", validoAte: fimDoDiaLojaIsoV3("2026-09-17") },
+      aberturaV3: { recepcao: {} },
+      timeline: [],
+    };
+    const r = planejarCorrecaoDatasV3(
+      os,
+      input({ alteracoes: { dataProposta: data("2026-09-20") }, esperados: { dataProposta: esperadoCampoDataV3(proposta.iso, "dia") } }),
+      CTX,
+    );
+    expect(r).toMatchObject({ ok: false, tipo: "validacao", campo: "validoAte" });
+    if (r.ok) return;
+    expect(r.mensagem).toMatch(/não pode ser anterior à data do orçamento/);
   });
 });
 

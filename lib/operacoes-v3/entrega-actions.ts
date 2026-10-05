@@ -46,6 +46,7 @@ import {
   validarDataEntregaV3,
   validarEntradaDataV3,
   ROTULO_DATA_ENTREGA_V3,
+  TOLERANCIA_RELOGIO_MS_V3,
   formatarDataOperacionalV3,
   type DataOperacionalMetaV3,
 } from "./datas-operacionais-model";
@@ -150,11 +151,16 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
       // silencioso: ajustar a data é a correção auditada ("Corrigir datas").
       if (dataValidada?.ok) {
         const gravada = lerDatasOSV3(payload).entrega;
+        const pedidaMs = Date.parse(dataValidada.data.iso);
+        const gravadaMs = gravada ? Date.parse(gravada.iso) : NaN;
         const mesma =
           !!gravada &&
           gravada.precisao === dataValidada.data.precisao &&
-          gravada.dia === dataValidada.data.dia &&
-          (gravada.precisao === "dia" || gravada.iso === dataValidada.data.iso);
+          (gravada.precisao === "dia"
+            ? gravada.dia === dataValidada.data.dia
+            : // Mesmo horário — ou o mesmo pedido "à frente" que a vencedora gravou
+              // limitado ao relógio do servidor (dentro da folga).
+              pedidaMs === gravadaMs || (pedidaMs > gravadaMs && pedidaMs - gravadaMs <= TOLERANCIA_RELOGIO_MS_V3));
         if (!mesma) {
           throw new Error(`Esta OS já foi entregue${gravada ? ` em ${formatarDataOperacionalV3(gravada)}` : ""}. Para ajustar a data, use "Corrigir datas".`);
         }

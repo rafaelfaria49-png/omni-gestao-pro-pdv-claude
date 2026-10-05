@@ -261,6 +261,11 @@ export async function converterOrcamentoEmOSV3(
       const ordem = erroOrdemV3("previsaoEntrega", "A previsão de entrega", v.data, "entrada do aparelho", entradaFinal);
       if (ordem) throw new Error(ordem.mensagem);
       previsao = { iso: v.data.iso, meta: v.meta };
+    } else {
+      // A previsão já gravada (que será preservada) também não pode ficar antes da entrada.
+      const existente = lerDatasOSV3(payload).previsao;
+      const ordem = existente ? erroOrdemV3("previsaoEntrega", "A previsão de entrega", existente, "entrada do aparelho", entradaFinal) : null;
+      if (ordem) throw new Error(`${ordem.mensagem} Informe a nova previsão de entrega ao abrir a OS.`);
     }
 
     const aberturaAtual = payload.aberturaV3 && typeof payload.aberturaV3 === "object"

@@ -14,7 +14,7 @@
 
 import type { EventoTimeline, EventoTipo, OrdemServico } from "@/types/os";
 import { statusMetaV3, statusV3FromOS, type OperacaoStatusV3 } from "./status-machine";
-import { formatarDataOperacionalV3, lerDatasOSV3, rotuloEntradaV3 } from "./datas-operacionais-model";
+import { formatarDataOperacionalV3, lerDatasOSV3, previsaoVencidaV3, rotuloEntradaV3 } from "./datas-operacionais-model";
 
 // ----------------------------------------------------------------------------
 // Checklist de entrada (item 4)
@@ -179,6 +179,8 @@ export interface RecepcaoV3 {
   entradaTexto?: string;
   /** Previsão de entrega COMBINADA; "" = não informada. */
   previsaoTexto?: string;
+  /** A previsão combinada já passou e o aparelho não foi entregue (aviso honesto, calculado agora). */
+  previsaoVencida?: boolean;
   /** Prazo interno (automático/legado) quando não é a previsão combinada; "" = nenhum. */
   prazoInternoTexto?: string;
 }
@@ -196,6 +198,7 @@ export function lerRecepcaoV3(os: OrdemServico | null | undefined): RecepcaoV3 {
     entradaRotulo: datas.semEntradaFisica ? "Entrada" : rotuloEntradaV3(datas.entradaOuCadastro),
     entradaTexto: datas.semEntradaFisica ? "Aparelho não está na loja" : formatarDataOperacionalV3(datas.entradaOuCadastro),
     previsaoTexto: formatarDataOperacionalV3(datas.previsao),
+    previsaoVencida: previsaoVencidaV3(datas.previsao) && !datas.entrega,
     prazoInternoTexto:
       !datas.previsao && datas.prazoInterno
         ? `${formatarDataOperacionalV3(datas.prazoInterno.data)}${datas.prazoInterno.origem === "automatico" ? " (automático)" : ""}`

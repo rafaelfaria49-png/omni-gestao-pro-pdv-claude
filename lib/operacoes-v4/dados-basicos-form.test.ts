@@ -21,6 +21,7 @@ import {
   isoToLocalInputInTZ,
   localInputToIso,
   localInputToIsoInTZ,
+  previsaoLocalParaDataV4,
   seedDadosBasicos,
   setDadosBasicos,
   toDadosBasicosInput,
@@ -317,6 +318,19 @@ describe("montarProximosDadosBasicos — modo estrito por campo (R02)", () => {
     expect(defeito).toBe("D9");
     const recepcao = (next.aberturaV3 as Record<string, Record<string, unknown>>).recepcao;
     expect(recepcao.prioridade).toBe("alta");
+  });
+});
+
+describe("intencaoDadosBasicos — precisão da previsão (R4)", () => {
+  it("trocar só-dia por 12:00 explícito (mesma ISO) é intenção, com o valor visto 'ISO|dia'", () => {
+    const soDia = previsaoLocalParaDataV4("2026-10-10");
+    const comHora = previsaoLocalParaDataV4("2026-10-10T12:00");
+    expect(comHora.iso).toBe(soDia.iso);
+    const comum = { defeitoRelatado: "Tela", prioridade: "media", origem: "balcao", recebidoPor: "Ana", localFisico: "balcao", observacoes: "" } as const;
+    const base = { ...comum, previsaoEntrega: soDia.iso, previsaoEntregaMeta: soDia.meta } as unknown as Parameters<typeof intencaoDadosBasicos>[1];
+    const atual = { ...comum, previsaoEntrega: comHora.iso, previsaoEntregaMeta: comHora.meta } as unknown as Parameters<typeof intencaoDadosBasicos>[0];
+    expect(intencaoDadosBasicos(atual, base)).toEqual({ previsaoEntrega: `${soDia.iso}|dia` });
+    expect(intencaoDadosBasicos(base, base)).toEqual({});
   });
 });
 

@@ -324,6 +324,20 @@ describe("registrarEntregaV3 — guard financeiro server-side", () => {
     expect(gravado.data.payload.entregueEm).toBe("2026-07-15T15:30:00.000Z");
   });
 
+  it("R4: mesmo pedido 'à frente' que a vencedora gravou limitado ao relógio do servidor continua no-op", async () => {
+    // Vencedora gravou 15:30Z (limitado); o perdedor pediu 15:33Z (dentro da folga).
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-15T15:30:00.000Z", entregueEmMeta: { precisao: "data_hora", dia: "2026-07-15" }, registradoEm: "2026-07-15T15:30:00.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-15T15:33:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-15" } } }),
+    ).resolves.toBe(entregue);
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+  });
+
   it("OS já entregue com a MESMA data efetiva: continua no-op idempotente", async () => {
     const entregue = payload(100, {
       operacaoStatusV3: "entregue",
