@@ -31,7 +31,7 @@ import {
   type NovaOSDraftV3,
   validarNovaOSDraftV3,
 } from "./nova-os-model";
-import { prazoInternoPadraoIsoV3 } from "./datas-operacionais-model";
+import { prazoInternoPadraoIsoV3, prazoSlaDaPrevisaoV3 } from "./datas-operacionais-model";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
 import { recalcOrcamentoV3, type OrcamentoV3, type OrcamentoVersaoV3 } from "./orcamento-model";
@@ -183,7 +183,7 @@ async function criarOSCore(
   //    `origemV3` distingue a previsão combinada do prazo automático: o padrão
   //    nunca aparece como promessa ao cliente.
   const previsao = datas.previsao;
-  const slaPrazo = previsao?.iso || prazoInternoPadraoIsoV3(new Date().toISOString());
+  const slaPrazo = previsao ? prazoSlaDaPrevisaoV3(previsao) : prazoInternoPadraoIsoV3(new Date().toISOString());
 
   // 5. Observações internas viram observação técnica interna (igual à V2).
   const observacoes = draft.problema.observacoesInternas?.trim()

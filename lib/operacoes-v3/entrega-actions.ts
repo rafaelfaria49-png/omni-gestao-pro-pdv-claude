@@ -69,6 +69,14 @@ function makeEvento(tipo: EventoTimeline["tipo"], autor: string, conteudo: strin
 type LinhaOSTravadaV3 = { id: string; payload: OSPayloadFull; valorTotal: number | null };
 
 /**
+ * Janela em que uma entrega recém-efetivada ainda está disparando os próprios
+ * efeitos (estoque, evento, fechamento do retorno): a confirmação concorrente que
+ * perdeu a corrida não os repete. Retentativas posteriores voltam a tentar o
+ * fechamento de um retorno que tenha ficado pendente.
+ */
+const JANELA_EFEITOS_ENTREGA_MS = 2 * 60_000;
+
+/**
  * Lê e grava a OS sob a MESMA trava por OS dos writers de pagamento e da correção
  * de datas (advisory lock + `FOR UPDATE` + releitura): a decisão e o patch sempre
  * partem do estado atual — nunca de um snapshot lido antes de outra gravação.
@@ -304,11 +312,19 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
   });
 
   if (!resultado.entregou) {
-    await finalizarRetornoPorEntregaVinculadaV3({
-      storeId: sid,
-      osFilha: { ...(resultado.payload as unknown as OrdemServico), id },
-      operador,
-    });
+    // Retentativa de uma entrega já registrada: fecha o retorno vinculado que tenha
+    // ficado pendente. Se a entrega acabou de ser efetivada por OUTRA chamada
+    // (concorrente), quem a efetivou já dispara esse efeito — não repetir aqui.
+    const entregaGravada = (resultado.payload.entregaV3 ?? {}) as { registradoEm?: unknown };
+    const registradoMs = Date.parse(typeof entregaGravada.registradoEm === "string" ? entregaGravada.registradoEm : "");
+    const efetivadaAgoraPorOutra = Number.isFinite(registradoMs) && Date.now() - registradoMs < JANELA_EFEITOS_ENTREGA_MS;
+    if (!efetivadaAgoraPorOutra) {
+      await finalizarRetornoPorEntregaVinculadaV3({
+        storeId: sid,
+        osFilha: { ...(resultado.payload as unknown as OrdemServico), id },
+        operador,
+      });
+    }
     return resultado.payload as unknown as OrdemServico;
   }
   // Só quem efetivou a entrega (vencedor sob a trava) dispara os efeitos.

@@ -284,6 +284,30 @@ describe("registrarEntregaV3 — guard financeiro server-side", () => {
     expect(mocks.autoClose).not.toHaveBeenCalled();
   });
 
+  it("perdedor concorrente (entrega efetivada agora por outra chamada): não repete o fechamento do retorno", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      // Registrada há 30 s pela confirmação vencedora (relógio fixo do teste: 15:30Z).
+      entregaV3: { entregueEm: "2026-07-15T15:00:00.000Z", registradoEm: "2026-07-15T15:29:30.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(registrarEntregaV3(storeId, osId)).resolves.toBe(entregue);
+    expect(mocks.autoClose).not.toHaveBeenCalled();
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+  });
+
+  it("retentativa de entrega antiga continua tentando fechar um retorno vinculado pendente", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-10T15:00:00.000Z", registradoEm: "2026-07-10T15:00:00.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(registrarEntregaV3(storeId, osId)).resolves.toBe(entregue);
+    expect(mocks.autoClose).toHaveBeenCalledTimes(1);
+  });
+
   it("OS já entregue com a MESMA data efetiva: continua no-op idempotente", async () => {
     const entregue = payload(100, {
       operacaoStatusV3: "entregue",

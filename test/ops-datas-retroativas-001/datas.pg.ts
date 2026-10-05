@@ -24,7 +24,7 @@ import { criarOSEnterpriseV3, criarOSPreOrcamentoV3 } from "@/lib/operacoes-v3/n
 import { novaOSDraftVazioV3, type NovaOSDraftV3 } from "@/lib/operacoes-v3/nova-os-model";
 import { criarOrcamentoRapidoV3 } from "@/lib/operacoes-v3/orcamento-rapido-actions";
 import { atualizarStatusComercialV3, converterOrcamentoEmOSV3, marcarOrcamentoPreOsV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
-import { enviarOrcamentoV3, gerarOrcamentoDaOS, salvarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
+import { enviarOrcamentoV3, gerarOrcamentoDaOS, registrarEnvioOrcamento, salvarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
 import { finalizarAtendimentoRapidoV3 } from "@/lib/operacoes-v3/atendimento-rapido-actions";
 import { registrarEntregaV3 } from "@/lib/operacoes-v3/entrega-actions";
 import { receberOSV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
@@ -323,7 +323,8 @@ describe("PG · Orçamento (D08–D10)", () => {
     const depois = (await lerOS(r.osId)).p;
     expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: entrada.iso, previsaoEntrega: previsao.iso, previsaoEntregaMeta: previsao.meta });
     expect(depois.comercialV4).toMatchObject({ statusComercial: "convertido", dataProposta: proposta.iso });
-    expect(depois.sla).toMatchObject({ prazo: previsao.iso, origemV3: "informada" });
+    // Previsão só-dia: o SLA vale até o fim do dia prometido (nunca a âncora 12:00).
+    expect(depois.sla).toMatchObject({ prazo: fimDoDiaLojaIsoV3(dia(5)), origemV3: "informada" });
   });
 
   it("conversão × status/carimbo comercial simultâneos: em qualquer ordem a conversão nunca é revertida", async () => {
@@ -345,6 +346,55 @@ describe("PG · Orçamento (D08–D10)", () => {
     expect(depois.comercialV4.statusComercial).toBe("convertido");
     expect(depois.aberturaV3.recepcao).toMatchObject({ dataEntrada: entrada.iso, dataEntradaMeta: entrada.meta });
     expect(depois.timeline.filter((e: Payload) => e.metadata?.evento === "orcamento_convertido_os")).toHaveLength(1);
+  });
+
+  it("writer de orçamento × conversão simultâneos: a conversão nunca é desfeita (o atrasado recebe conflito)", async () => {
+    const storeId = await novaLoja();
+    const entrada = data(dia(-2), "10:30");
+    const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: data(dia(-3)), validoAteDia: dia(4), entradaAparelho: entrada } });
+    const { p } = await lerOS(r.osId);
+    await prisma.ordemServico.update({
+      where: { id: r.osId },
+      data: { payload: { ...p, comercialV4: { ...p.comercialV4, statusComercial: "aprovado" }, orcamento: { ...p.orcamento, status: "aprovado" } } as Prisma.InputJsonValue },
+    });
+    const [envio, conversao] = await Promise.allSettled([registrarEnvioOrcamento(storeId, r.osId, "whatsapp"), converterOrcamentoEmOSV3(storeId, r.osId)]);
+    expect(conversao.status).toBe("fulfilled");
+    if (envio.status === "rejected") expect(String((envio.reason as Error).message)).toMatch(/alterada por outra operação/);
+    const depois = (await lerOS(r.osId)).p;
+    expect(depois.comercialV4.statusComercial).toBe("convertido");
+    expect(depois.timeline.filter((e: Payload) => e.metadata?.evento === "orcamento_convertido_os")).toHaveLength(1);
+  });
+
+  it("duas validades definidas em paralelo: só uma vence; a outra é recusada (sem 'última grava por cima')", async () => {
+    const storeId = await novaLoja();
+    const proposta = data(dia(-1));
+    const { os } = await criarOSPreOrcamentoV3(storeId, draftBase({ dataEntrada: "", dataEntradaMeta: undefined }), {
+      comercialV4: { tipo: "orcamento_pre_os", statusComercial: "rascunho", dataProposta: proposta.iso, dataPropostaMeta: proposta.meta, validadeDias: 7 },
+    });
+    await gerarOrcamentoDaOS(storeId, os.id);
+    const itens = { servicos: [{ id: `s-${++seq}`, descricao: "Troca de tela", valor: 200 }], pecas: [], desconto: 0 };
+    const resultados = await Promise.allSettled([
+      salvarOrcamentoV3(storeId, os.id, { ...itens, validoAte: fimDoDiaLojaIsoV3(dia(5)) }),
+      salvarOrcamentoV3(storeId, os.id, { ...itens, validoAte: fimDoDiaLojaIsoV3(dia(9)) }),
+    ]);
+    expect(resultados.filter((x) => x.status === "fulfilled")).toHaveLength(1);
+    const recusa = resultados.find((x): x is PromiseRejectedResult => x.status === "rejected")!;
+    expect(String((recusa.reason as Error).message)).toMatch(/alterada por outra operação|já foi definida/);
+    const venc = (await lerOS(os.id)).p.orcamento.validoAte;
+    expect([fimDoDiaLojaIsoV3(dia(5)), fimDoDiaLojaIsoV3(dia(9))]).toContain(venc);
+  });
+
+  it("status comercial não aceita data da proposta nem validade no 'extra' (só campos não temporais)", async () => {
+    const storeId = await novaLoja();
+    const proposta = data(dia(-3));
+    const r = await criarOrcamentoRapidoV3(storeId, { ...ORC_INPUT, datas: { dataProposta: proposta, validoAteDia: dia(4), entradaAparelho: null } });
+    await atualizarStatusComercialV3(storeId, r.osId, "enviado", {
+      dataProposta: data(dia(5)).iso,
+      validadeDias: 99,
+      opcaoAprovadaRotulo: "Tela QA A",
+    } as unknown as Parameters<typeof atualizarStatusComercialV3>[3]);
+    const { p } = await lerOS(r.osId);
+    expect(p.comercialV4).toMatchObject({ statusComercial: "enviado", dataProposta: proposta.iso, validadeDias: 7, opcaoAprovadaRotulo: "Tela QA A" });
   });
 
   it("D08: conversão sem entrada registrada exige a entrada real (nunca presume a data da proposta)", async () => {

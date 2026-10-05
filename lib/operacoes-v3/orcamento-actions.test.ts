@@ -10,12 +10,14 @@ const salvarGarantiaMock = vi.fn<AnyFn>(async () => ({}));
 vi.mock("./garantia-actions", () => ({ salvarGarantiaOSV3: (...args: unknown[]) => salvarGarantiaMock(...args) }));
 
 const findFirstMock = vi.fn<AnyFn>();
-const updateMock = vi.fn<AnyFn>(async () => ({}));
+// A gravação é condicionada ao `updatedAt` lido (CAS): `updateMany` devolve quantas linhas mudou.
+const updateMock = vi.fn<AnyFn>(async () => ({ count: 1 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     ordemServico: {
       findFirst: (...args: unknown[]) => findFirstMock(...args),
       update: (...args: unknown[]) => updateMock(...args),
+      updateMany: (...args: unknown[]) => updateMock(...args),
     },
   },
 }));
@@ -47,6 +49,20 @@ function baseRow(orcamentoOverrides: Record<string, unknown> = {}) {
 
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+describe("gravação condicionada (CAS por updatedAt) — GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001", () => {
+  it("grava só se a OS não mudou desde a leitura; se mudou (ex.: conversão em paralelo), conflito explícito sem efeitos", async () => {
+    const lidoEm = new Date("2026-10-04T18:00:00.000Z");
+    findFirstMock.mockResolvedValue({ ...baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }), updatedAt: lidoEm });
+    await aprovarOrcamentoV3("loja-1", "os-1");
+    expect(updateMock.mock.calls[0]![0]).toMatchObject({ where: { id: "os-1", storeId: "loja-1", updatedAt: lidoEm } });
+
+    vi.clearAllMocks();
+    updateMock.mockResolvedValueOnce({ count: 0 });
+    await expect(aprovarOrcamentoV3("loja-1", "os-1")).rejects.toThrow(/alterada por outra operação/);
+    expect(salvarGarantiaMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("aprovarOrcamentoV3 — GOAL OPS-V4-ORC-APROVACAO-SELECAO-026", () => {

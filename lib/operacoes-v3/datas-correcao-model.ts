@@ -29,6 +29,7 @@ import {
   formatarDiaDeIsoNaLojaV3,
   lerDatasOSV3,
   prazoInternoPadraoIsoV3,
+  prazoSlaDaPrevisaoV3,
   validarDatasPropostaV3,
   validarEntradaDataV3,
   diasEntreCivisV3,
@@ -333,18 +334,24 @@ export function planejarCorrecaoDatasV3(
       const iso = new Date(n.iso).toISOString();
       recepcao.previsaoEntrega = iso;
       recepcao.previsaoEntregaMeta = { ...n.meta };
-      sla.prazo = iso;
+      // Só-dia: o SLA vale até o fim do dia prometido (nunca a âncora 12:00).
+      sla.prazo = prazoSlaDaPrevisaoV3({ iso, meta: n.meta });
       sla.origemV3 = "informada";
     } else {
       const previsaoRemovida = txt(recepcao.previsaoEntrega);
+      const metaRemovida = recepcao.previsaoEntregaMeta as DataOperacionalMetaV3 | undefined;
       delete recepcao.previsaoEntrega;
       delete recepcao.previsaoEntregaMeta;
       // O espelho da previsão removida NÃO vira "prazo interno" (seria a promessa
       // apagada com outro nome): volta à regra padrão da Nova OS (cadastro + 2 dias).
       // Um prazo interno próprio (não espelhado) continua valendo como regra interna.
+      const prazoAtual = Date.parse(txt(sla.prazo));
       const espelho =
         sla.origemV3 === "informada" ||
-        (!!previsaoRemovida && !!txt(sla.prazo) && Date.parse(txt(sla.prazo)) === Date.parse(previsaoRemovida));
+        (!!previsaoRemovida &&
+          Number.isFinite(prazoAtual) &&
+          (prazoAtual === Date.parse(previsaoRemovida) ||
+            prazoAtual === Date.parse(prazoSlaDaPrevisaoV3({ iso: previsaoRemovida, meta: metaRemovida }))));
       if (espelho) {
         const padrao = prazoInternoPadraoIsoV3(base.criadoEm);
         if (padrao) {
@@ -373,7 +380,9 @@ export function planejarCorrecaoDatasV3(
     const iso = new Date(n.iso).toISOString();
     const deltaMs = Date.parse(iso) - Date.parse(antes.iso);
     const entregaV3 = obj(base.entregaV3);
-    if (entregaV3) next.entregaV3 = { ...entregaV3, entregueEm: iso, entregueEmMeta: { ...n.meta } };
+    // Entrega legada sem o bloco V3: materializa o mínimo para a precisão não se
+    // perder na releitura (sem inventar `registradoEm`).
+    next.entregaV3 = { ...(entregaV3 ?? {}), entregueEm: iso, entregueEmMeta: { ...n.meta } };
     next.entregueEm = iso;
     const retirada = obj(base.retirada);
     if (retirada && txt(retirada.retiradoEm)) next.retirada = { ...retirada, retiradoEm: iso };
@@ -414,6 +423,32 @@ export function planejarCorrecaoDatasV3(
       garantia.payloadDeslocado ||
       garantia.linhas.length > 0 ||
       (!!garantia.inicioAntes && (garantia.inicioAntes !== garantia.inicioDepois || garantia.vencimentoAntes !== garantia.vencimentoDepois));
+
+    // Garantia VENCIDA nunca volta a valer por correção de data: estender cobertura
+    // é decisão comercial (editor de garantia), não correção de cadastro. Vale para
+    // a visão V3, a garantia V2 do payload e cada linha real deslocada.
+    const agoraMs = ctx.agora.getTime();
+    const coberturas: Array<{ fimAntes: string | undefined; fimDepois: string | undefined }> = [];
+    if (g3Antes.temGarantia && !g3Antes.semCobertura) coberturas.push({ fimAntes: g3Antes.vencimento, fimDepois: g3Depois.vencimento });
+    if (garantia.payloadDeslocado) coberturas.push({ fimAntes: txt(obj(base.garantia)?.fimEm) || undefined, fimDepois: txt(obj(next.garantia)?.fimEm) || undefined });
+    for (const l of garantia.linhas) coberturas.push({ fimAntes: l.dataFimAntes, fimDepois: l.dataFim });
+    const reativada = coberturas.find((c) => {
+      const a = Date.parse(c.fimAntes ?? "");
+      const d = Date.parse(c.fimDepois ?? "");
+      return Number.isFinite(a) && Number.isFinite(d) && a < agoraMs && d >= agoraMs;
+    });
+    if (reativada) {
+      return {
+        ok: false,
+        tipo: "impedimento",
+        campo: "dataEntrega",
+        garantia,
+        mensagem:
+          `A garantia desta entrega venceu em ${formatarDiaDeIsoNaLojaV3(reativada.fimAntes, tz)} e voltaria a valer até ` +
+          `${formatarDiaDeIsoNaLojaV3(reativada.fimDepois, tz)} com a nova data. Ajuste a garantia pelo editor de garantia, se for o caso. ` +
+          `A correção não foi aplicada.`,
+      };
+    }
 
     // Retorno registrado "com garantia ativa" que ficaria fora do novo período → impedimento.
     // Vale para TODA cobertura que se move com a entrega: a visão V3 (derivada) e

@@ -237,7 +237,8 @@ describe("dados básicos (Entrada V4) — sem fabricar entrada nem materializar 
     const p = data("2026-10-10");
     const { next } = montarProximosDadosBasicos(payload, { ...input, previsaoEntrega: p.iso, previsaoEntregaMeta: p.meta }, "Op", { previsaoEntrega: "" });
     expect((next as any).aberturaV3.recepcao).toMatchObject({ previsaoEntrega: p.iso, previsaoEntregaMeta: p.meta });
-    expect((next as any).sla).toMatchObject({ prazo: p.iso, origemV3: "informada" });
+    // Só-dia: o SLA espelha a promessa até o FIM do dia (nunca "atrasada" ao meio-dia).
+    expect((next as any).sla).toMatchObject({ prazo: fimDoDiaLojaIsoV3("2026-10-10"), origemV3: "informada" });
     const comEntrada = { ...payload, aberturaV3: { versao: 1, recepcao: { dataEntrada: data("2026-10-02").iso, dataEntradaMeta: data("2026-10-02").meta } } } as typeof payload;
     const antes = data("2026-10-01");
     expect(() =>

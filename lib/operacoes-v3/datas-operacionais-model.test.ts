@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { OrdemServico } from "@/types/os";
+import { lerSlaV3 } from "./producao-model";
 import {
   alterarDiaCampoV3,
   alterarHoraCampoV3,
@@ -14,6 +16,8 @@ import {
   formatarDiaDeIsoNaLojaV3,
   isoInstanteValidoV3,
   lerDataOperacionalV3,
+  lerDatasOSV3,
+  prazoSlaDaPrevisaoV3,
   montarDataOperacionalOpcionalV3,
   montarDataOperacionalV3,
   paredeLojaParaIsoV3,
@@ -153,6 +157,28 @@ describe("round-trip formulário → gravação → leitura → formulário", ()
     expect(d?.dia).toBe("2026-09-25");
     expect(lerDataOperacionalV3("", { precisao: "dia", dia: "2026-09-25" })).toBeNull();
     expect(lerDataOperacionalV3("lixo")).toBeNull();
+  });
+
+  it("SLA espelhado de previsão só-dia vale até o FIM do dia; não vira 'prazo interno' nem 'atrasada' ao meio-dia (R2)", () => {
+    const prev = montarDataOperacionalV3({ dia: "2026-10-04", hora: "" });
+    if (!prev.ok) throw new Error(prev.mensagem);
+    expect(prazoSlaDaPrevisaoV3(prev.valor)).toBe("2026-10-05T02:59:59.999Z");
+    const comHora = montarDataOperacionalV3({ dia: "2026-10-04", hora: "16:30" });
+    if (!comHora.ok) throw new Error(comHora.mensagem);
+    expect(prazoSlaDaPrevisaoV3(comHora.valor)).toBe(comHora.valor.iso);
+    const os = {
+      id: "os-1",
+      codigo: "OS-1",
+      criadoEm: "2026-10-01T12:00:00.000Z",
+      operacaoStatusV3: "em_execucao",
+      aberturaV3: { versao: 1, recepcao: { previsaoEntrega: prev.valor.iso, previsaoEntregaMeta: prev.valor.meta } },
+      sla: { prazo: prazoSlaDaPrevisaoV3(prev.valor), status: "ok", origemV3: "informada" },
+      timeline: [],
+    };
+    expect(lerDatasOSV3(os).prazoInterno).toBeNull();
+    // 15:00 do próprio dia prometido na loja: ainda no prazo (antes era "atrasada" desde 12:00).
+    expect(lerSlaV3(os as unknown as OrdemServico, new Date("2026-10-04T18:00:00.000Z")).situacao).not.toBe("atrasada");
+    expect(lerSlaV3(os as unknown as OrdemServico, new Date("2026-10-05T03:00:00.000Z")).situacao).toBe("atrasada");
   });
 
   it("só-dia só vale com a âncora EXATA do dia; ISO alterada por outro caminho vira leitura legada", () => {

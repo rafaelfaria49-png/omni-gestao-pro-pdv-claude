@@ -25,6 +25,7 @@ import {
 import {
   erroOrdemV3,
   lerDatasOSV3,
+  prazoSlaDaPrevisaoV3,
   validarEntradaDataV3,
   ROTULO_PREVISAO_ENTREGA_V3,
   type DataOperacionalMetaV3,
@@ -741,7 +742,11 @@ export function montarProximosDadosBasicos(
     previsaoMeta = v.meta;
   }
   const previsaoFinal = previsao || prazoLatest;
-  const sla = previsao ? { ...slaAtual, prazo: previsao, origemV3: "informada" } : slaAtual;
+  // Só a previsão NOVA reescreve o espelho do SLA (só-dia vale até o fim do dia).
+  const sla =
+    previsao && previsao !== prazoLatest
+      ? { ...slaAtual, prazo: prazoSlaDaPrevisaoV3({ iso: previsao, meta: previsaoMeta }), origemV3: "informada" }
+      : slaAtual;
 
   const equipamento = { ...equipamentoAtual, defeitoRelatado: defeito };
 

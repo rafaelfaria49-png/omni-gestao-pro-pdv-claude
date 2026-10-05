@@ -86,7 +86,10 @@ function makeEvento(tipo: EventoTipo, autor: string, conteudo: string, metadata?
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
-async function carregar(storeId: string, osId: string): Promise<{ sid: string; id: string; session: Session | null; payload: OSPayloadFull }> {
+async function carregar(
+  storeId: string,
+  osId: string,
+): Promise<{ sid: string; id: string; session: Session | null; payload: OSPayloadFull; lidoEm: Date }> {
   const sid = (storeId ?? "").trim();
   const id = (osId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
@@ -97,11 +100,23 @@ async function carregar(storeId: string, osId: string): Promise<{ sid: string; i
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar o orçamento desta OS.");
   if (!guard.ok) throw new Error(guard.error);
 
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
+  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true, updatedAt: true } });
   if (!row) throw new Error("OS não encontrada.");
   const payload = row.payload as unknown as OSPayloadFull | null;
   if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-  return { sid, id, session, payload };
+  return { sid, id, session, payload, lidoEm: row.updatedAt };
+}
+
+const CONFLITO_ORCAMENTO_V3 = "Esta OS foi alterada por outra operação enquanto você editava o orçamento. Recarregue e tente de novo.";
+
+/**
+ * Grava só se a OS não mudou desde a leitura (CAS por `updatedAt`, mesmo padrão
+ * de Dados básicos/Prova de entrada): uma gravação atrasada nunca desfaz outra
+ * (ex.: a conversão do orçamento ou uma validade definida em paralelo).
+ */
+async function gravarSeInalterada(sid: string, id: string, lidoEm: Date, data: Prisma.OrdemServicoUpdateManyMutationInput): Promise<void> {
+  const r = await prisma.ordemServico.updateMany({ where: { id, storeId: sid, updatedAt: lidoEm }, data });
+  if (r.count !== 1) throw new Error(CONFLITO_ORCAMENTO_V3);
 }
 
 function orcamentoEditavel(payload: OSPayloadFull): OrcamentoV3 {
@@ -122,6 +137,7 @@ async function gravar(
   id: string,
   payload: OSPayloadFull,
   next: { orcamento: OrcamentoV3; eventos: EventoTimeline[]; statusOS?: OperacaoStatusV3 | null; versoes?: OrcamentoVersaoV3[] },
+  lidoEm: Date,
 ): Promise<OrdemServico> {
   const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
   const nextPayload: OSPayloadFull = {
@@ -132,7 +148,7 @@ async function gravar(
   };
   if (next.versoes) nextPayload.orcamentoVersoesV3 = next.versoes;
 
-  const data: Prisma.OrdemServicoUpdateInput = { payload: nextPayload as unknown as Prisma.InputJsonValue };
+  const data: Prisma.OrdemServicoUpdateManyMutationInput = { payload: nextPayload as unknown as Prisma.InputJsonValue };
   if (next.statusOS) {
     const statusV2 = projetarStatusV2(next.statusOS);
     nextPayload.status = statusV2;
@@ -145,7 +161,7 @@ async function gravar(
   const totalCliente = computeTotaisV3(next.orcamento).total;
   if (Number.isFinite(totalCliente)) data.valorTotal = totalCliente;
 
-  await prisma.ordemServico.update({ where: { id }, data });
+  await gravarSeInalterada(sid, id, lidoEm, data);
   revalidatePath("/dashboard/operacoes-v3");
   return nextPayload as unknown as OrdemServico;
 }
@@ -155,7 +171,7 @@ async function gravar(
 // ----------------------------------------------------------------------------
 
 export async function salvarOrcamentoV3(storeId: string, osId: string, input: SalvarOrcamentoV3Input): Promise<OrdemServico> {
-  const { sid, id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session, payload, lidoEm } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
   assertStatus(atual, ["rascunho", "enviado"], "editar");
 
@@ -210,7 +226,7 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
     orcamento: editado,
     eventos: [makeEvento("orcamento_atualizado", operadorLabel(session), "Orçamento atualizado.", { versao: versao.versao })],
     versoes: [...versoesAtuais, versao],
-  });
+  }, lidoEm);
 }
 
 // ----------------------------------------------------------------------------
@@ -243,7 +259,7 @@ const STATUS_CORRECAO_AVANCADA_V3: ReadonlySet<OperacaoStatusV3> = new Set([
 ]);
 
 export async function corrigirOrcamentoV3(storeId: string, osId: string, input: SalvarOrcamentoV3Input): Promise<OrdemServico> {
-  const { sid, id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session, payload, lidoEm } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
 
   const statusOS = statusV3FromOS(payload);
@@ -287,7 +303,7 @@ export async function corrigirOrcamentoV3(storeId: string, osId: string, input: 
         { origem: "operacoes_v4_orcamento_reaberto", totalAnterior, totalNovo, correcaoAvancada: true },
       ),
     ],
-  });
+  }, lidoEm);
 }
 
 // ----------------------------------------------------------------------------
@@ -295,7 +311,7 @@ export async function corrigirOrcamentoV3(storeId: string, osId: string, input: 
 // ----------------------------------------------------------------------------
 
 export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<OrdemServico> {
-  const { sid, id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session, payload, lidoEm } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
   assertStatus(atual, ["rascunho", "enviado"], "enviar");
 
@@ -315,7 +331,7 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
     orcamento: enviado,
     statusOS: statusOSAposEnviarOrcamento(payload.status),
     eventos: [makeEvento("orcamento_enviado", operadorLabel(session), reenvio ? "Orçamento reenviado ao cliente." : "Orçamento enviado ao cliente.")],
-  });
+  }, lidoEm);
 
   // Espinha de eventos (3C.0): orçamento materializado e enviado ao cliente.
   emitirEventoOperacaoV3({
@@ -341,7 +357,7 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
  * aprovação, que já foi gravada).
  */
 export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise<OrdemServico> {
-  const { sid, id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session, payload, lidoEm } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
   assertStatus(atual, ["rascunho", "enviado"], "aprovar");
 
@@ -372,7 +388,7 @@ export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise
     statusOS: statusOSAposAprovarOrcamento(payload.status),
     eventos: [makeEvento("orcamento_aprovado", operadorLabel(session), "Orçamento aprovado.")],
     versoes: [...versoesAtuais, versaoAprovacao],
-  });
+  }, lidoEm);
 
   // Garantia da variante escolhida — melhor esforço (best-effort): se falhar,
   // a aprovação já gravada NÃO é desfeita (efeito auxiliar, não o núcleo da
@@ -408,7 +424,7 @@ export async function recusarOrcamentoV3(
   osId: string,
   motivo?: string | RecusarOrcamentoV3Input,
 ): Promise<OrdemServico> {
-  const { sid, id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session, payload, lidoEm } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
   assertStatus(atual, ["rascunho", "enviado"], "recusar");
 
@@ -422,7 +438,7 @@ export async function recusarOrcamentoV3(
   return gravar(sid, id, payload, {
     orcamento: recusado,
     eventos: [makeEvento("orcamento_recusado", operadorLabel(session), evt.conteudo, Object.keys(evt.metadata).length ? evt.metadata : undefined)],
-  });
+  }, lidoEm);
 }
 
 // ----------------------------------------------------------------------------
@@ -442,7 +458,7 @@ export async function registrarEnvioOrcamento(
   osId: string,
   canal: CanalEnvioOrcamentoV3,
 ): Promise<OrdemServico> {
-  const { id, session, payload } = await carregar(storeId, osId);
+  const { sid, id, session, payload, lidoEm } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
   const totalSnapshot = computeTotaisV3(atual).total;
   const evt = montarEventoEnvioOrcamentoV3(canal, totalSnapshot);
@@ -450,8 +466,7 @@ export async function registrarEnvioOrcamento(
 
   const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
   const nextPayload: OSPayloadFull = { ...payload, timeline: [...timeline, evento] };
-  const data: Prisma.OrdemServicoUpdateInput = { payload: nextPayload as unknown as Prisma.InputJsonValue };
-  await prisma.ordemServico.update({ where: { id }, data });
+  await gravarSeInalterada(sid, id, lidoEm, { payload: nextPayload as unknown as Prisma.InputJsonValue });
   revalidatePath("/dashboard/operacoes-v3");
   return nextPayload as unknown as OrdemServico;
 }

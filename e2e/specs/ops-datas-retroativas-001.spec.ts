@@ -182,7 +182,9 @@ test("V4 Nova OS: entrada anterior com horário e previsão combinada; o cadastr
     // Só-dia: âncora técnica 12:00 na loja, nunca exibida.
     expect(naLoja(recepcao.previsaoEntrega)).toBe(`${previsao} 12:00`);
     expect(recepcao.previsaoEntregaMeta).toEqual({ precisao: "dia", dia: previsao });
-    expect(p.sla).toMatchObject({ prazo: recepcao.previsaoEntrega, origemV3: "informada" });
+    // SLA espelha a promessa só-dia até o FIM do dia (nunca "atrasada" ao meio-dia).
+    expect(p.sla.origemV3).toBe("informada");
+    expect(naLoja(p.sla.prazo)).toBe(`${previsao} 23:59`);
     // Cadastro e auditoria = horário real do servidor.
     expect(pertoDeAgora(rows[0]!.createdAt.toISOString())).toBe(true);
     expect(pertoDeAgora(p.aberturaV3.criadoEm)).toBe(true);

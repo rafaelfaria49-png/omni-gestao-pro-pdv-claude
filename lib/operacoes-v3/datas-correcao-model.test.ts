@@ -5,7 +5,7 @@ import {
   type CorrecaoDatasInputV3,
   type GarantiaOperacionalLinhaV3,
 } from "./datas-correcao-model";
-import { fimDoDiaLojaIsoV3, lerDatasOSV3, montarDataOperacionalV3, type DataOperacionalV3 } from "./datas-operacionais-model";
+import { fimDoDiaLojaIsoV3, formatarDataOperacionalV3, lerDatasOSV3, montarDataOperacionalV3, type DataOperacionalV3 } from "./datas-operacionais-model";
 import { lerGarantiaV3 } from "./pos-venda-model";
 import type { OrdemServico } from "@/types/os";
 
@@ -231,6 +231,101 @@ describe("planejarCorrecaoDatasV3 — retorno × linha real de garantia divergen
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.garantia.linhas[0]).toMatchObject({ id: "g-30", dataFim: "2026-10-15T19:00:00.000Z" });
+  });
+});
+
+describe("planejarCorrecaoDatasV3 — garantia vencida nunca é reativada (R2)", () => {
+  // Entrega em 01/06 com 90 dias: venceu em 30/08 (antes de AGORA = 04/10).
+  const ENTREGA_ANTIGA = data("2026-06-01");
+  const ENTRADA_ANTIGA = data("2026-05-30");
+  function osAntiga(over: Record<string, unknown> = {}) {
+    return osEntregue({
+      aberturaV3: {
+        versao: 1,
+        recepcao: { dataEntrada: ENTRADA_ANTIGA.iso, dataEntradaMeta: ENTRADA_ANTIGA.meta, origem: "balcao" },
+        garantiaPrevista: { modelo: "tela", label: "Troca de Tela", prazoDias: 90 },
+      },
+      entregueEm: ENTREGA_ANTIGA.iso,
+      retirada: { confirmado: true, retiradoPor: "Cliente", retiradoEm: ENTREGA_ANTIGA.iso },
+      entregaV3: { entregueEm: ENTREGA_ANTIGA.iso, entregueEmMeta: ENTREGA_ANTIGA.meta, registradoEm: "2026-06-01T18:00:00.000Z" },
+      ...over,
+    });
+  }
+
+  it("mover a entrega para depois a ponto de a garantia vencida voltar a valer é impedimento", () => {
+    const r = planejarCorrecaoDatasV3(
+      osAntiga(),
+      input({ alteracoes: { dataEntrega: data("2026-09-15") }, esperados: { dataEntrega: ENTREGA_ANTIGA.iso }, confirmarImpactoGarantia: true }),
+      CTX,
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.tipo).toBe("impedimento");
+    expect(r.mensagem).toContain("venceu em 30/08/2026");
+    expect(r.mensagem).toContain("A correção não foi aplicada.");
+  });
+
+  it("linha real 'ativa' já vencida também não volta a valer", () => {
+    const linhas: GarantiaOperacionalLinhaV3[] = [{ id: "g-velha", status: "ativa", dataInicio: ENTREGA_ANTIGA.iso, dataFim: "2026-07-01T15:00:00.000Z" }];
+    // Sem garantia prevista na abertura: só a linha real decide.
+    const base = osAntiga({ aberturaV3: { versao: 1, recepcao: { dataEntrada: ENTRADA_ANTIGA.iso, dataEntradaMeta: ENTRADA_ANTIGA.meta } } });
+    const r = planejarCorrecaoDatasV3(
+      base,
+      input({ alteracoes: { dataEntrega: data("2026-09-20") }, esperados: { dataEntrega: ENTREGA_ANTIGA.iso }, confirmarImpactoGarantia: true }),
+      { ...CTX, garantias: linhas },
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.tipo).toBe("impedimento");
+    expect(r.mensagem).toContain("venceu em 01/07/2026");
+  });
+
+  it("antecipar uma entrega com garantia vencida (continua vencida) é permitido", () => {
+    const r = planejarCorrecaoDatasV3(
+      osAntiga(),
+      input({
+        alteracoes: { dataEntrega: data("2026-05-31") },
+        esperados: { dataEntrega: ENTREGA_ANTIGA.iso },
+        confirmarImpactoGarantia: true,
+      }),
+      CTX,
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("planejarCorrecaoDatasV3 — entrega legada e SLA da previsão (R2)", () => {
+  it("entrega legada só com `entregueEm`: a correção materializa `entregaV3` com a precisão (sem inventar registro)", () => {
+    const base = osEntregue({ entregaV3: undefined });
+    delete (base as Record<string, unknown>).entregaV3;
+    const nova = data("2026-09-27");
+    const r = planejarCorrecaoDatasV3(
+      base,
+      input({ alteracoes: { dataEntrega: nova }, esperados: { dataEntrega: ENTREGA.iso }, confirmarImpactoGarantia: true }),
+      CTX,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect((r.next as any).entregaV3).toEqual({ entregueEm: nova.iso, entregueEmMeta: nova.meta });
+    const lida = lerDatasOSV3(r.next).entrega;
+    expect(lida).toMatchObject({ precisao: "dia", dia: "2026-09-27" });
+    expect(formatarDataOperacionalV3(lida)).toBe("27/09/2026");
+  });
+
+  it("previsão só-dia corrigida espelha o FIM do dia no SLA (não a âncora 12:00) e não vira prazo interno", () => {
+    const prev = data("2026-10-08");
+    const r = planejarCorrecaoDatasV3(
+      osEntregue({ status: "pronta", operacaoStatusV3: "pronta" }),
+      // Previsão ausente: o valor "visto" (camposCorrigiveisV3) é "".
+      input({ alteracoes: { previsaoEntrega: prev }, esperados: { previsaoEntrega: "" } }),
+      CTX,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect((r.next as any).sla).toMatchObject({ prazo: fimDoDiaLojaIsoV3("2026-10-08"), origemV3: "informada" });
+    const datas = lerDatasOSV3(r.next);
+    expect(datas.previsao).toMatchObject({ precisao: "dia", dia: "2026-10-08" });
+    expect(datas.prazoInterno).toBeNull();
   });
 });
 

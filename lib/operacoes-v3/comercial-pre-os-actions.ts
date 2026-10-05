@@ -22,6 +22,7 @@ import {
   erroOrdemV3,
   lerDatasOSV3,
   validarEntradaDataV3,
+  prazoSlaDaPrevisaoV3,
   ROTULO_DATA_ENTRADA_V3,
   ROTULO_PREVISAO_ENTREGA_V3,
   type DataOperacionalMetaV3,
@@ -142,12 +143,23 @@ export async function marcarOrcamentoPreOsV3(storeId: string, osId: string, inpu
   });
 }
 
+/** Campos que o status comercial pode carregar junto (nenhum deles é data). */
+const CAMPOS_EXTRA_STATUS_COMERCIAL_V3 = ["opcaoAprovadaId", "opcaoAprovadaRotulo", "observacaoCliente", "observacaoInterna"] as const;
+export type ExtraStatusComercialV3 = Partial<Pick<ComercialV4, (typeof CAMPOS_EXTRA_STATUS_COMERCIAL_V3)[number]>>;
+
 export async function atualizarStatusComercialV3(
   storeId: string,
   osId: string,
   statusComercial: StatusComercialOrcamentoV4,
-  extra: Partial<ComercialV4> = {},
+  extra: ExtraStatusComercialV3 = {},
 ): Promise<OrdemServico> {
+  // Só campos não temporais: data da proposta, validade e conversão mudam apenas
+  // pelos fluxos validados (criação, "Corrigir datas", conversão) — nunca por aqui.
+  const extraPermitido: ExtraStatusComercialV3 = {};
+  for (const k of CAMPOS_EXTRA_STATUS_COMERCIAL_V3) {
+    const v = extra?.[k];
+    if (typeof v === "string" && v.trim()) extraPermitido[k] = v.trim();
+  }
   const { id, autor } = await carregar(storeId, osId);
   return gravarComTrava(storeId, id, (payload) => {
     const atual = lerComercialV4(payload);
@@ -156,7 +168,7 @@ export async function atualizarStatusComercialV3(
     }
     if (atual.statusComercial === "convertido") return null;
 
-    const comercialV4: ComercialV4 = { ...atual, ...extra, tipo: "orcamento_pre_os", statusComercial };
+    const comercialV4: ComercialV4 = { ...atual, ...extraPermitido, tipo: "orcamento_pre_os", statusComercial };
     const evento: EventoTimeline = {
       id: eventId(),
       tipo: "observacao",
@@ -283,7 +295,7 @@ export async function converterOrcamentoEmOSV3(
       ...payload,
       comercialV4,
       aberturaV3,
-      ...(previsao ? { sla: { ...(slaAtual ?? {}), prazo: previsao.iso, origemV3: "informada" } } : {}),
+      ...(previsao ? { sla: { ...(slaAtual ?? {}), prazo: prazoSlaDaPrevisaoV3(previsao), origemV3: "informada" } } : {}),
       timeline: [...timeline, evento],
       atualizadoEm: agora.toISOString(),
     } as OSPayloadFull;

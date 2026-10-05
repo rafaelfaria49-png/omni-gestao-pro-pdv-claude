@@ -301,6 +301,19 @@ export function lerDataOperacionalV3(iso: unknown, meta?: unknown, tz?: string):
   return { iso: instante, precisao: "data_hora", dia: diaIso, origem: "legado" };
 }
 
+/**
+ * `sla.prazo` espelhado de uma previsão COMBINADA. Só-dia vale até o FIM do dia
+ * civil na loja: a âncora técnica (12:00) nunca vira "atrasada" ao meio-dia do
+ * próprio dia prometido. Com horário, o próprio instante. "" quando ausente.
+ */
+export function prazoSlaDaPrevisaoV3(previsao: { iso: string; meta?: DataOperacionalMetaV3 | null } | null | undefined, tz?: string): string {
+  const d = dataValida(previsao?.iso);
+  if (!d) return "";
+  const meta = previsao?.meta;
+  if (meta?.precisao === "dia" && diaCivilValidoV3(meta.dia)) return fimDoDiaLojaIsoV3(meta.dia, tz);
+  return d.toISOString();
+}
+
 /** Regra do prazo interno padrão da Nova OS (sem previsão combinada): cadastro + 2 dias. */
 export const PRAZO_INTERNO_PADRAO_DIAS_V3 = 2;
 
@@ -592,7 +605,11 @@ export function lerDatasOSV3(os: unknown, tz?: string): DatasOSV3 {
   const sla = obj(o.sla);
   const slaPrazo = lerDataOperacionalV3(sla?.prazo, undefined, tz);
   let prazoInterno: DatasOSV3["prazoInterno"] = null;
-  if (slaPrazo && (!previsao || slaPrazo.iso !== previsao.iso)) {
+  // Espelho da previsão combinada (o próprio instante, ou o fim do dia civil de
+  // uma previsão só-dia) não é prazo interno.
+  const espelhoDaPrevisao =
+    !!previsao && !!slaPrazo && (slaPrazo.iso === previsao.iso || (previsao.precisao === "dia" && slaPrazo.iso === fimDoDiaLojaIsoV3(previsao.dia, tz)));
+  if (slaPrazo && !espelhoDaPrevisao) {
     const automatico = sla?.origemV3 === "automatico" || (!previsao && sla?.origemV3 === undefined && abertura?.versao === 1);
     prazoInterno = { data: slaPrazo, origem: automatico ? "automatico" : "sla" };
   }
