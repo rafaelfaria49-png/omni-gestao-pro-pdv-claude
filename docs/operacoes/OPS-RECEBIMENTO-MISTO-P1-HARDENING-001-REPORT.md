@@ -27,13 +27,13 @@ LEGACY_REPLAY_COMPAT=PASS_PG_SIMPLES_SPLIT_REPETIDO_E_MARCADOR_MISTO_V1
 SAME_ECONOMIC_RETRY_SAME_KEY=PASS_HOOK_MONTADO_PG_E_E2E_C
 DIFFERENT_ECONOMIC_CONTENT_CONFLICT=PASS_UNIT_E_PG (forma, sessão, 1 centavo)
 
-OS_PAYLOAD_WRITERS_SCANNED=95_ENTRADAS_POR_FUNCAO (docs/operacoes/OPS-RECEBIMENTO-MISTO-P1-HARDENING-001-WRITERS.json)
+OS_PAYLOAD_WRITERS_SCANNED=114_FUNCOES_EXPLICITAS (SAFE_TRANSACTIONAL 100 · SAFE_CAS 0 · WHOLE_PAYLOAD_STALE_RISK 0 · READ_ONLY 14; 37 gravam payload diretamente); +10 escopos revisados e 2 exclusões em apêndice, FORA da contagem (docs/operacoes/OPS-RECEBIMENTO-MISTO-P1-HARDENING-001-WRITERS.json)
 STALE_WRITERS_FOUND=YES
 STALE_WRITERS_FIXED=CHECKPOINT_266003A + 2_IMPORTADORES_RUNTIME + PATCH_GENERICO_V2 + createOS + PUT_/api/ops/ordens + 3_SCRIPTS_MANUAIS
 STALE_WRITERS_REMAINING=0
 
 ROW_LOCK_STRATEGY=mutarPayloadOSV3: tx -> SELECT FOR UPDATE (loja+id) -> releitura do latest -> mutação intencional (spread) -> UPDATE na mesma tx
-CAS_STRATEGY=CAS por updatedAt existente preservado (dados básicos, checklist de entrada, prova) e agora SOB a trava
+CAS_STRATEGY=CAS por updatedAt existente preservado (dados básicos, checklist de entrada, prova) e agora SOB a trava (por isso classificados SAFE_TRANSACTIONAL; nenhum writer depende só de CAS)
 LOCK_ORDER=advisory(OS) -> sessão FOR SHARE -> OS FOR UPDATE -> título FOR UPDATE; operacional/importação = só OS (folha) e depois linhas que ninguém trava antes da OS
 DEADLOCK_TEST=PASS_PG (normal, misto, estorno, a prazo, prioridade, técnico, local, importação na MESMA OS e caixa, 3 rodadas; limites maxWait 5000/timeout 15000 iguais à base)
 
@@ -71,6 +71,7 @@ P0=NOT_REVIEWED
 P1=NOT_REVIEWED
 P2=NOT_REVIEWED
 P3=NOT_REVIEWED
+IMPLEMENTER_P3_CANDIDATES=3 (candidatos do implementador, não P3 finais do revisor; ver abaixo)
 READY_FOR_MERGE=NO
 
 PR=NOT_CREATED
@@ -116,9 +117,10 @@ A rota também passou a ser escopada por loja no caminho do id informado. Um id 
 **outra loja** nunca é tocado: a importação cria uma OS nova na loja do pedido (o `upsert` por id sem
 loja podia sobrescrever OS alheia). Mudança de contrato: uma OS existente encontrada pelo id agora
 conta em `updated`, não em `created`.
-Por isso o validador privado do coordenador (`existing_id_upsert`) falha só na asserção dura
-`created === 1`. O caso `matched_update` dele passa inteiro. O teste versionado cobre esse caminho
-com `updated: 1` e todas as verificações de segurança.
+Por isso os dois validadores privados do coordenador falham só na asserção antiga de `created`
+(`created === 1`), contra o `updated` correto do contrato novo. Eles **não** são testes versionados
+deste GOAL; não foram lidos, alterados nem apagados, e a falha não foi escondida. O teste versionado
+cobre esse caminho com `updated: 1` e todas as verificações de segurança.
 
 ### Demais writers fechados no inventário
 
@@ -145,16 +147,68 @@ afrouxadas nem o timeout aumentado. Nenhuma mudança de runtime foi necessária.
 
 ## Inventário de writers (pendência 4)
 
-Arquivo versionado: `docs/operacoes/OPS-RECEBIMENTO-MISTO-P1-HARDENING-001-WRITERS.json` (95 entradas
-por função, notas e mapa de travas). Contagem: SAFE_TRANSACTIONAL 65 · SAFE_TRANSACTIONAL+CAS 3 ·
-SAFE_NEW_ROW_TX 1 · INSERT_ONLY 1 · DELEGATES_SAFE 13 · READ_ONLY 9 · PURE 1 · NOT_PAYLOAD 1 ·
-NOT_REACHABLE 1 · **WHOLE_PAYLOAD_STALE_RISK 0**. A V4 não grava `OrdemServico` diretamente: consome
-16 módulos de actions V3 (todos classificados).
+Arquivo versionado: `docs/operacoes/OPS-RECEBIMENTO-MISTO-P1-HARDENING-001-WRITERS.json`, levantado
+sobre o código de `c1fa75a` (este commit só muda docs).
 
-Residuais P3 fora da corrida financeira, relatados e não corrigidos por escopo:
-`applyOperacaoHubAcao` edita `orcamento` a partir de leitura prévia (última escrita vence no próprio
-campo); `abrirRetornoV3` decide "retorno aberto?" sobre leitura prévia (duplo envio concorrente pode
-abrir 2 atendimentos). As duas gravações são feitas sobre o latest, sob a trava.
+Correção desta revisão do inventário: a versão anterior tinha **95 registros, não 95 funções**. Havia
+globs (`function='*'`), uma entrada combinada (`mutarPayloadOS / aplicarImportacaoEmOSExistente`), um
+helper puro e escopos de leitura/histórico na mesma contagem, além de categorias fora da taxonomia
+exigida. Agora:
+
+- **`functions` (114, contadas):** uma entrada por função nomeada, com arquivo e linha da declaração,
+  `role` (PRIMITIVE 8 · WRITER 37 · CALLER 55 · READER 14), `callee`, `lock`, `latest`, `intent` e
+  `strategy`. Usa só as quatro categorias exigidas: **SAFE_TRANSACTIONAL 100 · SAFE_CAS 0 ·
+  WHOLE_PAYLOAD_STALE_RISK 0 · READ_ONLY 14**.
+  - Delegação, criação inédita e trava + CAS ficam em `role`/`strategy`; a categoria antiga fica em
+    `previousCategory`.
+  - SAFE_CAS = 0 porque os três CAS existentes rodam sob `FOR UPDATE`.
+  - READ_ONLY quer dizer que a função nunca grava `OrdemServico.payload` a partir da leitura. A única
+    escrita em outra tabela está explícita: `syncOperacaoItensComOrcamento` grava `OrdemServicoItem`.
+- **`scopesReviewed` (10, fora da contagem):** V4 (sem escrita direta; consome 16 módulos V3, todos
+  com funções listadas), consumidores cliente da V2, rotas e actions só de leitura,
+  `app/api/ordens-servico/**` (escrita devolve 410), scripts que não gravam payload e helpers puros.
+- **`appendixExcluded` (2, fora da contagem, NÃO aprovados como writers):** `scripts/migrate-loja-ids.mjs`
+  (grava só a coluna `lojaId`) e o backend histórico aninhado do espelho (abaixo).
+
+Reconfirmação de que a troca de categoria não escondeu risco: cada função foi reclassificada pela
+prova no código. Uma checagem cruzada mapeou toda gravação encontrada pelo grep
+(`ordemServico.update*/create*/upsert/delete*`, primitivas, `updateOSPayload`/`updateOSStatus`/
+`createOS`/`appendTimelineEvent`) para a função que a contém. Todas caem numa entrada de `functions`,
+exceto o apêndice (`migrate-loja-ids`) e os consumidores cliente da V2 em `scopesReviewed` (hooks
+React; nenhum importador de servidor). A varredura achou funções que a versão anterior omitia ou
+agrupava (prova de entrada ×6, `finalizarAtendimentoRapidoV3`, `gerarOrcamentoDaOS` ×2, `criarOS`,
+`criarOSCore`, `executeOmniAgentIntent`, `syncFinanceiroAfterOSPayloadUpdate`, `persistirImportacao`,
+primitivas…). Nenhuma é WHOLE_PAYLOAD_STALE_RISK. Também corrige uma nota errada: `criarOSEnterpriseV3`
+grava só via `createOS`; não chama `updateOSPayload` depois.
+
+### Espelho `pdv-github-original` (limite preciso)
+
+A pasta **não** é inteira inalcançável. `app/dashboard/pdv-github-original/page.tsx` importa
+`PdvGithubOriginal` e, com `experimentalPdvEnabled` (`NEXT_PUBLIC_OG_EXPERIMENTAL=1`), renderiza a UI
+de referência (sem a flag, `ModuleEmDesenvolvimento`). O fecho de imports dessa rota (`page.tsx` e
+`layout.tsx`, com relativos e aliases do tsconfig) tem 5 arquivos do espelho: `PdvGithubOriginal.tsx`,
+`Icons.tsx`, `Modals.tsx`, `data.ts` e `pdv-original-scope.css`. São 0 arquivos sob `app/`, 0 gravações
+em `ordemServico`, 0 `"use server"` e nenhum `fetch`/`/api/`.
+
+Já o backend histórico aninhado (`components/pdv-github-original/app/**`, mais `components/`, `lib/`,
+`scripts/` e `importar_backup.mjs` do espelho) contém gravações em `ordemServico` não corrigidas. Ele
+não é roteado: o App Router só monta o `app/` da raiz e não há `src/app`. Também não é importado: fora
+do espelho, a única referência de runtime é a `page.tsx` acima. Está excluído no `tsconfig.json` e no
+`vitest.config.ts`. Por isso fica no apêndice, sem contar como writer aprovado. Nada no espelho foi
+editado ou executado.
+
+### Candidatos P3 do implementador (não são P3 finais do revisor)
+
+Fora da corrida financeira do P1-B; relatados e não corrigidos por escopo. Em todos, a gravação é
+feita sobre o latest, sob a trava, e campos financeiros nunca vêm do patch:
+
+1. `applyOperacaoHubAcao` edita `orcamento` a partir de leitura prévia (última escrita vence no
+   próprio campo).
+2. `abrirRetornoV3` decide "retorno aberto?" sobre leitura prévia (duplo envio concorrente pode abrir
+   2 atendimentos).
+3. Da mesma classe do 1, registrado nesta revisão do inventário: `components/operacoes/lovable/api/os.ts::gerarOrcamentoDaOS`
+   (alcançado no servidor por `orcamento-actions::gerarOrcamentoDaOS`) decide "já há orçamento
+   real?" sobre `listOS` e grava `{ orcamento, timeline }` via `updateOSPayload`.
 
 ## Validação (logs em `playwright-report/ops-p1-hardening-001/`, gitignorado)
 
@@ -172,8 +226,9 @@ abrir 2 atendimentos). As duas gravações são feitas sobre o latest, sob a tra
   `app/api/import/advanced/route.test.ts` (mock de `getVerifiedSubscriptionFromCookies` → `null` quebra
   `hub-api-gate`; rota, gate e teste sem diff e o persistidor está mockado ali); 4 calculadora de caixa
   e 1 cancelamento de vendas (estáticos, sem diff); 5 fiscal xmllint e 2 arquivos de setup de
-  ambiente; 4 suítes PG gated sem a variável (verdes acima); 2 validadores do coordenador (contador
-  `created`, acima). Observação: a execução sem filtro também coletou
+  ambiente; 4 suítes PG gated sem a variável (verdes acima: gated 34/34); 2 validadores privados do
+  coordenador (só a asserção antiga de `created` contra o `updated` correto; não versionados neste
+  GOAL, não alterados nem apagados). Observação: a execução sem filtro também coletou
   `.claude/ops-p1-hardening/import-validator.test.ts` (controle privado; executado pelo vitest, não lido).
 - E2E (`e2e-after-fix.log`, build novo, web QA 3051): 6/6.
 - Build oficial via helper (`build-after-import-fix.log`): PASS, `MIGRATION_SKIPPED`.
