@@ -14,6 +14,7 @@
 
 import type { EventoTimeline, EventoTipo, OrdemServico } from "@/types/os";
 import { statusMetaV3, statusV3FromOS, type OperacaoStatusV3 } from "./status-machine";
+import { formatarDataOperacionalV3, lerDatasOSV3, previsaoVencidaV3, rotuloEntradaV3 } from "./datas-operacionais-model";
 
 // ----------------------------------------------------------------------------
 // Checklist de entrada (item 4)
@@ -165,22 +166,43 @@ export function diagnosticoPreenchidoV3(d: DiagnosticoTecnicoV3): boolean {
 // ----------------------------------------------------------------------------
 
 export interface RecepcaoV3 {
+  /** ISO bruta (compatível): entrada registrada, ou o cadastro no legado. Para EXIBIR use `entradaTexto`. */
   dataEntrada?: string;
+  /** ISO bruta (compatível, regra de SLA): previsão, ou o prazo interno. Para EXIBIR use `previsaoTexto`. */
   previsaoEntrega?: string;
   recebidoPor?: string;
   origem?: string;
   localFisico?: string;
+  /** "Entrada" ou "Cadastro" — o cadastro nunca aparece como entrada confirmada. */
+  entradaRotulo?: string;
+  /** Entrada no fuso da loja (só-dia sem horário); "" quando não há data. */
+  entradaTexto?: string;
+  /** Previsão de entrega COMBINADA; "" = não informada. */
+  previsaoTexto?: string;
+  /** A previsão combinada já passou e o aparelho não foi entregue (aviso honesto, calculado agora). */
+  previsaoVencida?: boolean;
+  /** Prazo interno (automático/legado) quando não é a previsão combinada; "" = nenhum. */
+  prazoInternoTexto?: string;
 }
 
 export function lerRecepcaoV3(os: OrdemServico | null | undefined): RecepcaoV3 {
   const r = (os as { aberturaV3?: { recepcao?: Record<string, unknown> } } | null | undefined)?.aberturaV3?.recepcao;
   const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v : undefined);
+  const datas = lerDatasOSV3(os);
   return {
     dataEntrada: str(r?.dataEntrada) ?? os?.criadoEm,
     previsaoEntrega: str(r?.previsaoEntrega) ?? os?.sla?.prazo,
     recebidoPor: str(r?.recebidoPor),
     origem: str(r?.origem) ?? os?.origem,
     localFisico: str(r?.localFisico),
+    entradaRotulo: datas.semEntradaFisica ? "Entrada" : rotuloEntradaV3(datas.entradaOuCadastro),
+    entradaTexto: datas.semEntradaFisica ? "Aparelho não está na loja" : formatarDataOperacionalV3(datas.entradaOuCadastro),
+    previsaoTexto: formatarDataOperacionalV3(datas.previsao),
+    previsaoVencida: previsaoVencidaV3(datas.previsao) && !datas.entrega,
+    prazoInternoTexto:
+      !datas.previsao && datas.prazoInterno
+        ? `${formatarDataOperacionalV3(datas.prazoInterno.data)}${datas.prazoInterno.origem === "automatico" ? " (automático)" : ""}`
+        : "",
   };
 }
 
@@ -198,6 +220,8 @@ export interface TimelineStepV3 {
   atingido: boolean;
   /** ISO do evento que marca a etapa (quando há evento real). */
   em?: string;
+  /** Texto pronto de uma data operacional (respeita a precisão: só-dia nunca mostra a âncora). */
+  emTexto?: string;
   /** Responsável pelo evento (autor), quando há evento real. */
   responsavel?: string;
 }
@@ -250,21 +274,44 @@ export function construirTimelineOperacionalV3(os: OrdemServico | null | undefin
   const ordemAtual = statusMetaV3(statusAtual).order;
   const cancelada = statusAtual === "cancelada";
   const recepcao = lerRecepcaoV3(os);
+  const datas = lerDatasOSV3(os);
 
   return STEPS_DEF.map((def) => {
     const ev = eventoDaEtapa(timeline, def);
     let atingido = !!ev;
     if (!cancelada && def.minOrder > 0 && ordemAtual >= def.minOrder) atingido = true;
     if (def.key === "criada") atingido = true;
-    if (def.key === "recebida") atingido = atingido || !!os; // se a OS existe, o aparelho foi recebido
+    // Se a OS existe, o aparelho foi recebido — exceto orçamento sem o aparelho na loja.
+    if (def.key === "recebida") atingido = atingido || (!!os && !datas.semEntradaFisica);
 
     let em = ev?.criadoEm;
+    let emTexto: string | undefined;
     let responsavel = ev?.autor;
     if (def.key === "criada" && !em) em = os?.criadoEm;
-    if (def.key === "recebida" && !em) em = recepcao.dataEntrada;
-    if (def.key === "entregue" && !em && os?.entregueEm) em = os.entregueEm;
+    // Recebida/Entregue mostram as datas EFETIVAS (com a precisão gravada); o
+    // horário real de cada registro continua no Histórico.
+    if (def.key === "recebida") {
+      if (datas.entrada) {
+        em = datas.entrada.iso;
+        emTexto = formatarDataOperacionalV3(datas.entrada);
+        responsavel = recepcao.recebidoPor;
+      } else if (datas.semEntradaFisica) {
+        em = undefined;
+        responsavel = undefined;
+      } else if (!em) {
+        em = recepcao.dataEntrada;
+      }
+    }
+    if (def.key === "entregue") {
+      if (datas.entrega) {
+        em = datas.entrega.iso;
+        emTexto = formatarDataOperacionalV3(datas.entrega);
+      } else if (!em && os?.entregueEm) {
+        em = os.entregueEm;
+      }
+    }
 
-    return { key: def.key, label: def.label, tone: def.tone, atingido, em, responsavel };
+    return { key: def.key, label: def.label, tone: def.tone, atingido, em, emTexto, responsavel };
   });
 }
 

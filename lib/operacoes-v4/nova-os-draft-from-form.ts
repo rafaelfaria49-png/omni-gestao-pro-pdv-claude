@@ -20,6 +20,7 @@ import {
   type NovaOSOrigemV3,
 } from "@/lib/operacoes-v3/nova-os-model";
 import { normalizarGarantiaPrevistaV3, sugerirGarantiaPorDescricaoV3 } from "@/lib/operacoes-v3/garantia-textos";
+import type { DataOperacionalMetaV3, DataOperacionalV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 
 /** Chave de tipo de equipamento usada pelos botões do modal V4. */
 export type NovaOSEquipV4 = "celular" | "tablet" | "notebook" | "videogame" | "outro";
@@ -79,7 +80,11 @@ export interface NovaOSFormV4 {
   tipoEntrada?: TipoEntradaOSV4;
   prioridade?: "baixa" | "media" | "alta";
   localFisico?: "balcao" | "bancada" | "aguardando_diagnostico";
+  /** Entrada efetiva do aparelho (bloco "Datas e prazos"). Ausente = agora (compatível). */
+  dataEntrada?: DataOperacionalV3 | null;
+  /** Previsão de entrega informada (ISO). Ausente = não informada. */
   previsaoEntrega?: string;
+  previsaoEntregaMeta?: DataOperacionalMetaV3;
   /** Legado singular (UI atual = 1 serviço). Preferir `servicosAutorizados`; quando
    *  o array vier preenchido ele tem prioridade. Mantido para compatibilidade. */
   servicoAutorizado?: {
@@ -196,11 +201,13 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
     },
     recepcao: {
       ...base.recepcao,
+      ...(form.dataEntrada ? { dataEntrada: form.dataEntrada.iso, dataEntradaMeta: form.dataEntrada.meta } : {}),
       origem,
       recebidoPor: clean(form.recebidoPor),
       prioridade: form.prioridade ?? base.recepcao.prioridade,
       localFisico: form.localFisico ?? base.recepcao.localFisico,
       previsaoEntrega: clean(form.previsaoEntrega) ?? base.recepcao.previsaoEntrega,
+      ...(clean(form.previsaoEntrega) && form.previsaoEntregaMeta ? { previsaoEntregaMeta: form.previsaoEntregaMeta } : {}),
     },
     problema: {
       ...base.problema,

@@ -44,6 +44,15 @@ import { isOperacaoStatusV3, projetarStatusV2 } from "@/lib/operacoes-v3/status-
 // ASSINATURA-TERMOS-ANEXOS-012): mesma fonte já usada pelas telas de pós-venda
 // e pela impressão da OS (`aberturaV3.garantiaPrevista` / `entregaV3`).
 import { lerEntregaV3, lerFotosSaidaV3 } from "@/lib/operacoes-v3/pos-venda-model";
+// Datas operacionais (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001): entrada,
+// previsão combinada × prazo interno e entrega efetiva, no fuso da loja.
+import {
+  diaNaLojaV3,
+  formatarDataOperacionalV3,
+  lerDatasOSV3,
+  previsaoVencidaV3,
+  rotuloEntradaV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
 import {
   buildGarantiaPosVendaV4,
   buildPosVendaV4,
@@ -243,8 +252,18 @@ export interface V4OsView {
   defeito: string;
   /** Observações internas da recepção (aberturaV3.observacoesInternas); "" quando ausente. */
   observacoesInternas: string;
+  /** Entrada efetiva do aparelho; sem ela, o cadastro (ver `entradaRotulo`). */
   entrada: string;
+  /** "Entrada" ou "Cadastro" — nunca apresenta o cadastro como entrada confirmada. */
+  entradaRotulo: string;
+  /** Previsão de entrega COMBINADA (informada); NI quando não informada. */
   previsao: string;
+  /** Previsão combinada já passou (aviso honesto, sem alteração automática). */
+  previsaoVencida: boolean;
+  /** Prazo interno (SLA automático/legado) quando não é a previsão combinada; "" = nenhum. */
+  prazoInterno: string;
+  /** Entrega efetiva (quando entregue); "" = não entregue. */
+  entrega: string;
   tecnico: string;
   sla: string;
   localizacao: string;
@@ -319,6 +338,7 @@ export function adaptOsHeader(os: OrdemServico): V4OsView {
   const senhaTipo = txt(os.senhaEquipamentoTipo);
   const prazoGar =
     os.garantiasOperacionais?.[0]?.prazoDias ?? (os.garantia?.ativa ? os.garantia?.prazoDias : undefined);
+  const datas = lerDatasOSV3(os);
 
   return {
     codigo: txt(os.codigo) || NI,
@@ -344,8 +364,14 @@ export function adaptOsHeader(os: OrdemServico): V4OsView {
     contaApple: NI,
     defeito: txt(eq?.defeitoRelatado) || txt(os.observacaoCliente) || NI,
     observacoesInternas: db.observacoes,
-    entrada: fmtDataHora(os.criadoEm),
-    previsao: os.sla?.prazo ? fmtDataHora(os.sla.prazo) : NI,
+    entrada: datas.semEntradaFisica ? "Aparelho não está na loja" : formatarDataOperacionalV3(datas.entradaOuCadastro) || NI,
+    entradaRotulo: datas.semEntradaFisica ? "Entrada" : rotuloEntradaV3(datas.entradaOuCadastro),
+    previsao: formatarDataOperacionalV3(datas.previsao) || "Não informada",
+    previsaoVencida: previsaoVencidaV3(datas.previsao) && !datas.entrega,
+    prazoInterno: datas.prazoInterno
+      ? `${formatarDataOperacionalV3(datas.prazoInterno.data)}${datas.prazoInterno.origem === "automatico" ? " (automático)" : ""}`
+      : "",
+    entrega: formatarDataOperacionalV3(datas.entrega),
     tecnico: txt(os.tecnico?.nome) || NI,
     sla: os.sla?.status ? (SLA_LABEL[os.sla.status] ?? os.sla.status) : NI,
     localizacao: db.localFisico ? (LOCAL_FISICO_LABEL_V3[db.localFisico] ?? db.localFisico) : NI,
@@ -427,7 +453,11 @@ export const EMPTY_OS_VIEW: V4OsView = {
   defeito: NI,
   observacoesInternas: "",
   entrada: NI,
+  entradaRotulo: "Entrada",
   previsao: NI,
+  previsaoVencida: false,
+  prazoInterno: "",
+  entrega: "",
   tecnico: NI,
   sla: NI,
   localizacao: NI,
@@ -1426,7 +1456,10 @@ export interface V4EntregaView {
   statusLabel: string;
   statusTone: "success" | "info" | "neutro";
   retiradoPor: string;
+  /** Data EFETIVA da entrega (fuso da loja; só-dia nunca mostra horário). */
   retiradoEm: string;
+  /** Momento real do registro da entrega, quando difere da data efetiva; "" = igual/desconhecido. */
+  registradoEm: string;
   /** Observação real da retirada; vazio quando não houver. */
   observacao: string;
   temAssinatura: boolean;
@@ -1447,6 +1480,7 @@ export const EMPTY_ENTREGA_VIEW: V4EntregaView = {
   statusTone: "neutro",
   retiradoPor: NI,
   retiradoEm: NI,
+  registradoEm: "",
   observacao: "",
   temAssinatura: false,
   assinaturaDataUrl: "",
@@ -1468,7 +1502,10 @@ export function adaptEntrega(os: OrdemServico): V4EntregaView {
       : "neutro";
 
   const retiradoPor = txt(retirada?.retiradoPor);
-  const retiradoEmRaw = txt(retirada?.retiradoEm) || txt(os.entregueEm);
+  // Mesma precedência da V3 (entregaV3 > entregueEm > retirada), com a precisão gravada.
+  const datasOS = lerDatasOSV3(os);
+  const registroIso = datasOS.entregaRegistradaEm;
+  const registradoDifere = !!registroIso && !!datasOS.entrega && Math.abs(Date.parse(registroIso) - Date.parse(datasOS.entrega.iso)) > 5 * 60_000;
   // Assinatura digital real de retirada (SPRINT_3E.2) — mesma fonte usada pelo
   // Termo de Entrega impresso (`montarTermoEntregaV3`). Nunca texto fabricado.
   const assinaturaDataUrl = txt(entregaV3.assinaturaRetiradaDataUrl);
@@ -1498,7 +1535,8 @@ export function adaptEntrega(os: OrdemServico): V4EntregaView {
     statusLabel,
     statusTone,
     retiradoPor: retiradoPor || NI,
-    retiradoEm: retiradoEmRaw ? fmtDataHora(retiradoEmRaw) : NI,
+    retiradoEm: formatarDataOperacionalV3(datasOS.entrega) || NI,
+    registradoEm: registradoDifere ? formatarDataOperacionalV3({ iso: registroIso, precisao: "data_hora", dia: diaNaLojaV3(registroIso) }) : "",
     observacao,
     temAssinatura: !!assinaturaDataUrl,
     assinaturaDataUrl,

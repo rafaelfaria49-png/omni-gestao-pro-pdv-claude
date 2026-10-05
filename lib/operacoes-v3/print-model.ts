@@ -41,6 +41,7 @@ import {
   type TermoGarantiaV3,
 } from "./garantia-textos";
 import { lerEntregaV3, lerGarantiaV3 } from "./pos-venda-model";
+import { formatarDataOperacionalV3, lerDatasOSV3 } from "./datas-operacionais-model";
 import {
   ACESSORIOS_ENTRADA_V3,
   componenteFisicoLabelV3,
@@ -563,6 +564,9 @@ export interface EtiquetaV3 {
   statusLabel: string;
   tecnico: string;
   entrada?: string;
+  /** Entrada formatada no fuso da loja (ou cadastro, com rótulo honesto). */
+  entradaTexto?: string;
+  entradaRotulo?: string;
 }
 
 export function montarEtiquetaV3(os: OrdemServico): EtiquetaV3 {
@@ -574,6 +578,8 @@ export function montarEtiquetaV3(os: OrdemServico): EtiquetaV3 {
     statusLabel: statusMetaV3(statusV3FromOS(os)).label,
     tecnico: s(os.tecnico?.nome),
     entrada: lerRecepcaoV3(os).dataEntrada,
+    entradaTexto: lerRecepcaoV3(os).entradaTexto,
+    entradaRotulo: lerRecepcaoV3(os).entradaRotulo,
   };
 }
 
@@ -589,6 +595,8 @@ export interface TermoEntregaDocV3 {
   equipamento: { tipo: string; marca: string; modelo: string; numeroSerie: string; serial?: string; operadora?: string };
   servicoRealizado: string[];
   dataEntrega?: string;
+  /** Data EFETIVA da entrega no fuso da loja (só-dia sem horário). */
+  dataEntregaTexto?: string;
   recebidoPor?: string;
   observacao?: string;
   /** Assinatura digital de retirada (data URL) — SPRINT_3E.2. */
@@ -622,6 +630,7 @@ export function montarTermoEntregaV3(os: OrdemServico, empresa?: EmpresaPrintInp
     },
     servicoRealizado,
     dataEntrega: entrega.entregueEm,
+    dataEntregaTexto: formatarDataOperacionalV3(lerDatasOSV3(os).entrega),
     recebidoPor: entrega.recebidoPor,
     observacao: entrega.observacao,
     assinaturaRetiradaDataUrl: entrega.assinaturaRetiradaDataUrl,

@@ -7,7 +7,7 @@
  * `aprovarOrcamentoV3` / `recusarOrcamentoV3`. NÃO baixa/reserva estoque, NÃO
  * toca caixa/financeiro real. Estados aprovado/recusado/prévia/ausente ficam
  * read-only (com CTA "Gerar orçamento" quando aplicável). */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { C, card, cardTitle, upLabel, fmt } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import { lerOrcKindV4, ORC_KIND_LABEL, type V4OrcItemView, type V4OrcKind } from "../../os-adapter";
@@ -23,6 +23,20 @@ import {
   type OrcamentoEditorV4,
 } from "@/lib/operacoes-v4/orcamento-form";
 import { converterOrcamentoEmOSV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
+import { resolverDatasRecepcaoFormV3 } from "@/lib/operacoes-v3/nova-os-model";
+import {
+  campoAgoraV3,
+  campoDeDataLidaV3,
+  campoVazioV3,
+  esperadoCampoDataV3,
+  formatarDataOperacionalV3,
+  hojeNaLojaV3,
+  intencaoPrevisaoConversaoV3,
+  lerDatasOSV3,
+  type CampoDataOperacionalV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
+import { DataOperacionalCampoV3 } from "@/components/operacoes-v3/components/DataOperacionalCampoV3";
+import { atendDataCampo, atendGradeDatas } from "../atendimento/field-styles";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { OrcamentoEnvioCluster } from "./OrcamentoEnvioCluster";
 import { OrcamentoDuplicarButton } from "./OrcamentoDuplicarButton";
@@ -121,8 +135,38 @@ function ConverterOrcamentoPanel({ v }: { v: V4Vals }) {
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [recebidoPor, setRecebidoPor] = useState("");
-  const [previsao, setPrevisao] = useState("");
+  // Datas da abertura: a entrada já registrada é preservada; sem ela, o operador
+  // informa a entrada REAL (nunca presumida pela data da proposta).
+  const [entradaCampo, setEntradaCampo] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
+  // A previsão já gravada vem preenchida: é a promessa que será preservada (e conferida contra a entrada).
+  // `previsaoVista` é o valor que o operador viu — vai junto na conversão (CAS no servidor).
+  const gravada = lerDatasOSV3(v.realOS).previsao;
+  const assinaturaGravada = gravada ? esperadoCampoDataV3(gravada.iso, gravada.precisao) : "";
+  const previsaoGravada = (): CampoDataOperacionalV3 => (gravada ? campoDeDataLidaV3(gravada) : campoVazioV3());
+  const [previsaoCampo, setPrevisaoCampo] = useState<CampoDataOperacionalV3>(previsaoGravada);
+  const [previsaoVista, setPrevisaoVista] = useState(assinaturaGravada);
+  const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
+  const entradaRef = useRef<HTMLInputElement>(null);
+  const previsaoRef = useRef<HTMLInputElement>(null);
+  const osKey = v.selectedOsId ?? "";
+  const realId = (v.realOS as { id?: string } | null)?.id ?? "";
+  // Outra OS, ou a previsão gravada mudou (ex.: "Corrigir datas"): o painel recomeça do valor atual.
+  useEffect(() => {
+    setEntradaCampo(campoAgoraV3());
+    setPrevisaoCampo(previsaoGravada());
+    setPrevisaoVista(assinaturaGravada);
+    setErrosDatas({});
+    setErro(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [osKey, realId, assinaturaGravada]);
   if (!comercial || comercial.tipo !== "orcamento_pre_os" || comercial.statusComercial === "convertido" || !aprovado) return null;
+  const datasOS = lerDatasOSV3(v.realOS);
+  const entradaRegistrada = datasOS.entrada;
+  // Com entrada registrada, o campo vira só leitura (a mesma data vale para a regra da previsão).
+  const camposDatas = {
+    entrada: entradaRegistrada ? campoDeDataLidaV3(entradaRegistrada) : entradaCampo,
+    previsao: previsaoCampo,
+  };
   return (
     <div style={{ ...card, marginBottom: 12, border: `1px solid ${C.primaryBd}` }}>
       <div style={{ ...cardTitle, marginBottom: 6 }}>Converter em Ordem de Serviço</div>
@@ -130,9 +174,47 @@ function ConverterOrcamentoPanel({ v }: { v: V4Vals }) {
         Cliente, aparelho, defeito, opção aprovada e valor já estão neste registro. Só complete a recepção.
       </div>
       {erro ? <div style={{ fontSize: 12, color: C.dangerFg, marginBottom: 8 }}>{erro}</div> : null}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, marginBottom: 10 }}>
-        <input value={recebidoPor} onChange={(e) => setRecebidoPor(e.target.value)} placeholder="Recebido por" style={cellInput} autoComplete="off" />
-        <input type="datetime-local" value={previsao} onChange={(e) => setPrevisao(e.target.value)} style={cellInput} autoComplete="off" />
+      <div style={{ ...atendGradeDatas, marginBottom: 10 }}>
+        {entradaRegistrada ? (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...upLabel, marginBottom: 3 }}>Data de entrada do aparelho</div>
+            <div style={{ fontSize: 12.5, color: C.body, fontWeight: 600 }}>{formatarDataOperacionalV3(entradaRegistrada)}</div>
+            <div style={{ fontSize: 11, color: C.subtle, marginTop: 3 }}>Registrada no orçamento — preservada na OS.</div>
+          </div>
+        ) : (
+          <DataOperacionalCampoV3
+            ref={entradaRef}
+            id="converter-entrada"
+            rotulo="Data de entrada do aparelho"
+            ajuda="Quando o aparelho realmente entrou na loja (não a data da proposta)."
+            obrigatorio
+            maxDia={hojeNaLojaV3()}
+            valor={entradaCampo}
+            onChange={(c) => {
+              setEntradaCampo(c);
+              setErrosDatas((e) => ({ ...e, dataEntrada: "" }));
+            }}
+            erro={errosDatas.dataEntrada || null}
+            estilos={atendDataCampo}
+          />
+        )}
+        <DataOperacionalCampoV3
+          ref={previsaoRef}
+          id="converter-previsao"
+          rotulo="Previsão de entrega"
+          ajuda="Quando você prevê entregar o aparelho ao cliente. Opcional."
+          valor={previsaoCampo}
+          onChange={(c) => {
+            setPrevisaoCampo(c);
+            setErrosDatas((e) => ({ ...e, previsaoEntrega: "" }));
+          }}
+          erro={errosDatas.previsaoEntrega || null}
+          estilos={atendDataCampo}
+        />
+        <div style={{ minWidth: 0 }}>
+          <label htmlFor="converter-recebido" style={{ ...upLabel, display: "block", marginBottom: 3 }}>Recebido por</label>
+          <input id="converter-recebido" value={recebidoPor} onChange={(e) => setRecebidoPor(e.target.value)} placeholder="Nome do atendente" style={{ ...cellInput, width: "100%" }} autoComplete="off" />
+        </div>
       </div>
       <button
         type="button"
@@ -141,12 +223,25 @@ function ConverterOrcamentoPanel({ v }: { v: V4Vals }) {
           const sid = (lojaAtivaId ?? "").trim();
           const osId = (v.selectedOsId ?? "").trim();
           if (!sid || !osId) return;
+          // Datas validadas antes de enviar (mesma regra do servidor).
+          const datas = resolverDatasRecepcaoFormV3(camposDatas, { entradaObrigatoria: true });
+          if (datas.erros.length > 0) {
+            setErrosDatas(Object.fromEntries(datas.erros.map((e) => [e.campo, e.mensagem])));
+            const alvo = datas.erros[0]!.campo === "previsaoEntrega" ? previsaoRef : entradaRef;
+            requestAnimationFrame(() => alvo.current?.focus());
+            return;
+          }
           setBusy(true);
           setErro(null);
           try {
             await converterOrcamentoEmOSV3(sid, osId, {
               recebidoPor,
-              previsaoEntrega: previsao || undefined,
+              ...(entradaRegistrada || !datas.entrada ? {} : { dataEntrada: datas.entrada }),
+              // Preservar (igual ao visto), trocar ou remover (campo limpo) — sempre com a previsão vista.
+              ...intencaoPrevisaoConversaoV3(
+                previsaoVista,
+                datas.previsao ? { iso: datas.previsao.iso, meta: datas.previsao.meta ?? null } : null,
+              ),
               localFisico: "balcao",
               prioridade: "media",
             });

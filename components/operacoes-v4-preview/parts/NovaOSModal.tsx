@@ -10,17 +10,21 @@ import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { criarOSEnterpriseV3, criarOSServicoAutorizadoV3 } from "@/lib/operacoes-v3/nova-os-actions";
-import { validarNovaOSDraftV3 } from "@/lib/operacoes-v3/nova-os-model";
+import { resolverDatasRecepcaoFormV3, validarNovaOSDraftV3 } from "@/lib/operacoes-v3/nova-os-model";
 import {
   buildNovaOSDraftFromFormV4,
   type TipoEntradaOSV4,
 } from "@/lib/operacoes-v4/nova-os-draft-from-form";
 import {
-  FUSO_LOJA_LABEL_V4,
-  formatPrevisaoComFuso,
-  isPrevisaoVencida,
-  localInputToIsoInTZ,
-} from "@/lib/operacoes-v4/dados-basicos-form";
+  campoAgoraV3,
+  campoVazioV3,
+  diasAtrasV3,
+  hojeNaLojaV3,
+  lerDataOperacionalV3,
+  previsaoVencidaV3,
+  type CampoDataOperacionalV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
+import { DataOperacionalCampoV3 } from "@/components/operacoes-v3/components/DataOperacionalCampoV3";
 import {
   atualizarLinhaServicoV4,
   erroLinhaServicoV4,
@@ -45,7 +49,14 @@ import { AtendimentoAccordionSection } from "./atendimento/AtendimentoAccordionS
 import { ClienteAtendimentoSection } from "./atendimento/ClienteAtendimentoSection";
 import { AparelhoAtendimentoSection } from "./atendimento/AparelhoAtendimentoSection";
 import { ServicoCatalogLookup } from "./atendimento/ServicoCatalogLookup";
-import { atendInput, atendLabel } from "./atendimento/field-styles";
+import {
+  atendBlocoDatas,
+  atendBlocoDatasTitulo,
+  atendDataCampo,
+  atendGradeDatas,
+  atendInput,
+  atendLabel,
+} from "./atendimento/field-styles";
 
 const TIPOS: Array<{ key: TipoEntradaOSV4; titulo: string; texto: string }> = [
   { key: "servico_autorizado", titulo: "Serviço já autorizado", texto: "Cliente já aprovou o serviço e o valor." },
@@ -75,7 +86,13 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
   const [recebidoPor, setRecebidoPor] = useState("");
   const [prioridade, setPrioridade] = useState<"baixa" | "media" | "alta">("media");
   const [localFisico, setLocalFisico] = useState<"balcao" | "bancada" | "aguardando_diagnostico">("balcao");
-  const [previsao, setPrevisao] = useState("");
+  // Datas e prazos: entrada efetiva começa em "hoje, agora" e pode ser anterior;
+  // previsão é opcional. Estado próprio — não reseta com tipo, sessão ou catálogo.
+  const [entradaCampo, setEntradaCampo] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
+  const [previsaoCampo, setPrevisaoCampo] = useState<CampoDataOperacionalV3>(() => campoVazioV3());
+  const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
+  const entradaRef = useRef<HTMLInputElement>(null);
+  const previsaoRef = useRef<HTMLInputElement>(null);
   const [aceitaVencida, setAceitaVencida] = useState(false);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -84,9 +101,25 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
   // Atendente real: identidade autenticada como padrão (override manual vale).
   const { data: session } = useSession();
   const nomeSessao = ((session?.user as { name?: unknown } | undefined)?.name ?? session?.user?.email ?? "").toString().trim();
-  // T09: parede da loja → instante ISO pelo fuso canônico (nunca a string crua).
-  const previsaoIso = previsao.trim() ? localInputToIsoInTZ(previsao) : "";
-  const previsaoVencida = isPrevisaoVencida(previsaoIso);
+  // Fuso canônico da loja (nunca o do navegador); mesma regra do servidor.
+  const datas = resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: true });
+  const entradaLida = datas.entrada ? lerDataOperacionalV3(datas.entrada.iso, datas.entrada.meta) : null;
+  const previsaoLida = datas.previsao ? lerDataOperacionalV3(datas.previsao.iso, datas.previsao.meta) : null;
+  const previsaoVencida = previsaoVencidaV3(previsaoLida);
+  const diasRetroativo = diasAtrasV3(entradaLida);
+  const hoje = hojeNaLojaV3();
+
+  /** Mostra os erros junto aos campos e leva o foco ao primeiro. */
+  const marcarErrosDatas = (erros: { campo: string; mensagem: string }[]): boolean => {
+    if (erros.length === 0) {
+      setErrosDatas({});
+      return false;
+    }
+    setErrosDatas(Object.fromEntries(erros.map((e) => [e.campo, e.mensagem])));
+    const alvo = erros[0]!.campo === "previsaoEntrega" ? previsaoRef : entradaRef;
+    requestAnimationFrame(() => alvo.current?.focus());
+    return true;
+  };
 
   /** Remove uma linha; se era a última, abre um editor vazio (validação segue no submit). */
   const removerLinha = (key: string) => {
@@ -119,13 +152,21 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
       setErro("Selecione uma loja ativa para abrir a OS.");
       return;
     }
+    // Datas primeiro: nada é enviado com data inválida, futura ou fora de ordem.
+    const datasAgora = resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: true });
+    if (marcarErrosDatas(datasAgora.erros)) {
+      setErro("Revise as datas destacadas.");
+      return;
+    }
     if (tipo === "servico_autorizado" && paraServicosAutorizadosV4(servicos).length === 0) {
       setErro("Informe ao menos um serviço com descrição e valor de venda.");
       return;
     }
     // T10: previsão no passado exige aceite explícito — nunca entra em silêncio.
     if (previsaoVencida && !aceitaVencida) {
-      setErro("A previsão está no passado. Marque o aceite explícito para abrir a OS assim mesmo.");
+      setErrosDatas({ previsaoEntrega: "Essa previsão já passou. Confirme abaixo para registrá-la assim mesmo." });
+      requestAnimationFrame(() => previsaoRef.current?.focus());
+      setErro("A previsão de entrega está no passado. Marque a confirmação para abrir a OS assim mesmo.");
       return;
     }
     const draft = buildNovaOSDraftFromFormV4({
@@ -142,7 +183,9 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
       tipoEntrada: tipo,
       prioridade,
       localFisico,
-      previsaoEntrega: previsaoIso || undefined,
+      dataEntrada: datasAgora.entrada,
+      previsaoEntrega: datasAgora.previsao?.iso,
+      previsaoEntregaMeta: datasAgora.previsao?.meta,
       // Somente linhas válidas viram contrato (item fantasma vazio nunca persiste).
       servicosAutorizados: tipo === "servico_autorizado" ? paraServicosAutorizadosV4(servicos) : undefined,
     });
@@ -160,6 +203,8 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
       v.onOSCriada(os);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir a OS.");
+      // O servidor confere as datas de novo (relógio dele): aponta o campo se for o caso.
+      marcarErrosDatas(resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: true }).erros);
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -226,6 +271,55 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
           })}
         </div>
       </div>
+
+      <section aria-labelledby="novaos-datas-titulo" style={atendBlocoDatas}>
+        <h3 id="novaos-datas-titulo" style={atendBlocoDatasTitulo}>Datas e prazos</h3>
+        <div style={atendGradeDatas}>
+          <DataOperacionalCampoV3
+            ref={entradaRef}
+            id="novaos-entrada"
+            rotulo="Data de entrada do aparelho"
+            ajuda="Quando o aparelho realmente entrou na loja."
+            obrigatorio
+            maxDia={hoje}
+            valor={entradaCampo}
+            onChange={(c) => {
+              setEntradaCampo(c);
+              setErrosDatas((e) => ({ ...e, dataEntrada: "" }));
+            }}
+            erro={errosDatas.dataEntrada || null}
+            aviso={
+              diasRetroativo > 0
+                ? `Entrada há ${diasRetroativo} ${diasRetroativo === 1 ? "dia" : "dias"}. O cadastro da OS continua com a data de hoje.`
+                : null
+            }
+            estilos={atendDataCampo}
+          />
+          <div style={{ minWidth: 0 }}>
+            <DataOperacionalCampoV3
+              ref={previsaoRef}
+              id="novaos-previsao"
+              rotulo="Previsão de entrega"
+              ajuda="Quando você prevê entregar o aparelho ao cliente. Opcional."
+              minDia={entradaLida?.dia}
+              valor={previsaoCampo}
+              onChange={(c) => {
+                setPrevisaoCampo(c);
+                setAceitaVencida(false);
+                setErrosDatas((e) => ({ ...e, previsaoEntrega: "" }));
+              }}
+              erro={errosDatas.previsaoEntrega || null}
+              estilos={atendDataCampo}
+            />
+            {previsaoVencida ? (
+              <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, color: C.warnFg, marginTop: 6, lineHeight: 1.4 }}>
+                <input type="checkbox" checked={aceitaVencida} onChange={(e) => setAceitaVencida(e.target.checked)} autoComplete="off" />
+                <span>Essa previsão já passou. Registrar assim mesmo.</span>
+              </label>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       <AtendimentoAccordionSection titulo="Cliente" aberto={abertos.cliente} onToggle={() => setAbertos((a) => ({ ...a, cliente: !a.cliente }))} resumo={cliente.existente?.nome || cliente.novo.nome || undefined}>
         <ClienteAtendimentoSection storeId={lojaAtivaId} value={cliente} onChange={setCliente} origem={origem} onOrigemChange={setOrigem} />
@@ -325,19 +419,6 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
               <option value="aguardando_diagnostico">Aguardando diagnóstico</option>
             </select>
           </div>
-          <div>
-            <div style={atendLabel}>Previsão / SLA</div>
-            <input type="datetime-local" value={previsao} onChange={(e) => { setPrevisao(e.target.value); setAceitaVencida(false); }} style={atendInput} autoComplete="off" aria-describedby="novaos-previsao-fuso" />
-            <div id="novaos-previsao-fuso" style={{ fontSize: 11, color: C.subtle, marginTop: 4 }}>
-              {FUSO_LOJA_LABEL_V4}{previsaoIso ? ` · ${formatPrevisaoComFuso(previsaoIso)}` : ""}
-            </div>
-            {previsaoVencida ? (
-              <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, color: C.dangerFg, marginTop: 6 }}>
-                <input type="checkbox" checked={aceitaVencida} onChange={(e) => setAceitaVencida(e.target.checked)} autoComplete="off" />
-                <span>Data no passado — confirmo com o cliente antes de abrir.</span>
-              </label>
-            ) : null}
-          </div>
         </div>
       </AtendimentoAccordionSection>
 
@@ -367,7 +448,7 @@ function LinhaServicoCard({
   const detalhes = [
     moeda(Math.max(0, linha.valor)),
     linha.garantia > 0 ? `Garantia ${linha.garantia}d` : null,
-    linha.prazo.trim() ? `Prazo ${linha.prazo.trim()}` : null,
+    linha.prazo.trim() ? `Tempo estimado ${linha.prazo.trim()}` : null,
   ].filter(Boolean) as string[];
   return (
     <div
@@ -464,12 +545,13 @@ function LinhaServicoEditor({
           />
         </div>
         <div>
-          <div style={atendLabel}>Prazo</div>
+          <div style={atendLabel}>Tempo estimado do serviço</div>
           <input
             value={linha.prazo}
             onChange={(e) => onPatch({ prazo: e.target.value })}
             placeholder="2 horas"
-            aria-label="Prazo estimado"
+            aria-label="Tempo estimado do serviço"
+            title="Duração do serviço. Não é a previsão de entrega ao cliente."
             style={atendInput}
             autoComplete="off"
           />

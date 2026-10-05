@@ -12,7 +12,8 @@
 // `atendimento-rapido-actions.ts`:
 //   1. resolverClienteOperacoesV3  — existente|novo, PF, sem balcão/campos
 //      estendidos (GOAL 022; a mesma config de Nova OS/Atendimento Rápido).
-//   2. criarOSEnterpriseV3         — OS mínima (Nova OS write-path seguro).
+//   2. criarOSPreOrcamentoV3       — pré-OS mínima (write-path seguro da Nova OS),
+//      com a data da proposta e SEM entrada física salvo "aparelho já está na loja".
 //   3. gerarOrcamentoDaOS + salvarOrcamentoV3 — materializa e grava itens
 //      fixos + linhas do grupo + `gruposV3` num ÚNICO write, pelo contrato
 //      OFICIAL de `SalvarOrcamentoV3Input` (GOAL OPS-V4-ORC-APROVACAO-
@@ -32,13 +33,15 @@ import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { resolverClienteOperacoesV3 } from "./cliente-resolver";
-import { criarOSEnterpriseV3 } from "./nova-os-actions";
+import { criarOSPreOrcamentoV3 } from "./nova-os-actions";
 import { gerarOrcamentoDaOS, salvarOrcamentoV3 } from "./orcamento-actions";
 import { aplicarTransicaoStatusV3 } from "./status-actions";
 import { novaOSDraftVazioV3, type NovaOSDraftV3 } from "./nova-os-model";
 import {
   montarGrupoMetaOrcamentoRapidoV3,
   montarServicosOrcamentoRapidoV3,
+  datasOrcamentoRapidoPadraoV3,
+  normalizarDatasOrcamentoRapidoV3,
   novoGrupoIdOrcamentoRapidoV3,
   validarOrcamentoRapidoInputV3,
   type CriarOrcamentoRapidoResultV3,
@@ -66,6 +69,12 @@ export async function criarOrcamentoRapidoV3(storeId: string, input: OrcamentoRa
 
   const erro = validarOrcamentoRapidoInputV3(input);
   if (erro) throw new Error(erro);
+  // Datas da proposta validadas ANTES de qualquer efeito (cliente, OS, orçamento).
+  // Sem o bloco, valem os padrões do servidor (proposta hoje, validade padrão e
+  // nenhuma entrada física): orçamento é sempre pré-OS, nunca fabrica entrada.
+  const datasOk = normalizarDatasOrcamentoRapidoV3(input.datas ?? datasOrcamentoRapidoPadraoV3());
+  if (!datasOk.ok) throw new Error(datasOk.erros[0]!.mensagem);
+  const datas = datasOk.datas;
 
   // 1. Cliente — existente ou novo (PF, sem balcão, sem campos estendidos: GOAL 022).
   const opts = { permitirBalcao: false, permitirCamposEstendidos: false };
@@ -79,13 +88,25 @@ export async function criarOrcamentoRapidoV3(storeId: string, input: OrcamentoRa
       : await resolverClienteOperacoesV3(sid, { modo: "novo", nome: input.cliente.nome?.trim(), telefone: input.cliente.telefone?.trim() || undefined }, opts);
 
   // 2. OS mínima — marca, modelo, defeito. Sem IMEI/senha/fotos/acessórios/catálogo.
+  const base = novaOSDraftVazioV3();
   const draft: NovaOSDraftV3 = {
-    ...novaOSDraftVazioV3(),
+    ...base,
     cliente: { id: cliente.id, nome: cliente.nome, telefone: cliente.telefone, tipo: "PF" },
     equipamento: { tipo: "", marca: input.aparelho.marca.trim(), modelo: input.aparelho.modelo.trim(), senhaTipo: "numerica", acessorios: [] },
     problema: { defeitoRelatado: input.defeitoRelatado.trim() },
+    // Proposta não é entrada física: sem "aparelho já está na loja", não há entrada.
+    recepcao: {
+      ...base.recepcao,
+      dataEntrada: datas.entrada?.iso ?? "",
+      ...(datas.entrada ? { dataEntradaMeta: datas.entrada.meta } : {}),
+    },
   };
-  const { os } = await criarOSEnterpriseV3(sid, draft);
+  // Nasce classificado como pré-OS, com a data REAL da proposta (o carimbo
+  // posterior preserva estes campos). O cadastro continua em `criadoEm`.
+  const { os } = await criarOSPreOrcamentoV3(sid, draft, {
+    dataProposta: datas.proposta,
+    validadeDias: datas.validadeDias,
+  });
   const osId = os.id;
 
   // 3. Orçamento multiopção — materializado em rascunho, SEM transição de status.
@@ -100,6 +121,8 @@ export async function criarOrcamentoRapidoV3(storeId: string, input: OrcamentoRa
       pecas: [],
       desconto: 0,
       gruposV3: [montarGrupoMetaOrcamentoRapidoV3(input, grupoId)],
+      // Validade escolhida na proposta (definida uma única vez; nunca reiniciada).
+      validoAte: datas.validoAte,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

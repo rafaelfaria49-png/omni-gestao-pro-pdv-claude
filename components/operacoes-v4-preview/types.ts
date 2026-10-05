@@ -77,6 +77,8 @@ export interface V4State {
   receberPagamento: boolean;
   /** Modal de confirmação "Cancelar OS" (GOAL OPS-V4-CANCELAR-OS-CONNECT-021). */
   cancelamentoOS: boolean;
+  /** Modal "Corrigir datas" (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001). */
+  corrigirDatas?: boolean;
   /** null = tela limpa (empty state); id = OS real selecionada. */
   selectedOsId: string | null;
   /**

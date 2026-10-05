@@ -126,6 +126,7 @@ import {
   adicionarFotoSaidaV3,
   removerFotoSaidaV3,
   type AdicionarFotoSaidaInputV3,
+  type RegistrarEntregaInputV3,
 } from "@/lib/operacoes-v3/entrega-actions";
 import { montarMensagemAtualizacaoOSV4 } from "@/lib/operacoes-v4/documento-mensagem";
 import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
@@ -265,7 +266,7 @@ export interface V4DataCtx {
   // ---- Entrega (slice OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
   // Confirma pela action canônica `registrarEntregaV3`; o servidor sempre revalida
   // financeiro, mesmo quando o cliente chama fora do gate visual.
-  confirmarEntrega: (semCobranca?: EntregaSemCobrancaSolicitacaoV3) => Promise<boolean>;
+  confirmarEntrega: (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"]) => Promise<boolean>;
   // ---- Assinatura de retirada + auditoria de impressão (GOAL OPS-V4-DOCS-
   // ASSINATURA-TERMOS-ANEXOS-012) ----
   /** Persiste a assinatura de retirada (reuso de `salvarAssinaturaRetiradaV3`). */
@@ -776,6 +777,8 @@ export function buildVals(
     moreItems.push({ icon: "⏸", label: "Marcar “Aguardando peça”", color: C.body, onClick: () => go("execucao") });
   if (status === "aguardando_peca")
     moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => go("execucao") });
+  // Correção auditada de datas (só datas — nunca refaz entrega, cobrança ou estoque).
+  if (realOS) moreItems.push({ icon: "📅", label: "Corrigir datas", color: C.body, onClick: () => update({ corrigirDatas: true }) });
   if (status !== "entregue" && status !== "cancelada")
     moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => update({ cancelamentoOS: true }) });
 
@@ -1411,6 +1414,16 @@ export function buildVals(
       ctx.definirCancelamentoMotivoPrefill(null);
     },
     cancelamentoOSOpen: st.cancelamentoOS,
+    // ---- Corrigir datas (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001) ----
+    corrigirDatasOpen: !!st.corrigirDatas && !!ctx.realOS,
+    openCorrigirDatas: () => update({ corrigirDatas: true }),
+    closeCorrigirDatas: () => update({ corrigirDatas: false }),
+    onDatasCorrigidas: () => {
+      update({ corrigirDatas: false });
+      ctx.reloadOrdens();
+      ctx.reloadDetail();
+      notify("Datas corrigidas.");
+    },
     cancelamentoMotivoPrefill: ctx.cancelamentoMotivoPrefill,
     // GOAL 026: link honesto pós-recusa — abre o MESMO modal já com um motivo
     // sugerido (o operador confirma/edita antes de cancelar de verdade).
@@ -2022,9 +2035,14 @@ export function useV4Preview(): V4Vals {
   // `registrarEntregaV3` é o caminho canônico e agora sempre refaz a decisão
   // financeira no servidor. O gate cliente serve apenas para orientar a UX.
   const confirmarEntrega = useCallback(
-    (semCobranca?: EntregaSemCobrancaSolicitacaoV3) =>
+    (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"]) =>
       runWrite(
-        (sid, osId) => registrarEntregaV3(sid, osId, semCobranca ? { semCobranca } : {}),
+        (sid, osId) =>
+          registrarEntregaV3(sid, osId, {
+            ...(semCobranca ? { semCobranca } : {}),
+            // Data efetiva da entrega; o servidor valida e refaz toda a decisão.
+            ...(dataEntrega ? { dataEntrega } : {}),
+          }),
         "Entrega confirmada.",
         () => update({ status: "entregue", stage: "entrega" }),
       ),

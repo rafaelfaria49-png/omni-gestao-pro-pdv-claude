@@ -47,6 +47,7 @@ import {
   recalcOrcamentoV3,
   validarGruposOrcamentoV3,
   validarSelecaoCompletaV3,
+  validadeExpiradaV3,
   VALIDADE_PADRAO_DIAS,
   type CanalEnvioOrcamentoV3,
   type OrcamentoV3,
@@ -57,6 +58,16 @@ import {
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { salvarGarantiaOSV3 } from "./garantia-actions";
 import { mutarPayloadOSV3 } from "./os-payload-lock";
+import {
+  diaNaLojaV3,
+  fimDoDiaLojaIsoV3,
+  formatarDataOperacionalV3,
+  formatarDiaDeIsoNaLojaV3,
+  hojeNaLojaV3,
+  isoInstanteValidoV3,
+  lerDatasOSV3,
+  somarDiasCivisV3,
+} from "./datas-operacionais-model";
 
 /** Materializa o rascunho a partir dos itens da OS (reuso seguro do @/api/os). */
 export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise<OrdemServico> {
@@ -186,6 +197,22 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
       snapshot: atual,
     };
 
+    // Validade: definida uma única vez (criação da proposta); editar itens nunca a reinicia.
+    // Decidida sobre o payload relido sob a trava: uma validade gravada em paralelo é vista.
+    let validoAte = atual.validoAte;
+    if (input.validoAte !== undefined) {
+      if (atual.validoAte) throw new Error("A validade deste orçamento já foi definida. Use “Corrigir datas” para alterá-la.");
+      if (!isoInstanteValidoV3(input.validoAte)) throw new Error("Validade do orçamento inválida.");
+      // "Válido até" é um DIA civil na loja: vale até o fim desse dia e nunca antes
+      // da data do orçamento (mesma regra do formulário e da correção).
+      const dia = diaNaLojaV3(input.validoAte);
+      const proposta = lerDatasOSV3(payload).proposta;
+      if (proposta && dia < proposta.dia) {
+        throw new Error(`A validade não pode ser anterior à data do orçamento (${formatarDataOperacionalV3(proposta)}).`);
+      }
+      validoAte = fimDoDiaLojaIsoV3(dia);
+    }
+
     const editado = recalcOrcamentoV3({
       ...atual,
       servicos: servicosInput,
@@ -195,6 +222,7 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
       // GOAL 026: contrato oficial de grupos — ausente preserva os grupos já
       // existentes (chamadores que não editam grupos, ex. editor de itens V4).
       gruposV3: input.gruposV3 ?? atual.gruposV3,
+      ...(validoAte ? { validoAte } : {}),
       atualizadoEm: nowIso(),
   });
 
@@ -306,8 +334,12 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
     const enviado = recalcOrcamentoV3({
       ...atual,
       status: "enviado",
+      // Evento REAL do envio (nunca a data retroativa da proposta).
       enviadoEm: atual.enviadoEm ?? nowIso(),
-      validoAte: new Date(Date.now() + VALIDADE_PADRAO_DIAS * 86400000).toISOString(),
+      // Validade já definida (na proposta ou num envio anterior) é preservada:
+      // reenviar nunca prorroga em silêncio. Sem validade, vale o padrão contado em
+      // DIAS CIVIS a partir de hoje, até o fim do dia na loja (como as telas leem).
+      validoAte: atual.validoAte ?? fimDoDiaLojaIsoV3(somarDiasCivisV3(hojeNaLojaV3(), VALIDADE_PADRAO_DIAS)),
       atualizadoEm: nowIso(),
   });
   const reenvio = atual.status === "enviado";
@@ -349,6 +381,11 @@ export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise
   const { os, extra: aprovado } = await gravarSobTrava(sid, id, (payload) => {
     const atual = orcamentoEditavel(payload);
     assertStatus(atual, ["rascunho", "enviado"], "aprovar");
+    // Proposta vencida continua vencida: renovar a validade é a correção auditada
+    // ("Corrigir datas" → Válido até), nunca um efeito colateral do aceite.
+    if (validadeExpiradaV3(atual.validoAte)) {
+      throw new Error(`Este orçamento venceu em ${formatarDiaDeIsoNaLojaV3(atual.validoAte)}. Para aprovar, atualize o "Válido até" em "Corrigir datas".`);
+    }
 
     const erroSelecao = validarSelecaoCompletaV3(atual);
     if (erroSelecao) throw new Error(erroSelecao);

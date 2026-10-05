@@ -11,15 +11,26 @@ vi.mock("./garantia-actions", () => ({ salvarGarantiaOSV3: (...args: unknown[]) 
 
 const findFirstMock = vi.fn<AnyFn>();
 const updateMock = vi.fn<AnyFn>(async () => ({}));
+// Ordem das chamadas no `tx`: prova que a trava (`FOR UPDATE`) vem ANTES da leitura gravada.
+const ordemTx: string[] = [];
 vi.mock("@/lib/prisma", () => {
   const prismaTx: Record<string, unknown> = {
     ordemServico: {
-      findFirst: (...args: unknown[]) => findFirstMock(...args),
-      update: (...args: unknown[]) => updateMock(...args),
+      findFirst: (...args: unknown[]) => {
+        ordemTx.push("findFirst");
+        return findFirstMock(...args);
+      },
+      update: (...args: unknown[]) => {
+        ordemTx.push("update");
+        return updateMock(...args);
+      },
     },
   };
   prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
-  prismaTx.$queryRaw = async () => [{ id: "os-travada" }];
+  prismaTx.$queryRaw = async () => {
+    ordemTx.push("forUpdate");
+    return [{ id: "os-travada" }];
+  };
   return { prisma: prismaTx };
 });
 
@@ -50,6 +61,39 @@ function baseRow(orcamentoOverrides: Record<string, unknown> = {}) {
 
 afterEach(() => {
   vi.clearAllMocks();
+  ordemTx.length = 0;
+});
+
+// GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001 garantiu que "uma gravação atrasada nunca
+// desfaz outra" (lá por CAS em updatedAt). Na árvore reconciliada com o hardening
+// OPS-RECEBIMENTO-MISTO-P1, o orçamento decide e grava sob a trava da linha da OS
+// (os-payload-lock): a garantia vem da releitura do payload mais recente sob `FOR UPDATE`.
+describe("gravação sob a trava da OS — gravação atrasada nunca desfaz outra", () => {
+  it("trava, relê e grava na mesma transação; estado mudado em paralelo (ex.: recusa) é visto e nada é gravado", async () => {
+    findFirstMock.mockResolvedValue(baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }));
+    await aprovarOrcamentoV3("loja-1", "os-1");
+    expect(ordemTx).toEqual(["forUpdate", "findFirst", "update"]);
+    expect(findFirstMock.mock.calls[0]![0]).toMatchObject({ where: { id: "os-1", storeId: "loja-1" } });
+
+    vi.clearAllMocks();
+    ordemTx.length = 0;
+    // Outra operação já recusou o orçamento: a releitura sob a trava enxerga isso.
+    findFirstMock.mockResolvedValue(baseRow({ status: "recusado", servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }));
+    await expect(aprovarOrcamentoV3("loja-1", "os-1")).rejects.toThrow();
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(salvarGarantiaMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("aprovarOrcamentoV3 — proposta vencida (R3)", () => {
+  it("recusa aprovar orçamento vencido e aponta a renovação auditada; nada é gravado", async () => {
+    findFirstMock.mockResolvedValue(
+      baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }], validoAte: "2020-01-02T02:59:59.999Z" }),
+    );
+    await expect(aprovarOrcamentoV3("loja-1", "os-1")).rejects.toThrow(/venceu em 01\/01\/2020.*Corrigir datas/);
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(salvarGarantiaMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("aprovarOrcamentoV3 — GOAL OPS-V4-ORC-APROVACAO-SELECAO-026", () => {

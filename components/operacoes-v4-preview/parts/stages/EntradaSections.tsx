@@ -27,13 +27,20 @@ import {
   ORIGEM_V3,
   PRIORIDADE_V3,
   FUSO_LOJA_LABEL_V4,
-  formatPrevisaoComFuso,
-  isPrevisaoVencida,
-  localInputToIsoInTZ,
+  previsaoLocalParaDataV4,
   setDadosBasicos,
   type DadosBasicosEditorV4,
 } from "@/lib/operacoes-v4/dados-basicos-form";
 import { lerDadosBasicosV3 } from "@/lib/operacoes-v3/dados-basicos-model";
+import {
+  formatarDataOperacionalV3,
+  lerDataOperacionalV3,
+  lerDatasOSV3,
+  previsaoVencidaV3,
+  rotuloEntradaV3,
+  type CampoDataOperacionalV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
+import { DataOperacionalCampoV3 } from "@/components/operacoes-v3/components/DataOperacionalCampoV3";
 import { ROTULO_ESTADO_ENTRADA_V4, type EntradaGroupId } from "@/lib/operacoes-v4/entrada-workspace";
 import type { ChavePendenciaEntradaV4, PendenciaEntradaV4 } from "@/lib/operacoes-v4/entrada-pendencias";
 import { lerAberturaRecepcionV4, resolverIdentidadeAparelhoV4 } from "@/lib/operacoes-v4/identidade-aparelho";
@@ -135,7 +142,12 @@ function ConferenciaSnapshot({ v }: { v: V4Vals }) {
   const abertura = lerAberturaRecepcionV4(v.realOS);
   const basicos = lerDadosBasicosV3(v.realOS ?? null);
   const aparelho = [identidade.marca.value, identidade.modelo.value].filter(Boolean).join(" ") || v.os.aparelho;
-  const previsaoIso = basicos.previsaoEntrega;
+  // Datas operacionais (fuso da loja, precisão gravada): entrada × cadastro e
+  // previsão combinada × prazo interno nunca se confundem.
+  const datas = lerDatasOSV3(v.realOS);
+  const prazoInterno = !datas.previsao && datas.prazoInterno
+    ? `${formatarDataOperacionalV3(datas.prazoInterno.data)}${datas.prazoInterno.origem === "automatico" ? " (automático)" : ""}`
+    : "";
   const rows = [
     ["Cliente", v.os.cliente],
     ["Tipo", identidade.tipo.value],
@@ -150,8 +162,10 @@ function ConferenciaSnapshot({ v }: { v: V4Vals }) {
     ["Recebido por", abertura.recebidoPor],
     ["Prioridade", basicos.prioridade],
     ["Localização", basicos.localFisico],
-    // T09: previsão com o fuso explícito — mesmo instante em qualquer navegador.
-    ["Previsão", previsaoIso ? formatPrevisaoComFuso(previsaoIso) : ""],
+    [rotuloEntradaV3(datas.entradaOuCadastro), datas.semEntradaFisica ? "Aparelho não está na loja" : formatarDataOperacionalV3(datas.entradaOuCadastro)],
+    // T09: datas no fuso da loja — mesmo dia/horário em qualquer navegador.
+    ["Previsão de entrega", formatarDataOperacionalV3(datas.previsao)],
+    ["Prazo interno", prazoInterno],
   ].filter(([, value]) => value && value !== NI);
 
   if (rows.length === 0) return null;
@@ -193,8 +207,9 @@ function DadosBasicosSection(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSessao, v.cargaEntradaEstabelecida, seedRecebidoPor]);
   // T10: previsão no passado exige aviso — nunca correção silenciosa.
-  const previsaoIso = db.previsaoLocal.trim() ? localInputToIsoInTZ(db.previsaoLocal) : "";
-  const previsaoVencida = isPrevisaoVencida(previsaoIso);
+  const previsaoData = previsaoLocalParaDataV4(db.previsaoLocal);
+  const previsaoVencida = previsaoVencidaV3(previsaoData.iso ? lerDataOperacionalV3(previsaoData.iso, previsaoData.meta) : null);
+  const previsaoCampo = previsaoLocalParaCampo(db.previsaoLocal);
   // GOAL 004: o que já veio da abertura fica no resumo; "Recebido por" aparece
   // sozinho quando é ele que falta no servidor (complemento real, não reentrada).
   const mostrarCorrecao = !aberturaJaInformada || corrigirAbertura;
@@ -230,13 +245,17 @@ function DadosBasicosSection(props: Props) {
               {LOCAL_FISICO_V3.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </Field>
-          <Field label="Previsão de entrega / SLA (opcional)" className={styles.span2}>
-            <input className={styles.input} type="datetime-local" value={db.previsaoLocal} onChange={(event) => setBasico("previsaoLocal", event.target.value)} aria-describedby="previsao-fuso" />
-            <span id="previsao-fuso" className={styles.groupHint}>{FUSO_LOJA_LABEL_V4}{previsaoIso ? ` · ${formatPrevisaoComFuso(previsaoIso)}` : ""}</span>
-            {previsaoVencida ? (
-              <span className={styles.error} role="alert">Data no passado — confirme com o cliente antes de salvar.</span>
-            ) : null}
-          </Field>
+          <div className={cn(styles.field, styles.span2)}>
+            <DataOperacionalCampoV3
+              id="entrada-previsao"
+              rotulo="Previsão de entrega (opcional)"
+              ajuda={`Quando você prevê entregar o aparelho ao cliente. ${FUSO_LOJA_LABEL_V4}.`}
+              valor={previsaoCampo}
+              onChange={(c) => setBasico("previsaoLocal", campoParaPrevisaoLocal(c))}
+              aviso={previsaoVencida ? "Essa previsão já passou — confirme com o cliente antes de salvar." : null}
+              classes={{ rotulo: styles.label, input: styles.input, ajuda: styles.groupHint, aviso: styles.error, erro: styles.error, botao: styles.linkButton }}
+            />
+          </div>
         </div>
         {aberturaJaInformada ? (
           <button type="button" className={styles.linkButton} onClick={() => setCorrigirAbertura((open) => !open)}>
@@ -618,4 +637,16 @@ function AssinaturaEntradaSection(props: Props) {
       </div>
     </Group>
   );
+}
+
+/** "YYYY-MM-DDTHH:mm" | "YYYY-MM-DD" | "" → campo (sem horário = só o dia). */
+function previsaoLocalParaCampo(local: string): CampoDataOperacionalV3 {
+  const [dia = "", hora = ""] = (local ?? "").trim().split("T");
+  return { dia, hora: hora.slice(0, 5), horaAutomatica: false };
+}
+
+/** Campo → valor do rascunho da Entrada (só o dia quando não há horário). */
+function campoParaPrevisaoLocal(c: CampoDataOperacionalV3): string {
+  if (!c.dia) return "";
+  return c.hora ? `${c.dia}T${c.hora}` : c.dia;
 }

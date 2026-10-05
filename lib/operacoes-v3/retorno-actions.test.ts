@@ -28,6 +28,7 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("./nova-os-actions", () => ({ criarOSEnterpriseV3: mocks.criarOS }));
 
 import { abrirRetornoV3, finalizarRetornoV3 } from "./retorno-actions";
+import { planejarCorrecaoDatasV3 } from "./datas-correcao-model";
 
 const storeId = "store-real";
 const osId = "os-1042";
@@ -122,6 +123,28 @@ describe("abrirRetornoV3", () => {
     ]);
     expect(mocks.emitirEvento).toHaveBeenCalledWith(expect.objectContaining({ tipo: "os_retorno_aberto", storeId }));
     expect(result.atendimento?.id).toBe("os-2001");
+  });
+
+  it("R9: entrega só pelo dia — retorno às 16:00 do último dia abre COM garantia; antecipar a entrega depois é impedido", async () => {
+    vi.setSystemTime(new Date("2026-04-01T19:00:00.000Z")); // 01/04 16:00 na loja
+    const soDia = payload({ entregaV3: { entregueEm: "2026-01-01T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-01-01" } } });
+    mocks.findFirst.mockResolvedValue({ id: osId, payload: soDia });
+    await abrirRetornoV3(storeId, osId, { motivo: "Tela piscando" });
+    const gravado = mocks.update.mock.calls.find((call) => call[0].where.id === osId)![0].data.payload;
+    expect(gravado.retornosV3[0].garantiaAtivaNaAbertura).toBe(true);
+    // A mesma OS, com o retorno aberto pelo fluxo real, não aceita antecipar a entrega para fora da cobertura.
+    const r = planejarCorrecaoDatasV3(
+      gravado,
+      {
+        alteracoes: { dataEntrega: { iso: "2025-12-31T15:00:00.000Z", meta: { precisao: "dia", dia: "2025-12-31" } } },
+        esperados: { dataEntrega: "2026-01-01T15:00:00.000Z|dia" },
+        motivo: "Entregue um dia antes.",
+        confirmarImpactoGarantia: true,
+      },
+      { agora: new Date("2026-10-04T18:00:00.000Z"), operador: "QA", operadorId: "qa" },
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.tipo).toBe("impedimento");
   });
 
   it("permite fora da garantia, mas registra snapshot sem cobertura", async () => {

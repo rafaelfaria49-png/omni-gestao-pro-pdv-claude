@@ -18,6 +18,7 @@
 // nunca chega a esta projeção — ver `KIND_META_V3` em `orcamento-model.ts`.
 // ============================================================================
 
+import { formatarDataOperacionalV3, formatarDiaDeIsoNaLojaV3, lerDatasOSV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 import type { OrdemServico } from "@/types/os";
 import {
   computeTotaisV3,
@@ -26,6 +27,7 @@ import {
   pecaValorCliente,
   servicoValorCliente,
   VALIDADE_PADRAO_DIAS,
+  validadeExpiradaV3,
   type OrcamentoLinhaKindV3,
   type PecaV3,
   type ServicoV3,
@@ -48,8 +50,12 @@ export interface OrcamentoClienteAparelhoV4 {
 }
 
 export interface OrcamentoClienteValidadeV4 {
-  /** Presente quando o orçamento já foi enviado (data real gravada). */
+  /** Presente quando há validade gravada (na proposta ou no envio). */
   validoAte?: string;
+  /** `validoAte` formatado no fuso da loja ("dd/mm/aaaa") — mesmo dia em qualquer navegador. */
+  validoAteTexto?: string;
+  /** A validade já passou (fica vencida; nunca é prorrogada automaticamente). */
+  vencida?: boolean;
   /** Presente quando ainda não foi enviado — texto de política, nunca uma data inventada. */
   politicaTexto?: string;
 }
@@ -90,7 +96,10 @@ export interface OrcamentoClienteTotaisV4 {
 export interface OrcamentoClienteViewV4 {
   loja: OrcamentoClienteLojaV4;
   osNumero: string;
+  /** Momento REAL de criação do orçamento (registro) — rótulo "Emitido". */
   dataCriacao: string;
+  /** Data da PROPOSTA ("dd/mm/aaaa", pode ser anterior ao registro); "" quando não informada. */
+  dataPropostaTexto?: string;
   validade: OrcamentoClienteValidadeV4;
   cliente: OrcamentoClienteClienteV4;
   aparelho: OrcamentoClienteAparelhoV4;
@@ -217,8 +226,14 @@ export function montarOrcamentoClienteViewV4(os: OrdemServico, empresa?: Empresa
     : { exato: totaisGerais.total };
 
   const validade: OrcamentoClienteValidadeV4 = orc.validoAte
-    ? { validoAte: orc.validoAte }
+    ? {
+        validoAte: orc.validoAte,
+        validoAteTexto: formatarDiaDeIsoNaLojaV3(orc.validoAte),
+        // Mesma regra do status efetivo (`statusEfetivoOrcamentoV3`): nunca divergem.
+        vencida: validadeExpiradaV3(orc.validoAte),
+      }
     : { politicaTexto: `Validade de ${VALIDADE_PADRAO_DIAS} dias a partir do envio ao cliente.` };
+  const datasOS = lerDatasOSV3(os);
 
   const observacaoOrcamento = txt(orc.observacao);
 
@@ -226,6 +241,7 @@ export function montarOrcamentoClienteViewV4(os: OrdemServico, empresa?: Empresa
     loja,
     osNumero: txt(os.codigo) || "—",
     dataCriacao: txt(orc.criadoEm),
+    dataPropostaTexto: formatarDataOperacionalV3(datasOS.proposta),
     validade,
     cliente: { nome: txt(os.cliente?.nome) },
     aparelho: { marca: txt(os.equipamento?.marca), modelo: txt(os.equipamento?.modelo) },
