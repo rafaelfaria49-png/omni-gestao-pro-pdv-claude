@@ -38,9 +38,15 @@ function vencimentoFuturo(): string {
 async function abrirReceber(page: Page) {
   await page.goto("/dashboard/operacoes-v3");
   await dismissFirstAccessWizardIfPresent(page);
+  // UI pronta ANTES do clique: a árvore do dashboard é remontada quando a loja ativa termina
+  // de resolver (`OperationsProvider key={opsStorageKey}` em app-ops-providers.tsx), e a
+  // remontagem devolve o shell à aba inicial — um clique anterior se perde. "Precisa de
+  // atenção" só renderiza com a loja já resolvida (storeId); daí em diante a chave é final.
+  await expect(page.getByRole("heading", { name: "Precisa de atenção", exact: true })).toBeVisible();
   const aba = page.getByRole("navigation", { name: "Operações" }).getByRole("button", { name: "Receber", exact: true });
   await expect(aba).toBeVisible();
   await aba.click();
+  await expect(aba).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("Ordem de serviço", { exact: true })).toBeVisible();
 }
 
