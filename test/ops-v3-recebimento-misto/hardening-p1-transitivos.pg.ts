@@ -16,6 +16,10 @@
  *         quantidade real 10→9→10 em ambas as ordens, repetições e peças repetidas legítimas.
  *  P2-T5  intenção de orçamento (hub aprovar/enviar/recusar) e materialização do rascunho
  *         (gerarOrcamentoDaOS) contra edição concorrente.
+ *  P1-SEED (R3) seed oficial `financeiro:seed` → `scripts/seed-contas-receber-os.mjs --exec`
+ *         (CLI real, processo filho) contra o título canônico: ledger, marcador de K, status e
+ *         valor vigente nunca regridem; título ausente nasce uma vez; intercalações com K,
+ *         rota global e pagamento do Financeiro.
  *
  * Intercalação DETERMINÍSTICA: o cliente Prisma real é envolvido só para PAUSAR uma chamada
  * escolhida numa barreira (antes de executar, ou depois de devolver o resultado lido do PG).
@@ -133,6 +137,10 @@ import { consumeEstoqueFromOS, restoreEstoqueFromOS } from "@/lib/operacoes/adap
 import { POST as persistPOST } from "@/app/api/ops/contas-receber-persist/route";
 import { POST as legacyPOST } from "@/app/api/ops/sync-legacy-financeiro/route";
 import { POST as lotePOST } from "@/app/api/pdv/receber-conta-lote/route";
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { exigirBancoQA } from "./qa-bootstrap.mjs";
 
 exigirBancoQA(process.env);
@@ -219,12 +227,19 @@ async function abrirCaixa(storeId: string): Promise<string> {
 let opSeq = 0;
 const opId = () => `qa-trans-op-${SUFIXO}-${++opSeq}`;
 
-async function estado(storeId: string, osId: string) {
+/**
+ * `escopo`: loja compartilhada (`loja-1`, fixa no seed oficial) — títulos só desta OS, caixa só
+ * da sessão do teste e movimentações só do título desta OS. Sem escopo: a loja exclusiva inteira.
+ */
+async function estado(storeId: string, osId: string, escopo?: { sessaoId: string }) {
   const localKey = localKeyContaReceberOSV3(storeId, osId);
-  const titulos = await prisma.contaReceberTitulo.findMany({ where: { storeId } });
+  const titulos = await prisma.contaReceberTitulo.findMany({ where: escopo ? { storeId, localKey } : { storeId } });
   const titulo = titulos.find((t) => t.localKey === localKey) ?? null;
-  const caixa = await prisma.caixaOperacao.findMany({ where: { storeId }, orderBy: { at: "asc" } });
-  const movs = await prisma.movimentacaoFinanceira.findMany({ where: { storeId } });
+  const caixa = await prisma.caixaOperacao.findMany({ where: escopo ? { storeId, sessaoId: escopo.sessaoId } : { storeId }, orderBy: { at: "asc" } });
+  const movs = await prisma.movimentacaoFinanceira.findMany({
+    where: escopo ? { storeId, referenciaId: titulo?.id ?? "-" } : { storeId },
+    ...(escopo ? { orderBy: { createdAt: "asc" as const } } : {}),
+  });
   const os = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } });
   const historico: Payload[] = ((titulo?.payload as Payload | null)?.historico as Payload[] | undefined) ?? [];
   const saldo = titulo ? buildContaReceberAuditTrail([titulo])[0]!.saldoAberto : null;
@@ -345,8 +360,8 @@ const pausaRecebimentoNoCaixa = () =>
   armarPausa({ modelo: "caixaOperacao", metodos: ["create", "createMany"], quando: () => true });
 
 /** K 350+50 completo: 1 baixa 350, 1 marcador, caixa 350, 1 mov; replay K não duplica; novo recebimento legítimo de 50 quita. */
-async function conferirK350Mais50(storeId: string, osId: string, sessaoId: string, K: string) {
-  const s = await estado(storeId, osId);
+async function conferirK350Mais50(storeId: string, osId: string, sessaoId: string, K: string, escopo?: { sessaoId: string }) {
+  const s = await estado(storeId, osId, escopo);
   console.info(`[estado K] ${JSON.stringify(resumo(s))}`);
   expect.soft(s.titulos).toHaveLength(1);
   expect.soft(s.pagamentos.map((e) => e.valor)).toEqual([350]);
@@ -363,7 +378,7 @@ async function conferirK350Mais50(storeId: string, osId: string, sessaoId: strin
   // Retry de K: replay, nenhum efeito novo.
   const replay = await registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K));
   expect.soft(replay).toMatchObject({ ok: true, jaRegistrado: true });
-  const r = await estado(storeId, osId);
+  const r = await estado(storeId, osId, escopo);
   expect.soft(r.pagamentos).toHaveLength(1);
   expect.soft(r.marcadores).toHaveLength(1);
   expect.soft(r.caixa).toHaveLength(1);
@@ -372,13 +387,14 @@ async function conferirK350Mais50(storeId: string, osId: string, sessaoId: strin
   // Recebimento NOVO legítimo sobre o novo saldo continua permitido.
   const novo = await receberOSV3(storeId, osId, { valor: 50, forma: "pix", sessaoId, operacaoId: opId(), saldoEsperado: 50 });
   expect.soft(novo.jaRegistrado).toBe(false);
-  const f = await estado(storeId, osId);
+  const f = await estado(storeId, osId, escopo);
   expect.soft(f.pagamentos.map((e) => e.valor)).toEqual([350, 50]);
   expect.soft(f.caixa).toHaveLength(2);
   expect.soft(f.movs).toHaveLength(2);
   expect.soft(f.saldo).toBe(0);
   expect.soft(f.titulo?.status).toBe("pago");
   ledgerCoerente(f);
+  return f;
 }
 
 // ─── P1-T1 · updateOSPayload → sync → adapter (upsert) ─────────────────────────
@@ -1193,5 +1209,321 @@ describe("P2-T5 · gerar cobrança (V2) decide sobre o faturamento MAIS RECENTE"
     expect.soft(s.titulo?.valor).toBe(500);
     expect.soft(((s.titulo?.payload as Payload | undefined)?.parcelas as Payload[] | undefined)?.map((p) => p.valor)).toEqual([250, 250]);
     expect.soft(s.titulos).toHaveLength(1);
+  });
+});
+
+// ─── P1-SEED (R3) · seed oficial `financeiro:seed` × título canônico da OS ────────
+//
+// `package.json` → `financeiro:seed` → `node scripts/seed-contas-receber-os.mjs --exec` (loja-1
+// fixa no script). O CLI REAL roda em processo filho contra o MESMO PostgreSQL QA (conferido
+// abaixo: loopback, porta e banco iguais aos do teste) com SÓ as URLs QA no ambiente. As
+// intercalações em que o SEED precisa pausar usam a função exportada pelo MESMO módulo do CLI
+// sobre o cliente Prisma real envolvido (barreira determinística, sem sleep).
+
+const SEED_STORE = "loja-1";
+const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const SEED_SCRIPT = resolve(RAIZ, "scripts", "seed-contas-receber-os.mjs");
+
+/** URL QA para o filho: exige loopback + `ops_v3_misto_qa*` e a MESMA porta/banco desta conexão. */
+async function urlQASeed(): Promise<string> {
+  const url = exigirBancoQA(process.env);
+  expect(process.env.OPS_V3_MISTO_TEST_DATABASE_URL, "as três URLs QA iguais").toBe(url);
+  const u = new URL(url);
+  const [alvo] = await prisma.$queryRaw<Array<{ db: string; porta: number }>>`SELECT current_database() AS db, inet_server_port() AS porta`;
+  expect(u.pathname.slice(1)).toBe(alvo!.db);
+  expect(Number(u.port)).toBe(Number(alvo!.porta));
+  expect(alvo!.db.startsWith("ops_v3_misto_qa")).toBe(true);
+  return url;
+}
+
+/** Ambiente mínimo do filho: só o necessário ao processo + as duas URLs QA. */
+function ambienteSeed(url: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", DATABASE_URL: url, DIRECT_URL: url };
+  for (const k of ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP"]) {
+    if (process.env[k]) env[k] = process.env[k];
+  }
+  return env;
+}
+
+/** Caller REAL: `node scripts/seed-contas-receber-os.mjs [--exec]`. */
+function rodarSeedCLI(url: string, args: string[]): Promise<{ code: number | null; out: string }> {
+  return new Promise((ok, falha) => {
+    const filho = spawn(process.execPath, [SEED_SCRIPT, ...args], { cwd: RAIZ, env: ambienteSeed(url), stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    filho.stdout.on("data", (d) => (out += String(d)));
+    filho.stderr.on("data", (d) => (out += String(d)));
+    filho.on("error", falha);
+    filho.on("close", (code) => ok({ code, out }));
+  });
+}
+
+type SeedModulo = {
+  seedContasReceberOS: (db: unknown, opts: { storeId: string; dryRun: boolean; log?: (m: string) => void }) => Promise<Record<string, number>>;
+};
+const seedModulo = async (): Promise<SeedModulo> => (await import("../../scripts/seed-contas-receber-os.mjs")) as unknown as SeedModulo;
+const seedEmProcesso = async (storeId: string) =>
+  (await seedModulo()).seedContasReceberOS(prisma, { storeId, dryRun: false, log: (m) => console.info(`[seed] ${m}`) });
+
+async function lojaSeed(): Promise<string> {
+  await prisma.store.upsert({ where: { id: SEED_STORE }, update: {}, create: { id: SEED_STORE, name: "Loja 1 QA (sintética)" } });
+  return SEED_STORE;
+}
+
+/** OS 400 com título pelo caminho real (updateOSPayload → adapter) — conferido pela localKey (loja compartilhada). */
+async function novaOSComTituloEm(storeId: string): Promise<string> {
+  const osId = await novaOS(storeId);
+  await updateOSPayload(storeId, osId, { ...FATURAMENTO_400, faturamentoReferencia: `OS-QA · ${osId}` } as never);
+  const t = await prisma.contaReceberTitulo.findMany({ where: { storeId, localKey: localKeyContaReceberOSV3(storeId, osId) } });
+  expect(t).toHaveLength(1);
+  expect(t[0]!.valor).toBe(400);
+  return osId;
+}
+
+async function fotoTitulo(storeId: string, osId: string) {
+  const t = await prisma.contaReceberTitulo.findUnique({ where: { storeId_localKey: { storeId, localKey: localKeyContaReceberOSV3(storeId, osId) } } });
+  if (!t) return null;
+  const foto = { id: t.id, valor: t.valor, status: t.status, vencimento: t.vencimento, descricao: t.descricao, cliente: t.cliente, payload: t.payload, updatedAt: t.updatedAt.toISOString() };
+  return { ...foto, hash: createHash("sha256").update(JSON.stringify(foto)).digest("hex") };
+}
+
+/** Todos os títulos da loja (id/updatedAt/conteúdo): prova de "zero DML" no dry-run. */
+async function fotoTitulosLoja(storeId: string) {
+  const rows = await prisma.contaReceberTitulo.findMany({ where: { storeId }, orderBy: { id: "asc" } });
+  return createHash("sha256")
+    .update(JSON.stringify(rows.map((t) => [t.id, t.localKey, t.valor, t.status, t.payload, t.updatedAt.toISOString()])))
+    .digest("hex");
+}
+
+/** Pausa o seed imediatamente antes da escrita do título desta OS. */
+const pausaSeedNaEscrita = (storeId: string, osId: string) => {
+  const localKey = localKeyContaReceberOSV3(storeId, osId);
+  return armarPausa({
+    modelo: "contaReceberTitulo",
+    metodos: ["create", "createMany", "upsert", "update", "updateMany"],
+    quando: (a) => dadosGravados(a).some((d) => d.localKey === localKey) || (a.where as Payload | undefined)?.storeId_localKey?.localKey === localKey,
+  });
+};
+
+describe("P1-SEED · seed oficial (financeiro:seed → seed-contas-receber-os.mjs --exec) × título canônico da OS", () => {
+  it("CLI real depois de K 350+50: ledger/marcador/status/valor intactos; replay K sem efeito novo; 50 quita o MESMO título", async () => {
+    const url = await urlQASeed();
+    const storeId = await lojaSeed();
+    const osId = await novaOSComTituloEm(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    const K = opId();
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K))).toMatchObject({ ok: true, jaRegistrado: false });
+    const antes = await fotoTitulo(storeId, osId);
+    console.info(`[P1-SEED cli] antes hash=${antes?.hash} status=${antes?.status} valor=${antes?.valor}`);
+
+    const cli = await rodarSeedCLI(url, ["--exec"]);
+    console.info(`[P1-SEED cli] exit=${cli.code}\n${cli.out}`);
+    expect(cli.code).toBe(0);
+
+    const depois = await fotoTitulo(storeId, osId);
+    console.info(`[P1-SEED cli] depois hash=${depois?.hash} status=${depois?.status} valor=${depois?.valor}`);
+    expect.soft(depois, "seed não regrava o título existente").toEqual(antes);
+    const f = await conferirK350Mais50(storeId, osId, sessaoId, K, { sessaoId });
+    expect.soft(f.titulo?.id).toBe(antes?.id);
+    expect.soft(f.marcadores.map((e) => e.operacaoId)).toEqual([K]);
+    expect.soft(f.caixa.reduce((a, c) => a + Number(c.valor), 0)).toBe(400);
+    expect.soft(f.movs.reduce((a, m) => a + Number(m.valor), 0)).toBe(400);
+  });
+
+  it("título AUSENTE: dry-run sem DML; --exec cria uma única vez; reexecução conserva identidade; K e 50 posteriores no mesmo título", async () => {
+    const url = await urlQASeed();
+    const storeId = await lojaSeed();
+    const osId = await novaOS(storeId);
+    const sessaoId = await abrirCaixa(storeId);
+    expect(await fotoTitulo(storeId, osId)).toBeNull();
+
+    const lojaAntes = await fotoTitulosLoja(storeId);
+    const dry = await rodarSeedCLI(url, []);
+    console.info(`[P1-SEED ausente] dry-run exit=${dry.code}\n${dry.out}`);
+    expect(dry.code).toBe(0);
+    expect(dry.out).toMatch(/DRY-RUN/);
+    expect.soft(await fotoTitulosLoja(storeId), "dry-run: zero DML nos títulos da loja").toBe(lojaAntes);
+    expect.soft(await fotoTitulo(storeId, osId)).toBeNull();
+
+    const exec1 = await rodarSeedCLI(url, ["--exec"]);
+    console.info(`[P1-SEED ausente] exec1 exit=${exec1.code}\n${exec1.out}`);
+    expect(exec1.code).toBe(0);
+    const t1 = await fotoTitulo(storeId, osId);
+    expect(t1).not.toBeNull();
+    expect.soft(t1?.valor).toBe(400);
+    expect.soft(t1?.status).toBe("pendente");
+    expect.soft((t1?.payload as Payload).ordemServicoId).toBe(osId);
+    expect.soft((t1?.payload as Payload).createdFrom).toBe("seed_os_import");
+
+    const exec2 = await rodarSeedCLI(url, ["--exec"]);
+    console.info(`[P1-SEED ausente] exec2 exit=${exec2.code}`);
+    expect(exec2.code).toBe(0);
+    expect.soft(await fotoTitulo(storeId, osId), "reexecução conserva identidade e linha").toEqual(t1);
+    expect.soft(await prisma.contaReceberTitulo.count({ where: { storeId, localKey: localKeyContaReceberOSV3(storeId, osId) } })).toBe(1);
+
+    const K = opId();
+    expect(await registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K))).toMatchObject({ ok: true, jaRegistrado: false });
+    const exec3 = await rodarSeedCLI(url, ["--exec"]);
+    expect(exec3.code).toBe(0);
+    const f = await conferirK350Mais50(storeId, osId, sessaoId, K, { sessaoId });
+    expect.soft(f.titulo?.id).toBe(t1?.id);
+  });
+
+  it("status e valor vigentes não regridem: pago, parcial, cancelado, estornado, valor 500 e OS Entregue com título pendente", async () => {
+    const url = await urlQASeed();
+    const storeId = await lojaSeed();
+    const sessaoId = await abrirCaixa(storeId);
+    const casos: Record<string, string> = {};
+
+    casos.pago = await novaOSComTituloEm(storeId);
+    expect(await receberOSV3(storeId, casos.pago, { valor: 400, forma: "pix", sessaoId, operacaoId: opId(), saldoEsperado: 400 })).toMatchObject({ jaRegistrado: false });
+    casos.parcial = await novaOSComTituloEm(storeId);
+    expect(await receberOSV3(storeId, casos.parcial, { valor: 100, forma: "pix", sessaoId, operacaoId: opId(), saldoEsperado: 400 })).toMatchObject({ jaRegistrado: false });
+    casos.cancelado = await novaOSComTituloEm(storeId);
+    expect(await cancelContaReceber({ storeId, localKey: localKeyContaReceberOSV3(storeId, casos.cancelado), motivo: "QA", userLabel: "QA" })).toMatchObject({ ok: true });
+    casos.estornado = await novaOSComTituloEm(storeId);
+    // Fixture sintética: status terminal gravado direto (o seed não pode reabri-lo).
+    await prisma.contaReceberTitulo.update({ where: { storeId_localKey: { storeId, localKey: localKeyContaReceberOSV3(storeId, casos.estornado) } }, data: { status: "estornado" } });
+    casos.valor500 = await novaOSComTituloEm(storeId);
+    await faturamentoVigente500(storeId, casos.valor500);
+    // Coluna da OS ainda 400 (snapshot antigo): o título vigente 500 não pode voltar a 400.
+    await prisma.ordemServico.update({ where: { id: casos.valor500 }, data: { valorTotal: 400 } });
+    casos.entregue = await novaOSComTituloEm(storeId);
+    await prisma.ordemServico.update({ where: { id: casos.entregue }, data: { status: "Entregue" } });
+
+    const antes: Record<string, Awaited<ReturnType<typeof fotoTitulo>>> = {};
+    for (const [nome, osId] of Object.entries(casos)) antes[nome] = await fotoTitulo(storeId, osId);
+    const cli = await rodarSeedCLI(url, ["--exec"]);
+    console.info(`[P1-SEED status] exit=${cli.code}`);
+    expect(cli.code).toBe(0);
+    for (const [nome, osId] of Object.entries(casos)) {
+      const depois = await fotoTitulo(storeId, osId);
+      console.info(`[P1-SEED status] ${nome}: ${antes[nome]?.status}/${antes[nome]?.valor} → ${depois?.status}/${depois?.valor}`);
+      expect.soft(depois, `${nome}: título intacto`).toEqual(antes[nome]);
+    }
+  });
+
+  for (const existe of [true, false]) {
+    it(`K trava OS/título (pausado no caixa) → CLI --exec espera a trava → K commita · título ${existe ? "existente" : "AUSENTE"}: K preservado`, async () => {
+      const url = await urlQASeed();
+      const storeId = await lojaSeed();
+      const osId = existe ? await novaOSComTituloEm(storeId) : await novaOS(storeId);
+      const sessaoId = await abrirCaixa(storeId);
+      const K = opId();
+      const pausa = pausaRecebimentoNoCaixa();
+      const pB = registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K));
+      await pausa.naBarreira;
+      const pS = rodarSeedCLI(url, ["--exec"]);
+      const observado = await concluiuOuEsperaTrava(pS);
+      pausa.liberar();
+      const [rB, rS] = await Promise.allSettled([pB, pS]);
+      console.info(`[P1-SEED K→seed] existe=${existe} · seed=${observado} · exit=${rS.status === "fulfilled" ? rS.value.code : String(rS.reason)}`);
+      naoEhDeadlock(rB);
+      expect(observado, "o seed esperou a trava de K").toBe("esperando_trava");
+      expect(rB).toMatchObject({ status: "fulfilled", value: { ok: true, jaRegistrado: false } });
+      expect(rS).toMatchObject({ status: "fulfilled", value: { code: 0 } });
+      const s = await estado(storeId, osId, { sessaoId });
+      if (!existe) expect.soft((s.titulo?.payload as Payload | undefined)?.origem, "título criado por K preservado").toBe("operacoes-v3");
+      const f = await conferirK350Mais50(storeId, osId, sessaoId, K, { sessaoId });
+      expect.soft(f.marcadores.map((e) => e.operacaoId)).toEqual([K]);
+    });
+
+    it(`seed trava antes de gravar → K espera e decide depois · título ${existe ? "existente" : "AUSENTE"}: um título, K aplicado, 50 quita`, async () => {
+      const storeId = await novaLoja();
+      const osId = existe ? await novaOSComTituloEm(storeId) : await novaOS(storeId);
+      const sessaoId = await abrirCaixa(storeId);
+      const K = opId();
+      const pausa = pausaSeedNaEscrita(storeId, osId);
+      const pS = seedEmProcesso(storeId);
+      await pausa.naBarreira;
+      const pB = registrarRecebimentoMistoOSV3(storeId, osId, misto(sessaoId, K));
+      const observado = await concluiuOuEsperaTrava(pB);
+      pausa.liberar();
+      const [rS, rB] = await Promise.allSettled([pS, pB]);
+      console.info(`[P1-SEED seed→K] existe=${existe} · K=${observado} · seed=${JSON.stringify(rS.status === "fulfilled" ? rS.value : String(rS.reason))}`);
+      naoEhDeadlock(rS);
+      naoEhDeadlock(rB);
+      expect(observado, "K esperou a trava da OS tomada pelo seed").toBe("esperando_trava");
+      expect(rS.status).toBe("fulfilled");
+      expect(rB).toMatchObject({ status: "fulfilled", value: { ok: true, jaRegistrado: false } });
+      const f = await conferirK350Mais50(storeId, osId, sessaoId, K);
+      expect.soft(f.marcadores.map((e) => e.operacaoId)).toEqual([K]);
+    });
+  }
+
+  it("título criado pela rota global ENTRE a observação e a escrita do seed, e pago durante o seed: nada sobrescrito", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOS(storeId);
+    const pausa = pausaSeedNaEscrita(storeId, osId);
+    const pS = seedEmProcesso(storeId);
+    await pausa.naBarreira; // seed já observou (OS listada, título ausente) e está prestes a gravar
+    const rA = await postarSnapshot(ROTAS[0], storeId, osId);
+    expect(rA.status).toBe(200);
+    const pago = await registrarPagamentoParcial({ storeId, localKey: localKeyContaReceberOSV3(storeId, osId), valorPago: 100 });
+    expect(pago).toMatchObject({ ok: true });
+    const vencedor = await fotoTitulo(storeId, osId);
+    pausa.liberar();
+    const [rS] = await Promise.allSettled([pS]);
+    console.info(`[P1-SEED rota+pagamento] seed=${JSON.stringify(rS.status === "fulfilled" ? rS.value : String(rS.reason))}`);
+    naoEhDeadlock(rS);
+    expect(rS.status).toBe("fulfilled");
+    const s = await estado(storeId, osId);
+    console.info(`[P1-SEED rota+pagamento] ${JSON.stringify(resumo(s))}`);
+    expect.soft(await fotoTitulo(storeId, osId), "título vencedor (rota + pagamento) intacto").toEqual(vencedor);
+    expect.soft(s.titulos).toHaveLength(1);
+    expect.soft((s.titulo?.payload as Payload | undefined)?.snapshotQA).toBe("A");
+    expect.soft(s.pagamentos.map((e) => e.valor)).toEqual([100]);
+    expect.soft(s.titulo?.status).toBe("parcial");
+  });
+
+  it("rota global cria o título (INSERT ainda sem commit) → CLI --exec espera o índice único → rota commita: título da rota preservado", async () => {
+    const url = await urlQASeed();
+    const storeId = await lojaSeed();
+    const osId = await novaOS(storeId);
+    const localKey = localKeyContaReceberOSV3(storeId, osId);
+    const pausa = armarPausa({
+      modelo: "contaReceberTitulo",
+      metodos: ["createMany", "create", "upsert"],
+      fase: "depois",
+      quando: (a) => dadosGravados(a).some((d) => d.localKey === localKey),
+    });
+    const pA = postarSnapshot(ROTAS[0], storeId, osId);
+    await pausa.naBarreira; // INSERT da rota feito, transação aberta
+    const pS = rodarSeedCLI(url, ["--exec"]);
+    const observado = await concluiuOuEsperaTrava(pS);
+    pausa.liberar();
+    const [rA, rS] = await Promise.allSettled([pA, pS]);
+    console.info(`[P1-SEED rota×CLI] seed=${observado} · exit=${rS.status === "fulfilled" ? rS.value.code : String(rS.reason)}`);
+    naoEhDeadlock(rA);
+    expect(observado, "o seed esperou o INSERT concorrente").toBe("esperando_trava");
+    expect(rA).toMatchObject({ status: "fulfilled", value: { status: 200 } });
+    expect(rS).toMatchObject({ status: "fulfilled", value: { code: 0 } });
+    const t = await prisma.contaReceberTitulo.findMany({ where: { storeId, localKey } });
+    expect.soft(t).toHaveLength(1);
+    expect.soft((t[0]?.payload as Payload | undefined)?.snapshotQA).toBe("A");
+    expect.soft((t[0]?.payload as Payload | undefined)?.createdFrom).toBeUndefined();
+  });
+
+  it("título existente quitado pelo Financeiro enquanto o seed segura a escrita: quitação preservada", async () => {
+    const storeId = await novaLoja();
+    const osId = await novaOSComTituloEm(storeId);
+    const pausa = pausaSeedNaEscrita(storeId, osId);
+    const pS = seedEmProcesso(storeId);
+    await pausa.naBarreira;
+    const pP = liquidarContaReceber({ storeId, localKey: localKeyContaReceberOSV3(storeId, osId) });
+    const observado = await concluiuOuEsperaTrava(pP);
+    pausa.liberar();
+    const [rS, rP] = await Promise.allSettled([pS, pP]);
+    console.info(`[P1-SEED quitação] pagamento=${observado} · P=${JSON.stringify(rP.status === "fulfilled" ? (rP.value as Payload).ok : String(rP.reason))}`);
+    naoEhDeadlock(rS);
+    naoEhDeadlock(rP);
+    expect(rS.status).toBe("fulfilled");
+    expect(rP).toMatchObject({ status: "fulfilled", value: { ok: true } });
+    const s = await estado(storeId, osId);
+    console.info(`[P1-SEED quitação] ${JSON.stringify(resumo(s))}`);
+    expect.soft(s.titulos).toHaveLength(1);
+    expect.soft(s.titulo?.status).toBe("pago");
+    expect.soft(s.saldo).toBe(0);
+    expect.soft(s.pagamentos.map((e) => e.valor)).toEqual([400]);
+    expect.soft(s.titulo?.valor).toBe(400);
   });
 });
