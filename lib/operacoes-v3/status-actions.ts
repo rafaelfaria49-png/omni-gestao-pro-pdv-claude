@@ -17,10 +17,10 @@
 //
 // GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019 — cancelamento (to==="cancelada")
 // exige `opts.motivo` (mín. 5 caracteres) e BLOQUEIA se houver qualquer valor já
-// recebido (`lerPagamentoOSV3`, fonte autoritativa — não o espelho do payload):
+// recebido (ledger do título travado na MESMA transação da OS — não o espelho do payload):
 // nesse caso lança erro orientando a estornar primeiro (`estornarRecebimentoOSV3`).
-// O cancelamento da Conta a Receber acontece ANTES do write de status (não
-// depois, como antes) e o retorno NUNCA é ignorado: se `cancelContaReceber`
+// O cancelamento da Conta a Receber acontece ANTES do write de status, na mesma
+// transação (OS → título), e o retorno NUNCA é ignorado: se `cancelContaReceber`
 // falhar por um motivo que não seja "título inexistente" (ex.: título pago/
 // estornado), o cancelamento inteiro é abortado — a OS NÃO muda de status.
 // ============================================================================
@@ -33,7 +33,6 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-service";
 import { localKeyContaReceberOSV3 } from "./payment-model";
-import { lerPagamentoOSV3 } from "./pdv-servico-actions";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { statusV3ParaEvento } from "./event-model";
 import { restaurarEstoqueOSV3 } from "./estoque-sync";
@@ -121,32 +120,31 @@ export async function aplicarTransicaoStatusV3(
   const { nextPayload, from } = await mutarPayloadOSV3({
     storeId: sid,
     osId: id,
-    mutate: async ({ payload }) => {
+    mutate: async ({ payload }, tx) => {
       const from = statusV3FromOS(payload);
       const veredito = podeTransicionarV3(from, to);
       if (!veredito.ok) throw new Error(veredito.motivo ?? "Transição de status não permitida.");
 
       // ---- Cancelamento seguro (GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019) ----
-      // Motivo obrigatório + bloqueio por pagamento ANTES de qualquer write. A leitura
-      // de pagamento é sempre a autoritativa (mesma fonte do estorno/recebimento),
-      // nunca o espelho `payload.pagamentoV3`. O cancelamento do CR também acontece
-      // aqui (antes do status) e seu retorno é verificado — "not_found" (OS nunca
+      // Motivo obrigatório + bloqueio por pagamento ANTES de qualquer write. O pagamento
+      // é lido do título (ledger autoritativo, nunca o espelho `payload.pagamentoV3`)
+      // TRAVADO nesta mesma transação, depois da OS (ordem OS → título): um pagamento
+      // direto/lote do Financeiro (que não trava a OS) ou commita antes — e o cancelamento
+      // é recusado — ou espera este commit e falha no CAS do título já cancelado. O
+      // cancelamento do CR e o status da OS commitam juntos; "not_found" (OS nunca
       // cobrada) é o caso comum e seguro; qualquer outra falha aborta tudo.
       if (to === "cancelada" && motivoCancelamento !== undefined) {
-        const pagamento = await lerPagamentoOSV3(sid, id);
-        if (pagamento.recebido > 0) {
-          throw new Error("Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar.");
-        }
-
         const resCr = await cancelContaReceber({
           storeId: sid,
           localKey: localKeyContaReceberOSV3(sid, id),
           motivo: motivoCancelamento,
           userLabel: operadorLabel(session),
+          exigirSemRecebimento: true,
+          db: tx,
         });
         if (!resCr.ok && resCr.reason !== "not_found") {
           throw new Error(
-            resCr.reason === "titulo_pago_nao_cancela_aqui"
+            resCr.reason === "titulo_pago_nao_cancela_aqui" || resCr.reason === "titulo_com_recebimento"
               ? "Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar."
               : `Não foi possível cancelar o financeiro desta OS (${resCr.reason}). Cancelamento abortado.`,
           );

@@ -516,7 +516,8 @@ function normal(input: RegistrarRecebimentoMistoInputV3) {
 describe("PG · falha injetada no meio da operação", () => {
   for (const ponto of [
     { modelo: "caixaOperacao", metodo: "create", rotulo: "depois da baixa e da movimentação, ANTES do caixa" },
-    { modelo: "contaReceberTitulo", metodo: "upsert", rotulo: "DEPOIS do caixa, antes da formalização a prazo" },
+    // A formalização grava o título TRAVADO via `update` (upsertContaReceber lê e grava sob a trava).
+    { modelo: "contaReceberTitulo", metodo: "update", rotulo: "DEPOIS do caixa, antes da formalização a prazo" },
     { modelo: "ordemServico", metodo: "update", rotulo: "na gravação final da OS" },
   ]) {
     it(`falha ${ponto.rotulo} → rollback total, nenhuma meia baixa`, async () => {

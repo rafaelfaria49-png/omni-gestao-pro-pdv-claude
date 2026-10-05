@@ -57,6 +57,17 @@ const h = vi.hoisted(() => {
   }
 
   const prisma = {
+    // `SELECT … FOR UPDATE` do título (em memória não há concorrência): devolve a linha, se existir.
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = strings.join("?")
+      if (!sql.includes("contas_receber_titulos")) throw new Error(`query raw não simulada: ${sql}`)
+      const porId = sql.includes('"id" = ?')
+      const row = porId ? byId.get(String(values[0])) : titulos.get(ck(String(values[0]), String(values[1])))
+      if (!row || (porId && row.storeId !== values[1])) return []
+      return [{ id: row.id }]
+    },
+    // Transação interativa: o próprio cliente em memória faz o papel do `tx`.
+    $transaction: async (fn: (tx: unknown) => unknown): Promise<unknown> => fn(prisma),
     contaReceberTitulo: {
       findUnique: async ({ where }: { where: { storeId_localKey: { storeId: string; localKey: string } } }) => {
         const { storeId, localKey } = where.storeId_localKey
@@ -108,6 +119,19 @@ const h = vi.hoisted(() => {
         return { count: 1 }
       },
       create: async ({ data }: { data: Row }) => snapshot(put(makeRow(data))),
+      // Contrato do Postgres: INSERT … ON CONFLICT DO NOTHING (`skipDuplicates`).
+      createMany: async ({ data, skipDuplicates }: { data: Row[]; skipDuplicates?: boolean }) => {
+        let count = 0
+        for (const d of data) {
+          if (titulos.has(ck(String(d.storeId), String(d.localKey)))) {
+            if (skipDuplicates) continue
+            throw new Error("Unique constraint failed")
+          }
+          put(makeRow(d))
+          count += 1
+        }
+        return { count }
+      },
     },
     carteiraFinanceira: {
       findFirst: async () => null,

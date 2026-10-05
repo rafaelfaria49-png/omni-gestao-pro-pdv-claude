@@ -43,10 +43,12 @@ vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "u1", name: "A
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/financeiro/services/contas-receber-service", () => ({ cancelContaReceber: fin.cancelContaReceber }));
 vi.mock("./estoque-sync", () => ({ restaurarEstoqueOSV3: estoque.restaurarEstoqueOSV3 }));
-// GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019: `aplicarTransicaoStatusV3` agora lê
-// o pagamento autoritativo (`lerPagamentoOSV3`) antes de cancelar — mockado aqui
-// porque este arquivo testa só o roteamento de status (entrega/cancelamento), não
-// o motor de pagamento (que tem suíte própria).
+// GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019: o bloqueio por pagamento é decidido por
+// `cancelContaReceber({ exigirSemRecebimento: true, db: tx })` sobre o título travado na
+// transação da OS (OPS-RECEBIMENTO-MISTO-P1-HARDENING-001) — o serviço é mockado aqui
+// porque este arquivo testa só o roteamento de status; o ledger real é provado em
+// `os-conta-receber-unica.test.ts` e no PostgreSQL (`hardening-p1-transitivos.pg.ts`).
+// `lerPagamentoOSV3` segue mockado só para provar que NÃO é mais consultado.
 vi.mock("./pdv-servico-actions", () => ({ lerPagamentoOSV3: pdv.lerPagamentoOSV3 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -123,21 +125,24 @@ describe("GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019 — bloqueios de cancelame
     expect(prismaMock.update).not.toHaveBeenCalled();
   });
 
-  it("pagamento TOTAL recebido: bloqueia e mantém status anterior (sem write, sem cancelar CR)", async () => {
-    pdv.lerPagamentoOSV3.mockResolvedValue({ total: 300, recebido: 300, saldo: 0, status: "quitado" });
+  it("pagamento TOTAL recebido: bloqueia e mantém status anterior (sem write, CR não cancelado)", async () => {
+    fin.cancelContaReceber.mockResolvedValue({ ok: false, reason: "titulo_pago_nao_cancela_aqui" });
     await expect(
       aplicarTransicaoStatusV3("loja-1", "os1", "cancelada", { motivo: "Cliente desistiu" }),
     ).rejects.toThrow("Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar.");
     expect(prismaMock.update).not.toHaveBeenCalled();
-    expect(fin.cancelContaReceber).not.toHaveBeenCalled();
+    // Decidido sobre o título travado na MESMA transação da OS, nunca por leitura avulsa.
+    expect(fin.cancelContaReceber).toHaveBeenCalledWith(expect.objectContaining({ exigirSemRecebimento: true, db: expect.anything() }));
+    expect(pdv.lerPagamentoOSV3).not.toHaveBeenCalled();
   });
 
   it("pagamento PARCIAL recebido: bloqueia e mantém status anterior (sem write)", async () => {
-    pdv.lerPagamentoOSV3.mockResolvedValue({ total: 480, recebido: 200, saldo: 280, status: "parcial" });
+    fin.cancelContaReceber.mockResolvedValue({ ok: false, reason: "titulo_com_recebimento" });
     await expect(
       aplicarTransicaoStatusV3("loja-1", "os1", "cancelada", { motivo: "Cliente desistiu" }),
     ).rejects.toThrow("Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar.");
     expect(prismaMock.update).not.toHaveBeenCalled();
+    expect(fin.cancelContaReceber).toHaveBeenCalledWith(expect.objectContaining({ exigirSemRecebimento: true, db: expect.anything() }));
   });
 
   it("cancelContaReceber retorna ok:false por motivo que NÃO é 'not_found': aborta, não muda status", async () => {

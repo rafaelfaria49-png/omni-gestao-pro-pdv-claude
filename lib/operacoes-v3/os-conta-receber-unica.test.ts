@@ -76,6 +76,11 @@ const h = vi.hoisted(() => {
         const r = ordens.get(values[0] as string);
         return r && r.storeId === values[1] ? [{ id: r.id }] : [];
       }
+      if (sql.includes("contas_receber_titulos")) {
+        const porId = sql.includes('"id" = ?');
+        const r = porId ? byId.get(values[0] as string) : titulos.get(ck(values[0] as string, values[1] as string));
+        return r && (!porId || r.storeId === values[1]) ? [{ id: r.id }] : [];
+      }
       return [];
     },
     contaReceberTitulo: {

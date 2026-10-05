@@ -11,11 +11,24 @@
 //   preservados por spread do latest) → UPDATE na MESMA transação → commit.
 //   `revalidatePath`/eventos/efeitos externos só DEPOIS do commit, no chamador.
 //
-// Ordem de travas (sem ciclo): writers de pagamento da V3 = advisory lock da OS →
-// sessão de caixa (FOR SHARE) → OS (FOR UPDATE) → título (FOR UPDATE). Writers
-// operacionais travam SÓ a OS (folha) — ou a OS e, depois dela, linhas que nenhum
-// caminho trava antes da OS (produto/estoque, garantias). Nenhum writer segura
-// duas OS ao mesmo tempo.
+// Ordem de travas — a OS NÃO é folha; as arestas concretas são (A → B = segura A e pede B):
+//
+//   pagamento V3 (receber/misto/estorno/a prazo): advisory da OS → sessão de caixa
+//     (FOR SHARE) → OS (FOR UPDATE) → título (FOR UPDATE) → movimentação/caixa/carteira.
+//   updateOSPayload / hub / intenções de orçamento / gerar cobrança (V2): OS → título
+//     (adapter os-faturamento, upsert/cancel na MESMA transação, `db: tx`).
+//   cancelar OS (V3, status-actions): OS → título (`cancelContaReceber` com `db: tx`).
+//   Financeiro/PDV direto, lote, rotas persist/sync-legacy, importadores: SÓ título
+//     (CAS em `updatedAt` ou `SELECT … FOR UPDATE` do serviço) → movimentação/caixa/
+//     carteira. Nunca pedem a OS.
+//   estoque (consumo/restauração/delta): OS → produtos (ledger de estoque) → itens da OS.
+//   sync de itens (rascunho): OS → itens da OS (KEY SHARE do INSERT na própria OS).
+//   writers operacionais: SÓ a OS (ou OS → garantias).
+//
+// Sem ciclo: título, produtos e itens nunca são travados ANTES da OS por quem depois
+// pede a OS; nenhum writer segura duas OS ao mesmo tempo; o serviço de título não adquire
+// advisory nem outra tabela antes do título (re-travar o título no `tx` da V3 é no-op).
+// Provas: `test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts` (PostgreSQL real).
 //
 // Módulo comum (sem "use server"): não é exposto como Server Action.
 // ============================================================================
