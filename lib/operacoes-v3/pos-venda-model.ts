@@ -12,6 +12,7 @@
 
 import type { OrdemServico } from "@/types/os";
 import { garantiaCatalogoV3, normalizarGarantiaPrevistaV3 } from "./garantia-textos";
+import { diaNaLojaV3, fimDoDiaLojaIsoV3, lerDatasOSV3 } from "./datas-operacionais-model";
 
 const DIA_MS = 86400000;
 
@@ -173,7 +174,13 @@ export function lerGarantiaV3(os: OrdemServico | null | undefined, now: Date = n
   const vencimentoIso = g2?.fimEm && !gp ? (g2.fimEm as string) : addDaysIso(inicioIso, prazoDias);
   const venc = parseIso(vencimentoIso);
   const diasRestantes = venc ? Math.ceil((venc.getTime() - now.getTime()) / DIA_MS) : undefined;
-  const situacao: GarantiaSituacaoV3 = venc && venc.getTime() >= now.getTime() ? "ativa" : "vencida";
+  // Entrega só pelo dia (âncora técnica 12:00): a cobertura vale até o FIM do
+  // último dia civil na loja — nunca vence no meio do dia por causa da âncora.
+  const entregaData = lerDatasOSV3(os).entrega;
+  const porDia = !!entregaData && entregaData.precisao === "dia" && Date.parse(entregaData.iso) === Date.parse(inicioIso);
+  const fimDoDia = porDia ? Date.parse(fimDoDiaLojaIsoV3(diaNaLojaV3(vencimentoIso))) : NaN;
+  const fimCoberturaMs = Number.isFinite(fimDoDia) ? fimDoDia : venc?.getTime() ?? NaN;
+  const situacao: GarantiaSituacaoV3 = venc && fimCoberturaMs >= now.getTime() ? "ativa" : "vencida";
 
   return { temGarantia: true, modeloId, label, prazoDias, semCobertura: false, situacao, inicio: inicioIso, vencimento: vencimentoIso, diasRestantes };
 }

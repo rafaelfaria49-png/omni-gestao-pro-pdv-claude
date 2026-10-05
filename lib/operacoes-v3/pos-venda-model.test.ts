@@ -105,6 +105,16 @@ describe("garantia — situação", () => {
     expect(lerGarantiaV3(os({}), NOW).situacao).toBe("nenhuma");
   });
 
+  it("R9: entrega só pelo dia — a garantia vale o último dia inteiro (a âncora 12:00 não a vence às 16:00)", () => {
+    // Entrega em 01/01/2026 só pelo dia (âncora 12:00 na loja = 15:00Z), 90 dias.
+    const soDia = { entregaV3: { entregueEm: "2026-01-01T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-01-01" } } };
+    expect(lerGarantiaV3(comGarantia("tela", 90, soDia), new Date("2026-04-01T19:00:00.000Z")).situacao).toBe("ativa"); // 01/04 16:00
+    expect(lerGarantiaV3(comGarantia("tela", 90, soDia), new Date("2026-04-02T03:00:00.000Z")).situacao).toBe("vencida"); // 02/04 00:00
+    // Com horário informado vale o instante: 12:00 explícito vence às 12:00.
+    const comHora = { entregaV3: { entregueEm: "2026-01-01T15:00:00.000Z", entregueEmMeta: { precisao: "data_hora", dia: "2026-01-01" } } };
+    expect(lerGarantiaV3(comGarantia("tela", 90, comHora), new Date("2026-04-01T19:00:00.000Z")).situacao).toBe("vencida");
+  });
+
   it("usa o prazo padrão do catálogo quando não informado", () => {
     const g = lerGarantiaV3(comGarantia("bateria", undefined, entregueEm(NOW.toISOString())), NOW);
     expect(g.prazoDias).toBe(90); // padrão de bateria
