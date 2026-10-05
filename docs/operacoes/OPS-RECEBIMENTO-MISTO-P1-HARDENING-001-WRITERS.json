@@ -1,8 +1,8 @@
 {
   "goal": "OPS-RECEBIMENTO-MISTO-P1-HARDENING-001",
-  "status": "INVENTARIO_POR_FUNCAO_PRE_REVISAO",
-  "codeHeadInventoried": "c1fa75a4501cf7a995aa0645fe18acba442ed78f",
-  "note": "Inventário do implementador (anthropic), não é veredito de revisão. line = declaração da função no codeHeadInventoried (o commit de docs não altera código).",
+  "status": "INVENTARIO_POR_FUNCAO_PRE_REVISAO_R2",
+  "codeHeadInventoried": "ce1d806ba962fbf5acac1e015e18a370d7939055",
+  "note": "Inventário do implementador (anthropic), não é veredito de revisão. line = declaração da função no codeHeadInventoried (recalculada nesta rodada; o commit de docs não altera código). Rodada R2: corrige os transitivos da revisão R1 sobre c21990d (título da OS, serviço de título compartilhado, cancelar OS, itens/estoque, intenções de orçamento) — ver transitiveWriters e r1Findings.",
   "taxonomy": {
     "SAFE_TRANSACTIONAL": "grava OrdemServico.payload (ou delega a callee listado que grava) somente sobre o payload relido sob SELECT … FOR UPDATE da OS na mesma transação, aplicando só a alteração pretendida. Inclui criação inédita (linha nova na mesma tx/instrução) e writers com trava + CAS (a trava é a garantia primária). Delegação, criação inédita e CAS ficam em strategy/role",
     "SAFE_CAS": "grava só por compare-and-set (updatedAt/versão) com releitura e reaplicação da intenção, SEM row lock. Contagem 0: os 3 CAS existentes rodam sob a trava e estão em SAFE_TRANSACTIONAL",
@@ -34,24 +34,25 @@
     ]
   },
   "counts": {
-    "functionsScanned": 114,
+    "functionsScanned": 115,
     "byClassification": {
-      "SAFE_TRANSACTIONAL": 100,
+      "SAFE_TRANSACTIONAL": 102,
       "SAFE_CAS": 0,
       "WHOLE_PAYLOAD_STALE_RISK": 0,
-      "READ_ONLY": 14
+      "READ_ONLY": 13
     },
     "byRole": {
       "PRIMITIVE": 8,
       "WRITER": 37,
-      "READER": 14,
-      "CALLER": 55
+      "READER": 13,
+      "CALLER": 57
     },
     "directPayloadWriters": 37,
     "staleWritersRemaining": 0,
     "scopesReviewedNotCounted": 10,
     "appendixExcludedNotCounted": 2,
-    "previousInventory": "95 registros, não 95 funções: havia globs/function='*', uma entrada combinada, helper puro e escopos de leitura/histórico contados junto, e categorias fora da taxonomia"
+    "previousInventory": "95 registros, não 95 funções: havia globs/function='*', uma entrada combinada, helper puro e escopos de leitura/histórico contados junto, e categorias fora da taxonomia",
+    "note": "114 (c21990d) + aplicarPatchOSPayloadSobTrava + aplicarIntencaoOrcamentoOS − loadOrcamentoFromOsRow = 115"
   },
   "staleRiskReconfirmation": [
     "Cada função foi reclassificada pela prova no código, não pelo rótulo antigo (campo previousCategory nas entradas afetadas).",
@@ -63,20 +64,24 @@
     "Correção de nota: criarOSEnterpriseV3/criarOSCore NÃO chamam updateOSPayload depois de criar (a nota anterior estava errada); gravam só via createOS."
   ],
   "lockOrder": {
-    "pagamento_normal_receberOSV3": "advisory(OS) → sessão FOR SHARE → OS FOR UPDATE → título FOR UPDATE",
+    "pagamento_normal_receberOSV3": "advisory(OS) → sessão FOR SHARE → OS FOR UPDATE → título FOR UPDATE → movimentação/caixa/carteira(advisory)",
     "estorno": "advisory(OS) → sessão FOR SHARE → OS FOR UPDATE → título",
     "a_prazo_lancarOSAPrazoV3": "advisory(OS) → OS FOR UPDATE → título",
     "misto_decidir_executar": "advisory(OS) → sessão FOR SHARE (só com dinheiro) → OS FOR UPDATE → título FOR UPDATE",
-    "operacional_e_importacao": "OS FOR UPDATE (folha); depois só linhas que ninguém trava antes da OS (produto/estoque/itens, garantias); título só lido",
-    "recebimento_lote_financeiro_e_caixa": "nunca trava OS",
-    "ciclo": "nenhum: toda aresta que termina em OS parte de advisory/sessão; nenhum caminho trava OS e depois advisory/sessão; nenhum writer segura duas OS na mesma transação (abrirRetornoV3 e o auto-close travam uma OS por transação)",
-    "helpersSemOS": "travarSessaoCaixa, travarTitulo e garantirTituloOSTravadoV3 travam sessão/título, não a OS (por isso não estão em functions)"
+    "updateOSPayload_hub_intencoes_cobranca_V2": "OS FOR UPDATE → título FOR UPDATE (adapter os-faturamento no MESMO tx)",
+    "cancelar_OS_V3": "OS FOR UPDATE → título FOR UPDATE (cancelContaReceber db: tx)",
+    "financeiro_pdv_lote_rotas_importadores": "SÓ título (FOR UPDATE do serviço ou CAS updatedAt) → movimentação/caixa/carteira; nunca pedem a OS",
+    "estoque_consumo_restauracao_delta": "OS FOR UPDATE → produtos (ledger de estoque) → itens da OS",
+    "sync_itens_rascunho": "OS FOR UPDATE → itens da OS (KEY SHARE do INSERT na própria OS)",
+    "operacional_e_importacao": "OS FOR UPDATE; depois só garantias/estoque conforme acima",
+    "ciclo": "nenhum: nenhum caminho segura título, produto ou item e depois pede a OS (o Financeiro nunca pede a OS; o sync de itens agora trava a OS antes dos itens); toda aresta que termina em OS parte de advisory/sessão ou de nada; nenhum writer segura duas OS; o serviço de título não adquire advisory/outra tabela antes do título (re-travar no tx da V3 é no-op). Provas: test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts",
+    "helpersSemOS": "travarSessaoCaixa, travarTitulo, garantirTituloOSTravadoV3, travarTituloContaReceber, gravarTituloContaReceberTravado e naTransacaoDoTituloContaReceber travam sessão/título, não a OS (estão em transitiveWriters, não em functions)"
   },
   "functions": [
     {
       "file": "lib/operacoes-v3/os-payload-lock.ts",
       "function": "travarLinhaOSV3",
-      "line": 58,
+      "line": 71,
       "role": "PRIMITIVE",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "trava de linha; não lê nem grava payload",
@@ -88,7 +93,7 @@
     {
       "file": "lib/operacoes-v3/os-payload-lock.ts",
       "function": "lerOSTravadaV3",
-      "line": 66,
+      "line": 79,
       "role": "PRIMITIVE",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "trava e relê; não grava (a gravação é do chamador, na mesma tx)",
@@ -100,7 +105,7 @@
     {
       "file": "lib/operacoes-v3/os-payload-lock.ts",
       "function": "mutarPayloadOSV3",
-      "line": 110,
+      "line": 123,
       "role": "PRIMITIVE",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "MUTATE LATEST PAYLOAD UNDER ROW LOCK; tx própria (maxWait 5000/timeout 15000) ou tx do chamador; payload:null = no-op; revalidate só no chamador, após o commit",
@@ -830,9 +835,9 @@
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "Server Action que delega ao módulo V2 (components/operacoes/lovable/api/os.ts::gerarOrcamentoDaOS)",
-      "callee": "gerarOrcamentoDaOS (lovable) → updateOSPayload",
-      "lock": "FOR UPDATE (em updateOSPayload)",
-      "latest": "patch aplicado ao latest em updateOSPayload",
+      "callee": "gerarOrcamentoDaOS (lovable) → aplicarIntencaoOrcamentoOS",
+      "lock": "FOR UPDATE (no callee)",
+      "latest": "guarda decidida sob trava no callee",
       "intent": "{ orcamento, timeline }"
     },
     {
@@ -985,7 +990,7 @@
     {
       "file": "components/operacoes/lovable/api/os.ts",
       "function": "criarOS",
-      "line": 305,
+      "line": 276,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "módulo V2 sem diretiva; alcançado no servidor por nova-os-actions (e no cliente pela UI V2)",
@@ -997,14 +1002,15 @@
     {
       "file": "components/operacoes/lovable/api/os.ts",
       "function": "gerarOrcamentoDaOS",
-      "line": 181,
+      "line": 182,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "módulo V2 sem diretiva; alcançado no servidor por orcamento-actions::gerarOrcamentoDaOS. Decide 'já há orçamento real?' sobre listOS (leitura prévia) e envia PATCH { orcamento, timeline }",
-      "callee": "listOS → updateOSPayload",
-      "lock": "FOR UPDATE (em updateOSPayload)",
-      "latest": "patch aplicado ao latest; timeline só anexa; campos financeiros removidos do patch",
-      "intent": "campo orcamento = última escrita vence NO PRÓPRIO campo (ver implementerP3Candidates)"
+      "strategy": "módulo V2 sem diretiva; alcançado no servidor por orcamento-actions::gerarOrcamentoDaOS. Delega a intenção 'materializar_rascunho_da_os' à Server Action aplicarIntencaoOrcamentoOS: guarda 'já há orçamento real?' decidida sob a trava, sobre a visão hidratada relida",
+      "callee": "aplicarIntencaoOrcamentoOS",
+      "lock": "FOR UPDATE (no callee)",
+      "latest": "guarda e rascunho sobre o latest (hidratado) sob trava; no-op se já há orçamento real",
+      "intent": "{ orcamento, timeline } só quando não há orçamento real",
+      "previousCategory": "SAFE_TRANSACTIONAL com guarda sobre listOS prévio (P2 R1: rascunho 400 substituía aprovado 500)"
     },
     {
       "file": "lib/operacoes-v3/retorno-actions.ts",
@@ -1069,14 +1075,15 @@
     {
       "file": "lib/operacoes-v3/status-actions.ts",
       "function": "aplicarTransicaoStatusV3",
-      "line": 77,
+      "line": 76,
       "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "transição e bloqueio por pagamento decididos no latest; restauro de estoque depois",
-      "callee": "mutarPayloadOSV3 → restaurarEstoqueOSV3",
+      "strategy": "transição decidida no latest; cancelamento: cancelContaReceber({ exigirSemRecebimento, db: tx }) sobre o título travado NA MESMA transação (OS → título) antes do status; restauro de estoque depois",
+      "callee": "mutarPayloadOSV3 → cancelContaReceber(db: tx) → restaurarEstoqueOSV3",
       "lock": "FOR UPDATE",
-      "latest": "mutate sobre o latest",
-      "intent": "status/motivo/timeline"
+      "latest": "mutate sobre o latest; recebido lido do título travado",
+      "intent": "status/motivo/timeline",
+      "previousCategory": "SAFE_TRANSACTIONAL com guarda de pagamento por leitura global e cancel do título fora da tx da OS (P1 R1)"
     },
     {
       "file": "lib/operacoes-v3/producao-actions.ts",
@@ -1168,28 +1175,17 @@
       "line": 34,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "pós-updateOSPayload: título/cancelamento; no payload, só eventos",
-      "callee": "appendTimelineEvent (injetado)",
-      "lock": "no callee",
-      "latest": "no callee",
-      "intent": "timeline"
-    },
-    {
-      "file": "lib/operacoes/services/os-prisma-itens-sync.ts",
-      "function": "loadOrcamentoFromOsRow",
-      "line": 95,
-      "role": "READER",
-      "classification": "READ_ONLY",
-      "strategy": "leitura para validação/sync de itens",
-      "callee": "prisma.ordemServico.findFirst",
-      "lock": "nenhuma",
-      "latest": "n/a",
-      "intent": "n/a"
+      "strategy": "chamado DENTRO da transação de aplicarPatchOSPayloadSobTrava (OS travada) com upsert/cancel do adapter ligados ao mesmo tx (OS → título); eventos coletados e anexados ao MESMO payload gravado; auditoria só após o commit",
+      "callee": "upsertContaReceberFromOS(os, tx) | cancelContaReceberFromOS({…, db: tx})",
+      "lock": "OS FOR UPDATE (caller) → título FOR UPDATE (adapter)",
+      "latest": "payload resultante do latest; título relido sob trava",
+      "intent": "título da OS e eventos financeiros na timeline",
+      "previousCategory": "pós-commit, título lido/gravado sem trava (P1 R1)"
     },
     {
       "file": "app/actions/operacoes.ts",
       "function": "listOS",
-      "line": 176,
+      "line": 179,
       "role": "READER",
       "classification": "READ_ONLY",
       "strategy": "listagem (base de leitura dos clientes V2; nenhuma gravação a partir dela aqui)",
@@ -1201,7 +1197,7 @@
     {
       "file": "app/actions/operacoes.ts",
       "function": "createOS",
-      "line": 186,
+      "line": 189,
       "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "criação inédita: create + payload definitivo na MESMA tx (corrigido nesta rodada); ninguém vê/grava a OS com payload provisório",
@@ -1214,7 +1210,7 @@
     {
       "file": "app/actions/operacoes.ts",
       "function": "updateOSStatus",
-      "line": 250,
+      "line": 253,
       "role": "WRITER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "transição decidida e gravada no latest; estoque/timeline depois (cada um sob sua trava)",
@@ -1226,44 +1222,46 @@
     {
       "file": "app/actions/operacoes.ts",
       "function": "updateOSPayload",
-      "line": 410,
-      "role": "WRITER",
+      "line": 413,
+      "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "patch genérico V2 sobre o latest; campos financeiros do servidor removidos do patch (corrigido nesta rodada); timeline do patch só anexa",
-      "callee": "mutarPayloadOSV3 + semCamposFinanceirosDoServidorV3 + mesclarTimelineDoPatch → applyEstoqueDelta → syncFinanceiroAfterOSPayloadUpdate",
-      "lock": "FOR UPDATE",
-      "latest": "mergePayload(current=latest, patch)",
-      "intent": "só os campos do patch; campo editado = última escrita vence NO PRÓPRIO campo (intencional)"
+      "strategy": "auth + validatePatchIdentifiers; delega a aplicarPatchOSPayloadSobTrava com o patch fixo do chamador",
+      "callee": "aplicarPatchOSPayloadSobTrava",
+      "lock": "FOR UPDATE (no callee)",
+      "latest": "patch aplicado ao latest no callee",
+      "intent": "só os campos do patch; campo editado = última escrita vence NO PRÓPRIO campo (intencional: patch explícito do chamador)",
+      "previousCategory": "WRITER (até c21990d o título era sincronizado DEPOIS do commit da OS, fora da trava)"
     },
     {
       "file": "app/actions/operacoes.ts",
       "function": "applyOperacaoHubAcao",
-      "line": 542,
+      "line": 607,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "decide sobre leitura prévia e grava via updateOSPayload/updateOSStatus (latest sob trava; transição revalidada no latest)",
-      "callee": "updateOSPayload | updateOSStatus",
-      "lock": "no callee",
-      "latest": "patch aplicado ao latest",
-      "intent": "orcamento editado a partir de leitura prévia = última escrita vence no campo orcamento (ver implementerP3Candidates)",
-      "previousCategory": "DELEGATES_SAFE"
+      "strategy": "auth primeiro; entregar/cancelar → updateOSStatus (revalida no latest); demais ações: montarPatchAcaoHub decide asserts/orçamento/faturamento/garantia/timeline sobre o payload MAIS RECENTE dentro da trava (aprovar/enviar/recusar valem sobre o orçamento vigente)",
+      "callee": "aplicarPatchOSPayloadSobTrava(montarPatchAcaoHub) | updateOSStatus",
+      "lock": "FOR UPDATE (no callee)",
+      "latest": "intenção montada sobre o latest sob trava",
+      "intent": "intenção da ação (status/orçamento/faturamento/timeline); nunca substitui orçamento editado no meio",
+      "previousCategory": "SAFE_TRANSACTIONAL com intenção sobre leitura prévia (P2 R1: aprovar 400 sobrescrevia 500)"
     },
     {
       "file": "app/actions/operacoes.ts",
       "function": "syncOperacaoItensComOrcamento",
-      "line": 812,
+      "line": 1032,
       "role": "READER",
       "classification": "READ_ONLY",
-      "strategy": "lê payload e reescreve OrdemServicoItem (outra tabela); NÃO grava OrdemServico.payload",
-      "callee": "loadOrcamentoFromOsRow → syncOrdemServicoDraftItensFromOrcamento",
-      "lock": "nenhuma na OS",
+      "strategy": "auth; delega a syncOrdemServicoDraftItensFromOrcamento, que trava a OS e relê estoqueConsumido/orçamento antes de reescrever OrdemServicoItem; NÃO grava OrdemServico.payload",
+      "callee": "syncOrdemServicoDraftItensFromOrcamento({ storeId, osId })",
+      "lock": "OS FOR UPDATE → itens (no callee)",
       "latest": "n/a",
-      "intent": "n/a"
+      "intent": "n/a",
+      "previousCategory": "READ_ONLY com snapshot antes da tx (P2 R1: ciclo itens→OS × OS→itens e rascunho stale sobre ledger consumido)"
     },
     {
       "file": "app/actions/operacoes.ts",
       "function": "validateOrcamentoEstoqueAction",
-      "line": 826,
+      "line": 1045,
       "role": "READER",
       "classification": "READ_ONLY",
       "strategy": "validação de estoque; não grava",
@@ -1275,20 +1273,20 @@
     {
       "file": "app/actions/operacoes.ts",
       "function": "gerarCobrancaOSAction",
-      "line": 880,
+      "line": 1099,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
-      "strategy": "faturamento* + timeline via updateOSPayload; eventos via appendTimelineEvent",
-      "callee": "updateOSPayload, appendTimelineEvent",
-      "lock": "no callee",
-      "latest": "no callee",
-      "intent": "faturamento*/timeline",
+      "strategy": "auth (gerarCobranca + editarOs) e período antes; status/faturamento pendente/total e parcelas decididos sobre o latest sob trava",
+      "callee": "aplicarPatchOSPayloadSobTrava, appendTimelineEvent",
+      "lock": "FOR UPDATE (no callee)",
+      "latest": "intenção montada sobre o latest sob trava",
+      "intent": "faturamentoModoCobranca/Parcelas/FormaPagamento + timeline",
       "previousCategory": "DELEGATES_SAFE"
     },
     {
       "file": "app/actions/operacoes.ts",
       "function": "salvarChecklistTecnicoOperacaoAction",
-      "line": 990,
+      "line": 1214,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "via updateOSPayload (patch por campo)",
@@ -1301,7 +1299,7 @@
     {
       "file": "app/actions/operacoes.ts",
       "function": "confirmarRetiradaOperacaoAction",
-      "line": 1017,
+      "line": 1241,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "via updateOSPayload (patch por campo)",
@@ -1314,7 +1312,7 @@
     {
       "file": "app/actions/operacoes.ts",
       "function": "salvarPreferenciaGarantiaOperacionalAction",
-      "line": 1069,
+      "line": 1293,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "via updateOSPayload (patch por campo)",
@@ -1327,7 +1325,7 @@
     {
       "file": "app/actions/operacoes.ts",
       "function": "criarGarantiaOperacionalManualAction",
-      "line": 1085,
+      "line": 1309,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "via updateOSPayload (patch por campo)",
@@ -1340,7 +1338,7 @@
     {
       "file": "app/actions/operacoes.ts",
       "function": "registrarDocumentoImpressoAction",
-      "line": 1050,
+      "line": 1274,
       "role": "CALLER",
       "classification": "SAFE_TRANSACTIONAL",
       "strategy": "só anexa evento",
@@ -1458,6 +1456,30 @@
       "lock": "FOR UPDATE",
       "latest": "condição e patch sobre o latest",
       "intent": "status cancelada + evento"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "aplicarPatchOSPayloadSobTrava",
+      "line": 448,
+      "role": "WRITER",
+      "classification": "SAFE_TRANSACTIONAL",
+      "strategy": "núcleo do updateOSPayload: montar(latest, tx) decide o patch sob a trava; merge/política/transição sobre o latest; título sincronizado no MESMO tx (OS → título); auditoria/revalidate após o commit",
+      "callee": "mutarPayloadOSV3 → syncFinanceiroAfterOSPayloadUpdate(adapter com db: tx) → applyEstoqueDelta (pós-commit)",
+      "lock": "OS FOR UPDATE → título FOR UPDATE",
+      "latest": "mergePayload(current=latest, patch montado sobre o latest)",
+      "intent": "patch do chamador ou intenção montada sobre o latest"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "function": "aplicarIntencaoOrcamentoOS",
+      "line": 918,
+      "role": "CALLER",
+      "classification": "SAFE_TRANSACTIONAL",
+      "strategy": "Server Action das intenções de orçamento da UI V2 (materializar rascunho, enviar, aprovar, recusar): relê a OS hidratada (mesma visão do listOS) dentro da trava e monta a intenção sobre ela",
+      "callee": "aplicarPatchOSPayloadSobTrava(montarPatchIntencaoOrcamento)",
+      "lock": "FOR UPDATE (no callee)",
+      "latest": "intenção sobre o latest hidratado sob trava",
+      "intent": "orcamento/status/garantia/faturamento*/timeline conforme a intenção"
     }
   ],
   "scopesReviewed": [
@@ -1474,7 +1496,7 @@
     {
       "scope": "components/operacoes/lovable/api/os.ts — demais funções (criarOrcamentoRascunho, salvarOrcamento, enviarOrcamentoAoCliente, moveStatus, runOperacaoHubAcao, assignTecnico, addObservacao, addAnexo, removeAnexo, approveOrcamento, rejectOrcamento, addEvento, addPecaFromEstoque, faturarOS, updateChecklist, vincularCliente, gerarCobrancaOS, salvarChecklistTecnico, confirmarRetirada, salvarPreferenciaGarantiaOperacional, criarGarantiaOperacionalManual, validateOrcamentoEstoque, listOrdens, fetchOrdem, listTecnicos)",
       "kind": "CLIENT_CONSUMER",
-      "reason": "chamadas pela UI V2 (osStore/painéis), sem importador de servidor no repositório; gravam só via Server Actions updateOSPayload/updateOSStatus/createOS/applyOperacaoHubAcao (entradas em functions): patch por campo, timeline só anexa, campos financeiros do servidor removidos. Só criarOS e gerarOrcamentoDaOS são alcançadas no servidor e estão em functions"
+      "reason": "chamadas pela UI V2 (osStore/painéis), sem importador de servidor no repositório; gravam só via Server Actions updateOSPayload/updateOSStatus/createOS/applyOperacaoHubAcao (entradas em functions): patch por campo, timeline só anexa, campos financeiros do servidor removidos. Só criarOS e gerarOrcamentoDaOS são alcançadas no servidor e estão em functions. Rodada R2: enviarOrcamentoAoCliente, approveOrcamento e rejectOrcamento delegam a INTENÇÃO à Server Action aplicarIntencaoOrcamentoOS (decidida sob a trava sobre o orçamento vigente), em vez de montar o orçamento a partir de listOS"
     },
     {
       "scope": "app/actions/ordens.ts::listOrdens, getOrdem",
@@ -1536,11 +1558,158 @@
     "note": "A pasta inteira NÃO é inalcançável: a UI de referência é alcançável; o backend histórico aninhado (appendixExcluded) é que não é importado nem roteado. Nada foi editado nem executado no espelho."
   },
   "implementerP3Candidates": {
-    "note": "Candidatos observados pelo IMPLEMENTADOR, fora da corrida financeira do P1-B. NÃO são P3 finais atribuídos pelo revisor.",
+    "note": "Candidatos observados pelo IMPLEMENTADOR. NÃO são P3 finais atribuídos pelo revisor. Os candidatos 'orçamento a partir de leitura prévia' (hub e gerarOrcamentoDaOS) foram promovidos a P2 pela R1 e CORRIGIDOS nesta rodada.",
     "items": [
-      "app/actions/operacoes.ts::applyOperacaoHubAcao edita orcamento a partir de leitura prévia: última escrita vence no próprio campo orcamento (gravação no latest, sob trava; campos financeiros nunca vêm do patch).",
-      "lib/operacoes-v3/retorno-actions.ts::abrirRetornoV3 decide 'retorno aberto?' sobre leitura prévia: duplo envio concorrente pode abrir 2 atendimentos de retorno (gravações no latest, sob trava).",
-      "Mesma classe do 1º, registrado nesta revisão do inventário: components/operacoes/lovable/api/os.ts::gerarOrcamentoDaOS decide 'já há orçamento real?' sobre listOS e grava { orcamento, timeline } via updateOSPayload (latest sob trava; timeline só anexa; campos financeiros removidos)."
+      "lib/operacoes-v3/retorno-actions.ts::abrirRetornoV3 decide 'retorno aberto?' sobre leitura prévia: duplo envio concorrente pode abrir 2 atendimentos de retorno (gravações no latest, sob trava). R1 classificou como P3 operacional não financeiro (fora deste corretivo).",
+      "lib/operacoes/adapters/os-estoque.ts::consumeEstoqueFromOS cria os itens do ledger sem remover rascunhos de syncOrdemServicoDraftItensFromOrcamento (fluxo V2), e restoreEstoqueFromOS soma todos os itens com produtoId. Pré-existente (não alterado), observado no teste de ciclo; estoque, não financeiro, fora da corrida corrigida."
+    ]
+  },
+  "transitiveWriters": {
+    "note": "Writers que não gravam OrdemServico.payload mas disputam a MESMA operação econômica (título da OS) ou a trava da OS (itens). Taxonomia própria; fora de counts.functionsScanned.",
+    "taxonomy": {
+      "TITLE_SAFE_LOCKED": "lê o título (ou a ausência) e grava na MESMA transação, depois de SELECT … FOR UPDATE da linha; ausência coberta por INSERT … ON CONFLICT DO NOTHING + releitura",
+      "TITLE_SAFE_CAS": "grava baixa/estorno por CAS em updatedAt sobre o snapshot usado no cálculo (falha → titulo_alterado, sem efeito)",
+      "ITEMS_SAFE_LOCKED": "trava a OS antes de ler/escrever OrdemServicoItem e relê estoqueConsumido/orçamento sob a trava",
+      "STALE_RISK": "lê, faz await fora de trava e grava por cima (contagem 0)"
+    },
+    "entries": [
+      {
+        "file": "lib/financeiro/services/contas-receber-service.ts",
+        "function": "naTransacaoDoTituloContaReceber",
+        "line": 243,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "usa o tx do chamador (db) ou abre transação curta própria; nunca aninha"
+      },
+      {
+        "file": "lib/financeiro/services/contas-receber-service.ts",
+        "function": "travarTituloContaReceber",
+        "line": 251,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "SELECT id FROM contas_receber_titulos (storeId+localKey | id+storeId) FOR UPDATE"
+      },
+      {
+        "file": "lib/financeiro/services/contas-receber-service.ts",
+        "function": "gravarTituloContaReceberTravado",
+        "line": 280,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "trava → relê → montar(latest) → UPDATE; ausente → createMany skipDuplicates; perdeu a criação → trava e remonta (≤3)"
+      },
+      {
+        "file": "lib/financeiro/services/contas-receber-service.ts",
+        "function": "upsertContaReceber",
+        "line": 316,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "canonicalidade (server-owned keys, temLedgerDoServidor, status canônico) avaliada sobre a linha TRAVADA; snapshot do cliente nunca é autoridade sobre ledger já gravado pelo servidor",
+        "previousCategory": "STALE_RISK (P1 R1: read → upsert cego; título inexistente → UPDATE do ON CONFLICT apagava o payload criado)"
+      },
+      {
+        "file": "lib/financeiro/services/contas-receber-service.ts",
+        "function": "cancelContaReceber",
+        "line": 391,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "trava (id, senão localKey) → relê → pago/estornado/recebido (exigirSemRecebimento) avaliados no latest → UPDATE no mesmo tx (db do chamador ou próprio)",
+        "previousCategory": "STALE_RISK (P1 R1: read → update cego apagava histórico concorrente)"
+      },
+      {
+        "file": "lib/financeiro/services/contas-receber-service.ts",
+        "function": "liquidarContaReceber | registrarPagamentoParcial | estornarContaReceber",
+        "line": null,
+        "classification": "TITLE_SAFE_CAS",
+        "strategy": "gravarBaixaNoTitulo: updateMany where updatedAt = snapshot (inalterado nesta rodada)"
+      },
+      {
+        "file": "lib/financeiro/adapters/os-faturamento.ts",
+        "function": "upsertContaReceberFromOS",
+        "line": 161,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "gravarTituloContaReceberTravado; merge {...latest, ...faturamento} preserva histórico/marcadores/revisões; status derivado do ledger mais recente (pendente/parcial/pago)",
+        "previousCategory": "STALE_RISK (P1 R1)"
+      },
+      {
+        "file": "lib/financeiro/adapters/os-faturamento.ts",
+        "function": "cancelContaReceberFromOS",
+        "line": 237,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "trava → relê → cancela preservando histórico/marcadores do latest (db do chamador = tx da OS)",
+        "previousCategory": "STALE_RISK (P1 R1, irmão cancel)"
+      },
+      {
+        "file": "app/api/ops/contas-receber-persist/route.ts",
+        "function": "POST",
+        "line": 24,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "caller global: upsertContaReceber sem db (transação curta por linha, só o título)"
+      },
+      {
+        "file": "app/api/ops/sync-legacy-financeiro/route.ts",
+        "function": "POST",
+        "line": 23,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "caller global: upsertContaReceber sem db (transação curta por linha, só o título)"
+      },
+      {
+        "file": "app/api/financeiro/receber/route.ts",
+        "function": "POST | PATCH | DELETE",
+        "line": null,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "upsert manual novo (localKey nova) e cancelamentos via serviço travado; baixas via TITLE_SAFE_CAS"
+      },
+      {
+        "file": "app/api/vendas/[id]/cancelar|corrigir|corrigir-parcelas/route.ts",
+        "function": "POST",
+        "line": null,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "cancelContaReceber/upsertContaReceber sem db: transação curta própria por título (não alcançam título de OS)"
+      },
+      {
+        "file": "lib/importador-avancado/persistidor.ts | lib/importador-avancado/smart-genius/persistir.ts",
+        "function": "upsertContaReceber (callers)",
+        "line": null,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "replacePayload sob a trava; ledger do servidor preservado (temLedgerDoServidor no latest)"
+      },
+      {
+        "file": "lib/operacoes-v3/pdv-servico-actions.ts | lib/operacoes-v3/recebimento-misto-service.ts",
+        "function": "formalização a prazo (upsertContaReceber db: tx)",
+        "line": null,
+        "classification": "TITLE_SAFE_LOCKED",
+        "strategy": "título já travado no tx (advisory → caixa → OS → título): re-trava no-op, nenhuma trava nova"
+      },
+      {
+        "file": "lib/operacoes/services/os-prisma-itens-sync.ts",
+        "function": "syncOrdemServicoDraftItensFromOrcamento",
+        "line": 28,
+        "classification": "ITEMS_SAFE_LOCKED",
+        "strategy": "lerOSTravadaV3 → estoqueConsumido/orçamento do latest → delete/create de itens; consumido = no-op",
+        "previousCategory": "STALE_RISK (P2 R1: snapshot antes da tx; itens→OS KEY SHARE × OS→itens = deadlock 40P01)"
+      },
+      {
+        "file": "lib/operacoes/adapters/os-estoque.ts",
+        "function": "consumeEstoqueFromOS | restoreEstoqueFromOS | applyEstoqueDelta",
+        "line": null,
+        "classification": "ITEMS_SAFE_LOCKED",
+        "strategy": "OS FOR UPDATE → produtos → itens (inalterado nesta rodada)"
+      }
+    ],
+    "counts": {
+      "STALE_RISK": 0
+    }
+  },
+  "r1Findings": {
+    "reviewedHead": "c21990d96f19cc148430142bd8e885991cc8b595",
+    "fixedIn": "ce1d806ba962fbf5acac1e015e18a370d7939055",
+    "P1": [
+      "adapter os-faturamento upsert/cancel após liberar a OS (updateOSPayload → sync)",
+      "serviço upsertContaReceber/cancelContaReceber + rotas persist/sync-legacy (título existente e INEXISTENTE) + cancelar OS × Financeiro direto/lote"
+    ],
+    "P2": [
+      "ciclo de travas sync de itens × restauração; rascunho stale sobre ledger consumido",
+      "applyOperacaoHubAcao aprovar/enviar/recusar sobre orçamento lido antes",
+      "gerarOrcamentoDaOS com guarda fora da trava"
+    ],
+    "regressionTests": "test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts",
+    "removedFunctions": [
+      "lib/operacoes/services/os-prisma-itens-sync.ts::loadOrcamentoFromOsRow (READ_ONLY; leitura fora da trava que alimentava o sync de itens — removida; o sync relê sob a trava)"
     ]
   }
 }
