@@ -1,6 +1,6 @@
 {
   "goal": "OPS-RECEBIMENTO-MISTO-P1-HARDENING-001",
-  "status": "INVENTARIO_CORRETIVO_R4_CANCELAMENTO_PRE_REVISAO_R5",
+  "status": "INVENTARIO_FINAL_GATES_CONCLUIDOS_PRE_REVISAO_R5",
   "codeHeadInventoried": "0f5179c9892f86505d017a8cbbcbe0ede9d438a0",
   "note": "Inventário do implementador (anthropic), não é veredito de revisão. line = declaração da função no codeHeadInventoried (corretivo R2 só deslocou linhas em contas-receber-service.ts e os-estoque.ts; demais inalteradas desde ce1d806; o commit de docs não altera código). Rodada R2: corrige os transitivos da revisão R1 sobre c21990d (título da OS, serviço de título compartilhado, cancelar OS, itens/estoque, intenções de orçamento) — ver transitiveWriters e r1Findings. Árvore reconciliada (merge normal 4ed751c com origin/main a27b37e, PR #237): entrega-actions.ts, comercial-pre-os-actions.ts, orcamento-actions.ts e atendimento-rapido-actions.ts mudaram de linhas; os campos line das entradas que mudaram de forma foram atualizados, nas demais valem como referência aproximada. Código do PR #237 é do upstream, não do implementador deste GOAL. Corretivo R3 (e02e826): só scripts/seed-contas-receber-os.mjs mudou no código; nenhuma função de OrdemServico.payload mudou, então functions/counts do recorte OS.payload seguem 118/105/13/39. O seed entra em transitiveWriters (financeiro), não em functions. Corretivo R4 (0f5179c): só cancelarTituloTravado (contas-receber-service.ts, serviço de título) mudou no código; nenhuma função de OrdemServico.payload mudou, então functions/counts seguem 118/105/13/39. Linha de cancelContaReceber atualizada; as demais linhas desse arquivo continuam aproximadas.",
   "taxonomy": {
@@ -1845,5 +1845,43 @@
     ],
     "preserved": "cancelado sem recebido (ou totalmente estornado) + flag = sucesso idempotente sem escrita; sem flag = contrato genérico atual; recusas pago/estornado/parcial com razões existentes; ordem OS → título; sem aresta título → OS, transação aninhada, advisory novo ou schema",
     "regressionTests": "hardening-p1-transitivos.pg.ts › P1-R4: RED (fonte pré-fix, HEAD 01c46e9) 3 FAIL/1 PASS/47 fora do filtro — PATCH e DELETE: OS cancelada, estoque 6→10, entrada 4; disputa de travas: idem; controle sem recebido PASS. GREEN 4/4; PG V3 completo 109/109. Unit contas-receber-cancelar.test.ts 6/6 (escrito depois do fix; sem RED declarado); entrega-unificada.test.ts 13/13 (+assert de nenhuma restauração na recusa)."
+  },
+  "coordinatorFinalGates": {
+    "functionalHead": "0f5179c9892f86505d017a8cbbcbe0ede9d438a0",
+    "validatedHead": "ec0650d9eb7e28fcad8153e62c1b976e48891441",
+    "docsOnlyAfterFunctionalHead": true,
+    "build": {
+      "exitCode": 0,
+      "compiledSeconds": 112,
+      "staticPages": 102,
+      "migrationSkipped": true
+    },
+    "e2e": {
+      "exitCode": 0,
+      "passed": 6,
+      "seconds": 44.8,
+      "workers": 1,
+      "retries": 0,
+      "ownedQaWebStopped": true
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "incremental": false,
+      "heapMb": 8192,
+      "fullPostBuild": true
+    },
+    "lint": {
+      "exitCode": 0,
+      "files": 62,
+      "errors": 0,
+      "preexistingWarnings": 1
+    },
+    "affectedUnit": {
+      "passed": 642,
+      "failedPreexistingStatic": 11,
+      "allSuiteGreen": false,
+      "staticBaselineProof": "r4fix-preexisting-static-source-proof.json"
+    },
+    "nextReview": "R5_NEW_OPENAI_READ_ONLY_EXACT_FINAL_SHA_REQUIRED"
   }
 }

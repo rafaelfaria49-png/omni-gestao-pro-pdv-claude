@@ -1,6 +1,6 @@
 # OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — implementação, corretivos R2, R3 e R4, reconciliação com a main e validação para R5
 
-Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). Os commits funcionais dos corretivos são `ce1d806ba962fbf5acac1e015e18a370d7939055` (R1), `3071c6749730ca138966d46fc9e6271afc211d81` (R2), `5727e5802e202f05eef9aedcf30f17813f6cda8a` (P1-T7) `e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e` (P1 do seed, R3) e `0f5179c9892f86505d017a8cbbcbe0ede9d438a0` (P1 do cancelamento, R4). O coordenador OpenAI consolidou os documentos e evidências produzidos pelo Claude; não implementou código ou testes. A revisão final R4 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos e os gates finais. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
+Código e testes implementados por Claude Code/Anthropic (`claude-opus-5-5`). Os commits funcionais dos corretivos são `ce1d806ba962fbf5acac1e015e18a370d7939055` (R1), `3071c6749730ca138966d46fc9e6271afc211d81` (R2), `5727e5802e202f05eef9aedcf30f17813f6cda8a` (P1-T7) `e02e826ed4dabf4ce7f9db7fdabd2cbccace0f5e` (P1 do seed, R3) e `0f5179c9892f86505d017a8cbbcbe0ede9d438a0` (P1 do cancelamento, R4). O coordenador OpenAI consolidou os documentos e evidências produzidos pelo Claude; não implementou código ou testes. A revisão final R5 será uma sessão OpenAI nova, READ-ONLY, sobre o SHA exato que incluir estes documentos e os gates finais. Nenhum código será alterado depois dessa revisão sem novo parecer sobre o novo SHA.
 
 Em 05/10/2026, um primeiro `git fetch origin` confirmou `origin/main=1e45f98ade83b3071548d581225928b0fd95b06c`. Um fetch posterior no mesmo dia mostrou `origin/main=a27b37e861ff044666d16535acb292f5d6957fcf` (merge do PR #237, GOAL de datas, já publicado). O coordenador iniciou `git merge --no-edit origin/main`; Claude resolveu os 6 conflitos e concluiu o merge normal de dois pais (`4ed751c7d349f0e8a92e726952aeee861830b31e`, pais `d3d9a97` e `a27b37e`), sem rebase/amend/reset/stash. O código do PR #237 é do upstream, não deste GOAL. Depois do merge, Claude estabilizou a sincronização dos specs E2E (`8aa19326a85adcbab7b7afcd3479b44ea55181db`, só teste) e corrigiu o candidato escalar P1-T7 (`5727e5802e202f05eef9aedcf30f17813f6cda8a`, funcional). A worktree e o trabalho anterior foram preservados. PRs #234 e #235 permanecem na base. A auditoria/baseline original não foi reiniciada; o GOAL de datas não foi iniciado nem alterado.
 
@@ -57,11 +57,11 @@ PR235_LATER_PAYMENT=PASS_PG_E2E_V3_V4
 UNIT=AFETADOS_R4_17_ARQUIVOS_642_PASS_11_FAIL_ESTATICAS_PREEXISTENTES_10_PREVIEW_HONESTY_1_VENDAS_007A_EM_0f5179c;CANCELAR_TITULO_6_6;ENTREGA_UNIFICADA_13_13;AMPLO_HISTORICO_2006_PASS_10_FAIL_EM_5727e58;CANONICALIDADE_24_24;DATAS_UPSTREAM_30_30
 MOUNTED=PASS_V3_20_V4_29_EM_0f5179c
 POSTGRES=PASS_V3_109_INCLUI_TRANSITIVOS_51_P1SEED_10_P1R4_4_EM_0f5179c;V4_PARIDADE_1_GATED_40_EM_0f5179c
-E2E=HISTORICO_PASS_6_6_FONTE_e02e826;PENDENTE_COORDENADOR_NOVO_BUILD_E_E2E_NA_FONTE_0f5179c
+E2E=PASS_FINAL_6_6_44.8S_WORKERS1_RETRIES0_NOVO_BUILD_HEAD_ec0650d_FONTE_0f5179c
 REGRESSION=PASS_FOCAL_E_AMPLA_OPS
-TYPECHECK=PASS_TSC_NOEMIT_COMPLETO_INCREMENTAL_FALSE_EXIT0_HEAP8192_FONTE_0f5179c_PRE_BUILD;POS_BUILD_PENDENTE_COORDENADOR
-LINT=PASS_4_ARQUIVOS_ALTERADOS_R4_EXIT0_0_ERROS_0_AVISOS;HISTORICO_61_ARQUIVOS_EXIT0_1_AVISO_PREEXISTENTE
-BUILD=HISTORICO_PASS_FONTE_e02e826;PENDENTE_COORDENADOR_NOVO_BUILD_OFICIAL_NA_FONTE_0f5179c
+TYPECHECK=PASS_FULL_PRE_E_POS_BUILD_INCREMENTAL_FALSE_EXIT0_HEAP8192_HEAD_ec0650d_FONTE_0f5179c;LOG_E_JSON_COM_EXIT_REAL
+LINT=PASS_ALL_62_ARQUIVOS_GOAL_DIFF_EXIT0_0_ERROS_1_AVISO_PREEXISTENTE;SEM_FIX_COSMETICO
+BUILD=PASS_OFICIAL_NOVO_HEAD_ec0650d_FONTE_0f5179c_EXIT0_COMPILED112S_STATIC102_MIGRATION_SKIPPED
 DIFF_CHECK=PASS
 SCHEMA_CHANGED=NO
 MIGRATION_CREATED=NO
@@ -86,7 +86,7 @@ IMPLEMENTADO=SIM
 VALIDADO=SIM_LOCAL_QA_COM_RESSALVAS_DOCUMENTADAS
 PUBLICADO=NO
 HOMOLOGADO=NO
-BLOCKER=GATES_COORDENADOR_BUILD_E2E_TSC_POS_BUILD_E_REVISAO_INDEPENDENTE_R5_EXACT_SHA_PENDENTES
+BLOCKER=REVISAO_INDEPENDENTE_R5_READ_ONLY_SOBRE_SHA_FINAL_EXATO_PENDENTE
 ```
 
 ## Correções originais
@@ -352,6 +352,23 @@ RED: 3 FAIL/1 PASS/47 fora do filtro (`-t "P1-R4"`), exit 1. GREEN: 4/4, exit 0.
 | ESLint dos 4 arquivos alterados | exit 0, 0 erros, 0 avisos | `r4fix-lint.log` |
 | `git diff --check` | exit 0 | Git |
 
-Observação fora do escopo R4, sem alteração: o caminho legado V2 `applyOperacaoHubAcao("cancelar")` → `updateOSStatus` (`app/actions/operacoes.ts`) cancela e restaura estoque sem guarda de recebido. Na base `a27` ele já se comportava assim. Não é o caminho V3/V4 do P1 nem regressão deste GOAL. Fica registrado para a R5 e o coordenador classificarem.
+Observação preexistente, sem alteração, para classificação independente de escopo na R5: o caminho legado V2 `applyOperacaoHubAcao("cancelar")` → `updateOSStatus` (`app/actions/operacoes.ts`) cancela e restaura estoque sem guarda de recebido. Na base `a27` ele já se comportava assim. Não é o caminho V3/V4 do P1 nem regressão deste GOAL. Fica registrado para a R5 e o coordenador classificarem.
 
-Pendências: o coordenador deve executar novo build oficial, E2E conjunto e typecheck pós-build na fonte `0f5179c`, sem reaproveitar o build anterior. Depois, uma nova revisão R5 (OpenAI, READ-ONLY) deve avaliar o SHA final exato. PR, merge e deploy só ocorrem com R5 APPROVE, P0=P1=P2=0 e checks verdes. Não houve PR, push, merge, deploy, pagamento real, alteração financeira real nem acesso à OS-2026-00028.
+O coordenador concluiu novo build oficial, E2E conjunto e typecheck pós-build na fonte `0f5179c`, conforme a consolidação seguinte. Uma nova revisão R5 (OpenAI, READ-ONLY) deve avaliar o SHA final exato que inclui esses resultados. PR, merge e deploy só ocorrem com R5 APPROVE, P0=P1=P2=0 e checks verdes. Não houve PR, push, merge, deploy, pagamento real, alteração financeira real nem acesso à OS-2026-00028.
+
+## Gates finais do coordenador antes da R5
+
+Fonte funcional Anthropic `0f5179c9892f86505d017a8cbbcbe0ede9d438a0`. Os quatro gates finais validaram o HEAD `ec0650d9eb7e28fcad8153e62c1b976e48891441`, cujo diff desde a fonte é exclusivamente REPORT/WRITERS. Esta consolidação também altera somente esses documentos. A R5 receberá o SHA final exato após este commit; R4 REQUEST_CHANGES não aprova o corretivo.
+
+| Gate | Resultado real | Evidência técnica ignorada em `playwright-report/ops-p1-hardening-001/` |
+| --- | --- | --- |
+| Build oficial novo | exit 0; compilação 112s; 102 páginas; MIGRATION_SKIPPED | `r4fix-final-build-coordinator.log` |
+| E2E conjunto | 6/6, 44.8s, worker 1, retries 0, trace off; servidor QA próprio parado | `r4fix-final-e2e-coordinator.log` |
+| Typecheck completo pós-build | exit 0; `--noEmit --incremental false`, heap 8192 | `r4fix-final-typecheck-coordinator.log` |
+| Lint de todos os arquivos exclusivos do GOAL | 62 arquivos, exit 0, zero erros, um aviso preexistente em `app/actions/operacoes.ts:1433` | `r4fix-final-lint-coordinator.log` |
+
+Os logs contêm o marcador de exit code real e o HEAD validado, e o pacote externo contém os quatro JSONs de resultado. Nenhum resultado foi inferido de saída vazia. PostgreSQL V3 109/109 (51 transitivos), PG gated 40/40, V4 paridade 1/1 e mounted 20+29 foram reexecutados pelo Claude na fonte final.
+
+Unitários afetados: 642 PASS/11 FAIL em 17 arquivos; a suíte inteira não está verde. Além das dez falhas estáticas preexistentes de preview-honesty já verificadas nas revisões anteriores, a falha estrutural vendas/hardening-007a exige um literal LF numa rota CRLF. Prova READ-ONLY `r4fix-preexisting-static-source-proof.json`: blob da rota `63358b9e49e1117e35d53eaf315c66d660197bea` idêntico em BASE_ORIGINAL, BASE, HEAD e worktree filtrada; blob do teste `b819d367926f8d43b31e94df611fb92fe715ded0` idêntico em BASE/HEAD; 519 CRLF; o literal falho passa a existir apenas após normalização de terminadores. Fonte e teste não foram alterados para mascarar a falha. Os testes comportamentais afetados passaram.
+
+A observação V2 preexistente e o P3 de retorno ficam visíveis para classificação pelo revisor à luz do comando original. O inventário preserva 118 funções OS.payload (105 seguras transacionais, 13 read-only, 39 writers diretos) e 17 transitivos financeiros. Sem schema/migration nova, PR/push/merge remoto/deploy/smoke/pagamento real/mutação financeira real ou acesso à OS-2026-00028. PR, merge normal e os dois deploys dependem de R5 APPROVE, P0=P1=P2=0 e checks verdes.
