@@ -24,6 +24,7 @@ import {
   updateOSPayload,
   updateOSStatus,
   applyOperacaoHubAcao,
+  aplicarIntencaoOrcamentoOS,
   syncOperacaoItensComOrcamento,
   validateOrcamentoEstoqueAction,
   gerarCobrancaOSAction,
@@ -180,22 +181,9 @@ export async function criarOrcamentoRascunho(storeId: string, osId: string, auto
  */
 export async function gerarOrcamentoDaOS(storeId: string, osId: string, autor = "Você"): Promise<OrdemServico> {
   const sid = requireStoreId(storeId);
-  const rows = await listOS(sid);
-  const current = rows.find((o) => o.id === osId);
-  if (!current) throw new Error("OS não encontrada");
-
-  const orcAtual = (current as { orcamento?: Orcamento }).orcamento;
-  if (orcAtual && orcAtual.sintetizado !== true) {
-    // Já existe orçamento real persistido — não recriar.
-    return current as unknown as OrdemServico;
-  }
-
-  const orcamento = buildOrcamentoRascunhoFromOS(current as unknown as OrdemServico, { uid, nowIso });
-  const timeline = [
-    ...readTimeline((current as { timeline?: unknown }).timeline),
-    newEvent("orcamento_criado", autor, "usuario", "Orçamento gerado a partir dos itens da OS (rascunho editável)."),
-  ];
-  const patched = await updateOSPayload(sid, osId, { orcamento, timeline } as Partial<OrdemServico>);
+  // Guarda e materialização decididas sob a trava da OS, sobre o estado atual (nunca sobre
+  // uma listagem anterior): um orçamento real criado no meio é preservado (no-op).
+  const patched = await aplicarIntencaoOrcamentoOS(sid, osId, { kind: "materializar_rascunho_da_os" }, autor);
   return patched as unknown as OrdemServico;
 }
 
@@ -239,25 +227,8 @@ export async function salvarOrcamento(
 
 export async function enviarOrcamentoAoCliente(storeId: string, osId: string, autor: string): Promise<OrdemServico> {
   const sid = requireStoreId(storeId);
-  const rows = await listOS(sid);
-  const current = rows.find((o) => o.id === osId);
-  if (!current) throw new Error("OS não encontrada");
-  const curOrc = (current as { orcamento?: unknown }).orcamento;
-  if (!isOrcamento(curOrc)) throw new Error("Orçamento inexistente");
-
-  const orcamento: Orcamento = recalcularTotalOrcamento({
-    ...curOrc,
-    status: "enviado",
-    enviadoEm: curOrc.enviadoEm ?? nowIso(),
-  });
-  const timeline = [
-    ...readTimeline((current as { timeline?: unknown }).timeline),
-    newEvent("orcamento_enviado", autor, "usuario", "Orçamento enviado ao cliente."),
-  ];
-  const patched = await updateOSPayload(sid, osId, {
-    orcamento,
-    timeline,
-  } as Partial<OrdemServico>);
+  // Envia o orçamento VIGENTE sob a trava da OS (uma edição concorrente nunca é revertida).
+  const patched = await aplicarIntencaoOrcamentoOS(sid, osId, { kind: "enviar_ao_cliente" }, autor);
   await syncOperacaoItensComOrcamento(sid, osId);
   return patched as unknown as OrdemServico;
 }
@@ -416,47 +387,8 @@ export async function removeAnexo(
 
 export async function approveOrcamento(storeId: string, osId: string, autor: string): Promise<OrdemServico> {
   const sid = requireStoreId(storeId);
-  const rows = await listOS(sid);
-  const current = rows.find((o) => o.id === osId);
-  if (!current) throw new Error("OS não encontrada");
-  const base = current as unknown as OrdemServico;
-  const currentOrcamento = base.orcamento;
-  if (!isOrcamento(currentOrcamento)) throw new Error("Orçamento inexistente");
-
-  const orcamento: Orcamento = recalcularTotalOrcamento({
-    ...currentOrcamento,
-    status: "aprovado",
-    respondidoEm: nowIso(),
-  });
-
-  const virtual: OrdemServico = { ...base, orcamento, status: "aprovado" };
-  const ts = nowIso();
-  const garantiaSnap = snapshotGarantia(virtual, ts);
-  const garantia = garantiaSnap ?? base.garantia;
-
-  const faturamento = buildFaturamentoFromOrcamento({
-    os: { id: base.id, codigo: base.codigo },
-    orcamento,
-    criadoEm: ts,
-  });
-
-  const timeline = [
-    ...readTimeline(base.timeline),
-    newEvent("orcamento_aprovado", autor, "cliente", "Orçamento aprovado pelo cliente."),
-    newEvent(
-      "faturamento_os_pendente",
-      "Sistema",
-      "sistema",
-      "Orçamento aprovado e faturamento pendente criado.",
-    ),
-  ];
-  const patched = await updateOSPayload(sid, osId, {
-    orcamento,
-    status: "aprovado",
-    garantia,
-    timeline,
-    ...faturamento,
-  } as Partial<OrdemServico>);
+  // Aprova o orçamento VIGENTE sob a trava da OS: faturamento, garantia e título saem dele.
+  const patched = await aplicarIntencaoOrcamentoOS(sid, osId, { kind: "aprovar_pelo_cliente" }, autor);
   await syncOperacaoItensComOrcamento(sid, osId);
   return patched as unknown as OrdemServico;
 }
@@ -468,30 +400,8 @@ export async function rejectOrcamento(
   motivo?: string,
 ): Promise<OrdemServico> {
   const sid = requireStoreId(storeId);
-  const rows = await listOS(sid);
-  const current = rows.find((o) => o.id === osId);
-  if (!current) throw new Error("OS não encontrada");
-  const base = current as unknown as OrdemServico;
-  const currentOrcamento = base.orcamento;
-  if (!isOrcamento(currentOrcamento)) throw new Error("Orçamento inexistente");
-
-  const orcamento: Orcamento = recalcularTotalOrcamento({
-    ...currentOrcamento,
-    status: "recusado",
-    respondidoEm: nowIso(),
-  });
-  const faturamento = buildFaturamentoRecusadoOrcamento();
-  const timeline = [
-    ...readTimeline(base.timeline),
-    newEvent("orcamento_recusado", autor, "cliente", motivo ?? "Orçamento recusado."),
-    newEvent("faturamento_os_cancelado", "Sistema", "sistema", "Orçamento recusado; faturamento cancelado."),
-  ];
-  const patched = await updateOSPayload(sid, osId, {
-    orcamento,
-    status: "diagnostico",
-    timeline,
-    ...faturamento,
-  } as Partial<OrdemServico>);
+  // Recusa o orçamento VIGENTE sob a trava da OS (uma edição concorrente nunca é revertida).
+  const patched = await aplicarIntencaoOrcamentoOS(sid, osId, { kind: "recusar_pelo_cliente", motivo }, autor);
   await syncOperacaoItensComOrcamento(sid, osId);
   return patched as unknown as OrdemServico;
 }

@@ -16,9 +16,8 @@
 // ============================================================================
 
 import type { EventoTimeline, OrdemServico } from "@/types/os";
-import type { Prisma } from "@/generated/prisma";
-import { prisma } from "@/lib/prisma";
 import { consumeEstoqueFromOS, restoreEstoqueFromOS } from "@/lib/operacoes/adapters/os-estoque";
+import { mutarPayloadOSV3 } from "./os-payload-lock";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -27,7 +26,7 @@ function evId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? `ev_${crypto.randomUUID()}` : `ev_${Date.now()}`;
 }
 
-/** Anexa um evento `estoque_sync_erro` à timeline da OS (best-effort, nunca lança). */
+/** Anexa um evento `estoque_sync_erro` à timeline MAIS RECENTE da OS, sob a trava da linha (best-effort, nunca lança). */
 async function registrarErroEstoqueV3(
   storeId: string,
   osId: string,
@@ -35,10 +34,6 @@ async function registrarErroEstoqueV3(
   metadata: Record<string, unknown>,
 ): Promise<void> {
   try {
-    const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
-    if (!row) return;
-    const payload = (row.payload ?? {}) as Record<string, unknown>;
-    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
     const ev: EventoTimeline = {
       id: evId(),
       tipo: "estoque_sync_erro",
@@ -48,9 +43,15 @@ async function registrarErroEstoqueV3(
       metadata,
       criadoEm: nowIso(),
     };
-    await prisma.ordemServico.update({
-      where: { id: osId },
-      data: { payload: { ...payload, timeline: [...timeline, ev] } as unknown as Prisma.InputJsonValue },
+    await mutarPayloadOSV3({
+      storeId,
+      osId,
+      aceitarPayloadVazio: true,
+      aoAusente: () => undefined,
+      mutate: ({ payload }) => {
+        const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+        return { payload: { ...payload, timeline: [...timeline, ev] }, resultado: undefined };
+      },
     });
   } catch (e) {
     console.error("[estoque-sync-v3] falha ao registrar erro na timeline (ignorado):", e instanceof Error ? e.message : e);

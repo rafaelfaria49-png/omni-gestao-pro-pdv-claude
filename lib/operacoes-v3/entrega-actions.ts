@@ -5,8 +5,9 @@
 // ----------------------------------------------------------------------------
 // Registra a entrega formal do equipamento: data/hora + operador + observação +
 // quem retirou. Grava SOMENTE o payload (status entregue + entregaV3 + retirada +
-// timeline). Antes de qualquer write, relê OS + Conta a Receber e aplica o guard
-// financeiro fail-closed. Não altera Financeiro/V2/schema; a baixa de estoque
+// timeline). Sob a trava por OS dos writers de pagamento (advisory + `FOR UPDATE`, ver
+// `comOSTravadaV3`), relê o payload MAIS RECENTE + Conta a Receber (no mesmo `tx`) e aplica
+// o guard financeiro fail-closed antes do write. Não altera Financeiro/V2/schema; a baixa de estoque
 // idempotente continua ocorrendo somente depois da entrega persistida.
 //
 // Usa a MÁQUINA ÚNICA (status-machine) como fonte das REGRAS de status. A entrega
@@ -114,6 +115,17 @@ export interface RegistrarEntregaInputV3 {
    */
   dataEntrega?: { iso: string; meta?: DataOperacionalMetaV3 | null };
 }
+
+type ResultadoEntregaV3 =
+  | { jaEntregue: true; os: OrdemServico }
+  | {
+      jaEntregue: false;
+      next: OSPayloadFull;
+      from: ReturnType<typeof statusV3FromOS>;
+      recebidoPor: string;
+      projecaoFinanceira: ReturnType<typeof projetarEntregaFinanceiraV3>;
+      autorizacaoSemCobranca: EntregaSemCobrancaV3 | null;
+    };
 
 export async function registrarEntregaV3(storeId: string, osId: string, input: RegistrarEntregaInputV3 = {}): Promise<OrdemServico> {
   const sid = (storeId ?? "").trim();

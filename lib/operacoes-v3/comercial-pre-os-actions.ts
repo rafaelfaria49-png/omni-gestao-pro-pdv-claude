@@ -2,8 +2,9 @@
 
 // ============================================================================
 // Operações V3 — carimbo comercial pré-OS (GOAL OPS-V4-NOVO-ATENDIMENTO-COMERCIAL-001).
-// Payload-only. Sem schema, sem Financeiro, sem estoque. Reusa o mesmo
-// write-path de dados-basicos-actions (Prisma direto, sem updateOSPayload).
+// Payload-only. Sem schema, sem Financeiro, sem estoque. Toda escrita relê o payload
+// MAIS RECENTE sob a trava por OS dos writers de pagamento (advisory + `FOR UPDATE`),
+// sem updateOSPayload.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";

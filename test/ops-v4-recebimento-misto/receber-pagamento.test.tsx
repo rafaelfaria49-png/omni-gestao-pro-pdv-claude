@@ -204,4 +204,22 @@ describe("V4 — paridade sobre o hook V3 real (montado)", () => {
     expect(document.body.textContent).toMatch(/Recebido nesta operaçãoR\$\s0,00/);
   });
 
+  it("T20 (OPS-RECEBIMENTO-MISTO-P1-HARDENING-001): A termina com o operador já em B — B não recebe efeito de A e o rascunho de B fica", async () => {
+    const pendente = deferred<ReturnType<typeof resultado>>(); mocks.registrarRecebimentoMistoOSV3.mockReturnValue(pendente.promise);
+    const view = await preparar(); fireEvent.click(confirmar());
+    view.rerender(<Harness osId="os-b" />);
+    await waitFor(() => expect(screen.queryByText("Carregando sessão de caixa…")).toBeNull()); fireEvent.click(screen.getByRole("button", { name: /^Receber R/ })); await screen.findByRole("dialog");
+    // Enquanto a confirmação de A está em voo, a folha de B fica travada (nenhuma edição a perder).
+    expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).disabled).toBe(true);
+    await act(async () => pendente.resolve(resultado()));
+    expect(abrirRecibo).not.toHaveBeenCalled(); expect(screen.getByRole("dialog")).toBeTruthy();
+    // B continua com o próprio saldo (400), sem nada de A; o operador digita e o rascunho fica.
+    await waitFor(() => expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).disabled).toBe(false));
+    expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("400");
+    linha(1, "dinheiro", "120"); dividir(); linha(2, "a_prazo"); prazo();
+    await act(async () => { await Promise.resolve(); });
+    expect((screen.getByLabelText("Forma da linha 1") as HTMLSelectElement).value).toBe("dinheiro"); expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("120");
+    expect((screen.getByLabelText("Forma da linha 2") as HTMLSelectElement).value).toBe("a_prazo"); expect((screen.getByLabelText("Vencimento da parte a prazo") as HTMLInputElement).value).toBe(VENC);
+    expect(mocks.registrarRecebimentoMistoOSV3.mock.calls.map((c) => c[1])).toEqual(["os-a"]);
+  });
 });

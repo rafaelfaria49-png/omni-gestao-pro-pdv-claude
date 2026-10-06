@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
 import type { OrdemServico, OSStatus } from "@/types/os";
 import { isFaturamentoOS } from "@/lib/os/faturamento";
@@ -6,6 +5,14 @@ import { buildContaReceberLocalKey } from "@/lib/financeiro/contracts/local-key"
 import { buildContaReceberPayload } from "@/lib/financeiro/contracts/payload";
 import { FINANCEIRO_CREATED_FROM_OPERACOES_HUB_V2, FINANCEIRO_ORIGEM } from "@/lib/financeiro/contracts/origem";
 import { RECEBER_STATUS } from "@/lib/financeiro/contracts/status";
+import { PAY_EPS } from "@/lib/financeiro/contracts/valores";
+import {
+  gravarTituloContaReceberTravado,
+  naTransacaoDoTituloContaReceber,
+  sumPagamentosFromHistoricoPayload,
+  travarTituloContaReceber,
+  type ContaReceberDbClient,
+} from "@/lib/financeiro/services/contas-receber-service";
 
 type MinimalOS = Pick<OrdemServico, "id" | "storeId" | "clienteId" | "cliente" | "status" | "orcamento"> & {
   codigo?: string;
@@ -135,63 +142,103 @@ export type UpsertContaReceberFromOSResult =
   | { ok: true; action: "created" | "updated"; id: string; localKey: string }
   | { ok: false; reason: "not_faturavel" | "invalid_os"; localKey?: string };
 
-export async function upsertContaReceberFromOS(os: MinimalOS): Promise<UpsertContaReceberFromOSResult> {
+/**
+ * Status do título coerente com o ledger MAIS RECENTE (lido sob a trava): pagamentos já
+ * baixados nunca voltam a "pendente" por causa de uma revisão do faturamento da OS.
+ */
+function statusPeloLedger(payload: unknown, valor: number): string {
+  const pago = sumPagamentosFromHistoricoPayload(payload);
+  if (valor > PAY_EPS && pago + PAY_EPS >= valor) return RECEBER_STATUS.PAGO;
+  if (pago > PAY_EPS) return RECEBER_STATUS.PARCIAL;
+  return RECEBER_STATUS.PENDENTE;
+}
+
+/**
+ * Cria/atualiza o título da OS. Lê e grava a linha TRAVADA na mesma transação (ver "trava do
+ * título" em `contas-receber-service`). `db`: transação do chamador que já travou a OS (ordem
+ * OS → título); ausente, abre uma curta própria.
+ */
+export async function upsertContaReceberFromOS(os: MinimalOS, db?: ContaReceberDbClient): Promise<UpsertContaReceberFromOSResult> {
   if (!os || !os.id || !os.storeId) return { ok: false, reason: "invalid_os" };
   if (!isOSFaturavel(os)) return { ok: false, reason: "not_faturavel" };
 
   const { localKey, create, update, storeId } = buildContaReceberFromOS(os);
+  const scalars = update as unknown as {
+    descricao: string;
+    cliente: string;
+    valor: number;
+    vencimento: string;
+    payload: unknown;
+  };
 
-  const existing = await prisma.contaReceberTitulo.findUnique({
-    where: { storeId_localKey: { storeId, localKey } },
-    select: { id: true, payload: true },
+  const { row, criado } = await gravarTituloContaReceberTravado({
+    storeId,
+    localKey,
+    db,
+    montar: (existing) => {
+      if (!existing) {
+        const c = create as unknown as typeof scalars & { status: string };
+        return {
+          descricao: c.descricao,
+          cliente: c.cliente,
+          valor: c.valor,
+          vencimento: c.vencimento,
+          status: c.status,
+          payload: c.payload as Prisma.InputJsonValue,
+        };
+      }
+
+      // Preserva histórico (ledger), marcadores e revisões do payload MAIS RECENTE do título.
+      const prevPayloadRaw = existing.payload as unknown;
+      const prevPayload = isRecord(prevPayloadRaw) ? prevPayloadRaw : {};
+      const nextPayloadRaw = scalars.payload;
+      const nextPayload = isRecord(nextPayloadRaw) ? nextPayloadRaw : {};
+
+      let mergedPayload: Record<string, unknown> = { ...prevPayload, ...nextPayload };
+
+      // Se há revisão pós-aprovação, acumula em `revisoes[]` (dedupe por `revisadoEm`).
+      const revisadoEm = safeStr((nextPayload as { revisadoEm?: unknown }).revisadoEm);
+      if (revisadoEm) {
+        const prevRevs = (prevPayload as { revisoes?: unknown }).revisoes;
+        const arr = Array.isArray(prevRevs) ? (prevRevs as Record<string, unknown>[]) : [];
+        const entry = {
+          revisadoEm,
+          valorAnterior: safeNum((nextPayload as { valorAnterior?: unknown }).valorAnterior),
+          valorNovo: safeNum((nextPayload as { valorNovo?: unknown }).valorNovo),
+          orcamentoRevisaoAtual: isRecord((nextPayload as { orcamentoRevisaoAtual?: unknown }).orcamentoRevisaoAtual)
+            ? (nextPayload as { orcamentoRevisaoAtual?: unknown }).orcamentoRevisaoAtual
+            : undefined,
+        };
+        const deduped = [...arr.filter((r) => safeStr((r as { revisadoEm?: unknown }).revisadoEm) !== revisadoEm), entry];
+        mergedPayload = { ...mergedPayload, revisoes: deduped };
+      }
+
+      return {
+        descricao: scalars.descricao,
+        cliente: scalars.cliente,
+        valor: scalars.valor,
+        vencimento: scalars.vencimento,
+        status: statusPeloLedger(mergedPayload, scalars.valor),
+        payload: mergedPayload as unknown as Prisma.InputJsonValue,
+      };
+    },
   });
-
-  if (!existing) {
-    const created = await prisma.contaReceberTitulo.create({ data: create, select: { id: true } });
-    return { ok: true, action: "created", id: created.id, localKey };
-  }
-
-  // Preserva histórico de revisão no payload do título.
-  const prevPayloadRaw = existing.payload as unknown;
-  const prevPayload = isRecord(prevPayloadRaw) ? prevPayloadRaw : {};
-  const nextPayloadRaw = (update as unknown as { payload?: unknown }).payload;
-  const nextPayload = isRecord(nextPayloadRaw) ? nextPayloadRaw : {};
-
-  let mergedPayload: Record<string, unknown> = { ...prevPayload, ...nextPayload };
-
-  // Se há revisão pós-aprovação, acumula em `revisoes[]` (dedupe por `revisadoEm`).
-  const revisadoEm = safeStr((nextPayload as { revisadoEm?: unknown }).revisadoEm);
-  if (revisadoEm) {
-    const prevRevs = (prevPayload as { revisoes?: unknown }).revisoes;
-    const arr = Array.isArray(prevRevs) ? (prevRevs as Record<string, unknown>[]) : [];
-    const entry = {
-      revisadoEm,
-      valorAnterior: safeNum((nextPayload as { valorAnterior?: unknown }).valorAnterior),
-      valorNovo: safeNum((nextPayload as { valorNovo?: unknown }).valorNovo),
-      orcamentoRevisaoAtual: isRecord((nextPayload as { orcamentoRevisaoAtual?: unknown }).orcamentoRevisaoAtual)
-        ? (nextPayload as { orcamentoRevisaoAtual?: unknown }).orcamentoRevisaoAtual
-        : undefined,
-    };
-    const deduped = [...arr.filter((r) => safeStr((r as { revisadoEm?: unknown }).revisadoEm) !== revisadoEm), entry];
-    mergedPayload = { ...mergedPayload, revisoes: deduped };
-  }
-
-  const updated = await prisma.contaReceberTitulo.update({
-    where: { storeId_localKey: { storeId, localKey } },
-    data: { ...(update as Prisma.ContaReceberTituloUpdateInput), payload: mergedPayload as unknown as Prisma.InputJsonValue },
-    select: { id: true },
-  });
-  return { ok: true, action: "updated", id: updated.id, localKey };
+  return { ok: true, action: criado ? "created" : "updated", id: row.id, localKey };
 }
 
 export type CancelContaReceberFromOSResult =
   | { ok: true; action: "cancelled" | "noop_not_found"; id?: string; localKey: string }
   | { ok: false; reason: "invalid_os"; localKey?: string };
 
+/**
+ * Cancela o título da OS sobre a linha TRAVADA e relida na mesma transação: baixas e
+ * marcadores gravados no meio são preservados. `db`: transação do chamador (OS → título).
+ */
 export async function cancelContaReceberFromOS(params: {
   storeId: string;
   ordemServicoId: string;
   motivo?: string;
+  db?: ContaReceberDbClient;
 }): Promise<CancelContaReceberFromOSResult> {
   const storeId = safeStr(params.storeId);
   const ordemServicoId = safeStr(params.ordemServicoId);
@@ -203,29 +250,31 @@ export async function cancelContaReceberFromOS(params: {
     ordemServicoId,
   });
 
-  const existing = await prisma.contaReceberTitulo.findUnique({
-    where: { storeId_localKey: { storeId, localKey } },
-    select: { id: true, payload: true },
-  });
-  if (!existing) return { ok: true, action: "noop_not_found", localKey };
+  return naTransacaoDoTituloContaReceber(params.db, async (tx) => {
+    if (!(await travarTituloContaReceber(tx, storeId, { localKey }))) return { ok: true, action: "noop_not_found", localKey };
+    const existing = await tx.contaReceberTitulo.findUnique({
+      where: { storeId_localKey: { storeId, localKey } },
+      select: { id: true, payload: true },
+    });
+    if (!existing) return { ok: true, action: "noop_not_found", localKey };
 
-  const raw = existing.payload as unknown;
-  const base = isRecord(raw) ? raw : {};
-  const nextPayload = {
-    ...base,
-    status: RECEBER_STATUS.CANCELADO,
-    canceladoEm: new Date().toISOString(),
-    ...(safeStr(params.motivo) ? { motivo: safeStr(params.motivo) } : {}),
-  } satisfies Record<string, unknown>;
-
-  await prisma.contaReceberTitulo.update({
-    where: { storeId_localKey: { storeId, localKey } },
-    data: {
+    const raw = existing.payload as unknown;
+    const base = isRecord(raw) ? raw : {};
+    const nextPayload = {
+      ...base,
       status: RECEBER_STATUS.CANCELADO,
-      payload: nextPayload as unknown as Prisma.InputJsonValue,
-    },
+      canceladoEm: new Date().toISOString(),
+      ...(safeStr(params.motivo) ? { motivo: safeStr(params.motivo) } : {}),
+    } satisfies Record<string, unknown>;
+
+    await tx.contaReceberTitulo.update({
+      where: { id: existing.id },
+      data: {
+        status: RECEBER_STATUS.CANCELADO,
+        payload: nextPayload as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    return { ok: true, action: "cancelled", id: existing.id, localKey };
   });
-
-  return { ok: true, action: "cancelled", id: existing.id, localKey };
 }
-

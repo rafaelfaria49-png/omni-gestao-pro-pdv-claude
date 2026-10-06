@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import {
+  assinaturaRecebimentoMistoLegadaV1,
   assinaturaRecebimentoMistoV3,
   avaliarRascunhoMistoV3,
+  centavosPorFormaV3,
+  conteudoRecebimentoCanonicoLegadoV1,
   conteudoRecebimentoCanonicoV3,
   centavosEstritosV3,
   dataCivilValidaV3,
@@ -281,5 +284,75 @@ describe("conteudoRecebimentoCanonicoV3", () => {
     expect(conteudoRecebimentoCanonicoV3({ sessaoId: "s2", linhas: [{ forma: "pix", valor: 100 }] })).not.toBe(base);
     expect(conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "debito", valor: 100 }] })).not.toBe(base);
     expect(conteudoRecebimentoCanonicoV3({ sessaoId: "s1", linhas: [{ forma: "pix", valor: 100.01 }] })).not.toBe(base);
+  });
+});
+
+// OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — identidade econômica = TOTAL por forma, em centavos.
+describe("P1-A · identidade econômica agregada por forma (T01–T07)", () => {
+  const c = (linhas: Array<{ forma: string; valor: number }>, sessaoId = "CAIXA-A") => conteudoRecebimentoCanonicoV3({ sessaoId, linhas });
+  const pix100 = c([{ forma: "pix", valor: 100 }]);
+
+  it("T01: PIX 100 == PIX 50 + PIX 50", () => {
+    expect(c([{ forma: "pix", valor: 50 }, { forma: "pix", valor: 50 }])).toBe(pix100);
+  });
+  it("T02: PIX 100 == PIX 25 + PIX 25 + PIX 50 (e == PIX 20 + PIX 30 + PIX 50)", () => {
+    expect(c([{ forma: "pix", valor: 25 }, { forma: "pix", valor: 25 }, { forma: "pix", valor: 50 }])).toBe(pix100);
+    expect(c([{ forma: "pix", valor: 20 }, { forma: "pix", valor: 30 }, { forma: "pix", valor: 50 }])).toBe(pix100);
+  });
+  it("T03: a ordem das formas não altera a identidade (Dinheiro 20 + PIX 80 == PIX 80 + Dinheiro 20)", () => {
+    expect(c([{ forma: "dinheiro", valor: 20 }, { forma: "pix", valor: 80 }])).toBe(c([{ forma: "pix", valor: 80 }, { forma: "dinheiro", valor: 20 }]));
+    expect(c([{ forma: "pix", valor: 40 }, { forma: "dinheiro", valor: 20 }, { forma: "pix", valor: 40 }])).toBe(c([{ forma: "dinheiro", valor: 20 }, { forma: "pix", valor: 80 }]));
+  });
+  it("T04: formas diferentes permanecem distintas (PIX 100 != Débito 100; PIX 50 + Débito 50 != PIX 100)", () => {
+    expect(c([{ forma: "debito", valor: 100 }])).not.toBe(pix100);
+    expect(c([{ forma: "pix", valor: 50 }, { forma: "debito", valor: 50 }])).not.toBe(pix100);
+  });
+  it("T05: sessão diferente permanece distinta (CAIXA-A != CAIXA-B)", () => {
+    expect(c([{ forma: "pix", valor: 100 }], "CAIXA-B")).not.toBe(pix100);
+  });
+  it("T06: 1 centavo de diferença permanece distinto (PIX 100 != PIX 99,99; PIX 50 + PIX 49,99 != PIX 100)", () => {
+    expect(c([{ forma: "pix", valor: 99.99 }])).not.toBe(pix100);
+    expect(c([{ forma: "pix", valor: 50 }, { forma: "pix", valor: 49.99 }])).not.toBe(pix100);
+  });
+  it("T07: forma única e split equivalente produzem a mesma identidade", () => {
+    expect(conteudoRecebimentoCanonicoV3({ sessaoId: "CAIXA-A", forma: "pix", valor: 100 })).toBe(pix100);
+    expect(conteudoRecebimentoCanonicoV3({ sessaoId: "CAIXA-A", forma: "pix", valor: 100 })).toBe(c([{ forma: "pix", valor: 60 }, { forma: "pix", valor: 40 }]));
+  });
+  it("trabalha em centavos inteiros: 0,1 + 0,2 de PIX == 0,30 de PIX (sem float bruto na identidade)", () => {
+    expect(c([{ forma: "pix", valor: 0.1 }, { forma: "pix", valor: 0.2 }])).toBe(c([{ forma: "pix", valor: 0.3 }]));
+    expect(centavosPorFormaV3([{ forma: "pix", centavos: 10 }, { forma: "pix", centavos: 20 }, { forma: "debito", centavos: 5 }])).toEqual([
+      { forma: "debito", centavos: 5 },
+      { forma: "pix", centavos: 30 },
+    ]);
+  });
+  it("legado v1: recalculado para a MESMA requisição, distingue representações (só serve para reconhecer gravações antigas)", () => {
+    const legado = (linhas: Array<{ forma: string; valor: number }>) => conteudoRecebimentoCanonicoLegadoV1({ sessaoId: "CAIXA-A", linhas });
+    expect(legado([{ forma: "pix", valor: 100 }])).toBe(JSON.stringify({ v: 1, sessaoId: "CAIXA-A", linhas: [["pix", 10000]] }));
+    expect(legado([{ forma: "pix", valor: 50 }, { forma: "pix", valor: 50 }])).toBe(JSON.stringify({ v: 1, sessaoId: "CAIXA-A", linhas: [["pix", 5000], ["pix", 5000]] }));
+    expect(legado([{ forma: "pix", valor: 50 }, { forma: "pix", valor: 50 }])).not.toBe(legado([{ forma: "pix", valor: 100 }]));
+    expect(pix100).not.toBe(legado([{ forma: "pix", valor: 100 }]));
+  });
+});
+
+describe("P1-A · assinatura do misto agregada por forma (+ legado v1 estrito)", () => {
+  const escopo = { storeId: "loja-qa", osId: "os-qa" };
+  const norm = (pagamentosAgora: RecebimentoMistoInputV3["pagamentosAgora"]) => {
+    const r = normalizarRecebimentoMistoV3(entrada({ pagamentosAgora }), HOJE);
+    if (!r.ok) throw new Error(r.mensagem);
+    return r.valor;
+  };
+  it("PIX 100 == PIX 50 + PIX 50 na mesma confirmação; outra forma/valor não", () => {
+    const pix100 = assinaturaRecebimentoMistoV3(escopo, norm([{ forma: "pix", valor: 100 }]));
+    expect(assinaturaRecebimentoMistoV3(escopo, norm([{ forma: "pix", valor: 50 }, { forma: "pix", valor: 50 }]))).toBe(pix100);
+    expect(assinaturaRecebimentoMistoV3(escopo, norm([{ forma: "debito", valor: 100 }]))).not.toBe(pix100);
+    expect(assinaturaRecebimentoMistoV3(escopo, norm([{ forma: "pix", valor: 99.99 }]))).not.toBe(pix100);
+  });
+  it("v1 legado preserva o formato antigo (linhas ordenadas, sem agregar)", () => {
+    const n = norm([{ forma: "pix", valor: 50 }, { forma: "pix", valor: 50 }]);
+    expect(JSON.parse(assinaturaRecebimentoMistoLegadaV1(escopo, n))).toMatchObject({
+      v: 1,
+      pagamentosAgora: [{ forma: "pix", centavos: 5000 }, { forma: "pix", centavos: 5000 }],
+    });
+    expect(JSON.parse(assinaturaRecebimentoMistoV3(escopo, n))).toMatchObject({ v: 2, pagamentosAgora: [{ forma: "pix", centavos: 10000 }] });
   });
 });

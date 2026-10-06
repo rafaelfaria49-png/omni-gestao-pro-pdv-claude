@@ -32,6 +32,7 @@ import { appendTimelineEvent, makeTimelineEvent } from "@/lib/operacoes/services
 import { toPrismaStatus } from "@/lib/operacoes/services/status-service";
 import { applyApprovedBudgetPolicy } from "@/lib/operacoes/services/orcamento-policy-service";
 import { applyEstoqueDelta, buildEstoqueMovimentosFromOS, consumeEstoqueFromOS, restoreEstoqueFromOS } from "@/lib/operacoes/adapters/os-estoque";
+import { mutarPayloadOSV3, semCamposFinanceirosDoServidorV3, TX_PAYLOAD_OS_V3, type OSPayloadV3 } from "@/lib/operacoes-v3/os-payload-lock";
 import {
   normalizeOperacaoStatus,
   prismaStatusToOperacaoStatus,
@@ -49,7 +50,10 @@ import {
   readTimelinePayload,
 } from "@/lib/operacoes/services/operacao-hub-flow";
 import { buildFaturamentoFromOrcamento, buildFaturamentoRecusadoOrcamento } from "@/lib/os/faturamento";
-import { syncOrdemServicoDraftItensFromOrcamento, loadOrcamentoFromOsRow } from "@/lib/operacoes/services/os-prisma-itens-sync";
+import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
+import { hydrateOSRows } from "@/lib/operacoes/services/hydration-service";
+import { uid as uidLovable } from "@/components/operacoes/lovable/api/_helpers";
+import { syncOrdemServicoDraftItensFromOrcamento } from "@/lib/operacoes/services/os-prisma-itens-sync";
 import {
   cancelarGarantiasAtivasOrdem,
   criarGarantiaOrdemServicoDb,
@@ -199,31 +203,36 @@ export async function createOS(
     atualizadoEm: createdAtIso,
   };
 
-  const created = await prisma.ordemServico.create({
-    data: {
-      storeId,
-      numero: codigo,
-      clienteId: input.clienteId || null,
-      equipamento: `${input.equipamento.marca} ${input.equipamento.modelo}`.trim(),
-      defeito: input.equipamento.defeitoRelatado,
-      valorBase: 0,
-      valorTotal: Number(
-        (input.servicosCatalogo ?? []).reduce((acc, s) => acc + Number(s.valorVenda || 0), 0)
-      ),
-      status: toPrismaStatus(input.status),
-      payload: {} as Prisma.InputJsonValue, // atualizado abaixo com id
-    },
-    select: { id: true, createdAt: true, updatedAt: true },
-  });
+  // Criação + payload definitivo na MESMA transação: nenhum outro writer vê (nem grava em)
+  // a OS com o payload provisório `{}` antes desta gravação.
+  const created = await prisma.$transaction(async (tx) => {
+    const row = await tx.ordemServico.create({
+      data: {
+        storeId,
+        numero: codigo,
+        clienteId: input.clienteId || null,
+        equipamento: `${input.equipamento.marca} ${input.equipamento.modelo}`.trim(),
+        defeito: input.equipamento.defeitoRelatado,
+        valorBase: 0,
+        valorTotal: Number(
+          (input.servicosCatalogo ?? []).reduce((acc, s) => acc + Number(s.valorVenda || 0), 0)
+        ),
+        status: toPrismaStatus(input.status),
+        payload: {} as Prisma.InputJsonValue, // atualizado abaixo com id
+      },
+      select: { id: true, createdAt: true, updatedAt: true },
+    });
 
-  payload.id = created.id;
-  payload.criadoEm = created.createdAt.toISOString();
-  payload.atualizadoEm = created.updatedAt.toISOString();
+    payload.id = row.id;
+    payload.criadoEm = row.createdAt.toISOString();
+    payload.atualizadoEm = row.updatedAt.toISOString();
 
-  await prisma.ordemServico.update({
-    where: { id: created.id },
-    data: { payload: payload as unknown as Prisma.InputJsonValue },
-  });
+    await tx.ordemServico.update({
+      where: { id: row.id },
+      data: { payload: payload as unknown as Prisma.InputJsonValue },
+    });
+    return row;
+  }, TX_PAYLOAD_OS_V3);
 
   void auditOS({
     storeId,
@@ -247,52 +256,57 @@ export async function updateOSStatus(
   status: OSStatus,
   options?: OperacaoTransitionOptions & { appendTimeline?: EventoTimeline[] },
 ): Promise<OperacoesOSPayload> {
-  const existing = await prisma.ordemServico.findFirst({
-    where: { id: osId, storeId },
-    select: { id: true, payload: true, createdAt: true },
-  });
-  if (!existing) throw new Error("OS não encontrada");
-
-  const current = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
-  if (!current) throw new Error("OS sem payload (incompatível)");
-
-  const currentEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
   const effective = normalizeOperacaoStatus(status);
   let statusPerm: (p: EnterprisePermissions) => boolean;
   if (effective === "entregue") statusPerm = (p) => p.operacoes.entregarOs;
   else if (effective === "cancelada") statusPerm = (p) => p.operacoes.cancelarOs;
   else statusPerm = (p) => p.operacoes.editarOs;
   await requireOperacaoAuth(storeId, statusPerm, "Sem permissão para alterar o status desta OS.");
-  assertOperacaoStatusTransition(currentEff, effective, options);
 
-  const next: OperacoesOSPayload = {
-    ...(current as OperacoesOSPayload),
-    status: effective,
-    operacaoStatus: effective,
-    atualizadoEm: nowIso(),
-  };
-  if (effective === "entregue") {
-    const entregueEm = next.entregueEm ?? nowIso();
-    next.entregueEm = entregueEm;
+  // Transição decidida e gravada sobre o payload MAIS RECENTE, sob a trava da linha da OS
+  // (nenhum writer de payload — recebimento, recusa terminal, operacional — grava no meio).
+  const { current, next } = await mutarPayloadOSV3({
+    storeId,
+    osId,
+    aceitarPayloadVazio: true,
+    aoAusente: () => {
+      throw new Error("OS não encontrada");
+    },
+    mutate: async ({ payload }, tx) => {
+      const current = asOperacoesPayload<OperacoesOSPayload>(payload as unknown);
+      if (!current) throw new Error("OS sem payload (incompatível)");
 
-    const snap = snapshotGarantiaOperacional(next, entregueEm);
-    if (snap?.prazoDias && snap.prazoDias > 0) {
-      next.garantia = snap;
-    }
-  }
+      const currentEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
+      assertOperacaoStatusTransition(currentEff, effective, options);
 
-  if (options?.appendTimeline?.length) {
-    next.timeline = [...(next.timeline ?? []), ...options.appendTimeline];
-  }
+      const next: OperacoesOSPayload = {
+        ...(current as OperacoesOSPayload),
+        status: effective,
+        operacaoStatus: effective,
+        atualizadoEm: nowIso(),
+      };
+      if (effective === "entregue") {
+        const entregueEm = next.entregueEm ?? nowIso();
+        next.entregueEm = entregueEm;
 
-  if (currentEff === "entregue" && effective !== "entregue") {
-    await cancelarGarantiasAtivasOrdem(prisma, { storeId, ordemServicoId: osId });
-  }
+        const snap = snapshotGarantiaOperacional(next, entregueEm);
+        if (snap?.prazoDias && snap.prazoDias > 0) {
+          next.garantia = snap;
+        }
+      }
 
-  await prisma.ordemServico.update({
-    where: { id: osId },
-    data: { status: toPrismaStatus(effective), payload: next as unknown as Prisma.InputJsonValue },
+      if (options?.appendTimeline?.length) {
+        next.timeline = [...(next.timeline ?? []), ...options.appendTimeline];
+      }
+
+      if (currentEff === "entregue" && effective !== "entregue") {
+        await cancelarGarantiasAtivasOrdem(tx, { storeId, ordemServicoId: osId });
+      }
+
+      return { payload: next as unknown as OSPayloadV3, colunas: { status: toPrismaStatus(effective) }, resultado: { current, next } };
+    },
   });
+  const currentEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
 
   if (currentEff !== effective) {
     void auditOS({
@@ -383,68 +397,150 @@ export async function updateOSStatus(
   return next as unknown as OperacoesOSPayload;
 }
 
+/**
+ * `patch.timeline` montado pelo chamador a partir de uma leitura ANTERIOR: os eventos do
+ * payload atual são preservados e só os eventos novos (por id, ou conteúdo sem id) entram.
+ */
+function mesclarTimelineDoPatch(current: OperacoesOSPayload, patch: Partial<OperacoesOSPayload>): Partial<OperacoesOSPayload> {
+  if (!Array.isArray(patch.timeline)) return patch;
+  const atual = Array.isArray(current.timeline) ? current.timeline : [];
+  const chave = (e: EventoTimeline) => (e && typeof e.id === "string" && e.id ? `id:${e.id}` : `json:${JSON.stringify(e)}`);
+  const conhecidos = new Set(atual.map(chave));
+  const novos = patch.timeline.filter((e) => !conhecidos.has(chave(e)));
+  return { ...patch, timeline: [...atual, ...novos] };
+}
+
 export async function updateOSPayload(
   storeId: string,
   osId: string,
   patch: Partial<OperacoesOSPayload>,
   transitionOpts?: OperacaoTransitionOptions,
 ): Promise<OperacoesOSPayload> {
-  const existing = await prisma.ordemServico.findFirst({
-    where: { id: osId, storeId },
-    select: { id: true, payload: true },
-  });
-  if (!existing) throw new Error("OS não encontrada");
-  const current = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
-  if (!current) throw new Error("OS sem payload (incompatível)");
   await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
   validatePatchIdentifiers({ storeId, osId, patch });
-  const effectiveOperacao = computeEffectiveOperacaoStatus(patch);
-  const next = mergePayload<OperacoesOSPayload>({
-    current: current as unknown as OperacoesOSPayload,
-    patch,
+  return aplicarPatchOSPayloadSobTrava(storeId, osId, () => ({ patch, transitionOpts }));
+}
+
+/** Patch decidido sobre o payload MAIS RECENTE (sob a trava). `null` = nada a gravar. */
+type PatchOSPayloadMontado = { patch: Partial<OperacoesOSPayload>; transitionOpts?: OperacaoTransitionOptions } | null;
+
+type MontarPatchOSPayload = (
+  current: OperacoesOSPayload,
+  tx: Prisma.TransactionClient,
+) => PatchOSPayloadMontado | Promise<PatchOSPayloadMontado>;
+
+/**
+ * Núcleo do `updateOSPayload` (sem auth — o chamador já autorizou). `montar` recebe o payload
+ * MAIS RECENTE, lido sob a trava da OS, e devolve o patch — chamadores com INTENÇÃO (aprovar,
+ * enviar, recusar, materializar o rascunho) decidem sobre o estado atual, nunca sobre uma
+ * leitura anterior ao `await`.
+ *
+ * O patch é aplicado ao payload MAIS RECENTE, sob a trava da linha da OS: campos fora do
+ * patch nunca voltam a um snapshot anterior; os campos financeiros do servidor
+ * (`pagamentoV3`, `aPrazoV3`, `recebimentoMistoRecusasV3`) nunca vêm do patch; e uma
+ * timeline montada pelo chamador a partir de uma leitura antiga só ANEXA.
+ *
+ * Título da OS (adapter os-faturamento) sincronizado NA MESMA transação, a partir do payload
+ * resultante (nunca de um orçamento anterior), com a ordem OS → título: um recebimento da OS
+ * (advisory → caixa → OS → título) espera esta transação inteira; o Financeiro (só título)
+ * nunca espera a OS. Auditoria/revalidate só depois do commit.
+ */
+async function aplicarPatchOSPayloadSobTrava(
+  storeId: string,
+  osId: string,
+  montar: MontarPatchOSPayload,
+): Promise<OperacoesOSPayload> {
+  const auditorias: Array<Parameters<NonNullable<Parameters<typeof syncFinanceiroAfterOSPayloadUpdate>[0]["onContaReceberChanged"]>>[0]> = [];
+  let revisaoKey: string | undefined;
+
+  const nextWithPolicy = await mutarPayloadOSV3({
     storeId,
     osId,
-    effectiveOperacao,
-  }) satisfies OperacoesOSPayload;
-  const nextWithPolicy = applyApprovedBudgetPolicy<OperacoesOSPayload>({
-    current: current as unknown as OperacoesOSPayload,
-    next,
-    makeTimelineEvent,
-  });
+    aceitarPayloadVazio: true,
+    aoAusente: () => {
+      throw new Error("OS não encontrada");
+    },
+    mutate: async ({ payload }, tx) => {
+      const current = asOperacoesPayload<OperacoesOSPayload>(payload as unknown);
+      if (!current) throw new Error("OS sem payload (incompatível)");
+      const montado = await montar(current as unknown as OperacoesOSPayload, tx);
+      if (!montado) return { payload: null, resultado: current as unknown as OperacoesOSPayload };
+      const { patch, transitionOpts } = montado;
+      validatePatchIdentifiers({ storeId, osId, patch });
+      const effectiveOperacao = computeEffectiveOperacaoStatus(patch);
 
-  const nextEff = normalizeOperacaoStatus((nextWithPolicy as OperacoesOSPayload).status);
-  const curEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
-  if (nextEff !== curEff) {
-    assertOperacaoStatusTransition(curEff, nextEff, transitionOpts);
-  }
+      if (shouldSyncFinanceiroFromPatch(patch as Partial<OperacoesSyncPatch>)) {
+        const lock = await verificarPeriodoFechado(storeId, new Date());
+        if (lock.fechado) {
+          throw new Error(
+            "Período financeiro fechado. Reabra o fechamento para alterar cobrança ou faturamento desta OS.",
+          );
+        }
+      }
 
-  const prismaSt = toPrismaStatus(nextEff);
-  const rowUpdate: Prisma.OrdemServicoUpdateInput = {
-    payload: nextWithPolicy as unknown as Prisma.InputJsonValue,
-    status: prismaSt,
-  };
-  const orcTotal = (nextWithPolicy as OperacoesOSPayload).orcamento?.total;
-  if (typeof orcTotal === "number" && Number.isFinite(orcTotal)) {
-    rowUpdate.valorTotal = orcTotal;
-  }
+      const next = mergePayload<OperacoesOSPayload>({
+        current: current as unknown as OperacoesOSPayload,
+        patch: mesclarTimelineDoPatch(current, semCamposFinanceirosDoServidorV3(patch)),
+        storeId,
+        osId,
+        effectiveOperacao,
+      }) satisfies OperacoesOSPayload;
+      const nextWithPolicy = applyApprovedBudgetPolicy<OperacoesOSPayload>({
+        current: current as unknown as OperacoesOSPayload,
+        next,
+        makeTimelineEvent,
+      });
 
-  if (shouldSyncFinanceiroFromPatch(patch as Partial<OperacoesSyncPatch>)) {
-    const lock = await verificarPeriodoFechado(storeId, new Date());
-    if (lock.fechado) {
-      throw new Error(
-        "Período financeiro fechado. Reabra o fechamento para alterar cobrança ou faturamento desta OS.",
-      );
-    }
-  }
+      const nextEff = normalizeOperacaoStatus((nextWithPolicy as OperacoesOSPayload).status);
+      const curEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
+      if (nextEff !== curEff) {
+        assertOperacaoStatusTransition(curEff, nextEff, transitionOpts);
+      }
 
-  await prisma.ordemServico.update({
-    where: { id: osId },
-    data: rowUpdate,
+      // Título da OS na MESMA transação (OS → título), sobre o payload resultante.
+      const eventosFinanceiros: EventoTimeline[] = [];
+      let erroTitulo: unknown;
+      await syncFinanceiroAfterOSPayloadUpdate({
+        storeId,
+        osId,
+        patch,
+        next: nextWithPolicy,
+        upsertContaReceberFromOS: (os) =>
+          upsertContaReceberFromOS(os, tx).catch((e: unknown) => {
+            erroTitulo = e;
+            throw e;
+          }),
+        cancelContaReceberFromOS: (input) =>
+          cancelContaReceberFromOS({ ...input, db: tx }).catch((e: unknown) => {
+            erroTitulo = e;
+            throw e;
+          }),
+        makeTimelineEvent,
+        appendTimelineEvent: async ({ ev }) => {
+          eventosFinanceiros.push(ev as EventoTimeline);
+        },
+        onContaReceberChanged: (a) => {
+          auditorias.push(a);
+        },
+      });
+      // Falha no título desfaz a OS junto (nunca OS e título divergentes).
+      if (erroTitulo !== undefined) throw erroTitulo;
+      if (eventosFinanceiros.length > 0) {
+        (nextWithPolicy as OperacoesOSPayload).timeline = [...((nextWithPolicy as OperacoesOSPayload).timeline ?? []), ...eventosFinanceiros];
+      }
+
+      const colunas: Omit<Prisma.OrdemServicoUpdateInput, "payload"> = { status: toPrismaStatus(nextEff) };
+      const orcTotal = (nextWithPolicy as OperacoesOSPayload).orcamento?.total;
+      if (typeof orcTotal === "number" && Number.isFinite(orcTotal)) {
+        colunas.valorTotal = orcTotal;
+      }
+      revisaoKey = (nextWithPolicy as any)?.orcamentoRevisaoAtual?.revisadoEm as string | undefined;
+      return { payload: nextWithPolicy as unknown as OSPayloadV3, colunas, resultado: nextWithPolicy };
+    },
   });
 
   // Delta de estoque após revisão de orçamento aprovado (se já consumiu estoque real e ainda não restaurou).
   // Importante: falhas NÃO podem quebrar o update do payload.
-  const revisaoKey = (nextWithPolicy as any)?.orcamentoRevisaoAtual?.revisadoEm as string | undefined;
   if (typeof revisaoKey === "string" && revisaoKey) {
     const operadorDelta = getOperatorLabelFromSession(await auth());
     const r = await applyEstoqueDelta({ storeId, osId, osPayload: nextWithPolicy as unknown as OrdemServico, revisaoKey, operador: operadorDelta });
@@ -457,16 +553,9 @@ export async function updateOSPayload(
     }
   }
 
-  await syncFinanceiroAfterOSPayloadUpdate({
-    storeId,
-    osId,
-    patch,
-    next: nextWithPolicy,
-    upsertContaReceberFromOS,
-    cancelContaReceberFromOS,
-    makeTimelineEvent,
-    appendTimelineEvent: ({ storeId: s, osId: o, ev }) => appendTimelineEvent<OperacoesOSPayload>(prisma, { storeId: s, osId: o, ev }),
-    onContaReceberChanged: async ({ contaReceberTituloId, localKey, action, valor }) => {
+  // Auditoria financeira do título só depois do commit (falha não interrompe).
+  for (const { contaReceberTituloId, localKey, action, valor } of auditorias) {
+    try {
       const session = await auth();
       await registrarAuditoriaFinanceira({
         storeId,
@@ -477,8 +566,10 @@ export async function updateOSPayload(
         usuarioNome: getOperatorLabelFromSession(session),
         depois: { localKey, valor, origemAdapter: "os-faturamento", osId },
       });
-    },
-  });
+    } catch {
+      /* auditoria não interrompe sync */
+    }
+  }
 
   revalidatePath("/dashboard/operacoes-v2");
   return nextWithPolicy;
@@ -519,18 +610,6 @@ export async function applyOperacaoHubAcao(
   acao: OperacaoHubAcaoInput,
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
-  const existing = await prisma.ordemServico.findFirst({
-    where: { id: osId, storeId },
-    select: { payload: true },
-  });
-  if (!existing?.payload) throw new Error("OS não encontrada");
-
-  const base = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
-  if (!base) throw new Error("OS sem payload (incompatível)");
-  const current = base as OperacoesOSPayload;
-  const st = normalizeOperacaoStatus(current.status);
-  const tl = readTimelinePayload(current);
-
   const permForAcao = (): ((p: EnterprisePermissions) => boolean) => {
     switch (acao.kind) {
       case "entregar_cliente":
@@ -543,6 +622,60 @@ export async function applyOperacaoHubAcao(
   };
   await requireOperacaoAuth(storeId, permForAcao(), "Sem permissão para esta ação na OS.");
   const autorEfetivo = await resolveOperador(autor);
+
+  if (acao.kind === "entregar_cliente" || acao.kind === "cancelar") {
+    // Transição de status: `updateOSStatus` valida de novo sobre o payload MAIS RECENTE, sob a trava.
+    const existing = await prisma.ordemServico.findFirst({
+      where: { id: osId, storeId },
+      select: { payload: true },
+    });
+    if (!existing?.payload) throw new Error("OS não encontrada");
+    const base = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
+    if (!base) throw new Error("OS sem payload (incompatível)");
+    const st = normalizeOperacaoStatus((base as OperacoesOSPayload).status);
+    switch (acao.kind) {
+      case "entregar_cliente": {
+        assertOperacaoStatusTransition(st, "entregue");
+        const ev: EventoTimeline = {
+          id: newTimelineId(),
+          tipo: "entrega_cliente",
+          titulo: "Entrega",
+          autor: autorEfetivo,
+          autorTipo: "usuario",
+          conteudo: "Equipamento entregue ao cliente.",
+          criadoEm: nowIso(),
+        };
+        return updateOSStatus(storeId, osId, "entregue", { appendTimeline: [ev] });
+      }
+      case "cancelar": {
+        assertOperacaoStatusTransition(st, "cancelada");
+        const ev: EventoTimeline = {
+          id: newTimelineId(),
+          tipo: "os_cancelada",
+          titulo: "Cancelamento",
+          autor: autorEfetivo,
+          autorTipo: "usuario",
+          conteudo: acao.motivo?.trim() ? `OS cancelada. Motivo: ${acao.motivo.trim()}` : "OS cancelada.",
+          criadoEm: nowIso(),
+        };
+        return updateOSStatus(storeId, osId, "cancelada", { appendTimeline: [ev] });
+      }
+    }
+  }
+
+  // Demais ações: a INTENÇÃO é decidida e montada sobre o payload MAIS RECENTE, sob a trava
+  // da OS (asserts, orçamento, faturamento, garantia e timeline) — nunca sobre uma leitura
+  // anterior ao `await`. Aprovar/enviar/recusar valem sobre o orçamento vigente nesse instante.
+  return aplicarPatchOSPayloadSobTrava(storeId, osId, (current) => montarPatchAcaoHub(current, acao, autorEfetivo));
+}
+
+function montarPatchAcaoHub(
+  current: OperacoesOSPayload,
+  acao: Exclude<OperacaoHubAcaoInput, { kind: "entregar_cliente" } | { kind: "cancelar" }>,
+  autorEfetivo: string,
+): PatchOSPayloadMontado {
+  const st = normalizeOperacaoStatus(current.status);
+  const tl = readTimelinePayload(current);
 
   switch (acao.kind) {
     case "iniciar_diagnostico": {
@@ -557,11 +690,13 @@ export async function applyOperacaoHubAcao(
         conteudo: "Diagnóstico iniciado.",
         criadoEm: nowIso(),
       };
-      return updateOSPayload(storeId, osId, {
-        status: "diagnostico",
-        operacaoStatus: "diagnostico",
-        timeline: [...tl, ev],
-      });
+      return {
+        patch: {
+          status: "diagnostico",
+          operacaoStatus: "diagnostico",
+          timeline: [...tl, ev],
+        },
+      };
     }
     case "enviar_orcamento": {
       assertPodeEnviarOrcamento(current);
@@ -582,11 +717,13 @@ export async function applyOperacaoHubAcao(
         conteudo: "Orçamento enviado ao cliente.",
         criadoEm: nowIso(),
       };
-      return updateOSPayload(storeId, osId, {
-        orcamento,
-        status: "aguardando_aprovacao",
-        timeline: [...tl, ev],
-      });
+      return {
+        patch: {
+          orcamento,
+          status: "aguardando_aprovacao",
+          timeline: [...tl, ev],
+        },
+      };
     }
     case "aprovar_orcamento": {
       assertOrcamentoAprovavel(current.orcamento);
@@ -622,13 +759,15 @@ export async function applyOperacaoHubAcao(
         conteudo: "Orçamento aprovado e faturamento pendente criado.",
         criadoEm: nowIso(),
       };
-      return updateOSPayload(storeId, osId, {
-        status: "aprovado",
-        orcamento,
-        garantia,
-        timeline: [...tl, ev1, ev2],
-        ...faturamento,
-      } as Partial<OperacoesOSPayload>);
+      return {
+        patch: {
+          status: "aprovado",
+          orcamento,
+          garantia,
+          timeline: [...tl, ev1, ev2],
+          ...faturamento,
+        } as Partial<OperacoesOSPayload>,
+      };
     }
     case "reprovar_orcamento": {
       assertOrcamentoRecusavel(current.orcamento);
@@ -657,12 +796,14 @@ export async function applyOperacaoHubAcao(
         conteudo: "Orçamento recusado; faturamento cancelado.",
         criadoEm: nowIso(),
       };
-      return updateOSPayload(storeId, osId, {
-        status: "diagnostico",
-        orcamento,
-        timeline: [...tl, ev1, ev2],
-        ...faturamento,
-      } as Partial<OperacoesOSPayload>);
+      return {
+        patch: {
+          status: "diagnostico",
+          orcamento,
+          timeline: [...tl, ev1, ev2],
+          ...faturamento,
+        } as Partial<OperacoesOSPayload>,
+      };
     }
     case "iniciar_servico": {
       const transitionOpts: OperacaoTransitionOptions | undefined = acao.iniciarSemAprovacaoConfirmado
@@ -680,15 +821,13 @@ export async function applyOperacaoHubAcao(
           : "Serviço iniciado após aprovação do orçamento.",
         criadoEm: nowIso(),
       };
-      return updateOSPayload(
-        storeId,
-        osId,
-        {
+      return {
+        patch: {
           status: "em_execucao",
           timeline: [...tl, ev],
         },
         transitionOpts,
-      );
+      };
     }
     case "aguardar_peca": {
       assertPodeAguardarPeca(current);
@@ -702,10 +841,12 @@ export async function applyOperacaoHubAcao(
         conteudo: "Serviço pausado aguardando peça.",
         criadoEm: nowIso(),
       };
-      return updateOSPayload(storeId, osId, {
-        status: "aguardando_peca",
-        timeline: [...tl, ev],
-      });
+      return {
+        patch: {
+          status: "aguardando_peca",
+          timeline: [...tl, ev],
+        },
+      };
     }
     case "marcar_pronta": {
       assertPodeMarcarPronta(current);
@@ -719,36 +860,12 @@ export async function applyOperacaoHubAcao(
         conteudo: "OS marcada como pronta para retirada.",
         criadoEm: nowIso(),
       };
-      return updateOSPayload(storeId, osId, {
-        status: "pronta",
-        timeline: [...tl, ev],
-      });
-    }
-    case "entregar_cliente": {
-      assertOperacaoStatusTransition(st, "entregue");
-      const ev: EventoTimeline = {
-        id: newTimelineId(),
-        tipo: "entrega_cliente",
-        titulo: "Entrega",
-        autor: autorEfetivo,
-        autorTipo: "usuario",
-        conteudo: "Equipamento entregue ao cliente.",
-        criadoEm: nowIso(),
+      return {
+        patch: {
+          status: "pronta",
+          timeline: [...tl, ev],
+        },
       };
-      return updateOSStatus(storeId, osId, "entregue", { appendTimeline: [ev] });
-    }
-    case "cancelar": {
-      assertOperacaoStatusTransition(st, "cancelada");
-      const ev: EventoTimeline = {
-        id: newTimelineId(),
-        tipo: "os_cancelada",
-        titulo: "Cancelamento",
-        autor: autorEfetivo,
-        autorTipo: "usuario",
-        conteudo: acao.motivo?.trim() ? `OS cancelada. Motivo: ${acao.motivo.trim()}` : "OS cancelada.",
-        criadoEm: nowIso(),
-      };
-      return updateOSStatus(storeId, osId, "cancelada", { appendTimeline: [ev] });
     }
     case "adicionar_observacao": {
       const txt = acao.texto.trim();
@@ -771,10 +888,12 @@ export async function applyOperacaoHubAcao(
         conteudo: obs.interna ? "Observação interna registrada." : "Observação registrada.",
         criadoEm: nowIso(),
       };
-      return updateOSPayload(storeId, osId, {
-        observacoes,
-        timeline: [...tl, ev],
-      });
+      return {
+        patch: {
+          observacoes,
+          timeline: [...tl, ev],
+        },
+      };
     }
     default: {
       const k = (acao as { kind?: string }).kind ?? "desconhecida";
@@ -783,11 +902,137 @@ export async function applyOperacaoHubAcao(
   }
 }
 
+/**
+ * Intenções de orçamento da UI V2 (`components/operacoes/lovable/api/os.ts`, também alcançada
+ * no servidor por `lib/operacoes-v3/orcamento-actions.ts::gerarOrcamentoDaOS`). A decisão
+ * (guarda "já há orçamento real?", orçamento a enviar/aprovar/recusar) é tomada sob a trava
+ * da OS, sobre a MESMA visão hidratada que a tela usa (`listOS`) relida nesse instante — um
+ * orçamento criado/editado/aprovado durante o `await` do chamador nunca é substituído.
+ */
+export type IntencaoOrcamentoOS =
+  | { kind: "materializar_rascunho_da_os" }
+  | { kind: "enviar_ao_cliente" }
+  | { kind: "aprovar_pelo_cliente" }
+  | { kind: "recusar_pelo_cliente"; motivo?: string };
+
+export async function aplicarIntencaoOrcamentoOS(
+  storeId: string,
+  osId: string,
+  intencao: IntencaoOrcamentoOS,
+  autor = "Você",
+): Promise<OperacoesOSPayload> {
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
+  return aplicarPatchOSPayloadSobTrava(storeId, osId, async (_latest, tx) => {
+    const row = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, include: { cliente: true } });
+    if (!row) throw new Error("OS não encontrada");
+    const [atual] = hydrateOSRows<OperacoesOSPayload>([
+      {
+        id: row.id,
+        storeId: row.storeId,
+        numero: row.numero ?? null,
+        clienteId: row.clienteId ?? null,
+        cliente: row.cliente ? { id: row.cliente.id, nome: row.cliente.name } : undefined,
+        defeito: row.defeito ?? "",
+        status: row.status,
+        payload: row.payload as unknown,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        valorTotal: Number(row.valorTotal ?? 0) || 0,
+        valorBase: Number(row.valorBase ?? 0) || 0,
+      },
+    ]);
+    if (!atual) throw new Error("OS não encontrada");
+    return montarPatchIntencaoOrcamento(atual, intencao, autor);
+  });
+}
+
+function ehOrcamento(v: unknown): v is Orcamento {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  if (typeof o.id !== "string" || typeof o.status !== "string") return false;
+  if (!Array.isArray(o.pecas) || !Array.isArray(o.servicos)) return false;
+  const desconto = typeof o.desconto === "number" ? o.desconto : Number(o.desconto);
+  const total = typeof o.total === "number" ? o.total : Number(o.total);
+  return typeof o.criadoEm === "string" && Number.isFinite(desconto) && Number.isFinite(total);
+}
+
+function eventoIntencaoOrcamento(tipo: EventoTimeline["tipo"], autor: string, autorTipo: EventoTimeline["autorTipo"], conteudo: string): EventoTimeline {
+  return { id: uidLovable("ev"), tipo, autor, autorTipo, conteudo, criadoEm: nowIso() };
+}
+
+function montarPatchIntencaoOrcamento(atual: OperacoesOSPayload, intencao: IntencaoOrcamentoOS, autor: string): PatchOSPayloadMontado {
+  const tl = readTimelinePayload(atual);
+  switch (intencao.kind) {
+    case "materializar_rascunho_da_os": {
+      const orcAtual = (atual as { orcamento?: Orcamento }).orcamento;
+      // Já existe orçamento real persistido — não recriar (no-op sobre o estado atual).
+      if (orcAtual && orcAtual.sintetizado !== true) return null;
+      const orcamento = buildOrcamentoRascunhoFromOS(atual as unknown as OrdemServico, { uid: uidLovable, nowIso });
+      return {
+        patch: {
+          orcamento,
+          timeline: [...tl, eventoIntencaoOrcamento("orcamento_criado", autor, "usuario", "Orçamento gerado a partir dos itens da OS (rascunho editável).")],
+        } as Partial<OperacoesOSPayload>,
+      };
+    }
+    case "enviar_ao_cliente": {
+      const cur = (atual as { orcamento?: unknown }).orcamento;
+      if (!ehOrcamento(cur)) throw new Error("Orçamento inexistente");
+      const orcamento = recalcularOrcamentoTotals({ ...cur, status: "enviado", enviadoEm: cur.enviadoEm ?? nowIso() });
+      return {
+        patch: {
+          orcamento,
+          timeline: [...tl, eventoIntencaoOrcamento("orcamento_enviado", autor, "usuario", "Orçamento enviado ao cliente.")],
+        } as Partial<OperacoesOSPayload>,
+      };
+    }
+    case "aprovar_pelo_cliente": {
+      const cur = (atual as { orcamento?: unknown }).orcamento;
+      if (!ehOrcamento(cur)) throw new Error("Orçamento inexistente");
+      const orcamento = recalcularOrcamentoTotals({ ...cur, status: "aprovado", respondidoEm: nowIso() });
+      const base = atual as unknown as OrdemServico;
+      const virtual: OrdemServico = { ...base, orcamento, status: "aprovado" };
+      const ts = nowIso();
+      const garantia = snapshotGarantia(virtual, ts) ?? base.garantia;
+      const faturamento = buildFaturamentoFromOrcamento({ os: { id: base.id, codigo: base.codigo }, orcamento, criadoEm: ts });
+      return {
+        patch: {
+          orcamento,
+          status: "aprovado",
+          garantia,
+          timeline: [
+            ...tl,
+            eventoIntencaoOrcamento("orcamento_aprovado", autor, "cliente", "Orçamento aprovado pelo cliente."),
+            eventoIntencaoOrcamento("faturamento_os_pendente", "Sistema", "sistema", "Orçamento aprovado e faturamento pendente criado."),
+          ],
+          ...faturamento,
+        } as Partial<OperacoesOSPayload>,
+      };
+    }
+    case "recusar_pelo_cliente": {
+      const cur = (atual as { orcamento?: unknown }).orcamento;
+      if (!ehOrcamento(cur)) throw new Error("Orçamento inexistente");
+      const orcamento = recalcularOrcamentoTotals({ ...cur, status: "recusado", respondidoEm: nowIso() });
+      return {
+        patch: {
+          orcamento,
+          status: "diagnostico",
+          timeline: [
+            ...tl,
+            eventoIntencaoOrcamento("orcamento_recusado", autor, "cliente", intencao.motivo ?? "Orçamento recusado."),
+            eventoIntencaoOrcamento("faturamento_os_cancelado", "Sistema", "sistema", "Orçamento recusado; faturamento cancelado."),
+          ],
+          ...buildFaturamentoRecusadoOrcamento(),
+        } as Partial<OperacoesOSPayload>,
+      };
+    }
+  }
+}
+
 export async function syncOperacaoItensComOrcamento(storeId: string, osId: string): Promise<void> {
   await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para sincronizar itens da OS.");
-  const { orcamento, payload } = await loadOrcamentoFromOsRow(storeId, osId);
-  if (!orcamento || !payload) return;
-  await syncOrdemServicoDraftItensFromOrcamento({ storeId, osId, orcamento, payload });
+  // Orçamento e `estoqueConsumido` relidos sob a trava da OS, dentro do serviço.
+  await syncOrdemServicoDraftItensFromOrcamento({ storeId, osId });
 }
 
 export type EstoqueOrcamentoIssue = {
@@ -857,25 +1102,10 @@ export async function gerarCobrancaOSAction(
   input: { modo: GerarCobrancaModo; numParcelas?: number },
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
-  const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
-  const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
-  if (!current) throw new Error("OS não encontrada");
-
   await requireOperacaoAuth(storeId, (p) => p.operacoes.gerarCobranca, "Sem permissão para gerar cobrança.");
+  // Mesma exigência do `updateOSPayload` que esta action usava para gravar.
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
   const autorCob = await resolveOperador(autor);
-
-  const st = normalizeOperacaoStatus(current.status);
-  const allowed: OSStatus[] = ["aprovado", "em_execucao", "aguardando_peca", "pronta", "entregue"];
-  if (!allowed.includes(st)) {
-    throw new Error("Gere cobrança somente com OS aprovada, em execução, pronta ou entregue.");
-  }
-  const pendenteOk =
-    current.faturamentoPendente === true &&
-    current.faturamentoStatus === "pendente" &&
-    Number(current.faturamentoTotal) > 0;
-  if (!pendenteOk) {
-    throw new Error("Não há faturamento pendente nesta OS (aprove o orçamento primeiro).");
-  }
 
   const lockCobranca = await verificarPeriodoFechado(storeId, new Date());
   if (lockCobranca.fechado) {
@@ -884,8 +1114,6 @@ export async function gerarCobrancaOSAction(
     );
   }
 
-  const total = Number(current.faturamentoTotal);
-  const parcelas = montarParcelasCobranca(total, input.modo, input.numParcelas);
   const formaPagamento =
     input.modo === "carteira"
       ? "carteira"
@@ -895,24 +1123,46 @@ export async function gerarCobrancaOSAction(
           ? "avista"
           : "parcelado";
 
-  const tl = readTimelinePayload(current);
-  const ev: EventoTimeline = {
-    id: newTimelineId(),
-    tipo: "operacao_cobranca_gerada",
-    titulo: "Cobrança",
-    autor: autorCob,
-    autorTipo: "usuario",
-    conteudo: `Cobrança registrada no financeiro (modo: ${input.modo}).`,
-    metadata: { modo: input.modo, parcelas: parcelas.length },
-    criadoEm: nowIso(),
-  };
+  // Status, faturamento pendente e total decididos sobre o payload MAIS RECENTE, sob a trava
+  // da OS: as parcelas nunca saem de um `faturamentoTotal` anterior a uma revisão concorrente.
+  let total = 0;
+  const patched = await aplicarPatchOSPayloadSobTrava(storeId, osId, (current) => {
+    const st = normalizeOperacaoStatus(current.status);
+    const allowed: OSStatus[] = ["aprovado", "em_execucao", "aguardando_peca", "pronta", "entregue"];
+    if (!allowed.includes(st)) {
+      throw new Error("Gere cobrança somente com OS aprovada, em execução, pronta ou entregue.");
+    }
+    const pendenteOk =
+      current.faturamentoPendente === true &&
+      current.faturamentoStatus === "pendente" &&
+      Number(current.faturamentoTotal) > 0;
+    if (!pendenteOk) {
+      throw new Error("Não há faturamento pendente nesta OS (aprove o orçamento primeiro).");
+    }
 
-  const patched = await updateOSPayload(storeId, osId, {
-    faturamentoModoCobranca: input.modo,
-    faturamentoParcelas: parcelas,
-    faturamentoFormaPagamento: formaPagamento,
-    timeline: [...tl, ev],
-  } as Partial<OperacoesOSPayload>);
+    total = Number(current.faturamentoTotal);
+    const parcelas = montarParcelasCobranca(total, input.modo, input.numParcelas);
+    const tl = readTimelinePayload(current);
+    const ev: EventoTimeline = {
+      id: newTimelineId(),
+      tipo: "operacao_cobranca_gerada",
+      titulo: "Cobrança",
+      autor: autorCob,
+      autorTipo: "usuario",
+      conteudo: `Cobrança registrada no financeiro (modo: ${input.modo}).`,
+      metadata: { modo: input.modo, parcelas: parcelas.length },
+      criadoEm: nowIso(),
+    };
+    return {
+      patch: {
+        faturamentoModoCobranca: input.modo,
+        faturamentoParcelas: parcelas,
+        faturamentoFormaPagamento: formaPagamento,
+        timeline: [...tl, ev],
+      } as Partial<OperacoesOSPayload>,
+    };
+  });
+  const parcelas = Array.isArray(patched.faturamentoParcelas) ? patched.faturamentoParcelas : [];
 
   void auditOS({
     storeId,

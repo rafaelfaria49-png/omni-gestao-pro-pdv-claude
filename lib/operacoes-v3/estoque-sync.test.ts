@@ -20,9 +20,12 @@ vi.mock("@/lib/operacoes/adapters/os-estoque", () => ({
   consumeEstoqueFromOS: adapter.consumeEstoqueFromOS,
   restoreEstoqueFromOS: adapter.restoreEstoqueFromOS,
 }));
-vi.mock("@/lib/prisma", () => ({
-  prisma: { ordemServico: { findFirst: db.findFirst, update: db.update } },
-}));
+vi.mock("@/lib/prisma", () => {
+  const prismaTx: Record<string, unknown> = { ordemServico: { findFirst: db.findFirst, update: db.update } };
+  prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
+  prismaTx.$queryRaw = async () => [{ id: "os-travada" }];
+  return { prisma: prismaTx };
+});
 
 import { consumirEstoqueOSV3, restaurarEstoqueOSV3 } from "./estoque-sync";
 

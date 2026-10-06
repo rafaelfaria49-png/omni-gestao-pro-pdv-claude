@@ -13,7 +13,7 @@
 // vencimento) no MESMO título — via `registrarMisto` (uma transação no servidor).
 // ============================================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarClock, CheckCircle2, CreditCard, Loader2, Lock, Plus, Receipt, RotateCcw, Trash2, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -125,6 +125,11 @@ export function PdvServicoV3() {
   const [reciboAberto, setReciboAberto] = useState(false);
   // Estorno
   const [motivoEstorno, setMotivoEstorno] = useState("");
+  // Loja/OS selecionada AGORA (atualizada no render): a resposta de uma operação iniciada em
+  // outra OS só pode mexer no rascunho/recarga desta tela se o alvo ainda for o mesmo.
+  const alvoAtual = JSON.stringify([storeId ?? "", osId]);
+  const alvoAtualRef = useRef(alvoAtual);
+  alvoAtualRef.current = alvoAtual;
 
   const saldo = pagamento?.saldo ?? 0;
 
@@ -179,9 +184,21 @@ export function PdvServicoV3() {
   const valorAReceber = splitMode ? somaSplit : valorUnico;
   const podeReceber = !temAPrazo && !!os && caixaAberto && (splitMode || formaUnicaSuportada) && veredito.ok && !recebendo;
 
+  /** Captura o alvo ANTES do await; `aindaNoAlvo()` diz se a tela continua nessa loja/OS. */
+  const capturarAlvo = () => {
+    const alvo = alvoAtual;
+    const codigo = os?.codigo ?? os?.id ?? "OS";
+    return {
+      aindaNoAlvo: () => alvoAtualRef.current === alvo,
+      // Mensagem de uma OS que não está mais na tela nomeia a OS de origem.
+      notificar: (mensagem: string) => notificar(alvoAtualRef.current === alvo ? mensagem : `${codigo}: ${mensagem}`),
+    };
+  };
+
   const onReceber = async () => {
     if (!os || !sessao?.sessaoId || temAPrazo) return;
     if (!splitMode && !formaUnica) return;
+    const alvo = capturarAlvo();
     const ok = await receber(
       splitMode
         ? { linhas: splitLinhasNum, sessaoId: sessao.sessaoId, intencao }
@@ -189,14 +206,23 @@ export function PdvServicoV3() {
     );
     if (ok) {
       reloadLista();
-      notificar(veredito.op === "liquidar" ? "OS quitada." : "Pagamento registrado.");
-      // Reseta os campos de entrada do split; forma única é re-sugerida pelo efeito do saldo.
-      setSplitLinhas([{ forma: "dinheiro", valorStr: "" }]);
+      alvo.notificar(veredito.op === "liquidar" ? "OS quitada." : "Pagamento registrado.");
+      // Reseta os campos de entrada do split (só na MESMA OS); forma única é re-sugerida pelo efeito do saldo.
+      if (alvo.aindaNoAlvo()) setSplitLinhas([{ forma: "dinheiro", valorStr: "" }]);
     }
+  };
+
+  /** Limpa o rascunho misto — só chamado quando a tela ainda está na OS da operação. */
+  const limparRascunhoMisto = () => {
+    setSplitLinhas([{ forma: "dinheiro", valorStr: "" }]);
+    setForma("dinheiro");
+    setVencimentoAPrazo("");
+    setObsAPrazo("");
   };
 
   const onRegistrarMisto = async () => {
     if (!os || !pagamento || !misto?.ok) return;
+    const alvo = capturarAlvo();
     const r = await registrarMisto({
       sessaoId: misto.receberAgoraCentavos > 0 ? sessao?.sessaoId : undefined,
       pagamentosAgora: misto.pagamentosAgora,
@@ -207,19 +233,16 @@ export function PdvServicoV3() {
     if (r.status === "ok") {
       reloadLista();
       const res = r.resultado;
-      notificar(
+      alvo.notificar(
         res.jaRegistrado
           ? "Esta operação já estava registrada — nada foi lançado de novo."
           : res.valorRecebidoAgora > 0
             ? `Registrado: ${formatBRL(res.valorRecebidoAgora)} recebido + ${formatBRL(res.valorAPrazo)} a prazo.`
             : `Saldo de ${formatBRL(res.valorAPrazo)} formalizado a prazo.`,
       );
-      setSplitLinhas([{ forma: "dinheiro", valorStr: "" }]);
-      setForma("dinheiro");
-      setVencimentoAPrazo("");
-      setObsAPrazo("");
-    } else if (r.status === "recusado" && r.code === "saldo_divergente") {
-      // Conflito recuperável: relê o saldo real; os valores digitados ficam para revisão.
+      if (alvo.aindaNoAlvo()) limparRascunhoMisto();
+    } else if (r.status === "recusado" && r.code === "saldo_divergente" && alvo.aindaNoAlvo()) {
+      // Conflito recuperável: relê o saldo real DESTA OS; os valores digitados ficam para revisão.
       reload();
     }
   };
@@ -227,16 +250,14 @@ export function PdvServicoV3() {
   /** Resultado anterior desconhecido: reenvia a MESMA operação (mesma chave) — o servidor deduplica. */
   const onReenviarPendente = async () => {
     if (!pendenciaMisto) return;
+    const alvo = capturarAlvo();
     const { operacaoId: _chave, ...dados } = pendenciaMisto.input;
     void _chave;
     const r = await registrarMisto(dados);
     if (r.status === "ok") {
       reloadLista();
-      notificar(r.resultado.jaRegistrado ? "Confirmado: a operação já estava registrada (sem duplicidade)." : "Operação registrada.");
-      setSplitLinhas([{ forma: "dinheiro", valorStr: "" }]);
-      setForma("dinheiro");
-      setVencimentoAPrazo("");
-      setObsAPrazo("");
+      alvo.notificar(r.resultado.jaRegistrado ? "Confirmado: a operação já estava registrada (sem duplicidade)." : "Operação registrada.");
+      if (alvo.aindaNoAlvo()) limparRascunhoMisto();
     }
   };
 
@@ -265,12 +286,15 @@ export function PdvServicoV3() {
 
   const onEstornar = async () => {
     if (!os || !sessao?.sessaoId) return;
+    const alvo = capturarAlvo();
     const ok = await estornar({ sessaoId: sessao.sessaoId, motivo: motivoEstorno.trim() || undefined });
     if (ok) {
       reloadLista();
-      reload();
-      setMotivoEstorno("");
-      notificar("Último recebimento estornado.");
+      if (alvo.aindaNoAlvo()) {
+        reload();
+        setMotivoEstorno("");
+      }
+      alvo.notificar("Último recebimento estornado.");
     }
   };
 

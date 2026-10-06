@@ -271,11 +271,48 @@ export function validarDistribuicaoMistaV3(
 }
 
 /**
- * Assinatura canônica do conteúdo econômico protegido pelo `operacaoId`. A ordem
- * das linhas não muda a operação; valores entram em centavos. O servidor faz o
- * hash (sha256) desta string — aqui fica só a forma canônica, sem `node:crypto`.
+ * Total em CENTAVOS por forma de pagamento: linhas da MESMA forma somam (PIX 50 + PIX 50 =
+ * PIX 100), a ordem não importa e o resultado sai ordenado pela forma. Linha com valor não
+ * finito ou ≤ 0 é ignorada — a mesma regra que a identidade já aplicava antes de agregar.
+ * Formas diferentes nunca se fundem (não há alias entre formas).
+ */
+export function centavosPorFormaV3(linhas: ReadonlyArray<{ forma: unknown; centavos: number }>): Array<{ forma: string; centavos: number }> {
+  const porForma = new Map<string, number>();
+  for (const l of linhas) {
+    if (!Number.isSafeInteger(l.centavos) || l.centavos <= 0) continue;
+    const forma = String(l.forma ?? "");
+    porForma.set(forma, (porForma.get(forma) ?? 0) + l.centavos);
+  }
+  return [...porForma.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([forma, centavos]) => ({ forma, centavos }));
+}
+
+/**
+ * Assinatura canônica do conteúdo econômico protegido pelo `operacaoId`. A identidade é o
+ * TOTAL por forma (em centavos), não a quantidade de linhas usada para representá-lo. O
+ * servidor faz o hash (sha256) desta string — aqui fica só a forma canônica, sem `node:crypto`.
  */
 export function assinaturaRecebimentoMistoV3(escopo: { storeId: string; osId: string }, n: RecebimentoMistoNormalizadoV3): string {
+  return JSON.stringify({
+    v: 2,
+    storeId: escopo.storeId,
+    osId: escopo.osId,
+    sessaoId: n.sessaoId,
+    pagamentosAgora: centavosPorFormaV3(n.pagamentosAgora),
+    aPrazo: n.aPrazo,
+    saldoEsperadoCentavos: n.saldoEsperadoCentavos,
+    intencao: n.intencao,
+    observacao: n.observacao,
+  });
+}
+
+/**
+ * Assinatura v1 (anterior ao agregado por forma), mantida SÓ para reconhecer confirmações
+ * gravadas antes do fix: o servidor compara o fingerprint gravado com o v1 calculado para a
+ * MESMA requisição — nunca aceita um fingerprint arbitrário. Novas operações gravam a v2.
+ */
+export function assinaturaRecebimentoMistoLegadaV1(escopo: { storeId: string; osId: string }, n: RecebimentoMistoNormalizadoV3): string {
   const linhas = [...n.pagamentosAgora]
     .map((l) => ({ forma: l.forma, centavos: l.centavos }))
     .sort((a, b) => (a.forma < b.forma ? -1 : a.forma > b.forma ? 1 : a.centavos - b.centavos));
@@ -444,22 +481,38 @@ export function gerarOperacaoIdV3(): string {
   return `op-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-/**
- * Conteúdo ECONÔMICO de um recebimento canônico (`receberOSV3`): sessão de caixa + formas e
- * valores, em qualquer ordem. É a identidade de UMA confirmação, igual na tela e no servidor:
- * forma única e split com as mesmas formas/valores são o MESMO recebimento; rótulos
- * (intenção, observação) e o saldo visto não mudam a identidade.
- */
-export function conteudoRecebimentoCanonicoV3(input: {
+type EntradaConteudoRecebimentoV3 = {
   sessaoId?: string | null;
   linhas?: ReadonlyArray<{ forma: string; valor: unknown }> | null;
   forma?: string | null;
   valor?: unknown;
-}): string {
+};
+
+/** Linhas brutas (split, ou forma única como 1 linha) já em centavos inteiros. */
+function linhasEmCentavosV3(input: EntradaConteudoRecebimentoV3): Array<{ forma: string; centavos: number }> {
   const brutas = Array.isArray(input.linhas) && input.linhas.length > 0 ? input.linhas : input.forma ? [{ forma: input.forma, valor: input.valor }] : [];
-  const linhas = brutas
-    .map((l) => [String(l.forma ?? ""), Math.round(Number(l.valor) * 100)] as [string, number])
-    .filter(([, centavos]) => Number.isFinite(centavos) && centavos > 0)
+  return brutas.map((l) => ({ forma: String(l.forma ?? ""), centavos: Math.round(Number(l.valor) * 100) }));
+}
+
+/**
+ * Conteúdo ECONÔMICO de um recebimento canônico (`receberOSV3`): sessão de caixa + TOTAL EM
+ * CENTAVOS POR FORMA. É a identidade de UMA confirmação, igual na tela e no servidor: PIX 100,
+ * PIX 50 + PIX 50 e forma única/split equivalentes são o MESMO recebimento; formas, centavos
+ * ou sessão diferentes não. Rótulos (intenção, observação) e o saldo visto não mudam a identidade.
+ */
+export function conteudoRecebimentoCanonicoV3(input: EntradaConteudoRecebimentoV3): string {
+  const formas = centavosPorFormaV3(linhasEmCentavosV3(input)).map((l) => [l.forma, l.centavos] as [string, number]);
+  return JSON.stringify({ v: 2, sessaoId: (input.sessaoId ?? "").trim(), formas });
+}
+
+/**
+ * Conteúdo v1 (linhas ordenadas, SEM agregar por forma) — só para reconhecer recebimentos
+ * gravados antes do fix, recalculado para a MESMA requisição (compatibilidade estrita).
+ */
+export function conteudoRecebimentoCanonicoLegadoV1(input: EntradaConteudoRecebimentoV3): string {
+  const linhas = linhasEmCentavosV3(input)
+    .filter((l) => Number.isFinite(l.centavos) && l.centavos > 0)
+    .map((l) => [l.forma, l.centavos] as [string, number])
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
   return JSON.stringify({ v: 1, sessaoId: (input.sessaoId ?? "").trim(), linhas });
 }

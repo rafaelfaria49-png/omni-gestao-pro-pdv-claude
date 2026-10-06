@@ -11,9 +11,15 @@ const mocks = vi.hoisted(() => ({
   criarOS: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: { ordemServico: { findFirst: mocks.findFirst, update: mocks.update } },
-}));
+vi.mock("@/lib/prisma", () => {
+  // O atendimento recém-criado (os-2001) também é relido sob a trava antes do evento de timeline.
+  const atendimentoRow = { id: "os-2001", storeId: "store-real", payload: { id: "os-2001", codigo: "OS-2001", timeline: [] } };
+  const findFirst = (args: { where?: { id?: string } }) => (args?.where?.id === "os-2001" ? Promise.resolve(atendimentoRow) : mocks.findFirst(args));
+  const prismaTx: Record<string, unknown> = { ordemServico: { findFirst, update: mocks.update } };
+  prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
+  prismaTx.$queryRaw = async () => [{ id: "os-travada" }];
+  return { prisma: prismaTx };
+});
 vi.mock("@/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: mocks.guard }));
 vi.mock("@/lib/operacoes/assert-active-store", () => ({ assertActiveStoreId: mocks.assertStore }));

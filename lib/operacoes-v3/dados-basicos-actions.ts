@@ -24,6 +24,7 @@ import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import type { SalvarDadosBasicosInputV3 } from "./dados-basicos-model";
+import { travarLinhaOSV3 } from "./os-payload-lock";
 import {
   erroConflitoConcorrenciaV3,
   montarProximosDadosBasicos,
@@ -43,10 +44,7 @@ function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-async function carregar(
-  storeId: string,
-  osId: string,
-): Promise<{ id: string; session: Session | null; payload: OSPayloadFull }> {
+async function autorizar(storeId: string, osId: string): Promise<{ id: string; session: Session | null }> {
   const sid = (storeId ?? "").trim();
   const id = (osId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
@@ -56,21 +54,16 @@ async function carregar(
   if (!session?.user?.id) throw new Error("Faça login para editar a OS.");
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar esta OS.");
   if (!guard.ok) throw new Error(guard.error);
-
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-  return { id, session, payload };
+  return { id, session };
 }
 
 /**
  * Salva os dados básicos da OS (recepção). NÃO altera status/orçamento/diagnóstico/
  * financeiro/estoque/caixa. Retorna o payload atualizado (mesmo shape que `getOrdem`).
  *
- * R02: releitura dentro da transação + escrita condicionada a `updatedAt`.
- * Gravação concorrente de outra sessão não é sobrescrita em silêncio — vira
- * erro de conflito explícito (sem motor global: só este write-path).
+ * R02: trava da linha da OS + releitura dentro da transação + escrita condicionada
+ * a `updatedAt`. Nenhum outro writer de payload grava entre a leitura e a escrita;
+ * divergência com o que a tela viu (`esperados`) continua virando conflito explícito.
  */
 export async function salvarDadosBasicosOSV3(
   storeId: string,
@@ -78,11 +71,12 @@ export async function salvarDadosBasicosOSV3(
   input: SalvarDadosBasicosInputV3,
   esperados?: EsperadosDadosBasicosV3,
 ): Promise<OrdemServico> {
-  const { id, session } = await carregar(storeId, osId);
+  const { id, session } = await autorizar(storeId, osId);
   const sid = (storeId ?? "").trim();
   const operador = operadorLabel(session);
 
   const saida = await prisma.$transaction(async (tx) => {
+    if (!(await travarLinhaOSV3(tx, sid, id))) throw new Error("OS não encontrada.");
     const latest = await tx.ordemServico.findFirst({
       where: { id },
       select: { id: true, storeId: true, payload: true, updatedAt: true },

@@ -22,6 +22,7 @@ import path from "path"
 import { fileURLToPath } from "url"
 import Papa from "papaparse"
 import { PrismaClient } from "./generated/prisma/index.js"
+import { aplicarImportacaoEmOSExistente } from "./scripts/lib/os-payload-lock.mjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -210,30 +211,25 @@ async function upsertOsPrisma(lojaId, osRow) {
     importacao: "gestaoclick",
   }
 
+  const existing = await prisma.ordemServico.findFirst({
+    where: { storeId: lojaId, numero },
+    select: { id: true },
+  })
+  // OS existente: patch intencional sobre o payload MAIS RECENTE, sob a trava da OS (nunca o
+  // CSV inteiro por cima de recusas, espelhos financeiros, timeline ou campos desconhecidos).
+  if (
+    existing?.id &&
+    (await aplicarImportacaoEmOSExistente(prisma, {
+      storeId: lojaId,
+      osId: existing.id,
+      importado: payload,
+      colunas: { numero, equipamento, defeito, laudoTecnico, valorTotal, valorBase: valorTotal, status },
+    }))
+  ) {
+    return
+  }
+
   await prisma.$transaction(async (tx) => {
-    const existing = await tx.ordemServico.findFirst({
-      where: { storeId: lojaId, numero },
-      select: { id: true },
-    })
-
-    if (existing?.id) {
-      await tx.ordemServico.update({
-        where: { id: existing.id },
-        data: {
-          storeId: lojaId,
-          numero,
-          payload,
-          equipamento,
-          defeito,
-          laudoTecnico,
-          valorTotal,
-          valorBase: valorTotal,
-          status,
-        },
-      })
-      return
-    }
-
     await tx.ordemServico.create({
       data: {
         storeId: lojaId,

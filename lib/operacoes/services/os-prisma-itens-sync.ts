@@ -1,5 +1,6 @@
 import type { Orcamento, OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
+import { lerOSTravadaV3, TX_PAYLOAD_OS_V3 } from "@/lib/operacoes-v3/os-payload-lock";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
@@ -18,23 +19,27 @@ function safeMoney(v: unknown): number {
 /**
  * Espelha o orçamento atual em `ordem_servico_item` (rascunho / pré-baixa).
  * Não roda quando o estoque já foi consumido na entrega (itens = ledger de baixa real).
+ *
+ * Trava a OS (loja + id) ANTES de tocar os itens e relê `estoqueConsumido` e o orçamento sob
+ * a trava: mesma ordem OS → itens do consumo/restauração/delta de estoque (sem ciclo — o INSERT
+ * do item pede KEY SHARE na OS, que já é desta transação), e um rascunho lido antes da entrega
+ * nunca substitui o ledger consumido.
  */
-export async function syncOrdemServicoDraftItensFromOrcamento(params: {
-  storeId: string;
-  osId: string;
-  orcamento: Orcamento;
-  payload: OrdemServico;
-}): Promise<void> {
-  const { storeId, osId, orcamento, payload } = params;
+export async function syncOrdemServicoDraftItensFromOrcamento(params: { storeId: string; osId: string }): Promise<void> {
+  const { storeId, osId } = params;
   if (!storeId?.trim() || !osId?.trim()) return;
 
-  const p = payload as OrdemServico & Record<string, unknown>;
-  if (p.estoqueConsumido === true) return;
-
   await prisma.$transaction(async (tx) => {
+    const os = await lerOSTravadaV3(tx, storeId, osId);
+    if (!os || !os.payloadValido) return;
+    const p = os.payload as OrdemServico & Record<string, unknown>;
+    if (p.estoqueConsumido === true) return;
+    const orcamento = isRecord(p.orcamento as unknown) ? (p.orcamento as Orcamento) : null;
+    if (!orcamento) return;
+
     await tx.ordemServicoItem.deleteMany({ where: { ordemServicoId: osId } });
 
-    for (const peca of orcamento.pecas) {
+    for (const peca of Array.isArray(orcamento.pecas) ? orcamento.pecas : []) {
       const q = safeFloorQty(peca.quantidade);
       if (q < 1) continue;
       const descricao = String(peca.nome ?? "").trim() || "Peça";
@@ -71,7 +76,7 @@ export async function syncOrdemServicoDraftItensFromOrcamento(params: {
       }
     }
 
-    for (const s of orcamento.servicos) {
+    for (const s of Array.isArray(orcamento.servicos) ? orcamento.servicos : []) {
       const bruto = safeMoney(s.valor);
       const desc = safeMoney(s.desconto);
       const liquido = Math.max(0, bruto - desc);
@@ -89,20 +94,5 @@ export async function syncOrdemServicoDraftItensFromOrcamento(params: {
         },
       });
     }
-  });
-}
-
-export async function loadOrcamentoFromOsRow(storeId: string, osId: string): Promise<{
-  orcamento: Orcamento | null;
-  payload: OrdemServico | null;
-}> {
-  const row = await prisma.ordemServico.findFirst({
-    where: { id: osId, storeId },
-    select: { payload: true },
-  });
-  if (!row?.payload || !isRecord(row.payload as unknown)) return { orcamento: null, payload: null };
-  const payload = row.payload as unknown as OrdemServico;
-  const orc = payload.orcamento;
-  if (!orc || typeof orc !== "object") return { orcamento: null, payload };
-  return { orcamento: orc as Orcamento, payload };
+  }, TX_PAYLOAD_OS_V3);
 }

@@ -10,17 +10,29 @@ const salvarGarantiaMock = vi.fn<AnyFn>(async () => ({}));
 vi.mock("./garantia-actions", () => ({ salvarGarantiaOSV3: (...args: unknown[]) => salvarGarantiaMock(...args) }));
 
 const findFirstMock = vi.fn<AnyFn>();
-// A gravação é condicionada ao `updatedAt` lido (CAS): `updateMany` devolve quantas linhas mudou.
-const updateMock = vi.fn<AnyFn>(async () => ({ count: 1 }));
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+const updateMock = vi.fn<AnyFn>(async () => ({}));
+// Ordem das chamadas no `tx`: prova que a trava (`FOR UPDATE`) vem ANTES da leitura gravada.
+const ordemTx: string[] = [];
+vi.mock("@/lib/prisma", () => {
+  const prismaTx: Record<string, unknown> = {
     ordemServico: {
-      findFirst: (...args: unknown[]) => findFirstMock(...args),
-      update: (...args: unknown[]) => updateMock(...args),
-      updateMany: (...args: unknown[]) => updateMock(...args),
+      findFirst: (...args: unknown[]) => {
+        ordemTx.push("findFirst");
+        return findFirstMock(...args);
+      },
+      update: (...args: unknown[]) => {
+        ordemTx.push("update");
+        return updateMock(...args);
+      },
     },
-  },
-}));
+  };
+  prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
+  prismaTx.$queryRaw = async () => {
+    ordemTx.push("forUpdate");
+    return [{ id: "os-travada" }];
+  };
+  return { prisma: prismaTx };
+});
 
 import { aprovarOrcamentoV3, corrigirOrcamentoV3, recusarOrcamentoV3, salvarOrcamentoV3 } from "./orcamento-actions";
 import { totalCobravelV3, lerPagamentoV3 } from "./payment-model";
@@ -49,18 +61,26 @@ function baseRow(orcamentoOverrides: Record<string, unknown> = {}) {
 
 afterEach(() => {
   vi.clearAllMocks();
+  ordemTx.length = 0;
 });
 
-describe("gravação condicionada (CAS por updatedAt) — GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001", () => {
-  it("grava só se a OS não mudou desde a leitura; se mudou (ex.: conversão em paralelo), conflito explícito sem efeitos", async () => {
-    const lidoEm = new Date("2026-10-04T18:00:00.000Z");
-    findFirstMock.mockResolvedValue({ ...baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }), updatedAt: lidoEm });
+// GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001 garantiu que "uma gravação atrasada nunca
+// desfaz outra" (lá por CAS em updatedAt). Na árvore reconciliada com o hardening
+// OPS-RECEBIMENTO-MISTO-P1, o orçamento decide e grava sob a trava da linha da OS
+// (os-payload-lock): a garantia vem da releitura do payload mais recente sob `FOR UPDATE`.
+describe("gravação sob a trava da OS — gravação atrasada nunca desfaz outra", () => {
+  it("trava, relê e grava na mesma transação; estado mudado em paralelo (ex.: recusa) é visto e nada é gravado", async () => {
+    findFirstMock.mockResolvedValue(baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }));
     await aprovarOrcamentoV3("loja-1", "os-1");
-    expect(updateMock.mock.calls[0]![0]).toMatchObject({ where: { id: "os-1", storeId: "loja-1", updatedAt: lidoEm } });
+    expect(ordemTx).toEqual(["forUpdate", "findFirst", "update"]);
+    expect(findFirstMock.mock.calls[0]![0]).toMatchObject({ where: { id: "os-1", storeId: "loja-1" } });
 
     vi.clearAllMocks();
-    updateMock.mockResolvedValueOnce({ count: 0 });
-    await expect(aprovarOrcamentoV3("loja-1", "os-1")).rejects.toThrow(/alterada por outra operação/);
+    ordemTx.length = 0;
+    // Outra operação já recusou o orçamento: a releitura sob a trava enxerga isso.
+    findFirstMock.mockResolvedValue(baseRow({ status: "recusado", servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }));
+    await expect(aprovarOrcamentoV3("loja-1", "os-1")).rejects.toThrow();
+    expect(updateMock).not.toHaveBeenCalled();
     expect(salvarGarantiaMock).not.toHaveBeenCalled();
   });
 });

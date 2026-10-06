@@ -17,29 +17,27 @@
 //
 // GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019 — cancelamento (to==="cancelada")
 // exige `opts.motivo` (mín. 5 caracteres) e BLOQUEIA se houver qualquer valor já
-// recebido (`lerPagamentoOSV3`, fonte autoritativa — não o espelho do payload):
+// recebido (ledger do título travado na MESMA transação da OS — não o espelho do payload):
 // nesse caso lança erro orientando a estornar primeiro (`estornarRecebimentoOSV3`).
-// O cancelamento da Conta a Receber acontece ANTES do write de status (não
-// depois, como antes) e o retorno NUNCA é ignorado: se `cancelContaReceber`
+// O cancelamento da Conta a Receber acontece ANTES do write de status, na mesma
+// transação (OS → título), e o retorno NUNCA é ignorado: se `cancelContaReceber`
 // falhar por um motivo que não seja "título inexistente" (ex.: título pago/
 // estornado), o cancelamento inteiro é abortado — a OS NÃO muda de status.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
 import type { Session } from "next-auth";
-import type { Prisma } from "@/generated/prisma";
 import type { EventoTimeline, OrdemServico } from "@/types/os";
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-service";
 import { localKeyContaReceberOSV3 } from "./payment-model";
-import { lerPagamentoOSV3 } from "./pdv-servico-actions";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { statusV3ParaEvento } from "./event-model";
 import { restaurarEstoqueOSV3 } from "./estoque-sync";
 import { registrarEntregaV3 } from "./entrega-actions";
+import { mutarPayloadOSV3 } from "./os-payload-lock";
 import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/utils/os-status";
 import {
   type OperacaoStatusV3,
@@ -111,82 +109,72 @@ export async function aplicarTransicaoStatusV3(
   );
   if (!guard.ok) throw new Error(guard.error);
 
-  const existing = await prisma.ordemServico.findFirst({
-    where: { id, storeId: sid },
-    select: { id: true, payload: true },
-  });
-  if (!existing) throw new Error("OS não encontrada.");
-
-  const payload = existing.payload as unknown as (OrdemServico & Record<string, unknown>) | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-
-  const from = statusV3FromOS(payload);
-  const veredito = podeTransicionarV3(from, to);
-  if (!veredito.ok) throw new Error(veredito.motivo ?? "Transição de status não permitida.");
-
-  // ---- Cancelamento seguro (GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019) ----
-  // Motivo obrigatório + bloqueio por pagamento ANTES de qualquer write. A leitura
-  // de pagamento é sempre a autoritativa (mesma fonte do estorno/recebimento),
-  // nunca o espelho `payload.pagamentoV3`. O cancelamento do CR também acontece
-  // aqui (antes do status) e seu retorno é verificado — "not_found" (OS nunca
-  // cobrada) é o caso comum e seguro; qualquer outra falha aborta tudo.
-  let motivoCancelamento: string | undefined;
-  if (to === "cancelada") {
-    const motivo = (opts?.motivo ?? "").trim();
-    if (motivo.length < 5) {
-      throw new Error("Informe o motivo do cancelamento (mín. 5 caracteres).");
-    }
-    motivoCancelamento = motivo;
-
-    const pagamento = await lerPagamentoOSV3(sid, id);
-    if (pagamento.recebido > 0) {
-      throw new Error("Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar.");
-    }
-
-    const resCr = await cancelContaReceber({
-      storeId: sid,
-      localKey: localKeyContaReceberOSV3(sid, id),
-      motivo: motivoCancelamento,
-      userLabel: operadorLabel(session),
-    });
-    if (!resCr.ok && resCr.reason !== "not_found") {
-      throw new Error(
-        resCr.reason === "titulo_pago_nao_cancela_aqui"
-          ? "Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar."
-          : `Não foi possível cancelar o financeiro desta OS (${resCr.reason}). Cancelamento abortado.`,
-      );
-    }
+  const motivoCancelamento = to === "cancelada" ? (opts?.motivo ?? "").trim() : undefined;
+  if (motivoCancelamento !== undefined && motivoCancelamento.length < 5) {
+    throw new Error("Informe o motivo do cancelamento (mín. 5 caracteres).");
   }
 
-  const statusV2 = projetarStatusV2(to);
-  const evento: EventoTimeline = {
-    id: eventId(),
-    tipo: "mudanca_status",
-    autor: operadorLabel(session),
-    autorTipo: "usuario",
-    conteudo:
-      to === "cancelada"
-        ? `Status alterado para "${statusMetaV3(to).label}". Motivo: ${motivoCancelamento}`
-        : `Status alterado para "${statusMetaV3(to).label}".`,
-    metadata: { de: from, para: to, engine: "operacoes-v3", ...(motivoCancelamento ? { motivo: motivoCancelamento } : {}) },
-    criadoEm: nowIso(),
-  };
-  const timeline: EventoTimeline[] = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+  // Transição decidida e gravada sobre o payload MAIS RECENTE, sob a trava da linha da OS:
+  // nenhum writer de payload (recebimento, recusa terminal, operacional) grava no meio, e
+  // nenhum recebimento da V3 desta OS commita entre a checagem de pagamento e o status.
+  const { nextPayload, from } = await mutarPayloadOSV3({
+    storeId: sid,
+    osId: id,
+    mutate: async ({ payload }, tx) => {
+      const from = statusV3FromOS(payload);
+      const veredito = podeTransicionarV3(from, to);
+      if (!veredito.ok) throw new Error(veredito.motivo ?? "Transição de status não permitida.");
 
-  const nextPayload = {
-    ...payload,
-    status: statusV2,
-    operacaoStatus: statusV2,
-    operacaoStatusV3: to,
-    timeline: [...timeline, evento],
-    atualizadoEm: nowIso(),
-  };
+      // ---- Cancelamento seguro (GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019) ----
+      // Motivo obrigatório + bloqueio por pagamento ANTES de qualquer write. O pagamento
+      // é lido do título (ledger autoritativo, nunca o espelho `payload.pagamentoV3`)
+      // TRAVADO nesta mesma transação, depois da OS (ordem OS → título): um pagamento
+      // direto/lote do Financeiro (que não trava a OS) ou commita antes — e o cancelamento
+      // é recusado — ou espera este commit e falha no CAS do título já cancelado. O
+      // cancelamento do CR e o status da OS commitam juntos; "not_found" (OS nunca
+      // cobrada) é o caso comum e seguro; qualquer outra falha aborta tudo.
+      if (to === "cancelada" && motivoCancelamento !== undefined) {
+        const resCr = await cancelContaReceber({
+          storeId: sid,
+          localKey: localKeyContaReceberOSV3(sid, id),
+          motivo: motivoCancelamento,
+          userLabel: operadorLabel(session),
+          exigirSemRecebimento: true,
+          db: tx,
+        });
+        if (!resCr.ok && resCr.reason !== "not_found") {
+          throw new Error(
+            resCr.reason === "titulo_pago_nao_cancela_aqui" || resCr.reason === "titulo_com_recebimento"
+              ? "Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar."
+              : `Não foi possível cancelar o financeiro desta OS (${resCr.reason}). Cancelamento abortado.`,
+          );
+        }
+      }
 
-  await prisma.ordemServico.update({
-    where: { id },
-    data: {
-      status: operacaoStatusToPrismaStatus(statusV2),
-      payload: nextPayload as unknown as Prisma.InputJsonValue,
+      const statusV2 = projetarStatusV2(to);
+      const evento: EventoTimeline = {
+        id: eventId(),
+        tipo: "mudanca_status",
+        autor: operadorLabel(session),
+        autorTipo: "usuario",
+        conteudo:
+          to === "cancelada"
+            ? `Status alterado para "${statusMetaV3(to).label}". Motivo: ${motivoCancelamento}`
+            : `Status alterado para "${statusMetaV3(to).label}".`,
+        metadata: { de: from, para: to, engine: "operacoes-v3", ...(motivoCancelamento ? { motivo: motivoCancelamento } : {}) },
+        criadoEm: nowIso(),
+      };
+      const timeline: EventoTimeline[] = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+
+      const nextPayload = {
+        ...payload,
+        status: statusV2,
+        operacaoStatus: statusV2,
+        operacaoStatusV3: to,
+        timeline: [...timeline, evento],
+        atualizadoEm: nowIso(),
+      };
+      return { payload: nextPayload, colunas: { status: operacaoStatusToPrismaStatus(statusV2) }, resultado: { nextPayload, from } };
     },
   });
 

@@ -12,6 +12,7 @@ import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { randomUUID } from 'crypto'
+import { aplicarImportacaoEmOSExistente } from './lib/os-payload-lock.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DRY_RUN = !process.argv.includes('--exec')
@@ -248,9 +249,13 @@ async function main() {
   for (const r of records) {
     try {
       if (r.isUpdate) {
-        await prisma.ordemServico.update({
-          where: { id: r.id },
-          data: {
+        // Patch intencional sobre o payload MAIS RECENTE, sob a trava da OS (nunca o CSV
+        // inteiro por cima de recusas, espelhos financeiros, timeline ou campos desconhecidos).
+        const aplicado = await aplicarImportacaoEmOSExistente(prisma, {
+          storeId: STORE_ID,
+          osId: r.id,
+          importado: r.payload,
+          colunas: {
             clienteId: r.clienteId,
             equipamento: r.equipamento,
             defeito: r.defeito,
@@ -258,9 +263,9 @@ async function main() {
             valorTotal: r.valorTotal,
             valorBase: r.valorBase,
             status: r.status,
-            payload: r.payload,
           },
         })
+        if (!aplicado) throw new Error(`OS ${r.numero} não encontrada na loja ${STORE_ID}`)
         stats.updated++
         console.log(`  ↺ UPDATE OS ${r.numero} — ${r.clienteNome}`)
       } else {
