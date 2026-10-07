@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "fiscal",
-  "status": "RUNNING",
+  "status": "BLOCKED",
   "risk_tier": "ALTO",
-  "current_goal": "FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024",
+  "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
     "goals_done": 8,
     "goals_blocked": 2,
     "goals_imported": 0,
-    "ledger_lines": 11
+    "ledger_lines": 12
   },
   "last_goal": "FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024",
   "last_result": "BLOCKED",
-  "last_ratified_at": "2026-10-01T17:25:51.921Z"
+  "last_ratified_at": "2026-10-07T19:36:47.716Z"
 }
