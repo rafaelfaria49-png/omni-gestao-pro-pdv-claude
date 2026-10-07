@@ -9,10 +9,10 @@
   "status": "READY",
   "class": "C3",
   "risk_tier": "ALTO",
-  "plan_rev": 9,
+  "plan_rev": 10,
   "branch": "goal/ops-v4-fluxo-curto-005",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005",
-  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/entrada-pendencias.test.ts lib/operacoes-v4/entrada-workspace.test.ts lib/operacoes-v3/status-machine.test.ts components/operacoes-v4-preview/preview-honesty.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/financial-projection-surfaces.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-004/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx playwright test e2e/specs/operacoes-v4-fluxo-curto-003.spec.ts e2e/specs/operacoes-v4-fluxo-curto-004.spec.ts e2e/specs/operacoes-v4-fluxo-curto-005.spec.ts --retries=0 --workers=1",
+  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/entrada-pendencias.test.ts lib/operacoes-v4/entrada-workspace.test.ts lib/operacoes-v3/status-machine.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/financial-projection-surfaces.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-005\" && npx --no-install vitest run --config test/ops-v4-fluxo-curto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-004/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx playwright test e2e/specs/operacoes-v4-fluxo-curto-003.spec.ts e2e/specs/operacoes-v4-fluxo-curto-004.spec.ts e2e/specs/operacoes-v4-fluxo-curto-005.spec.ts --retries=0 --workers=1",
   "allowlist": [
     "lib/operacoes-v4/proxima-acao-v4.ts",
     "lib/operacoes-v4/proxima-acao-v4.test.ts",
@@ -331,6 +331,21 @@ npm run typecheck; ESLint focado nos .ts/.tsx alterados; npm run build
 verify --all, check. Revisão visual (skill frontend-design) em 1440, 1024 e
 390, claro/escuro quando viável. Falha preexistente é comparada com a main,
 nunca declarada PASS.
+
+## Revisão 10 — test_command (07/10/2026)
+
+Baseline focal na main ca245ef (antes de qualquer diff do 005):
+components/operacoes-v4-preview/preview-honesty.test.ts já falha em 10
+testes alheios a este GOAL (varreduras de ReceberPagamentoV4 desatualizadas
+pelos PRs de recebimento misto #234/#238 e o termo de garantia do menu Docs).
+Com o arquivo inteiro no test_command o check 10 nunca passaria por falha
+preexistente fora do escopo.
+
+Correção do plano (sem mudar contrato, allowlist nem gates): o arquivo
+continua atualizado pelo 005, mas roda filtrado pelo marcador
+"OPS-V4-FLUXO-CURTO-005" (blocos de próxima ação/CTA que este GOAL
+reescreveu). As 10 falhas preexistentes ficam relatadas como follow-up
+separado; não são corrigidas aqui (escopo fechado).
 
 ## Autocorreção
 
