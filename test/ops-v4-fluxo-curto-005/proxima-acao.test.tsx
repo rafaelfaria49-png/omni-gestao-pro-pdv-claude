@@ -67,8 +67,10 @@ import {
   buildVals,
   useDetalheEncerradoSemOSV4,
   useEscritaPrimariaV4,
+  useNavegacaoGuardadaV4,
   type V4DataCtx,
 } from "@/components/operacoes-v4-preview/use-v4-preview";
+import { criarGuardaRascunhos } from "@/components/operacoes-v4-preview/use-entrada-draft-guard";
 import { ProximaAcaoV4 } from "@/components/operacoes-v4-preview/parts/ProximaAcaoV4";
 
 afterEach(() => cleanup());
@@ -155,7 +157,7 @@ interface Cenario {
 const patches: Array<Record<string, unknown>> = [];
 
 /** Trava REAL + buildVals REAL + bloco REAL; a etapa ativa responde aos patches. */
-function Harness({ c }: { c: Cenario }) {
+function Harness({ c, expor }: { c: Cenario; expor?: (v: ReturnType<typeof buildVals>) => void }) {
   const [stage, setStage] = useState<V4Stage>(c.stage ?? "entrada");
   const iniciarDiagnostico = c.iniciarDiagnostico ?? (async () => false);
   const iniciarServico = c.iniciarServico ?? (async () => false);
@@ -165,6 +167,7 @@ function Harness({ c }: { c: Cenario }) {
     detalhe: c.os,
     detalheCarregando: !!c.detalheCarregando,
     detalheErro: !!c.detalheErro,
+    detalheCarregado: !c.detalheCarregando && !c.detalheErro && !c.detalheVazio && !!c.os,
     iniciarDiagnostico,
     iniciarServico,
   });
@@ -196,6 +199,7 @@ function Harness({ c }: { c: Cenario }) {
       confirmarEntrega: c.confirmarEntrega ?? (async () => false),
     },
   );
+  expor?.(v);
   return (
     <>
       <ProximaAcaoV4 v={v} />
@@ -508,6 +512,141 @@ describe("OPS-V4-FLUXO-CURTO-005 — correções da R OpenAI em f94cb6b (P1 + 2�
     expect(result.current).toBe(false); // releitura trouxe a OS
     rerender({ chave: "loja-1::os-B", carregando: false, carregada: false });
     expect(result.current).toBe(false); // seleção nova: não pisca erro antes de carregar
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-005 — correções da R2 OpenAI em 3548abd (2× P2)", () => {
+  const A = "loja-1::os-A";
+  const B = "loja-1::os-B";
+
+  /** Guarda REAL com rascunho sujo em A cujo salvar fica retido até `salvando.resolver`. */
+  function guardaSujaEmA() {
+    const guarda = criarGuardaRascunhos<unknown>();
+    const salvando = adiado();
+    guarda.publicar(A, { campo: "x" }, true, { salvar: () => salvando.promessa, descartar: () => {} });
+    return { guarda, salvando };
+  }
+
+  function navegador(guarda: ReturnType<typeof criarGuardaRascunhos<unknown>>, chave: { atual: string }) {
+    const irPara = vi.fn();
+    const { result } = renderHook(() => useNavegacaoGuardadaV4({ guarda, chaveViva: () => chave.atual, irPara }));
+    return { navegar: result.current, irPara };
+  }
+
+  it("R2-P2a cenário da R: salvar lento de A, Cancelar, ir para B descartando — o callback de A NÃO move B", async () => {
+    const { guarda, salvando } = guardaSujaEmA();
+    const chave = { atual: A };
+    const { navegar, irPara } = navegador(guarda, chave);
+    act(() => navegar("entrega", "ir para entrega", true));
+    expect(guarda.pendente).not.toBeNull();
+    let salvamento: Promise<unknown> = Promise.resolve();
+    act(() => { salvamento = guarda.confirmarSalvamento(); });
+    act(() => guarda.cancelarSaida());
+    await act(async () => { await Promise.resolve(); });
+    // Operador troca para B: nova saída (seleção) com o rascunho ainda sujo → Descartar.
+    act(() => { guarda.solicitarSaida(() => { chave.atual = B; }, { chave: A, descricao: "trocar para B" }); });
+    act(() => { guarda.confirmarDescarte(); });
+    expect(chave.atual).toBe(B);
+    await act(async () => { salvando.resolver(true); await salvamento; });
+    expect(irPara).not.toHaveBeenCalled();
+  });
+
+  it("R2-P2a′ Cancelar durante o salvamento na MESMA OS: a navegação cancelada não acontece depois", async () => {
+    const { guarda, salvando } = guardaSujaEmA();
+    const { navegar, irPara } = navegador(guarda, { atual: A });
+    act(() => navegar("financeiro", "ir para financeiro", true));
+    let salvamento: Promise<unknown> = Promise.resolve();
+    act(() => { salvamento = guarda.confirmarSalvamento(); });
+    act(() => guarda.cancelarSaida());
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { salvando.resolver(true); await salvamento; });
+    expect(irPara).not.toHaveBeenCalled();
+  });
+
+  it("R2-P2a″ intenção superada por outra navegação do bloco: só a mais recente se cumpre", async () => {
+    const { guarda } = guardaSujaEmA();
+    const { navegar, irPara } = navegador(guarda, { atual: A });
+    act(() => navegar("entrega", "ir para entrega", true));
+    act(() => navegar("financeiro", "ir para financeiro", true));
+    act(() => { guarda.confirmarDescarte(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(irPara).toHaveBeenCalledTimes(1);
+    expect(irPara).toHaveBeenCalledWith("financeiro");
+  });
+
+  it("R2-P2a‴ caminhos legítimos seguem: salvar com sucesso, descartar, sem rascunho e sem guarda navegam 1×", async () => {
+    {
+      const { guarda, salvando } = guardaSujaEmA();
+      const { navegar, irPara } = navegador(guarda, { atual: A });
+      act(() => navegar("entrega", "ir para entrega", true));
+      let salvamento: Promise<unknown> = Promise.resolve();
+      act(() => { salvamento = guarda.confirmarSalvamento(); });
+      await act(async () => { salvando.resolver(true); await salvamento; });
+      expect(irPara).toHaveBeenCalledTimes(1);
+      expect(irPara).toHaveBeenCalledWith("entrega");
+    }
+    {
+      const { guarda } = guardaSujaEmA();
+      const { navegar, irPara } = navegador(guarda, { atual: A });
+      act(() => navegar("entrega", "ir para entrega", true));
+      act(() => { guarda.confirmarDescarte(); });
+      expect(irPara).toHaveBeenCalledTimes(1);
+    }
+    {
+      const guarda = criarGuardaRascunhos<unknown>();
+      const { navegar, irPara } = navegador(guarda, { atual: A });
+      act(() => navegar("entrega", "ir para entrega", true));
+      expect(irPara).toHaveBeenCalledTimes(1);
+      act(() => navegar("posvenda", "ir para pós-venda", false));
+      expect(irPara).toHaveBeenCalledTimes(2);
+    }
+  });
+
+  it("R2-P2a⁗ o bloco roteia navegação primária e secundária pela intenção validada (nunca o go() cru)", () => {
+    const navegarProximaAcao = vi.fn();
+    const local: Array<Record<string, unknown>> = [];
+    const base = { ...ctxBase, lojaAtivaId: "loja-1", detailCarregada: true, navegarProximaAcao };
+    const vExec = buildVals(estado({ selectedOsId: "os-n1", stage: "entrada" }), (p) => local.push(p as Record<string, unknown>), () => {}, { ...base, realOS: os("os-n1", "em_execucao") });
+    vExec.executarProximaAcao();
+    expect(navegarProximaAcao).toHaveBeenLastCalledWith("execucao", expect.any(String), true);
+    const vFim = buildVals(estado({ selectedOsId: "os-n2", stage: "entrega" }), (p) => local.push(p as Record<string, unknown>), () => {}, { ...base, realOS: os("os-n2", "entregue") });
+    vFim.executarAcaoSecundaria();
+    expect(navegarProximaAcao).toHaveBeenLastCalledWith("posvenda", expect.any(String), false);
+    expect(local).toEqual([]);
+  });
+
+  it("R2-P2b detalhe encerrado sem OS: botão da Execução some e a escrita compartilhada não chega ao servidor", async () => {
+    const iniciarServico = vi.fn(async () => true);
+    let v: ReturnType<typeof buildVals> | null = null;
+    patches.length = 0;
+    render(<Harness c={{ lojaId: "loja-1", os: os("os-r5", "aprovado"), detalheVazio: true, iniciarServico }} expor={(x) => { v = x; }} />);
+    expect(bloco().getAttribute("data-acao")).toBe("erro-leitura-os");
+    expect(screen.queryByTestId("etapa-iniciar")).toBeNull();
+    expect(v!.execAcoes).toMatchObject({ podeIniciar: false, podeAguardarPeca: false, podePronta: false });
+    // Mesmo um botão de etapa obsoleto chamando v.iniciarServico não grava.
+    let ok = true;
+    await act(async () => { ok = await v!.iniciarServico(); });
+    expect(ok).toBe(false);
+    expect(iniciarServico).not.toHaveBeenCalled();
+  });
+
+  it("R2-P2b′ trava real: sem detalhe estabelecido, executar não grava nem trava", async () => {
+    const iniciar = vi.fn(async () => true);
+    const { result } = renderHook(() => useEscritaPrimariaV4({
+      lojaAtivaId: "loja-1",
+      selectedOsId: "os-r6",
+      detalhe: null,
+      detalheCarregando: false,
+      detalheErro: false,
+      detalheCarregado: false,
+      iniciarDiagnostico: iniciar,
+      iniciarServico: iniciar,
+    }));
+    let ok = true;
+    await act(async () => { ok = await result.current.executar("iniciar_execucao", "loja-1::os-r6"); });
+    expect(ok).toBe(false);
+    expect(iniciar).not.toHaveBeenCalled();
+    expect(result.current.travada).toBe(false);
   });
 });
 
