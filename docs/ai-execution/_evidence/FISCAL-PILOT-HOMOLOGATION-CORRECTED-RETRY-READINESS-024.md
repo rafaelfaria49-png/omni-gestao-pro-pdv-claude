@@ -1,3 +1,254 @@
+# FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024 — evidência sanitizada vigente
+
+Data: 2026-10-07 (America/Sao_Paulo). Resultado: **BLOCKED_BY_RETRY_RECONCILIATION_REQUIRED**.
+Ponto de parada: **GOAL_024_AUDIT_COMPLETE_RECONCILIATION_REQUIRED**.
+
+A auditoria solicitada está concluída. O mesmo GOAL 024 foi reativado; nenhum novo GOAL foi criado. Não existe readiness para a terceira tentativa: a nota continua incerta e não pode reentrar na persistência pré-transmissão canônica. A correção 023 e os testes verdes não reconciliam registros históricos. G-F7 e G-F12 permanecem fechados.
+
+## 1. Proveniência do estado do banco
+
+Fonte atual: contexto sanitizado fornecido diretamente pelo humano no pedido de retomada de 2026-10-07, explicitamente comprovado em leitura READ-ONLY de `omnigestao_prod`, com `transaction_read_only=on`. Essa evidência substitui a falta de identificação das duas retomadas anteriores. `DATABASE_STATE_VERIFIED=true` registra a prova humana recebida; **não significa uma nova conexão ou consulta executada pelo agente nesta sessão**. Nenhuma URL, senha, CSC, certificado, XML ou credencial foi recuperada ou impressa. DB_CONNECTIONS=0; DB_READ_QUERIES=0; DB_WRITES=0 nesta execução.
+
+| Registro | Estado comprovado pelo contexto humano |
+| --- | --- |
+| Configuração loja-1 | fiscalEnabled=false; HOMOLOGACAO; NFCE; SEFAZ_DIRETO; cscId=4; cscTokenRef=FISCAL_CSC_TOKEN_LOJA_1 (referência, sem token) |
+| Venda cmubufz1v000ch2mc5fknbpy6 | sessaoId=cmubufytz000ah2mcib062l0n; terminalId=HOMOLOG-022E; fiscalStatus=PENDENTE |
+| Caixa relacionado à venda | cmubufytz000ah2mcib062l0n; FECHADA |
+| Nota cmubufzhb000mh2mcvwan5e2m | TRANSMITINDO; vigente=true; série 1; número 2; cStat=null; tentativas=1 |
+| Chave persistida da nota | 35260948241205000195650010000000021026842710 |
+| ultimoErro da nota | cStat 588 não consta da matriz 018.2; desfecho incerto. |
+| EMISSAO cmubufzmf000ph2mcu6act9zk | AGUARDANDO_RETRY; tentativas=1; maxTentativas=5; proximaTentativaEm=null; lockOwner=null; lockExpiresAt=null; concluidoEm=null |
+| CONSULTA cmuchau0k0009h21ck7yhtf7x | CONCLUIDO; tentativas=1; NOT_FOUND identificado pelo log de consulta sem retransmissão |
+| Série fiscal | série 1; proximoNumero=3; ativo=true; a única nota série 1/número 2 é a nota acima |
+
+Os logs recebidos confirmam `fiscal.emission.persisted_before_transmission`, `fiscal.emission.uncertain`, `fiscal.queue.transmission.uncertain`, `fiscal.pilot.consulta_not_found_sem_retransmissao` e `fiscal.queue.completed`.
+
+**CAIXA_ID_DIVERGENCE_RESOLVED=true**: o relacionamento real da venda aponta para `cmubufytz000ah2mcib062l0n`. O ID `cmubufytz000ch2mcib062l0n`, escrito na evidência histórica 022E, não foi confirmado como relacionado à venda. O texto histórico não foi alterado; a correção de proveniência está neste adendo.
+
+O contexto não contém o conteúdo integral dos snapshots, bytes antigos, hashes completos dos logs, timestamps adicionais ou inventário global de todos os jobs. Não se afirma uma nova inspeção desses campos. A classificação de retry abaixo tem escopo no job EMISSAO histórico, e não certifica toda a fila de outras vendas/lojas.
+
+## 2. Reativação AEP e ausência de drift
+
+- Checkout localizado: C:/workspace; branch `goal/fiscal-024-corrected-retry-readiness`; HEAD de entrada `04282f2b30fe2122f87f21f9405d77757cfa0ba8`; árvore limpa. O workspace do chat, gymflow-ai, não recebeu alterações.
+- `node scripts/track.mjs status fiscal` confirmou as duas entradas BLOCKED anteriores do mesmo 024 (2026-10-01T16:29:22.066Z e 2026-10-01T17:25:51.921Z).
+- Reativação humana conforme EXECUTION_PROTOCOL §2/§3: mesmo arquivo `_closed/goals/` -> `goals/`, status BLOCKED -> READY, nova autorização sanitizada; `registry` regenerou os derivados. Nenhuma edição manual de state/ledger/registry.
+- SHA-256 do LEDGER.jsonl antes e depois da reativação: `3CF2AC577CDC8E5FC2704FBECCA86F7DB81580272C69BF7F3BB8800491D2A257`; duas entradas anteriores intactas.
+- Commit de reativação: `b0ae4d9ed9a55485cb48d9d105be0ebb23d549a3`. `open fiscal` abriu o mesmo ID, tentativa 1/3, allowlist documental original e nenhum gate liberado.
+- `git fetch origin` concluído. `origin/main=ca245ef6f3713e22dff23465f747649b1d5510c2`; base/merge-base do 024 permanece `bfbdf01087433738134f5ee308475c2ef9841fbe`. Não houve merge, rebase ou reset.
+- `git diff --name-only bfbdf01087433738134f5ee308475c2ef9841fbe origin/main -- lib/fiscal test/fiscal docs/fiscal`: vazio, exit 0. O mesmo diff base -> HEAD também é vazio. `git log base..origin/main -- lib/fiscal test/fiscal docs/fiscal`: vazio, exit 0; não houve alterações fiscais intermediárias revertidas.
+- Os três conjuntos têm árvores Git idênticas na base, em origin/main e em HEAD: lib/fiscal=`75a8ef23be3f64bece2d086230be0f90602af0f2`; test/fiscal=`fae68a2893eba87ffd3bee5b0f99dbc071948be8`; docs/fiscal=`6dc61a6ea79c1152abd4a5154fe8c464d18f54f4`.
+- Comparação adicional dos modelos NotaFiscal, NotaFiscalItem, SerieFiscal, FiscalEmissaoJob e FiscalLog em prisma/schema.prisma contra origin/main: idênticos após normalizar apenas CRLF/LF. A primeira comparação literal revelou somente essa diferença de finais de linha; a comparação normalizada passou, sem alteração de arquivos.
+- `node scripts/track.mjs verify --all`: PASS, oito trilhas e derivados sem divergências após a reativação.
+
+## 3. Retry automático e estado incerto são classificações distintas
+
+`lib/fiscal/queue/prisma-queue-worker.ts:165-201` admite AGUARDANDO_RETRY somente com `proximaTentativaEm: { not: null, lte: now }` e lock ausente/vencido. PENDENTE é outra ramificação; takeover exige PROCESSANDO e lease vencido. O job atual não satisfaz nenhuma delas. A aquisição genérica usa esse predicado na seleção (:211) e novamente no CAS (:229).
+
+O wiring armado de homologação (`nfce-homologation-pilot-armed-wiring.ts:486-503`) usa `AND` entre id/store/tipo específicos e **o mesmo eligibleWhere** no CAS; apontar o job por ID não contorna a elegibilidade. O wiring de consulta e o drill de contingência também usam eligibleWhere. Não foi encontrado caminho produtivo alternativo de aquisição automática do EMISSAO atual sem alterar seu estado. Mocks de portas em testes não são um caminho de aquisição do banco.
+
+`queue-admin.ts:125-129` permite reprocessamento manual somente em FALHA, portanto recusa AGUARDANDO_RETRY. O producer v1 reusa o job pelo dedupe e atualiza somente notaFiscalId, sem rearmar status/data (`queue-producer.ts:227-255`). O método genérico `authorizeExactRetransmission` faria writes para PENDENTE/data atual, mas a consulta real deste piloto o substitui por uma função de auditoria (`nfce-homologation-pilot-consultation-wiring.ts:55-59,95-115`): NOT_FOUND não revive a emissão.
+
+Prova offline em memória extraindo a função real eligibleWhere: datas null/futura/igual a now/passada produziram `[false,false,true,true]`. Nenhuma conexão Prisma/provider foi criada por essa prova.
+
+**NO_PENDING_AUTOMATIC_RETRY=true**, para o EMISSAO histórico no estado comprovado. **NO_UNCERTAIN_STATE=false**: TRANSMITINDO + ultimoErro de desfecho incerto e os dois logs de uncertain permanecem. CONSULTA concluída/NOT_FOUND não reconciliou retroativamente a nota. A matriz 023 classifica futuras respostas 588; ela não migra o estado antigo.
+
+## 4. Numeração e unicidade
+
+`allocate-fiscal-number.ts:136-149` lê a mesma nota e retorna `allocationFromNumberedNota` antes de consultar/reservar a série. O retorno exige numeração válida e serieFiscalId persistido (:54-95). `prisma-numbering-ports.ts` lê a nota vigente por id/loja e conserva esses campos; o incremento atômico e o bind só são usados para nota ainda sem número.
+
+Prova offline com o allocator real e portas sintéticas: nota com série 1/número 2/serieFiscalId válido retornou `ok=true,reused=true,serie=1,numero=2`, com **zero chamadas** a findActiveSerie/reserveNextNumber/bindNotaNumero; qualquer uma dessas chamadas faria a prova falhar. Essa é prova de suporte do código, não leitura adicional do serieFiscalId real, que não veio no contexto humano. A alocação histórica 022E documenta que a nota passou pelo allocator canônico.
+
+O contador atual em 3 não impede reuso pela mesma nota já numerada; não há decremento, reinício ou retirada do número 2 do pool. `prisma/schema.prisma:2521` impõe `@@unique([storeId, modelo, serie, numero, ambiente])`, sem condição em vigente/status. Tornar a antiga não vigente não libera esse número. `chaveAcesso @unique` é uma proteção adicional. O bind traduz P2002 em numero_em_uso.
+
+- NUMBER_REUSE_SAME_NOTA_SUPPORTED=true (suporte de numeração; não readiness do fluxo completo).
+- NEW_NOTA_SAME_NUMBER_SUPPORTED=false no schema atual com a antiga preservada.
+- Outra NotaFiscal série 1/número 2 no mesmo escopo conflita. Exigiria alteração estrutural/schema ou mutação da identidade antiga; nenhum desses caminhos foi usado ou proposto como contorno neste GOAL.
+
+## 5. Fonte congelada, chave e caminho dos bytes corrigidos
+
+`nfce-finalization-source-resolver.ts:111-245` lê somente NotaFiscal + NotaFiscalItem, snapshots congelados, serie/numero/tipoEmissao/localKey. `snapshot-reader.ts` reconstrói snapshotPagamento.venda/totais/diagnostico/tributacao e devolve deepFreeze. Não lê Produto, Cliente ou Venda vivos. Data de emissão vem de snapshot.venda.data; série 1 e número 2 vêm da nota persistida.
+
+`finalized-nfce-preparer.ts:177-218` usa `buildNfceXmlAssinavelResult` com esses campos e `signNfceXmlDetailed`. O builder assinável usa o destino embutível; `xml-writer.ts:228-234` serializa compactamente. Chave e número não dependem da formatação corrigida. O builder (:430-453) deriva cNF de `vendaId:serie:numero`, AAMM da data congelada, cUF/CNPJ do emitente congelado, modelo 65 e tpEmis persistido.
+
+Prova offline usando as funções reais nfce-chave-acesso: a semente `cmubufz1v000ch2mc5fknbpy6:1:2` produziu cNF=`02684271`. Recompor os componentes da chave histórica (cUF=35, AAMM=2609, CNPJ já contido na chave, modelo 65, série 1, número 2, tpEmis=1) e recalcular o DV produziu exatamente `35260948241205000195650010000000021026842710`.
+
+**CANDIDATE_CHNFE_EXPECTED** é essa chave sob preservação da identidade/snapshot. A prova recompôs os componentes históricos e o cNF/DV; não acessou o snapshot integral real nem preparou/reassinou a nota com A1 real. Nenhum candidato foi persistido.
+
+Caminho canônico auditado: aquisição elegível -> wiring do piloto -> resolver congelado -> builder compact -> XMLDSig -> preflight XSD dos mesmos bytes -> consumo da ativação/capability -> executor -> coordenador -> persistBeforeTransmission -> releitura/SHA-256 dos bytes -> SefazDiretoProvider/guards (incluindo XSD) -> composeEnviNFeRequest -> buildSefazSoap12Envelope/backstop D01e -> transport.send/authority externa one-shot.
+
+O wiring armado prepara o preflight em memória antes do consumo da ativação (:330-397); isso **não** libera reentrada da nota no coordenador. `sefaz-direto-provider.ts:350-374` compõe enviNFe e valida o envelope imediatamente antes de transport.send. `sefaz-envelope.ts:410-419` recusa whitespace D01e sem transformar os bytes. O transporte exige authority íntegra antes de A1/TLS/socket. O emissor legado é inacessível no wiring armado e SEFAZ_DIRETO nunca cai no legado do worker. O caminho pretty/standalone não atende o contrato do envelope; não há fallback que limpe bytes assinados antigos para fazê-los atravessar.
+
+## 6. Bloqueio da reentrada canônica
+
+`prisma-uncertain-state-persistence.ts:262-290`, persistBeforeTransmission, aceita **somente** RASCUNHO, VALIDANDO, ASSINADA e CONTINGENCIA. TRANSMITINDO não casa; count != 1 causa erro e rollback da transação antes do registro de novos bytes no job/log.
+
+Há dois freios adicionais no coordenador (`uncertain-state-coordinator.ts:286-335`):
+
+1. TRANSMITINDO sem autorização por consulta retorna CONSULTATION_REQUIRED. Com essa autorização, reutiliza **os bytes antigos**, sem chamar prepare/persistBeforeTransmission; não recompõe XML corrigido.
+2. REJEITADA retorna DOCUMENT_ALREADY_REJECTED com mensagem genérica de número consumido, mesmo que a futura reconciliação histórica use a consequência específica 588/numeroConsumido=false. Apenas marcar a nota REJEITADA não habilita a correção.
+
+**CURRENT_NOTE_CAN_REENTER_CANONICAL_PRETRANSMISSION=false**. Não se ampliou WHERE, não se mudou status, não se chamou método de persistência. Reenfileirar um job isoladamente não resolve esses guards; o preflight armado ainda poderia consumir uma ativação antes de o coordenador bloquear. Esse caminho deve ser provado no sucessor antes de qualquer gate de transmissão.
+
+## 7. Estratégia de job — auditoria sem implementação
+
+| Questão | Resposta mecânica |
+| --- | --- |
+| Adquirir o job antigo AGUARDANDO_RETRY/null? | Não, nem pelo worker genérico nem pelo CAS armado. |
+| Criar outro EMISSAO para a mesma nota/venda? | O schema permite, pois não há unicidade em notaFiscalId/vendaId/tipo; exige INSERT e dedupe distinta. O producer canônico existente faz upsert v1 e reusa o antigo, não cria esse segundo job. |
+| Qual dedupe do original? | fiscal:emissao:v1:venda:cmubufz1v000ch2mc5fknbpy6 |
+| Qual dedupe permitiria um novo job? | Uma chave não nula distinta e idempotente por operação; por exemplo fiscal:emissao:v2:nota:cmubufzhb000mh2mcvwan5e2m:correcao588:<operationId>. Exemplo explicativo, sem contrato implementado ou aprovado neste GOAL. Reusar a chave v1 colidiria/upsertaria o original. |
+| findEmissionJob poderia escolher o job errado? | Sim. Em prisma-uncertain-state-persistence.ts:74-87 ele busca storeId/vendaId/notaFiscalId e tipo EMISSAO ou CONTINGENCIA_TRANSMISSAO, ordenando createdAt/id DESC. Não vincula ao jobId efetivamente adquirido, dedupe, status ou lease. Com dois jobs nesse mesmo escopo, um worker do antigo pode ler/escrever metadados do mais recente. |
+| O ledger de ativação do piloto se confunde com a emissão? | O gate grava um job EMISSAO/CONCLUIDO com vendaId sintética homologacao-emissao:<hash> (:201-225); findEmissionJob exige a venda real, portanto esse ledger não casa com o escopo da venda histórica. |
+| Reutilizar o antigo exige alterar status/data? | Sim, para elegibilidade futura. PENDENTE pode ser adquirido com data nula/vencida; manter AGUARDANDO_RETRY exigiria data não nula/vencida. O estado presente não pode ser usado diretamente. |
+| Existem writes antes da transmissão em qualquer opção? | Sim: INSERT de novo job ou UPDATE de status/data/payload do original; reconciliação/arquivo da tentativa; persistência de XML; CAS de lease/tentativas e ledger one-shot. Zero dessas operações foi executada neste 024. |
+
+**Estratégia única proposta para o sucessor:** conservar o job `cmubufzmf000ph2mcu6act9zk` e a dedupe v1, preservar sua tentativa anterior e os contadores, reconciliá-lo para terminal coerente e mantê-lo inelegível até ação humana específica futura. Não criar outro EMISSAO da mesma nota/venda. A correção futura precisa estar vinculada explicitamente à mesma nota/job/linhagem e impedir seleção ambígua; nenhum rearm foi realizado.
+
+## 8. Imutabilidade e auditoria da tentativa 588
+
+No estado atual, o guard bloqueia qualquer substituição. **Se uma reentrada fosse liberada sem preservação adicional**, o data de persistBeforeTransmission (:273-284) atribuiria novamente xmlAssinado, digestValue, qrCodeData e urlConsulta (inclusive null quando ausentes) e limparia ultimoErro. Os valores de digest/QR podem coincidir, mas não há histórico de versões desses campos no update. `payload.document` do job também seria substituído pelos metadados/hash novos (:300-302), não anexado como uma tentativa imutável.
+
+O log persisted_before_transmission guarda bytesSha256 e booleanos de presença de digest/QR/URL, não os bytes ou valores anteriores (:315-324). O log uncertain guarda código, hash e consulta (:438-442). O payload mutável pode conservar resumos adicionais, mas o contexto humano não trouxe seu conteúdo e ele não garante arquivo imutável da tentativa. Sem cópia privada separada, após a sobrescrita restariam logs/hash e referências históricas; isso permite correlação, não restauração/verificação completa dos bytes antigos.
+
+ADR-0017 §2/§6 exige releitura dos mesmos bytes no retry de estado incerto. ADR-0018 §2.1 proíbe substituição silenciosa após o início da transmissão; seus guards de autorização não equivalem a versionamento de tentativas. `storage/mirror-vault.ts` resolve sempre para no-op inactive; além disso, o caminho de espelho em markAuthorized não arquiva a rejeição histórica antes de um novo preparo. Nenhuma preservação externa suficiente foi comprovada pelo contexto recebido.
+
+**SUFFICIENT_PREVIOUS_ATTEMPT_PRESERVATION_PROVED=false; BLOCKER.** A correção manual após 588 exige preservar, antes de qualquer write de reentrada, os bytes assinados anteriores, seu SHA-256, digest/QR/URL, ultimoErro, identidade/snapshot, resposta/classificação 588, job/payload/contadores e referências da consulta, com linhagem imutável e isolamento por loja. Logs/documentação devem receber somente hashes, IDs e referências privadas; não XML completo. A política específica 588 não permite ignorar a guarda da tentativa anterior nem transformar um retry exato em XML corrigido silenciosamente.
+
+## 9. Provas offline reais
+
+Node `v24.14.1`; Vitest `v4.1.4`. Binário real `C:/msys64/usr/bin/xmllint.exe`, adicionado somente ao PATH dos processos de teste. `xmllint --version` confirmou libxml **21504**, com Schemas/C14N. Não houve instalação, shim, skip do XSD ou mudança de ambiente persistida.
+
+| Comando executado | Resultado |
+| --- | --- |
+| npx vitest run lib/fiscal/xml/cstat588-compact-message.test.ts | PASS: 25/25 |
+| npx vitest run lib/fiscal/xml/cstat588-produtores-compactos.test.ts | PASS: 8/8 |
+| npx vitest run lib/fiscal/provider/sefaz/sefaz-cstat-matrix.test.ts | PASS: 19/19 |
+| npx vitest run lib/fiscal/provider/sefaz/sefaz-envelope.test.ts | PASS: 107/107 |
+| npx vitest run lib/fiscal/xml lib/fiscal/signing lib/fiscal/provider/sefaz lib/fiscal/homologation lib/fiscal/queue test/fiscal/scenario-battery | PASS: 48 arquivos aprovados, 2 skipped; 953 testes aprovados, 19 skipped; **zero falhas** |
+
+Os 19 skips são opt-ins já existentes em dois arquivos: prova externa Java JSR105/C14N (`FISCAL_C14N_EXTERNAL_PROOF=1`) e integração do advisory lock PostgreSQL (exige banco de teste). Nenhum skip foi adicionado e não se habilitou integração que escreve em DB. A perna XSD do cenário 588 rodou de verdade com xmllint/--nonet sobre os bytes da fixture assinada, e passou.
+
+D01E_INTERTAG_WHITESPACE=0; XMLDSIG_VALID=true; XSD_VALID=true; CSTAT588_POLICY=true; AUTO_RETRY_588=false **no escopo das provas offline do código/fixtures**. A matriz 588/NFeAutorizacao4 confirmou REJECTED, terminal=true, numeroConsumido=false, requiresInutilizacao=false e requiresConsultation=false. Esses PASS não afirmam que os bytes históricos já foram corrigidos ou que o candidato real foi reassinado.
+
+## 10. Um único micro-GOAL sucessor proposto, não criado
+
+Nome proposto: **FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025**.
+
+Objetivo: reconciliar a tentativa histórica 588 e habilitar um caminho explícito de correção controlada da mesma nota/série 1/número 2, com auditoria completa, um único job e zero transmissão.
+
+Critérios do escopo proposto:
+
+1. Preservar a tentativa 022E antes de toda mutação, em registro privado imutável de bytes/hash/metadados/lineage, vinculado a loja/nota/job/consulta; falha de preservação deve impedir a reconciliação/reentrada. Não colocar bytes/segredos em logs ou Git.
+2. Reconciliar o 588 histórico para terminal REJEITADA coerente, cStat/xMotivo e consequências específicas `numeroConsumido=false`, sem inutilização e sem tratar NOT_FOUND sozinho como rejeição. Terminalizar o job original, por exemplo FALHA/null, sem apagar tentativas/evidência e sem scheduling automático. Corrigir a mensagem genérica de markRejected que ainda afirma número consumido para esse caso; mero UPDATE de status não resolve o contrato.
+3. Permitir reentrada **somente** de correção 588 explícita, após reconciliação e preservação, pela mesma NotaFiscal e fonte congelada. Manter chave/série/número e contador em 3, sem outra nota número 2, decremento de contador ou relaxamento genérico para TRANSMITINDO/REJEITADA de outras espécies (especialmente 110/denegação).
+4. Estratégia única: reusar `cmubufzmf000ph2mcu6act9zk` e dedupe v1, com linhagem de tentativa e vínculo inequívoco por jobId; recusar ambiguidades/concorrência de segundo EMISSAO. Preparar o caminho futuro sem rearmar o job agora, sem reviver a consulta e sem reutilizar autorização de retry exato para bytes corrigidos.
+5. Provar ausência de retry automático com clocks null/futuros/vencidos, CAS/concorrência, ausência de novas aquisições do histórico, archive-failure fail-closed, preservação/restauração dos bytes, isolamento por loja, unicidade/contador e identidade igual. Validar a recusa do coordenador/persistência antes de consumir uma ativação quando a nota não puder reentrar.
+6. Repetir as provas offline compact/XMLDSig/XSD com xmllint real e regressão Fiscal sem falhas. Manter fiscalEnabled=false, janela dormente, G-F7/G-F12 fechados, capability/authority de transporte negadas, zero SEFAZ/SOAP/documentos transmitidos.
+
+A proposta identifica as alterações de código/contrato e os writes CAS que uma execução futura precisaria delimitar. **Nenhuma implementação, criação AEP, schema/migration, reconciliação DB ou autorização de transmissão desse sucessor foi realizada pelo GOAL 024.**
+
+## 11. Relatório vigente e decisão
+
+~~~text
+GOAL=FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024
+BASE_MAIN=bfbdf01087433738134f5ee308475c2ef9841fbe
+ORIGIN_MAIN_PREFLIGHT=ca245ef6f3713e22dff23465f747649b1d5510c2
+FISCAL_UPSTREAM_CHANGES=false
+FISCAL_SCHEMA_MODELS_DRIFT=false
+REACTIVATION_COMMIT=b0ae4d9ed9a55485cb48d9d105be0ebb23d549a3
+PREVIOUS_GOAL_024_BLOCKED_ENTRIES_PRESERVED=2
+DATABASE_STATE_VERIFIED=true
+DATABASE_STATE_SOURCE=HUMAN_PROVIDED_CANONICAL_READ_ONLY_EVIDENCE_2026_10_07
+DATABASE_STATE_REQUERIED_BY_AGENT=false
+CANONICAL_DB_NAME=omnigestao_prod
+TRANSACTION_READ_ONLY=true
+CAIXA_ID_DIVERGENCE_RESOLVED=true
+CAIXA_ID_FROM_SALE_RELATION=cmubufytz000ah2mcib062l0n
+STORE=loja-1
+AMBIENTE=HOMOLOGACAO
+MODELO=NFCE
+PROVIDER=SEFAZ_DIRETO
+CSC_ID=4
+CSC_TOKEN_REF=FISCAL_CSC_TOKEN_LOJA_1
+FISCAL_ENABLED=false
+OLD_NOTA_ID=cmubufzhb000mh2mcvwan5e2m
+OLD_NOTA_STATUS=TRANSMITINDO
+OLD_NOTA_CSTAT=null
+OLD_EMISSION_RESPONSE_CSTAT_HISTORICAL=588
+OLD_JOB_ID=cmubufzmf000ph2mcu6act9zk
+OLD_JOB_STATUS=AGUARDANDO_RETRY
+OLD_JOB_NEXT_ATTEMPT=null
+OLD_JOB_ATTEMPTS=1
+OLD_CONSULTA_STATUS=CONCLUIDO
+OLD_CONSULTA_RESULT=NOT_FOUND
+NO_PENDING_AUTOMATIC_RETRY=true
+AUTOMATIC_RETRY_CLASSIFICATION_SCOPE=OLD_EMISSAO_JOB_CURRENT_STATE
+ALTERNATE_AUTOMATIC_ACQUISITION_PATH_FOUND=false
+NO_UNCERTAIN_STATE=false
+SERIE_NEXT_NUMBER=3
+OLD_NUMBER=2
+OLD_SERIES=1
+NUMBER_REUSE_SAME_NOTA_SUPPORTED=true
+NEW_NOTA_SAME_NUMBER_SUPPORTED=false
+NUMBER_REUSE_END_TO_END_CURRENT_STATE=false
+CURRENT_NOTE_CAN_REENTER_CANONICAL_PRETRANSMISSION=false
+SUFFICIENT_PREVIOUS_ATTEMPT_PRESERVATION_PROVED=false
+CANDIDATE_NUMBER=2
+CANDIDATE_SERIES=1
+CANDIDATE_CHNFE_EXPECTED=35260948241205000195650010000000021026842710
+CANDIDATE_CHNFE_PROOF=OFFLINE_HISTORICAL_COMPONENTS_AND_REAL_CNF_DV_FUNCTIONS
+CANDIDATE_REUSES_REJECTED_NUMBER=true
+CANDIDATE_SOURCE_PATH=PERSISTED_NOTAFISCAL_FROZEN_SNAPSHOT_AND_ITEMS
+CANDIDATE_JOB_STRATEGY=REUSE_ORIGINAL_JOB_AND_V1_DEDUPE_AFTER_CONTROLLED_RECONCILIATION
+CANDIDATE_STRATEGY_IMPLEMENTED=false
+CANDIDATE_LIVE_SNAPSHOT_REPREPARED=false
+CANDIDATE_PERSISTED=false
+FOCUSED_OFFLINE_TESTS=PASS_159_FAILED_0
+GOAL_023_REGRESSION=PASS_953_SKIPPED_19_FAILED_0
+XMLLINT_REAL_ON_TEST_PATH=true
+XMLLINT_LIBXML_VERSION=21504
+D01E_INTERTAG_WHITESPACE=0
+XMLDSIG_VALID=true
+XSD_VALID=true
+CSTAT588_POLICY=true
+AUTO_RETRY_588=false
+OFFLINE_PROOF_SCOPE=CURRENT_SOURCE_AND_SYNTHETIC_FIXTURES
+OLD_NOTE_BYTES_REVALIDATED=false
+EXTERNAL_SEFAZ_CONTACT=false
+SEFAZ_SOAP_POST_COUNT=0
+REAL_SEFAZ_DOCUMENT_TRANSMISSIONS=0
+DB_CONNECTIONS=0
+DB_READ_QUERIES=0
+DB_WRITES=0
+FISCAL_ACTIVATION_WRITES=0
+TRANSMISSION_WINDOWS_ARMED_BY_THIS_GOAL=0
+VERSIONED_TRANSMISSION_WINDOW_ARMED=false
+RUNTIME_WINDOW_REQUERIED=false
+PRODUCTION_FISCAL_AUTHORIZED=false
+DOCUMENTS_CREATED=0
+JOBS_CREATED=0
+CODE_CHANGED=false
+SCHEMA_CHANGED=false
+G_F7_AUTHORIZED=false
+G_F12_AUTHORIZED=false
+INDEPENDENT_REVIEW_R=NOT_RUN_NOT_CLAIMED
+READY_FOR_THIRD_ATTEMPT_GATE=false
+TRANSMISSION_AUTHORIZATION_REQUESTED=false
+SUCCESSOR_PROPOSED=FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025
+SUCCESSOR_CREATED=false
+SUCCESSOR_IMPLEMENTED=false
+BLOCKERS=UNCERTAIN_HISTORICAL_NOTE; CANONICAL_PRETRANSMISSION_REENTRY_BLOCKED; PREVIOUS_ATTEMPT_PRESERVATION_REQUIRED; UNIQUE_JOB_RECONCILIATION_REQUIRED
+FINAL_DECISION=BLOCKED_BY_RETRY_RECONCILIATION_REQUIRED
+STOP=GOAL_024_AUDIT_COMPLETE_RECONCILIATION_REQUIRED
+~~~
+
+Ratificação correta: `node scripts/track.mjs block fiscal --by=dependencia --reason=BLOCKED_BY_RETRY_RECONCILIATION_REQUIRED`, após commit separado da evidência. Não usar close/DONE/readiness. Commit/push somente documentação/AEP na mesma branch, sem PR/merge automático. O ledger acrescenta uma nova ratificação; as duas anteriores permanecem como histórico.
+
+## Histórico preservado — evidência integral anterior a esta retomada
+
+SHA-256 dos bytes integrais arquivados abaixo: E8031734D5BD53FD50C8CD4F72CE43EB1A1EAD1C5B07B3FB5F21794DE082E37E.
+Os resultados CANONICAL_DB_NOT_IDENTIFIED e BLOCKED_BY_READONLY_DB_ACCESS abaixo são históricos; o relatório vigente está acima. Os bytes anteriores foram conservados sem reescrita.
+
 # FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024 — evidência sanitizada
 
 Data: 2026-10-01 (America/Sao_Paulo). Resultado vigente da retomada: CANONICAL_DB_NOT_IDENTIFIED.
