@@ -19,7 +19,6 @@ import {
   MODE_DEF,
   MODULE_META,
   PENDING,
-  PRIMARY,
   PRIO,
   RAIL_DEF,
   RESOLVED_RAW,
@@ -189,6 +188,16 @@ import {
   buildSlaView,
 } from "./rails-adapter";
 import { buildDashboardOperacionalV4 } from "@/lib/operacoes-v4/dashboard-v4";
+// GOAL OPS-V4-FLUXO-CURTO-005: próxima ação derivada SÓ de estado real (substitui
+// a antiga tabela de ação primária do mock-data) + trava da escrita por loja+OS.
+import {
+  chaveProximaAcaoV4,
+  derivarProximaAcaoV4,
+  travaAtivaProximaAcaoV4,
+  type EscritaProximaAcaoV4,
+  type ProximaAcaoV4,
+  type TravaProximaAcaoV4,
+} from "@/lib/operacoes-v4/proxima-acao-v4";
 import { buildHistoricoTransversalV4, montarAuditoriaExportV4 } from "@/lib/operacoes-v4/historico-v4";
 
 /** Entrada do editor de diagnóstico V4 → action `salvarDiagnosticoV3`. */
@@ -252,6 +261,16 @@ export interface V4DataCtx {
   selecionarVarianteOrcamento: (grupoId: string, itemId: string) => Promise<boolean>;
   iniciarDiagnostico: () => Promise<boolean>;
   iniciarServico: () => Promise<boolean>;
+  /**
+   * GOAL OPS-V4-FLUXO-CURTO-005: a escrita disparada pela próxima ação passa por
+   * UMA trava síncrona por loja+OS (duplo clique = no máximo uma escrita; outra
+   * OS/loja nunca é afetada). `travada` reflete a seleção atual. Opcional por
+   * compatibilidade com fixtures legados (ausente = handler direto, sem trava).
+   */
+  escritaPrimaria?: {
+    executar: (escrita: EscritaProximaAcaoV4) => Promise<boolean>;
+    travada: boolean;
+  };
   // ---- Execução (slice OPS-V4-EXECUCAO-REAL-007) ----
   // "iniciarServico" (acima) é reaproveitado para em_execucao a partir de aprovado
   // OU aguardando_peca (mesmo destino "em_execucao"; o rótulo muda na UI).
@@ -412,62 +431,6 @@ const INITIAL: V4State = {
 
 type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
 
-/**
- * Mensagem honesta reservada aos handlers residuais que ainda NÃO persistem
- * (ex.: WhatsApp, exportar histórico, alguns documentos/atalhos). A maioria
- * das ações de escrita da V4 (cancelar OS, diagnóstico, orçamento, execução,
- * entrega, assinatura, garantia, recebimento, Nova OS) já é real e persiste
- * via actions V3 — este toast NÃO se aplica a elas.
- */
-const PREVIEW_NOOP = "Indisponível nesta versão — nenhuma alteração foi salva.";
-
-/**
- * PDV-SERVICO-OS-RECEBIMENTO-REAL-001: o recebimento passou a ser real (aba
- * Financeiro, via `usePdvServicoV3`/`receberOSV3`) — este toast só confirma a
- * navegação, sem prometer nada que a aba não entregue.
- */
-const RECEBIMENTO_NO_FINANCEIRO = "Receba o pagamento na aba Financeiro.";
-
-/**
- * GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008: quando a OS está pronta e sem saldo
- * pendente confirmado, a ação primária global passa a levar à aba Entrega (onde
- * vive o botão real "Confirmar entrega") em vez de repetir "Receba o pagamento" —
- * a OS já não deve nada.
- */
-const ENTREGA_NA_ABA_ENTREGA = "Confirme a entrega na aba Entrega.";
-
-/**
- * OPS-V4-ACTIONS-RECONCILE-010: "Marcar pronta" (em_execucao) e "Peça chegou —
- * retomar" (aguardando_peca) já têm ação real (`marcarPronta`/`iniciarServico`
- * via `aplicarTransicaoStatusV3`), mas o botão dedicado — com seu próprio
- * busy-lock — vive na aba Execução, nunca no header. Este toast só confirma a
- * navegação, igual ao padrão já usado para Financeiro/Entrega.
- */
-const EXECUCAO_NA_ABA_EXECUCAO = "Confirme a transição na aba Execução.";
-
-/**
- * Saldo confirmado zerado: exige o pagamento JÁ carregado (`!!pag`) e `saldo<=0`.
- * Nunca libera "Entregar OS" só por o pagamento ainda não ter carregado — nesse
- * caso (`pag` null) o default seguro é continuar tratando como saldo pendente.
- * Cobre também OS sem cobrança nenhuma (`saldo` já nasce 0 quando `total` é 0).
- */
-/**
- * Ação primária quando a OS está "pronta" E sem saldo pendente (ver
- * `pagamentoSemSaldoPendente`). Tipada a partir de `PRIMARY` (mock-data) para não
- * precisar importar `V4Status`/`V4Stage` só para esta constante.
- */
-const PRIMARY_ENTREGAR_OS: NonNullable<(typeof PRIMARY)[keyof typeof PRIMARY]> = {
-  label: "Entregar OS",
-  to: "entregue",
-  stage: "entrega",
-};
-
-const PRIMARY_REVISAR_COBRANCA: NonNullable<(typeof PRIMARY)[keyof typeof PRIMARY]> = {
-  label: "Revisar cobrança",
-  to: "pronta",
-  stage: "financeiro",
-};
-
 const FINANCIAL_STATUS_LABEL: Record<FinancialStatusV4, string> = {
   UNKNOWN: "Financeiro indisponível",
   NO_PRICE: "Sem preço autorizado",
@@ -540,61 +503,6 @@ export function buildVals(
   const setView = (v: V4State["view"]) => update({ view: v, menu: null });
   const toggleMenu = (m: "print" | "more") =>
     update((s) => ({ menu: s.menu === m ? null : m }));
-  // Ação primária. SOMENTE as transições seguras desta fase persistem de verdade
-  // (aberta → diagnostico; aprovado → em_execucao), via `aplicarTransicaoStatusV3`.
-  // As demais (enviar orçamento, registrar aprovação…) seguem PREVIEW honesto:
-  // apenas NAVEGAM à etapa relacionada + toast — NUNCA mudam o status exibido (o
-  // status mostrado é sempre o real da OS carregada). "pronta" é especial: navega
-  // a Financeiro OU Entrega conforme o saldo real — nunca confirma a entrega a
-  // partir do header (a ação real fica no botão dedicado da aba Entrega, com seu
-  // próprio busy-lock — ver `entregaAcoes`/`confirmarEntrega`).
-  const advance = () => {
-    const canDeliver = financialProjection?.canDeliver === true;
-    const p = status === "pronta"
-      ? canDeliver
-        ? PRIMARY_ENTREGAR_OS
-        : financialProjection?.financialStatus === "OPEN" || financialProjection?.financialStatus === "PARTIAL"
-          ? PRIMARY[status]
-          : PRIMARY_REVISAR_COBRANCA
-      : PRIMARY[status];
-    if (!p) return;
-    if (status === "aberta") {
-      void ctx.iniciarDiagnostico();
-      return;
-    }
-    if (status === "aprovado") {
-      void ctx.iniciarServico();
-      return;
-    }
-    if (status === "em_execucao" || status === "aguardando_peca") {
-      // "Marcar pronta" / "Peça chegou — retomar" já têm ação real, mas o botão
-      // com busy-lock vive na aba Execução (`execAcoes` + marcarPronta/iniciarServico)
-      // — aqui só navegamos e avisamos, nunca disparamos a transição direto do header.
-      update({ stage: "execucao" });
-      notify(EXECUCAO_NA_ABA_EXECUCAO);
-      return;
-    }
-    if (status === "pronta") {
-      if (canDeliver) {
-        // Quitada (sem saldo pendente confirmado): leva à Entrega, onde vive o
-        // botão real de confirmação.
-        update({ stage: "entrega" });
-        notify(ENTREGA_NA_ABA_ENTREGA);
-        return;
-      }
-      // Saldo pendente — "Receber pagamento" leva ao Financeiro (o recebimento
-      // real acontece lá, no card de recebimento; aqui só navegamos + avisamos).
-      update({ stage: p.stage });
-      notify(
-        financialProjection?.financialStatus === "OPEN" || financialProjection?.financialStatus === "PARTIAL"
-          ? RECEBIMENTO_NO_FINANCEIRO
-          : "Revise a situação financeira antes de entregar.",
-      );
-      return;
-    }
-    update({ stage: p.stage });
-    notify(PREVIEW_NOOP);
-  };
   const setMode = (mode: "recepcao" | "bancada" | "auditoria") => {
     const map = {
       recepcao: [true, true],
@@ -907,10 +815,8 @@ export function buildVals(
   // classificação + justificativa enviadas à action canônica, que deriva ator/horário,
   // persiste a autorização e decide novamente no servidor.
   // Tudo derivado da mesma projeção server-side; sem projeção nada se decide
-  // (anti-flicker). `semSaldoPendenteEntrega` (quitada OU autorizada) segue
-  // alimentando só o CTA global (`prim`), que apenas NAVEGA à aba Entrega — o guard
-  // real mora lá.
-  const semSaldoPendenteEntrega = financialProjection?.canDeliver === true;
+  // (anti-flicker). A próxima ação (GOAL OPS-V4-FLUXO-CURTO-005) só NAVEGA à aba
+  // Entrega com `canDeliver` — o guard real mora lá.
   const cobrancaAusente = financialProjection?.deliveryDecision === "BLOCK_NO_CHARGE_AUTH_REQUIRED";
   const saldoPendenteConfirmado =
     financialProjection?.financialStatus === "OPEN" || financialProjection?.financialStatus === "PARTIAL";
@@ -1103,13 +1009,75 @@ export function buildVals(
     notify("Orçamento rápido criado — OS aberta com orçamento em rascunho.");
   };
 
-  const prim = status === "pronta"
-    ? semSaldoPendenteEntrega
-      ? PRIMARY_ENTREGAR_OS
-      : financialProjection?.financialStatus === "OPEN" || financialProjection?.financialStatus === "PARTIAL"
-        ? PRIMARY[status]
-        : PRIMARY_REVISAR_COBRANCA
-    : PRIMARY[status];
+  // ---- Próxima ação operacional (GOAL OPS-V4-FLUXO-CURTO-005) ----
+  // Derivada SÓ de estado real: OS resolvida (loja+OS), carga do detalhe, orçamento
+  // materializado e projeção financeira server-side. Sem OS real → nenhuma ação
+  // (nunca o snapshot `st.status`). Superfície ÚNICA: o bloco abaixo da pipeline.
+  const cargaOS =
+    ctx.detailError
+      ? "erro"
+      : ctx.detailCarregada === true && !!realOS && realOS.id === st.selectedOsId
+        ? "estabelecida"
+        : "carregando";
+  const proximaAcaoReal = derivarProximaAcaoV4({
+    os: realOS,
+    carga: cargaOS,
+    cargaErro: ctx.detailError ?? null,
+    orcamento: { materializado: orcamentoMaterializado, status: orcStatusRaw ?? null },
+    financeiro: {
+      projection: financialProjection,
+      loading: ctx.financialProjection.loading,
+      error: ctx.financialProjection.error,
+    },
+  });
+  const escritaPrimariaTravada = ctx.escritaPrimaria?.travada === true;
+  // Escrita em voo (ou aguardando a releitura do detalhe): o mesmo CTA fica
+  // desabilitado — um clique = no máximo uma escrita.
+  const proximaAcao: ProximaAcaoV4 =
+    escritaPrimariaTravada && proximaAcaoReal.efeito === "write" && proximaAcaoReal.cta
+      ? { ...proximaAcaoReal, cta: { label: "Processando…", disabled: true } }
+      : proximaAcaoReal;
+  const escreverPrimaria = (escrita: EscritaProximaAcaoV4): Promise<boolean> =>
+    ctx.escritaPrimaria
+      ? ctx.escritaPrimaria.executar(escrita)
+      : escrita === "iniciar_diagnostico"
+        ? ctx.iniciarDiagnostico()
+        : ctx.iniciarServico();
+  // write → só as escritas EXISTENTES (runWrite → aplicarTransicaoStatusV3);
+  // navigate → só muda a etapa. Sair da Entrada com rascunho sujo passa pela
+  // guarda salvar/descartar/cancelar do GOAL 001 (a escrita só roda depois dela).
+  const executarProximaAcao = () => {
+    const acao = proximaAcao;
+    if (!acao.cta || acao.cta.disabled || !acao.stage) return;
+    if (acao.efeito === "navigate") {
+      go(acao.stage);
+      return;
+    }
+    if (acao.efeito !== "write" || !acao.escrita) return;
+    const escrita = acao.escrita;
+    const escrever = () => {
+      void escreverPrimaria(escrita);
+    };
+    if (saidaEtapaExigeGuardaV4(st.stage, acao.stage)) {
+      sairComGuarda(escrever, acao.titulo.toLowerCase());
+      return;
+    }
+    escrever();
+  };
+  // Secundária: só navegação ou releitura — nunca escrita.
+  const executarAcaoSecundaria = () => {
+    const secundaria = proximaAcao.secundaria;
+    if (!secundaria) return;
+    if (secundaria.recarregar === "detalhe") {
+      ctx.reloadDetail();
+      return;
+    }
+    if (secundaria.recarregar === "financeiro") {
+      ctx.financialProjection.reload();
+      return;
+    }
+    if (secundaria.stage) go(secundaria.stage);
+  };
   const tone = TONE[status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
 
@@ -1323,8 +1291,11 @@ export function buildVals(
     printItems, moreItems,
 
     statusLabel: STATUS_LABEL[status], tone,
-    primaryLabel: prim ? prim.label : "Concluído", hasPrimary: !!prim, noPrimary: !prim,
-    onPrimary: () => advance(), showKbd: true,
+    // GOAL OPS-V4-FLUXO-CURTO-005: fonte única da ação primária (bloco abaixo da
+    // pipeline); o header não tem mais CTA paralelo.
+    proximaAcao,
+    executarProximaAcao,
+    executarAcaoSecundaria,
 
     prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot },
     checklist, check, checklistVazio,
@@ -1587,6 +1558,60 @@ export function buildVals(
 }
 
 export type V4Vals = ReturnType<typeof buildVals>;
+
+/**
+ * Trava da escrita primária (GOAL OPS-V4-FLUXO-CURTO-005). Síncrona (ref) e
+ * chaveada por loja+OS: vale do clique até a escrita terminar E o detalhe da
+ * MESMA OS ser relido. Falha libera na hora. Outra OS/loja nunca é bloqueada; a
+ * resposta de A não toca B (o pós-await de contexto é do `runWrite`).
+ */
+export function useEscritaPrimariaV4(args: {
+  lojaAtivaId: string | null | undefined;
+  selectedOsId: string | null | undefined;
+  detalhe: unknown;
+  detalheCarregando: boolean;
+  detalheErro: boolean;
+  iniciarDiagnostico: () => Promise<boolean>;
+  iniciarServico: () => Promise<boolean>;
+}): NonNullable<V4DataCtx["escritaPrimaria"]> {
+  const { lojaAtivaId, selectedOsId, detalhe, detalheCarregando, detalheErro, iniciarDiagnostico, iniciarServico } = args;
+  const chave = chaveProximaAcaoV4(lojaAtivaId, selectedOsId);
+  const travaRef = useRef<TravaProximaAcaoV4 | null>(null);
+  const [trava, setTrava] = useState<TravaProximaAcaoV4 | null>(null);
+  const leituraRef = useRef({ chave, detalhe, detalheCarregando, detalheErro });
+  useEffect(() => {
+    leituraRef.current = { chave, detalhe, detalheCarregando, detalheErro };
+  }, [chave, detalhe, detalheCarregando, detalheErro]);
+  const travada = travaAtivaProximaAcaoV4(trava, { chave, detalhe, detalheCarregando, detalheErro });
+  // Trava concluída que já não bloqueia (detalhe relido, erro ou outra seleção) é descartada.
+  useEffect(() => {
+    if (!trava?.concluida || travada) return;
+    if (travaRef.current === trava) travaRef.current = null;
+    setTrava(null);
+  }, [trava, travada]);
+  const executar = useCallback(
+    async (escrita: EscritaProximaAcaoV4): Promise<boolean> => {
+      const leitura = leituraRef.current;
+      if (!leitura.chave || travaAtivaProximaAcaoV4(travaRef.current, leitura)) return false;
+      const nova: TravaProximaAcaoV4 = { chave: leitura.chave, detalheRef: leitura.detalhe, concluida: false };
+      travaRef.current = nova;
+      setTrava(nova);
+      let ok = false;
+      try {
+        ok = escrita === "iniciar_diagnostico" ? await iniciarDiagnostico() : await iniciarServico();
+      } finally {
+        if (travaRef.current === nova) {
+          const fim = ok ? { ...nova, concluida: true } : null;
+          travaRef.current = fim;
+          setTrava(fim);
+        }
+      }
+      return ok;
+    },
+    [iniciarDiagnostico, iniciarServico],
+  );
+  return useMemo(() => ({ executar, travada }), [executar, travada]);
+}
 
 /** Hook principal do Preview: mantém o estado e devolve o objeto `vals`. */
 export function useV4Preview(): V4Vals {
@@ -2473,6 +2498,16 @@ export function useV4Preview(): V4Vals {
     setCancelamentoMotivoPrefill(motivo);
   }, []);
 
+  const escritaPrimaria = useEscritaPrimariaV4({
+    lojaAtivaId,
+    selectedOsId: st.selectedOsId,
+    detalhe: ordemDetail,
+    detalheCarregando: detailLoading,
+    detalheErro: !!detailError,
+    iniciarDiagnostico,
+    iniciarServico,
+  });
+
   const ctx = useMemo<V4DataCtx>(
     () => ({
       ordens,
@@ -2499,6 +2534,7 @@ export function useV4Preview(): V4Vals {
       recusarOrcamento,
       iniciarDiagnostico,
       iniciarServico,
+      escritaPrimaria,
       marcarAguardandoPeca,
       marcarPronta,
       baixarEstoqueOS,
@@ -2567,6 +2603,7 @@ export function useV4Preview(): V4Vals {
       recusarOrcamento,
       iniciarDiagnostico,
       iniciarServico,
+      escritaPrimaria,
       marcarAguardandoPeca,
       marcarPronta,
       baixarEstoqueOS,

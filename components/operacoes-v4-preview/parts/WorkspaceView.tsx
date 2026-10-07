@@ -3,6 +3,7 @@ import type { V4Vals } from "../use-v4-preview";
 import { ContextColumn } from "./ContextColumn";
 import { CommandHeader } from "./CommandHeader";
 import { PipelineSpine } from "./PipelineSpine";
+import { ProximaAcaoV4 } from "./ProximaAcaoV4";
 import { StagePanel } from "./StagePanel";
 import { ActivityColumn } from "./ActivityColumn";
 import { OSPicker } from "./OSPicker";
@@ -18,6 +19,8 @@ export function WorkspaceView({ v }: { v: V4Vals }) {
       <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", background: "var(--background)" }}>
         <CommandHeader v={v} />
         <PipelineSpine v={v} />
+        {/* GOAL OPS-V4-FLUXO-CURTO-005: fora da área rolável — sempre visível. */}
+        <ProximaAcaoV4 v={v} />
         <div style={{ flex: 1, minHeight: 0, minWidth: 0, position: "relative", display: "flex" }}>
           <StagePanel v={v} />
           {v.focusActive ? <ContextColumn v={v} /> : null}

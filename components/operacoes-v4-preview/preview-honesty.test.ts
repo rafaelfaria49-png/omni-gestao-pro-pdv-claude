@@ -319,6 +319,7 @@ function mkOS(p: Record<string, unknown> & { id: string }): OrdemServico {
 function financialStateFromPayment(
   pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null,
   financialStatusOverride?: FinancialProjectionOSV4["financialStatus"],
+  osId = "os-test",
 ): V4DataCtx["financialProjection"] {
   if (!pagamento) return { projection: null, loading: true, error: null, reload: () => {} }
   const financialStatus = financialStatusOverride ?? (
@@ -326,7 +327,7 @@ function financialStateFromPayment(
   )
   const canDeliver = financialStatus === "PAID" || financialStatus === "AUTHORIZED_CREDIT" || financialStatus === "AUTHORIZED_NO_CHARGE"
   const projection: FinancialProjectionOSV4 = {
-    version: 1, storeId: "store-a", osId: "os-test", osCode: "OS-TEST", operationalStatus: "pronta",
+    version: 1, storeId: "store-a", osId, osCode: "OS-TEST", operationalStatus: "pronta",
     expectedTotal: pagamento.total, expectedTotalSource: ["test"], approvedBudgetTotal: pagamento.total,
     osColumnTotal: pagamento.total, legacyTotal: null, billingSnapshotTotal: null,
     receivableFound: pagamento.total > 0, receivableId: pagamento.total > 0 ? "cr-test" : null,
@@ -457,35 +458,44 @@ describe("Operações V4 Preview — ações sem escrita real NUNCA mutam o stat
 // disparam a transição direto: ambos só NAVEGAM à Execução, onde vive o botão
 // real com busy-lock — nunca mais um toast de preview fingindo indisponível.
 // ---------------------------------------------------------------------------
-describe("OPS-V4-ACTIONS-RECONCILE-010 — CTA global e menu navegam à Execução (sem no-op falso)", () => {
-  it("em_execucao: onPrimary ('Marcar pronta') navega à Execução, avisa e não muda status", () => {
+describe("OPS-V4-FLUXO-CURTO-005 · OPS-V4-ACTIONS-RECONCILE-010 — próxima ação e menu navegam à Execução (sem no-op falso)", () => {
+  it("em_execucao: próxima ação 'Marcar como pronta' só NAVEGA à Execução — não muda status nem finge indisponível", () => {
     const patches: Array<Record<string, unknown>> = []
     const msgs: string[] = []
     const v = buildVals(
-      makeState({ status: "em_execucao", novaOS: false }),
+      makeState({ selectedOsId: "os-x", stage: "entrada", novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
       (m) => msgs.push(m),
-      ctx,
+      { ...ctx, realOS: mkOS({ id: "os-x", operacaoStatusV3: "em_execucao" }), detailCarregada: true },
     )
-    v.onPrimary()
+    expect(v.proximaAcao).toMatchObject({ titulo: "Marcar como pronta", efeito: "navigate", stage: "execucao" })
+    v.executarProximaAcao()
     expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
     expect(patches).toContainEqual(expect.objectContaining({ stage: "execucao" }))
-    expect(msgs.some((m) => /execução/i.test(m))).toBe(true)
+    expect(msgs.every((m) => !/indisponível|nenhuma alteração/i.test(m))).toBe(true)
   })
 
-  it("aguardando_peca: onPrimary ('Marcar peça chegou') navega à Execução, avisa e não muda status", () => {
+  it("aguardando_peca: próxima ação é ESPERA honesta e só navega à Execução — não inventa chegada de peça", () => {
     const patches: Array<Record<string, unknown>> = []
     const msgs: string[] = []
+    let escritas = 0
     const v = buildVals(
-      makeState({ status: "aguardando_peca", novaOS: false }),
+      makeState({ selectedOsId: "os-x", stage: "entrada", novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
       (m) => msgs.push(m),
-      ctx,
+      {
+        ...ctx,
+        realOS: mkOS({ id: "os-x", operacaoStatusV3: "aguardando_peca" }),
+        detailCarregada: true,
+        iniciarServico: async () => { escritas += 1; return true },
+      },
     )
-    v.onPrimary()
+    expect(v.proximaAcao).toMatchObject({ estado: "aguardando", titulo: "Aguardando peça", efeito: "navigate" })
+    v.executarProximaAcao()
+    expect(escritas).toBe(0)
     expect(patches.every((p) => !("status" in p))).toBe(true)
     expect(patches).toContainEqual(expect.objectContaining({ stage: "execucao" }))
-    expect(msgs.some((m) => /execução/i.test(m))).toBe(true)
+    expect(msgs.every((m) => !/indisponível|nenhuma alteração/i.test(m))).toBe(true)
   })
 
   it("em_execucao: menu 'Marcar Aguardando peça' navega à Execução (não é mais no-op)", () => {
@@ -859,36 +869,37 @@ describe("OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005 — abrir do rail PDV com s
   })
 })
 
-describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem drift)", () => {
-  it("realOS.status vence o snapshot local st.status", () => {
+describe("OPS-V4-FLUXO-CURTO-005 · OPS-V4-006 — status exibido prioriza o da OS real carregada (sem drift)", () => {
+  it("realOS.status vence o snapshot local st.status (e a próxima ação nasce da OS real)", () => {
     const v = buildVals(
       makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
       () => {},
       () => {},
-      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), financialProjection: financialStateFromPayment({ total: 100, recebido: 0, saldo: 100, status: "aberto" }) },
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), financialProjection: financialStateFromPayment({ total: 100, recebido: 0, saldo: 100, status: "aberto" }, undefined, "os-x") },
     )
     expect(v.statusLabel).toBe("Pronta")
-    expect(v.primaryLabel).toBe("Receber pagamento")
+    expect(v.proximaAcao.titulo).toBe("Receber pagamento")
   })
 
-  it("sem OS carregada, cai no fallback do estado local", () => {
+  it("sem OS carregada: rótulo cai no fallback local, mas a próxima ação NUNCA usa o snapshot", () => {
     const v = buildVals(makeState({ status: "em_execucao", novaOS: false }), () => {}, () => {}, ctx)
     expect(v.statusLabel).toBe("Em execução")
+    expect(v.proximaAcao).toMatchObject({ estado: "indisponivel", efeito: "none", cta: null })
   })
 
-  it("CTA 'Receber pagamento' navega ao Financeiro (recebimento real vive lá, nunca na Entrega)", () => {
+  it("'Receber pagamento' só NAVEGA ao Financeiro (recebimento real vive lá, nunca na Entrega) — sem status, sem toast falso", () => {
     const patches: Array<Record<string, unknown>> = []
     const msgs: string[] = []
     const v = buildVals(
       makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
       (m) => msgs.push(m),
-      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), financialProjection: financialStateFromPayment({ total: 100, recebido: 0, saldo: 100, status: "aberto" }) },
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), financialProjection: financialStateFromPayment({ total: 100, recebido: 0, saldo: 100, status: "aberto" }, undefined, "os-x") },
     )
-    v.onPrimary()
+    v.executarProximaAcao()
     expect(patches.at(-1)).toMatchObject({ stage: "financeiro" })
     expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
-    expect(msgs.some((m) => /financeiro/i.test(m))).toBe(true)
+    expect(msgs.every((m) => !/indisponível|nenhuma alteração/i.test(m))).toBe(true)
   })
 
   it("'Trocar OS' usa o fluxo real de busca (limpa a seleção; sem no-op)", () => {
@@ -909,83 +920,87 @@ describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem dri
 })
 
 // ---------------------------------------------------------------------------
-// OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — CTA global coerente com o pagamento:
-// "Receber pagamento" só aparece com saldo pendente; quitada mostra "Entregar OS"
-// e leva à Entrega (nunca confirma a entrega a partir do header); Entregue
-// mantém "Fluxo concluído" (sem CTA de receber).
+// OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 → OPS-V4-FLUXO-CURTO-005 — a próxima
+// ação reflete o saldo real: "Receber pagamento" só com saldo pendente; quitada
+// mostra "Confirmar entrega" e leva à Entrega (nunca confirma dali); leitura em
+// curso não oferece entrega; Entregue mostra o fluxo concluído (sem CTA).
 // ---------------------------------------------------------------------------
-describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — CTA global reflete o saldo real", () => {
+describe("OPS-V4-FLUXO-CURTO-005 · OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — próxima ação reflete o saldo real", () => {
   function ctxProntaComPagamento(pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null) {
     return {
       ...ctx,
       realOS: mkOS({ id: "os-x", status: "pronta" }),
-      financialProjection: financialStateFromPayment(pagamento),
+      financialProjection: financialStateFromPayment(pagamento, undefined, "os-x"),
       pdvServico: { ...ctx.pdvServico, pagamento },
     }
   }
 
-  it("pronta + saldo > 0: CTA continua 'Receber pagamento' e navega ao Financeiro", () => {
+  it("pronta + saldo > 0: 'Receber pagamento' navega ao Financeiro", () => {
     const patches: Array<Record<string, unknown>> = []
-    const msgs: string[] = []
     const v = buildVals(
       makeState({ selectedOsId: "os-x", novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
-      (m) => msgs.push(m),
+      () => {},
       ctxProntaComPagamento({ total: 320, recebido: 0, saldo: 320, status: "aberto" }),
     )
-    expect(v.primaryLabel).toBe("Receber pagamento")
-    v.onPrimary()
+    expect(v.proximaAcao).toMatchObject({ titulo: "Receber pagamento", efeito: "navigate", stage: "financeiro" })
+    v.executarProximaAcao()
     expect(patches.at(-1)).toMatchObject({ stage: "financeiro" })
     expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
-    expect(msgs.some((m) => /financeiro/i.test(m))).toBe(true)
   })
 
-  it("pronta + saldo == 0 (quitada): CTA vira 'Entregar OS' e navega à Entrega — nunca confirma direto do header", () => {
+  it("pronta + saldo == 0 (quitada): 'Confirmar entrega' navega à Entrega — nunca confirma a entrega dali", () => {
     const patches: Array<Record<string, unknown>> = []
-    const msgs: string[] = []
+    let entregas = 0
     const v = buildVals(
       makeState({ selectedOsId: "os-x", novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
-      (m) => msgs.push(m),
-      ctxProntaComPagamento({ total: 320, recebido: 320, saldo: 0, status: "quitado" }),
+      () => {},
+      { ...ctxProntaComPagamento({ total: 320, recebido: 320, saldo: 0, status: "quitado" }), confirmarEntrega: async () => { entregas += 1; return true } },
     )
-    expect(v.primaryLabel).toBe("Entregar OS")
-    expect(v.hasPrimary).toBe(true)
-    v.onPrimary()
+    expect(v.proximaAcao).toMatchObject({ titulo: "Confirmar entrega", efeito: "navigate", stage: "entrega" })
+    v.executarProximaAcao()
     expect(patches.at(-1)).toMatchObject({ stage: "entrega" })
+    expect(entregas).toBe(0)
     expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status — a confirmação real fica no botão da Entrega").toBe(true)
-    expect(msgs.some((m) => /entrega/i.test(m))).toBe(true)
   })
 
-  it("pronta sem cobrança autorizada (total=0): CTA exige revisão, nunca entrega implícita", () => {
+  it("pronta sem cobrança autorizada (total=0): exige revisão do financeiro, nunca entrega implícita", () => {
     const v = buildVals(
       makeState({ selectedOsId: "os-x", novaOS: false }),
       () => {},
       () => {},
       ctxProntaComPagamento({ total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }),
     )
-    expect(v.primaryLabel).toBe("Revisar cobrança")
+    expect(v.proximaAcao).toMatchObject({ estado: "bloqueada", titulo: "Revisar financeiro", stage: "financeiro" })
   })
 
-  it("pronta + projeção ainda não carregada: mantém o default seguro de revisão", () => {
+  it("pronta + projeção ainda carregando: 'Carregando situação financeira…', CTA desabilitado e inerte", () => {
+    const patches: Array<Record<string, unknown>> = []
     const v = buildVals(
       makeState({ selectedOsId: "os-x", novaOS: false }),
-      () => {},
+      (p) => patches.push(p as Record<string, unknown>),
       () => {},
       ctxProntaComPagamento(null),
     )
-    expect(v.primaryLabel).toBe("Revisar cobrança")
+    expect(v.proximaAcao).toMatchObject({ titulo: "Carregando situação financeira…", efeito: "wait" })
+    expect(v.proximaAcao.cta?.disabled).toBe(true)
+    v.executarProximaAcao()
+    expect(patches).toEqual([])
   })
 
-  it("entregue: sem CTA de receber — mostra estado final honesto ('Fluxo concluído')", () => {
+  it("entregue: fluxo concluído — sem CTA; pós-venda só como navegação secundária", () => {
+    const patches: Array<Record<string, unknown>> = []
     const v = buildVals(
       makeState({ selectedOsId: "os-x", novaOS: false }),
-      () => {},
+      (p) => patches.push(p as Record<string, unknown>),
       () => {},
       { ...ctx, realOS: mkOS({ id: "os-x", status: "entregue" }) },
     )
-    expect(v.hasPrimary).toBe(false)
-    expect(v.noPrimary).toBe(true)
+    expect(v.proximaAcao).toMatchObject({ estado: "concluida", titulo: "Fluxo operacional concluído", cta: null })
+    v.executarAcaoSecundaria()
+    expect(patches.at(-1)).toMatchObject({ stage: "posvenda" })
+    expect(patches.every((p) => !("status" in p))).toBe(true)
   })
 })
 
