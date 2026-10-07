@@ -4,7 +4,7 @@
   "id": "FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024",
   "track": "fiscal",
   "title": "Auditoria e readiness da terceira tentativa corrigida NFC-e em homologação; zero transmissão",
-  "status": "BLOCKED",
+  "status": "READY",
   "class": "C3",
   "branch": "goal/fiscal-024-corrected-retry-readiness",
   "worktree": "C:/workspace",
@@ -26,7 +26,7 @@
     "G-F7 permanece fechado; nenhuma ativação",
     "G-F12 permanece fechado; produção fiscal proibida"
   ],
-  "authorization_source": "Autorização humana anexada em 2026-10-01: retomada do mesmo GOAL 024; obtenção efêmera dos envs Production dos projetos Vercel omni-gestao e omni-gestao-pro exclusivamente para identificar a base canônica; transações PostgreSQL READ ONLY e SELECT/read queries de auditoria; documentação, commit e push. Proibidas escritas DB, alterações fiscais, ativação, janela, emissão/retry, POST SEFAZ, G-F7, G-F12, Production fiscal e merge."
+  "authorization_source": "Autorização humana anexada em 2026-10-07: reativar e continuar o MESMO GOAL 024, preservando as duas entradas BLOCKED anteriores; aceitar o contexto canônico READ-ONLY fornecido (omnigestao_prod, transaction_read_only=on); fetch e verificação de ausência de drift Fiscal; auditoria mecânica de retry, numeração, snapshot, persistência, jobs e lineage; provas offline com xmllint real; evidência sanitizada, commit/push somente documentação/AEP; ratificar BLOCKED_BY_RETRY_RECONCILIATION_REQUIRED se confirmado e apenas propor um micro-GOAL sucessor. Proibidos DB writes, mudanças de código/schema, SEFAZ, transmissão, ativação, G-F7, G-F12, novo GOAL e PR de merge automático."
 }
 -->
 
