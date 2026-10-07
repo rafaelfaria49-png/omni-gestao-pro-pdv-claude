@@ -5,14 +5,15 @@
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
   "title": "Operações V4 — fluxo curto",
-  "plan_rev": 9,
+  "plan_rev": 10,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
 -->
 
 Fonte de intenção: plano funcional de 19/09/2026 e autorização operacional
-ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-005, plan_rev 9,
+ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-005, plan_rev 10 (rev 9 +
+ajuste do test_command por falha preexistente fora do escopo),
 fornecida em 07/10/2026.
 
 ## Escopo ativo
