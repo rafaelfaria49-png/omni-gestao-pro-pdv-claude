@@ -1,9 +1,9 @@
 {
   "aep": "1.0-R2",
   "track": "pdv-parity-suite-n5-b1-core-gaps-001",
-  "status": "PAUSED",
+  "status": "RUNNING",
   "risk_tier": "ALTO",
-  "current_goal": null,
+  "current_goal": "PDV-PARITY-N5-B1-CURRENT-MAIN-CORRECTION-003",
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {

@@ -105,6 +105,7 @@ describe("T04 — checklist concorrente-safe: guarda estática da disciplina", (
     expect(fim).toBeGreaterThan(ini);
     const bloco = src.slice(ini, fim);
     expect(bloco, "transação").toContain("prisma.$transaction");
+    expect(bloco, "trava da linha ANTES da releitura").toMatch(/travarLinhaOSV3\(tx, sid, id\)[\s\S]*findFirst/);
     expect(bloco, "releitura LATEST").toContain("findFirst");
     expect(bloco, "storeId correto").toContain("latest.storeId !== sid");
     expect(bloco, "captura updatedAt").toContain("updatedAt: true");
@@ -131,16 +132,17 @@ describe("T04 — checklist concorrente-safe: guarda estática da disciplina", (
 });
 
 describe("D — nenhum outro handler de workspace-actions é semanticamente alterado", () => {
-  it("salvarSenhaAcessoriosV3 e salvarDiagnosticoV3 preservam shape e via gravar", () => {
+  it("salvarSenhaAcessoriosV3 e salvarDiagnosticoV3 preservam shape e gravam sob a trava da OS", () => {
     const src = srcWorkspace();
     for (const nome of ["salvarSenhaAcessoriosV3", "salvarDiagnosticoV3"] as const) {
       expect(src, `${nome} existe`).toContain(`export async function ${nome}`);
     }
-    // Ambos seguem pela via legada `gravar(id, next)` (update direto do payload
-    // + revalidate), sem transação condicionada — escopo exclusivo do checklist
-    // neste GOAL. Contar ocorrências: 2 (senha + diagnóstico), nenhuma no checklist.
-    const ocorrencias = src.split("return gravar(id, next)").length - 1;
+    // OPS-RECEBIMENTO-MISTO-P1-HARDENING-001: ambos aplicam a mudança ao payload MAIS
+    // RECENTE via `mutar` (`mutarPayloadOSV3`: trava da linha → releitura → update na
+    // mesma transação) — nunca regravam um snapshot lido antes. 2 ocorrências.
+    const ocorrencias = src.split("return mutar(sid, id,").length - 1;
     expect(ocorrencias).toBe(2);
+    expect(src, "sem gravação cega do payload").not.toContain("ordemServico.update({");
     expect(src, "senha preserva chaves").toContain("senhaEquipamento");
     expect(src, "senha preserva acessórios").toContain("equipamento.acessorios");
     expect(src, "diagnóstico preserva campo").toContain("diagnosticoV3");
@@ -205,7 +207,10 @@ describe("A — B altera identificação/prova para Y; A salva checklist com est
 });
 
 describe("B — corrida sobreposta: B grava entre SELECT e UPDATE de A", () => {
-  it("A não clobbera; recebe CONFLITO_CONCORRENCIA (PG real, duas conexões)", async () => {
+  // OPS-RECEBIMENTO-MISTO-P1-HARDENING-001: A trava a linha da OS ANTES de ler. Com B
+  // segurando a linha, A ESPERA o commit de B e aplica o checklist sobre o payload de B —
+  // nem clobber (o campo de B sobrevive) nem conflito espúrio (B não tocou no checklist).
+  it("A não clobbera: espera B, relê o LATEST e aplica só o checklist (PG real, duas conexões)", async () => {
     const url = exigirBancoLocal();
     const prisma = new PrismaClient({ datasourceUrl: url });
     const prismaB = new PrismaClient({ datasourceUrl: url });
@@ -224,14 +229,17 @@ describe("B — corrida sobreposta: B grava entre SELECT e UPDATE de A", () => {
       });
       await new Promise((r) => setTimeout(r, 400));
       const escrita = salvarChecklistEntradaV3(sid, id, [{ id: "wifi", label: "Wi-Fi", estado: "ruim" }]);
-      await expect(escrita).rejects.toSatisfy(ehConflitoConcorrenciaV3);
       await seguraLock;
+      await expect(escrita).resolves.toBeTruthy();
 
       const payload = await lerPayload(prisma, id);
+      // O campo gravado por B sobrevive à escrita de A (nenhum snapshot anterior regravado).
       expect(payload.marcadoConcorrente).toBe(true);
-      // Checklist da tentativa perdedora não clobberou o LATEST.
+      // A mudança de A (checklist) entra sobre o LATEST, com as duas edições na timeline.
       const checklist = payload.checklist as { estado?: string }[];
-      expect(checklist[0]?.estado).toBe("ok");
+      expect(checklist[0]?.estado).toBe("ruim");
+      const timeline = payload.timeline as { tipo?: string }[];
+      expect(timeline.filter((e) => e.tipo === "checklist_finalizado")).toHaveLength(2);
     } finally {
       await prisma.$disconnect().catch(() => {});
       await prismaB.$disconnect().catch(() => {});

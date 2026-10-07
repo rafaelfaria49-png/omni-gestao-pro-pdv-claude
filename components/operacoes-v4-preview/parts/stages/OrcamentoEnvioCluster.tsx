@@ -171,7 +171,9 @@ export function OrcamentoEnvioCluster({ v }: { v: V4Vals }) {
 
       <div style={{ ...upLabel, marginTop: 12 }}>Validade</div>
       <div style={{ fontSize: 11.5, color: C.subtle, marginTop: 3 }}>
-        {view.validade.validoAte ? `Válido até ${new Date(view.validade.validoAte).toLocaleDateString("pt-BR")}` : view.validade.politicaTexto}
+        {view.validade.validoAte
+          ? `Válido até ${view.validade.validoAteTexto || new Date(view.validade.validoAte).toLocaleDateString("pt-BR")}${view.validade.vencida ? " · vencido" : ""}`
+          : view.validade.politicaTexto}
       </div>
     </div>
   );

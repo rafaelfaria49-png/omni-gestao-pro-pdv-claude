@@ -5,8 +5,9 @@
 // ----------------------------------------------------------------------------
 // Registra a entrega formal do equipamento: data/hora + operador + observação +
 // quem retirou. Grava SOMENTE o payload (status entregue + entregaV3 + retirada +
-// timeline). Antes de qualquer write, relê OS + Conta a Receber e aplica o guard
-// financeiro fail-closed. Não altera Financeiro/V2/schema; a baixa de estoque
+// timeline). Sob a trava por OS dos writers de pagamento (advisory + `FOR UPDATE`, ver
+// `comOSTravadaV3`), relê o payload MAIS RECENTE + Conta a Receber (no mesmo `tx`) e aplica
+// o guard financeiro fail-closed antes do write. Não altera Financeiro/V2/schema; a baixa de estoque
 // idempotente continua ocorrendo somente depois da entrega persistida.
 //
 // Usa a MÁQUINA ÚNICA (status-machine) como fonte das REGRAS de status. A entrega
@@ -38,6 +39,20 @@ import {
 } from "./delivery-financial-guard";
 import { localKeyContaReceberOSV3 } from "./payment-model";
 import { finalizarRetornoPorEntregaVinculadaV3 } from "./retorno-auto-close-actions";
+import {
+  dataRetroativaV3,
+  diaNaLojaV3,
+  lerDatasOSV3,
+  limitarFatoAoAgoraV3,
+  validarDataEntregaV3,
+  validarEntradaDataV3,
+  ROTULO_DATA_ENTREGA_V3,
+  TOLERANCIA_RELOGIO_MS_V3,
+  formatarDataOperacionalV3,
+  type DataOperacionalMetaV3,
+} from "./datas-operacionais-model";
+import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
+import { chaveLockRecebimentoMistoV3, travarOS } from "./recebimento-misto-service";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -55,6 +70,36 @@ function makeEvento(tipo: EventoTimeline["tipo"], autor: string, conteudo: strin
   return { id: eventId(), tipo, autor, autorTipo: "usuario", conteudo, metadata, criadoEm: nowIso() };
 }
 
+type LinhaOSTravadaV3 = { id: string; payload: OSPayloadFull; valorTotal: number | null };
+
+/**
+ * Janela em que uma entrega recém-efetivada ainda está disparando os próprios
+ * efeitos (estoque, evento, fechamento do retorno): a confirmação concorrente que
+ * perdeu a corrida não os repete. Retentativas posteriores voltam a tentar o
+ * fechamento de um retorno que tenha ficado pendente.
+ */
+const JANELA_EFEITOS_ENTREGA_MS = 2 * 60_000;
+
+/**
+ * Lê e grava a OS sob a MESMA trava por OS dos writers de pagamento e da correção
+ * de datas (advisory lock + `FOR UPDATE` + releitura): a decisão e o patch sempre
+ * partem do estado atual — nunca de um snapshot lido antes de outra gravação.
+ */
+async function comOSTravadaV3<T>(sid: string, id: string, fn: (tx: Prisma.TransactionClient, row: LinhaOSTravadaV3) => Promise<T>): Promise<T> {
+  return prisma.$transaction(
+    async (tx) => {
+      await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
+      if (!(await travarOS(tx, sid, id))) throw new Error("OS não encontrada.");
+      const row = await tx.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true, valorTotal: true } });
+      if (!row) throw new Error("OS não encontrada.");
+      const payload = row.payload as unknown as OSPayloadFull | null;
+      if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
+      return fn(tx, { id: row.id, payload, valorTotal: row.valorTotal === null ? null : Number(row.valorTotal) });
+    },
+    { maxWait: 5_000, timeout: 15_000 },
+  );
+}
+
 export interface RegistrarEntregaInputV3 {
   /** Quem retirou o aparelho (cliente/portador). Default: nome do cliente. */
   recebidoPor?: string;
@@ -63,7 +108,24 @@ export interface RegistrarEntregaInputV3 {
   assinaturaRetirada?: string;
   /** Solicitação do operador; ator, loja e horário são sempre derivados no servidor. */
   semCobranca?: EntregaSemCobrancaSolicitacaoV3;
+  /**
+   * Data EFETIVA da entrega (quando o aparelho saiu de fato). Pode ser anterior
+   * ao registro, nunca no futuro nem antes da entrada. Ausente = agora. NÃO
+   * dispensa saldo, prontidão, autorização a prazo nem regra de entrega.
+   */
+  dataEntrega?: { iso: string; meta?: DataOperacionalMetaV3 | null };
 }
+
+type ResultadoEntregaV3 =
+  | { jaEntregue: true; os: OrdemServico }
+  | {
+      jaEntregue: false;
+      next: OSPayloadFull;
+      from: ReturnType<typeof statusV3FromOS>;
+      recebidoPor: string;
+      projecaoFinanceira: ReturnType<typeof projetarEntregaFinanceiraV3>;
+      autorizacaoSemCobranca: EntregaSemCobrancaV3 | null;
+    };
 
 export async function registrarEntregaV3(storeId: string, osId: string, input: RegistrarEntregaInputV3 = {}): Promise<OrdemServico> {
   const sid = (storeId ?? "").trim();
@@ -76,155 +138,231 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.entregarOs, "Sem permissão para entregar esta OS.");
   if (!guard.ok) throw new Error(guard.error);
 
-  const row = await prisma.ordemServico.findFirst({
-    where: { id, storeId: sid },
-    select: { id: true, payload: true, valorTotal: true },
-  });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-
-  const from = statusV3FromOS(payload);
-  // Idempotência (SPRINT_3D.2): entrega já registrada → NO-OP. Não re-executa
-  // entrega/garantia/estoque/evento; devolve o estado atual. Isso torna seguro o
-  // caminho unificado (Kanban/Command Bar/PDV/PosVenda) contra duplo-clique e
-  // chamadas concorrentes de superfícies diferentes — efeitos rodam UMA vez.
-  if (from === "entregue") {
-    await finalizarRetornoPorEntregaVinculadaV3({
-      storeId: sid,
-      osFilha: { ...(payload as unknown as OrdemServico), id },
-      operador: operadorLabel(session),
-    });
-    return payload as unknown as OrdemServico;
-  }
-  if (from !== "pronta" && from !== "recebida") {
-    throw new Error("A OS precisa estar Pronta ou Recebida para registrar a entrega.");
-  }
-
   const operador = operadorLabel(session);
-  const recebidoPor = (input.recebidoPor ?? "").trim() || (payload as unknown as OrdemServico).cliente?.nome || "Cliente";
+  const recebidoPorInformado = (input.recebidoPor ?? "").trim();
   const observacao = (input.observacao ?? "").trim() || undefined;
-  const now = nowIso();
-
-  // P0: a decisão financeira é refeita no servidor imediatamente antes do
-  // primeiro efeito de entrega. Ator, loja e horário nunca vêm do navegador.
-  const autorizacaoSolicitada = input.semCobranca
-    ? criarAutorizacaoEntregaSemCobrancaV3({
-        solicitacao: input.semCobranca,
-        storeId: sid,
-        autorizadoPorId: session.user.id,
-        autorizadoPorNome: operador,
-        autorizadoEm: now,
-      })
+  // Formato da data efetiva validado antes de qualquer efeito; a regra que
+  // depende da entrada é revalidada sob a trava, contra o estado atual.
+  const dataValidada = input.dataEntrega
+    ? validarEntradaDataV3(input.dataEntrega.iso, input.dataEntrega.meta, ROTULO_DATA_ENTREGA_V3)
     : null;
-  const payloadParaGuard: OSPayloadFull = autorizacaoSolicitada
-    ? { ...payload, entregaSemCobrancaV3: autorizacaoSolicitada }
-    : payload;
+  if (dataValidada && !dataValidada.ok) throw new Error(dataValidada.mensagem);
 
-  let titulo: Awaited<ReturnType<typeof prisma.contaReceberTitulo.findUnique>> = null;
-  let falhaLeituraTitulo = false;
-  try {
-    titulo = await prisma.contaReceberTitulo.findUnique({
-      where: { storeId_localKey: { storeId: sid, localKey: localKeyContaReceberOSV3(sid, id) } },
-    });
-  } catch {
-    falhaLeituraTitulo = true;
-  }
+  // Decisão + gravação sob a MESMA trava por OS dos writers de pagamento: duas
+  // confirmações concorrentes não passam ambas por "pronta" — a segunda relê a
+  // OS já entregue e cai na idempotência abaixo.
+  const resultado = await comOSTravadaV3(sid, id, async (tx, row) => {
+    const payload = row.payload;
+    const from = statusV3FromOS(payload);
+    // Idempotência (SPRINT_3D.2): entrega já registrada → NO-OP. Não re-executa
+    // entrega/garantia/estoque/evento; devolve o estado atual. Isso torna seguro o
+    // caminho unificado (Kanban/Command Bar/PDV/PosVenda) contra duplo-clique e
+    // chamadas concorrentes de superfícies diferentes — efeitos rodam UMA vez.
+    if (from === "entregue") {
+      // Outra data efetiva para uma entrega já registrada não vira sucesso
+      // silencioso: ajustar a data é a correção auditada ("Corrigir datas").
+      if (dataValidada?.ok) {
+        const gravada = lerDatasOSV3(payload).entrega;
+        const pedidaMs = Date.parse(dataValidada.data.iso);
+        const gravadaMs = gravada ? Date.parse(gravada.iso) : NaN;
+        // A vencedora concorrente que limitou o pedido ao relógio grava a entrega
+        // no próprio instante do registro; só nesse caso, e com registro recente,
+        // o mesmo pedido "à frente" (dentro da folga) é a mesma entrega.
+        const registro = (payload.entregaV3 ?? {}) as { registradoEm?: unknown };
+        const registradoMs = Date.parse(typeof registro.registradoEm === "string" ? registro.registradoEm : "");
+        const limitadaNoRegistroRecente =
+          Number.isFinite(registradoMs) && gravadaMs === registradoMs && Date.now() - registradoMs < JANELA_EFEITOS_ENTREGA_MS;
+        const mesma =
+          !!gravada &&
+          gravada.precisao === dataValidada.data.precisao &&
+          (gravada.precisao === "dia"
+            ? gravada.dia === dataValidada.data.dia
+            : pedidaMs === gravadaMs ||
+              (limitadaNoRegistroRecente && pedidaMs > gravadaMs && pedidaMs - gravadaMs <= TOLERANCIA_RELOGIO_MS_V3));
+        if (!mesma) {
+          throw new Error(`Esta OS já foi entregue${gravada ? ` em ${formatarDataOperacionalV3(gravada)}` : ""}. Para ajustar a data, use "Corrigir datas".`);
+        }
+      }
+      return { entregou: false as const, payload };
+    }
+    if (from !== "pronta" && from !== "recebida") {
+      throw new Error("A OS precisa estar Pronta ou Recebida para registrar a entrega.");
+    }
 
-  const projecaoFinanceira = projetarEntregaFinanceiraV3({
-    storeId: sid,
-    osId: id,
-    payload: payloadParaGuard,
-    prismaValorTotal: Number(row.valorTotal ?? 0),
-    titulo,
-    falhaLeituraTitulo,
-  });
-  if (!autorizadaParaEntregaFinanceiraV3(projecaoFinanceira.decisao)) {
-    throw new Error(mensagemBloqueioEntregaFinanceiraV3(projecaoFinanceira.decisao));
-  }
+    const recebidoPor = recebidoPorInformado || (payload as unknown as OrdemServico).cliente?.nome || "Cliente";
+    // `now` = momento REAL do registro (auditoria, eventos, assinatura). A data
+    // efetiva da entrega pode ser anterior; é validada antes de qualquer efeito.
+    const now = nowIso();
+    let entregueEm = now;
+    let entregueEmMeta: DataOperacionalMetaV3 | null = null;
+    let entregaRetroativa = false;
+    const agoraEntrega = new Date(now);
+    const entradaOS = lerDatasOSV3(payload).entrada;
+    if (dataValidada?.ok) {
+      const erros = validarDataEntregaV3({ entrega: dataValidada.data, entrada: entradaOS }, agoraEntrega);
+      if (erros.length > 0) throw new Error(erros[0]!.mensagem);
+      // Dentro da folga do relógio, a entrega é gravada no "agora" do servidor.
+      const gravada = limitarFatoAoAgoraV3({ iso: dataValidada.data.iso, meta: dataValidada.meta }, agoraEntrega);
+      entregueEm = gravada.iso;
+      entregueEmMeta = gravada.meta;
+      entregaRetroativa = dataRetroativaV3(dataValidada.data, agoraEntrega);
+    } else {
+      // Sem data informada a entrega é AGORA — que também nunca fica antes da entrada.
+      const erros = validarDataEntregaV3({ entrega: { iso: now, precisao: "data_hora", dia: diaNaLojaV3(now) }, entrada: entradaOS }, agoraEntrega);
+      if (erros.length > 0) throw new Error(erros[0]!.mensagem);
+    }
 
-  const autorizacaoSemCobranca =
-    projecaoFinanceira.decisao === "ALLOW_AUTHORIZED_NO_CHARGE"
-      ? ({
-          ...((autorizacaoSolicitada ?? payload.entregaSemCobrancaV3) as EntregaSemCobrancaV3),
-          snapshotFinanceiro: {
-            totalEsperado: projecaoFinanceira.totalEsperado,
-            origensTotal: projecaoFinanceira.origensTotal,
-            tituloEncontrado: projecaoFinanceira.tituloEncontrado,
-            tituloLocalKey: titulo?.localKey ?? undefined,
-            valorTitulo: projecaoFinanceira.valorTitulo,
-            totalRecebido: projecaoFinanceira.totalRecebido,
-            saldo: projecaoFinanceira.saldo,
-            decisao: "ALLOW_AUTHORIZED_NO_CHARGE",
-          },
-        } satisfies EntregaSemCobrancaV3)
+    // P0: a decisão financeira é refeita no servidor imediatamente antes do
+    // primeiro efeito de entrega. Ator, loja e horário nunca vêm do navegador.
+    const autorizacaoSolicitada = input.semCobranca
+      ? criarAutorizacaoEntregaSemCobrancaV3({
+          solicitacao: input.semCobranca,
+          storeId: sid,
+          autorizadoPorId: session.user.id,
+          autorizadoPorNome: operador,
+          autorizadoEm: now,
+        })
       : null;
+    const payloadParaGuard: OSPayloadFull = autorizacaoSolicitada
+      ? { ...payload, entregaSemCobrancaV3: autorizacaoSolicitada }
+      : payload;
 
-  // Assinatura de retirada (opcional) — validada e embarcada no entregaV3.
-  const assinaturaInput = (input.assinaturaRetirada ?? "").trim();
-  const assinaturaRetirada = assinaturaInput && validarAssinaturaV3(assinaturaInput).ok ? assinaturaInput : undefined;
+    // Título lido NA transação (sob a trava, os writers de pagamento esperam: ele
+    // não muda até o commit; e nunca disputa uma 2ª conexão do pool). Se a leitura
+    // falhar, a guarda bloqueia e nenhuma outra consulta roda na transação.
+    let titulo: Awaited<ReturnType<typeof prisma.contaReceberTitulo.findUnique>> = null;
+    let falhaLeituraTitulo = false;
+    try {
+      titulo = await tx.contaReceberTitulo.findUnique({
+        where: { storeId_localKey: { storeId: sid, localKey: localKeyContaReceberOSV3(sid, id) } },
+      });
+    } catch {
+      falhaLeituraTitulo = true;
+    }
 
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const eventos: EventoTimeline[] = [];
-  // Passagem implícita por RECEBIDA quando a entrega parte de PRONTA (auditável).
-  if (from === "pronta") {
-    eventos.push(makeEvento("mudanca_status", operador, 'Status alterado para "Recebida".', { de: "pronta", para: "recebida", engine: "operacoes-v3", origem: "entrega" }));
-  }
-  if (autorizacaoSemCobranca) {
+    const projecaoFinanceira = projetarEntregaFinanceiraV3({
+      storeId: sid,
+      osId: id,
+      payload: payloadParaGuard,
+      prismaValorTotal: Number(row.valorTotal ?? 0),
+      titulo,
+      falhaLeituraTitulo,
+    });
+    if (!autorizadaParaEntregaFinanceiraV3(projecaoFinanceira.decisao)) {
+      throw new Error(mensagemBloqueioEntregaFinanceiraV3(projecaoFinanceira.decisao));
+    }
+
+    const autorizacaoSemCobranca =
+      projecaoFinanceira.decisao === "ALLOW_AUTHORIZED_NO_CHARGE"
+        ? ({
+            ...((autorizacaoSolicitada ?? payload.entregaSemCobrancaV3) as EntregaSemCobrancaV3),
+            snapshotFinanceiro: {
+              totalEsperado: projecaoFinanceira.totalEsperado,
+              origensTotal: projecaoFinanceira.origensTotal,
+              tituloEncontrado: projecaoFinanceira.tituloEncontrado,
+              tituloLocalKey: titulo?.localKey ?? undefined,
+              valorTitulo: projecaoFinanceira.valorTitulo,
+              totalRecebido: projecaoFinanceira.totalRecebido,
+              saldo: projecaoFinanceira.saldo,
+              decisao: "ALLOW_AUTHORIZED_NO_CHARGE",
+            },
+          } satisfies EntregaSemCobrancaV3)
+        : null;
+
+    // Assinatura de retirada (opcional) — validada e embarcada no entregaV3.
+    const assinaturaInput = (input.assinaturaRetirada ?? "").trim();
+    const assinaturaRetirada = assinaturaInput && validarAssinaturaV3(assinaturaInput).ok ? assinaturaInput : undefined;
+
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const eventos: EventoTimeline[] = [];
+    // Passagem implícita por RECEBIDA quando a entrega parte de PRONTA (auditável).
+    if (from === "pronta") {
+      eventos.push(makeEvento("mudanca_status", operador, 'Status alterado para "Recebida".', { de: "pronta", para: "recebida", engine: "operacoes-v3", origem: "entrega" }));
+    }
+    if (autorizacaoSemCobranca) {
+      eventos.push(
+        makeEvento("observacao", operador, `Entrega sem cobrança autorizada (${autorizacaoSemCobranca.categoria}): ${autorizacaoSemCobranca.motivo}`, {
+          evento: "entrega_sem_cobranca_autorizada",
+          categoria: autorizacaoSemCobranca.categoria,
+          motivo: autorizacaoSemCobranca.motivo,
+          autorizadoPorId: autorizacaoSemCobranca.autorizadoPorId,
+          autorizadoEm: autorizacaoSemCobranca.autorizadoEm,
+          entregaSemCobranca: true,
+        }),
+      );
+    }
     eventos.push(
-      makeEvento("observacao", operador, `Entrega sem cobrança autorizada (${autorizacaoSemCobranca.categoria}): ${autorizacaoSemCobranca.motivo}`, {
-        evento: "entrega_sem_cobranca_autorizada",
-        categoria: autorizacaoSemCobranca.categoria,
-        motivo: autorizacaoSemCobranca.motivo,
-        autorizadoPorId: autorizacaoSemCobranca.autorizadoPorId,
-        autorizadoEm: autorizacaoSemCobranca.autorizadoEm,
-        entregaSemCobranca: true,
+      makeEvento("entrega_cliente", operador, `Equipamento entregue a ${recebidoPor}.${observacao ? " Obs.: " + observacao : ""}`, {
+        de: from === "pronta" ? "recebida" : from,
+        para: "entregue",
+        recebidoPor,
+        observacao,
+        decisaoFinanceira: projecaoFinanceira.decisao,
+        entregaSemCobranca: !!autorizacaoSemCobranca,
+        // Data efetiva em campo próprio; o evento continua com o horário real do registro.
+        ...(input.dataEntrega ? { entregueEm } : {}),
+        ...(entregaRetroativa ? { entregaRetroativa: true } : {}),
+        ...(entregueEmMeta ? { precisao: entregueEmMeta.precisao } : {}),
       }),
     );
-  }
-  eventos.push(
-    makeEvento("entrega_cliente", operador, `Equipamento entregue a ${recebidoPor}.${observacao ? " Obs.: " + observacao : ""}`, {
-      de: from === "pronta" ? "recebida" : from,
-      para: "entregue",
-      recebidoPor,
-      observacao,
-      decisaoFinanceira: projecaoFinanceira.decisao,
-      entregaSemCobranca: !!autorizacaoSemCobranca,
-    }),
-  );
-  if (assinaturaRetirada) {
-    eventos.push(makeEvento("observacao", operador, "Assinatura de retirada capturada.", { evento: "assinatura_retirada_capturada" }));
-  }
+    if (assinaturaRetirada) {
+      eventos.push(makeEvento("observacao", operador, "Assinatura de retirada capturada.", { evento: "assinatura_retirada_capturada" }));
+    }
 
-  const prevEntrega =
-    payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
-  const next: OSPayloadFull = {
-    ...payload,
-    operacaoStatusV3: "entregue",
-    operacaoStatus: projetarStatusV2("entregue"),
-    status: projetarStatusV2("entregue"),
-    entregueEm: now,
-    retirada: { confirmado: true, retiradoPor: recebidoPor, retiradoEm: now, observacao },
-    entregaV3: {
-      ...prevEntrega,
-      entregueEm: now,
-      entreguePor: operador,
-      recebidoPor,
-      observacao,
-      ...(assinaturaRetirada ? { assinaturaRetirada: { dataUrl: assinaturaRetirada, criadoEm: now, por: recebidoPor } } : {}),
-    },
-    ...(autorizacaoSemCobranca ? { entregaSemCobrancaV3: autorizacaoSemCobranca } : {}),
-    timeline: [...timeline, ...eventos],
-    atualizadoEm: now,
-  } as OSPayloadFull;
+    const prevEntrega =
+      payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
+    const next: OSPayloadFull = {
+      ...payload,
+      operacaoStatusV3: "entregue",
+      operacaoStatus: projetarStatusV2("entregue"),
+      status: projetarStatusV2("entregue"),
+      entregueEm,
+      retirada: { confirmado: true, retiradoPor: recebidoPor, retiradoEm: entregueEm, observacao },
+      entregaV3: {
+        ...prevEntrega,
+        entregueEm,
+        ...(entregueEmMeta ? { entregueEmMeta } : {}),
+        // Momento real do registro (servidor) — nunca a data efetiva escolhida.
+        registradoEm: now,
+        entreguePor: operador,
+        recebidoPor,
+        observacao,
+        // A captura da assinatura é um fato de AGORA (nunca retrodatada).
+        ...(assinaturaRetirada ? { assinaturaRetirada: { dataUrl: assinaturaRetirada, criadoEm: now, por: recebidoPor } } : {}),
+      },
+      ...(autorizacaoSemCobranca ? { entregaSemCobrancaV3: autorizacaoSemCobranca } : {}),
+      timeline: [...timeline, ...eventos],
+      atualizadoEm: now,
+    } as OSPayloadFull;
 
-  await prisma.ordemServico.update({
-    where: { id },
-    data: {
-      status: operacaoStatusToPrismaStatus(projetarStatusV2("entregue")),
-      payload: next as unknown as Prisma.InputJsonValue,
-    },
+    await tx.ordemServico.update({
+      where: { id },
+      data: {
+        status: operacaoStatusToPrismaStatus(projetarStatusV2("entregue")),
+        payload: next as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return { entregou: true as const, next, from, recebidoPor, projecaoFinanceira, autorizacaoSemCobranca };
   });
+
+  if (!resultado.entregou) {
+    // Retentativa de uma entrega já registrada: fecha o retorno vinculado que tenha
+    // ficado pendente. Se a entrega acabou de ser efetivada por OUTRA chamada
+    // (concorrente), quem a efetivou já dispara esse efeito — não repetir aqui.
+    const entregaGravada = (resultado.payload.entregaV3 ?? {}) as { registradoEm?: unknown };
+    const registradoMs = Date.parse(typeof entregaGravada.registradoEm === "string" ? entregaGravada.registradoEm : "");
+    const efetivadaAgoraPorOutra = Number.isFinite(registradoMs) && Date.now() - registradoMs < JANELA_EFEITOS_ENTREGA_MS;
+    if (!efetivadaAgoraPorOutra) {
+      await finalizarRetornoPorEntregaVinculadaV3({
+        storeId: sid,
+        osFilha: { ...(resultado.payload as unknown as OrdemServico), id },
+        operador,
+      });
+    }
+    return resultado.payload as unknown as OrdemServico;
+  }
+  // Só quem efetivou a entrega (vencedor sob a trava) dispara os efeitos.
+  const { next, from, recebidoPor, projecaoFinanceira, autorizacaoSemCobranca } = resultado;
 
   // SPRINT_3D.1 — baixa REAL de estoque ao entregar, via adapter oficial
   // (`consumeEstoqueFromOS`). Idempotente (não baixa a mesma OS duas vezes) e
@@ -287,30 +425,30 @@ export async function salvarAssinaturaRetiradaV3(storeId: string, osId: string, 
 
   const veredito = validarAssinaturaV3(dataUrl ?? "");
   if (!veredito.ok) throw new Error(veredito.motivo ?? "Assinatura inválida.");
-
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-
-  if (statusV3FromOS(payload) !== "entregue") {
-    throw new Error("A assinatura de retirada só pode ser registrada após a entrega.");
-  }
-
-  const now = nowIso();
   const operador = operadorLabel(session);
-  const entregaV3 = (payload.entregaV3 && typeof payload.entregaV3 === "object" ? payload.entregaV3 : {}) as Record<string, unknown>;
-  const recebidoPor =
-    (por ?? "").trim() || (typeof entregaV3.recebidoPor === "string" ? entregaV3.recebidoPor : "") || (payload as unknown as OrdemServico).cliente?.nome || "Cliente";
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const next: OSPayloadFull = {
-    ...payload,
-    entregaV3: { ...entregaV3, assinaturaRetirada: { dataUrl: dataUrl.trim(), criadoEm: now, por: recebidoPor } },
-    timeline: [...timeline, makeEvento("observacao", operador, "Assinatura de retirada capturada.", { evento: "assinatura_retirada_capturada" })],
-    atualizadoEm: now,
-  } as OSPayloadFull;
 
-  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+  // Leitura, decisão e gravação sob a MESMA trava por OS da entrega, da correção de
+  // datas e dos writers de pagamento: o patch parte do estado mais recente — nunca
+  // regrava um snapshot antigo por cima de uma correção concorrente.
+  const next = await comOSTravadaV3(sid, id, async (tx, row) => {
+    const payload = row.payload;
+    if (statusV3FromOS(payload) !== "entregue") {
+      throw new Error("A assinatura de retirada só pode ser registrada após a entrega.");
+    }
+    const now = nowIso();
+    const entregaV3 = (payload.entregaV3 && typeof payload.entregaV3 === "object" ? payload.entregaV3 : {}) as Record<string, unknown>;
+    const recebidoPor =
+      (por ?? "").trim() || (typeof entregaV3.recebidoPor === "string" ? entregaV3.recebidoPor : "") || (payload as unknown as OrdemServico).cliente?.nome || "Cliente";
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const proximo: OSPayloadFull = {
+      ...payload,
+      entregaV3: { ...entregaV3, assinaturaRetirada: { dataUrl: dataUrl.trim(), criadoEm: now, por: recebidoPor } },
+      timeline: [...timeline, makeEvento("observacao", operador, "Assinatura de retirada capturada.", { evento: "assinatura_retirada_capturada" })],
+      atualizadoEm: now,
+    } as OSPayloadFull;
+    await tx.ordemServico.update({ where: { id }, data: { payload: proximo as unknown as Prisma.InputJsonValue } });
+    return proximo;
+  });
   revalidatePath("/dashboard/operacoes-v3");
   revalidatePath("/dashboard/operacoes-v4-preview");
   return next as unknown as OrdemServico;
@@ -342,41 +480,41 @@ export async function adicionarFotoSaidaV3(
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar esta OS.");
   if (!guard.ok) throw new Error(guard.error);
 
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-  if (statusV3FromOS(payload) === "cancelada") {
-    throw new Error("Não é possível adicionar foto de saída em OS cancelada.");
-  }
-
-  const atuais = lerFotosSaidaV3(payload as unknown as OrdemServico);
-  const veredito = validarFotoEntradaV3(input?.dataUrl ?? "", atuais.length);
-  if (!veredito.ok) throw new Error(veredito.motivo ?? "Foto inválida.");
-
   const categoria: CategoriaFotoSaidaV3 =
     input?.categoria === "acessorio" || input?.categoria === "outro" || input?.categoria === "reparado"
       ? input.categoria
       : "reparado";
-  const now = nowIso();
-  const foto: FotoSaidaV3 = {
-    id: fotoSaidaId(),
-    categoria,
-    nome: (input?.nome ?? "").trim() || undefined,
-    dataUrl: input.dataUrl.trim(),
-    tamanho: bytesDeDataUrlV3(input.dataUrl),
-    criadoEm: now,
-  };
-  const entregaV3 = payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
   const operador = operadorLabel(session);
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const next: OSPayloadFull = {
-    ...payload,
-    entregaV3: { ...entregaV3, fotosSaida: [...atuais, foto] },
-    timeline: [...timeline, makeEvento("anexo_adicionado", operador, `Foto de saída adicionada (${categoria}).`, { evento: "foto_saida_adicionada", categoria, fotoId: foto.id })],
-    atualizadoEm: now,
-  } as OSPayloadFull;
-  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+
+  // Mesma trava por OS da entrega/correção: limite de fotos e patch sobre o estado atual.
+  const next = await comOSTravadaV3(sid, id, async (tx, row) => {
+    const payload = row.payload;
+    if (statusV3FromOS(payload) === "cancelada") {
+      throw new Error("Não é possível adicionar foto de saída em OS cancelada.");
+    }
+    const atuais = lerFotosSaidaV3(payload as unknown as OrdemServico);
+    const veredito = validarFotoEntradaV3(input?.dataUrl ?? "", atuais.length);
+    if (!veredito.ok) throw new Error(veredito.motivo ?? "Foto inválida.");
+    const now = nowIso();
+    const foto: FotoSaidaV3 = {
+      id: fotoSaidaId(),
+      categoria,
+      nome: (input?.nome ?? "").trim() || undefined,
+      dataUrl: input.dataUrl.trim(),
+      tamanho: bytesDeDataUrlV3(input.dataUrl),
+      criadoEm: now,
+    };
+    const entregaV3 = payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const proximo: OSPayloadFull = {
+      ...payload,
+      entregaV3: { ...entregaV3, fotosSaida: [...atuais, foto] },
+      timeline: [...timeline, makeEvento("anexo_adicionado", operador, `Foto de saída adicionada (${categoria}).`, { evento: "foto_saida_adicionada", categoria, fotoId: foto.id })],
+      atualizadoEm: now,
+    } as OSPayloadFull;
+    await tx.ordemServico.update({ where: { id }, data: { payload: proximo as unknown as Prisma.InputJsonValue } });
+    return proximo;
+  });
   revalidatePath("/dashboard/operacoes-v3");
   revalidatePath("/dashboard/operacoes-v4-preview");
   return next as unknown as OrdemServico;
@@ -393,27 +531,27 @@ export async function removerFotoSaidaV3(storeId: string, osId: string, fotoId: 
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para editar esta OS.");
   if (!guard.ok) throw new Error(guard.error);
 
-  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada.");
-  const payload = row.payload as unknown as OSPayloadFull | null;
-  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-
-  const atuais = lerFotosSaidaV3(payload as unknown as OrdemServico);
   const fid = (fotoId ?? "").trim();
-  const alvo = atuais.find((f) => f.id === fid);
-  if (!alvo) throw new Error("Foto de saída não encontrada nesta OS.");
-
-  const now = nowIso();
-  const entregaV3 = payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
   const operador = operadorLabel(session);
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const next: OSPayloadFull = {
-    ...payload,
-    entregaV3: { ...entregaV3, fotosSaida: atuais.filter((f) => f.id !== fid) },
-    timeline: [...timeline, makeEvento("anexo_removido", operador, `Foto de saída removida (${alvo.categoria}).`, { evento: "foto_saida_removida", categoria: alvo.categoria, fotoId: fid })],
-    atualizadoEm: now,
-  } as OSPayloadFull;
-  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+
+  // Mesma trava por OS da entrega/correção: remove só a foto pedida do estado atual.
+  const next = await comOSTravadaV3(sid, id, async (tx, row) => {
+    const payload = row.payload;
+    const atuais = lerFotosSaidaV3(payload as unknown as OrdemServico);
+    const alvo = atuais.find((f) => f.id === fid);
+    if (!alvo) throw new Error("Foto de saída não encontrada nesta OS.");
+    const now = nowIso();
+    const entregaV3 = payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const proximo: OSPayloadFull = {
+      ...payload,
+      entregaV3: { ...entregaV3, fotosSaida: atuais.filter((f) => f.id !== fid) },
+      timeline: [...timeline, makeEvento("anexo_removido", operador, `Foto de saída removida (${alvo.categoria}).`, { evento: "foto_saida_removida", categoria: alvo.categoria, fotoId: fid })],
+      atualizadoEm: now,
+    } as OSPayloadFull;
+    await tx.ordemServico.update({ where: { id }, data: { payload: proximo as unknown as Prisma.InputJsonValue } });
+    return proximo;
+  });
   revalidatePath("/dashboard/operacoes-v3");
   revalidatePath("/dashboard/operacoes-v4-preview");
   return next as unknown as OrdemServico;

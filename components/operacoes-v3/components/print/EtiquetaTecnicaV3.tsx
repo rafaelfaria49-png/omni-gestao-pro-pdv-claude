@@ -24,7 +24,7 @@ export function EtiquetaTecnicaV3({ etiqueta }: { etiqueta: EtiquetaV3 }) {
             <span>Status: <strong className="text-black">{etiqueta.statusLabel}</strong></span>
             {etiqueta.tecnico ? <span>Téc.: {etiqueta.tecnico}</span> : null}
           </div>
-          {etiqueta.entrada ? <p className="text-[10px] text-zinc-600">Entrada: {formatData(etiqueta.entrada)}</p> : null}
+          {etiqueta.entradaTexto ? <p className="text-[10px] text-zinc-600">{etiqueta.entradaRotulo ?? "Entrada"}: {etiqueta.entradaTexto}</p> : etiqueta.entrada ? <p className="text-[10px] text-zinc-600">Entrada: {formatData(etiqueta.entrada)}</p> : null}
         </div>
       </div>
       <p className="mt-2 w-[320px] text-center text-[9px] text-zinc-400">Etiqueta técnica — impressão térmica em fase futura.</p>

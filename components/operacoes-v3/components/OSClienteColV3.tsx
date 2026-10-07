@@ -6,7 +6,6 @@ import type { OrdemServico } from "@/types/os";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { lerRecepcaoV3 } from "@/lib/operacoes-v3/workspace-model";
 import { isAtrasada, isEmRisco } from "../lib/os-derive";
-import { formatDataHora } from "../lib/format";
 import { StatusBadgeV3 } from "./StatusBadgeV3";
 
 function iniciaisDe(nome?: string | null): string {
@@ -128,14 +127,15 @@ export function OSClienteColV3({
         <div className="border-t border-[var(--ops-v3-line)] pt-3">
           <ColBlock icon={Clock} titulo="SLA">
             <StatRow
-              label="Entrada"
-              value={recepcao.dataEntrada ? formatDataHora(recepcao.dataEntrada) : undefined}
+              label={recepcao.entradaRotulo ?? "Entrada"}
+              value={recepcao.entradaTexto || undefined}
             />
             <StatRow
-              label="Previsão"
-              value={recepcao.previsaoEntrega ? formatDataHora(recepcao.previsaoEntrega) : undefined}
-              tone={atrasada ? "text-[var(--ops-v3-danger)] font-semibold" : risco ? "text-[var(--ops-v3-warning)]" : undefined}
+              label="Previsão de entrega"
+              value={recepcao.previsaoTexto ? `${recepcao.previsaoTexto}${recepcao.previsaoVencida ? " · vencida" : ""}` : "Não informada"}
+              tone={atrasada ? "text-[var(--ops-v3-danger)] font-semibold" : risco || recepcao.previsaoVencida ? "text-[var(--ops-v3-warning)]" : undefined}
             />
+            {recepcao.prazoInternoTexto ? <StatRow label="Prazo interno" value={recepcao.prazoInternoTexto} /> : null}
             {atrasada ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-[var(--ops-v3-danger-bd)] bg-[var(--ops-v3-danger-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--ops-v3-danger-fg)]">
                 Atrasada

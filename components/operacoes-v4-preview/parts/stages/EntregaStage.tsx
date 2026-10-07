@@ -33,6 +33,19 @@ import { CATEGORIAS_FOTO_SAIDA_V3, lerGarantiaV3, type CategoriaFotoSaidaV3 } fr
 import { FOTO_MAX_V3 } from "@/lib/operacoes-v3/prova-entrada-model";
 import { GARANTIA_CATALOGO_V3, garantiaCatalogoV3, normalizarGarantiaPrevistaV3, prazoPadraoGarantiaV3 } from "@/lib/operacoes-v3/garantia-textos";
 import type { EntregaSemCobrancaCategoriaV3, EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
+import {
+  campoAgoraV3,
+  dataRetroativaV3,
+  formatarDataOperacionalV3,
+  hojeNaLojaV3,
+  lerDataOperacionalV3,
+  lerDatasOSV3,
+  montarDataOperacionalV3,
+  validarDataEntregaV3,
+  type CampoDataOperacionalV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
+import { DataOperacionalCampoV3 } from "@/components/operacoes-v3/components/DataOperacionalCampoV3";
+import { atendDataCampo } from "../atendimento/field-styles";
 import { RealActionNotice } from "../RealActionNotice";
 
 const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
@@ -65,6 +78,11 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
   const [formSemCobrancaAberto, setFormSemCobrancaAberto] = useState(false);
   const [categoria, setCategoria] = useState<EntregaSemCobrancaCategoriaV3 | "">("");
   const [motivo, setMotivo] = useState("");
+  // Data EFETIVA da entrega: começa em "hoje, agora" e pode ser anterior (nunca
+  // futura nem antes da entrada). Não dispensa nenhuma regra de entrega.
+  const [dataEntrega, setDataEntrega] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
+  const [erroData, setErroData] = useState<string | null>(null);
+  const dataRef = useRef<HTMLInputElement>(null);
   const ea = v.entregaAcoes;
   const osKey = v.realOS?.id ?? "";
   useEffect(() => {
@@ -72,24 +90,66 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
     setCategoria("");
     setMotivo("");
   }, [osKey, ea.semCobrancaLancada]);
+  useEffect(() => {
+    // Troca de OS: nada da OS anterior (data/erro) sobrevive.
+    setDataEntrega(campoAgoraV3());
+    setErroData(null);
+  }, [osKey]);
 
   if (!ea.podeConfirmar && !ea.bloqueadaPorSaldo && !ea.semCobrancaLancada && !ea.leituraFinanceiraBloqueada) return null;
 
+  const entradaOS = lerDatasOSV3(v.realOS).entrada;
+  const montada = montarDataOperacionalV3(dataEntrega);
+  const lida = montada.ok ? lerDataOperacionalV3(montada.valor.iso, montada.valor.meta) : null;
+  const retroativa = dataRetroativaV3(lida);
+
   const run = async (semCobranca?: EntregaSemCobrancaSolicitacaoV3) => {
     if (busy) return;
+    // Mesma regra do servidor, antes de qualquer confirmação.
+    const erro = !montada.ok ? montada.mensagem : validarDataEntregaV3({ entrega: lida, entrada: entradaOS })[0]?.mensagem ?? null;
+    if (erro) {
+      setErroData(erro);
+      requestAnimationFrame(() => dataRef.current?.focus());
+      return;
+    }
+    const quando = retroativa ? ` em ${formatarDataOperacionalV3(lida)}` : "";
     const confirmado = window.confirm(
       semCobranca
-        ? "A entrega será registrada sem cobrança, com categoria, motivo e responsável na auditoria. Confirmar?"
-        : "Entrega real: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?"
+        ? `A entrega${quando} será registrada sem cobrança, com categoria, motivo e responsável na auditoria. Confirmar?`
+        : `Entrega real${quando}: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?`
     );
     if (!confirmado) return;
+    // Padrão intacto ("hoje, agora" automático) = horário exato do servidor.
+    const informada = !(dataEntrega.horaAutomatica && dataEntrega.dia === hojeNaLojaV3());
     setBusy(true);
     try {
-      await v.confirmarEntrega(semCobranca);
+      await v.confirmarEntrega(semCobranca, informada && montada.ok ? montada.valor : undefined);
     } finally {
       setBusy(false);
     }
   };
+
+  const campoData = (
+    <div style={{ marginBottom: 12 }}>
+      <DataOperacionalCampoV3
+        ref={dataRef}
+        id="entrega-data"
+        rotulo="Data da entrega"
+        ajuda="Quando o aparelho foi realmente entregue ao cliente."
+        obrigatorio
+        maxDia={hojeNaLojaV3()}
+        minDia={entradaOS?.dia}
+        valor={dataEntrega}
+        onChange={(c) => {
+          setDataEntrega(c);
+          setErroData(null);
+        }}
+        erro={erroData}
+        aviso={retroativa ? "Entrega com data anterior. O histórico guarda também o horário real deste registro." : null}
+        estilos={atendDataCampo}
+      />
+    </div>
+  );
 
   if (ea.leituraFinanceiraBloqueada) {
     return (
@@ -169,6 +229,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
         <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 12 }}>
           A classificação e a justificativa serão validadas e auditadas pelo servidor antes da entrega.
         </div>
+        {campoData}
         <label style={{ display: "grid", gap: 5, marginBottom: 10 }}>
           <span style={upLabel}>Categoria obrigatória</span>
           <select
@@ -230,6 +291,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
       ) : (
         <RealActionNotice kind="entrega" />
       )}
+      {campoData}
       <button
         type="button"
         disabled={busy}
@@ -580,8 +642,18 @@ export function EntregaStage({ v }: { v: V4Vals }) {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10 }}>
           <Field label="Retirado por" value={e.retiradoPor} />
-          <Field label="Data / hora" value={e.retiradoEm} />
+          <Field label="Data da entrega" value={e.retiradoEm} />
+          {e.registradoEm ? <Field label="Registrado no sistema" value={e.registradoEm} /> : null}
         </div>
+        {e.entregue ? (
+          <button
+            type="button"
+            onClick={v.openCorrigirDatas}
+            style={{ marginTop: 9, padding: 0, border: "none", background: "transparent", color: C.primaryHover, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+          >
+            Corrigir datas
+          </button>
+        ) : null}
         {e.observacao && (
           <div style={{ marginTop: 11 }}>
             <div style={{ ...upLabel, marginBottom: 3 }}>Observação</div>

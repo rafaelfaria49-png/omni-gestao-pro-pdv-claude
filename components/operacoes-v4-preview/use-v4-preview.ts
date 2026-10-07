@@ -98,7 +98,7 @@ import { podeTransicionarV3, statusV3FromOS, type OperacaoStatusV3 } from "@/lib
 // já pronto (carrega pagamento+sessão de caixa, expõe receber/estornar/reload) —
 // reaproveitado tal como é, sem motor novo. A V4 só adiciona o reload da lista/
 // detalhe da OS depois do recebimento (ver `receberPagamentoV4` abaixo).
-import { usePdvServicoV3, type PdvServicoState } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
+import { usePdvServicoV3, type PdvServicoState, type PdvServicoV3Completo, type DadosRecebimentoMistoV3 } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
 import type { EstornarRecebimentoInputV3, ReceberOSInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 // GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006: action separada de `receberOSV3` —
 // nunca liquida título, nunca movimenta caixa, nunca exige caixa aberto.
@@ -126,6 +126,7 @@ import {
   adicionarFotoSaidaV3,
   removerFotoSaidaV3,
   type AdicionarFotoSaidaInputV3,
+  type RegistrarEntregaInputV3,
 } from "@/lib/operacoes-v3/entrega-actions";
 import { montarMensagemAtualizacaoOSV4 } from "@/lib/operacoes-v4/documento-mensagem";
 import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
@@ -135,7 +136,7 @@ import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
-import { alvoAindaSelecionado, fatiaTocada, patchTocadoCredenciais, patchTocadoIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4, type EsperadosDadosBasicosV3, type EsperadosProvaEntradaV3 } from "@/lib/operacoes-v4/entrada-form";
+import { alvoAindaSelecionado, fatiaTocada, patchTocadoCredenciais, patchTocadoIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4, type EsperadosDadosBasicosV3, type EsperadosProvaEntradaV3, type OpcoesSalvarAcessoriosV4, type OpcoesSalvarProvaEntradaV4 } from "@/lib/operacoes-v4/entrada-form";
 import { intencaoDadosBasicos, toDadosBasicosInput } from "@/lib/operacoes-v4/dados-basicos-form";
 import { seedDadosBasicos, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
 import {
@@ -265,7 +266,7 @@ export interface V4DataCtx {
   // ---- Entrega (slice OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
   // Confirma pela action canônica `registrarEntregaV3`; o servidor sempre revalida
   // financeiro, mesmo quando o cliente chama fora do gate visual.
-  confirmarEntrega: (semCobranca?: EntregaSemCobrancaSolicitacaoV3) => Promise<boolean>;
+  confirmarEntrega: (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"]) => Promise<boolean>;
   // ---- Assinatura de retirada + auditoria de impressão (GOAL OPS-V4-DOCS-
   // ASSINATURA-TERMOS-ANEXOS-012) ----
   /** Persiste a assinatura de retirada (reuso de `salvarAssinaturaRetiradaV3`). */
@@ -296,15 +297,15 @@ export interface V4DataCtx {
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
   // recarregar lista+detalhe da V4 depois do sucesso.
-  pdvServico: PdvServicoState;
+  pdvServico: PdvServicoState & Partial<Pick<PdvServicoV3Completo, "registrarMisto" | "registrandoMisto" | "pendenciaMisto" | "aPrazo">>;
   // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
   // Action SEPARADA de `receberOSV3`/`pdvServico.receber` — formaliza o saldo
   // aberto como Conta a Receber PENDENTE (vencimento), sem receber dinheiro.
   lancarAPrazo: (input: LancarAPrazoInputV3) => Promise<boolean>;
   // ---- Entrada/Recepção (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
   salvarIdentificacao: (input: IdentificacaoV3) => Promise<boolean>;
-  salvarProvaEntrada: (input: SalvarProvaEntradaInputV3) => Promise<boolean>;
-  salvarAcessorios: (acessorios: AcessorioEntradaV3[]) => Promise<boolean>;
+  salvarProvaEntrada: (input: SalvarProvaEntradaInputV3, opcoes?: OpcoesSalvarProvaEntradaV4) => Promise<boolean>;
+  salvarAcessorios: (acessorios: AcessorioEntradaV3[], opcoes?: OpcoesSalvarAcessoriosV4) => Promise<boolean>;
   salvarChecklist: (itens: ChecklistEntradaItemV3[]) => Promise<boolean>;
   adicionarFotoEntrada: (input: AdicionarFotoEntradaInputV3) => Promise<boolean>;
   removerFotoEntrada: (fotoId: string) => Promise<boolean>;
@@ -776,6 +777,8 @@ export function buildVals(
     moreItems.push({ icon: "⏸", label: "Marcar “Aguardando peça”", color: C.body, onClick: () => go("execucao") });
   if (status === "aguardando_peca")
     moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => go("execucao") });
+  // Correção auditada de datas (só datas — nunca refaz entrega, cobrança ou estoque).
+  if (realOS) moreItems.push({ icon: "📅", label: "Corrigir datas", color: C.body, onClick: () => update({ corrigirDatas: true }) });
   if (status !== "entregue" && status !== "cancelada")
     moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => update({ cancelamentoOS: true }) });
 
@@ -1025,10 +1028,11 @@ export function buildVals(
   /** Fila / Bancada / SLA abrem o workspace na Execução — identidade de produção, não o stage genérico. */
   const openOSProducao = (id: string) => openOSFromRail(id, false, "execucao");
 
-  // Nova OS criada (REAL) pelo modal → fecha o modal, abre a OS recém-criada no workspace
-  // e recarrega a lista. Recebe apenas o id resultante; a identidade/financeiro são
-  // hidratados pelo detalhe (`useOrdemV4`). Uma OS nova nasce "aberta" → etapa "entrada".
-  const onOSCriada = (osId: string) => {
+  // Nova OS criada (REAL) pelo modal → o status/stage inicial vêm da OS canônica
+  // retornada pelo servidor; o detalhe (`useOrdemV4`) completa a hidratação.
+  const onOSCriada = (criada: OrdemServico | string) => {
+    const osId = typeof criada === "string" ? criada : criada.id;
+    const status = typeof criada === "string" ? "aberta" : resolverStatusV4(criada);
     // R04: criar outra OS com edição suja pendente também passa pela guarda
     // (a OS criada já existe no servidor; só a SELEÇÃO é bloqueada).
     sairComGuarda(
@@ -1037,8 +1041,8 @@ export function buildVals(
           novaOS: false,
           novoAtendimento: false,
           selectedOsId: osId,
-          status: "aberta",
-          stage: "entrada",
+          status,
+          stage: stageForStatus(status),
           module: "workspace",
           view: "cockpit",
           menu: null,
@@ -1410,6 +1414,16 @@ export function buildVals(
       ctx.definirCancelamentoMotivoPrefill(null);
     },
     cancelamentoOSOpen: st.cancelamentoOS,
+    // ---- Corrigir datas (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001) ----
+    corrigirDatasOpen: !!st.corrigirDatas && !!ctx.realOS,
+    openCorrigirDatas: () => update({ corrigirDatas: true }),
+    closeCorrigirDatas: () => update({ corrigirDatas: false }),
+    onDatasCorrigidas: () => {
+      update({ corrigirDatas: false });
+      ctx.reloadOrdens();
+      ctx.reloadDetail();
+      notify("Datas corrigidas.");
+    },
     cancelamentoMotivoPrefill: ctx.cancelamentoMotivoPrefill,
     // GOAL 026: link honesto pós-recusa — abre o MESMO modal já com um motivo
     // sugerido (o operador confirma/edita antes de cancelar de verdade).
@@ -1468,6 +1482,7 @@ export function buildVals(
     // Sessão de caixa/recibo e ações do motor V3; totais vêm da projeção server-side.
     // `recebimento` é o gating pré-computado dessa projeção com a sessão do caixa.
     pdvServico: ctx.pdvServico,
+    recebimentoContextKey: JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]),
     recebimento,
     estorno,
     // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
@@ -1637,6 +1652,8 @@ export function useV4Preview(): V4Vals {
   const {
     limparRecibo: limparReciboPdvV3,
     receber: receberPdvV3,
+    registrarMisto: registrarMistoPdvV3,
+    reload: reloadPdvV3,
     estornar: estornarPdvV3,
   } = pdvServicoV3;
   // Troca de OS não deve arrastar o recibo da OS anterior para a próxima seleção.
@@ -1817,9 +1834,11 @@ export function useV4Preview(): V4Vals {
   // NUNCA rodam se `receber` falhar, porque só entram no `if (ok)` abaixo).
   const receberPagamentoV4 = useCallback(
     async (input: ReceberOSInputV3) => {
+      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
       const ok = await receberPdvV3(input);
+      if (ok) reloadOrdens();
+      if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return false;
       if (ok) {
-        reloadOrdens();
         reloadDetail();
         reloadFinancial();
       } else {
@@ -1844,9 +1863,29 @@ export function useV4Preview(): V4Vals {
     },
     [estornarPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
   );
-  const pdvServico = useMemo<PdvServicoState>(
-    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, estornar: estornarRecebimentoV4 }),
-    [pdvServicoV3, receberPagamentoV4, estornarRecebimentoV4],
+  // A chave/idempotência e o comprovante continuam inteiramente no hook V3.
+  // A lista atualiza após resultado terminal; detalhe/financeiro só no alvo.
+  // Recusa relê a autoridade server e preserva o rascunho para correção.
+  // Nenhuma resposta da OS/loja anterior produz aviso ou comprovante na atual.
+  const registrarMistoV4 = useCallback(
+    async (input: DadosRecebimentoMistoV3) => {
+      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
+      const resultado = await registrarMistoPdvV3(input);
+      const recarregar = resultado.status === "ok" || resultado.status === "recusado";
+      if (recarregar) reloadOrdens();
+      if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return { status: "em_andamento" } as const;
+      if (recarregar) {
+        if (resultado.status === "recusado") void reloadPdvV3();
+        reloadDetail();
+        reloadFinancial();
+      }
+      return resultado;
+    },
+    [registrarMistoPdvV3, reloadPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
+  );
+  const pdvServico = useMemo<PdvServicoV3Completo>(
+    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, registrarMisto: registrarMistoV4, estornar: estornarRecebimentoV4 }),
+    [pdvServicoV3, receberPagamentoV4, registrarMistoV4, estornarRecebimentoV4],
   );
 
   const salvarDiagnostico = useCallback(
@@ -1996,9 +2035,14 @@ export function useV4Preview(): V4Vals {
   // `registrarEntregaV3` é o caminho canônico e agora sempre refaz a decisão
   // financeira no servidor. O gate cliente serve apenas para orientar a UX.
   const confirmarEntrega = useCallback(
-    (semCobranca?: EntregaSemCobrancaSolicitacaoV3) =>
+    (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"]) =>
       runWrite(
-        (sid, osId) => registrarEntregaV3(sid, osId, semCobranca ? { semCobranca } : {}),
+        (sid, osId) =>
+          registrarEntregaV3(sid, osId, {
+            ...(semCobranca ? { semCobranca } : {}),
+            // Data efetiva da entrega; o servidor valida e refaz toda a decisão.
+            ...(dataEntrega ? { dataEntrega } : {}),
+          }),
         "Entrega confirmada.",
         () => update({ status: "entregue", stage: "entrega" }),
       ),
@@ -2185,11 +2229,18 @@ export function useV4Preview(): V4Vals {
   // viaja como `esperados` — fatia intocada nunca escreve; fatia tocada com
   // servidor divergente conflita em vez de remover em silêncio o que outra
   // sessão marcou. Definido após `realOS` (usa a seleção atual como semente).
+  // OPS-V4-FLUXO-CURTO-004: "nenhum acessório" é resposta válida — o registro
+  // explícito grava mesmo igual à semente (evento acessorio_registrado com
+  // presentes 0), sempre com a mesma baseline.
   const salvarAcessorios = useCallback(
-    (acessorios: AcessorioEntradaV3[]) => {
+    (acessorios: AcessorioEntradaV3[], opcoes?: OpcoesSalvarAcessoriosV4) => {
       const seed = seedEntradaEditor(realOS).acessorios;
-      if (!fatiaTocada(acessorios, seed)) return Promise.resolve(true);
-      return runWrite((sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios, seed), "Acessórios salvos.");
+      const explicito = opcoes?.registrarSemAlteracao === true;
+      if (!explicito && !fatiaTocada(acessorios, seed)) return Promise.resolve(true);
+      return runWrite(
+        (sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios, seed),
+        explicito ? "Acessórios registrados." : "Acessórios salvos.",
+      );
     },
     [runWrite, realOS],
   );
@@ -2218,17 +2269,21 @@ export function useV4Preview(): V4Vals {
     },
     [runWrite, realOS],
   );
+  // OPS-V4-FLUXO-CURTO-004: `confirmarEstadoFisico` registra o estado exibido
+  // (inclusive "tudo íntegro", igual à semente) com baseline — só assim o
+  // padrão vira registro; sem a opção, o comportamento R02 é o mesmo.
   const salvarProvaEntrada = useCallback(
-    (input: SalvarProvaEntradaInputV3) => {
+    (input: SalvarProvaEntradaInputV3, opcoes?: OpcoesSalvarProvaEntradaV4) => {
       const seed = seedEntradaEditor(realOS);
+      const confirmarEstado = opcoes?.confirmarEstadoFisico === true;
       const incluir: FatiaProvaEntradaV3[] = [];
       const esp: EsperadosProvaEntradaV3 = {};
       let limparCred: (keyof CredenciaisEntradaV3)[] | undefined;
-      if (fatiaTocada(input.estadoFisico, seed.estadoFisico)) {
+      if (confirmarEstado || fatiaTocada(input.estadoFisico, seed.estadoFisico)) {
         incluir.push("estadoFisico");
         esp.estadoFisico = seed.estadoFisico;
       }
-      if (fatiaTocada(input.avarias, seed.avarias)) {
+      if (confirmarEstado || fatiaTocada(input.avarias, seed.avarias)) {
         incluir.push("avarias");
         esp.avarias = seed.avarias;
       }
@@ -2249,7 +2304,7 @@ export function useV4Preview(): V4Vals {
       };
       return runWrite(
         (sid, osId) => salvarProvaEntradaV3(sid, osId, inputEnxuto, limparCred, esp, incluir),
-        "Prova de entrada salva.",
+        confirmarEstado ? "Estado físico registrado." : "Prova de entrada salva.",
       );
     },
     [runWrite, realOS],

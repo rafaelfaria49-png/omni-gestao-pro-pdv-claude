@@ -8,9 +8,12 @@ const mocks = vi.hoisted(() => ({
   assertStore: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: { ordemServico: { findFirst: mocks.findFirst, update: mocks.update } },
-}));
+vi.mock("@/lib/prisma", () => {
+  const prismaTx: Record<string, unknown> = { ordemServico: { findFirst: mocks.findFirst, update: mocks.update } };
+  prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
+  prismaTx.$queryRaw = async () => [{ id: "os-travada" }];
+  return { prisma: prismaTx };
+});
 vi.mock("@/lib/operacoes/assert-active-store", () => ({ assertActiveStoreId: mocks.assertStore }));
 vi.mock("./event-publisher", () => ({ emitirEventoOperacaoV3: mocks.emitirEvento }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));

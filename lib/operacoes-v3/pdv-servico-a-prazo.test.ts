@@ -44,8 +44,11 @@ describe("lancarOSAPrazoV3 — NÃO é recebimento (guarda estática)", () => {
     expect(body).not.toContain("Caixa fechado");
   });
 
-  it("garante/mantém o MESMO título único da OS (resolverTituloOS/localKey)", () => {
-    expect(body).toContain("resolverTituloOS(sid, id, loaded, { create: true })");
+  it("garante/mantém o MESMO título único da OS, lido só DENTRO da transação sob a trava por OS", () => {
+    expect(body).toContain("garantirTituloOSTravadoV3(tx,");
+    expect(body).toContain("recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id))");
+    // A formalização grava com o MESMO `tx` (linha travada) — nunca um upsert solto.
+    expect(body).toMatch(/upsertContaReceber\(\{[\s\S]*db: tx,[\s\S]*\}\);/);
   });
 
   it("marca a autorização no histórico com um tipo que NUNCA soma como recebido (não é 'pagamento'/'liquidacao')", () => {
@@ -97,12 +100,47 @@ describe("statusTituloAPrazoV3 — preserva 'parcial' quando já houve recebimen
   });
 });
 
-describe("receberOSV3 — recebimento imediato continua com todos os passos originais (inalterado)", () => {
+// GOAL OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 — a confirmação mista é UMA transação.
+describe("registrarRecebimentoMistoOSV3 — imediato + a prazo numa única transação", () => {
+  const body = extractFunctionBody(source, "registrarRecebimentoMistoOSV3");
+  const service = readFileSync(join(DIR, "recebimento-misto-service.ts"), "utf8");
+
+  it("delega a UMA prisma.$transaction com o serviço transacional (decisão terminal por chave)", () => {
+    expect(body).toContain("prisma.$transaction(");
+    expect(body).toContain("decidirRecebimentoMistoOSV3(");
+    // A decisão (replay, recusa terminal, execução) acontece inteira sob a trava da OS.
+    expect(service).toMatch(/export async function decidirRecebimentoMistoOSV3[\s\S]*?await travarParaDecidir\(tx, ctx, n\);\s*const replay = await replayDaOperacao/);
+    // Ordem das travas ANTES de ler marcador/recusas: advisory → sessão (FOR SHARE) → OS (FOR UPDATE).
+    expect(service).toMatch(
+      /async function travarParaDecidir[\s\S]*?recebimentoLoteAdvisoryLock\(tx, chaveLockRecebimentoMistoV3\(ctx\.storeId, ctx\.osId\)\);[\s\S]*?travarSessaoCaixa\(tx, ctx\.storeId, n\.sessaoId\);\s*await travarOS\(tx, ctx\.storeId, ctx\.osId\);/,
+    );
+    expect(service).toContain("SAVEPOINT ops_v3_misto_execucao");
+    expect(service).toContain("ROLLBACK TO SAVEPOINT ops_v3_misto_execucao");
+  });
+
+  it("nunca encadeia receberOSV3 + lancarOSAPrazoV3 (duas operações independentes)", () => {
+    expect(body).not.toContain("receberOSV3(");
+    expect(body).not.toContain("lancarOSAPrazoV3(");
+  });
+
+  it("exige permissão real de gerar cobrança além de editar a OS", () => {
+    expect(body).toMatch(/p\.operacoes\.editarOs && p\.operacoes\.gerarCobranca/);
+  });
+
+  it("serviço: nenhuma escrita financeira best-effort (sem .catch engolindo erro)", () => {
+    expect(service).not.toContain(".catch(");
+    expect(service).toContain("idempotenciaDoChamador: true");
+    expect(service).toContain('tipo: "recebimento_cr"');
+    expect(service).toContain("tipo: MARCADOR_A_PRAZO");
+  });
+});
+
+describe("receberOSV3 — recebimento imediato mantém todos os passos, agora numa transação sob a trava da OS", () => {
   const body = extractFunctionBody(source, "receberOSV3");
 
-  it("continua exigindo sessão de caixa ABERTA", () => {
-    expect(body).toContain("sessaoCaixa.findFirst");
-    expect(body).toContain('status: "ABERTA"');
+  it("continua exigindo sessão de caixa ABERTA (relida e travada dentro da transação)", () => {
+    expect(body).toContain("travarSessaoCaixa(tx, sid, sessaoId)");
+    expect(body).toContain('sessao.status !== "ABERTA"');
   });
 
   it("continua liquidando/baixando o título via os services financeiros originais", () => {
@@ -118,5 +156,51 @@ describe("receberOSV3 — recebimento imediato continua com todos os passos orig
 
   it("continua validando formas suportadas (sem habilitar parcelado/crediário/carteira)", () => {
     expect(body).toContain("formaSuportadaV3(");
+  });
+});
+
+// OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 (R2/P0+P1): todos os writers de pagamento da OS
+// rodam numa transação sob a MESMA trava por OS — nenhum lê o título antes dela.
+describe("writers de pagamento da OS — uma transação, trava por OS, nada best-effort", () => {
+  for (const nome of ["receberOSV3", "estornarRecebimentoOSV3", "lancarOSAPrazoV3", "registrarRecebimentoMistoOSV3"]) {
+    const body = extractFunctionBody(source, nome);
+
+    it(`${nome}: delega a UMA prisma.$transaction`, () => {
+      expect(body).toContain("prisma.$transaction(");
+    });
+
+    it(`${nome}: nenhuma escrita financeira best-effort (sem .catch engolindo erro)`, () => {
+      expect(body).not.toContain(".catch(");
+    });
+  }
+
+  for (const nome of ["receberOSV3", "estornarRecebimentoOSV3", "lancarOSAPrazoV3"]) {
+    const body = extractFunctionBody(source, nome);
+
+    it(`${nome}: a trava por OS é a PRIMEIRA instrução da transação`, () => {
+      expect(body).toMatch(/prisma\.\$transaction\(async \(tx\)[^{]*\{\s*(\/\/[^\n]*\n\s*)*await recebimentoLoteAdvisoryLock\(tx, chaveLockRecebimentoMistoV3\(sid, id\)\);/);
+    });
+
+    it(`${nome}: título e OS só são lidos/gravados com o mesmo tx`, () => {
+      expect(body).not.toMatch(/prisma\.(contaReceberTitulo|ordemServico|caixaOperacao)\./);
+      expect(body).not.toContain("carregarOS(");
+      expect(body).not.toContain("resolverTituloOS(");
+    });
+  }
+
+  it("receberOSV3: replay pela identidade da operação ANTES da sessão; caixa carimbado com operacaoId", () => {
+    const body = extractFunctionBody(source, "receberOSV3");
+    const replay = body.indexOf("replayRecebimentoOSV3(tx");
+    const sessao = body.indexOf("travarSessaoCaixa(tx");
+    expect(replay).toBeGreaterThan(-1);
+    expect(replay).toBeLessThan(sessao);
+    expect(body).toContain('payload: { path: ["operacaoId"], equals: operacaoId }');
+    expect(body).toContain("idempotenciaDoChamador: true");
+    expect(body).toMatch(/operacaoId,\s*requestFingerprint,/);
+  });
+
+  it("estornarRecebimentoOSV3: o estorno do título participa da transação (db: tx)", () => {
+    const body = extractFunctionBody(source, "estornarRecebimentoOSV3");
+    expect(body).toMatch(/estornarContaReceber\(\{[\s\S]*db: tx,[\s\S]*\}\);/);
   });
 });

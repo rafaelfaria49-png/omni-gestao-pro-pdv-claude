@@ -138,6 +138,14 @@ const h = vi.hoisted(() => {
           const s = db.sessoes.find((x) => x.id === sessaoId && x.storeId === storeId)
           return s ? [{ id: s.id, storeId: s.storeId, status: s.status }] : []
         }
+        if (sql.includes("contas_receber_titulos") && sql.includes("FOR UPDATE")) {
+          // Trava do título (upsert/cancelamento travados): em memória, só confirma a existência.
+          const porId = sql.includes('"id" = ?')
+          const r = db.titulos.find((t) =>
+            porId ? t.id === values[0] && t.storeId === values[1] : t.storeId === values[0] && t.localKey === values[1],
+          )
+          return r ? [{ id: r.id }] : []
+        }
         throw new Error(`query raw não suportada no harness: ${sql}`)
       },
       contaReceberTitulo: {
@@ -225,6 +233,32 @@ const h = vi.hoisted(() => {
           }
 
           return lidos
+        },
+        // Contrato do Postgres: INSERT … ON CONFLICT DO NOTHING (`skipDuplicates`).
+        createMany: async ({ data, skipDuplicates }: { data: Row[]; skipDuplicates?: boolean }) => {
+          guard()
+          let count = 0
+          for (const d of data) {
+            if (db.titulos.some((r) => r.storeId === d.storeId && r.localKey === d.localKey)) {
+              if (skipDuplicates) continue
+              throw new Error("Unique constraint failed")
+            }
+            db.titulos.push({
+              id: next("cr"),
+              storeId: d.storeId,
+              localKey: d.localKey,
+              descricao: d.descricao ?? "",
+              cliente: d.cliente ?? "",
+              valor: d.valor ?? 0,
+              vencimento: d.vencimento ?? "",
+              status: d.status ?? "pendente",
+              payload: d.payload ?? {},
+              createdAt: new Date(),
+              updatedAt: tick(),
+            })
+            count += 1
+          }
+          return { count }
         },
         upsert: async ({
           where,

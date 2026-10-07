@@ -22,17 +22,23 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
   const resumo = v.financeiroResumo;
 
   if (financial.loading) {
-    return <div className={styles.tape}><div className={styles.tapeHead}><span className={styles.tapeEyebrow}>Financeiro</span></div><div style={{ ...emptyText, padding: 14 }}>Carregando a projeção financeira desta OS…</div></div>;
+    // A mesma posição/chave mantém o rascunho vivo na recarga após uma recusa.
+    return <div className={styles.panel}><section className={styles.tape}>
+      <div className={styles.tapeHead}><span className={styles.tapeEyebrow}>Financeiro</span></div>
+      <div style={{ ...emptyText, padding: 14 }}>Carregando a projeção financeira desta OS…</div>
+      <div key="recebimento" hidden><ReceberPagamentoV4 v={v} /></div>
+    </section></div>;
   }
   if (financial.error || !projection) {
     return (
-      <div className={styles.tape}>
+      <div className={styles.panel}><section className={styles.tape}>
         <div className={styles.tapeHead}><span className={styles.tapeEyebrow}>Financeiro indisponível</span></div>
         <div style={{ ...emptyText, color: C.dangerFg, padding: 14 }}>{financial.error ?? "Não foi possível determinar a situação financeira desta OS."}</div>
         <div style={{ padding: "0 14px 14px" }}>
           <button type="button" onClick={financial.reload} style={{ height: 32, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, cursor: "pointer" }}>Tentar novamente</button>
         </div>
-      </div>
+        <div key="recebimento" hidden><ReceberPagamentoV4 v={v} /></div>
+      </section></div>
     );
   }
 
@@ -97,7 +103,7 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
           </div>
         )}
 
-        <div style={{ padding: "0 12px 12px" }}>
+        <div key="recebimento" style={{ padding: "0 12px 12px" }}>
           <ReceberPagamentoV4 v={v} />
         </div>
       </section>

@@ -11,13 +11,29 @@ const mocks = vi.hoisted(() => ({
   emitirEvento: vi.fn(),
   revalidatePath: vi.fn(),
   autoClose: vi.fn(),
+  lock: vi.fn(),
+  travarOS: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const tx = {
     ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate },
     contaReceberTitulo: { findUnique: mocks.tituloFindUnique },
-  },
+  };
+  return {
+    prisma: {
+      ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate },
+      contaReceberTitulo: { findUnique: mocks.tituloFindUnique },
+      // Trava por OS: o callback recebe o mesmo cliente de OS mockado (a trava real
+      // é provada no PostgreSQL em test/ops-datas-retroativas-001/datas.pg.ts).
+      $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
+    },
+  };
+});
+vi.mock("@/lib/financeiro/services/recebimento-lote-service", () => ({ recebimentoLoteAdvisoryLock: mocks.lock }));
+vi.mock("./recebimento-misto-service", () => ({
+  chaveLockRecebimentoMistoV3: (sid: string, id: string) => `lock:${sid}:${id}`,
+  travarOS: mocks.travarOS,
 }));
 vi.mock("@/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: mocks.requireEnterpriseWith }));
@@ -27,7 +43,7 @@ vi.mock("./event-publisher", () => ({ emitirEventoOperacaoV3: mocks.emitirEvento
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("./retorno-auto-close-actions", () => ({ finalizarRetornoPorEntregaVinculadaV3: mocks.autoClose }));
 
-import { adicionarFotoSaidaV3, registrarEntregaV3, removerFotoSaidaV3 } from "./entrega-actions";
+import { adicionarFotoSaidaV3, registrarEntregaV3, removerFotoSaidaV3, salvarAssinaturaRetiradaV3 } from "./entrega-actions";
 
 const storeId = "store-a";
 const osId = "os-1";
@@ -76,6 +92,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-07-15T15:30:00.000Z"));
   mocks.osFindFirst.mockReset().mockResolvedValue(row());
   mocks.osUpdate.mockReset().mockResolvedValue({});
+  mocks.lock.mockReset().mockResolvedValue(undefined);
+  mocks.travarOS.mockReset().mockResolvedValue(true);
   mocks.tituloFindUnique.mockReset().mockResolvedValue(titulo());
   mocks.auth.mockReset().mockResolvedValue({ user: { id: "server-user", name: "Operadora Server", email: "server@example.com" } });
   mocks.requireEnterpriseWith.mockReset().mockResolvedValue({ ok: true });
@@ -240,6 +258,130 @@ describe("registrarEntregaV3 — guard financeiro server-side", () => {
     }));
   });
 
+  // GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001 — confirmação concorrente perdedora.
+  it("decide e grava sob a trava por OS (advisory lock + FOR UPDATE) antes de qualquer efeito", async () => {
+    await registrarEntregaV3(storeId, osId);
+    expect(mocks.lock).toHaveBeenCalledWith(expect.anything(), `lock:${storeId}:${osId}`);
+    expect(mocks.travarOS).toHaveBeenCalledWith(expect.anything(), storeId, osId);
+    expect(mocks.lock.mock.invocationCallOrder[0]).toBeLessThan(mocks.osFindFirst.mock.invocationCallOrder[0]);
+    expect(mocks.osUpdate.mock.invocationCallOrder[0]).toBeLessThan(mocks.consumirEstoque.mock.invocationCallOrder[0]);
+  });
+
+  it("OS já entregue com OUTRA data efetiva pedida: conflito explícito, sem gravar nem repetir efeitos", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregueEm: "2026-07-10T15:00:00.000Z",
+      entregaV3: { entregueEm: "2026-07-10T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-07-10" } },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-12T15:00:00.000Z", meta: { precisao: "dia", dia: "2026-07-12" } } }),
+    ).rejects.toThrow('Esta OS já foi entregue em 10/07/2026. Para ajustar a data, use "Corrigir datas".');
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+    expect(mocks.consumirEstoque).not.toHaveBeenCalled();
+    expect(mocks.emitirEvento).not.toHaveBeenCalled();
+    expect(mocks.autoClose).not.toHaveBeenCalled();
+  });
+
+  it("perdedor concorrente (entrega efetivada agora por outra chamada): não repete o fechamento do retorno", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      // Registrada há 30 s pela confirmação vencedora (relógio fixo do teste: 15:30Z).
+      entregaV3: { entregueEm: "2026-07-15T15:00:00.000Z", registradoEm: "2026-07-15T15:29:30.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(registrarEntregaV3(storeId, osId)).resolves.toBe(entregue);
+    expect(mocks.autoClose).not.toHaveBeenCalled();
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+  });
+
+  it("retentativa de entrega antiga continua tentando fechar um retorno vinculado pendente", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-10T15:00:00.000Z", registradoEm: "2026-07-10T15:00:00.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(registrarEntregaV3(storeId, osId)).resolves.toBe(entregue);
+    expect(mocks.autoClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("entrega sem data informada valida o 'agora' contra a entrada (entrada no futuro bloqueia, sem efeitos)", async () => {
+    // Relógio do teste: 15/07 15:30Z; entrada legada registrada para 15/07 18:00Z.
+    mocks.osFindFirst.mockResolvedValue(row(100, { aberturaV3: { versao: 1, recepcao: { dataEntrada: "2026-07-15T18:00:00.000Z" } } }));
+    await expect(registrarEntregaV3(storeId, osId)).rejects.toThrow(/anterior à entrada/);
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+    expect(mocks.consumirEstoque).not.toHaveBeenCalled();
+  });
+
+  it("data efetiva dentro da folga do relógio (minuto à frente) é gravada no horário do servidor", async () => {
+    // 15/07 12:33 na loja = 15:33Z, com o servidor em 15:30Z.
+    await registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-15T15:33:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-15" } } });
+    const gravado = mocks.osUpdate.mock.calls[0]![0] as { data: { payload: Record<string, any> } };
+    expect(gravado.data.payload.entregaV3.entregueEm).toBe("2026-07-15T15:30:00.000Z");
+    expect(gravado.data.payload.entregueEm).toBe("2026-07-15T15:30:00.000Z");
+  });
+
+  it("R4: mesmo pedido 'à frente' que a vencedora gravou limitado ao relógio do servidor continua no-op", async () => {
+    // Vencedora gravou 15:30Z (limitado); o perdedor pediu 15:33Z (dentro da folga).
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-15T15:30:00.000Z", entregueEmMeta: { precisao: "data_hora", dia: "2026-07-15" }, registradoEm: "2026-07-15T15:30:00.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-15T15:33:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-15" } } }),
+    ).resolves.toBe(entregue);
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+  });
+
+  it("R5: a folga não vale para entrega antiga — ontem 10:00 × novo pedido 10:04 é conflito", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-14T13:00:00.000Z", entregueEmMeta: { precisao: "data_hora", dia: "2026-07-14" }, registradoEm: "2026-07-14T13:00:00.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-14T13:04:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-14" } } }),
+    ).rejects.toThrow('Esta OS já foi entregue em 14/07/2026 10:00. Para ajustar a data, use "Corrigir datas".');
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+  });
+
+  it("R5: registro recente com horário informado (não limitado ao relógio) só aceita o MESMO horário", async () => {
+    // Registrada há 30 s com entrega efetiva às 12:00 (15:00Z); pedido de 12:03 é outra data.
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-15T15:00:00.000Z", entregueEmMeta: { precisao: "data_hora", dia: "2026-07-15" }, registradoEm: "2026-07-15T15:29:30.000Z" },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-15T15:03:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-15" } } }),
+    ).rejects.toThrow(/já foi entregue em 15\/07\/2026 12:00/);
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-15T15:00:00.000Z", meta: { precisao: "data_hora", dia: "2026-07-15" } } }),
+    ).resolves.toBe(entregue);
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+  });
+
+  it("OS já entregue com a MESMA data efetiva: continua no-op idempotente", async () => {
+    const entregue = payload(100, {
+      operacaoStatusV3: "entregue",
+      status: "entregue",
+      entregaV3: { entregueEm: "2026-07-10T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-07-10" } },
+    });
+    mocks.osFindFirst.mockResolvedValue({ id: osId, valorTotal: 100, payload: entregue });
+    await expect(
+      registrarEntregaV3(storeId, osId, { dataEntrega: { iso: "2026-07-10T15:00:00.000Z", meta: { precisao: "dia", dia: "2026-07-10" } } }),
+    ).resolves.toBe(entregue);
+    expect(mocks.osUpdate).not.toHaveBeenCalled();
+    expect(mocks.emitirEvento).not.toHaveBeenCalled();
+  });
+
   it("após persistir a entrega, tenta finalizar o retorno original vinculado", async () => {
     await registrarEntregaV3(storeId, osId);
     expect(mocks.osUpdate).toHaveBeenCalledTimes(1);
@@ -286,6 +428,21 @@ describe("fotos de saída", () => {
     await removerFotoSaidaV3(storeId, osId, "f1");
     const write = mocks.osUpdate.mock.calls[0]![0] as { data: { payload: { entregaV3: { fotosSaida: unknown[] } } } };
     expect(write.data.payload.entregaV3.fotosSaida).toEqual([]);
+  });
+
+  it("R7: assinatura e fotos de saída gravam sob a trava por OS (advisory + FOR UPDATE), sobre o estado relido", async () => {
+    const entregue = row(100, { operacaoStatusV3: "entregue", status: "entregue", entregaV3: { entregueEm: "2026-07-10T15:00:00.000Z", recebidoPor: "Cliente" } });
+    mocks.osFindFirst.mockResolvedValue(entregue);
+    await salvarAssinaturaRetiradaV3(storeId, osId, "data:image/png;base64,AAAA");
+    await adicionarFotoSaidaV3(storeId, osId, { dataUrl: `data:image/jpeg;base64,${"A".repeat(40)}` });
+    mocks.osFindFirst.mockResolvedValue(
+      row(100, { operacaoStatusV3: "entregue", status: "entregue", entregaV3: { fotosSaida: [{ id: "f1", categoria: "reparado", dataUrl: "data:image/jpeg;base64,AAAA", tamanho: 4, criadoEm: "2026-07-14T10:00:00.000Z" }] } }),
+    );
+    await removerFotoSaidaV3(storeId, osId, "f1");
+    expect(mocks.lock).toHaveBeenCalledTimes(3);
+    expect(mocks.travarOS).toHaveBeenCalledTimes(3);
+    const assinatura = mocks.osUpdate.mock.calls[0]![0] as { data: { payload: { entregaV3: Record<string, unknown> } } };
+    expect(assinatura.data.payload.entregaV3).toMatchObject({ entregueEm: "2026-07-10T15:00:00.000Z", assinaturaRetirada: { por: "Cliente" } });
   });
 
   it("bloqueia foto de saída em OS cancelada", async () => {

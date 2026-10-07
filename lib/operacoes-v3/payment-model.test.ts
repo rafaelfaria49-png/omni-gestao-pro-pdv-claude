@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import { buildContaReceberLocalKey } from "@/lib/financeiro/contracts/local-key";
 import {
+  aPrazoVisivelV3,
   computeSaldoV3,
   formaSuportadaV3,
   lerAPrazoV3,
@@ -9,6 +10,7 @@ import {
   localKeyContaReceberOSV3,
   montarAPrazoMirrorV3,
   montarPagamentoMirrorV3,
+  reconciliarAPrazoAposBaixaV3,
   somaSplitV3,
   statusTituloAPrazoV3,
   totalCobravelV3,
@@ -161,5 +163,45 @@ describe("pagamento — 'a prazo' (espelho separado, sem alterar recebido/saldo)
     expect(statusTituloAPrazoV3(100)).toBe("parcial");
     expect(statusTituloAPrazoV3(0.01)).toBe("parcial");
     expect(statusTituloAPrazoV3(0)).toBe("pendente");
+  });
+});
+
+// OPS-V3-RECEBIMENTO-MISTO-A-PRAZO-001 (R/P2): baixa posterior reconcilia o espelho a prazo.
+describe("reconciliarAPrazoAposBaixaV3", () => {
+  const aPrazo = montarAPrazoMirrorV3({ valor: 50, vencimento: "2026-11-10", now: "2026-10-03T10:00:00.000Z" });
+  const agora = "2026-10-10T12:00:00.000Z";
+
+  it("saldo zerado → 'quitado' (lerAPrazoV3 deixa de enxergar cobrança pendente)", () => {
+    const r = reconciliarAPrazoAposBaixaV3(aPrazo, 0, agora) as Record<string, unknown>;
+    expect(r).toMatchObject({ status: "quitado", quitadoEm: agora, valor: 50 });
+    expect(lerAPrazoV3(os({ aPrazoV3: r }))).toBeNull();
+  });
+
+  it("baixa parcial do saldo a prazo → valor acompanha o saldo real", () => {
+    expect(reconciliarAPrazoAposBaixaV3(aPrazo, 30, agora)).toMatchObject({ status: "pendente", valor: 30 });
+  });
+
+  it("nunca amplia a autorização nem mexe em espelho ausente/não pendente", () => {
+    expect(reconciliarAPrazoAposBaixaV3(aPrazo, 400, agora)).toBe(aPrazo);
+    expect(reconciliarAPrazoAposBaixaV3(undefined, 0, agora)).toBeUndefined();
+    const cancelado = { ...aPrazo, status: "cancelado" };
+    expect(reconciliarAPrazoAposBaixaV3(cancelado, 0, agora)).toBe(cancelado);
+  });
+});
+
+// R3/P2: a tela usa a MESMA regra do servidor depois de cada operação.
+describe("aPrazoVisivelV3", () => {
+  const aPrazo = montarAPrazoMirrorV3({ valor: 50, vencimento: "2026-11-10", now: "2026-10-03T10:00:00.000Z" });
+
+  it("com saldo em aberto: mostra o espelho pendente, limitado ao saldo real", () => {
+    expect(aPrazoVisivelV3(os({ aPrazoV3: aPrazo }), 50)).toMatchObject({ valor: 50, vencimento: "2026-11-10" });
+    expect(aPrazoVisivelV3(os({ aPrazoV3: aPrazo }), 30)).toMatchObject({ valor: 30 });
+  });
+
+  it("sem saldo, sem espelho ou espelho encerrado: nada a exibir", () => {
+    expect(aPrazoVisivelV3(os({ aPrazoV3: aPrazo }), 0)).toBeNull();
+    expect(aPrazoVisivelV3(os({}), 50)).toBeNull();
+    expect(aPrazoVisivelV3(os({ aPrazoV3: { ...aPrazo, status: "quitado" } }), 50)).toBeNull();
+    expect(aPrazoVisivelV3(null, 50)).toBeNull();
   });
 });

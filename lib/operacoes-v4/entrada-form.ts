@@ -23,6 +23,16 @@ import {
   type SalvarDadosBasicosInputV3,
 } from "@/lib/operacoes-v3/dados-basicos-model";
 import {
+  erroOrdemV3,
+  esperadoCampoDataV3,
+  lerDataOperacionalV3,
+  lerDatasOSV3,
+  prazoSlaDaPrevisaoV3,
+  validarEntradaDataV3,
+  ROTULO_PREVISAO_ENTREGA_V3,
+  type DataOperacionalMetaV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
+import {
   lerProvaEntradaV3,
   ACESSORIOS_ENTRADA_V3,
   COMPONENTES_FISICOS_V3,
@@ -79,15 +89,32 @@ export type {
   TipoAvariaV3,
 };
 
-/** Credenciais no editor (campos controlados — strings/booleans, sem opcionais). */
+/**
+ * Credenciais no editor (campos controlados). Face ID/biometria são tri-estado
+ * (OPS-V4-FLUXO-CURTO-004): `null` = não informado — ausente nunca vira "não".
+ */
 export interface EntradaCredenciaisEditorV4 {
   pin: string;
   senha: string;
   senhaTipo: SenhaTipoV3;
   contaGoogle: string;
   contaApple: string;
-  faceId: boolean;
-  biometria: boolean;
+  faceId: boolean | null;
+  biometria: boolean | null;
+}
+
+/** Wrapper `salvarAcessorios`: registro explícito mesmo sem diferença da semente ("nenhum acessório"). */
+export interface OpcoesSalvarAcessoriosV4 {
+  registrarSemAlteracao?: boolean;
+}
+
+/** Wrapper `salvarProvaEntrada`: confirmação explícita do estado físico exibido (inclui estado e avarias). */
+export interface OpcoesSalvarProvaEntradaV4 {
+  confirmarEstadoFisico?: boolean;
+}
+
+function triEstado(v: unknown): boolean | null {
+  return v === true ? true : v === false ? false : null;
 }
 
 /** Estado completo do editor de Entrada da V4. */
@@ -137,8 +164,8 @@ export function seedEntradaEditor(os: OrdemServico | null | undefined): EntradaE
       senhaTipo: cred.senhaTipo ?? "numerica",
       contaGoogle: str(cred.contaGoogle),
       contaApple: str(cred.contaApple),
-      faceId: cred.faceId === true,
-      biometria: cred.biometria === true,
+      faceId: triEstado(cred.faceId),
+      biometria: triEstado(cred.biometria),
     },
     acessorios: prova.acessorios.map((a) => ({ ...a })),
     checklist: checklist.map((c) => ({ ...c })),
@@ -176,6 +203,16 @@ export function limpezasExplicitas(
 // exclui. Exclusão exige lista explícita em `limpar`. Fatias ausentes do
 // intent preservam o servidor; chaves desconhecidas nunca são tocadas.
 
+/** Presença explícita na baseline transitória; não integra a prova persistida. */
+export type BaselineBiometriaV4 =
+  | { informado: false }
+  | { informado: true; valor: boolean };
+
+export type EsperadosCredenciaisEntradaV3 = Omit<Partial<CredenciaisEntradaV3>, "faceId" | "biometria"> & {
+  faceId?: boolean | BaselineBiometriaV4;
+  biometria?: boolean | BaselineBiometriaV4;
+};
+
 /**
  * Baseline por campo/fatia (R02): o que o editor VIA quando tocou. No servidor,
  * cada chave enviada com `esperados` é conferida contra o LATEST: igual aplica,
@@ -185,7 +222,7 @@ export function limpezasExplicitas(
  */
 export interface EsperadosProvaEntradaV3 {
   identificacao?: Partial<IdentificacaoV3>;
-  credenciais?: Partial<CredenciaisEntradaV3>;
+  credenciais?: EsperadosCredenciaisEntradaV3;
   estadoFisico?: EstadoFisicoItemV3[];
   avarias?: AvariaV3[];
   acessorios?: AcessorioEntradaV3[];
@@ -257,9 +294,9 @@ function textoCampoV4(v: unknown): string {
  *
  * Normalização de vazio: campo realmente ausente (undefined) ≡ "" — o
  * primeiro preenchimento aplica; o segundo (latest já preenchido × baseline
- * vazia) conflita. Booleanos ausentes ≡ false; senhaTipo ausente ≡ "numerica"
- * (defaults que o editor exibe) — a primeira troca aplica, a divergente
- * conflita.
+ * vazia) conflita. A baseline V4 distingue biometria ausente de false/true.
+ * Baselines booleanas legadas mantêm ausente ≡ false; senhaTipo ausente
+ * mantém o default "numerica".
  */
 export function aplicarPatchIntencionalProvaEntrada(
   provaAtual: ProvaEntradaV3,
@@ -339,7 +376,13 @@ export function aplicarPatchIntencionalProvaEntrada(
       if (esperadoV !== undefined) {
         let igual: boolean;
         if (k === "faceId" || k === "biometria") {
-          igual = (base[k] ?? false) === (esperadoV ?? false);
+          if (typeof esperadoV === "object" && esperadoV !== null) {
+            const baseline = esperadoV as BaselineBiometriaV4;
+            igual = triEstado(base[k]) === (baseline.informado ? baseline.valor : null);
+          } else {
+            // Compatibilidade com os callers anteriores à baseline de presença.
+            igual = (base[k] ?? false) === (esperadoV ?? false);
+          }
         } else if (k === "senhaTipo") {
           const atualNorm = typeof base[k] === "string" && (base[k] as string) ? base[k] : "numerica";
           const espNorm = typeof esperadoV === "string" && (esperadoV as string) ? esperadoV : "numerica";
@@ -494,20 +537,32 @@ export function patchTocadoCredenciais(
     { pin: semente.pin, senha: semente.senha, contaGoogle: semente.contaGoogle, contaApple: semente.contaApple },
   );
   const valores: Partial<CredenciaisEntradaV3> = { ...texto.valores };
-  const esperados: Partial<CredenciaisEntradaV3> = { ...texto.esperados };
+  const esperados: EsperadosCredenciaisEntradaV3 = { ...texto.esperados };
+  const limpar = [...texto.limpar];
   if (input.senhaTipo !== undefined && input.senhaTipo !== semente.senhaTipo) {
     valores.senhaTipo = input.senhaTipo;
     esperados.senhaTipo = semente.senhaTipo;
   }
-  if (input.faceId !== undefined && input.faceId !== semente.faceId) {
-    valores.faceId = input.faceId;
-    esperados.faceId = semente.faceId;
+  // Tri-estado (GOAL 004): chave presente com `undefined` = não informado;
+  // chave ausente = intocada. A baseline conserva presença e valor, inclusive
+  // após serialização. Voltar a "não informado" usa a limpeza explícita.
+  for (const k of ["faceId", "biometria"] as const) {
+    if (!(k in input)) continue;
+    const novo = input[k];
+    const base = semente[k];
+    if (novo !== undefined) {
+      if (novo !== base) {
+        valores[k] = novo;
+        esperados[k] = base === null || base === undefined
+          ? { informado: false }
+          : { informado: true, valor: base };
+      }
+    } else if (base !== null && base !== undefined) {
+      limpar.push(k);
+      esperados[k] = { informado: true, valor: base };
+    }
   }
-  if (input.biometria !== undefined && input.biometria !== semente.biometria) {
-    valores.biometria = input.biometria;
-    esperados.biometria = semente.biometria;
-  }
-  return { valores, limpar: texto.limpar, esperados };
+  return { valores, limpar, esperados };
 }
 
 function patchTocadoTextoCredenciais(
@@ -550,7 +605,7 @@ export interface PatchTocadoIdentificacao {
 export interface PatchTocadoCredenciais {
   valores: Partial<CredenciaisEntradaV3>;
   limpar: (keyof CredenciaisEntradaV3)[];
-  esperados: Partial<CredenciaisEntradaV3>;
+  esperados: EsperadosCredenciaisEntradaV3;
 }
 
 export function patchTocadoIdentificacao(
@@ -671,28 +726,56 @@ export function montarProximosDadosBasicos(
   );
   const recebidoPor = usar("recebidoPor", txt(recepcaoAtual.recebidoPor), txt(input?.recebidoPor));
   const observacoes = usar("observacoes", txt(aberturaAtual.observacoesInternas), txt(input?.observacoes));
-  const prazoLatest = txt(recepcaoAtual.previsaoEntrega) || txt(slaAtual.prazo);
+  // Só a previsão COMBINADA (recepção) conta: o `sla.prazo` automático nunca é
+  // materializado como previsão informada só porque o operador salvou outro campo.
+  const prazoLatest = txt(recepcaoAtual.previsaoEntrega);
   const previsao = txt(input?.previsaoEntrega);
-  if (esp.previsaoEntrega !== undefined && prazoLatest !== (esp.previsaoEntrega ?? "")) {
+  // Assinatura = ISO + precisão: trocar só-dia por "12:00 explícito" também é mudança.
+  const assinaturaLatest = prazoLatest
+    ? esperadoCampoDataV3(prazoLatest, lerDataOperacionalV3(prazoLatest, recepcaoAtual.previsaoEntregaMeta)?.precisao)
+    : "";
+  const assinaturaNova = previsao
+    ? esperadoCampoDataV3(previsao, lerDataOperacionalV3(previsao, input?.previsaoEntregaMeta)?.precisao)
+    : "";
+  const mudouPrevisao = !!previsao && assinaturaNova !== assinaturaLatest;
+  if (esp.previsaoEntrega !== undefined && assinaturaLatest !== (esp.previsaoEntrega ?? "")) {
     emConflito.push("dadosBasicos.previsaoEntrega");
   }
   if (emConflito.length > 0) throw erroConflitoConcorrenciaV3("os dados básicos", emConflito);
+  // Previsão nova: data real e nunca antes da entrada registrada (pode estar vencida).
+  let previsaoMeta: DataOperacionalMetaV3 | null = null;
+  if (mudouPrevisao) {
+    const v = validarEntradaDataV3(previsao, input?.previsaoEntregaMeta, ROTULO_PREVISAO_ENTREGA_V3);
+    if (!v.ok) throw new Error(v.mensagem);
+    const ordem = erroOrdemV3("previsaoEntrega", "A previsão de entrega", v.data, "entrada do aparelho", lerDatasOSV3(payload).entrada);
+    if (ordem) throw new Error(ordem.mensagem);
+    previsaoMeta = v.meta;
+  }
   const previsaoFinal = previsao || prazoLatest;
-  const sla = previsao ? { ...slaAtual, prazo: previsao } : slaAtual;
+  // Só a previsão NOVA reescreve o espelho do SLA (só-dia vale até o fim do dia).
+  const sla = mudouPrevisao
+    ? { ...slaAtual, prazo: prazoSlaDaPrevisaoV3({ iso: previsao, meta: previsaoMeta }), origemV3: "informada" }
+    : slaAtual;
 
   const equipamento = { ...equipamentoAtual, defeitoRelatado: defeito };
 
+  const recepcaoProxima: Record<string, unknown> = {
+    ...recepcaoAtual,
+    origem,
+    recebidoPor: recebidoPor || undefined,
+    prioridade,
+    localFisico,
+    previsaoEntrega: previsaoFinal || undefined,
+  };
+  // A entrada registrada é preservada como está; sem ela, NADA é fabricado a
+  // partir do cadastro (`criadoEm` não é entrada confirmada).
+  if (mudouPrevisao) {
+    if (previsaoMeta) recepcaoProxima.previsaoEntregaMeta = previsaoMeta;
+    else delete recepcaoProxima.previsaoEntregaMeta;
+  }
   const aberturaV3 = {
     ...aberturaAtual,
-    recepcao: {
-      ...recepcaoAtual,
-      dataEntrada: txt(recepcaoAtual.dataEntrada) || txt(solto.criadoEm) || new Date().toISOString(),
-      origem,
-      recebidoPor: recebidoPor || undefined,
-      prioridade,
-      localFisico,
-      previsaoEntrega: previsaoFinal || undefined,
-    },
+    recepcao: recepcaoProxima,
     observacoesInternas: observacoes || undefined,
   };
 
@@ -735,8 +818,9 @@ export function toProvaEntradaInput(editor: EntradaEditorV4): SalvarProvaEntrada
       senhaTipo: c.senhaTipo,
       contaGoogle: clean(c.contaGoogle),
       contaApple: clean(c.contaApple),
-      faceId: c.faceId,
-      biometria: c.biometria,
+      // Não informado não viaja (nunca vira false no intent).
+      faceId: c.faceId ?? undefined,
+      biometria: c.biometria ?? undefined,
     },
   };
 }

@@ -43,7 +43,7 @@ export function OSTimelineV3({ os }: { os: OrdemServico }) {
             </div>
             <p className={cn("mt-1 text-[11px] font-semibold leading-tight", s.atingido ? "text-[var(--ops-v3-body)]" : "text-[var(--ops-v3-subtle)]")}>{s.label}</p>
             {s.em ? (
-              <p className="text-[10px] leading-tight text-[var(--ops-v3-muted)]">{formatDataHora(s.em)}</p>
+              <p className="text-[10px] leading-tight text-[var(--ops-v3-muted)]">{s.emTexto ?? formatDataHora(s.em)}</p>
             ) : (
               <p className="text-[10px] leading-tight text-[var(--ops-v3-faint)]">pendente</p>
             )}

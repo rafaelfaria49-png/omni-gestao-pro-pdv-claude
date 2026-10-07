@@ -111,8 +111,32 @@ const h = vi.hoisted(() => {
         return { count: 1 }
       },
       create: async ({ data }: { data: Row }) => snapshot(put(makeRow(data))),
+      // Contrato do Postgres: INSERT … ON CONFLICT DO NOTHING (`skipDuplicates`).
+      createMany: async ({ data, skipDuplicates }: { data: Row[]; skipDuplicates?: boolean }) => {
+        let count = 0
+        for (const d of data) {
+          if (titulos.has(ck(String(d.storeId), String(d.localKey)))) {
+            if (skipDuplicates) continue
+            throw new Error("Unique constraint failed")
+          }
+          put(makeRow(d))
+          count += 1
+        }
+        return { count }
+      },
+    },
+    // `SELECT … FOR UPDATE` do título (em memória não há concorrência): devolve a linha, se existir.
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = strings.join("?")
+      if (!sql.includes("contas_receber_titulos")) throw new Error(`query raw não simulada: ${sql}`)
+      const porId = sql.includes('"id" = ?')
+      const row = porId ? byId.get(String(values[0])) : titulos.get(ck(String(values[0]), String(values[1])))
+      if (!row || (porId && row.storeId !== values[1])) return []
+      return [{ id: row.id }]
     },
   }
+  // Transação interativa: o próprio cliente em memória faz o papel do `tx`.
+  Object.assign(prisma, { $transaction: async (fn: (tx: unknown) => unknown) => fn(prisma) })
 
   return {
     prisma,
@@ -466,5 +490,56 @@ describe("G1 §8 — isolamento multi-loja", () => {
     expect(res.ok).toBe(false)
     if (res.ok) throw new Error("não deveria achar título de outra loja")
     expect(res.reason).toBe("not_found")
+  })
+})
+
+describe("OPS-RECEBIMENTO-MISTO-P1-HARDENING-001 — valor do título da OS no snapshot legado", () => {
+  const LK_OS = `os-faturamento:${STORE}:os-1`
+
+  /** Linha do título da OS como a tela/sync reenvia (lista inteira, linha antiga). */
+  async function snapshotDaOS(valor: number) {
+    return upsertContaReceber({
+      storeId: STORE,
+      localKey: LK_OS,
+      descricao: "OS snapshot",
+      cliente: "Cliente",
+      valor,
+      vencimento: "2026-11-30",
+      status: "pendente",
+      payloadPatch: { id: LK_OS, valor, status: "pendente" },
+      replacePayload: true,
+    })
+  }
+
+  it("título os-faturamento existente: snapshot antigo (400) não troca o valor derivado da OS (500)", async () => {
+    // Título criado/atualizado pelo caminho da OS (sem replacePayload): valor vigente 500.
+    await upsertContaReceber({ storeId: STORE, localKey: LK_OS, descricao: "OS", cliente: "Cliente", valor: 500, vencimento: "2026-11-30", status: "pendente" })
+    await expect((await registrarPagamentoParcial({ storeId: STORE, localKey: LK_OS, valorPago: 350 })).ok).toBe(true)
+
+    const depois = await snapshotDaOS(400)
+    expect(depois.valor).toBe(500)
+    expect(depois.status).toBe("parcial")
+    expect(saldo(depois)).toBe(150)
+    expect(sumPagamentosFromHistoricoPayload(depois.payload)).toBe(350)
+    // O snapshot continua sendo autoridade de apresentação.
+    expect(depois.descricao).toBe("OS snapshot")
+  })
+
+  it("caminho da OS (sem replacePayload) continua regravando o valor do título", async () => {
+    await upsertContaReceber({ storeId: STORE, localKey: LK_OS, valor: 400, status: "pendente" })
+    const r = await upsertContaReceber({ storeId: STORE, localKey: LK_OS, valor: 500 })
+    expect(r.valor).toBe(500)
+  })
+
+  it("título os-faturamento INEXISTENTE: o snapshot cria com o valor da linha (comportamento anterior)", async () => {
+    const criado = await snapshotDaOS(400)
+    expect(criado.valor).toBe(400)
+  })
+
+  it("título manual/legado: a edição de valor pelo snapshot continua valendo", async () => {
+    await persistirSnapshotLegado()
+    const editado = await persistirSnapshotLegado({ valor: 120 })
+    expect(editado.valor).toBe(120)
+    expect(saldo(editado)).toBe(120)
   })
 })

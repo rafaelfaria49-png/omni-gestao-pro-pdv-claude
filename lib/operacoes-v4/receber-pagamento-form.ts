@@ -5,6 +5,8 @@
 // UX (intenção + split) com os mesmos helpers da V3. Sem motor novo.
 // ============================================================================
 
+import { avaliarRascunhoMistoV3, deCentavosV3, hojeLojaV3, parseValorDigitadoV3, validarVencimentoAPrazoV3, type LinhaRascunhoMistoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
+import type { DadosRecebimentoMistoV3 } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
 import type { ReceberOSInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import {
   INTENCOES_RECEBIMENTO_V3,
@@ -29,8 +31,7 @@ export interface LinhaDraftRecebimentoV4 {
 }
 
 export function parseValorRecebimentoV4(raw: string): number {
-  const n = parseFloat((raw ?? "").replace(",", "."));
-  return Number.isFinite(n) ? money(n) : 0;
+  return deCentavosV3(parseValorDigitadoV3(raw) ?? 0);
 }
 
 export function valorSugeridoRecebimentoV4(intencao: IntencaoRecebimentoV4, saldo: number): number {
@@ -66,10 +67,56 @@ export function rascunhoRecebimentoValidoV4(input: {
   return { ok: true, totalInformado, restante };
 }
 
-/** Mesma regra de `lancarOSAPrazoV3`: vencimento obrigatório e parseável. */
-export function vencimentoAPrazoValidoV4(vencimento: string): boolean {
-  const value = (vencimento ?? "").trim();
-  return value.length > 0 && !Number.isNaN(new Date(value).getTime());
+/** Data civil real, validada no fuso da loja pelo helper canônico V3. */
+export function vencimentoAPrazoValidoV4(vencimento: string, hoje = hojeLojaV3()): boolean {
+  return validarVencimentoAPrazoV3(vencimento, hoje).ok;
+}
+
+/** "a_prazo" discrimina a linha de dívida; nunca é FormaRecebimentoV3 imediata. */
+export type LinhaRecebimentoV4 = LinhaRascunhoMistoV3;
+
+export function avaliarRecebimentoV4(input: {
+  linhas: LinhaRecebimentoV4[];
+  saldo: number;
+  intencao: IntencaoRecebimentoV4;
+  vencimento: string;
+  caixaAberto: boolean;
+  aPrazoExistente: boolean;
+  hoje?: string;
+}) {
+  const rascunho = avaliarRascunhoMistoV3({ ...input, hoje: input.hoje ?? hojeLojaV3() });
+  const erros = [...rascunho.erros];
+  if (!rascunho.temAPrazo) {
+    const imediato = rascunhoRecebimentoValidoV4({
+      linhas: rascunho.pagamentosAgora.map((l) => ({ forma: l.forma, valorStr: String(l.valor) })),
+      saldo: input.saldo,
+      intencao: input.intencao,
+    });
+    if (!imediato.ok && imediato.motivo) erros.push(imediato.motivo);
+  }
+  if (rascunho.receberAgoraCentavos > 0 && !input.caixaAberto) erros.push("Abra o caixa para registrar o valor recebido agora.");
+  if (rascunho.temAPrazo && input.aPrazoExistente) erros.push("Este saldo já está a prazo. Escolha uma forma imediata para recebê-lo.");
+  return { ...rascunho, erros, ok: erros.length === 0 };
+}
+
+/** Um campo visual de observação: mesma nota na operação e na formalização. */
+export function buildRecebimentoMistoV4(input: {
+  rascunho: ReturnType<typeof avaliarRecebimentoV4>;
+  saldo: number;
+  vencimento: string;
+  sessaoId?: string;
+  intencao: IntencaoRecebimentoV4;
+  observacao?: string;
+}): DadosRecebimentoMistoV3 {
+  const observacao = input.observacao?.trim() || undefined;
+  return {
+    pagamentosAgora: input.rascunho.pagamentosAgora,
+    saldoAPrazo: { valor: deCentavosV3(input.rascunho.aPrazoCentavos), vencimento: input.vencimento.trim(), observacao },
+    saldoEsperado: input.saldo,
+    ...(input.rascunho.receberAgoraCentavos > 0 ? { sessaoId: input.sessaoId } : {}),
+    intencao: input.intencao === "quitacao" ? "parcial" : input.intencao,
+    observacao,
+  };
 }
 
 /** Converte o rascunho no input canônico de `receberOSV3`. Quitação é rótulo UX — o motor deriva. */

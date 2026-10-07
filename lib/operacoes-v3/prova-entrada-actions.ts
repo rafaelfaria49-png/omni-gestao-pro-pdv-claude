@@ -48,6 +48,7 @@ import {
   type PatchProvaEntradaV3,
 } from "@/lib/operacoes-v4/entrada-form";
 import { identidadeAtualV4 } from "@/lib/operacoes-v4/identidade-aparelho";
+import { travarLinhaOSV3 } from "./os-payload-lock";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -90,7 +91,8 @@ async function autorizar(storeId: string, osId: string): Promise<{ id: string; s
 type TxV3 = Prisma.TransactionClient;
 
 /**
- * Releitura + mesclagem + escrita condicionada, tudo na mesma transação.
+ * Trava da linha da OS + releitura + mesclagem + escrita condicionada, tudo na
+ * mesma transação (nenhum outro writer de payload grava no meio).
  * `patchPayload` sincroniza campos legados (ex.: senhaEquipamento) sobre o
  * LATEST. Timeline do servidor é preservada (só anexa o evento).
  */
@@ -104,6 +106,7 @@ async function persistirPatchProva(
   fotosOp?: { aplicarFotos?: (atuais: FotoEntradaV3[]) => FotoEntradaV3[] },
 ): Promise<OrdemServico> {
   const saida = await prisma.$transaction(async (tx: TxV3) => {
+    if (!(await travarLinhaOSV3(tx, storeId, id))) throw new Error("OS não encontrada.");
     const latest = await tx.ordemServico.findFirst({
       where: { id },
       select: { id: true, storeId: true, payload: true, updatedAt: true },
@@ -285,12 +288,15 @@ export async function salvarProvaEntradaV3(
       ...(temCred ? { credenciais: { valores: credenciais, limpar: limparCredenciais } } : {}),
       ...(esperados ? { esperados } : {}),
     },
+    // OPS-V4-FLUXO-CURTO-004: `fatias` registra quais partes viajaram (aditivo).
+    // Sem ele, salvar só credenciais seria indistinguível de conferir o estado
+    // físico; eventos antigos sem `fatias` mantêm o significado anterior.
     (jaCriada, op) =>
       makeEvento(
         "observacao",
         op,
         jaCriada ? "Prova de entrada atualizada." : "Prova de entrada registrada (estado físico, avarias e credenciais).",
-        { evento: jaCriada ? "prova_entrada_atualizada" : "prova_entrada_criada", avariados: resumo, avarias: avarias.length },
+        { evento: jaCriada ? "prova_entrada_atualizada" : "prova_entrada_criada", avariados: resumo, avarias: avarias.length, fatias: quais },
       ),
     undefined,
   );

@@ -135,10 +135,9 @@ export async function PUT(req: Request) {
   }
 
   try {
-    await prisma.$transaction([
-      prisma.ordemServico.deleteMany({ where: { storeId } }),
-      prisma.ordemServico.createMany({ data: rows }),
-    ])
+    // Só chega aqui com a loja SEM OS (guard acima): nada a apagar. Sem `deleteMany`, uma OS
+    // criada entre o guard e esta gravação nunca é apagada nem sobrescrita.
+    await prisma.ordemServico.createMany({ data: rows })
     return NextResponse.json({ ok: true, count: rows.length })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

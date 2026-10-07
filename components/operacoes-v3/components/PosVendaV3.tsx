@@ -8,8 +8,8 @@
 // Entrega. Não baixa estoque; não toca Financeiro/V2.
 // ============================================================================
 
-import { useState, type ReactNode } from "react";
-import { CheckCircle2, Loader2, PackageCheck, PenLine, Printer, RotateCcw, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CalendarClock, CheckCircle2, Loader2, PackageCheck, PenLine, Printer, RotateCcw, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrdemServico } from "@/types/os";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
@@ -21,8 +21,20 @@ import {
   lerRetornosV3,
   retornosDoClienteV3,
 } from "@/lib/operacoes-v3/pos-venda-model";
+import {
+  campoAgoraV3,
+  dataRetroativaV3,
+  formatarDataOperacionalV3,
+  hojeNaLojaV3,
+  lerDataOperacionalV3,
+  lerDatasOSV3,
+  montarDataOperacionalV3,
+  validarDataEntregaV3,
+  type CampoDataOperacionalV3,
+} from "@/lib/operacoes-v3/datas-operacionais-model";
 import { ButtonV3 } from "./UiV3";
 import { SignaturePadV3 } from "./SignaturePadV3";
+import { DataOperacionalCampoV3 } from "./DataOperacionalCampoV3";
 import { usePosVendaV3 } from "../hooks/use-pos-venda-v3";
 import { formatData, formatDataHora } from "../lib/format";
 
@@ -62,6 +74,7 @@ export function PosVendaV3({
   notificar,
   onImprimirEntrega,
   onAbrirRetornos,
+  onCorrigirDatas,
 }: {
   os: OrdemServico;
   storeId: string | null;
@@ -70,6 +83,8 @@ export function PosVendaV3({
   notificar: (msg: string) => void;
   onImprimirEntrega: () => void;
   onAbrirRetornos: () => void;
+  /** Abre "Corrigir datas" (correção auditada; nunca refaz a entrega). */
+  onCorrigirDatas?: () => void;
 }) {
   const { pending, error, entregar, abrirRetorno, finalizarRetorno, salvarAssinaturaRetirada } = usePosVendaV3(storeId, os.id, onChanged);
 
@@ -86,17 +101,40 @@ export function PosVendaV3({
   const [obsEntrega, setObsEntrega] = useState("");
   const [motivo, setMotivo] = useState("");
   const [assinaturaRetirada, setAssinaturaRetirada] = useState<string | null>(null);
+  // Data EFETIVA da entrega (fuso da loja): padrão "hoje, agora", pode ser anterior.
+  const [dataEntrega, setDataEntrega] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
+  const [erroData, setErroData] = useState<string | null>(null);
+  const dataRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    setDataEntrega(campoAgoraV3());
+    setErroData(null);
+  }, [os.id]);
+  const datasOS = lerDatasOSV3(os);
+  const montada = montarDataOperacionalV3(dataEntrega);
+  const dataLida = montada.ok ? lerDataOperacionalV3(montada.valor.iso, montada.valor.meta) : null;
+  const retroativa = dataRetroativaV3(dataLida);
 
   const onEntregar = async () => {
+    // Mesma regra do servidor antes de enviar (nunca futura, nunca antes da entrada).
+    const erro = !montada.ok ? montada.mensagem : validarDataEntregaV3({ entrega: dataLida, entrada: datasOS.entrada })[0]?.mensagem ?? null;
+    if (erro) {
+      setErroData(erro);
+      requestAnimationFrame(() => dataRef.current?.focus());
+      return;
+    }
+    // Padrão intacto ("hoje, agora" automático) = horário exato do servidor.
+    const informada = !(dataEntrega.horaAutomatica && dataEntrega.dia === hojeNaLojaV3());
     const ok = await entregar({
       recebidoPor: recebidoPor.trim() || undefined,
       observacao: obsEntrega.trim() || undefined,
       assinaturaRetirada: assinaturaRetirada ?? undefined,
+      ...(informada && montada.ok ? { dataEntrega: montada.valor } : {}),
     });
     if (ok) {
       setRecebidoPor("");
       setObsEntrega("");
       setAssinaturaRetirada(null);
+      setDataEntrega(campoAgoraV3());
       notificar("Entrega registrada.");
     }
   };
@@ -137,8 +175,16 @@ export function PosVendaV3({
         {entrega.entregue ? (
           <div className="rounded-lg border border-success/30 bg-success/5 p-3">
             <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <CheckCircle2 className="h-4 w-4 text-success" /> Entregue em {formatDataHora(entrega.entregueEm)}
+              <CheckCircle2 className="h-4 w-4 text-success" /> Entregue em {formatarDataOperacionalV3(datasOS.entrega) || formatDataHora(entrega.entregueEm)}
             </p>
+            {datasOS.entregaRegistradaEm && datasOS.entrega && dataRetroativaV3(datasOS.entrega, new Date(datasOS.entregaRegistradaEm)) ? (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Registrado no sistema em {formatDataHora(datasOS.entregaRegistradaEm)}.</p>
+            ) : null}
+            {onCorrigirDatas ? (
+              <button type="button" onClick={onCorrigirDatas} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                <CalendarClock className="h-3.5 w-3.5" aria-hidden /> Corrigir datas
+              </button>
+            ) : null}
             <dl className="mt-2 grid gap-2 sm:grid-cols-3">
               <KV label="Recebido por" value={entrega.recebidoPor} />
               <KV label="Entregue por" value={entrega.entreguePor} />
@@ -165,6 +211,24 @@ export function PosVendaV3({
             <div className="grid gap-2 sm:grid-cols-2">
               <input className={inputCls} value={recebidoPor} onChange={(e) => setRecebidoPor(e.target.value)} placeholder={`Recebido por (padrão: ${os.cliente?.nome ?? "cliente"})`} />
               <input className={inputCls} value={obsEntrega} onChange={(e) => setObsEntrega(e.target.value)} placeholder="Observação (opcional)" />
+            </div>
+            <div className="mt-2 max-w-md">
+              <DataOperacionalCampoV3
+                ref={dataRef}
+                id="posvenda-v3-entrega"
+                rotulo="Data da entrega"
+                ajuda="Quando o aparelho foi realmente entregue ao cliente."
+                obrigatorio
+                maxDia={hojeNaLojaV3()}
+                minDia={datasOS.entrada?.dia}
+                valor={dataEntrega}
+                onChange={(c) => {
+                  setDataEntrega(c);
+                  setErroData(null);
+                }}
+                erro={erroData}
+                aviso={retroativa ? "Entrega com data anterior. O histórico guarda também o horário real deste registro." : null}
+              />
             </div>
             <div className="mt-2">
               <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
