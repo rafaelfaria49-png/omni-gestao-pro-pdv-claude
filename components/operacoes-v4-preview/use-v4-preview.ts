@@ -268,9 +268,14 @@ export interface V4DataCtx {
    * compatibilidade com fixtures legados (ausente = handler direto, sem trava).
    */
   escritaPrimaria?: {
-    executar: (escrita: EscritaProximaAcaoV4) => Promise<boolean>;
+    /** `chaveEsperada` (loja+OS do clique): seleção diferente na hora de gravar = nada é escrito. */
+    executar: (escrita: EscritaProximaAcaoV4, chaveEsperada?: string) => Promise<boolean>;
     travada: boolean;
   };
+  /** A Entrada da seleção atual tem rascunho não salvo (bloqueia escrita de status). */
+  entradaComRascunho?: boolean;
+  /** A leitura do detalhe da seleção atual terminou sem OS (nem erro, nem carga). */
+  detailVazio?: boolean;
   // ---- Execução (slice OPS-V4-EXECUCAO-REAL-007) ----
   // "iniciarServico" (acima) é reaproveitado para em_execucao a partir de aprovado
   // OU aguardando_peca (mesmo destino "em_execucao"; o rótulo muda na UI).
@@ -740,8 +745,14 @@ export function buildVals(
   // máquina única (`podeTransicionarV3`) permite a partir do status real atual —
   // mesma regra que o servidor aplica em `aplicarTransicaoStatusV3`. Sem OS real
   // selecionada, nenhuma ação fica disponível (nada de status fabricado).
+  // GOAL OPS-V4-FLUXO-CURTO-005: "Iniciar/Retomar execução" da etapa compartilha a
+  // trava da escrita primária — com uma escrita desta OS em voo o botão sai de cena
+  // (o bloco "Próxima ação" mostra o processamento) e `iniciarServico` exposto em
+  // `v` passa pela mesma trava (nunca duas requisições).
+  const escritaPrimariaTravada = ctx.escritaPrimaria?.travada === true;
+  const chaveSelecaoAtual = chaveProximaAcaoV4(ctx.lojaAtivaId, st.selectedOsId);
   const execAcoes = {
-    podeIniciar: !!realOS && podeTransicionarV3(status, "em_execucao").ok,
+    podeIniciar: !!realOS && podeTransicionarV3(status, "em_execucao").ok && !escritaPrimariaTravada,
     iniciarLabel: status === "aguardando_peca" ? "Retomar execução" : "Iniciar execução",
     podeAguardarPeca: !!realOS && podeTransicionarV3(status, "aguardando_peca").ok,
     podePronta: !!realOS && podeTransicionarV3(status, "pronta").ok,
@@ -1013,8 +1024,10 @@ export function buildVals(
   // Derivada SÓ de estado real: OS resolvida (loja+OS), carga do detalhe, orçamento
   // materializado e projeção financeira server-side. Sem OS real → nenhuma ação
   // (nunca o snapshot `st.status`). Superfície ÚNICA: o bloco abaixo da pipeline.
+  // Leitura do detalhe ENCERRADA sem OS (ex.: `getOrdem` → null) também é erro
+  // seguro com "Tentar novamente" — nunca "carregando" eterno.
   const cargaOS =
-    ctx.detailError
+    ctx.detailError || ctx.detailVazio
       ? "erro"
       : ctx.detailCarregada === true && !!realOS && realOS.id === st.selectedOsId
         ? "estabelecida"
@@ -1022,7 +1035,8 @@ export function buildVals(
   const proximaAcaoReal = derivarProximaAcaoV4({
     os: realOS,
     carga: cargaOS,
-    cargaErro: ctx.detailError ?? null,
+    cargaErro: ctx.detailError ?? (ctx.detailVazio ? "O servidor não devolveu o detalhe desta OS." : null),
+    entradaComRascunho: ctx.entradaComRascunho === true,
     orcamento: { materializado: orcamentoMaterializado, status: orcStatusRaw ?? null },
     financeiro: {
       projection: financialProjection,
@@ -1030,22 +1044,23 @@ export function buildVals(
       error: ctx.financialProjection.error,
     },
   });
-  const escritaPrimariaTravada = ctx.escritaPrimaria?.travada === true;
-  // Escrita em voo (ou aguardando a releitura do detalhe): o mesmo CTA fica
-  // desabilitado — um clique = no máximo uma escrita.
+  // Escrita desta OS em voo (ou aguardando a releitura do detalhe): o bloco
+  // mostra o processamento no lugar do CTA/indicação — um clique = no máximo uma
+  // escrita, inclusive pelo botão da própria etapa (que sai de cena).
   const proximaAcao: ProximaAcaoV4 =
-    escritaPrimariaTravada && proximaAcaoReal.efeito === "write" && proximaAcaoReal.cta
-      ? { ...proximaAcaoReal, cta: { label: "Processando…", disabled: true } }
+    escritaPrimariaTravada && (proximaAcaoReal.cta || proximaAcaoReal.controleNaEtapa)
+      ? { ...proximaAcaoReal, controleNaEtapa: false, cta: { label: "Processando…", disabled: true, ocupado: true } }
       : proximaAcaoReal;
   const escreverPrimaria = (escrita: EscritaProximaAcaoV4): Promise<boolean> =>
     ctx.escritaPrimaria
-      ? ctx.escritaPrimaria.executar(escrita)
+      ? ctx.escritaPrimaria.executar(escrita, chaveSelecaoAtual)
       : escrita === "iniciar_diagnostico"
         ? ctx.iniciarDiagnostico()
         : ctx.iniciarServico();
-  // write → só as escritas EXISTENTES (runWrite → aplicarTransicaoStatusV3);
-  // navigate → só muda a etapa. Sair da Entrada com rascunho sujo passa pela
-  // guarda salvar/descartar/cancelar do GOAL 001 (a escrita só roda depois dela).
+  // write → só as escritas EXISTENTES (runWrite → aplicarTransicaoStatusV3), e só
+  // por clique DIRETO: nunca é adiada para depois da guarda de rascunho (com a
+  // Entrada suja o CTA já vem desabilitado com motivo). navigate → só muda a
+  // etapa (a guarda salvar/descartar/cancelar do GOAL 001 vale normalmente).
   const executarProximaAcao = () => {
     const acao = proximaAcao;
     if (!acao.cta || acao.cta.disabled || !acao.stage) return;
@@ -1054,15 +1069,8 @@ export function buildVals(
       return;
     }
     if (acao.efeito !== "write" || !acao.escrita) return;
-    const escrita = acao.escrita;
-    const escrever = () => {
-      void escreverPrimaria(escrita);
-    };
-    if (saidaEtapaExigeGuardaV4(st.stage, acao.stage)) {
-      sairComGuarda(escrever, acao.titulo.toLowerCase());
-      return;
-    }
-    escrever();
+    if (ctx.entradaComRascunho === true) return;
+    void escreverPrimaria(acao.escrita);
   };
   // Secundária: só navegação ou releitura — nunca escrita.
   const executarAcaoSecundaria = () => {
@@ -1416,7 +1424,9 @@ export function buildVals(
     // (ação primária); aqui também serve a aguardando_peca→em_execucao ("retomar") —
     // o rótulo certo vem de `execAcoes.iniciarLabel`. Peças baixam pelo adapter
     // oficial (`consumirEstoqueOSActionV3` → `consumeEstoqueFromOS`).
-    iniciarServico: ctx.iniciarServico,
+    // GOAL OPS-V4-FLUXO-CURTO-005: o botão da etapa usa a MESMA trava da próxima
+    // ação (bloco + etapa nunca disparam duas requisições de início).
+    iniciarServico: (): Promise<boolean> => escreverPrimaria("iniciar_execucao"),
     marcarAguardandoPeca: ctx.marcarAguardandoPeca,
     marcarPronta: ctx.marcarPronta,
     baixarEstoqueOS: ctx.baixarEstoqueOS,
@@ -1560,6 +1570,33 @@ export function buildVals(
 export type V4Vals = ReturnType<typeof buildVals>;
 
 /**
+ * GOAL OPS-V4-FLUXO-CURTO-005: a leitura do detalhe da seleção ATUAL (loja+OS)
+ * passou por "carregando" e terminou sem OS nem erro (ex.: `getOrdem` → null)?
+ * Vira estado seguro com "Tentar novamente" em vez de "carregando" eterno. Só
+ * conta depois de ver a carga desta chave começar — sem piscar erro no primeiro
+ * render de uma seleção nova.
+ */
+export function useDetalheEncerradoSemOSV4(args: {
+  chave: string;
+  carregando: boolean;
+  erro: boolean;
+  carregada: boolean;
+}): boolean {
+  const { chave, carregando, erro, carregada } = args;
+  const leituraRef = useRef({ chave, viuCarregando: carregando });
+  const [encerrada, setEncerrada] = useState<string | null>(null);
+  useEffect(() => {
+    if (leituraRef.current.chave !== chave) leituraRef.current = { chave, viuCarregando: carregando };
+    if (carregando) {
+      leituraRef.current.viuCarregando = true;
+      return;
+    }
+    if (leituraRef.current.viuCarregando) setEncerrada(chave);
+  }, [chave, carregando]);
+  return !!chave && encerrada === chave && !carregando && !erro && !carregada;
+}
+
+/**
  * Trava da escrita primária (GOAL OPS-V4-FLUXO-CURTO-005). Síncrona (ref) e
  * chaveada por loja+OS: vale do clique até a escrita terminar E o detalhe da
  * MESMA OS ser relido. Falha libera na hora. Outra OS/loja nunca é bloqueada; a
@@ -1590,9 +1627,11 @@ export function useEscritaPrimariaV4(args: {
     setTrava(null);
   }, [trava, travada]);
   const executar = useCallback(
-    async (escrita: EscritaProximaAcaoV4): Promise<boolean> => {
+    async (escrita: EscritaProximaAcaoV4, chaveEsperada?: string): Promise<boolean> => {
       const leitura = leituraRef.current;
       if (!leitura.chave || travaAtivaProximaAcaoV4(travaRef.current, leitura)) return false;
+      // Seleção (loja+OS) diferente da do clique: nada é escrito, nada é travado.
+      if (chaveEsperada !== undefined && chaveEsperada !== leitura.chave) return false;
       const nova: TravaProximaAcaoV4 = { chave: leitura.chave, detalheRef: leitura.detalhe, concluida: false };
       travaRef.current = nova;
       setTrava(nova);
@@ -2508,6 +2547,16 @@ export function useV4Preview(): V4Vals {
     iniciarServico,
   });
 
+  const chaveSelecao = chaveProximaAcaoV4(lojaAtivaId, st.selectedOsId);
+  const detailVazio = useDetalheEncerradoSemOSV4({
+    chave: chaveSelecao,
+    carregando: detailLoading,
+    erro: !!detailError,
+    carregada: detailCarregada,
+  });
+  // Rascunho não salvo na Entrada desta loja+OS (a guarda re-renderiza o hook).
+  const entradaComRascunho = !!chaveSelecao && rascunhos.sujo(chaveSelecao);
+
   const ctx = useMemo<V4DataCtx>(
     () => ({
       ordens,
@@ -2522,6 +2571,8 @@ export function useV4Preview(): V4Vals {
       detailLoading,
       detailError,
       detailCarregada,
+      detailVazio,
+      entradaComRascunho,
       financialProjection,
       financialProjectionsByOsId: railFinancial.projectionsByOsId,
       financialRailLoading: railFinancial.loading,
@@ -2591,6 +2642,8 @@ export function useV4Preview(): V4Vals {
       detailLoading,
       detailError,
       detailCarregada,
+      detailVazio,
+      entradaComRascunho,
       financialProjection,
       railFinancial.projectionsByOsId,
       railFinancial.loading,

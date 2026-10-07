@@ -5,7 +5,7 @@
 // As actions "use server" da V3 são cortadas por mock só para o módulo carregar
 // (mesmo padrão de preview-honesty); nenhuma escrita real acontece aqui.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -63,7 +63,12 @@ vi.mock("@/lib/operacoes-v4/financial-projection-actions", () => ({
 import type { OrdemServico } from "@/types/os";
 import type { V4Stage, V4State } from "@/components/operacoes-v4-preview/types";
 import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
-import { buildVals, useEscritaPrimariaV4, type V4DataCtx } from "@/components/operacoes-v4-preview/use-v4-preview";
+import {
+  buildVals,
+  useDetalheEncerradoSemOSV4,
+  useEscritaPrimariaV4,
+  type V4DataCtx,
+} from "@/components/operacoes-v4-preview/use-v4-preview";
 import { ProximaAcaoV4 } from "@/components/operacoes-v4-preview/parts/ProximaAcaoV4";
 
 afterEach(() => cleanup());
@@ -138,6 +143,9 @@ interface Cenario {
   financeiro?: Financeiro;
   detalheCarregando?: boolean;
   detalheErro?: string | null;
+  detalheVazio?: boolean;
+  entradaComRascunho?: boolean;
+  reloadDetail?: () => void;
   orcamentoMaterializado?: boolean;
   iniciarDiagnostico?: () => Promise<boolean>;
   iniciarServico?: () => Promise<boolean>;
@@ -177,7 +185,10 @@ function Harness({ c }: { c: Cenario }) {
       realOS,
       detailLoading: !!c.detalheCarregando,
       detailError: c.detalheErro ?? null,
-      detailCarregada: !c.detalheCarregando && !c.detalheErro && !!c.os,
+      detailCarregada: !c.detalheCarregando && !c.detalheErro && !c.detalheVazio && !!c.os,
+      detailVazio: c.detalheVazio === true,
+      entradaComRascunho: c.entradaComRascunho === true,
+      reloadDetail: c.reloadDetail ?? (() => {}),
       financialProjection: c.financeiro ?? finVazio,
       iniciarDiagnostico,
       iniciarServico,
@@ -185,7 +196,17 @@ function Harness({ c }: { c: Cenario }) {
       confirmarEntrega: c.confirmarEntrega ?? (async () => false),
     },
   );
-  return <ProximaAcaoV4 v={v} />;
+  return (
+    <>
+      <ProximaAcaoV4 v={v} />
+      {/* Sonda do botão "Iniciar execução" da etapa Execução (ExecAcoesCard usa estes dois campos). */}
+      {v.execAcoes.podeIniciar ? (
+        <button type="button" data-testid="etapa-iniciar" onClick={() => void v.iniciarServico()}>
+          etapa
+        </button>
+      ) : null}
+    </>
+  );
 }
 
 const bloco = () => screen.getByRole("region", { name: "Próxima ação da OS" });
@@ -397,6 +418,96 @@ describe("OPS-V4-FLUXO-CURTO-005 — trava, troca de OS/loja, Entrada, teclado (
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
     montar({ lojaId: "loja-1", os: os("os-14", "aberta") });
     expect(bloco().getAttribute("style")).toBeNull();
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-005 — correções da R OpenAI em f94cb6b (P1 + 2× P2)", () => {
+  it("R-P1a Entrada com rascunho: CTA de escrita desabilitado com motivo; clique não grava nem abre guarda", async () => {
+    const iniciarServico = vi.fn(async () => true);
+    montar({ lojaId: "loja-1", os: os("os-r1", "aprovado"), entradaComRascunho: true, iniciarServico });
+    const cta = within(bloco()).getByRole("button", { name: "Iniciar execução" }) as HTMLButtonElement;
+    expect(cta.disabled).toBe(true);
+    expect(within(bloco()).getByText(/Salve ou descarte as alterações da Entrada/)).toBeTruthy();
+    fireEvent.click(cta);
+    expect(iniciarServico).not.toHaveBeenCalled();
+    expect(patches).toEqual([]);
+    // Nenhuma escrita é entregue à guarda de rascunho (fonte do P1): o executor não a usa.
+    expect(fonte("components/operacoes-v4-preview/use-v4-preview.ts")).not.toMatch(/sairComGuarda\(\s*escrever/);
+  });
+
+  it("R-P1b callback antigo (clique em A) executado com a seleção já em B: nada grava, nada trava B", async () => {
+    const iniciarA = vi.fn(async () => true);
+    const { result, rerender } = renderHook((p: { os: string }) =>
+      useEscritaPrimariaV4({
+        lojaAtivaId: "loja-1",
+        selectedOsId: p.os,
+        detalhe: { id: p.os },
+        detalheCarregando: false,
+        detalheErro: false,
+        iniciarDiagnostico: async () => true,
+        iniciarServico: iniciarA,
+      }), { initialProps: { os: "os-A" } });
+    const executarDeA = result.current.executar;
+    rerender({ os: "os-B" });
+    let ok = true;
+    await act(async () => { ok = await executarDeA("iniciar_execucao", "loja-1::os-A"); });
+    expect(ok).toBe(false);
+    expect(iniciarA).not.toHaveBeenCalled();
+    expect(result.current.travada).toBe(false);
+  });
+
+  it("R-P2a botão da etapa Execução compartilha a trava: com o início em voo pelo bloco, a etapa não dispara 2ª requisição", async () => {
+    const d = adiado();
+    const iniciarServico = vi.fn(() => d.promessa);
+    montar({ lojaId: "loja-1", os: os("os-r2", "aprovado"), iniciarServico });
+    expect(screen.getByTestId("etapa-iniciar")).toBeTruthy();
+    fireEvent.click(within(bloco()).getByRole("button", { name: "Iniciar execução" }));
+    expect(iniciarServico).toHaveBeenCalledTimes(1);
+    // O botão da etapa sai de cena enquanto a escrita está em voo; o bloco mostra o processamento.
+    expect(screen.queryByTestId("etapa-iniciar")).toBeNull();
+    const ocupado = within(bloco()).getByRole("button", { name: "Processando…" });
+    expect(ocupado.getAttribute("aria-busy")).toBe("true");
+    await act(async () => { d.resolver(true); await d.promessa; });
+    expect(iniciarServico).toHaveBeenCalledTimes(1);
+  });
+
+  it("R-P2a′ clique pela etapa primeiro também trava o bloco (mesma trava nos dois sentidos)", async () => {
+    const d = adiado();
+    const iniciarServico = vi.fn(() => d.promessa);
+    montar({ lojaId: "loja-1", os: os("os-r3", "aprovado"), stage: "execucao", iniciarServico });
+    fireEvent.click(screen.getByTestId("etapa-iniciar"));
+    expect(iniciarServico).toHaveBeenCalledTimes(1);
+    const ocupado = within(bloco()).getByRole("button", { name: "Processando…" }) as HTMLButtonElement;
+    expect(ocupado.disabled).toBe(true);
+    fireEvent.click(ocupado);
+    expect(iniciarServico).toHaveBeenCalledTimes(1);
+    await act(async () => { d.resolver(true); await d.promessa; });
+  });
+
+  it("R-P2b leitura encerrada sem detalhe → estado seguro com 'Tentar novamente' (nunca carregando eterno)", async () => {
+    const reloadDetail = vi.fn();
+    montar({ lojaId: "loja-1", os: os("os-r4", "aprovado"), detalheVazio: true, reloadDetail });
+    expect(bloco().getAttribute("data-acao")).toBe("erro-leitura-os");
+    expect(within(bloco()).queryByRole("button", { name: /Iniciar execução/ })).toBeNull();
+    await userEvent.click(within(bloco()).getByRole("button", { name: "Tentar novamente" }));
+    expect(reloadDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("R-P2b′ detecção real: só após ver a carga da chave começar e terminar sem OS; sem piscar na seleção nova", () => {
+    const { result, rerender } = renderHook((p: { chave: string; carregando: boolean; carregada: boolean }) =>
+      useDetalheEncerradoSemOSV4({ chave: p.chave, carregando: p.carregando, erro: false, carregada: p.carregada }),
+      { initialProps: { chave: "loja-1::os-A", carregando: false, carregada: false } });
+    expect(result.current).toBe(false); // primeiro render da seleção: ainda não começou a carregar
+    rerender({ chave: "loja-1::os-A", carregando: true, carregada: false });
+    expect(result.current).toBe(false);
+    rerender({ chave: "loja-1::os-A", carregando: false, carregada: false });
+    expect(result.current).toBe(true); // terminou sem OS
+    rerender({ chave: "loja-1::os-A", carregando: true, carregada: false });
+    expect(result.current).toBe(false); // releitura em curso
+    rerender({ chave: "loja-1::os-A", carregando: false, carregada: true });
+    expect(result.current).toBe(false); // releitura trouxe a OS
+    rerender({ chave: "loja-1::os-B", carregando: false, carregada: false });
+    expect(result.current).toBe(false); // seleção nova: não pisca erro antes de carregar
   });
 });
 

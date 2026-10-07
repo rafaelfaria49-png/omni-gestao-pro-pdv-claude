@@ -99,9 +99,13 @@ export function ProximaAcaoV4({ v }: { v: Pick<V4Vals, "proximaAcao" | "stage" |
                 className={acao.efeito === "write" ? styles.write : styles.navigate}
                 onClick={v.executarProximaAcao}
                 disabled={cta.disabled}
-                aria-busy={cta.disabled && acao.efeito === "write" && !acao.motivo ? true : undefined}
+                aria-busy={cta.ocupado ? true : undefined}
               >
-                {acao.efeito === "write" ? <CirclePlay size={14} strokeWidth={2.2} aria-hidden /> : null}
+                {cta.ocupado ? (
+                  <LoaderCircle size={14} strokeWidth={2.2} aria-hidden className={styles.spin} />
+                ) : acao.efeito === "write" ? (
+                  <CirclePlay size={14} strokeWidth={2.2} aria-hidden />
+                ) : null}
                 {cta.label}
               </button>
             ) : null}

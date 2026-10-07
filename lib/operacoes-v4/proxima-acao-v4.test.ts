@@ -101,6 +101,17 @@ describe("OPS-V4-FLUXO-CURTO-005 — derivarProximaAcaoV4 (N01–N20)", () => {
     expect(a.motivo).toMatch(/carregar/i);
   });
 
+  it("N01c (R P1) Entrada com rascunho não salvo → escrita desabilitada com motivo; navegação intacta", () => {
+    for (const st of ["aberta", "aprovado"] as const) {
+      const a = derivarProximaAcaoV4(entrada({ operacaoStatusV3: st }, { entradaComRascunho: true }));
+      expect(a.efeito, st).toBe("write");
+      expect(a.cta?.disabled, st).toBe(true);
+      expect(a.motivo, st).toMatch(/Salve ou descarte as alterações da Entrada/);
+    }
+    const nav = derivarProximaAcaoV4(entrada({ operacaoStatusV3: "em_execucao" }, { entradaComRascunho: true }));
+    expect(nav).toMatchObject({ efeito: "navigate", cta: { label: "Abrir execução", disabled: false } });
+  });
+
   it("N02 diagnóstico sem orçamento materializado → Preparar orçamento (navigate, sem gerar nada)", () => {
     const a = derivarProximaAcaoV4(entrada({ operacaoStatusV3: "diagnostico" }));
     expect(a).toMatchObject({ estado: "navegacao", titulo: "Preparar orçamento", efeito: "navigate", stage: "orcamento" });

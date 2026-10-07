@@ -253,27 +253,65 @@ test("E01 — autorizada: próxima ação Iniciar execução; acionar muda o sta
   expect(mudancas(os).filter((e) => e.metadata?.para === "em_execucao")).toHaveLength(1);
 });
 
-test("E01b — escrita a partir da Entrada com rascunho respeita a guarda do GOAL 001 (Cancelar não grava; Descartar grava uma vez)", async ({ page }) => {
+test("E01b — Entrada com rascunho: escrita fica desabilitada com motivo (nunca adiada pela guarda); após descartar, grava uma vez", async ({ page }) => {
   // Sem `recebidoPor` registrado, a Entrada abre com sugestão ainda não salva (rascunho sujo).
   const alvo = await semearOS(prisma, "aprovado", { semRecebidoPor: true });
   await abrirOS(page, alvo.codigo);
   await etapa(page, /Entrada/).click();
   await expect(page.getByText("Alterações não salvas", { exact: true })).toBeVisible();
-  const guarda = page.getByRole("alertdialog", { name: "Alterações não salvas na Entrada" });
 
-  await bloco(page).getByRole("button", { name: "Iniciar execução" }).click();
-  await expect(guarda).toBeVisible();
-  await guarda.getByRole("button", { name: "Cancelar", exact: true }).click();
-  await expect(guarda).toHaveCount(0);
-  await expect(etapa(page, /Entrada/)).toHaveAttribute("aria-current", "step");
+  const cta = bloco(page).getByRole("button", { name: "Iniciar execução" });
+  await expect(cta).toBeDisabled();
+  await expect(bloco(page).getByText(/Salve ou descarte as alterações da Entrada/)).toBeVisible();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
   expect((await lerOS(prisma, alvo.id)).operacaoStatusV3).toBe("aprovado");
 
-  await bloco(page).getByRole("button", { name: "Iniciar execução" }).click();
-  await expect(guarda).toBeVisible();
-  await guarda.getByRole("button", { name: "Descartar", exact: true }).click();
+  // O operador resolve o rascunho na própria Entrada; só então a escrita fica disponível.
+  await page.getByRole("button", { name: "Descartar alterações" }).click();
+  await expect(page.getByText("Alterações não salvas", { exact: true })).toHaveCount(0);
+  await expect(cta).toBeEnabled();
+  await cta.click();
   await expect.poll(async () => (await lerOS(prisma, alvo.id)).operacaoStatusV3, { timeout: 30_000 }).toBe("em_execucao");
   await expect(bloco(page)).toHaveAttribute("data-acao", "marcar-pronta", { timeout: 30_000 });
   expect(mudancas(await lerOS(prisma, alvo.id))).toHaveLength(1);
+});
+
+test("E01c — início em voo pelo bloco: a etapa Execução não oferece 2º disparo (trava compartilhada)", async ({ page }) => {
+  const alvo = await semearOS(prisma, "aprovado");
+  await abrirOS(page, alvo.codigo);
+  await etapa(page, /Entrada/).click();
+  await expect(bloco(page)).toHaveAttribute("data-acao", "iniciar-execucao");
+
+  // Retém as chamadas ao servidor desta OS a partir do clique (a escrita de início fica em voo).
+  let liberar: () => void = () => {};
+  const portao = new Promise<void>((r) => { liberar = r; });
+  const retidas: Request[] = [];
+  await page.route("**/dashboard/operacoes-v4-preview**", async (route) => {
+    const req = route.request();
+    if (req.method() === "POST" && req.headers()["next-action"] && (req.postData() ?? "").includes(alvo.id)) {
+      retidas.push(req);
+      await portao;
+    }
+    await route.continue();
+  });
+  await bloco(page).getByRole("button", { name: "Iniciar execução" }).click();
+  await expect.poll(() => retidas.length).toBeGreaterThan(0);
+  await expect(bloco(page).getByRole("button", { name: "Processando…" })).toBeDisabled();
+
+  await etapa(page, /Execução/).click();
+  await expect(etapa(page, /Execução/)).toHaveAttribute("aria-current", "step");
+  await expect(page.getByRole("button", { name: "Iniciar execução" })).toHaveCount(0);
+  await expect(bloco(page).getByRole("button", { name: "Processando…" })).toBeDisabled();
+  const retidasNoClique = retidas.length;
+
+  const respostas = retidas.map((req) => page.waitForResponse((resp) => resp.request() === req));
+  liberar();
+  await Promise.all(respostas);
+  await expect.poll(async () => (await lerOS(prisma, alvo.id)).operacaoStatusV3, { timeout: 30_000 }).toBe("em_execucao");
+  await expect(bloco(page)).toHaveAttribute("data-acao", "marcar-pronta", { timeout: 30_000 });
+  expect(retidasNoClique).toBe(1);
+  expect(mudancas(await lerOS(prisma, alvo.id))).toHaveLength(1);
+  await page.unroute("**/dashboard/operacoes-v4-preview**");
 });
 
 test("E03 — em execução: aponta à Execução; marcar pronta pelo caminho real da etapa", async ({ page }) => {

@@ -43,6 +43,8 @@ export type EscritaProximaAcaoV4 = "iniciar_diagnostico" | "iniciar_execucao";
 export interface CtaProximaAcaoV4 {
   label: string;
   disabled: boolean;
+  /** Escrita desta OS em voo (trava ativa): o CTA comunica processamento. */
+  ocupado?: boolean;
 }
 
 /** Ação secundária: sempre navegação ou releitura — nunca escrita. */
@@ -86,6 +88,11 @@ export interface EntradaProximaAcaoV4 {
   os: (OSStatusFonteV4 & { id?: unknown }) | null;
   carga: CargaOSProximaAcaoV4;
   cargaErro?: string | null;
+  /**
+   * A Entrada desta OS tem rascunho não salvo. Escrita de status fica bloqueada
+   * até salvar/descartar — nunca é adiada para depois da guarda (GOAL 001).
+   */
+  entradaComRascunho?: boolean;
   orcamento: { materializado: boolean; status?: string | null };
   financeiro: {
     projection: FinancialProjectionOSV4 | null;
@@ -95,6 +102,7 @@ export interface EntradaProximaAcaoV4 {
 }
 
 const MSG_AGUARDE_CARGA = "Aguarde a OS terminar de carregar.";
+const MSG_RASCUNHO_ENTRADA = "Salve ou descarte as alterações da Entrada antes de mudar o status.";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -142,8 +150,10 @@ function escritaPrimaria(input: {
   stage: V4Stage;
   controleNaEtapa: boolean;
   carga: CargaOSProximaAcaoV4;
+  entradaComRascunho: boolean;
 }): ProximaAcaoV4 {
-  const pronta = input.carga === "estabelecida";
+  const pronta = input.carga === "estabelecida" && !input.entradaComRascunho;
+  const motivo = input.carga !== "estabelecida" ? MSG_AGUARDE_CARGA : input.entradaComRascunho ? MSG_RASCUNHO_ENTRADA : undefined;
   return base({
     estado: "acao",
     id: input.id,
@@ -155,7 +165,7 @@ function escritaPrimaria(input: {
     stage: input.stage,
     controleNaEtapa: input.controleNaEtapa,
     cta: { label: input.titulo, disabled: !pronta },
-    motivo: pronta ? undefined : MSG_AGUARDE_CARGA,
+    motivo,
     tone: "primary",
   });
 }
@@ -296,6 +306,7 @@ export function derivarProximaAcaoV4(input: EntradaProximaAcaoV4): ProximaAcaoV4
         // A etapa Diagnóstico não tem botão próprio de início: o controle é este.
         controleNaEtapa: false,
         carga: input.carga,
+        entradaComRascunho: input.entradaComRascunho === true,
       });
     }
 
@@ -342,6 +353,7 @@ export function derivarProximaAcaoV4(input: EntradaProximaAcaoV4): ProximaAcaoV4
         // A Execução tem o botão real "Iniciar execução" (mesma action).
         controleNaEtapa: true,
         carga: input.carga,
+        entradaComRascunho: input.entradaComRascunho === true,
       });
     }
 
