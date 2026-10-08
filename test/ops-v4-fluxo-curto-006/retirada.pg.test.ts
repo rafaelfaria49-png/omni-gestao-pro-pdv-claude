@@ -70,7 +70,9 @@ import { computeTotaisV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { gerarOperacaoIdV3, hojeLojaV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { lerProjecaoFinanceiraOSV4 } from "@/lib/operacoes-v4/financial-projection-actions";
 import { derivarRetiradaFinanceiraV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
-import { lerReciboPersistidoV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
+import { lerReciboDaProjecaoV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
+import { registrarPagamentoParcial } from "@/lib/financeiro/services/contas-receber-service";
+import type { ComprovanteReciboV3 } from "@/lib/operacoes-v3/payment-model";
 import { derivarProximaAcaoV4 } from "@/lib/operacoes-v4/proxima-acao-v4";
 
 function exigirBancoLocal(): void {
@@ -173,6 +175,12 @@ async function efeitos(storeId: string) {
 const entregas = (p: Payload) => (p.timeline as Payload[]).filter((e) => e.tipo === "entrega_cliente");
 const receber = (sid: string, id: string, sessaoId: string, linhas: Array<{ forma: "pix" | "dinheiro" | "debito" | "credito"; valor: number }>, extra: Record<string, unknown> = {}) =>
   receberOSV3(sid, id, { linhas, sessaoId, operacaoId: gerarOperacaoIdV3(), ...extra });
+
+/** Comprovante que a V4 ofereceria: regra de produção sobre o READ-BACK (OS + projeção real). */
+async function reciboOferecido(sid: string, id: string, sessao: ComprovanteReciboV3 | null = null) {
+  const projection = await lerProjecaoFinanceiraOSV4(sid, id);
+  return lerReciboDaProjecaoV4({ sessao, os: await lerOS(id), projection });
+}
 
 async function retirada(sid: string, id: string) {
   const projection = await lerProjecaoFinanceiraOSV4(sid, id);
@@ -299,7 +307,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — PostgreSQL descartável", () => {
     }
     const os = await lerOS(id);
     expect((os.timeline as Payload[]).some((ev) => ev.metadata?.comprovante)).toBe(false);
-    expect(lerReciboPersistidoV4({ os, recebidoAtual: 0 }).estado).toBe("sem_recebimento");
+    expect((await reciboOferecido(sid, id)).estado).toBe("sem_recebimento");
     await expect(registrarEntregaV3(sid, id)).rejects.toThrow();
   });
 
@@ -331,7 +339,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — PostgreSQL descartável", () => {
     const r = await retirada(sid, id);
     expect(r.projection).toMatchObject({ financialStatus: "PAID", receivedTotal: 300, balance: 0 });
     expect(r.retirada.descricao).toBe("Pagamento quitado — confirmar entrega.");
-    expect(lerReciboPersistidoV4({ os, recebidoAtual: 300 }).estado).toBe("disponivel");
+    expect(await reciboOferecido(sid, id)).toMatchObject({ estado: "disponivel", recibo: { valorPago: 300, recebidoAcumulado: 300 } });
     await registrarEntregaV3(sid, id);
     await registrarEntregaV3(sid, id);
     os = await lerOS(id);
@@ -426,18 +434,39 @@ describe("OPS-V4-FLUXO-CURTO-006 — PostgreSQL descartável", () => {
     await receber(sid, id, caixa, [{ forma: "pix", valor: 100 }]);
     await receber(sid, id, caixa, [{ forma: "dinheiro", valor: 200 }]);
     let os = await lerOS(id);
-    let leitura = lerReciboPersistidoV4({ os, recebidoAtual: 300 });
-    expect(leitura.estado === "disponivel" && leitura.persistido.recibo).toMatchObject({ numeroOS: os.codigo, valorPago: 200, recebidoAcumulado: 300 });
+    let leitura = await reciboOferecido(sid, id);
+    expect(leitura.estado === "disponivel" && leitura.recibo).toMatchObject({ numeroOS: os.codigo, valorPago: 200, recebidoAcumulado: 300 });
     await estornarRecebimentoOSV3(sid, id, { sessaoId: caixa, motivo: "Valor lançado errado (QA)" });
     const r = await retirada(sid, id);
     expect(r.projection).toMatchObject({ financialStatus: "PARTIAL", receivedTotal: 100, balance: 200, canDeliver: false });
     os = await lerOS(id);
-    leitura = lerReciboPersistidoV4({ os, recebidoAtual: r.projection.receivedTotal });
-    expect(leitura.estado === "disponivel" && leitura.persistido.recibo).toMatchObject({ valorPago: 100, recebidoAcumulado: 100 });
+    leitura = await reciboOferecido(sid, id);
+    expect(leitura.estado === "disponivel" && leitura.recibo).toMatchObject({ valorPago: 100, recebidoAcumulado: 100 });
     expect((os.timeline as Payload[]).some((ev) => ev.tipo === "financeiro_conta_receber_atualizada" && ev.metadata?.estornado === 200)).toBe(true);
     expect((await efeitos(sid)).estornosCaixa).toBe(1);
     await expect(registrarEntregaV3(sid, id)).rejects.toThrow(/saldo pendente/i);
     expect((await retirada(sid, vizinha)).projection).toMatchObject({ financialStatus: "PAID", receivedTotal: 300 });
+  });
+
+  it("R2 recibo: estorno do PIX 200 e reposição de 200 em dinheiro (mesmo acumulado) — a OS oferece o novo; baixa fora da OS invalida", async () => {
+    const sid = await novaLoja();
+    const id = await novaOS(sid);
+    const caixa = await abrirCaixa(sid);
+    await receber(sid, id, caixa, [{ forma: "pix", valor: 100 }]);
+    const pixDaSessao = (await receber(sid, id, caixa, [{ forma: "pix", valor: 200 }])).recibo;
+    expect(await reciboOferecido(sid, id, pixDaSessao)).toMatchObject({ estado: "disponivel", origem: "sessao" });
+    // Outro operador: estorna o PIX 200 e repõe 200 em dinheiro (acumulado volta a 300).
+    await estornarRecebimentoOSV3(sid, id, { sessaoId: caixa, motivo: "Troca de forma (QA)" });
+    await receber(sid, id, caixa, [{ forma: "dinheiro", valor: 200 }]);
+    const leitura = await reciboOferecido(sid, id, pixDaSessao);
+    expect(leitura).toMatchObject({ estado: "disponivel", origem: "persistido", recibo: { valorPago: 200, recebidoAcumulado: 300 } });
+    expect(leitura.estado === "disponivel" && leitura.recibo.formas.map((f) => f.forma)).toEqual(["dinheiro"]);
+    // Baixa feita FORA da OS (serviço do Financeiro direto no título): nenhum comprovante da OS vale.
+    const outra = await novaOS(sid);
+    await receber(sid, outra, caixa, [{ forma: "pix", valor: 100 }]);
+    const baixa = await registrarPagamentoParcial({ storeId: sid, localKey: `os-faturamento:${sid}:${outra}`, valorPago: 50, observacao: "Baixa externa QA", userLabel: "Financeiro QA" });
+    expect(baixa.ok).toBe(true);
+    expect(await reciboOferecido(sid, outra)).toEqual({ estado: "indisponivel" });
   });
 
   it("T52 entrega canônica: retirante + data retroativa (S13); replay/reimpressão não duplicam; garantia inicia uma vez (S19); assinatura distinta da entrada", async () => {

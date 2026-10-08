@@ -85,7 +85,10 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
     sheet.current = el;
     if (!el) return;
     if (!origemFoco.current) origemFoco.current = document.activeElement;
-    if (!el.contains(document.activeElement)) el.querySelector<HTMLElement>("select, button")?.focus();
+    if (el.contains(document.activeElement)) return;
+    // Com uma operação ainda em voo os controles estão desabilitados: o foco vai ao
+    // próprio sheet (tabIndex -1), que segue recebendo Tab/Escape quando liberar.
+    (el.querySelector<HTMLElement>("select:not(:disabled), input:not(:disabled), button:not(:disabled)") ?? el).focus();
   }, []);
   useEffect(() => {
     if (!formAberto) return;
@@ -169,13 +172,15 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   if (!mounted) return null;
   return createPortal(
     <div className={sheetStyles.overlay} role="dialog" aria-modal="true" aria-labelledby="receber-os-title">
-      <div ref={sheetRef} className={sheetStyles.sheet} onKeyDown={(e) => {
+      <div ref={sheetRef} tabIndex={-1} className={sheetStyles.sheet} onKeyDown={(e) => {
         if (e.key === "Escape" && !busy) { e.preventDefault(); cancelar(); }
         if (e.key !== "Tab") return;
         const itens = sheet.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]');
-        if (!itens?.length) return;
+        // Sem controle habilitado (operação em voo), o foco fica no próprio sheet.
+        if (!itens?.length) { e.preventDefault(); return; }
         const primeiro = itens[0], ultimo = itens[itens.length - 1];
-        if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+        if (document.activeElement === sheet.current) { e.preventDefault(); (e.shiftKey ? ultimo : primeiro).focus(); }
+        else if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
         else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
       }}>
         <div className={sheetStyles.head}>

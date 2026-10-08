@@ -283,3 +283,24 @@ describe("FinancialProjectionOSV4 — contrato puro e reconciliação", () => {
     expect(project({ titulo: title(300, "estornado", [{ tipo: "estorno_titulo" }]) })).toMatchObject({ financialStatus: "REVERSED", canDeliver: false });
   });
 });
+
+describe("OPS-V4-FLUXO-CURTO-006 — pagamentos vigentes do título (receivablePayments)", () => {
+  it("lista pagamento/liquidação na ordem, com a identidade gravada (loteId)", () => {
+    const result = project({ titulo: title(300, "pago", [{ tipo: "pagamento", valor: 100, loteId: "op-1" }, { tipo: "a_prazo_autorizado", valor: 200 }, { tipo: "liquidacao", valor: 200 }]) });
+    expect(result.receivablePayments).toEqual([{ amount: 100, operationId: "op-1" }, { amount: 200, operationId: null }]);
+  });
+
+  it("estorno remove exatamente o pagamento referido; sem referência, o último vigente", () => {
+    const comRef = project({ titulo: title(300, "parcial", [{ tipo: "pagamento", valor: 100, loteId: "a" }, { tipo: "pagamento", valor: 200, loteId: "b" }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 0 }]) });
+    expect(comRef.receivablePayments).toEqual([{ amount: 200, operationId: "b" }]);
+    const semRef = project({ titulo: title(300, "parcial", [{ tipo: "pagamento", valor: 100, loteId: "a" }, { tipo: "pagamento", valor: 200, loteId: "b" }, { tipo: "estorno_pagamento", valor: 200 }]) });
+    expect(semRef.receivablePayments).toEqual([{ amount: 100, operationId: "a" }]);
+  });
+
+  it("referência a pagamento inexistente/já estornado ou histórico inválido = ilegível (null); sem título = []", () => {
+    const duplo = project({ titulo: title(300, "parcial", [{ tipo: "pagamento", valor: 100 }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 0 }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 0 }]) });
+    expect(duplo.receivablePayments).toBeNull();
+    expect(project({ titulo: title(300, "pendente", "x" as unknown as unknown[]) }).receivablePayments).toBeNull();
+    expect(project({ titulo: null }).receivablePayments).toEqual([]);
+  });
+});

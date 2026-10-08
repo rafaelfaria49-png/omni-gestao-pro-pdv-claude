@@ -4,14 +4,17 @@
 // Módulo PURO (sem I/O, sem React). Reimpressão depois de reload/troca de
 // máquina: o comprovante vem da evidência que os writers canônicos já gravam na
 // timeline da OS — `receberOSV3` e `registrarRecebimentoMistoOSV3` guardam o
-// `ComprovanteReciboV3` em `timeline[].metadata.comprovante`, na ordem do
-// registro. Nada aqui grava, recalcula valor ou inventa comprovante.
+// `ComprovanteReciboV3` em `timeline[].metadata.comprovante` (com `operacaoId`),
+// na ordem do registro. Nada aqui grava, recalcula valor ou inventa comprovante.
 //
-// Estorno: `estornarRecebimentoOSV3` reverte o ÚLTIMO recebimento com dinheiro
-// (modo "ultimo_pagamento"); o comprovante correspondente deixa de valer. Além
-// disso, só é oferecido o comprovante cujo acumulado recebido bate com o
-// recebido ATUAL da projeção server-side — histórico alterado por outro caminho
-// (estorno/baixa fora da OS) nunca reimprime um estado que não existe mais.
+// Autoridade: o histórico do TÍTULO. Um comprovante só é oferecido quando a
+// sequência de comprovantes com dinheiro da OS (descontados os estornos que a OS
+// registrou) casa 1:1 com os pagamentos VIGENTES do título — mesmo valor, na
+// mesma ordem e, quando os dois lados a têm, a mesma identidade de operação — e o
+// acumulado dele é o recebido atual. Baixa ou estorno feitos fora da OS, ou um
+// estorno seguido de reposição do mesmo valor, nunca deixam reimprimir um
+// recebimento que não vale mais. O comprovante da sessão nunca é autoridade: só
+// identifica "acabou de receber" quando é o mesmo que a evidência persistida.
 // ============================================================================
 
 import type { ComprovanteReciboV3 } from "@/lib/operacoes-v3/payment-model";
@@ -20,6 +23,8 @@ export interface ReciboPersistidoV4 {
   recibo: ComprovanteReciboV3;
   /** Evento da timeline que guardou o comprovante (rastreabilidade). */
   eventoId: string | null;
+  /** Identidade da operação que o gravou (`metadata.operacaoId`), quando houver. */
+  operacaoId: string | null;
 }
 
 export type LeituraReciboPersistidoV4 =
@@ -30,6 +35,20 @@ export type LeituraReciboPersistidoV4 =
   | { estado: "sem_recebimento" }
   /** Há recebimento, mas nenhum comprovante persistido corresponde ao estado atual. */
   | { estado: "indisponivel" };
+
+export type LeituraReciboV4 =
+  | { estado: "disponivel"; recibo: ComprovanteReciboV3; origem: "sessao" | "persistido"; eventoId: string | null }
+  | { estado: "confirmando" }
+  /** A leitura da OS ou do financeiro falhou: nada se conclui até reler. */
+  | { estado: "erro" }
+  | { estado: "sem_recebimento" }
+  | { estado: "indisponivel" };
+
+/** Pagamento vigente do título (ver `FinancialProjectionOSV4.receivablePayments`). */
+export interface PagamentoVigenteV4 {
+  amount: number;
+  operationId: string | null;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -56,9 +75,9 @@ function estornoDoUltimoPagamento(evento: Record<string, unknown>): boolean {
 }
 
 /**
- * Comprovantes ainda válidos da OS, na ordem do registro (o último é o mais
- * recente). Cada estorno do último pagamento remove o comprovante com dinheiro
- * mais recente — a mesma regra do motor (`estornarContaReceber`).
+ * Comprovantes da OS ainda não estornados PELA OS, na ordem do registro (o último
+ * é o mais recente). Cada estorno do último pagamento registrado na OS remove o
+ * comprovante com dinheiro mais recente — a regra de `estornarRecebimentoOSV3`.
  */
 export function comprovantesValidosDaOSV4(os: { timeline?: unknown } | null | undefined): ReciboPersistidoV4[] {
   const timeline = Array.isArray(os?.timeline) ? os!.timeline : [];
@@ -74,46 +93,92 @@ export function comprovantesValidosDaOSV4(os: { timeline?: unknown } | null | un
       }
       continue;
     }
-    const recibo = isRecord(evento.metadata) ? comoComprovante(evento.metadata.comprovante) : null;
-    if (recibo) pilha.push({ recibo, eventoId: typeof evento.id === "string" ? evento.id : null });
+    const metadata = isRecord(evento.metadata) ? evento.metadata : null;
+    const recibo = metadata ? comoComprovante(metadata.comprovante) : null;
+    if (!recibo) continue;
+    pilha.push({
+      recibo,
+      eventoId: typeof evento.id === "string" ? evento.id : null,
+      operacaoId: typeof metadata?.operacaoId === "string" && metadata.operacaoId.trim() ? metadata.operacaoId.trim() : null,
+    });
   }
   return pilha;
 }
 
-export type LeituraReciboV4 =
-  | { estado: "disponivel"; recibo: ComprovanteReciboV3; origem: "sessao" | "persistido"; eventoId: string | null }
-  | { estado: "confirmando" }
-  | { estado: "sem_recebimento" }
-  | { estado: "indisponivel" };
+/** A sequência de comprovantes com dinheiro da OS é exatamente a de pagamentos vigentes do título. */
+function casaComTitulo(validos: ReciboPersistidoV4[], pagamentos: ReadonlyArray<PagamentoVigenteV4>): boolean {
+  const comDinheiro = validos.filter((item) => item.recibo.valorPago > 0);
+  if (comDinheiro.length !== pagamentos.length) return false;
+  return comDinheiro.every((item, i) => {
+    const pagamento = pagamentos[i]!;
+    if (!finito(pagamento.amount) || centavos(item.recibo.valorPago) !== centavos(pagamento.amount)) return false;
+    return !pagamento.operationId || !item.operacaoId || pagamento.operationId === item.operacaoId;
+  });
+}
+
+/** Mesmo comprovante (o JSONB do banco reordena chaves: compara campo a campo). */
+function mesmoComprovante(a: ComprovanteReciboV3, b: ComprovanteReciboV3): boolean {
+  const formas = (r: ComprovanteReciboV3) =>
+    (Array.isArray(r.formas) ? r.formas : []).map((f) => `${f.forma}:${centavos(f.valor)}`).sort().join("|");
+  return (
+    a.numeroOS === b.numeroOS &&
+    a.dataHora === b.dataHora &&
+    a.operador === b.operador &&
+    (a.tipoComprovante ?? "recebimento") === (b.tipoComprovante ?? "recebimento") &&
+    centavos(a.valorPago) === centavos(b.valorPago) &&
+    centavos(a.recebidoAcumulado) === centavos(b.recebidoAcumulado) &&
+    formas(a) === formas(b)
+  );
+}
 
 /**
- * Comprovante que a OS pode mostrar AGORA. O da sessão (resposta do servidor a
- * este recebimento) e o persistido seguem a MESMA regra: só valem se o acumulado
- * deles é o recebido atual da projeção da mesma OS. Um estorno feito depois — por
- * esta ou outra sessão — nunca deixa o comprovante estornado imprimível; sem
- * leitura confirmada, nada é oferecido.
+ * Comprovante que a OS pode mostrar AGORA (reimpressão inclusive). Sem leitura
+ * confirmada do título (`pagamentosVigentes`) e do recebido atual, nada é
+ * oferecido. A sessão só define a origem ("acabou de receber"), nunca o conteúdo.
  */
 export function escolherReciboV4(input: {
   sessao: ComprovanteReciboV3 | null | undefined;
   os: { timeline?: unknown } | null | undefined;
   recebidoAtual: number | null | undefined;
+  pagamentosVigentes: ReadonlyArray<PagamentoVigenteV4> | null | undefined;
 }): LeituraReciboV4 {
-  if (!finito(input.recebidoAtual)) return { estado: "confirmando" };
+  if (!finito(input.recebidoAtual) || !Array.isArray(input.pagamentosVigentes)) return { estado: "confirmando" };
+  const semComprovante = input.recebidoAtual > 0 ? ({ estado: "indisponivel" } as const) : ({ estado: "sem_recebimento" } as const);
+  const validos = comprovantesValidosDaOSV4(input.os);
+  const ultimo = validos[validos.length - 1];
+  if (!ultimo || !casaComTitulo(validos, input.pagamentosVigentes)) return semComprovante;
+  if (centavos(ultimo.recibo.recebidoAcumulado) !== centavos(input.recebidoAtual)) return semComprovante;
   const sessao = comoComprovante(input.sessao);
-  if (sessao && centavos(sessao.recebidoAcumulado) === centavos(input.recebidoAtual)) {
-    return { estado: "disponivel", recibo: sessao, origem: "sessao", eventoId: null };
-  }
-  const persistido = lerReciboPersistidoV4({ os: input.os, recebidoAtual: input.recebidoAtual });
-  if (persistido.estado === "disponivel") {
-    return { estado: "disponivel", recibo: persistido.persistido.recibo, origem: "persistido", eventoId: persistido.persistido.eventoId };
-  }
-  return persistido;
+  return {
+    estado: "disponivel",
+    recibo: ultimo.recibo,
+    origem: sessao && mesmoComprovante(sessao, ultimo.recibo) ? "sessao" : "persistido",
+    eventoId: ultimo.eventoId,
+  };
 }
 
 /**
- * Comprovante oferecido para reimpressão. `recebidoAtual` é o recebido da
- * projeção server-side da MESMA OS (null = ainda não confirmado → nada é
- * oferecido). O comprovante só vale se o acumulado dele é o recebido atual.
+ * Mesma decisão a partir de uma projeção JÁ estabelecida da MESMA OS. Sem título,
+ * nada foi recebido (todo recebimento canônico cria o título antes); com título mas
+ * recebido/histórico ilegíveis, o comprovante fica indisponível — nunca "confirmando"
+ * para sempre.
+ */
+export function lerReciboDaProjecaoV4(input: {
+  sessao: ComprovanteReciboV3 | null | undefined;
+  os: { timeline?: unknown } | null | undefined;
+  projection: { receivedTotal: number | null; receivableFound: boolean; receivablePayments?: ReadonlyArray<PagamentoVigenteV4> | null };
+}): LeituraReciboV4 {
+  const { projection } = input;
+  const recebidoAtual = projection.receivedTotal ?? (projection.receivableFound ? null : 0);
+  const pagamentosVigentes = projection.receivablePayments ?? (projection.receivableFound ? null : []);
+  if (recebidoAtual == null || pagamentosVigentes == null) return { estado: "indisponivel" };
+  return escolherReciboV4({ sessao: input.sessao, os: input.os, recebidoAtual, pagamentosVigentes });
+}
+
+/**
+ * Leitura só da timeline da OS (sem o título): o último comprovante não estornado
+ * pela OS cujo acumulado é o recebido atual. Use `escolherReciboV4` para decidir o
+ * que mostrar — esta leitura não enxerga baixa/estorno feitos fora da OS.
  */
 export function lerReciboPersistidoV4(input: {
   os: { timeline?: unknown } | null | undefined;

@@ -9,10 +9,10 @@
  * V3, só a apresentação é V4-nativa. A impressão reusa o motor real
  * `ReciboPreviewV3` (browser print — sem PDF novo).
  *
- * GOAL OPS-V4-FLUXO-CURTO-006: o comprovante vem de `v.reciboAtual` — o da sessão
- * ou, após reload/outra máquina, o PERSISTIDO pelos writers canônicos; os dois só
- * valem se ainda correspondem ao recebido atual da mesma OS (um estorno posterior,
- * desta ou de outra sessão, invalida). Nunca o recibo de outra OS. */
+ * GOAL OPS-V4-FLUXO-CURTO-006: o comprovante vem de `v.reciboAtual` — sempre a
+ * evidência PERSISTIDA pelos writers canônicos que ainda casa com os pagamentos
+ * vigentes do título da mesma OS (estorno, reposição ou baixa fora da OS
+ * invalidam); a sessão só marca "acabou de receber". Nunca o recibo de outra OS. */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -85,6 +85,13 @@ function ReciboModalConteudo({ v }: { v: V4Vals }) {
               {recibo.observacao && <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 9 }}>{recibo.observacao}</div>}
               <div style={{ fontSize: 10, color: C.faint2, marginTop: 11, textAlign: "center" }}>{fmtDataHora(recibo.dataHora)} · {recibo.operador}</div>
             </div>
+          ) : leitura?.estado === "erro" ? (
+            <div role="alert" style={{ textAlign: "center", color: C.dangerFg, fontSize: 12.5, lineHeight: 1.6, padding: "10px 4px 18px" }}>
+              Não foi possível confirmar os recebimentos desta OS.
+              <div style={{ fontSize: 11, color: C.faint2, marginTop: 8 }}>
+                Recarregue a OS antes de reimprimir o comprovante.
+              </div>
+            </div>
           ) : leitura?.estado === "confirmando" ? (
             <div style={{ textAlign: "center", color: C.subtle, fontSize: 12.5, lineHeight: 1.6, padding: "10px 4px 18px" }}>
               Confirmando os recebimentos desta OS…
@@ -93,7 +100,7 @@ function ReciboModalConteudo({ v }: { v: V4Vals }) {
             <div style={{ textAlign: "center", color: C.subtle, fontSize: 12.5, lineHeight: 1.6, padding: "10px 4px 18px" }}>
               O comprovante do recebimento atual não está disponível para reimpressão.
               <div style={{ fontSize: 11, color: C.faint2, marginTop: 8 }}>
-                O histórico desta OS mudou depois do último comprovante (estorno ou baixa fora do recebimento da OS). Confira o <b>Histórico de recebimentos</b> no Financeiro.
+                O histórico desta OS não confirma o último comprovante (estorno, baixa fora do recebimento da OS ou financeiro inconsistente). Confira o <b>Histórico de recebimentos</b> no Financeiro.
               </div>
             </div>
           ) : (

@@ -150,7 +150,7 @@ import {
 } from "@/lib/operacoes-v4/os-header-transversal";
 import { montarResumoFinanceiroOSV4 } from "@/lib/operacoes-v4/financeiro-v4";
 import { derivarRetiradaFinanceiraV4, servicoDaRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
-import { escolherReciboV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
+import { lerReciboDaProjecaoV4, type LeituraReciboV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
 import { buildGarantiasPortfolioV4 } from "@/lib/operacoes-v4/posvenda-v4";
 import {
   adaptAcessoriosEntrada,
@@ -920,17 +920,21 @@ export function buildVals(
     servico: servicoDaRetiradaV4(realOS),
     clienteNome: (realOS?.cliente?.nome ?? "").trim(),
   };
-  // Comprovante da MESMA OS: o da sessão (resposta deste recebimento) ou, após
-  // reload, o persistido pelos writers canônicos — os dois só valem se ainda
-  // correspondem ao recebido atual da projeção (estorno posterior invalida).
-  const reciboAtual = escolherReciboV4({
-    sessao: ctx.pdvServico.ultimoRecibo,
-    os: realOS,
-    recebidoAtual:
-      realOS && financialProjection && financialProjection.osId === realOS.id && !ctx.financialProjection.loading
-        ? financialProjection.receivedTotal
-        : null,
-  });
+  // Comprovante da MESMA OS, sempre da evidência PERSISTIDA (timeline da OS × pagamentos
+  // vigentes do título): só com o detalhe e a projeção desta OS estabelecidos; a sessão
+  // apenas marca "acabou de receber". Leitura com erro nunca vira "confirmando" eterno.
+  const leituraReciboEstabelecida =
+    !!realOS &&
+    cargaOS === "estabelecida" &&
+    !!financialProjection &&
+    financialProjection.osId === realOS.id &&
+    !ctx.financialProjection.loading;
+  const reciboAtual: LeituraReciboV4 =
+    ctx.financialProjection.error || cargaOS === "erro"
+      ? { estado: "erro" }
+      : !leituraReciboEstabelecida || !financialProjection
+        ? { estado: "confirmando" }
+        : lerReciboDaProjecaoV4({ sessao: ctx.pdvServico.ultimoRecibo, os: realOS, projection: financialProjection });
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
   const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);

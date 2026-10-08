@@ -330,10 +330,23 @@ describe("OPS-V4-FLUXO-CURTO-006 — confirmação de entrega separada", () => {
     expect(confirmarEntrega).not.toHaveBeenCalled();
   });
 
-  it("logo após receber (comprovante da sessão): 'Pagamento registrado. Falta confirmar a entrega.'", () => {
+  it("logo após receber (comprovante da sessão = o persistido pelo servidor): 'Pagamento registrado. Falta confirmar a entrega.'", () => {
+    const base = os("a");
+    const a = os("a", "pronta", {
+      timeline: [
+        { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { comprovante: recibo(base, 100, 100) } },
+        { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { comprovante: recibo(base, 200, 300) } },
+      ],
+    });
+    montar({ os: a, fin: { projection: projecao(a, PAGO) }, pdv: pdv({ ultimoRecibo: recibo(base, 200, 300) }) });
+    expect(screen.getByText("Pagamento registrado. Falta confirmar a entrega.")).toBeTruthy();
+  });
+
+  it("R2 comprovante da sessão sem evidência persistida coerente nunca vale (nem para o aviso)", () => {
     const a = os("a");
     montar({ os: a, fin: { projection: projecao(a, PAGO) }, pdv: pdv({ ultimoRecibo: recibo(a, 200, 300) }) });
-    expect(screen.getByText("Pagamento registrado. Falta confirmar a entrega.")).toBeTruthy();
+    expect(screen.queryByText("Pagamento registrado. Falta confirmar a entrega.")).toBeNull();
+    expect(within(guia()).getByText("Pagamento quitado — confirmar entrega.")).toBeTruthy();
   });
 
   it("T52/§18 retirado por: pré-preenchido com o cliente, editável, enviado à action canônica", async () => {
@@ -561,5 +574,69 @@ describe("OPS-V4-FLUXO-CURTO-006 — regressões da R1", () => {
     view.trocar({ os: a, fin: { projection: projecao(a, PAGO) } });
     await waitFor(() => expect(patches).toEqual(expect.arrayContaining([{ receberPagamento: false }])));
     expect(screen.queryByRole("dialog", { name: "Receber pagamento" })).toBeNull();
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-006 — regressões da R2", () => {
+  const comprovanteEm = (valor: number, acumulado: number, forma: "pix" | "dinheiro", dataHora: string) =>
+    montarComprovanteReciboV3({
+      os: os("a"), linhas: [{ forma, valor }], valorPago: valor,
+      pagamento: { total: 300, recebido: acumulado, saldo: 300 - acumulado, status: acumulado >= 300 ? "quitado" : "parcial" } as never,
+      intencaoLabel: acumulado >= 300 ? "Quitação" : "Parcial", operador: "QA", dataHora,
+    });
+
+  it("R2-P1 estorno do PIX 200 e reposição em dinheiro (mesmo acumulado): o PIX da sessão nunca é impresso", () => {
+    const pix200 = comprovanteEm(200, 300, "pix", "2026-10-08T12:05:00.000Z");
+    const dinheiro200 = comprovanteEm(200, 300, "dinheiro", "2026-10-08T12:20:00.000Z");
+    const a = os("a", "pronta", {
+      timeline: [
+        { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { operacaoId: "op-e1", comprovante: comprovanteEm(100, 100, "pix", "2026-10-08T12:00:00.000Z") } },
+        { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { operacaoId: "op-e2", comprovante: pix200 } },
+        { id: "e3", tipo: "financeiro_conta_receber_atualizada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:10:00Z", metadata: { estornado: 200, modo: "ultimo_pagamento" } },
+        { id: "e4", tipo: "operacao_cobranca_gerada", autor: "Outro", conteudo: "", criadoEm: "2026-10-08T12:20:00Z", metadata: { operacaoId: "op-e4", comprovante: dinheiro200 } },
+      ],
+    });
+    const titulo: Titulo = {
+      status: "pago",
+      historico: [
+        { tipo: "pagamento", valor: 100, loteId: "op-e1" },
+        { tipo: "pagamento", valor: 200, loteId: "op-e2" },
+        { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 1 },
+        { tipo: "pagamento", valor: 200, loteId: "op-e4" },
+      ],
+    };
+    montar({ os: a, fin: { projection: projecao(a, titulo) }, pdv: pdv({ ultimoRecibo: pix200 }), inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
+    const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
+    expect(within(d).getByText("Dinheiro")).toBeTruthy();
+    expect(within(d).queryByText("PIX")).toBeNull();
+    expect(within(d).getByText("Reimpressão do último comprovante registrado nesta OS.")).toBeTruthy();
+    // E o aviso de "acabou de receber" não usa o PIX estornado.
+    expect(screen.queryByText("Pagamento registrado. Falta confirmar a entrega.")).toBeNull();
+  });
+
+  it("R2-P1 leitura com erro: o modal diz que não foi possível confirmar (nunca 'confirmando' eterno)", () => {
+    const a = os("a");
+    montar({ os: a, fin: { projection: null, error: "Falha de rede." }, pdv: pdv({ ultimoRecibo: recibo(a, 300, 300) }), inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
+    const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
+    expect(within(d).getByText("Não foi possível confirmar os recebimentos desta OS.")).toBeTruthy();
+    expect(within(d).queryByRole("button", { name: "Imprimir comprovante" })).toBeNull();
+  });
+
+  it("R2-P2 sheet aberto com operação anterior em voo: foco entra no sheet e Escape fecha quando libera", async () => {
+    const a = os("a");
+    const ocupado = pdv({ recebendo: true });
+    const view = montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: ocupado, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
+    const s = await screen.findByRole("dialog", { name: "Receber pagamento" });
+    expect((within(s).getByRole("button", { name: "Fechar recebimento" }) as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect(s.contains(document.activeElement)).toBe(true));
+    // Ocupado: Tab não escapa do sheet e Escape não fecha. Liberado: Escape fecha.
+    fireEvent.keyDown(document.activeElement!, { key: "Tab" });
+    expect(s.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Receber pagamento" })).toBeTruthy();
+    view.trocar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: { ...ocupado, recebendo: false } });
+    expect(s.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Receber pagamento" })).toBeNull());
   });
 });

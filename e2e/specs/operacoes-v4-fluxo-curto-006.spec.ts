@@ -399,7 +399,13 @@ test("E11 — estorno: saldo volta, entrega volta a bloquear, comprovante estorn
 
 let osEstoque = { id: "", codigo: "", produto: "" };
 
-test("E12 — duplo clique + resposta perdida da entrega: um único fato de entrega", async ({ page }) => {
+/** Cabeçalhos do pedido original, sem os de transporte (o contexto do navegador repõe cookies). */
+function cabecalhosDoReplay(headers: Record<string, string>): Record<string, string> {
+  const fora = new Set(["host", "content-length", "cookie", "connection", "accept-encoding"]);
+  return Object.fromEntries(Object.entries(headers).filter(([nome]) => !fora.has(nome.toLowerCase()) && !nome.startsWith(":")));
+}
+
+test("E12 — duplo clique + resposta perdida + replay real do MESMO pedido: um único fato de entrega e uma baixa", async ({ page }) => {
   const produto = await prisma.produto.create({ data: { storeId: LOJA, name: `Tela QA E2E ${marca()}`, price: 150, stock: 5 } });
   const peca = { id: `peca-${marca()}`, nome: "Tela QA E2E", quantidade: 1, valorUnitario: 0, custoUnitario: 92, kindV3: "interno", produtoId: produto.id };
   const os = await semearOS(prisma, { pecas: [peca] });
@@ -407,8 +413,11 @@ test("E12 — duplo clique + resposta perdida da entrega: um único fato de entr
   await abrirOS(page, os.codigo);
   await receber(page, [{ forma: "pix" }]);
   await expect(confirmarEntrega(page)).toBeVisible({ timeout: 30_000 });
-  // Resposta perdida: o servidor efetiva, o navegador não recebe a resposta.
+  // Resposta perdida: o servidor efetiva, o navegador não recebe a resposta. O pedido é guardado.
+  const capturado: { pedido?: { url: string; headers: Record<string, string>; body: string } } = {};
   const soltar = await interceptarProximaAction(page, os.id, async (route) => {
+    const req = route.request();
+    capturado.pedido = { url: req.url(), headers: await req.allHeaders(), body: req.postData() ?? "" };
     await route.fetch();
     await route.abort("failed");
   });
@@ -416,14 +425,22 @@ test("E12 — duplo clique + resposta perdida da entrega: um único fato de entr
   await page.getByLabel("Retirado por").fill("Portador E12");
   await confirmarEntrega(page).dblclick();
   await expect.poll(async () => (await lerOS(prisma, os.id)).operacaoStatusV3, { timeout: 30_000 }).toBe("entregue");
-  await soltar();
-  // Retry após a resposta perdida: idempotente.
-  await page.reload();
-  await abrirOS(page, os.codigo);
+  // Recuperação SEM recarregar a página: depois da falha a V4 relê o servidor e mostra a entrega.
   await expect(guia(page).getByText("Entregue", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(confirmarEntrega(page)).toHaveCount(0);
+  await soltar();
+  // Replay real do MESMO pedido (mesma action, mesmos cabeçalhos e corpo), como um reenvio após a perda.
+  expect(capturado.pedido).toBeDefined();
+  const { url, headers, body } = capturado.pedido!;
+  const replay = await page.request.post(url, { headers: cabecalhosDoReplay(headers), data: body });
+  expect(replay.ok()).toBe(true);
   const lido = await lerOS(prisma, os.id);
   expect(entregas(lido)).toHaveLength(1);
   expect(lido.entregaV3.recebidoPor).toBe("Portador E12");
+  expect(await prisma.movimentacaoEstoque.count({ where: { storeId: LOJA, produtoId: produto.id } })).toBe(1);
+  // A tela continua coerente depois do replay (sem reload): entregue, sem botão de entrega.
+  await expect(guia(page).getByText("Entregue", { exact: true })).toBeVisible();
+  await expect(confirmarEntrega(page)).toHaveCount(0);
 });
 
 test("E13 — troca A→B com a entrega de A em voo: B intacta", async ({ page }) => {

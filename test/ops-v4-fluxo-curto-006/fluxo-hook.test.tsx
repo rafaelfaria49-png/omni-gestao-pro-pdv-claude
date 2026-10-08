@@ -76,14 +76,30 @@ function os(id: string, loja = LOJA): OrdemServico {
     timeline: [],
   } as unknown as OrdemServico;
 }
+// "Servidor" em memória: como os writers reais, o recebimento grava o comprovante na
+// timeline da OS e o pagamento (com a identidade) no histórico do título; o estorno
+// grava o evento na OS e o estorno referenciado no título.
+type Hist = Array<Record<string, unknown>>;
+let timelines: Record<string, unknown[]> = {};
+let historicos: Record<string, Hist> = {};
+let seqServidor = 0;
+const osAtual = (id: string) => ({ ...(id === "a" ? A : B), timeline: [...(timelines[id] ?? [])] }) as unknown as OrdemServico;
 const proj = (o: OrdemServico, recebido: number, loja = LOJA) =>
   projectFinancialOSV4({
     storeId: loja, osId: o.id, prismaValorTotal: 300, loadedAt: "2026-10-08T12:00:00Z",
     payload: { ...(o as unknown as Record<string, unknown>), valorTotal: 300 } as never,
-    titulo: { id: "cr", storeId: loja, localKey: `os-faturamento:${loja}:${o.id}`, valor: 300, status: recebido >= 300 ? "pago" : recebido > 0 ? "parcial" : "pendente", payload: { ordemServicoId: o.id, historico: recebido > 0 ? [{ tipo: "pagamento", valor: recebido }] : [] } },
+    titulo: { id: "cr", storeId: loja, localKey: `os-faturamento:${loja}:${o.id}`, valor: 300, status: recebido >= 300 ? "pago" : recebido > 0 ? "parcial" : "pendente", payload: { ordemServicoId: o.id, historico: [...(historicos[o.id] ?? [])] } },
   });
 const leitura = (recebido: number) => ({ total: 300, recebido, saldo: 300 - recebido, status: recebido >= 300 ? "quitado" : recebido > 0 ? "parcial" : "aberto", sessao: { aberta: true, sessaoId: "sessao-qa" }, aPrazo: null });
-const recibo = (o: OrdemServico) => montarComprovanteReciboV3({ os: o, linhas: [{ forma: "pix", valor: 300 }], valorPago: 300, pagamento: { total: 300, recebido: 300, saldo: 0, status: "quitado" } as never, intencaoLabel: "Quitação", operador: "QA", dataHora: "2026-10-08T12:00:00Z" });
+const recibo = (o: OrdemServico) => montarComprovanteReciboV3({ os: o, linhas: [{ forma: "pix", valor: 300 }], valorPago: 300, pagamento: { total: 300, recebido: 300, saldo: 0, status: "quitado" } as never, intencaoLabel: "Quitação", operador: "QA", dataHora: `2026-10-08T12:00:${String(++seqServidor).padStart(2, "0")}.000Z` });
+/** Efeitos persistidos de um recebimento de 300 na OS `id` (comprovante + pagamento identificado). */
+function gravarRecebimento(id: string, operacaoId: string) {
+  const rec = recibo(id === "a" ? A : B);
+  (historicos[id] ??= []).push({ tipo: "liquidacao", valor: 300, loteId: operacaoId });
+  (timelines[id] ??= []).push({ id: `ev-${++seqServidor}`, tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: rec.dataHora, metadata: { operacaoId, comprovante: rec } });
+  recebidoPorOS[id] = 300;
+  return rec;
+}
 
 let recebidoPorOS: Record<string, number> = {};
 const A = os("a");
@@ -92,19 +108,24 @@ const B = os("b");
 beforeEach(() => {
   h.loja = LOJA;
   recebidoPorOS = { a: 0, b: 0 };
+  timelines = { a: [], b: [] };
+  historicos = { a: [], b: [] };
   for (const fn of Object.values(m)) fn.mockReset();
-  m.listOrdens.mockImplementation(async () => [A, B]);
-  m.getOrdem.mockImplementation(async (_sid: string, id: string) => (id === "a" ? A : id === "b" ? B : null));
-  m.lerProjecaoFinanceiraOSV4.mockImplementation(async (sid: string, id: string) => proj(id === "a" ? A : B, recebidoPorOS[id] ?? 0, sid));
+  m.listOrdens.mockImplementation(async () => [osAtual("a"), osAtual("b")]);
+  m.getOrdem.mockImplementation(async (_sid: string, id: string) => (id === "a" || id === "b" ? osAtual(id) : null));
+  m.lerProjecaoFinanceiraOSV4.mockImplementation(async (sid: string, id: string) => proj(osAtual(id), recebidoPorOS[id] ?? 0, sid));
   m.lerProjecoesFinanceirasOSV4.mockImplementation(async () => []);
   m.lerPagamentoOSV3.mockImplementation(async (_sid: string, id: string) => leitura(recebidoPorOS[id] ?? 0));
-  m.receberOSV3.mockImplementation(async (_sid: string, id: string) => {
-    recebidoPorOS[id] = 300;
-    return { pagamento: leitura(300), recibo: recibo(id === "a" ? A : B), os: id === "a" ? A : B, valorRecebido: 300, op: "liquidar" };
+  m.receberOSV3.mockImplementation(async (_sid: string, id: string, input: { operacaoId: string }) => {
+    const rec = gravarRecebimento(id, input.operacaoId);
+    return { pagamento: leitura(300), recibo: rec, os: osAtual(id), valorRecebido: 300, op: "liquidar" };
   });
   m.estornarRecebimentoOSV3.mockImplementation(async (_sid: string, id: string) => {
+    const hist = (historicos[id] ??= []);
+    hist.push({ tipo: "estorno_pagamento", valor: 300, refHistoricoIndex: hist.length - 1 });
+    (timelines[id] ??= []).push({ id: `ev-${++seqServidor}`, tipo: "financeiro_conta_receber_atualizada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T13:00:00Z", metadata: { estornado: 300, modo: "ultimo_pagamento" } });
     recebidoPorOS[id] = 0;
-    return { pagamento: leitura(0), os: id === "a" ? A : B, estornado: 300 };
+    return { pagamento: leitura(0), os: osAtual(id), estornado: 300 };
   });
   m.registrarEntregaV3.mockImplementation(async () => A);
 });
@@ -141,7 +162,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — ligação real (useV4Preview + usePdvServic
   });
 
   it("confirmar entrega envia 'Retirado por' e a data à action canônica", async () => {
-    recebidoPorOS.a = 300;
+    gravarRecebimento("a", "op-anterior");
     const r = await montarComOS("a");
     await act(async () => { await r.result.current.confirmarEntrega(undefined, undefined, "Portador QA"); });
     expect(m.registrarEntregaV3).toHaveBeenCalledTimes(1);
@@ -175,8 +196,8 @@ describe("OPS-V4-FLUXO-CURTO-006 — ligação real (useV4Preview + usePdvServic
       (_sid: string, id: string) =>
         new Promise((resolve) => {
           soltar = () => {
-            recebidoPorOS[id] = 300;
-            resolve({ pagamento: leitura(300), recibo: recibo(A), os: A, valorRecebido: 300, op: "liquidar" });
+            const rec = gravarRecebimento(id, "op-a-em-voo");
+            resolve({ pagamento: leitura(300), recibo: rec, os: osAtual(id), valorRecebido: 300, op: "liquidar" });
           };
         }),
     );
@@ -197,14 +218,16 @@ describe("OPS-V4-FLUXO-CURTO-006 — ligação real (useV4Preview + usePdvServic
 
 describe("OPS-V4-FLUXO-CURTO-006 — regressões da R1 (hook real)", () => {
   it("R1-P1b estorno de A responde com o operador em B: devolve false, B mantém recibo e modal, sem releitura de B", async () => {
-    recebidoPorOS.a = 300;
+    gravarRecebimento("a", "op-anterior");
     let soltar!: () => void;
     m.estornarRecebimentoOSV3.mockImplementationOnce(
       (_sid: string, id: string) =>
         new Promise((resolve) => {
           soltar = () => {
+            historicos[id]!.push({ tipo: "estorno_pagamento", valor: 300, refHistoricoIndex: 0 });
+            timelines[id]!.push({ id: "ev-estorno-a", tipo: "financeiro_conta_receber_atualizada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T13:00:00Z", metadata: { estornado: 300, modo: "ultimo_pagamento" } });
             recebidoPorOS[id] = 0;
-            resolve({ pagamento: leitura(0), os: A, estornado: 300 });
+            resolve({ pagamento: leitura(0), os: osAtual(id), estornado: 300 });
           };
         }),
     );
@@ -231,11 +254,33 @@ describe("OPS-V4-FLUXO-CURTO-006 — regressões da R1 (hook real)", () => {
     const r = await montarComOS("a");
     await act(async () => { await r.result.current.pdvServico.receber({ linhas: [{ forma: "pix", valor: 300 }], sessaoId: "sessao-qa" }); });
     await waitFor(() => expect(r.result.current.reciboAtual).toMatchObject({ estado: "disponivel", origem: "sessao" }));
-    // Outro operador estorna fora desta sessão; a V4 relê o servidor.
+    // Outro operador estorna fora desta sessão (só o título registra); a V4 relê o servidor.
+    historicos.a!.push({ tipo: "estorno_pagamento", valor: 300, refHistoricoIndex: 0 });
     recebidoPorOS.a = 0;
     act(() => r.result.current.financial.reload());
     await waitFor(() => expect(r.result.current.financial.projection?.receivedTotal).toBe(0));
     expect(r.result.current.pdvServico.ultimoRecibo?.numeroOS).toBe("OS-A");
     expect(r.result.current.reciboAtual).toEqual({ estado: "sem_recebimento" });
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-006 — regressão da R2 (hook real)", () => {
+  it("R2-P1 outro operador estorna e repõe o MESMO valor em dinheiro: a OS oferece o comprovante novo, nunca o PIX estornado da sessão", async () => {
+    const r = await montarComOS("a");
+    await act(async () => { await r.result.current.pdvServico.receber({ linhas: [{ forma: "pix", valor: 300 }], sessaoId: "sessao-qa" }); });
+    await waitFor(() => expect(r.result.current.reciboAtual).toMatchObject({ estado: "disponivel", origem: "sessao" }));
+    const pixDaSessao = r.result.current.pdvServico.ultimoRecibo;
+    // Outro operador (outra sessão): estorno pela OS + reposição em dinheiro, mesmo acumulado.
+    await m.estornarRecebimentoOSV3("loja-qa-006", "a", { sessaoId: "outra" });
+    const dinheiro = montarComprovanteReciboV3({ os: A, linhas: [{ forma: "dinheiro", valor: 300 }], valorPago: 300, pagamento: { total: 300, recebido: 300, saldo: 0, status: "quitado" } as never, intencaoLabel: "Quitação", operador: "Outro", dataHora: "2026-10-08T14:00:00.000Z" });
+    historicos.a!.push({ tipo: "liquidacao", valor: 300, loteId: "op-outro" });
+    timelines.a!.push({ id: "ev-outro", tipo: "operacao_cobranca_gerada", autor: "Outro", conteudo: "", criadoEm: dinheiro.dataHora, metadata: { operacaoId: "op-outro", comprovante: dinheiro } });
+    recebidoPorOS.a = 300;
+    // Qualquer escrita desta OS relê detalhe e projeção (runWrite) — aqui uma gravação de garantia espiã.
+    await act(async () => { await r.result.current.salvarGarantia({ modeloId: "tela" }); });
+    await waitFor(() => expect(r.result.current.reciboAtual).toMatchObject({ estado: "disponivel", origem: "persistido" }));
+    expect(r.result.current.pdvServico.ultimoRecibo).toEqual(pixDaSessao);
+    const atual = r.result.current.reciboAtual;
+    expect(atual.estado === "disponivel" && atual.recibo.formas.map((f) => f.forma)).toEqual(["dinheiro"]);
   });
 });

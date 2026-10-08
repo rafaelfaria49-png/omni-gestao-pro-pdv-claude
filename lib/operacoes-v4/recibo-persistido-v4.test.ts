@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import { montarComprovanteReciboV3, type PagamentoV3 } from "@/lib/operacoes-v3/payment-model";
 import { montarComprovanteMistoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
-import { comprovantesValidosDaOSV4, escolherReciboV4, lerReciboPersistidoV4 } from "./recibo-persistido-v4";
+import { comprovantesValidosDaOSV4, escolherReciboV4, lerReciboDaProjecaoV4, lerReciboPersistidoV4 } from "./recibo-persistido-v4";
 
 const os = { id: "os-a", codigo: "OS-A", cliente: { nome: "Cliente QA" }, equipamento: { marca: "Samsung", modelo: "A54" } } as OrdemServico;
 const pag = (total: number, recebido: number): PagamentoV3 =>
   ({ total, recebido, saldo: total - recebido, status: recebido >= total ? "quitado" : recebido > 0 ? "parcial" : "aberto" }) as PagamentoV3;
 
-function recebimento(id: string, valor: number, acumulado: number, total = 300) {
+function recebimento(id: string, valor: number, acumulado: number, total = 300, forma: "pix" | "dinheiro" = "pix") {
   return {
     id,
     tipo: "operacao_cobranca_gerada",
@@ -17,12 +17,12 @@ function recebimento(id: string, valor: number, acumulado: number, total = 300) 
       operacaoId: `op-${id}`,
       comprovante: montarComprovanteReciboV3({
         os,
-        linhas: [{ forma: "pix", valor }],
+        linhas: [{ forma, valor }],
         valorPago: valor,
         pagamento: pag(total, acumulado),
         intencaoLabel: acumulado >= total ? "Quitação" : "Parcial",
         operador: "QA",
-        dataHora: "2026-10-08T12:00:00.000Z",
+        dataHora: `2026-10-08T12:00:00.000Z#${id}`,
       }),
     },
   };
@@ -89,21 +89,70 @@ describe("OPS-V4-FLUXO-CURTO-006 — recibo persistido", () => {
   });
 });
 
-describe("OPS-V4-FLUXO-CURTO-006 — comprovante oferecido (sessão × persistido, R1)", () => {
-  const sessaoQuitacao = recebimento("s", 200, 300).metadata.comprovante;
+describe("OPS-V4-FLUXO-CURTO-006 — comprovante oferecido: OS × pagamentos vigentes do título (R1/R2)", () => {
+  const pagou = (valor: number, id: string) => ({ amount: valor, operationId: `op-${id}` });
+  const comprovante = (ev: ReturnType<typeof recebimento>) => ev.metadata.comprovante;
 
-  it("sessão coerente com o recebido atual: oferece o da sessão", () => {
-    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: { timeline: [] }, recebidoAtual: 300 })).toMatchObject({ estado: "disponivel", origem: "sessao", recibo: { valorPago: 200 } });
+  it("parcial 100 + 200: casa com o título e a sessão marca 'acabou de receber'", () => {
+    const e1 = recebimento("e1", 100, 100);
+    const e2 = recebimento("e2", 200, 300);
+    const leitura = escolherReciboV4({ sessao: comprovante(e2), os: { timeline: [e1, e2] }, recebidoAtual: 300, pagamentosVigentes: [pagou(100, "e1"), pagou(200, "e2")] });
+    expect(leitura).toMatchObject({ estado: "disponivel", origem: "sessao", eventoId: "e2", recibo: { valorPago: 200 } });
   });
 
-  it("sessão estornada depois (recebido atual 100): nunca a da sessão — vale o persistido coerente", () => {
-    const timeline = [recebimento("e1", 100, 100), recebimento("e2", 200, 300), estorno("e3", 200)];
-    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: { timeline }, recebidoAtual: 100 })).toMatchObject({ estado: "disponivel", origem: "persistido", eventoId: "e1" });
-    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: { timeline: [] }, recebidoAtual: 100 })).toEqual({ estado: "indisponivel" });
-    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: { timeline: [] }, recebidoAtual: 0 })).toEqual({ estado: "sem_recebimento" });
+  it("R2: estorno do PIX 200 e reposição de 200 em dinheiro (mesmo acumulado) — nunca o PIX estornado da sessão", () => {
+    const e1 = recebimento("e1", 100, 100);
+    const e2 = recebimento("e2", 200, 300);
+    const e4 = recebimento("e4", 200, 300, 300, "dinheiro");
+    const leitura = escolherReciboV4({
+      sessao: comprovante(e2),
+      os: { timeline: [e1, e2, estorno("e3", 200), e4] },
+      recebidoAtual: 300,
+      pagamentosVigentes: [pagou(100, "e1"), pagou(200, "e4")],
+    });
+    expect(leitura).toMatchObject({ estado: "disponivel", origem: "persistido", eventoId: "e4" });
+    expect(leitura.estado === "disponivel" && leitura.recibo.formas.map((f) => f.forma)).toEqual(["dinheiro"]);
   });
 
-  it("sem leitura confirmada nada é oferecido, nem o da sessão", () => {
-    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: null, recebidoAtual: null })).toEqual({ estado: "confirmando" });
+  it("estorno e reposição feitos FORA da OS (só no título): nada é oferecido, nem com o mesmo acumulado", () => {
+    const e1 = recebimento("e1", 100, 100);
+    const e2 = recebimento("e2", 200, 300);
+    // Título: 100 (e1) + 200 externo; o PIX 200 da OS foi estornado no Financeiro.
+    expect(escolherReciboV4({ sessao: comprovante(e2), os: { timeline: [e1, e2] }, recebidoAtual: 300, pagamentosVigentes: [pagou(100, "e1"), { amount: 200, operationId: "baixa-externa" }] })).toEqual({ estado: "indisponivel" });
+    // Baixa externa a mais (sem comprovante na OS): sequência não casa.
+    expect(escolherReciboV4({ sessao: null, os: { timeline: [e1] }, recebidoAtual: 300, pagamentosVigentes: [pagou(100, "e1"), { amount: 200, operationId: null }] })).toEqual({ estado: "indisponivel" });
+  });
+
+  it("estorno pela OS sem reposição: volta ao comprovante anterior; estorno de tudo = sem recebimento", () => {
+    const e1 = recebimento("e1", 100, 100);
+    const e2 = recebimento("e2", 200, 300);
+    expect(escolherReciboV4({ sessao: comprovante(e2), os: { timeline: [e1, e2, estorno("e3", 200)] }, recebidoAtual: 100, pagamentosVigentes: [pagou(100, "e1")] })).toMatchObject({ estado: "disponivel", origem: "persistido", eventoId: "e1" });
+    expect(escolherReciboV4({ sessao: comprovante(e1), os: { timeline: [e1, estorno("e2", 100)] }, recebidoAtual: 0, pagamentosVigentes: [] })).toEqual({ estado: "sem_recebimento" });
+  });
+
+  it("pagamento do título sem identidade (misto) casa só por valor e ordem; identidade divergente nunca casa", () => {
+    const e1 = recebimento("e1", 300, 300);
+    expect(escolherReciboV4({ sessao: null, os: { timeline: [e1] }, recebidoAtual: 300, pagamentosVigentes: [{ amount: 300, operationId: null }] })).toMatchObject({ estado: "disponivel" });
+    expect(escolherReciboV4({ sessao: null, os: { timeline: [e1] }, recebidoAtual: 300, pagamentosVigentes: [{ amount: 300, operationId: "op-outra" }] })).toEqual({ estado: "indisponivel" });
+  });
+
+  it("sem leitura confirmada do título ou do recebido, nada é oferecido — nem o da sessão", () => {
+    const e1 = recebimento("e1", 300, 300);
+    expect(escolherReciboV4({ sessao: comprovante(e1), os: { timeline: [e1] }, recebidoAtual: null, pagamentosVigentes: [pagou(300, "e1")] })).toEqual({ estado: "confirmando" });
+    expect(escolherReciboV4({ sessao: comprovante(e1), os: { timeline: [e1] }, recebidoAtual: 300, pagamentosVigentes: null })).toEqual({ estado: "confirmando" });
+    expect(escolherReciboV4({ sessao: comprovante(e1), os: { timeline: [] }, recebidoAtual: 300, pagamentosVigentes: [pagou(300, "e1")] })).toEqual({ estado: "indisponivel" });
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-006 — comprovante a partir da projeção estabelecida", () => {
+  it("sem título = nada recebido (nunca 'confirmando' eterno); título ilegível = indisponível", () => {
+    expect(lerReciboDaProjecaoV4({ sessao: null, os: { timeline: [] }, projection: { receivedTotal: null, receivableFound: false, receivablePayments: [] } })).toEqual({ estado: "sem_recebimento" });
+    expect(lerReciboDaProjecaoV4({ sessao: null, os: { timeline: [] }, projection: { receivedTotal: null, receivableFound: true, receivablePayments: null } })).toEqual({ estado: "indisponivel" });
+    expect(lerReciboDaProjecaoV4({ sessao: null, os: { timeline: [] }, projection: { receivedTotal: 100, receivableFound: true } })).toEqual({ estado: "indisponivel" });
+  });
+
+  it("projeção legível delega para a regra OS × título", () => {
+    const e1 = recebimento("e1", 300, 300);
+    expect(lerReciboDaProjecaoV4({ sessao: e1.metadata.comprovante, os: { timeline: [e1] }, projection: { receivedTotal: 300, receivableFound: true, receivablePayments: [{ amount: 300, operationId: "op-e1" }] } })).toMatchObject({ estado: "disponivel", origem: "sessao" });
   });
 });
