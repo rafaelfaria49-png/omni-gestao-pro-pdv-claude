@@ -390,6 +390,14 @@ describe("OPS-V4-FLUXO-CURTO-007 — PostgreSQL real", () => {
     expect(orfa).toHaveLength(1);
     expect(lerRetornosV3((await lerOS(original)) as OrdemServico)[0]).toMatchObject({ operacaoId: op });
     expect(lerRetornosV3((await lerOS(original)) as OrdemServico)[0]!.osRetornoId).toBeUndefined();
+    // R2-F2: finalizar agora deixaria a filha órfã — o servidor recusa e manda reconciliar.
+    const [retAntes] = lerRetornosV3((await lerOS(original)) as OrdemServico);
+    await expect(finalizarRetornoV3(loja, original, retAntes!.id)).rejects.toThrow("ainda está em processamento"); // reserva viva
+    const expirar = await lerOS(original); // cenário da R2: passaram-se os 15 min da reserva
+    expirar.retornosV3 = (expirar.retornosV3 as Payload[]).map((r) => ({ ...r, reserva: { ...r.reserva, expiraEm: "2020-01-01T00:00:00.000Z" } }));
+    await outroProcesso.ordemServico.update({ where: { id: original }, data: { payload: expirar as Prisma.InputJsonValue } });
+    await expect(finalizarRetornoV3(loja, original, retAntes!.id)).rejects.toThrow("criado e ainda não vinculado");
+    expect(lerRetornosV3((await lerOS(original)) as OrdemServico)[0]!.status).toBe("aberto");
     const r = await abrirRetornoV3(loja, original, { motivo: "Touch", operacaoId: op });
     expect(r.situacao).toBe("recuperado");
     expect(r.atendimento!.id).toBe(orfa[0]!.id);
@@ -425,6 +433,19 @@ describe("OPS-V4-FLUXO-CURTO-007 — PostgreSQL real", () => {
     expect((o.timeline as Payload[]).map((e) => e.metadata?.evento).filter(Boolean)).toEqual(["retorno_reserva_descartada", "retorno_aberto"]);
   });
 
+  it("R2-F1 retorno LEGADO (sem operação): falha na criação do atendimento restaura a entrada exatamente", async () => {
+    comoAdmin();
+    const loja = await novaLoja();
+    const legado = { id: "ret-legado-pg", osOriginalId: "x", motivo: "Relato legado", observacao: "Obs legado", criadoEm: "2026-08-02T12:00:00.000Z", criadoPor: "Ana", status: "aberto", extra: "preservado" };
+    const original = await novaOS(loja, { extra: { retornosV3: [legado] } });
+    const antes = await linhaOriginal(original);
+    falharUmaVez(criacaoDaFilha);
+    await expect(abrirRetornoV3(loja, original, { motivo: "Relato legado", operacaoId: `op-r2f1-${SUFIXO}` })).rejects.toThrow("falha injetada");
+    expect(await linhaOriginal(original)).toEqual({ ...antes, payload: { ...antes.payload, atualizadoEm: (await lerOS(original)).atualizadoEm } });
+    expect((await lerOS(original)).retornosV3).toEqual([legado]);
+    expect(await filhasDe(loja, original)).toHaveLength(0);
+  });
+
   it("T57 original preservada: retorno coberto e fora de cobertura, abrir e finalizar — zero efeito financeiro/estoque/garantia", async () => {
     comoAdmin();
     const loja = await novaLoja();
@@ -441,6 +462,9 @@ describe("OPS-V4-FLUXO-CURTO-007 — PostgreSQL real", () => {
     }
     expect(abertos.map((r) => r.situacao)).toEqual(["criado", "criado", "criado"]);
     expect(lerRetornosV3((await lerOS(vencida)) as OrdemServico)[0]).toMatchObject({ garantiaAtivaNaAbertura: false, garantiaSituacaoNaAbertura: "vencida" });
+    // R2-F7: só a coberta vira "garantia acionada"; as demais são registro informativo.
+    const tipoAbertura = async (id: string) => ((await lerOS(id)).timeline as Payload[]).find((e) => e.metadata?.evento === "retorno_aberto")?.tipo;
+    expect([await tipoAbertura(coberta), await tipoAbertura(vencida), await tipoAbertura(semGarantia)]).toEqual(["garantia_acionada", "observacao", "observacao"]);
     expect(lerRetornosV3((await lerOS(semGarantia)) as OrdemServico)[0]).toMatchObject({ garantiaAtivaNaAbertura: false, garantiaSituacaoNaAbertura: "nenhuma" });
     for (const id of [coberta, vencida, semGarantia]) {
       const [ret] = lerRetornosV3((await lerOS(id)) as OrdemServico);

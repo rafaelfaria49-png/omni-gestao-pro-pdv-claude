@@ -139,12 +139,6 @@ async function travar<R>(
   return resultado;
 }
 
-async function mutar(storeId: string, id: string, montar: (payload: OSPayloadFull) => OSPayloadFull): Promise<OrdemServico> {
-  return travar(storeId, id, ({ payload }) => {
-    const proximo = montar(payload as OSPayloadFull);
-    return { payload: proximo, resultado: proximo as unknown as OrdemServico };
-  });
-}
 
 export interface AbrirRetornoV3Input {
   motivo: string;
@@ -176,7 +170,8 @@ interface FilhaRetornoV3 {
 type DecisaoAberturaV3 =
   | { tipo: "replay"; os: OSPayloadFull; retorno: RetornoV3 }
   | { tipo: "adotado"; os: OSPayloadFull; retorno: RetornoV3; filha: FilhaRetornoV3; mesmaOperacao: boolean }
-  | { tipo: "criar"; os: OSPayloadFull; retorno: RetornoV3 };
+  /** `anterior`: entrada PREEXISTENTE retomada (legado ou a própria operação) — a compensação a restaura. */
+  | { tipo: "criar"; os: OSPayloadFull; retorno: RetornoV3; anterior?: RetornoBruto };
 
 function operacaoIdDe(valor: unknown): string {
   const id = text(valor);
@@ -209,6 +204,17 @@ function textoCobertura(situacao: GarantiaSituacaoV3 | undefined): string {
   if (situacao === "vencida") return "Garantia vencida na abertura: sem cobertura confirmada.";
   if (situacao === "sem_garantia") return "OS sem cobertura de garantia: sem cobertura confirmada.";
   return "Garantia não informada: nenhuma cobertura presumida.";
+}
+
+/**
+ * Evento de abertura do retorno. "Garantia acionada" só quando a garantia estava VIGENTE;
+ * sem cobertura confirmada (vencida, sem garantia, não informada) é registro informativo,
+ * com título explícito — a timeline nunca exibe garantia que não existe.
+ */
+function eventoDeRetorno(situacao: GarantiaSituacaoV3 | undefined, autor: string, conteudo: string, metadata: Record<string, unknown>): EventoTimeline {
+  if (situacao === "ativa") return { ...makeEvento("garantia_acionada", autor, conteudo, metadata), titulo: "Retorno em garantia" };
+  const titulo = situacao === "nenhuma" || !situacao ? "Retorno — garantia não informada" : "Retorno — sem cobertura confirmada";
+  return { ...makeEvento("observacao", autor, conteudo, metadata), titulo };
 }
 
 /** Rascunho canônico do atendimento + validações que impedem criar (sem cadastro novo de cliente). */
@@ -260,8 +266,8 @@ function vincularNoPayload(payload: OSPayloadFull, retornoId: string, filha: Fil
   const evento =
     jaRegistrado || !retorno
       ? null
-      : makeEvento(
-          "garantia_acionada",
+      : eventoDeRetorno(
+          retorno.garantiaSituacaoNaAbertura,
           operador,
           `Retorno aberto: ${retorno.motivo}. Atendimento ${filha.codigo} vinculado. ${textoCobertura(retorno.garantiaSituacaoNaAbertura)}`,
           {
@@ -292,8 +298,8 @@ async function registrarEventoNaFilha(storeId: string, filha: FilhaRetornoV3, or
     const timeline = timelineDe(payload);
     const ja = timeline.some((ev) => meta(ev).evento === "retorno_atendimento_aberto" && meta(ev).retornoId === retorno.id);
     if (ja) return { payload: null, resultado: payload as unknown as OrdemServico };
-    const evento = makeEvento(
-      "garantia_acionada",
+    const evento = eventoDeRetorno(
+      retorno.garantiaSituacaoNaAbertura,
       operador,
       `Atendimento de retorno da OS ${codigoOrigem}. Motivo: ${retorno.motivo}. ${textoCobertura(retorno.garantiaSituacaoNaAbertura)}`,
       { evento: "retorno_atendimento_aberto", osOriginalId: text(origem.id), osOriginalCodigo: codigoOrigem, retornoId: retorno.id, motivo: retorno.motivo },
@@ -431,7 +437,8 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: Abrir
         );
         const proximo = { ...atual, retornosV3: lista, atualizadoEm: nowIso() } as OSPayloadFull;
         const retorno = lerRetornosV3(proximo as unknown as OrdemServico).find((r) => r.id === aberto.id)!;
-        return { payload: proximo, resultado: { tipo: "criar", os: proximo, retorno } };
+        const anterior = brutos.find((r) => r.id === aberto.id);
+        return { payload: proximo, resultado: { tipo: "criar", os: proximo, retorno, ...(anterior ? { anterior } : {}) } };
       }
       // Reserva expirada de OUTRA operação, sem atendimento: descartada com auditoria.
       brutos = brutos.filter((r) => r.id !== aberto.id);
@@ -528,7 +535,12 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: Abrir
         return { payload: vinculado, resultado: { filha: encontrada, os: vinculado } };
       }
       if (alvo.reserva?.token !== token) return { payload: null, resultado: null };
-      const lista = retornosBrutos(atual).filter((r) => r.id !== retorno.id);
+      // Entrada criada por esta tentativa: some. Entrada PREEXISTENTE retomada (legado): volta
+      // exatamente ao que era — relato, observação, autoria e histórico preservados.
+      const anterior = decisao.anterior;
+      const lista = anterior
+        ? retornosBrutos(atual).map((r) => (r.id === retorno.id ? anterior : r))
+        : retornosBrutos(atual).filter((r) => r.id !== retorno.id);
       return { payload: { ...atual, retornosV3: lista, atualizadoEm: nowIso() } as OSPayloadFull, resultado: null };
     });
     if (!comp) throw erro;
@@ -604,12 +616,25 @@ export async function finalizarRetornoV3(storeId: string, osId: string, retornoI
   const now = nowIso();
 
   let motivoAlvo = "";
-  const salva = await mutar((storeId ?? "").trim(), id, (payload) => {
+  const sid = (storeId ?? "").trim();
+  const salva = await travar<OrdemServico>(sid, id, async ({ payload: bruto }, tx) => {
+    const payload = bruto as OSPayloadFull;
     const lista = lerRetornosV3(payload as unknown as OrdemServico);
     const alvo = lista.find((r) => r.id === rid);
     if (!alvo) throw new Error("Retorno não encontrado nesta OS.");
     if (alvo.status === "finalizado") throw new Error("Este retorno já está finalizado.");
     if (retornoEmAberturaV3(alvo)) throw new Error(MSG_EM_PROCESSAMENTO);
+    // GOAL 007: retorno ainda SEM vínculo não fecha se já existe atendimento criado para ele
+    // (abertura interrompida entre a criação e o vínculo). Fechar aqui deixaria a filha órfã:
+    // a reabertura adota esse atendimento (ou descarta a abertura) antes de qualquer final.
+    if (!alvo.osRetornoId) {
+      const filha = await buscarFilhaDoRetornoV3(tx, sid, id, alvo.id);
+      if (filha) {
+        throw new Error(
+          `Este retorno tem o atendimento ${filha.codigo} criado e ainda não vinculado. Abra o retorno novamente para reconciliar o vínculo antes de finalizar.`,
+        );
+      }
+    }
     motivoAlvo = alvo.motivo;
 
     const retornos = retornosBrutos(payload).map((r) => {
@@ -627,7 +652,8 @@ export async function finalizarRetornoV3(storeId: string, osId: string, retornoI
     );
 
     const timeline = timelineDe(payload);
-    return { ...payload, retornosV3: retornos, timeline: [...timeline, evento], atualizadoEm: now } as OSPayloadFull;
+    const proximo = { ...payload, retornosV3: retornos, timeline: [...timeline, evento], atualizadoEm: now } as OSPayloadFull;
+    return { payload: proximo, resultado: proximo as unknown as OrdemServico };
   });
 
   // Espinha de eventos (3C.0): retorno concluído.

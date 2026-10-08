@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import {
@@ -51,6 +51,11 @@ export function NovoAtendimentoLauncher({ v }: { v: V4Vals }) {
 
 function NovoAtendimentoLauncherContent({ v }: { v: V4Vals }) {
   const firstRef = useRef<HTMLButtonElement>(null);
+  // Gatilho que abriu o launcher (o "+ Novo"), lido antes de o foco entrar aqui: o fluxo
+  // Retorno / Garantia devolve o foco a ele, já que o launcher desmonta ao escolher.
+  const [gatilho] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  );
 
   useEffect(() => {
     firstRef.current?.focus();
@@ -68,7 +73,7 @@ function NovoAtendimentoLauncherContent({ v }: { v: V4Vals }) {
   }, [v]);
 
   const escolher = (id: NovoAtendimentoModalidadeV4) => {
-    v.escolherNovoAtendimento(id);
+    v.escolherNovoAtendimento(id, id === "retorno" ? gatilho : undefined);
   };
 
   return (

@@ -86,6 +86,16 @@ describe("buildPosVendaV4", () => {
     expect(view.podeFinalizarRetorno).toBe(false);
   });
 
+  it("R2-F2: abertura interrompida (reserva expirada, sem vínculo) é o retorno em aberto: reconciliar, não abrir outro", () => {
+    const view = buildPosVendaV4(garantia(90, "2026-08-01T12:00:00.000Z", {
+      retornosV3: [{ id: "r", osOriginalId: "os-1", motivo: "Touch", criadoEm: "2026-08-15T10:00:00.000Z", status: "aberto", operacaoId: "op-00000001", reserva: { token: "t", expiraEm: "2026-08-15T10:15:00.000Z" } }],
+    }), NOW);
+    expect(view.retornoEmAbertura).toBe(false);
+    expect(view.atendimentoPendente).toBe(true);
+    expect(view.elegibilidade.id).toBe("retorno_aberto");
+    expect(view.podeAbrirRetorno).toBe(false);
+  });
+
   it("GOAL 007: retorno legado em aberto sem atendimento oferece abrir o atendimento DELE (não um novo)", () => {
     const view = buildPosVendaV4(garantia(90, "2026-08-01T12:00:00.000Z", {
       retornosV3: [{ id: "r", osOriginalId: "os-1", motivo: "Touch", criadoEm: "2026-08-14T10:00:00.000Z", status: "aberto" }],

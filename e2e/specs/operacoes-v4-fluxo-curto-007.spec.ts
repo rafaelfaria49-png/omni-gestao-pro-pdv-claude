@@ -368,6 +368,7 @@ test("R07 — teclado: setas + Enter, Tab contido no diálogo, Escape fecha e de
   }
   await page.keyboard.press("Escape");
   await expect(dialogo(page)).toHaveCount(0);
+  await expect(page.getByTitle(/^Novo atendimento/)).toBeFocused(); // R2-F6: foco volta ao + Novo
   expect(await filhas(prisma, os.id)).toHaveLength(0);
 
   // Pela ficha: o foco volta ao botão que abriu o fluxo.

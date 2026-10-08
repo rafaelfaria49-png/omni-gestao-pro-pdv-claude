@@ -337,8 +337,10 @@ export interface V4DataCtx {
   // ---- Retorno / Garantia pela OS original (GOAL OPS-V4-FLUXO-CURTO-007) ----
   // Opcionais por compatibilidade com fixtures legados (ausente = fluxo indisponível).
   /** Abre o fluxo na loja ativa (OS original pré-selecionada ou `null` = escolher). */
-  abrirFluxoRetorno?: (origemOsId: string | null) => void;
+  abrirFluxoRetorno?: (origemOsId: string | null, opcoes?: { focoRetorno?: HTMLElement | null }) => void;
   fecharFluxoRetorno?: () => void;
+  /** Controle persistente que deve receber o foco quando o fluxo fechar (ex.: o "+ Novo"). */
+  focoRetornoFluxo?: () => HTMLElement | null;
   /** Busca server-side da OS original na loja ativa; a resposta carrega a loja consultada. */
   buscarOrigensRetorno?: (termo: string) => Promise<RespostaOrigensRetornoV4>;
   /** Releitura server-side da OS original pré-selecionada. */
@@ -1442,13 +1444,13 @@ export function buildVals(
     openNovoAtendimento: () => update(patchAbrirLauncherNovoAtendimentoV4()),
     closeNovoAtendimento: () => update({ novoAtendimento: false }),
     novoAtendimentoOpen: st.novoAtendimento,
-    escolherNovoAtendimento: (id: NovoAtendimentoModalidadeV4) => {
+    escolherNovoAtendimento: (id: NovoAtendimentoModalidadeV4, focoRetorno?: HTMLElement | null) => {
       if (id === "orcamento") ctx.definirOrcamentoRapidoPrefill(null);
       update(patchEscolherNovoAtendimentoV4(id));
       // GOAL OPS-V4-FLUXO-CURTO-007: "Retorno / Garantia" só abre o seletor da OS
       // original (nada é criado aqui); sem orquestrador do fluxo, avisa e não finge.
       if (id === "retorno") {
-        if (ctx.abrirFluxoRetorno) ctx.abrirFluxoRetorno(null);
+        if (ctx.abrirFluxoRetorno) ctx.abrirFluxoRetorno(null, { focoRetorno });
         else notify("Retorno / Garantia indisponível nesta tela.");
       }
     },
@@ -1461,6 +1463,7 @@ export function buildVals(
       else notify("Retorno / Garantia indisponível nesta tela.");
     },
     closeRetornoFluxo: () => ctx.fecharFluxoRetorno?.(),
+    focoRetornoFluxo: (): HTMLElement | null => ctx.focoRetornoFluxo?.() ?? null,
     buscarOrigensRetorno: (termo: string): Promise<RespostaOrigensRetornoV4> =>
       ctx.buscarOrigensRetorno ? ctx.buscarOrigensRetorno(termo) : Promise.reject(new Error("Busca indisponível.")),
     lerOrigemRetorno: (osId: string): Promise<RespostaOrigemRetornoV4> =>
@@ -2003,8 +2006,12 @@ export function useV4Preview(): V4Vals {
   // T05 + R03: espelhos da seleção para comparar DEPOIS do await — a seleção
   // (loja e/ou OS) pode ter mudado enquanto a action rodava.
   const selectedRef = useRef(st.selectedOsId);
+  // GOAL OPS-V4-FLUXO-CURTO-007: geração da SELEÇÃO (cobre A→B→A na mesma loja) para que
+  // a resposta de uma abertura de retorno nunca troque uma seleção feita depois do disparo.
+  const selecaoGenRef = useRef(0);
   useEffect(() => {
     selectedRef.current = st.selectedOsId;
+    selecaoGenRef.current += 1;
   }, [st.selectedOsId]);
   const lojaRef = useRef(lojaAtivaId);
   useEffect(() => {
@@ -2451,13 +2458,17 @@ export function useV4Preview(): V4Vals {
     },
     [chaveRascunhoRetorno],
   );
+  // Gatilho persistente para devolver o foco (o launcher desmonta antes do seletor montar).
+  const retornoFocoRef = useRef<HTMLElement | null>(null);
+  const focoRetornoFluxo = useCallback(() => retornoFocoRef.current, []);
   const abrirFluxoRetorno = useCallback(
-    (origemOsId: string | null) => {
+    (origemOsId: string | null, opcoes?: { focoRetorno?: HTMLElement | null }) => {
       const sid = (lojaAtivaId ?? "").trim();
       if (!sid) {
         notify("Selecione a loja ativa para registrar um retorno.");
         return;
       }
+      retornoFocoRef.current = opcoes?.focoRetorno ?? null;
       retornoGenRef.current += 1;
       update({ retornoFluxo: { lojaId: sid, origemOsId: origemOsId?.trim() || null }, novoAtendimento: false, menu: null });
     },
@@ -2491,8 +2502,12 @@ export function useV4Preview(): V4Vals {
       const origem = (origemOsId ?? "").trim();
       if (!sid || !origem) return { ok: false, mensagem: "Selecione a OS original na loja ativa." };
       const geracao = retornoGenRef.current;
+      const selecao = selecaoGenRef.current;
       const mesmoContexto = () =>
-        lojaRef.current === sid && retornoGenRef.current === geracao && retornoFluxoRef.current?.lojaId === sid;
+        lojaRef.current === sid &&
+        retornoGenRef.current === geracao &&
+        selecaoGenRef.current === selecao &&
+        retornoFluxoRef.current?.lojaId === sid;
       try {
         const r = await abrirRetornoV3(sid, origem, {
           motivo: comando.motivo,
@@ -2936,6 +2951,7 @@ export function useV4Preview(): V4Vals {
       abrirOsVinculada,
       abrirFluxoRetorno,
       fecharFluxoRetorno,
+      focoRetornoFluxo,
       buscarOrigensRetorno,
       lerOrigemRetorno,
       abrirRetornoDaOrigem,
@@ -3015,6 +3031,7 @@ export function useV4Preview(): V4Vals {
       abrirOsVinculada,
       abrirFluxoRetorno,
       fecharFluxoRetorno,
+      focoRetornoFluxo,
       buscarOrigensRetorno,
       lerOrigemRetorno,
       abrirRetornoDaOrigem,

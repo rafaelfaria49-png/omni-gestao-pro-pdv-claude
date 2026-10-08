@@ -257,16 +257,20 @@ export function buildPosVendaV4(os: OrdemServico, now: Date = new Date()): PosVe
   const retornos = lerRetornosV3(os);
   const retornoAberto = retornos.find((retorno) => retorno.status === "aberto");
   const enquadramento = enquadrarOrigemRetornoV4(os, now);
-  const elegibilidade = elegibilidadeRetorno(enquadramento);
   const vinculoOrigem = lerVinculoRetornoV3(os);
   const retornoEmAbertura = enquadramento.id === "abertura_em_processamento";
+  // Abertura interrompida (reserva expirada, sem atendimento vinculado): continua sendo o
+  // retorno em aberto desta OS — a reabertura adota o atendimento já criado ou descarta a reserva.
+  const aberturaInterrompida = !!retornoAberto && !retornoAberto.osRetornoId && !!retornoAberto.operacaoId && !retornoEmAbertura;
+  const elegibilidade = elegibilidadeRetorno(aberturaInterrompida ? { ...enquadramento, id: "retorno_sem_atendimento" } : enquadramento);
   return {
     garantia,
     elegibilidade,
     enquadramento,
     retornoAberto,
     retornoEmAbertura,
-    atendimentoPendente: !!text(os.id) && enquadramento.id === "retorno_sem_atendimento" && retornoLegadoSemAtendimentoV4(retornoAberto),
+    atendimentoPendente:
+      !!text(os.id) && (aberturaInterrompida || (enquadramento.id === "retorno_sem_atendimento" && retornoLegadoSemAtendimentoV4(retornoAberto))),
     retornos,
     podeAbrirRetorno: !!text(os.id) && elegibilidade.podeRegistrar,
     podeRegistrarOcorrencia: !!text(os.id) && enquadramento.acao === "registrar_ocorrencia",

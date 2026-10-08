@@ -209,6 +209,14 @@ describe("abrirRetornoV3 — abertura canônica", () => {
     expect(retorno.garantiaSituacaoNaAbertura).toBe("vencida");
     expect(mocks.criarOS.mock.calls[0]![1].recepcao.origem).toBe("retorno");
     expect(original().timeline[0].conteudo).toContain("sem cobertura confirmada");
+    // R2-F7: sem cobertura NUNCA é "garantia acionada" (nem na original nem na filha).
+    expect(original().timeline[0]).toMatchObject({ tipo: "observacao", titulo: "Retorno — sem cobertura confirmada" });
+    expect(mocks.rows.get("os-2001")!.payload.timeline[0]).toMatchObject({ tipo: "observacao", titulo: "Retorno — sem cobertura confirmada" });
+  });
+
+  it("R2-F7: com garantia vigente o evento é 'garantia acionada'", async () => {
+    await abrirRetornoV3(storeId, osId, { motivo: "Touch", operacaoId: OP });
+    expect(original().timeline[0]).toMatchObject({ tipo: "garantia_acionada", titulo: "Retorno em garantia" });
   });
 
   it("garantia não informada nunca vira cobertura positiva", async () => {
@@ -216,6 +224,7 @@ describe("abrirRetornoV3 — abertura canônica", () => {
     await abrirRetornoV3(storeId, osId, { motivo: "Voltou", operacaoId: OP });
     expect(original().retornosV3[0]).toMatchObject({ garantiaAtivaNaAbertura: false, garantiaSituacaoNaAbertura: "nenhuma" });
     expect(original().timeline[0].conteudo).toContain("Garantia não informada");
+    expect(original().timeline[0]).toMatchObject({ tipo: "observacao", titulo: "Retorno — garantia não informada" });
   });
 
   it("exige motivo e não grava estado parcial", async () => {
@@ -354,6 +363,15 @@ describe("abrirRetornoV3 — idempotência e concorrência (T56, unidade)", () =
     expect(mocks.emitirEvento).not.toHaveBeenCalled();
   });
 
+  it("R2-F1: falha ao abrir o atendimento de um retorno LEGADO restaura a entrada exatamente como era", async () => {
+    const legado = { id: "ret-legado", osOriginalId: osId, motivo: "Relato antigo", observacao: "Obs antiga", criadoEm: "2026-08-10T12:00:00.000Z", criadoPor: "Ana", status: "aberto", campoExtra: "preservado" };
+    semear({ retornosV3: [legado] });
+    mocks.criarOS.mockRejectedValueOnce(new Error("Falha ao criar a OS."));
+    await expect(abrirRetornoV3(storeId, osId, { motivo: "Relato antigo", operacaoId: OP })).rejects.toThrow("Falha ao criar a OS.");
+    expect(original().retornosV3).toEqual([legado]);
+    expect(filhas()).toHaveLength(0);
+  });
+
   it("criação gravou mas a action falhou depois: a compensação ADOTA a filha (sucesso honesto)", async () => {
     mocks.criarOS.mockImplementationOnce(async (loja: string, _draft: any, extras: any) => {
       mocks.rows.set("os-gravada", { id: "os-gravada", storeId: loja, numero: "OS-G", payload: { id: "os-gravada", codigo: "OS-G", timeline: [], ...extras } });
@@ -425,6 +443,24 @@ describe("finalizarRetornoV3", () => {
     await expect(finalizarRetornoV3(storeId, osId, "ret-1")).rejects.toThrow("Este retorno já está finalizado.");
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.emitirEvento).not.toHaveBeenCalled();
+  });
+
+  it("R2-F2: não finaliza retorno sem vínculo quando já existe atendimento criado para ele (evita órfã)", async () => {
+    semear({ retornosV3: [{ id: `ret-${OP}`, osOriginalId: osId, motivo: "Touch", criadoEm: "2026-08-15T10:00:00.000Z", status: "aberto", operacaoId: OP, reserva: { token: "t", expiraEm: "2026-08-15T10:15:00.000Z" } }] });
+    mocks.rows.set("os-orfa", { id: "os-orfa", storeId, numero: "OS-ORFA", payload: { id: "os-orfa", codigo: "OS-ORFA", timeline: [], vinculoRetornoV3: { osOrigemId: osId, retornoId: `ret-${OP}` } } });
+    await expect(finalizarRetornoV3(storeId, osId, `ret-${OP}`)).rejects.toThrow("OS-ORFA criado e ainda não vinculado");
+    expect(mocks.update).not.toHaveBeenCalled();
+    // Reabrir reconcilia: adota a filha existente (sem criar outra).
+    const r = await abrirRetornoV3(storeId, osId, { motivo: "Touch", operacaoId: OP });
+    expect(r.atendimento?.id).toBe("os-orfa");
+    expect(mocks.criarOS).not.toHaveBeenCalled();
+  });
+
+  it("R2-F2: retorno sem vínculo e SEM atendimento criado (expirado) pode ser finalizado", async () => {
+    semear({ retornosV3: [{ id: `ret-${OP}`, osOriginalId: osId, motivo: "Touch", criadoEm: "2026-08-15T10:00:00.000Z", status: "aberto", operacaoId: OP, reserva: { token: "t", expiraEm: "2026-08-15T10:15:00.000Z" } }] });
+    await finalizarRetornoV3(storeId, osId, `ret-${OP}`, { observacao: "Desistiu" });
+    expect(original().retornosV3[0]).toMatchObject({ status: "finalizado", observacaoFinal: "Desistiu" });
+    expect(original().retornosV3[0].reserva).toBeUndefined();
   });
 
   it("não finaliza retorno cuja abertura ainda está em processamento", async () => {

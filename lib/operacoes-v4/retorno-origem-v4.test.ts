@@ -83,6 +83,11 @@ describe("resumirOrigemRetornoV4 — dados herdados, sem credencial", () => {
     expect(r.retornoAberto).toBeUndefined();
     expect(JSON.stringify(r)).not.toContain("1478");
   });
+
+  it("R2-F8: expõe a operação que abriu cada retorno (o cliente reconhece a própria operação concluída)", () => {
+    const r = resumirOrigemRetornoV4(os({ retornosV3: [{ id: "r1", osOriginalId: "os-1", motivo: "x", criadoEm: "2026-08-10T00:00:00.000Z", status: "aberto", osRetornoId: "f1", operacaoId: "rtv4-abc12345" }] }), NOW);
+    expect(r.retornos[0]).toMatchObject({ operacaoId: "rtv4-abc12345", osRetornoId: "f1" });
+  });
 });
 
 describe("relato e identidade da operação", () => {

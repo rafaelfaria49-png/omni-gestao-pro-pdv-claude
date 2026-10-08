@@ -177,6 +177,7 @@ describe("OPS-V4-FLUXO-CURTO-007 — entrada pelo + Novo e seletor da OS origina
     m.buscarOrigensRetornoV3.mockImplementationOnce((_sid: string) => new Promise((res) => { soltarA = () => res([resumo(banco.a!)]); }));
     await user.type(busca, "Galaxy A");
     await within(dialogo).findByText("Buscando na loja ativa…");
+    await waitFor(() => expect(m.buscarOrigensRetornoV3).toHaveBeenCalledTimes(1)); // requisição de "Galaxy A" em voo
     await user.clear(busca);
     await user.type(busca, "Galaxy B");
     await within(dialogo).findByRole("option", { name: opcao("OS-B") });
@@ -301,6 +302,7 @@ describe("OPS-V4-FLUXO-CURTO-007 — retry, rascunho e contexto (T56 na UI)", ()
     m.buscarOrigensRetornoV3.mockImplementationOnce(() => new Promise((res) => { soltar = () => res([resumo(banco.a!)]); }));
     await user.type(within(dialogo).getByRole("combobox", { name: "Buscar OS original" }), "Galaxy");
     await within(dialogo).findByText("Buscando na loja ativa…");
+    await waitFor(() => expect(m.buscarOrigensRetornoV3).toHaveBeenCalledTimes(1)); // requisição em voo
     h.loja = "loja-qa-007-b";
     r.rerender(<Harness expor={(v) => { vAtual = v; }} />);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -443,5 +445,98 @@ describe("OPS-V4-FLUXO-CURTO-007 — Pós-venda usa o MESMO fluxo", () => {
     expect(screen.getByText(/Garantia deste atendimento/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Abrir OS original" }));
     await waitFor(() => expect(vAtual.selectedOsId).toBe("a"));
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-007 — correções da R2 (tentativa 2)", () => {
+  it("F3: resposta da busca anterior chegando DURANTE o debounce do novo termo não aparece nem é selecionável", async () => {
+    const user = userEvent.setup();
+    await montar();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await screen.findByRole("dialog", { name: "Retorno / Garantia" });
+    const busca = within(dialogo).getByRole("combobox", { name: "Buscar OS original" });
+    let soltar!: () => void;
+    m.buscarOrigensRetornoV3.mockImplementationOnce(() => new Promise((res) => { soltar = () => res([resumo(banco.a!)]); }));
+    await user.type(busca, "Galaxy");
+    await waitFor(() => expect(m.buscarOrigensRetornoV3).toHaveBeenCalledTimes(1));
+    // Novo termo; a resposta velha chega ANTES da próxima busca disparar.
+    let soltarB!: () => void;
+    m.buscarOrigensRetornoV3.mockImplementationOnce(() => new Promise((res) => { soltarB = () => res([resumo(banco.b!)]); }));
+    await user.type(busca, " B");
+    await act(async () => soltar());
+    expect(within(dialogo).queryByRole("option")).toBeNull();
+    expect(within(dialogo).getByText("Buscando na loja ativa…")).toBeTruthy();
+    await waitFor(() => expect(m.buscarOrigensRetornoV3).toHaveBeenCalledTimes(2));
+    await act(async () => soltarB());
+    await within(dialogo).findByRole("option", { name: opcao("OS-B") });
+    expect(within(dialogo).queryByRole("option", { name: opcao("OS-A") })).toBeNull();
+  });
+
+  it("F4: seleção trocada (A→B) na mesma loja durante a abertura: a resposta não troca a seleção", async () => {
+    const user = userEvent.setup();
+    await montar();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await buscarESelecionar(user, "Galaxy A", "OS-A");
+    let soltar!: () => void;
+    m.abrirRetornoV3.mockImplementationOnce((_s: string, id: string) => new Promise((res) => { soltar = () => res({ os: banco[id], atendimento: os("filha"), situacao: "criado", retornoId: "r" }); }));
+    await user.type(within(dialogo).getByLabelText("Motivo do retorno / novo defeito"), "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await act(async () => vAtual.selectOS(banco.b!, "posvenda"));
+    await waitFor(() => expect(screen.getByTestId("selecionada").textContent).toBe("b"));
+    await act(async () => soltar());
+    expect(screen.getByTestId("selecionada").textContent).toBe("b");
+    await within(dialogo).findByText(/Retorno registrado: atendimento OS-FILHA/);
+  });
+
+  it("F5: com a abertura em andamento (tudo desabilitado) Tab e Shift+Tab continuam no diálogo", async () => {
+    const user = userEvent.setup();
+    await montar();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await buscarESelecionar(user, "Galaxy A", "OS-A");
+    let soltar!: () => void;
+    m.abrirRetornoV3.mockImplementationOnce((_s: string, id: string) => new Promise((res) => { soltar = () => res({ os: banco[id], atendimento: os("filha"), situacao: "criado", retornoId: "r" }); }));
+    await user.type(within(dialogo).getByLabelText("Motivo do retorno / novo defeito"), "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await within(dialogo).findByRole("button", { name: "Abrindo atendimento…" });
+    await waitFor(() => expect(document.activeElement).toBe(dialogo));
+    for (let i = 0; i < 4; i += 1) {
+      await user.tab();
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+      await user.tab({ shift: true });
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+    }
+    await act(async () => soltar());
+  });
+
+  it("F6: aberto pelo + Novo, ao fechar o foco volta ao + Novo", async () => {
+    const user = userEvent.setup();
+    await montar();
+    const novo = screen.getByRole("button", { name: "+ Novo" });
+    await user.click(novo);
+    await user.click(await screen.findByRole("button", { name: /Retorno \/ Garantia/ }));
+    const dialogo = await screen.findByRole("dialog", { name: "Retorno / Garantia" });
+    expect(dialogo).toBeTruthy();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(document.activeElement).toBe(novo);
+  });
+
+  it("F8: resposta perdida com retorno já gravado pela MESMA operação: o rascunho é encerrado (a operação nunca é reusada)", async () => {
+    const user = userEvent.setup();
+    await montar();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await buscarESelecionar(user, "Galaxy A", "OS-A");
+    m.abrirRetornoV3.mockImplementationOnce(async (_s: string, id: string, input: { operacaoId: string; motivo: string }) => {
+      // O servidor concluiu (vínculo gravado com ESTA operação), mas a resposta se perdeu.
+      banco[id] = os(id, { retornosV3: [{ id: `ret-${input.operacaoId}`, osOriginalId: id, motivo: input.motivo, criadoEm: NOW, status: "aberto", osRetornoId: "filha-x", osRetornoCodigo: "OS-FILHA-X", operacaoId: input.operacaoId }] });
+      throw new Error("Falha de rede.");
+    });
+    await user.type(within(dialogo).getByLabelText("Motivo do retorno / novo defeito"), "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await within(dialogo).findByRole("button", { name: "Continuar no atendimento OS-FILHA-X" });
+    expect(vAtual.rascunhoRetorno("a")).toBeNull();
+    await user.click(within(dialogo).getByRole("button", { name: "Continuar no atendimento OS-FILHA-X" }));
+    await waitFor(() => expect(screen.getByTestId("selecionada").textContent).toBe("filha-x"));
+    expect(vAtual.rascunhoRetorno("a")).toBeNull();
   });
 });

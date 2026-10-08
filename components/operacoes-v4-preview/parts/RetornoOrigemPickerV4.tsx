@@ -131,6 +131,7 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
   const vivo = useRef(true);
   const focoOrigem = useRef<HTMLElement | null | undefined>(undefined);
   const buscaGen = useRef(0);
+  const termoRef = useRef("");
   const detalheGen = useRef(0);
   const vRef = useRef(v);
   vRef.current = v;
@@ -153,7 +154,10 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
   // Foco: entra no diálogo e volta ao controle que o abriu.
   useEffect(() => {
     vivo.current = true;
-    if (focoOrigem.current === undefined) focoOrigem.current = document.activeElement as HTMLElement | null;
+    if (focoOrigem.current === undefined) {
+      // O "+ Novo" (via launcher) quando houver; senão o controle que abriu o fluxo (ficha/portfólio).
+      focoOrigem.current = vRef.current.focoRetornoFluxo() ?? (document.activeElement as HTMLElement | null);
+    }
     if (!origemInicial) buscaRef.current?.focus();
     else dialogRef.current?.focus();
     return () => {
@@ -164,6 +168,13 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
   }, [origemInicial]);
 
   const item = detalhe.estado === "ok" ? detalhe.item : null;
+
+  // Ocupado: os controles ficam desabilitados e perderiam o foco para o fundo — o foco
+  // vai para o próprio diálogo (a contenção de Tab segue valendo).
+  useEffect(() => {
+    const focado = document.activeElement as HTMLButtonElement | null;
+    if (busy && dialogRef.current && (!focado || !dialogRef.current.contains(focado) || focado.disabled)) dialogRef.current.focus();
+  }, [busy]);
   // Retorno legado em aberto sem atendimento: o atendimento abre com o relato JÁ registrado.
   const legado = item?.enquadramento.id === "retorno_sem_atendimento";
 
@@ -190,6 +201,14 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
           return;
         }
         setDetalhe({ estado: "ok", item: resp.item });
+        // A operação do rascunho já virou retorno vinculado (ex.: resposta perdida): está
+        // consumida — o rascunho é encerrado para nunca reusá-la num retorno futuro.
+        const operacao = vRef.current.rascunhoRetorno(osId)?.operacao?.id;
+        if (operacao && resp.item.retornos.some((r) => r.operacaoId === operacao && !!r.osRetornoId)) {
+          vRef.current.salvarRascunhoRetorno(osId, null);
+          aplicarRascunho(osId);
+          return;
+        }
         if (!opcoes?.manterRascunho) aplicarRascunho(osId);
       } catch (e) {
         if (!vivo.current || gen !== detalheGen.current) return;
@@ -224,8 +243,8 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
       setBusca({ estado: "carregando", termo: q });
       try {
         const resp = await vRef.current.buscarOrigensRetorno(q);
-        // Resposta de outra busca, de outra loja ou após fechar: descartada.
-        if (!vivo.current || gen !== buscaGen.current || resp.lojaId !== lojaId) return;
+        // Resposta de outra busca, de outro termo, de outra loja ou após fechar: descartada.
+        if (!vivo.current || gen !== buscaGen.current || resp.lojaId !== lojaId || resp.termo !== q || termoRef.current.trim() !== q) return;
         setBusca({ estado: "ok", termo: q, itens: resp.itens });
         setAtivo(resp.itens.length > 0 ? 0 : -1);
       } catch (e) {
@@ -237,14 +256,18 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
     [lojaId],
   );
 
-  // Busca enquanto digita (com pausa curta); Enter busca/seleciona na hora.
+  // Busca enquanto digita (com pausa curta); Enter busca/seleciona na hora. Cada alteração
+  // invalida NA HORA a busca em voo e esconde resultados do termo anterior.
   useEffect(() => {
-    if (termo.trim().length < 2) {
-      buscaGen.current += 1;
+    termoRef.current = termo;
+    buscaGen.current += 1;
+    setAtivo(-1);
+    const q = termo.trim();
+    if (q.length < 2) {
       setBusca({ estado: "ocioso" });
-      setAtivo(-1);
       return;
     }
+    setBusca({ estado: "carregando", termo: q });
     const t = setTimeout(() => void buscar(termo), 300);
     return () => clearTimeout(t);
   }, [termo, buscar]);
@@ -294,7 +317,11 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
     const focaveis = Array.from(
       dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'),
     ).filter((el) => (typeof el.checkVisibility === "function" ? el.checkVisibility() : true));
-    if (focaveis.length === 0) return;
+    if (focaveis.length === 0) {
+      e.preventDefault();
+      dialogRef.current.focus();
+      return;
+    }
     const primeiro = focaveis[0]!;
     const ultimo = focaveis[focaveis.length - 1]!;
     const atual = document.activeElement as HTMLElement | null;
@@ -394,6 +421,7 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
 
   const continuarNoAtendimento = (osRetornoId: string) => {
     if (busy) return;
+    if (item) vRef.current.salvarRascunhoRetorno(item.osId, null);
     vRef.current.closeRetornoFluxo();
     vRef.current.abrirOsVinculada(osRetornoId);
   };

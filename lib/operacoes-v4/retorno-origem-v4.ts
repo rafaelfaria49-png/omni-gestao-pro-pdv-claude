@@ -54,6 +54,8 @@ export interface RetornoAnteriorResumoV4 {
   osRetornoCodigo?: string;
   /** Reserva viva: o atendimento ainda está sendo criado pelo servidor. */
   emAbertura: boolean;
+  /** Identidade da operação que abriu o retorno (o cliente reconhece a própria operação já concluída). */
+  operacaoId?: string;
   garantiaAtivaNaAbertura?: boolean;
 }
 
@@ -102,6 +104,7 @@ function resumoRetorno(retorno: RetornoV3, now: Date): RetornoAnteriorResumoV4 {
     ...(retorno.osRetornoId ? { osRetornoId: retorno.osRetornoId } : {}),
     ...(retorno.osRetornoCodigo ? { osRetornoCodigo: retorno.osRetornoCodigo } : {}),
     emAbertura: retornoEmAberturaV3(retorno, now),
+    ...(retorno.operacaoId ? { operacaoId: retorno.operacaoId } : {}),
     ...(typeof retorno.garantiaAtivaNaAbertura === "boolean" ? { garantiaAtivaNaAbertura: retorno.garantiaAtivaNaAbertura } : {}),
   };
 }
