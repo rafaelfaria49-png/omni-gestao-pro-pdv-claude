@@ -283,6 +283,8 @@ describe("OPS-V4-FLUXO-CURTO-006 — PostgreSQL descartável", () => {
     expect(e.recebimentosCaixa.map((c) => (c.payload as Payload).formaPagamento).sort()).toEqual(["debito", "pix"]);
     expect(e.recebimentosCaixa.reduce((s, c) => s + Number(c.valor), 0)).toBe(300);
     expect((await retirada(sid, id)).projection).toMatchObject({ financialStatus: "PAID", receivedTotal: 300 });
+    // Um recebimento dividido é UMA baixa no título e UM comprovante: reimprimível.
+    expect(await reciboOferecido(sid, id)).toMatchObject({ estado: "disponivel", recibo: { valorPago: 300, recebidoAcumulado: 300 } });
     const outra = await novaOS(sid);
     await expect(receberOSV3(sid, outra, { linhas: [{ forma: "carteira", valor: 300 }], sessaoId: caixa })).rejects.toThrow(/não suportada/);
     expect((await efeitos(sid)).recebimentosCaixa).toHaveLength(2);
@@ -384,6 +386,8 @@ describe("OPS-V4-FLUXO-CURTO-006 — PostgreSQL descartável", () => {
     const rm = await retirada(sid, misto);
     expect(rm.projection).toMatchObject({ financialStatus: "AUTHORIZED_CREDIT", receivedTotal: 350, balance: 50, canDeliver: true });
     expect(rm.retirada.situacao).toBe("a_prazo");
+    // O comprovante do misto (parte imediata) segue reimprimível pelo read-back.
+    expect(await reciboOferecido(sid, misto)).toMatchObject({ estado: "disponivel", recibo: { valorPago: 350, recebidoAcumulado: 350 } });
   });
 
   it("S17 a prazo parcial depois de um sinal: recebido preservado, título parcial, entrega autorizada", async () => {
