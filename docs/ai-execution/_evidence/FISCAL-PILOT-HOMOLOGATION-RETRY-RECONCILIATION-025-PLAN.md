@@ -2,7 +2,8 @@
 
 Data: 2026-10-08 (America/Sao_Paulo). Escopo: **PLAN-ONLY**.
 GOAL: [FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025](../../execution-tracks/fiscal/goals/FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025.md).
-Decisão: **READY_FOR_025_PLAN_REVIEW**; revisão independente pendente.
+Decisão atual (revisão documental 2): **AWAITING_FISCAL_025_PLAN_REREVIEW**.
+Registro do preflight original preservado abaixo; a revisão anterior Anthropic foi REQUEST_CHANGES.
 
 ## Base e isolamento
 
@@ -65,7 +66,7 @@ A terminalização planejada em FALHA continuará inelegível automaticamente, m
 `queue-admin.ts:125-167` permite reprocessar FALHA genericamente: o plano exige bloquear
 esse atalho para a correção 588. Nenhum desses caminhos foi executado ou alterado.
 
-## Governança e validação
+## Governança e validação do preflight original
 
 Planejamento autorizado segue EXECUTION_PROTOCOL §2. GOAL 025 inicial READY/C3/ALTO,
 revisao_independente=true, gates_liberados=[] e allowlist documental.
@@ -83,7 +84,7 @@ RUNNING na trilha é projeção automática da presença de um GOAL READY, sem i
 Testes fiscais, TypeScript e build: **NOT_RUN / não aplicáveis a esta etapa documental**.
 Os PASS de fixtures do 024 não são novos testes nem prova dos bytes históricos ou do candidato.
 
-## Contenção e relatório do plano
+## Contenção e relatório do plano original
 
 ~~~text
 GOAL=FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025
@@ -105,12 +106,103 @@ G_F7=BLOCKED
 G_F12=BLOCKED
 INDEPENDENT_REVIEW_REQUIRED=true
 IMPLEMENTATION_STARTED=false
-FINAL_DECISION=READY_FOR_025_PLAN_REVIEW
+INITIAL_PLAN_DECISION=READY_FOR_025_PLAN_REVIEW
 ~~~
 
-Publicar somente documentação/AEP na branch de planejamento, abrir PR para main,
-solicitar revisão independente **somente do plano 025** e parar, sem merge.
+Na criação original, o escopo era publicar documentação/AEP na branch de planejamento,
+abrir PR para main e solicitar R somente do plano, sem merge. O PR #247 já existe;
+esta correção o atualiza e solicita re-R, sem abrir outro PR.
 Commit e PR serão identificados no relatório de entrega e no próprio PR, sem hash circular.
 CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT não mudam: não houve entrega funcional nem decisão
 arquitetural aprovada. Arquivamento histórico, reconciliação, reentrada e gates permanecem
 pendências futuras, sem reivindicação de sucesso no banco.
+
+## Correção após R independente — revisão documental 2
+
+Pedido humano de 2026-10-08: corrigir B1-B4 somente no plano e publicar novo commit no
+mesmo PR #247. Registro da R anterior conforme fornecido pelo humano:
+
+~~~text
+R_FAMILY=anthropic
+R_VERDICT=REQUEST_CHANGES
+R_REVIEWED_SHA=e3ea89934780fc4cee867f4c6b6f774b5c351a53
+REREVIEW_REQUIRED=true
+REREVIEW_EXECUTOR_FAMILY=anthropic
+~~~
+
+O conteúdo anterior documenta a criação do plano; sua decisão inicial não representa
+aprovação da R. Codex/OpenAI é o executor das correções, sem realizar a própria re-R.
+O novo SHA deve receber R formal do Claude Code/Anthropic antes de qualquer avanço.
+
+| Blocker da R | Correção no GOAL (somente plano) | Testes/aceite futuros exigidos |
+| --- | --- | --- |
+| B1 HIGH — reemissão/inutilização | Seção Guards persistentes contra reemissão e inutilização: vínculo protegido em 025-A; rota administrativa e lib/fiscal/inutilizacao/** em 025-B | Recusa antes de qualquer write em reemitir/inutilizar, swapReissueVigente, demoteVigente, enqueueInutilizacao e criação delegada/direta; mesma nota/chave/1/2, contador 3, nenhuma segunda nota/EMISSAO/inutilização e venda REJEITADA |
+| B2 MEDIUM — prova histórica 588 | Seção Evidência admissível: persisted_before_transmission + uncertain, jobId original, bytesSha256, ultimoErro exato, NFeAutorizacao4, consultationJobId/consulta correlacionados; prova READ-ONLY antes de 025-C | Cada ausência/divergência recusa; NOT_FOUND sozinho insuficiente; SEFAZ_XMOTIVO_HISTORICAL=NOT_PERSISTED, sem rótulo sintético como resposta SEFAZ |
+| B3 MEDIUM — deploy antes de write | Gate obrigatório antes de 025-C: guards validados/revisados/mergeados e Production READY com SHA/alias contendo retry admin, reissue/inutilização, job único e identidade | Prova por guard/commit/SHA/deployment; versão antiga, guard ausente, Preview, rollback ou status diferente de READY bloqueiam; gate humano de write continua separado |
+| B4 MEDIUM — reentrada canônica | Tabela dos quatro blockers 024 com resolução/fase/evidência/risco; 025-B exige coordinator com HISTORICAL_588_OFFLINE_CORRECTION_ONLY e mensagem sem número consumido | RESOLVED_OFFLINE_ONLY, reentrada canônica false, capability offline sem authority externa; outras rejeições e denegação/110 continuam bloqueadas |
+
+Leituras pontuais de fontes versionadas para conferir os caminhos indicados pela R:
+
+- app/api/fiscal/inutilizacao/route.ts, POST: despacha reemitir/inutilizar.
+- lib/fiscal/inutilizacao/reissue.ts: reemissão enfileira inutilização, troca vigente,
+  aloca novo número e cria job; prisma-ports.ts contém demoteVigente, swapReissueVigente
+  e createReissueNota; enqueue.ts faz upsertJob e FiscalLog. O plano cobre essas entradas
+  antes de write, inclusive por faixa e chamada direta. Nenhuma foi executada.
+- lib/fiscal/emission/prisma-uncertain-state-persistence.ts: os dois eventos guardam
+  jobId/bytesSha256; uncertain registra consultationJobId. O 024 registra o erro histórico
+  exato e a ausência dos hashes completos no contexto humano. Leitura de código não é
+  prova de que a cadeia histórica já foi revalidada em omnigestao_prod.
+- lib/fiscal/emission/uncertain-state-coordinator.ts: REJEITADA retorna mensagem genérica
+  de número consumido; a correção específica 588 foi incluída para implementação futura.
+
+Esta revisão parte do SHA revisado, reutiliza a worktree isolada do plano, preserva WIPs
+externos e não sincroniza main. O status inicial foi limpo. status/open foram executados
+no preflight conforme ENTRYPOINT; open criou apenas .aep-active gitignored. Ao ler o
+GOAL, aplicou-se sua regra específica de PLAN_ONLY sem open/close: o marcador temporário
+criado nesta sessão foi removido, sem ratificação DONE, evento de ledger ou implementação.
+verify --all confirmou os derivados AEP corretos; não foi necessária regeneração. Nenhum
+state.json/LEDGER.jsonl/REGISTRY.md foi editado. Ledger preservado (12 linhas); 024 BLOCKED.
+
+### Validação da correção documental
+
+Resultados executados nesta correção, sem reutilizar testes fiscais como prova nova:
+
+| Validação | Resultado e escopo |
+| --- | --- |
+| node scripts/track.mjs verify --all | PASS: nove trilhas, REGISTRY.md e GATES.md sem divergência |
+| git diff --check | PASS: delta documental sem erros de whitespace |
+| Metadados AEP pelo parser real readGoalMeta | PASS: READY/C3/ALTO, plan_rev=2, PLAN_ONLY, implementação negada, família openai, gates vazios e re-R anthropic obrigatória |
+| Documentação e referências cruzadas | PASS: quatro links locais, nove tabelas Markdown, blocos fechados, quatro blockers 024 rastreados e caminhos de implementação existentes conferidos |
+| Scan de segredos no delta desde e3ea899 | PASS: nenhuma ocorrência em nove categorias de padrões (chaves/certificados, tokens GitHub/OpenAI/Anthropic/AWS/Google/JWT, DSN com credenciais, atribuições de segredo, XML Fiscal/PFX) |
+| Escopo/derivados/ledger | PASS: somente os dois documentos principais mudaram; derivados e ledger idênticos ao SHA revisado; 024 continua BLOCKED |
+| Build, TypeScript e testes fiscais | NOT_RUN: mudança exclusivamente documental, conforme pedido humano |
+| Banco e SEFAZ | DB_CONNECTIONS=0; DB_WRITES=0; EXTERNAL_SEFAZ_CONTACT=false; SEFAZ_TRANSMISSIONS=0 |
+
+O scan é uma inspeção por padrões das linhas adicionadas no delta, sem imprimir valores
+sensíveis; não atesta segredos fora do delta. CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT não
+foram alterados: não houve entrega funcional nem decisão arquitetural aprovada.
+
+~~~text
+B1_CLOSED_IN_PLAN=true
+B2_CLOSED_IN_PLAN=true
+B3_CLOSED_IN_PLAN=true
+B4_CLOSED_IN_PLAN=true
+IMPLEMENTATION_STARTED=false
+CODE_CHANGED=false
+SCHEMA_CHANGED=false
+DB_CONNECTIONS=0
+DB_WRITES=0
+SEFAZ_TRANSMISSIONS=0
+SEFAZ_XMOTIVO_HISTORICAL=NOT_PERSISTED
+CANONICAL_PRETRANSMISSION_REENTRY_BLOCKED=RESOLVED_OFFLINE_ONLY
+CURRENT_NOTE_CAN_REENTER_CANONICAL_PRETRANSMISSION=false
+G_F7=BLOCKED
+G_F12=BLOCKED
+REREVIEW_REQUIRED=true
+REREVIEW_EXECUTOR_FAMILY=anthropic
+FINAL_DECISION=AWAITING_FISCAL_025_PLAN_REREVIEW
+~~~
+
+Novo SHA e solicitação de re-R serão vinculados no próprio PR após o push normal autorizado,
+sem hash circular no commit. Nenhuma autorização atual permite write em omnigestao_prod.
+Não declarar APPROVE; parar aguardando re-R formal Anthropic.
