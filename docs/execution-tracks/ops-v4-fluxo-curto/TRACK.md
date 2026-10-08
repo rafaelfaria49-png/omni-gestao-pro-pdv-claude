@@ -5,52 +5,49 @@
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
   "title": "Operações V4 — fluxo curto",
-  "plan_rev": 13,
+  "plan_rev": 14,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
 -->
 
 Fonte de intenção: plano funcional de 19/09/2026 e autorização operacional
-ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-006, plan_rev 13
-(rev 12 + desbloqueio humano da rev 13), classe C4, risco ALTO, fornecida em
-08/10/2026 ("QUERO INICIAR OPS-V4-FLUXO-CURTO-006" e "DECISÃO HUMANA DE
-DESBLOQUEIO").
+ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-007, plan_rev 14,
+classe derivada C4 (proposta C3; divergência registrada no GOAL), risco
+ALTO, fornecida em 08/10/2026 ("COMANDO MESTRE — OPS-V4-FLUXO-CURTO-007").
 
 ## Escopo ativo
 
-Somente OPS-V4-FLUXO-CURTO-006 está ativo/elegível, com contrato em
-goals/OPS-V4-FLUXO-CURTO-006.md.
+Somente OPS-V4-FLUXO-CURTO-007 está ativo/elegível, com contrato em
+goals/OPS-V4-FLUXO-CURTO-007.md.
 
-OPS-V4-FLUXO-CURTO-001, 002, 003, 004 e 005 permanecem DONE.
-Não reabrir. O GOAL 005 (próxima ação) é contrato obrigatório de regressão.
+OPS-V4-FLUXO-CURTO-001 a 006 permanecem DONE (histórico em _closed/,
+inalterado). Não reabrir. A Próxima ação (005) e recebimento ≠ retirada
+(006) são contratos obrigatórios de regressão.
 
-GOALs 007 (retorno/garantia) e 008 não são elegíveis.
-Não criar outro GOAL para corrigir o 006 (006B, 006-FIX, 006C, 006-HARDENING).
+GOAL 008 não é elegível.
+Não criar outro GOAL para corrigir o 007 (007B, 007-FIX, 007-HARDENING).
 
-O objetivo é CONECTAR os motores existentes para que a mesma OS percorra
-serviço pronto → situação financeira conhecida → receber agora / parcial /
-misto / a prazo → saldo resolvido ou entrega autorizada → retirada →
-entrega formal → documentos e garantia coerentes, sem segunda venda,
-segundo título, cobrança/caixa/estoque/custo duplicados, recibo de outra
-OS, entrega implícita, status técnico avançado por pagamento, quitação
-otimista ou garantia iniciada duas vezes. Preço aprovado, título,
-dinheiro recebido e entrega continuam fatos distintos e comandos
-explícitos separados.
+O objetivo é o RETORNO pela OS original: localizar a original, herdar
+cliente/aparelho/serviço/histórico sem recadastro, registrar só o novo
+relato, enquadrar a garantia com honestidade (ativa, vencida/sem cobertura,
+não informada, ocorrência antes da entrega) e abrir UM atendimento real,
+persistido, vinculado nos dois lados, idempotente sob retry e concorrência —
+sem venda, pagamento, movimentação financeira, estoque ou renovação
+automática de garantia, preservando integralmente a OS original.
 
-Não criar V5, novo PDV, novo Financeiro, novo Caixa, novo motor de
-cobrança ou de estoque, segundo componente de pagamento, action de
-entrega V4 nem checkout monolítico "pagar e entregar".
+Não criar V5, quarto motor de criação de OS, segunda máquina de status,
+motor paralelo a criarOSEnterpriseV3 nem OS avulsa rotulada como garantia.
 
 ## Materialização humana e ativação
 
 O EXECUTION_PROTOCOL.md, §2, determina que adicionar ou remover um GOAL
 em goals/ é ato humano.
 
-A decisão textual do proprietário ("QUERO INICIAR OPS-V4-FLUXO-CURTO-006")
-é materializada com este TRACK rev 12 no checkout de planejamento
-C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006-plan, branch
-plan/ops-v4-fluxo-curto-006, baseado em origin/main.
+A decisão textual do proprietário ("COMANDO MESTRE —
+OPS-V4-FLUXO-CURTO-007") é materializada com este TRACK rev 14 no checkout
+de planejamento C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007-plan, branch
+plan/ops-v4-fluxo-curto-007, baseado em origin/main.
 
 Depois, seguir o rito oficial:
 registry → verify → verify --all → commit/PR exclusivo de planejamento
@@ -60,40 +57,37 @@ atualizada → status → open.
 Não editar state.json, LEDGER.jsonl, REGISTRY.md ou GATES.md à mão.
 Não deixar alterações de goals/** no diff de produto do check 8.
 
-Rev 13 (desbloqueio após o teto de tentativas): o proprietário reativou o
-MESMO GOAL (BLOCKED by=decisao em 4d13498, após a R3 em 1fc223e), sem GOAL
-sucessor. Escopo restrito aos dois achados da R3 (identidade do comprovante
-em recibo-persistido-v4.ts; contenção de foco no ReciboModal) e seus testes;
-allowlist, test_command e contrato inalterados. Rito: PR exclusivo de
-governança (block + desbloqueio) → merge normal na main → merge normal da
-main na branch do GOAL → open (tentativa 1 da rev 13).
-
 ## Ambiente planejado
 
-Branch: goal/ops-v4-fluxo-curto-006.
-Worktree: C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006.
+Branch: goal/ops-v4-fluxo-curto-007.
+Worktree: C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007.
 Base: origin/main vigente na ativação, após integração do planejamento.
 
 Base conferida em 08/10/2026:
-4e87fb13f53fa9f78e229d88b1b8566f95262ad0 (merge do PR #241, GOAL 005).
+07385d1435c2e4fe8450ef513f9abaa15edabd8e (merge do PR #245, GOAL 006).
 
 A base de produto deve conter esse merge ou descendente. Preservar outras
 branches/worktrees (inclusive C:/Projetos/omni-gestao, ocupada por outra
-frente, e as worktrees do GOAL 005) e processos externos.
+frente, e as worktrees dos GOALs 001–006) e processos externos.
 
 ## Contrato funcional (resumo — detalhe no GOAL)
 
-Entrega/Retirada vira o contexto operacional final da OS: identidade,
-serviço aprovado, condição financeira (total, recebido, saldo, situação
-honesta e fail-closed), garantia prevista, acessórios/custódia, fotos,
-documentos, quem retira e data efetiva. Com saldo, "Receber pagamento"
-abre o MESMO ReceberPagamentoV4 + hook V3 (receberOSV3 /
-registrarRecebimentoMistoOSV3) sem sair da OS; sucesso relê o servidor e
-nunca entrega sozinho — "Confirmar entrega" continua comando separado
-(registrarEntregaV3, com "Retirado por" editável). Recibo só de recebimento
-real persistido da mesma OS (reimpressão após reload pela evidência
-persistida). Termo de entrega só após entrega real. Estoque e garantia pelos
-contratos canônicos, uma única vez.
+"+ Novo" ganha a entrada "Retorno / Garantia" (ponto de entrada para
+abrirRetornoV3, não motor novo), com seletor de OS original por número,
+cliente e aparelho (leitura server-side autenticada e filtrada por loja,
+DTO sem senha), também aberto pré-selecionado pela ficha (Pós-venda) e pelo
+portfólio de Garantias. O operador informa só motivo, observação e a
+recepção do novo atendimento (acessórios entregues agora, senha opcional);
+senha e acessórios da original nunca são herdados automaticamente. OS não
+entregue leva à observação interna da própria OS; o servidor recusa
+retorno em OS não entregue ou cancelada.
+
+Idempotência sem gate protegido: operacaoId estável por operação lógica;
+reserva sob a trava da original (transação curta, TTL maior que a duração
+máxima de função), criação da filha fora da trava só por quem detém a
+reserva, adoção da filha por vínculo após falha, vínculo idempotente,
+descarte explícito de filha excedente — nunca órfã silenciosa nem
+duplicada. connection_limit=1 impede segurar a trava durante a criação.
 
 ## Gates
 
@@ -104,35 +98,35 @@ Schema, migrations, seeds, auth, proxy, CI, package.json, lockfile,
 Node/Vercel, configuração de deploy, .env, Fiscal, WhatsApp, Marketplace,
 AppShell e produção mutante continuam fechados.
 
-Motores globais (PDV geral, Caixa global, Financeiro global, Estoque
-global, lib/ops-upsert-venda.ts, finalizeSaleTransaction) intocáveis:
+Motores e serviços globais (PDV, Caixa, Financeiro, Estoque,
+lib/operacoes/**, app/actions/**) e os contratos V3 adjacentes
+(nova-os-actions.ts, os-payload-lock.ts, retorno-auto-close*,
+entrega-actions.ts, producao-actions.ts, status-*) são só leitura/chamada:
 necessidade de editá-los = parar e devolver UMA decisão (PROTECTED_PATH,
 WHY_REQUIRED, MINIMAL_DIFF, RISK_IF_NOT_DONE, ALTERNATIVE_WITHIN_SCOPE).
 
-Exceção controlada V3 (somente quando indispensável e documentada no
-relatório): lib/operacoes-v3/pdv-servico-actions.ts, payment-model.ts,
-pos-venda-model.ts, entrega-actions.ts, delivery-financial-guard.ts e
-components/operacoes-v3/hooks/use-pdv-servico-v3.ts. Não é autorização
-genérica para lib/operacoes-v3/**. Escrever somente na allowlist do
-GOAL/open.
+Exceção controlada V3 (allowlist do GOAL): retorno-actions.ts,
+pos-venda-model.ts e retorno-atendimento.ts (+ testes). Não é autorização
+genérica para lib/operacoes-v3/**.
 
-Não receber pagamento, lançar a prazo, estornar, entregar, salvar
-assinatura, enviar foto, alterar garantia, movimentar estoque, abrir/fechar
-caixa, enviar WhatsApp, emitir fiscal, fazer backfill ou reclassificar OS
-fora do PostgreSQL local descartável. OS-2026-00028 proibida.
+Não abrir retorno, criar OS, registrar observação, alterar garantia,
+receber, movimentar estoque ou caixa fora do PostgreSQL local descartável.
+OS-2026-00028 proibida.
 
 ## Prova de resultado
 
-Executar T43–T52, S01–S20, E01–E15, test_command do GOAL, regressões dos
-GOALs 001–005 e dos PRs #234/#235/#237/#238, typecheck, ESLint em todos os
+Executar T53–T57, E2E 007, test_command do GOAL, regressões dos GOALs
+001–006 e dos PRs #234/#235/#237/#238, typecheck, ESLint em todos os
 .ts/.tsx alterados, build, diff --check, AEP verify, verify --all e check.
 
-Usar PostgreSQL local descartável, nunca produção. Massa sintética
-(lojas A/B, cliente, OS, serviço R$300, custo R$92, peça QA, caixa/sessão
-QA, Conta a Receber QA). Concorrência provada de forma determinística em
-PostgreSQL real.
+Usar PostgreSQL local descartável (ops_v4_fluxo_007_qa*; o PostgreSQL do
+006 roda à parte em ops_v4_fluxo_006_qa*), nunca produção. Massa
+sintética (lojas A/B, clientes, OS entregues com garantia ativa, vencida,
+sem cobertura e não informada, OS em reparo, OS cancelada, retornos
+legados). Concorrência provada de forma determinística em PostgreSQL real
+(barreira + pg_stat_activity, nunca sleep).
 
-E2E em e2e/specs/operacoes-v4-fluxo-curto-006.spec.ts, porta isolada 3060
+E2E em e2e/specs/operacoes-v4-fluxo-curto-007.spec.ts, porta isolada 3070
 ou próxima disponível, --retries=0, --workers=1, sem matar processos.
 Sincronizar prontidão real; não usar sleeps arbitrários, skip/fixme,
 .first() arbitrário, catch para engolir falha ou reload para mascarar race.
@@ -158,4 +152,4 @@ R_STATUS=AGUARDANDO_OPENAI
 AEP_CLOSE=PENDENTE
 MERGE=PENDENTE
 
-Não autodeclarar R. Depois de publicar o 006: parar; não iniciar 007/008.
+Não autodeclarar R. Depois de publicar o 007: parar; não iniciar 008.
