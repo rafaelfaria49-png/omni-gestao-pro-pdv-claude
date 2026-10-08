@@ -297,6 +297,27 @@ describe("OPS-V4-FLUXO-CURTO-006 — pagamentos vigentes do título (receivableP
     expect(semRef.receivablePayments).toEqual([{ amount: 100, operationId: "a" }]);
   });
 
+  it("rev 13 — baixa do recebimento misto (sem loteId) leva a identidade do marcador gravado com ela; baixa externa segue sem identidade", () => {
+    const misto = project({ titulo: title(400, "parcial", [
+      { tipo: "pagamento", valor: 350 },
+      { tipo: "a_prazo_autorizado", valor: 50, operacaoId: "op-m", recebidoAgora: 350 },
+    ]) });
+    expect(misto.receivablePayments).toEqual([{ amount: 350, operationId: "op-m" }]);
+    // Baixa externa (Financeiro), sem loteId e sem marcador: sem identidade.
+    expect(project({ titulo: title(300, "pago", [{ tipo: "pagamento", valor: 100, loteId: "op-1" }, { tipo: "pagamento", valor: 200 }]) }).receivablePayments)
+      .toEqual([{ amount: 100, operationId: "op-1" }, { amount: 200, operationId: null }]);
+    // Marcador que não descreve ESTA baixa: outro valor recebido, sem operacaoId (a prazo puro), zero recebido, ou não adjacente.
+    const semVinculo = [
+      [{ tipo: "pagamento", valor: 200 }, { tipo: "a_prazo_autorizado", valor: 50, operacaoId: "op-m", recebidoAgora: 350 }],
+      [{ tipo: "pagamento", valor: 200 }, { tipo: "a_prazo_autorizado", valor: 100 }],
+      [{ tipo: "pagamento", valor: 200 }, { tipo: "a_prazo_autorizado", valor: 100, operacaoId: "op-m", recebidoAgora: 0 }],
+      [{ tipo: "pagamento", valor: 200 }, { tipo: "observacao" }, { tipo: "a_prazo_autorizado", valor: 100, operacaoId: "op-m", recebidoAgora: 200 }],
+    ];
+    for (const historico of semVinculo) {
+      expect(project({ titulo: title(300, "parcial", historico) }).receivablePayments).toEqual([{ amount: 200, operationId: null }]);
+    }
+  });
+
   it("referência a pagamento inexistente/já estornado ou histórico inválido = ilegível (null); sem título = []", () => {
     const duplo = project({ titulo: title(300, "parcial", [{ tipo: "pagamento", valor: 100 }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 0 }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 0 }]) });
     expect(duplo.receivablePayments).toBeNull();

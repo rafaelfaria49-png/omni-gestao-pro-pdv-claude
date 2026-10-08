@@ -44,7 +44,11 @@ export interface FinancialInstallmentV4 {
 /** Pagamento VIGENTE (não estornado) do título, na ordem do histórico. */
 export interface FinancialPaymentV4 {
   amount: number;
-  /** Identidade da operação gravada pelo writer (`loteId` = `operacaoId`), quando houver. */
+  /**
+   * Identidade da operação gravada pelo writer: `loteId` (= `operacaoId`) da baixa ou,
+   * na baixa do recebimento misto, a `operacaoId` do marcador gravado com ela. `null` =
+   * baixa sem identidade (ex.: feita pelo Financeiro).
+   */
   operationId: string | null;
 }
 
@@ -263,6 +267,22 @@ const EVENT_DESCRIPTIONS: Record<string, string> = {
 };
 
 /**
+ * Identidade de uma baixa que o recebimento misto (`registrarRecebimentoMistoOSV3`)
+ * grava sem `loteId`: na MESMA transação, sob a trava do título, o writer grava logo
+ * em seguida o marcador `a_prazo_autorizado` com a `operacaoId` e o `recebidoAgora`
+ * da operação. Só esse vínculo explícito (entrada imediatamente seguinte, mesmo valor
+ * recebido) identifica a baixa. Baixa sem marcador (ex.: feita pelo Financeiro) segue
+ * sem identidade — nunca se deduz identidade por valor e ordem.
+ */
+function mixedReceiptOperationId(next: unknown, amount: number): string | null {
+  if (!isRecord(next) || text(next.tipo).toLowerCase() !== "a_prazo_autorizado") return null;
+  const operationId = text(next.operacaoId);
+  const receivedNow = typeof next.recebidoAgora === "number" ? money(next.recebidoAgora) : null;
+  if (!operationId || receivedNow == null || receivedNow <= 0) return null;
+  return Math.round(receivedNow * 100) === Math.round(amount * 100) ? operationId : null;
+}
+
+/**
  * Pagamentos vigentes do histórico do título. Estorno com `refHistoricoIndex`
  * remove exatamente o pagamento referido; sem referência, o último vigente (mesma
  * regra do serviço de estorno). Referência a pagamento inexistente ou já estornado
@@ -280,7 +300,7 @@ function readValidPayments(titlePayload: unknown): FinancialPaymentV4[] | null {
     if (type === "pagamento" || type === "liquidacao") {
       const amount = money(entry.valor);
       if (amount == null) return null;
-      vigentes.push({ index, amount, operationId: text(entry.loteId) || null });
+      vigentes.push({ index, amount, operationId: text(entry.loteId) || mixedReceiptOperationId(historico[index + 1], amount) });
       continue;
     }
     if (type !== "estorno_pagamento") continue;

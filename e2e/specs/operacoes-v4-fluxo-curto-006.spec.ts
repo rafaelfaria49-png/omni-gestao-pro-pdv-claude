@@ -371,17 +371,34 @@ test("E09 — sem cobrança: categoria + motivo auditados; nunca silencioso", as
 
 let osEstorno = { id: "", codigo: "" };
 
-test("E10 — recibo após reload: reimpressão do comprovante persistido da MESMA OS", async ({ page }) => {
+/** O elemento com foco está dentro do diálogo do recibo? (navegador real) */
+const focoNoRecibo = (page: Page) => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"][aria-labelledby="recibo-os-title"]'));
+const focoNome = (page: Page) => page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute("aria-label") || document.activeElement?.textContent?.trim() || "");
+
+test("E10 — recibo após reload: reimpressão do comprovante persistido da MESMA OS; teclado preso no recibo (rev 13)", async ({ page }) => {
   osEstorno = await semearOS(prisma);
   await abrirOS(page, osEstorno.codigo);
   await receber(page, [{ forma: "pix" }]);
   await page.reload();
   await abrirOS(page, osEstorno.codigo, "financeiro");
-  await page.getByRole("button", { name: "Imprimir comprovante" }).click();
+  const abridor = page.getByRole("button", { name: "Imprimir comprovante" });
+  await abridor.click();
   const d = recibo(page);
   await expect(d.getByText("Reimpressão do último comprovante registrado nesta OS.")).toBeVisible();
   await expect(d.getByText(`OS ${osEstorno.codigo}`)).toBeVisible();
-  await d.getByRole("button", { name: "Fechar comprovante" }).click();
+  // Teclado real: foco inicial dentro; Shift+Tab no primeiro vai ao último; Tab nunca sai.
+  await expect.poll(() => focoNoRecibo(page)).toBe(true);
+  expect(await focoNome(page)).toBe("Fechar comprovante");
+  await page.keyboard.press("Shift+Tab");
+  expect(await focoNome(page)).toBe("Fechar");
+  for (let i = 0; i < 5; i++) {
+    await page.keyboard.press("Tab");
+    expect(await focoNoRecibo(page)).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(d).toHaveCount(0);
+  // O foco volta ao botão que abriu o recibo.
+  await expect(abridor).toBeFocused();
 });
 
 test("E11 — estorno: saldo volta, entrega volta a bloquear, comprovante estornado não é reoferecido", async ({ page }) => {

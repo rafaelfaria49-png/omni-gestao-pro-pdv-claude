@@ -15,12 +15,15 @@
  * invalidam); a sessão só marca "acabou de receber". Nunca o recibo de outra OS. */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as TecladoEvent } from "react";
 import { C, fmt } from "../tokens";
 import { formatarVencimentoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { fmtDataHora } from "../os-adapter";
 import type { V4Vals } from "../use-v4-preview";
 import { ReciboPreviewV3 } from "@/components/operacoes-v3/components/print/ReciboPreviewV3";
+
+/** Controles que recebem foco por teclado dentro do recibo. */
+const FOCAVEIS = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
 
 export function ReciboModal({ v }: { v: V4Vals }) {
   if (!v.reciboOpen) return null;
@@ -29,23 +32,61 @@ export function ReciboModal({ v }: { v: V4Vals }) {
 
 function ReciboModalConteudo({ v }: { v: V4Vals }) {
   const [printOpen, setPrintOpen] = useState(false);
+  const dialogo = useRef<HTMLDivElement>(null);
   const fechar = useRef<HTMLButtonElement>(null);
+  const imprimir = useRef<HTMLButtonElement>(null);
+  // Fundo inacessível: com o recibo aberto (e sem a impressão por cima), foco que saia
+  // do diálogo — clique no fundo, foco programático, Tab a partir do body — volta para
+  // dentro. Declarado ANTES da restauração para sair antes dela no fechamento.
+  useEffect(() => {
+    if (printOpen) return;
+    const segurar = (e: FocusEvent) => {
+      const el = dialogo.current;
+      if (!el?.isConnected || !(e.target instanceof Node) || el.contains(e.target)) return;
+      fechar.current?.focus();
+    };
+    document.addEventListener("focusin", segurar);
+    return () => document.removeEventListener("focusin", segurar);
+  }, [printOpen]);
   // Teclado: foco entra no diálogo e volta ao controle que o abriu.
   useEffect(() => {
     const anterior = document.activeElement;
     fechar.current?.focus();
     return () => { if (anterior instanceof HTMLElement && anterior.isConnected) anterior.focus(); };
   }, []);
+  // Voltando da impressão, o foco retorna ao botão que a abriu (nunca fica solto no body).
+  const imprimiu = useRef(false);
+  useEffect(() => {
+    if (printOpen) { imprimiu.current = true; return; }
+    if (!imprimiu.current) return;
+    imprimiu.current = false;
+    (imprimir.current ?? fechar.current)?.focus();
+  }, [printOpen]);
+  // Tab/Shift+Tab circulam só pelos controles do recibo (mesmo padrão do sheet de
+  // recebimento). Com a impressão aberta por cima, ela cuida do próprio teclado.
+  const teclado = (e: TecladoEvent<HTMLDivElement>) => {
+    if (printOpen) return;
+    if (e.key === "Escape") { e.preventDefault(); v.closeRecibo(); return; }
+    if (e.key !== "Tab") return;
+    const itens = Array.from(dialogo.current?.querySelectorAll<HTMLElement>(FOCAVEIS) ?? []);
+    if (!itens.length) { e.preventDefault(); return; }
+    const primeiro = itens[0]!, ultimo = itens[itens.length - 1]!;
+    const ativo = document.activeElement;
+    if (!ativo || !itens.includes(ativo as HTMLElement)) { e.preventDefault(); (e.shiftKey ? ultimo : primeiro).focus(); }
+    else if (e.shiftKey && ativo === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && ativo === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
   // Sem a leitura validada (consumidor antigo do contrato), só o comprovante da sessão.
   const leitura = v.reciboAtual;
   const recibo = leitura ? (leitura.estado === "disponivel" ? leitura.recibo : null) : v.pdvServico.ultimoRecibo;
   const reimpressao = leitura?.estado === "disponivel" && leitura.origem === "persistido";
   return (
     <div
+      ref={dialogo}
       role="dialog"
       aria-modal="true"
       aria-labelledby="recibo-os-title"
-      onKeyDown={(e) => { if (e.key === "Escape" && !printOpen) { e.preventDefault(); v.closeRecibo(); } }}
+      onKeyDown={teclado}
       style={{ position: "absolute", inset: 0, zIndex: 70, background: "rgba(17,19,26,.42)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
     >
       <div style={{ width: 380, maxWidth: "100%", maxHeight: "100%", overflowY: "auto", background: C.surface, borderRadius: 14, boxShadow: "0 24px 60px rgba(17,19,26,.3)" }}>
@@ -113,7 +154,7 @@ function ReciboModalConteudo({ v }: { v: V4Vals }) {
           )}
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             {recibo ? (
-              <button type="button" onClick={() => setPrintOpen(true)} style={{ flex: 1, height: 34, border: "none", background: C.primary, color: C.white, borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Imprimir comprovante</button>
+              <button ref={imprimir} type="button" onClick={() => setPrintOpen(true)} style={{ flex: 1, height: 34, border: "none", background: C.primary, color: C.white, borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Imprimir comprovante</button>
             ) : null}
             <button type="button" onClick={v.closeRecibo} style={{ flex: 1, height: 34, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 9, fontSize: 12.5, fontWeight: 500, cursor: "pointer" }}>Fechar</button>
           </div>

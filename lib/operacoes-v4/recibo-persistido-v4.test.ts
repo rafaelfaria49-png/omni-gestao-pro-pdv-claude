@@ -130,10 +130,38 @@ describe("OPS-V4-FLUXO-CURTO-006 — comprovante oferecido: OS × pagamentos vig
     expect(escolherReciboV4({ sessao: comprovante(e1), os: { timeline: [e1, estorno("e2", 100)] }, recebidoAtual: 0, pagamentosVigentes: [] })).toEqual({ estado: "sem_recebimento" });
   });
 
-  it("pagamento do título sem identidade (misto) casa só por valor e ordem; identidade divergente nunca casa", () => {
+  it("rev 13 — identidade obrigatória: correta valida; ausente no pagamento ou divergente nunca valida o comprovante", () => {
     const e1 = recebimento("e1", 300, 300);
-    expect(escolherReciboV4({ sessao: null, os: { timeline: [e1] }, recebidoAtual: 300, pagamentosVigentes: [{ amount: 300, operationId: null }] })).toMatchObject({ estado: "disponivel" });
-    expect(escolherReciboV4({ sessao: null, os: { timeline: [e1] }, recebidoAtual: 300, pagamentosVigentes: [{ amount: 300, operationId: "op-outra" }] })).toEqual({ estado: "indisponivel" });
+    const ler = (operationId: string | null) =>
+      escolherReciboV4({ sessao: null, os: { timeline: [e1] }, recebidoAtual: 300, pagamentosVigentes: [{ amount: 300, operationId }] });
+    expect(ler("op-e1")).toMatchObject({ estado: "disponivel", eventoId: "e1" });
+    expect(ler(null)).toEqual({ estado: "indisponivel" });
+    expect(ler("op-outra")).toEqual({ estado: "indisponivel" });
+  });
+
+  it("rev 13 — comprovante sem operacaoId não prova pagamento vigente (sem casar por valor e ordem)", () => {
+    const e1 = recebimento("e1", 300, 300);
+    const semIdentidade = { ...e1, metadata: { comprovante: e1.metadata.comprovante } };
+    expect(escolherReciboV4({ sessao: null, os: { timeline: [semIdentidade] }, recebidoAtual: 300, pagamentosVigentes: [{ amount: 300, operationId: null }] })).toEqual({ estado: "indisponivel" });
+    expect(escolherReciboV4({ sessao: null, os: { timeline: [semIdentidade] }, recebidoAtual: 300, pagamentosVigentes: [{ amount: 300, operationId: "op-e1" }] })).toEqual({ estado: "indisponivel" });
+  });
+
+  it("R3 (regressão exata): PIX 100 op1 + PIX 200 op2, estorno dos 200 e reposição externa de 200 em dinheiro sem identidade → o PIX op2 nunca é oferecido", () => {
+    const e1 = recebimento("e1", 100, 100);
+    const e2 = recebimento("e2", 200, 300);
+    // Título depois do Financeiro: 100 (op-e1) vigente; 200 (op-e2) estornado; 200 repostos sem loteId.
+    const vigentes = [{ amount: 100, operationId: "op-e1" }, { amount: 200, operationId: null }];
+    // Estorno e reposição feitos no Financeiro: a OS não registrou o estorno.
+    expect(escolherReciboV4({ sessao: comprovante(e2), os: { timeline: [e1, e2] }, recebidoAtual: 300, pagamentosVigentes: vigentes })).toEqual({ estado: "indisponivel" });
+    // Mesmo cenário depois do reload (sem comprovante da sessão).
+    expect(escolherReciboV4({ sessao: null, os: { timeline: [e1, e2] }, recebidoAtual: 300, pagamentosVigentes: vigentes })).toEqual({ estado: "indisponivel" });
+    // Estorno registrado pela OS e reposição externa: também indisponível.
+    expect(escolherReciboV4({ sessao: comprovante(e2), os: { timeline: [e1, e2, estorno("e3", 200)] }, recebidoAtual: 300, pagamentosVigentes: vigentes })).toEqual({ estado: "indisponivel" });
+    // Reposição legítima PELA OS (comprovante persistido com a identidade da baixa): o comprovante novo, nunca o PIX.
+    const e4 = recebimento("e4", 200, 300, 300, "dinheiro");
+    expect(
+      escolherReciboV4({ sessao: comprovante(e2), os: { timeline: [e1, e2, estorno("e3", 200), e4] }, recebidoAtual: 300, pagamentosVigentes: [vigentes[0]!, { amount: 200, operationId: "op-e4" }] }),
+    ).toMatchObject({ estado: "disponivel", origem: "persistido", eventoId: "e4" });
   });
 
   it("sem leitura confirmada do título ou do recebido, nada é oferecido — nem o da sessão", () => {

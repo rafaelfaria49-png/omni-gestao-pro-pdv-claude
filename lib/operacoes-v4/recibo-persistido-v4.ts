@@ -10,10 +10,12 @@
 // Autoridade: o histórico do TÍTULO. Um comprovante só é oferecido quando a
 // sequência de comprovantes com dinheiro da OS (descontados os estornos que a OS
 // registrou) casa 1:1 com os pagamentos VIGENTES do título — mesmo valor, na
-// mesma ordem e, quando os dois lados a têm, a mesma identidade de operação — e o
-// acumulado dele é o recebido atual. Baixa ou estorno feitos fora da OS, ou um
-// estorno seguido de reposição do mesmo valor, nunca deixam reimprimir um
-// recebimento que não vale mais. O comprovante da sessão nunca é autoridade: só
+// mesma ordem e a MESMA identidade de operação (`operacaoId` do comprovante =
+// `operationId` do pagamento) — e o acumulado dele é o recebido atual. Identidade
+// ausente em qualquer lado nunca casa: uma reposição feita fora da OS (sem
+// identidade) não valida o comprovante estornado. Baixa ou estorno feitos fora da
+// OS, ou um estorno seguido de reposição do mesmo valor, nunca deixam reimprimir
+// um recebimento que não vale mais. O comprovante da sessão nunca é autoridade: só
 // identifica "acabou de receber" quando é o mesmo que a evidência persistida.
 // ============================================================================
 
@@ -105,14 +107,19 @@ export function comprovantesValidosDaOSV4(os: { timeline?: unknown } | null | un
   return pilha;
 }
 
-/** A sequência de comprovantes com dinheiro da OS é exatamente a de pagamentos vigentes do título. */
+/**
+ * A sequência de comprovantes com dinheiro da OS é exatamente a de pagamentos vigentes
+ * do título: mesmo valor e MESMA identidade, par a par. Comprovante sem `operacaoId`
+ * ou pagamento sem `operationId` não prova nada (os writers canônicos sempre gravam a
+ * identidade nos dois lados) — fail-closed, sem casar por valor e ordem.
+ */
 function casaComTitulo(validos: ReciboPersistidoV4[], pagamentos: ReadonlyArray<PagamentoVigenteV4>): boolean {
   const comDinheiro = validos.filter((item) => item.recibo.valorPago > 0);
   if (comDinheiro.length !== pagamentos.length) return false;
   return comDinheiro.every((item, i) => {
     const pagamento = pagamentos[i]!;
     if (!finito(pagamento.amount) || centavos(item.recibo.valorPago) !== centavos(pagamento.amount)) return false;
-    return !pagamento.operationId || !item.operacaoId || pagamento.operationId === item.operacaoId;
+    return !!item.operacaoId && !!pagamento.operationId && pagamento.operationId === item.operacaoId;
   });
 }
 

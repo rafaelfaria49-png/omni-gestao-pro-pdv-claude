@@ -71,7 +71,7 @@ import { gerarOperacaoIdV3, hojeLojaV3 } from "@/lib/operacoes-v3/recebimento-mi
 import { lerProjecaoFinanceiraOSV4 } from "@/lib/operacoes-v4/financial-projection-actions";
 import { derivarRetiradaFinanceiraV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
 import { lerReciboDaProjecaoV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
-import { registrarPagamentoParcial } from "@/lib/financeiro/services/contas-receber-service";
+import { estornarContaReceber, registrarPagamentoParcial } from "@/lib/financeiro/services/contas-receber-service";
 import type { ComprovanteReciboV3 } from "@/lib/operacoes-v3/payment-model";
 import { derivarProximaAcaoV4 } from "@/lib/operacoes-v4/proxima-acao-v4";
 
@@ -471,6 +471,29 @@ describe("OPS-V4-FLUXO-CURTO-006 — PostgreSQL descartável", () => {
     const baixa = await registrarPagamentoParcial({ storeId: sid, localKey: `os-faturamento:${sid}:${outra}`, valorPago: 50, observacao: "Baixa externa QA", userLabel: "Financeiro QA" });
     expect(baixa.ok).toBe(true);
     expect(await reciboOferecido(sid, outra)).toEqual({ estado: "indisponivel" });
+  });
+
+  it("R3 regressão exata (writers reais): PIX 100 op1 + PIX 200 op2; estorno dos 200 e reposição de 200 em dinheiro pelo Financeiro (sem identidade) → o PIX op2 nunca é oferecido", async () => {
+    const sid = await novaLoja();
+    const id = await novaOS(sid);
+    const caixa = await abrirCaixa(sid);
+    const op1 = gerarOperacaoIdV3();
+    const op2 = gerarOperacaoIdV3();
+    await receberOSV3(sid, id, { linhas: [{ forma: "pix", valor: 100 }], sessaoId: caixa, operacaoId: op1 });
+    const pixDaSessao = (await receberOSV3(sid, id, { linhas: [{ forma: "pix", valor: 200 }], sessaoId: caixa, operacaoId: op2 })).recibo;
+    expect(await reciboOferecido(sid, id, pixDaSessao)).toMatchObject({ estado: "disponivel", origem: "sessao", recibo: { valorPago: 200 } });
+    // Financeiro (mesmos serviços da rota /api/financeiro/receber): estorna o último pagamento e repõe 200 sem loteId.
+    const localKey = `os-faturamento:${sid}:${id}`;
+    const estorno = await estornarContaReceber({ storeId: sid, localKey, modo: "ultimo_pagamento", motivo: "Troca de forma (QA)", userLabel: "Financeiro QA" });
+    expect(estorno.ok).toBe(true);
+    const reposicao = await registrarPagamentoParcial({ storeId: sid, localKey, valorPago: 200, formaPagamento: "dinheiro", observacao: "Reposição externa QA", userLabel: "Financeiro QA" });
+    expect(reposicao.ok).toBe(true);
+    const projection = await lerProjecaoFinanceiraOSV4(sid, id);
+    expect(projection).toMatchObject({ financialStatus: "PAID", receivedTotal: 300 });
+    expect(projection.receivablePayments).toEqual([{ amount: 100, operationId: op1 }, { amount: 200, operationId: null }]);
+    // Logo depois (sessão ainda com o PIX) e após reload (sem sessão): indisponível — nunca o PIX estornado.
+    expect(await reciboOferecido(sid, id, pixDaSessao)).toEqual({ estado: "indisponivel" });
+    expect(await reciboOferecido(sid, id)).toEqual({ estado: "indisponivel" });
   });
 
   it("T52 entrega canônica: retirante + data retroativa (S13); replay/reimpressão não duplicam; garantia inicia uma vez (S19); assinatura distinta da entrada", async () => {

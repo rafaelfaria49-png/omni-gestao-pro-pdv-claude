@@ -6,6 +6,7 @@
 // escrita real acontece aqui (o PostgreSQL fica no .pg.test.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
 vi.mock("@/app/actions/ordens", () => ({ listOrdens: vi.fn(async () => []), getOrdem: vi.fn(async () => null) }));
@@ -85,8 +86,9 @@ function projecao(o: OrdemServico, titulo: Titulo, extra: Record<string, unknown
       : null,
   });
 }
-const PAGO: Titulo = { status: "pago", historico: [{ tipo: "pagamento", valor: 100 }, { tipo: "pagamento", valor: 200 }] };
-const PARCIAL: Titulo = { status: "parcial", historico: [{ tipo: "pagamento", valor: 100 }] };
+// Como os writers canônicos gravam: cada baixa com a identidade da operação (loteId = operacaoId).
+const PAGO: Titulo = { status: "pago", historico: [{ tipo: "pagamento", valor: 100, loteId: "op-e1" }, { tipo: "pagamento", valor: 200, loteId: "op-e2" }] };
+const PARCIAL: Titulo = { status: "parcial", historico: [{ tipo: "pagamento", valor: 100, loteId: "op-e1" }] };
 const ABERTO: Titulo = { status: "pendente", historico: [] };
 
 const recibo = (o: OrdemServico, valor: number, acumulado: number): ComprovanteReciboV3 =>
@@ -135,6 +137,8 @@ interface Cenario {
   pdv?: Pdv;
   confirmarEntrega?: V4DataCtx["confirmarEntrega"];
   inicial?: Partial<V4State>;
+  /** Teclado (rev 13): controle de fundo espião + o botão que abre o recibo (como o do Financeiro). */
+  fundo?: () => void;
 }
 
 const patches: Array<Record<string, unknown>> = [];
@@ -172,6 +176,12 @@ function Harness({ c }: { c: Cenario }) {
   expor(v);
   return (
     <>
+      {c.fundo ? (
+        <>
+          <button type="button" onClick={c.fundo}>Ação do fundo</button>
+          <button type="button" onClick={v.openRecibo}>Abrir recibo</button>
+        </>
+      ) : null}
       <EntregaStage v={v} />
       <ReciboModal v={v} />
     </>
@@ -334,8 +344,8 @@ describe("OPS-V4-FLUXO-CURTO-006 — confirmação de entrega separada", () => {
     const base = os("a");
     const a = os("a", "pronta", {
       timeline: [
-        { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { comprovante: recibo(base, 100, 100) } },
-        { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { comprovante: recibo(base, 200, 300) } },
+        { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { operacaoId: "op-e1", comprovante: recibo(base, 100, 100) } },
+        { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { operacaoId: "op-e2", comprovante: recibo(base, 200, 300) } },
       ],
     });
     montar({ os: a, fin: { projection: projecao(a, PAGO) }, pdv: pdv({ ultimoRecibo: recibo(base, 200, 300) }) });
@@ -450,8 +460,8 @@ describe("OPS-V4-FLUXO-CURTO-006 — documentos e recibo", () => {
   it("S12 recibo após reload: reimpressão do comprovante persistido da MESMA OS", () => {
     const a = os("a", "pronta", {
       timeline: [
-        { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { comprovante: recibo(os("a"), 100, 100) } },
-        { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { comprovante: recibo(os("a"), 200, 300) } },
+        { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { operacaoId: "op-e1", comprovante: recibo(os("a"), 100, 100) } },
+        { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { operacaoId: "op-e2", comprovante: recibo(os("a"), 200, 300) } },
       ],
     });
     montar({ os: a, fin: { projection: projecao(a, PAGO) }, inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
@@ -466,12 +476,12 @@ describe("OPS-V4-FLUXO-CURTO-006 — documentos e recibo", () => {
   it("T51 recibo depois do estorno: o comprovante estornado nunca é reimpresso como válido", () => {
     const a = os("a", "pronta", {
       timeline: [
-        { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { comprovante: recibo(os("a"), 100, 100) } },
-        { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { comprovante: recibo(os("a"), 200, 300) } },
+        { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { operacaoId: "op-e1", comprovante: recibo(os("a"), 100, 100) } },
+        { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { operacaoId: "op-e2", comprovante: recibo(os("a"), 200, 300) } },
         { id: "e3", tipo: "financeiro_conta_receber_atualizada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:10:00Z", metadata: { estornado: 200, modo: "ultimo_pagamento" } },
       ],
     });
-    montar({ os: a, fin: { projection: projecao(a, { status: "parcial", historico: [{ tipo: "pagamento", valor: 100 }, { tipo: "pagamento", valor: 200 }, { tipo: "estorno_pagamento", valor: 200 }] }) }, inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
+    montar({ os: a, fin: { projection: projecao(a, { status: "parcial", historico: [{ tipo: "pagamento", valor: 100, loteId: "op-e1" }, { tipo: "pagamento", valor: 200, loteId: "op-e2" }, { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 1 }] }) }, inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
     const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
     // Comprovante válido = o de R$ 100 (parcial); o de R$ 200 (quitação) foi estornado.
     expect(within(d).getByText("Parcial")).toBeTruthy();
@@ -498,11 +508,11 @@ describe("OPS-V4-FLUXO-CURTO-006 — documentos e recibo", () => {
 
 describe("OPS-V4-FLUXO-CURTO-006 — regressões da R1", () => {
   const timelineEstornada = () => [
-    { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { comprovante: recibo(os("a"), 100, 100) } },
-    { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { comprovante: recibo(os("a"), 200, 300) } },
+    { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { operacaoId: "op-e1", comprovante: recibo(os("a"), 100, 100) } },
+    { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { operacaoId: "op-e2", comprovante: recibo(os("a"), 200, 300) } },
     { id: "e3", tipo: "financeiro_conta_receber_atualizada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:10:00Z", metadata: { estornado: 200, modo: "ultimo_pagamento" } },
   ];
-  const PARCIAL_POS_ESTORNO: Titulo = { status: "parcial", historico: [{ tipo: "pagamento", valor: 100 }, { tipo: "pagamento", valor: 200 }, { tipo: "estorno_pagamento", valor: 200 }] };
+  const PARCIAL_POS_ESTORNO: Titulo = { status: "parcial", historico: [{ tipo: "pagamento", valor: 100, loteId: "op-e1" }, { tipo: "pagamento", valor: 200, loteId: "op-e2" }, { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 1 }] };
 
   it("R1-P1a comprovante da SESSÃO estornado por outra sessão nunca é impresso: vale o persistido coerente", () => {
     const a = os("a", "pronta", { timeline: timelineEstornada() });
@@ -638,5 +648,128 @@ describe("OPS-V4-FLUXO-CURTO-006 — regressões da R2", () => {
     expect(s.contains(document.activeElement)).toBe(true);
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Receber pagamento" })).toBeNull());
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-006 rev 13 — teclado do recibo (R3-P2, teclado real via user-event)", () => {
+  const timelineQuitada = () => [
+    { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { operacaoId: "op-e1", comprovante: recibo(os("a"), 100, 100) } },
+    { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { operacaoId: "op-e2", comprovante: recibo(os("a"), 200, 300) } },
+  ];
+  async function abrir() {
+    const fundo = vi.fn();
+    const confirmarEntrega = vi.fn(async () => true);
+    const a = os("a", "pronta", { timeline: timelineQuitada() });
+    montar({ os: a, fin: { projection: projecao(a, PAGO) }, confirmarEntrega, fundo });
+    const user = userEvent.setup();
+    const abridor = screen.getByRole("button", { name: "Abrir recibo" });
+    await user.click(abridor);
+    const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
+    const controles = [
+      within(d).getByRole("button", { name: "Fechar comprovante" }),
+      within(d).getByRole("button", { name: "Imprimir comprovante" }),
+      within(d).getByRole("button", { name: "Fechar" }),
+    ];
+    return { user, d, abridor, fundo, confirmarEntrega, controles, primeiro: controles[0]!, ultimo: controles[2]! };
+  }
+
+  it("K01 foco inicial fica dentro do recibo", async () => {
+    const { d, primeiro } = await abrir();
+    expect(d.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(primeiro);
+  });
+
+  it("K02 Tab percorre somente os controles do recibo, na ordem", async () => {
+    const { user, d, controles } = await abrir();
+    const visitados: Element[] = [document.activeElement!];
+    for (let i = 0; i < 5; i++) {
+      await user.tab();
+      visitados.push(document.activeElement!);
+    }
+    expect(visitados.every((el) => d.contains(el))).toBe(true);
+    expect(visitados).toEqual([...controles, ...controles]);
+  });
+
+  it("K03 Tab no último controle volta ao primeiro", async () => {
+    const { user, primeiro, ultimo } = await abrir();
+    act(() => ultimo.focus());
+    await user.tab();
+    expect(document.activeElement).toBe(primeiro);
+  });
+
+  it("K04 Shift+Tab no primeiro controle vai ao último", async () => {
+    const { user, primeiro, ultimo } = await abrir();
+    expect(document.activeElement).toBe(primeiro);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(ultimo);
+  });
+
+  it("K05 o foco nunca chega a um controle do fundo (Tab, Shift+Tab ou foco programático)", async () => {
+    const { user, d } = await abrir();
+    for (let i = 0; i < 8; i++) {
+      await user.tab({ shift: i % 2 === 1 });
+      expect(d.contains(document.activeElement)).toBe(true);
+    }
+    for (let i = 0; i < 4; i++) {
+      await user.tab({ shift: true });
+      expect(d.contains(document.activeElement)).toBe(true);
+    }
+    // Foco movido para o fundo por outro caminho (clique/script): volta para o recibo.
+    act(() => screen.getByRole("button", { name: "Ação do fundo" }).focus());
+    expect(d.contains(document.activeElement)).toBe(true);
+    act(() => screen.getByLabelText("Retirado por").focus());
+    expect(d.contains(document.activeElement)).toBe(true);
+  });
+
+  it("K06 Enter com o recibo aberto nunca dispara controle do fundo", async () => {
+    const { user, fundo, confirmarEntrega, primeiro, ultimo } = await abrir();
+    // Tentativa de fuga pelo início (Shift+Tab) seguida de Enter: cai no último controle DO recibo.
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(ultimo);
+    // Tentativa por foco programático no fundo + Enter.
+    act(() => screen.getByRole("button", { name: "Ação do fundo" }).focus());
+    expect(document.activeElement).toBe(primeiro);
+    await user.keyboard("{Enter}");
+    expect(fundo).not.toHaveBeenCalled();
+    expect(confirmarEntrega).not.toHaveBeenCalled();
+    // O Enter acionou o controle do recibo em foco (fechar), não o fundo.
+    expect(patches.at(-1)).toEqual({ recibo: false });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("K07 Escape fecha o recibo", async () => {
+    const { user } = await abrir();
+    await user.tab();
+    await user.keyboard("{Escape}");
+    expect(patches.at(-1)).toEqual({ recibo: false });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("K08 ao fechar, o foco volta ao botão que abriu o recibo", async () => {
+    const { user, abridor } = await abrir();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(abridor);
+    // Também pelo botão Fechar, via teclado.
+    await user.click(abridor);
+    const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(within(d).getByRole("button", { name: "Fechar" }));
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(abridor);
+  });
+
+  it("impressão por cima: Escape fecha só a impressão e o foco volta ao Imprimir, ainda preso no recibo", async () => {
+    const { user, d, fundo } = await abrir();
+    await user.click(within(d).getByRole("button", { name: "Imprimir comprovante" }));
+    expect(await screen.findByRole("button", { name: /Voltar/ })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Voltar/ })).toBeNull());
+    expect(screen.getByRole("dialog", { name: /Recibo de pagamento/ })).toBeTruthy();
+    expect(document.activeElement).toBe(within(d).getByRole("button", { name: "Imprimir comprovante" }));
+    await user.tab();
+    expect(d.contains(document.activeElement)).toBe(true);
+    expect(fundo).not.toHaveBeenCalled();
   });
 });
