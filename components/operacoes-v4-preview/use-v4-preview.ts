@@ -134,6 +134,7 @@ import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operaco
 import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { abrirRetornoV3, buscarOrigensRetornoV3, finalizarRetornoV3, lerOrigemRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import {
+  encerrarOperacaoNoRascunhoV4,
   gerarOperacaoRetornoIdV4,
   type ComandoRetornoV4,
   type RascunhoRetornoV4,
@@ -2522,8 +2523,16 @@ export function useV4Preview(): V4Vals {
         const atendimentoId = r.atendimento?.id?.trim() ?? "";
         const atendimentoCodigo = r.atendimento?.codigo?.trim() || atendimentoId;
         if (!atendimentoId) return { ok: false, mensagem: "O servidor não confirmou o atendimento do retorno. Recarregue a OS original." };
-        rascunhosRetornoRef.current.delete(`${sid}::${origem}`);
-        if (!mesmoContexto()) return { ok: true, atendimentoId, atendimentoCodigo, situacao: r.situacao, navegou: false };
+        // A operação foi concluída: encerra SÓ a identidade dela (texto editado depois fica).
+        const chaveRascunho = `${sid}::${origem}`;
+        const encerrado = encerrarOperacaoNoRascunhoV4(rascunhosRetornoRef.current.get(chaveRascunho), comando.operacaoId);
+        if (encerrado === null) rascunhosRetornoRef.current.delete(chaveRascunho);
+        else if (encerrado) rascunhosRetornoRef.current.set(chaveRascunho, encerrado);
+        if (!mesmoContexto()) {
+          // Sem navegar: se a original segue selecionada nesta loja, a ficha relê o servidor.
+          if (lojaRef.current === sid && selectedRef.current === origem) reloadDetail();
+          return { ok: true, atendimentoId, atendimentoCodigo, situacao: r.situacao, navegou: false };
+        }
         retornoGenRef.current += 1;
         update({
           retornoFluxo: null,
@@ -2544,11 +2553,14 @@ export function useV4Preview(): V4Vals {
         );
         return { ok: true, atendimentoId, atendimentoCodigo, situacao: r.situacao, navegou: true };
       } catch (e) {
+        // Falha (inclusive resposta perdida com retorno gravado): a lista e, se a original
+        // segue selecionada nesta loja, a ficha relêem o servidor — nada de CTA velho.
         reloadOrdens();
+        if (lojaRef.current === sid && selectedRef.current === origem) reloadDetail();
         return { ok: false, mensagem: e instanceof Error ? e.message : "Não foi possível abrir o retorno." };
       }
     },
-    [lojaAtivaId, reloadOrdens, update, notify],
+    [lojaAtivaId, reloadOrdens, reloadDetail, update, notify],
   );
   /** Compatibilidade: retorno da OS selecionada, sem o seletor (uma operação nova por chamada). */
   const abrirRetorno = useCallback(

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import {
   chaveRelatoRetornoV4,
+  encerrarOperacaoNoRascunhoV4,
   enquadrarOrigemRetornoV4,
   normalizarAcessoriosRetornoV4,
   operacaoDoRelatoV4,
@@ -101,6 +102,15 @@ describe("relato e identidade da operação", () => {
     const b = chaveRelatoRetornoV4({ motivo: "Touch", acessorios: ["Capa", "chip"] });
     expect(a).toBe(b);
     expect(chaveRelatoRetornoV4({ motivo: "Touch!", acessorios: [] })).not.toBe(a);
+  });
+
+  it("R3-N3: operação concluída encerra o rascunho só se o texto ainda for o dela", () => {
+    const relato = { motivo: "Touch", acessorios: [] as string[] };
+    const operacao = { id: "op-1", chave: chaveRelatoRetornoV4(relato) };
+    expect(encerrarOperacaoNoRascunhoV4({ ...relato, operacao }, "op-1")).toBeNull();
+    expect(encerrarOperacaoNoRascunhoV4({ motivo: "Touch e câmera", acessorios: [], operacao }, "op-1")).toEqual({ motivo: "Touch e câmera", acessorios: [] });
+    expect(encerrarOperacaoNoRascunhoV4({ ...relato, operacao }, "op-2")).toBeUndefined();
+    expect(encerrarOperacaoNoRascunhoV4(null, "op-1")).toBeUndefined();
   });
 
   it("retry do MESMO relato reusa a operação; relato editado gera operação nova", () => {

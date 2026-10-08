@@ -11,6 +11,7 @@
 import { useMemo, useState } from "react";
 import { C, card } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
+import pf from "./retorno-origem-v4.module.css";
 import {
   filtrarGarantiasPortfolioV4,
   type GarantiaPortfolioFiltroV4,
@@ -141,21 +142,21 @@ function GarantiasBody({ v }: { v: V4Vals }) {
         </div>
       </div>
 
-      <div style={{ ...card, padding: 0, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "92px minmax(130px,1.2fr) minmax(150px,1fr) 100px 130px 180px", gap: 10, padding: "9px 12px", borderBottom: `1px solid ${C.line2}`, color: C.subtle, fontSize: 10, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".04em" }}>
-          <span>OS</span><span>Cliente</span><span>Aparelho</span><span>Até</span><span>Situação</span><span>Ação</span>
+      <div className={pf.portfolio} style={{ ...card, padding: 0, overflow: "hidden" }}>
+        <div className={`${pf.portfolioLinha} ${pf.portfolioCabecalho}`} style={{ padding: "9px 12px", borderBottom: `1px solid ${C.line2}`, color: C.subtle, fontSize: 10, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".04em" }}>
+          <span className={pf.pfOs}>OS</span><span className={pf.pfCliente}>Cliente</span><span className={pf.pfAparelho}>Aparelho</span><span className={pf.pfAte}>Até</span><span className={pf.pfSituacao}>Situação</span><span className={pf.pfAcoes}>Ação</span>
         </div>
         {itens.length ? itens.map((item) => (
-          <div key={item.osId} style={{ display: "grid", gridTemplateColumns: "92px minmax(130px,1.2fr) minmax(150px,1fr) 100px 130px 180px", gap: 10, alignItems: "center", padding: "10px 12px", borderBottom: `1px solid ${C.line4}`, fontSize: 12 }}>
-            <strong style={{ color: C.ink }}>{item.codigo}</strong>
-            <span style={{ color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.cliente}</span>
-            <span style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.aparelho}</span>
-            <span style={{ color: C.body, fontVariantNumeric: "tabular-nums" }}>{dataCurta(item.vencimento)}</span>
-            <span style={{ color: item.retornoStatus === "andamento" ? C.warnFg : item.tone === "success" ? C.successFg : item.tone === "warn" ? C.warnFg : C.muted, fontWeight: 650 }}>
+          <div key={item.osId} className={pf.portfolioLinha} style={{ padding: "10px 12px", borderBottom: `1px solid ${C.line4}`, fontSize: 12 }}>
+            <strong className={pf.pfOs} style={{ color: C.ink }}>{item.codigo}</strong>
+            <span className={pf.pfCliente} style={{ color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.cliente}</span>
+            <span className={pf.pfAparelho} style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.aparelho}</span>
+            <span className={pf.pfAte} style={{ color: C.body, fontVariantNumeric: "tabular-nums" }}>{dataCurta(item.vencimento)}</span>
+            <span className={pf.pfSituacao} style={{ color: item.retornoStatus === "andamento" ? C.warnFg : item.tone === "success" ? C.successFg : item.tone === "warn" ? C.warnFg : C.muted, fontWeight: 650 }}>
               {item.retornoStatus === "andamento" ? "Retorno em andamento" : item.situacaoLabel}
               {item.retornoStatus === "concluido" ? <span style={{ display: "block", color: C.subtle, fontSize: 10.5, fontWeight: 600 }}>Retorno concluído</span> : null}
             </span>
-            <span style={{ display: "flex", gap: 6, minWidth: 0 }}>
+            <span className={pf.pfAcoes}>
               <button type="button" onClick={() => v.openOSFromRail(item.osId, false, "posvenda")} style={{ height: 31, padding: "0 9px", border: `1px solid ${C.inputBd}`, borderRadius: 7, background: C.surface, color: C.body, fontSize: 11.5, fontWeight: 650, cursor: "pointer" }}>Abrir OS</button>
               {item.podeAbrirRetorno ? (
                 <button type="button" onClick={() => v.openRetornoFluxo(item.osId)} aria-label={`Abrir retorno da ${item.codigo}`} style={{ height: 31, padding: "0 9px", border: `1px solid ${C.primaryBd}`, borderRadius: 7, background: C.primaryBg, color: C.primaryHover, fontSize: 11.5, fontWeight: 650, cursor: "pointer" }}>Retorno</button>

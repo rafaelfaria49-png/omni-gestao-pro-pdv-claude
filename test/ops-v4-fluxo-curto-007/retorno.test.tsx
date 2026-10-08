@@ -124,6 +124,7 @@ beforeEach(() => {
     a: os("a"),
     b: os("b", { entregaV3: { entregueEm: "2025-01-01T12:00:00.000Z" } }),
     pronta: os("pronta", { status: "pronta", operacaoStatusV3: "pronta", entregaV3: undefined }),
+    pronta2: os("pronta2", { status: "pronta", operacaoStatusV3: "pronta", entregaV3: undefined }),
     andamento: os("andamento", { retornosV3: [{ id: "r1", osOriginalId: "andamento", motivo: "Câmera", criadoEm: "2026-10-05T12:00:00.000Z", status: "aberto", osRetornoId: "filha-and", osRetornoCodigo: "OS-FILHA-AND" }] }),
   };
   for (const fn of Object.values(m)) fn.mockReset();
@@ -538,5 +539,102 @@ describe("OPS-V4-FLUXO-CURTO-007 — correções da R2 (tentativa 2)", () => {
     await user.click(within(dialogo).getByRole("button", { name: "Continuar no atendimento OS-FILHA-X" }));
     await waitFor(() => expect(screen.getByTestId("selecionada").textContent).toBe("filha-x"));
     expect(vAtual.rascunhoRetorno("a")).toBeNull();
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-007 — correções da R3 (tentativa 3)", () => {
+  function FichaHarness({ expor }: { expor: (v: V4Vals) => void }) {
+    const v = useV4Preview();
+    expor(v);
+    return (
+      <div>
+        {v.realOS ? <PosVendaStage v={v} /> : null}
+        <RetornoOrigemPickerV4 v={v} />
+      </div>
+    );
+  }
+  /** O "servidor" concluiu a abertura (vínculo gravado com ESTA operação), mas a resposta se perdeu. */
+  const gravarEPerderResposta = async (_s: string, id: string, input: { operacaoId: string; motivo: string }) => {
+    banco[id] = os(id, { retornosV3: [{ id: `ret-${input.operacaoId}`, osOriginalId: id, motivo: input.motivo, criadoEm: NOW, status: "aberto", osRetornoId: "filha-x", osRetornoCodigo: "OS-FILHA-X", operacaoId: input.operacaoId }] });
+    throw new Error("Falha de rede.");
+  };
+
+  it("N2: resposta perdida pela ficha — a ficha relê o servidor; ao fechar o seletor não há 'Abrir retorno' concorrente", async () => {
+    const user = userEvent.setup();
+    render(<FichaHarness expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(vAtual.ordens.length).toBeGreaterThan(0));
+    await act(async () => vAtual.selectOS(banco.a!, "posvenda"));
+    await user.click(await screen.findByRole("button", { name: "Abrir retorno" }));
+    const dialogo = await screen.findByRole("dialog", { name: "Retorno / Garantia" });
+    await within(dialogo).findByText("OS-A", { selector: "div" });
+    m.abrirRetornoV3.mockImplementationOnce(gravarEPerderResposta);
+    const leiturasAntes = m.getOrdem.mock.calls.filter((c) => c[1] === "a").length;
+    await user.type(within(dialogo).getByLabelText("Motivo do retorno / novo defeito"), "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await within(dialogo).findByText("A abertura anterior foi concluída no servidor: atendimento OS-FILHA-X.");
+    await waitFor(() => expect(m.getOrdem.mock.calls.filter((c) => c[1] === "a").length).toBeGreaterThan(leiturasAntes));
+    await user.click(within(dialogo).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect((await screen.findAllByRole("button", { name: "Abrir atendimento OS-FILHA-X" })).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Abrir retorno" })).toBeNull();
+  });
+
+  it("N3: texto editado DURANTE a releitura não é apagado quando a operação anterior se revela concluída", async () => {
+    const user = userEvent.setup();
+    await montar();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await buscarESelecionar(user, "Galaxy A", "OS-A");
+    await waitFor(() => expect(m.lerOrigemRetornoV3).toHaveBeenCalledTimes(1));
+    let soltarLeitura!: () => void;
+    m.lerOrigemRetornoV3.mockImplementationOnce((_s: string, id: string) => new Promise((res) => { soltarLeitura = () => res(resumo(banco[id]!)); }));
+    m.abrirRetornoV3.mockImplementationOnce(gravarEPerderResposta);
+    const motivo = within(dialogo).getByLabelText("Motivo do retorno / novo defeito");
+    await user.type(motivo, "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await within(dialogo).findByText("Falha de rede.");
+    await waitFor(() => expect(m.lerOrigemRetornoV3).toHaveBeenCalledTimes(2)); // releitura em voo
+    await user.type(motivo, " e câmera");
+    await act(async () => soltarLeitura());
+    await within(dialogo).findByRole("button", { name: "Continuar no atendimento OS-FILHA-X" });
+    expect(vAtual.rascunhoRetorno("a")).toEqual({ motivo: "Touch e câmera", observacao: "", acessorios: [] });
+  });
+
+  it("tentativa encerrada sem atendimento: relato mantido, operação descartada; o próximo envio usa operação NOVA", async () => {
+    const user = userEvent.setup();
+    await montar();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await buscarESelecionar(user, "Galaxy A", "OS-A");
+    m.abrirRetornoV3.mockImplementationOnce(async (_s: string, id: string, input: { operacaoId: string; motivo: string }) => {
+      // Servidor: a reserva desta operação expirou sem atendimento e foi encerrada por alguém.
+      banco[id] = os(id, { retornosV3: [{ id: `ret-${input.operacaoId}`, osOriginalId: id, motivo: input.motivo, criadoEm: NOW, status: "finalizado", finalizadoEm: NOW, operacaoId: input.operacaoId }] });
+      throw new Error("Esta tentativa de abertura foi encerrada sem atendimento.");
+    });
+    await user.type(within(dialogo).getByLabelText("Motivo do retorno / novo defeito"), "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await within(dialogo).findByText("A tentativa anterior foi encerrada sem atendimento. Confira o relato e abra novamente.");
+    const op1 = m.abrirRetornoV3.mock.calls[0]![2].operacaoId;
+    expect(vAtual.rascunhoRetorno("a")).toEqual({ motivo: "Touch", observacao: "", acessorios: [] });
+    expect((within(dialogo).getByLabelText("Motivo do retorno / novo defeito") as HTMLTextAreaElement).value).toBe("Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await waitFor(() => expect(m.abrirRetornoV3).toHaveBeenCalledTimes(2));
+    expect(m.abrirRetornoV3.mock.calls[1]![2]).toMatchObject({ motivo: "Touch" });
+    expect(m.abrirRetornoV3.mock.calls[1]![2].operacaoId).not.toBe(op1);
+  });
+
+  it("N4: ocorrência digitada para a OS A não viaja para a OS B ao trocar de OS", async () => {
+    const user = userEvent.setup();
+    await montar();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await buscarESelecionar(user, "OS-PRONTA", "OS-PRONTA");
+    await user.type(within(dialogo).getByLabelText("Ocorrência (observação interna desta OS)"), "Texto de A");
+    await user.click(within(dialogo).getByRole("button", { name: "← Trocar OS" }));
+    fireEvent.click(within(dialogo).getByRole("option", { name: opcao("OS-PRONTA2") }));
+    await within(dialogo).findByText("OS-PRONTA2", { selector: "div" });
+    const ocorrencia = within(dialogo).getByLabelText("Ocorrência (observação interna desta OS)") as HTMLTextAreaElement;
+    expect(ocorrencia.value).toBe("");
+    await user.type(ocorrencia, "Texto de B");
+    await user.click(within(dialogo).getByRole("button", { name: "Registrar ocorrência" }));
+    await waitFor(() => expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledTimes(1));
+    expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledWith(LOJA, "pronta2", "Ocorrência antes da entrega: Texto de B");
   });
 });

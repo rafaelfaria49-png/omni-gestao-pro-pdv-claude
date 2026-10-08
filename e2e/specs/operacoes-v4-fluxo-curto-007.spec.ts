@@ -264,7 +264,9 @@ test("R03 — falha de rede e resposta PERDIDA: o relato fica, o retry reenvia a
     await route.abort("failed");
   });
   await d.getByRole("button", { name: "Abrir atendimento de retorno" }).click();
-  await expect(d.getByRole("alert")).toBeVisible();
+  // A releitura descobre que a operação foi concluída: aviso honesto, sem erro velho na tela.
+  await expect(d.getByRole("status")).toContainText("A abertura anterior foi concluída no servidor");
+  await expect(d.getByRole("alert")).toHaveCount(0);
   await soltar2();
   expect(operacaoEnviada).toMatch(/^rtv4-/);
   expect(await filhas(prisma, os.id)).toHaveLength(1);
@@ -335,7 +337,19 @@ test("R06 — pela ficha (Pós-venda) e pelo portfólio de Garantias: o MESMO fl
   await expect(railGarantias).toHaveCount(1);
   await railGarantias.click();
   await page.getByLabel("Buscar garantias").fill(doPortfolio.codigo);
-  await page.getByRole("button", { name: `Abrir retorno da ${doPortfolio.codigo}` }).click();
+  // R3-N5: a ação do portfólio fica visível e clicável em painel estreito.
+  const acaoRetorno = page.getByRole("button", { name: `Abrir retorno da ${doPortfolio.codigo}` });
+  for (const [largura, altura] of [[1024, 768], [768, 1024], [390, 844]] as const) {
+    await page.setViewportSize({ width: largura, height: altura });
+    await acaoRetorno.scrollIntoViewIfNeeded();
+    await expect(acaoRetorno).toBeVisible();
+    const caixa = await acaoRetorno.boundingBox();
+    expect(caixa && caixa.x >= 0 && caixa.x + caixa.width <= largura + 1, `portfólio@${largura}: ação Retorno dentro da tela`).toBe(true);
+    await semRolagemHorizontal(page);
+    await page.screenshot({ path: test.info().outputPath(`r06-portfolio-${largura}.png`), fullPage: false });
+  }
+  await acaoRetorno.click();
+  await page.setViewportSize({ width: 1440, height: 900 });
   await expect(dialogo(page).locator("div", { hasText: new RegExp(`^${doPortfolio.codigo}$`) })).toHaveCount(1);
   await dialogo(page).getByLabel("Motivo do retorno / novo defeito").fill("Sem som");
   await dialogo(page).getByRole("button", { name: "Abrir atendimento de retorno" }).click();

@@ -336,3 +336,21 @@ export function operacaoDoRelatoV4(
   if (anterior && anterior.chave === chave) return anterior;
   return { id: gerar(), chave };
 }
+
+/**
+ * A operação `operacaoId` foi concluída no servidor (retorno vinculado). Encerra a identidade
+ * dela no rascunho SEM perder texto editado depois da tentativa:
+ * - `undefined`: nada a fazer (sem rascunho ou a operação do rascunho é outra);
+ * - `null`: o rascunho é exatamente o relato dessa operação — descartar;
+ * - rascunho sem `operacao`: o relato foi editado depois — mantém o texto (comando novo).
+ */
+export function encerrarOperacaoNoRascunhoV4(
+  rascunho: RascunhoRetornoV4 | null | undefined,
+  operacaoId: string,
+): RascunhoRetornoV4 | null | undefined {
+  if (!rascunho?.operacao || rascunho.operacao.id !== operacaoId) return undefined;
+  if (chaveRelatoRetornoV4(rascunho) === rascunho.operacao.chave) return null;
+  const { operacao: _consumida, ...texto } = rascunho;
+  void _consumida;
+  return texto;
+}

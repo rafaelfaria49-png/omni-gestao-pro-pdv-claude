@@ -111,3 +111,47 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Portfólio de Garantias (ModuleView): linhas se adaptam à largura REAL do painel
+   (container query) — em painel estreito a ação de retorno nunca fica fora da tela. */
+.portfolio {
+  container-type: inline-size;
+}
+
+.portfolioLinha {
+  display: grid;
+  grid-template-columns: 92px minmax(130px, 1.2fr) minmax(150px, 1fr) 100px 130px 180px;
+  grid-template-areas: "os cliente aparelho ate situacao acoes";
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.pfOs { grid-area: os; min-width: 0; }
+.pfCliente { grid-area: cliente; min-width: 0; }
+.pfAparelho { grid-area: aparelho; min-width: 0; }
+.pfAte { grid-area: ate; min-width: 0; }
+.pfSituacao { grid-area: situacao; min-width: 0; }
+.pfAcoes { grid-area: acoes; min-width: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+
+@container (max-width: 860px) {
+  .portfolioCabecalho {
+    display: none;
+  }
+  .portfolioLinha {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "os situacao"
+      "cliente aparelho"
+      "ate ate"
+      "acoes acoes";
+    row-gap: 6px;
+  }
+}
+
+@container (max-width: 420px) {
+  .portfolioLinha {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "os" "situacao" "cliente" "aparelho" "ate" "acoes";
+  }
+}

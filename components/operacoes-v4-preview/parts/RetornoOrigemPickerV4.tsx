@@ -13,6 +13,7 @@ import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, ty
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import {
+  encerrarOperacaoNoRascunhoV4,
   LIMITE_TEXTO_RETORNO_V4,
   normalizarAcessoriosRetornoV4,
   operacaoDoRelatoV4,
@@ -178,7 +179,14 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
   // Retorno legado em aberto sem atendimento: o atendimento abre com o relato JÁ registrado.
   const legado = item?.enquadramento.id === "retorno_sem_atendimento";
 
+  const osDoFormulario = useRef<string | null>(null);
   const aplicarRascunho = useCallback((osId: string) => {
+    if (osDoFormulario.current !== osId) {
+      // Ocorrência e acessório em digitação pertencem à OS anterior: nunca viajam para outra.
+      osDoFormulario.current = osId;
+      setOcorrencia("");
+      setAcessorioNovo("");
+    }
     const r = vRef.current.rascunhoRetorno(osId);
     setMotivo(r?.motivo ?? "");
     setObservacao(r?.observacao ?? "");
@@ -203,10 +211,30 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
         setDetalhe({ estado: "ok", item: resp.item });
         // A operação do rascunho já virou retorno vinculado (ex.: resposta perdida): está
         // consumida — o rascunho é encerrado para nunca reusá-la num retorno futuro.
-        const operacao = vRef.current.rascunhoRetorno(osId)?.operacao?.id;
-        if (operacao && resp.item.retornos.some((r) => r.operacaoId === operacao && !!r.osRetornoId)) {
-          vRef.current.salvarRascunhoRetorno(osId, null);
-          aplicarRascunho(osId);
+        const rascunho = vRef.current.rascunhoRetorno(osId);
+        const operacao = rascunho?.operacao?.id;
+        // Operação consumida: virou retorno vinculado (resposta perdida) OU foi encerrada sem
+        // atendimento — em ambos os casos nunca mais é reenviada.
+        const concluido = operacao
+          ? resp.item.retornos.find((r) => r.operacaoId === operacao && (!!r.osRetornoId || r.status === "finalizado"))
+          : undefined;
+        if (operacao && concluido) {
+          // Encerra SÓ a identidade consumida: texto editado depois da tentativa permanece. Sem
+          // atendimento (tentativa encerrada), o relato fica inteiro para a nova abertura.
+          const encerrado = concluido.osRetornoId
+            ? encerrarOperacaoNoRascunhoV4(rascunho, operacao)
+            : rascunho
+              ? { motivo: rascunho.motivo, observacao: rascunho.observacao, acessorios: rascunho.acessorios }
+              : undefined;
+          if (encerrado !== undefined) vRef.current.salvarRascunhoRetorno(osId, encerrado);
+          if (encerrado === null || !opcoes?.manterRascunho) aplicarRascunho(osId);
+          // A falha exibida antes era só a resposta perdida: o servidor concluiu a abertura.
+          setErro(null);
+          setAviso(
+            concluido.osRetornoId
+              ? `A abertura anterior foi concluída no servidor: atendimento ${concluido.osRetornoCodigo || concluido.osRetornoId}.`
+              : "A tentativa anterior foi encerrada sem atendimento. Confira o relato e abra novamente.",
+          );
           return;
         }
         if (!opcoes?.manterRascunho) aplicarRascunho(osId);
@@ -383,8 +411,11 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
       });
       if (!vivo.current) return;
       if (r.ok) {
-        // Navegou = o fluxo fechou; sem navegação (contexto mudou) só informa.
-        if (!r.navegou) setAviso(`Retorno registrado: atendimento ${r.atendimentoCodigo}.`);
+        // Navegou = o fluxo fechou; sem navegação (contexto mudou) informa e relê a original.
+        if (!r.navegou) {
+          setAviso(`Retorno registrado: atendimento ${r.atendimentoCodigo}.`);
+          void carregarDetalhe(osId, { manterRascunho: true, silencioso: true });
+        }
         return;
       }
       setErro(r.mensagem);
@@ -421,7 +452,12 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
 
   const continuarNoAtendimento = (osRetornoId: string) => {
     if (busy) return;
-    if (item) vRef.current.salvarRascunhoRetorno(item.osId, null);
+    if (item) {
+      // Se este atendimento é o da operação do rascunho, ela está consumida (texto novo fica).
+      const operacao = item.retornos.find((r) => r.osRetornoId === osRetornoId)?.operacaoId;
+      const encerrado = operacao ? encerrarOperacaoNoRascunhoV4(vRef.current.rascunhoRetorno(item.osId), operacao) : undefined;
+      if (encerrado !== undefined) vRef.current.salvarRascunhoRetorno(item.osId, encerrado);
+    }
     vRef.current.closeRetornoFluxo();
     vRef.current.abrirOsVinculada(osRetornoId);
   };

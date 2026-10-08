@@ -72,6 +72,8 @@ const MSG_EM_PROCESSAMENTO =
   "A abertura deste retorno ainda está em processamento. Verifique novamente em instantes.";
 const MSG_OUTRA_ABERTURA =
   "Outra abertura de retorno está em processamento para esta OS. Verifique novamente em instantes.";
+const MSG_TENTATIVA_ENCERRADA =
+  "Esta tentativa de abertura foi encerrada sem atendimento. Abra o retorno novamente para registrar uma nova abertura.";
 const MSG_SEM_CLIENTE =
   "A OS original não tem cliente cadastrado vinculado. Vincule o cliente na OS original antes de abrir o retorno (o retorno não cria cadastro novo).";
 
@@ -395,6 +397,10 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: Abrir
       if (daOperacao.assinatura && daOperacao.assinatura !== assinatura) throw new Error(MSG_DIVERGENTE);
       return { payload: null, resultado: { tipo: "replay", os: atual, retorno: daOperacao } };
     }
+    if (daOperacao?.status === "finalizado") {
+      // Tentativa interrompida (sem atendimento) e já encerrada: esta operação não abre mais nada.
+      throw new Error(MSG_TENTATIVA_ENCERRADA);
+    }
 
     const aberto = lidos.find((r) => r.status === "aberto");
     if (aberto?.osRetornoId) {
@@ -490,8 +496,10 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: Abrir
   }
 
   if (decisao.tipo === "adotado") {
-    await registrarEventoNaFilha(sid, decisao.filha, decisao.os, decisao.retorno, operador);
+    // Vínculo já commitado por ESTA chamada: anuncia antes de qualquer outra gravação (se a
+    // timeline da filha falhar, o retry entra em replay — que não anuncia de novo).
     emitirAberto(sid, decisao.os, decisao.retorno, decisao.filha);
+    await registrarEventoNaFilha(sid, decisao.filha, decisao.os, decisao.retorno, operador);
     if (!decisao.mesmaOperacao) {
       throw new Error(`Já existe um retorno em andamento para esta OS. Continue no atendimento ${decisao.filha.codigo}.`);
     }
@@ -584,8 +592,9 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: Abrir
   }
 
   const retornoFinal = lerRetornosV3(original as unknown as OrdemServico).find((r) => r.id === retorno.id) ?? retorno;
-  const atendimento = (await registrarEventoNaFilha(sid, filha, original, retornoFinal, operador)) ?? (await lerPayloadOS(sid, filha.id));
+  // Anúncio único, logo após o vínculo commitado e ANTES da timeline da filha (ver adoção).
   if (euVinculei) emitirAberto(sid, original, retornoFinal, filha);
+  const atendimento = (await registrarEventoNaFilha(sid, filha, original, retornoFinal, operador)) ?? (await lerPayloadOS(sid, filha.id));
   return { os: original, atendimento, situacao: vinculadoNaCompensacao ? "recuperado" : "criado", retornoId: retorno.id };
 }
 

@@ -399,6 +399,23 @@ describe("abrirRetornoV3 — idempotência e concorrência (T56, unidade)", () =
     expect(mocks.rows.get("os-minha")!.payload.timeline.filter((e: any) => e.metadata?.evento === "retorno_atendimento_aberto")).toHaveLength(1);
   });
 
+  it("R3-N1: timeline da filha falha DEPOIS do vínculo: os_retorno_aberto já foi publicado; o retry não publica de novo", async () => {
+    let falhou = false;
+    mocks.update.mockImplementation((args: { where: { id: string } }) => {
+      if (!falhou && args.where.id === "os-2001") {
+        falhou = true;
+        throw new Error("timeout gravando a timeline da filha");
+      }
+    });
+    await expect(abrirRetornoV3(storeId, osId, { motivo: "Touch", operacaoId: OP })).rejects.toThrow("timeout gravando a timeline da filha");
+    expect(original().retornosV3[0]).toMatchObject({ osRetornoId: "os-2001" });
+    expect(mocks.emitirEvento).toHaveBeenCalledTimes(1);
+    const r = await abrirRetornoV3(storeId, osId, { motivo: "Touch", operacaoId: OP });
+    expect(r.situacao).toBe("recuperado");
+    expect(mocks.emitirEvento).toHaveBeenCalledTimes(1);
+    expect(mocks.rows.get("os-2001")!.payload.timeline.filter((e: any) => e.metadata?.evento === "retorno_atendimento_aberto")).toHaveLength(1);
+  });
+
   it("replay repara o evento informativo da filha se faltar (sem nova filha, sem novo vínculo)", async () => {
     await abrirRetornoV3(storeId, osId, { motivo: "Touch", operacaoId: OP });
     mocks.rows.get("os-2001")!.payload.timeline = [];
@@ -454,6 +471,16 @@ describe("finalizarRetornoV3", () => {
     const r = await abrirRetornoV3(storeId, osId, { motivo: "Touch", operacaoId: OP });
     expect(r.atendimento?.id).toBe("os-orfa");
     expect(mocks.criarOS).not.toHaveBeenCalled();
+  });
+
+  it("tentativa encerrada sem atendimento: a MESMA operação recebe mensagem clara e nada é gravado", async () => {
+    semear({ retornosV3: [{ id: `ret-${OP}`, osOriginalId: osId, motivo: "Touch", criadoEm: "2026-08-15T10:00:00.000Z", status: "finalizado", operacaoId: OP, finalizadoEm: "2026-08-15T11:00:00.000Z" }] });
+    await expect(abrirRetornoV3(storeId, osId, { motivo: "Touch", operacaoId: OP })).rejects.toThrow("encerrada sem atendimento");
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.criarOS).not.toHaveBeenCalled();
+    // Operação NOVA abre normalmente.
+    const r = await abrirRetornoV3(storeId, osId, { motivo: "Touch", operacaoId: "op-retorno-0009" });
+    expect(r.situacao).toBe("criado");
   });
 
   it("R2-F2: retorno sem vínculo e SEM atendimento criado (expirado) pode ser finalizado", async () => {
