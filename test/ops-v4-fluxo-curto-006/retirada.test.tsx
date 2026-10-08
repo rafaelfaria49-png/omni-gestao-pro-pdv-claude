@@ -798,6 +798,34 @@ describe("OPS-V4-FLUXO-CURTO-006 rev 13 — teclado do recibo (R3-P2, teclado re
     expect(fundo).not.toHaveBeenCalled();
   });
 
+  it("R4 impressão aberta: o foco entra nela, Tab/Shift+Tab não saem dela, fundo e recibo de trás ficam inacessíveis e Enter nunca aciona o fundo", async () => {
+    const { user, d, fundo, confirmarEntrega, abridor } = await abrir();
+    await user.click(within(d).getByRole("button", { name: "Imprimir comprovante" }));
+    const voltar = await screen.findByRole("button", { name: /Voltar/ });
+    const camada = document.querySelector("[data-og-recibo-overlay]")!;
+    expect(camada.contains(voltar)).toBe(true);
+    // Foco entra na impressão ao abrir.
+    await waitFor(() => expect(document.activeElement).toBe(voltar));
+    // Tab/Shift+Tab (o cenário da R4: dois Shift+Tab levavam ao fundo) circulam só na impressão.
+    for (const shift of [true, true, true, false, false, false]) {
+      await user.tab({ shift });
+      expect(camada.contains(document.activeElement)).toBe(true);
+    }
+    // Foco movido para o fundo ou para o recibo atrás da impressão: volta para a impressão.
+    for (const alvo of [screen.getByRole("button", { name: "Ação do fundo" }), abridor, within(d).getByRole("button", { name: "Fechar comprovante" })]) {
+      act(() => alvo.focus());
+      expect(camada.contains(document.activeElement)).toBe(true);
+    }
+    // Enter no controle da impressão em foco (Voltar): fecha só a impressão — nunca o fundo.
+    act(() => voltar.focus());
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Voltar/ })).toBeNull());
+    expect(fundo).not.toHaveBeenCalled();
+    expect(confirmarEntrega).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: /Recibo de pagamento/ })).toBeTruthy();
+    expect(document.activeElement).toBe(within(d).getByRole("button", { name: "Imprimir comprovante" }));
+  });
+
   it("impressão por cima: Escape fecha só a impressão e o foco volta ao Imprimir, ainda preso no recibo", async () => {
     const { user, d, fundo } = await abrir();
     await user.click(within(d).getByRole("button", { name: "Imprimir comprovante" }));

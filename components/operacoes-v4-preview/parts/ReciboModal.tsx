@@ -24,6 +24,8 @@ import { ReciboPreviewV3 } from "@/components/operacoes-v3/components/print/Reci
 
 /** Controles que recebem foco por teclado dentro do recibo. */
 const FOCAVEIS = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
+/** Raiz da impressão do comprovante (`ReciboPreviewV3`, em portal no body — mesmo marcador do CSS de impressão dele). */
+const CAMADA_IMPRESSAO = "[data-og-recibo-overlay]";
 
 export function ReciboModal({ v }: { v: V4Vals }) {
   if (!v.reciboOpen) return null;
@@ -45,20 +47,38 @@ function ReciboModalConteudo({ v }: { v: V4Vals }) {
   useEffect(() => {
     if (printOpen && !recibo) setPrintOpen(false);
   }, [printOpen, recibo]);
-  // Fundo inacessível: com o recibo aberto (e sem a impressão por cima), foco que saia
-  // do diálogo para o fundo — clique, foco programático, Tab a partir do body — volta
-  // para dentro. Outro diálogo modal por cima não é fundo: fica com o foco. Declarado
-  // ANTES da restauração para sair antes dela no fechamento.
+  // Camada que detém o teclado: o recibo ou, com a impressão aberta por cima, a impressão
+  // (o recibo fica atrás dela e também é "fundo").
+  const camadaAtiva = (): HTMLElement | null =>
+    imprimindo ? document.querySelector<HTMLElement>(CAMADA_IMPRESSAO) : dialogo.current;
+  // Fundo inacessível: foco que saia da camada ativa — clique, foco programático, Tab a
+  // partir do body — volta para dentro dela. Outro diálogo modal por cima não é fundo:
+  // fica com o foco. Declarado ANTES da restauração para sair antes dela no fechamento.
   useEffect(() => {
-    if (imprimindo) return;
     const segurar = (e: FocusEvent) => {
-      const el = dialogo.current;
-      if (!el?.isConnected || !(e.target instanceof Element) || el.contains(e.target)) return;
-      if (e.target.closest('[aria-modal="true"]')) return;
-      fechar.current?.focus();
+      const camada = imprimindo ? document.querySelector<HTMLElement>(CAMADA_IMPRESSAO) : dialogo.current;
+      if (!camada?.isConnected || !(e.target instanceof Element) || camada.contains(e.target)) return;
+      const outroModal = e.target.closest('[aria-modal="true"]');
+      if (outroModal && outroModal !== dialogo.current) return;
+      (imprimindo ? camada.querySelector<HTMLElement>(FOCAVEIS) : fechar.current)?.focus();
     };
     document.addEventListener("focusin", segurar);
     return () => document.removeEventListener("focusin", segurar);
+  }, [imprimindo]);
+  // Abrindo a impressão, o foco entra nela assim que ela monta (portal, montagem adiada).
+  useEffect(() => {
+    if (!imprimindo) return;
+    const focar = () => {
+      const camada = document.querySelector<HTMLElement>(CAMADA_IMPRESSAO);
+      const alvo = camada?.querySelector<HTMLElement>(FOCAVEIS);
+      if (!camada || !alvo) return false;
+      if (!camada.contains(document.activeElement)) alvo.focus();
+      return true;
+    };
+    if (focar()) return;
+    const observador = new MutationObserver(() => { if (focar()) observador.disconnect(); });
+    observador.observe(document.body, { childList: true, subtree: true });
+    return () => observador.disconnect();
   }, [imprimindo]);
   // Teclado: foco entra no diálogo e volta ao controle que o abriu.
   useEffect(() => {
@@ -74,13 +94,18 @@ function ReciboModalConteudo({ v }: { v: V4Vals }) {
     imprimiu.current = false;
     (imprimir.current ?? fechar.current)?.focus();
   }, [imprimindo]);
-  // Tab/Shift+Tab circulam só pelos controles do recibo (mesmo padrão do sheet de
-  // recebimento). Com a impressão aberta por cima, ela cuida do próprio teclado.
+  // Tab/Shift+Tab circulam só pelos controles da camada ativa (mesmo padrão do sheet de
+  // recebimento). Eventos da impressão chegam aqui pela árvore React do portal. Escape com
+  // a impressão aberta é dela (fecha só a impressão).
   const teclado = (e: TecladoEvent<HTMLDivElement>) => {
-    if (imprimindo) return;
-    if (e.key === "Escape") { e.preventDefault(); v.closeRecibo(); return; }
+    if (e.key === "Escape") {
+      if (imprimindo) return;
+      e.preventDefault();
+      v.closeRecibo();
+      return;
+    }
     if (e.key !== "Tab") return;
-    const itens = Array.from(dialogo.current?.querySelectorAll<HTMLElement>(FOCAVEIS) ?? []);
+    const itens = Array.from(camadaAtiva()?.querySelectorAll<HTMLElement>(FOCAVEIS) ?? []);
     if (!itens.length) { e.preventDefault(); return; }
     const primeiro = itens[0]!, ultimo = itens[itens.length - 1]!;
     const ativo = document.activeElement;

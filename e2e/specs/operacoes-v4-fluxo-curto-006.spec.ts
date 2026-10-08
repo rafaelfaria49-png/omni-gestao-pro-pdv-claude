@@ -373,6 +373,7 @@ let osEstorno = { id: "", codigo: "" };
 
 /** O elemento com foco está dentro do diálogo do recibo? (navegador real) */
 const focoNoRecibo = (page: Page) => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"][aria-labelledby="recibo-os-title"]'));
+const focoNaImpressao = (page: Page) => page.evaluate(() => !!document.activeElement?.closest("[data-og-recibo-overlay]"));
 const focoNome = (page: Page) => page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute("aria-label") || document.activeElement?.textContent?.trim() || "");
 
 test("E10 — recibo após reload: reimpressão do comprovante persistido da MESMA OS; teclado preso no recibo (rev 13)", async ({ page }) => {
@@ -395,6 +396,17 @@ test("E10 — recibo após reload: reimpressão do comprovante persistido da MES
     await page.keyboard.press("Tab");
     expect(await focoNoRecibo(page)).toBe(true);
   }
+  // Impressão por cima (R4): o foco entra nela e Tab/Shift+Tab não saem dela; Escape fecha só a impressão.
+  await d.getByRole("button", { name: "Imprimir comprovante" }).click();
+  await expect(page.getByRole("button", { name: /Voltar/ })).toBeVisible();
+  await expect.poll(() => focoNaImpressao(page)).toBe(true);
+  for (const tecla of ["Shift+Tab", "Shift+Tab", "Shift+Tab", "Tab", "Tab", "Tab"]) {
+    await page.keyboard.press(tecla);
+    expect(await focoNaImpressao(page)).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: /Voltar/ })).toHaveCount(0);
+  await expect(d.getByRole("button", { name: "Imprimir comprovante" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(d).toHaveCount(0);
   // O foco volta ao botão que abriu o recibo.
