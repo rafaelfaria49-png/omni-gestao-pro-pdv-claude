@@ -5,16 +5,17 @@
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
   "title": "Operações V4 — fluxo curto",
-  "plan_rev": 12,
+  "plan_rev": 13,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
 -->
 
 Fonte de intenção: plano funcional de 19/09/2026 e autorização operacional
-ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-006, plan_rev 12,
-classe C4, risco ALTO, fornecida em 08/10/2026 ("QUERO INICIAR
-OPS-V4-FLUXO-CURTO-006").
+ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-006, plan_rev 13
+(rev 12 + desbloqueio humano da rev 13), classe C4, risco ALTO, fornecida em
+08/10/2026 ("QUERO INICIAR OPS-V4-FLUXO-CURTO-006" e "DECISÃO HUMANA DE
+DESBLOQUEIO").
 
 ## Escopo ativo
 
@@ -58,6 +59,14 @@ atualizada → status → open.
 
 Não editar state.json, LEDGER.jsonl, REGISTRY.md ou GATES.md à mão.
 Não deixar alterações de goals/** no diff de produto do check 8.
+
+Rev 13 (desbloqueio após o teto de tentativas): o proprietário reativou o
+MESMO GOAL (BLOCKED by=decisao em 4d13498, após a R3 em 1fc223e), sem GOAL
+sucessor. Escopo restrito aos dois achados da R3 (identidade do comprovante
+em recibo-persistido-v4.ts; contenção de foco no ReciboModal) e seus testes;
+allowlist, test_command e contrato inalterados. Rito: PR exclusivo de
+governança (block + desbloqueio) → merge normal na main → merge normal da
+main na branch do GOAL → open (tentativa 1 da rev 13).
 
 ## Ambiente planejado
 

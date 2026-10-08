@@ -9,7 +9,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 12,
+  "plan_rev": 13,
   "branch": "goal/ops-v4-fluxo-curto-006",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v4/retirada-fluxo-v4.test.ts lib/operacoes-v4/recibo-persistido-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/receber-pagamento-form.test.ts lib/operacoes-v4/estorno-recebimento-form.test.ts lib/operacoes-v4/os-header-transversal.test.ts lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v3/entrega-actions.test.ts lib/operacoes-v3/entrega-unificada.test.ts lib/operacoes-v3/payment-model.test.ts lib/operacoes-v3/pdv-servico-a-prazo.test.ts lib/operacoes-v3/os-conta-receber-unica.test.ts lib/operacoes-v3/recebimento-misto-model.test.ts lib/operacoes-v3/pos-venda-model.test.ts lib/operacoes-v3/estoque-sync.test.ts lib/operacoes-v3/datas-operacionais-model.test.ts lib/operacoes-v3/status-machine.test.ts lib/operacoes-v3/orcamento-model.test.ts components/operacoes-v3/hooks/use-pdv-servico-v3.test.ts components/operacoes-v4-preview/financial-projection-surfaces.test.ts components/operacoes-v4-preview/recebimento-transversal.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/use-financial-projection-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[56]\" && npx --no-install vitest run --config test/ops-v4-fluxo-curto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-004/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx --no-install vitest run --config test/ops-v3-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts && npx playwright test e2e/specs/operacoes-v4-fluxo-curto-006.spec.ts --retries=0 --workers=1",
@@ -430,6 +430,72 @@ stale, estoque em dobro, custo duplicado, garantia em dobro, entregas
 concorrentes, deadlock, documento afirmando fato inexistente, regressão
 da Próxima ação 005, retrodatação financeira pela data de entrega, meio
 não suportado como sucesso). Exigir P0=P1=P2=0 e VERDICT=APPROVE.
+
+## Revisão 13 — desbloqueio humano (08/10/2026)
+
+Histórico das tentativas (R independente OpenAI, gpt-6.1-sol, read-only):
+- tentativa 1, R1 em 1769cab: 3 P1 + 4 P2 — corrigidos em a209aec;
+- tentativa 2, R2 em a209aec: 1 P1 + 2 P2 — corrigidos em a6bb261 (1fc223e só
+  acrescentou asserções de reimpressão em split e misto);
+- tentativa 3, R3 em 1fc223e: 1 P1 + 1 P2 (abaixo). O teto de 3 tentativas
+  esgotou: BLOCKED (by=decisao) em 4d13498 na branch do GOAL, materializado na
+  main pelo PR de governança desta revisão.
+
+Decisão do proprietário (08/10/2026): reativar este MESMO GOAL na rev 13, sem
+006-FIX/006B/006C/006-HARDENING nem GOAL sucessor — os dois achados da R3
+pertencem ao contrato do 006. As tentativas reiniciam pelo desbloqueio humano
+(protocolo §3). O trabalho do PR #245 é preservado: a branch do GOAL integra a
+main por merge normal (sem rebase, cherry-pick, reset ou force).
+
+Escopo da rev 13: SOMENTE os dois achados da R3 e seus testes. Nenhuma
+ampliação da allowlist (os arquivos já estão nela); test_command, contrato
+funcional, matriz, gates e áreas protegidas inalterados. Não reauditar o 006
+inteiro, não redesenhar, não tocar motores financeiros, não implementar 007.
+
+P1 — identidade do comprovante (lib/operacoes-v4/recibo-persistido-v4.ts):
+- comprovante persistido com operacaoId só casa com o pagamento vigente do
+  título que tenha a MESMA identidade (operationId = loteId). Pagamento sem
+  identidade, ou com identidade divergente, NÃO valida esse comprovante →
+  recibo indisponível. Comprovante sem operacaoId não prova pagamento vigente
+  (os writers atuais sempre gravam a identidade) → indisponível;
+- proibido adivinhar por valor + ordem; proibido alterar writer financeiro
+  para fabricar operationId;
+- preservar parcial 100 + 200, split, misto, recibos canônicos válidos,
+  reimpressão após reload e comprovante atual da mesma OS;
+- regressão exata: OS R$300; PIX 100 op1; PIX 200 op2; estorno dos 200;
+  reposição externa 200 em dinheiro com operationId=null → o recibo PIX op2
+  nunca é oferecido (indisponível, salvo comprovante persistido legítimo da
+  reposição atual). Também: identidade correta → disponível; identidade
+  divergente → indisponível. recibo-persistido-v4.test.ts deixa de aceitar
+  comprovante com operacaoId × pagamento sem operationId.
+
+P2 — foco do recibo (components/operacoes-v4-preview/parts/ReciboModal.tsx):
+- conter Tab/Shift+Tab no recibo, no mesmo padrão nativo do sheet de
+  recebimento: Tab no último focável volta ao primeiro; Shift+Tab no primeiro
+  vai ao último; foco nunca alcança controle da página de fundo; Enter nunca
+  atinge controle de fundo; Escape fecha quando a impressão interna não está
+  aberta; foco volta ao controle que abriu. Sem dependência nova, sem sistema
+  global de foco;
+- testes montados no runner 006 (test/ops-v4-fluxo-curto-006/**) com
+  interação real de teclado: K01 foco inicial dentro do recibo; K02 Tab
+  percorre só controles do modal; K03 Tab no último volta ao primeiro; K04
+  Shift+Tab no primeiro vai ao último; K05 foco nunca no botão de fundo; K06
+  Enter com modal aberto não dispara controle de fundo; K07 Escape fecha; K08
+  foco retorna ao botão que abriu.
+
+Fora desta revisão (auditoria futura somente leitura, sem ampliar allowlist):
+estoque da OS consumindo peça alternativa não escolhida; estorno do
+Financeiro podendo mirar pagamento já estornado. Não bloqueiam o aceite do
+006, salvo se a correção tocar diretamente essa cadeia e provar regressão.
+
+Validação da rev 13: testes focados; test_command completo; recibo-persistido,
+montados 006, teclado, PostgreSQL e E2E 006 pertinentes; regressões 005, #237,
+#238; typecheck; ESLint em todos os .ts/.tsx alterados; git diff --check;
+build (MIGRATION_SKIPPED); verify; verify --all; check. Nova R independente
+OpenAI read-only (R4) sobre o HEAD exato, com foco em R09, R17, focus trap,
+Tab/Shift+Tab, Enter contra o fundo, Escape e isolamento OS A/B, e
+confirmação de que os ataques já aprovados seguem sem regressão:
+P0=P1=P2=0 e VERDICT=APPROVE.
 
 ## Autocorreção
 

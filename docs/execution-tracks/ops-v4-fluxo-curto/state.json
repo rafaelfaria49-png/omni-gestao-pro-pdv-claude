@@ -8,11 +8,11 @@
   "bootstrap_commit": null,
   "counters": {
     "goals_done": 5,
-    "goals_blocked": 0,
+    "goals_blocked": 1,
     "goals_imported": 0,
-    "ledger_lines": 8
+    "ledger_lines": 9
   },
-  "last_goal": "OPS-V4-FLUXO-CURTO-005",
-  "last_result": "DONE",
-  "last_ratified_at": "2026-10-08T02:18:29.624Z"
+  "last_goal": "OPS-V4-FLUXO-CURTO-006",
+  "last_result": "BLOCKED",
+  "last_ratified_at": "2026-10-08T07:15:37.419Z"
 }
