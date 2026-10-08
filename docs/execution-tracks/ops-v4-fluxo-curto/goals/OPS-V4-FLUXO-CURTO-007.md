@@ -6,10 +6,10 @@
   "id": "OPS-V4-FLUXO-CURTO-007",
   "track": "ops-v4-fluxo-curto",
   "title": "Retorno pela OS original, sem recadastrar e sem venda presumida",
-  "status": "BLOCKED",
+  "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 14,
+  "plan_rev": 15,
   "branch": "goal/ops-v4-fluxo-curto-007",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/retorno-actions.test.ts lib/operacoes-v3/retorno-atendimento.test.ts lib/operacoes-v3/pos-venda-model.test.ts lib/operacoes-v3/retorno-auto-close.test.ts lib/operacoes-v3/retorno-auto-close-actions.test.ts lib/operacoes-v3/nova-os-actions.test.ts lib/operacoes-v3/nova-os-model.test.ts lib/operacoes-v3/garantia-actions.test.ts lib/operacoes-v3/entrega-actions.test.ts lib/operacoes-v3/status-machine.test.ts lib/operacoes-v3/event-model.test.ts lib/operacoes-v4/retorno-origem-v4.test.ts lib/operacoes-v4/posvenda-v4.test.ts lib/operacoes-v4/novo-atendimento.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-NOVO-ATENDIMENTO-COMERCIAL-001|OPS-V4-POSVENDA-RETORNO-GARANTIAS-006\" && npx --no-install vitest run --config test/ops-v4-fluxo-curto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-004/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v3-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts && npx playwright test e2e/specs/operacoes-v4-fluxo-curto-007.spec.ts --retries=0 --workers=1",
@@ -387,6 +387,68 @@ multi-loja, preservação da original, ausência de efeito financeiro,
 regressões V3/V4 e navegador. Relatório com R_HEAD_REVIEWED, R_FAMILY,
 R_VERDICT, P0, P1, P2, P3. Aprovação = P0=P1=P2=0 e R_VERDICT=APPROVE.
 Sem R real: R_STATUS=AGUARDANDO_OPENAI, sem close nem merge.
+
+## Revisão 15 — desbloqueio humano (08/10/2026)
+
+Histórico das tentativas (R independente OpenAI, gpt-6.1-sol, Codex
+read-only; a R1 foi anulada porque o HEAD se moveu durante a leitura):
+- tentativa 1, R2 em c411e7b: 8 P2 (F1–F8) — corrigidos em 4bff374;
+- tentativa 2, R3 em 4bff374: 5 P2 (N1–N5) — corrigidos em c4f691d
+  (c290ecd só ajustou a asserção estrutural do preview-honesty);
+- tentativa 3, R4 em c290ecd: N1–N5 confirmadas, 2 P2 restantes (abaixo).
+  O teto de 3 tentativas esgotou: BLOCKED (by=externo) em 8d1f392 na branch
+  do GOAL, materializado na main pelo PR de governança desta revisão, com o
+  registro original preservado.
+
+Decisão do proprietário (08/10/2026, "COMANDO MESTRE — DESBLOQUEAR, CORRIGIR
+E PUBLICAR GOAL 007"): reativar este MESMO GOAL na rev 15, sem
+007-FIX/007B/007-HARDENING nem GOAL sucessor — os dois achados da R4
+pertencem ao contrato do 007. As tentativas reiniciam pelo desbloqueio
+humano (protocolo §3). O trabalho da branch goal/ops-v4-fluxo-curto-007 é
+preservado: ela integra a main por merge normal (sem rebase, cherry-pick,
+reset, amend ou force).
+
+Escopo da rev 15: SOMENTE os dois P2 da R4 e seus testes. Os dois arquivos
+já estão na allowlist; allowlist, test_command, contrato funcional (T53–T57),
+gates, classe C4, risco ALTO, família anthropic, R obrigatória e áreas
+protegidas inalterados. Não reauditar o 007 inteiro, não redesenhar, não
+tocar motores, não elevar o limite do servidor, não implementar 008.
+
+P2 nº 1 — limite da ocorrência pré-entrega
+(components/operacoes-v4-preview/parts/RetornoOrigemPickerV4.tsx):
+- o campo aceita 2000 caracteres, mas o envio a adicionarObservacaoInternaV3
+  acrescenta o prefixo "Ocorrência antes da entrega: " e o servidor recusa
+  conteúdo final acima de 2000 (producao-actions.ts, só leitura);
+- o limite do relato passa a ser DERIVADO do texto realmente enviado (2000
+  menos o comprimento do prefixo/separadores efetivos), com uma única regra
+  para contador, validação e envio — sem número mágico;
+- nunca truncar em silêncio (inclusive colagem): acima do limite, impedir o
+  salvamento, explicar e preservar integralmente o texto do operador;
+- sem transporte do relato entre OS/lojas (N4 preservada);
+- testes de fronteira: exatamente o limite, limite+1, 2000 caracteres,
+  espaços nas bordas, quebras de linha, Unicode (inclusive par substituto) e
+  rascunho/estado preservado após recusa.
+
+P2 nº 2 — contenção de foco do "Finalizar retorno"
+(Modal de components/operacoes-v4-preview/parts/stages/PosVendaStage.tsx):
+- Tab/Shift+Tab circulam só entre os controles habilitados do diálogo; foco
+  inicial dentro; foco nunca alcança a página de fundo; Enter nunca aciona
+  controle de fundo; Escape segue a regra de fechamento (não fecha durante o
+  salvamento); foco volta ao controle que abriu (ou a destino válido se ele
+  sumiu após troca de OS/loja); contenção mantida com controles
+  desabilitados (sem focável → o próprio contêiner recebe o foco); camadas
+  legítimas em portal não são capturadas indevidamente;
+- padrão nativo já usado nos diálogos do 006/007, sem dependência nova nem
+  sistema global de foco; regra de negócio da finalização inalterada;
+- testes montados com teclado real (userEvent) no runner 007 e navegação
+  por teclado no E2E 007.
+
+Validação da rev 15: testes focados; test_command completo; T53–T57;
+regressões 001–006 e #234/#235/#237/#238; PostgreSQL descartável; E2E 007
+(--retries=0); typecheck; ESLint em todos os .ts/.tsx alterados; build sem
+migration; git diff --check; verify; verify --all; check. Nova R
+independente OpenAI read-only (R5) sobre o HEAD exato, confirmando os dois
+corretivos e a ausência de regressão: P0=P1=P2=0 e R_VERDICT=APPROVE.
 
 ## Autocorreção
 
