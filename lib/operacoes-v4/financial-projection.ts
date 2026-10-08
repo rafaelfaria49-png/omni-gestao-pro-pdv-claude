@@ -41,6 +41,17 @@ export interface FinancialInstallmentV4 {
   status: string | null;
 }
 
+/** Pagamento VIGENTE (não estornado) do título, na ordem do histórico. */
+export interface FinancialPaymentV4 {
+  amount: number;
+  /**
+   * Identidade da operação gravada pelo writer: `loteId` (= `operacaoId`) da baixa ou,
+   * na baixa do recebimento misto, a `operacaoId` do marcador gravado com ela. `null` =
+   * baixa sem identidade (ex.: feita pelo Financeiro).
+   */
+  operationId: string | null;
+}
+
 export interface FinancialEventV4 {
   eventId: string;
   source: FinancialEventSourceV4;
@@ -88,6 +99,12 @@ export interface FinancialProjectionOSV4 {
   noChargeReason: string | null;
 
   financialEvents: FinancialEventV4[];
+  /**
+   * GOAL OPS-V4-FLUXO-CURTO-006: pagamentos vigentes do título (pagamento/liquidação
+   * menos os estornados, pela referência `refHistoricoIndex`), na ordem. `[]` = sem
+   * pagamento; `null` = histórico ilegível (nada se conclui sobre comprovantes).
+   */
+  receivablePayments?: FinancialPaymentV4[] | null;
   canReceive: boolean;
   canDeliver: boolean;
   deliveryDecision: EntregaFinanceiraDecisaoV3;
@@ -249,6 +266,52 @@ const EVENT_DESCRIPTIONS: Record<string, string> = {
   a_prazo_autorizado: "Entrega autorizada a prazo",
 };
 
+/**
+ * Identidade de uma baixa que o recebimento misto (`registrarRecebimentoMistoOSV3`)
+ * grava sem `loteId`: na MESMA transação, sob a trava do título, o writer grava logo
+ * em seguida o marcador `a_prazo_autorizado` com a `operacaoId` e o `recebidoAgora`
+ * da operação. Só esse vínculo explícito (entrada imediatamente seguinte, mesmo valor
+ * recebido) identifica a baixa. Baixa sem marcador (ex.: feita pelo Financeiro) segue
+ * sem identidade — nunca se deduz identidade por valor e ordem.
+ */
+function mixedReceiptOperationId(next: unknown, amount: number): string | null {
+  if (!isRecord(next) || text(next.tipo).toLowerCase() !== "a_prazo_autorizado") return null;
+  const operationId = text(next.operacaoId);
+  const receivedNow = typeof next.recebidoAgora === "number" ? money(next.recebidoAgora) : null;
+  if (!operationId || receivedNow == null || receivedNow <= 0) return null;
+  return Math.round(receivedNow * 100) === Math.round(amount * 100) ? operationId : null;
+}
+
+/**
+ * Pagamentos vigentes do histórico do título. Estorno com `refHistoricoIndex`
+ * remove exatamente o pagamento referido; sem referência, o último vigente (mesma
+ * regra do serviço de estorno). Referência a pagamento inexistente ou já estornado
+ * torna o histórico ilegível para este fim (`null`) — fail-closed.
+ */
+function readValidPayments(titlePayload: unknown): FinancialPaymentV4[] | null {
+  if (!isRecord(titlePayload) || titlePayload.historico == null) return [];
+  if (!Array.isArray(titlePayload.historico)) return null;
+  const vigentes: Array<FinancialPaymentV4 & { index: number }> = [];
+  const historico: unknown[] = titlePayload.historico;
+  for (let index = 0; index < historico.length; index++) {
+    const entry = historico[index];
+    if (!isRecord(entry)) continue;
+    const type = text(entry.tipo).toLowerCase();
+    if (type === "pagamento" || type === "liquidacao") {
+      const amount = money(entry.valor);
+      if (amount == null) return null;
+      vigentes.push({ index, amount, operationId: text(entry.loteId) || mixedReceiptOperationId(historico[index + 1], amount) });
+      continue;
+    }
+    if (type !== "estorno_pagamento") continue;
+    const ref = typeof entry.refHistoricoIndex === "number" ? entry.refHistoricoIndex : null;
+    const pos = ref == null ? vigentes.length - 1 : vigentes.findIndex((item) => item.index === ref);
+    if (pos < 0) return null;
+    vigentes.splice(pos, 1);
+  }
+  return vigentes.map(({ amount, operationId }) => ({ amount, operationId }));
+}
+
 function readFinancialEvents(payload: Record<string, unknown>, titlePayload: unknown): FinancialEventV4[] {
   const titleHistory = isRecord(titlePayload) && Array.isArray(titlePayload.historico) ? titlePayload.historico : [];
   const fromTitle = titleHistory.flatMap((entry, index): FinancialEventV4[] => {
@@ -368,6 +431,7 @@ export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): Financia
     noChargeCategory: guard.autorizacaoSemCobranca ? text(noCharge.categoria) || null : null,
     noChargeReason: guard.autorizacaoSemCobranca ? text(noCharge.motivo) || null : null,
     financialEvents: readFinancialEvents(input.payload, input.titulo?.payload),
+    receivablePayments: input.titulo ? readValidPayments(input.titulo.payload) : [],
     canReceive,
     canDeliver: autorizadaParaEntregaFinanceiraV3(guard.decisao),
     deliveryDecision: guard.decisao,
@@ -414,6 +478,7 @@ export function unknownFinancialProjectionOSV4(input: {
     noChargeCategory: null,
     noChargeReason: null,
     financialEvents: [],
+    receivablePayments: null,
     canReceive: false,
     canDeliver: false,
     deliveryDecision: "BLOCK_UNKNOWN",

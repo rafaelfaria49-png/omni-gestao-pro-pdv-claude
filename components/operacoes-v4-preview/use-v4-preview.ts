@@ -131,7 +131,7 @@ import { montarMensagemAtualizacaoOSV4 } from "@/lib/operacoes-v4/documento-mens
 import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
 import type { EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operacoes-v3/garantia-actions";
-import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
@@ -149,6 +149,8 @@ import {
   montarHistoricoHeaderV4,
 } from "@/lib/operacoes-v4/os-header-transversal";
 import { montarResumoFinanceiroOSV4 } from "@/lib/operacoes-v4/financeiro-v4";
+import { derivarRetiradaFinanceiraV4, servicoDaRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
+import { lerReciboDaProjecaoV4, type LeituraReciboV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
 import { buildGarantiasPortfolioV4 } from "@/lib/operacoes-v4/posvenda-v4";
 import {
   adaptAcessoriosEntrada,
@@ -297,7 +299,12 @@ export interface V4DataCtx {
   // ---- Entrega (slice OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
   // Confirma pela action canônica `registrarEntregaV3`; o servidor sempre revalida
   // financeiro, mesmo quando o cliente chama fora do gate visual.
-  confirmarEntrega: (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"]) => Promise<boolean>;
+  /** GOAL OPS-V4-FLUXO-CURTO-006: `recebidoPor` = "Retirado por" informado (ausente = cliente da OS, regra do servidor). */
+  confirmarEntrega: (
+    semCobranca?: EntregaSemCobrancaSolicitacaoV3,
+    dataEntrega?: RegistrarEntregaInputV3["dataEntrega"],
+    recebidoPor?: string,
+  ) => Promise<boolean>;
   // ---- Assinatura de retirada + auditoria de impressão (GOAL OPS-V4-DOCS-
   // ASSINATURA-TERMOS-ANEXOS-012) ----
   /** Persiste a assinatura de retirada (reuso de `salvarAssinaturaRetiradaV3`). */
@@ -467,6 +474,11 @@ export function buildVals(
   // OS real selecionada → identidade/financeiro reais (vazio honesto quando ausente).
   const realOS = ctx.realOS;
   const financialProjection = ctx.financialProjection.projection;
+  // GOAL OPS-V4-FLUXO-CURTO-006: loja+OS das superfícies abertas sobre a seleção
+  // (sheet de recebimento, recibo, estorno, documento impresso). Aberta para outra
+  // seleção = fechada nesta — nunca mostra/age sobre a OS errada.
+  const chaveSuperficies = JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]);
+  const noAlvoSuperficies = !!st.selectedOsId && st.alvoSuperficies === chaveSuperficies;
   const financialStatusLabel = financialProjection
     ? FINANCIAL_STATUS_LABEL[financialProjection.financialStatus]
     : ctx.financialProjection.loading
@@ -663,7 +675,13 @@ export function buildVals(
       notify("Defina a garantia da OS antes de emitir o termo.");
       return;
     }
-    update({ docPrint: tipo, menu: null });
+    // GOAL OPS-V4-FLUXO-CURTO-006: o Termo de Entrega declara uma retirada — só
+    // existe depois da entrega real (antes, o documento afirmaria um fato inexistente).
+    if (tipo === "termo_entrega" && !lerEntregaV3(realOS).entregue) {
+      notify("O Termo de Entrega fica disponível depois da entrega confirmada.");
+      return;
+    }
+    update({ docPrint: tipo, alvoSuperficies: chaveSuperficies, menu: null });
   };
   // GOAL 023: "Orçamento (via cliente)" só aparece no menu com orçamento REAL
   // materializado (`estado === "persistido"`) — prévia/ausente não têm o que
@@ -880,7 +898,43 @@ export function buildVals(
     financeiroErro: leituraFinanceiraBloqueada ? ctx.financialProjection.error : null,
     financeiroMotivo: financialProjection?.consistencyIssues[0] ?? null,
     saldoPendente: saldoPendenteConfirmado ? financialProjection?.balance ?? null : null,
+    // GOAL OPS-V4-FLUXO-CURTO-006: total aprovado sem Conta a Receber — o título
+    // único nasce no primeiro recebimento/lançamento a prazo (nunca pela leitura).
+    cobrancaNaoFormalizada:
+      !!realOS && status === "pronta" && !ctx.financialProjection.loading && !ctx.financialProjection.error &&
+      financialProjection?.financialStatus === "CHARGE_NOT_CREATED",
   };
+
+  // ---- Retirada (GOAL OPS-V4-FLUXO-CURTO-006) ----
+  // Contexto final da OS na Entrega: condição financeira da MESMA OS (projeção de
+  // outra OS = carregando), serviço do orçamento real. Derivação pura; a decisão
+  // de entrega continua no servidor (`registrarEntregaV3`).
+  const retirada = {
+    financeiro: derivarRetiradaFinanceiraV4({
+      osId: realOS?.id ?? null,
+      projection: financialProjection,
+      loading: ctx.financialProjection.loading,
+      error: ctx.financialProjection.error,
+      entregue: entregaReal.entregue,
+    }),
+    servico: servicoDaRetiradaV4(realOS),
+    clienteNome: (realOS?.cliente?.nome ?? "").trim(),
+  };
+  // Comprovante da MESMA OS, sempre da evidência PERSISTIDA (timeline da OS × pagamentos
+  // vigentes do título): só com o detalhe e a projeção desta OS estabelecidos; a sessão
+  // apenas marca "acabou de receber". Leitura com erro nunca vira "confirmando" eterno.
+  const leituraReciboEstabelecida =
+    !!realOS &&
+    cargaOS === "estabelecida" &&
+    !!financialProjection &&
+    financialProjection.osId === realOS.id &&
+    !ctx.financialProjection.loading;
+  const reciboAtual: LeituraReciboV4 =
+    ctx.financialProjection.error || cargaOS === "erro"
+      ? { estado: "erro" }
+      : !leituraReciboEstabelecida || !financialProjection
+        ? { estado: "confirmando" }
+        : lerReciboDaProjecaoV4({ sessao: ctx.pdvServico.ultimoRecibo, os: realOS, projection: financialProjection });
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
   const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);
@@ -1307,9 +1361,13 @@ export function buildVals(
     // GOAL OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005: usado pelo bloqueio "saldo em
     // aberto" da Entrega — só navega (o recebimento real vive no botão do Financeiro).
     goFinanceiro: () => update({ stage: "financeiro", module: "workspace", view: "cockpit", menu: null }),
-    openReceberPagamento: () => update({ stage: "financeiro", receberPagamento: true, module: "workspace", view: "cockpit", menu: null }),
+    openReceberPagamento: () =>
+      update({ stage: "financeiro", receberPagamento: true, alvoSuperficies: chaveSuperficies, module: "workspace", view: "cockpit", menu: null }),
+    // GOAL OPS-V4-FLUXO-CURTO-006: o MESMO sheet (ReceberPagamentoV4 + hook V3),
+    // aberto sem sair da etapa Entrega — pagar nunca entrega sozinho.
+    openReceberPagamentoAqui: () => update({ receberPagamento: true, alvoSuperficies: chaveSuperficies, menu: null }),
     closeReceberPagamento: () => update({ receberPagamento: false }),
-    receberPagamentoOpen: st.receberPagamento,
+    receberPagamentoOpen: st.receberPagamento && noAlvoSuperficies,
     // GOAL OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002: usado pelo alerta "OS sem cobrança"
     // da Entrega — leva o operador a lançar o orçamento antes de entregar (só navega).
     goOrcamento: () => update({ stage: "orcamento", module: "workspace", view: "cockpit", menu: null }),
@@ -1404,9 +1462,9 @@ export function buildVals(
     // ---- Estorno de recebimento REAL (GOAL OPS-V4-RECEBIMENTO-ESTORNO-016) ----
     // Modal só abre atrás de ação explícita (botão na aba Financeiro, já gated por
     // `v.estorno.podeEstornar`); a escrita real é `v.pdvServico.estornar` (acima).
-    openEstornoRecebimento: () => update({ estornoRecebimento: true }),
+    openEstornoRecebimento: () => update({ estornoRecebimento: true, alvoSuperficies: chaveSuperficies }),
     closeEstornoRecebimento: () => update({ estornoRecebimento: false }),
-    estornoRecebimentoOpen: st.estornoRecebimento,
+    estornoRecebimentoOpen: st.estornoRecebimento && noAlvoSuperficies,
 
     // ---- Cancelamento de OS REAL (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) ----
     // Modal só abre atrás de ação explícita (menu "Mais ações"); a escrita real é
@@ -1442,7 +1500,10 @@ export function buildVals(
     cancelamento,
     cancelarOS: ctx.cancelarOS,
 
-    openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
+    openRecibo: () => update({ recibo: true, alvoSuperficies: chaveSuperficies }),
+    closeRecibo: () => update({ recibo: false }),
+    reciboOpen: st.recibo && noAlvoSuperficies,
+    reciboAtual,
 
     diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, entrega: entregaReal,
     os: osView,
@@ -1467,6 +1528,7 @@ export function buildVals(
     // saldo usada pelo CTA global e pelo aviso do Financeiro).
     confirmarEntrega: ctx.confirmarEntrega,
     entregaAcoes,
+    retirada,
 
     // ---- Assinatura de retirada + documentos reais (GOAL OPS-V4-DOCS-
     // ASSINATURA-TERMOS-ANEXOS-012) ----
@@ -1476,7 +1538,16 @@ export function buildVals(
     salvarAssinaturaRetirada: ctx.salvarAssinaturaRetirada,
     adicionarFotoSaida: ctx.adicionarFotoSaida,
     removerFotoSaida: ctx.removerFotoSaida,
-    docPrintTipo: st.docPrint as DocumentoTipoV3 | null,
+    // GOAL OPS-V4-FLUXO-CURTO-006: o documento aberto vale só para a loja+OS em que
+    // foi pedido; Termo de Entrega só de OS realmente entregue e Termo de Garantia
+    // só com garantia definida — as guardas valem a cada render, não só na abertura.
+    docPrintTipo:
+      st.docPrint &&
+      noAlvoSuperficies &&
+      !(st.docPrint === "termo_entrega" && !lerEntregaV3(realOS).entregue) &&
+      !(st.docPrint === "termo_garantia" && !lerGarantiaV3(realOS).temGarantia)
+        ? (st.docPrint as DocumentoTipoV3)
+        : null,
     closeDocPrint: () => update({ docPrint: null }),
     registrarImpressaoDoc: ctx.registrarImpressaoDoc,
     // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
@@ -1492,7 +1563,7 @@ export function buildVals(
     // Sessão de caixa/recibo e ações do motor V3; totais vêm da projeção server-side.
     // `recebimento` é o gating pré-computado dessa projeção com a sessão do caixa.
     pdvServico: ctx.pdvServico,
-    recebimentoContextKey: JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]),
+    recebimentoContextKey: chaveSuperficies,
     recebimento,
     estorno,
     // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
@@ -1823,6 +1894,17 @@ export function useV4Preview(): V4Vals {
   useEffect(() => {
     limparReciboPdvV3();
   }, [st.selectedOsId, limparReciboPdvV3]);
+  // GOAL OPS-V4-FLUXO-CURTO-006: superfícies abertas para outra loja+OS (sheet,
+  // recibo, estorno, documento) já não aparecem na seleção nova (`alvoSuperficies`);
+  // aqui são descartadas para não ressurgirem ao voltar à OS anterior.
+  const chaveSuperficiesSelecao = JSON.stringify([lojaAtivaId ?? null, st.selectedOsId]);
+  useEffect(() => {
+    setSt((prev) =>
+      prev.alvoSuperficies == null || prev.alvoSuperficies === chaveSuperficiesSelecao
+        ? prev
+        : { ...prev, receberPagamento: false, recibo: false, estornoRecebimento: false, docPrint: null, alvoSuperficies: null },
+    );
+  }, [chaveSuperficiesSelecao]);
 
   useEffect(() => {
     return () => {
@@ -2016,15 +2098,27 @@ export function useV4Preview(): V4Vals {
   // V3) só para também recarregar lista+detalhe da V4 depois do sucesso.
   const estornarRecebimentoV4 = useCallback(
     async (input: EstornarRecebimentoInputV3) => {
+      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
       const ok = await estornarPdvV3(input);
+      // GOAL OPS-V4-FLUXO-CURTO-006: resposta de A com o operador já em B (OS ou
+      // loja) só atualiza a lista — nunca limpa o recibo, relê ou fecha superfícies
+      // de B; o chamador obsoleto recebe `false`.
+      if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) {
+        if (ok) reloadOrdens();
+        return false;
+      }
       if (ok) {
         reloadOrdens();
         reloadDetail();
         reloadFinancial();
       }
+      // GOAL OPS-V4-FLUXO-CURTO-006: o comprovante da sessão era do recebimento
+      // agora estornado — nunca mais é oferecido como válido (a reimpressão passa
+      // a vir só da evidência persistida que ainda vale).
+      if (ok) limparReciboPdvV3();
       return ok;
     },
-    [estornarPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
+    [estornarPdvV3, reloadOrdens, reloadDetail, reloadFinancial, limparReciboPdvV3],
   );
   // A chave/idempotência e o comprovante continuam inteiramente no hook V3.
   // A lista atualiza após resultado terminal; detalhe/financeiro só no alvo.
@@ -2198,13 +2292,15 @@ export function useV4Preview(): V4Vals {
   // `registrarEntregaV3` é o caminho canônico e agora sempre refaz a decisão
   // financeira no servidor. O gate cliente serve apenas para orientar a UX.
   const confirmarEntrega = useCallback(
-    (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"]) =>
+    (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"], recebidoPor?: string) =>
       runWrite(
         (sid, osId) =>
           registrarEntregaV3(sid, osId, {
             ...(semCobranca ? { semCobranca } : {}),
             // Data efetiva da entrega; o servidor valida e refaz toda a decisão.
             ...(dataEntrega ? { dataEntrega } : {}),
+            // GOAL OPS-V4-FLUXO-CURTO-006: quem retirou (ausente = cliente da OS).
+            ...(recebidoPor ? { recebidoPor } : {}),
           }),
         "Entrega confirmada.",
         () => update({ status: "entregue", stage: "entrega" }),

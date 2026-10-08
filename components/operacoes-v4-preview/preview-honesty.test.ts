@@ -1172,8 +1172,10 @@ describe("OPS-V4-DELIVERY-FINANCIAL-GUARD-SERVER-001 — confirmarEntrega usa a 
     expect(orquestrador).toContain("...(dataEntrega ? { dataEntrega } : {}),")
   })
 
-  it("passa pelo wrapper runWrite (fonte única de reload/patch-em-sucesso) — falha não muta status", () => {
-    expect(orquestrador).toMatch(/const confirmarEntrega = useCallback\(\s*\(semCobranca\?: EntregaSemCobrancaSolicitacaoV3, dataEntrega\?: RegistrarEntregaInputV3\["dataEntrega"\]\)\s*=>\s*runWrite\(/)
+  it("passa pelo wrapper runWrite (fonte única de reload/patch-em-sucesso) — falha não muta status (OPS-V4-FLUXO-CURTO-006: + recebidoPor)", () => {
+    // OPS-V4-FLUXO-CURTO-006: "Retirado por" viaja como 3º argumento opcional (recebidoPor).
+    expect(orquestrador).toMatch(/const confirmarEntrega = useCallback\(\s*\(semCobranca\?: EntregaSemCobrancaSolicitacaoV3, dataEntrega\?: RegistrarEntregaInputV3\["dataEntrega"\], recebidoPor\?: string\)\s*=>\s*runWrite\(/)
+    expect(orquestrador).toContain("...(recebidoPor ? { recebidoPor } : {}),")
     // runWrite continua definido uma única vez — confirmarEntrega reaproveita, não duplica.
     expect(orquestrador.match(/const runWrite = useCallback/g)?.length).toBe(1)
   })
@@ -2166,11 +2168,18 @@ describe("GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia re
     expect(msgs.some((m) => /indisponível/i.test(m))).toBe(false)
   })
 
-  it('"Termo de Entrega" no menu Docs abre o modal real (docPrint) em vez do toast de preview', () => {
+  it('"Termo de Entrega" no menu Docs abre o modal real (docPrint) em vez do toast de preview — só após a entrega (OPS-V4-FLUXO-CURTO-006)', () => {
+    // OPS-V4-FLUXO-CURTO-006 §29: o termo declara a retirada; antes da entrega
+    // real o menu avisa e não abre o documento. Depois dela, abre o modal real.
     const patches: Array<Record<string, unknown>> = []
-    const v = buildVals(makeState({ novaOS: false }), (p) => patches.push(p as Record<string, unknown>), () => {}, ctx)
-    const item = v.printItems.find((d) => /Termo de Entrega/.test(d.label))!
-    item.onClick()
+    const msgs: string[] = []
+    const antes = buildVals(makeState({ novaOS: false }), (p) => patches.push(p as Record<string, unknown>), (m) => msgs.push(m), ctx)
+    antes.printItems.find((d) => /Termo de Entrega/.test(d.label))!.onClick()
+    expect(patches.some((p) => p.docPrint === "termo_entrega")).toBe(false)
+    expect(msgs.at(-1)).toBe("O Termo de Entrega fica disponível depois da entrega confirmada.")
+    const entregue = mkOS({ id: "os-termo-entrega", status: "entregue", entregueEm: "2026-01-10T12:00:00.000Z" })
+    const depois = buildVals(makeState({ novaOS: false, selectedOsId: "os-termo-entrega" }), (p) => patches.push(p as Record<string, unknown>), () => {}, { ...ctx, realOS: entregue })
+    depois.printItems.find((d) => /Termo de Entrega/.test(d.label))!.onClick()
     expect(patches.at(-1)).toMatchObject({ docPrint: "termo_entrega", menu: null })
   })
 
