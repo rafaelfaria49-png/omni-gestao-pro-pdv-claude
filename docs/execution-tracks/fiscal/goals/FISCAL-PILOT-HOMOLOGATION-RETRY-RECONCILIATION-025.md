@@ -21,7 +21,7 @@
   "risk_tier": "ALTO",
   "reversibilidade": "alta",
   "plan_ref": "FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025",
-  "plan_rev": 2,
+  "plan_rev": 3,
   "execution_mode": "PLAN_ONLY",
   "implementation_authorized": false,
   "previous_review": {
@@ -31,9 +31,10 @@
     "source": "Pedido humano de correção B1-B4 em 2026-10-08"
   },
   "rereview_required": true,
-  "rereview_executor_family": "anthropic",
+  "rereview_executor_family": "google",
+  "alternative_reviewer_family": "anthropic",
   "gates_extra": [
-    "Re-R formal Anthropic pendente após REQUEST_CHANGES; READY não autoriza implementação",
+    "Re-R independente Google preferencial, Anthropic alternativa, pendente; READY não autoriza implementação",
     "Prova histórica 588 correlacionada READ-ONLY obrigatória antes de 025-C; proveniência insuficiente bloqueia",
     "025-C BLOCKED até guards validados/mergeados em main e Production READY com SHA contendo todos os guards",
     "G-F7 fechado; não ativar loja, armar janela nem consumir ativação",
@@ -47,9 +48,26 @@
     "025-C: write em omnigestao_prod exige autorização humana explícita futura e delimitada",
     "025-D: readiness pós-write exige auditoria própria; não libera G-F7 automaticamente"
   ],
-  "authorization_source": "Pedido humano anexado em 2026-10-08: criar somente o plano canônico AEP do GOAL 025 em branch nova da origin/main atual, auditar primitives versionadas por leitura, commit/push e PR plan-only para main, solicitar revisão independente somente do plano e parar em READY_FOR_025_PLAN_REVIEW. Não autoriza código, schema/migration, banco, SEFAZ, rearm, janela, alteração de NotaFiscal ou criação de documento Fiscal. Pedido humano de correção em 2026-10-08 autoriza somente B1-B4 documentais após R Anthropic REQUEST_CHANGES no SHA e3ea89934780fc4cee867f4c6b6f774b5c351a53, commit novo docs(fiscal): corrigir plano 025 apos R independente, push normal apenas na branch plan/fiscal-025-retry-reconciliation, atualização do PR #247 e solicitação de re-R formal ao Claude Code/Anthropic; sem sincronizar main e sem merge."
+  "authorization_source": "Atualização humana em 2026-10-08: Codex/OpenAI executor; Google Gemini/Antigravity revisor preferencial e Anthropic alternativa; preservar escopo original B1-B4 PLAN_ONLY, sem merge antes da revisão independente. Pedido humano anexado em 2026-10-08: criar somente o plano canônico AEP do GOAL 025 em branch nova da origin/main atual, auditar primitives versionadas por leitura, commit/push e PR plan-only para main, solicitar revisão independente somente do plano e parar em READY_FOR_025_PLAN_REVIEW. Não autoriza código, schema/migration, banco, SEFAZ, rearm, janela, alteração de NotaFiscal ou criação de documento Fiscal. Pedido humano de correção em 2026-10-08 autoriza somente B1-B4 documentais após R Anthropic REQUEST_CHANGES no SHA e3ea89934780fc4cee867f4c6b6f774b5c351a53, commit novo docs(fiscal): corrigir plano 025 apos R independente, push normal apenas na branch plan/fiscal-025-retry-reconciliation, atualização do PR #247 e solicitação de re-R formal ao Claude Code/Anthropic; sem sincronizar main e sem merge."
 }
 -->
+
+## Autorização humana vigente — alteração de executor e revisor
+
+Em 2026-10-08, o humano autorizou IMPLEMENTER=CODEX, IMPLEMENTER_FAMILY=OPENAI,
+REVIEWER_FAMILY=GOOGLE, REVIEWER_PREFERRED=GEMINI/ANTIGRAVITY e
+ALTERNATIVE_REVIEWER_FAMILY=ANTHROPIC. Esta atualização substitui exclusivamente a
+exigência anterior de re-R Anthropic/Claude Code, preservada abaixo como histórico.
+A revisão anterior OpenAI é referência dos problemas; não aprova o próprio corretivo.
+A aprovação final deve vir de IA independente de outra família.
+
+O corretivo ativo continua sendo B1-B4 documentais deste mesmo GOAL, PLAN_ONLY e com
+allowlist documental. Nenhuma fase funcional 025-A/B/C/D, schema/storage, write ou
+transmissão recebe autorização adicional. Não fechar definitivamente nem fazer merge
+antes da revisão independente; se indisponível, parar no gate de revisão.
+
+REREVIEW_REQUIRED=true; REREVIEW_EXECUTOR_FAMILY=google;
+ALTERNATIVE_REVIEWER_FAMILY=anthropic; REVIEW_VERDICT=PENDING.
 
 # FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025
 

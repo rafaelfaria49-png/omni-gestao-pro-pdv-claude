@@ -1,3 +1,21 @@
+
+## Autorização humana vigente — alteração de executor e revisor
+
+Em 2026-10-08, o humano autorizou IMPLEMENTER=CODEX, IMPLEMENTER_FAMILY=OPENAI,
+REVIEWER_FAMILY=GOOGLE, REVIEWER_PREFERRED=GEMINI/ANTIGRAVITY e
+ALTERNATIVE_REVIEWER_FAMILY=ANTHROPIC. Esta atualização substitui exclusivamente a
+exigência anterior de re-R Anthropic/Claude Code, preservada abaixo como histórico.
+A revisão anterior OpenAI é referência dos problemas; não aprova o próprio corretivo.
+A aprovação final deve vir de IA independente de outra família.
+
+O corretivo ativo continua sendo B1-B4 documentais deste mesmo GOAL, PLAN_ONLY e com
+allowlist documental. Nenhuma fase funcional 025-A/B/C/D, schema/storage, write ou
+transmissão recebe autorização adicional. Não fechar definitivamente nem fazer merge
+antes da revisão independente; se indisponível, parar no gate de revisão.
+
+REREVIEW_REQUIRED=true; REREVIEW_EXECUTOR_FAMILY=google;
+ALTERNATIVE_REVIEWER_FAMILY=anthropic; REVIEW_VERDICT=PENDING.
+
 # GOAL 025 — preflight e auditoria de persistência do plano
 
 Data: 2026-10-08 (America/Sao_Paulo). Escopo: **PLAN-ONLY**.
