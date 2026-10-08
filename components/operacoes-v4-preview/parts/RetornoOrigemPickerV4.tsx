@@ -14,9 +14,13 @@ import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import {
   encerrarOperacaoNoRascunhoV4,
+  LIMITE_OBSERVACAO_INTERNA_V3,
+  LIMITE_OCORRENCIA_PRE_ENTREGA_V4,
   LIMITE_TEXTO_RETORNO_V4,
   normalizarAcessoriosRetornoV4,
+  ocorrenciaPreEntregaV4,
   operacaoDoRelatoV4,
+  PREFIXO_OCORRENCIA_PRE_ENTREGA_V4,
   type OrigemRetornoResumoV4,
   type RelatoRetornoV4,
   type SenhaTipoRetornoV4,
@@ -428,16 +432,17 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
 
   const registrarOcorrencia = async () => {
     if (busy || !item || item.enquadramento.acao !== "registrar_ocorrencia") return;
-    const texto = ocorrencia.trim();
-    if (!texto) {
-      setErro("Descreva a ocorrência.");
+    // Mesma regra do contador: acima do limite nada é enviado nem cortado — o texto fica.
+    const envio = ocorrenciaPreEntregaV4(ocorrencia);
+    if (!envio.ok) {
+      setErro(envio.motivo === "vazia" ? "Descreva a ocorrência." : `A ocorrência tem ${envio.tamanho} caracteres; o limite é ${LIMITE_OCORRENCIA_PRE_ENTREGA_V4}. Reduza o texto — nada foi registrado.`);
       ocorrenciaRef.current?.focus();
       return;
     }
     setBusy("ocorrencia");
     setErro(null);
     try {
-      const ok = await vRef.current.adicionarObservacaoInterna(item.osId, `Ocorrência antes da entrega: ${texto}`);
+      const ok = await vRef.current.adicionarObservacaoInterna(item.osId, envio.conteudo);
       if (!vivo.current) return;
       if (ok) {
         setOcorrencia("");
@@ -463,6 +468,8 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
   };
 
   const selecionado = detalhe.estado !== "nenhum";
+  const ocorrenciaEnvio = ocorrenciaPreEntregaV4(ocorrencia);
+  const ocorrenciaExcede = !ocorrenciaEnvio.ok && ocorrenciaEnvio.motivo === "excede";
   const tituloId = `${uid}-titulo`;
 
   return (
@@ -664,7 +671,16 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
                 {item.enquadramento.acao === "registrar_ocorrencia" ? (
                   <div>
                     <label htmlFor={`${uid}-ocorrencia`} style={rotulo}>Ocorrência (observação interna desta OS)</label>
-                    <textarea id={`${uid}-ocorrencia`} ref={ocorrenciaRef} rows={3} maxLength={2000} value={ocorrencia} disabled={!!busy} onChange={(e) => setOcorrencia(e.target.value)} placeholder="O que o cliente relatou antes da retirada" className={FOCO} style={{ ...campo, resize: "vertical", minHeight: 72 }} />
+                    {/* Sem maxLength: colar um texto maior não pode ser cortado em silêncio — o limite é validado e explicado. */}
+                    <textarea id={`${uid}-ocorrencia`} ref={ocorrenciaRef} rows={3} value={ocorrencia} disabled={!!busy} onChange={(e) => setOcorrencia(e.target.value)} placeholder="O que o cliente relatou antes da retirada" aria-invalid={ocorrenciaExcede || undefined} aria-describedby={ocorrenciaExcede ? `${uid}-ocorrencia-limite ${uid}-ocorrencia-excede` : `${uid}-ocorrencia-limite`} className={FOCO} style={{ ...campo, resize: "vertical", minHeight: 72, ...(ocorrenciaExcede ? { borderColor: C.dangerBd } : null) }} />
+                    <div id={`${uid}-ocorrencia-limite`} style={{ marginTop: 4, fontSize: 11.5, color: ocorrenciaExcede ? C.dangerFg : C.subtle }}>
+                      {ocorrenciaEnvio.tamanho}/{LIMITE_OCORRENCIA_PRE_ENTREGA_V4} caracteres
+                    </div>
+                    {ocorrenciaExcede ? (
+                      <div id={`${uid}-ocorrencia-excede`} aria-live="polite" style={{ marginTop: 2, fontSize: 11.5, color: C.dangerFg, lineHeight: 1.45 }}>
+                        Texto acima do limite de {LIMITE_OCORRENCIA_PRE_ENTREGA_V4} caracteres (o registro acrescenta “{PREFIXO_OCORRENCIA_PRE_ENTREGA_V4.trim()}” e a observação interna aceita até {LIMITE_OBSERVACAO_INTERNA_V3}). Reduza o texto para registrar; nada foi cortado.
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -695,7 +711,7 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
             </button>
           ) : null}
           {item?.enquadramento.acao === "registrar_ocorrencia" ? (
-            <button type="button" onClick={() => void registrarOcorrencia()} disabled={!!busy || !ocorrencia.trim()} className={FOCO} style={{ ...btnPrimario, opacity: busy || !ocorrencia.trim() ? 0.55 : 1 }}>
+            <button type="button" onClick={() => void registrarOcorrencia()} disabled={!!busy || !ocorrenciaEnvio.ok} className={FOCO} style={{ ...btnPrimario, opacity: busy || !ocorrenciaEnvio.ok ? 0.55 : 1 }}>
               {busy === "ocorrencia" ? "Registrando…" : "Registrar ocorrência"}
             </button>
           ) : null}

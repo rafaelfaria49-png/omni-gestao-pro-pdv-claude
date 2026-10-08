@@ -62,6 +62,8 @@ import { prisma } from "@/lib/prisma";
 import { abrirRetornoV3, buscarOrigensRetornoV3, finalizarRetornoV3, lerOrigemRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import { lerGarantiaV3, lerRetornosV3, lerVinculoRetornoV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { resolverRetornoParaAutoCloseV3 } from "@/lib/operacoes-v3/retorno-auto-close";
+import { adicionarObservacaoInternaV3 } from "@/lib/operacoes-v3/producao-actions";
+import { LIMITE_OCORRENCIA_PRE_ENTREGA_V4, ocorrenciaPreEntregaV4, PREFIXO_OCORRENCIA_PRE_ENTREGA_V4 } from "@/lib/operacoes-v4/retorno-origem-v4";
 import type { OrdemServico } from "@/types/os";
 
 function exigirBancoLocal(): string {
@@ -308,6 +310,26 @@ describe("OPS-V4-FLUXO-CURTO-007 — PostgreSQL real", () => {
     expect((await lerOrigemRetornoV3(loja, emReparo))?.enquadramento).toMatchObject({ id: "nao_entregue", acao: "registrar_ocorrencia" });
     const cancelada = await novaOS(loja, { status: "cancelada" });
     await expect(abrirRetornoV3(loja, cancelada, { motivo: "x", operacaoId: `op-t55c-${SUFIXO}` })).rejects.toThrow("OS cancelada não admite retorno.");
+  });
+
+  it("T55b (rev 15) ocorrência no limite derivado: o servidor REAL aceita prefixo + 1971 (2000) e recusa o que a R4 deixava passar", async () => {
+    comoAdmin();
+    const loja = await novaLoja();
+    const emReparo = await novaOS(loja, { entregueEm: null });
+    const noLimite = ocorrenciaPreEntregaV4("x".repeat(LIMITE_OCORRENCIA_PRE_ENTREGA_V4));
+    if (!noLimite.ok) throw new Error("relato no limite deveria ser aceito pela regra da tela");
+    expect(noLimite.conteudo.length).toBe(2000);
+    await adicionarObservacaoInternaV3(loja, emReparo, noLimite.conteudo);
+    const notas = ((await lerOS(emReparo)).observacoes as Payload[]).map((o) => o.conteudo as string);
+    expect(notas).toContain(noLimite.conteudo);
+    // O que a R4 encontrou: 1972 caracteres no campo + prefixo = 2001 → o servidor recusa.
+    // A regra da tela agora recusa ANTES de enviar (nada é cortado).
+    const acima = "x".repeat(LIMITE_OCORRENCIA_PRE_ENTREGA_V4 + 1);
+    expect(ocorrenciaPreEntregaV4(acima)).toMatchObject({ ok: false, motivo: "excede" });
+    await expect(adicionarObservacaoInternaV3(loja, emReparo, `${PREFIXO_OCORRENCIA_PRE_ENTREGA_V4}${acima}`)).rejects.toThrow("no máximo 2000");
+    expect(((await lerOS(emReparo)).observacoes as Payload[])).toHaveLength(notas.length);
+    expect(await filhasDe(loja, emReparo)).toHaveLength(0);
+    expect(lerGarantiaV3((await lerOS(emReparo)) as OrdemServico).situacao).toBe("prevista");
   });
 
   it("T56a duas chamadas simultâneas da MESMA operação: a segunda aguarda (em processamento); resposta perdida → replay; UMA filha", async () => {

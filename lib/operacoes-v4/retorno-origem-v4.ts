@@ -245,6 +245,34 @@ export function resumirOrigemRetornoV4(os: OrdemServico, now: Date = new Date())
 }
 
 // ----------------------------------------------------------------------------
+// Ocorrência antes da entrega (observação interna da própria OS)
+// ----------------------------------------------------------------------------
+
+/** Teto do conteúdo final aceito por `adicionarObservacaoInternaV3` (producao-actions.ts, após trim). */
+export const LIMITE_OBSERVACAO_INTERNA_V3 = 2000;
+/** Prefixo que a interface acrescenta ao relato antes de enviá-lo como observação interna. */
+export const PREFIXO_OCORRENCIA_PRE_ENTREGA_V4 = "Ocorrência antes da entrega: ";
+/** Espaço que sobra para o relato do operador (o prefixo também conta no limite do servidor). */
+export const LIMITE_OCORRENCIA_PRE_ENTREGA_V4 = LIMITE_OBSERVACAO_INTERNA_V3 - PREFIXO_OCORRENCIA_PRE_ENTREGA_V4.length;
+
+export type OcorrenciaPreEntregaV4 =
+  | { ok: true; conteudo: string; tamanho: number }
+  | { ok: false; motivo: "vazia" | "excede"; tamanho: number };
+
+/**
+ * Regra ÚNICA de contador, validação e envio da ocorrência: o relato é aparado, recebe o
+ * prefixo e o conteúdo final é medido como o servidor mede (UTF-16, após trim). Acima do
+ * limite nada é enviado nem truncado — quem chama mantém o texto do operador intacto.
+ */
+export function ocorrenciaPreEntregaV4(relato: string): OcorrenciaPreEntregaV4 {
+  const texto = (relato ?? "").trim();
+  if (!texto) return { ok: false, motivo: "vazia", tamanho: 0 };
+  const conteudo = `${PREFIXO_OCORRENCIA_PRE_ENTREGA_V4}${texto}`;
+  if (conteudo.trim().length > LIMITE_OBSERVACAO_INTERNA_V3) return { ok: false, motivo: "excede", tamanho: texto.length };
+  return { ok: true, conteudo, tamanho: texto.length };
+}
+
+// ----------------------------------------------------------------------------
 // Relato do retorno (cliente): normalização e identidade da operação
 // ----------------------------------------------------------------------------
 

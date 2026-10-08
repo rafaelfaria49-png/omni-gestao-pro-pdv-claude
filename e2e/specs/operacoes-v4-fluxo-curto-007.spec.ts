@@ -397,3 +397,99 @@ test("R07 — teclado: setas + Enter, Tab contido no diálogo, Escape fecha e de
   await expect(dialogo(page)).toHaveCount(0);
   await expect(gatilho).toBeFocused();
 });
+
+test("R08 — rev 15: ocorrência no limite derivado do prefixo; acima dele nada é cortado nem enviado (T55)", async ({ page }) => {
+  const os = await semearOS(prisma, { entregueEm: null });
+  await abrirV4(page);
+  await abrirPeloNovo(page);
+  await buscarESelecionar(page, os.codigo, os.codigo);
+  const d = dialogo(page);
+  const campo = d.getByLabel("Ocorrência (observação interna desta OS)");
+  const registrar = d.getByRole("button", { name: "Registrar ocorrência" });
+  expect(await campo.getAttribute("maxlength")).toBeNull();
+
+  // 2000 colados (o que a R4 deixava passar até o servidor recusar): fica inteiro, explicado, bloqueado.
+  await campo.fill("x".repeat(2000));
+  await expect(campo).toHaveValue("x".repeat(2000));
+  await expect(d.getByText("2000/1971 caracteres")).toBeVisible();
+  await expect(d.getByText(/Texto acima do limite de 1971 caracteres/)).toBeVisible();
+  await expect(campo).toHaveAttribute("aria-invalid", "true");
+  await expect(registrar).toBeDisabled();
+  await capturar(page, "r08-limite");
+
+  // 1972 (um acima): continua bloqueado.
+  await campo.fill("x".repeat(1972));
+  await expect(d.getByText("1972/1971 caracteres")).toBeVisible();
+  await expect(registrar).toBeDisabled();
+  expect(((await lerOS(prisma, os.id)).observacoes as Payload[])).toHaveLength(0);
+
+  // Exatamente no limite, com bordas em branco: registra; o servidor grava 2000 caracteres.
+  const relato = "Chiado ".repeat(282).slice(0, 1971); // termina em "Chia": 1971 sem espaço na borda
+  await campo.fill(`  ${relato}\n `);
+  await expect(d.getByText("1971/1971 caracteres")).toBeVisible();
+  await registrar.click();
+  await expect(d.getByRole("status")).toContainText("Nenhum retorno foi aberto");
+  const p = await lerOS(prisma, os.id);
+  const gravadas = (p.observacoes as Payload[]).map((o) => o.conteudo as string);
+  expect(gravadas).toEqual([`Ocorrência antes da entrega: ${relato.trim()}`]);
+  expect(p.retornosV3).toBeUndefined();
+  expect(await filhas(prisma, os.id)).toHaveLength(0);
+});
+
+test("R09 — rev 15: 'Finalizar retorno' prende Tab/Shift+Tab, Escape devolve o foco ao gatilho e Enter não alcança o fundo", async ({ page }) => {
+  const os = await semearOS(prisma);
+  await abrirV4(page);
+  await selecionarNaBusca(page, os.codigo);
+  await irPosVenda(page);
+  await page.getByRole("button", { name: /^Abrir retorno$/ }).click();
+  await dialogo(page).getByLabel("Motivo do retorno / novo defeito").fill("Touch falhando");
+  await dialogo(page).getByRole("button", { name: "Abrir atendimento de retorno" }).click();
+  await expect(dialogo(page)).toHaveCount(0, { timeout: 30_000 });
+  const [filha] = await filhas(prisma, os.id);
+  expect(filha).toBeTruthy();
+  await expect(page.getByRole("heading", { name: filha!.numero! })).toBeVisible();
+
+  // Volta à lista (como no R01) e abre a OS original no Pós-venda.
+  await abrirV4(page);
+  await selecionarNaBusca(page, os.codigo);
+  await irPosVenda(page);
+  const gatilho = page.getByRole("button", { name: "Finalizar retorno" });
+  await expect(gatilho).toHaveCount(1);
+  await gatilho.focus();
+  await page.keyboard.press("Enter");
+  const modal = page.getByRole("dialog", { name: "Finalizar retorno" });
+  await expect(modal).toBeVisible();
+  await expect(modal.getByLabel(/Resolução/)).toBeFocused();
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press("Tab");
+    expect(await modal.evaluate((el) => el.contains(document.activeElement)), `Tab ${i + 1} dentro do diálogo`).toBe(true);
+  }
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press("Shift+Tab");
+    expect(await modal.evaluate((el) => el.contains(document.activeElement)), `Shift+Tab ${i + 1} dentro do diálogo`).toBe(true);
+  }
+  // Ciclo exato: do último (Finalizar) Tab volta ao primeiro (Fechar); Shift+Tab no primeiro vai ao último.
+  await modal.getByRole("button", { name: "Finalizar retorno" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(modal.getByRole("button", { name: "Fechar", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(modal.getByRole("button", { name: "Finalizar retorno" })).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(modal).toHaveCount(0);
+  await expect(gatilho).toBeFocused();
+  expect((await lerOS(prisma, os.id)).retornosV3).toEqual([expect.objectContaining({ status: "aberto", osRetornoId: filha!.id })]);
+
+  // Finalizar pelo teclado: Enter no botão do diálogo finaliza; o foco não cai no body.
+  await page.keyboard.press("Enter");
+  await expect(modal).toBeVisible();
+  await page.keyboard.type("Conector ressoldado");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(modal.getByRole("button", { name: "Finalizar retorno" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(modal).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Finalizar retorno" })).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement !== document.body && !!document.activeElement?.isConnected)).toBe(true);
+  expect((await lerOS(prisma, os.id)).retornosV3).toEqual([expect.objectContaining({ status: "finalizado", osRetornoId: filha!.id })]);
+});

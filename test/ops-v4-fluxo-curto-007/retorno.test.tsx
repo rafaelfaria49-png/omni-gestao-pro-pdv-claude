@@ -72,7 +72,12 @@ import { useV4Preview, type V4Vals } from "@/components/operacoes-v4-preview/use
 import { RetornoOrigemPickerV4 } from "@/components/operacoes-v4-preview/parts/RetornoOrigemPickerV4";
 import { PosVendaStage } from "@/components/operacoes-v4-preview/parts/stages/PosVendaStage";
 import { NovoAtendimentoLauncher } from "@/components/operacoes-v4-preview/parts/NovoAtendimentoLauncher";
-import { resumirOrigemRetornoV4 } from "@/lib/operacoes-v4/retorno-origem-v4";
+import {
+  LIMITE_OBSERVACAO_INTERNA_V3,
+  LIMITE_OCORRENCIA_PRE_ENTREGA_V4,
+  PREFIXO_OCORRENCIA_PRE_ENTREGA_V4,
+  resumirOrigemRetornoV4,
+} from "@/lib/operacoes-v4/retorno-origem-v4";
 
 const LOJA = "loja-qa-007";
 const NOW = "2026-10-08T12:00:00.000Z";
@@ -636,5 +641,270 @@ describe("OPS-V4-FLUXO-CURTO-007 — correções da R3 (tentativa 3)", () => {
     await user.click(within(dialogo).getByRole("button", { name: "Registrar ocorrência" }));
     await waitFor(() => expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledTimes(1));
     expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledWith(LOJA, "pronta2", "Ocorrência antes da entrega: Texto de B");
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-007 rev 15 — P2 nº 1: limite da ocorrência antes da entrega", () => {
+  const ROTULO = "Ocorrência (observação interna desta OS)";
+  // O "servidor" aplica a MESMA regra de adicionarObservacaoInternaV3 (trim + teto de 2000).
+  beforeEach(() => {
+    m.adicionarObservacaoInternaV3.mockImplementation(async (_sid: string, id: string, texto: string) => {
+      const conteudo = (texto ?? "").trim();
+      if (conteudo.length > LIMITE_OBSERVACAO_INTERNA_V3) throw new Error("Observação interna deve ter no máximo 2000 caracteres.");
+      return banco[id];
+    });
+  });
+
+  async function ocorrenciaDaPronta(user: ReturnType<typeof userEvent.setup>) {
+    await montar();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await buscarESelecionar(user, "OS-PRONTA", "OS-PRONTA");
+    const campo = within(dialogo).getByLabelText(ROTULO) as HTMLTextAreaElement;
+    return { dialogo, campo, botao: () => within(dialogo).getByRole("button", { name: "Registrar ocorrência" }) as HTMLButtonElement };
+  }
+  async function colar(user: ReturnType<typeof userEvent.setup>, campo: HTMLTextAreaElement, texto: string) {
+    await user.click(campo);
+    await user.paste(texto);
+  }
+
+  it("L1: exatamente no limite (1971) registra e o servidor recebe 2000 caracteres", async () => {
+    const user = userEvent.setup();
+    const { dialogo, campo, botao } = await ocorrenciaDaPronta(user);
+    expect(campo.hasAttribute("maxlength")).toBe(false);
+    await colar(user, campo, "a".repeat(LIMITE_OCORRENCIA_PRE_ENTREGA_V4));
+    expect(within(dialogo).getByText(`1971/${LIMITE_OCORRENCIA_PRE_ENTREGA_V4} caracteres`)).toBeTruthy();
+    expect(botao().disabled).toBe(false);
+    await user.click(botao());
+    await waitFor(() => expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledTimes(1));
+    const enviado = m.adicionarObservacaoInternaV3.mock.calls[0]![2] as string;
+    expect(enviado).toBe(`${PREFIXO_OCORRENCIA_PRE_ENTREGA_V4}${"a".repeat(1971)}`);
+    expect(enviado.length).toBe(2000);
+    await within(dialogo).findByText(/Nenhum retorno foi aberto/);
+    expect(m.abrirRetornoV3).not.toHaveBeenCalled();
+  });
+
+  it("L2: um caractere acima (1972) não envia, explica o limite e preserva o texto intacto", async () => {
+    const user = userEvent.setup();
+    const { dialogo, campo, botao } = await ocorrenciaDaPronta(user);
+    const texto = "b".repeat(LIMITE_OCORRENCIA_PRE_ENTREGA_V4 + 1);
+    await colar(user, campo, texto);
+    expect(campo.value).toBe(texto);
+    expect(campo.getAttribute("aria-invalid")).toBe("true");
+    expect(within(dialogo).getByText("1972/1971 caracteres")).toBeTruthy();
+    expect(within(dialogo).getByText(/Texto acima do limite de 1971 caracteres/)).toBeTruthy();
+    expect(botao().disabled).toBe(true);
+    fireEvent.click(botao());
+    expect(m.adicionarObservacaoInternaV3).not.toHaveBeenCalled();
+    expect(campo.value).toBe(texto);
+    // Apagar 1 caractere libera e o envio é o texto do operador, sem corte.
+    await user.type(campo, "{Backspace}");
+    expect(botao().disabled).toBe(false);
+    expect(within(dialogo).queryByText(/Texto acima do limite/)).toBeNull();
+    await user.click(botao());
+    await waitFor(() => expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledTimes(1));
+    expect((m.adicionarObservacaoInternaV3.mock.calls[0]![2] as string).length).toBe(2000);
+  });
+
+  it("L3: relato de 2000 caracteres colado não é cortado em silêncio nem enviado", async () => {
+    const user = userEvent.setup();
+    const { dialogo, campo, botao } = await ocorrenciaDaPronta(user);
+    const texto = "c".repeat(2000);
+    await colar(user, campo, texto);
+    expect(campo.value).toBe(texto);
+    expect(within(dialogo).getByText("2000/1971 caracteres")).toBeTruthy();
+    expect(botao().disabled).toBe(true);
+    expect(m.adicionarObservacaoInternaV3).not.toHaveBeenCalled();
+  });
+
+  it("L4: espaços nas bordas não contam; quebras de linha e Unicode contam como o servidor conta", async () => {
+    const user = userEvent.setup();
+    const { dialogo, campo, botao } = await ocorrenciaDaPronta(user);
+    const miolo = `${"é".repeat(1000)}\n${"ç".repeat(970)}`; // 1971 com a quebra
+    await colar(user, campo, `   \n${miolo}\n   `);
+    expect(within(dialogo).getByText("1971/1971 caracteres")).toBeTruthy();
+    await user.click(botao());
+    await waitFor(() => expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledWith(LOJA, "pronta", `${PREFIXO_OCORRENCIA_PRE_ENTREGA_V4}${miolo}`));
+    expect(campo.value).toBe("");
+
+    // Emoji fora do BMP ocupa 2 unidades no servidor: 986 emojis = 1972 → recusado na tela.
+    await colar(user, campo, "📱".repeat(986));
+    expect(within(dialogo).getByText("1972/1971 caracteres")).toBeTruthy();
+    expect(botao().disabled).toBe(true);
+    expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledTimes(1);
+  });
+
+  it("L5: falha do servidor mantém o texto; nova tentativa envia o MESMO conteúdo", async () => {
+    const user = userEvent.setup();
+    const { dialogo, campo, botao } = await ocorrenciaDaPronta(user);
+    const texto = "d".repeat(LIMITE_OCORRENCIA_PRE_ENTREGA_V4);
+    await colar(user, campo, texto);
+    m.adicionarObservacaoInternaV3.mockRejectedValueOnce(new Error("Sem conexão com o servidor."));
+    await user.click(botao());
+    await within(dialogo).findByText("Não foi possível registrar a ocorrência. O texto foi mantido.");
+    expect(campo.value).toBe(texto);
+    await user.click(botao());
+    await waitFor(() => expect(m.adicionarObservacaoInternaV3).toHaveBeenCalledTimes(2));
+    expect(m.adicionarObservacaoInternaV3.mock.calls[1]![2]).toBe(m.adicionarObservacaoInternaV3.mock.calls[0]![2]);
+    await within(dialogo).findByText(/Nenhum retorno foi aberto/);
+  });
+
+  it("L6: texto acima do limite na OS A não viaja para a OS B (nem o aviso)", async () => {
+    const user = userEvent.setup();
+    const { dialogo, campo } = await ocorrenciaDaPronta(user);
+    await colar(user, campo, "e".repeat(2000));
+    await user.click(within(dialogo).getByRole("button", { name: "← Trocar OS" }));
+    fireEvent.click(within(dialogo).getByRole("option", { name: opcao("OS-PRONTA2") }));
+    await within(dialogo).findByText("OS-PRONTA2", { selector: "div" });
+    expect((within(dialogo).getByLabelText(ROTULO) as HTMLTextAreaElement).value).toBe("");
+    expect(within(dialogo).getByText("0/1971 caracteres")).toBeTruthy();
+    expect(within(dialogo).queryByText(/Texto acima do limite/)).toBeNull();
+    expect(m.adicionarObservacaoInternaV3).not.toHaveBeenCalled();
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-007 rev 15 — P2 nº 2: teclado no diálogo 'Finalizar retorno'", () => {
+  const fundo = vi.fn();
+  function FichaComFundo({ expor }: { expor: (v: V4Vals) => void }) {
+    const v = useV4Preview();
+    expor(v);
+    return (
+      <div>
+        <button type="button" onClick={() => fundo("antes")}>Fundo antes</button>
+        {v.realOS ? <PosVendaStage v={v} /> : null}
+        <button type="button" onClick={() => fundo("depois")}>Fundo depois</button>
+      </div>
+    );
+  }
+  beforeEach(() => {
+    fundo.mockReset();
+    banco.andamento2 = os("andamento2", { retornosV3: [{ id: "r2", osOriginalId: "andamento2", motivo: "Bateria", criadoEm: "2026-10-06T12:00:00.000Z", status: "aberto", osRetornoId: "filha-and2", osRetornoCodigo: "OS-FILHA-AND2" }] });
+    m.finalizarRetornoV3.mockImplementation(async (_sid: string, id: string, retornoId: string, opts?: { observacao?: string }) => {
+      const atual = banco[id]! as unknown as { retornosV3: Array<Record<string, unknown>> };
+      banco[id] = os(id, { retornosV3: atual.retornosV3.map((r) => (r.id === retornoId ? { ...r, status: "finalizado", finalizadoEm: NOW, observacaoFinal: opts?.observacao } : r)) });
+      return banco[id];
+    });
+  });
+
+  async function abrirFinalizar(user: ReturnType<typeof userEvent.setup>, osId = "andamento") {
+    render(<FichaComFundo expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(vAtual.ordens.length).toBeGreaterThan(0));
+    await act(async () => vAtual.selectOS(banco[osId]!, "posvenda"));
+    const gatilho = await screen.findByRole("button", { name: "Finalizar retorno" });
+    await user.click(gatilho);
+    const dialogo = await screen.findByRole("dialog", { name: "Finalizar retorno" });
+    return { gatilho, dialogo };
+  }
+  const controles = (dialogo: HTMLElement) => ({
+    fechar: within(dialogo).getByRole("button", { name: "Fechar" }),
+    resolucao: within(dialogo).getByLabelText(/Resolução/),
+    cancelar: within(dialogo).getByRole("button", { name: "Cancelar" }),
+    finalizar: within(dialogo).getByRole("button", { name: /^(Finalizar retorno|Finalizando…)$/ }),
+  });
+
+  it("K01–K03: foco inicial na resolução; Tab percorre só o diálogo e volta do último ao primeiro", async () => {
+    const user = userEvent.setup();
+    const { dialogo } = await abrirFinalizar(user);
+    const c = controles(dialogo);
+    expect(document.activeElement).toBe(c.resolucao);
+    await user.tab();
+    expect(document.activeElement).toBe(c.cancelar);
+    await user.tab();
+    expect(document.activeElement).toBe(c.finalizar);
+    await user.tab();
+    expect(document.activeElement).toBe(c.fechar);
+    for (let i = 0; i < 9; i += 1) {
+      await user.tab();
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+    }
+  });
+
+  it("K04–K05: Shift+Tab no primeiro vai ao último; o foco nunca alcança o fundo", async () => {
+    const user = userEvent.setup();
+    const { dialogo } = await abrirFinalizar(user);
+    const c = controles(dialogo);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(c.fechar);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(c.finalizar);
+    for (let i = 0; i < 9; i += 1) {
+      await user.tab({ shift: true });
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+      expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Fundo antes" }));
+      expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Fundo depois" }));
+    }
+    // Foco programático/clique no fundo volta para dentro do diálogo.
+    act(() => screen.getByRole("button", { name: "Fundo depois" }).focus());
+    expect(dialogo.contains(document.activeElement)).toBe(true);
+  });
+
+  it("K06: com a finalização em andamento (botões desabilitados) Tab, Shift+Tab e Enter não alcançam o fundo; Escape não fecha", async () => {
+    const user = userEvent.setup();
+    const { dialogo } = await abrirFinalizar(user);
+    let soltar!: () => void;
+    m.finalizarRetornoV3.mockImplementationOnce((_s: string, id: string) => new Promise((res) => { soltar = () => res(banco[id]); }));
+    await user.click(controles(dialogo).finalizar);
+    await within(dialogo).findByRole("button", { name: "Finalizando…" });
+    await waitFor(() => expect(dialogo.contains(document.activeElement)).toBe(true));
+    for (let i = 0; i < 6; i += 1) {
+      await user.tab();
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+      await user.keyboard("{Enter}");
+      await user.tab({ shift: true });
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+    }
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "Finalizar retorno" })).toBeTruthy();
+    expect(fundo).not.toHaveBeenCalled();
+    expect(m.finalizarRetornoV3).toHaveBeenCalledTimes(1);
+    await act(async () => soltar());
+  });
+
+  it("K07–K08: Escape fecha e o foco volta ao 'Finalizar retorno' que abriu; Enter no fundo nunca dispara", async () => {
+    const user = userEvent.setup();
+    const { gatilho, dialogo } = await abrirFinalizar(user);
+    await user.type(controles(dialogo).resolucao, "Conector{Enter}ressoldado");
+    expect(fundo).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Finalizar retorno" })).toBeNull());
+    expect(document.activeElement).toBe(gatilho);
+    expect(m.finalizarRetornoV3).not.toHaveBeenCalled();
+    // Reabrir na mesma OS mantém a resolução digitada (rascunho local do diálogo).
+    await user.click(gatilho);
+    const reaberto = await screen.findByRole("dialog", { name: "Finalizar retorno" });
+    expect((controles(reaberto).resolucao as HTMLTextAreaElement).value).toBe("Conector\nressoldado");
+  });
+
+  it("K09: finalizado com sucesso, o gatilho some — o foco vai ao card do Retorno, nunca ao body", async () => {
+    const user = userEvent.setup();
+    const { dialogo } = await abrirFinalizar(user);
+    await user.type(controles(dialogo).resolucao, "Conector ressoldado");
+    await user.click(controles(dialogo).finalizar);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Finalizar retorno" })).toBeNull());
+    expect(m.finalizarRetornoV3).toHaveBeenCalledWith(LOJA, "andamento", "r1", { observacao: "Conector ressoldado" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Finalizar retorno" })).toBeNull());
+    const ativo = document.activeElement as HTMLElement;
+    expect(ativo).not.toBe(document.body);
+    expect(ativo.isConnected).toBe(true);
+    expect(ativo.tagName).toBe("SECTION");
+    expect(ativo.textContent).toContain("Retorno");
+  });
+
+  it("K10: trocar de OS com o diálogo aberto o fecha, foco vai a destino válido e a resolução não viaja", async () => {
+    const user = userEvent.setup();
+    const { dialogo } = await abrirFinalizar(user);
+    await user.type(controles(dialogo).resolucao, "Texto da OS andamento");
+    await act(async () => vAtual.selectOS(banco.a!, "posvenda"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Finalizar retorno" })).toBeNull());
+    const ativo = document.activeElement as HTMLElement;
+    expect(ativo).not.toBe(document.body);
+    expect(ativo.isConnected).toBe(true);
+    // Outra OS com retorno em andamento: o diálogo abre limpo e finaliza o retorno DELA.
+    await act(async () => vAtual.selectOS(banco.andamento2!, "posvenda"));
+    await user.click(await screen.findByRole("button", { name: "Finalizar retorno" }));
+    const outro = await screen.findByRole("dialog", { name: "Finalizar retorno" });
+    expect((controles(outro).resolucao as HTMLTextAreaElement).value).toBe("");
+    await user.click(controles(outro).finalizar);
+    await waitFor(() => expect(m.finalizarRetornoV3).toHaveBeenCalledWith(LOJA, "andamento2", "r2", { observacao: undefined }));
+    expect(fundo).not.toHaveBeenCalled();
   });
 });

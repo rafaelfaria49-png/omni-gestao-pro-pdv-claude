@@ -4,8 +4,12 @@ import {
   chaveRelatoRetornoV4,
   encerrarOperacaoNoRascunhoV4,
   enquadrarOrigemRetornoV4,
+  LIMITE_OBSERVACAO_INTERNA_V3,
+  LIMITE_OCORRENCIA_PRE_ENTREGA_V4,
   normalizarAcessoriosRetornoV4,
+  ocorrenciaPreEntregaV4,
   operacaoDoRelatoV4,
+  PREFIXO_OCORRENCIA_PRE_ENTREGA_V4,
   resumirOrigemRetornoV4,
 } from "./retorno-origem-v4";
 
@@ -121,5 +125,45 @@ describe("relato e identidade da operação", () => {
     expect(primeira.id).toBe("op-1");
     expect(operacaoDoRelatoV4(primeira, { ...relato }, gerar).id).toBe("op-1");
     expect(operacaoDoRelatoV4(primeira, { motivo: "Touch e câmera", acessorios: [] }, gerar).id).toBe("op-2");
+  });
+});
+
+describe("ocorrência antes da entrega — limite derivado do prefixo (rev 15, P2 nº 1)", () => {
+  it("o limite do relato é o do servidor menos o prefixo efetivamente enviado", () => {
+    expect(PREFIXO_OCORRENCIA_PRE_ENTREGA_V4).toBe("Ocorrência antes da entrega: ");
+    expect(PREFIXO_OCORRENCIA_PRE_ENTREGA_V4.length).toBe(29);
+    expect(LIMITE_OCORRENCIA_PRE_ENTREGA_V4).toBe(LIMITE_OBSERVACAO_INTERNA_V3 - PREFIXO_OCORRENCIA_PRE_ENTREGA_V4.length);
+    expect(LIMITE_OCORRENCIA_PRE_ENTREGA_V4).toBe(1971);
+  });
+
+  it("exatamente no limite: aceita e o conteúdo final tem 2000 caracteres", () => {
+    const r = ocorrenciaPreEntregaV4("a".repeat(LIMITE_OCORRENCIA_PRE_ENTREGA_V4));
+    expect(r).toMatchObject({ ok: true, tamanho: 1971 });
+    expect(r.ok && r.conteudo.length).toBe(LIMITE_OBSERVACAO_INTERNA_V3);
+    expect(r.ok && r.conteudo.startsWith(PREFIXO_OCORRENCIA_PRE_ENTREGA_V4)).toBe(true);
+  });
+
+  it("um caractere acima e relato de 2000: recusa sem truncar (nada é enviado)", () => {
+    expect(ocorrenciaPreEntregaV4("a".repeat(LIMITE_OCORRENCIA_PRE_ENTREGA_V4 + 1))).toEqual({ ok: false, motivo: "excede", tamanho: 1972 });
+    expect(ocorrenciaPreEntregaV4("a".repeat(2000))).toEqual({ ok: false, motivo: "excede", tamanho: 2000 });
+  });
+
+  it("espaços nas bordas não contam (o servidor apara); espaços internos e quebras de linha contam", () => {
+    const borda = `  \n${"a".repeat(LIMITE_OCORRENCIA_PRE_ENTREGA_V4)}\n  `;
+    const r = ocorrenciaPreEntregaV4(borda);
+    expect(r).toMatchObject({ ok: true, tamanho: 1971 });
+    expect(r.ok && r.conteudo).toBe(`${PREFIXO_OCORRENCIA_PRE_ENTREGA_V4}${"a".repeat(1971)}`);
+    const linhas = `${"a".repeat(1000)}\n${"b".repeat(970)}`; // 1971 com a quebra
+    expect(ocorrenciaPreEntregaV4(linhas)).toMatchObject({ ok: true, tamanho: 1971 });
+    expect(ocorrenciaPreEntregaV4(`${linhas}b`)).toMatchObject({ ok: false, motivo: "excede", tamanho: 1972 });
+    expect(ocorrenciaPreEntregaV4(" \n\t ")).toEqual({ ok: false, motivo: "vazia", tamanho: 0 });
+  });
+
+  it("Unicode: mede como o servidor (UTF-16) — acento conta 1, emoji fora do BMP conta 2", () => {
+    expect(ocorrenciaPreEntregaV4("é".repeat(1971))).toMatchObject({ ok: true, tamanho: 1971 });
+    expect(ocorrenciaPreEntregaV4("é".repeat(1972))).toMatchObject({ ok: false, motivo: "excede" });
+    const emoji = "📱".repeat(985) + "a"; // 985×2 + 1 = 1971 unidades
+    expect(ocorrenciaPreEntregaV4(emoji)).toMatchObject({ ok: true, tamanho: 1971 });
+    expect(ocorrenciaPreEntregaV4("📱".repeat(986))).toMatchObject({ ok: false, motivo: "excede", tamanho: 1972 });
   });
 });

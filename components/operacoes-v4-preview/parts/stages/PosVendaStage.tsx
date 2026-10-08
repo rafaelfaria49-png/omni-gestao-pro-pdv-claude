@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as TecladoEvent, type ReactNode, type RefObject } from "react";
 import { Clock3, RotateCcw, ShieldCheck, X } from "lucide-react";
 import { retornoEmAberturaV3, type RetornoV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { C, card, cardTitle, upLabel } from "../../tokens";
@@ -73,20 +73,86 @@ function DataPoint({ label, value, strong = false }: { label: string; value: Rea
   );
 }
 
-function Modal({ title, onClose, children, footer, initialFocus }: { title: string; onClose: () => void; children: ReactNode; footer: ReactNode; initialFocus?: RefObject<HTMLInputElement | HTMLTextAreaElement | null> }) {
+/** Controles que recebem foco por teclado dentro do diálogo. */
+const FOCAVEIS = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
+function focoValido(el: HTMLElement | null | undefined): el is HTMLElement {
+  return !!el && el.isConnected && !(el as HTMLButtonElement).disabled;
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+  footer,
+  initialFocus,
+  busy = false,
+  restaurarFoco,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer: ReactNode;
+  initialFocus?: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
+  busy?: boolean;
+  /** Chamado ao fechar: devolve o foco a um destino válido (quem abriu decide qual). */
+  restaurarFoco?: () => void;
+}) {
+  const dialogo = useRef<HTMLElement>(null);
+  // Fundo inacessível: foco que saia do diálogo — clique, foco programático, Tab a partir do
+  // body — volta para dentro dele. Outro diálogo modal por cima não é fundo: fica com o foco.
+  // Declarado ANTES da restauração para sair antes dela no fechamento.
   useEffect(() => {
-    initialFocus?.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const segurar = (e: FocusEvent) => {
+      const d = dialogo.current;
+      if (!d?.isConnected || !(e.target instanceof Element) || d.contains(e.target)) return;
+      const outroModal = e.target.closest('[aria-modal="true"]');
+      if (outroModal && outroModal !== d) return;
+      (d.querySelector<HTMLElement>(FOCAVEIS) ?? d).focus();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [initialFocus, onClose]);
+    document.addEventListener("focusin", segurar);
+    return () => document.removeEventListener("focusin", segurar);
+  }, []);
+  // Foco entra no diálogo e, ao fechar, sai para o destino que quem abriu indicar.
+  useEffect(() => {
+    (initialFocus?.current ?? dialogo.current)?.focus();
+    return () => restaurarFoco?.();
+  }, [initialFocus, restaurarFoco]);
+  // Ocupado: o botão acionado fica desabilitado e perderia o foco para o body — o foco vai para
+  // o próprio diálogo (a contenção segue valendo e Enter não alcança o fundo).
+  useEffect(() => {
+    const d = dialogo.current;
+    const ativo = document.activeElement;
+    if (busy && d && (!(ativo instanceof HTMLElement) || !d.contains(ativo) || (ativo as HTMLButtonElement).disabled)) d.focus();
+  }, [busy]);
+  // Tab/Shift+Tab circulam só pelos controles habilitados do diálogo (mesmo padrão do recibo e
+  // do seletor de retorno); Escape segue a regra de fechamento de quem abriu.
+  const teclado = (e: TecladoEvent<HTMLElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    const d = dialogo.current;
+    if (e.key !== "Tab" || !d) return;
+    const itens = Array.from(d.querySelectorAll<HTMLElement>(FOCAVEIS));
+    if (!itens.length) {
+      e.preventDefault();
+      d.focus();
+      return;
+    }
+    const primeiro = itens[0]!, ultimo = itens[itens.length - 1]!;
+    const ativo = document.activeElement;
+    if (!ativo || !itens.includes(ativo as HTMLElement)) { e.preventDefault(); (e.shiftKey ? ultimo : primeiro).focus(); }
+    else if (e.shiftKey && ativo === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && ativo === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 90, display: "grid", placeItems: "center", padding: 16 }}>
-      <button type="button" aria-label="Fechar janela" onClick={onClose} style={{ position: "absolute", inset: 0, border: 0, background: "rgba(17, 19, 26, .46)", cursor: "default" }} />
-      <section role="dialog" aria-modal="true" aria-label={title} style={{ position: "relative", width: "min(100%, 480px)", maxHeight: "min(680px, calc(100vh - 32px))", overflow: "auto", border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface, boxShadow: "0 24px 70px rgba(17, 19, 26, .26)" }}>
+      <button type="button" aria-label="Fechar janela" tabIndex={-1} onClick={onClose} style={{ position: "absolute", inset: 0, border: 0, background: "rgba(17, 19, 26, .46)", cursor: "default" }} />
+      <section ref={dialogo} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} onKeyDown={teclado} style={{ position: "relative", width: "min(100%, 480px)", maxHeight: "min(680px, calc(100vh - 32px))", overflow: "auto", border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface, boxShadow: "0 24px 70px rgba(17, 19, 26, .26)", outline: "none" }}>
         <header style={{ position: "sticky", top: 0, zIndex: 1, display: "flex", alignItems: "center", gap: 12, minHeight: 52, padding: "0 16px", borderBottom: `1px solid ${C.line2}`, background: C.surface }}>
           <h2 style={{ flex: 1, margin: 0, color: C.ink, fontSize: 14, fontWeight: 750 }}>{title}</h2>
           <button type="button" onClick={onClose} aria-label="Fechar" style={{ width: 32, height: 32, display: "grid", placeItems: "center", border: 0, borderRadius: 8, background: "transparent", color: C.muted, cursor: "pointer" }}><X size={16} /></button>
@@ -149,16 +215,33 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
   const garantia = posVenda.garantia;
   const vinculo = posVenda.vinculoOrigem;
   const osId = v.realOS?.id?.trim() ?? "";
-  const [finalizar, setFinalizar] = useState<RetornoV3 | null>(null);
-  const [obsFinal, setObsFinal] = useState("");
+  // O diálogo pertence à OS em que foi aberto: trocar de OS (ou de loja) o fecha, e a
+  // resolução digitada nunca viaja para o retorno de outro atendimento.
+  const [finalizarAberto, setFinalizarAberto] = useState<{ osId: string; retorno: RetornoV3 } | null>(null);
+  const finalizar = finalizarAberto && finalizarAberto.osId === osId ? finalizarAberto.retorno : null;
+  const chaveResolucao = finalizar ? `${osId}:${finalizar.id}` : "";
+  const [resolucao, setResolucao] = useState<{ chave: string; texto: string }>({ chave: "", texto: "" });
+  const obsFinal = resolucao.chave === chaveResolucao ? resolucao.texto : "";
   const [busy, setBusy] = useState<"finalizar" | null>(null);
   const observacaoRef = useRef<HTMLTextAreaElement>(null);
   const finalizarTriggerRef = useRef<HTMLButtonElement>(null);
+  const retornoCardRef = useRef<HTMLElement>(null);
+
+  // Ao fechar, o foco volta ao "Finalizar retorno" se ele ainda existir e estiver habilitado;
+  // trocando de OS/loja ele pode ter sumido — então vai ao card do Retorno, nunca a um
+  // elemento desmontado. Retorno finalizado: o gatilho deixa de existir assim que a OS é
+  // relida, então o foco vai direto ao card.
+  const finalizado = useRef(false);
+  const restaurarFocoFinalizar = useCallback(() => {
+    const gatilho = finalizarTriggerRef.current;
+    const destino = !finalizado.current && focoValido(gatilho) ? gatilho : retornoCardRef.current;
+    finalizado.current = false;
+    if (focoValido(destino)) destino.focus();
+  }, []);
 
   const closeFinalizar = useCallback(() => {
     if (busy) return;
-    setFinalizar(null);
-    queueMicrotask(() => finalizarTriggerRef.current?.focus());
+    setFinalizarAberto(null);
   }, [busy]);
 
   // GOAL OPS-V4-FLUXO-CURTO-007: abrir retorno / registrar ocorrência passam pelo
@@ -175,9 +258,9 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
     try {
       const ok = await v.finalizarRetorno(finalizar.id, obsFinal.trim() || undefined);
       if (ok) {
-        setObsFinal("");
-        setFinalizar(null);
-        queueMicrotask(() => finalizarTriggerRef.current?.focus());
+        finalizado.current = true;
+        setResolucao({ chave: "", texto: "" });
+        setFinalizarAberto(null);
       }
     } finally {
       setBusy(null);
@@ -245,7 +328,7 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           )}
         </section>
 
-        <section style={{ ...card, borderTop: `3px solid ${posVenda.retornoAberto ? C.warn : C.line2}` }}>
+        <section ref={retornoCardRef} tabIndex={-1} style={{ ...card, borderTop: `3px solid ${posVenda.retornoAberto ? C.warn : C.line2}`, outline: "none" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
             <span style={{ ...cardTitle, display: "inline-flex", alignItems: "center", gap: 7 }}><RotateCcw size={15} aria-hidden /> Retorno</span>
             <Badge tone={posVenda.elegibilidade.tone}>{posVenda.elegibilidade.label}</Badge>
@@ -262,7 +345,7 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
                       Abrir atendimento deste retorno
                     </button>
                   ) : null}
-                  <button ref={finalizarTriggerRef} type="button" disabled={busy !== null || !posVenda.podeFinalizarRetorno} onClick={() => setFinalizar(posVenda.retornoAberto ?? null)} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", marginTop: 11, background: C.ink, opacity: busy ? .65 : 1 }}>
+                  <button ref={finalizarTriggerRef} type="button" disabled={busy !== null || !posVenda.podeFinalizarRetorno} onClick={() => setFinalizarAberto(posVenda.retornoAberto ? { osId, retorno: posVenda.retornoAberto } : null)} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", marginTop: 11, background: C.ink, opacity: busy ? .65 : 1 }}>
                     Finalizar retorno
                   </button>
                 </>
@@ -314,6 +397,8 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           title="Finalizar retorno"
           onClose={closeFinalizar}
           initialFocus={observacaoRef}
+          busy={busy !== null}
+          restaurarFoco={restaurarFocoFinalizar}
           footer={<><button type="button" disabled={!!busy} onClick={closeFinalizar} style={secondaryButton}>Cancelar</button><button type="button" disabled={!!busy} onClick={() => void finalizarRetorno()} style={{ ...primaryButton, background: C.ink, opacity: busy ? .55 : 1 }}>{busy === "finalizar" ? "Finalizando…" : "Finalizar retorno"}</button></>}
         >
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 14 }}>
@@ -322,7 +407,7 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           </div>
           <label style={{ display: "block" }}>
             <span style={{ display: "block", marginBottom: 6, color: C.body, fontSize: 12, fontWeight: 700 }}>Resolução <span style={{ color: C.subtle, fontWeight: 500 }}>(opcional)</span></span>
-            <textarea ref={observacaoRef} rows={4} maxLength={1000} value={obsFinal} onChange={(event) => setObsFinal(event.target.value)} placeholder="Ex.: conector ressoldado" style={{ width: "100%", resize: "vertical", minHeight: 96, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
+            <textarea ref={observacaoRef} rows={4} maxLength={1000} value={obsFinal} onChange={(event) => setResolucao({ chave: chaveResolucao, texto: event.target.value })} placeholder="Ex.: conector ressoldado" style={{ width: "100%", resize: "vertical", minHeight: 96, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
           </label>
           <p style={{ margin: "9px 0 0", color: C.subtle, fontSize: 11.5 }}>O encerramento será confirmado pelo servidor e aparecerá no histórico após o reload. Finalizar não cobra, não estorna e não renova garantia.</p>
         </Modal>
