@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
-import { PrismaClient } from "../../generated/prisma";
+import { PrismaClient, type Prisma } from "../../generated/prisma";
 import { dismissFirstAccessWizardIfPresent } from "../helpers";
 
 // OPS-V4-FLUXO-CURTO-006 — recebimento e retirada no Workspace V4.
@@ -37,7 +37,7 @@ const VENC = (() => {
 
 async function semearOS(
   prisma: PrismaClient,
-  opts: { status?: string; total?: number; pecas?: unknown[] } = {},
+  opts: { status?: string; total?: number; pecas?: Prisma.InputJsonValue[] } = {},
 ): Promise<{ id: string; codigo: string }> {
   const m = marca();
   const id = `qa-006-${m}`;
