@@ -80,6 +80,36 @@ export function comprovantesValidosDaOSV4(os: { timeline?: unknown } | null | un
   return pilha;
 }
 
+export type LeituraReciboV4 =
+  | { estado: "disponivel"; recibo: ComprovanteReciboV3; origem: "sessao" | "persistido"; eventoId: string | null }
+  | { estado: "confirmando" }
+  | { estado: "sem_recebimento" }
+  | { estado: "indisponivel" };
+
+/**
+ * Comprovante que a OS pode mostrar AGORA. O da sessão (resposta do servidor a
+ * este recebimento) e o persistido seguem a MESMA regra: só valem se o acumulado
+ * deles é o recebido atual da projeção da mesma OS. Um estorno feito depois — por
+ * esta ou outra sessão — nunca deixa o comprovante estornado imprimível; sem
+ * leitura confirmada, nada é oferecido.
+ */
+export function escolherReciboV4(input: {
+  sessao: ComprovanteReciboV3 | null | undefined;
+  os: { timeline?: unknown } | null | undefined;
+  recebidoAtual: number | null | undefined;
+}): LeituraReciboV4 {
+  if (!finito(input.recebidoAtual)) return { estado: "confirmando" };
+  const sessao = comoComprovante(input.sessao);
+  if (sessao && centavos(sessao.recebidoAcumulado) === centavos(input.recebidoAtual)) {
+    return { estado: "disponivel", recibo: sessao, origem: "sessao", eventoId: null };
+  }
+  const persistido = lerReciboPersistidoV4({ os: input.os, recebidoAtual: input.recebidoAtual });
+  if (persistido.estado === "disponivel") {
+    return { estado: "disponivel", recibo: persistido.persistido.recibo, origem: "persistido", eventoId: persistido.persistido.eventoId };
+  }
+  return persistido;
+}
+
 /**
  * Comprovante oferecido para reimpressão. `recebidoAtual` é o recebido da
  * projeção server-side da MESMA OS (null = ainda não confirmado → nada é

@@ -9,10 +9,10 @@
  * V3, só a apresentação é V4-nativa. A impressão reusa o motor real
  * `ReciboPreviewV3` (browser print — sem PDF novo).
  *
- * GOAL OPS-V4-FLUXO-CURTO-006: sem comprovante da sessão (reload, outra máquina),
- * a reimpressão usa a evidência PERSISTIDA da mesma OS (`v.reciboPersistido`,
- * gravada pelos writers canônicos e ainda válida contra o recebido atual) —
- * nunca o recibo de outra OS, nunca um comprovante estornado. */
+ * GOAL OPS-V4-FLUXO-CURTO-006: o comprovante vem de `v.reciboAtual` — o da sessão
+ * ou, após reload/outra máquina, o PERSISTIDO pelos writers canônicos; os dois só
+ * valem se ainda correspondem ao recebido atual da mesma OS (um estorno posterior,
+ * desta ou de outra sessão, invalida). Nunca o recibo de outra OS. */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -36,10 +36,10 @@ function ReciboModalConteudo({ v }: { v: V4Vals }) {
     fechar.current?.focus();
     return () => { if (anterior instanceof HTMLElement && anterior.isConnected) anterior.focus(); };
   }, []);
-  const leitura = v.reciboPersistido;
-  const persistido = leitura?.estado === "disponivel" ? leitura.persistido.recibo : null;
-  const recibo = v.pdvServico.ultimoRecibo ?? persistido;
-  const reimpressao = !v.pdvServico.ultimoRecibo && !!persistido;
+  // Sem a leitura validada (consumidor antigo do contrato), só o comprovante da sessão.
+  const leitura = v.reciboAtual;
+  const recibo = leitura ? (leitura.estado === "disponivel" ? leitura.recibo : null) : v.pdvServico.ultimoRecibo;
+  const reimpressao = leitura?.estado === "disponivel" && leitura.origem === "persistido";
   return (
     <div
       role="dialog"

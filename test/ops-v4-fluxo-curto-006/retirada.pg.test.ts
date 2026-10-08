@@ -480,23 +480,43 @@ describe("OPS-V4-FLUXO-CURTO-006 — PostgreSQL descartável", () => {
 // ─── concorrência determinística ─────────────────────────────────────────────
 
 describe("OPS-V4-FLUXO-CURTO-006 — concorrência (PostgreSQL real)", () => {
-  it("A) dois recebimentos equivalentes: mesma operação = um lançamento; chaves diferentes sobre o mesmo saldo = um vence, o outro é recusado", async () => {
+  it("A1) mesma operação reenviada com a primeira em voo: a segunda ESPERA a trava e vira replay — um lançamento", async () => {
     const sid = await novaLoja();
     const id = await novaOS(sid);
     const caixa = await abrirCaixa(sid);
     const input = { linhas: [{ forma: "pix" as const, valor: 300 }], sessaoId: caixa, operacaoId: gerarOperacaoIdV3() };
-    const [a, b] = await Promise.all([receberOSV3(sid, id, input), receberOSV3(sid, id, input)]);
-    expect([a.jaRegistrado, b.jaRegistrado].sort()).toEqual([false, true]);
-    expect((await efeitos(sid)).recebimentosCaixa).toHaveLength(1);
-    const outra = await novaOS(sid);
-    const resultados = await Promise.allSettled([
-      receber(sid, outra, caixa, [{ forma: "pix", valor: 300 }], { saldoEsperado: 300 }),
-      receber(sid, outra, caixa, [{ forma: "dinheiro", valor: 300 }], { saldoEsperado: 300 }),
-    ]);
-    expect(resultados.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const pausa = armarPausa(id, (p) => !!p.pagamentoV3);
+    const primeira = receberOSV3(sid, id, input);
+    await pausa.naBarreira;
+    const segunda = receberOSV3(sid, id, input);
+    await esperarBloqueioNoBanco();
+    pausa.liberar();
+    const [a, b] = await Promise.all([primeira, segunda]);
+    expect(a.jaRegistrado).toBe(false);
+    expect(b.jaRegistrado).toBe(true);
     const e = await efeitos(sid);
-    expect(e.recebimentosCaixa.filter((c) => (c.payload as Payload).ordemServicoId === outra)).toHaveLength(1);
-    expect((await retirada(sid, outra)).projection).toMatchObject({ receivedTotal: 300, balance: 0 });
+    expect(e.recebimentosCaixa).toHaveLength(1);
+    expect(e.movimentos).toBe(1);
+    expect((await retirada(sid, id)).projection).toMatchObject({ receivedTotal: 300, balance: 0 });
+  });
+
+  it("A2) chaves diferentes sobre o mesmo saldo com a primeira em voo: a segunda espera e é recusada pelo saldo — nada em dobro", async () => {
+    const sid = await novaLoja();
+    const id = await novaOS(sid);
+    const caixa = await abrirCaixa(sid);
+    const pausa = armarPausa(id, (p) => !!p.pagamentoV3);
+    const primeira = receber(sid, id, caixa, [{ forma: "pix", valor: 300 }], { saldoEsperado: 300 });
+    await pausa.naBarreira;
+    const segunda = receber(sid, id, caixa, [{ forma: "dinheiro", valor: 300 }], { saldoEsperado: 300 }).then(() => "gravou", (e: Error) => e.message);
+    await esperarBloqueioNoBanco();
+    pausa.liberar();
+    await primeira;
+    expect(await segunda).toMatch(/saldo desta OS mudou/);
+    const e = await efeitos(sid);
+    expect(e.recebimentosCaixa).toHaveLength(1);
+    expect(e.recebimentosCaixa[0]!.payload).toMatchObject({ formaPagamento: "pix" });
+    expect(e.movimentos).toBe(1);
+    expect((await retirada(sid, id)).projection).toMatchObject({ receivedTotal: 300, balance: 0 });
   });
 
   it("B) recebimento em voo × entrega: a entrega espera a trava e decide com o estado commitado (quitado → entrega)", async () => {

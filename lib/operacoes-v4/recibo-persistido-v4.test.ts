@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import { montarComprovanteReciboV3, type PagamentoV3 } from "@/lib/operacoes-v3/payment-model";
 import { montarComprovanteMistoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
-import { comprovantesValidosDaOSV4, lerReciboPersistidoV4 } from "./recibo-persistido-v4";
+import { comprovantesValidosDaOSV4, escolherReciboV4, lerReciboPersistidoV4 } from "./recibo-persistido-v4";
 
 const os = { id: "os-a", codigo: "OS-A", cliente: { nome: "Cliente QA" }, equipamento: { marca: "Samsung", modelo: "A54" } } as OrdemServico;
 const pag = (total: number, recebido: number): PagamentoV3 =>
@@ -86,5 +86,24 @@ describe("OPS-V4-FLUXO-CURTO-006 — recibo persistido", () => {
     expect(comprovantesValidosDaOSV4({ timeline })).toEqual([]);
     expect(comprovantesValidosDaOSV4(null)).toEqual([]);
     expect(lerReciboPersistidoV4({ os: { timeline }, recebidoAtual: 300 })).toEqual({ estado: "indisponivel" });
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-006 — comprovante oferecido (sessão × persistido, R1)", () => {
+  const sessaoQuitacao = recebimento("s", 200, 300).metadata.comprovante;
+
+  it("sessão coerente com o recebido atual: oferece o da sessão", () => {
+    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: { timeline: [] }, recebidoAtual: 300 })).toMatchObject({ estado: "disponivel", origem: "sessao", recibo: { valorPago: 200 } });
+  });
+
+  it("sessão estornada depois (recebido atual 100): nunca a da sessão — vale o persistido coerente", () => {
+    const timeline = [recebimento("e1", 100, 100), recebimento("e2", 200, 300), estorno("e3", 200)];
+    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: { timeline }, recebidoAtual: 100 })).toMatchObject({ estado: "disponivel", origem: "persistido", eventoId: "e1" });
+    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: { timeline: [] }, recebidoAtual: 100 })).toEqual({ estado: "indisponivel" });
+    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: { timeline: [] }, recebidoAtual: 0 })).toEqual({ estado: "sem_recebimento" });
+  });
+
+  it("sem leitura confirmada nada é oferecido, nem o da sessão", () => {
+    expect(escolherReciboV4({ sessao: sessaoQuitacao, os: null, recebidoAtual: null })).toEqual({ estado: "confirmando" });
   });
 });

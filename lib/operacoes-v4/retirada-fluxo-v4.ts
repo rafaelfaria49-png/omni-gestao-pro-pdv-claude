@@ -206,13 +206,17 @@ export function servicoDaRetiradaV4(os: OrdemServico | null | undefined): Servic
 export const RETIRANTE_MAX_V4 = 120;
 
 /**
- * "Retirado por": opcional na tela (em branco, o servidor registra o nome do
- * cliente da OS — contrato de `registrarEntregaV3`), nunca maior que o limite.
+ * "Retirado por" (contrato F do GOAL 006): obrigatório — a entrega sempre
+ * registra quem levou o aparelho, nunca um nome genérico deduzido. Espaços
+ * normalizados; nunca maior que o limite. `obrigatorio: false` só existe para
+ * leitores sem a guia da retirada (o servidor então usa o cliente da OS).
  */
-export function validarRetiranteV4(valor: string | null | undefined):
-  | { ok: true; recebidoPor: string | undefined }
-  | { ok: false; mensagem: string } {
+export function validarRetiranteV4(
+  valor: string | null | undefined,
+  opcoes: { obrigatorio?: boolean } = {},
+): { ok: true; recebidoPor: string | undefined } | { ok: false; mensagem: string } {
   const nome = (valor ?? "").replace(/\s+/g, " ").trim();
+  if (!nome && opcoes.obrigatorio !== false) return { ok: false, mensagem: "Informe quem está retirando o aparelho." };
   if (nome.length > RETIRANTE_MAX_V4) {
     return { ok: false, mensagem: `Informe até ${RETIRANTE_MAX_V4} caracteres em "Retirado por".` };
   }

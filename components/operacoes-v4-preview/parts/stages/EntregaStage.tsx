@@ -104,9 +104,11 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
   const [dataEntrega, setDataEntrega] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
   const [erroData, setErroData] = useState<string | null>(null);
   const dataRef = useRef<HTMLInputElement>(null);
-  // GOAL OPS-V4-FLUXO-CURTO-006: quem retira — começa com o cliente da OS e é
-  // editável (portador). Em branco, o servidor registra o cliente da OS.
+  // GOAL OPS-V4-FLUXO-CURTO-006: quem retira — começa com o cliente da OS, é
+  // editável (portador) e obrigatório com a guia da retirada carregada (sempre, na
+  // V4 real): a entrega nunca registra um retirante deduzido.
   const clienteNome = v.retirada?.clienteNome ?? "";
+  const exigeRetirante = !!v.retirada;
   const [retirante, setRetirante] = useState(clienteNome);
   const [erroRetirante, setErroRetirante] = useState<string | null>(null);
   const retiranteRef = useRef<HTMLInputElement>(null);
@@ -144,7 +146,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
       requestAnimationFrame(() => dataRef.current?.focus());
       return;
     }
-    const quem = validarRetiranteV4(retirante);
+    const quem = validarRetiranteV4(retirante, { obrigatorio: exigeRetirante });
     if (!quem.ok) {
       setErroRetirante(quem.mensagem);
       requestAnimationFrame(() => retiranteRef.current?.focus());
@@ -204,6 +206,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
         maxLength={RETIRANTE_MAX_V4}
         disabled={busy}
         autoComplete="off"
+        required={exigeRetirante}
         aria-invalid={erroRetirante ? true : undefined}
         aria-describedby="entrega-retirante-ajuda"
         onChange={(event) => {
@@ -213,7 +216,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
         style={{ ...inputBase, height: 34 }}
       />
       <span id="entrega-retirante-ajuda" style={{ fontSize: 10.5, color: erroRetirante ? C.dangerFg : C.subtle, lineHeight: 1.45 }}>
-        {erroRetirante ?? "Cliente ou portador que está levando o aparelho. Em branco, o registro usa o cliente da OS."}
+        {erroRetirante ?? "Cliente ou portador que está levando o aparelho."}
       </span>
     </div>
   );
@@ -396,7 +399,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
           <span style={{ fontSize: 11.5, color: C.infoFg, lineHeight: 1.45 }}><strong>Entrega sem cobrança autorizada.</strong> A classificação persistida será revalidada pelo servidor.</span>
         </div>
-      ) : v.retirada?.financeiro.situacao === "quitado" && v.pdvServico?.ultimoRecibo ? (
+      ) : v.retirada?.financeiro.situacao === "quitado" && v.reciboAtual?.estado === "disponivel" && v.reciboAtual.origem === "sessao" ? (
         // Logo após receber nesta sessão (o estado persistido já aparece na guia).
         <div role="status" style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.successBg, border: `1px solid ${C.successBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
           <span style={{ fontSize: 11.5, color: C.successFg, lineHeight: 1.45 }}>

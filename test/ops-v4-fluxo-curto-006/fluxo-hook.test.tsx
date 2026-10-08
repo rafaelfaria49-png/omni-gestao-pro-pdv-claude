@@ -194,3 +194,48 @@ describe("OPS-V4-FLUXO-CURTO-006 — ligação real (useV4Preview + usePdvServic
     expect(m.registrarEntregaV3).not.toHaveBeenCalled();
   });
 });
+
+describe("OPS-V4-FLUXO-CURTO-006 — regressões da R1 (hook real)", () => {
+  it("R1-P1b estorno de A responde com o operador em B: devolve false, B mantém recibo e modal, sem releitura de B", async () => {
+    recebidoPorOS.a = 300;
+    let soltar!: () => void;
+    m.estornarRecebimentoOSV3.mockImplementationOnce(
+      (_sid: string, id: string) =>
+        new Promise((resolve) => {
+          soltar = () => {
+            recebidoPorOS[id] = 0;
+            resolve({ pagamento: leitura(0), os: A, estornado: 300 });
+          };
+        }),
+    );
+    const r = await montarComOS("a");
+    let estornoA!: Promise<boolean>;
+    act(() => { estornoA = r.result.current.pdvServico.estornar({ sessaoId: "sessao-qa", motivo: "QA estorno A" }); });
+    await act(async () => r.result.current.selectOS(B, "entrega"));
+    await waitFor(() => expect(r.result.current.financial.projection?.osId).toBe("b"));
+    await waitFor(() => expect(r.result.current.pdvServico.loading).toBe(false));
+    await act(async () => { await r.result.current.pdvServico.receber({ linhas: [{ forma: "pix", valor: 300 }], sessaoId: "sessao-qa" }); });
+    expect(r.result.current.pdvServico.ultimoRecibo?.numeroOS).toBe("OS-B");
+    act(() => r.result.current.openEstornoRecebimento());
+    expect(r.result.current.estornoRecebimentoOpen).toBe(true);
+    const leiturasB = m.lerProjecaoFinanceiraOSV4.mock.calls.filter((c) => c[1] === "b").length;
+    let resultadoA: boolean | undefined;
+    await act(async () => { soltar(); resultadoA = await estornoA; });
+    expect(resultadoA).toBe(false);
+    expect(r.result.current.pdvServico.ultimoRecibo?.numeroOS).toBe("OS-B");
+    expect(r.result.current.estornoRecebimentoOpen).toBe(true);
+    expect(m.lerProjecaoFinanceiraOSV4.mock.calls.filter((c) => c[1] === "b").length).toBe(leiturasB);
+  });
+
+  it("R1-P1a estorno feito por OUTRA sessão: depois da releitura o comprovante da sessão deixa de ser oferecido", async () => {
+    const r = await montarComOS("a");
+    await act(async () => { await r.result.current.pdvServico.receber({ linhas: [{ forma: "pix", valor: 300 }], sessaoId: "sessao-qa" }); });
+    await waitFor(() => expect(r.result.current.reciboAtual).toMatchObject({ estado: "disponivel", origem: "sessao" }));
+    // Outro operador estorna fora desta sessão; a V4 relê o servidor.
+    recebidoPorOS.a = 0;
+    act(() => r.result.current.financial.reload());
+    await waitFor(() => expect(r.result.current.financial.projection?.receivedTotal).toBe(0));
+    expect(r.result.current.pdvServico.ultimoRecibo?.numeroOS).toBe("OS-A");
+    expect(r.result.current.reciboAtual).toEqual({ estado: "sem_recebimento" });
+  });
+});

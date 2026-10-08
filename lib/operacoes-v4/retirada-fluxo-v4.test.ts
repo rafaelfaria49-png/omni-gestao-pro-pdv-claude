@@ -102,10 +102,14 @@ describe("OPS-V4-FLUXO-CURTO-006 — serviço e custo da retirada (T50)", () => 
 });
 
 describe("OPS-V4-FLUXO-CURTO-006 — retirado por", () => {
-  it("normaliza espaços, em branco = cliente da OS (servidor), limite de tamanho", () => {
+  it("obrigatório (contrato F): normaliza espaços, recusa vazio, limite de tamanho", () => {
     expect(validarRetiranteV4("  Ana   Souza ")).toEqual({ ok: true, recebidoPor: "Ana Souza" });
-    expect(validarRetiranteV4("   ")).toEqual({ ok: true, recebidoPor: undefined });
-    expect(validarRetiranteV4(null)).toEqual({ ok: true, recebidoPor: undefined });
+    expect(validarRetiranteV4("   ")).toEqual({ ok: false, mensagem: "Informe quem está retirando o aparelho." });
+    expect(validarRetiranteV4(null)).toEqual({ ok: false, mensagem: "Informe quem está retirando o aparelho." });
     expect(validarRetiranteV4("x".repeat(RETIRANTE_MAX_V4 + 1)).ok).toBe(false);
+  });
+
+  it("sem a guia da retirada (obrigatorio: false) o vazio segue para a regra do servidor", () => {
+    expect(validarRetiranteV4("", { obrigatorio: false })).toEqual({ ok: true, recebidoPor: undefined });
   });
 });

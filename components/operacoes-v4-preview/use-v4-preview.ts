@@ -150,7 +150,7 @@ import {
 } from "@/lib/operacoes-v4/os-header-transversal";
 import { montarResumoFinanceiroOSV4 } from "@/lib/operacoes-v4/financeiro-v4";
 import { derivarRetiradaFinanceiraV4, servicoDaRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
-import { lerReciboPersistidoV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
+import { escolherReciboV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
 import { buildGarantiasPortfolioV4 } from "@/lib/operacoes-v4/posvenda-v4";
 import {
   adaptAcessoriosEntrada,
@@ -474,6 +474,11 @@ export function buildVals(
   // OS real selecionada → identidade/financeiro reais (vazio honesto quando ausente).
   const realOS = ctx.realOS;
   const financialProjection = ctx.financialProjection.projection;
+  // GOAL OPS-V4-FLUXO-CURTO-006: loja+OS das superfícies abertas sobre a seleção
+  // (sheet de recebimento, recibo, estorno, documento impresso). Aberta para outra
+  // seleção = fechada nesta — nunca mostra/age sobre a OS errada.
+  const chaveSuperficies = JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]);
+  const noAlvoSuperficies = !!st.selectedOsId && st.alvoSuperficies === chaveSuperficies;
   const financialStatusLabel = financialProjection
     ? FINANCIAL_STATUS_LABEL[financialProjection.financialStatus]
     : ctx.financialProjection.loading
@@ -676,7 +681,7 @@ export function buildVals(
       notify("O Termo de Entrega fica disponível depois da entrega confirmada.");
       return;
     }
-    update({ docPrint: tipo, menu: null });
+    update({ docPrint: tipo, alvoSuperficies: chaveSuperficies, menu: null });
   };
   // GOAL 023: "Orçamento (via cliente)" só aparece no menu com orçamento REAL
   // materializado (`estado === "persistido"`) — prévia/ausente não têm o que
@@ -745,10 +750,6 @@ export function buildVals(
     status: orcStatusRaw,
     total: typeof orcRaw?.total === "number" ? orcRaw.total : financialProjection?.approvedBudgetTotal,
   });
-  // GOAL OPS-V4-FLUXO-CURTO-006: loja+OS das superfícies financeiras (sheet,
-  // recibo, estorno). Aberta para outra seleção = fechada nesta.
-  const chaveFinanceira = JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]);
-  const noAlvoFinanceiro = !!st.selectedOsId && st.financeiroAlvo === chaveFinanceira;
   const financeiroResumo = montarResumoFinanceiroOSV4({
     loading: ctx.financialProjection.loading,
     error: ctx.financialProjection.error,
@@ -919,12 +920,17 @@ export function buildVals(
     servico: servicoDaRetiradaV4(realOS),
     clienteNome: (realOS?.cliente?.nome ?? "").trim(),
   };
-  // Comprovante persistido da MESMA OS (reimpressão após reload): só o que os
-  // writers canônicos gravaram e que ainda corresponde ao recebido atual.
-  const reciboPersistido =
-    realOS && financialProjection && financialProjection.osId === realOS.id && !ctx.financialProjection.loading
-      ? lerReciboPersistidoV4({ os: realOS, recebidoAtual: financialProjection.receivedTotal })
-      : ({ estado: "confirmando" } as const);
+  // Comprovante da MESMA OS: o da sessão (resposta deste recebimento) ou, após
+  // reload, o persistido pelos writers canônicos — os dois só valem se ainda
+  // correspondem ao recebido atual da projeção (estorno posterior invalida).
+  const reciboAtual = escolherReciboV4({
+    sessao: ctx.pdvServico.ultimoRecibo,
+    os: realOS,
+    recebidoAtual:
+      realOS && financialProjection && financialProjection.osId === realOS.id && !ctx.financialProjection.loading
+        ? financialProjection.receivedTotal
+        : null,
+  });
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
   const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);
@@ -1352,12 +1358,12 @@ export function buildVals(
     // aberto" da Entrega — só navega (o recebimento real vive no botão do Financeiro).
     goFinanceiro: () => update({ stage: "financeiro", module: "workspace", view: "cockpit", menu: null }),
     openReceberPagamento: () =>
-      update({ stage: "financeiro", receberPagamento: true, financeiroAlvo: chaveFinanceira, module: "workspace", view: "cockpit", menu: null }),
+      update({ stage: "financeiro", receberPagamento: true, alvoSuperficies: chaveSuperficies, module: "workspace", view: "cockpit", menu: null }),
     // GOAL OPS-V4-FLUXO-CURTO-006: o MESMO sheet (ReceberPagamentoV4 + hook V3),
     // aberto sem sair da etapa Entrega — pagar nunca entrega sozinho.
-    openReceberPagamentoAqui: () => update({ receberPagamento: true, financeiroAlvo: chaveFinanceira, menu: null }),
+    openReceberPagamentoAqui: () => update({ receberPagamento: true, alvoSuperficies: chaveSuperficies, menu: null }),
     closeReceberPagamento: () => update({ receberPagamento: false }),
-    receberPagamentoOpen: st.receberPagamento && noAlvoFinanceiro,
+    receberPagamentoOpen: st.receberPagamento && noAlvoSuperficies,
     // GOAL OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002: usado pelo alerta "OS sem cobrança"
     // da Entrega — leva o operador a lançar o orçamento antes de entregar (só navega).
     goOrcamento: () => update({ stage: "orcamento", module: "workspace", view: "cockpit", menu: null }),
@@ -1452,9 +1458,9 @@ export function buildVals(
     // ---- Estorno de recebimento REAL (GOAL OPS-V4-RECEBIMENTO-ESTORNO-016) ----
     // Modal só abre atrás de ação explícita (botão na aba Financeiro, já gated por
     // `v.estorno.podeEstornar`); a escrita real é `v.pdvServico.estornar` (acima).
-    openEstornoRecebimento: () => update({ estornoRecebimento: true, financeiroAlvo: chaveFinanceira }),
+    openEstornoRecebimento: () => update({ estornoRecebimento: true, alvoSuperficies: chaveSuperficies }),
     closeEstornoRecebimento: () => update({ estornoRecebimento: false }),
-    estornoRecebimentoOpen: st.estornoRecebimento && noAlvoFinanceiro,
+    estornoRecebimentoOpen: st.estornoRecebimento && noAlvoSuperficies,
 
     // ---- Cancelamento de OS REAL (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) ----
     // Modal só abre atrás de ação explícita (menu "Mais ações"); a escrita real é
@@ -1490,10 +1496,10 @@ export function buildVals(
     cancelamento,
     cancelarOS: ctx.cancelarOS,
 
-    openRecibo: () => update({ recibo: true, financeiroAlvo: chaveFinanceira }),
+    openRecibo: () => update({ recibo: true, alvoSuperficies: chaveSuperficies }),
     closeRecibo: () => update({ recibo: false }),
-    reciboOpen: st.recibo && noAlvoFinanceiro,
-    reciboPersistido,
+    reciboOpen: st.recibo && noAlvoSuperficies,
+    reciboAtual,
 
     diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, entrega: entregaReal,
     os: osView,
@@ -1528,7 +1534,16 @@ export function buildVals(
     salvarAssinaturaRetirada: ctx.salvarAssinaturaRetirada,
     adicionarFotoSaida: ctx.adicionarFotoSaida,
     removerFotoSaida: ctx.removerFotoSaida,
-    docPrintTipo: st.docPrint as DocumentoTipoV3 | null,
+    // GOAL OPS-V4-FLUXO-CURTO-006: o documento aberto vale só para a loja+OS em que
+    // foi pedido; Termo de Entrega só de OS realmente entregue e Termo de Garantia
+    // só com garantia definida — as guardas valem a cada render, não só na abertura.
+    docPrintTipo:
+      st.docPrint &&
+      noAlvoSuperficies &&
+      !(st.docPrint === "termo_entrega" && !lerEntregaV3(realOS).entregue) &&
+      !(st.docPrint === "termo_garantia" && !lerGarantiaV3(realOS).temGarantia)
+        ? (st.docPrint as DocumentoTipoV3)
+        : null,
     closeDocPrint: () => update({ docPrint: null }),
     registrarImpressaoDoc: ctx.registrarImpressaoDoc,
     // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
@@ -1544,7 +1559,7 @@ export function buildVals(
     // Sessão de caixa/recibo e ações do motor V3; totais vêm da projeção server-side.
     // `recebimento` é o gating pré-computado dessa projeção com a sessão do caixa.
     pdvServico: ctx.pdvServico,
-    recebimentoContextKey: chaveFinanceira,
+    recebimentoContextKey: chaveSuperficies,
     recebimento,
     estorno,
     // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
@@ -1875,17 +1890,17 @@ export function useV4Preview(): V4Vals {
   useEffect(() => {
     limparReciboPdvV3();
   }, [st.selectedOsId, limparReciboPdvV3]);
-  // GOAL OPS-V4-FLUXO-CURTO-006: sheet/recibo/estorno abertos para outra loja+OS
-  // já não aparecem na seleção nova (`financeiroAlvo`); aqui são descartados para
-  // não ressurgirem ao voltar à OS anterior.
-  const chaveFinanceiraSelecao = JSON.stringify([lojaAtivaId ?? null, st.selectedOsId]);
+  // GOAL OPS-V4-FLUXO-CURTO-006: superfícies abertas para outra loja+OS (sheet,
+  // recibo, estorno, documento) já não aparecem na seleção nova (`alvoSuperficies`);
+  // aqui são descartadas para não ressurgirem ao voltar à OS anterior.
+  const chaveSuperficiesSelecao = JSON.stringify([lojaAtivaId ?? null, st.selectedOsId]);
   useEffect(() => {
     setSt((prev) =>
-      prev.financeiroAlvo == null || prev.financeiroAlvo === chaveFinanceiraSelecao
+      prev.alvoSuperficies == null || prev.alvoSuperficies === chaveSuperficiesSelecao
         ? prev
-        : { ...prev, receberPagamento: false, recibo: false, estornoRecebimento: false, financeiroAlvo: null },
+        : { ...prev, receberPagamento: false, recibo: false, estornoRecebimento: false, docPrint: null, alvoSuperficies: null },
     );
-  }, [chaveFinanceiraSelecao]);
+  }, [chaveSuperficiesSelecao]);
 
   useEffect(() => {
     return () => {
@@ -2079,7 +2094,15 @@ export function useV4Preview(): V4Vals {
   // V3) só para também recarregar lista+detalhe da V4 depois do sucesso.
   const estornarRecebimentoV4 = useCallback(
     async (input: EstornarRecebimentoInputV3) => {
+      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
       const ok = await estornarPdvV3(input);
+      // GOAL OPS-V4-FLUXO-CURTO-006: resposta de A com o operador já em B (OS ou
+      // loja) só atualiza a lista — nunca limpa o recibo, relê ou fecha superfícies
+      // de B; o chamador obsoleto recebe `false`.
+      if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) {
+        if (ok) reloadOrdens();
+        return false;
+      }
       if (ok) {
         reloadOrdens();
         reloadDetail();

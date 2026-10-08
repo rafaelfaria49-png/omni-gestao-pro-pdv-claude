@@ -240,7 +240,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     const p = pdv();
     montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, confirmarEntrega });
     fireEvent.click(screen.getByRole("button", { name: "Receber pagamento" }));
-    expect(patches.at(-1)).toEqual({ receberPagamento: true, financeiroAlvo: chave(LOJA, "a"), menu: null });
+    expect(patches.at(-1)).toEqual({ receberPagamento: true, alvoSuperficies: chave(LOJA, "a"), menu: null });
     expect(patches.some((x) => "stage" in x)).toBe(false);
     const dialogo = await screen.findByRole("dialog", { name: "Receber pagamento" });
     expect(within(dialogo).getAllByText(/R\$\s300,00/).length).toBeGreaterThan(0);
@@ -249,7 +249,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     expect(p.receber).toHaveBeenCalledWith(expect.objectContaining({ linhas: [{ forma: "pix", valor: 300 }], sessaoId: "sessao-qa" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Receber pagamento" })).toBeNull());
     // Sucesso: fecha o sheet e abre o recibo da MESMA OS — nunca entrega.
-    expect(patches).toEqual(expect.arrayContaining([{ receberPagamento: false }, { recibo: true, financeiroAlvo: chave(LOJA, "a") }]));
+    expect(patches).toEqual(expect.arrayContaining([{ receberPagamento: false }, { recibo: true, alvoSuperficies: chave(LOJA, "a") }]));
     expect(confirmarEntrega).not.toHaveBeenCalled();
   });
 
@@ -257,7 +257,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     const a = os("a");
     const pendente = adiado<boolean>();
     const p = pdv({ receber: vi.fn(() => pendente.promessa) });
-    montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, inicial: { receberPagamento: true, financeiroAlvo: chave(LOJA, "a") } });
+    montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
     const dialogo = await screen.findByRole("dialog", { name: "Receber pagamento" });
     const botao = within(dialogo).getByRole("button", { name: /^Confirmar R\$/ });
     fireEvent.click(botao);
@@ -270,7 +270,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     const a = os("a");
     const confirmarEntrega = vi.fn(async () => true);
     const p = pdv({ receber: vi.fn(async () => false) });
-    montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, confirmarEntrega, inicial: { receberPagamento: true, financeiroAlvo: chave(LOJA, "a") } });
+    montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, confirmarEntrega, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
     const dialogo = await screen.findByRole("dialog", { name: "Receber pagamento" });
     fireEvent.click(within(dialogo).getByRole("button", { name: /^Confirmar R\$/ }));
     await waitFor(() => expect(p.receber).toHaveBeenCalledTimes(1));
@@ -284,7 +284,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     const b = os("b");
     const pendente = adiado<boolean>();
     const p = pdv({ receber: vi.fn(() => pendente.promessa) });
-    const view = montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, inicial: { receberPagamento: true, financeiroAlvo: chave(LOJA, "a") } });
+    const view = montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
     fireEvent.click(within(await screen.findByRole("dialog", { name: "Receber pagamento" })).getByRole("button", { name: /^Confirmar R\$/ }));
     view.trocar({ os: b, fin: { projection: projecao(b, ABERTO) }, pdv: p });
     // O sheet aberto para A não aparece em B.
@@ -349,14 +349,31 @@ describe("OPS-V4-FLUXO-CURTO-006 — confirmação de entrega separada", () => {
     expect(vi.mocked(window.confirm).mock.calls[0]![0]).toContain("retirada por Portador QA");
   });
 
-  it("retirado por em branco: o servidor registra o cliente (nenhum nome inventado na tela)", async () => {
+  it("R1 §F retirado por é obrigatório: em branco não confirma, avisa e devolve o foco ao campo", async () => {
     const a = os("a");
     const confirmarEntrega = vi.fn(async () => true);
     montar({ os: a, fin: { projection: projecao(a, PAGO) }, confirmarEntrega });
-    fireEvent.change(screen.getByLabelText("Retirado por"), { target: { value: "   " } });
+    const campo = screen.getByLabelText("Retirado por") as HTMLInputElement;
+    expect(campo.required).toBe(true);
+    fireEvent.change(campo, { target: { value: "   " } });
     fireEvent.click(confirmar()!);
-    await waitFor(() => expect(confirmarEntrega).toHaveBeenCalledTimes(1));
-    expect(confirmarEntrega).toHaveBeenCalledWith(undefined, undefined);
+    expect(await screen.findByText("Informe quem está retirando o aparelho.")).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(campo));
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(confirmarEntrega).not.toHaveBeenCalled();
+  });
+
+  it("R1 §F sem nome de cliente na OS: o campo começa vazio e exige o retirante antes de entregar", async () => {
+    const a = os("a", "pronta", { cliente: { nome: "" } });
+    const confirmarEntrega = vi.fn(async () => true);
+    montar({ os: a, fin: { projection: projecao(a, PAGO) }, confirmarEntrega });
+    expect((screen.getByLabelText("Retirado por") as HTMLInputElement).value).toBe("");
+    fireEvent.click(confirmar()!);
+    expect(await screen.findByText("Informe quem está retirando o aparelho.")).toBeTruthy();
+    expect(confirmarEntrega).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Retirado por"), { target: { value: "Maria Portadora" } });
+    fireEvent.click(confirmar()!);
+    await waitFor(() => expect(confirmarEntrega).toHaveBeenCalledWith(undefined, undefined, "Maria Portadora"));
   });
 
   it("S02 duplo clique em Confirmar entrega: uma única chamada", async () => {
@@ -424,7 +441,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — documentos e recibo", () => {
         { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { comprovante: recibo(os("a"), 200, 300) } },
       ],
     });
-    montar({ os: a, fin: { projection: projecao(a, PAGO) }, inicial: { recibo: true, financeiroAlvo: chave(LOJA, "a") } });
+    montar({ os: a, fin: { projection: projecao(a, PAGO) }, inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
     const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
     expect(within(d).getByText("Reimpressão do último comprovante registrado nesta OS.")).toBeTruthy();
     expect(within(d).getByText("OS OS-A")).toBeTruthy();
@@ -441,7 +458,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — documentos e recibo", () => {
         { id: "e3", tipo: "financeiro_conta_receber_atualizada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:10:00Z", metadata: { estornado: 200, modo: "ultimo_pagamento" } },
       ],
     });
-    montar({ os: a, fin: { projection: projecao(a, { status: "parcial", historico: [{ tipo: "pagamento", valor: 100 }, { tipo: "pagamento", valor: 200 }, { tipo: "estorno_pagamento", valor: 200 }] }) }, inicial: { recibo: true, financeiroAlvo: chave(LOJA, "a") } });
+    montar({ os: a, fin: { projection: projecao(a, { status: "parcial", historico: [{ tipo: "pagamento", valor: 100 }, { tipo: "pagamento", valor: 200 }, { tipo: "estorno_pagamento", valor: 200 }] }) }, inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
     const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
     // Comprovante válido = o de R$ 100 (parcial); o de R$ 200 (quitação) foi estornado.
     expect(within(d).getByText("Parcial")).toBeTruthy();
@@ -454,7 +471,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — documentos e recibo", () => {
   it("S05/S07 superfícies financeiras só valem para a loja+OS em que foram abertas", () => {
     const a = os("a");
     const b = os("b");
-    const aberto = { receberPagamento: true, recibo: true, estornoRecebimento: true, financeiroAlvo: chave(LOJA, "a") };
+    const aberto = { receberPagamento: true, recibo: true, estornoRecebimento: true, alvoSuperficies: chave(LOJA, "a") };
     const view = montar({ os: a, fin: { projection: projecao(a, ABERTO) }, inicial: aberto });
     expect(sonda.v!.reciboOpen && sonda.v!.receberPagamentoOpen && sonda.v!.estornoRecebimentoOpen).toBe(true);
     view.trocar({ os: b, fin: { projection: projecao(b, ABERTO) } });
@@ -463,5 +480,86 @@ describe("OPS-V4-FLUXO-CURTO-006 — documentos e recibo", () => {
     // Mesma OS em OUTRA loja: também fechado.
     view.trocar({ os: a, loja: "loja-qa-006-b", fin: { projection: null } });
     expect(sonda.v!.reciboOpen || sonda.v!.receberPagamentoOpen || sonda.v!.estornoRecebimentoOpen).toBe(false);
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-006 — regressões da R1", () => {
+  const timelineEstornada = () => [
+    { id: "e1", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:00:00Z", metadata: { comprovante: recibo(os("a"), 100, 100) } },
+    { id: "e2", tipo: "operacao_cobranca_gerada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:05:00Z", metadata: { comprovante: recibo(os("a"), 200, 300) } },
+    { id: "e3", tipo: "financeiro_conta_receber_atualizada", autor: "QA", conteudo: "", criadoEm: "2026-10-08T12:10:00Z", metadata: { estornado: 200, modo: "ultimo_pagamento" } },
+  ];
+  const PARCIAL_POS_ESTORNO: Titulo = { status: "parcial", historico: [{ tipo: "pagamento", valor: 100 }, { tipo: "pagamento", valor: 200 }, { tipo: "estorno_pagamento", valor: 200 }] };
+
+  it("R1-P1a comprovante da SESSÃO estornado por outra sessão nunca é impresso: vale o persistido coerente", () => {
+    const a = os("a", "pronta", { timeline: timelineEstornada() });
+    montar({ os: a, fin: { projection: projecao(a, PARCIAL_POS_ESTORNO) }, pdv: pdv({ ultimoRecibo: recibo(os("a"), 200, 300) }), inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
+    const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
+    expect(within(d).queryByText("Quitação")).toBeNull();
+    expect(within(d).getByText("Parcial")).toBeTruthy();
+    expect(within(d).getByText("Reimpressão do último comprovante registrado nesta OS.")).toBeTruthy();
+  });
+
+  it("R1-P1a sem evidência coerente: o modal diz que o comprovante não está disponível (nada estornado é oferecido)", () => {
+    const a = os("a");
+    montar({ os: a, fin: { projection: projecao(a, PARCIAL_POS_ESTORNO) }, pdv: pdv({ ultimoRecibo: recibo(os("a"), 200, 300) }), inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
+    const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
+    expect(within(d).getByText("O comprovante do recebimento atual não está disponível para reimpressão.")).toBeTruthy();
+    expect(within(d).queryByRole("button", { name: "Imprimir comprovante" })).toBeNull();
+  });
+
+  it("R1-P1a leitura financeira em curso: nenhum comprovante é oferecido até confirmar", () => {
+    const a = os("a");
+    montar({ os: a, fin: { projection: null, loading: true }, pdv: pdv({ ultimoRecibo: recibo(os("a"), 300, 300) }), inicial: { recibo: true, alvoSuperficies: chave(LOJA, "a") } });
+    const d = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
+    expect(within(d).getByText("Confirmando os recebimentos desta OS…")).toBeTruthy();
+    expect(within(d).queryByRole("button", { name: "Imprimir comprovante" })).toBeNull();
+  });
+
+  it("R1-P1c documento aberto para A entregue nunca aparece em B; Termo de Entrega exige OS entregue a cada render", () => {
+    const entregue = os("a", "entregue", { entregueEm: "2026-10-08T12:00:00Z", entregaV3: { entregueEm: "2026-10-08T12:00:00Z", recebidoPor: "Ana" }, retirada: { confirmado: true, retiradoPor: "Ana", retiradoEm: "2026-10-08T12:00:00Z" } });
+    const b = os("b");
+    const view = montar({ os: entregue, fin: { projection: projecao(entregue, PAGO) } });
+    act(() => sonda.v!.printItems.find((i) => i.label === "Termo de Entrega")!.onClick());
+    expect(sonda.v!.docPrintTipo).toBe("termo_entrega");
+    view.trocar({ os: b, fin: { projection: projecao(b, PAGO) } });
+    expect(sonda.v!.docPrintTipo).toBeNull();
+    cleanup();
+    // Estado forçado (alvo = B, B não entregue): a guarda de render ainda recusa o termo.
+    montar({ os: b, fin: { projection: projecao(b, PAGO) }, inicial: { docPrint: "termo_entrega", alvoSuperficies: chave(LOJA, "b") } });
+    expect(sonda.v!.docPrintTipo).toBeNull();
+  });
+
+  it("R1-P2b/c leitura bloqueada após recusa só esconde o sheet: rascunho preservado e foco volta ao reaparecer", async () => {
+    const a = os("a");
+    const p = pdv({ receber: vi.fn(async () => false) });
+    const view = montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
+    const s1 = await screen.findByRole("dialog", { name: "Receber pagamento" });
+    fireEvent.click(within(s1).getByRole("button", { name: "Pagamento parcial" }));
+    fireEvent.change(within(s1).getByLabelText("Valor da linha 1"), { target: { value: "120" } });
+    fireEvent.click(within(s1).getByRole("button", { name: /^Confirmar R\$/ }));
+    await waitFor(() => expect(p.receber).toHaveBeenCalledTimes(1));
+    // Releitura devolve INCONSISTENT: o sheet some, mas o pedido de abertura NÃO é encerrado.
+    const inconsistente = projecao(a, { status: "pendente", valor: 250 });
+    expect(inconsistente.financialStatus).toBe("INCONSISTENT");
+    view.trocar({ os: a, fin: { projection: inconsistente }, pdv: p });
+    expect(screen.queryByRole("dialog", { name: "Receber pagamento" })).toBeNull();
+    expect(patches.some((x) => x.receberPagamento === false)).toBe(false);
+    // A leitura volta: mesmo rascunho, foco dentro do sheet, Escape fecha.
+    view.trocar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p });
+    const s2 = await screen.findByRole("dialog", { name: "Receber pagamento" });
+    expect((within(s2).getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("120");
+    await waitFor(() => expect(s2.contains(document.activeElement)).toBe(true));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Receber pagamento" })).toBeNull());
+  });
+
+  it("R1-P2b só estado terminal encerra o sheet hospedado na Entrega (quitada por outra sessão)", async () => {
+    const a = os("a");
+    const view = montar({ os: a, fin: { projection: projecao(a, ABERTO) }, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
+    await screen.findByRole("dialog", { name: "Receber pagamento" });
+    view.trocar({ os: a, fin: { projection: projecao(a, PAGO) } });
+    await waitFor(() => expect(patches).toEqual(expect.arrayContaining([{ receberPagamento: false }])));
+    expect(screen.queryByRole("dialog", { name: "Receber pagamento" })).toBeNull();
   });
 });

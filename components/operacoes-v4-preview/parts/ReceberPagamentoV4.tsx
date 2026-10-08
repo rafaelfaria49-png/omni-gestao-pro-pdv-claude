@@ -69,20 +69,32 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   useEffect(() => {
     if (v.receberPagamentoOpen && !open && !v.financial.loading && !v.financial.error && projection?.expectedTotal != null) { seedForm(); setOpen(true); }
   }, [v.receberPagamentoOpen, open, v.financial.loading, v.financial.error, projection?.expectedTotal, seedForm]);
-  // Hospedado na Entrega: se a OS deixou de ter o que receber (quitada/sem total/
-  // bloqueada por outra sessão), o pedido de abertura cai — nunca reabre depois.
-  const naoRecebivelAgora =
-    !!projection && !pendencia &&
-    (v.recebimento.semTotal || v.recebimento.quitado || (!projection.canReceive && projection.financialStatus !== "CHARGE_NOT_CREATED"));
+  // Hospedado na Entrega: só um estado TERMINAL (quitada por outra sessão ou sem
+  // valor a cobrar) encerra o pedido de abertura. Leitura bloqueada/inconsistente
+  // ou em releitura após uma recusa só esconde o sheet: rascunho e mensagem ficam
+  // e voltam com a leitura (mesma regra do Financeiro).
+  const nadaAReceber = !!projection && !pendencia && (v.recebimento.semTotal || v.recebimento.quitado);
   useEffect(() => {
-    if (somenteSheet && formAberto && !busy && !v.financial.loading && naoRecebivelAgora) { setOpen(false); v.closeReceberPagamento(); }
-  }, [somenteSheet, formAberto, busy, v.financial.loading, naoRecebivelAgora, v]);
+    if (somenteSheet && formAberto && !busy && !v.financial.loading && nadaAReceber) { setOpen(false); v.closeReceberPagamento(); }
+  }, [somenteSheet, formAberto, busy, v.financial.loading, nadaAReceber, v]);
+  // Teclado: toda vez que o sheet (re)aparece — inclusive depois de sumir numa
+  // releitura — o foco entra nele, para Tab/Escape funcionarem. O controle de
+  // origem é guardado na PRIMEIRA aparição e recebe o foco de volta no fechamento.
+  const origemFoco = useRef<Element | null>(null);
+  const sheetRef = useCallback((el: HTMLDivElement | null) => {
+    sheet.current = el;
+    if (!el) return;
+    if (!origemFoco.current) origemFoco.current = document.activeElement;
+    if (!el.contains(document.activeElement)) el.querySelector<HTMLElement>("select, button")?.focus();
+  }, []);
   useEffect(() => {
-    if (!formAberto || !mounted) return;
-    const anterior = document.activeElement;
-    sheet.current?.querySelector<HTMLElement>("select, button")?.focus();
-    return () => { if (anterior instanceof HTMLElement && anterior.isConnected) anterior.focus(); };
-  }, [formAberto, mounted]);
+    if (!formAberto) return;
+    return () => {
+      const origem = origemFoco.current;
+      origemFoco.current = null;
+      if (origem instanceof HTMLElement && origem.isConnected) origem.focus();
+    };
+  }, [formAberto]);
 
   const cancelar = () => { setOpen(false); v.closeReceberPagamento(); };
   const openForm = () => { seedForm(); setOpen(true); };
@@ -157,7 +169,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   if (!mounted) return null;
   return createPortal(
     <div className={sheetStyles.overlay} role="dialog" aria-modal="true" aria-labelledby="receber-os-title">
-      <div ref={sheet} className={sheetStyles.sheet} onKeyDown={(e) => {
+      <div ref={sheetRef} className={sheetStyles.sheet} onKeyDown={(e) => {
         if (e.key === "Escape" && !busy) { e.preventDefault(); cancelar(); }
         if (e.key !== "Tab") return;
         const itens = sheet.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]');
