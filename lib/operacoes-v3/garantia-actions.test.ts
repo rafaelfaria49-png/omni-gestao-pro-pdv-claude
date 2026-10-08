@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({ findFirst: vi.fn(), update: vi.fn() }));
-vi.mock("@/lib/prisma", () => ({ prisma: { ordemServico: db } }));
+vi.mock("@/lib/prisma", () => {
+  const prismaTx: Record<string, unknown> = { ordemServico: db };
+  prismaTx.$transaction = async (fn: (tx: unknown) => unknown) => fn(prismaTx);
+  prismaTx.$queryRaw = async () => [{ id: "os-travada" }];
+  return { prisma: prismaTx };
+});
 vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "qa-002", name: "Operador QA" } })) }));
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: vi.fn(async () => ({ ok: true })) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -27,7 +32,8 @@ describe("salvarGarantiaOSV3 — persistência normalizada no servidor", () => {
     ["tela", 45, 45],
   ])("%s + %i persiste prazo %i na OS da loja selecionada", async (modeloId, entrada, esperado) => {
     const salvo = await salvarGarantiaOSV3("loja-qa", "os-002", { modeloId, prazoDias: entrada });
-    expect(db.findFirst).toHaveBeenCalledWith({ where: { id: "os-002", storeId: "loja-qa" }, select: { id: true, payload: true } });
+    // Releitura do payload MAIS RECENTE sob a trava, sempre escopada pela loja.
+    expect(db.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "os-002", storeId: "loja-qa" } }));
     const update = db.update.mock.calls[0]?.[0];
     expect(update?.where).toEqual({ id: "os-002" });
     expect(update?.data.payload.aberturaV3.garantiaPrevista).toMatchObject({ modelo: modeloId, prazoDias: esperado });

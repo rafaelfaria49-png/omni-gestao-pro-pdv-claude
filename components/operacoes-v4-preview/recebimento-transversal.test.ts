@@ -53,7 +53,7 @@ describe("OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3", () => {
 
   it("caixa fechado não abre sessão e aponta para o PDV existente", () => {
     expect(receber).toContain("Caixa fechado");
-    expect(receber).toContain("Abra uma sessão de caixa antes de receber este pagamento.");
+    expect(form).toContain("Abra o caixa para registrar o valor recebido agora.");
     expect(receber).toContain('href="/dashboard/vendas"');
     expect(receber).not.toContain("openCaixaIfClosed");
   });
@@ -70,7 +70,7 @@ describe("OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3", () => {
   it("19–35. submit usa receberOSV3 via hook, sem optimistic e com reload só no sucesso", () => {
     expect(receber).toMatch(/pdv\.receber\(\{\s*linhas:\s*linhasValidas,/);
     expect(receber).toContain("pdv.recebendo");
-    expect(receber).toContain("if (!podeConfirmar || !pdv.sessao?.sessaoId || pdv.recebendo) return");
+    expect(receber).toContain("if (!podeConfirmar || envio.current) return");
     expect(orchestrator).toContain("receberOSV3");
     expect(orchestrator).toMatch(/if \(ok\) \{\s*reloadOrdens\(\);\s*reloadDetail\(\);\s*reloadFinancial\(\);/);
     expect(orchestrator).not.toContain("setOptimistic");

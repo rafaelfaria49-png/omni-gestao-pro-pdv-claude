@@ -22,10 +22,10 @@
 // ============================================================================
 
 import type { EventoTimeline, OrdemServico } from "@/types/os";
-import type { Prisma } from "@/generated/prisma";
-import { prisma, withPrismaSafe } from "@/lib/prisma";
+import { withPrismaSafe } from "@/lib/prisma";
 import { statusV3FromOS } from "./status-machine";
 import { lerEntregaV3 } from "./pos-venda-model";
+import { mutarPayloadOSV3 } from "./os-payload-lock";
 
 type OSPayloadLike = OrdemServico & Record<string, unknown>;
 
@@ -275,16 +275,21 @@ async function runBackfill(opts: { dryRun: boolean; storeId?: string; limit?: nu
     if (aplicadas >= limit) continue; // aplica só até o limite (lote cauteloso)
 
     try {
-      const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-      // Não duplica o marco se por algum motivo já existir um entrega_cliente.
-      const jaTemMarco = timeline.some((e) => e?.tipo === "entrega_cliente");
-      const nextTimeline = jaTemMarco ? timeline : [...timeline, evento];
-      const nextPayload = { ...payload, ...patch, timeline: nextTimeline, atualizadoEm: nowIso(now) };
-      await prisma.ordemServico.update({
-        where: { id: r.id },
-        data: { payload: nextPayload as unknown as Prisma.InputJsonValue },
+      // Aplica sobre o payload MAIS RECENTE, sob a trava da linha; reconfere a idempotência nele.
+      const gravou = await mutarPayloadOSV3({
+        storeId: r.storeId,
+        osId: r.id,
+        mutate: ({ payload: atual }) => {
+          if (statusV3FromOS(atual) !== "entregue" || lerEntregaV3(atual as OrdemServico).entregue) return { payload: null, resultado: false };
+          const timeline = Array.isArray(atual.timeline) ? (atual.timeline as EventoTimeline[]) : [];
+          // Não duplica o marco se por algum motivo já existir um entrega_cliente.
+          const jaTemMarco = timeline.some((e) => e?.tipo === "entrega_cliente");
+          const nextTimeline = jaTemMarco ? timeline : [...timeline, evento];
+          return { payload: { ...atual, ...patch, timeline: nextTimeline, atualizadoEm: nowIso(now) }, resultado: true };
+        },
       });
-      aplicadas += 1;
+      if (gravou) aplicadas += 1;
+      else ignoradas += 1;
     } catch (e) {
       erros += 1;
       console.error("[backfill-entregas-v3] falha ao aplicar", r.id, e instanceof Error ? e.message : e);

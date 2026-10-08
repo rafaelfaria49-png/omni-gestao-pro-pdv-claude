@@ -190,7 +190,10 @@ export function FocusContextDrawer({ v }: { v: V4Vals }) {
         <div className="mt-4 grid gap-2.5 border-y border-border py-3">
           <DetailRow label="Prioridade" value={v.prio.label} valueColor={v.prio.fg} />
           <DetailRow label="Localização" value={os.localizacao} />
-          <DetailRow label="Previsão / SLA" value={os.previsao} valueColor={C.successFg} />
+          <DetailRow label={os.entradaRotulo} value={os.entrada} />
+          <DetailRow label="Previsão de entrega" value={os.previsaoVencida ? os.previsao + " · vencida" : os.previsao} valueColor={os.previsaoVencida ? C.warnFg : C.successFg} />
+          {os.prazoInterno ? <DetailRow label="Prazo interno" value={os.prazoInterno} /> : null}
+          {os.entrega ? <DetailRow label="Entrega" value={os.entrega} /> : null}
         </div>
 
         <div className="mt-4 flex gap-2">

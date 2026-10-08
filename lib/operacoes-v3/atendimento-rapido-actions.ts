@@ -17,22 +17,23 @@
 
 import { revalidatePath } from "next/cache";
 import type { Session } from "next-auth";
-import type { Prisma } from "@/generated/prisma";
 import type { EventoTimeline, OrdemServico } from "@/types/os";
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { criarOSEnterpriseV3 } from "./nova-os-actions";
 import { getCaixaSessaoAbertaV3, receberOSV3 } from "./pdv-servico-actions";
 import { gerarOrcamentoDaOS, aprovarOrcamentoV3 } from "./orcamento-actions";
 import { projetarStatusV2 } from "./status-machine";
+import { mutarPayloadOSV3, type OSPayloadV3 } from "./os-payload-lock";
 import { resolverClienteOperacoesV3, type ClienteResolvidoOperacoesV3 } from "./cliente-resolver";
 import {
   montarDraftAtendimentoRapidoV3,
+  normalizarDatasAtendimentoRapidoV3,
   validarAtendimentoRapidoV3,
   type AtendimentoRapidoInputV3,
 } from "./atendimento-rapido-model";
 import type { ComprovanteReciboV3 } from "./payment-model";
+import type { DataOperacionalMetaV3 } from "./datas-operacionais-model";
 
 function operadorLabel(session: Session | null): string {
   const u = session?.user;
@@ -69,6 +70,11 @@ export async function finalizarAtendimentoRapidoV3(
 
   const erro = validarAtendimentoRapidoV3(input);
   if (erro) throw new Error(erro);
+  // Datas do SERVIÇO validadas antes de qualquer efeito (caixa, cliente, OS,
+  // recebimento). Elas nunca mudam a data do pagamento: o recebimento é sempre
+  // registrado agora, na sessão de caixa aberta.
+  const datas = normalizarDatasAtendimentoRapidoV3(input);
+  if (!datas.ok) throw new Error(datas.erros[0]!.mensagem);
 
   // Caixa precisa estar ABERTO (o recebimento entra no fechamento).
   const sessao = await getCaixaSessaoAbertaV3(sid);
@@ -100,13 +106,16 @@ export async function finalizarAtendimentoRapidoV3(
   }
 
   // 2. Cria a OS reusando a Nova OS Enterprise (caminho seguro, audita + numera).
-  const draft = montarDraftAtendimentoRapidoV3(input, cliente);
+  const draft = montarDraftAtendimentoRapidoV3(
+    { ...input, dataEntrada: datas.datas.entrada.iso, dataEntradaMeta: datas.datas.entrada.meta ?? undefined },
+    cliente,
+  );
   const { os } = await criarOSEnterpriseV3(sid, draft);
   const osId = os.id;
 
   const operador = operadorLabel(session);
   const valor = Math.round(Number(input.servico.valor) * 100) / 100;
-  const concluidoEm = input.dataConclusao?.trim() || nowIso();
+  const concluidoEm = datas.datas.conclusao.iso;
 
   try {
     // 2b. (Opção B) Materializa e APROVA o orçamento REAL da OS → o recebimento passa a
@@ -131,6 +140,7 @@ export async function finalizarAtendimentoRapidoV3(
       valor,
       forma: input.formaPagamento,
       concluidoEm,
+      concluidoEmMeta: datas.datas.conclusao.meta,
     });
 
     revalidatePath("/dashboard/operacoes-v3");
@@ -160,68 +170,89 @@ interface ConcluirInfoV3 {
   servico: string;
   valor: number;
   forma: string;
+  /** Saída EFETIVA do atendimento (pode ser anterior ao registro). */
   concluidoEm: string;
+  concluidoEmMeta: DataOperacionalMetaV3 | null;
+}
+
+/** Patch do payload MAIS RECENTE da OS sob a trava da linha (OS ausente = no-op). */
+async function mutarAtendimentoRapidoV3(sid: string, osId: string, montar: (payload: Record<string, unknown>) => Record<string, unknown>): Promise<void> {
+  await mutarPayloadOSV3({
+    storeId: sid,
+    osId,
+    aceitarPayloadVazio: true,
+    aoAusente: () => undefined,
+    mutate: ({ payload }) => ({ payload: montar(payload) as OSPayloadV3, resultado: undefined }),
+  });
 }
 
 async function concluirAtendimentoRapidoV3(sid: string, osId: string, info: ConcluirInfoV3): Promise<void> {
-  const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) return;
-  const payload = (row.payload as Record<string, unknown> | null) ?? {};
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const prev = (payload.atendimentoRapidoV3 as Record<string, unknown> | undefined) ?? {};
-  const evento: EventoTimeline = {
-    id: eventId(),
-    tipo: "mudanca_status",
-    autor: info.operador,
-    autorTipo: "usuario",
-    conteudo: `Atendimento rápido concluído (${info.servico}).`,
-    metadata: { para: "entregue", atendimentoRapido: true },
-    criadoEm: info.concluidoEm,
-  };
-  const nextPayload: Record<string, unknown> = {
-    ...payload,
-    operacaoStatusV3: "entregue",
-    status: projetarStatusV2("entregue"),
-    entregueEm: info.concluidoEm,
-    atendimentoRapidoV3: {
-      ...prev,
-      versao: 1,
-      servico: info.servico,
-      valor: info.valor,
-      forma: info.forma,
-      concluidoEm: info.concluidoEm,
-      operador: info.operador,
-    },
-    timeline: [...timeline, evento],
-    atualizadoEm: nowIso(),
-  };
-  await prisma.ordemServico.update({ where: { id: osId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
+  await mutarAtendimentoRapidoV3(sid, osId, (payload) => {
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const prev = (payload.atendimentoRapidoV3 as Record<string, unknown> | undefined) ?? {};
+    // Auditoria: o evento é do momento REAL do registro (servidor); a data efetiva
+    // do atendimento fica em campo próprio — a timeline nunca é retrodatada.
+    const registradoEm = nowIso();
+    const evento: EventoTimeline = {
+      id: eventId(),
+      tipo: "mudanca_status",
+      autor: info.operador,
+      autorTipo: "usuario",
+      conteudo: `Atendimento rápido concluído (${info.servico}).`,
+      metadata: {
+        para: "entregue",
+        atendimentoRapido: true,
+        concluidoEm: info.concluidoEm,
+        ...(info.concluidoEmMeta ? { precisao: info.concluidoEmMeta.precisao } : {}),
+      },
+      criadoEm: registradoEm,
+    };
+    const nextPayload: Record<string, unknown> = {
+      ...payload,
+      operacaoStatusV3: "entregue",
+      status: projetarStatusV2("entregue"),
+      entregueEm: info.concluidoEm,
+      atendimentoRapidoV3: {
+        ...prev,
+        versao: 1,
+        servico: info.servico,
+        valor: info.valor,
+        forma: info.forma,
+        concluidoEm: info.concluidoEm,
+        ...(info.concluidoEmMeta ? { concluidoEmMeta: info.concluidoEmMeta } : {}),
+        registradoEm,
+        operador: info.operador,
+      },
+      timeline: [...timeline, evento],
+      atualizadoEm: registradoEm,
+    };
+    return nextPayload;
+  });
 }
 
 async function cancelarAtendimentoRapidoComErroV3(sid: string, osId: string, operador: string, e: unknown): Promise<void> {
-  const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) return;
-  const payload = (row.payload as Record<string, unknown> | null) ?? {};
-  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const prev = (payload.atendimentoRapidoV3 as Record<string, unknown> | undefined) ?? {};
-  const msg = e instanceof Error ? e.message : String(e);
-  const dataHora = nowIso();
-  const evento: EventoTimeline = {
-    id: eventId(),
-    tipo: "mudanca_status",
-    autor: operador,
-    autorTipo: "usuario",
-    conteudo: `Atendimento rápido: recebimento não concluído — OS cancelada automaticamente. Motivo: ${msg}`,
-    metadata: { para: "cancelada", atendimentoRapido: true, erroRecebimento: true },
-    criadoEm: dataHora,
-  };
-  const nextPayload: Record<string, unknown> = {
-    ...payload,
-    operacaoStatusV3: "cancelada",
-    status: projetarStatusV2("cancelada"),
-    atendimentoRapidoV3: { ...prev, erroRecebimento: true, erroMensagem: msg, erroEm: dataHora },
-    timeline: [...timeline, evento],
-    atualizadoEm: dataHora,
-  };
-  await prisma.ordemServico.update({ where: { id: osId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
+  await mutarAtendimentoRapidoV3(sid, osId, (payload) => {
+    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+    const prev = (payload.atendimentoRapidoV3 as Record<string, unknown> | undefined) ?? {};
+    const msg = e instanceof Error ? e.message : String(e);
+    const dataHora = nowIso();
+    const evento: EventoTimeline = {
+      id: eventId(),
+      tipo: "mudanca_status",
+      autor: operador,
+      autorTipo: "usuario",
+      conteudo: `Atendimento rápido: recebimento não concluído — OS cancelada automaticamente. Motivo: ${msg}`,
+      metadata: { para: "cancelada", atendimentoRapido: true, erroRecebimento: true },
+      criadoEm: dataHora,
+    };
+    const nextPayload: Record<string, unknown> = {
+      ...payload,
+      operacaoStatusV3: "cancelada",
+      status: projetarStatusV2("cancelada"),
+      atendimentoRapidoV3: { ...prev, erroRecebimento: true, erroMensagem: msg, erroEm: dataHora },
+      timeline: [...timeline, evento],
+      atualizadoEm: dataHora,
+    };
+    return nextPayload;
+  });
 }

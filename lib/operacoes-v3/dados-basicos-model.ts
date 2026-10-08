@@ -13,7 +13,9 @@
 //   • prioridade       → payload.prioridade            (espelho: aberturaV3.recepcao.prioridade)
 //   • recebidoPor      → payload.aberturaV3.recepcao.recebidoPor
 //   • localFisico      → payload.aberturaV3.recepcao.localFisico   (nome real na V3)
-//   • previsaoEntrega  → payload.sla.prazo             (espelho: aberturaV3.recepcao.previsaoEntrega)
+//   • previsaoEntrega  → payload.aberturaV3.recepcao.previsaoEntrega (+ previsaoEntregaMeta)
+//                        = previsão COMBINADA; espelho em payload.sla.prazo. `sla.prazo`
+//                        sozinho é prazo interno (automático/legado) — não é lido aqui.
 //   • origem           → payload.aberturaV3.recepcao.origem (rico) · payload.origem (colapsado)
 //   • observacoes      → payload.aberturaV3.observacoesInternas
 //
@@ -29,6 +31,7 @@ import {
   type NovaOSLocalFisicoV3,
   type NovaOSOrigemV3,
 } from "./nova-os-model";
+import type { DataOperacionalMetaV3 } from "./datas-operacionais-model";
 
 // Reexporta as opções/tipos canônicos da V3 para a UI/adapter da V4 (fonte única).
 export { LOCAL_FISICO_V3, ORIGEM_V3, PRIORIDADE_V3 };
@@ -42,8 +45,10 @@ export interface DadosBasicosOSV3 {
   recebidoPor: string;
   /** "" quando não há localização válida. */
   localFisico: NovaOSLocalFisicoV3 | "";
-  /** ISO da previsão/SLA; "" quando ausente. */
+  /** ISO da previsão de entrega COMBINADA; "" quando não informada (prazo interno não conta). */
   previsaoEntrega: string;
+  /** Precisão da previsão (só-dia × data/hora), quando gravada. */
+  previsaoEntregaMeta?: DataOperacionalMetaV3;
   /** "" quando não há origem rica válida. */
   origem: NovaOSOrigemV3 | "";
   observacoes: string;
@@ -57,6 +62,8 @@ export interface SalvarDadosBasicosInputV3 {
   localFisico: NovaOSLocalFisicoV3;
   /** ISO (ou "" para manter a previsão atual). */
   previsaoEntrega: string;
+  /** Precisão da previsão informada (aditivo; ausente = data/hora). */
+  previsaoEntregaMeta?: DataOperacionalMetaV3;
   origem: NovaOSOrigemV3;
   observacoes: string;
 }
@@ -99,6 +106,7 @@ type RecepcaoLoose = {
   recebidoPor?: unknown;
   localFisico?: unknown;
   previsaoEntrega?: unknown;
+  previsaoEntregaMeta?: unknown;
   origem?: unknown;
   prioridade?: unknown;
 };
@@ -127,13 +135,17 @@ export function lerDadosBasicosV3(os: OrdemServico | null | undefined): DadosBas
       : "";
 
   const localFisico: NovaOSLocalFisicoV3 | "" = isLocalFisicoV3(recepcao.localFisico) ? recepcao.localFisico : "";
+  const meta = recepcao.previsaoEntregaMeta as DataOperacionalMetaV3 | undefined;
+  const previsaoEntrega = str(recepcao.previsaoEntrega);
 
   return {
     defeitoRelatado: str(o.equipamento?.defeitoRelatado),
     prioridade,
     recebidoPor: str(recepcao.recebidoPor),
     localFisico,
-    previsaoEntrega: str(o.sla?.prazo) || str(recepcao.previsaoEntrega),
+    // Só a previsão COMBINADA: o `sla.prazo` automático nunca vira promessa ao cliente.
+    previsaoEntrega,
+    ...(previsaoEntrega && meta && typeof meta === "object" ? { previsaoEntregaMeta: meta } : {}),
     origem,
     observacoes: str(o.aberturaV3?.observacoesInternas),
   };

@@ -124,6 +124,12 @@ model Store {
   contadorCompetencias     ContadorCompetencia[]
   contadorDocumentos       ContadorDocumento[]
   contadorEventos          ContadorEvento[]
+  dpEmpregadoresGestora DpEmpregador[] @relation("DpEmpregadorGestora")
+  dpUnidades DpUnidadeVinculo[]
+  dpAcessos DpAcesso[]
+  dpVinculos DpVinculo[]
+  dpDocumentos DpDocumento[]
+  dpAuditorias DpAuditoria[]
   // ─── Contador HUB identidade externa (GOAL 014 — aditivo; só relações inversas) ──
   contadorConvites         ContadorConvite[]
   contadorAcessos          ContadorAcesso[]
@@ -1007,8 +1013,11 @@ model Tecnico {
   createdAt         DateTime @default(now()) @map("createdAt")
   updatedAt         DateTime @updatedAt @map("updatedAt")
 
+  @@unique([id, storeId])
   @@index([storeId])
   @@index([name])
+  dpPessoas DpPessoaTecnico[]
+
   @@map("tecnicos")
 }
 
@@ -2210,6 +2219,9 @@ model AdminUser {
   updatedAt DateTime @updatedAt
 
   adminUserStores AdminUserStore[]
+  dpAcessos DpAcesso[]
+  dpPessoas DpPessoaUsuario[]
+  dpAuditorias DpAuditoria[]
 
   // ─── Stripe / Billing ───────────────────────────────────────────────────────
   stripeCustomerId     String?   @unique
@@ -3217,4 +3229,331 @@ model ContadorGuia {
   @@index([competenciaId, vencimento])
   @@index([storeId, vencimento])
   @@map("contador_guias")
+}
+// ─── Pessoas / DP: cadastro e documentos (PESSOAS-001A) ──────────────────────
+// Identidade legal separada de Store. Sem tabelas de folha neste GOAL.
+
+model DpEmpregador {
+  id String @id @default(cuid())
+  storeGestoraId String
+  storeGestora Store @relation("DpEmpregadorGestora", fields: [storeGestoraId], references: [id], onDelete: Restrict)
+  tipoInscricao String @db.VarChar(12)
+  inscricao String @db.VarChar(32)
+  nome String @db.VarChar(240)
+  status String @default("ATIVO") @db.VarChar(20)
+  versaoAtual Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versoes DpEmpregadorVersao[]
+  estabelecimentos DpEstabelecimento[]
+  unidades DpUnidadeVinculo[]
+  acessos DpAcesso[]
+  pessoas DpPessoa[]
+  vinculos DpVinculo[]
+  contratos DpContratoVersao[]
+  documentos DpDocumento[]
+  auditorias DpAuditoria[]
+
+  @@unique([storeGestoraId, tipoInscricao, inscricao])
+  @@unique([id, storeGestoraId])
+  @@map("dp_empregadores")
+}
+
+model DpEmpregadorVersao {
+  id String @id @default(cuid())
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  versao Int
+  tipoInscricao String @db.VarChar(12)
+  inscricao String @db.VarChar(32)
+  nome String @db.VarChar(240)
+  endereco Json? @db.JsonB
+  regime String? @db.VarChar(80)
+  validFrom DateTime @db.Date
+  validTo DateTime? @db.Date
+  recordedAt DateTime @default(now())
+  supersedesId String?
+  supersedes DpEmpregadorVersao? @relation("DpEmpregadorSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  substituicoes DpEmpregadorVersao[] @relation("DpEmpregadorSupersessao")
+  supersededAt DateTime?
+  autorId String
+  motivo String @db.Text
+
+  @@unique([empregadorId, versao])
+  @@unique([id, empregadorId])
+  @@index([empregadorId, validFrom])
+  @@map("dp_empregador_versoes")
+}
+
+model DpEstabelecimento {
+  id String @id @default(cuid())
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  tipoInscricao String @db.VarChar(12)
+  inscricao String @db.VarChar(32)
+  status String @default("ATIVO") @db.VarChar(20)
+  versaoAtual Int @default(1)
+  createdAt DateTime @default(now())
+  versoes DpEstabelecimentoVersao[]
+  unidades DpUnidadeVinculo[]
+  contratos DpContratoVersao[]
+
+  @@unique([empregadorId, tipoInscricao, inscricao])
+  @@unique([id, empregadorId])
+  @@map("dp_estabelecimentos")
+}
+
+model DpEstabelecimentoVersao {
+  id String @id @default(cuid())
+  empregadorId String
+  estabelecimentoId String
+  estabelecimento DpEstabelecimento @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  versao Int
+  nome String @db.VarChar(240)
+  endereco Json? @db.JsonB
+  lotacaoRef String? @db.VarChar(80)
+  validFrom DateTime @db.Date
+  validTo DateTime? @db.Date
+  recordedAt DateTime @default(now())
+  supersedesId String?
+  supersedes DpEstabelecimentoVersao? @relation("DpEstabelecimentoSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  substituicoes DpEstabelecimentoVersao[] @relation("DpEstabelecimentoSupersessao")
+  supersededAt DateTime?
+  autorId String
+  motivo String @db.Text
+
+  @@unique([estabelecimentoId, versao])
+  @@unique([id, empregadorId])
+  @@map("dp_estabelecimento_versoes")
+}
+
+model DpUnidadeVinculo {
+  id String @id @default(cuid())
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  estabelecimentoId String
+  estabelecimento DpEstabelecimento @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  storeId String
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  validFrom DateTime @db.Date
+  validTo DateTime? @db.Date
+  aprovadoPorId String
+  recordedAt DateTime @default(now())
+  motivo String @db.Text
+
+  @@unique([empregadorId, storeId, validFrom])
+  @@index([storeId, validTo])
+  @@map("dp_unidades_vinculo")
+}
+
+model DpAcesso {
+  id String @id @default(cuid())
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  storeId String
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  adminUserId String
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  capacidades String[] @default([])
+  concedidoPorId String
+  concedidoEm DateTime @default(now())
+  revogadoPorId String?
+  revogadoEm DateTime?
+  motivo String @db.Text
+
+  @@index([empregadorId, storeId, adminUserId])
+  @@map("dp_acessos")
+}
+
+model DpPessoa {
+  id String @id @default(cuid())
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  cpfCipher String? @db.Text
+  cpfHash String? @db.VarChar(64)
+  versaoAtual Int @default(0)
+  createdAt DateTime @default(now())
+  versoes DpPessoaVersao[]
+  vinculos DpVinculo[]
+  usuarios DpPessoaUsuario[]
+  tecnicos DpPessoaTecnico[]
+  documentos DpDocumento[]
+
+  @@unique([empregadorId, cpfHash])
+  @@unique([id, empregadorId])
+  @@map("dp_pessoas")
+}
+
+model DpPessoaVersao {
+  id String @id @default(cuid())
+  empregadorId String
+  pessoaId String
+  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  versao Int
+  nome String? @db.VarChar(240)
+  nascimento DateTime? @db.Date
+  endereco Json? @db.JsonB
+  cpfCipher String? @db.Text
+  cpfHash String? @db.VarChar(64)
+  validFrom DateTime? @db.Date
+  validTo DateTime? @db.Date
+  recordedAt DateTime @default(now())
+  supersedesId String?
+  supersedes DpPessoaVersao? @relation("DpPessoaSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  substituicoes DpPessoaVersao[] @relation("DpPessoaSupersessao")
+  autorId String
+  motivo String @db.Text
+
+  @@unique([pessoaId, versao])
+  @@unique([id, empregadorId])
+  @@map("dp_pessoa_versoes")
+}
+
+model DpPessoaUsuario {
+  id String @id @default(cuid())
+  empregadorId String
+  pessoaId String
+  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  adminUserId String
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  validFrom DateTime @db.Date
+  validTo DateTime? @db.Date
+  autorId String
+  motivo String @db.Text
+  recordedAt DateTime @default(now())
+
+  @@index([empregadorId, adminUserId])
+  @@map("dp_pessoa_usuarios")
+}
+
+model DpPessoaTecnico {
+  id String @id @default(cuid())
+  empregadorId String
+  pessoaId String
+  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  tecnicoId String
+  storeId String
+  tecnico Tecnico @relation(fields: [tecnicoId, storeId], references: [id, storeId], onDelete: Restrict)
+  validFrom DateTime @db.Date
+  validTo DateTime? @db.Date
+  autorId String
+  motivo String @db.Text
+  recordedAt DateTime @default(now())
+
+  @@index([empregadorId, tecnicoId])
+  @@map("dp_pessoa_tecnicos")
+}
+
+model DpVinculo {
+  id String @id @default(cuid())
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  pessoaId String
+  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  storeId String
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  matricula String? @db.VarChar(64)
+  admissao DateTime? @db.Date
+  termino DateTime? @db.Date
+  regime String? @db.VarChar(80)
+  categoria String? @db.VarChar(80)
+  status String @default("RASCUNHO") @db.VarChar(20)
+  versaoAtual Int @default(0)
+  arquivadoEm DateTime?
+  arquivadoPorId String?
+  motivoArquivo String? @db.Text
+  createdAt DateTime @default(now())
+  contratos DpContratoVersao[]
+  documentos DpDocumento[]
+
+  @@unique([empregadorId, matricula])
+  @@unique([id, empregadorId])
+  @@unique([id, empregadorId, pessoaId])
+  @@index([empregadorId, storeId, status])
+  @@map("dp_vinculos")
+}
+
+model DpContratoVersao {
+  id String @id @default(cuid())
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  vinculoId String
+  vinculo DpVinculo @relation(fields: [vinculoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  estabelecimentoId String?
+  estabelecimento DpEstabelecimento? @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  versao Int
+  cargo String? @db.VarChar(160)
+  cbo String? @db.VarChar(12)
+  tipoContrato String? @db.VarChar(80)
+  salarioBase Decimal? @db.Decimal(18, 2)
+  unidadeSalario String? @db.VarChar(24)
+  jornadaSemanal Decimal? @db.Decimal(8, 2)
+  divisor Int?
+  cctRef String? @db.VarChar(160)
+  validFrom DateTime? @db.Date
+  validTo DateTime? @db.Date
+  recordedAt DateTime @default(now())
+  supersedesId String?
+  supersedes DpContratoVersao? @relation("DpContratoSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  substituicoes DpContratoVersao[] @relation("DpContratoSupersessao")
+  supersededAt DateTime?
+  autorId String
+  motivo String @db.Text
+
+  @@unique([vinculoId, versao])
+  @@unique([id, empregadorId])
+  @@index([empregadorId, vinculoId, validFrom])
+  @@map("dp_contrato_versoes")
+}
+
+model DpDocumento {
+  id String @id
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  pessoaId String
+  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  vinculoId String?
+  vinculo DpVinculo? @relation(fields: [vinculoId, empregadorId, pessoaId], references: [id, empregadorId, pessoaId], onDelete: Restrict)
+  storeId String
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  categoria String @db.VarChar(64)
+  classificacao String @db.VarChar(32)
+  origem String @db.VarChar(32)
+  nomeArquivo String @db.VarChar(180)
+  storageRef String @unique @db.Text
+  mime String @db.VarChar(80)
+  bytes Int
+  sha256 String @db.VarChar(64)
+  versaoDeId String?
+  versaoDe DpDocumento? @relation("DpDocumentoVersao", fields: [versaoDeId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  versoes DpDocumento[] @relation("DpDocumentoVersao")
+  enviadoPorId String
+  createdAt DateTime @default(now())
+
+  @@unique([id, empregadorId])
+  @@index([empregadorId, storeId, vinculoId])
+  @@map("dp_documentos")
+}
+
+model DpAuditoria {
+  id String @id @default(cuid())
+  empregadorId String
+  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  storeId String
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  atorId String
+  ator AdminUser @relation(fields: [atorId], references: [id], onDelete: Restrict)
+  comandoId String @db.VarChar(100)
+  acao String @db.VarChar(80)
+  entidade String @db.VarChar(80)
+  entidadeId String
+  payloadHash String @db.VarChar(64)
+  justificativa String? @db.Text
+  diffSaneado Json? @db.JsonB
+  createdAt DateTime @default(now())
+
+  @@unique([storeId, atorId, comandoId])
+  @@index([empregadorId, createdAt])
+  @@map("dp_auditorias")
 }

@@ -19,6 +19,18 @@
 
 import type { OSPrioridade } from "@/types/os";
 import type { OrcamentoLinhaKindV3 } from "./orcamento-model";
+import {
+  limitarFatoAoAgoraV3,
+  montarDataOperacionalOpcionalV3,
+  validarDatasRecepcaoV3,
+  validarEntradaDataV3,
+  ROTULO_DATA_ENTRADA_V3,
+  ROTULO_PREVISAO_ENTREGA_V3,
+  type CampoDataOperacionalV3,
+  type DataOperacionalMetaV3,
+  type DataOperacionalV3,
+  type ErroCampoDataV3,
+} from "./datas-operacionais-model";
 
 export type NovaOSClienteKindV3 = "PF" | "PJ";
 export type NovaOSItemCategoriaV3 = "servico" | "peca";
@@ -69,8 +81,13 @@ export interface NovaOSEquipamentoV3 {
 }
 
 export interface NovaOSRecepcaoV3 {
-  dataEntrada: string; // ISO
-  previsaoEntrega?: string; // ISO
+  /** Entrada efetiva do aparelho (ISO). "" só no orçamento sem o aparelho na loja. */
+  dataEntrada: string;
+  /** Precisão da entrada (aditivo). Ausente = chamada antiga (vale como data/hora). */
+  dataEntradaMeta?: DataOperacionalMetaV3;
+  /** Previsão de entrega combinada com o cliente (ISO). Ausente = não informada. */
+  previsaoEntrega?: string;
+  previsaoEntregaMeta?: DataOperacionalMetaV3;
   origem: NovaOSOrigemV3;
   recebidoPor?: string;
   prioridade: OSPrioridade;
@@ -336,6 +353,83 @@ export function validarNovaOSDraftV3(draft: NovaOSDraftV3): string | null {
     if ((it.quantidade || 0) <= 0) return `Quantidade inválida em "${it.descricao}".`;
   }
   return null;
+}
+
+/** Data de recepção validada, pronta para gravar (metadata `null` = chamada antiga). */
+export interface DataRecepcaoNormalizadaV3 {
+  iso: string;
+  meta: DataOperacionalMetaV3 | null;
+}
+
+export type DatasRecepcaoNormalizadasV3 =
+  | { ok: true; entrada: DataRecepcaoNormalizadaV3 | null; previsao: DataRecepcaoNormalizadaV3 | null }
+  | { ok: false; erros: ErroCampoDataV3[] };
+
+/**
+ * Valida as datas da recepção do rascunho (entrada efetiva + previsão) ANTES de
+ * qualquer efeito (cliente, OS, orçamento). Mesma regra no formulário e no
+ * servidor: entrada é fato (nunca no futuro, sem limite de dias para trás);
+ * previsão é opcional, pode estar vencida, mas não antes da entrada. A entrada
+ * só pode faltar quando `entradaObrigatoria` é falso (orçamento sem o aparelho).
+ */
+export function normalizarDatasRecepcaoV3(
+  recepcao: Pick<NovaOSRecepcaoV3, "dataEntrada" | "dataEntradaMeta" | "previsaoEntrega" | "previsaoEntregaMeta">,
+  opts: { entradaObrigatoria: boolean; agora?: Date },
+): DatasRecepcaoNormalizadasV3 {
+  const agora = opts.agora ?? new Date();
+  const erros: ErroCampoDataV3[] = [];
+  const entradaTxt = typeof recepcao?.dataEntrada === "string" ? recepcao.dataEntrada.trim() : "";
+  const previsaoTxt = typeof recepcao?.previsaoEntrega === "string" ? recepcao.previsaoEntrega.trim() : "";
+
+  const entrada = entradaTxt ? validarEntradaDataV3(entradaTxt, recepcao.dataEntradaMeta, ROTULO_DATA_ENTRADA_V3) : null;
+  if (entrada && !entrada.ok) erros.push({ campo: "dataEntrada", mensagem: entrada.mensagem });
+  const previsao = previsaoTxt ? validarEntradaDataV3(previsaoTxt, recepcao.previsaoEntregaMeta, ROTULO_PREVISAO_ENTREGA_V3) : null;
+  if (previsao && !previsao.ok) erros.push({ campo: "previsaoEntrega", mensagem: previsao.mensagem });
+  if (erros.length > 0) return { ok: false, erros };
+
+  const e = entrada && entrada.ok ? entrada : null;
+  const p = previsao && previsao.ok ? previsao : null;
+  const regras = validarDatasRecepcaoV3(
+    { entrada: e?.data ?? null, previsao: p?.data ?? null, entradaObrigatoria: opts.entradaObrigatoria },
+    agora,
+  );
+  if (regras.length > 0) return { ok: false, erros: regras };
+  return {
+    ok: true,
+    // Fato dentro da folga do relógio é gravado no "agora" de quem normaliza (servidor).
+    entrada: e ? limitarFatoAoAgoraV3({ iso: e.data.iso, meta: e.meta }, agora) : null,
+    previsao: p ? { iso: p.data.iso, meta: p.meta } : null,
+  };
+}
+
+/**
+ * Campos do formulário ("Datas e prazos") → datas graváveis + erros por campo.
+ * Usa a MESMA normalização do servidor (`normalizarDatasRecepcaoV3`), então o
+ * formulário recusa exatamente o que o servidor recusaria — e aponta o campo.
+ */
+export function resolverDatasRecepcaoFormV3(
+  campos: { entrada: Pick<CampoDataOperacionalV3, "dia" | "hora">; previsao: Pick<CampoDataOperacionalV3, "dia" | "hora"> },
+  opts: { entradaObrigatoria: boolean; agora?: Date },
+): { entrada: DataOperacionalV3 | null; previsao: DataOperacionalV3 | null; erros: ErroCampoDataV3[] } {
+  const erros: ErroCampoDataV3[] = [];
+  const e = montarDataOperacionalOpcionalV3(campos.entrada);
+  if (!e && opts.entradaObrigatoria) erros.push({ campo: "dataEntrada", mensagem: `Informe a ${ROTULO_DATA_ENTRADA_V3.toLowerCase()}.` });
+  if (e && !e.ok) erros.push({ campo: "dataEntrada", mensagem: e.mensagem });
+  const p = montarDataOperacionalOpcionalV3(campos.previsao);
+  if (p && !p.ok) erros.push({ campo: "previsaoEntrega", mensagem: p.mensagem });
+  const entrada = e && e.ok ? e.valor : null;
+  const previsao = p && p.ok ? p.valor : null;
+  if (erros.length > 0) return { entrada, previsao, erros };
+  const r = normalizarDatasRecepcaoV3(
+    {
+      dataEntrada: entrada?.iso ?? "",
+      dataEntradaMeta: entrada?.meta,
+      previsaoEntrega: previsao?.iso,
+      previsaoEntregaMeta: previsao?.meta,
+    },
+    opts,
+  );
+  return { entrada, previsao, erros: r.ok ? [] : r.erros };
 }
 
 /** Quais passos (índice) têm pendência — para destacar no wizard. Ordem A..J. */

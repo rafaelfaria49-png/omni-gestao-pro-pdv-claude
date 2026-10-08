@@ -55,24 +55,8 @@ export const PRIO = {
   urgente: { label: "Urgente", fg: C.dangerFg, dot: C.danger },
 } as const;
 
-/** Ação primária por status (label + transição + etapa de destino). */
-export const PRIMARY: Record<
-  V4Status,
-  { label: string; to: V4Status; stage: V4Stage } | null
-> = {
-  aberta: { label: "Iniciar diagnóstico", to: "diagnostico", stage: "diagnostico" },
-  diagnostico: { label: "Enviar orçamento", to: "aguardando_aprovacao", stage: "orcamento" },
-  aguardando_aprovacao: { label: "Registrar aprovação", to: "aprovado", stage: "orcamento" },
-  aprovado: { label: "Iniciar serviço", to: "em_execucao", stage: "execucao" },
-  aguardando_peca: { label: "Marcar peça chegou", to: "em_execucao", stage: "execucao" },
-  em_execucao: { label: "Marcar pronta", to: "pronta", stage: "execucao" },
-  // "Receber pagamento" leva ao Financeiro (a baixa real vive no PDV de Serviço).
-  pronta: { label: "Receber pagamento", to: "entregue", stage: "financeiro" },
-  entregue: null,
-  cancelada: null,
-  // F-03 fail-closed: status não reconhecido NUNCA vira ação operacional.
-  desconhecido: null,
-};
+// A ação primária NÃO vive mais aqui (GOAL OPS-V4-FLUXO-CURTO-005): ela é derivada
+// do estado real da OS em `lib/operacoes-v4/proxima-acao-v4.ts`.
 
 /* ---- definições de etapas / módulos ---- */
 

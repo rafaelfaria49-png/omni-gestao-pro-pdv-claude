@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { C, fmt } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { useLojaAtiva } from "@/lib/loja-ativa";
@@ -24,13 +24,27 @@ import {
   type OrcamentoRapidoFormV4,
 } from "@/lib/operacoes-v4/orcamento-rapido-form";
 
+import {
+  alterarDataPropostaV3,
+  resolverDatasOrcamentoFormV3,
+  type CamposDatasOrcamentoV3,
+} from "@/lib/operacoes-v3/orcamento-rapido-model";
+import { diasEntreCivisV3, hojeNaLojaV3, validadeVencidaV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
+import { DataOperacionalCampoV3 } from "@/components/operacoes-v3/components/DataOperacionalCampoV3";
 import { AtendimentoModalShell } from "./atendimento/AtendimentoModalShell";
 import { AtendimentoAccordionSection } from "./atendimento/AtendimentoAccordionSection";
 import { ClienteAtendimentoSection } from "./atendimento/ClienteAtendimentoSection";
 import { AparelhoAtendimentoSection } from "./atendimento/AparelhoAtendimentoSection";
 import { CommercialOptionEditor } from "./atendimento/CommercialOptionEditor";
 import { ServicoCatalogLookup } from "./atendimento/ServicoCatalogLookup";
-import { atendInput, atendLabel } from "./atendimento/field-styles";
+import {
+  atendBlocoDatas,
+  atendBlocoDatasTitulo,
+  atendDataCampo,
+  atendGradeDatas,
+  atendInput,
+  atendLabel,
+} from "./atendimento/field-styles";
 
 export function OrcamentoRapidoModal({ v }: { v: V4Vals }) {
   if (!v.orcamentoRapidoOpen) return null;
@@ -44,10 +58,23 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [abertos, setAbertos] = useState({ cliente: true, aparelho: true, diagnostico: false, proposta: true, condicoes: false });
+  const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
+  const refsDatas = {
+    dataProposta: useRef<HTMLInputElement>(null),
+    validoAte: useRef<HTMLInputElement>(null),
+    dataEntrada: useRef<HTMLInputElement>(null),
+  };
+  const setDatas = (fn: (d: CamposDatasOrcamentoV3) => CamposDatasOrcamentoV3) => {
+    setForm((f) => ({ ...f, datas: fn(f.datas) }));
+    setErrosDatas({});
+  };
 
   const invalido = validarOrcamentoRapidoFormV4(form);
   const podeSalvar = !!sid && !invalido && !busy;
   const totais = previaTotaisOrcamentoRapidoV4(form);
+  const hoje = hojeNaLojaV3();
+  const diasProposta = form.datas.dataProposta.dia && form.datas.dataProposta.dia < hoje ? diasEntreCivisV3(form.datas.dataProposta.dia, hoje) : 0;
+  const vencida = validadeVencidaV3(form.datas.validoAteDia);
 
   const persistir = async (enviar: boolean) => {
     setErro(null);
@@ -55,17 +82,27 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
       setErro("Selecione uma loja ativa para criar o orçamento.");
       return;
     }
+    // Datas primeiro (mesma regra do servidor), com foco no campo do problema.
+    const datas = resolverDatasOrcamentoFormV3(form.datas);
+    if (datas.erros.length > 0 || !datas.datas) {
+      setErrosDatas(Object.fromEntries(datas.erros.map((e) => [e.campo, e.mensagem])));
+      const alvo = refsDatas[datas.erros[0]?.campo as keyof typeof refsDatas];
+      requestAnimationFrame(() => alvo?.current?.focus());
+      setErro("Revise as datas do orçamento.");
+      return;
+    }
     const invalidoAgora = validarOrcamentoRapidoFormV4(form);
     if (invalidoAgora) {
       setErro(invalidoAgora);
       return;
     }
+    const validadeDias = Math.max(0, diasEntreCivisV3(form.datas.dataProposta.dia, form.datas.validoAteDia));
     setBusy(true);
     try {
-      const resultado = await criarOrcamentoRapidoV3(sid, buildOrcamentoRapidoInputFromFormV4(form));
+      const resultado = await criarOrcamentoRapidoV3(sid, buildOrcamentoRapidoInputFromFormV4(form, datas.datas));
       await marcarOrcamentoPreOsV3(sid, resultado.osId, {
         origemAtendimento: form.origemAtendimento,
-        validadeDias: form.validadeDias,
+        validadeDias,
         prazoEstimado: form.prazoEstimado,
         observacaoCliente: form.observacaoCliente,
         observacaoInterna: form.observacaoInterna,
@@ -84,6 +121,8 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
       v.onOrcamentoRapidoCriado(resultado.osId);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível criar o orçamento.");
+      const novamente = resolverDatasOrcamentoFormV3(form.datas);
+      if (novamente.erros.length > 0) setErrosDatas(Object.fromEntries(novamente.erros.map((x) => [x.campo, x.mensagem])));
     } finally {
       setBusy(false);
     }
@@ -124,6 +163,80 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
         </>
       }
     >
+      <section aria-labelledby="orc-datas-titulo" style={atendBlocoDatas}>
+        <h3 id="orc-datas-titulo" style={atendBlocoDatasTitulo}>Datas e prazos</h3>
+        <div style={atendGradeDatas}>
+          <DataOperacionalCampoV3
+            ref={refsDatas.dataProposta}
+            id="orc-data"
+            rotulo="Data do orçamento"
+            ajuda="Quando a proposta foi feita. Hoje por padrão."
+            obrigatorio
+            permitirHora={false}
+            maxDia={hoje}
+            valor={form.datas.dataProposta}
+            onChange={(c) => setDatas((d) => alterarDataPropostaV3(d, c))}
+            erro={errosDatas.dataProposta || null}
+            aviso={diasProposta > 0 ? `Proposta de ${diasProposta} ${diasProposta === 1 ? "dia" : "dias"} atrás. O cadastro continua com a data de hoje.` : null}
+            estilos={atendDataCampo}
+          />
+          <DataOperacionalCampoV3
+            ref={refsDatas.validoAte}
+            id="orc-validade"
+            rotulo="Válido até"
+            ajuda="Último dia de validade da proposta."
+            obrigatorio
+            permitirHora={false}
+            minDia={form.datas.dataProposta.dia || undefined}
+            valor={{ dia: form.datas.validoAteDia, hora: "", horaAutomatica: false }}
+            onChange={(c) => setDatas((d) => ({ ...d, validoAteDia: c.dia, validadeEditada: true }))}
+            erro={errosDatas.validoAte || null}
+            aviso={vencida ? "Proposta já vencida: fica registrada assim, sem prorrogação." : null}
+            estilos={atendDataCampo}
+          />
+          <div style={{ minWidth: 0 }}>
+            <label htmlFor="orc-tempo-estimado" style={{ ...atendLabel, display: "block" }}>Tempo estimado após aprovação</label>
+            <input
+              id="orc-tempo-estimado"
+              value={form.prazoEstimado}
+              onChange={(e) => setForm((f) => ({ ...f, prazoEstimado: e.target.value }))}
+              placeholder="2 horas após aprovação"
+              aria-describedby="orc-tempo-estimado-ajuda"
+              style={atendInput}
+              autoComplete="off"
+            />
+            <p id="orc-tempo-estimado-ajuda" style={atendDataCampo.ajuda}>Duração do serviço depois do sim do cliente. Não é data de entrega.</p>
+          </div>
+        </div>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 7, marginTop: 11, fontSize: 12.5, color: C.body, lineHeight: 1.4, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={form.datas.aparelhoNaLoja}
+            onChange={(e) => setDatas((d) => ({ ...d, aparelhoNaLoja: e.target.checked }))}
+          />
+          <span>
+            <strong style={{ fontWeight: 600 }}>Aparelho já está na loja</strong>
+            <span style={{ display: "block", fontSize: 11, color: C.subtle }}>Marque só se o aparelho ficou aqui. Não aprova, não abre OS e não cobra nada.</span>
+          </span>
+        </label>
+        {form.datas.aparelhoNaLoja ? (
+          <div style={{ marginTop: 10, maxWidth: 420 }}>
+            <DataOperacionalCampoV3
+              ref={refsDatas.dataEntrada}
+              id="orc-entrada"
+              rotulo="Data de entrada do aparelho"
+              ajuda="Quando o aparelho realmente entrou na loja."
+              obrigatorio
+              maxDia={hoje}
+              valor={form.datas.dataEntrada}
+              onChange={(c) => setDatas((d) => ({ ...d, dataEntrada: c }))}
+              erro={errosDatas.dataEntrada || null}
+              estilos={atendDataCampo}
+            />
+          </div>
+        ) : null}
+      </section>
+
       <AtendimentoAccordionSection titulo="Cliente" aberto={abertos.cliente} onToggle={() => setAbertos((a) => ({ ...a, cliente: !a.cliente }))} resumo={form.clienteExistente?.nome || form.clienteNovoNome || undefined}>
         <ClienteAtendimentoSection
           storeId={lojaAtivaId}
@@ -237,14 +350,6 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
 
       <AtendimentoAccordionSection titulo="Condições" aberto={abertos.condicoes} onToggle={() => setAbertos((a) => ({ ...a, condicoes: !a.condicoes }))}>
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
-          <div>
-            <div style={atendLabel}>Validade (dias)</div>
-            <input type="number" min={1} value={form.validadeDias || ""} onChange={(e) => setForm((f) => ({ ...f, validadeDias: Math.max(1, Math.trunc(Number(e.target.value) || 7)) }))} style={atendInput} />
-          </div>
-          <div>
-            <div style={atendLabel}>Prazo estimado</div>
-            <input value={form.prazoEstimado} onChange={(e) => setForm((f) => ({ ...f, prazoEstimado: e.target.value }))} placeholder="2 horas após aprovação" style={atendInput} autoComplete="off" />
-          </div>
           <div>
             <div style={atendLabel}>Observação para o cliente</div>
             <textarea value={form.observacaoCliente} onChange={(e) => setForm((f) => ({ ...f, observacaoCliente: e.target.value }))} style={area} autoComplete="off" />

@@ -30,7 +30,7 @@ const STATUS_FINALIZADO: V4Status[] = ["entregue", "cancelada"];
 
 // "desconhecido" NÃO entra em STATUS_FINALIZADO de propósito: uma OS com status
 // inconsistente continua VISÍVEL na fila (some-la esconderia o problema) — o que
-// ela perde é a ação primária (`PRIMARY.desconhecido === null`).
+// ela perde é a ação primária (`derivarProximaAcaoV4` não oferece ação operacional).
 function isAtivo(os: OrdemServico): boolean {
   if (isOrcamentoPreOsAtivoV4(os)) return false;
   return !STATUS_FINALIZADO.includes(resolverStatusV4(os));

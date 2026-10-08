@@ -10,7 +10,14 @@
 // ============================================================================
 
 import { MAX_LINHAS_POR_GRUPO_V3, computeTotaisV3, type TotaisOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-model";
-import { montarServicosOrcamentoRapidoV3, type OrcamentoRapidoInputV3 } from "@/lib/operacoes-v3/orcamento-rapido-model";
+import {
+  montarServicosOrcamentoRapidoV3,
+  validadePadraoDiaV3,
+  type CamposDatasOrcamentoV3,
+  type OrcamentoRapidoDatasInputV3,
+  type OrcamentoRapidoInputV3,
+} from "@/lib/operacoes-v3/orcamento-rapido-model";
+import { campoAgoraV3, campoHojeV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 
 const MIN_VARIANTES = 2;
 
@@ -81,12 +88,15 @@ export interface OrcamentoRapidoFormV4 {
   solucaoSugerida: string;
   observacaoTecnica: string;
   validadeDias: number;
+  /** "Tempo estimado após aprovação" (texto). Não é entrada nem entrega. */
   prazoEstimado: string;
   observacaoCliente: string;
   observacaoInterna: string;
   itensFixos: OrcamentoRapidoItemFixoFormV4[];
   grupoRotulo: string;
   variantes: OrcamentoRapidoVarianteFormV4[];
+  /** "Datas e prazos": data do orçamento, validade e (opcional) entrada física. */
+  datas: CamposDatasOrcamentoV3;
 }
 
 export function novaVarianteVaziaV4(): OrcamentoRapidoVarianteFormV4 {
@@ -97,9 +107,22 @@ export function novoItemFixoVazioV4(): OrcamentoRapidoItemFixoFormV4 {
   return { id: uid("fix"), descricao: "", valor: 0, cortesia: false, custoV3: 0, quantidade: 1 };
 }
 
-/** Formulário vazio (estado inicial do modal, sempre que abre) — já com 2 variantes. */
-export function orcamentoRapidoFormVazioV4(): OrcamentoRapidoFormV4 {
+/** Datas iniciais: orçamento de hoje, validade padrão, aparelho fora da loja. */
+export function datasOrcamentoVaziasV4(agora: Date = new Date()): CamposDatasOrcamentoV3 {
+  const dataProposta = campoHojeV3(agora);
   return {
+    dataProposta,
+    validoAteDia: validadePadraoDiaV3(dataProposta.dia),
+    validadeEditada: false,
+    aparelhoNaLoja: false,
+    dataEntrada: campoAgoraV3(agora),
+  };
+}
+
+/** Formulário vazio (estado inicial do modal, sempre que abre) — já com 2 variantes. */
+export function orcamentoRapidoFormVazioV4(agora: Date = new Date()): OrcamentoRapidoFormV4 {
+  return {
+    datas: datasOrcamentoVaziasV4(agora),
     clienteModo: "existente",
     clienteExistente: null,
     clienteNovoNome: "",
@@ -194,7 +217,7 @@ export function validarOrcamentoRapidoFormV4(form: OrcamentoRapidoFormV4): strin
  * use `validarOrcamentoRapidoFormV4` (gating de UI) e a própria
  * `criarOrcamentoRapidoV3` (que valida de novo no servidor) antes de chamar.
  */
-export function buildOrcamentoRapidoInputFromFormV4(form: OrcamentoRapidoFormV4): OrcamentoRapidoInputV3 {
+export function buildOrcamentoRapidoInputFromFormV4(form: OrcamentoRapidoFormV4, datas?: OrcamentoRapidoDatasInputV3 | null): OrcamentoRapidoInputV3 {
   const cliente: OrcamentoRapidoInputV3["cliente"] =
     form.clienteModo === "existente"
       ? { modo: "existente", clienteId: clean(form.clienteExistente?.id), nome: clean(form.clienteExistente?.nome), telefone: clean(form.clienteExistente?.telefone) }
@@ -225,6 +248,8 @@ export function buildOrcamentoRapidoInputFromFormV4(form: OrcamentoRapidoFormV4)
     defeitoRelatado: form.defeitoRelatado.trim(),
     itensFixos: itensFixos.length ? itensFixos : undefined,
     grupo: { rotulo: form.grupoRotulo.trim(), variantes },
+    // Datas resolvidas por `resolverDatasOrcamentoFormV3` (proposta ≠ entrada física).
+    ...(datas ? { datas } : {}),
   };
 }
 

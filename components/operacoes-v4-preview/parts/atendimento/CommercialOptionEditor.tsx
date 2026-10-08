@@ -50,8 +50,8 @@ export function CommercialOptionEditor({
           <input value={value.descricaoCurta} onChange={(e) => onChange({ ...value, descricaoCurta: e.target.value })} placeholder="Ótima qualidade de imagem" style={atendInput} maxLength={120} autoComplete="off" />
         </div>
         <div>
-          <div style={atendLabel}>Prazo</div>
-          <input value={value.prazoTexto} onChange={(e) => onChange({ ...value, prazoTexto: e.target.value })} placeholder="2 horas" style={atendInput} maxLength={40} autoComplete="off" />
+          <div style={atendLabel}>Tempo estimado do serviço</div>
+          <input value={value.prazoTexto} onChange={(e) => onChange({ ...value, prazoTexto: e.target.value })} placeholder="2 horas" aria-label="Tempo estimado do serviço" title="Duração do serviço. Não é a previsão de entrega ao cliente." style={atendInput} maxLength={40} autoComplete="off" />
         </div>
         <div>
           <div style={atendLabel}>Selo</div>

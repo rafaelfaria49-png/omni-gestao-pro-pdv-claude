@@ -39,7 +39,7 @@ export type V4Status =
    * OPS-V4-STATUS-AUTHORITY-FIX-003 (F-03) — estado NÃO reconhecido. Não é um
    * status de negócio nem uma etapa do pipeline: é o resultado fail-closed de
    * `resolverStatusV4` quando a OS carrega um status fora do domínio conhecido.
-   * Nunca habilita ação primária (`PRIMARY.desconhecido === null`).
+   * Nunca habilita ação primária (`derivarProximaAcaoV4` → sem ação operacional).
    */
   | "desconhecido"
   | "cancelada";
@@ -77,6 +77,8 @@ export interface V4State {
   receberPagamento: boolean;
   /** Modal de confirmação "Cancelar OS" (GOAL OPS-V4-CANCELAR-OS-CONNECT-021). */
   cancelamentoOS: boolean;
+  /** Modal "Corrigir datas" (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001). */
+  corrigirDatas?: boolean;
   /** null = tela limpa (empty state); id = OS real selecionada. */
   selectedOsId: string | null;
   /**

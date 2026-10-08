@@ -270,15 +270,8 @@ export function CommandHeader({ v }: { v: V4Vals }) {
           </button>
         )}
 
-        {v.hasPrimary && (
-          <button type="button" onClick={v.onPrimary} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 33, padding: "0 14px", border: "none", background: C.primary, color: C.white, borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(79,70,229,.3)", whiteSpace: "nowrap", flex: "none" }}>
-            ✦ {v.primaryLabel}
-            {v.showKbd && <kbd style={{ fontSize: 10, background: "rgba(255,255,255,.22)", borderRadius: 4, padding: "1px 5px" }}>↵</kbd>}
-          </button>
-        )}
-        {v.noPrimary && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 33, padding: "0 12px", background: C.successBg2, color: C.successFg, borderRadius: 9, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", flex: "none" }}>✓ Fluxo concluído</span>
-        )}
+        {/* GOAL OPS-V4-FLUXO-CURTO-005: a ação primária vive só no bloco "Próxima
+            ação" (abaixo da pipeline) — sem CTA paralelo aqui, sem divergência. */}
 
         <div style={{ position: "relative", flex: "none" }}>
           <button type="button" onClick={v.toggleMore} title="Mais ações" style={{ width: 33, height: 33, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.muted, borderRadius: 9, fontSize: 16, cursor: "pointer" }}>⋯</button>

@@ -150,6 +150,11 @@ export function criarGuardaRascunhos<T = unknown>(): GuardaRascunhosV4<T> & {  s
       if (!p.salvar) return "aguardando";
       const ok = await p.salvar();
       if (!ok) return "aguardando";
+      // OPS-V4-FLUXO-CURTO-005 (rev 11): durante o salvamento a pendência pode ter
+      // sido cancelada ou substituída por outra saída. O dado salvo fica salvo,
+      // mas a saída capturada não vale mais: não executa `sair()` nem apaga a
+      // pendência vigente.
+      if (pendente !== p) return "aguardando";
       // Salvo com sucesso: o rascunho persistido é descartado da guarda e a
       // saída original (alvo capturado) é liberada.
       rascunhos.delete(p.chave);

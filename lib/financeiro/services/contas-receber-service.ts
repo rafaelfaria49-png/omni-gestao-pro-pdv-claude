@@ -4,6 +4,7 @@ import type { ContaReceberTitulo } from "@/generated/prisma"
 import { mergeFinanceiroPayload, appendFinanceiroHistorico } from "@/lib/financeiro/contracts/payload"
 import { RECEBER_STATUS, normalizeReceberStatus, type ReceberStatusCanon } from "@/lib/financeiro/contracts/status"
 import { safeMoney, isOverdueDateString, PAY_EPS } from "@/lib/financeiro/contracts/valores"
+import { parseFinanceiroLocalKey } from "@/lib/financeiro/contracts/local-key"
 
 /**
  * Cliente Prisma aceito pelos services de Contas a Receber: o singleton global OU um
@@ -41,6 +42,11 @@ export const CONTA_RECEBER_SERVER_OWNED_PAYLOAD_KEYS = [
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v)
+}
+
+/** Título da OS pela chave do adapter (`os-faturamento:{storeId}:{osId}`). */
+function ehTituloDaOS(localKey: string | null | undefined): boolean {
+  return parseFinanceiroLocalKey(localKey).type === "os_faturamento"
 }
 
 function safeStr(v: unknown): string {
@@ -219,8 +225,102 @@ function canonicalSnapshotStatus(params: {
   return params.pedido
 }
 
+// ─── trava do título ─────────────────────────────────────────────────────────
+//
+// Writers de título que leem a linha para derivar `payload`/`status` (upsert, cancelamento,
+// adapter da OS) leem SÓ depois de travá-la, na MESMA transação em que gravam: um pagamento
+// (CAS em `updatedAt`, trava do recebimento V3 ou lote) que commite no meio nunca é apagado
+// por um snapshot anterior. Sem `db`, abrem uma transação curta própria; com `db` (o `tx` do
+// chamador, ex. V3 com a OS e o título já travados), re-travar a mesma linha é no-op e
+// nenhuma trava nova entra na ordem do chamador (sem advisory, sem outra tabela).
+//
+// Título AUSENTE: `FOR UPDATE` sem linha não trava a ausência. A criação usa
+// `INSERT … ON CONFLICT DO NOTHING` (`createMany` + `skipDuplicates`): se outra transação
+// criou o título no meio, o INSERT espera o commit dela, não grava nada, e o writer volta a
+// travar e reler a linha que ela gravou — nunca a sobrescreve com o que montou sem ela.
+
+/** Transação curta dos writers de título (mesmos limites dos writers de pagamento). */
+const TX_TITULO_CONTA_RECEBER = { maxWait: 5_000, timeout: 15_000 } as const
+
+/** Releituras após perder a corrida de criação (o INSERT concorrente já commitou). */
+const MAX_TENTATIVAS_TITULO = 3
+
+/** Executa `fn` na transação do chamador ou numa transação curta própria. */
+export function naTransacaoDoTituloContaReceber<T>(
+  db: ContaReceberDbClient | undefined,
+  fn: (tx: ContaReceberDbClient) => Promise<T>,
+): Promise<T> {
+  return db ? fn(db) : prisma.$transaction(fn, TX_TITULO_CONTA_RECEBER)
+}
+
+/** `SELECT … FOR UPDATE` do título desta loja (por id OU localKey). `false` = não existe. */
+export async function travarTituloContaReceber(
+  tx: ContaReceberDbClient,
+  storeId: string,
+  ref: { id?: string; localKey?: string },
+): Promise<boolean> {
+  const rows = ref.id
+    ? await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "contas_receber_titulos" WHERE "id" = ${ref.id} AND "storeId" = ${storeId} FOR UPDATE
+      `
+    : await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "contas_receber_titulos" WHERE "storeId" = ${storeId} AND "localKey" = ${ref.localKey ?? ""} FOR UPDATE
+      `
+  return Array.isArray(rows) && rows.length > 0
+}
+
+export type DadosTituloContaReceber = {
+  descricao: string
+  cliente: string
+  valor: number
+  vencimento: string
+  status: string
+  payload: Prisma.InputJsonValue
+}
+
+/**
+ * Trava o título `(storeId, localKey)`, relê a linha MAIS RECENTE e grava o que `montar`
+ * derivar dela — UPDATE da linha travada, ou INSERT se ausente. Criação concorrente: o
+ * INSERT não sobrescreve; relê e remonta sobre a linha criada (até `MAX_TENTATIVAS_TITULO`).
+ */
+export async function gravarTituloContaReceberTravado(p: {
+  storeId: string
+  localKey: string
+  db?: ContaReceberDbClient
+  montar: (existente: ContaReceberTitulo | null) => DadosTituloContaReceber
+}): Promise<{ row: ContaReceberTitulo; criado: boolean }> {
+  return naTransacaoDoTituloContaReceber(p.db, async (tx) => {
+    for (let tentativa = 0; tentativa < MAX_TENTATIVAS_TITULO; tentativa++) {
+      // Só deriva UPDATE de linha que ESTA transação travou. Trava vazia = ausente, mesmo que
+      // uma leitura agora já enxergue o título criado no meio (ainda sem trava): vai para o
+      // INSERT sem sobrescrita, que não grava nada, e a próxima volta trava e relê a linha.
+      const travado = await travarTituloContaReceber(tx, p.storeId, { localKey: p.localKey })
+      const existente = travado ? await getContaReceberByLocalKey(p.storeId, p.localKey, tx) : null
+      const data = p.montar(existente)
+      if (existente) {
+        const row = await tx.contaReceberTitulo.update({ where: { id: existente.id }, data })
+        return { row, criado: false }
+      }
+      const r = await tx.contaReceberTitulo.createMany({
+        data: [{ storeId: p.storeId, localKey: p.localKey, ...data }],
+        skipDuplicates: true,
+      })
+      if (r.count === 1) {
+        const row = await getContaReceberByLocalKey(p.storeId, p.localKey, tx)
+        if (row) return { row, criado: true }
+      }
+      // Outro writer criou o título no meio: trava e remonta sobre o que ele gravou.
+    }
+    throw new Error("contas-receber-service: título alterado em paralelo; tente novamente")
+  })
+}
+
 /**
  * Upsert idempotente por `(storeId, localKey)` — compatível com adapter OS e rota PDV `/api/ops/contas-receber-persist`.
+ *
+ * Lê o título travado e grava na mesma transação (ver "trava do título"): o snapshot de
+ * tela/import nunca é comparado com um ledger antigo nem grava por cima de um pagamento ou
+ * de um título criado em paralelo.
  */
 export async function upsertContaReceber(input: UpsertContaReceberInput): Promise<ContaReceberTitulo> {
   const storeId = safeStr(input.storeId).trim()
@@ -229,11 +329,16 @@ export async function upsertContaReceber(input: UpsertContaReceberInput): Promis
     throw new Error("contas-receber-service: storeId e localKey são obrigatórios")
   }
 
-  const client = dbOf(input.db)
-  const existing = await client.contaReceberTitulo.findUnique({
-    where: { storeId_localKey: { storeId, localKey } },
+  const { row } = await gravarTituloContaReceberTravado({
+    storeId,
+    localKey,
+    db: input.db,
+    montar: (existing) => montarUpsertContaReceber(input, existing),
   })
+  return row
+}
 
+function montarUpsertContaReceber(input: UpsertContaReceberInput, existing: ContaReceberTitulo | null): DadosTituloContaReceber {
   let nextPayload: Record<string, unknown>
   const basePayload = existing?.payload as Record<string, unknown> | undefined
   // O chamador só é autoridade sobre o livro-razão se (a) enviar `historico` e (b) o
@@ -260,8 +365,12 @@ export async function upsertContaReceber(input: UpsertContaReceberInput): Promis
     nextPayload = appendFinanceiroHistorico(nextPayload, input.historicoEntrada)
   }
 
+  // Título da OS (`os-faturamento:*`): o valor é derivado da OS — só o adapter o regrava, sob
+  // a trava OS → título. Um snapshot legado inteiro (tela/sync) pode trazer a linha de antes
+  // do faturamento vigente; ele não troca esse valor. Títulos manuais/legados seguem o snapshot.
+  const valorDaOS = !!(input.replacePayload && existing && ehTituloDaOS(existing.localKey))
   const valor =
-    input.valor !== undefined ? safeMoney(input.valor) : safeMoney(existing?.valor ?? 0)
+    input.valor !== undefined && !valorDaOS ? safeMoney(input.valor) : safeMoney(existing?.valor ?? 0)
   const descricao = input.descricao !== undefined ? safeStr(input.descricao) : (existing?.descricao ?? "")
   const cliente = input.cliente !== undefined ? safeStr(input.cliente) : (existing?.cliente ?? "")
   const vencimento = input.vencimento !== undefined ? safeStr(input.vencimento) : (existing?.vencimento ?? "")
@@ -273,7 +382,7 @@ export async function upsertContaReceber(input: UpsertContaReceberInput): Promis
       ? canonicalSnapshotStatus({ existente: existing.status, payload: nextPayload, valor, pedido: statusPedido })
       : statusPedido
 
-  const data = {
+  return {
     descricao,
     cliente,
     valor,
@@ -281,32 +390,61 @@ export async function upsertContaReceber(input: UpsertContaReceberInput): Promis
     status: statusCanon,
     payload: nextPayload as unknown as Prisma.InputJsonValue,
   }
-
-  return client.contaReceberTitulo.upsert({
-    where: { storeId_localKey: { storeId, localKey } },
-    create: {
-      storeId,
-      localKey,
-      ...data,
-    },
-    update: data,
-  })
 }
 
+/**
+ * Cancela o título decidindo sobre a linha TRAVADA e relida na mesma transação (ver "trava
+ * do título"): um pagamento que commite no meio nunca é apagado, e as condições financeiras
+ * (pago/estornado/recebido) valem sobre o estado mais recente.
+ *
+ * `exigirSemRecebimento`: recusa (`titulo_com_recebimento`) se o título já tem QUALQUER valor
+ * recebido — contrato do cancelamento seguro da OS —, inclusive quando o título JÁ está
+ * cancelado (sem recebido, o já-cancelado segue sucesso idempotente). Sem a flag, o
+ * cancelamento genérico mantém o contrato atual. `db`: transação do chamador (ex.: a OS já
+ * travada antes do título — ordem OS → título).
+ */
 export async function cancelContaReceber(params: {
   storeId: string
   id?: string
   localKey?: string
   motivo?: string
   userLabel?: string
+  exigirSemRecebimento?: boolean
+  db?: ContaReceberDbClient
 }): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
-  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey })
-  if (!row) return { ok: false, reason: "not_found" }
+  return naTransacaoDoTituloContaReceber(params.db, async (tx) => {
+    // Mesma resolução de `findTitulo` (id, senão localKey), cada candidata travada antes de lida.
+    let row: ContaReceberTitulo | null = null
+    if (params.id && (await travarTituloContaReceber(tx, params.storeId, { id: params.id }))) {
+      row = await getContaReceberById(params.storeId, params.id, tx)
+    }
+    if (!row && params.localKey && (await travarTituloContaReceber(tx, params.storeId, { localKey: params.localKey }))) {
+      row = await getContaReceberByLocalKey(params.storeId, params.localKey, tx)
+    }
+    if (!row) return { ok: false, reason: "not_found" }
+    return cancelarTituloTravado(tx, row, params)
+  })
+}
 
+async function cancelarTituloTravado(
+  tx: ContaReceberDbClient,
+  row: ContaReceberTitulo,
+  params: { motivo?: string; userLabel?: string; exigirSemRecebimento?: boolean },
+): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
   const cur = normalizeReceberStatus(row.status)
-  if (cur === RECEBER_STATUS.CANCELADO) return { ok: true, data: row }
+  // Já cancelado (ex.: pelo Financeiro, que cancela sem a flag e conserva o ledger): o
+  // sucesso idempotente só vale se a pré-condição do chamador também vale na linha travada.
+  if (cur === RECEBER_STATUS.CANCELADO) {
+    if (params.exigirSemRecebimento && sumPagamentosFromHistoricoPayload(row.payload) > PAY_EPS) {
+      return { ok: false, reason: "titulo_com_recebimento" }
+    }
+    return { ok: true, data: row }
+  }
   if (cur === RECEBER_STATUS.ESTORNADO) return { ok: false, reason: "titulo_estornado" }
   if (cur === RECEBER_STATUS.PAGO) return { ok: false, reason: "titulo_pago_nao_cancela_aqui" }
+  if (params.exigirSemRecebimento && sumPagamentosFromHistoricoPayload(row.payload) > PAY_EPS) {
+    return { ok: false, reason: "titulo_com_recebimento" }
+  }
 
   const base = asPayloadRecord(row.payload)
   const merged = mergeFinanceiroPayload(base, {
@@ -320,7 +458,7 @@ export async function cancelContaReceber(params: {
     motivo: safeStr(params.motivo) || undefined,
   })
 
-  const updated = await prisma.contaReceberTitulo.update({
+  const updated = await tx.contaReceberTitulo.update({
     where: { id: row.id },
     data: {
       status: RECEBER_STATUS.CANCELADO,
@@ -331,7 +469,7 @@ export async function cancelContaReceber(params: {
 }
 
 /**
- * Grava a baixa no título.
+ * Grava a baixa (ou o estorno) no título.
  *
  * A escrita sempre carrega um **token otimista** (`updatedAt` lido junto com a linha).
  * `status` e `payload` são calculados em JS a partir da leitura de
@@ -491,8 +629,12 @@ export async function estornarContaReceber(params: {
   modo: EstornoContaReceberModo
   motivo?: string
   userLabel?: string
+  /** Quando informado, o estorno participa da transação (e das travas) do chamador. */
+  db?: ContaReceberDbClient
 }): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
-  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey })
+  // Escrita com token otimista (`gravarBaixaNoTitulo`): um update cego apagaria uma baixa
+  // gravada por outra transação entre esta leitura e a escrita (lost update).
+  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey, db: params.db })
   if (!row) return { ok: false, reason: "not_found" }
 
   const cur = normalizeReceberStatus(row.status)
@@ -513,14 +655,7 @@ export async function estornarContaReceber(params: {
       motivo: safeStr(params.motivo) || undefined,
       userLabel: safeStr(params.userLabel) || undefined,
     })
-    const updated = await prisma.contaReceberTitulo.update({
-      where: { id: row.id },
-      data: {
-        status: RECEBER_STATUS.ESTORNADO,
-        payload: withHist as unknown as Prisma.InputJsonValue,
-      },
-    })
-    return { ok: true, data: updated }
+    return gravarBaixaNoTitulo(dbOf(params.db), row, { status: RECEBER_STATUS.ESTORNADO, payload: withHist })
   }
 
   let lastIdx = -1
@@ -554,14 +689,7 @@ export async function estornarContaReceber(params: {
   else if (pago + PAY_EPS >= total) nextStatus = RECEBER_STATUS.PAGO
   else nextStatus = RECEBER_STATUS.PENDENTE
 
-  const updated = await prisma.contaReceberTitulo.update({
-    where: { id: row.id },
-    data: {
-      status: nextStatus,
-      payload: merged as unknown as Prisma.InputJsonValue,
-    },
-  })
-  return { ok: true, data: updated }
+  return gravarBaixaNoTitulo(dbOf(params.db), row, { status: nextStatus, payload: merged })
 }
 
 export type ContaReceberAuditItem = {

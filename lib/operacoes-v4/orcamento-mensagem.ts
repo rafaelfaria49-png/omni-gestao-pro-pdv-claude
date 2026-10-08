@@ -91,7 +91,7 @@ export function montarMensagemOrcamentoV4(view: OrcamentoClienteViewV4): string 
   }
 
   if (view.validade.validoAte) {
-    linhas.push(`⏳ Válido até ${formatDataBR(view.validade.validoAte)}`);
+    linhas.push(`⏳ Válido até ${view.validade.validoAteTexto || formatDataBR(view.validade.validoAte)}`);
   } else if (view.validade.politicaTexto) {
     linhas.push(`⏳ ${view.validade.politicaTexto}`);
   }

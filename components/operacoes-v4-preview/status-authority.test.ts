@@ -14,10 +14,25 @@ import { describe, it, expect } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import { resolverStatusV4, realStatusToV4, stageForStatus } from "./os-adapter";
 import { buildFilaItens, buildDashboardResumo } from "./rails-adapter";
-import { PRIMARY, STATUS_LABEL, TONE } from "./mock-data";
+import { STATUS_LABEL, TONE } from "./mock-data";
+import { derivarProximaAcaoV4 } from "@/lib/operacoes-v4/proxima-acao-v4";
 
 function mkOS(p: Record<string, unknown> & { id: string }): OrdemServico {
   return p as unknown as OrdemServico;
+}
+
+/**
+ * GOAL OPS-V4-FLUXO-CURTO-005: a ação primária deixou de ser o PRIMARY de
+ * mock-data — nasce de `derivarProximaAcaoV4` sobre a OS real. "Sem CTA de
+ * início" = nenhuma escrita operacional oferecida.
+ */
+function acaoDe(os: Record<string, unknown> & { id: string }) {
+  return derivarProximaAcaoV4({
+    os: mkOS(os),
+    carga: "estabelecida",
+    orcamento: { materializado: false },
+    financeiro: { projection: null, loading: false, error: null },
+  });
 }
 
 describe("resolverStatusV4 — precedência da autoridade", () => {
@@ -88,7 +103,10 @@ describe("resolverStatusV4 — precedência da autoridade", () => {
 
 describe("fail-closed — status desconhecido não vira ação operacional (F-03)", () => {
   it("não tem ação primária", () => {
-    expect(PRIMARY.desconhecido).toBeNull();
+    const acao = acaoDe({ id: "os-q", operacaoStatusV3: "status_que_nao_existe" });
+    expect(acao.efeito).toBe("none");
+    expect(acao.cta).toBeNull();
+    expect(acao.escrita).toBeUndefined();
   });
 
   it("tem rótulo e tom próprios (não se disfarça de 'Aberta')", () => {
@@ -107,14 +125,14 @@ describe("CTAs por status resolvido (F-02 · FASE 4)", () => {
   it("10. CANCELADA não gera CTA de início", () => {
     const status = resolverStatusV4({ operacaoStatus: "aberta", operacaoStatusV3: "cancelada" });
     expect(status).toBe("cancelada");
-    expect(PRIMARY[status]).toBeNull();
+    expect(acaoDe({ id: "os-c", operacaoStatus: "aberta", operacaoStatusV3: "cancelada" })).toMatchObject({ efeito: "none", cta: null });
     expect(stageForStatus(status)).toBe("historico");
   });
 
   it("11. ENTREGUE não gera CTA de início", () => {
     const status = resolverStatusV4({ operacaoStatus: "aprovado", operacaoStatusV3: "entregue" });
     expect(status).toBe("entregue");
-    expect(PRIMARY[status]).toBeNull();
+    expect(acaoDe({ id: "os-e", operacaoStatus: "aprovado", operacaoStatusV3: "entregue" })).toMatchObject({ efeito: "none", cta: null });
     expect(stageForStatus(status)).toBe("entrega");
   });
 
@@ -122,8 +140,10 @@ describe("CTAs por status resolvido (F-02 · FASE 4)", () => {
     const status = resolverStatusV4({ operacaoStatus: "diagnostico", operacaoStatusV3: "pronta" });
     expect(status).toBe("pronta");
     expect(stageForStatus(status)).toBe("entrega");
-    // A ação de "pronta" leva ao Financeiro/Entrega — nunca a diagnóstico.
-    expect(PRIMARY[status]?.stage).toBe("financeiro");
+    // A ação de "pronta" depende do financeiro (Financeiro/Entrega) — nunca diagnóstico.
+    const acao = acaoDe({ id: "os-p", operacaoStatus: "diagnostico", operacaoStatusV3: "pronta" });
+    expect(acao.stage).toBe("financeiro");
+    expect(acao.escrita).toBeUndefined();
   });
 });
 
@@ -182,6 +202,6 @@ describe("regressão de fila — OS-2026-00002 / OS-2026-00003", () => {
     expect(fila).toHaveLength(1);
     expect(fila[0]!.status).toBe("desconhecido");
     expect(fila[0]!.statusLabel).toBe("Status não reconhecido");
-    expect(PRIMARY[fila[0]!.status]).toBeNull();
+    expect(acaoDe({ id: "os-x", operacaoStatusV3: "vish" })).toMatchObject({ efeito: "none", cta: null });
   });
 });

@@ -72,8 +72,20 @@ describe("Operações V4 — arquitetura do workspace focado", () => {
     expect(sections.match(/case "/g)).toHaveLength(4);
   });
 
-  it("inicia a Entrada em Recepção", () => {
-    expect(workspace).toContain('useState<EntradaGroupId>("recepcao")');
+  it("GOAL 004 — abre na primeira área com complemento faltando (derivada do servidor), não sempre em Recepção", () => {
+    expect(workspace).not.toContain('useState<EntradaGroupId>("recepcao")');
+    expect(workspace).toContain("derivarPendenciasEntradaV4(v.realOS)");
+    expect(workspace).toContain("primeiraAreaEntradaV4(grupos)");
+    // Escolha manual congela a área (refresh não troca).
+    expect(workspace).toMatch(/const selectGroup = [\s\S]*areaDecididaRef\.current = true/);
+  });
+
+  it("GOAL 004 — rail sem numeração de passos nem progresso 'x de 4'", () => {
+    expect(entranceRail).not.toContain("groupChipStep");
+    expect(entranceRail).not.toContain("progressbar");
+    expect(entranceRail).not.toContain("padStart");
+    expect(entranceRail).toContain("Complementar entrada");
+    expect(workspace).not.toContain("padStart");
   });
 
   it("Recepção mostra o que já veio da abertura e só pede o que falta", () => {
@@ -100,24 +112,41 @@ describe("Operações V4 — arquitetura do workspace focado", () => {
     expect(workspace).toContain("<EntradaSections group={active}");
   });
 
-  it("só avança depois que o save do grupo retorna sucesso", () => {
-    expect(workspace).toMatch(/const saved = await saveGroup\(active\);[\s\S]*if \(saved && next\) setActive\(next\)/);
+  it("GOAL 004 (A04/A05) — salvar mantém a área ativa: sem 'Salvar e continuar', 'Anterior' ou avanço", () => {
+    expect(workspace).not.toContain("Salvar e continuar");
+    expect(workspace).not.toContain("saveAndContinue");
+    expect(workspace).not.toContain(">Anterior<");
+    expect(workspace).not.toMatch(/setActive\(next\)/);
+    expect(workspace).toContain("Salvar alterações");
   });
 
   it("mantém o grupo atual quando a persistência falha", () => {
-    const saveGroup = workspace.slice(workspace.indexOf("const saveGroup"), workspace.indexOf("const saveAndContinue"));
+    const saveGroup = workspace.slice(workspace.indexOf("const saveGroup"), workspace.indexOf("const registrarExplicito"));
     expect(saveGroup).toMatch(/if \(!saved\)[\s\S]*return false/);
     expect(saveGroup).not.toContain("setActive(");
   });
 
-  it("reusa os cinco handlers e mapeadores reais da Entrada", () => {
+  it("reusa os cinco handlers e mapeadores reais da Entrada (salvar localizado por área)", () => {
     for (const contract of [
       "v.salvarDadosBasicos(toDadosBasicosInput(db))",
       "v.salvarIdentificacao(toIdentificacaoInput(ed))",
-      "v.salvarProvaEntrada(toProvaEntradaInput(ed))",
+      "v.salvarProvaEntrada(toProvaEntradaInput({ ...ed, estadoFisico: savedEd.estadoFisico, avarias: savedEd.avarias }))",
+      "v.salvarProvaEntrada(toProvaEntradaInput({ ...ed, credenciais: savedEd.credenciais }))",
       "v.salvarChecklist(toChecklistInput(ed))",
       "v.salvarAcessorios(toAcessoriosInput(ed))",
     ]) expect(workspace).toContain(contract);
+  });
+
+  it("GOAL 004 — registros explícitos passam pelos wrappers com opção explícita", () => {
+    expect(workspace).toContain("v.salvarAcessorios(toAcessoriosInput(ed), { registrarSemAlteracao: true })");
+    expect(workspace).toContain("{ confirmarEstadoFisico: true }");
+    const acessorios = hook.slice(hook.indexOf("const salvarAcessorios = useCallback"), hook.indexOf("const salvarIdentificacao = useCallback"));
+    expect(acessorios).toContain('opcoes?.registrarSemAlteracao === true');
+    expect(acessorios).toContain("salvarAcessoriosEntradaV3(sid, osId, acessorios, seed)");
+    const prova = hook.slice(hook.indexOf("const salvarProvaEntrada = useCallback"), hook.indexOf("const detailCarregada"));
+    expect(prova).toContain("opcoes?.confirmarEstadoFisico === true");
+    expect(prova).toContain("esp.estadoFisico = seed.estadoFisico");
+    expect(prova).toContain("esp.avarias = seed.avarias");
   });
 
   it("retira Contexto do fluxo e abre drawer de 320px pelo header", () => {

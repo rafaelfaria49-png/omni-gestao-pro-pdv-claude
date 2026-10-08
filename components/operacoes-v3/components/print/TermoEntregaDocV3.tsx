@@ -74,7 +74,7 @@ export function TermoEntregaDocV3({ doc }: { doc: TermoEntregaDoc }) {
 
       <section className="mt-3 break-inside-avoid">
         <h2 className="mb-1 border-b border-zinc-400 pb-0.5 text-[11px] font-bold uppercase tracking-wide text-zinc-700">Entrega</h2>
-        <Campo rotulo="Data da entrega" valor={doc.dataEntrega ? formatData(doc.dataEntrega) : undefined} />
+        <Campo rotulo="Data da entrega" valor={doc.dataEntregaTexto || (doc.dataEntrega ? formatData(doc.dataEntrega) : undefined)} />
         <Campo rotulo="Recebido por" valor={doc.recebidoPor} />
         {doc.observacao ? <Campo rotulo="Observação" valor={doc.observacao} /> : null}
       </section>

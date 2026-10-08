@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Printer } from "lucide-react";
 import type { ComprovanteReciboV3 } from "@/lib/operacoes-v3/payment-model";
+import { formatarVencimentoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { ButtonV3 } from "../UiV3";
 import { formatBRL, formatDataHora } from "../../lib/format";
 
@@ -47,12 +48,17 @@ export function ReciboPreviewV3({ recibo, onClose }: { recibo: ComprovanteRecibo
 
   if (!open || !mounted || !recibo) return null;
 
+  // Recebimento misto: o dinheiro recebido agora e o saldo a prazo nunca se misturam.
+  const aPrazo = recibo.aPrazo ?? null;
+  const formalizacao = recibo.tipoComprovante === "formalizacao_a_prazo";
+  const titulo = formalizacao ? "Resumo de Formalização a Prazo" : "Comprovante de Recebimento";
+
   return createPortal(
     <div data-og-recibo-overlay className="fixed inset-0 z-[80] overflow-y-auto bg-zinc-700/60">
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
 
       <div data-no-print className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-2.5 shadow-sm">
-        <span className="truncate text-sm font-semibold text-foreground">Comprovante de Recebimento · OS {recibo.numeroOS}</span>
+        <span className="truncate text-sm font-semibold text-foreground">{titulo} · OS {recibo.numeroOS}</span>
         <div className="flex items-center gap-2">
           <ButtonV3 variant="ghost" onClick={onClose}>
             <ArrowLeft className="h-4 w-4" aria-hidden /> Voltar
@@ -66,7 +72,7 @@ export function ReciboPreviewV3({ recibo, onClose }: { recibo: ComprovanteRecibo
       <div className="flex justify-center px-3 py-6">
         <div id="og-recibo-root" className="w-full max-w-[520px] rounded-md bg-white p-6 text-black shadow-lg">
           <div className="border-b border-zinc-300 pb-3 text-center">
-            <h1 className="text-base font-bold uppercase tracking-wide">Comprovante de Recebimento</h1>
+            <h1 className="text-base font-bold uppercase tracking-wide">{titulo}</h1>
             <p className="mt-0.5 text-xs text-zinc-500">{recibo.intencaoLabel} · {formatDataHora(recibo.dataHora)}</p>
           </div>
 
@@ -76,32 +82,77 @@ export function ReciboPreviewV3({ recibo, onClose }: { recibo: ComprovanteRecibo
             <Linha rotulo="Equipamento" valor={recibo.equipamento} />
           </dl>
 
-          <div className="mt-4 rounded border border-zinc-300">
-            <div className="border-b border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold uppercase text-zinc-600">
-              Formas de pagamento
-            </div>
-            <table className="w-full text-sm">
-              <tbody>
-                {recibo.formas.map((f, i) => (
-                  <tr key={`${f.forma}-${i}`} className="border-b border-zinc-100 last:border-0">
-                    <td className="px-3 py-1.5">{f.label}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums">{formatBRL(f.valor)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-zinc-50 font-semibold">
-                  <td className="px-3 py-1.5">Valor pago</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{formatBRL(recibo.valorPago)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {aPrazo ? (
+            <>
+              {recibo.formas.length > 0 ? (
+                <div className="mt-4 rounded border border-zinc-300">
+                  <div className="border-b border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold uppercase text-zinc-600">
+                    Forma recebida
+                  </div>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {recibo.formas.map((f, i) => (
+                        <tr key={`${f.forma}-${i}`} className="border-b border-zinc-100 last:border-0">
+                          <td className="px-3 py-1.5">{f.label}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{formatBRL(f.valor)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
 
-          <dl className="mt-4 space-y-1.5 text-sm">
-            <Linha rotulo="Total da OS" valor={formatBRL(recibo.totalOS)} />
-            <Linha rotulo="Recebido acumulado" valor={formatBRL(recibo.recebidoAcumulado)} />
-            <Linha rotulo="Saldo restante" valor={formatBRL(recibo.saldoRestante)} forte />
-            <Linha rotulo="Situação" valor={recibo.statusLabel} />
-          </dl>
+              <dl className="mt-4 space-y-1.5 text-sm">
+                <Linha rotulo="Total da OS" valor={formatBRL(recibo.totalOS)} />
+                {(recibo.recebidoAnteriormente ?? 0) > 0 ? (
+                  <Linha rotulo="Recebido anteriormente" valor={formatBRL(recibo.recebidoAnteriormente ?? 0)} />
+                ) : null}
+                <Linha rotulo="Recebido nesta operação" valor={formatBRL(recibo.valorPago)} forte={!formalizacao} />
+                {recibo.formas.length > 0 ? (
+                  <Linha rotulo="Forma recebida" valor={recibo.formas.map((f) => f.label).join(" + ")} />
+                ) : null}
+                <Linha rotulo="Saldo a prazo" valor={formatBRL(aPrazo.valor)} forte />
+                <Linha rotulo="Vencimento" valor={formatarVencimentoV3(aPrazo.vencimento)} />
+                <Linha rotulo="Situação" valor={recibo.situacaoLabel ?? recibo.statusLabel} />
+              </dl>
+
+              <p className="mt-3 border-t border-zinc-200 pt-2 text-xs text-zinc-600">
+                {formalizacao
+                  ? "Nenhum valor foi recebido nesta operação: o saldo foi formalizado a prazo, com o vencimento acima."
+                  : "O saldo a prazo NÃO foi recebido: continua em aberto até o vencimento acima."}
+                {aPrazo.observacao ? ` Obs. a prazo: ${aPrazo.observacao}` : ""}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mt-4 rounded border border-zinc-300">
+                <div className="border-b border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold uppercase text-zinc-600">
+                  Formas de pagamento
+                </div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {recibo.formas.map((f, i) => (
+                      <tr key={`${f.forma}-${i}`} className="border-b border-zinc-100 last:border-0">
+                        <td className="px-3 py-1.5">{f.label}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{formatBRL(f.valor)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-zinc-50 font-semibold">
+                      <td className="px-3 py-1.5">Valor pago</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{formatBRL(recibo.valorPago)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <dl className="mt-4 space-y-1.5 text-sm">
+                <Linha rotulo="Total da OS" valor={formatBRL(recibo.totalOS)} />
+                <Linha rotulo="Recebido acumulado" valor={formatBRL(recibo.recebidoAcumulado)} />
+                <Linha rotulo="Saldo restante" valor={formatBRL(recibo.saldoRestante)} forte />
+                <Linha rotulo="Situação" valor={recibo.statusLabel} />
+              </dl>
+            </>
+          )}
 
           {recibo.observacao ? (
             <p className="mt-3 border-t border-zinc-200 pt-2 text-xs text-zinc-600">Obs.: {recibo.observacao}</p>
