@@ -3459,7 +3459,7 @@ describe("OPS-V4-POSVENDA-RETORNO-GARANTIAS-006 — actions/readers reais", () =
     expect(orquestrador).toMatch(/abrirRetornoV3\(sid, origem, \{[\s\S]*operacaoId: comando\.operacaoId/)
     expect(orquestrador).toContain("finalizarRetornoV3(sid, osId, retornoId, { observacao })")
     expect(orquestrador).toContain("r.atendimento?.id")
-    expect(orquestrador).toContain("if (!mesmoContexto()) return { ok: true")
+    expect(orquestrador).toMatch(/if \(!mesmoContexto\(\)\) \{[\s\S]*?return \{ ok: true[^}]*navegou: false/)
     expect(orquestrador).toMatch(/const finalizarRetorno = useCallback\([\s\S]*runWrite\(/)
     expect(orquestrador).toMatch(/catch \(e\) \{[\s\S]*reloadOrdens\(\);[\s\S]*reloadDetail\(\);[\s\S]*reloadFinancial\(\);[\s\S]*notify\(/)
   })
