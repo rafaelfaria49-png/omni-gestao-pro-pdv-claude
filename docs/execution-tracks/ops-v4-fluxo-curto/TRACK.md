@@ -5,15 +5,15 @@
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
   "title": "Operações V4 — fluxo curto",
-  "plan_rev": 10,
+  "plan_rev": 11,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
 -->
 
 Fonte de intenção: plano funcional de 19/09/2026 e autorização operacional
-ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-005, plan_rev 10 (rev 9 +
-ajuste do test_command por falha preexistente fora do escopo),
+ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-005, plan_rev 11 (rev 9 +
+test_command da rev 10 + desbloqueio humano da rev 11, com exceção na guarda),
 fornecida em 07/10/2026.
 
 ## Escopo ativo
@@ -95,6 +95,10 @@ Node/Vercel, configuração de deploy, .env e produção mutante continuam
 fechados.
 
 Não alterar app/actions/operacoes.ts nem lib/operacoes-v3/**.
+Rev 11 (desbloqueio após o teto de tentativas): única exceção fora da allowlist
+original — components/operacoes-v4-preview/use-entrada-draft-guard.ts, só em
+confirmarSalvamento (não executar saída cancelada/substituída durante o salvamento),
+conforme o GOAL.
 Motor financeiro (recebimento misto, ledger, idempotência, estorno, caixa,
 ContaReceber, movimentações) intocável: necessidade de editá-lo = parar e
 reportar. Escrever somente na allowlist do GOAL/open.
