@@ -57,6 +57,18 @@ export function decimalCanonico(valor: string | null | undefined, casas = 2): st
   return valor
 }
 
+/** Jornada usa o contrato decimal string, com limite próprio; dinheiro não muda. */
+export function jornadaSemanal(valor: unknown, obrigatoria = false): string | null {
+  if (valor == null || valor === "") {
+    if (obrigatoria) throw new PessoasError("JORNADA_INVALIDA", 400)
+    return null
+  }
+  if (typeof valor !== "string" || valor.trim() !== valor || !/^(0|[1-9]\d{0,2})\.\d{2}$/.test(valor) || Number(valor) > 168) {
+    throw new PessoasError("JORNADA_INVALIDA", 400)
+  }
+  return valor
+}
+
 export function cpfNormalizado(valor: string | null | undefined): string | null {
   if (valor == null || valor.trim() === "") return null
   if (!/^[\d.\-\s]+$/.test(valor)) throw new PessoasError("CPF_INVALIDO")

@@ -1,0 +1,599 @@
+{
+  "head": "427962fcfadabf2bb36848ba4a5dfd3107d338bc",
+  "base": "4e87fb13f53fa9f78e229d88b1b8566f95262ad0",
+  "total": 95,
+  "skipped": 0,
+  "todo": 0,
+  "integration": 15,
+  "invariants": {
+    "check": 10,
+    "index": 7,
+    "trigger": 10,
+    "function": 4,
+    "sourceSha256": "ff735fd5a69d6f7c4e57a26c557953ef3383711ebbe431fa3eb81173209d7baf"
+  },
+  "hardening": 46,
+  "pwa": {
+    "nextPwaVersion": "10.2.9",
+    "provas": [
+      {
+        "url": "/api/pessoas",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/documentos",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/documentos",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/documentos",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/documentos?categoria=contrato",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/documentos?categoria=contrato",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/documentos?categoria=contrato",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/funcionarios",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/funcionarios",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/funcionarios",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/funcionarios?_rsc=synthetic",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/funcionarios?_rsc=synthetic",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/funcionarios?_rsc=synthetic",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/anexo.json",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/anexo.json",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/anexo.json",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/anexo.js",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/anexo.js",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/pessoas/anexo.js",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/anexo.css",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/anexo.css",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/anexo.css",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/foto.png",
+        "headers": {},
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/foto.png",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/dashboard/pessoas/foto.png",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1",
+          "Purpose": "prefetch"
+        },
+        "handler": "NetworkOnly"
+      },
+      {
+        "url": "/api/version",
+        "headers": {},
+        "handler": "NetworkFirst",
+        "cache": "apis"
+      },
+      {
+        "url": "/dashboard/estoque",
+        "headers": {},
+        "handler": "NetworkFirst",
+        "cache": "pages"
+      },
+      {
+        "url": "/dashboard/estoque?_rsc=synthetic",
+        "headers": {
+          "RSC": "1"
+        },
+        "handler": "NetworkFirst",
+        "cache": "pages-rsc"
+      },
+      {
+        "url": "/dashboard/estoque?_rsc=synthetic",
+        "headers": {
+          "RSC": "1",
+          "Next-Router-Prefetch": "1"
+        },
+        "handler": "NetworkFirst",
+        "cache": "pages-rsc-prefetch"
+      },
+      {
+        "url": "/api/pessoas-extra",
+        "headers": {},
+        "handler": "NetworkFirst",
+        "cache": "apis"
+      },
+      {
+        "url": "/dashboard/pessoas-extra",
+        "headers": {},
+        "handler": "NetworkFirst",
+        "cache": "pages"
+      },
+      {
+        "url": "https://outra.example.invalid/api/pessoas/documentos",
+        "headers": {},
+        "handler": "NetworkFirst",
+        "cache": "cross-origin"
+      },
+      {
+        "url": "https://outra.example.invalid/dashboard/pessoas",
+        "headers": {},
+        "handler": "NetworkFirst",
+        "cache": "cross-origin"
+      }
+    ],
+    "mensagensPessoas": 96,
+    "mensagensOutras": 24,
+    "workerName": "swe-worker-5c72df51bb1f6ee0.js",
+    "workerRevision": "d92f86d064c9a9375d4cad1d122d9b0d",
+    "workerSha256": "99f03b6f01f3d56e93cd2a670e28c94fbe9c9d0554711d012842e3971e638a7d",
+    "swSha256": "8c778b21c829c21e423afe2937f753bfce0a189ea4443fc221f1cf285555992c",
+    "routes": [
+      {
+        "method": "GET",
+        "kind": "NetworkFirst",
+        "options": {
+          "cacheName": "start-url",
+          "plugins": [
+            {}
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "NetworkOnly",
+        "options": {}
+      },
+      {
+        "method": "GET",
+        "kind": "CacheFirst",
+        "options": {
+          "cacheName": "google-fonts-webfonts",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 4,
+                "maxAgeSeconds": 31536000
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "StaleWhileRevalidate",
+        "options": {
+          "cacheName": "google-fonts-stylesheets",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 4,
+                "maxAgeSeconds": 604800
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "StaleWhileRevalidate",
+        "options": {
+          "cacheName": "static-font-assets",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 4,
+                "maxAgeSeconds": 604800
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "StaleWhileRevalidate",
+        "options": {
+          "cacheName": "static-image-assets",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 64,
+                "maxAgeSeconds": 2592000
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "CacheFirst",
+        "options": {
+          "cacheName": "next-static-js-assets",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 64,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "StaleWhileRevalidate",
+        "options": {
+          "cacheName": "next-image",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 64,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "CacheFirst",
+        "options": {
+          "cacheName": "static-audio-assets",
+          "plugins": [
+            {
+              "kind": "RangeRequestsPlugin",
+              "options": {}
+            },
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "CacheFirst",
+        "options": {
+          "cacheName": "static-video-assets",
+          "plugins": [
+            {
+              "kind": "RangeRequestsPlugin",
+              "options": {}
+            },
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "StaleWhileRevalidate",
+        "options": {
+          "cacheName": "static-js-assets",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 48,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "StaleWhileRevalidate",
+        "options": {
+          "cacheName": "static-style-assets",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "StaleWhileRevalidate",
+        "options": {
+          "cacheName": "next-data",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "NetworkFirst",
+        "options": {
+          "cacheName": "static-data-assets",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "NetworkFirst",
+        "options": {
+          "cacheName": "apis",
+          "networkTimeoutSeconds": 10,
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 16,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "NetworkFirst",
+        "options": {
+          "cacheName": "pages-rsc-prefetch",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "NetworkFirst",
+        "options": {
+          "cacheName": "pages-rsc",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "NetworkFirst",
+        "options": {
+          "cacheName": "pages",
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 86400
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "GET",
+        "kind": "NetworkFirst",
+        "options": {
+          "cacheName": "cross-origin",
+          "networkTimeoutSeconds": 10,
+          "plugins": [
+            {
+              "kind": "ExpirationPlugin",
+              "options": {
+                "maxEntries": 32,
+                "maxAgeSeconds": 3600
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "offline": {
+      "fetches": 1,
+      "cacheAccesses": 0,
+      "fallback": false
+    }
+  },
+  "typecheck": "PASS",
+  "lint": "PASS",
+  "build": "PASS",
+  "p2034MaxAttempts": 3,
+  "cleanup": "PASS"
+}

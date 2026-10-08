@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import {
   abrirCpf, comandoId, cpfNormalizado, dataCivil, dataCivilDto, decimalCanonico,
-  exigirModulo, hashComando, PessoasError, protegerCpf,
+  exigirModulo, hashComando, jornadaSemanal, PessoasError, protegerCpf,
 } from "./domain"
 import { pendenciasCadastro } from "./cadastro-validation"
 
@@ -63,5 +63,18 @@ describe("Pessoas: codecs e proteção", () => {
     expect(ausentes).toContain("salarioBase")
     expect(comandoId("abcdefgh")).toBe("abcdefgh")
     expect(() => comandoId("1")).toThrow()
+  })
+})
+
+describe("Pessoas: jornada semanal canônica", () => {
+  it.each(["0.00", "44.00", "167.99", "168.00"])("aceita %s sem arredondar", (valor) => {
+    expect(jornadaSemanal(valor)).toBe(valor)
+  })
+  it.each(["-0.01", "168.01", "999.99", "1", "1.2", "01.00", "NaN", "1,00", "44.000", "44.00\n", 44, NaN, true, {}, ["44.00"]])("recusa tipo/formato/limite inválido (%s)", (valor) => {
+    expect(() => jornadaSemanal(valor)).toThrowError(expect.objectContaining({ code: "JORNADA_INVALIDA", status: 400 }))
+  })
+  it.each([undefined, null, ""])("ausência é opcional só no rascunho (%s)", (valor) => {
+    expect(jornadaSemanal(valor)).toBeNull()
+    expect(() => jornadaSemanal(valor, true)).toThrowError(expect.objectContaining({ code: "JORNADA_INVALIDA", status: 400 }))
   })
 })

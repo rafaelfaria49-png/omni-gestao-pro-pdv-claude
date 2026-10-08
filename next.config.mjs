@@ -1,13 +1,65 @@
 import withPWAInit from "@ducanh2912/next-pwa"
 
+/** Guarda o worker auxiliar antes de qualquer aquecimento/leitura/gravação Pessoas. */
+function protegerWorkerPessoas() {
+  const original = self.onmessage
+  if (typeof original !== "function") throw new Error("PESSOAS_PWA_WORKER_CONTRACT_CHANGED")
+  self.onmessage = function (event) {
+    if (event.data?.type === "__FRONTEND_NAV_CACHE__" || event.data?.type === "__START_URL_CACHE__") {
+      const url = new URL(event.data.url, self.location.href)
+      if (url.origin === self.location.origin && (
+        url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
+        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
+      )) return Promise.resolve()
+    }
+    return original.call(this, event)
+  }
+}
+
+class PessoasNavigationWorkerPlugin {
+  apply(compiler) {
+    const nome = "PessoasNavigationWorkerPlugin"
+    compiler.hooks.thisCompilation.tap(nome, (compilation) => {
+      compilation.hooks.processAssets.tap({
+        name: nome,
+        // Workbox calcula manifesto/revisions em OPTIMIZE_TRANSFER - 10.
+        stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_TRANSFER - 20,
+      }, () => {
+        const workers = compilation.getAssets().filter(({ name }) => /(?:^|[/\\])swe-worker-[a-f0-9]+\.js$/.test(name))
+        if (workers.length !== 1) throw new Error("PESSOAS_PWA_WORKER_MISSING_OR_AMBIGUOUS")
+        const worker = workers[0]
+        const source = worker.source.source().toString()
+        // Falhar diante de outro contrato, sem substituir silenciosamente código arbitrário.
+        if (!source.includes("__FRONTEND_NAV_CACHE__") || !source.includes("__START_URL_CACHE__") ||
+            !/self\.onmessage\s*=/.test(source) || !/caches\.open\(["']pages["']\)/.test(source)) {
+          throw new Error("PESSOAS_PWA_WORKER_CONTRACT_CHANGED")
+        }
+        compilation.updateAsset(worker.name, new compiler.webpack.sources.RawSource(
+          source + ";(" + protegerWorkerPessoas.toString() + ")();\n",
+        ))
+      })
+    })
+  }
+}
+
 const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
   register: true,
   skipWaiting: true,
   cacheOnFrontEndNav: true,
+  extendDefaultRuntimeCaching: true,
   workboxOptions: {
     disableDevLogs: true,
+    runtimeCaching: [{
+      // Callback autocontido: Workbox o serializa para o SW de produção.
+      urlPattern: ({ sameOrigin, url }) => sameOrigin && (
+        url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
+        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
+      ),
+      handler: "NetworkOnly",
+      method: "GET",
+    }],
   },
 })
 
@@ -69,6 +121,10 @@ const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   /** Next.js 16 usa Turbopack por padrão; o plugin PWA injeta webpack — config vazia evita erro de build. */
   turbopack: {},
+  webpack(config, { isServer, dev }) {
+    if (!isServer && !dev) config.plugins.push(new PessoasNavigationWorkerPlugin())
+    return config
+  },
   env,
   /**
    * CATALOGO-APARELHOS-SEEDS-TRACING-002 — o loader server-only (`lib/catalogo-aparelhos/
