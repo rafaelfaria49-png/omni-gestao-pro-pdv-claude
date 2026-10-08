@@ -28,12 +28,17 @@ function APrazoResumo({ amount, dueAt }: { amount: number; dueAt: string | null 
   </div>;
 }
 
-export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
+/**
+ * `somenteSheet` (GOAL OPS-V4-FLUXO-CURTO-006): o MESMO componente/contrato,
+ * hospedado na etapa Entrega só para abrir o sheet ali (`v.openReceberPagamentoAqui`)
+ * — sem o card inline do Financeiro e sem nenhuma regra nova.
+ */
+export function ReceberPagamentoV4({ v, somenteSheet = false }: { v: V4Vals; somenteSheet?: boolean }) {
   if (!v.osSelected) return null;
-  return <ReceberPagamentoFormV4 key={v.recebimentoContextKey} v={v} />;
+  return <ReceberPagamentoFormV4 key={v.recebimentoContextKey} v={v} somenteSheet={somenteSheet} />;
 }
 
-function ReceberPagamentoFormV4({ v }: { v: V4Vals }) {
+function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: boolean }) {
   const pdv = v.pdvServico;
   const [open, setOpen] = useState(false);
   const [linhas, setLinhas] = useState<LinhaRecebimentoV4[]>([]);
@@ -64,6 +69,14 @@ function ReceberPagamentoFormV4({ v }: { v: V4Vals }) {
   useEffect(() => {
     if (v.receberPagamentoOpen && !open && !v.financial.loading && !v.financial.error && projection?.expectedTotal != null) { seedForm(); setOpen(true); }
   }, [v.receberPagamentoOpen, open, v.financial.loading, v.financial.error, projection?.expectedTotal, seedForm]);
+  // Hospedado na Entrega: se a OS deixou de ter o que receber (quitada/sem total/
+  // bloqueada por outra sessão), o pedido de abertura cai — nunca reabre depois.
+  const naoRecebivelAgora =
+    !!projection && !pendencia &&
+    (v.recebimento.semTotal || v.recebimento.quitado || (!projection.canReceive && projection.financialStatus !== "CHARGE_NOT_CREATED"));
+  useEffect(() => {
+    if (somenteSheet && formAberto && !busy && !v.financial.loading && naoRecebivelAgora) { setOpen(false); v.closeReceberPagamento(); }
+  }, [somenteSheet, formAberto, busy, v.financial.loading, naoRecebivelAgora, v]);
   useEffect(() => {
     if (!formAberto || !mounted) return;
     const anterior = document.activeElement;
@@ -73,6 +86,9 @@ function ReceberPagamentoFormV4({ v }: { v: V4Vals }) {
 
   const cancelar = () => { setOpen(false); v.closeReceberPagamento(); };
   const openForm = () => { seedForm(); setOpen(true); };
+  // Hospedado na Entrega: nada inline — só o sheet quando aberto e pronto (a
+  // mesma instância mantém o rascunho vivo durante a releitura após recusa).
+  if (somenteSheet && (!formAberto || v.financial.loading || v.financial.error || !projection || projection.expectedTotal == null || pdv.loading)) return null;
   if (v.financial.loading) return <div style={box}>Carregando projeção financeira…</div>;
   if (v.financial.error || !projection || projection.expectedTotal == null) return <div style={box}>Recebimento bloqueado: situação financeira indisponível ou incompleta.</div>;
   const pagamento = { total: projection.expectedTotal, recebido: projection.receivedTotal ?? 0, saldo };

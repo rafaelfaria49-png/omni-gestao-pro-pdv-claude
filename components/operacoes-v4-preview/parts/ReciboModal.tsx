@@ -7,10 +7,15 @@
  * sessão (`v.pdvServico.ultimoRecibo`, resultado de `receberOSV3`), mostra o
  * comprovante de verdade — mesma estrutura de dados do `ComprovanteReciboV3` da
  * V3, só a apresentação é V4-nativa. A impressão reusa o motor real
- * `ReciboPreviewV3` (browser print — sem PDF novo). */
+ * `ReciboPreviewV3` (browser print — sem PDF novo).
+ *
+ * GOAL OPS-V4-FLUXO-CURTO-006: sem comprovante da sessão (reload, outra máquina),
+ * a reimpressão usa a evidência PERSISTIDA da mesma OS (`v.reciboPersistido`,
+ * gravada pelos writers canônicos e ainda válida contra o recebido atual) —
+ * nunca o recibo de outra OS, nunca um comprovante estornado. */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { C, fmt } from "../tokens";
 import { formatarVencimentoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { fmtDataHora } from "../os-adapter";
@@ -18,19 +23,42 @@ import type { V4Vals } from "../use-v4-preview";
 import { ReciboPreviewV3 } from "@/components/operacoes-v3/components/print/ReciboPreviewV3";
 
 export function ReciboModal({ v }: { v: V4Vals }) {
-  const [printOpen, setPrintOpen] = useState(false);
   if (!v.reciboOpen) return null;
-  const recibo = v.pdvServico.ultimoRecibo;
+  return <ReciboModalConteudo v={v} />;
+}
+
+function ReciboModalConteudo({ v }: { v: V4Vals }) {
+  const [printOpen, setPrintOpen] = useState(false);
+  const fechar = useRef<HTMLButtonElement>(null);
+  // Teclado: foco entra no diálogo e volta ao controle que o abriu.
+  useEffect(() => {
+    const anterior = document.activeElement;
+    fechar.current?.focus();
+    return () => { if (anterior instanceof HTMLElement && anterior.isConnected) anterior.focus(); };
+  }, []);
+  const leitura = v.reciboPersistido;
+  const persistido = leitura?.estado === "disponivel" ? leitura.persistido.recibo : null;
+  const recibo = v.pdvServico.ultimoRecibo ?? persistido;
+  const reimpressao = !v.pdvServico.ultimoRecibo && !!persistido;
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 70, background: "rgba(17,19,26,.42)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ width: 380, maxWidth: "100%", background: C.surface, borderRadius: 14, boxShadow: "0 24px 60px rgba(17,19,26,.3)", overflow: "hidden" }}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="recibo-os-title"
+      onKeyDown={(e) => { if (e.key === "Escape" && !printOpen) { e.preventDefault(); v.closeRecibo(); } }}
+      style={{ position: "absolute", inset: 0, zIndex: 70, background: "rgba(17,19,26,.42)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+    >
+      <div style={{ width: 380, maxWidth: "100%", maxHeight: "100%", overflowY: "auto", background: C.surface, borderRadius: 14, boxShadow: "0 24px 60px rgba(17,19,26,.3)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${C.line2}` }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>🧾 {recibo?.tipoComprovante === "formalizacao_a_prazo" ? "Resumo de formalização a prazo" : "Recibo de pagamento"}</div>
-          <button type="button" onClick={v.closeRecibo} style={{ width: 26, height: 26, border: "none", background: C.muted50, borderRadius: 7, color: C.muted, fontSize: 15, cursor: "pointer" }}>×</button>
+          <div id="recibo-os-title" style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>🧾 {recibo?.tipoComprovante === "formalizacao_a_prazo" ? "Resumo de formalização a prazo" : "Recibo de pagamento"}</div>
+          <button ref={fechar} type="button" aria-label="Fechar comprovante" onClick={v.closeRecibo} style={{ width: 26, height: 26, border: "none", background: C.muted50, borderRadius: 7, color: C.muted, fontSize: 15, cursor: "pointer" }}>×</button>
         </div>
         <div style={{ padding: 22 }}>
           {recibo ? (
             <div style={{ fontSize: 12, color: C.body, lineHeight: 1.6 }}>
+              {reimpressao && (
+                <div style={{ fontSize: 10.5, color: C.subtle, textAlign: "center", marginBottom: 10 }}>Reimpressão do último comprovante registrado nesta OS.</div>
+              )}
               <div style={{ textAlign: "center", marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>OS {recibo.numeroOS}</div>
                 <div style={{ fontSize: 11, color: C.subtle }}>{recibo.cliente} · {recibo.equipamento}</div>
@@ -56,6 +84,17 @@ export function ReciboModal({ v }: { v: V4Vals }) {
               </div>}
               {recibo.observacao && <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 9 }}>{recibo.observacao}</div>}
               <div style={{ fontSize: 10, color: C.faint2, marginTop: 11, textAlign: "center" }}>{fmtDataHora(recibo.dataHora)} · {recibo.operador}</div>
+            </div>
+          ) : leitura?.estado === "confirmando" ? (
+            <div style={{ textAlign: "center", color: C.subtle, fontSize: 12.5, lineHeight: 1.6, padding: "10px 4px 18px" }}>
+              Confirmando os recebimentos desta OS…
+            </div>
+          ) : leitura?.estado === "indisponivel" ? (
+            <div style={{ textAlign: "center", color: C.subtle, fontSize: 12.5, lineHeight: 1.6, padding: "10px 4px 18px" }}>
+              O comprovante do recebimento atual não está disponível para reimpressão.
+              <div style={{ fontSize: 11, color: C.faint2, marginTop: 8 }}>
+                O histórico desta OS mudou depois do último comprovante (estorno ou baixa fora do recebimento da OS). Confira o <b>Histórico de recebimentos</b> no Financeiro.
+              </div>
             </div>
           ) : (
             <div style={{ textAlign: "center", color: C.subtle, fontSize: 12.5, lineHeight: 1.6, padding: "10px 4px 18px" }}>

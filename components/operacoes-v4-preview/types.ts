@@ -75,6 +75,13 @@ export interface V4State {
   estornoRecebimento: boolean;
   /** Sheet de recebimento imediato (GOAL OPS-V4-RECEBIMENTO-TRANSVERSAL-005). */
   receberPagamento: boolean;
+  /**
+   * GOAL OPS-V4-FLUXO-CURTO-006: loja+OS (`recebimentoContextKey`) em que o
+   * sheet de recebimento, o recibo ou o estorno foram abertos. As três
+   * superfícies só valem para esse alvo — trocar de OS/loja nunca as abre na
+   * seleção nova.
+   */
+  financeiroAlvo?: string | null;
   /** Modal de confirmação "Cancelar OS" (GOAL OPS-V4-CANCELAR-OS-CONNECT-021). */
   cancelamentoOS: boolean;
   /** Modal "Corrigir datas" (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001). */
