@@ -8,7 +8,7 @@ Semáforo: 🟢 rodando · 🟡 esperando humano · 🔴 bloqueado ou check falh
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | contador | 🟡 amarelo | PAUSED | MEDIO | — | — | 17 | 0 | 2026-08-20T20:16:31.782Z |
 | fiscal | 🔴 vermelho | BLOCKED | ALTO | — | — | 8 | 1 | 2026-09-30T20:10:05.016Z |
-| ops-v4-fluxo-curto | 🟢 verde | RUNNING | ALTO | OPS-V4-FLUXO-CURTO-005 | — | 4 | 0 | 2026-10-04T01:44:28.820Z |
+| ops-v4-fluxo-curto | 🔴 vermelho | BLOCKED | ALTO | — | — | 4 | 1 | 2026-10-08T00:46:35.363Z |
 | pdv | 🟡 amarelo | PAUSED | ALTO | — | — | 3 | 0 | 2026-08-29T21:00:50.288Z |
 | pdv-parity-suite-n5-a-foundation-001 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-16T14:36:01.262Z |
 | pdv-parity-suite-n5-b1-core-gaps-001 | 🟢 verde | RUNNING | ALTO | PDV-PARITY-N5-B1-CURRENT-MAIN-CORRECTION-003 | — | 2 | 0 | 2026-09-18T01:34:19.946Z |

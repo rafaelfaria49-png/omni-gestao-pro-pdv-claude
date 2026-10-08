@@ -6,7 +6,7 @@
   "id": "OPS-V4-FLUXO-CURTO-005",
   "track": "ops-v4-fluxo-curto",
   "title": "Workspace operacional claro: próxima ação real, contexto e execução sem ambiguidade",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "plan_rev": 10,
