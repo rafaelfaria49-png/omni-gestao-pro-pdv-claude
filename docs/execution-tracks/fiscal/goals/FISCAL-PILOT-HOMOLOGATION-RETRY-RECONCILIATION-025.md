@@ -21,7 +21,7 @@
   "risk_tier": "ALTO",
   "reversibilidade": "alta",
   "plan_ref": "FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025",
-  "plan_rev": 3,
+  "plan_rev": 4,
   "execution_mode": "PLAN_ONLY",
   "implementation_authorized": false,
   "previous_review": {
@@ -58,7 +58,8 @@ Em 2026-10-08, o humano autorizou IMPLEMENTER=CODEX, IMPLEMENTER_FAMILY=OPENAI,
 REVIEWER_FAMILY=GOOGLE, REVIEWER_PREFERRED=GEMINI/ANTIGRAVITY e
 ALTERNATIVE_REVIEWER_FAMILY=ANTHROPIC. Esta atualização substitui exclusivamente a
 exigência anterior de re-R Anthropic/Claude Code, preservada abaixo como histórico.
-A revisão anterior OpenAI é referência dos problemas; não aprova o próprio corretivo.
+A revisão OpenAI mencionada pelo humano é referência, sem aprovação do próprio corretivo.
+A R formal anterior sobre e3ea899 foi Anthropic; sua atribuição histórica permanece preservada.
 A aprovação final deve vir de IA independente de outra família.
 
 O corretivo ativo continua sendo B1-B4 documentais deste mesmo GOAL, PLAN_ONLY e com
@@ -106,6 +107,9 @@ Após revisão independente e autorização humana futura, um ato governado deve
 branch/worktree, allowlist, testes e gates antes de executar `status fiscal` -> `open fiscal`.
 Cada autorização vale somente para seu escopo; nenhum gate posterior é herdado implicitamente.
 
+Os registros da revisão documental 2, inclusive pedidos exclusivos Anthropic e seus
+resultados, são histórico; a autorização vigente acima prevalece. plan_rev atual é 4.
+
 ## Fontes e preflight
 
 - Fonte canônica curta: [evidência vigente do 024](../../../ai-execution/_evidence/FISCAL-PILOT-HOMOLOGATION-CORRECTED-RETRY-READINESS-024.md),
@@ -149,6 +153,16 @@ específico; divergência impede a operação.
 A matriz versionada classifica 588 **somente em NFeAutorizacao4** como REJECTED, terminal=true,
 numeroConsumido=false, requiresInutilizacao=false, requiresConsultation=false, sem retry
 automático. NOT_FOUND, isoladamente, não prova rejeição 588 nem autoriza XML corrigido.
+
+
+Complemento documental da R independente de 881ee4a (P3): incluir explicitamente
+app/api/internal/fiscal/queue/route.ts, action=inutilizar, nos testes e caminhos
+prováveis de 025-B. O guard em solicitarInutilizacaoAdministrativa e enqueueInutilizacao
+continua obrigatório e protege ambas as rotas e chamadas diretas antes de qualquer write.
+Também exigir recusa de cancelFiscalQueueJob/action=cancel para o job original protegido:
+cancelamento genérico não pode alterar seu terminal reconciliado, payload ou contadores,
+nem quebrar replay idempotente; testar zero writes e isolamento de jobs não protegidos.
+A implementação desses guards permanece futura, sujeita a 025-A/B e seus gates.
 
 ### Evidência admissível do 588 histórico — B2
 

@@ -5,7 +5,8 @@ Em 2026-10-08, o humano autorizou IMPLEMENTER=CODEX, IMPLEMENTER_FAMILY=OPENAI,
 REVIEWER_FAMILY=GOOGLE, REVIEWER_PREFERRED=GEMINI/ANTIGRAVITY e
 ALTERNATIVE_REVIEWER_FAMILY=ANTHROPIC. Esta atualização substitui exclusivamente a
 exigência anterior de re-R Anthropic/Claude Code, preservada abaixo como histórico.
-A revisão anterior OpenAI é referência dos problemas; não aprova o próprio corretivo.
+A revisão OpenAI mencionada pelo humano é referência, sem aprovação do próprio corretivo.
+A R formal anterior sobre e3ea899 foi Anthropic; sua atribuição histórica permanece preservada.
 A aprovação final deve vir de IA independente de outra família.
 
 O corretivo ativo continua sendo B1-B4 documentais deste mesmo GOAL, PLAN_ONLY e com
@@ -16,7 +17,26 @@ antes da revisão independente; se indisponível, parar no gate de revisão.
 REREVIEW_REQUIRED=true; REREVIEW_EXECUTOR_FAMILY=google;
 ALTERNATIVE_REVIEWER_FAMILY=anthropic; REVIEW_VERDICT=PENDING.
 
-# GOAL 025 — preflight e auditoria de persistência do plano
+
+## Revisão independente e ajustes documentais posteriores
+
+R_FAMILY=anthropic; MODEL=claude-opus-5-5;
+REVIEWED_SHA=881ee4a42b61c15cd5fd3f3026f9455a3bfe55b4;
+R_VERDICT=APPROVE, exclusivamente do plano B1-B4, sem gates adicionais.
+Session de revisão: 5052b8e6-ee15-4cbb-804d-3447c05dc558.
+Gemini preferencial indisponível: autenticação recusada por UNSUPPORTED_CLIENT;
+utilizada a alternativa Anthropic expressamente autorizada, somente como revisora.
+
+Quatro sugestões P3 incorporadas nesta revisão documental 4: distinguir referência
+OpenAI de R formal anterior Anthropic; citar rota interna action=inutilizar e seus
+testes; exigir proteção contra cancel genérico do job reconciliado; marcar registros
+rev. 2 como históricos. A rota interna e cancel foram incluídos no contrato futuro,
+sem implementação funcional, novos gates ou alteração de estado real.
+
+Validações desta atualização: verify --all e git diff --check PASS; ledger e derivados
+intactos. Os registros de parser/scan e plan_rev=2 abaixo pertencem à revisão anterior,
+sem reivindicação de nova execução desses checks. Nova R do SHA atualizado é necessária.
+# Registro histórico — preflight e auditoria do plano, revisões 1 e 2
 
 Data: 2026-10-08 (America/Sao_Paulo). Escopo: **PLAN-ONLY**.
 GOAL: [FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025](../../execution-tracks/fiscal/goals/FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025.md).
