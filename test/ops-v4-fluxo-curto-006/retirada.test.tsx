@@ -660,7 +660,8 @@ describe("OPS-V4-FLUXO-CURTO-006 rev 13 — teclado do recibo (R3-P2, teclado re
     const fundo = vi.fn();
     const confirmarEntrega = vi.fn(async () => true);
     const a = os("a", "pronta", { timeline: timelineQuitada() });
-    montar({ os: a, fin: { projection: projecao(a, PAGO) }, confirmarEntrega, fundo });
+    const cenario: Cenario = { os: a, fin: { projection: projecao(a, PAGO) }, confirmarEntrega, fundo };
+    const view = montar(cenario);
     const user = userEvent.setup();
     const abridor = screen.getByRole("button", { name: "Abrir recibo" });
     await user.click(abridor);
@@ -670,7 +671,7 @@ describe("OPS-V4-FLUXO-CURTO-006 rev 13 — teclado do recibo (R3-P2, teclado re
       within(d).getByRole("button", { name: "Imprimir comprovante" }),
       within(d).getByRole("button", { name: "Fechar" }),
     ];
-    return { user, d, abridor, fundo, confirmarEntrega, controles, primeiro: controles[0]!, ultimo: controles[2]! };
+    return { user, d, abridor, fundo, confirmarEntrega, controles, primeiro: controles[0]!, ultimo: controles[2]!, view, cenario, a };
   }
 
   it("K01 foco inicial fica dentro do recibo", async () => {
@@ -758,6 +759,43 @@ describe("OPS-V4-FLUXO-CURTO-006 rev 13 — teclado do recibo (R3-P2, teclado re
     await user.keyboard("{Enter}");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(abridor);
+  });
+
+  it("outro diálogo modal por cima do recibo fica com o foco; o fundo continua bloqueado", async () => {
+    const { d } = await abrir();
+    const outro = document.createElement("div");
+    outro.setAttribute("role", "dialog");
+    outro.setAttribute("aria-modal", "true");
+    const botao = document.createElement("button");
+    botao.textContent = "Controle do outro diálogo";
+    outro.append(botao);
+    document.body.append(outro);
+    try {
+      act(() => botao.focus());
+      expect(document.activeElement).toBe(botao);
+      act(() => screen.getByRole("button", { name: "Ação do fundo" }).focus());
+      expect(d.contains(document.activeElement)).toBe(true);
+    } finally {
+      outro.remove();
+    }
+  });
+
+  it("comprovante deixa de valer com a impressão aberta: a impressão fecha e o teclado volta a ficar preso no recibo", async () => {
+    const { user, d, fundo, view, cenario, a } = await abrir();
+    await user.click(within(d).getByRole("button", { name: "Imprimir comprovante" }));
+    expect(await screen.findByRole("button", { name: /Voltar/ })).toBeTruthy();
+    // Releitura: o título agora tem uma reposição sem identidade (Financeiro) → comprovante indisponível.
+    const reposto: Titulo = { status: "pago", historico: [{ tipo: "pagamento", valor: 100, loteId: "op-e1" }, { tipo: "pagamento", valor: 200 }] };
+    view.trocar({ ...cenario, fin: { projection: projecao(a, reposto) } });
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Voltar/ })).toBeNull());
+    const dialogo = screen.getByRole("dialog", { name: /Recibo de pagamento/ });
+    expect(within(dialogo).getByText("O comprovante do recebimento atual não está disponível para reimpressão.")).toBeTruthy();
+    expect(dialogo.contains(document.activeElement)).toBe(true);
+    for (let i = 0; i < 4; i++) {
+      await user.tab({ shift: i % 2 === 0 });
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+    }
+    expect(fundo).not.toHaveBeenCalled();
   });
 
   it("impressão por cima: Escape fecha só a impressão e o foco volta ao Imprimir, ainda preso no recibo", async () => {
