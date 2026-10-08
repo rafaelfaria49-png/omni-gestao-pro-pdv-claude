@@ -164,7 +164,7 @@ async function filhasDe(storeId: string, origemId: string) {
   const rows = await prisma.ordemServico.findMany({ where: { storeId }, select: { id: true, numero: true, valorTotal: true, status: true, clienteId: true, payload: true } });
   return rows.filter((r) => (r.payload as Payload)?.vinculoRetornoV3?.osOrigemId === origemId);
 }
-const ativas = (rows: Array<{ payload: unknown }>) => rows.filter((r) => !(r.payload as Payload).vinculoRetornoV3?.descartadoEm);
+const ativas = <T extends { payload: unknown }>(rows: T[]): T[] => rows.filter((r) => !(r.payload as Payload).vinculoRetornoV3?.descartadoEm);
 async function efeitos(storeId: string) {
   const [titulos, caixa, movimentos, vendas, estoque, clientes, garantias] = await Promise.all([
     prisma.contaReceberTitulo.count({ where: { storeId } }),
