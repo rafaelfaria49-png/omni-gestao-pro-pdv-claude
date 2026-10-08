@@ -6,10 +6,10 @@
   "id": "OPS-V4-FLUXO-CURTO-005",
   "track": "ops-v4-fluxo-curto",
   "title": "Workspace operacional claro: próxima ação real, contexto e execução sem ambiguidade",
-  "status": "BLOCKED",
+  "status": "READY",
   "class": "C3",
   "risk_tier": "ALTO",
-  "plan_rev": 10,
+  "plan_rev": 11,
   "branch": "goal/ops-v4-fluxo-curto-005",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/entrada-pendencias.test.ts lib/operacoes-v4/entrada-workspace.test.ts lib/operacoes-v3/status-machine.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/financial-projection-surfaces.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-005\" && npx --no-install vitest run --config test/ops-v4-fluxo-curto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-004/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx playwright test e2e/specs/operacoes-v4-fluxo-curto-003.spec.ts e2e/specs/operacoes-v4-fluxo-curto-004.spec.ts e2e/specs/operacoes-v4-fluxo-curto-005.spec.ts --retries=0 --workers=1",
@@ -21,6 +21,7 @@
     "components/operacoes-v4-preview/parts/WorkspaceView.tsx",
     "components/operacoes-v4-preview/parts/CommandHeader.tsx",
     "components/operacoes-v4-preview/use-v4-preview.ts",
+    "components/operacoes-v4-preview/use-entrada-draft-guard.ts",
     "components/operacoes-v4-preview/mock-data.ts",
     "components/operacoes-v4-preview/types.ts",
     "components/operacoes-v4-preview/rails-adapter.ts",
@@ -346,6 +347,40 @@ continua atualizado pelo 005, mas roda filtrado pelo marcador
 "OPS-V4-FLUXO-CURTO-005" (blocos de próxima ação/CTA que este GOAL
 reescreveu). As 10 falhas preexistentes ficam relatadas como follow-up
 separado; não são corrigidas aqui (escopo fechado).
+
+## Revisão 11 — desbloqueio humano e exceção na guarda (07/10/2026)
+
+Histórico das tentativas (R independente OpenAI, gpt-6.1-sol, read-only):
+- tentativa 1, R1 em f94cb6b: 1 P1 + 2 P2 (escrita adiada pela guarda executava após
+  Cancelar e travava outra OS; botão da Execução contornava a trava; detalhe nulo
+  virava carregamento eterno) — corrigidos em 3548abd;
+- tentativa 2, R2 em 3548abd: P1=0, 2 P2 (navegação do bloco cancelada na guarda
+  movia a etapa de outra OS; Execução gravava com detalhe nulo) — corrigidos em e3af67c;
+- tentativa 3, R3 em e3af67c: P1=0, 1 P2 (intenção de navegação do bloco superada
+  pela pipeline ainda se cumpre quando o salvamento antigo termina).
+
+Causa raiz comum: em components/operacoes-v4-preview/use-entrada-draft-guard.ts
+(GOAL 001), confirmarSalvamento chama sair() depois do await salvar() sem conferir
+se a pendência capturada ainda é a vigente (cancelada ou substituída por outra saída
+durante o salvamento). O teto de 3 tentativas esgotou: BLOCKED (by=decisao, d524625).
+Decisão do proprietário (07/10/2026): desbloquear este mesmo GOAL com esta revisão,
+sem 005B/005-FIX. Tentativas reiniciam pelo desbloqueio humano (protocolo §3).
+
+Exceção justificada — única ampliação da allowlist:
+components/operacoes-v4-preview/use-entrada-draft-guard.ts, somente em
+confirmarSalvamento: depois do salvamento bem-sucedido, liberar a saída capturada
+apenas se ela ainda for a pendência vigente. Cancelada ou substituída durante o
+salvamento: não chamar sair(), não apagar a pendência nova e devolver "aguardando".
+Proibido nessa exceção: mudar o contrato público da guarda, chaves, solicitarSaida,
+confirmarDescarte, cancelarSaida, publicação de rascunho, Entrada ou qualquer outro
+comportamento do GOAL 001. Qualquer outra mudança fora da allowlist: parar antes.
+
+Regressões obrigatórias da exceção: runner do GOAL 001
+(test/ops-v4-fluxo-curto/vitest.config.ts, inclui use-entrada-draft-guard.test.tsx)
+verde e teste novo em test/ops-v4-fluxo-curto-005/** com salvamento retido +
+Cancelar, + substituição pela pipeline, + troca de OS — nenhuma saída antiga
+executa. Contrato funcional, matriz, gates e test_command (rev 10) inalterados.
+Nova R independente OpenAI sobre o HEAD corrigido, P0=P1=P2=0.
 
 ## Autocorreção
 
