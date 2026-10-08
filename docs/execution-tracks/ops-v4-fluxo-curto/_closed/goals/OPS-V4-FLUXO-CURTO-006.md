@@ -6,7 +6,7 @@
   "id": "OPS-V4-FLUXO-CURTO-006",
   "track": "ops-v4-fluxo-curto",
   "title": "Recebimento e retirada: caminho curto com dinheiro e estoque corretos",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C4",
   "risk_tier": "ALTO",
   "plan_rev": 12,
