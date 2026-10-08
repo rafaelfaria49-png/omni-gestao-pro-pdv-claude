@@ -66,6 +66,12 @@ export interface V4State {
   novaOS: boolean;
   /** Launcher `+ Novo` (GOAL OPS-V4-NOVO-ATENDIMENTO-COMERCIAL-001). */
   novoAtendimento: boolean;
+  /**
+   * GOAL OPS-V4-FLUXO-CURTO-007: fluxo Retorno / Garantia aberto — loja em que foi
+   * aberto e OS original pré-selecionada (`null` = escolher no seletor). Só vale
+   * para essa loja: trocar de loja fecha o fluxo.
+   */
+  retornoFluxo?: { lojaId: string; origemOsId: string | null } | null;
   recibo: boolean;
   /** Modal "Atendimento rápido" (GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014). */
   atendimentoRapido: boolean;

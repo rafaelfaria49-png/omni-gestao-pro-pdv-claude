@@ -3454,9 +3454,12 @@ describe("OPS-V4-POSVENDA-RETORNO-GARANTIAS-006 — actions/readers reais", () =
 
   it("reusa abrirRetornoV3/finalizarRetornoV3 pelo wrapper de reload confirmado", () => {
     expect(orquestrador).toContain('from "@/lib/operacoes-v3/retorno-actions"')
-    expect(orquestrador).toContain("abrirRetornoV3(sid, osId, { motivo, observacao })")
+    // GOAL OPS-V4-FLUXO-CURTO-007: abertura pela OS original, idempotente por operacaoId,
+    // e a resposta só navega no mesmo contexto (loja + geração do fluxo).
+    expect(orquestrador).toMatch(/abrirRetornoV3\(sid, origem, \{[\s\S]*operacaoId: comando\.operacaoId/)
     expect(orquestrador).toContain("finalizarRetornoV3(sid, osId, retornoId, { observacao })")
-    expect(orquestrador).toContain("result.atendimento?.id")
+    expect(orquestrador).toContain("r.atendimento?.id")
+    expect(orquestrador).toContain("if (!mesmoContexto()) return { ok: true")
     expect(orquestrador).toMatch(/const finalizarRetorno = useCallback\([\s\S]*runWrite\(/)
     expect(orquestrador).toMatch(/catch \(e\) \{[\s\S]*reloadOrdens\(\);[\s\S]*reloadDetail\(\);[\s\S]*reloadFinancial\(\);[\s\S]*notify\(/)
   })
@@ -3469,7 +3472,9 @@ describe("OPS-V4-POSVENDA-RETORNO-GARANTIAS-006 — actions/readers reais", () =
   })
 
   it("stage chama handlers reais, tem busy-lock e não simula persistência", () => {
-    expect(stage).toContain("v.abrirRetorno(motivo.trim(), obsAbertura.trim() || undefined)")
+    // GOAL OPS-V4-FLUXO-CURTO-007: a ficha abre o MESMO fluxo Retorno / Garantia (sem 2º formulário).
+    expect(stage).toContain("v.openRetornoFluxo(osId)")
+    expect(stage).not.toContain("v.abrirRetorno(")
     expect(stage).toContain("v.finalizarRetorno(finalizar.id")
     expect(stage).toContain("v.abrirOsVinculada")
     expect(stage).toContain("if (busy")

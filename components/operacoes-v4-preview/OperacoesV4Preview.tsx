@@ -28,6 +28,7 @@ import { SlaV4 } from "./parts/SlaV4";
 import { DashboardV4 } from "./parts/DashboardV4";
 import { NovaOSModal } from "./parts/NovaOSModal";
 import { NovoAtendimentoLauncher } from "./parts/NovoAtendimentoLauncher";
+import { RetornoOrigemPickerV4 } from "./parts/RetornoOrigemPickerV4";
 import { AtendimentoRapidoModal } from "./parts/AtendimentoRapidoModal";
 import { OrcamentoRapidoModal } from "./parts/OrcamentoRapidoModal";
 import { EstornoRecebimentoModal } from "./parts/EstornoRecebimentoModal";
@@ -75,6 +76,7 @@ export function OperacoesV4Preview() {
       </div>
 
       <NovoAtendimentoLauncher v={v} />
+      <RetornoOrigemPickerV4 v={v} />
       <NovaOSModal v={v} />
       <AtendimentoRapidoModal v={v} />
       <OrcamentoRapidoModal v={v} />

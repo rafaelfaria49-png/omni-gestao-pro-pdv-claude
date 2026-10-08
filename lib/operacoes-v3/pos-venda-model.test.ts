@@ -7,7 +7,9 @@ import {
   lerFotosSaidaV3,
   lerGarantiaV3,
   lerRetornosV3,
+  lerVinculoRetornoV3,
   resumoRetornosV3,
+  retornoEmAberturaV3,
   retornosDoClienteV3,
 } from "./pos-venda-model";
 
@@ -198,6 +200,33 @@ describe("retorno — leitura + vínculo OS original", () => {
 
   it("ignora entradas inválidas", () => {
     expect(lerRetornosV3(os({ retornosV3: [{}, { id: "" }, null] }))).toHaveLength(0);
+  });
+
+  it("GOAL 007: lê operação, assinatura, situação da garantia e reserva (só sem atendimento)", () => {
+    const [aberto] = lerRetornosV3(os({
+      retornosV3: [{
+        id: "r1", osOriginalId: "os9", motivo: "Touch", criadoEm: diasAtras(0), status: "aberto",
+        operacaoId: "op-1", assinatura: "abc", garantiaSituacaoNaAbertura: "vencida",
+        reserva: { token: "t", expiraEm: new Date(NOW.getTime() + 60_000).toISOString() },
+      }],
+    }));
+    expect(aberto).toMatchObject({ operacaoId: "op-1", assinatura: "abc", garantiaSituacaoNaAbertura: "vencida", reserva: { token: "t" } });
+    expect(retornoEmAberturaV3(aberto, NOW)).toBe(true);
+    expect(retornoEmAberturaV3(aberto, new Date(NOW.getTime() + 120_000))).toBe(false);
+
+    const [vinculado] = lerRetornosV3(os({
+      retornosV3: [{ id: "r1", osOriginalId: "os9", motivo: "Touch", criadoEm: diasAtras(0), status: "aberto", osRetornoId: "f1", reserva: { token: "t", expiraEm: "2999-01-01T00:00:00.000Z" } }],
+    }));
+    expect(vinculado.reserva).toBeUndefined();
+    expect(retornoEmAberturaV3(vinculado, NOW)).toBe(false);
+    expect(lerRetornosV3(os({ retornosV3: [{ id: "r", motivo: "x", criadoEm: diasAtras(0), status: "aberto", garantiaSituacaoNaAbertura: "inventada", reserva: { token: "" } }] }))[0])
+      .toMatchObject({ garantiaSituacaoNaAbertura: undefined, reserva: undefined });
+  });
+
+  it("GOAL 007: vínculo da filha lê operação e descarte explícito", () => {
+    expect(lerVinculoRetornoV3(os({
+      vinculoRetornoV3: { osOrigemId: "os9", retornoId: "r1", operacaoId: "op-1", descartadoEm: diasAtras(0), descartadoMotivo: "abertura_concorrente", vinculoValidoId: "f1", vinculoValidoCodigo: "OS-F1" },
+    }))).toMatchObject({ operacaoId: "op-1", descartadoMotivo: "abertura_concorrente", vinculoValidoId: "f1", vinculoValidoCodigo: "OS-F1" });
   });
 });
 

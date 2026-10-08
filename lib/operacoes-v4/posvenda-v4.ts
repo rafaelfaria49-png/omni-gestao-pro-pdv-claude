@@ -1,6 +1,5 @@
 import type { EventoTimeline, OrdemServico } from "@/types/os";
 import {
-  lerEntregaV3,
   lerGarantiaV3,
   lerRetornosV3,
   lerVinculoRetornoV3,
@@ -10,6 +9,7 @@ import {
 } from "@/lib/operacoes-v3/pos-venda-model";
 import { termoGarantiaDaOSV3 } from "@/lib/operacoes-v3/print-model";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
+import { enquadrarOrigemRetornoV4, retornoLegadoSemAtendimentoV4, type EnquadramentoRetornoV4 } from "./retorno-origem-v4";
 
 export type PosVendaToneV4 = "success" | "info" | "warn" | "danger" | "neutro";
 
@@ -34,7 +34,10 @@ export type ElegibilidadeRetornoV4Id =
   | "fora_garantia"
   | "garantia_nao_informada"
   | "retorno_aberto"
+  | "abertura_em_processamento"
   | "os_nao_entregue"
+  | "os_cancelada"
+  | "dados_incompletos"
   | "condicao_nao_determinada";
 
 export interface ElegibilidadeRetornoV4 {
@@ -42,7 +45,10 @@ export interface ElegibilidadeRetornoV4 {
   label: string;
   descricao: string;
   tone: PosVendaToneV4;
-  /** O motor V3 aceita retorno fora/sem garantia; só um retorno já aberto bloqueia a CTA. */
+  /**
+   * Pode abrir um retorno NOVO (motor V3, OS entregue). Retorno aberto, reserva em
+   * processamento, OS não entregue/cancelada ou dados incompletos bloqueiam a CTA.
+   */
   podeRegistrar: boolean;
 }
 
@@ -57,9 +63,17 @@ export interface TimelinePosVendaV4 {
 export interface PosVendaV4 {
   garantia: GarantiaPosVendaV4;
   elegibilidade: ElegibilidadeRetornoV4;
+  /** GOAL OPS-V4-FLUXO-CURTO-007: enquadramento único (o mesmo do seletor da OS original). */
+  enquadramento: EnquadramentoRetornoV4;
   retornoAberto?: RetornoV3;
+  /** Retorno aberto cujo atendimento ainda está sendo criado (reserva viva). */
+  retornoEmAbertura: boolean;
+  /** Retorno aberto legado, sem atendimento: o fluxo pode abrir o atendimento DELE (mesmo relato). */
+  atendimentoPendente: boolean;
   retornos: RetornoV3[];
   podeAbrirRetorno: boolean;
+  /** OS não entregue: a ocorrência vai para a observação interna desta OS (sem retorno). */
+  podeRegistrarOcorrencia: boolean;
   podeFinalizarRetorno: boolean;
   historico: RetornoV3[];
   timeline: TimelinePosVendaV4[];
@@ -86,8 +100,18 @@ export const EMPTY_POSVENDA_V4: PosVendaV4 = {
     tone: "neutro",
     podeRegistrar: false,
   },
+  enquadramento: {
+    id: "garantia_nao_informada",
+    label: "Garantia não informada",
+    descricao: "Selecione uma OS para consultar a condição do retorno.",
+    tone: "neutro",
+    acao: "nenhuma",
+  },
+  retornoEmAbertura: false,
+  atendimentoPendente: false,
   retornos: [],
   podeAbrirRetorno: false,
+  podeRegistrarOcorrencia: false,
   podeFinalizarRetorno: false,
   historico: [],
   timeline: [],
@@ -144,68 +168,57 @@ export function buildGarantiaPosVendaV4(os: OrdemServico, now: Date = new Date()
   };
 }
 
-function elegibilidadeRetorno(
-  os: OrdemServico,
-  garantia: GarantiaPosVendaV4,
-  retornoAberto: RetornoV3 | undefined,
-): ElegibilidadeRetornoV4 {
-  if (retornoAberto) {
-    return {
-      id: "retorno_aberto",
-      label: "Retorno em andamento",
-      descricao: "Finalize o retorno atual antes de registrar outro.",
-      tone: "warn",
-      podeRegistrar: false,
-    };
+/** Ficha da OS: projeção do enquadramento único (GOAL OPS-V4-FLUXO-CURTO-007). */
+function elegibilidadeRetorno(enquadramento: EnquadramentoRetornoV4): ElegibilidadeRetornoV4 {
+  switch (enquadramento.id) {
+    case "retorno_em_andamento":
+    case "retorno_sem_atendimento":
+      return {
+        id: "retorno_aberto",
+        label: "Retorno em andamento",
+        descricao: "Finalize o retorno atual antes de registrar outro.",
+        tone: "warn",
+        podeRegistrar: false,
+      };
+    case "abertura_em_processamento":
+      return { id: "abertura_em_processamento", label: enquadramento.label, descricao: enquadramento.descricao, tone: "info", podeRegistrar: false };
+    case "nao_entregue":
+      return {
+        id: "os_nao_entregue",
+        label: "OS não entregue",
+        descricao: "A cobertura ainda não iniciou e isto não é pós-venda: registre a ocorrência como observação interna desta OS.",
+        tone: "info",
+        podeRegistrar: false,
+      };
+    case "cancelada":
+      return { id: "os_cancelada", label: enquadramento.label, descricao: enquadramento.descricao, tone: "danger", podeRegistrar: false };
+    case "dados_incompletos":
+      return { id: "dados_incompletos", label: enquadramento.label, descricao: enquadramento.descricao, tone: "danger", podeRegistrar: false };
+    case "garantia_ativa":
+      return {
+        id: "dentro_garantia",
+        label: "Dentro da garantia",
+        descricao: "A garantia está vigente na leitura atual da OS. Isso não confirma que o novo defeito está coberto.",
+        tone: "success",
+        podeRegistrar: true,
+      };
+    case "fora_cobertura":
+      return {
+        id: "fora_garantia",
+        label: "Fora da garantia",
+        descricao: "O retorno pode ser registrado, mas não há cobertura confirmada: serviço cobrável exige decisão comercial própria.",
+        tone: "warn",
+        podeRegistrar: true,
+      };
+    default:
+      return {
+        id: "garantia_nao_informada",
+        label: "Garantia não informada",
+        descricao: "O retorno pode ser registrado; nenhuma cobertura é presumida.",
+        tone: "neutro",
+        podeRegistrar: true,
+      };
   }
-
-  if (!lerEntregaV3(os).entregue) {
-    return {
-      id: "os_nao_entregue",
-      label: "OS não entregue",
-      descricao: "A cobertura ainda não iniciou. O motor V3 permite registrar o relato sem prometer garantia.",
-      tone: "info",
-      podeRegistrar: true,
-    };
-  }
-
-  if (garantia.situacao === "ativa") {
-    return {
-      id: "dentro_garantia",
-      label: "Dentro da garantia",
-      descricao: "A garantia estava vigente na leitura atual da OS.",
-      tone: "success",
-      podeRegistrar: true,
-    };
-  }
-
-  if (garantia.situacao === "vencida" || garantia.situacao === "sem_garantia") {
-    return {
-      id: "fora_garantia",
-      label: "Fora da garantia",
-      descricao: "O retorno pode ser registrado, mas a cobertura não é prometida.",
-      tone: "warn",
-      podeRegistrar: true,
-    };
-  }
-
-  if (garantia.situacao === "nenhuma") {
-    return {
-      id: "garantia_nao_informada",
-      label: "Garantia não informada",
-      descricao: "O retorno pode ser registrado sem classificar a cobertura.",
-      tone: "neutro",
-      podeRegistrar: true,
-    };
-  }
-
-  return {
-    id: "condicao_nao_determinada",
-    label: "Condição não determinada",
-    descricao: "A garantia está prevista, mas ainda não possui vigência calculada.",
-    tone: "info",
-    podeRegistrar: true,
-  };
 }
 
 function timelinePosVenda(os: OrdemServico): TimelinePosVendaV4[] {
@@ -230,7 +243,8 @@ function headerLabel(
 ): string {
   if (retornoAberto?.osRetornoCodigo) return `Retorno · ${retornoAberto.osRetornoCodigo}`;
   if (retornoAberto) return "Retorno aberto";
-  if (vinculoOrigem) return `Retorno de ${vinculoOrigem.osOrigemCodigo || "OS original"}`;
+  if (vinculoOrigem?.descartadoEm) return "Atendimento descartado";
+  if (vinculoOrigem) return `Retorno da ${vinculoOrigem.osOrigemCodigo || "OS original"}`;
   if (garantia.situacao === "ativa" && garantia.vencimento) return `Garantia até ${garantia.vencimento}`;
   if (garantia.situacao === "vencida") return "Garantia vencida";
   if (garantia.situacao === "prevista" && garantia.prazoDias > 0) return `Garantia ${garantia.prazoDias} dias`;
@@ -242,15 +256,21 @@ export function buildPosVendaV4(os: OrdemServico, now: Date = new Date()): PosVe
   const garantia = buildGarantiaPosVendaV4(os, now);
   const retornos = lerRetornosV3(os);
   const retornoAberto = retornos.find((retorno) => retorno.status === "aberto");
-  const elegibilidade = elegibilidadeRetorno(os, garantia, retornoAberto);
+  const enquadramento = enquadrarOrigemRetornoV4(os, now);
+  const elegibilidade = elegibilidadeRetorno(enquadramento);
   const vinculoOrigem = lerVinculoRetornoV3(os);
+  const retornoEmAbertura = enquadramento.id === "abertura_em_processamento";
   return {
     garantia,
     elegibilidade,
+    enquadramento,
     retornoAberto,
+    retornoEmAbertura,
+    atendimentoPendente: !!text(os.id) && enquadramento.id === "retorno_sem_atendimento" && retornoLegadoSemAtendimentoV4(retornoAberto),
     retornos,
     podeAbrirRetorno: !!text(os.id) && elegibilidade.podeRegistrar,
-    podeFinalizarRetorno: !!retornoAberto,
+    podeRegistrarOcorrencia: !!text(os.id) && enquadramento.acao === "registrar_ocorrencia",
+    podeFinalizarRetorno: !!retornoAberto && !retornoEmAbertura,
     historico: retornos,
     timeline: timelinePosVenda(os),
     headerLabel: headerLabel(garantia, retornoAberto, vinculoOrigem),
@@ -271,6 +291,10 @@ export interface GarantiaPortfolioItemV4 {
   situacaoLabel: string;
   tone: PosVendaToneV4;
   retornoAberto: boolean;
+  /** GOAL 007: retorno em andamento (aberto) × concluído (só finalizados) × nenhum. */
+  retornoStatus: "andamento" | "concluido" | null;
+  /** GOAL 007: o fluxo Retorno / Garantia pode abrir um retorno novo para esta OS. */
+  podeAbrirRetorno: boolean;
   busca: string;
 }
 
@@ -280,6 +304,8 @@ export interface GarantiasPortfolioV4 {
   vencendo: number;
   vencidas: number;
   retornosAbertos: number;
+  /** OS do portfólio cujos retornos estão todos concluídos (finalizados). */
+  retornosConcluidos: number;
   vencendoDias: number;
 }
 
@@ -307,6 +333,8 @@ export function buildGarantiasPortfolioV4(
       situacaoLabel: garantia.situacaoLabel,
       tone: garantia.tone,
       retornoAberto: !!posVenda.retornoAberto,
+      retornoStatus: posVenda.retornoAberto ? "andamento" : posVenda.retornos.length > 0 ? "concluido" : null,
+      podeAbrirRetorno: posVenda.podeAbrirRetorno,
       busca: `${codigo} ${cliente} ${aparelho}`.toLocaleLowerCase("pt-BR"),
     }];
   });
@@ -324,6 +352,7 @@ export function buildGarantiasPortfolioV4(
     vencendo: itens.filter((item) => item.situacao === "ativa" && typeof item.diasRestantes === "number" && item.diasRestantes <= vencendoDias).length,
     vencidas: itens.filter((item) => item.situacao === "vencida").length,
     retornosAbertos: itens.filter((item) => item.retornoAberto).length,
+    retornosConcluidos: itens.filter((item) => item.retornoStatus === "concluido").length,
     vencendoDias,
   };
 }

@@ -12,7 +12,8 @@ function os(extra: Record<string, unknown> = {}): OrdemServico {
   return {
     id: "os-1",
     codigo: "OS-1042",
-    cliente: { nome: "Maria" },
+    clienteId: "cli-1",
+    cliente: { id: "cli-1", nome: "Maria" },
     equipamento: { tipo: "Celular", marca: "Samsung", modelo: "S22" },
     timeline: [],
     ...extra,
@@ -50,10 +51,48 @@ describe("buildPosVendaV4", () => {
     expect(view.podeAbrirRetorno).toBe(true);
   });
 
-  it("expõe OS não entregue sem iniciar a garantia", () => {
+  it("expõe OS não entregue sem iniciar a garantia — ocorrência, nunca retorno (GOAL 007)", () => {
     const view = buildPosVendaV4(garantia(90), NOW);
     expect(view.garantia.situacao).toBe("prevista");
     expect(view.elegibilidade.id).toBe("os_nao_entregue");
+    expect(view.podeAbrirRetorno).toBe(false);
+    expect(view.podeRegistrarOcorrencia).toBe(true);
+    expect(view.enquadramento).toMatchObject({ id: "nao_entregue", acao: "registrar_ocorrencia" });
+  });
+
+  it("GOAL 007: OS cancelada e dados incompletos não abrem retorno", () => {
+    const cancelada = buildPosVendaV4(garantia(90, "2026-08-01T12:00:00.000Z", { status: "cancelada", operacaoStatusV3: "cancelada" }), NOW);
+    expect(cancelada.elegibilidade.id).toBe("os_cancelada");
+    expect(cancelada.podeAbrirRetorno).toBe(false);
+    const semCliente = buildPosVendaV4(garantia(90, "2026-08-01T12:00:00.000Z", { clienteId: "", cliente: { nome: "Avulso" } }), NOW);
+    expect(semCliente.elegibilidade.id).toBe("dados_incompletos");
+    expect(semCliente.podeAbrirRetorno).toBe(false);
+  });
+
+  it("GOAL 007: garantia não informada é registrável sem cobertura presumida", () => {
+    const view = buildPosVendaV4(os({ entregaV3: { entregueEm: "2026-08-01T12:00:00.000Z" } }), NOW);
+    expect(view.elegibilidade.id).toBe("garantia_nao_informada");
+    expect(view.podeAbrirRetorno).toBe(true);
+    expect(view.enquadramento.acao).toBe("abrir_retorno");
+  });
+
+  it("GOAL 007: reserva viva = abertura em processamento; sem CTA de criar nem finalizar", () => {
+    const view = buildPosVendaV4(garantia(90, "2026-08-01T12:00:00.000Z", {
+      retornosV3: [{ id: "r", osOriginalId: "os-1", motivo: "Touch", criadoEm: "2026-08-15T11:59:00.000Z", status: "aberto", operacaoId: "op-00000001", reserva: { token: "t", expiraEm: "2026-08-15T12:10:00.000Z" } }],
+    }), NOW);
+    expect(view.retornoEmAbertura).toBe(true);
+    expect(view.elegibilidade.id).toBe("abertura_em_processamento");
+    expect(view.podeAbrirRetorno).toBe(false);
+    expect(view.podeFinalizarRetorno).toBe(false);
+  });
+
+  it("GOAL 007: retorno legado em aberto sem atendimento oferece abrir o atendimento DELE (não um novo)", () => {
+    const view = buildPosVendaV4(garantia(90, "2026-08-01T12:00:00.000Z", {
+      retornosV3: [{ id: "r", osOriginalId: "os-1", motivo: "Touch", criadoEm: "2026-08-14T10:00:00.000Z", status: "aberto" }],
+    }), NOW);
+    expect(view.atendimentoPendente).toBe(true);
+    expect(view.podeAbrirRetorno).toBe(false);
+    expect(view.podeFinalizarRetorno).toBe(true);
   });
 
   it("usa retornosV3, mantém vínculo, ordena e bloqueia outro retorno aberto", () => {
@@ -90,7 +129,13 @@ describe("buildPosVendaV4", () => {
       vinculoRetornoV3: { osOrigemId: "os-1", osOrigemCodigo: "OS-1042", retornoId: "aberto" },
     }), NOW);
     expect(nova.vinculoOrigem?.osOrigemCodigo).toBe("OS-1042");
-    expect(nova.headerLabel).toBe("Retorno de OS-1042");
+    expect(nova.headerLabel).toBe("Retorno da OS-1042");
+
+    const descartada = buildPosVendaV4(os({
+      vinculoRetornoV3: { osOrigemId: "os-1", osOrigemCodigo: "OS-1042", retornoId: "aberto", descartadoEm: "2026-08-15T12:00:00.000Z", vinculoValidoId: "os-2001", vinculoValidoCodigo: "OS-2001" },
+    }), NOW);
+    expect(descartada.headerLabel).toBe("Atendimento descartado");
+    expect(descartada.vinculoOrigem).toMatchObject({ vinculoValidoId: "os-2001", vinculoValidoCodigo: "OS-2001" });
   });
 
   it("não duplica eventos de retorno na timeline auxiliar", () => {
@@ -118,6 +163,21 @@ describe("portfólio de garantias V4", () => {
     expect(portfolio.vigentes).toBe(2);
     expect(portfolio.vencendo).toBe(1);
     expect(portfolio.vencidas).toBe(1);
+  });
+
+  it("GOAL 007: diferencia retorno em andamento × concluído e só oferece retorno a quem pode abrir", () => {
+    const comRetornos = [
+      garantia(90, "2026-08-01T12:00:00.000Z", { id: "andamento", codigo: "OS-5", retornosV3: [{ id: "a", osOriginalId: "andamento", motivo: "x", criadoEm: "2026-08-10T10:00:00.000Z", status: "aberto", osRetornoId: "f1" }] }),
+      garantia(90, "2026-08-01T12:00:00.000Z", { id: "concluido", codigo: "OS-6", retornosV3: [{ id: "b", osOriginalId: "concluido", motivo: "y", criadoEm: "2026-08-10T10:00:00.000Z", status: "finalizado" }] }),
+      garantia(90, "2026-08-01T12:00:00.000Z", { id: "livre", codigo: "OS-7" }),
+    ];
+    const portfolio = buildGarantiasPortfolioV4(comRetornos, { now: NOW, vencendoDias: 7 });
+    const porId = Object.fromEntries(portfolio.itens.map((item) => [item.osId, item]));
+    expect(porId.andamento).toMatchObject({ retornoStatus: "andamento", retornoAberto: true, podeAbrirRetorno: false });
+    expect(porId.concluido).toMatchObject({ retornoStatus: "concluido", retornoAberto: false, podeAbrirRetorno: true });
+    expect(porId.livre).toMatchObject({ retornoStatus: null, podeAbrirRetorno: true });
+    expect(portfolio.retornosAbertos).toBe(1);
+    expect(portfolio.retornosConcluidos).toBe(1);
   });
 
   it("filtra situação e busca por OS/cliente/aparelho", () => {

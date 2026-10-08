@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { Clock3, RotateCcw, ShieldCheck, X } from "lucide-react";
-import type { RetornoV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { retornoEmAberturaV3, type RetornoV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { C, card, cardTitle, upLabel } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 
@@ -108,6 +108,8 @@ function RetornoResumo({
   onAbrirVinculo?: (osId: string) => void;
 }) {
   const tone = retorno.status === "aberto" ? "warn" : "success";
+  // GOAL OPS-V4-FLUXO-CURTO-007: reserva viva = atendimento ainda sendo criado pelo servidor.
+  const emAbertura = retornoEmAberturaV3(retorno);
   const atendimentoId = retorno.osRetornoId;
   return (
     <article style={{ border: `1px solid ${emphasis ? C.warnBd : C.line2}`, borderLeft: `3px solid ${emphasis ? C.warn : C.line2}`, borderRadius: 9, background: emphasis ? C.warnBg : C.surface2, padding: "11px 12px" }}>
@@ -116,7 +118,7 @@ function RetornoResumo({
           <div style={{ color: C.body, fontSize: 12.5, fontWeight: 700, lineHeight: 1.4, overflowWrap: "anywhere" }}>{retorno.motivo || "Motivo não informado"}</div>
           <div style={{ marginTop: 3, color: C.subtle, fontSize: 10.5 }}>Aberto em {formatDateTime(retorno.criadoEm)}{retorno.criadoPor ? ` · ${retorno.criadoPor}` : ""}</div>
         </div>
-        <Badge tone={tone}>{retorno.status === "aberto" ? "Em andamento" : "Finalizado"}</Badge>
+        <Badge tone={emAbertura ? "info" : tone}>{retorno.status === "aberto" ? (emAbertura ? "Abertura em processamento" : "Em andamento") : "Finalizado"}</Badge>
       </div>
       <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap", color: C.muted, fontSize: 11 }}>
         <span>OS original: <strong style={{ color: C.body }}>{retorno.osOriginalCodigo || retorno.osOriginalId}</strong></span>
@@ -145,42 +147,26 @@ function RetornoResumo({
 export function PosVendaStage({ v }: { v: V4Vals }) {
   const posVenda = v.posVenda;
   const garantia = posVenda.garantia;
-  const [abrirOpen, setAbrirOpen] = useState(false);
+  const vinculo = posVenda.vinculoOrigem;
+  const osId = v.realOS?.id?.trim() ?? "";
   const [finalizar, setFinalizar] = useState<RetornoV3 | null>(null);
-  const [motivo, setMotivo] = useState("");
-  const [obsAbertura, setObsAbertura] = useState("");
   const [obsFinal, setObsFinal] = useState("");
-  const [busy, setBusy] = useState<"abrir" | "finalizar" | null>(null);
-  const motivoRef = useRef<HTMLTextAreaElement>(null);
+  const [busy, setBusy] = useState<"finalizar" | null>(null);
   const observacaoRef = useRef<HTMLTextAreaElement>(null);
-  const abrirTriggerRef = useRef<HTMLButtonElement>(null);
   const finalizarTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const closeAbrir = useCallback(() => {
-    if (busy) return;
-    setAbrirOpen(false);
-    queueMicrotask(() => abrirTriggerRef.current?.focus());
-  }, [busy]);
   const closeFinalizar = useCallback(() => {
     if (busy) return;
     setFinalizar(null);
     queueMicrotask(() => finalizarTriggerRef.current?.focus());
   }, [busy]);
 
-  const abrirRetorno = async () => {
-    if (busy || !motivo.trim()) return;
-    setBusy("abrir");
-    try {
-      const ok = await v.abrirRetorno(motivo.trim(), obsAbertura.trim() || undefined);
-      if (ok) {
-        setMotivo("");
-        setObsAbertura("");
-        setAbrirOpen(false);
-        queueMicrotask(() => abrirTriggerRef.current?.focus());
-      }
-    } finally {
-      setBusy(null);
-    }
+  // GOAL OPS-V4-FLUXO-CURTO-007: abrir retorno / registrar ocorrência passam pelo
+  // MESMO fluxo Retorno / Garantia (seletor com a OS pré-selecionada, relida no
+  // servidor) — não existe segundo formulário de abertura aqui.
+  const abrirFluxo = () => {
+    if (busy || !osId) return;
+    v.openRetornoFluxo(osId);
   };
 
   const finalizarRetorno = async () => {
@@ -198,25 +184,50 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
     }
   };
 
+  const coberturaReferencia =
+    vinculo?.garantiaSituacaoNaAbertura === "ativa" || vinculo?.garantiaAtivaNaAbertura === true
+      ? "Garantia da OS original vigente na abertura (cobertura do novo defeito a avaliar)."
+      : vinculo?.garantiaSituacaoNaAbertura === "vencida"
+        ? "Garantia da OS original vencida na abertura: sem cobertura confirmada."
+        : vinculo?.garantiaSituacaoNaAbertura === "sem_garantia" || vinculo?.garantiaAtivaNaAbertura === false
+          ? "OS original sem cobertura na abertura: sem cobertura confirmada."
+          : "Garantia da OS original não informada na abertura.";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {posVenda.vinculoOrigem ? (
-        <section style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px" }}>
-          <div>
-            <div style={{ ...upLabel, marginBottom: 3 }}>Atendimento de retorno</div>
+      {vinculo ? (
+        <section style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px", flexWrap: "wrap", borderLeft: `3px solid ${vinculo.descartadoEm ? C.danger : C.warn}` }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...upLabel, marginBottom: 3 }}>{vinculo.descartadoEm ? "Atendimento descartado" : "Atendimento de retorno"}</div>
             <div style={{ color: C.body, fontSize: 13, fontWeight: 700 }}>
-              Vinculado à {posVenda.vinculoOrigem.osOrigemCodigo || "OS original"}
+              Retorno da {vinculo.osOrigemCodigo || "OS original"}
             </div>
+            {vinculo.descartadoEm ? (
+              <div style={{ marginTop: 3, color: C.dangerFg, fontSize: 11.5 }}>
+                Criado em paralelo e descartado: o retorno ficou no atendimento {vinculo.vinculoValidoCodigo || vinculo.vinculoValidoId || "vinculado"}. Cancele este atendimento se ele não for usado.
+              </div>
+            ) : (
+              <div style={{ marginTop: 3, color: C.subtle, fontSize: 11.5 }}>
+                {vinculo.motivo ? `Relato: ${vinculo.motivo}. ` : ""}{coberturaReferencia} A garantia deste atendimento é própria e não começa sozinha.
+              </div>
+            )}
           </div>
-          <button type="button" onClick={() => v.abrirOsVinculada(posVenda.vinculoOrigem!.osOrigemId)} style={secondaryButton}>
-            Abrir OS original
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {vinculo.descartadoEm && vinculo.vinculoValidoId ? (
+              <button type="button" onClick={() => v.abrirOsVinculada(vinculo.vinculoValidoId!)} style={secondaryButton}>
+                Abrir atendimento válido
+              </button>
+            ) : null}
+            <button type="button" onClick={() => v.abrirOsVinculada(vinculo.osOrigemId)} style={secondaryButton}>
+              Abrir OS original
+            </button>
+          </div>
         </section>
       ) : null}
       <div style={{ display: "grid", gridTemplateColumns: sectionGrid, gap: 12, alignItems: "stretch" }}>
         <section style={{ ...card, borderTop: `3px solid ${garantia.tone === "success" ? C.success : garantia.tone === "warn" ? C.warn : C.line2}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
-            <span style={{ ...cardTitle, display: "inline-flex", alignItems: "center", gap: 7 }}><ShieldCheck size={15} aria-hidden /> Garantia</span>
+            <span style={{ ...cardTitle, display: "inline-flex", alignItems: "center", gap: 7 }}><ShieldCheck size={15} aria-hidden /> Garantia{vinculo ? " deste atendimento" : ""}</span>
             <Badge tone={garantia.tone}>{garantia.situacaoLabel}</Badge>
           </div>
           {garantia.temGarantia ? (
@@ -242,17 +253,34 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           {posVenda.retornoAberto ? (
             <>
               <RetornoResumo retorno={posVenda.retornoAberto} emphasis onAbrirVinculo={v.abrirOsVinculada} />
-              <button ref={finalizarTriggerRef} type="button" disabled={busy !== null} onClick={() => setFinalizar(posVenda.retornoAberto ?? null)} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", marginTop: 11, background: C.ink, opacity: busy ? .65 : 1 }}>
-                Finalizar retorno
-              </button>
+              {posVenda.retornoEmAbertura ? (
+                <p style={{ margin: "10px 0 0", color: C.subtle, fontSize: 11.5, lineHeight: 1.5 }}>O atendimento deste retorno está sendo criado. Recarregue em instantes para abri-lo.</p>
+              ) : (
+                <>
+                  {posVenda.atendimentoPendente ? (
+                    <button type="button" disabled={busy !== null || !osId} onClick={abrirFluxo} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...secondaryButton, width: "100%", marginTop: 11 }}>
+                      Abrir atendimento deste retorno
+                    </button>
+                  ) : null}
+                  <button ref={finalizarTriggerRef} type="button" disabled={busy !== null || !posVenda.podeFinalizarRetorno} onClick={() => setFinalizar(posVenda.retornoAberto ?? null)} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", marginTop: 11, background: C.ink, opacity: busy ? .65 : 1 }}>
+                    Finalizar retorno
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>
               <div style={{ padding: "8px 0 2px", color: C.body, fontSize: 13, fontWeight: 700 }}>Nenhum retorno em andamento.</div>
               <p style={{ margin: "5px 0 13px", color: C.subtle, fontSize: 11.5, lineHeight: 1.5 }}>{posVenda.elegibilidade.descricao}</p>
-              <button ref={abrirTriggerRef} type="button" disabled={!posVenda.podeAbrirRetorno || busy !== null} onClick={() => setAbrirOpen(true)} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", opacity: !posVenda.podeAbrirRetorno || busy ? .55 : 1 }}>
-                {posVenda.elegibilidade.id === "fora_garantia" ? "Registrar retorno fora da garantia" : "Abrir retorno"}
-              </button>
+              {posVenda.podeRegistrarOcorrencia ? (
+                <button type="button" disabled={busy !== null || !osId} onClick={abrirFluxo} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...secondaryButton, width: "100%" }}>
+                  Registrar ocorrência
+                </button>
+              ) : (
+                <button type="button" disabled={!posVenda.podeAbrirRetorno || busy !== null || !osId} onClick={abrirFluxo} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", opacity: !posVenda.podeAbrirRetorno || busy ? .55 : 1 }}>
+                  {posVenda.elegibilidade.id === "fora_garantia" ? "Registrar retorno fora da garantia" : "Abrir retorno"}
+                </button>
+              )}
             </>
           )}
         </section>
@@ -281,34 +309,6 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
         )}
       </section>
 
-      {abrirOpen ? (
-        <Modal
-          title="Abrir retorno"
-          onClose={closeAbrir}
-          initialFocus={motivoRef}
-          footer={<><button type="button" disabled={!!busy} onClick={closeAbrir} style={secondaryButton}>Cancelar</button><button type="button" disabled={!!busy || !motivo.trim()} onClick={() => void abrirRetorno()} style={{ ...primaryButton, opacity: busy || !motivo.trim() ? .55 : 1 }}>{busy === "abrir" ? "Abrindo…" : "Abrir retorno"}</button></>}
-        >
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 14 }}>
-            <DataPoint label="OS original" value={v.os.codigo} />
-            <DataPoint label="Garantia" value={garantia.situacao === "ativa" && garantia.vencimento ? `Vigente até ${formatDate(garantia.vencimento)}` : posVenda.elegibilidade.label} />
-          </div>
-          <label style={{ display: "block" }}>
-            <span style={{ display: "block", marginBottom: 6, color: C.body, fontSize: 12, fontWeight: 700 }}>Motivo</span>
-            <textarea ref={motivoRef} rows={4} maxLength={1000} value={motivo} onChange={(event) => setMotivo(event.target.value)} placeholder="Descreva o que voltou a falhar" style={{ width: "100%", resize: "vertical", minHeight: 96, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
-          </label>
-          <label style={{ display: "block", marginTop: 12 }}>
-            <span style={{ display: "block", marginBottom: 6, color: C.body, fontSize: 12, fontWeight: 700 }}>Observações <span style={{ color: C.subtle, fontWeight: 500 }}>(opcional)</span></span>
-            <textarea rows={3} maxLength={1000} value={obsAbertura} onChange={(event) => setObsAbertura(event.target.value)} placeholder="Relato do cliente, condição do aparelho, combinados" style={{ width: "100%", resize: "vertical", minHeight: 72, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
-          </label>
-          <p style={{ margin: "9px 0 0", color: C.subtle, fontSize: 11.5 }}>
-            {posVenda.elegibilidade.id === "os_nao_entregue"
-              ? "O relato fica no histórico desta OS."
-              : "A OS original permanece entregue. Será aberto um atendimento novo, vinculado, na fila."}
-          </p>
-          {posVenda.elegibilidade.id === "fora_garantia" ? <p style={{ margin: "9px 0 0", color: C.warnFg, fontSize: 11.5 }}>Este registro não confirma cobertura nem cria cobrança automática.</p> : null}
-        </Modal>
-      ) : null}
-
       {finalizar ? (
         <Modal
           title="Finalizar retorno"
@@ -324,7 +324,7 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
             <span style={{ display: "block", marginBottom: 6, color: C.body, fontSize: 12, fontWeight: 700 }}>Resolução <span style={{ color: C.subtle, fontWeight: 500 }}>(opcional)</span></span>
             <textarea ref={observacaoRef} rows={4} maxLength={1000} value={obsFinal} onChange={(event) => setObsFinal(event.target.value)} placeholder="Ex.: conector ressoldado" style={{ width: "100%", resize: "vertical", minHeight: 96, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
           </label>
-          <p style={{ margin: "9px 0 0", color: C.subtle, fontSize: 11.5 }}>O encerramento será confirmado pelo servidor e aparecerá no histórico após o reload.</p>
+          <p style={{ margin: "9px 0 0", color: C.subtle, fontSize: 11.5 }}>O encerramento será confirmado pelo servidor e aparecerá no histórico após o reload. Finalizar não cobra, não estorna e não renova garantia.</p>
         </Modal>
       ) : null}
     </div>

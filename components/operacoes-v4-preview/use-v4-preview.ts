@@ -132,7 +132,15 @@ import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
 import type { EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operacoes-v3/garantia-actions";
 import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
-import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
+import { abrirRetornoV3, buscarOrigensRetornoV3, finalizarRetornoV3, lerOrigemRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
+import {
+  gerarOperacaoRetornoIdV4,
+  type ComandoRetornoV4,
+  type RascunhoRetornoV4,
+  type RespostaOrigemRetornoV4,
+  type RespostaOrigensRetornoV4,
+  type ResultadoRetornoV4,
+} from "@/lib/operacoes-v4/retorno-origem-v4";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
 import { alvoAindaSelecionado, fatiaTocada, patchTocadoCredenciais, patchTocadoIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4, type EsperadosDadosBasicosV3, type EsperadosProvaEntradaV3, type OpcoesSalvarAcessoriosV4, type OpcoesSalvarProvaEntradaV4 } from "@/lib/operacoes-v4/entrada-form";
@@ -317,12 +325,29 @@ export interface V4DataCtx {
   // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
   /** Define/edita a garantia prevista da OS (reuso de `salvarGarantiaOSV3`). */
   salvarGarantia: (input: { modeloId: string; prazoDias?: number }) => Promise<boolean>;
-  /** Abre retorno no payload da OS original via motor V3 e, se entregue, o atendimento vinculado. */
+  /**
+   * Abre o retorno da OS SELECIONADA (motor V3, operação nova). Mantido por
+   * compatibilidade; a V4 usa o fluxo Retorno / Garantia (`abrirRetornoDaOrigem`).
+   */
   abrirRetorno: (motivo: string, observacao?: string) => Promise<boolean>;
   /** Finaliza o retorno indicado via motor V3. */
   finalizarRetorno: (retornoId: string, observacao?: string) => Promise<boolean>;
   /** Abre a OS original ou o atendimento de retorno pelo id persistido. */
   abrirOsVinculada: (osId: string) => void;
+  // ---- Retorno / Garantia pela OS original (GOAL OPS-V4-FLUXO-CURTO-007) ----
+  // Opcionais por compatibilidade com fixtures legados (ausente = fluxo indisponível).
+  /** Abre o fluxo na loja ativa (OS original pré-selecionada ou `null` = escolher). */
+  abrirFluxoRetorno?: (origemOsId: string | null) => void;
+  fecharFluxoRetorno?: () => void;
+  /** Busca server-side da OS original na loja ativa; a resposta carrega a loja consultada. */
+  buscarOrigensRetorno?: (termo: string) => Promise<RespostaOrigensRetornoV4>;
+  /** Releitura server-side da OS original pré-selecionada. */
+  lerOrigemRetorno?: (osId: string) => Promise<RespostaOrigemRetornoV4>;
+  /** Abre o retorno pela OS original — idempotente por `operacaoId` (retry = mesmo id). */
+  abrirRetornoDaOrigem?: (origemOsId: string, comando: ComandoRetornoV4) => Promise<ResultadoRetornoV4>;
+  /** Rascunho do relato por loja+OS (memória da sessão, sem senha). */
+  rascunhoRetorno?: (origemOsId: string) => RascunhoRetornoV4 | null;
+  salvarRascunhoRetorno?: (origemOsId: string, rascunho: RascunhoRetornoV4 | null) => void;
   // ---- Cancelamento de OS (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) ----
   /** Cancela a OS via `aplicarTransicaoStatusV3(sid, osId, "cancelada", { motivo })` (motivo obrigatório, contrato já blindado — commit f825867). */
   cancelarOS: (motivo: string) => Promise<boolean>;
@@ -1420,7 +1445,32 @@ export function buildVals(
     escolherNovoAtendimento: (id: NovoAtendimentoModalidadeV4) => {
       if (id === "orcamento") ctx.definirOrcamentoRapidoPrefill(null);
       update(patchEscolherNovoAtendimentoV4(id));
+      // GOAL OPS-V4-FLUXO-CURTO-007: "Retorno / Garantia" só abre o seletor da OS
+      // original (nada é criado aqui); sem orquestrador do fluxo, avisa e não finge.
+      if (id === "retorno") {
+        if (ctx.abrirFluxoRetorno) ctx.abrirFluxoRetorno(null);
+        else notify("Retorno / Garantia indisponível nesta tela.");
+      }
     },
+    // ---- Retorno / Garantia pela OS original (GOAL OPS-V4-FLUXO-CURTO-007) ----
+    // O fluxo só existe na loja em que foi aberto (troca de loja o fecha).
+    retornoFluxo:
+      st.retornoFluxo && ctx.abrirFluxoRetorno && st.retornoFluxo.lojaId === (ctx.lojaAtivaId ?? "") ? st.retornoFluxo : null,
+    openRetornoFluxo: (origemOsId: string | null) => {
+      if (ctx.abrirFluxoRetorno) ctx.abrirFluxoRetorno(origemOsId);
+      else notify("Retorno / Garantia indisponível nesta tela.");
+    },
+    closeRetornoFluxo: () => ctx.fecharFluxoRetorno?.(),
+    buscarOrigensRetorno: (termo: string): Promise<RespostaOrigensRetornoV4> =>
+      ctx.buscarOrigensRetorno ? ctx.buscarOrigensRetorno(termo) : Promise.reject(new Error("Busca indisponível.")),
+    lerOrigemRetorno: (osId: string): Promise<RespostaOrigemRetornoV4> =>
+      ctx.lerOrigemRetorno ? ctx.lerOrigemRetorno(osId) : Promise.reject(new Error("Leitura indisponível.")),
+    abrirRetornoDaOrigem: (origemOsId: string, comando: ComandoRetornoV4): Promise<ResultadoRetornoV4> =>
+      ctx.abrirRetornoDaOrigem
+        ? ctx.abrirRetornoDaOrigem(origemOsId, comando)
+        : Promise.resolve({ ok: false as const, mensagem: "Retorno / Garantia indisponível nesta tela." }),
+    rascunhoRetorno: (origemOsId: string): RascunhoRetornoV4 | null => ctx.rascunhoRetorno?.(origemOsId) ?? null,
+    salvarRascunhoRetorno: (origemOsId: string, rascunho: RascunhoRetornoV4 | null) => ctx.salvarRascunhoRetorno?.(origemOsId, rascunho),
     // Nova OS real: o modal coleta o formulário localmente, cria via `criarOSEnterpriseV3`
     // e chama `onOSCriada(osId)` no sucesso (fecha modal + abre a OS criada + recarrega).
     onOSCriada,
@@ -2374,6 +2424,118 @@ export function useV4Preview(): V4Vals {
     },
     [ordens, update, reloadOrdens],
   );
+  // ---- Retorno / Garantia pela OS original (GOAL OPS-V4-FLUXO-CURTO-007) ----
+  // O fluxo vale só para a loja em que foi aberto; cada abertura/fechamento consome
+  // uma geração. A resposta de `abrirRetornoV3` só navega/fecha/notifica se a loja e
+  // a geração ainda são as mesmas — resposta atrasada nunca contamina outro contexto.
+  const retornoGenRef = useRef(0);
+  const retornoFluxoRef = useRef<V4State["retornoFluxo"]>(null);
+  useEffect(() => {
+    retornoFluxoRef.current = st.retornoFluxo ?? null;
+  }, [st.retornoFluxo]);
+  useEffect(() => {
+    retornoGenRef.current += 1;
+    setSt((prev) => (prev.retornoFluxo && prev.retornoFluxo.lojaId !== (lojaAtivaId ?? "") ? { ...prev, retornoFluxo: null } : prev));
+  }, [lojaAtivaId]);
+  const rascunhosRetornoRef = useRef(new Map<string, RascunhoRetornoV4>());
+  const chaveRascunhoRetorno = useCallback((origemOsId: string) => `${(lojaAtivaId ?? "").trim()}::${origemOsId.trim()}`, [lojaAtivaId]);
+  const rascunhoRetorno = useCallback(
+    (origemOsId: string) => rascunhosRetornoRef.current.get(chaveRascunhoRetorno(origemOsId)) ?? null,
+    [chaveRascunhoRetorno],
+  );
+  const salvarRascunhoRetorno = useCallback(
+    (origemOsId: string, rascunho: RascunhoRetornoV4 | null) => {
+      const chave = chaveRascunhoRetorno(origemOsId);
+      if (rascunho) rascunhosRetornoRef.current.set(chave, rascunho);
+      else rascunhosRetornoRef.current.delete(chave);
+    },
+    [chaveRascunhoRetorno],
+  );
+  const abrirFluxoRetorno = useCallback(
+    (origemOsId: string | null) => {
+      const sid = (lojaAtivaId ?? "").trim();
+      if (!sid) {
+        notify("Selecione a loja ativa para registrar um retorno.");
+        return;
+      }
+      retornoGenRef.current += 1;
+      update({ retornoFluxo: { lojaId: sid, origemOsId: origemOsId?.trim() || null }, novoAtendimento: false, menu: null });
+    },
+    [lojaAtivaId, notify, update],
+  );
+  const fecharFluxoRetorno = useCallback(() => {
+    retornoGenRef.current += 1;
+    update({ retornoFluxo: null });
+  }, [update]);
+  const buscarOrigensRetorno = useCallback(
+    async (termo: string): Promise<RespostaOrigensRetornoV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      if (!sid) throw new Error("Selecione a loja ativa.");
+      const itens = await buscarOrigensRetornoV3(sid, termo);
+      return { lojaId: sid, termo, itens };
+    },
+    [lojaAtivaId],
+  );
+  const lerOrigemRetorno = useCallback(
+    async (osId: string): Promise<RespostaOrigemRetornoV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      if (!sid) throw new Error("Selecione a loja ativa.");
+      const item = await lerOrigemRetornoV3(sid, osId);
+      return { lojaId: sid, osId, item };
+    },
+    [lojaAtivaId],
+  );
+  const abrirRetornoDaOrigem = useCallback(
+    async (origemOsId: string, comando: ComandoRetornoV4): Promise<ResultadoRetornoV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      const origem = (origemOsId ?? "").trim();
+      if (!sid || !origem) return { ok: false, mensagem: "Selecione a OS original na loja ativa." };
+      const geracao = retornoGenRef.current;
+      const mesmoContexto = () =>
+        lojaRef.current === sid && retornoGenRef.current === geracao && retornoFluxoRef.current?.lojaId === sid;
+      try {
+        const r = await abrirRetornoV3(sid, origem, {
+          motivo: comando.motivo,
+          observacao: comando.observacao,
+          operacaoId: comando.operacaoId,
+          recepcao: {
+            acessorios: comando.acessorios,
+            ...(comando.senha ? { senha: comando.senha, ...(comando.senhaTipo ? { senhaTipo: comando.senhaTipo } : {}) } : {}),
+          },
+        });
+        reloadOrdens();
+        const atendimentoId = r.atendimento?.id?.trim() ?? "";
+        const atendimentoCodigo = r.atendimento?.codigo?.trim() || atendimentoId;
+        if (!atendimentoId) return { ok: false, mensagem: "O servidor não confirmou o atendimento do retorno. Recarregue a OS original." };
+        rascunhosRetornoRef.current.delete(`${sid}::${origem}`);
+        if (!mesmoContexto()) return { ok: true, atendimentoId, atendimentoCodigo, situacao: r.situacao, navegou: false };
+        retornoGenRef.current += 1;
+        update({
+          retornoFluxo: null,
+          selectedOsId: atendimentoId,
+          status: "aberta",
+          stage: "entrada",
+          module: "workspace",
+          view: "cockpit",
+          menu: null,
+          focus: true,
+          left: false,
+          right: false,
+        });
+        notify(
+          r.situacao === "criado"
+            ? `Retorno aberto. Atendimento ${atendimentoCodigo} vinculado à OS original.`
+            : `Retorno já registrado: atendimento ${atendimentoCodigo}.`,
+        );
+        return { ok: true, atendimentoId, atendimentoCodigo, situacao: r.situacao, navegou: true };
+      } catch (e) {
+        reloadOrdens();
+        return { ok: false, mensagem: e instanceof Error ? e.message : "Não foi possível abrir o retorno." };
+      }
+    },
+    [lojaAtivaId, reloadOrdens, update, notify],
+  );
+  /** Compatibilidade: retorno da OS selecionada, sem o seletor (uma operação nova por chamada). */
   const abrirRetorno = useCallback(
     async (motivo: string, observacao?: string) => {
       const sid = (lojaAtivaId ?? "").trim();
@@ -2382,42 +2544,11 @@ export function useV4Preview(): V4Vals {
         notify("Selecione uma OS na loja ativa para concluir a ação.");
         return false;
       }
-      try {
-        const result = await abrirRetornoV3(sid, osId, { motivo, observacao });
-        reloadOrdens();
-        reloadDetail();
-        reloadFinancial();
-        const atendimentoId = result.atendimento?.id?.trim();
-        if (atendimentoId) {
-          update({
-            selectedOsId: atendimentoId,
-            status: "aberta",
-            stage: "entrada",
-            module: "workspace",
-            view: "cockpit",
-            menu: null,
-            focus: true,
-            left: false,
-            right: false,
-          });
-          notify(
-            result.atendimento?.codigo
-              ? `Retorno aberto. Atendimento ${result.atendimento.codigo} vinculado.`
-              : "Retorno aberto e atendimento vinculado.",
-          );
-        } else {
-          notify("Retorno aberto.");
-        }
-        return true;
-      } catch (e) {
-        reloadOrdens();
-        reloadDetail();
-        reloadFinancial();
-        notify(e instanceof Error ? e.message : "Não foi possível concluir a ação.");
-        return false;
-      }
+      const r = await abrirRetornoDaOrigem(osId, { motivo, observacao, acessorios: [], operacaoId: gerarOperacaoRetornoIdV4() });
+      if (!r.ok) notify(r.mensagem);
+      return r.ok;
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify, update],
+    [lojaAtivaId, selectedOsId, abrirRetornoDaOrigem, notify],
   );
   const finalizarRetorno = useCallback(
     (retornoId: string, observacao?: string) =>
@@ -2803,6 +2934,13 @@ export function useV4Preview(): V4Vals {
       abrirRetorno,
       finalizarRetorno,
       abrirOsVinculada,
+      abrirFluxoRetorno,
+      fecharFluxoRetorno,
+      buscarOrigensRetorno,
+      lerOrigemRetorno,
+      abrirRetornoDaOrigem,
+      rascunhoRetorno,
+      salvarRascunhoRetorno,
       lancarAPrazo,
       cancelarOS,
       pdvServico,
@@ -2875,6 +3013,13 @@ export function useV4Preview(): V4Vals {
       abrirRetorno,
       finalizarRetorno,
       abrirOsVinculada,
+      abrirFluxoRetorno,
+      fecharFluxoRetorno,
+      buscarOrigensRetorno,
+      lerOrigemRetorno,
+      abrirRetornoDaOrigem,
+      rascunhoRetorno,
+      salvarRascunhoRetorno,
       lancarAPrazo,
       cancelarOS,
       pdvServico,
