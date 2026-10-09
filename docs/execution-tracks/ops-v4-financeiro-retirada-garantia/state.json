@@ -10,9 +10,9 @@
     "goals_done": 0,
     "goals_blocked": 1,
     "goals_imported": 0,
-    "ledger_lines": 1
+    "ledger_lines": 2
   },
   "last_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001",
   "last_result": "BLOCKED",
-  "last_ratified_at": "2026-10-09T15:42:35.999Z"
+  "last_ratified_at": "2026-10-09T21:36:53.264Z"
 }

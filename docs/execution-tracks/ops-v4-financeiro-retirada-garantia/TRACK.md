@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 3,
+  "plan_rev": 4,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -17,6 +17,8 @@ sobre o diagnóstico somente leitura da mesma data (base `85aafb4`, caso
 OS-2026-00025). Repositório `rafaelfaria49-png/omni-gestao-pro-pdv-claude`.
 Revisão 3: "COMANDO — GOAL 001 / REV 3" do proprietário, de 09/10/2026
 (desbloqueio do 001; ver Revisões do plano).
+Revisão 4: "DECISÃO HUMANA — GOAL 001 / REVISÃO 4" do proprietário, de
+09/10/2026 (desbloqueio do 001 restrito ao achado R6; ver Revisões do plano).
 
 A autorização cobre planejamento formal, implementação, testes reais,
 revisão independente e publicação condicionada aos gates — em ENTREGAS
@@ -63,6 +65,35 @@ assinatura, garantia, estoque).
   Rito: PR exclusivo de governança (block da rev 2 materializado byte a byte
   + desbloqueio) → merge normal na main → merge normal da main na branch do
   001 → `open` (tentativa 1 da rev 3).
+- rev 4 (09/10/2026, "DECISÃO HUMANA — GOAL 001 / REVISÃO 4", desbloqueio
+  humano): o GOAL 001 esgotou o teto de 3 tentativas da rev 3 (R4 em
+  `da9bb4a` e R5 em `cc03fc8`: P2 orçamento malformado derrubando o lote,
+  ambos corrigidos; R6 OpenAI em `b3f5fe5`: P2=1 formas de pagamento
+  `"__proto__"`/`"constructor"` resolvem `METHOD_LABELS` para
+  objeto/função herdados e o FinanceiroStage quebra no React) e ficou
+  BLOCKED (by=decisao) em `f8fe8cd`. O proprietário reativou o MESMO GOAL
+  (sem sucessor nem reinício da implementação): READY, plan_rev 4,
+  tentativas reiniciadas (protocolo §3). Decisões:
+  1. corrigir só o R6 no 001, dentro da allowlist vigente
+     (`financial-projection.ts`, seus consumidores no mesmo arquivo e os
+     testes pertinentes): nenhum rótulo não textual sai da cadeia
+     `method()` → `rotuloMeioEstrito()` → fatos → UI; forma desconhecida
+     nunca vira forma reconhecida; sem forma verificável o valor válido fica
+     como "forma não identificada";
+  2. preservar todos os corretivos das revs 2 e 3; regras server-side de
+     recebimento, estorno e entrega inalteradas; allowlist, test_command,
+     classe, risco, família e R obrigatória inalterados;
+  3. bateria adversarial dirigida (nomes de propriedades herdadas em forma
+     única e em split, formas não textuais, vazias, valores inválidos,
+     splits parciais, sem forma, JSON malformado) com reprodução vermelha em
+     `b3f5fe5` antes da R;
+  4. GOALs 002 e 003 seguem READY e sobem para plan_rev 4 (nenhum
+     SUPERSEDED), contratos funcionais inalterados; o 002 continua
+     dependente do 001 DONE e integrado; não abrir 002, 003 nem o
+     OPS-V4-FLUXO-CURTO-008 sem autorização nova.
+  Rito: PR exclusivo de governança (block da rev 3 materializado byte a byte
+  + desbloqueio) → merge normal na main → merge normal da main na branch do
+  001 → `open` (tentativa 1 da rev 4).
 
 ## Por que trilha própria
 

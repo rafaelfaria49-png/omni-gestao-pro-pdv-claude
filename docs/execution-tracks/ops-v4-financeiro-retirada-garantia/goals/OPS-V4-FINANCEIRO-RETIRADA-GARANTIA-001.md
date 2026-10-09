@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 3,
+  "plan_rev": 4,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-001",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-001",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financial-projection-actions.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/os-header-transversal.test.ts lib/operacoes-v4/recibo-persistido-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts components/operacoes-v4-preview/rails-adapter.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-001.spec.ts --retries=0 --workers=1",
@@ -375,6 +375,80 @@ independente OpenAI read-only sobre o SHA exato, conferindo os dois achados
 da R3 e toda superfície que poderia vazar valor legado: P0=P1=P2=0 e
 R_VERDICT=APPROVE. Corretivos do mesmo contrato seguem no MESMO GOAL, dentro
 do teto de tentativas da rev 3.
+
+## Revisão 4 — desbloqueio humano (09/10/2026)
+
+Histórico das tentativas da rev 3 (R independente OpenAI, Codex read-only):
+- tentativa 1, R4 em da9bb4a: REQUEST_CHANGES P2=1 (`lerComercialV4` passava
+  as linhas do orçamento a `computeTotaisV3` sem validar a estrutura; serviço
+  `null` ou `grupoId` numérico lançava exceção e derrubava o lote de
+  projeções do rail). Achados P1/P2 da R3 confirmados corrigidos;
+- tentativa 2, R5 em cc03fc8: REQUEST_CHANGES P2=1 (campos numéricos e de
+  validade do cálculo comercial com objeto não primitivo — `desconto`,
+  `valor`, `custoV3`, `quantidade`, `valorUnitario`, `custoUnitario`,
+  `validoAte` com `toString` nulo — ainda lançavam TypeError e derrubavam o
+  lote);
+- tentativa 3, R6 em b3f5fe5: REQUEST_CHANGES P2=1 (abaixo). R4 e R5
+  confirmados corrigidos; R3-P1/P2 corrigidos desde a R4. O teto de 3
+  tentativas esgotou: BLOCKED (by=decisao) em f8fe8cd na branch do GOAL,
+  materializado na main pelo PR de governança desta revisão com o registro
+  original preservado.
+
+Decisão do proprietário (09/10/2026, "DECISÃO HUMANA — GOAL 001 / REVISÃO
+4"): reativar este MESMO GOAL na rev 4, restrita ao único P2 remanescente da
+R6, sem GOAL sucessor nem reinício da implementação; preservar todos os
+corretivos das revisões 2 e 3; não alterar regras server-side de
+recebimento, estorno ou entrega; não iniciar 002, 003 nem o
+OPS-V4-FLUXO-CURTO-008. As tentativas reiniciam pelo desbloqueio humano
+(protocolo §3). A branch integra a main por merge normal (sem rebase,
+cherry-pick, reset, amend ou force). Classe C4, risco ALTO, família
+anthropic, R obrigatória, allowlist, test_command, gates e áreas protegidas
+inalterados.
+
+### R6-P2 — rótulo de meio de pagamento não textual
+
+Achado: em `lib/operacoes-v4/financial-projection.ts`, a consulta ao
+dicionário `METHOD_LABELS` não se protege de propriedades herdadas. Forma de
+pagamento registrada como `"__proto__"` ou `"constructor"` resolve para
+objeto/função herdados; `rotuloMeioEstrito` aceita esse valor sem validar o
+tipo e o FinanceiroStage lança "Objects are not valid as a React child" com
+fatos verificáveis.
+
+Contrato da correção (dentro da allowlist vigente; não mover para
+`payment-model.ts` nem outra área por conveniência):
+- investigar a cadeia completa `method()` → `rotuloMeioEstrito()` → fatos
+  financeiros → consumidores da interface, incluindo os leitores legados do
+  mesmo arquivo que usam `method()` ou seus rótulos;
+- nenhum rótulo não textual sai dessa cadeia para a UI: consulta só a
+  propriedades próprias (ou estrutura equivalente, p.ex. `Map`) e validação
+  explícita do tipo de saída;
+- valor desconhecido nunca é apresentado como forma reconhecida; sem forma
+  verificável, o valor financeiro válido é preservado sem meio inventado
+  ("forma não identificada");
+- histórico, status, valor, split, caixa, estorno e comprovante persistidos
+  não mudam; decisões de recebimento/entrega idênticas (baseline de
+  equivalência congelado, não regenerado).
+
+### Prova da rev 4
+
+Antes da R, bateria adversarial restrita ao contrato de interpretação de
+dados financeiros e às superfícies autorizadas: `__proto__`, `constructor`,
+`toString`, `valueOf`, `hasOwnProperty` e demais nomes herdados pertinentes,
+em registro de forma única e em linhas de split; formas não textuais;
+strings vazias/espaços; valores monetários inválidos; splits parciais;
+registros sem forma identificada; JSON malformado das revisões anteriores.
+Os testes demonstram: projeção sem exceção; todo rótulo exposto é texto
+válido; nenhuma forma inventada; valor de cada meio correto; sem soma
+duplicada; estado financeiro e permissões inalterados; FinanceiroStage e
+consumidores relevantes renderizam sem erro React; leitura em lote não falha
+por uma OS com metadados inválidos; histórico auditável disponível de modo
+honesto. Reprodução vermelha no candidato b3f5fe5 e verde após a correção,
+no mínimo para o cenário exato da R6. Regressões, PG descartável, E2E sem
+retries, typecheck, ESLint, build seguro, diff-check e AEP como na rev 3;
+T56c e impressão legada seguem separados com evidência. Nova R independente
+OpenAI read-only sobre o SHA exato, com verificação especial da cadeia de
+rótulos e das superfícies que os consomem: P0=P1=P2=0 e R_VERDICT=APPROVE.
+Corretivos do mesmo contrato seguem no MESMO GOAL, dentro do teto da rev 4.
 
 ## Validação, R e parada
 
