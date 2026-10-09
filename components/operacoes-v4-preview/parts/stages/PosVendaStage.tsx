@@ -78,6 +78,18 @@ const ANCORA_FOCO_V4 = "[data-og-v4-raiz]";
 /** Controles que recebem foco por teclado dentro do diálogo. */
 const FOCAVEIS = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
+/**
+ * Camada legítima POR CIMA do diálogo — não é fundo: outro diálogo `aria-modal`, ou um diálogo
+ * fora da raiz da V4 (portal do AppShell, ex.: paleta Ctrl+K do Radix, que não declara aria-modal).
+ */
+function camadaPorCima(alvo: Element, dialogo: HTMLElement): boolean {
+  const camada = alvo.closest('[aria-modal="true"], [role="dialog"], [role="alertdialog"]');
+  if (!camada || camada === dialogo || camada.contains(dialogo)) return false;
+  if (camada.getAttribute("aria-modal") === "true") return true;
+  const raiz = dialogo.closest("[data-og-v4-raiz]");
+  return !raiz || !raiz.contains(camada);
+}
+
 function focoValido(el: HTMLElement | null | undefined): el is HTMLElement {
   return !!el && el.isConnected && !(el as HTMLButtonElement).disabled;
 }
@@ -102,14 +114,13 @@ function Modal({
 }) {
   const dialogo = useRef<HTMLElement>(null);
   // Fundo inacessível: foco que saia do diálogo — clique, foco programático, Tab a partir do
-  // body — volta para dentro dele. Outro diálogo modal por cima não é fundo: fica com o foco.
-  // Declarado ANTES da restauração para sair antes dela no fechamento.
+  // body — volta para dentro dele. Camada legítima por cima (outro modal, paleta Ctrl+K do
+  // AppShell) não é fundo: fica com o foco. Declarado ANTES da restauração para sair antes dela.
   useEffect(() => {
     const segurar = (e: FocusEvent) => {
       const d = dialogo.current;
       if (!d?.isConnected || !(e.target instanceof Element) || d.contains(e.target)) return;
-      const outroModal = e.target.closest('[aria-modal="true"]');
-      if (outroModal && outroModal !== d) return;
+      if (camadaPorCima(e.target, d)) return;
       (d.querySelector<HTMLElement>(FOCAVEIS) ?? d).focus();
     };
     document.addEventListener("focusin", segurar);
@@ -130,6 +141,15 @@ function Modal({
   // Tab/Shift+Tab circulam só pelos controles habilitados do diálogo (mesmo padrão do recibo e
   // do seletor de retorno); Escape segue a regra de fechamento de quem abriu.
   const teclado = (e: TecladoEvent<HTMLElement>) => {
+    // Atalho global da paleta (Ctrl/⌘+K do AppShell) suspenso com este diálogo aberto: ela abriria
+    // POR TRÁS dele (z-index menor), invisível, e levaria o foco do teclado. No App Router o React
+    // escuta no próprio document, o mesmo nó do atalho: só stopImmediatePropagation o alcança.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();

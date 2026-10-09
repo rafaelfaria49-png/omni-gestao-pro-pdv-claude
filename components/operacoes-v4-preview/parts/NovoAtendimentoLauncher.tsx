@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent as TecladoEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as TecladoEvent } from "react";
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import {
@@ -49,6 +49,22 @@ export function NovoAtendimentoLauncher({ v }: { v: V4Vals }) {
   return <NovoAtendimentoLauncherContent v={v} />;
 }
 
+/**
+ * Camada legítima POR CIMA do diálogo — não é fundo: outro diálogo `aria-modal`, ou um diálogo
+ * fora da raiz da V4 (portal do AppShell, ex.: paleta Ctrl+K do Radix, que não declara aria-modal).
+ */
+function camadaPorCima(alvo: Element, dialogo: HTMLElement): boolean {
+  const camada = alvo.closest('[aria-modal="true"], [role="dialog"], [role="alertdialog"]');
+  if (!camada || camada === dialogo || camada.contains(dialogo)) return false;
+  if (camada.getAttribute("aria-modal") === "true") return true;
+  const raiz = dialogo.closest("[data-og-v4-raiz]");
+  return !raiz || !raiz.contains(camada);
+}
+
+function focoValido(el: Element | null | undefined): el is HTMLElement {
+  return el instanceof HTMLElement && el.isConnected && !(el as HTMLButtonElement).disabled;
+}
+
 /** Controles que recebem foco por teclado dentro do launcher. */
 const FOCAVEIS = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
@@ -68,6 +84,10 @@ function NovoAtendimentoLauncherContent({ v }: { v: V4Vals }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // Escape já tratado por uma camada por cima (ex.: paleta Ctrl+K) fecha só ela.
+        const d = dialogoRef.current;
+        if (e.defaultPrevented) return;
+        if (d && e.target instanceof Element && !d.contains(e.target) && camadaPorCima(e.target, d)) return;
         e.preventDefault();
         v.closeNovoAtendimento();
       }
@@ -77,21 +97,39 @@ function NovoAtendimentoLauncherContent({ v }: { v: V4Vals }) {
   }, [v]);
 
   // GOAL OPS-V4-FLUXO-CURTO-007 (porta de entrada do Retorno / Garantia): fundo inacessível —
-  // foco que saia do launcher volta para dentro; outro diálogo modal por cima não é fundo.
+  // foco que saia do launcher volta para dentro; camada legítima por cima não é fundo.
+  // Declarado ANTES da restauração para sair antes dela no fechamento.
   useEffect(() => {
     const segurar = (e: FocusEvent) => {
       const d = dialogoRef.current;
       if (!d?.isConnected || !(e.target instanceof Element) || d.contains(e.target)) return;
-      const outroModal = e.target.closest('[aria-modal="true"]');
-      if (outroModal && outroModal !== d) return;
+      if (camadaPorCima(e.target, d)) return;
       (d.querySelector<HTMLElement>(FOCAVEIS) ?? d).focus();
     };
     document.addEventListener("focusin", segurar);
     return () => document.removeEventListener("focusin", segurar);
   }, []);
 
+  // Fechar (Escape, backdrop) devolve o foco ao "+ Novo" que abriu o launcher — ou à raiz da V4
+  // se ele saiu da tela. Escolher uma modalidade NÃO devolve: o foco segue para o próximo fluxo.
+  const escolhido = useRef(false);
+  const restaurarFoco = useCallback(() => {
+    if (escolhido.current) return;
+    [gatilho, document.querySelector("[data-og-v4-raiz]")].find(focoValido)?.focus();
+  }, [gatilho]);
+  useEffect(() => () => restaurarFoco(), [restaurarFoco]);
+
   // Tab/Shift+Tab circulam só pelas opções do launcher (mesmo padrão dos demais diálogos V4).
   const teclado = (e: TecladoEvent<HTMLDivElement>) => {
+    // Atalho global da paleta (Ctrl/⌘+K do AppShell) suspenso com este diálogo aberto: ela abriria
+    // POR TRÁS dele (z-index menor), invisível, e levaria o foco do teclado. No App Router o React
+    // escuta no próprio document, o mesmo nó do atalho: só stopImmediatePropagation o alcança.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+      return;
+    }
     const d = dialogoRef.current;
     if (e.key !== "Tab" || !d) return;
     const itens = Array.from(d.querySelectorAll<HTMLElement>(FOCAVEIS));
@@ -108,6 +146,7 @@ function NovoAtendimentoLauncherContent({ v }: { v: V4Vals }) {
   };
 
   const escolher = (id: NovoAtendimentoModalidadeV4) => {
+    escolhido.current = true;
     v.escolherNovoAtendimento(id, id === "retorno" ? gatilho : undefined);
   };
 

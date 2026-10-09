@@ -168,6 +168,27 @@ async function capturar(page: Page, nome: string) {
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
+/** Ctrl+K (paleta do AppShell) dentro de um diálogo V4: não abre a paleta POR TRÁS dele; o foco fica. */
+async function ctrlKContido(page: Page, dialogoV4: ReturnType<Page["getByRole"]>, nome: string) {
+  const antes = await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 200) ?? "");
+  await page.keyboard.press("Control+k");
+  await expect(page.getByRole("dialog", { name: "Buscar Rota ou Ação" })).toHaveCount(0);
+  await expect(dialogoV4).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 200) ?? "")).toBe(antes);
+  expect(await dialogoV4.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await page.screenshot({ path: test.info().outputPath(`${nome}-ctrlk.png`), fullPage: false });
+}
+/** Com o diálogo V4 fechado, a paleta do AppShell segue funcionando (abre visível e fecha no Escape). */
+async function paletaDoAppShellFunciona(page: Page, nome: string) {
+  await page.keyboard.press("Control+k");
+  const paleta = page.getByRole("dialog", { name: "Buscar Rota ou Ação" });
+  await expect(paleta).toBeVisible();
+  await expect(paleta.getByPlaceholder("Digite para buscar rotas, cadastros e atalhos...")).toBeFocused();
+  await page.screenshot({ path: test.info().outputPath(`${nome}-paleta-livre.png`), fullPage: false });
+  await page.keyboard.press("Escape");
+  await expect(paleta).toHaveCount(0);
+}
+
 test.describe.configure({ mode: "serial" });
 
 let prisma: PrismaClient;
@@ -475,9 +496,14 @@ test("R09 — rev 15: 'Finalizar retorno' prende Tab/Shift+Tab, Escape devolve o
   await page.keyboard.press("Shift+Tab");
   await expect(modal.getByRole("button", { name: "Finalizar retorno" })).toBeFocused();
 
+  // Tentativa 3 (R6-F3): Ctrl+K não abre a paleta do AppShell por trás do diálogo.
+  await ctrlKContido(page, modal, "r09");
+
   await page.keyboard.press("Escape");
   await expect(modal).toHaveCount(0);
   await expect(gatilho).toBeFocused();
+  await paletaDoAppShellFunciona(page, "r09");
+  await gatilho.focus();
   expect((await lerOS(prisma, os.id)).retornosV3).toEqual([expect.objectContaining({ status: "aberto", osRetornoId: filha!.id })]);
 
   // Finalizar pelo teclado: Enter no botão do diálogo finaliza; o foco não cai no body.
@@ -512,6 +538,44 @@ test("R10 — rev 15 (tentativa 2): launcher + Novo prende Tab/Shift+Tab; a raiz
     await page.keyboard.press("Shift+Tab");
     expect(await launcher.evaluate((el) => el.contains(document.activeElement)), `Shift+Tab ${i + 1} dentro do launcher`).toBe(true);
   }
+  // Tentativa 3 (R6-F3/F2): Ctrl+K contido; o Escape do launcher fecha e devolve o foco ao + Novo.
+  await ctrlKContido(page, launcher, "r10");
   await page.keyboard.press("Escape");
   await expect(launcher).toHaveCount(0);
+  await expect(cta).toBeFocused();
+});
+
+test("R11 — rev 15 (tentativa 3): seletor gravando — clique no backdrop não tira o foco nem fecha; Tab/Enter não alcançam o fundo", async ({ page }) => {
+  const os = await semearOS(prisma);
+  await abrirV4(page);
+  await abrirPeloNovo(page);
+  await buscarESelecionar(page, os.codigo, os.codigo);
+  const d = dialogo(page);
+  await d.getByLabel("Motivo do retorno / novo defeito").fill("Touch intermitente");
+  let liberar!: () => void;
+  const segurada = new Promise<void>((r) => { liberar = r; });
+  const soltar = await interceptarProximaAction(page, os.id, async (route) => {
+    await segurada;
+    await route.continue();
+  });
+  await d.getByRole("button", { name: "Abrir atendimento de retorno" }).click();
+  await expect(d.getByRole("button", { name: "Abrindo atendimento…" })).toBeVisible();
+  const caixa = (await d.boundingBox())!;
+  expect(caixa.x).toBeGreaterThan(20);
+  await page.mouse.click(caixa.x - 12, caixa.y + 40); // backdrop, fora do diálogo
+  await expect(d).toBeVisible();
+  expect(await d.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await page.locator("[data-og-v4-raiz]").focus();
+  expect(await d.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  for (let i = 0; i < 6; i += 1) {
+    await page.keyboard.press("Tab");
+    expect(await d.evaluate((el) => el.contains(document.activeElement)), `Tab ${i + 1} dentro do seletor`).toBe(true);
+    await page.keyboard.press("Enter");
+  }
+  expect(await filhas(prisma, os.id)).toHaveLength(0);
+  await ctrlKContido(page, d, "r11");
+  liberar();
+  await expect(d).toHaveCount(0, { timeout: 30_000 });
+  await soltar();
+  expect(await filhas(prisma, os.id)).toHaveLength(1);
 });

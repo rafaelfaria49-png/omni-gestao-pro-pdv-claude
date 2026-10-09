@@ -72,6 +72,8 @@ import { useV4Preview, type V4Vals } from "@/components/operacoes-v4-preview/use
 import { RetornoOrigemPickerV4 } from "@/components/operacoes-v4-preview/parts/RetornoOrigemPickerV4";
 import { PosVendaStage } from "@/components/operacoes-v4-preview/parts/stages/PosVendaStage";
 import { NovoAtendimentoLauncher } from "@/components/operacoes-v4-preview/parts/NovoAtendimentoLauncher";
+import { useEffect, useState } from "react";
+import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   LIMITE_OBSERVACAO_INTERNA_V3,
   LIMITE_OCORRENCIA_PRE_ENTREGA_V4,
@@ -983,5 +985,193 @@ describe("OPS-V4-FLUXO-CURTO-007 rev 15 — tentativa 2 (achados da R5)", () => 
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Novo atendimento" })).toBeNull());
     expect(m.abrirRetornoV3).not.toHaveBeenCalled();
+  });
+});
+
+describe("OPS-V4-FLUXO-CURTO-007 rev 15 — tentativa 3 (achados da R6)", () => {
+  /** Abre a paleta por outro caminho (camada legítima por cima, sem passar pelo atalho). */
+  let abrirPaletaPorFora: () => void = () => {};
+  /** Mesmo atalho e mesmo componente do Topbar do AppShell: CommandDialog (Radix, portal). */
+  function PaletaAppShell() {
+    const [aberta, setAberta] = useState(false);
+    useEffect(() => {
+      abrirPaletaPorFora = () => setAberta(true);
+    }, []);
+    useEffect(() => {
+      const down = (e: KeyboardEvent) => {
+        if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          setAberta((a) => !a);
+        }
+      };
+      document.addEventListener("keydown", down);
+      return () => document.removeEventListener("keydown", down);
+    }, []);
+    return (
+      <CommandDialog open={aberta} onOpenChange={setAberta} title="Buscar Rota ou Ação" description="Atalhos">
+        <CommandInput placeholder="Digite para buscar" />
+        <CommandList>
+          <CommandEmpty>Nada.</CommandEmpty>
+          <CommandGroup heading="Ações">
+            <CommandItem>Nova venda</CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
+    );
+  }
+  /** Raiz da V4 real (focável) + fundo + paleta do AppShell fora da raiz. */
+  function V4ComPaleta({ expor }: { expor: (v: V4Vals) => void }) {
+    const v = useV4Preview();
+    expor(v);
+    return (
+      <>
+        <div data-og-v4-raiz="" tabIndex={-1}>
+          <button type="button" onClick={v.openNovoAtendimento}>+ Novo</button>
+          <button type="button" onClick={() => fundo()}>Fundo</button>
+          {v.realOS && v.isPos ? <PosVendaStage v={v} /> : null}
+          <NovoAtendimentoLauncher v={v} />
+          <RetornoOrigemPickerV4 v={v} />
+        </div>
+        <PaletaAppShell />
+      </>
+    );
+  }
+  const fundo = vi.fn();
+  const paleta = () => screen.findByRole("dialog", { name: "Buscar Rota ou Ação" });
+  async function montarComPaleta() {
+    render(<V4ComPaleta expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(vAtual.ordens.length).toBeGreaterThan(0));
+  }
+  /** Ctrl+K dentro do diálogo V4 NÃO abre a paleta por trás dele; o foco fica no diálogo. */
+  async function ctrlKContido(user: ReturnType<typeof userEvent.setup>, dialogo: HTMLElement) {
+    const antes = document.activeElement;
+    expect(dialogo.contains(antes)).toBe(true);
+    await user.keyboard("{Control>}k{/Control}");
+    expect(screen.queryByRole("dialog", { name: "Buscar Rota ou Ação" })).toBeNull();
+    expect(document.activeElement).toBe(antes);
+  }
+  /** Camada legítima aberta por outro caminho: fica com o foco; o Escape dela fecha só ela. */
+  async function camadaPorCimaRespeitada(user: ReturnType<typeof userEvent.setup>, dialogo: HTMLElement) {
+    act(() => abrirPaletaPorFora());
+    const p = await paleta();
+    const busca = within(p).getByPlaceholderText("Digite para buscar");
+    await waitFor(() => expect(document.activeElement).toBe(busca));
+    await user.type(busca, "venda");
+    expect((busca as HTMLInputElement).value).toBe("venda");
+    expect(p.contains(document.activeElement)).toBe(true);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Buscar Rota ou Ação" })).toBeNull());
+    expect(dialogo.isConnected).toBe(true);
+    // A paleta (Radix, sem trigger) solta o foco no body ao fechar: nenhum controle de fundo
+    // fica com ele, Enter não aciona nada e o próximo Tab volta ao diálogo.
+    const ativo = document.activeElement;
+    expect(ativo === document.body || dialogo.contains(ativo)).toBe(true);
+    await user.keyboard("{Enter}");
+    expect(fundo).not.toHaveBeenCalled();
+    await user.tab();
+    expect(dialogo.contains(document.activeElement)).toBe(true);
+    await user.tab({ shift: true });
+    expect(dialogo.contains(document.activeElement)).toBe(true);
+  }
+  beforeEach(() => {
+    fundo.mockReset();
+    // jsdom não tem as APIs de layout que o cmdk usa (ambiente, não comportamento do app).
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+    if (!("ResizeObserver" in globalThis)) {
+      (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+    }
+  });
+
+  it("F1: seletor gravando — clique no backdrop e foco na raiz NÃO tiram o foco do diálogo; Tab/Enter não alcançam o fundo", async () => {
+    const user = userEvent.setup();
+    await montarComPaleta();
+    act(() => vAtual.openRetornoFluxo(null));
+    const dialogo = await buscarESelecionar(user, "Galaxy A", "OS-A");
+    let soltar!: () => void;
+    m.abrirRetornoV3.mockImplementationOnce((_s: string, id: string) => new Promise((res) => { soltar = () => res({ os: banco[id], atendimento: os("filha"), situacao: "criado", retornoId: "r" }); }));
+    await user.type(within(dialogo).getByLabelText("Motivo do retorno / novo defeito"), "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await within(dialogo).findByRole("button", { name: "Abrindo atendimento…" });
+    // Clique no backdrop durante a gravação: não fecha e não move o foco (mousedown cancelado).
+    const backdrop = dialogo.parentElement!;
+    expect(fireEvent.mouseDown(backdrop)).toBe(false);
+    expect(screen.getByRole("dialog", { name: "Retorno / Garantia" })).toBeTruthy();
+    // Foco na raiz da V4 (o destino que um clique nativo daria): volta para dentro do seletor.
+    const raiz = document.querySelector<HTMLElement>("[data-og-v4-raiz]")!;
+    act(() => raiz.focus());
+    expect(dialogo.contains(document.activeElement)).toBe(true);
+    for (let i = 0; i < 4; i += 1) {
+      await user.tab();
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+      await user.keyboard("{Enter}");
+      await user.tab({ shift: true });
+      expect(dialogo.contains(document.activeElement)).toBe(true);
+    }
+    expect(fundo).not.toHaveBeenCalled();
+    expect(m.abrirRetornoV3).toHaveBeenCalledTimes(1);
+    await act(async () => soltar());
+  });
+
+  it("F2: fechar o launcher (Escape ou backdrop) devolve o foco ao '+ Novo'; escolher uma modalidade não", async () => {
+    const user = userEvent.setup();
+    await montarComPaleta();
+    const novo = screen.getByRole("button", { name: "+ Novo" });
+    await user.click(novo);
+    await screen.findByRole("dialog", { name: "Novo atendimento" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Novo atendimento" })).toBeNull());
+    expect(document.activeElement).toBe(novo);
+
+    await user.click(novo);
+    const launcher = await screen.findByRole("dialog", { name: "Novo atendimento" });
+    await user.click(launcher.parentElement!);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Novo atendimento" })).toBeNull());
+    expect(document.activeElement).toBe(novo);
+
+    await user.click(novo);
+    await user.click(await screen.findByRole("button", { name: /Retorno \/ Garantia/ }));
+    const seletor = await screen.findByRole("dialog", { name: "Retorno / Garantia" });
+    expect(document.activeElement).toBe(within(seletor).getByRole("combobox", { name: "Buscar OS original" }));
+  });
+
+  it("F3a: 'Finalizar retorno' — Ctrl+K não abre a paleta por trás; paleta aberta por fora fica com o foco e o Escape dela não fecha o diálogo", async () => {
+    const user = userEvent.setup();
+    await montarComPaleta();
+    await act(async () => vAtual.selectOS(banco.andamento!, "posvenda"));
+    await user.click(await screen.findByRole("button", { name: "Finalizar retorno" }));
+    const finalizar = await screen.findByRole("dialog", { name: "Finalizar retorno" });
+    await ctrlKContido(user, finalizar);
+    await camadaPorCimaRespeitada(user, finalizar);
+    expect(screen.getByRole("dialog", { name: "Finalizar retorno" })).toBe(finalizar);
+    expect(m.finalizarRetornoV3).not.toHaveBeenCalled();
+    // Fechado o diálogo, o atalho do AppShell volta a funcionar.
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Finalizar retorno" })).toBeNull());
+    await user.keyboard("{Control>}k{/Control}");
+    await paleta();
+  });
+
+  it("F3b: launcher — Ctrl+K contido; paleta por fora fecha sozinha no Escape; o Escape seguinte fecha o launcher e devolve o foco", async () => {
+    const user = userEvent.setup();
+    await montarComPaleta();
+    const novo = screen.getByRole("button", { name: "+ Novo" });
+    await user.click(novo);
+    const launcher = await screen.findByRole("dialog", { name: "Novo atendimento" });
+    await ctrlKContido(user, launcher);
+    await camadaPorCimaRespeitada(user, launcher);
+    expect(screen.getByRole("dialog", { name: "Novo atendimento" })).toBe(launcher);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Novo atendimento" })).toBeNull());
+    expect(document.activeElement).toBe(novo);
+  });
+
+  it("F3c: seletor Retorno / Garantia — Ctrl+K contido; paleta por fora fica com o foco e o Escape dela não fecha o seletor", async () => {
+    const user = userEvent.setup();
+    await montarComPaleta();
+    act(() => vAtual.openRetornoFluxo(null));
+    const seletor = await screen.findByRole("dialog", { name: "Retorno / Garantia" });
+    await ctrlKContido(user, seletor);
+    await camadaPorCimaRespeitada(user, seletor);
+    expect(screen.getByRole("dialog", { name: "Retorno / Garantia" })).toBe(seletor);
   });
 });

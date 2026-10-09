@@ -74,6 +74,21 @@ const campo: CSSProperties = {
 const rotulo: CSSProperties = { display: "block", marginBottom: 5, color: C.body, fontSize: 12, fontWeight: 700 };
 const FOCO = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+/** Controles que recebem foco por teclado dentro do seletor (mesma lista da contenção de Tab). */
+const FOCAVEIS = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Camada legítima POR CIMA do diálogo — não é fundo: outro diálogo `aria-modal`, ou um diálogo
+ * fora da raiz da V4 (portal do AppShell, ex.: paleta Ctrl+K do Radix, que não declara aria-modal).
+ */
+function camadaPorCima(alvo: Element, dialogo: HTMLElement): boolean {
+  const camada = alvo.closest('[aria-modal="true"], [role="dialog"], [role="alertdialog"]');
+  if (!camada || camada === dialogo || camada.contains(dialogo)) return false;
+  if (camada.getAttribute("aria-modal") === "true") return true;
+  const raiz = dialogo.closest("[data-og-v4-raiz]");
+  return !raiz || !raiz.contains(camada);
+}
+
 function dataCurta(iso?: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -155,6 +170,20 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
   const [busy, setBusy] = useState<null | "abrir" | "ocorrencia">(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+
+  // Fundo inacessível (inclusive durante a gravação): foco que saia do seletor — clique no
+  // backdrop, foco programático na raiz da V4, Tab a partir dela — volta para dentro. Camada
+  // legítima por cima (paleta Ctrl+K do AppShell) não é fundo. Declarado ANTES da restauração.
+  useEffect(() => {
+    const segurar = (e: FocusEvent) => {
+      const d = dialogRef.current;
+      if (!d?.isConnected || !(e.target instanceof Element) || d.contains(e.target)) return;
+      if (camadaPorCima(e.target, d)) return;
+      (Array.from(d.querySelectorAll<HTMLElement>(FOCAVEIS)).find((el) => (typeof el.checkVisibility === "function" ? el.checkVisibility() : true)) ?? d).focus();
+    };
+    document.addEventListener("focusin", segurar);
+    return () => document.removeEventListener("focusin", segurar);
+  }, []);
 
   // Foco: entra no diálogo e volta ao controle que o abriu.
   useEffect(() => {
@@ -339,6 +368,15 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
 
   // Contenção de foco (Tab/Shift+Tab) e Escape no próprio diálogo — sem listener global.
   const onDialogKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    // Atalho global da paleta (Ctrl/⌘+K do AppShell) suspenso com este diálogo aberto: ela abriria
+    // POR TRÁS dele (z-index menor), invisível, e levaria o foco do teclado. No App Router o React
+    // escuta no próprio document, o mesmo nó do atalho: só stopImmediatePropagation o alcança.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -346,9 +384,7 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
       return;
     }
     if (e.key !== "Tab" || !dialogRef.current) return;
-    const focaveis = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'),
-    ).filter((el) => (typeof el.checkVisibility === "function" ? el.checkVisibility() : true));
+    const focaveis = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCAVEIS)).filter((el) => (typeof el.checkVisibility === "function" ? el.checkVisibility() : true));
     if (focaveis.length === 0) {
       e.preventDefault();
       dialogRef.current.focus();
@@ -473,7 +509,7 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
   const tituloId = `${uid}-titulo`;
 
   return (
-    <div className={styles.overlay} role="presentation" style={{ background: "rgba(17,19,26,.42)" }} onMouseDown={(e) => { if (e.target === e.currentTarget) fechar(); }}>
+    <div className={styles.overlay} role="presentation" style={{ background: "rgba(17,19,26,.42)" }} onMouseDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); fechar(); } }}>
       <div
         ref={dialogRef}
         role="dialog"
