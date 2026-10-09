@@ -600,3 +600,121 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R3: nenhum valor não conc
     }
   });
 });
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R6: forma ou evento com nome herdado do protótipo não quebra superfície", () => {
+  const HERDADOS = ["__proto__", "constructor", "toString", "valueOf", "hasOwnProperty", "__PROTO__", "Constructor"];
+  const codigo = (forma: string) => forma.trim().toLocaleLowerCase("pt-BR").replace(/\s+/g, "_");
+  const baixa = (extra: Record<string, unknown> = {}, depois: unknown[] = []): Titulo => ({
+    status: "pago",
+    historico: [{ tipo: "liquidacao", valor: 420, loteId: "op-1", at: "2026-10-05T21:37:39.000Z", userLabel: "Operador QA", ...extra }, ...depois],
+  });
+  /** Recibo da operação op-1 na OS com as linhas dadas (o vínculo do 006). */
+  const comEvento = (linhas: unknown) => ({
+    timeline: [{
+      id: "ev-quitacao", tipo: "operacao_cobranca_gerada", autor: "Operador QA", autorTipo: "usuario", conteudo: "Quitação",
+      criadoEm: "2026-10-05T21:37:38.000Z", metadata: { operacaoId: "op-1", total: 420, linhas, op: "liquidar" },
+    }],
+  });
+
+  /** Monta sem exceção e devolve os erros de filho inválido que o React registraria. */
+  function montarSemErroReact(c: Cenario): string[] {
+    const erros: string[] = [];
+    const espiao = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => { erros.push(args.map((a) => String(a)).join(" ")); });
+    try {
+      expect(() => montar(c)).not.toThrow();
+    } finally {
+      espiao.mockRestore();
+    }
+    return erros.filter((e) => /not valid as a React child/i.test(e));
+  }
+  const semLixo = (rotulo: string) => {
+    const texto = document.body.textContent ?? "";
+    expect(texto, rotulo).not.toMatch(/\[object |function [A-Za-z]*\(/);
+  };
+  const formaExibida = () => {
+    const linha = screen.getByText("Forma de pagamento").parentElement!;
+    return linha.lastElementChild?.textContent ?? "";
+  };
+
+  it("R6-P2 reprodução exata: Financeiro com baixa \"__proto__\"/\"constructor\" e fatos verificáveis renderiza a forma registrada em texto", () => {
+    for (const forma of ["__proto__", "constructor"]) {
+      const a = os("a", "aprovado", { timeline: [] });
+      expect(montarSemErroReact({ os: a, fin: { projection: projecao(a, baixa({ formaPagamento: forma })) }, stage: "financeiro" }), forma).toEqual([]);
+      expect(formaExibida(), forma).toBe(forma);
+      semLixo(forma);
+      cleanup();
+    }
+  });
+
+  it("R6: Financeiro, Entrega, Próxima ação e Estorno com nome herdado na baixa, no split e no recibo da operação — sem erro React, forma em texto, valores próprios", () => {
+    for (const forma of HERDADOS) {
+      const c = codigo(forma);
+      const casos: Array<[string, Titulo, Record<string, unknown>, string]> = [
+        ["baixa", baixa({ formaPagamento: forma }), { timeline: [] }, c],
+        ["split parcial", baixa({ split: [{ forma: "pix", valor: 100 }, { forma, valor: 320 }] }), { timeline: [] }, `Pix R$ 100,00 + ${c} R$ 320,00`],
+        ["recibo da operação", baixa(), comEvento([{ forma, valor: 420 }]), c],
+        ["recibo parcial", baixa(), comEvento([{ forma: "pix", valor: 100 }, { forma, valor: 320 }]), `Pix R$ 100,00 + ${c} R$ 320,00`],
+      ];
+      for (const [onde, titulo, extra, esperado] of casos) {
+        const rotulo = `${JSON.stringify(forma)} @ ${onde}`;
+        // Financeiro (aprovado + pago) com o modal de estorno aberto por cima
+        const a = os("a", "aprovado", extra);
+        expect(montarSemErroReact({ os: a, fin: { projection: projecao(a, titulo) }, stage: "financeiro", estorno: true }), rotulo).toEqual([]);
+        expect(formaExibida(), rotulo).toBe(esperado);
+        expect(sonda.v!.estorno, rotulo).toEqual({ temRecebido: true, caixaAberto: true, podeEstornar: true });
+        semLixo(rotulo);
+        cleanup();
+        // Entrega com pendência comercial: fatos e forma no guia de retirada, entrega bloqueada
+        const r = os("r", "rascunho", extra);
+        expect(montarSemErroReact({ os: r, fin: { projection: projecao(r, titulo) } }), rotulo).toEqual([]);
+        expect(within(guia()).getByText(`Pagamento registrado — R$ 420,00 · Saldo do título — R$ 0,00 · Forma registrada: ${esperado}.`), rotulo).toBeTruthy();
+        expect(within(barra()).getByText("Revisar aprovação comercial"), rotulo).toBeTruthy();
+        expect(confirmar(), rotulo).toBeNull();
+        semLixo(rotulo);
+        cleanup();
+      }
+    }
+  });
+
+  it("R6: forma não textual na baixa → \"Forma não identificada no título\", sem erro React", () => {
+    for (const forma of [7, true, ["pix"], { codigo: "pix" }, "   ", JSON.parse('{"toString":null}')]) {
+      const rotulo = String(JSON.stringify(forma));
+      const a = os("a", "aprovado", { timeline: [] });
+      expect(montarSemErroReact({ os: a, fin: { projection: projecao(a, baixa({ formaPagamento: forma })) }, stage: "financeiro" }), rotulo).toEqual([]);
+      expect(formaExibida(), rotulo).toBe("Forma não identificada no título");
+      semLixo(rotulo);
+      cleanup();
+    }
+  });
+
+  it("R6: tipo de evento com nome herdado no título → histórico com descrição em texto, sem erro React; nenhum evento some", () => {
+    for (const tipo of HERDADOS) {
+      const a = os("a", "aprovado");
+      const p = projecao(a, baixa({}, [{ tipo, at: "2026-10-06T10:00:00.000Z" }]));
+      expect(montarSemErroReact({ os: a, fin: { projection: p }, stage: "financeiro" }), tipo).toEqual([]);
+      expect(screen.getByText("Evento financeiro do título"), tipo).toBeTruthy();
+      expect(p.historico?.flatMap((h) => h.eventIds).sort(), tipo).toEqual(p.financialEvents.map((e) => e.eventId).sort());
+      semLixo(tipo);
+      cleanup();
+    }
+  });
+
+  it("R6: rail \"Recebimento da OS\" com OS de forma/evento herdados ao lado de uma íntegra — sem erro React, linhas coerentes", () => {
+    const boa = os("boa", "aprovado");
+    const proto = os("p", "aprovado", { timeline: [] });
+    const cons = os("c", "rascunho", comEvento([{ forma: "constructor", valor: 420 }]));
+    expect(montarSemErroReact({ os: null, fin: { projection: null }, rail: {
+      ordens: [boa, proto, cons],
+      projections: new Map([
+        ["boa", projecao(boa, LIQUIDADO)],
+        ["p", projecao(proto, baixa({ formaPagamento: "__proto__" }, [{ tipo: "__proto__" }]))],
+        ["c", projecao(cons, baixa({}, [{ tipo: "constructor" }]))],
+      ]),
+    } })).toEqual([]);
+    const itens = sonda.v!.pdvView.itens;
+    expect(itens.map((i) => i.id).sort()).toEqual(["boa", "c", "p"]);
+    expect(itens.find((i) => i.id === "p")).toMatchObject({ statusFaturamento: itens.find((i) => i.id === "boa")!.statusFaturamento });
+    expect(itens.find((i) => i.id === "c")).toMatchObject({ statusFaturamento: "Aprovação pendente" });
+    semLixo("rail");
+  });
+});

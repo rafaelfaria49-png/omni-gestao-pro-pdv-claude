@@ -115,3 +115,56 @@ describe("R4-P2 — orçamento malformado não derruba o lote de projeções", (
     });
   }
 });
+
+describe("R6 — forma ou evento com nome herdado do protótipo não derruba nem contamina o lote", () => {
+  const integra = () => osRow("boa", "aprovado", [{ id: "s1", descricao: "Troca de Tela", valor: 420 }]);
+  const comHistorico = (id: string, historico: unknown[]) => ({ ...titleRow(id), payload: { ordemServicoId: id, historico } });
+  const baixa = (id: string, extra: Record<string, unknown> = {}) => ({ tipo: "liquidacao", valor: 420, loteId: `op-${id}`, ...extra });
+
+  /** Saída que não é texto (objeto/função herdados) ou texto de coerção em qualquer ponto do lote. */
+  function rotulosInvalidos(raiz: unknown): string[] {
+    const achados: string[] = [];
+    const vistos = new Set<unknown>();
+    const visitar = (v: unknown, caminho: string) => {
+      if (typeof v === "function") { achados.push(`${caminho}: função`); return; }
+      if (typeof v === "string") { if (/\[object |function [A-Za-z]*\(/.test(v)) achados.push(`${caminho}: "${v}"`); return; }
+      if (!v || typeof v !== "object" || vistos.has(v)) return;
+      if (v === Object.prototype || v === Array.prototype || v === Function.prototype) { achados.push(`${caminho}: protótipo`); return; }
+      vistos.add(v);
+      for (const [k, filho] of Object.entries(v)) visitar(filho, `${caminho}.${k}`);
+    };
+    visitar(raiz, "$");
+    return achados;
+  }
+
+  it("OS com __proto__/constructor na baixa, no split e no tipo do evento ao lado de uma íntegra: o lote volta inteiro, serializável e só com texto", async () => {
+    const aprovado = (id: string) => osRow(id, "aprovado", [{ id: "s1", descricao: "Troca de Tela", valor: 420 }]);
+    mocks.osFindMany.mockReset().mockResolvedValue([integra(), aprovado("proto"), aprovado("cons"), aprovado("split"), aprovado("tipo"), aprovado("valor")]);
+    mocks.titleFindMany.mockReset().mockResolvedValue([
+      titleRow("boa"),
+      comHistorico("proto", [baixa("proto", { formaPagamento: "__proto__" })]),
+      comHistorico("cons", [baixa("cons", { formaPagamento: "constructor" })]),
+      comHistorico("split", [baixa("split", { split: [{ forma: "pix", valor: 100 }, { forma: "constructor", valor: 320 }] })]),
+      comHistorico("tipo", [baixa("tipo"), { tipo: "__proto__" }, { tipo: "constructor" }]),
+      comHistorico("valor", [baixa("valor", { split: [{ forma: "pix", valor: 100 }, { forma: "__proto__", valor: JSON.parse('{"toString":null}') }] })]),
+    ]);
+    const lote = await lerProjecoesFinanceirasOSV4(LOJA, ["boa", "proto", "cons", "split", "tipo", "valor"]);
+    const porId = new Map(lote.map((p) => [p.osId, p]));
+    expect([...porId.keys()].sort()).toEqual(["boa", "cons", "proto", "split", "tipo", "valor"]);
+    // O retorno do reader cruza a fronteira da Server Action: função/objeto herdado não pode estar lá.
+    expect(() => structuredClone(lote)).not.toThrow();
+    expect(rotulosInvalidos(lote)).toEqual([]);
+    const boa = porId.get("boa")!;
+    for (const id of ["proto", "cons", "split", "tipo", "valor"]) {
+      const p = porId.get(id)!;
+      // decisões e fatos idênticos aos da OS íntegra: a forma/tipo não muda nada financeiro
+      expect(p, id).toMatchObject({ financialStatus: boa.financialStatus, canDeliver: boa.canDeliver, canReceive: boa.canReceive, receivedTotal: 420, balance: 0 });
+      expect(p.fatos, id).toMatchObject({ verificavel: true, recebidoLiquido: 420, saldoTitulo: 0, liquidado: true });
+    }
+    expect(porId.get("proto")?.fatos?.meios).toEqual([{ label: "__proto__", valor: 420, operacaoId: "op-proto", fonte: "RECEIVABLE_HISTORY" }]);
+    expect(porId.get("cons")?.fatos?.meios).toEqual([{ label: "constructor", valor: 420, operacaoId: "op-cons", fonte: "RECEIVABLE_HISTORY" }]);
+    expect(porId.get("split")?.fatos).toMatchObject({ meios: [{ label: "Pix", valor: 100 }, { label: "constructor", valor: 320 }], semMeioIdentificado: 0 });
+    expect(porId.get("valor")?.fatos).toMatchObject({ meios: [{ label: "Pix", valor: 100 }], semMeioIdentificado: 320 });
+    expect(porId.get("tipo")?.financialEvents.filter((e) => e.source === "RECEIVABLE" && e.type !== "liquidacao").map((e) => e.description)).toEqual(["Evento financeiro do título", "Evento financeiro do título"]);
+  });
+});

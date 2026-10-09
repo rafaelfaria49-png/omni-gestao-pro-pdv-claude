@@ -253,7 +253,14 @@ function text(value: unknown): string {
 }
 
 function money(value: unknown): number | null {
-  const parsed = typeof value === "number" ? value : Number(value);
+  let parsed: number;
+  try {
+    parsed = typeof value === "number" ? value : Number(value);
+  } catch {
+    // Sem conversão primitiva (JSON `{"toString":null}`): não é valor — e nunca exceção que
+    // derrube a leitura de meios/eventos (ou o lote). Quem convertia segue idêntico.
+    return null;
+  }
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) / 100 : null;
 }
 
@@ -276,13 +283,25 @@ const METHOD_LABELS: Record<string, string> = {
   cartao_credito: "Crédito",
 };
 
+/**
+ * Rótulo de um dicionário fixo SÓ por chave própria e SÓ se for texto. O código vem do
+ * dado gravado: `"__proto__"`/`"constructor"` nunca resolvem para a propriedade herdada
+ * do protótipo (objeto/função que quebraria a tela e serializaria lixo).
+ */
+function rotuloDoDicionario(dicionario: Readonly<Record<string, string>>, chave: string): string | null {
+  if (!Object.prototype.hasOwnProperty.call(dicionario, chave)) return null;
+  const rotulo: unknown = dicionario[chave];
+  return typeof rotulo === "string" && rotulo ? rotulo : null;
+}
+
 function method(codeValue: unknown, amount: unknown, source: FinancialPaymentMethodV4["source"]): FinancialPaymentMethodV4 | null {
   const raw = text(codeValue);
   if (!raw) return null;
   const code = raw.toLocaleLowerCase("pt-BR").replace(/\s+/g, "_");
-  const known = METHOD_LABELS[code];
-  const label = known ?? formaLabelRecebimentoV3(code).replace(/^PIX$/, "Pix");
-  return { code, label: label || raw, amount: money(amount), source };
+  // Forma conhecida só pelo dicionário próprio ou pelo catálogo da V3; fora deles, o texto
+  // registrado — nunca uma forma reconhecida por acidente.
+  const label: unknown = rotuloDoDicionario(METHOD_LABELS, code) ?? formaLabelRecebimentoV3(code).replace(/^PIX$/, "Pix");
+  return { code, label: typeof label === "string" && label ? label : raw, amount: money(amount), source };
 }
 
 function methodsFromRecord(record: Record<string, unknown>, source: FinancialPaymentMethodV4["source"]): FinancialPaymentMethodV4[] {
@@ -458,7 +477,7 @@ function readFinancialEvents(payload: Record<string, unknown>, titlePayload: unk
       paymentMethod: methods.map((item) => item.label).join(" + ") || null,
       occurredAt,
       actor: text(entry.userLabel ?? entry.autor) || null,
-      description: EVENT_DESCRIPTIONS[type] ?? "Evento financeiro do título",
+      description: rotuloDoDicionario(EVENT_DESCRIPTIONS, type) ?? "Evento financeiro do título",
     }];
   });
 
@@ -480,7 +499,7 @@ function readFinancialEvents(payload: Record<string, unknown>, titlePayload: unk
       paymentMethod: methods.map((item) => item.label).join(" + ") || null,
       occurredAt,
       actor: text(entry.autor) || null,
-      description: text(entry.conteudo) || EVENT_DESCRIPTIONS[metadataEvent || type] || "Evento financeiro da OS",
+      description: text(entry.conteudo) || rotuloDoDicionario(EVENT_DESCRIPTIONS, metadataEvent || type) || "Evento financeiro da OS",
     }];
   });
 
@@ -546,10 +565,14 @@ function eventoDeRecebimentoDaOperacao(payload: Record<string, unknown>, operaca
   return null;
 }
 
-/** Rótulo de forma dos FATOS: só texto não vazio (nada de coerção de número/objeto). */
+/**
+ * Rótulo de forma dos FATOS: entrada e saída só em texto não vazio (nada de coerção de
+ * número/objeto, nada herdado do protótipo). Sem rótulo, a parte fica sem meio identificado.
+ */
 function rotuloMeioEstrito(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
-  return method(value, null, "RECEIVABLE_HISTORY")?.label ?? null;
+  const label: unknown = method(value, null, "RECEIVABLE_HISTORY")?.label;
+  return typeof label === "string" && label.trim() ? label : null;
 }
 
 /**

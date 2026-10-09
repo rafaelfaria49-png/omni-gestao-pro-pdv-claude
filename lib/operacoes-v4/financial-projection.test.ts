@@ -3,6 +3,9 @@ import type { OrdemServico } from "@/types/os";
 import { criarAutorizacaoEntregaSemCobrancaV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { projectFinancialOSV4, type ProjectFinancialOSV4Input } from "./financial-projection";
+import { derivarSituacaoAtendimentoV4, formaRegistradaV4 } from "./situacao-atendimento-v4";
+import { montarResumoFinanceiroOSV4 } from "./financeiro-v4";
+import { derivarRetiradaFinanceiraV4 } from "./retirada-fluxo-v4";
 
 const storeId = "store-a";
 const osId = "os-1";
@@ -695,5 +698,208 @@ describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R5: nenhum campo do o
     expect(ok.comercial).toMatchObject({ orcamento: "rascunho", totalOrcamento: 300, confereComTitulo: true, divergencias: [] });
     const vencido = project({ payload: comOrcamento({ status: "enviado", validoAte: "2026-07-01" }), titulo: titulo() });
     expect(vencido.comercial).toMatchObject({ orcamento: "expirado", divergencias: [] });
+  });
+});
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R6: rótulo de meio nunca vem do protótipo (matriz adversarial)", () => {
+  // Nomes de propriedades HERDADAS de Object.prototype, inclusive grafias que o código
+  // da forma normaliza para elas (minúsculas, sem espaços nas bordas).
+  const HERDADOS = [
+    "__proto__", "constructor", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf",
+    "propertyIsEnumerable", "toLocaleString", "__defineGetter__", "__defineSetter__",
+    "__lookupGetter__", "__lookupSetter__", "__PROTO__", "Constructor", " constructor ",
+  ];
+  // Rótulos de formas reconhecidas: um nome herdado nunca vira uma delas.
+  const RECONHECIDOS = ["Pix", "PIX", "Dinheiro", "Débito", "Crédito", "Parcelado", "Crediário", "Carteira / crédito do cliente"];
+  // Formas sem texto aproveitável: o valor fica como "forma não identificada".
+  const NAO_TEXTUAIS: unknown[] = [true, 7, ["pix"], { codigo: "pix" }, "", "   ", null, JSON.parse('{"toString":null}'), JSON.parse('{"__proto__":{"x":1}}'), Object.create(null)];
+  const VALORES_INVALIDOS: unknown[] = [[320], "320", true, Number.NaN, Number.POSITIVE_INFINITY, -320, 0, JSON.parse('{"toString":null}')];
+
+  const codigo = (forma: string) => forma.trim().toLocaleLowerCase("pt-BR").replace(/\s+/g, "_");
+  const evento = (linhas: unknown) => ({
+    id: "ev-op-1", tipo: "operacao_cobranca_gerada", autor: "Operador", conteudo: "Recebimento",
+    criadoEm: "2026-07-15T11:00:00.000Z", metadata: { operacaoId: "op-1", total: 420, linhas },
+  });
+  const liquidado = (extra: Record<string, unknown> = {}, depois: unknown[] = []) =>
+    title(420, "pago", [{ tipo: "liquidacao", valor: 420, loteId: "op-1", at: "2026-07-15T11:00:01.000Z", ...extra }, ...depois]);
+  const legado = (r: ReturnType<typeof project>) => ({
+    deliveryDecision: r.deliveryDecision, canDeliver: r.canDeliver, canReceive: r.canReceive, financialStatus: r.financialStatus,
+    consistencyStatus: r.consistencyStatus, consistencyIssues: r.consistencyIssues, receivedTotal: r.receivedTotal, balance: r.balance,
+    receivablePayments: r.receivablePayments, acoes: r.acoes,
+    fatos: { verificavel: r.fatos?.verificavel, recebidoLiquido: r.fatos?.recebidoLiquido, saldoTitulo: r.fatos?.saldoTitulo, liquidado: r.fatos?.liquidado, pagamentosVigentes: r.fatos?.pagamentosVigentes },
+  });
+
+  /** Caminhos onde sai algo que não é texto (objeto/função herdados) ou texto de coerção ("[object Object]"). */
+  function rotulosInvalidos(raiz: unknown): string[] {
+    const achados: string[] = [];
+    const vistos = new Set<unknown>();
+    const visitar = (v: unknown, caminho: string) => {
+      if (typeof v === "function") { achados.push(`${caminho}: função`); return; }
+      if (typeof v === "string") { if (/\[object |function [A-Za-z]*\(/.test(v)) achados.push(`${caminho}: "${v}"`); return; }
+      if (!v || typeof v !== "object" || vistos.has(v)) return;
+      if (v === Object.prototype || v === Array.prototype || v === Function.prototype) { achados.push(`${caminho}: protótipo`); return; }
+      vistos.add(v);
+      for (const [k, filho] of Object.entries(v)) visitar(filho, `${caminho}.${k}`);
+    };
+    visitar(raiz, "$");
+    return achados;
+  }
+
+  /** Projeção + tudo o que as superfícies derivam dela (situação, resumo financeiro, retirada). */
+  function superficies(r: ReturnType<typeof project>) {
+    return {
+      projecao: r,
+      situacao: derivarSituacaoAtendimentoV4({ osId, projection: r, loading: false, error: null }),
+      forma: formaRegistradaV4(r, "legado"),
+      resumo: montarResumoFinanceiroOSV4({ projection: r, caixaAberto: true }),
+      retirada: derivarRetiradaFinanceiraV4({ osId, projection: r, loading: false, error: null }),
+    };
+  }
+
+  type Local = "baixa" | "split integral" | "split parcial" | "evento" | "evento parcial";
+  const LOCAIS: Local[] = ["baixa", "split integral", "split parcial", "evento", "evento parcial"];
+  function cenario(onde: Local, forma: unknown) {
+    switch (onde) {
+      case "baixa": return project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ formaPagamento: forma }) });
+      case "split integral": return project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ split: [{ forma, valor: 420 }] }) });
+      case "split parcial": return project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ split: [{ forma: "pix", valor: 100 }, { forma, valor: 320 }] }) });
+      case "evento": return project({ payload: payload(420, { timeline: [evento([{ forma, valor: 420 }])] }), prismaValorTotal: 420, titulo: liquidado() });
+      case "evento parcial": return project({ payload: payload(420, { timeline: [evento([{ forma: "pix", valor: 100 }, { forma, valor: 320 }])] }), prismaValorTotal: 420, titulo: liquidado() });
+    }
+  }
+  const parcial = (onde: Local) => onde === "split parcial" || onde === "evento parcial";
+  const fonte = (onde: Local) => (onde.startsWith("evento") ? "OS_TIMELINE" : "RECEIVABLE_HISTORY");
+
+  it("R6-P2 reprodução exata: baixa com formaPagamento \"__proto__\"/\"constructor\" e fatos verificáveis → rótulo é TEXTO", () => {
+    for (const forma of ["__proto__", "constructor"]) {
+      const r = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ formaPagamento: forma }) });
+      expect(r.fatos, forma).toMatchObject({ verificavel: true, recebidoLiquido: 420, liquidado: true });
+      expect(r.fatos?.meios, forma).toEqual([{ label: forma, valor: 420, operacaoId: "op-1", fonte: "RECEIVABLE_HISTORY" }]);
+      expect(typeof r.paymentMethods[0]?.label, forma).toBe("string");
+      expect(formaRegistradaV4(r, "legado"), forma).toBe(forma);
+    }
+  });
+
+  it("R6: nome herdado em forma única, split integral/parcial e evento da operação — texto registrado, nunca forma reconhecida; valores e decisões intactos", () => {
+    for (const forma of HERDADOS) {
+      for (const onde of LOCAIS) {
+        const rotulo = `${JSON.stringify(forma)} @ ${onde}`;
+        let r!: ReturnType<typeof project>;
+        expect(() => { r = cenario(onde, forma); }, rotulo).not.toThrow();
+        // 1–2: nada de objeto/função/coerção em nenhuma saída que chega à interface
+        expect(rotulosInvalidos(superficies(r)), rotulo).toEqual([]);
+        // 3–4: o meio herdado aparece como o texto registrado, com o PRÓPRIO valor
+        const esperado = [
+          ...(parcial(onde) ? [{ label: "Pix", valor: 100, operacaoId: "op-1", fonte: fonte(onde) }] : []),
+          { label: codigo(forma), valor: parcial(onde) ? 320 : 420, operacaoId: "op-1", fonte: fonte(onde) },
+        ];
+        expect(r.fatos?.meios, rotulo).toEqual(esperado);
+        expect(RECONHECIDOS, rotulo).not.toContain(codigo(forma));
+        for (const m of r.paymentMethods) expect(typeof m.label, rotulo).toBe("string");
+        // 5: sem soma duplicada — meios + parte sem forma = recebido líquido
+        const soma = (r.fatos?.meios ?? []).reduce((acc, m) => acc + Math.round((m.valor ?? 0) * 100), 0) + Math.round((r.fatos?.semMeioIdentificado ?? 0) * 100);
+        expect(soma, rotulo).toBe(42000);
+        // 6: estado financeiro, decisões e ações idênticos aos da mesma baixa paga em dinheiro
+        expect(legado(r), rotulo).toEqual(legado(cenario(onde, "dinheiro")));
+        expect(formaRegistradaV4(r, "legado"), rotulo).toContain(codigo(forma));
+      }
+    }
+  });
+
+  it("R6: forma sem texto aproveitável (não textual, vazia, espaços, objeto sem protótipo) → valor preservado como forma não identificada", () => {
+    for (const forma of NAO_TEXTUAIS) {
+      for (const onde of LOCAIS) {
+        const rotulo = `${String(JSON.stringify(forma))} @ ${onde}`;
+        let r!: ReturnType<typeof project>;
+        expect(() => { r = cenario(onde, forma); }, rotulo).not.toThrow();
+        expect(rotulosInvalidos(superficies(r)), rotulo).toEqual([]);
+        expect(r.fatos?.meios, rotulo).toEqual(parcial(onde) ? [{ label: "Pix", valor: 100, operacaoId: "op-1", fonte: fonte(onde) }] : []);
+        expect(r.fatos?.semMeioIdentificado, rotulo).toBe(parcial(onde) ? 320 : 420);
+        expect(formaRegistradaV4(r, "legado"), rotulo).toBe(parcial(onde) ? "Pix R$ 100,00 + forma não identificada R$ 320,00" : "Forma não identificada no título");
+        expect(legado(r), rotulo).toEqual(legado(cenario(onde, "dinheiro")));
+      }
+    }
+  });
+
+  it("R6: nome herdado com valor monetário inválido na linha → a parte fica sem forma, sem coerção nem meio inventado", () => {
+    for (const forma of HERDADOS) {
+      for (const valor of VALORES_INVALIDOS) {
+        const rotulo = `${JSON.stringify(forma)} = ${String(JSON.stringify(valor))}`;
+        const r = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ split: [{ forma: "pix", valor: 100 }, { forma, valor }] }) });
+        expect(rotulosInvalidos(superficies(r)), rotulo).toEqual([]);
+        expect(r.fatos?.meios, rotulo).toEqual([{ label: "Pix", valor: 100, operacaoId: "op-1", fonte: "RECEIVABLE_HISTORY" }]);
+        expect(r.fatos?.semMeioIdentificado, rotulo).toBe(320);
+      }
+    }
+  });
+
+  it("R6: registro sem forma alguma (baixa feita fora da OS) → forma não identificada, sem dedução por valor/horário", () => {
+    const r = project({ payload: payload(420, { timeline: [evento([{ forma: "pix", valor: 420 }])] }), prismaValorTotal: 420, titulo: title(420, "pago", [{ tipo: "liquidacao", valor: 420 }]) });
+    expect(r.fatos).toMatchObject({ verificavel: true, meios: [], semMeioIdentificado: 420 });
+    expect(formaRegistradaV4(r, "legado")).toBe("Forma não identificada no título");
+  });
+
+  it("R6: leitores legados do mesmo arquivo (formas do espelho/faturamento e eventos) nunca devolvem rótulo herdado", () => {
+    for (const forma of HERDADOS) {
+      const snapshot = project({ payload: payload(420, { pagamentoV3: { ultimaForma: `Pix + ${forma}` } }), prismaValorTotal: 420, titulo: liquidado() });
+      expect(snapshot.paymentMethods.map((m) => m.label), forma).toEqual(["Pix", codigo(forma)]);
+      const faturamento = project({ payload: payload(420, { faturamentoFormaPagamento: forma }), prismaValorTotal: 420, titulo: liquidado() });
+      expect(faturamento.paymentMethods.map((m) => m.label), forma).toEqual([codigo(forma)]);
+      const daBaixa = cenario("split parcial", forma);
+      const ev = daBaixa.financialEvents.find((e) => e.source === "RECEIVABLE");
+      expect(ev?.paymentMethod, forma).toBe(`Pix + ${codigo(forma)}`);
+      for (const r of [snapshot, faturamento, daBaixa]) expect(rotulosInvalidos(superficies(r)), forma).toEqual([]);
+    }
+  });
+
+  it("R6: tipo de evento com nome herdado (título e registro da OS) → descrição genérica em texto; fatos e histórico auditável preservados", () => {
+    for (const tipo of HERDADOS) {
+      const r = project({
+        payload: payload(420, { timeline: [evento([{ forma: "pix", valor: 420 }]), { id: "ev-x", tipo: "pagamento_registrado", autor: "Op", conteudo: "", criadoEm: "2026-07-15T12:00:00.000Z", metadata: { evento: tipo } }] }),
+        prismaValorTotal: 420,
+        titulo: liquidado({}, [{ tipo, at: "2026-07-15T12:30:00.000Z" }]),
+      });
+      expect(rotulosInvalidos(superficies(r)), tipo).toEqual([]);
+      expect(r.fatos, tipo).toMatchObject({ verificavel: true, recebidoLiquido: 420, liquidado: true });
+      const doTitulo = r.financialEvents.find((e) => e.source === "RECEIVABLE" && e.type === tipo.trim().toLowerCase());
+      expect(doTitulo?.description, tipo).toBe("Evento financeiro do título");
+      const daOS = r.financialEvents.find((e) => e.eventId === "OS_TIMELINE:ev-x");
+      expect(daOS?.description, tipo).toBe("Evento financeiro da OS");
+      // nenhum evento some do histórico de exibição (a baixa e o recibo da mesma operação viram um só)
+      expect(r.historico?.flatMap((h) => h.eventIds).sort(), tipo).toEqual(r.financialEvents.map((e) => e.eventId).sort());
+    }
+  });
+
+  it("R6: JSON malformado das revisões anteriores combinado com nome herdado — nada lança, rótulos em texto, diagnóstico comercial preservado", () => {
+    // Orçamento em rascunho (como na R5): o total do aprovado é lido pelo guard V3, fora deste contrato.
+    const orcamento = { id: "orc-1", status: "rascunho", sintetizado: false, total: 420, desconto: JSON.parse('{"toString":null}'), servicos: [{ id: "s1", descricao: "Serviço", valor: 420 }], pecas: [], criadoEm: "2026-07-01T10:00:00.000Z" };
+    for (const forma of ["__proto__", "constructor"]) {
+      let r!: ReturnType<typeof project>;
+      expect(() => { r = project({ payload: payload(420, { orcamento }), prismaValorTotal: 420, titulo: liquidado({ split: [{ forma, valor: 420 }] }) }); }, forma).not.toThrow();
+      expect(rotulosInvalidos(superficies(r)), forma).toEqual([]);
+      expect(r.comercial?.divergencias.map((d) => d.codigo), forma).toContain("ORCAMENTO_ILEGIVEL");
+      expect(r.fatos?.meios, forma).toEqual([{ label: forma, valor: 420, operacaoId: "op-1", fonte: "RECEIVABLE_HISTORY" }]);
+      expect(r.acoes?.impedimento, forma).toEqual({ codigo: "APROVACAO_COMERCIAL_PENDENTE", destino: "comercial" });
+    }
+  });
+
+  it("R6: valor sem conversão primitiva nas linhas lidas pelos leitores de meios/eventos não lança (antes lançava no leitor legado)", () => {
+    const semPrimitivo = () => JSON.parse('{"toString":null}');
+    for (const forma of ["pix", "__proto__", "constructor"]) {
+      const casos: Array<[string, ReturnType<typeof liquidado> | undefined, Record<string, unknown>]> = [
+        ["linha do split", liquidado({ split: [{ forma: "pix", valor: 100 }, { forma, valor: semPrimitivo() }] }), {}],
+        ["valor do evento da OS", undefined, { timeline: [{ ...evento([{ forma, valor: 420 }]), metadata: { operacaoId: "op-1", total: semPrimitivo(), linhas: [{ forma, valor: semPrimitivo() }] } }] }],
+      ];
+      for (const [nome, titulo, extra] of casos) {
+        const rotulo = `${forma} @ ${nome}`;
+        let r!: ReturnType<typeof project>;
+        expect(() => { r = project({ payload: payload(420, extra), prismaValorTotal: 420, titulo: titulo ?? liquidado() }); }, rotulo).not.toThrow();
+        expect(rotulosInvalidos(superficies(r)), rotulo).toEqual([]);
+        expect(r.fatos, rotulo).toMatchObject({ verificavel: true, recebidoLiquido: 420 });
+        const soma = (r.fatos?.meios ?? []).reduce((acc, m) => acc + Math.round((m.valor ?? 0) * 100), 0) + Math.round((r.fatos?.semMeioIdentificado ?? 0) * 100);
+        expect(soma, rotulo).toBe(42000);
+        expect(legado(r), rotulo).toEqual(legado(cenario("baixa", "dinheiro")));
+      }
+    }
   });
 });
