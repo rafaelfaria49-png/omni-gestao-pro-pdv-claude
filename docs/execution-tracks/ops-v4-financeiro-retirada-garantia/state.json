@@ -3,8 +3,8 @@
   "track": "ops-v4-financeiro-retirada-garantia",
   "status": "RUNNING",
   "risk_tier": "ALTO",
-  "current_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002",
-  "next_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003",
+  "current_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001",
+  "next_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002",
   "bootstrap_commit": null,
   "counters": {
     "goals_done": 0,

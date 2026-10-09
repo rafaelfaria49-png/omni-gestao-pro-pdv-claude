@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 2,
+  "plan_rev": 3,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -15,6 +15,8 @@ Fonte de intenção: "COMANDO — Consolidação de Financeiro, Retirada e Garan
 da Operações V4", autorização ponta a ponta do proprietário de 08/10/2026,
 sobre o diagnóstico somente leitura da mesma data (base `85aafb4`, caso
 OS-2026-00025). Repositório `rafaelfaria49-png/omni-gestao-pro-pdv-claude`.
+Revisão 3: "COMANDO — GOAL 001 / REV 3" do proprietário, de 09/10/2026
+(desbloqueio do 001; ver Revisões do plano).
 
 A autorização cobre planejamento formal, implementação, testes reais,
 revisão independente e publicação condicionada aos gates — em ENTREGAS
@@ -34,6 +36,33 @@ assinatura, garantia, estoque).
   prefixo comum `ops_v4_frg_qa*` para as suítes desta trilha. Allowlists,
   objetivos e orçamentos inalterados. Os três GOALs READY sobem juntos para
   plan_rev 2 (nenhum é SUPERSEDED).
+- rev 3 (09/10/2026, "COMANDO — GOAL 001 / REV 3", desbloqueio humano): o
+  GOAL 001 esgotou o teto de 3 tentativas da rev 2 (R3 OpenAI em `cd68d45`:
+  P1=1 valores legados com fatos rejeitados em status INCONSISTENT; P2=1
+  meios com coerção e split atribuído à baixa inteira) e ficou BLOCKED
+  (by=decisao) em `5bb4bbe`. O proprietário reativou o MESMO GOAL (sem
+  001-FIX/001B/sucessor): READY, plan_rev 3, tentativas reiniciadas
+  (protocolo §3). Decisões:
+  1. corrigir os dois achados da R3 no 001;
+  2. incluir na allowlist do 001 `parts/EstornoRecebimentoModal.tsx` (só
+     leitura/exibição) e `rails-adapter.ts` (+`rails-adapter.test.ts`),
+     com testes, só para eliminar apresentações financeiras não confiáveis
+     (achados de escopo da R3: ESTORNO_MODAL_VALORES_LEGADOS,
+     TRILHO_LISTA_VALORES_LEGADOS); test_command do 001 roda também
+     `rails-adapter.test.ts`;
+  3. decisão A da garantia (G_EDITOR_GARANTIA_ABERTO): o recolhimento do
+     editor de garantia sai do aceite do 001 e passa a ser obrigação
+     explícita do 003 (item E), que recebe na allowlist
+     `parts/stages/retirada-v4.module.css` e
+     `e2e/specs/operacoes-v4-fluxo-curto-002.spec.ts` (adaptado só quando a
+     nova experiência existir, mesmas asserções); até lá o editor atual e
+     esse E2E ficam inalterados;
+  4. GOALs 002 e 003 seguem READY e sobem para plan_rev 3 (nenhum
+     SUPERSEDED), com objetivos preservados; não abrir 002, 003 nem o
+     OPS-V4-FLUXO-CURTO-008 sem autorização nova.
+  Rito: PR exclusivo de governança (block da rev 2 materializado byte a byte
+  + desbloqueio) → merge normal na main → merge normal da main na branch do
+  001 → `open` (tentativa 1 da rev 3).
 
 ## Por que trilha própria
 
@@ -97,7 +126,7 @@ Retomada exata (depois do 007 integrado):
 | --- | --- | --- | --- |
 | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 | A — informação financeira verdadeira e tela organizada (decisões inalteradas) | C4 | 007 integrado |
 | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 | B — impedir novos casos e formalizar legados com segurança | C4 | 001 DONE + merge |
-| OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003 | C — garantia por serviço, documento versionado e uso simples | C4 | 002 DONE + merge |
+| OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003 | C — garantia por serviço, documento versionado e uso simples (inclui, desde a rev 3, o editor de garantia recolhido transferido do 001) | C4 | 002 DONE + merge |
 
 Os três estão READY para que o contrato fique materializado e auditável; a
 ordem é a do id. O `open` de 002 e 003 exige, além da ordem, o GOAL anterior
