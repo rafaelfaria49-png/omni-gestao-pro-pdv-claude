@@ -9,14 +9,100 @@ A revisão OpenAI mencionada pelo humano é referência, sem aprovação do pró
 A R formal anterior sobre e3ea899 foi Anthropic; sua atribuição histórica permanece preservada.
 A aprovação final deve vir de IA independente de outra família.
 
-O corretivo ativo continua sendo B1-B4 documentais deste mesmo GOAL, PLAN_ONLY e com
-allowlist documental. Nenhuma fase funcional 025-A/B/C/D, schema/storage, write ou
-transmissão recebe autorização adicional. Não fechar definitivamente nem fazer merge
-antes da revisão independente; se indisponível, parar no gate de revisão.
+O pedido humano vigente de 2026-10-08 delimita o corretivo a **B1-R1 e B3-R1** nos
+documentos deste mesmo GOAL, **plan_rev=5 / PLAN_ONLY**, com allowlist documental.
+B2 e B4, considerados resolvidos na re-R de 73b6aa4, permanecem preservados; nenhum
+desses eixos é reaberto sem inconsistência concreta. Nenhuma fase funcional 025-A/B/C/D,
+schema/storage, write ou transmissão recebe autorização adicional. Aprovações históricas
+de 881ee4a e 299fdbb não aprovam o novo SHA. Solicitar nova R após o push e parar em
+**AWAITING_FISCAL_025_FINAL_PLAN_REVIEW**, sem close definitivo nem merge.
 
 REREVIEW_REQUIRED=true; REREVIEW_EXECUTOR_FAMILY=google;
 ALTERNATIVE_REVIEWER_FAMILY=anthropic; REVIEW_VERDICT=PENDING.
 
+
+## Corretivo B1-R1/B3-R1 — revisão documental 5 vigente
+
+Data: 2026-10-08 (America/Sao_Paulo). PR #247; branch
+plan/fiscal-025-retry-reconciliation; PREVIOUS_HEAD=299fdbb3a01b9cae1b00012014747e433ecc8e40.
+HEAD/branch locais e head remoto foram confirmados nesse SHA antes da edição. A worktree
+do plano estava limpa; as alterações de outras tarefas em C:/Projetos/omni-gestao foram
+preservadas. Sem fetch/merge/sincronização de main nesta revisão.
+
+A re-R Anthropic **REQUEST_CHANGES** de
+73b6aa44324d64bb2d3b5a79d3d611df32a18b32 permanece preservada integralmente no
+[relatório atribuível do PR](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/247#issuecomment-6069931514):
+B1-R1 e B3-R1 MEDIUM remanescentes; B2/B4 resolvidos; nenhum blocker independente novo.
+O registro APPROVE intermediário de 881ee4a42b61c15cd5fd3f3026f9455a3bfe55b4 abaixo
+é histórico. O corpo do PR observado no preflight também registra APPROVE Anthropic de
+299fdbb3a01b9cae1b00012014747e433ecc8e40, por revalidação do delta na mesma sessão.
+Esses pareceres não são estendidos à revisão 5. O REQUEST_CHANGES inicial de e3ea899
+e os registros das revisões anteriores permanecem abaixo, sem reescrever sua atribuição.
+
+| Blocker | Cobertura documental adicionada no GOAL | Aceite futuro |
+| --- | --- | --- |
+| B1-R1 — inutilizações preexistentes | Inventário READ-ONLY de jobs INUTILIZACAO em qualquer status, marcas A_INUTILIZAR, EventoFiscal e pedidos/faixas, por nota/venda/job/identidade completa do alvo; revalidar imediatamente antes de 025-C e no CAS | Qualquer ocorrência/ambiguidade/ausência de prova bloqueia, sem cancelamento/remoção/correção automática |
+| B1-R1 — executor/worker | executeInutilizacaoJob, execute.ts, prisma-queue-worker.ts e rota interna; vínculo persistente protegido antes de provider.inutilizar, upsertEvento/updateJobPayload, replay, lease/estado/marca/log; ports upsertEmissionJob/setVendaFiscalStatus nomeados | Job antigo não contorna enqueue; serialização/fencing reconciliação/worker/enqueue/admin, zero inutilização externa e zero mutação indevida |
+| B3-R1 — todos os runtimes | Dois projetos Production, crons/workers, rota interna, deployments antigos alcançáveis, Preview/outros ambientes e processos externos com escrita em omnigestao_prod | Cada runtime prova A: guards ativos/SHA/deployment/versão, ou B: incapacidade efetiva de escrever; configuração sanitizada, sem secrets/URLs |
+| B3-R1 — revalidação e testes | Inventário completo imediatamente antes do write; casos de dois projetos com versões diferentes, worker/cron antigo, Preview com credencial, runtime sem credencial, rollback, rota interna e runtime desconhecido | Qualquer item inseguro/desconhecido/inconsistente ou credencial não verificada bloqueia 025-C mesmo com principal READY |
+
+B2 e B4 não foram reabertos nem alterados em seu contrato. A prova histórica correlacionada,
+xMotivo NOT_PERSISTED, reentrada apenas offline e a tabela dos quatro blockers 024 seguem
+preservados. As novas condições são cumulativas, sem liberar 025-A/B/C/D, G-F7 ou G-F12.
+As linhas B1..B4_CLOSED_IN_PLAN=true do registro rev. 2 são autoafirmações históricas:
+esta revisão não as apresenta como aprovação independente.
+
+Ciclo AEP: status/open executados conforme ENTRYPOINT; open criou somente o marcador
+.aep-active gitignored. Após leitura, aplicada a regra específica PLAN_ONLY deste GOAL:
+removido somente esse marcador temporário da sessão, sem close, DONE ou evento no ledger.
+plan_rev foi incrementado de 4 para 5 no GOAL; derivados somente seriam regenerados pelo
+AEP se a verificação apontasse necessidade, nunca por edição manual.
+
+Validações executadas nesta revisão documental 5, sem reutilizar resultados fiscais:
+
+| Checagem | Resultado |
+| --- | --- |
+| node scripts/track.mjs verify --all | PASS: nove trilhas, REGISTRY.md e GATES.md sem divergências; não foi necessária regeneração |
+| git diff --check | PASS: delta documental sem erros de whitespace |
+| Parser AEP real readGoalMeta | PASS: READY/C3/ALTO, plan_rev=5, PLAN_ONLY, implementação negada, gates vazios, allowlist preservada, re-R Google preferencial/Anthropic alternativa |
+| Referências e estrutura | PASS: quatro links locais, 13 tabelas Markdown e 12 blocos fechados; caminhos de executor/worker/rota/ports existem |
+| B2/B4 e pareceres | PASS: seções B2, coordinator B4, reentrada offline e tabela 024 idênticas ao HEAD anterior; evidência histórica rev. 4/2 preservada; todos os SHAs revisados são ancestrais |
+| Scan de segredos do delta desde 299fdbb | PASS: nenhuma ocorrência em nove categorias de padrões nas linhas adicionadas; valores não impressos |
+| Escopo, ledger e derivados | PASS: somente GOAL e evidência PLAN alterados; ledger com 12 linhas e derivados intactos; 024 continua BLOCKED; .aep-active ausente |
+
+O scan cobre PEM/PFX, tokens GitHub, OpenAI/Anthropic, AWS, Google, JWT, DSN com
+credenciais, atribuições de segredo e XML Fiscal bruto. É uma checagem por padrões do
+delta, sem atestado sobre segredos fora dele. Os testes da matriz do GOAL são exigências
+para execução futura; nenhum teste Fiscal, build ou typecheck foi executado nesta etapa.
+Somente GOAL e evidência PLAN alterados; implementação, schema, banco e SEFAZ não executados.
+Build/TypeScript/testes fiscais: NOT_RUN, por mudança exclusivamente documental.
+CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT não mudam: nenhuma entrega funcional ou decisão
+arquitetural aprovada. SHA novo e solicitação de R serão vinculados no PR após push,
+sem hash circular no commit.
+
+~~~text
+PLAN_REV=5
+B1_R1_CLOSED_IN_PLAN=true
+B3_R1_CLOSED_IN_PLAN=true
+CLOSED_IN_PLAN_MEANS=EXECUTOR_DOCUMENTAL_COVERAGE_ONLY
+B2_B4_PRESERVED=true
+OLD_REVIEWS_PRESERVED=true
+NEW_SHA_R_VERDICT=PENDING
+IMPLEMENTATION_STARTED=false
+CODE_CHANGED=false
+SCHEMA_CHANGED=false
+DB_CONNECTIONS=0
+DB_WRITES=0
+EXTERNAL_SEFAZ_CONTACT=false
+G_F7=BLOCKED
+G_F12=BLOCKED
+REREVIEW_REQUIRED=true
+REREVIEW_EXECUTOR_FAMILY=google
+ALTERNATIVE_REVIEWER_FAMILY=anthropic
+FINAL_DECISION=AWAITING_FISCAL_025_FINAL_PLAN_REVIEW
+~~~
+
+## Histórico preservado — revisão documental 4
 
 ## Revisão independente e ajustes documentais posteriores
 
