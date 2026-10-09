@@ -754,7 +754,8 @@ export function lerComercialV4(
   totals: ReturnType<typeof reconciliarTotaisFinanceirosV3>,
   fatos: FatosFinanceirosOSV4,
 ): ComercialOSV4 {
-  const real = orcamentoRealV3(input.payload);
+  // Só um REGISTRO de orçamento é orçamento (lista/escalar não vira total comercial zero).
+  const real = isRecord(input.payload.orcamento) ? orcamentoRealV3(input.payload) : null;
   let orcamento: EstadoOrcamentoComercialV4;
   if (!isRecord(input.payload.orcamento)) orcamento = "ausente";
   else if (!real) orcamento = "previa";

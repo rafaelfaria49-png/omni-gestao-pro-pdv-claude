@@ -631,6 +631,13 @@ describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R4: orçamento malfor
     }
   });
 
+  it("R4-P2: orçamento que não é registro (lista/texto) é ausente, sem total comercial zero inventado", () => {
+    for (const orcamento of [[], ["x"], "orçamento"]) {
+      const r = project({ payload: rascunho({ timeline: [recebimentoOS("op-1", 300)], orcamento }), titulo: titulo() });
+      expect(r.comercial, JSON.stringify(orcamento)).toMatchObject({ orcamento: "ausente", totalOrcamento: null, confereComTitulo: null, divergencias: [] });
+    }
+  });
+
   it("R4-P2: linhas legíveis seguem calculando o total (grupoId nulo ou texto)", () => {
     const r = project({ payload: comServicos([{ id: "s1", descricao: "Serviço", valor: 300, grupoId: null }]), titulo: titulo() });
     expect(r.comercial).toMatchObject({ totalOrcamento: 300, confereComTitulo: true, divergencias: [] });
