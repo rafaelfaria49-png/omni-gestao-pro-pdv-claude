@@ -158,6 +158,7 @@ import {
   montarHistoricoHeaderV4,
 } from "@/lib/operacoes-v4/os-header-transversal";
 import { montarResumoFinanceiroOSV4 } from "@/lib/operacoes-v4/financeiro-v4";
+import { derivarSituacaoAtendimentoV4, pagamentoComPendenciaComercialV4 } from "@/lib/operacoes-v4/situacao-atendimento-v4";
 import { derivarRetiradaFinanceiraV4, servicoDaRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
 import { lerReciboDaProjecaoV4, type LeituraReciboV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
 import { buildGarantiasPortfolioV4 } from "@/lib/operacoes-v4/posvenda-v4";
@@ -773,10 +774,32 @@ export function buildVals(
   const orcamentoEditavel = orcamentoMaterializado && (orcStatusRaw === "rascunho" || orcStatusRaw === "enviado");
   const orcamentoPodeDecidir = orcamentoEditavel;
   const orcamentoEditorSeed = seedEditorFromOS(realOS);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: UMA leitura das três dimensões
+  // (fatos do título, comercial, impedimento) para Header, Financeiro, Entrega e
+  // Próxima ação. Projeção de outra OS (resposta tardia) = carregando.
+  const situacaoAtendimento = derivarSituacaoAtendimentoV4({
+    osId: realOS?.id ?? null,
+    projection: financialProjection,
+    loading: ctx.financialProjection.loading,
+    error: ctx.financialProjection.error,
+  });
   const comercialHeader = montarComercialHeaderV4({
     estado: orcamentoReal.estado,
     status: orcStatusRaw,
     total: typeof orcRaw?.total === "number" ? orcRaw.total : financialProjection?.approvedBudgetTotal,
+    pendencia: situacaoAtendimento.comercial.pendente
+      ? {
+          rotulo:
+            situacaoAtendimento.impedimento?.codigo === "ORCAMENTO_RECUSADO"
+              ? "Orçamento recusado"
+              : situacaoAtendimento.impedimento?.codigo === "ORCAMENTO_EXPIRADO"
+                ? "Orçamento vencido"
+                : situacaoAtendimento.impedimento?.codigo === "PRECO_AUSENTE"
+                  ? "Cobrança não definida"
+                  : "Aprovação pendente",
+          tone: situacaoAtendimento.impedimento?.codigo === "ORCAMENTO_RECUSADO" ? "danger" : "warn",
+        }
+      : null,
   });
   const financeiroResumo = montarResumoFinanceiroOSV4({
     loading: ctx.financialProjection.loading,
@@ -791,6 +814,10 @@ export function buildVals(
     expectedTotal: financialProjection?.expectedTotal,
     receivedTotal: financialProjection?.receivedTotal,
     balance: financialProjection?.balance,
+    pagamentoVerificado: pagamentoComPendenciaComercialV4(situacaoAtendimento) && situacaoAtendimento.pagamento.estado === "registrado"
+      ? { label: situacaoAtendimento.pagamento.rotulo.replace(" — ", " "), liquidado: situacaoAtendimento.pagamento.liquidado }
+      : null,
+    pagamentoEmConferencia: situacaoAtendimento.comercial.pendente && situacaoAtendimento.pagamento.estado === "conferencia_pendente",
   });
   const historicoHeader = montarHistoricoHeaderV4(timelineReal.length);
 
@@ -1406,6 +1433,16 @@ export function buildVals(
     financeiroHeader,
     financeiroResumo,
     historicoHeader,
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: situação única + atalho para o
+    // lugar que resolve o impedimento (só navega ou relê; nunca escreve).
+    situacaoAtendimento,
+    irParaImpedimento: () => {
+      const destino = situacaoAtendimento.impedimento?.destino;
+      if (destino === "comercial") update({ stage: "orcamento", module: "workspace", view: "cockpit", menu: null });
+      else if (destino === "entrega") update({ stage: "entrega", module: "workspace", view: "cockpit", menu: null });
+      else if (destino === "recarregar") ctx.financialProjection.reload();
+      else update({ stage: "financeiro", module: "workspace", view: "cockpit", menu: null });
+    },
     backFromSeguranca: () => update({ stage: "execucao", module: "workspace", view: "cockpit", menu: null }),
 
     menu: st.menu, menuPrint: st.menu === "print", menuMore: st.menu === "more",

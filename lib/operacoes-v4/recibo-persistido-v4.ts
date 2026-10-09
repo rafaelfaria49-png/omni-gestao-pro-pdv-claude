@@ -173,10 +173,19 @@ export function escolherReciboV4(input: {
 export function lerReciboDaProjecaoV4(input: {
   sessao: ComprovanteReciboV3 | null | undefined;
   os: { timeline?: unknown } | null | undefined;
-  projection: { receivedTotal: number | null; receivableFound: boolean; receivablePayments?: ReadonlyArray<PagamentoVigenteV4> | null };
+  projection: {
+    receivedTotal: number | null;
+    receivableFound: boolean;
+    receivablePayments?: ReadonlyArray<PagamentoVigenteV4> | null;
+    /** GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: fatos do título (só verificados contam). */
+    fatos?: { verificavel: boolean; recebidoLiquido: number | null } | null;
+  };
 }): LeituraReciboV4 {
   const { projection } = input;
-  const recebidoAtual = projection.receivedTotal ?? (projection.receivableFound ? null : 0);
+  // Sem o recebido legado (bloqueio comercial), só o recebido líquido VERIFICADO do
+  // título serve de âncora; a correspondência 1:1 abaixo continua a mesma.
+  const recebidoVerificado = projection.fatos?.verificavel ? projection.fatos.recebidoLiquido : null;
+  const recebidoAtual = projection.receivedTotal ?? recebidoVerificado ?? (projection.receivableFound ? null : 0);
   const pagamentosVigentes = projection.receivablePayments ?? (projection.receivableFound ? null : []);
   if (recebidoAtual == null || pagamentosVigentes == null) return { estado: "indisponivel" };
   return escolherReciboV4({ sessao: input.sessao, os: input.os, recebidoAtual, pagamentosVigentes });

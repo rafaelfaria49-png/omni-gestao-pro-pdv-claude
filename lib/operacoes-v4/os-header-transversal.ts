@@ -71,10 +71,25 @@ export function montarComercialHeaderV4(input: {
   estado: "ausente" | "vazio" | "previa" | "persistido";
   status?: OrcamentoStatusHeaderV4;
   total?: number | null;
+  /**
+   * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: a aprovação comercial é o que
+   * impede a entrega agora (impedimento estruturado da projeção).
+   */
+  pendencia?: { rotulo: string; tone: "warn" | "danger" } | null;
 }): ComercialHeaderV4 {
   const status = typeof input.status === "string" ? input.status : "";
   const valor = money(input.total);
   const real = input.estado === "persistido" || input.estado === "vazio";
+
+  if (input.pendencia) {
+    return {
+      eyebrow: "Comercial",
+      label: input.pendencia.rotulo,
+      tone: input.pendencia.tone,
+      destino: "orcamento",
+      hasBudget: real,
+    };
+  }
 
   if (!real) {
     return {
@@ -156,6 +171,13 @@ export function montarFinanceiroHeaderV4(input: {
   expectedTotal?: number | null;
   receivedTotal?: number | null;
   balance?: number | null;
+  /**
+   * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: fato VERIFICADO do título quando o
+   * bloqueio é comercial (UNKNOWN sem falha de leitura). Nunca vira "Quitado".
+   */
+  pagamentoVerificado?: { label: string; liquidado: boolean } | null;
+  /** Há registro de pagamento, mas vínculo/histórico não conferem. */
+  pagamentoEmConferencia?: boolean;
 }): FinanceiroHeaderV4 {
   if (input.loading) {
     return {
@@ -192,6 +214,18 @@ export function montarFinanceiroHeaderV4(input: {
     return { eyebrow: "Financeiro", label, cta: "Definir cobrança", tone: "neutro", destino: "orcamento" };
   }
   if (status === "UNKNOWN") {
+    if (input.pagamentoVerificado) {
+      return {
+        eyebrow: "Financeiro",
+        label: input.pagamentoVerificado.label,
+        cta: null,
+        tone: input.pagamentoVerificado.liquidado ? "success" : "warn",
+        destino: "financeiro",
+      };
+    }
+    if (input.pagamentoEmConferencia) {
+      return { eyebrow: "Financeiro", label: "Pagamento em conferência", cta: "Financeiro", tone: "warn", destino: "financeiro" };
+    }
     return { eyebrow: "Financeiro", label, cta: "Financeiro", tone: "danger", destino: "financeiro" };
   }
   if (status === "INCONSISTENT") {

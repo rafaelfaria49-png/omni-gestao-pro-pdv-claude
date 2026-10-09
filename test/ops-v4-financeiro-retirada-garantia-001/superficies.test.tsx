@@ -1,0 +1,290 @@
+// OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — superfícies MONTADAS (jsdom).
+//
+// Próxima ação, Financeiro e Entrega REAIS sobre o `buildVals` REAL (estado V4 vivo,
+// patches aplicados), com a projeção pura REAL e handlers espiões. As actions "use
+// server" da V3 são cortadas por mock só para os módulos carregarem; nenhuma escrita
+// acontece aqui (a persistência fica no .pg.test.ts). Massa sintética.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
+
+vi.mock("@/app/actions/ordens", () => ({ listOrdens: vi.fn(async () => []), getOrdem: vi.fn(async () => null) }));
+vi.mock("@/lib/operacoes-v3/workspace-actions", () => ({ salvarDiagnosticoV3: vi.fn(), salvarChecklistEntradaV3: vi.fn() }));
+vi.mock("@/lib/operacoes-v3/orcamento-actions", () => ({
+  gerarOrcamentoDaOS: vi.fn(), salvarOrcamentoV3: vi.fn(), corrigirOrcamentoV3: vi.fn(), aprovarOrcamentoV3: vi.fn(), recusarOrcamentoV3: vi.fn(),
+}));
+vi.mock("@/lib/operacoes-v3/status-actions", () => ({ aplicarTransicaoStatusV3: vi.fn() }));
+vi.mock("@/lib/operacoes-v3/prova-entrada-actions", () => ({
+  salvarIdentificacaoV3: vi.fn(), salvarProvaEntradaV3: vi.fn(), salvarAcessoriosEntradaV3: vi.fn(),
+  adicionarFotoEntradaV3: vi.fn(), removerFotoEntradaV3: vi.fn(), salvarAssinaturaClienteV3: vi.fn(),
+}));
+vi.mock("@/lib/operacoes-v3/dados-basicos-actions", () => ({ salvarDadosBasicosOSV3: vi.fn() }));
+vi.mock("@/lib/operacoes-v3/producao-actions", () => ({
+  atribuirTecnicoV3: vi.fn(), definirPrioridadeV3: vi.fn(), definirLocalFisicoV3: vi.fn(), adicionarObservacaoInternaV3: vi.fn(), salvarChecklistTecnicoV3: vi.fn(),
+}));
+vi.mock("@/lib/operacoes-v3/estoque-actions", () => ({ consumirEstoqueOSActionV3: vi.fn() }));
+vi.mock("@/app/actions/cadastros", () => ({ listTecnicos: vi.fn(async () => []) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/lib/operacoes-v3/entrega-actions", () => ({
+  salvarAssinaturaRetiradaV3: vi.fn(), registrarEntregaV3: vi.fn(), adicionarFotoSaidaV3: vi.fn(), removerFotoSaidaV3: vi.fn(),
+}));
+vi.mock("@/lib/operacoes-v3/garantia-actions", () => ({ registrarImpressaoDocumentoV3: vi.fn(), salvarGarantiaOSV3: vi.fn() }));
+vi.mock("@/lib/operacoes-v3/retorno-actions", () => ({ abrirRetornoV3: vi.fn(), finalizarRetornoV3: vi.fn() }));
+vi.mock("@/lib/operacoes-v3/pdv-servico-actions", () => ({
+  getCaixaSessaoAbertaV3: vi.fn(async () => ({ aberta: false })), lerPagamentoOSV3: vi.fn(), receberOSV3: vi.fn(),
+  estornarRecebimentoOSV3: vi.fn(), lancarOSAPrazoV3: vi.fn(), registrarRecebimentoMistoOSV3: vi.fn(),
+}));
+vi.mock("@/lib/operacoes-v4/financial-projection-actions", () => ({ lerProjecaoFinanceiraOSV4: vi.fn(), lerProjecoesFinanceirasOSV4: vi.fn() }));
+
+import type { OrdemServico } from "@/types/os";
+import type { V4State } from "@/components/operacoes-v4-preview/types";
+import { buildVals, type V4DataCtx } from "@/components/operacoes-v4-preview/use-v4-preview";
+import { EntregaStage } from "@/components/operacoes-v4-preview/parts/stages/EntregaStage";
+import { FinanceiroStage } from "@/components/operacoes-v4-preview/parts/stages/FinanceiroStage";
+import { ProximaAcaoV4 } from "@/components/operacoes-v4-preview/parts/ProximaAcaoV4";
+import { projectFinancialOSV4, type FinancialProjectionOSV4 } from "@/lib/operacoes-v4/financial-projection";
+
+const LOJA = "loja-qa-frg";
+const EXPLICACAO = "O orçamento desta OS não está aprovado. A entrega continua bloqueada até a aprovação ser registrada.";
+
+beforeEach(() => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+function estado(over: Partial<V4State> = {}): V4State {
+  return {
+    view: "cockpit", module: "workspace", stage: "entrega", status: "pronta", left: false, right: false,
+    menu: null, toast: "", prioridade: "normal", histFilter: "todos", novaOS: false, novoAtendimento: false,
+    recibo: false, atendimentoRapido: false, orcamentoRapido: false, estornoRecebimento: false,
+    receberPagamento: false, cancelamentoOS: false, selectedOsId: null, focus: true, authState: "autorizado",
+    pin4: 0, pin6: 0, pattern: [], senha: "", motivo: "", docPrint: null, ...over,
+  } as V4State;
+}
+
+function os(id: string, orcStatus: string, extra: Record<string, unknown> = {}): OrdemServico {
+  return {
+    id, storeId: LOJA, codigo: `OS-${id.toUpperCase()}`, numero: id.toUpperCase(), status: "pronta",
+    operacaoStatusV3: "pronta", cliente: { nome: "Cliente QA FRG" },
+    equipamento: { tipo: "Smartphone", marca: "Samsung", modelo: "S20 FE", acessorios: ["Capa"] },
+    criadoEm: "2026-09-18T12:00:00.000Z",
+    orcamento: { id: "orc", status: orcStatus, sintetizado: false, total: 420, desconto: 0, criadoEm: "2026-09-18T12:00:00Z", servicos: [{ id: "s1", descricao: "Troca de Tela", valor: 420 }], pecas: [] },
+    aberturaV3: { garantiaPrevista: { modelo: "tela", prazoDias: 90 } },
+    timeline: [{
+      id: "ev-quitacao", tipo: "operacao_cobranca_gerada", autor: "Operador QA", autorTipo: "usuario",
+      conteudo: "Quitação: Dinheiro R$ 420,00 (total R$ 420.00) · saldo R$ 0.00 (quitado).", criadoEm: "2026-10-05T21:37:38.000Z",
+      metadata: { operacaoId: "op-1", total: 420, linhas: [{ forma: "dinheiro", valor: 420 }], op: "liquidar" },
+    }],
+    ...extra,
+  } as unknown as OrdemServico;
+}
+
+type Titulo = { storeId?: string; status: string; historico: unknown[] } | null;
+const LIQUIDADO: Titulo = { status: "pago", historico: [{ tipo: "liquidacao", valor: 420, loteId: "op-1", at: "2026-10-05T21:37:39.000Z", userLabel: "Operador QA" }] };
+
+function projecao(o: OrdemServico, titulo: Titulo, over: Record<string, unknown> = {}): FinancialProjectionOSV4 {
+  const loja = titulo?.storeId ?? LOJA;
+  return projectFinancialOSV4({
+    storeId: LOJA, osId: o.id, prismaValorTotal: 420, loadedAt: "2026-10-09T12:00:00Z",
+    payload: { ...(o as unknown as Record<string, unknown>), valorTotal: 420 } as unknown as OrdemServico & Record<string, unknown>,
+    titulo: titulo ? { id: "cr", storeId: loja, localKey: `os-faturamento:${loja}:${o.id}`, valor: 420, status: titulo.status, payload: { ordemServicoId: o.id, historico: titulo.historico } } : null,
+    ...over,
+  });
+}
+
+type Pdv = V4DataCtx["pdvServico"];
+const pdv = (): Pdv => ({
+  pagamento: null, sessao: { aberta: true, sessaoId: "sessao-qa" }, loading: false, recebendo: false, estornando: false, error: null,
+  ultimoRecibo: null, reload: vi.fn(), receber: vi.fn(async () => true), estornar: vi.fn(async () => true), limparRecibo: vi.fn(),
+}) as Pdv;
+
+const ctxBase = {
+  ordens: [], ordensLoading: false, ordensPrimeiraCarga: false, ordensError: null,
+  reloadOrdens: () => {}, reloadDetail: () => {}, realOS: null, detailLoading: false,
+  financialProjectionsByOsId: new Map(), financialRailLoading: false, financialRailError: null,
+  salvarDiagnostico: async () => false, gerarOrcamento: async () => false, salvarOrcamento: async () => false,
+  corrigirOrcamento: async () => false, aprovarOrcamento: async () => false, recusarOrcamento: async () => false,
+  iniciarDiagnostico: async () => false, iniciarServico: async () => false, marcarAguardandoPeca: async () => false,
+  marcarPronta: async () => false, baixarEstoqueOS: async () => false, tecnicosCadastro: [], irParaConfiguracoes: () => {},
+  salvarAssinaturaRetirada: async () => false, adicionarFotoSaida: async () => false,
+  removerFotoSaida: async () => false, registrarImpressaoDoc: () => {}, salvarGarantia: async () => false,
+  abrirRetorno: async () => false, finalizarRetorno: async () => false, abrirOsVinculada: () => {},
+  lancarAPrazo: async () => false, cancelarOS: async () => false,
+  salvarIdentificacao: async () => false, salvarProvaEntrada: async () => false, salvarAcessorios: async () => false,
+  salvarChecklist: async () => false, adicionarFotoEntrada: async () => false, removerFotoEntrada: async () => false,
+  salvarAssinaturaCliente: async () => false, salvarDadosBasicos: async () => false, atribuirTecnico: async () => false,
+  removerTecnico: async () => false, definirPrioridade: async () => false, avancarStatusBancada: async () => false,
+  entrarBancada: async () => false, sairBancada: async () => false, adicionarObservacaoInterna: async () => false,
+  salvarChecklistTecnico: async () => false, moverStatusFila: async () => false, modoFila: "kanban",
+  setModoFila: () => {}, enviarOrcamentoPorCanal: async () => ({ ok: false }), orcamentoRapidoPrefill: null,
+  definirOrcamentoRapidoPrefill: () => {}, selecionarVarianteOrcamento: async () => false,
+  cancelamentoMotivoPrefill: null, definirCancelamentoMotivoPrefill: () => {},
+} as unknown as V4DataCtx;
+
+interface Cenario {
+  os: OrdemServico | null;
+  fin: { projection: FinancialProjectionOSV4 | null; loading?: boolean; error?: string | null; reload?: () => void };
+  stage?: V4State["stage"];
+}
+
+const patches: Array<Record<string, unknown>> = [];
+const sonda: { v: ReturnType<typeof buildVals> | null } = { v: null };
+
+function Harness({ c }: { c: Cenario }) {
+  const [st, setSt] = useState<V4State>(() => estado({ selectedOsId: c.os?.id ?? null, stage: c.stage ?? "entrega" }));
+  const selecionado = c.os?.id ?? null;
+  const atual = st.selectedOsId === selecionado ? st : { ...st, selectedOsId: selecionado };
+  const v = buildVals(
+    atual,
+    (p) => {
+      setSt((prev) => {
+        const patch = (typeof p === "function" ? p(prev) : p) as Partial<V4State>;
+        patches.push(patch as Record<string, unknown>);
+        return { ...prev, ...patch };
+      });
+    },
+    () => {},
+    {
+      ...ctxBase,
+      lojaAtivaId: LOJA,
+      realOS: c.os,
+      detailCarregada: !!c.os,
+      financialProjection: { projection: c.fin.projection, loading: !!c.fin.loading, error: c.fin.error ?? null, reload: c.fin.reload ?? (() => {}) },
+      pdvServico: pdv(),
+      confirmarEntrega: async () => false,
+    },
+  );
+  sonda.v = v;
+  return (
+    <>
+      <ProximaAcaoV4 v={v} />
+      {atual.stage === "financeiro" ? <FinanceiroStage v={v} /> : <EntregaStage v={v} />}
+    </>
+  );
+}
+
+function montar(c: Cenario) {
+  patches.length = 0;
+  const r = render(<Harness c={c} />);
+  return { ...r, trocar: (n: Cenario) => r.rerender(<Harness c={n} />) };
+}
+
+const guia = () => screen.getByRole("region", { name: "Guia de retirada" });
+const barra = () => screen.getByRole("region", { name: "Próxima ação da OS" });
+const confirmar = () => screen.queryByRole("button", { name: "Confirmar entrega real" });
+const contar = (texto: string) => (document.body.textContent ?? "").split(texto).length - 1;
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — superfícies coerentes", () => {
+  it("A1 Entrega: pagamento registrado e pendência comercial separados, explicação única, ação para o orçamento, entrega bloqueada", () => {
+    const a = os("a", "rascunho");
+    montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) } });
+    const v = sonda.v!;
+    expect(v.financeiroHeader).toMatchObject({ label: "Pagamento registrado R$ 420,00", tone: "success" });
+    expect(v.comercialHeader).toMatchObject({ label: "Aprovação pendente", tone: "warn", destino: "orcamento" });
+
+    const g = within(guia());
+    expect(g.getByText("Conferir retirada")).toBeTruthy();
+    expect(g.getByText("Aprovação comercial pendente — revisar autorização")).toBeTruthy();
+    expect(g.getByText("Pagamento registrado — R$ 420,00 · Saldo do título — R$ 0,00 · Forma registrada: Dinheiro.")).toBeTruthy();
+    expect(g.getByText("Valor do título")).toBeTruthy();
+    expect(g.getByText("Saldo do título")).toBeTruthy();
+    expect(g.getByText("Capa")).toBeTruthy();
+
+    expect(within(barra()).getByText("Revisar aprovação comercial")).toBeTruthy();
+    expect(contar(EXPLICACAO)).toBe(1);
+    for (const proibido of ["Situação financeira desconhecida", "Financeiro indisponível", "Recebimento bloqueado", "Esta Ordem de Serviço ainda não foi entregue."]) {
+      expect(contar(proibido), proibido).toBe(0);
+    }
+    expect(confirmar()).toBeNull();
+    expect(screen.getByText(/Para liberar a confirmação da entrega/)).toBeTruthy();
+    expect(screen.getByText("🛡 Garantia da OS")).toBeTruthy();
+    expect(screen.queryByText("Checklist final de entrega")).toBeNull();
+    expect(screen.queryByText("📦 Registro de entrega")).toBeNull();
+
+    // Uma única ação, para o lugar que resolve: o orçamento (nunca o Financeiro).
+    const acoes = screen.getAllByRole("button", { name: "Abrir orçamento" });
+    expect(acoes.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(acoes[acoes.length - 1]!);
+    expect(patches.some((p) => p.stage === "orcamento")).toBe(true);
+    expect(patches.some((p) => p.stage === "financeiro")).toBe(false);
+  });
+
+  it("A1 Financeiro: fatos do título com rótulos próprios, nada a receber, forma registrada, histórico sem soma dupla", () => {
+    const a = os("a", "rascunho");
+    montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) }, stage: "financeiro" });
+    const strip = screen.getByLabelText("Fatos da Conta a Receber");
+    expect(within(strip).getByText("Valor do título")).toBeTruthy();
+    expect(within(strip).getByText("Saldo do título")).toBeTruthy();
+    expect(within(strip).getAllByText("R$ 420,00").length).toBe(2);
+    expect(screen.getByText("Aprovação pendente")).toBeTruthy();
+    expect(screen.getByText("Nada a receber — título liquidado (R$ 420,00).")).toBeTruthy();
+    expect(screen.queryByText(/Recebimento bloqueado/)).toBeNull();
+    expect(screen.getByText("Dinheiro")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Imprimir comprovante" })).toBeTruthy();
+    // Baixa do título + recibo da OS da MESMA operação: um item só, com as duas fontes.
+    expect(screen.getAllByText(/Quitação: Dinheiro R\$ 420,00/)).toHaveLength(1);
+    expect(screen.queryByText(/Liquidação registrada/)).toBeNull();
+    expect(screen.getByText(/Conta a Receber \+ registro da OS/)).toBeTruthy();
+  });
+
+  it("A2: aprovado + pago — quatro superfícies dizem quitado; retirante, data e custódia aparecem ANTES de confirmar", () => {
+    const a = os("a", "aprovado");
+    montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) } });
+    const v = sonda.v!;
+    expect(v.financeiroHeader.label).toBe("Quitado");
+    expect(v.comercialHeader.tone).toBe("success");
+    expect(within(guia()).getByText("Pagamento quitado — confirmar entrega.")).toBeTruthy();
+    expect(within(barra()).getByText("Confirmar entrega")).toBeTruthy();
+    expect(screen.getByLabelText("Retirado por")).toBeTruthy();
+    expect(screen.getAllByText(/Data da entrega/).length).toBeGreaterThan(0);
+    expect(within(guia()).getByText("Capa")).toBeTruthy();
+    expect(confirmar()).toBeTruthy();
+    expect(contar("Aprovação comercial pendente")).toBe(0);
+  });
+
+  it("A3: título de outra loja — nada de quitação, de valores do título nem de entrega", () => {
+    const a = os("a", "rascunho");
+    montar({ os: a, fin: { projection: projecao(a, { ...LIQUIDADO!, storeId: "outra-loja" }) } });
+    const v = sonda.v!;
+    expect(v.financeiroHeader.tone).not.toBe("success");
+    expect(within(guia()).getByText("Financeiro inconsistente")).toBeTruthy();
+    expect(screen.queryByText("Valor do título")).toBeNull();
+    expect(contar("Pagamento registrado")).toBe(0);
+    expect(confirmar()).toBeNull();
+  });
+
+  it("falha real de leitura: único caso de indisponível, com nova tentativa", () => {
+    const a = os("a", "rascunho");
+    const reload = vi.fn();
+    montar({ os: a, fin: { projection: null, error: "Falha de rede.", reload } });
+    expect(sonda.v!.financeiroHeader.label).toBe("Financeiro indisponível");
+    expect(within(guia()).getByText("Situação financeira indisponível")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Tentar novamente" })[0]!);
+    expect(reload).toHaveBeenCalled();
+    expect(confirmar()).toBeNull();
+  });
+
+  it("A8: troca rápida de OS com resposta tardia da anterior — nada da outra OS aparece", () => {
+    const a = os("a", "rascunho");
+    const b = os("b", "aprovado");
+    const { trocar } = montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) } });
+    expect(within(guia()).getByText("Aprovação comercial pendente — revisar autorização")).toBeTruthy();
+    trocar({ os: b, fin: { projection: projecao(a, LIQUIDADO) } });
+    expect(within(guia()).getByText("Confirmando situação financeira…")).toBeTruthy();
+    expect(contar("Pagamento registrado")).toBe(0);
+    expect(contar("Aprovação comercial pendente")).toBe(0);
+    expect(confirmar()).toBeNull();
+  });
+
+  it("A9: retirada sem fotos não exige foto — o formulário só abre quando o operador pede", () => {
+    const a = os("a", "aprovado");
+    montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) } });
+    expect(screen.queryByText("Adicionar foto")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar fotos de saída" }));
+    expect(screen.getByText("Adicionar foto")).toBeTruthy();
+    expect(confirmar()).toBeTruthy();
+  });
+});

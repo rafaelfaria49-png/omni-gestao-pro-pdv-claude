@@ -85,3 +85,21 @@ describe("header histórico transversal", () => {
     expect(montarHistoricoHeaderV4(12).countLabel).toBe("12 eventos");
   });
 });
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — chips com pagamento e pendência comercial separados", () => {
+  it("Comercial sinaliza a pendência que bloqueia a entrega (warn/danger) e leva ao orçamento", () => {
+    expect(montarComercialHeaderV4({ estado: "persistido", status: "rascunho", total: 420, pendencia: { rotulo: "Aprovação pendente", tone: "warn" } }))
+      .toMatchObject({ label: "Aprovação pendente", tone: "warn", destino: "orcamento", hasBudget: true });
+    expect(montarComercialHeaderV4({ estado: "persistido", status: "recusado", pendencia: { rotulo: "Orçamento recusado", tone: "danger" } }).tone).toBe("danger");
+    expect(montarComercialHeaderV4({ estado: "persistido", status: "rascunho" })).toMatchObject({ label: "Orçamento · Rascunho", tone: "neutro" });
+  });
+
+  it("UNKNOWN com pagamento verificado mostra o fato (nunca 'Quitado'); sem fato segue 'Financeiro indisponível'", () => {
+    const verificado = montarFinanceiroHeaderV4({ financialStatus: "UNKNOWN", pagamentoVerificado: { label: "Pagamento registrado R$ 420,00", liquidado: true } });
+    expect(verificado).toMatchObject({ label: "Pagamento registrado R$ 420,00", tone: "success", cta: null, destino: "financeiro" });
+    expect(verificado.label).not.toMatch(/Quitado/);
+    expect(montarFinanceiroHeaderV4({ financialStatus: "UNKNOWN", pagamentoEmConferencia: true })).toMatchObject({ label: "Pagamento em conferência", tone: "warn" });
+    expect(montarFinanceiroHeaderV4({ financialStatus: "UNKNOWN" })).toMatchObject({ label: "Financeiro indisponível", tone: "danger" });
+    expect(montarFinanceiroHeaderV4({ error: "falha" })).toMatchObject({ label: "Financeiro indisponível", tone: "danger" });
+  });
+});

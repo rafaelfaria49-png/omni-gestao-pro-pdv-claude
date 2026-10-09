@@ -16,6 +16,7 @@ import { orcamentoRealV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { itensImprimiveisV3 } from "@/lib/operacoes-v3/print-model";
 import { formatarVencimentoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import type { FinancialProjectionOSV4 } from "./financial-projection";
+import { derivarSituacaoAtendimentoV4 } from "./situacao-atendimento-v4";
 
 export type SituacaoRetiradaFinanceiraV4 =
   | "carregando"
@@ -30,7 +31,9 @@ export type SituacaoRetiradaFinanceiraV4 =
   | "a_prazo"
   | "sem_cobranca_autorizada"
   | "cancelada"
-  | "estornada";
+  | "estornada"
+  /** GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: o que bloqueia é a aprovação comercial, não a leitura. */
+  | "pendencia_comercial";
 
 export type ToneRetiradaV4 = "success" | "info" | "warning" | "danger" | "neutral";
 
@@ -54,6 +57,11 @@ export interface RetiradaFinanceiraV4 {
   podeReceber: boolean;
   /** Espelha `projection.canDeliver` (guard compartilhado); fail-closed. */
   liberaEntrega: boolean;
+  /**
+   * Os valores vêm dos FATOS do título (valor, recebido líquido, saldo do título),
+   * não do total comercial — a tela usa rótulos próprios.
+   */
+  valoresDoTitulo?: boolean;
 }
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -71,7 +79,7 @@ function base(
   rotulo: string,
   descricao: string,
   tone: ToneRetiradaV4,
-  valores: Partial<Pick<RetiradaFinanceiraV4, "total" | "recebido" | "saldo" | "aPrazo" | "podeReceber" | "liberaEntrega">> = {},
+  valores: Partial<Pick<RetiradaFinanceiraV4, "total" | "recebido" | "saldo" | "aPrazo" | "podeReceber" | "liberaEntrega" | "valoresDoTitulo">> = {},
 ): RetiradaFinanceiraV4 {
   return {
     situacao,
@@ -84,6 +92,7 @@ function base(
     aPrazo: valores.aPrazo ?? null,
     podeReceber: valores.podeReceber ?? false,
     liberaEntrega: valores.liberaEntrega ?? false,
+    ...(valores.valoresDoTitulo ? { valoresDoTitulo: true } : {}),
   };
 }
 
@@ -181,8 +190,26 @@ export function derivarRetiradaFinanceiraV4(input: {
       return base("cancelada", "Cobrança cancelada", "A Conta a Receber desta OS está cancelada. Revise o financeiro antes de entregar.", "danger", valores);
     case "REVERSED":
       return base("estornada", "Cobrança estornada", "A Conta a Receber desta OS foi estornada. Revise o financeiro antes de entregar.", "danger", valores);
-    default:
+    default: {
+      // A leitura funcionou e o motivo é COMERCIAL: os fatos do título aparecem
+      // (só se verificáveis) e a pendência fica separada — nunca "desconhecida".
+      const s = derivarSituacaoAtendimentoV4({ osId, projection: p, loading: false, error: null });
+      if (s.comercial.pendente) {
+        const fatos = [
+          s.pagamento.rotulo,
+          s.pagamento.saldoRotulo,
+          s.pagamento.meio ? `Forma registrada: ${s.pagamento.meio}` : null,
+        ].filter(Boolean).join(" · ");
+        return base("pendencia_comercial", s.comercial.rotulo, `${fatos}.`, "warning", {
+          total: s.pagamento.valorTitulo,
+          recebido: s.pagamento.recebidoLiquido,
+          saldo: s.pagamento.saldoTitulo,
+          liberaEntrega: false,
+          valoresDoTitulo: true,
+        });
+      }
       return base("indisponivel", "Situação financeira desconhecida", motivo ?? "Não foi possível confirmar preço e título desta OS. A entrega fica bloqueada.", "danger", valores);
+    }
   }
 }
 

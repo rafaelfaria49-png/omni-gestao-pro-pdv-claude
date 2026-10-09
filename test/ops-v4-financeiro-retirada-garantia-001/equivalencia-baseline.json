@@ -1,0 +1,1768 @@
+{
+  "geradoSobre": "721924c1a661136a1c002b7925feaf5baabde474",
+  "casos": [
+    {
+      "nome": "A1 rascunho + título liquidado (forma da OS-2026-00025)",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": null,
+        "reversedTotal": 0,
+        "balance": null,
+        "financialStatus": "UNKNOWN",
+        "consistencyStatus": "UNKNOWN",
+        "consistencyIssues": [
+          "Preço ou aprovação comercial da OS não está materializado de forma confiável."
+        ],
+        "paymentMethods": [
+          {
+            "code": "dinheiro",
+            "label": "Dinheiro",
+            "amount": 420,
+            "source": "PDV_SPLIT"
+          }
+        ],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          },
+          {
+            "eventId": "OS_TIMELINE:ev-op-1",
+            "source": "OS_TIMELINE",
+            "type": "operacao_cobranca_gerada",
+            "amount": 420,
+            "paymentMethod": "Dinheiro",
+            "occurredAt": "2026-10-05T21:37:38.000Z",
+            "actor": "Operador Sintético",
+            "description": "Quitação: dinheiro R$ 420.00 (total R$ 420.00) · saldo R$ 0.00 (quitado)."
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_UNKNOWN",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": "FINANCIAL_STATE_UNKNOWN"
+      }
+    },
+    {
+      "nome": "rascunho sem título",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": false,
+        "receivableId": null,
+        "receivableTotal": null,
+        "receivableStatus": null,
+        "receivedTotal": null,
+        "reversedTotal": null,
+        "balance": null,
+        "financialStatus": "UNKNOWN",
+        "consistencyStatus": "UNKNOWN",
+        "consistencyIssues": [
+          "Preço ou aprovação comercial da OS não está materializado de forma confiável."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_UNKNOWN",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": "FINANCIAL_STATE_UNKNOWN"
+      }
+    },
+    {
+      "nome": "enviado + título liquidado",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": null,
+        "reversedTotal": 0,
+        "balance": null,
+        "financialStatus": "UNKNOWN",
+        "consistencyStatus": "UNKNOWN",
+        "consistencyIssues": [
+          "Preço ou aprovação comercial da OS não está materializado de forma confiável."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_UNKNOWN",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": "FINANCIAL_STATE_UNKNOWN"
+      }
+    },
+    {
+      "nome": "enviado vencido + título liquidado",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": null,
+        "reversedTotal": 0,
+        "balance": null,
+        "financialStatus": "UNKNOWN",
+        "consistencyStatus": "UNKNOWN",
+        "consistencyIssues": [
+          "Preço ou aprovação comercial da OS não está materializado de forma confiável."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_UNKNOWN",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": "FINANCIAL_STATE_UNKNOWN"
+      }
+    },
+    {
+      "nome": "recusado + título liquidado",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": null,
+        "reversedTotal": 0,
+        "balance": null,
+        "financialStatus": "UNKNOWN",
+        "consistencyStatus": "UNKNOWN",
+        "consistencyIssues": [
+          "Preço ou aprovação comercial da OS não está materializado de forma confiável."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_UNKNOWN",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": "FINANCIAL_STATE_UNKNOWN"
+      }
+    },
+    {
+      "nome": "rascunho + título liquidado com valor divergente da coluna",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 380,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 380,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": null,
+        "reversedTotal": 0,
+        "balance": null,
+        "financialStatus": "INCONSISTENT",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Existe título financeiro divergente das fontes de preço disponíveis."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A2 aprovado + título liquidado",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 420,
+        "reversedTotal": 0,
+        "balance": 0,
+        "financialStatus": "PAID",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [],
+        "paymentMethods": [
+          {
+            "code": "dinheiro",
+            "label": "Dinheiro",
+            "amount": 420,
+            "source": "PDV_SPLIT"
+          }
+        ],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          },
+          {
+            "eventId": "OS_TIMELINE:ev-op-1",
+            "source": "OS_TIMELINE",
+            "type": "operacao_cobranca_gerada",
+            "amount": 420,
+            "paymentMethod": "Dinheiro",
+            "occurredAt": "2026-10-05T21:37:38.000Z",
+            "actor": "Operador Sintético",
+            "description": "Quitação: dinheiro R$ 420.00 (total R$ 420.00) · saldo R$ 0.00 (quitado)."
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": true,
+        "deliveryDecision": "ALLOW_PAID",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "aprovado + parcial",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "parcial",
+        "receivedTotal": 100,
+        "reversedTotal": 0,
+        "balance": 320,
+        "financialStatus": "PARTIAL",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [
+          "Título possui saldo pendente sem autorização a prazo válida."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:pagamento:undated:0",
+            "source": "RECEIVABLE",
+            "type": "pagamento",
+            "amount": 100,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento registrado"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 100,
+            "operationId": "op-p"
+          }
+        ],
+        "canReceive": true,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_PENDING_BALANCE",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "aprovado + título pendente",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pendente",
+        "receivedTotal": 0,
+        "reversedTotal": 0,
+        "balance": 420,
+        "financialStatus": "OPEN",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [
+          "Título possui saldo pendente sem autorização a prazo válida."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": true,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_PENDING_BALANCE",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "aprovado sem título",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": false,
+        "receivableId": null,
+        "receivableTotal": null,
+        "receivableStatus": null,
+        "receivedTotal": null,
+        "reversedTotal": null,
+        "balance": null,
+        "financialStatus": "CHARGE_NOT_CREATED",
+        "consistencyStatus": "INCOMPLETE",
+        "consistencyIssues": [
+          "Total positivo sem Conta a Receber correspondente."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_CHARGE_NOT_CREATED",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "sem orçamento real, coluna 420 + título liquidado (legado)",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total",
+          "payload.valorTotal"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 420,
+        "legacyTotal": 420,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 420,
+        "reversedTotal": 0,
+        "balance": 0,
+        "financialStatus": "PAID",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": true,
+        "deliveryDecision": "ALLOW_PAID",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "sem orçamento e sem preço",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 0,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 0,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": false,
+        "receivableId": null,
+        "receivableTotal": null,
+        "receivableStatus": null,
+        "receivedTotal": null,
+        "reversedTotal": null,
+        "balance": null,
+        "financialStatus": "UNKNOWN",
+        "consistencyStatus": "UNKNOWN",
+        "consistencyIssues": [
+          "Preço ou aprovação comercial da OS não está materializado de forma confiável."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_UNKNOWN",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": "FINANCIAL_STATE_UNKNOWN"
+      }
+    },
+    {
+      "nome": "prévia sintetizada",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "ordem_servico.valor_total",
+          "payload.valorTotal"
+        ],
+        "approvedBudgetTotal": null,
+        "osColumnTotal": 420,
+        "legacyTotal": 420,
+        "billingSnapshotTotal": null,
+        "receivableFound": false,
+        "receivableId": null,
+        "receivableTotal": null,
+        "receivableStatus": null,
+        "receivedTotal": null,
+        "reversedTotal": null,
+        "balance": null,
+        "financialStatus": "CHARGE_NOT_CREATED",
+        "consistencyStatus": "INCOMPLETE",
+        "consistencyIssues": [
+          "Total positivo sem Conta a Receber correspondente."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_CHARGE_NOT_CREATED",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "aprovado total zero sem autorização",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 0,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 0,
+        "osColumnTotal": 0,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": false,
+        "receivableId": null,
+        "receivableTotal": null,
+        "receivableStatus": null,
+        "receivedTotal": null,
+        "reversedTotal": null,
+        "balance": null,
+        "financialStatus": "NO_PRICE",
+        "consistencyStatus": "INCOMPLETE",
+        "consistencyIssues": [
+          "Total zero exige classificação e justificativa persistidas."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_NO_CHARGE_AUTH_REQUIRED",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "aprovado total zero com cortesia autorizada",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 0,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 0,
+        "osColumnTotal": 0,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": false,
+        "receivableId": null,
+        "receivableTotal": null,
+        "receivableStatus": null,
+        "receivedTotal": null,
+        "reversedTotal": null,
+        "balance": null,
+        "financialStatus": "AUTHORIZED_NO_CHARGE",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": true,
+        "noChargeCategory": "cortesia",
+        "noChargeReason": "Cortesia sintética",
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": true,
+        "deliveryDecision": "ALLOW_AUTHORIZED_NO_CHARGE",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 título de outra loja",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": null,
+        "reversedTotal": 0,
+        "balance": null,
+        "financialStatus": "INCONSISTENT",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Título financeiro não pertence inequivocamente à mesma OS e loja."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 título de outra OS",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": null,
+        "reversedTotal": 0,
+        "balance": null,
+        "financialStatus": "INCONSISTENT",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Título financeiro não pertence inequivocamente à mesma OS e loja."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 título com valor divergente",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 400,
+        "receivableStatus": "pago",
+        "receivedTotal": null,
+        "reversedTotal": 0,
+        "balance": null,
+        "financialStatus": "INCONSISTENT",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Valor do título diverge do total esperado da OS."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:undated:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 400,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 400,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 histórico inválido",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 0,
+        "reversedTotal": null,
+        "balance": 420,
+        "financialStatus": "INCONSISTENT",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Histórico ou status do título não permite calcular o saldo com segurança."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:undated:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": null,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": null,
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 histórico não-array",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 0,
+        "reversedTotal": null,
+        "balance": 420,
+        "financialStatus": "INCONSISTENT",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Histórico ou status do título não permite calcular o saldo com segurança."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": null,
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 estorno com referência inexistente",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "parcial",
+        "receivedTotal": 100,
+        "reversedTotal": 100,
+        "balance": 320,
+        "financialStatus": "PARTIAL",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [
+          "Título possui saldo pendente sem autorização a prazo válida."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:pagamento:undated:0",
+            "source": "RECEIVABLE",
+            "type": "pagamento",
+            "amount": 200,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento registrado"
+          },
+          {
+            "eventId": "RECEIVABLE:estorno_pagamento:undated:1",
+            "source": "RECEIVABLE",
+            "type": "estorno_pagamento",
+            "amount": 100,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento estornado"
+          }
+        ],
+        "receivablePayments": null,
+        "canReceive": true,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_PENDING_BALANCE",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 recebido acima do título",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 600,
+        "reversedTotal": 0,
+        "balance": 0,
+        "financialStatus": "INCONSISTENT",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Histórico ou status do título não permite calcular o saldo com segurança."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:pagamento:undated:0",
+            "source": "RECEIVABLE",
+            "type": "pagamento",
+            "amount": 300,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento registrado"
+          },
+          {
+            "eventId": "RECEIVABLE:pagamento:undated:1",
+            "source": "RECEIVABLE",
+            "type": "pagamento",
+            "amount": 300,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento registrado"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 300,
+            "operationId": "op-a"
+          },
+          {
+            "amount": 300,
+            "operationId": "op-b"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 status pago com saldo aberto",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 100,
+        "reversedTotal": 0,
+        "balance": 320,
+        "financialStatus": "INCONSISTENT",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Status do título diverge do saldo calculado."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:pagamento:undated:0",
+            "source": "RECEIVABLE",
+            "type": "pagamento",
+            "amount": 100,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento registrado"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 100,
+            "operationId": "op-a"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A3 falha de leitura do título",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": false,
+        "receivableId": null,
+        "receivableTotal": null,
+        "receivableStatus": null,
+        "receivedTotal": null,
+        "reversedTotal": null,
+        "balance": null,
+        "financialStatus": "UNKNOWN",
+        "consistencyStatus": "UNKNOWN",
+        "consistencyIssues": [
+          "Falha ao consultar a Conta a Receber da OS."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_UNKNOWN",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": "FINANCIAL_STATE_UNKNOWN"
+      }
+    },
+    {
+      "nome": "título cancelado",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "cancelado",
+        "receivedTotal": 0,
+        "reversedTotal": 0,
+        "balance": 420,
+        "financialStatus": "CANCELLED",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Status do título diverge do saldo calculado."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "título estornado",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "estornado",
+        "receivedTotal": 0,
+        "reversedTotal": 420,
+        "balance": 420,
+        "financialStatus": "REVERSED",
+        "consistencyStatus": "INCONSISTENT",
+        "consistencyIssues": [
+          "Status do título diverge do saldo calculado."
+        ],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          },
+          {
+            "eventId": "RECEIVABLE:estorno_pagamento:undated:1",
+            "source": "RECEIVABLE",
+            "type": "estorno_pagamento",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento estornado"
+          }
+        ],
+        "receivablePayments": [],
+        "canReceive": false,
+        "canDeliver": false,
+        "deliveryDecision": "BLOCK_INCONSISTENT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A6 estornado + reposição externa do mesmo valor",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 420,
+        "reversedTotal": 420,
+        "balance": 0,
+        "financialStatus": "PAID",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [],
+        "paymentMethods": [
+          {
+            "code": "dinheiro",
+            "label": "Dinheiro",
+            "amount": 420,
+            "source": "PDV_SPLIT"
+          }
+        ],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:2026-10-05T21:37:39.000Z:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": "2026-10-05T21:37:39.000Z",
+            "actor": "Operador Sintético",
+            "description": "Liquidação registrada"
+          },
+          {
+            "eventId": "OS_TIMELINE:ev-op-1",
+            "source": "OS_TIMELINE",
+            "type": "operacao_cobranca_gerada",
+            "amount": 420,
+            "paymentMethod": "Dinheiro",
+            "occurredAt": "2026-10-05T21:37:38.000Z",
+            "actor": "Operador Sintético",
+            "description": "Quitação: dinheiro R$ 420.00 (total R$ 420.00) · saldo R$ 0.00 (quitado)."
+          },
+          {
+            "eventId": "RECEIVABLE:estorno_pagamento:undated:1",
+            "source": "RECEIVABLE",
+            "type": "estorno_pagamento",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento estornado"
+          },
+          {
+            "eventId": "RECEIVABLE:pagamento:undated:2",
+            "source": "RECEIVABLE",
+            "type": "pagamento",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento registrado"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": null
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": true,
+        "deliveryDecision": "ALLOW_PAID",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "misto: baixa sem loteId + marcador a prazo",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "parcial",
+        "receivedTotal": 200,
+        "reversedTotal": 0,
+        "balance": 220,
+        "financialStatus": "AUTHORIZED_CREDIT",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [],
+        "paymentMethods": [],
+        "collectionMode": "a_prazo",
+        "installments": [
+          {
+            "number": "1",
+            "dueAt": "2026-11-10",
+            "amount": 220,
+            "status": "pendente"
+          }
+        ],
+        "authorizedCredit": true,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:pagamento:undated:0",
+            "source": "RECEIVABLE",
+            "type": "pagamento",
+            "amount": 200,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Pagamento registrado"
+          },
+          {
+            "eventId": "RECEIVABLE:a_prazo_autorizado:undated:1",
+            "source": "RECEIVABLE",
+            "type": "a_prazo_autorizado",
+            "amount": null,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Entrega autorizada a prazo"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 200,
+            "operationId": "op-m"
+          }
+        ],
+        "canReceive": true,
+        "canDeliver": true,
+        "deliveryDecision": "ALLOW_AUTHORIZED_CREDIT",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "baixa externa sem identidade (Financeiro)",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 420,
+        "reversedTotal": 0,
+        "balance": 0,
+        "financialStatus": "PAID",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [],
+        "paymentMethods": [],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:undated:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": null,
+            "occurredAt": null,
+            "actor": null,
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": null
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": true,
+        "deliveryDecision": "ALLOW_PAID",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    },
+    {
+      "nome": "A4 forma débito no histórico do título",
+      "saida": {
+        "version": 1,
+        "storeId": "loja-sintetica-frg",
+        "osId": "os-sintetica-frg",
+        "osCode": "OS-SINT-00025",
+        "operationalStatus": "pronta",
+        "expectedTotal": 420,
+        "expectedTotalSource": [
+          "orcamento_aprovado",
+          "ordem_servico.valor_total"
+        ],
+        "approvedBudgetTotal": 420,
+        "osColumnTotal": 420,
+        "legacyTotal": null,
+        "billingSnapshotTotal": null,
+        "receivableFound": true,
+        "receivableId": "cr-frg",
+        "receivableTotal": 420,
+        "receivableStatus": "pago",
+        "receivedTotal": 420,
+        "reversedTotal": 0,
+        "balance": 0,
+        "financialStatus": "PAID",
+        "consistencyStatus": "CONSISTENT",
+        "consistencyIssues": [],
+        "paymentMethods": [
+          {
+            "code": "debito",
+            "label": "Débito",
+            "amount": 420,
+            "source": "RECEIVABLE_HISTORY"
+          }
+        ],
+        "collectionMode": null,
+        "installments": [],
+        "authorizedCredit": false,
+        "authorizedNoCharge": false,
+        "noChargeCategory": null,
+        "noChargeReason": null,
+        "financialEvents": [
+          {
+            "eventId": "RECEIVABLE:liquidacao:undated:0",
+            "source": "RECEIVABLE",
+            "type": "liquidacao",
+            "amount": 420,
+            "paymentMethod": "Débito",
+            "occurredAt": null,
+            "actor": null,
+            "description": "Liquidação registrada"
+          }
+        ],
+        "receivablePayments": [
+          {
+            "amount": 420,
+            "operationId": "op-1"
+          }
+        ],
+        "canReceive": false,
+        "canDeliver": true,
+        "deliveryDecision": "ALLOW_PAID",
+        "loadedAt": "2026-10-09T12:00:00.000Z",
+        "errorCode": null
+      }
+    }
+  ]
+}

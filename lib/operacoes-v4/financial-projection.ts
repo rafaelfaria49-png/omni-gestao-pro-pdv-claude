@@ -8,7 +8,8 @@ import {
   type EntregaFinanceiraDecisaoV3,
   type ProjetarEntregaFinanceiraInputV3,
 } from "@/lib/operacoes-v3/delivery-financial-guard";
-import { formaLabelRecebimentoV3 } from "@/lib/operacoes-v3/payment-model";
+import { formaLabelRecebimentoV3, localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
+import { computeTotaisV3, orcamentoRealV3, statusEfetivoOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-model";
 
 export type FinancialStatusV4 =
   | "UNKNOWN"
@@ -63,6 +64,122 @@ export interface FinancialEventV4 {
   description: string;
 }
 
+// ----------------------------------------------------------------------------
+// GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — três dimensões ADITIVAS.
+// Fatos do título, situação comercial e ações possíveis, ao lado dos campos
+// legados (que seguem idênticos: matriz de equivalência). Nenhuma decisão nova:
+// `acoes` espelha `canReceive`/`canDeliver` e só NOMEIA o motivo do bloqueio que
+// o guard já decidiu. Fatos só com vínculo, histórico e status verificáveis;
+// senão `null` (nunca zero) e motivo estruturado. Opcionais no tipo: leitores e
+// fixtures anteriores seguem válidos sem elas.
+// ----------------------------------------------------------------------------
+
+export type ImpedimentoCodigoV4 =
+  | "APROVACAO_COMERCIAL_PENDENTE"
+  | "ORCAMENTO_RECUSADO"
+  | "ORCAMENTO_EXPIRADO"
+  | "PRECO_AUSENTE"
+  | "SEM_COBRANCA_EXIGE_AUTORIZACAO"
+  | "VALORES_DIVERGENTES"
+  | "TITULO_NAO_VINCULADO"
+  | "HISTORICO_INVALIDO"
+  | "ESTORNO_AMBIGUO"
+  | "RECEBIDO_ACIMA_DO_TITULO"
+  | "FALHA_LEITURA"
+  | "COBRANCA_NAO_FORMALIZADA"
+  | "SALDO_EM_ABERTO"
+  | "COBRANCA_CANCELADA"
+  | "PAGAMENTO_ESTORNADO";
+
+export type DestinoImpedimentoV4 = "comercial" | "financeiro" | "entrega" | "recarregar";
+
+export interface ImpedimentoOSV4 {
+  codigo: ImpedimentoCodigoV4;
+  destino: DestinoImpedimentoV4;
+}
+
+/** Meio de um pagamento VIGENTE, ligado a ele pela identidade da operação ou pela própria baixa. */
+export interface MeioRegistradoV4 {
+  label: string;
+  valor: number | null;
+  operacaoId: string | null;
+  fonte: "RECEIVABLE_HISTORY" | "OS_TIMELINE";
+}
+
+export interface FatosFinanceirosOSV4 {
+  /** Existe Conta a Receber na chave canônica da OS (vínculo conferido ou não). */
+  tituloEncontrado: boolean;
+  /** Vínculo, histórico, estornos e status conferem — só então há valores. */
+  verificavel: boolean;
+  /** Por que não é verificável (`null` quando é, ou quando não há título). */
+  motivo: ImpedimentoCodigoV4 | null;
+  tituloId: string | null;
+  valorTitulo: number | null;
+  recebidoBruto: number | null;
+  estornado: number | null;
+  recebidoLiquido: number | null;
+  saldoTitulo: number | null;
+  /** Verificável, saldo zero e status "pago". Não significa OS liberada. */
+  liquidado: boolean;
+  /** O histórico do título traz lançamento de pagamento (mesmo sem verificação). */
+  temRegistroDePagamento: boolean;
+  pagamentosVigentes: FinancialPaymentV4[] | null;
+  meios: MeioRegistradoV4[];
+  /** Parte vigente cujo meio não se identifica com segurança (ex.: baixa feita fora da OS). */
+  semMeioIdentificado: number | null;
+}
+
+export type EstadoOrcamentoComercialV4 =
+  | "ausente"
+  | "previa"
+  | "rascunho"
+  | "enviado"
+  | "aprovado"
+  | "recusado"
+  | "expirado"
+  | "desconhecido";
+
+export interface DivergenciaComercialV4 {
+  codigo: "FONTES_DE_PRECO" | "ORCAMENTO_X_TITULO";
+  detalhe: string;
+}
+
+export interface ComercialOSV4 {
+  orcamento: EstadoOrcamentoComercialV4;
+  /** Total calculado do orçamento real (qualquer status); `null` sem orçamento real ou total inválido. */
+  totalOrcamento: number | null;
+  /** Total do orçamento APROVADO usado pelo guard; `null` sem aprovação. */
+  totalAprovado: number | null;
+  /** Orçamento real × valor do título vinculado; `null` quando um dos dois falta. */
+  confereComTitulo: boolean | null;
+  divergencias: DivergenciaComercialV4[];
+}
+
+export interface AcoesOSV4 {
+  /** Igual a `canReceive` (decisão legada, sem mudança). */
+  podeReceber: boolean;
+  /** Igual a `canDeliver` (decisão legada, sem mudança). */
+  podeEntregar: boolean;
+  /** Motivo estruturado do bloqueio da entrega e onde ele se resolve. */
+  impedimento: ImpedimentoOSV4 | null;
+}
+
+/** Histórico de recebimentos para EXIBIÇÃO: a mesma operação comprovada em duas fontes vira um item. */
+export interface RegistroHistoricoFinanceiroV4 {
+  id: string;
+  /** Identidade comprovada da operação (`null` = sem identidade: item isolado). */
+  operacaoId: string | null;
+  tipo: string;
+  descricao: string;
+  valor: number | null;
+  meio: string | null;
+  ocorridoEm: string | null;
+  autor: string | null;
+  fontes: FinancialEventSourceV4[];
+  eventIds: string[];
+  estorno: boolean;
+}
+
 export interface FinancialProjectionOSV4 {
   version: 1;
   storeId: string;
@@ -111,6 +228,12 @@ export interface FinancialProjectionOSV4 {
 
   loadedAt: string;
   errorCode: string | null;
+
+  /** GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — dimensões aditivas (ver acima). */
+  fatos?: FatosFinanceirosOSV4;
+  comercial?: ComercialOSV4;
+  acoes?: AcoesOSV4;
+  historico?: RegistroHistoricoFinanceiroV4[];
 }
 
 export interface ProjectFinancialOSV4Input extends ProjetarEntregaFinanceiraInputV3 {
@@ -289,6 +412,12 @@ function mixedReceiptOperationId(next: unknown, amount: number): string | null {
  * torna o histórico ilegível para este fim (`null`) — fail-closed.
  */
 function readValidPayments(titlePayload: unknown): FinancialPaymentV4[] | null {
+  const entries = readValidPaymentEntries(titlePayload);
+  return entries ? entries.map(({ amount, operationId }) => ({ amount, operationId })) : null;
+}
+
+/** Mesma leitura de `readValidPayments`, com o índice da baixa no histórico do título. */
+function readValidPaymentEntries(titlePayload: unknown): Array<FinancialPaymentV4 & { index: number }> | null {
   if (!isRecord(titlePayload) || titlePayload.historico == null) return [];
   if (!Array.isArray(titlePayload.historico)) return null;
   const vigentes: Array<FinancialPaymentV4 & { index: number }> = [];
@@ -309,7 +438,7 @@ function readValidPayments(titlePayload: unknown): FinancialPaymentV4[] | null {
     if (pos < 0) return null;
     vigentes.splice(pos, 1);
   }
-  return vigentes.map(({ amount, operationId }) => ({ amount, operationId }));
+  return vigentes;
 }
 
 function readFinancialEvents(payload: Record<string, unknown>, titlePayload: unknown): FinancialEventV4[] {
@@ -382,6 +511,307 @@ function consistencyStatus(guard: ReturnType<typeof projetarEntregaFinanceiraV3>
   return "CONSISTENT";
 }
 
+// ---- GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — dimensões aditivas ----
+
+const TOLERANCIA_CENTAVOS = 1;
+
+function cents(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : null;
+}
+
+function temLancamentoDePagamento(titlePayload: unknown): boolean {
+  if (!isRecord(titlePayload) || !Array.isArray(titlePayload.historico)) return false;
+  return titlePayload.historico.some((entry) => {
+    if (!isRecord(entry)) return false;
+    const type = text(entry.tipo).toLowerCase();
+    return type === "pagamento" || type === "liquidacao";
+  });
+}
+
+/** Evento de RECEBIMENTO gravado pelos writers da OS para a operação (`receberOSV3` / misto). */
+function eventoDeRecebimentoDaOperacao(payload: Record<string, unknown>, operacaoId: string, valorCentavos: number): Record<string, unknown> | null {
+  const timeline = Array.isArray(payload.timeline) ? payload.timeline : [];
+  for (const entry of timeline) {
+    if (!isRecord(entry) || text(entry.tipo) !== "operacao_cobranca_gerada" || !isRecord(entry.metadata)) continue;
+    if (text(entry.metadata.operacaoId) !== operacaoId) continue;
+    if (cents(entry.metadata.total ?? entry.metadata.valor) !== valorCentavos) continue;
+    return entry;
+  }
+  return null;
+}
+
+/**
+ * Meio de cada pagamento VIGENTE: o da própria baixa no título, ou o do evento de
+ * recebimento da OS com a MESMA identidade de operação e o mesmo valor. Sem esse
+ * vínculo o valor fica "sem meio identificado" — nunca se deduz por valor/horário.
+ */
+function meiosDosPagamentos(
+  entries: Array<FinancialPaymentV4 & { index: number }>,
+  titlePayload: unknown,
+  payload: Record<string, unknown>,
+): { meios: MeioRegistradoV4[]; semMeioCentavos: number } {
+  const historico = isRecord(titlePayload) && Array.isArray(titlePayload.historico) ? titlePayload.historico : [];
+  const meios: MeioRegistradoV4[] = [];
+  let semMeioCentavos = 0;
+  for (const pagamento of entries) {
+    const valorCentavos = Math.round(pagamento.amount * 100);
+    const entry = historico[pagamento.index];
+    const proprios = isRecord(entry) ? methodsFromRecord(entry, "RECEIVABLE_HISTORY") : [];
+    if (proprios.length === 1) {
+      meios.push({ label: proprios[0]!.label, valor: pagamento.amount, operacaoId: pagamento.operationId, fonte: "RECEIVABLE_HISTORY" });
+      continue;
+    }
+    const evento = pagamento.operationId ? eventoDeRecebimentoDaOperacao(payload, pagamento.operationId, valorCentavos) : null;
+    const linhas = evento && isRecord(evento.metadata) ? methodsFromRecord(evento.metadata, "PDV_SPLIT") : [];
+    const soma = linhas.reduce<number | null>((acc, linha) => (acc == null || linha.amount == null ? null : acc + Math.round(linha.amount * 100)), 0);
+    if (linhas.length > 0 && soma === valorCentavos) {
+      for (const linha of linhas) meios.push({ label: linha.label, valor: linha.amount, operacaoId: pagamento.operationId, fonte: "OS_TIMELINE" });
+      continue;
+    }
+    semMeioCentavos += valorCentavos;
+  }
+  return { meios, semMeioCentavos };
+}
+
+function fatosSemValores(
+  input: ProjectFinancialOSV4Input,
+  tituloEncontrado: boolean,
+  motivo: ImpedimentoCodigoV4 | null,
+): FatosFinanceirosOSV4 {
+  return {
+    tituloEncontrado,
+    verificavel: false,
+    motivo,
+    tituloId: input.titulo?.id ?? null,
+    valorTitulo: null,
+    recebidoBruto: null,
+    estornado: null,
+    recebidoLiquido: null,
+    saldoTitulo: null,
+    liquidado: false,
+    temRegistroDePagamento: input.titulo ? temLancamentoDePagamento(input.titulo.payload) : false,
+    pagamentosVigentes: null,
+    meios: [],
+    semMeioIdentificado: null,
+  };
+}
+
+/**
+ * Fatos do título, independentes do comercial: mesma checagem de vínculo e de
+ * coerência histórico × status que o guard faz, sem depender do preço aprovado.
+ */
+export function lerFatosFinanceirosV4(input: ProjectFinancialOSV4Input): FatosFinanceirosOSV4 {
+  const titulo = input.titulo;
+  if (input.falhaLeituraTitulo) return fatosSemValores(input, false, "FALHA_LEITURA");
+  if (!titulo) return fatosSemValores(input, false, null);
+  const titlePayload = isRecord(titulo.payload) ? titulo.payload : {};
+  const valor = cents(titulo.valor);
+  if (
+    titulo.storeId !== input.storeId ||
+    titulo.localKey !== localKeyContaReceberOSV3(input.storeId, input.osId) ||
+    (typeof titlePayload.ordemServicoId === "string" && titlePayload.ordemServicoId !== input.osId) ||
+    valor == null
+  ) {
+    return fatosSemValores(input, true, "TITULO_NAO_VINCULADO");
+  }
+  const recebimentos = reconciliarRecebimentosFinanceirosV3(titulo.payload);
+  if (!recebimentos.valido) return fatosSemValores(input, true, "HISTORICO_INVALIDO");
+  const entries = readValidPaymentEntries(titulo.payload);
+  const somaVigentes = entries?.reduce((acc, entry) => acc + Math.round(entry.amount * 100), 0) ?? null;
+  if (!entries || somaVigentes !== recebimentos.centavos) return fatosSemValores(input, true, "ESTORNO_AMBIGUO");
+  if (recebimentos.centavos > valor + TOLERANCIA_CENTAVOS) return fatosSemValores(input, true, "RECEBIDO_ACIMA_DO_TITULO");
+  const status = normalizeReceberStatus(titulo.status);
+  if (status === RECEBER_STATUS.CANCELADO) return fatosSemValores(input, true, "COBRANCA_CANCELADA");
+  if (status === RECEBER_STATUS.ESTORNADO) return fatosSemValores(input, true, "PAGAMENTO_ESTORNADO");
+  const saldo = Math.max(0, valor - recebimentos.centavos);
+  const coerente =
+    !!status &&
+    (saldo <= TOLERANCIA_CENTAVOS
+      ? status === RECEBER_STATUS.PAGO && recebimentos.centavos + TOLERANCIA_CENTAVOS >= valor
+      : status === RECEBER_STATUS.VENCIDO ||
+        (recebimentos.centavos <= TOLERANCIA_CENTAVOS && status === RECEBER_STATUS.PENDENTE) ||
+        (recebimentos.centavos > TOLERANCIA_CENTAVOS && status === RECEBER_STATUS.PARCIAL));
+  if (!coerente) return fatosSemValores(input, true, "HISTORICO_INVALIDO");
+  const { meios, semMeioCentavos } = meiosDosPagamentos(entries, titulo.payload, input.payload);
+  return {
+    tituloEncontrado: true,
+    verificavel: true,
+    motivo: null,
+    tituloId: titulo.id,
+    valorTitulo: valor / 100,
+    recebidoBruto: recebimentos.recebidoCentavos / 100,
+    estornado: recebimentos.estornadoCentavos / 100,
+    recebidoLiquido: recebimentos.centavos / 100,
+    saldoTitulo: saldo / 100,
+    liquidado: saldo <= TOLERANCIA_CENTAVOS && status === RECEBER_STATUS.PAGO,
+    temRegistroDePagamento: temLancamentoDePagamento(titulo.payload),
+    pagamentosVigentes: entries.map(({ amount, operationId }) => ({ amount, operationId })),
+    meios,
+    semMeioIdentificado: semMeioCentavos / 100,
+  };
+}
+
+const ESTADOS_ORCAMENTO: readonly EstadoOrcamentoComercialV4[] = ["rascunho", "enviado", "aprovado", "recusado", "expirado"];
+
+export function lerComercialV4(
+  input: ProjectFinancialOSV4Input,
+  totals: ReturnType<typeof reconciliarTotaisFinanceirosV3>,
+  fatos: FatosFinanceirosOSV4,
+): ComercialOSV4 {
+  const real = orcamentoRealV3(input.payload);
+  let orcamento: EstadoOrcamentoComercialV4;
+  if (!isRecord(input.payload.orcamento)) orcamento = "ausente";
+  else if (!real) orcamento = "previa";
+  else {
+    const agora = Date.parse(input.loadedAt);
+    const efetivo = Number.isFinite(agora) ? statusEfetivoOrcamentoV3(real, agora) : real.status;
+    orcamento = (ESTADOS_ORCAMENTO as readonly string[]).includes(efetivo) ? (efetivo as EstadoOrcamentoComercialV4) : "desconhecido";
+  }
+  const totalOrcamentoCentavos = real
+    ? cents(computeTotaisV3({ servicos: real.servicos, pecas: real.pecas, desconto: real.desconto }).total)
+    : null;
+  const vinculado = !!input.titulo && fatos.tituloEncontrado && fatos.motivo !== "TITULO_NAO_VINCULADO";
+  const valorTituloCentavos = vinculado ? cents(input.titulo!.valor) : null;
+  const confereComTitulo =
+    totalOrcamentoCentavos != null && valorTituloCentavos != null
+      ? Math.abs(totalOrcamentoCentavos - valorTituloCentavos) <= TOLERANCIA_CENTAVOS
+      : null;
+  const divergencias: DivergenciaComercialV4[] = [];
+  if (totals.inconsistencia) divergencias.push({ codigo: "FONTES_DE_PRECO", detalhe: totals.inconsistencia });
+  if (confereComTitulo === false) {
+    divergencias.push({
+      codigo: "ORCAMENTO_X_TITULO",
+      detalhe: `Orçamento R$ ${(totalOrcamentoCentavos! / 100).toFixed(2)} × título R$ ${(valorTituloCentavos! / 100).toFixed(2)}.`,
+    });
+  }
+  return {
+    orcamento,
+    totalOrcamento: totalOrcamentoCentavos == null ? null : totalOrcamentoCentavos / 100,
+    totalAprovado: sourceAmount(totals.fontes, "orcamento_aprovado"),
+    confereComTitulo,
+    divergencias,
+  };
+}
+
+/** Só NOMEIA o motivo do bloqueio já decidido pelo guard; nunca libera nada. */
+export function lerImpedimentoV4(
+  input: ProjectFinancialOSV4Input,
+  guard: ReturnType<typeof projetarEntregaFinanceiraV3>,
+  fatos: FatosFinanceirosOSV4,
+  comercial: ComercialOSV4,
+): ImpedimentoOSV4 | null {
+  if (autorizadaParaEntregaFinanceiraV3(guard.decisao)) return null;
+  switch (guard.decisao) {
+    case "BLOCK_PENDING_BALANCE":
+      return { codigo: "SALDO_EM_ABERTO", destino: "financeiro" };
+    case "BLOCK_CHARGE_NOT_CREATED":
+      return { codigo: "COBRANCA_NAO_FORMALIZADA", destino: "financeiro" };
+    case "BLOCK_NO_CHARGE_AUTH_REQUIRED":
+      return { codigo: "SEM_COBRANCA_EXIGE_AUTORIZACAO", destino: "entrega" };
+    case "BLOCK_UNKNOWN":
+      if (input.falhaLeituraTitulo || input.errorCode) return { codigo: "FALHA_LEITURA", destino: "recarregar" };
+      if (comercial.orcamento === "rascunho" || comercial.orcamento === "enviado" || comercial.orcamento === "desconhecido") {
+        return { codigo: "APROVACAO_COMERCIAL_PENDENTE", destino: "comercial" };
+      }
+      if (comercial.orcamento === "recusado") return { codigo: "ORCAMENTO_RECUSADO", destino: "comercial" };
+      if (comercial.orcamento === "expirado") return { codigo: "ORCAMENTO_EXPIRADO", destino: "comercial" };
+      return { codigo: "PRECO_AUSENTE", destino: "comercial" };
+    case "BLOCK_INCONSISTENT":
+      if (fatos.tituloEncontrado && fatos.motivo) return { codigo: fatos.motivo, destino: "financeiro" };
+      return { codigo: "VALORES_DIVERGENTES", destino: "financeiro" };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Histórico para EXIBIÇÃO. A baixa do título e o evento de recebimento da OS viram
+ * UM item só quando a MESMA operação está provada dos dois lados (identidade
+ * gravada + evento de recebimento + mesmo valor). Sem isso, cada fonte aparece
+ * rotulada e separada. Nenhum evento some e nada é somado aqui.
+ */
+export function agruparHistoricoFinanceiroV4(
+  payload: Record<string, unknown>,
+  titlePayload: unknown,
+  events: FinancialEventV4[],
+): RegistroHistoricoFinanceiroV4[] {
+  const historico = isRecord(titlePayload) && Array.isArray(titlePayload.historico) ? titlePayload.historico : [];
+  const identidadeTitulo = new Map<string, string>();
+  historico.forEach((entry, index) => {
+    if (!isRecord(entry)) return;
+    const type = text(entry.tipo).toLowerCase();
+    if (type !== "pagamento" && type !== "liquidacao") return;
+    const amount = money(entry.valor);
+    const operationId = text(entry.loteId) || (amount == null ? null : mixedReceiptOperationId(historico[index + 1], amount));
+    if (!operationId) return;
+    const occurredAt = text(entry.at ?? entry.criadoEm) || null;
+    identidadeTitulo.set(`RECEIVABLE:${text(entry.id) || `${type}:${occurredAt ?? "undated"}:${index}`}`, operationId);
+  });
+  const timeline = Array.isArray(payload.timeline) ? payload.timeline : [];
+  const identidadeOS = new Map<string, string>();
+  timeline.forEach((entry, index) => {
+    if (!isRecord(entry) || text(entry.tipo) !== "operacao_cobranca_gerada" || !isRecord(entry.metadata)) return;
+    const operationId = text(entry.metadata.operacaoId);
+    if (!operationId) return;
+    const occurredAt = text(entry.criadoEm ?? entry.at) || null;
+    const type = text(entry.tipo).toLowerCase();
+    identidadeOS.set(`OS_TIMELINE:${text(entry.id) || `${type}:${occurredAt ?? "undated"}:${index}`}`, operationId);
+  });
+
+  const usados = new Set<string>();
+  const registros: RegistroHistoricoFinanceiroV4[] = [];
+  const isolado = (event: FinancialEventV4, operacaoId: string | null): RegistroHistoricoFinanceiroV4 => ({
+    id: event.eventId,
+    operacaoId,
+    tipo: event.type,
+    descricao: event.description,
+    valor: event.amount,
+    meio: event.paymentMethod,
+    ocorridoEm: event.occurredAt,
+    autor: event.actor,
+    fontes: [event.source],
+    eventIds: [event.eventId],
+    estorno: event.type.includes("estorno"),
+  });
+  for (const event of events) {
+    if (usados.has(event.eventId)) continue;
+    const operacaoId = identidadeTitulo.get(event.eventId) ?? identidadeOS.get(event.eventId) ?? null;
+    const par = operacaoId
+      ? events.find((other) =>
+          other.eventId !== event.eventId &&
+          !usados.has(other.eventId) &&
+          other.source !== event.source &&
+          (identidadeTitulo.get(other.eventId) ?? identidadeOS.get(other.eventId)) === operacaoId &&
+          other.amount != null && event.amount != null &&
+          Math.round(other.amount * 100) === Math.round(event.amount * 100))
+      : undefined;
+    if (!par) {
+      usados.add(event.eventId);
+      registros.push(isolado(event, operacaoId));
+      continue;
+    }
+    const daOS = event.source === "OS_TIMELINE" ? event : par;
+    const doTitulo = event.source === "RECEIVABLE" ? event : par;
+    usados.add(event.eventId);
+    usados.add(par.eventId);
+    registros.push({
+      id: daOS.eventId,
+      operacaoId,
+      tipo: daOS.type,
+      descricao: daOS.description,
+      valor: daOS.amount,
+      meio: daOS.paymentMethod ?? doTitulo.paymentMethod,
+      ocorridoEm: daOS.occurredAt ?? doTitulo.occurredAt,
+      autor: daOS.actor ?? doTitulo.actor,
+      fontes: ["OS_TIMELINE", "RECEIVABLE"],
+      eventIds: [daOS.eventId, doTitulo.eventId],
+      estorno: false,
+    });
+  }
+  return registros;
+}
+
 export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): FinancialProjectionOSV4 {
   const totals = reconciliarTotaisFinanceirosV3(input);
   const guard = projetarEntregaFinanceiraV3(input);
@@ -400,6 +830,16 @@ export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): Financia
     guard.tituloEncontrado &&
     guard.saldo != null &&
     guard.saldo > 0;
+  const canDeliver = autorizadaParaEntregaFinanceiraV3(guard.decisao);
+  const fatos = lerFatosFinanceirosV4(input);
+  const comercial = lerComercialV4(input, totals, fatos);
+  const impedimento = lerImpedimentoV4(input, guard, fatos, comercial);
+  // Divergência que só o guard enxerga (título × coluna/legado): registrada com o
+  // motivo dele, para a tela nunca mostrar "confere" sem ressalva.
+  if (impedimento?.codigo === "VALORES_DIVERGENTES" && comercial.divergencias.length === 0 && guard.motivoBloqueio) {
+    comercial.divergencias.push({ codigo: "FONTES_DE_PRECO", detalhe: guard.motivoBloqueio });
+  }
+  const financialEvents = readFinancialEvents(input.payload, input.titulo?.payload);
 
   return {
     version: 1,
@@ -430,13 +870,17 @@ export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): Financia
     authorizedNoCharge: guard.autorizacaoSemCobranca,
     noChargeCategory: guard.autorizacaoSemCobranca ? text(noCharge.categoria) || null : null,
     noChargeReason: guard.autorizacaoSemCobranca ? text(noCharge.motivo) || null : null,
-    financialEvents: readFinancialEvents(input.payload, input.titulo?.payload),
+    financialEvents,
     receivablePayments: input.titulo ? readValidPayments(input.titulo.payload) : [],
     canReceive,
-    canDeliver: autorizadaParaEntregaFinanceiraV3(guard.decisao),
+    canDeliver,
     deliveryDecision: guard.decisao,
     loadedAt: input.loadedAt,
     errorCode: input.errorCode ?? (guard.decisao === "BLOCK_UNKNOWN" ? "FINANCIAL_STATE_UNKNOWN" : null),
+    fatos,
+    comercial,
+    acoes: { podeReceber: canReceive, podeEntregar: canDeliver, impedimento },
+    historico: agruparHistoricoFinanceiroV4(input.payload, input.titulo?.payload, financialEvents),
   };
 }
 
@@ -484,5 +928,24 @@ export function unknownFinancialProjectionOSV4(input: {
     deliveryDecision: "BLOCK_UNKNOWN",
     loadedAt: input.loadedAt,
     errorCode: input.errorCode,
+    fatos: {
+      tituloEncontrado: false,
+      verificavel: false,
+      motivo: "FALHA_LEITURA",
+      tituloId: null,
+      valorTitulo: null,
+      recebidoBruto: null,
+      estornado: null,
+      recebidoLiquido: null,
+      saldoTitulo: null,
+      liquidado: false,
+      temRegistroDePagamento: false,
+      pagamentosVigentes: null,
+      meios: [],
+      semMeioIdentificado: null,
+    },
+    comercial: { orcamento: "desconhecido", totalOrcamento: null, totalAprovado: null, confereComTitulo: null, divergencias: [] },
+    acoes: { podeReceber: false, podeEntregar: false, impedimento: { codigo: "FALHA_LEITURA", destino: "recarregar" } },
+    historico: [],
   };
 }

@@ -325,3 +325,112 @@ describe("OPS-V4-FLUXO-CURTO-006 — pagamentos vigentes do título (receivableP
     expect(project({ titulo: null }).receivablePayments).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — dimensões aditivas.
+// Fatos do título, situação comercial e impedimento estruturado; a decisão
+// legada fica intacta (equivalência completa no harness dedicado do GOAL).
+// ---------------------------------------------------------------------------
+
+const orcamentoRascunho = { id: "orc-1", status: "rascunho", sintetizado: false, total: 300, desconto: 0, servicos: [{ id: "s1", descricao: "Troca de Tela", valor: 300 }], pecas: [], criadoEm: "2026-07-01T10:00:00.000Z" };
+const rascunho = (extra: Record<string, unknown> = {}) => payload(300, { orcamento: orcamentoRascunho, ...extra });
+const recebimentoOS = (operacaoId: string, valor: number, forma = "dinheiro") => ({
+  id: `ev-${operacaoId}`,
+  tipo: "operacao_cobranca_gerada",
+  autor: "Operador",
+  conteudo: `Quitação: ${forma} R$ ${valor.toFixed(2)}`,
+  criadoEm: "2026-07-15T11:00:00.000Z",
+  metadata: { operacaoId, total: valor, linhas: [{ forma, valor }] },
+});
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — fatos, comercial e impedimento", () => {
+  it("A1: rascunho + título liquidado mostra os fatos verificados e a pendência comercial, sem mudar a decisão", () => {
+    const r = project({
+      payload: rascunho({ timeline: [recebimentoOS("op-1", 300)] }),
+      titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }]),
+    });
+    expect(r).toMatchObject({ financialStatus: "UNKNOWN", deliveryDecision: "BLOCK_UNKNOWN", receivedTotal: null, balance: null, canDeliver: false, canReceive: false });
+    expect(r.fatos).toMatchObject({ tituloEncontrado: true, verificavel: true, motivo: null, valorTitulo: 300, recebidoLiquido: 300, saldoTitulo: 0, liquidado: true, semMeioIdentificado: 0 });
+    expect(r.fatos?.meios).toEqual([{ label: "Dinheiro", valor: 300, operacaoId: "op-1", fonte: "OS_TIMELINE" }]);
+    expect(r.comercial).toMatchObject({ orcamento: "rascunho", totalOrcamento: 300, totalAprovado: null, confereComTitulo: true, divergencias: [] });
+    expect(r.acoes).toEqual({ podeReceber: false, podeEntregar: false, impedimento: { codigo: "APROVACAO_COMERCIAL_PENDENTE", destino: "comercial" } });
+  });
+
+  it("status pago isolado, sem baixa no histórico, NÃO vira pagamento", () => {
+    const r = project({ payload: rascunho(), titulo: title(300, "pago", []) });
+    expect(r.fatos).toMatchObject({ verificavel: false, motivo: "HISTORICO_INVALIDO", recebidoLiquido: null, saldoTitulo: null, temRegistroDePagamento: false });
+  });
+
+  it("timeline ou espelho pagamentoV3 sem título não inferem pagamento", () => {
+    const r = project({
+      payload: rascunho({ timeline: [recebimentoOS("op-1", 300)], pagamentoV3: { total: 300, recebido: 300, saldo: 0, status: "quitado" } }),
+      titulo: null,
+    });
+    expect(r.fatos).toMatchObject({ tituloEncontrado: false, verificavel: false, recebidoLiquido: null, saldoTitulo: null });
+  });
+
+  it("A3: vínculo, histórico, estorno e excesso viram motivo estruturado e valores nulos (nunca zero)", () => {
+    const casos: Array<[Partial<ProjectFinancialOSV4Input>, string]> = [
+      [{ titulo: { ...title(300, "pago", [{ tipo: "liquidacao", valor: 300 }]), storeId: "outra" } }, "TITULO_NAO_VINCULADO"],
+      [{ titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300 }], { ordemServicoId: "outra-os" }) }, "TITULO_NAO_VINCULADO"],
+      [{ titulo: title(300, "pago", [{ tipo: "liquidacao", valor: "x" }]) }, "HISTORICO_INVALIDO"],
+      [{ titulo: title(300, "parcial", [{ tipo: "pagamento", valor: 200 }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 9 }]) }, "ESTORNO_AMBIGUO"],
+      [{ titulo: title(300, "parcial", [{ tipo: "pagamento", valor: 200 }, { tipo: "estorno_pagamento", valor: 50 }]) }, "ESTORNO_AMBIGUO"],
+      [{ titulo: title(300, "pago", [{ tipo: "pagamento", valor: 200 }, { tipo: "pagamento", valor: 200 }]) }, "RECEBIDO_ACIMA_DO_TITULO"],
+      [{ falhaLeituraTitulo: true }, "FALHA_LEITURA"],
+      [{ titulo: title(300, "cancelado", []) }, "COBRANCA_CANCELADA"],
+    ];
+    for (const [over, motivo] of casos) {
+      const r = project({ payload: rascunho(), ...over });
+      expect(r.fatos, motivo).toMatchObject({ verificavel: false, motivo, recebidoLiquido: null, saldoTitulo: null, valorTitulo: null, liquidado: false });
+      expect(r.canDeliver).toBe(false);
+    }
+  });
+
+  it("meio do pagamento só por identidade da operação: valor igual com outra operação fica sem meio", () => {
+    const r = project({
+      payload: payload(300, { timeline: [recebimentoOS("op-outra", 300, "pix")] }),
+      titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }]),
+    });
+    expect(r.fatos).toMatchObject({ verificavel: true, meios: [], semMeioIdentificado: 300 });
+  });
+
+  it("A4: forma registrada na própria baixa do título prevalece; nada é trocado", () => {
+    const r = project({ titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300, loteId: "op-1", formaPagamento: "debito" }]) });
+    expect(r.fatos?.meios).toEqual([{ label: "Débito", valor: 300, operacaoId: "op-1", fonte: "RECEIVABLE_HISTORY" }]);
+  });
+
+  it("A5: mesma operação no título e na timeline vira UM item de histórico; eventos auditáveis preservados", () => {
+    const r = project({
+      payload: payload(300, { timeline: [recebimentoOS("op-1", 300)] }),
+      titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300, loteId: "op-1", at: "2026-07-15T11:00:01.000Z" }]),
+    });
+    expect(r.financialEvents).toHaveLength(2);
+    expect(r.historico).toHaveLength(1);
+    expect(r.historico?.[0]).toMatchObject({ operacaoId: "op-1", valor: 300, meio: "Dinheiro", fontes: ["OS_TIMELINE", "RECEIVABLE"] });
+    expect(r.historico?.[0]?.eventIds).toHaveLength(2);
+  });
+
+  it("A5: sem identidade comprovada nada se agrupa — mesmo valor e horário viram fontes separadas", () => {
+    const evento = { ...recebimentoOS("op-1", 300), metadata: { total: 300, linhas: [{ forma: "dinheiro", valor: 300 }] } };
+    const r = project({
+      payload: payload(300, { timeline: [evento] }),
+      titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300, at: "2026-07-15T11:00:00.000Z" }]),
+    });
+    expect(r.historico).toHaveLength(2);
+    expect(r.historico?.map((h) => h.fontes)).toEqual(expect.arrayContaining([["RECEIVABLE"], ["OS_TIMELINE"]]));
+  });
+
+  it("orçamento recusado, vencido e preço ausente apontam para o comercial; divergência título × fontes vira divergência estruturada", () => {
+    const recusado = project({ payload: payload(300, { orcamento: { ...orcamentoRascunho, status: "recusado" } }), titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300 }]) });
+    expect(recusado.acoes?.impedimento).toEqual({ codigo: "ORCAMENTO_RECUSADO", destino: "comercial" });
+    const vencido = project({ payload: payload(300, { orcamento: { ...orcamentoRascunho, status: "enviado", validoAte: "2026-07-01T00:00:00.000Z" } }) });
+    expect(vencido.comercial?.orcamento).toBe("expirado");
+    expect(vencido.acoes?.impedimento).toEqual({ codigo: "ORCAMENTO_EXPIRADO", destino: "comercial" });
+    const semPreco = project({ payload: { id: osId, status: "pronta" } as unknown as OrdemServico & Record<string, unknown>, prismaValorTotal: 0, titulo: null });
+    expect(semPreco.acoes?.impedimento).toEqual({ codigo: "PRECO_AUSENTE", destino: "comercial" });
+    const divergente = project({ payload: rascunho(), prismaValorTotal: 280, titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300 }]) });
+    expect(divergente.acoes?.impedimento).toEqual({ codigo: "VALORES_DIVERGENTES", destino: "financeiro" });
+    expect(divergente.comercial?.divergencias.map((d) => d.codigo)).toEqual(["FONTES_DE_PRECO"]);
+  });
+});
