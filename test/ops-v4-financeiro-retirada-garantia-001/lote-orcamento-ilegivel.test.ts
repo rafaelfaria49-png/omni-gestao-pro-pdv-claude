@@ -64,7 +64,40 @@ describe("R4-P2 — orçamento malformado não derruba o lote de projeções", (
     ["grupoId numérico", osRow("ruim", "rascunho", [{ id: "s1", descricao: "Troca de Tela", valor: 420, grupoId: 17 }])],
     ["grupoId objeto em peça", osRow("ruim", "rascunho", [{ id: "s1", valor: 420 }], [{ id: "p1", grupoId: { x: 1 }, quantidade: 1, valorUnitario: 10 }])],
     ["servicos não é lista", osRow("ruim", "rascunho", "Troca de Tela")],
+    // R5: objetos sem conversão primitiva (chegam por JSON) em campos numéricos e na validade
+    ["desconto do serviço sem primitivo", osRow("ruim", "rascunho", [{ id: "s1", valor: 420, desconto: JSON.parse('{"toString":null}') }])],
+    ["custoV3 sem primitivo", osRow("ruim", "rascunho", [{ id: "s1", valor: 420, custoV3: JSON.parse('{"toString":null}') }])],
+    ["valor do serviço sem primitivo", osRow("ruim", "rascunho", [{ id: "s1", valor: JSON.parse('{"valueOf":null,"toString":null}') }])],
+    ["quantidade/valor/custo de peça sem primitivo", osRow("ruim", "rascunho", [{ id: "s1", valor: 420 }], [{ id: "p1", quantidade: JSON.parse('{"toString":null}'), valorUnitario: JSON.parse('{"toString":null}'), custoUnitario: JSON.parse('{"toString":null}') }])],
   ];
+
+  it("desconto do orçamento e validade sem primitivo (enviado) também não derrubam o lote", async () => {
+    const desconto = osRow("ruim", "rascunho", [{ id: "s1", valor: 420 }]);
+    (desconto.payload.orcamento as Record<string, unknown>).desconto = JSON.parse('{"toString":null}');
+    const validade = osRow("vence", "enviado", [{ id: "s1", valor: 420 }]);
+    (validade.payload.orcamento as Record<string, unknown>).validoAte = JSON.parse('{"toString":null}');
+    mocks.osFindMany.mockReset().mockResolvedValue([integra(), desconto, validade]);
+    mocks.titleFindMany.mockReset().mockResolvedValue([titleRow("boa"), titleRow("ruim"), titleRow("vence")]);
+    const lote = await lerProjecoesFinanceirasOSV4(LOJA, ["boa", "ruim", "vence"]);
+    const porId = new Map(lote.map((p) => [p.osId, p]));
+    expect(porId.get("boa")).toMatchObject({ financialStatus: "PAID", canDeliver: true });
+    expect(porId.get("ruim")?.comercial).toMatchObject({ totalOrcamento: null });
+    expect(porId.get("vence")?.comercial).toMatchObject({ orcamento: "desconhecido" });
+    for (const id of ["ruim", "vence"]) {
+      expect(porId.get(id)?.comercial?.divergencias.map((d) => d.codigo), id).toContain("ORCAMENTO_ILEGIVEL");
+      expect(porId.get(id)?.fatos, id).toMatchObject({ verificavel: true, recebidoLiquido: 420 });
+    }
+  });
+
+  it("status do título que não é texto não derruba o lote (fatos em conferência)", async () => {
+    const ruim = { ...titleRow("ruim"), status: JSON.parse('{"toString":null}') };
+    mocks.osFindMany.mockReset().mockResolvedValue([integra(), osRow("ruim", "rascunho", [{ id: "s1", valor: 420 }])]);
+    mocks.titleFindMany.mockReset().mockResolvedValue([titleRow("boa"), ruim]);
+    const lote = await lerProjecoesFinanceirasOSV4(LOJA, ["boa", "ruim"]);
+    const porId = new Map(lote.map((p) => [p.osId, p]));
+    expect(porId.get("boa")).toMatchObject({ financialStatus: "PAID", canDeliver: true });
+    expect(porId.get("ruim")?.fatos).toMatchObject({ verificavel: false, motivo: "HISTORICO_INVALIDO" });
+  });
 
   for (const [nome, ruim] of malformadas) {
     it(`${nome}: a OS íntegra volta inteira e a malformada só perde o total comercial`, async () => {

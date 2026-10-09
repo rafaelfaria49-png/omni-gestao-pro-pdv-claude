@@ -704,7 +704,8 @@ export function lerFatosFinanceirosV4(input: ProjectFinancialOSV4Input): FatosFi
   if (!recebimentos.valido || recebimentos.centavos !== liquidoCentavos) return fatosSemValores(input, true, "ESTORNO_AMBIGUO");
   const entries = estrito.vigentes;
   if (recebimentos.centavos > valor + TOLERANCIA_CENTAVOS) return fatosSemValores(input, true, "RECEBIDO_ACIMA_DO_TITULO");
-  const status = normalizeReceberStatus(titulo.status);
+  // Status só em texto (como a leitura legada do status): outro formato não é status.
+  const status = normalizeReceberStatus(text(titulo.status) || null);
   if (status === RECEBER_STATUS.CANCELADO) return fatosSemValores(input, true, "COBRANCA_CANCELADA");
   if (status === RECEBER_STATUS.ESTORNADO) return fatosSemValores(input, true, "PAGAMENTO_ESTORNADO");
   const saldo = Math.max(0, valor - recebimentos.centavos);
@@ -737,35 +738,80 @@ export function lerFatosFinanceirosV4(input: ProjectFinancialOSV4Input): FatosFi
 
 const ESTADOS_ORCAMENTO: readonly EstadoOrcamentoComercialV4[] = ["rascunho", "enviado", "aprovado", "recusado", "expirado"];
 
+const ausenteOuTexto = (value: unknown) => value === undefined || value === null || typeof value === "string";
+const ausenteOuNumero = (value: unknown) => value === undefined || value === null || (typeof value === "number" && Number.isFinite(value));
+
+/** Campos numéricos que `computeTotaisV3` converte, por tipo de linha. */
+const NUMERICOS_SERVICO = ["valor", "desconto", "custoV3"] as const;
+const NUMERICOS_PECA = ["quantidade", "valorUnitario", "desconto", "custoUnitario"] as const;
+
 /**
  * Linhas do orçamento legíveis para o total COMERCIAL aditivo: ausentes, ou lista de
- * registros com `grupoId` ausente ou em texto (o que o cálculo de totais lê). Fora disso
- * o total comercial fica desconhecido, com diagnóstico — nunca uma exceção que derrube
+ * registros cujo `grupoId` é texto e cujos campos numéricos lidos pelo cálculo de totais
+ * são números finitos (ou ausentes) — nada que exija conversão implícita. Fora disso o
+ * total comercial fica desconhecido, com diagnóstico — nunca uma exceção que derrube
  * esta projeção ou o lote das outras OS. A leitura legada (decisões) não passa por aqui.
  */
-function linhasDoOrcamentoLegiveisV4(linhas: unknown): boolean {
+function linhasDoOrcamentoLegiveisV4(linhas: unknown, numericos: readonly string[]): boolean {
   if (linhas === undefined || linhas === null) return true;
   return Array.isArray(linhas) && linhas.every((linha) =>
-    isRecord(linha) && (linha.grupoId === undefined || linha.grupoId === null || typeof linha.grupoId === "string"));
+    isRecord(linha) && ausenteOuTexto(linha.grupoId) && numericos.every((campo) => ausenteOuNumero(linha[campo])));
 }
 
+/** Tudo o que o total comercial lê do orçamento está em formato próprio (sem coerção). */
+function totaisDoOrcamentoLegiveisV4(orcamento: Record<string, unknown>): boolean {
+  return (
+    ausenteOuNumero(orcamento.desconto) &&
+    linhasDoOrcamentoLegiveisV4(orcamento.servicos, NUMERICOS_SERVICO) &&
+    linhasDoOrcamentoLegiveisV4(orcamento.pecas, NUMERICOS_PECA)
+  );
+}
+
+const DETALHE_ORCAMENTO_ILEGIVEL = "Orçamento fora do formato esperado: total comercial desconhecido.";
+
+/**
+ * Dimensão comercial ADITIVA. Nunca lança: dado de orçamento fora do formato vira
+ * informação desconhecida com o diagnóstico `ORCAMENTO_ILEGIVEL` (a projeção legada e as
+ * decisões já foram calculadas pelo guard e não dependem disto).
+ */
 export function lerComercialV4(
   input: ProjectFinancialOSV4Input,
   totals: ReturnType<typeof reconciliarTotaisFinanceirosV3>,
   fatos: FatosFinanceirosOSV4,
 ): ComercialOSV4 {
+  try {
+    return lerComercialEstritoV4(input, totals, fatos);
+  } catch {
+    // Rede de segurança: formato não previsto acima — desconhecido e diagnosticado, nunca exceção.
+    const divergencias: DivergenciaComercialV4[] = [{ codigo: "ORCAMENTO_ILEGIVEL", detalhe: DETALHE_ORCAMENTO_ILEGIVEL }];
+    if (totals.inconsistencia) divergencias.push({ codigo: "FONTES_DE_PRECO", detalhe: totals.inconsistencia });
+    return { orcamento: "desconhecido", totalOrcamento: null, totalAprovado: sourceAmount(totals.fontes, "orcamento_aprovado"), confereComTitulo: null, divergencias };
+  }
+}
+
+function lerComercialEstritoV4(
+  input: ProjectFinancialOSV4Input,
+  totals: ReturnType<typeof reconciliarTotaisFinanceirosV3>,
+  fatos: FatosFinanceirosOSV4,
+): ComercialOSV4 {
   // Só um REGISTRO de orçamento é orçamento (lista/escalar não vira total comercial zero).
-  const real = isRecord(input.payload.orcamento) ? orcamentoRealV3(input.payload) : null;
+  const registro = isRecord(input.payload.orcamento) ? input.payload.orcamento : null;
+  const real = registro ? orcamentoRealV3(input.payload) : null;
+  // Validade só em texto (ou ausente): outro formato não decide vencimento.
+  const validadeLegivel = !registro || ausenteOuTexto(registro.validoAte);
   let orcamento: EstadoOrcamentoComercialV4;
-  if (!isRecord(input.payload.orcamento)) orcamento = "ausente";
+  if (!registro) orcamento = "ausente";
   else if (!real) orcamento = "previa";
   else {
     const agora = Date.parse(input.loadedAt);
-    const efetivo = Number.isFinite(agora) ? statusEfetivoOrcamentoV3(real, agora) : real.status;
+    const efetivo = !validadeLegivel
+      ? real.status === "enviado" ? "desconhecido" : real.status
+      : Number.isFinite(agora) ? statusEfetivoOrcamentoV3(real, agora) : real.status;
     orcamento = (ESTADOS_ORCAMENTO as readonly string[]).includes(efetivo) ? (efetivo as EstadoOrcamentoComercialV4) : "desconhecido";
   }
-  const orcamentoIlegivel = !!real && (!linhasDoOrcamentoLegiveisV4(real.servicos) || !linhasDoOrcamentoLegiveisV4(real.pecas));
-  const totalOrcamentoCentavos = real && !orcamentoIlegivel
+  const totaisLegiveis = !!registro && totaisDoOrcamentoLegiveisV4(registro);
+  const orcamentoIlegivel = !!real && (!totaisLegiveis || !validadeLegivel);
+  const totalOrcamentoCentavos = real && totaisLegiveis
     ? cents(computeTotaisV3({ servicos: real.servicos, pecas: real.pecas, desconto: real.desconto }).total)
     : null;
   const vinculado = !!input.titulo && fatos.tituloEncontrado && fatos.motivo !== "TITULO_NAO_VINCULADO";
@@ -775,7 +821,7 @@ export function lerComercialV4(
       ? Math.abs(totalOrcamentoCentavos - valorTituloCentavos) <= TOLERANCIA_CENTAVOS
       : null;
   const divergencias: DivergenciaComercialV4[] = [];
-  if (orcamentoIlegivel) divergencias.push({ codigo: "ORCAMENTO_ILEGIVEL", detalhe: "Linhas do orçamento fora do formato esperado: total comercial desconhecido." });
+  if (orcamentoIlegivel) divergencias.push({ codigo: "ORCAMENTO_ILEGIVEL", detalhe: DETALHE_ORCAMENTO_ILEGIVEL });
   if (totals.inconsistencia) divergencias.push({ codigo: "FONTES_DE_PRECO", detalhe: totals.inconsistencia });
   if (confereComTitulo === false) {
     divergencias.push({
@@ -840,7 +886,9 @@ export function agruparHistoricoFinanceiroV4(
     if (!isRecord(entry)) return;
     const type = text(entry.tipo).toLowerCase();
     if (type !== "pagamento" && type !== "liquidacao") return;
-    const amount = money(entry.valor);
+    // Valor estrito (sem coerção): a dimensão aditiva nunca converte objeto/texto.
+    const centavos = cents(entry.valor);
+    const amount = centavos == null ? null : centavos / 100;
     const operationId = text(entry.loteId) || (amount == null ? null : mixedReceiptOperationId(historico[index + 1], amount));
     if (!operationId) return;
     const occurredAt = text(entry.at ?? entry.criadoEm) || null;

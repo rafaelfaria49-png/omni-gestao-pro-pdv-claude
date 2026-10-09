@@ -643,3 +643,57 @@ describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R4: orçamento malfor
     expect(r.comercial).toMatchObject({ totalOrcamento: 300, confereComTitulo: true, divergencias: [] });
   });
 });
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R5: nenhum campo do orçamento ou do status fora do formato derruba a projeção", () => {
+  // Valores que chegam por JSON e exigiriam conversão implícita (ou a fariam lançar).
+  const HOSTIS: unknown[] = [JSON.parse('{"toString":null}'), JSON.parse('{"valueOf":null,"toString":null}'), JSON.parse("[420]"), JSON.parse('{"v":1}'), "420", true];
+  const titulo = () => title(300, "pago", [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }]);
+  const comOrcamento = (orcamento: Record<string, unknown>) =>
+    rascunho({ timeline: [recebimentoOS("op-1", 300)], orcamento: { ...orcamentoRascunho, ...orcamento } });
+  const servico = (extra: Record<string, unknown>) => ({ id: "s1", descricao: "Serviço", valor: 300, ...extra });
+  const peca = (extra: Record<string, unknown>) => ({ id: "p1", descricao: "Peça", quantidade: 1, valorUnitario: 10, ...extra });
+
+  it("R5-P2: desconto, validade e campos numéricos de serviço/peça hostis → total comercial desconhecido com diagnóstico; fatos e decisão preservados", () => {
+    const variantes = (h: unknown): Array<[string, Record<string, unknown>]> => [
+      ["orcamento.desconto", { desconto: h }],
+      // validade em texto é o formato próprio (o leitor decide se é data); só os outros tipos são hostis
+      ...(typeof h === "string" ? [] : [["orcamento.validoAte (enviado)", { status: "enviado", validoAte: h }] as [string, Record<string, unknown>]]),
+      ["servico.valor", { servicos: [servico({ valor: h })] }],
+      ["servico.desconto", { servicos: [servico({ desconto: h })] }],
+      ["servico.custoV3", { servicos: [servico({ custoV3: h })] }],
+      ["peca.quantidade", { pecas: [peca({ quantidade: h })] }],
+      ["peca.valorUnitario", { pecas: [peca({ valorUnitario: h })] }],
+      ["peca.desconto", { pecas: [peca({ desconto: h })] }],
+      ["peca.custoUnitario", { pecas: [peca({ custoUnitario: h })] }],
+    ];
+    for (const h of HOSTIS) {
+      for (const [campo, orcamento] of variantes(h)) {
+        const rotulo = `${campo} = ${JSON.stringify(h)}`;
+        let r!: ReturnType<typeof project>;
+        expect(() => { r = project({ payload: comOrcamento(orcamento), titulo: titulo() }); }, rotulo).not.toThrow();
+        expect(r.comercial?.divergencias.map((d) => d.codigo), rotulo).toContain("ORCAMENTO_ILEGIVEL");
+        if (campo !== "orcamento.validoAte (enviado)") expect(r.comercial?.totalOrcamento, rotulo).toBeNull();
+        else expect(r.comercial?.orcamento, rotulo).toBe("desconhecido");
+        expect(r.fatos, rotulo).toMatchObject({ verificavel: true, recebidoLiquido: 300, liquidado: true });
+        expect(r, rotulo).toMatchObject({ deliveryDecision: "BLOCK_UNKNOWN", canDeliver: false, canReceive: false });
+      }
+    }
+  });
+
+  it("R5-P2: status do título que não é texto não lança — fatos em conferência, decisão legada igual", () => {
+    for (const status of [7, JSON.parse('{"toString":null}'), true, ["pago"]]) {
+      const base = { ...titulo(), status };
+      let r!: ReturnType<typeof project>;
+      expect(() => { r = project({ payload: rascunho({ timeline: [recebimentoOS("op-1", 300)] }), titulo: base as unknown as ProjectFinancialOSV4Input["titulo"] }); }, JSON.stringify(status)).not.toThrow();
+      expect(r.fatos, JSON.stringify(status)).toMatchObject({ verificavel: false, motivo: "HISTORICO_INVALIDO", recebidoLiquido: null });
+      expect(r, JSON.stringify(status)).toMatchObject({ deliveryDecision: "BLOCK_UNKNOWN", canDeliver: false });
+    }
+  });
+
+  it("R5: orçamento íntegro (números finitos, validade em texto) segue calculando e decidindo o vencimento", () => {
+    const ok = project({ payload: comOrcamento({ desconto: 0, servicos: [servico({ desconto: 0, custoV3: 92 })], pecas: [] }), titulo: titulo() });
+    expect(ok.comercial).toMatchObject({ orcamento: "rascunho", totalOrcamento: 300, confereComTitulo: true, divergencias: [] });
+    const vencido = project({ payload: comOrcamento({ status: "enviado", validoAte: "2026-07-01" }), titulo: titulo() });
+    expect(vencido.comercial).toMatchObject({ orcamento: "expirado", divergencias: [] });
+  });
+});
