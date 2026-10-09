@@ -140,7 +140,8 @@ export type EstadoOrcamentoComercialV4 =
   | "desconhecido";
 
 export interface DivergenciaComercialV4 {
-  codigo: "FONTES_DE_PRECO" | "ORCAMENTO_X_TITULO";
+  /** `ORCAMENTO_ILEGIVEL`: linhas do orçamento fora do formato — total comercial desconhecido. */
+  codigo: "FONTES_DE_PRECO" | "ORCAMENTO_X_TITULO" | "ORCAMENTO_ILEGIVEL";
   detalhe: string;
 }
 
@@ -736,6 +737,18 @@ export function lerFatosFinanceirosV4(input: ProjectFinancialOSV4Input): FatosFi
 
 const ESTADOS_ORCAMENTO: readonly EstadoOrcamentoComercialV4[] = ["rascunho", "enviado", "aprovado", "recusado", "expirado"];
 
+/**
+ * Linhas do orçamento legíveis para o total COMERCIAL aditivo: ausentes, ou lista de
+ * registros com `grupoId` ausente ou em texto (o que o cálculo de totais lê). Fora disso
+ * o total comercial fica desconhecido, com diagnóstico — nunca uma exceção que derrube
+ * esta projeção ou o lote das outras OS. A leitura legada (decisões) não passa por aqui.
+ */
+function linhasDoOrcamentoLegiveisV4(linhas: unknown): boolean {
+  if (linhas === undefined || linhas === null) return true;
+  return Array.isArray(linhas) && linhas.every((linha) =>
+    isRecord(linha) && (linha.grupoId === undefined || linha.grupoId === null || typeof linha.grupoId === "string"));
+}
+
 export function lerComercialV4(
   input: ProjectFinancialOSV4Input,
   totals: ReturnType<typeof reconciliarTotaisFinanceirosV3>,
@@ -750,7 +763,8 @@ export function lerComercialV4(
     const efetivo = Number.isFinite(agora) ? statusEfetivoOrcamentoV3(real, agora) : real.status;
     orcamento = (ESTADOS_ORCAMENTO as readonly string[]).includes(efetivo) ? (efetivo as EstadoOrcamentoComercialV4) : "desconhecido";
   }
-  const totalOrcamentoCentavos = real
+  const orcamentoIlegivel = !!real && (!linhasDoOrcamentoLegiveisV4(real.servicos) || !linhasDoOrcamentoLegiveisV4(real.pecas));
+  const totalOrcamentoCentavos = real && !orcamentoIlegivel
     ? cents(computeTotaisV3({ servicos: real.servicos, pecas: real.pecas, desconto: real.desconto }).total)
     : null;
   const vinculado = !!input.titulo && fatos.tituloEncontrado && fatos.motivo !== "TITULO_NAO_VINCULADO";
@@ -760,6 +774,7 @@ export function lerComercialV4(
       ? Math.abs(totalOrcamentoCentavos - valorTituloCentavos) <= TOLERANCIA_CENTAVOS
       : null;
   const divergencias: DivergenciaComercialV4[] = [];
+  if (orcamentoIlegivel) divergencias.push({ codigo: "ORCAMENTO_ILEGIVEL", detalhe: "Linhas do orçamento fora do formato esperado: total comercial desconhecido." });
   if (totals.inconsistencia) divergencias.push({ codigo: "FONTES_DE_PRECO", detalhe: totals.inconsistencia });
   if (confereComTitulo === false) {
     divergencias.push({
@@ -918,7 +933,7 @@ export function projectFinancialOSV4(input: ProjectFinancialOSV4Input): Financia
   const impedimento = lerImpedimentoV4(input, guard, fatos, comercial);
   // Divergência que só o guard enxerga (título × coluna/legado): registrada com o
   // motivo dele, para a tela nunca mostrar "confere" sem ressalva.
-  if (impedimento?.codigo === "VALORES_DIVERGENTES" && comercial.divergencias.length === 0 && guard.motivoBloqueio) {
+  if (impedimento?.codigo === "VALORES_DIVERGENTES" && !comercial.divergencias.some((d) => d.codigo !== "ORCAMENTO_ILEGIVEL") && guard.motivoBloqueio) {
     comercial.divergencias.push({ codigo: "FONTES_DE_PRECO", detalhe: guard.motivoBloqueio });
   }
   const financialEvents = readFinancialEvents(input.payload, input.titulo?.payload);

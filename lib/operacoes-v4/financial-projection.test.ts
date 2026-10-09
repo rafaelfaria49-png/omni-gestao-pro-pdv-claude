@@ -603,3 +603,36 @@ describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R3: meios dos fatos e
     expect(legado(comSplit)).toEqual(legado(base));
   });
 });
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R4: orçamento malformado não derruba a projeção", () => {
+  const legado = (r: ReturnType<typeof project>) => ({
+    deliveryDecision: r.deliveryDecision, canDeliver: r.canDeliver, canReceive: r.canReceive, financialStatus: r.financialStatus,
+    consistencyStatus: r.consistencyStatus, receivedTotal: r.receivedTotal, balance: r.balance,
+  });
+  const comServicos = (servicos: unknown, pecas: unknown = []) =>
+    rascunho({ timeline: [recebimentoOS("op-1", 300)], orcamento: { ...orcamentoRascunho, servicos, pecas } });
+  const titulo = () => title(300, "pago", [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }]);
+
+  it("R4-P2: linha null, grupoId não textual ou lista que não é lista → total comercial desconhecido com diagnóstico; fatos e decisão preservados", () => {
+    const casos: Array<[string, unknown, unknown]> = [
+      ["serviço null", [null], []],
+      ["grupoId numérico", [{ id: "s1", descricao: "Serviço", valor: 300, grupoId: 17 }], []],
+      ["grupoId objeto (peça)", [{ id: "s1", valor: 300 }], [{ id: "p1", grupoId: {}, quantidade: 1, valorUnitario: 10 }]],
+      ["servicos texto", "Serviço", []],
+      ["pecas objeto", [{ id: "s1", valor: 300 }], { p1: 1 }],
+    ];
+    for (const [nome, servicos, pecas] of casos) {
+      const r = project({ payload: comServicos(servicos, pecas), titulo: titulo() });
+      expect(r.comercial, nome).toMatchObject({ orcamento: "rascunho", totalOrcamento: null, confereComTitulo: null });
+      expect(r.comercial?.divergencias.map((d) => d.codigo), nome).toContain("ORCAMENTO_ILEGIVEL");
+      expect(r.fatos, nome).toMatchObject({ verificavel: true, recebidoLiquido: 300, liquidado: true });
+      expect(r.acoes?.impedimento, nome).toEqual({ codigo: "APROVACAO_COMERCIAL_PENDENTE", destino: "comercial" });
+      expect(legado(r), nome).toMatchObject({ deliveryDecision: "BLOCK_UNKNOWN", canDeliver: false, canReceive: false });
+    }
+  });
+
+  it("R4-P2: linhas legíveis seguem calculando o total (grupoId nulo ou texto)", () => {
+    const r = project({ payload: comServicos([{ id: "s1", descricao: "Serviço", valor: 300, grupoId: null }]), titulo: titulo() });
+    expect(r.comercial).toMatchObject({ totalOrcamento: 300, confereComTitulo: true, divergencias: [] });
+  });
+});
