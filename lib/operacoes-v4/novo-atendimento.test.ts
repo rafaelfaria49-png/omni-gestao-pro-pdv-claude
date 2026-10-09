@@ -9,14 +9,19 @@ import {
 } from "./novo-atendimento";
 
 describe("NOVO_ATENDIMENTO_OPCOES_V4", () => {
-  it("tem exatamente as três modalidades aprovadas — sem quarta via", () => {
-    expect(NOVO_ATENDIMENTO_OPCOES_V4.map((o) => o.id)).toEqual(["os", "orcamento", "rapido"]);
+  it("tem as três criações aprovadas + a entrada do Retorno / Garantia (GOAL 007) — sem quarto motor", () => {
+    expect(NOVO_ATENDIMENTO_OPCOES_V4.map((o) => o.id)).toEqual(["os", "orcamento", "rapido", "retorno"]);
   });
 
   it("cada opção aponta para um motor V3 já existente", () => {
     expect(opcaoNovoAtendimentoV4("os").motor).toBe("criarOSEnterpriseV3");
     expect(opcaoNovoAtendimentoV4("orcamento").motor).toBe("criarOrcamentoRapidoV3");
     expect(opcaoNovoAtendimentoV4("rapido").motor).toBe("finalizarAtendimentoRapidoV3");
+    expect(opcaoNovoAtendimentoV4("retorno").motor).toBe("abrirRetornoV3");
+  });
+
+  it("Retorno / Garantia tem copy própria e parte da OS original", () => {
+    expect(opcaoNovoAtendimentoV4("retorno")).toMatchObject({ titulo: "Retorno / Garantia", chip: "Volta da OS original", destino: "entrada" });
   });
 
   it("o destino no workspace continua o dos handlers atuais", () => {
@@ -49,6 +54,10 @@ describe("patchEscolherNovoAtendimentoV4", () => {
     ["orcamento", "orcamentoRapido"],
     ["rapido", "atendimentoRapido"],
   ];
+
+  it("escolher retorno fecha o launcher e NÃO abre nenhum formulário de criação", () => {
+    expect(patchEscolherNovoAtendimentoV4("retorno")).toEqual({ novoAtendimento: false, novaOS: false, orcamentoRapido: false, atendimentoRapido: false });
+  });
 
   it.each(casos)("escolhe %s e abre só %s", (id, flag) => {
     const patch = patchEscolherNovoAtendimentoV4(id);
