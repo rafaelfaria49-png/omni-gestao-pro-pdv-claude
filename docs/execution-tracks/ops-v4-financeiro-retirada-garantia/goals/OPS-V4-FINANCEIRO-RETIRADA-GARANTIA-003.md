@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 2,
+  "plan_rev": 3,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-003",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-003",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/garantia-servicos-model.test.ts lib/operacoes-v3/garantia-textos.test.ts lib/operacoes-v3/garantia-templates.test.ts lib/operacoes-v3/garantia-actions.test.ts lib/operacoes-v3/entrega-actions.test.ts lib/operacoes-v3/pos-venda-model.test.ts lib/operacoes-v3/print-model.test.ts lib/operacoes-v3/datas-correcao-model.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/nova-os-actions.test.ts lib/operacoes-v3/nova-os-model.test.ts lib/operacoes-v3/retorno-actions.test.ts lib/operacoes-v3/historico-aparelho-model.test.ts lib/operacoes-v4/nova-os-draft-from-form.test.ts lib/operacoes-v4/posvenda-v4.test.ts lib/operacoes-v4/documento-mensagem.test.ts lib/operacoes-v4/historico-v4.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[2567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[123]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-003.spec.ts --retries=0 --workers=1",
@@ -53,6 +53,7 @@
     "components/operacoes-v4-preview/os-adapter.ts",
     "components/operacoes-v4-preview/parts/DocPrintModal.tsx",
     "components/operacoes-v4-preview/parts/stages/EntregaStage.tsx",
+    "components/operacoes-v4-preview/parts/stages/retirada-v4.module.css",
     "components/operacoes-v4-preview/parts/stages/PosVendaStage.tsx",
     "components/operacoes-v4-preview/preview-honesty.test.ts",
     "components/operacoes-v3/components/GarantiaOSV3.tsx",
@@ -60,6 +61,7 @@
     "components/operacoes-v3/components/print/PrintPreviewV3.tsx",
     "test/ops-v4-financeiro-retirada-garantia-003/**",
     "e2e/specs/ops-v4-financeiro-retirada-garantia-003.spec.ts",
+    "e2e/specs/operacoes-v4-fluxo-curto-002.spec.ts",
     "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/**",
     "docs/execution-tracks/REGISTRY.md"
   ],
@@ -166,6 +168,24 @@ pendente de revisão jurídica e não é publicada como definitiva.
   como reemissão, nunca como original. Sem backfill em massa.
 - Fluxo de impressão atual reaproveitado; sem novo motor de PDF.
 
+### E — Editor de garantia recolhido (transferido do GOAL 001 na rev 3)
+
+Obrigação OBRIGATÓRIA desta entrega (item G do 001, aceite visual diferido
+pelo proprietário em 09/10/2026, decisão A):
+- Na Entrega antes da retirada, o editor de garantia deixa de ficar sempre
+  aberto: o resumo lateral mostra a garantia vigente e as ações "Ver
+  condições" e "Alterar prazo" abrem o detalhamento/edição existente. Nada
+  que o contrato exige antes da entrega fica escondido; capacidades,
+  permissões (B), auditoria e endpoints preservados.
+- `e2e/specs/operacoes-v4-fluxo-curto-002.spec.ts` é adaptado SOMENTE quando
+  essa experiência estiver efetivamente implementada, e apenas no caminho de
+  chegada ao editor (abrir "Alterar prazo" antes de interagir). Os critérios
+  G01–G08/D01–D06 do OPS-V4-FLUXO-CURTO-002 continuam asseridos com a mesma
+  força; nenhuma asserção removida ou afrouxada, sem skip/fixme; roda com
+  `--retries=0` como regressão obrigatória deste GOAL.
+- Até este GOAL ser executado, o editor atual e esse E2E permanecem como
+  estão na main.
+
 ## Não objetivos
 
 Nova política comercial de garantia, CRM/NPS/WhatsApp automático,
@@ -185,13 +205,17 @@ backfill, schema, nova permissão, Fiscal, alterar elegibilidade financeira.
 - C5 (14) troca rápida de OS/loja e resposta tardia na garantia e no termo.
 - C6 (15) impressão sobre modal, Tab/Shift+Tab/Escape, 1440/768/390.
 - C7 regressão 002 (serviço único) idêntica.
+- C8 (rev 3, item E) editor recolhido atrás de "Ver condições"/"Alterar
+  prazo" na Entrega; E2E do OPS-V4-FLUXO-CURTO-002 adaptado só no caminho de
+  chegada, com as mesmas asserções, `--retries=0`.
 
 Unit + montado + PostgreSQL real (entrega + emissão na mesma escrita,
 concorrência entrega × edição de garantia, correção de data) + E2E.
 
 ## Regressões obrigatórias
 
-001 e 002 desta trilha; OPS-V4-FLUXO-CURTO-002/006/007; #237
+001 e 002 desta trilha; OPS-V4-FLUXO-CURTO-002/006/007 (incl. o E2E
+`operacoes-v4-fluxo-curto-002.spec.ts` adaptado pelo item E); #237
 (`test/ops-datas-retroativas-001`, incl. PG); #234/#235/#238 quando a
 entrega/recebimento for alcançada.
 
@@ -200,3 +224,15 @@ entrega/recebimento for alcançada.
 Como no TRACK. R sobre o SHA exato com atenção a documento contratual,
 versões, permissões e entrega. Parar se exigir schema, permissão nova,
 caminho protegido ou redação jurídica não validada.
+
+## Revisão 3 (09/10/2026)
+
+Desbloqueio do GOAL 001 na rev 3 ("COMANDO — GOAL 001 / REV 3"): este GOAL
+recebe o item E (editor de garantia recolhido, transferido do item G do 001)
+e, só para ele, dois caminhos na allowlist —
+`components/operacoes-v4-preview/parts/stages/retirada-v4.module.css`
+(estilo do resumo recolhido na Entrega) e
+`e2e/specs/operacoes-v4-fluxo-curto-002.spec.ts` (adaptação da regressão
+antiga quando a experiência existir). Demais objetivos, contrato,
+test_command, orçamento e dependência (002 DONE + merge) inalterados; este
+GOAL continua NÃO autorizado a abrir antes disso.

@@ -4,13 +4,13 @@
   "id": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Informação financeira verdadeira e retirada organizada, com decisões de recebimento e entrega inalteradas",
-  "status": "BLOCKED",
+  "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 2,
+  "plan_rev": 3,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-001",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-001",
-  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financial-projection-actions.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/os-header-transversal.test.ts lib/operacoes-v4/recibo-persistido-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-001.spec.ts --retries=0 --workers=1",
+  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financial-projection-actions.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/os-header-transversal.test.ts lib/operacoes-v4/recibo-persistido-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts components/operacoes-v4-preview/rails-adapter.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-001.spec.ts --retries=0 --workers=1",
   "allowlist": [
     "lib/operacoes-v4/financial-projection.ts",
     "lib/operacoes-v4/financial-projection.test.ts",
@@ -28,9 +28,12 @@
     "lib/operacoes-v4/recibo-persistido-v4.test.ts",
     "components/operacoes-v4-preview/use-v4-preview.ts",
     "components/operacoes-v4-preview/os-adapter.ts",
+    "components/operacoes-v4-preview/rails-adapter.ts",
+    "components/operacoes-v4-preview/rails-adapter.test.ts",
     "components/operacoes-v4-preview/parts/CommandHeader.tsx",
     "components/operacoes-v4-preview/parts/ProximaAcaoV4.tsx",
     "components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx",
+    "components/operacoes-v4-preview/parts/EstornoRecebimentoModal.tsx",
     "components/operacoes-v4-preview/parts/financeiro-stage.module.css",
     "components/operacoes-v4-preview/parts/stages/FinanceiroStage.tsx",
     "components/operacoes-v4-preview/parts/stages/EntregaStage.tsx",
@@ -173,6 +176,11 @@ estorno mantêm permissões e contratos vigentes.
   deixa de ficar sempre aberto). Nenhuma obrigação universal nova de
   foto/assinatura/checklist; nada que o contrato exige antes da entrega é
   escondido.
+  **Rev 3:** o recolhimento do editor de garantia ("Ver condições" /
+  "Alterar prazo" no lugar do formulário sempre aberto) foi TRANSFERIDO ao
+  OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003 (aceite visual diferido). Nesta
+  entrega o editor atual e o E2E `e2e/specs/operacoes-v4-fluxo-curto-002.spec.ts`
+  permanecem inalterados; o resumo lateral de garantia segue como está.
 - Sem cartões vazios permanentes: "Registro de entrega", checklist e
   acessórios só aparecem com conteúdo ou após a entrega. A mera existência
   de garantia não gera registro positivo de entrega (`temRegistro`).
@@ -217,6 +225,11 @@ Mudar elegibilidade de recebimento/entrega (GOAL 002), formalizar aprovação
   asserção estrutural equivalente, registrada no relatório).
 - `test/ops-v4-financeiro-retirada-garantia-001/**`: harness dedicado
   (jsdom + PG descartável), E2E próprio.
+- Rev 3: `parts/EstornoRecebimentoModal.tsx` (apenas leitura/exibição e
+  sinalização de informação não confiável do modal de estorno) e
+  `rails-adapter.ts` (+`rails-adapter.test.ts`, linhas do rail "Recebimento
+  da OS"): mesmas regras de C para as superfícies que ainda exibiam valores
+  legados com fatos rejeitados (achados de escopo da R3).
 
 ## Matriz de aceite (cenários do comando)
 
@@ -236,6 +249,17 @@ Mudar elegibilidade de recebimento/entrega (GOAL 002), formalizar aprovação
 - A8 troca rápida de OS/loja e resposta tardia (H).
 - A9 retirada: acessórios em custódia e retirante antes de confirmar;
   estados vazios; 1440/768/390; Tab/Shift+Tab/Escape; impressão sobre modal.
+  O recolhimento do editor de garantia (G) NÃO faz parte do aceite do 001
+  desde a rev 3: transferido ao GOAL 003; o 001 só prova que o editor atual
+  e o E2E do OPS-V4-FLUXO-CURTO-002 seguem inalterados.
+- A10 (rev 3) fatos rejeitados em QUALQUER status legado (incl.
+  INCONSISTENT): título R$ 420 com duas baixas de R$ 300 e marcador a prazo
+  antigo de R$ 320 — Financeiro, Retirada, Header/Próxima ação, Estorno,
+  rail e recebimento não afirmam recebido, saldo, parcela vigente nem
+  quitação; mostram conferência com motivo.
+- A11 (rev 3) meios estritos: split Pix R$ 100 + R$ 320 sem meio
+  identificado → Pix R$ 100 e parte não identificada; valores malformados
+  (booleano, array, objeto, string vazia, não finito) nunca viram valor.
 
 Unit + montado (hook real com actions espiãs) + PG real (projeção lida do
 banco descartável com título/OS sintéticos) + E2E.
@@ -250,6 +274,107 @@ test_command. O executor roda também as suítes 001–004, #234/#238
 (`test/ops-v3-recebimento-misto`, incl. PG) e #237
 (`test/ops-datas-retroativas-001`) e seus E2E quando a superfície alterada
 os alcança; falha preexistente só se separa com prova na main.
+
+## Revisão 3 — desbloqueio humano (09/10/2026)
+
+Histórico das tentativas da rev 2 (R independente OpenAI, Codex read-only):
+- tentativa 1, R1 em d9cb6f9: REQUEST_CHANGES P1=3 (histórico ausente/malformado
+  vira fato; estorno sem referência libera comprovante; superfícies mostram
+  quitado com fatos rejeitados) P2=3 (meio legado sem vínculo; próxima ação
+  ignora destinos entrega/recarregar; desvio do item G);
+- tentativa 2, R2 em ac72c8f: REQUEST_CHANGES P1=2 P3=1 (`cents()` aceitava
+  coerção de array/booleano; recebimento parcial/Entrega exibiam valores
+  rejeitados; linha vazia no EOF do E2E);
+- tentativa 3, R3 em cd68d45: REQUEST_CHANGES P0=0 P1=1 P2=1 P3=0, com
+  GOVERNANCA_PENDENTE=G_EDITOR_GARANTIA_ABERTO, ESTORNO_MODAL_VALORES_LEGADOS,
+  TRILHO_LISTA_VALORES_LEGADOS. O teto de 3 tentativas esgotou: BLOCKED
+  (by=decisao) em 5bb4bbe na branch do GOAL, materializado na main pelo PR de
+  governança desta revisão com o registro original preservado.
+
+Decisão do proprietário (09/10/2026, "COMANDO — GOAL 001 / REV 3"): reativar
+este MESMO GOAL na rev 3, sem 001-FIX/001B nem GOAL substituto; não iniciar
+002, 003 nem o OPS-V4-FLUXO-CURTO-008. As tentativas reiniciam pelo
+desbloqueio humano (protocolo §3). O trabalho da branch é preservado: ela
+integra a main por merge normal (sem rebase, cherry-pick, reset, amend ou
+force). Classe C4, risco ALTO, família anthropic, R obrigatória, gates e
+áreas protegidas inalterados.
+
+Allowlist da rev 3 = rev 2 + `components/operacoes-v4-preview/parts/EstornoRecebimentoModal.tsx`,
+`components/operacoes-v4-preview/rails-adapter.ts` e
+`components/operacoes-v4-preview/rails-adapter.test.ts`; o test_command passa
+a rodar também `rails-adapter.test.ts`. Testes novos de apresentação: por
+esses caminhos exatos ou em `test/ops-v4-financeiro-retirada-garantia-001/**`.
+
+### R3-P1 — informação financeira não conciliada exibida como verdade
+
+Reprodução obrigatória (fixture sintética): Conta a Receber de R$ 420 com
+duas baixas de R$ 300 (R$ 600) e marcador antigo de parcelamento a prazo
+("Vencimento … R$ 320"). Com `fatos.verificavel=false` (ou dado necessário à
+afirmação inconsistente), em QUALQUER status legado — inclusive
+INCONSISTENT — nenhuma superfície apresenta recebido, saldo, parcela ou
+quitação não conciliados como verdade financeira confirmada: Financeiro da
+OS, resumo de retirada, cabeçalho e próxima ação, modal de estorno, rail
+"Recebimento da OS" e componentes de recebimento que mostram valores.
+Mostrar estado de conferência com o motivo estruturado. Detalhes brutos podem
+ficar na auditoria/histórico rotulados como não conciliados, nunca como
+valores aprovados ou disponíveis.
+- Uma regra estrutural única (a de `situacao-atendimento-v4`) decide, para
+  todas as superfícies, se um valor do título pode ser afirmado; sem
+  esconder linhas por texto/status nem reinterpretar a projeção em cada
+  componente.
+- Estados distintos e preservados: pagamento comprovado com aprovação
+  comercial pendente; histórico/valor inconsistente; consulta financeira
+  indisponível; saldo efetivamente aberto. O caso título R$ 420 validamente
+  quitado + orçamento em rascunho continua mostrando os fatos verificáveis
+  separados da pendência comercial, com a entrega bloqueada.
+- Guard de entrega e decisões server-side intocados.
+- Estorno: só leitura, exibição e sinalização de informação não confiável;
+  writer, autorização (`podeEstornar`, caixa, motivo), valor a estornar,
+  idempotência e permissões inalterados.
+- Rail: cada linha só usa a projeção da MESMA loja e OS (vínculo por
+  `storeId` e `osId`); nunca snapshot antigo para afirmar pagamento ou saldo.
+
+### R3-P2 — forma e valor do pagamento
+
+- Validação estrita dos meios dos fatos: booleano, array, objeto, string
+  vazia, não finito ou negativo nunca vira valor monetário (sem coerção
+  implícita; os leitores legados das decisões não mudam).
+- Split: cada meio mantém o próprio valor registrado. Pix R$ 100 numa baixa
+  de R$ 420 é Pix R$ 100 + R$ 320 sem meio identificado — nunca Pix R$ 420.
+  O total da baixa nunca é atribuído ao único meio reconhecido quando o
+  registro é parcial ou incompleto. Sem dedução de meio por valor, horário ou
+  evento sem identidade compatível.
+- Preservadas as proteções contra dupla contagem, recibo estornado e
+  reposição externa de mesmo valor. Nenhum pagamento real modificado ou
+  reclassificado.
+
+### Garantia — decisão A
+
+O recolhimento do editor de garantia vai para o GOAL 003 (ver lá). Nesta
+revisão o editor atual não muda e o E2E `operacoes-v4-fluxo-curto-002.spec.ts`
+não é alterado, enfraquecido nem excluído.
+
+### Prova da rev 3
+
+Reproduzir os dois achados da R3 antes da correção com fixtures sintéticas;
+testes que falham no candidato cd68d45 e passam com a correção, cobrindo no
+mínimo: duas baixas de R$ 300 em título de R$ 420 (nenhum resumo afirma
+recebimento conciliado); parcela antiga de R$ 320 não aparece como cobrança
+vigente validada; o mesmo cenário no Financeiro, Retirada, Estorno e rail;
+split Pix R$ 100 + R$ 320; valores malformados; título liquidado íntegro com
+orçamento em rascunho (fatos visíveis, entrega bloqueada); estorno, pagamento
+parcial, histórico inválido e título de outra loja; troca rápida de OS/loja e
+resposta atrasada; regressões da identidade de comprovante do 006; decisões
+de recebimento/entrega idênticas (baseline de equivalência congelado, não
+regenerado); editor de garantia e E2E legado preservados. test_command
+completo; regressões 005–007, #234/#235/#237/#238 e contratos financeiros
+adjacentes; suítes PostgreSQL nos bancos descartáveis próprios (evidências
+separadas, como na rev 2); typecheck; ESLint dos alterados; build seguro; E2E
+sem retries; `git diff --check`; verify; verify --all; check. Nova R
+independente OpenAI read-only sobre o SHA exato, conferindo os dois achados
+da R3 e toda superfície que poderia vazar valor legado: P0=P1=P2=0 e
+R_VERDICT=APPROVE. Corretivos do mesmo contrato seguem no MESMO GOAL, dentro
+do teto de tentativas da rev 3.
 
 ## Validação, R e parada
 
