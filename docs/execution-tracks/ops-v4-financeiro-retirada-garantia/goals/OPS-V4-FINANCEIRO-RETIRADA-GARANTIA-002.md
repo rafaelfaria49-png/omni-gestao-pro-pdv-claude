@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 3,
+  "plan_rev": 4,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-002",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/elegibilidade-comercial.test.ts lib/operacoes-v3/formalizacao-aprovacao-model.test.ts lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts lib/operacoes-v3/payment-model.test.ts lib/operacoes-v3/pdv-servico-a-prazo.test.ts lib/operacoes-v3/recebimento-misto-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/atendimento-rapido-model.test.ts lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v4/receber-pagamento-form.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[12]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v3-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts --retries=0 --workers=1",
@@ -230,3 +230,11 @@ Somente metadados: `plan_rev` sobe para 3 junto com o desbloqueio do GOAL
 001 (nenhum GOAL READY da trilha é SUPERSEDED). Objetivo, contrato,
 allowlist, test_command, orçamento e dependência (001 DONE + merge)
 inalterados; este GOAL continua NÃO autorizado a abrir antes disso.
+
+## Revisão 4 (09/10/2026)
+
+Somente metadados: `plan_rev` sobe para 4 junto com o desbloqueio do GOAL
+001 ("DECISÃO HUMANA — GOAL 001 / REVISÃO 4", restrito ao achado R6;
+nenhum GOAL READY da trilha é SUPERSEDED). Objetivo, contrato, allowlist,
+test_command, orçamento e dependência (001 DONE + merge) inalterados; este
+GOAL continua NÃO autorizado a abrir antes disso.
