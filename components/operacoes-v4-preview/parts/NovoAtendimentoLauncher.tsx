@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as TecladoEvent } from "react";
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import {
@@ -49,8 +49,12 @@ export function NovoAtendimentoLauncher({ v }: { v: V4Vals }) {
   return <NovoAtendimentoLauncherContent v={v} />;
 }
 
+/** Controles que recebem foco por teclado dentro do launcher. */
+const FOCAVEIS = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
 function NovoAtendimentoLauncherContent({ v }: { v: V4Vals }) {
   const firstRef = useRef<HTMLButtonElement>(null);
+  const dialogoRef = useRef<HTMLDivElement>(null);
   // Gatilho que abriu o launcher (o "+ Novo"), lido antes de o foco entrar aqui: o fluxo
   // Retorno / Garantia devolve o foco a ele, já que o launcher desmonta ao escolher.
   const [gatilho] = useState<HTMLElement | null>(() =>
@@ -72,6 +76,37 @@ function NovoAtendimentoLauncherContent({ v }: { v: V4Vals }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [v]);
 
+  // GOAL OPS-V4-FLUXO-CURTO-007 (porta de entrada do Retorno / Garantia): fundo inacessível —
+  // foco que saia do launcher volta para dentro; outro diálogo modal por cima não é fundo.
+  useEffect(() => {
+    const segurar = (e: FocusEvent) => {
+      const d = dialogoRef.current;
+      if (!d?.isConnected || !(e.target instanceof Element) || d.contains(e.target)) return;
+      const outroModal = e.target.closest('[aria-modal="true"]');
+      if (outroModal && outroModal !== d) return;
+      (d.querySelector<HTMLElement>(FOCAVEIS) ?? d).focus();
+    };
+    document.addEventListener("focusin", segurar);
+    return () => document.removeEventListener("focusin", segurar);
+  }, []);
+
+  // Tab/Shift+Tab circulam só pelas opções do launcher (mesmo padrão dos demais diálogos V4).
+  const teclado = (e: TecladoEvent<HTMLDivElement>) => {
+    const d = dialogoRef.current;
+    if (e.key !== "Tab" || !d) return;
+    const itens = Array.from(d.querySelectorAll<HTMLElement>(FOCAVEIS));
+    if (!itens.length) {
+      e.preventDefault();
+      d.focus();
+      return;
+    }
+    const primeiro = itens[0]!, ultimo = itens[itens.length - 1]!;
+    const ativo = document.activeElement;
+    if (!ativo || !itens.includes(ativo as HTMLElement)) { e.preventDefault(); (e.shiftKey ? ultimo : primeiro).focus(); }
+    else if (e.shiftKey && ativo === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && ativo === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
+
   const escolher = (id: NovoAtendimentoModalidadeV4) => {
     v.escolherNovoAtendimento(id, id === "retorno" ? gatilho : undefined);
   };
@@ -92,12 +127,16 @@ function NovoAtendimentoLauncherContent({ v }: { v: V4Vals }) {
       }}
     >
       <div
+        ref={dialogoRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="novo-atendimento-titulo"
         aria-describedby="novo-atendimento-sub"
+        tabIndex={-1}
+        onKeyDown={teclado}
         onClick={(e) => e.stopPropagation()}
         style={{
+          outline: "none",
           width: 400,
           maxWidth: "100%",
           background: C.surface,

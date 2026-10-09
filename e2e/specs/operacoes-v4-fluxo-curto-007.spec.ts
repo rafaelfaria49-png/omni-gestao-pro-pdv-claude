@@ -493,3 +493,25 @@ test("R09 — rev 15: 'Finalizar retorno' prende Tab/Shift+Tab, Escape devolve o
   expect(await page.evaluate(() => document.activeElement !== document.body && !!document.activeElement?.isConnected)).toBe(true);
   expect((await lerOS(prisma, os.id)).retornosV3).toEqual([expect.objectContaining({ status: "finalizado", osRetornoId: filha!.id })]);
 });
+
+test("R10 — rev 15 (tentativa 2): launcher + Novo prende Tab/Shift+Tab; a raiz da V4 é a âncora de foco", async ({ page }) => {
+  await abrirV4(page);
+  const raiz = page.locator("[data-og-v4-raiz]");
+  await expect(raiz).toHaveCount(1);
+  await expect(raiz).toHaveAttribute("tabindex", "-1");
+  const cta = page.getByTitle(/^Novo atendimento/);
+  await cta.focus();
+  await page.keyboard.press("Enter");
+  const launcher = page.getByRole("dialog", { name: "Novo atendimento" });
+  await expect(launcher).toBeVisible();
+  for (let i = 0; i < 10; i += 1) {
+    await page.keyboard.press("Tab");
+    expect(await launcher.evaluate((el) => el.contains(document.activeElement)), `Tab ${i + 1} dentro do launcher`).toBe(true);
+  }
+  for (let i = 0; i < 10; i += 1) {
+    await page.keyboard.press("Shift+Tab");
+    expect(await launcher.evaluate((el) => el.contains(document.activeElement)), `Shift+Tab ${i + 1} dentro do launcher`).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(launcher).toHaveCount(0);
+});

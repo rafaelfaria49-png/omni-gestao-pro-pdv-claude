@@ -908,3 +908,80 @@ describe("OPS-V4-FLUXO-CURTO-007 rev 15 — P2 nº 2: teclado no diálogo 'Final
     expect(fundo).not.toHaveBeenCalled();
   });
 });
+
+describe("OPS-V4-FLUXO-CURTO-007 rev 15 — tentativa 2 (achados da R5)", () => {
+  function FichaNaRaiz({ expor }: { expor: (v: V4Vals) => void }) {
+    const v = useV4Preview();
+    expor(v);
+    // Mesma âncora da raiz da V4 (OperacoesV4Preview): destino quando a etapa sai da tela.
+    return (
+      <div data-og-v4-raiz="" tabIndex={-1}>
+        <button type="button">Fundo</button>
+        {v.realOS && v.isPos ? <PosVendaStage v={v} /> : null}
+      </div>
+    );
+  }
+  beforeEach(() => {
+    banco.andamento2 = os("andamento2", { retornosV3: [{ id: "r2", osOriginalId: "andamento2", motivo: "Bateria", criadoEm: "2026-10-06T12:00:00.000Z", status: "aberto", osRetornoId: "filha-and2", osRetornoCodigo: "OS-FILHA-AND2" }] });
+  });
+  async function abrirFinalizarNaRaiz(user: ReturnType<typeof userEvent.setup>) {
+    render(<FichaNaRaiz expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(vAtual.ordens.length).toBeGreaterThan(0));
+    await act(async () => vAtual.selectOS(banco.andamento!, "posvenda"));
+    await user.click(await screen.findByRole("button", { name: "Finalizar retorno" }));
+    return screen.findByRole("dialog", { name: "Finalizar retorno" });
+  }
+
+  it("K11: A→B→A com o diálogo aberto em A — voltar à OS A NÃO reabre o diálogo", async () => {
+    const user = userEvent.setup();
+    const dialogo = await abrirFinalizarNaRaiz(user);
+    await user.type(within(dialogo).getByLabelText(/Resolução/), "Rascunho de A");
+    await act(async () => vAtual.selectOS(banco.andamento2!, "posvenda"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Finalizar retorno" })).toBeNull());
+    await act(async () => vAtual.selectOS(banco.andamento!, "posvenda"));
+    await screen.findByRole("button", { name: "Finalizar retorno" });
+    expect(screen.queryByRole("dialog", { name: "Finalizar retorno" })).toBeNull();
+    expect(m.finalizarRetornoV3).not.toHaveBeenCalled();
+  });
+
+  it("K12: a etapa Pós-venda sai da tela com o diálogo aberto — o foco vai à raiz da V4, nunca ao body", async () => {
+    const user = userEvent.setup();
+    await abrirFinalizarNaRaiz(user);
+    await act(async () => vAtual.selectOS(banco.a!, "entrada"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Finalizar retorno" })).toBeNull());
+    expect(screen.queryByRole("button", { name: "Finalizar retorno" })).toBeNull();
+    const ativo = document.activeElement as HTMLElement;
+    expect(ativo).not.toBe(document.body);
+    expect(ativo.hasAttribute("data-og-v4-raiz")).toBe(true);
+  });
+
+  it("N01–N03: launcher + Novo — Tab e Shift+Tab circulam só pelas opções; foco no fundo volta; Escape fecha", async () => {
+    const user = userEvent.setup();
+    await montar();
+    await user.click(screen.getByRole("button", { name: "+ Novo" }));
+    const launcher = await screen.findByRole("dialog", { name: "Novo atendimento" });
+    const opcoes = within(launcher).getAllByRole("button");
+    expect(opcoes.length).toBeGreaterThan(1);
+    expect(launcher.contains(document.activeElement)).toBe(true);
+    for (let i = 0; i < opcoes.length + 3; i += 1) {
+      await user.tab();
+      expect(launcher.contains(document.activeElement)).toBe(true);
+    }
+    for (let i = 0; i < opcoes.length + 3; i += 1) {
+      await user.tab({ shift: true });
+      expect(launcher.contains(document.activeElement)).toBe(true);
+    }
+    // Ciclo exato: do último volta ao primeiro e vice-versa.
+    act(() => opcoes[opcoes.length - 1]!.focus());
+    await user.tab();
+    expect(document.activeElement).toBe(opcoes[0]);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(opcoes[opcoes.length - 1]);
+    // Foco programático no fundo volta para dentro do launcher.
+    act(() => screen.getByRole("button", { name: "Abrir retorno pré-selecionado" }).focus());
+    expect(launcher.contains(document.activeElement)).toBe(true);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Novo atendimento" })).toBeNull());
+    expect(m.abrirRetornoV3).not.toHaveBeenCalled();
+  });
+});

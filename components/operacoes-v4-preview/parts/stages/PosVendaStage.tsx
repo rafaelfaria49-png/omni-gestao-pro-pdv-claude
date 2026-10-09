@@ -73,6 +73,8 @@ function DataPoint({ label, value, strong = false }: { label: string; value: Rea
   );
 }
 
+/** Raiz da V4 (OperacoesV4Preview): destino de foco quando a etapa sai da tela. */
+const ANCORA_FOCO_V4 = "[data-og-v4-raiz]";
 /** Controles que recebem foco por teclado dentro do diálogo. */
 const FOCAVEIS = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
@@ -215,10 +217,13 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
   const garantia = posVenda.garantia;
   const vinculo = posVenda.vinculoOrigem;
   const osId = v.realOS?.id?.trim() ?? "";
-  // O diálogo pertence à OS em que foi aberto: trocar de OS (ou de loja) o fecha, e a
-  // resolução digitada nunca viaja para o retorno de outro atendimento.
+  // O diálogo pertence à OS em que foi aberto: trocar de OS (ou de loja) o DESCARTA — voltar
+  // à OS anterior não o reabre — e a resolução digitada nunca viaja para outro atendimento.
   const [finalizarAberto, setFinalizarAberto] = useState<{ osId: string; retorno: RetornoV3 } | null>(null);
+  if (finalizarAberto && finalizarAberto.osId !== osId) setFinalizarAberto(null);
   const finalizar = finalizarAberto && finalizarAberto.osId === osId ? finalizarAberto.retorno : null;
+  const abertoRef = useRef(finalizarAberto);
+  abertoRef.current = finalizarAberto;
   const chaveResolucao = finalizar ? `${osId}:${finalizar.id}` : "";
   const [resolucao, setResolucao] = useState<{ chave: string; texto: string }>({ chave: "", texto: "" });
   const obsFinal = resolucao.chave === chaveResolucao ? resolucao.texto : "";
@@ -228,15 +233,16 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
   const retornoCardRef = useRef<HTMLElement>(null);
 
   // Ao fechar, o foco volta ao "Finalizar retorno" se ele ainda existir e estiver habilitado;
-  // trocando de OS/loja ele pode ter sumido — então vai ao card do Retorno, nunca a um
-  // elemento desmontado. Retorno finalizado: o gatilho deixa de existir assim que a OS é
-  // relida, então o foco vai direto ao card.
+  // trocando de OS/loja ele pode ter sumido — então vai ao card do Retorno. Retorno
+  // finalizado: o gatilho deixa de existir assim que a OS é relida, então vai direto ao card.
+  // Se a própria etapa saiu da tela (troca de OS/loja/etapa), vai à raiz da V4 — nunca a um
+  // elemento desmontado nem ao body.
   const finalizado = useRef(false);
   const restaurarFocoFinalizar = useCallback(() => {
     const gatilho = finalizarTriggerRef.current;
-    const destino = !finalizado.current && focoValido(gatilho) ? gatilho : retornoCardRef.current;
+    const candidatos = [finalizado.current ? null : gatilho, retornoCardRef.current, document.querySelector<HTMLElement>(ANCORA_FOCO_V4)];
     finalizado.current = false;
-    if (focoValido(destino)) destino.focus();
+    candidatos.find(focoValido)?.focus();
   }, []);
 
   const closeFinalizar = useCallback(() => {
@@ -254,13 +260,17 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
 
   const finalizarRetorno = async () => {
     if (busy || !finalizar) return;
+    const alvo = finalizarAberto;
     setBusy("finalizar");
     try {
       const ok = await v.finalizarRetorno(finalizar.id, obsFinal.trim() || undefined);
       if (ok) {
-        finalizado.current = true;
         setResolucao({ chave: "", texto: "" });
-        setFinalizarAberto(null);
+        // Só fecha (e só leva o foco ao card) se o diálogo ainda for o desta finalização.
+        if (abertoRef.current === alvo) {
+          finalizado.current = true;
+          setFinalizarAberto(null);
+        }
       }
     } finally {
       setBusy(null);

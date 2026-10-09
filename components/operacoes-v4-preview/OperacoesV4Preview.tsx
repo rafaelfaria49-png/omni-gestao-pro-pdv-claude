@@ -47,9 +47,14 @@ export function OperacoesV4Preview() {
     return () => setFocusMode(false);
   }, [setFocusMode, v.focusActive]);
 
+  // Raiz focável (tabIndex -1, fora da ordem de Tab): destino de foco quando um diálogo fecha
+  // e o controle que o abriu saiu da tela (troca de OS/loja/etapa) — nunca o body.
   return (
     <div
+      data-og-v4-raiz=""
+      tabIndex={-1}
       style={{
+        outline: "none",
         width: "100%",
         height: "100%",
         minWidth: 0,
