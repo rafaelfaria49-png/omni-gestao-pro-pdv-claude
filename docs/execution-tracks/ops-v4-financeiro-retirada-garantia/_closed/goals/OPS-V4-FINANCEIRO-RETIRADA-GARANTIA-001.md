@@ -4,7 +4,7 @@
   "id": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Informação financeira verdadeira e retirada organizada, com decisões de recebimento e entrega inalteradas",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C4",
   "risk_tier": "ALTO",
   "plan_rev": 2,
