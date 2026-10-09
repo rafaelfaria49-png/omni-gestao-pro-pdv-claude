@@ -42,6 +42,8 @@ import { buildVals, type V4DataCtx } from "@/components/operacoes-v4-preview/use
 import { EntregaStage } from "@/components/operacoes-v4-preview/parts/stages/EntregaStage";
 import { FinanceiroStage } from "@/components/operacoes-v4-preview/parts/stages/FinanceiroStage";
 import { ProximaAcaoV4 } from "@/components/operacoes-v4-preview/parts/ProximaAcaoV4";
+import { EstornoRecebimentoModal } from "@/components/operacoes-v4-preview/parts/EstornoRecebimentoModal";
+import { ModuleView } from "@/components/operacoes-v4-preview/parts/ModuleView";
 import { projectFinancialOSV4, type FinancialProjectionOSV4 } from "@/lib/operacoes-v4/financial-projection";
 
 const LOJA = "loja-qa-frg";
@@ -129,13 +131,17 @@ interface Cenario {
   fin: { projection: FinancialProjectionOSV4 | null; loading?: boolean; error?: string | null; reload?: () => void };
   stage?: V4State["stage"];
   pdv?: Pdv;
+  /** Rev 3: abre o modal de estorno sobre a etapa. */
+  estorno?: boolean;
+  /** Rev 3: monta o rail "Recebimento da OS" (lista + projeções em lote da loja ativa). */
+  rail?: { ordens: OrdemServico[]; projections: Map<string, FinancialProjectionOSV4>; loja?: string };
 }
 
 const patches: Array<Record<string, unknown>> = [];
 const sonda: { v: ReturnType<typeof buildVals> | null } = { v: null };
 
 function Harness({ c }: { c: Cenario }) {
-  const [st, setSt] = useState<V4State>(() => estado({ selectedOsId: c.os?.id ?? null, stage: c.stage ?? "entrega" }));
+  const [st, setSt] = useState<V4State>(() => estado({ selectedOsId: c.os?.id ?? null, stage: c.stage ?? "entrega", estornoRecebimento: !!c.estorno, alvoSuperficies: c.estorno ? JSON.stringify([c.rail?.loja ?? LOJA, c.os?.id ?? null]) : undefined, module: c.rail ? "pdv" : "workspace" }));
   const selecionado = c.os?.id ?? null;
   const atual = st.selectedOsId === selecionado ? st : { ...st, selectedOsId: selecionado };
   const v = buildVals(
@@ -150,7 +156,9 @@ function Harness({ c }: { c: Cenario }) {
     () => {},
     {
       ...ctxBase,
-      lojaAtivaId: LOJA,
+      lojaAtivaId: c.rail?.loja ?? LOJA,
+      ordens: c.rail?.ordens ?? [],
+      financialProjectionsByOsId: c.rail?.projections ?? new Map(),
       realOS: c.os,
       detailCarregada: !!c.os,
       financialProjection: { projection: c.fin.projection, loading: !!c.fin.loading, error: c.fin.error ?? null, reload: c.fin.reload ?? (() => {}) },
@@ -159,10 +167,12 @@ function Harness({ c }: { c: Cenario }) {
     },
   );
   sonda.v = v;
+  if (c.rail) return <ModuleView v={v} />;
   return (
     <>
       <ProximaAcaoV4 v={v} />
       {atual.stage === "financeiro" ? <FinanceiroStage v={v} /> : <EntregaStage v={v} />}
+      <EstornoRecebimentoModal v={v} />
     </>
   );
 }
@@ -399,5 +409,194 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R2: recebimento parcial co
     const sheet = within(screen.getByRole("dialog"));
     expect((sheet.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("");
     expect(contar("R$ 320,00")).toBe(0);
+  });
+});
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R3: nenhum valor não conciliado vira verdade financeira", () => {
+  // Espelho a prazo antigo de R$ 320 (autorização + plano de parcelas persistido).
+  const aPrazoAntigo = (id: string) => ({
+    aPrazoV3: {
+      modo: "a_prazo", status: "pendente", valor: 320, vencimento: "2026-11-10",
+      tituloLocalKey: `os-faturamento:${LOJA}:${id}`, autorizadoEntrega: true, autorizadoEm: "2026-10-03T10:00:00.000Z", autorizadoPor: "Operador QA",
+    },
+    faturamentoParcelas: [{ numero: "1", valor: 320, vencimento: "2026-11-10" }],
+  });
+  // Título de R$ 420 com DUAS baixas de R$ 300 (R$ 600).
+  const DUAS_BAIXAS: Titulo = { status: "pago", historico: [
+    { tipo: "pagamento", valor: 300, loteId: "op-a" },
+    { tipo: "pagamento", valor: 300, loteId: "op-b" },
+  ] };
+  // R$ 300 recebidos, estorno de R$ 200 com referência inexistente e a prazo de R$ 320 autorizado.
+  const A_PRAZO_AMBIGUO: Titulo = { status: "parcial", historico: [
+    { tipo: "pagamento", valor: 300, loteId: "op-p" },
+    { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 7 },
+    { tipo: "a_prazo_autorizado", valor: 320, operacaoId: "op-m", recebidoAgora: 0 },
+  ] };
+  const caso = (titulo: Titulo, id = "a") => {
+    const a = os(id, "aprovado", { timeline: [], ...aPrazoAntigo(id) });
+    return { a, p: projecao(a, titulo) };
+  };
+  const SEM_VALOR_LEGADO = ["R$ 600,00", "R$ 320,00", "R$ 100,00"];
+  // O histórico bruto (auditoria) pode citar valores, mas rotulados como não conciliados;
+  // FORA dele nenhum valor legado aparece.
+  const historico = () => screen.queryByText("Histórico de recebimentos")?.closest("section") ?? null;
+  const contarFora = (texto: string) => contar(texto) - ((historico()?.textContent ?? "").split(texto).length - 1);
+  const semValoresLegados = () => { for (const t of SEM_VALOR_LEGADO) expect(contarFora(t), t).toBe(0); };
+  const brutosRotulados = () => {
+    const h = historico()!;
+    const comValor = [...h.children].filter((el) => /R\$/.test(el.textContent ?? "") && !/Registros brutos/.test(el.textContent ?? ""));
+    expect(comValor.length).toBeGreaterThan(0);
+    expect(h.textContent).toMatch(/Registros brutos — não conciliados/);
+    for (const item of comValor) expect(item.textContent).toMatch(/· não conciliado/);
+  };
+
+  it("reprodução: o legado diz INCONSISTENT com recebido 600 e AUTHORIZED_CREDIT com parcela 320; os fatos rejeitam os dois", () => {
+    const d = caso(DUAS_BAIXAS).p;
+    expect(d).toMatchObject({ financialStatus: "INCONSISTENT", consistencyStatus: "INCONSISTENT", receivedTotal: 600, balance: 0, canDeliver: false });
+    expect(d.fatos).toMatchObject({ tituloEncontrado: true, verificavel: false, motivo: "RECEBIDO_ACIMA_DO_TITULO", recebidoLiquido: null });
+    const m = caso(A_PRAZO_AMBIGUO).p;
+    expect(m).toMatchObject({ financialStatus: "AUTHORIZED_CREDIT", receivedTotal: 100, balance: 320, canDeliver: true });
+    expect(m.installments[0]).toMatchObject({ dueAt: "2026-11-10", amount: 320 });
+    expect(m.fatos).toMatchObject({ verificavel: false, motivo: "ESTORNO_AMBIGUO" });
+  });
+
+  it("R3-P1 Financeiro (INCONSISTENT): sem 'Recebido R$ 600', fatos em conferência com motivo; brutos só como não conciliados", () => {
+    const { a, p } = caso(DUAS_BAIXAS);
+    montar({ os: a, fin: { projection: p }, stage: "financeiro" });
+    semValoresLegados();
+    const strip = within(screen.getByLabelText("Fatos da Conta a Receber"));
+    expect(strip.getAllByText("Em conferência")).toHaveLength(3);
+    expect(screen.getByText(/O total recebido supera o valor da Conta a Receber\./)).toBeTruthy();
+    expect(screen.queryByText("Vencimento")).toBeNull();
+    expect(screen.queryByText("Quitado")).toBeNull();
+    // registros brutos ficam na auditoria, rotulados como não conciliados
+    expect(screen.getByText(/Registros brutos — não conciliados/)).toBeTruthy();
+    brutosRotulados();
+    expect(sonda.v!.financeiroHeader.label).not.toMatch(/R\$/);
+  });
+
+  it("R3-P1 Financeiro (AUTHORIZED_CREDIT): parcela antiga 'Vencimento … R$ 320' não aparece como cobrança vigente", () => {
+    const { a, p } = caso(A_PRAZO_AMBIGUO);
+    montar({ os: a, fin: { projection: p }, stage: "financeiro" });
+    expect(screen.queryByText("Vencimento")).toBeNull();
+    expect(screen.queryByText(/2026-11-10/)).toBeNull();
+    expect(contarFora("10/11/2026")).toBe(0);
+    expect(within(screen.getByTestId("a-prazo-persistido")).getByText("Vencimento: em conferência")).toBeTruthy();
+    semValoresLegados();
+    brutosRotulados();
+    expect(sonda.v!.financeiroHeader).toMatchObject({ label: "Pagamento em conferência" });
+  });
+
+  it("R3-P1 Retirada: as duas OS mostram conferência, nenhum valor legado; decisões legadas intactas", () => {
+    const d = caso(DUAS_BAIXAS);
+    const { trocar } = montar({ os: d.a, fin: { projection: d.p } });
+    semValoresLegados();
+    expect(within(guia()).getByText("Financeiro inconsistente")).toBeTruthy();
+    expect(within(guia()).getByText(/O total recebido supera o valor da Conta a Receber\./)).toBeTruthy();
+    expect(sonda.v!.retirada?.financeiro).toMatchObject({ total: null, recebido: null, saldo: null, aPrazo: null, liberaEntrega: false });
+    expect(confirmar()).toBeNull();
+    const m = caso(A_PRAZO_AMBIGUO, "m");
+    trocar({ os: m.a, fin: { projection: m.p } });
+    semValoresLegados();
+    expect(within(guia()).getByText("Pagamento em conferência")).toBeTruthy();
+    expect(sonda.v!.retirada?.financeiro).toMatchObject({ recebido: null, saldo: null, aPrazo: null, liberaEntrega: true });
+    // a autorização a prazo legada segue liberando a confirmação (decisão do servidor, inalterada)
+    expect(confirmar()).toBeTruthy();
+  });
+
+  it("R3-P1 Estorno: o modal não afirma recebido/saldo em conferência; autorização, caixa, motivo e chamada inalterados", () => {
+    const { a, p } = caso(DUAS_BAIXAS);
+    const caixa = pdv();
+    montar({ os: a, fin: { projection: p }, stage: "financeiro", pdv: caixa, estorno: true });
+    const modal = within(screen.getByText("↩ Estornar recebimento").parentElement!.parentElement!);
+    expect(modal.queryByText("Recebido atual")).toBeNull();
+    expect(modal.queryByText("Saldo atual")).toBeNull();
+    expect(modal.getByText(/Valores do título em conferência/)).toBeTruthy();
+    semValoresLegados();
+    expect(sonda.v!.estorno).toEqual({ temRecebido: true, caixaAberto: true, podeEstornar: true });
+    fireEvent.change(modal.getByPlaceholderText(/valor lançado errado/), { target: { value: "Recebimento lançado em duplicidade" } });
+    fireEvent.click(modal.getByRole("button", { name: "Confirmar estorno" }));
+    expect(caixa.estornar).toHaveBeenCalledWith(expect.objectContaining({ sessaoId: "sessao-qa", motivo: "Recebimento lançado em duplicidade" }));
+  });
+
+  it("R3-P1 Estorno: título íntegro mostra recebido e saldo como antes", () => {
+    const a = os("a", "aprovado");
+    montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) }, stage: "financeiro", estorno: true });
+    const modal = within(screen.getByText("↩ Estornar recebimento").parentElement!.parentElement!);
+    expect(modal.getByText("Recebido atual")).toBeTruthy();
+    expect(modal.getByText("R$ 420,00")).toBeTruthy();
+    expect(modal.getByText("Saldo atual")).toBeTruthy();
+  });
+
+  it("R3-P1 rail: conferência sem saldo nem 'A receber'; pendência comercial com fatos; outra loja/OS nunca aparece", () => {
+    const d = caso(DUAS_BAIXAS);
+    const m = caso(A_PRAZO_AMBIGUO, "m");
+    const r = os("r", "rascunho");
+    const pr = projecao(r, LIQUIDADO);
+    const x = os("x", "aprovado");
+    const px = { ...projecao(x, LIQUIDADO), storeId: "outra-loja" };
+    const y = os("y", "aprovado");
+    const py = { ...projecao(y, LIQUIDADO), osId: "z" };
+    montar({ os: null, fin: { projection: null }, rail: {
+      ordens: [d.a, m.a, r, x, y],
+      projections: new Map([["a", d.p], ["m", m.p], ["r", pr], ["x", px], ["y", py]]),
+    } });
+    const pdvView = sonda.v!.pdvView;
+    expect(pdvView.itens.map((i) => i.id).sort()).toEqual(["a", "m", "r"]);
+    const linha = (id: string) => pdvView.itens.find((i) => i.id === id)!;
+    expect(linha("a")).toMatchObject({ statusFaturamento: "Em conferência", saldoLinha: "", podeReceber: false, ctaLabel: "Abrir financeiro" });
+    expect(linha("m")).toMatchObject({ statusFaturamento: "Em conferência", saldoLinha: "", podeReceber: false });
+    expect(linha("r")).toMatchObject({ statusFaturamento: "Aprovação pendente", saldoLinha: "Saldo do título: R$ 0,00" });
+    expect(pdvView.aReceberCount).toBe(0);
+    semValoresLegados();
+    expect(contar("Financeiro indisponível")).toBe(0);
+    expect(contar("Quitado")).toBe(0);
+  });
+
+  it("R3: título íntegro liquidado + rascunho continua mostrando os fatos verificáveis e bloqueando a entrega", () => {
+    const a = os("a", "rascunho");
+    montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) }, stage: "financeiro" });
+    const strip = within(screen.getByLabelText("Fatos da Conta a Receber"));
+    expect(strip.getAllByText("R$ 420,00")).toHaveLength(2);
+    expect(strip.getByText("R$ 0,00")).toBeTruthy();
+    expect(screen.queryByText(/Registros brutos — não conciliados/)).toBeNull();
+    expect(sonda.v!.entregaAcoes.podeConfirmar).toBe(false);
+  });
+
+  it("R3: troca rápida de loja/OS com resposta atrasada não vaza valores no estorno nem no rail", () => {
+    const a = os("a", "aprovado");
+    const b = os("b", "aprovado");
+    const { trocar } = montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) }, stage: "financeiro", estorno: true });
+    expect(contar("R$ 420,00")).toBeGreaterThan(0);
+    // resposta atrasada da OS anterior chegando com a OS b selecionada
+    trocar({ os: b, fin: { projection: projecao(a, LIQUIDADO) }, stage: "financeiro", estorno: true });
+    expect(contar("Recebido atual")).toBe(0);
+    expect(contar("R$ 420,00")).toBe(0);
+    cleanup();
+    // rail: lote de OUTRA loja (troca de loja com resposta atrasada) não aparece
+    montar({ os: null, fin: { projection: null }, rail: { ordens: [a], projections: new Map([["a", projecao(a, LIQUIDADO)]]), loja: "loja-nova" } });
+    expect(sonda.v!.pdvView.itens).toHaveLength(0);
+    expect(contar("R$ 420,00")).toBe(0);
+  });
+
+  it("R3 Estorno: parcial válido mostra os valores; parcial ambíguo, histórico inválido e título de outra loja ficam em conferência", () => {
+    const valido = os("a", "aprovado", { timeline: [] });
+    montar({ os: valido, fin: { projection: projecao(valido, { status: "parcial", historico: [{ tipo: "pagamento", valor: 300, loteId: "op-p" }] }) }, stage: "financeiro", estorno: true });
+    const modalValido = within(screen.getByText("↩ Estornar recebimento").parentElement!.parentElement!);
+    expect(modalValido.getByText("R$ 300,00")).toBeTruthy();
+    expect(modalValido.getByText("R$ 120,00")).toBeTruthy();
+    cleanup();
+    const rejeitados: Array<[string, Titulo]> = [
+      ["parcial ambíguo", { status: "parcial", historico: [{ tipo: "pagamento", valor: 300, loteId: "op-p" }, { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 5 }] }],
+      ["histórico inválido", { status: "parcial", historico: [{ tipo: "pagamento", valor: 300, loteId: "op-p" }, { valor: 10 }] }],
+      ["outra loja", { storeId: "outra-loja", status: "parcial", historico: [{ tipo: "pagamento", valor: 300, loteId: "op-p" }] }],
+    ];
+    for (const [nome, titulo] of rejeitados) {
+      const a = os("a", "aprovado", { timeline: [] });
+      montar({ os: a, fin: { projection: projecao(a, titulo) }, stage: "financeiro", estorno: true });
+      const modal = screen.getByText("↩ Estornar recebimento").parentElement!.parentElement!;
+      expect(modal.textContent, nome).not.toMatch(/Recebido atual|Saldo atual|R\$ (300|120|100),00/);
+      cleanup();
+    }
   });
 });

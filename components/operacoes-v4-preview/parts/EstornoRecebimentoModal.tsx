@@ -15,6 +15,7 @@ import { useState } from "react";
 import { C, fmt } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { buildEstornarRecebimentoInputV4, validarMotivoEstornoV4 } from "@/lib/operacoes-v4/estorno-recebimento-form";
+import { afirmacaoValoresTituloV4, explicacaoConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
 
 const overlay: React.CSSProperties = {
   position: "absolute",
@@ -59,6 +60,12 @@ function EstornoRecebimentoModalContent({ v }: { v: V4Vals }) {
     ? { recebido: projection.receivedTotal, saldo: projection.balance }
     : null;
   const leituraIndisponivel = v.financial.loading || !!v.financial.error || !resumo;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 (rev 3): só a EXIBIÇÃO segue a regra
+  // única de afirmação dos valores do título — em conferência (ou projeção de outra
+  // OS) recebido/saldo não aparecem como fato. Autorização, caixa, motivo, valor a
+  // estornar e a chamada do writer continuam exatamente os de antes.
+  const situacao = situacaoAtendimentoDe(v);
+  const afirmacao = afirmacaoValoresTituloV4(situacao);
   const semRecebimento = !!resumo && !v.estorno.temRecebido;
   const veredito = validarMotivoEstornoV4(motivo);
   const podeConfirmar = !!resumo && v.estorno.podeEstornar && veredito.ok && !pdv.estornando;
@@ -89,16 +96,24 @@ function EstornoRecebimentoModalContent({ v }: { v: V4Vals }) {
             </div>
           ) : (
             <>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-                  <span style={{ color: C.subtle }}>Recebido atual</span>
-                  <span style={{ color: C.successFg, fontWeight: 600 }}>{fmt(resumo.recebido)}</span>
+              {afirmacao === "afirmavel" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                    <span style={{ color: C.subtle }}>Recebido atual</span>
+                    <span style={{ color: C.successFg, fontWeight: 600 }}>{fmt(resumo.recebido)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                    <span style={{ color: C.subtle }}>Saldo atual</span>
+                    <span style={{ color: resumo.saldo > 0 ? C.warnFg : C.body, fontWeight: 600 }}>{fmt(resumo.saldo)}</span>
+                  </div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-                  <span style={{ color: C.subtle }}>Saldo atual</span>
-                  <span style={{ color: resumo.saldo > 0 ? C.warnFg : C.body, fontWeight: 600 }}>{fmt(resumo.saldo)}</span>
+              ) : (
+                <div style={{ marginBottom: 12, padding: 11, border: `1px solid ${C.warnBd}`, borderRadius: 9, background: C.warnBg, color: C.warnFg, fontSize: 12, lineHeight: 1.5 }}>
+                  {afirmacao === "conferencia"
+                    ? <><b>Valores do título em conferência.</b> {explicacaoConferenciaV4(projection)} O recebido e o saldo registrados não são exibidos como confirmados.</>
+                    : "Confirmando a situação financeira desta OS…"}
                 </div>
-              </div>
+              )}
               <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
                 Este estorno reverte o <b>último recebimento</b> registrado nesta OS (correção auditada) — a V3 não permite escolher um recebimento específico da história.
               </div>

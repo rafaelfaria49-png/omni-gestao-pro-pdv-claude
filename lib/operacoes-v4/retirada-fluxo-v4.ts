@@ -117,10 +117,16 @@ export function derivarRetiradaFinanceiraV4(input: {
   // comprova o histórico — nenhuma quitação nem valor do título aparece. Gating
   // (receber/entregar) continua o da decisão legada, sem mudança.
   // (pendência comercial já descreve o pagamento pelos fatos — "conferência pendente" inclusive.)
-  if (legado.situacao === "carregando" || legado.situacao === "indisponivel" || legado.situacao === "inconsistente" ||
-      legado.situacao === "cancelada" || legado.situacao === "estornada" || legado.situacao === "pendencia_comercial") return legado;
+  if (legado.situacao === "carregando" || legado.situacao === "pendencia_comercial") return legado;
   const s = derivarSituacaoAtendimentoV4({ osId: input.osId, projection: input.projection, loading: input.loading, error: input.error });
   if (!pagamentoEmConferenciaV4(s)) return legado;
+  const semValores = { total: null, recebido: null, saldo: null, aPrazo: null };
+  // Rev 3: a regra vale em QUALQUER status legado. Estados próprios do título
+  // (inconsistente, cancelada, estornada) mantêm rótulo e tom; os valores, nunca.
+  if (legado.situacao === "inconsistente" || legado.situacao === "cancelada" || legado.situacao === "estornada") {
+    const explicacao = explicacaoConferenciaV4(input.projection);
+    return { ...legado, descricao: legado.descricao.includes(explicacao) ? legado.descricao : `${legado.descricao} ${explicacao}`, ...semValores };
+  }
   return {
     ...legado,
     rotulo: "Pagamento em conferência",
@@ -128,10 +134,7 @@ export function derivarRetiradaFinanceiraV4(input: {
       legado.liberaEntrega ? " Confira o histórico no Financeiro antes de entregar." : " A entrega fica bloqueada."
     }`,
     tone: "warning",
-    total: null,
-    recebido: null,
-    saldo: null,
-    aPrazo: null,
+    ...semValores,
   };
 }
 

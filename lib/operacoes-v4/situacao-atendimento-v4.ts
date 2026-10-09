@@ -185,13 +185,22 @@ export function formaRegistradaV4(projection: FinancialProjectionOSV4 | null | u
   return meiosDe(projection) ?? "Não registrada";
 }
 
+/**
+ * Meios dos fatos com o valor PRÓPRIO de cada um. Um meio só cobre o recebido inteiro
+ * quando é o único e não sobra parte sem forma; senão cada parte aparece com o seu
+ * valor e a parte sem forma identificada aparece como tal (nunca absorvida por um meio).
+ */
 function meiosDe(projection: FinancialProjectionOSV4): string | null {
   const fatos = projection.fatos;
   if (!fatos || !fatos.verificavel) return null;
-  const labels = [...new Set(fatos.meios.map((m) => m.label))];
-  const semMeio = (fatos.semMeioIdentificado ?? 0) > 0;
-  if (labels.length === 0) return semMeio ? "Forma não identificada no título" : null;
-  return semMeio ? `${labels.join(" + ")} + forma não identificada` : labels.join(" + ");
+  const porMeio = new Map<string, number>();
+  for (const m of fatos.meios) porMeio.set(m.label, (porMeio.get(m.label) ?? 0) + Math.round((m.valor ?? 0) * 100));
+  const semMeioCentavos = Math.round((fatos.semMeioIdentificado ?? 0) * 100);
+  if (porMeio.size === 0) return semMeioCentavos > 0 ? "Forma não identificada no título" : null;
+  if (porMeio.size === 1 && semMeioCentavos === 0) return [...porMeio.keys()][0]!;
+  const partes = [...porMeio].map(([label, centavos]) => `${label} ${formatarValorSituacaoV4(centavos / 100)}`);
+  if (semMeioCentavos > 0) partes.push(`forma não identificada ${formatarValorSituacaoV4(semMeioCentavos / 100)}`);
+  return partes.join(" + ");
 }
 
 const pagamentoBase = (
@@ -316,13 +325,35 @@ export function situacaoAtendimentoDe(v: {
 }
 
 /**
+ * REGRA ÚNICA de apresentação dos valores da Conta a Receber (recebido, saldo,
+ * parcela/a prazo, quitação) — rev 3. Toda superfície (Financeiro, Retirada,
+ * Header/Próxima ação, Estorno, rail, recebimento) pergunta AQUI se pode afirmar um
+ * valor; nenhuma reinterpreta o status legado por conta própria:
+ * - "carregando": leitura em curso ou projeção de OUTRA OS — nada a afirmar;
+ * - "indisponivel": falha real de leitura;
+ * - "conferencia": há título desta OS, mas a leitura estrita rejeita o histórico —
+ *   nenhum valor legado é afirmado, em QUALQUER status (inclusive INCONSISTENT,
+ *   CANCELLED e REVERSED);
+ * - "afirmavel": fatos verificados, ou leitura sem título/sem a dimensão de fatos.
+ * Decisões (receber, entregar, estornar) não passam por aqui e não mudam.
+ */
+export type AfirmacaoValoresTituloV4 = "carregando" | "indisponivel" | "conferencia" | "afirmavel";
+
+export function afirmacaoValoresTituloV4(s: SituacaoAtendimentoV4): AfirmacaoValoresTituloV4 {
+  if (s.estado === "carregando") return "carregando";
+  if (s.estado === "erro" || s.pagamento.estado === "indisponivel") return "indisponivel";
+  if (s.pagamento.estado === "conferencia_pendente") return "conferencia";
+  return "afirmavel";
+}
+
+/**
  * Há Conta a Receber desta OS, mas a leitura estrita NÃO comprova seu histórico
  * (estorno sem referência, entrada malformada, vínculo, excesso…). Vale para
  * QUALQUER status legado: nenhuma superfície mostra quitação nem valores do título;
  * a decisão legada de receber/entregar não muda.
  */
 export function pagamentoEmConferenciaV4(s: SituacaoAtendimentoV4): boolean {
-  return s.estado === "pronta" && s.pagamento.estado === "conferencia_pendente";
+  return afirmacaoValoresTituloV4(s) === "conferencia";
 }
 
 /** Explicação do motivo pelo qual o histórico do título está em conferência. */

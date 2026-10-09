@@ -20,7 +20,10 @@ import { registrarEntregaV3 } from "@/lib/operacoes-v3/entrega-actions";
 import { gerarOperacaoIdV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { lerProjecaoFinanceiraOSV4 } from "@/lib/operacoes-v4/financial-projection-actions";
-import { derivarSituacaoAtendimentoV4 } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import { afirmacaoValoresTituloV4, derivarSituacaoAtendimentoV4 } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import { derivarRetiradaFinanceiraV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
+import { buildPdvView } from "@/components/operacoes-v4-preview/rails-adapter";
+import type { OrdemServico } from "@/types/os";
 
 function exigirBancoLocal(): void {
   const urls = [process.env.OPS_V4_FRG_TEST_DATABASE_URL, process.env.DATABASE_URL, process.env.DIRECT_URL].map((v) => (v ?? "").trim());
@@ -152,6 +155,43 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — PostgreSQL descartável", 
     expect(p.fatos).toMatchObject({ verificavel: false, motivo: "TITULO_NAO_VINCULADO", recebidoLiquido: null });
     expect(p.acoes?.impedimento).toEqual({ codigo: "TITULO_NAO_VINCULADO", destino: "financeiro" });
     await expect(registrarEntregaV3(sid, osId, { recebidoPor: "Cliente QA" })).rejects.toThrow();
+  });
+
+  it("R3-P1: título de 420 com duas baixas de 300 lido do banco — fatos rejeitados, nenhuma superfície afirma recebido; decisão e escrita intactas", async () => {
+    const sid = await novaLoja();
+    const osId = await novaOS(sid, "aprovado");
+    await prisma.contaReceberTitulo.create({
+      data: {
+        storeId: sid, localKey: localKeyContaReceberOSV3(sid, osId), descricao: "OS QA", cliente: "Cliente QA", valor: 420,
+        vencimento: "2026-10-05", status: "pago",
+        payload: { ordemServicoId: osId, historico: [{ tipo: "pagamento", valor: 300, loteId: "op-a" }, { tipo: "pagamento", valor: 300, loteId: "op-b" }] } as unknown as Prisma.InputJsonValue,
+      },
+    });
+    const antes = await estadoBruto(sid, osId);
+    const p = await lerProjecaoFinanceiraOSV4(sid, osId);
+    expect(await estadoBruto(sid, osId)).toBe(antes);
+    expect(p).toMatchObject({ financialStatus: "INCONSISTENT", receivedTotal: 600, canDeliver: false });
+    expect(p.fatos).toMatchObject({ verificavel: false, motivo: "RECEBIDO_ACIMA_DO_TITULO", recebidoLiquido: null, saldoTitulo: null });
+    const s = derivarSituacaoAtendimentoV4({ osId, projection: p, loading: false, error: null });
+    expect(afirmacaoValoresTituloV4(s)).toBe("conferencia");
+    expect(derivarRetiradaFinanceiraV4({ osId, projection: p, loading: false, error: null })).toMatchObject({ recebido: null, saldo: null, total: null, liberaEntrega: false });
+    const os = (await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId } })).payload as unknown as OrdemServico;
+    expect(buildPdvView([os], new Map([[osId, p]]), sid).itens[0]).toMatchObject({ statusFaturamento: "Em conferência", saldoLinha: "" });
+    await expect(registrarEntregaV3(sid, osId, { recebidoPor: "Cliente QA" })).rejects.toThrow();
+    expect(await estadoBruto(sid, osId)).toBe(antes);
+  });
+
+  it("R3-P2: split real Pix R$ 100 + Dinheiro R$ 320 pelo writer — cada meio com o próprio valor, nada atribuído a mais", async () => {
+    const sid = await novaLoja();
+    const osId = await novaOS(sid, "aprovado");
+    const sessaoId = await abrirCaixa(sid);
+    await receberOSV3(sid, osId, { linhas: [{ forma: "pix", valor: 100 }, { forma: "dinheiro", valor: 320 }], sessaoId, operacaoId: gerarOperacaoIdV3() });
+    const p = await lerProjecaoFinanceiraOSV4(sid, osId);
+    expect(p).toMatchObject({ financialStatus: "PAID", receivedTotal: 420 });
+    expect(p.fatos).toMatchObject({ verificavel: true, semMeioIdentificado: 0 });
+    const porMeio = Object.fromEntries((p.fatos?.meios ?? []).map((m) => [m.label, m.valor]));
+    expect(porMeio).toEqual({ Pix: 100, Dinheiro: 320 });
+    expect(derivarSituacaoAtendimentoV4({ osId, projection: p, loading: false, error: null }).pagamento.meio).toBe("Pix R$ 100,00 + Dinheiro R$ 320,00");
   });
 
   it("loja errada: a leitura é escopada pela loja — nunca devolve OS/título de outra loja", async () => {

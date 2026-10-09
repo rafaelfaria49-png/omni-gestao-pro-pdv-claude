@@ -28,14 +28,13 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
   const projection = financial.projection;
   const resumo = v.financeiroResumo;
 
-  if (financial.loading) {
-    // A mesma posição/chave mantém o rascunho vivo na recarga após uma recusa.
-    return <div className={styles.panel}><section className={styles.tape}>
-      <div className={styles.tapeHead}><span className={styles.tapeEyebrow}>Financeiro</span></div>
-      <div style={{ ...emptyText, padding: 14 }}>Carregando a projeção financeira desta OS…</div>
-      <div key="recebimento" hidden><ReceberPagamentoV4 v={v} /></div>
-    </section></div>;
-  }
+  // A mesma posição/chave mantém o rascunho vivo na recarga após uma recusa.
+  const carregando = <div className={styles.panel}><section className={styles.tape}>
+    <div className={styles.tapeHead}><span className={styles.tapeEyebrow}>Financeiro</span></div>
+    <div style={{ ...emptyText, padding: 14 }}>Carregando a projeção financeira desta OS…</div>
+    <div key="recebimento" hidden><ReceberPagamentoV4 v={v} /></div>
+  </section></div>;
+  if (financial.loading) return carregando;
   if (financial.error || !projection) {
     return (
       <div className={styles.panel}><section className={styles.tape}>
@@ -49,6 +48,10 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
     );
   }
 
+  // Projeção de OUTRA OS (resposta tardia após troca rápida): nada dela aparece aqui.
+  const alvo = v.realOS?.id ?? null;
+  if (alvo && projection.osId && projection.osId !== alvo) return carregando;
+
   // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: com a pendência COMERCIAL e o título
   // verificado, os valores são os FATOS do título (rótulos próprios) e o aviso é um só,
   // com a ação que resolve. Decisões de receber/entregar continuam as da projeção.
@@ -56,9 +59,10 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
   const fatosDoTitulo = pagamentoComPendenciaComercialV4(s);
   const pendenciaComercial = s.estado === "pronta" && s.comercial.pendente;
   const inconsistent = !pendenciaComercial && (projection.consistencyStatus === "INCONSISTENT" || projection.consistencyStatus === "UNKNOWN");
-  // Fatos do título rejeitados pela leitura estrita (qualquer status legado): nada de
-  // quitação verde nem valores do título; a decisão legada segue como está.
-  const emConferencia = !inconsistent && pagamentoEmConferenciaV4(s);
+  // Fatos do título rejeitados pela leitura estrita, em QUALQUER status legado (rev 3:
+  // inclusive INCONSISTENT): nada de quitação verde, valores do título, parcela ou
+  // cobrança vigente; a decisão legada segue como está.
+  const emConferencia = pagamentoEmConferenciaV4(s);
   const statusColors = inconsistent
     ? { bg: C.dangerBg, fg: C.dangerFg }
     : pendenciaComercial || emConferencia
@@ -66,7 +70,7 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
       : projection.financialStatus === "PAID" || projection.canDeliver
         ? { bg: C.successBg, fg: C.successFg }
         : { bg: C.warnBg, fg: C.warnFg };
-  const stamp = pendenciaComercial ? "Aprovação pendente" : emConferencia ? "Em conferência" : resumo.situacaoLabel;
+  const stamp = pendenciaComercial ? "Aprovação pendente" : emConferencia && !inconsistent ? "Em conferência" : resumo.situacaoLabel;
   const recebidoConhecido = projection.receivedTotal ?? (s.pagamento.verificavel ? s.pagamento.recebidoLiquido : null);
   const historico = projection.historico;
   const valorFato = (n: number | null) => (n == null ? "Em conferência" : fmt(n));
@@ -128,8 +132,8 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
             </button>
           </div>
         ) : emConferencia ? (
-          <div className={styles.issue} style={{ border: `1px solid ${C.warnBd}`, background: C.warnBg, color: C.warnFg }}>
-            <strong>Há registro de pagamento; conferência pendente.</strong> {explicacaoConferenciaV4(projection)}
+          <div className={styles.issue} style={{ border: `1px solid ${inconsistent ? C.dangerBd : C.warnBd}`, background: inconsistent ? C.dangerBg : C.warnBg, color: inconsistent ? C.dangerFg : C.warnFg }}>
+            <strong>{s.pagamento.rotulo}.</strong> {explicacaoConferenciaV4(projection)}
           </div>
         ) : projection.consistencyIssues.length > 0 ? (
           <div className={styles.issue} style={{ border: `1px solid ${inconsistent ? C.dangerBd : C.warnBd}`, background: inconsistent ? C.dangerBg : C.warnBg, color: inconsistent ? C.dangerFg : C.warnFg }}>
@@ -138,11 +142,12 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
         ) : null}
 
         <div className={styles.meta}>
-          <div className={styles.metaRow}><span className={styles.metaLabel}>Conta a Receber</span><span className={styles.metaValue}>{projection.receivableFound ? projection.receivableStatus ?? "Encontrada" : "Não criada"}</span></div>
+          <div className={styles.metaRow}><span className={styles.metaLabel}>Conta a Receber</span><span className={styles.metaValue}>{projection.receivableFound ? `${projection.receivableStatus ?? "Encontrada"}${emConferencia ? " · não conciliado" : ""}` : "Não criada"}</span></div>
           <div className={styles.metaRow}><span className={styles.metaLabel}>Forma de pagamento</span><span className={styles.metaValue}>{formaExibida}</span></div>
-          {projection.collectionMode ? <div className={styles.metaRow}><span className={styles.metaLabel}>Cobrança</span><span className={styles.metaValue}>{projection.collectionMode}</span></div> : null}
+          {/* Modo de cobrança e parcela descrevem dívida VIGENTE: em conferência, não se afirmam. */}
+          {projection.collectionMode && !emConferencia ? <div className={styles.metaRow}><span className={styles.metaLabel}>Cobrança</span><span className={styles.metaValue}>{projection.collectionMode}</span></div> : null}
           {projection.authorizedNoCharge && <div className={styles.metaRow}><span className={styles.metaLabel}>Sem cobrança</span><span className={styles.metaValue}>{projection.noChargeCategory ?? "Autorizada"}</span></div>}
-          {projection.installments.length > 0 && (
+          {projection.installments.length > 0 && !emConferencia && (
             <div className={styles.metaRow}>
               <span className={styles.metaLabel}>Vencimento</span>
               <span className={styles.metaValue}>{projection.installments[0]?.dueAt ?? "sem vencimento"}{projection.installments[0]?.amount != null ? ` · ${amount(projection.installments[0].amount)}` : ""}</span>
@@ -164,6 +169,8 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
 
       <section className={styles.history}>
         <div className={styles.historyTitle}>Histórico de recebimentos</div>
+        {/* Em conferência os registros ficam para auditoria, sem virar valor aprovado. */}
+        {emConferencia ? <div className={styles.empty}>Registros brutos — não conciliados com a Conta a Receber; nenhum valor abaixo é saldo ou recebido confirmado.</div> : null}
         {historico ? (historico.length === 0 ? <div className={styles.empty}>Nenhum recebimento registrado nesta OS.</div> : historico.map((item) => (
           // A mesma operação comprovada nas duas fontes (baixa do título + recibo da OS)
           // aparece uma vez; o resto aparece com a fonte, sem somar nada.
@@ -180,6 +187,7 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
                 {item.autor ? ` · ${item.autor}` : ""}
                 {item.fontes.length > 1 ? " · Conta a Receber + registro da OS" : item.fontes[0] === "RECEIVABLE" ? " · Conta a Receber" : " · Registro da OS"}
                 {item.estorno ? " · Estornado" : ""}
+                {emConferencia ? " · não conciliado" : ""}
               </div>
             </div>
           </div>
@@ -196,6 +204,7 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
                 {dateTime(event.occurredAt)}
                 {event.actor ? ` · ${event.actor}` : ""}
                 {event.type.includes("estorno") ? " · Estornado" : ""}
+                {emConferencia ? " · não conciliado" : ""}
               </div>
             </div>
           </div>

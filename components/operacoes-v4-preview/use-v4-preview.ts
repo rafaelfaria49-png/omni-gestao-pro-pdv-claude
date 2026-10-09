@@ -1016,7 +1016,7 @@ export function buildVals(
   const producaoBancadaComCadastro = { ...producaoBancada, tecnicosConhecidos: tecnicosSeletor };
   const filaOperacionalComCadastro = { ...filaOperacional, tecnicosConhecidos: tecnicosSeletor };
   const slaOperacionalComCadastro = { ...slaOperacional, tecnicosConhecidos: tecnicosSeletor };
-  const pdvView = buildPdvView(ctx.ordens, ctx.financialProjectionsByOsId);
+  const pdvView = buildPdvView(ctx.ordens, ctx.financialProjectionsByOsId, ctx.lojaAtivaId);
 
   // R04: chave do rascunho da seleção ATUAL (loja+OS) para as saídas reais.
   const chaveRascunhoAtual = () =>

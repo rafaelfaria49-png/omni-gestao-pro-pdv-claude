@@ -23,9 +23,10 @@ const btnGhostSm: React.CSSProperties = { ...btnGhost, minHeight: 32, padding: "
 const FORMAS = [...FORMAS_RECEBIMENTO_V3.filter((f) => f.suportada).map(({ value, label }) => ({ value, label })), { value: "a_prazo" as const, label: "A prazo / crediário" }];
 const valorStr = (centavos: number) => deCentavosV3(centavos).toFixed(2).replace(".", ",");
 
-function APrazoResumo({ amount, dueAt }: { amount: number | null; dueAt: string | null }) {
+function APrazoResumo({ amount, dueAt, emConferencia = false }: { amount: number | null; dueAt: string | null; emConferencia?: boolean }) {
+  // Rev 3: em conferência a parcela a prazo (valor e vencimento) não é cobrança vigente confirmada.
   return <div data-testid="a-prazo-persistido" style={{ background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 12, fontSize: 11.5, color: C.infoFg }}>
-    <b>Saldo a prazo: {amount == null ? "Em conferência" : fmt(amount)}</b><div>Vencimento: {formatarVencimentoV3(dueAt)}</div>
+    <b>Saldo a prazo: {amount == null || emConferencia ? "Em conferência" : fmt(amount)}</b><div>Vencimento: {emConferencia ? "em conferência" : formatarVencimentoV3(dueAt)}</div>
   </div>;
 }
 
@@ -135,7 +136,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   if (!pendencia && !projection.canReceive && projection.financialStatus !== "CHARGE_NOT_CREATED") return <div style={box}>Recebimento bloqueado: {projection.consistencyIssues[0] ?? "revise a cobrança desta OS."}</div>;
   if (pdv.loading) return <div style={box}>Carregando sessão de caixa…</div>;
 
-  const credito = authorizedCredit ? <APrazoResumo amount={emConferencia ? null : creditInstallment?.amount ?? pagamento.saldo} dueAt={creditInstallment?.dueAt ?? null} /> : null;
+  const credito = authorizedCredit ? <APrazoResumo amount={emConferencia ? null : creditInstallment?.amount ?? pagamento.saldo} dueAt={creditInstallment?.dueAt ?? null} emConferencia={emConferencia} /> : null;
   if (!formAberto) return <div style={box}>
     {credito}
     {!caixaAberto && <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 9 }}>Caixa fechado — o recebimento imediato exige caixa aberto. Você pode formalizar 100% a prazo.</div>}

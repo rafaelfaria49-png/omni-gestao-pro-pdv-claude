@@ -6,7 +6,14 @@ import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { projectFinancialOSV4, type ProjectFinancialOSV4Input } from "./financial-projection";
-import { derivarSituacaoAtendimentoV4, formaRegistradaV4, pagamentoComPendenciaComercialV4, TEXTO_SITUACAO_V4 } from "./situacao-atendimento-v4";
+import {
+  afirmacaoValoresTituloV4,
+  derivarSituacaoAtendimentoV4,
+  formaRegistradaV4,
+  pagamentoComPendenciaComercialV4,
+  pagamentoEmConferenciaV4,
+  TEXTO_SITUACAO_V4,
+} from "./situacao-atendimento-v4";
 
 const storeId = "loja-sit";
 const osId = "os-sit";
@@ -100,5 +107,36 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: forma de pagamento só
     expect(formaRegistradaV4(projecao({ titulo: null }), "Dinheiro")).toBe("Não registrada");
     expect(formaRegistradaV4(projecao({ falhaLeituraTitulo: true }), "Dinheiro")).toBe("Indisponível");
     expect(formaRegistradaV4(projecao(), "x")).toBe("Dinheiro");
+  });
+});
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R3: regra única de afirmação e meios com valor próprio", () => {
+  const titulo = (status: string, historico: unknown[]) => ({ ...liquidado, status, payload: { ordemServicoId: osId, historico } });
+  const evento = (linhas: unknown[]) => ({ id: "ev-1", tipo: "operacao_cobranca_gerada", autor: "Op", conteudo: "Recebimento", criadoEm: "2026-10-05T21:37:38.000Z", metadata: { operacaoId: "op-1", total: 420, linhas } });
+
+  it("afirmação dos valores do título: carregando / indisponível / conferência / afirmável — conferência em QUALQUER status legado", () => {
+    expect(afirmacaoValoresTituloV4(ler(projecao(), { loading: true }))).toBe("carregando");
+    expect(afirmacaoValoresTituloV4(ler(projecao(), { osId: "outra-os" }))).toBe("carregando");
+    expect(afirmacaoValoresTituloV4(ler(null, { error: "Falha de rede." }))).toBe("indisponivel");
+    expect(afirmacaoValoresTituloV4(ler(projecao({ falhaLeituraTitulo: true })))).toBe("indisponivel");
+    const duas = projecao({ payload: os("aprovado"), titulo: titulo("pago", [{ tipo: "pagamento", valor: 300, loteId: "a" }, { tipo: "pagamento", valor: 300, loteId: "b" }]) });
+    expect(duas.financialStatus).toBe("INCONSISTENT");
+    expect(afirmacaoValoresTituloV4(ler(duas))).toBe("conferencia");
+    expect(pagamentoEmConferenciaV4(ler(duas))).toBe(true);
+    const cancelado = projecao({ payload: os("aprovado"), titulo: titulo("cancelado", [{ tipo: "pagamento", valor: 100, loteId: "a" }]) });
+    expect(afirmacaoValoresTituloV4(ler(cancelado))).toBe("conferencia");
+    expect(afirmacaoValoresTituloV4(ler(projecao()))).toBe("afirmavel");
+    expect(afirmacaoValoresTituloV4(ler(projecao({ titulo: null })))).toBe("afirmavel");
+  });
+
+  it("R3-P2: split Pix R$ 100 com o resto sem linha mostra as duas partes; split completo mostra cada valor; meio único mostra só o rótulo", () => {
+    expect(ler(projecao({ payload: os("rascunho", { timeline: [evento([{ forma: "pix", valor: 100 }])] }) })).pagamento.meio)
+      .toBe("Pix R$ 100,00 + forma não identificada R$ 320,00");
+    expect(ler(projecao({ payload: os("rascunho", { timeline: [evento([{ forma: "pix", valor: 100 }, { forma: "dinheiro", valor: 320 }])] }) })).pagamento.meio)
+      .toBe("Pix R$ 100,00 + Dinheiro R$ 320,00");
+    expect(ler(projecao()).pagamento.meio).toBe("Dinheiro");
+    // valor malformado na linha: nada de Pix R$ 420
+    expect(ler(projecao({ payload: os("rascunho", { timeline: [evento([{ forma: "pix", valor: [420] }])] }) })).pagamento.meio)
+      .toBe("Forma não identificada no título");
   });
 });

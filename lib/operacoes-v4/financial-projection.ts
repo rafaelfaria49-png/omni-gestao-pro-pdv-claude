@@ -545,10 +545,42 @@ function eventoDeRecebimentoDaOperacao(payload: Record<string, unknown>, operaca
   return null;
 }
 
+/** Rótulo de forma dos FATOS: só texto não vazio (nada de coerção de número/objeto). */
+function rotuloMeioEstrito(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return method(value, null, "RECEIVABLE_HISTORY")?.label ?? null;
+}
+
+/**
+ * Partes de um registro com meio: `linhas`/`split` (cada linha com forma em texto e
+ * valor estritamente numérico e positivo) ou, sem linhas, a forma única do registro.
+ * Linha malformada não vira valor — a parte dela fica sem meio identificado.
+ * `null` = o registro não informa meio algum.
+ */
+function partesDoMeioV4(record: Record<string, unknown>, valorUnico: unknown): Array<{ label: string; centavos: number }> | null {
+  const lines = Array.isArray(record.linhas) ? record.linhas : Array.isArray(record.split) ? record.split : null;
+  if (lines && lines.length > 0) {
+    return lines.flatMap((line) => {
+      if (!isRecord(line)) return [];
+      const label = rotuloMeioEstrito(line.forma ?? line.formaPagamento ?? line.paymentMethod);
+      const centavos = cents(line.valor ?? line.amount);
+      return label && centavos != null && centavos > 0 ? [{ label, centavos }] : [];
+    });
+  }
+  const label = rotuloMeioEstrito(record.formaPagamento ?? record.forma ?? record.paymentMethod);
+  if (!label) return null;
+  const centavos = cents(valorUnico);
+  return centavos != null && centavos > 0 ? [{ label, centavos }] : [];
+}
+
 /**
  * Meio de cada pagamento VIGENTE: o da própria baixa no título, ou o do evento de
- * recebimento da OS com a MESMA identidade de operação e o mesmo valor. Sem esse
- * vínculo o valor fica "sem meio identificado" — nunca se deduz por valor/horário.
+ * recebimento da OS com a MESMA identidade de operação e o mesmo valor. Cada meio
+ * guarda o PRÓPRIO valor registrado (split Pix R$ 100 numa baixa de R$ 420 é Pix
+ * R$ 100 + R$ 320 sem meio); a baixa inteira só vai a um meio quando o registro dá
+ * uma forma única sem linhas. Linhas que somam mais que a baixa são contraditórias:
+ * nada é atribuído. Sem vínculo o valor fica "sem meio identificado" — nunca se
+ * deduz por valor/horário.
  */
 function meiosDosPagamentos(
   entries: Array<FinancialPaymentV4 & { index: number }>,
@@ -561,19 +593,21 @@ function meiosDosPagamentos(
   for (const pagamento of entries) {
     const valorCentavos = Math.round(pagamento.amount * 100);
     const entry = historico[pagamento.index];
-    const proprios = isRecord(entry) ? methodsFromRecord(entry, "RECEIVABLE_HISTORY") : [];
-    if (proprios.length === 1) {
-      meios.push({ label: proprios[0]!.label, valor: pagamento.amount, operacaoId: pagamento.operationId, fonte: "RECEIVABLE_HISTORY" });
+    let partes = isRecord(entry) ? partesDoMeioV4(entry, entry.valor) : null;
+    let fonte: MeioRegistradoV4["fonte"] = "RECEIVABLE_HISTORY";
+    if (partes == null) {
+      const evento = pagamento.operationId ? eventoDeRecebimentoDaOperacao(payload, pagamento.operationId, valorCentavos) : null;
+      const metadata = evento && isRecord(evento.metadata) ? evento.metadata : null;
+      partes = metadata ? partesDoMeioV4(metadata, metadata.valor ?? metadata.amount) : null;
+      fonte = "OS_TIMELINE";
+    }
+    const conhecidos = partes ? partes.reduce((acc, parte) => acc + parte.centavos, 0) : 0;
+    if (!partes || conhecidos > valorCentavos) {
+      semMeioCentavos += valorCentavos;
       continue;
     }
-    const evento = pagamento.operationId ? eventoDeRecebimentoDaOperacao(payload, pagamento.operationId, valorCentavos) : null;
-    const linhas = evento && isRecord(evento.metadata) ? methodsFromRecord(evento.metadata, "PDV_SPLIT") : [];
-    const soma = linhas.reduce<number | null>((acc, linha) => (acc == null || linha.amount == null ? null : acc + Math.round(linha.amount * 100)), 0);
-    if (linhas.length > 0 && soma === valorCentavos) {
-      for (const linha of linhas) meios.push({ label: linha.label, valor: linha.amount, operacaoId: pagamento.operationId, fonte: "OS_TIMELINE" });
-      continue;
-    }
-    semMeioCentavos += valorCentavos;
+    for (const parte of partes) meios.push({ label: parte.label, valor: parte.centavos / 100, operacaoId: pagamento.operationId, fonte });
+    semMeioCentavos += valorCentavos - conhecidos;
   }
   return { meios, semMeioCentavos };
 }

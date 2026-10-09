@@ -523,3 +523,83 @@ describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R2: valor monetário 
     }
   });
 });
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R3: meios dos fatos estritos, sem atribuição fictícia", () => {
+  const evento = (operacaoId: string, total: unknown, linhas: unknown) => ({
+    id: `ev-${operacaoId}`, tipo: "operacao_cobranca_gerada", autor: "Operador", conteudo: "Recebimento",
+    criadoEm: "2026-07-15T11:00:00.000Z", metadata: { operacaoId, total, linhas },
+  });
+  const liquidado = (extra: Record<string, unknown> = {}) => title(420, "pago", [{ tipo: "liquidacao", valor: 420, loteId: "op-1", ...extra }]);
+  const legado = (r: ReturnType<typeof project>) => ({
+    deliveryDecision: r.deliveryDecision, canDeliver: r.canDeliver, canReceive: r.canReceive, financialStatus: r.financialStatus,
+    consistencyStatus: r.consistencyStatus, consistencyIssues: r.consistencyIssues, receivedTotal: r.receivedTotal, balance: r.balance,
+  });
+
+  it("R3-P2a: linha do evento da MESMA operação com valor [420] não vira Pix R$ 420", () => {
+    const r = project({ payload: payload(420, { timeline: [evento("op-1", 420, [{ forma: "pix", valor: [420] }])] }), prismaValorTotal: 420, titulo: liquidado() });
+    expect(r.fatos).toMatchObject({ verificavel: true, recebidoLiquido: 420 });
+    expect(r.fatos?.meios).toEqual([]);
+    expect(r.fatos?.semMeioIdentificado).toBe(420);
+  });
+
+  it("R3-P2b: baixa de R$ 420 com split só de Pix R$ 100 → Pix R$ 100 + R$ 320 sem meio (nunca Pix R$ 420)", () => {
+    for (const campo of ["split", "linhas"]) {
+      const r = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ [campo]: [{ forma: "pix", valor: 100 }] }) });
+      expect(r.fatos?.meios, campo).toEqual([{ label: "Pix", valor: 100, operacaoId: "op-1", fonte: "RECEIVABLE_HISTORY" }]);
+      expect(r.fatos?.semMeioIdentificado, campo).toBe(320);
+    }
+  });
+
+  it("R3-P2c: evento da operação com Pix R$ 100 e o resto sem linha → Pix R$ 100 + R$ 320 sem meio", () => {
+    const r = project({ payload: payload(420, { timeline: [evento("op-1", 420, [{ forma: "pix", valor: 100 }])] }), prismaValorTotal: 420, titulo: liquidado() });
+    expect(r.fatos?.meios).toEqual([{ label: "Pix", valor: 100, operacaoId: "op-1", fonte: "OS_TIMELINE" }]);
+    expect(r.fatos?.semMeioIdentificado).toBe(320);
+  });
+
+  it("R3-P2d: split completo preserva o valor de cada meio", () => {
+    const r = project({
+      payload: payload(420, { timeline: [evento("op-1", 420, [{ forma: "pix", valor: 100 }, { forma: "dinheiro", valor: 320 }])] }),
+      prismaValorTotal: 420, titulo: liquidado(),
+    });
+    expect(r.fatos?.meios).toEqual([
+      { label: "Pix", valor: 100, operacaoId: "op-1", fonte: "OS_TIMELINE" },
+      { label: "Dinheiro", valor: 320, operacaoId: "op-1", fonte: "OS_TIMELINE" },
+    ]);
+    expect(r.fatos?.semMeioIdentificado).toBe(0);
+  });
+
+  it("R3-P2e: valores e formas malformados nunca viram meio nem valor (sem coerção)", () => {
+    const invalidos: unknown[] = [true, false, [100], { valor: 100 }, "", "100", null, Number.NaN, Number.POSITIVE_INFINITY, -100, 0];
+    for (const valor of invalidos) {
+      const doEvento = project({ payload: payload(420, { timeline: [evento("op-1", 420, [{ forma: "pix", valor }, { forma: "dinheiro", valor: 320 }])] }), prismaValorTotal: 420, titulo: liquidado() });
+      expect(doEvento.fatos?.meios, `evento ${String(valor)}`).toEqual([{ label: "Dinheiro", valor: 320, operacaoId: "op-1", fonte: "OS_TIMELINE" }]);
+      expect(doEvento.fatos?.semMeioIdentificado, `evento ${String(valor)}`).toBe(100);
+      const daBaixa = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ split: [{ forma: "pix", valor }] }) });
+      expect(daBaixa.fatos?.meios, `baixa ${String(valor)}`).toEqual([]);
+      expect(daBaixa.fatos?.semMeioIdentificado, `baixa ${String(valor)}`).toBe(420);
+    }
+    for (const forma of [true, 7, ["pix"], { codigo: "pix" }, "  "]) {
+      const r = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ formaPagamento: forma }) });
+      expect(r.fatos?.meios, JSON.stringify(forma)).toEqual([]);
+      expect(r.fatos?.semMeioIdentificado, JSON.stringify(forma)).toBe(420);
+    }
+    // total do evento malformado: o vínculo da operação não se comprova
+    const totalCoagido = project({ payload: payload(420, { timeline: [evento("op-1", [420], [{ forma: "pix", valor: 420 }])] }), prismaValorTotal: 420, titulo: liquidado() });
+    expect(totalCoagido.fatos?.meios).toEqual([]);
+  });
+
+  it("R3-P2f: linhas que somam MAIS que a baixa são contraditórias — nada é atribuído", () => {
+    const r = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ split: [{ forma: "pix", valor: 300 }, { forma: "dinheiro", valor: 300 }] }) });
+    expect(r.fatos?.meios).toEqual([]);
+    expect(r.fatos?.semMeioIdentificado).toBe(420);
+  });
+
+  it("R3-P2: forma única da própria baixa, sem split, continua sendo a forma da baixa inteira; decisões idênticas", () => {
+    const base = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado() });
+    const comForma = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ formaPagamento: "credito" }) });
+    const comSplit = project({ payload: payload(420), prismaValorTotal: 420, titulo: liquidado({ split: [{ forma: "pix", valor: [100] }] }) });
+    expect(comForma.fatos?.meios).toEqual([{ label: "Crédito", valor: 420, operacaoId: "op-1", fonte: "RECEIVABLE_HISTORY" }]);
+    expect(legado(comForma)).toEqual(legado(base));
+    expect(legado(comSplit)).toEqual(legado(base));
+  });
+});
