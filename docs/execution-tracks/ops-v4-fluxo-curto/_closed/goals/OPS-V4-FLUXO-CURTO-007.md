@@ -6,7 +6,7 @@
   "id": "OPS-V4-FLUXO-CURTO-007",
   "track": "ops-v4-fluxo-curto",
   "title": "Retorno pela OS original, sem recadastrar e sem venda presumida",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C4",
   "risk_tier": "ALTO",
   "plan_rev": 15,
