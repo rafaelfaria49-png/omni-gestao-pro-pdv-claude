@@ -5,16 +5,19 @@
   "aep": "1.0-R2",
   "track": "ops-v4-fluxo-curto",
   "title": "Operações V4 — fluxo curto",
-  "plan_rev": 14,
+  "plan_rev": 16,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
 -->
 
 Fonte de intenção: plano funcional de 19/09/2026 e autorização operacional
-ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-007, plan_rev 14,
-classe derivada C4 (proposta C3; divergência registrada no GOAL), risco
-ALTO, fornecida em 08/10/2026 ("COMANDO MESTRE — OPS-V4-FLUXO-CURTO-007").
+ponta a ponta do proprietário para OPS-V4-FLUXO-CURTO-007, plan_rev 16
+(rev 14 + desbloqueios humanos das revs 15 e 16), classe derivada C4 (proposta
+C3; divergência registrada no GOAL), risco ALTO, fornecida em 08/10/2026
+("COMANDO MESTRE — OPS-V4-FLUXO-CURTO-007" e "COMANDO MESTRE — DESBLOQUEAR,
+CORRIGIR E PUBLICAR GOAL 007") e em 09/10/2026 ("DECISÃO HUMANA — GOAL 007 /
+REV 16").
 
 ## Escopo ativo
 
@@ -56,6 +59,24 @@ atualizada → status → open.
 
 Não editar state.json, LEDGER.jsonl, REGISTRY.md ou GATES.md à mão.
 Não deixar alterações de goals/** no diff de produto do check 8.
+
+Rev 15 (desbloqueio após o teto de tentativas): o proprietário reativou o
+MESMO GOAL (BLOCKED by=externo em 8d1f392, após a R4 em c290ecd), sem GOAL
+sucessor. Escopo restrito aos dois P2 da R4 (limite da ocorrência
+pré-entrega derivado do prefixo em RetornoOrigemPickerV4.tsx; contenção de
+foco do Modal "Finalizar retorno" em PosVendaStage.tsx) e seus testes;
+allowlist, test_command e contrato inalterados. Rito: PR exclusivo de
+governança (block + desbloqueio) → merge normal na main → merge normal da
+main na branch do GOAL → open (tentativa 1 da rev 15).
+
+Rev 16 (novo desbloqueio após o teto da rev 15): o proprietário reativou o
+MESMO GOAL (BLOCKED by=decisao em 1a0b125, após a R7 em 343eded com P2=1),
+sem GOAL sucessor. Escopo restrito ao R7-01 (restauração de foco do seletor
+Retorno / Garantia quando o gatilho da ficha some após resposta perdida e
+releitura, em RetornoOrigemPickerV4.tsx) e seus testes; allowlist,
+test_command e contrato inalterados. Mesmo rito: PR exclusivo de governança
+→ merge normal → merge normal da main na branch do GOAL → open (tentativa 1
+da rev 16).
 
 ## Ambiente planejado
 

@@ -33,9 +33,22 @@ Os três GOALs NÃO entram em `ops-v4-fluxo-curto`:
 - este pacote não entra no diff, na allowlist nem no contador de tentativas
   do 007.
 
-## Dependência bloqueante — DEPENDENCIA_007
+## Dependência — DEPENDENCIA_007 (RESOLVIDA em 09/10/2026)
 
-Estado conferido em 08/10/2026 (não presumido pelo GitHub):
+Estado atual, conferido em 09/10/2026 na reconciliação do PR #250:
+OPS-V4-FLUXO-CURTO-007 DONE (plan_rev 16, close `da4cd76`, commit funcional
+aprovado `3ad27c2`), integrado em main pelo merge `9381354` (PR #253);
+`ops-v4-fluxo-curto` PAUSED com 7 DONE e 0 BLOCKED. A dependência está
+satisfeita. Revalidação do plano contra `9381354`: o 007 alterou, dentre os
+caminhos desta trilha, apenas `use-v4-preview.ts`, `preview-honesty.test.ts`
+(001) e `pos-venda-model.ts`, `posvenda-v4.ts`, `PosVendaStage.tsx`,
+`retorno-actions.ts` (003); allowlists, test_commands e orçamentos de leitura
+do 001 continuam suficientes — plan_rev 1 preservado. Base de produto do 001:
+main com o merge deste planejamento sobre `9381354`. Os GOALs 002 e 003
+ratificam seus caminhos contra a main vigente antes do próprio `open`.
+
+Histórico da dependência (estado conferido em 08/10/2026, não presumido pelo
+GitHub):
 
 - main `85aafb4`: OPS-V4-FLUXO-CURTO-007 READY (current_goal).
 - branch remota `goal/ops-v4-fluxo-curto-007` = `8d1f392`

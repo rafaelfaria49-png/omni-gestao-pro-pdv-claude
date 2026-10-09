@@ -5,6 +5,10 @@
 // `criarOSEnterpriseV3` já sabe persistir. Sem I/O. A OS original continua
 // entregue (status final); o atendimento novo nasce aberto, com origem
 // retorno/garantia e vínculo explícito gravado depois pela action.
+//
+// GOAL OPS-V4-FLUXO-CURTO-007: cliente e identidade do aparelho são herdados
+// (sem recadastro); senha e acessórios NÃO — são fatos da recepção NOVA,
+// informados pelo operador agora (ausente = não informado).
 // ============================================================================
 
 import type { OrdemServico } from "@/types/os";
@@ -14,15 +18,24 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function senhaTipoDe(os: OrdemServico): NovaOSSenhaTipoV3 {
-  const tipo = os.senhaEquipamentoTipo;
-  return tipo === "padrao" || tipo === "texto" || tipo === "numerica" ? tipo : "numerica";
+function senhaTipoValido(tipo: unknown): NovaOSSenhaTipoV3 | undefined {
+  return tipo === "padrao" || tipo === "texto" || tipo === "numerica" ? tipo : undefined;
+}
+
+/** Recepção do atendimento NOVO — nada aqui vem da OS original. */
+export interface RetornoRecepcaoInputV3 {
+  /** Acessórios entregues AGORA, junto com o aparelho que voltou. */
+  acessorios?: string[];
+  /** Senha informada AGORA (opcional). */
+  senha?: string;
+  senhaTipo?: NovaOSSenhaTipoV3;
 }
 
 export interface RetornoAtendimentoInputV3 {
   motivo: string;
   observacao?: string;
   garantiaAtiva: boolean;
+  recepcao?: RetornoRecepcaoInputV3;
 }
 
 /** Rascunho canônico para reabrir o aparelho como atendimento vinculado. */
@@ -43,9 +56,10 @@ export function buildRetornoAtendimentoDraftV3(
     .join(" ");
 
   const clienteId = text(os.clienteId) || text(os.cliente?.id) || undefined;
-  const acessorios = Array.isArray(os.equipamento?.acessorios)
-    ? os.equipamento.acessorios.map((item) => text(item)).filter(Boolean)
+  const acessorios = Array.isArray(input.recepcao?.acessorios)
+    ? input.recepcao.acessorios.map((item) => text(item)).filter(Boolean)
     : [];
+  const senha = text(input.recepcao?.senha) || undefined;
 
   return {
     ...base,
@@ -63,8 +77,8 @@ export function buildRetornoAtendimentoDraftV3(
       marca: text(os.equipamento?.marca),
       modelo: text(os.equipamento?.modelo),
       imei: text(os.equipamento?.numeroSerie) || undefined,
-      senha: text(os.senhaEquipamento) || undefined,
-      senhaTipo: senhaTipoDe(os),
+      senha,
+      senhaTipo: (senha && senhaTipoValido(input.recepcao?.senhaTipo)) || base.equipamento.senhaTipo,
       acessorios,
     },
     recepcao: {
