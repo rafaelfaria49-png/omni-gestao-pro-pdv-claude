@@ -128,6 +128,7 @@ interface Cenario {
   os: OrdemServico | null;
   fin: { projection: FinancialProjectionOSV4 | null; loading?: boolean; error?: string | null; reload?: () => void };
   stage?: V4State["stage"];
+  pdv?: Pdv;
 }
 
 const patches: Array<Record<string, unknown>> = [];
@@ -153,7 +154,7 @@ function Harness({ c }: { c: Cenario }) {
       realOS: c.os,
       detailCarregada: !!c.os,
       financialProjection: { projection: c.fin.projection, loading: !!c.fin.loading, error: c.fin.error ?? null, reload: c.fin.reload ?? (() => {}) },
-      pdvServico: pdv(),
+      pdvServico: c.pdv ?? pdv(),
       confirmarEntrega: async () => false,
     },
   );
@@ -340,5 +341,63 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: superfícies com fatos
     montar({ os: a, fin: { projection: projecao(a, null) } });
     expect(sonda.v!.financeiroHeader).toMatchObject({ label: "Sem Conta a Receber", tone: "neutro" });
     expect(contar("Financeiro indisponível")).toBe(0);
+  });
+});
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R2: recebimento parcial com fatos rejeitados", () => {
+  // Título de R$ 420: pagamento de R$ 300 e estorno de R$ 200 apontando para índice inexistente.
+  const PARCIAL_AMBIGUO: Titulo = { status: "parcial", historico: [
+    { tipo: "pagamento", valor: 300, loteId: "op-p" },
+    { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 5 },
+  ] };
+  const semEventos = () => os("a", "aprovado", { timeline: [] });
+
+  it("R2-2: Financeiro — decisão legada intacta, mas 'já recebido' e saldos não aparecem como fato; o valor é o informado", () => {
+    const a = semEventos();
+    const p = projecao(a, PARCIAL_AMBIGUO);
+    expect(p).toMatchObject({ financialStatus: "PARTIAL", canReceive: true, canDeliver: false, receivedTotal: 100, balance: 320 });
+    expect(p.fatos).toMatchObject({ verificavel: false, motivo: "ESTORNO_AMBIGUO" });
+    const caixa = pdv();
+    montar({ os: a, fin: { projection: p }, stage: "financeiro", pdv: caixa });
+    expect(sonda.v!.entregaAcoes.saldoPendente).toBeNull();
+    expect(contar("R$ 320,00")).toBe(0);
+    expect(contar("R$ 100,00")).toBe(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Receber pagamento" }).at(-1)!);
+    const sheet = within(screen.getByRole("dialog"));
+    expect(sheet.getByText("Histórico do título em conferência: o saldo não é exibido. Informe o valor recebido agora.")).toBeTruthy();
+    const valor = sheet.getByLabelText("Valor da linha 1") as HTMLInputElement;
+    expect(valor.value).toBe("");
+    expect(sheet.queryByRole("button", { name: "Usar restante" })).toBeNull();
+    const resumo = within(sheet.getByTestId("resumo-misto"));
+    expect(resumo.getAllByText("Em conferência")).toHaveLength(2);
+    expect(resumo.getByText("Receber agora (informado)")).toBeTruthy();
+    expect(contar("R$ 320,00")).toBe(0);
+    expect(contar("R$ 100,00")).toBe(0);
+
+    // acima do saldo legado: o limite segue valendo, sem revelar o saldo não comprovado
+    fireEvent.change(valor, { target: { value: "500" } });
+    expect(sheet.getByText("Valor acima do saldo a receber.")).toBeTruthy();
+    expect(contar("320")).toBe(0);
+
+    // receber continua possível (canReceive inalterado): o valor enviado é o informado
+    fireEvent.click(sheet.getByRole("button", { name: "Pagamento parcial" }));
+    fireEvent.change(valor, { target: { value: "100" } });
+    fireEvent.click(sheet.getByRole("button", { name: "Confirmar R$ 100,00" }));
+    expect(caixa.receber).toHaveBeenCalledWith(expect.objectContaining({ sessaoId: "sessao-qa", linhas: [expect.objectContaining({ forma: "pix", valor: 100 })] }));
+  });
+
+  it("R2-2: Entrega — 'Pagamento em conferência' sem R$ 320, entrega bloqueada igual, sheet hospedado sem saldo pré-preenchido", () => {
+    const a = semEventos();
+    montar({ os: a, fin: { projection: projecao(a, PARCIAL_AMBIGUO) } });
+    expect(contar("Pagamento pendente")).toBe(0);
+    expect(contar("R$ 320,00")).toBe(0);
+    expect(contar("R$ 100,00")).toBe(0);
+    expect(screen.getAllByText("Pagamento em conferência").length).toBeGreaterThan(0);
+    expect(confirmar()).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "Receber pagamento" }).at(-1)!);
+    const sheet = within(screen.getByRole("dialog"));
+    expect((sheet.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("");
+    expect(contar("R$ 320,00")).toBe(0);
   });
 });

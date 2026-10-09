@@ -252,4 +252,3 @@ test("E4 (R1-3) — quitado legado com estorno sem referência válida: nenhuma 
   await expect(page.getByText("Quitado", { exact: true })).toHaveCount(0);
   expect(await efeitos(prisma, os.id)).toBe(antes);
 });
-

@@ -489,3 +489,37 @@ describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: leitura estrita d
     expect(r.fatos).toMatchObject({ tituloEncontrado: true, verificavel: false, motivo: "ESTORNO_AMBIGUO" });
   });
 });
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R2: valor monetário dos fatos sem coerção", () => {
+  const legado = (r: ReturnType<typeof project>) => ({
+    deliveryDecision: r.deliveryDecision, canDeliver: r.canDeliver, canReceive: r.canReceive,
+    financialStatus: r.financialStatus, receivedTotal: r.receivedTotal, balance: r.balance,
+  });
+
+  it("R2-1: valor de baixa em array, booleano, texto ou objeto NÃO comprova pagamento", () => {
+    for (const valor of [[300], true, "300", { valor: 300 }]) {
+      const r = project({ payload: payload(300, { timeline: [recebimentoOS("op-1", 300)] }), titulo: title(300, "pago", [{ tipo: "liquidacao", valor, loteId: "op-1" }]) });
+      expect(r.fatos, JSON.stringify(valor)).toMatchObject({ verificavel: false, motivo: "HISTORICO_INVALIDO", recebidoLiquido: null, liquidado: false, pagamentosVigentes: null });
+    }
+  });
+
+  it("R2-1: a leitura legada (decisão) segue a mesma — só os fatos ficam estritos", () => {
+    const numero = project({ payload: payload(300, { timeline: [recebimentoOS("op-1", 300)] }), titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }]) });
+    const coagido = project({ payload: payload(300, { timeline: [recebimentoOS("op-1", 300)] }), titulo: title(300, "pago", [{ tipo: "liquidacao", valor: [300], loteId: "op-1" }]) });
+    expect(legado(coagido)).toEqual(legado(numero));
+    expect(numero.fatos?.verificavel).toBe(true);
+    expect(coagido.fatos?.verificavel).toBe(false);
+  });
+
+  it("R2-1: estorno com valor coagido é ambíguo; valor do título que não é número não abre vínculo", () => {
+    const estorno = project({
+      payload: rascunho(),
+      titulo: title(300, "parcial", [{ tipo: "pagamento", valor: 100, loteId: "op-a" }, { tipo: "pagamento", valor: 200, loteId: "op-b" }, { tipo: "estorno_pagamento", valor: [100], refHistoricoIndex: 0 }]),
+    });
+    expect(estorno.fatos).toMatchObject({ verificavel: false, motivo: "ESTORNO_AMBIGUO" });
+    for (const valor of ["300", [300], true]) {
+      const r = project({ payload: rascunho(), titulo: { ...title(300, "pago", [{ tipo: "liquidacao", valor: 300 }]), valor } as unknown as ProjectFinancialOSV4Input["titulo"] });
+      expect(r.fatos, JSON.stringify(valor)).toMatchObject({ verificavel: false, motivo: "TITULO_NAO_VINCULADO", recebidoLiquido: null });
+    }
+  });
+});

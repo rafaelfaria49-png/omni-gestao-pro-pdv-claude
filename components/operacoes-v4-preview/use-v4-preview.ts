@@ -953,7 +953,8 @@ export function buildVals(
     financeiroCarregando: leituraFinanceiraBloqueada && ctx.financialProjection.loading,
     financeiroErro: leituraFinanceiraBloqueada ? ctx.financialProjection.error : null,
     financeiroMotivo: financialProjection?.consistencyIssues[0] ?? null,
-    saldoPendente: saldoPendenteConfirmado ? financialProjection?.balance ?? null : null,
+    // Saldo legado só é exibido como fato quando o histórico do título não está em conferência.
+    saldoPendente: saldoPendenteConfirmado && !pagamentoEmConferenciaV4(situacaoAtendimento) ? financialProjection?.balance ?? null : null,
     // GOAL OPS-V4-FLUXO-CURTO-006: total aprovado sem Conta a Receber — o título
     // único nasce no primeiro recebimento/lançamento a prazo (nunca pela leitura).
     cobrancaNaoFormalizada:

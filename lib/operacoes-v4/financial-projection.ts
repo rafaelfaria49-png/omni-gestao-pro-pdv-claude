@@ -515,9 +515,13 @@ function consistencyStatus(guard: ReturnType<typeof projetarEntregaFinanceiraV3>
 
 const TOLERANCIA_CENTAVOS = 1;
 
+/**
+ * Valor monetário dos FATOS: só número finito e não negativo — o que todos os
+ * writers gravam (e o `Float` do Prisma devolve). Nada de coerção: `[420]`, `true`,
+ * texto ou objeto não comprovam pagamento. A leitura legada segue com a sua regra.
+ */
 function cents(value: unknown): number | null {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : null;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : null;
 }
 
 function temLancamentoDePagamento(titlePayload: unknown): boolean {

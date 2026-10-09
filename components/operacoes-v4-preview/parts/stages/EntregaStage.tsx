@@ -55,7 +55,7 @@ import { atendDataCampo } from "../atendimento/field-styles";
 import { RealActionNotice } from "../RealActionNotice";
 import { ReceberPagamentoV4 } from "../ReceberPagamentoV4";
 import { RETIRANTE_MAX_V4, validarRetiranteV4, type ToneRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
-import { situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import { pagamentoEmConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
 import styles from "./retirada-v4.module.css";
 
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
@@ -295,6 +295,28 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
             ) : null}
           </div>
         ) : null}
+      </div>
+    );
+  }
+
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: saldo legado com histórico do título
+  // em conferência bloqueia igual, mas não é exibido como "pagamento pendente R$ X".
+  if (ea.bloqueadaPorSaldo && pagamentoEmConferenciaV4(sit)) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.warnFg, marginBottom: 4 }}>Pagamento em conferência</div>
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 10 }}>
+          A entrega continua bloqueada. Confira a Conta a Receber no Financeiro; receber não entrega: a confirmação continua aqui, separada.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {botaoReceber}
+          {v.goFinanceiro ? (
+            <button type="button" onClick={v.goFinanceiro} style={btnSecundario}>
+              Revisar no Financeiro
+            </button>
+          ) : null}
+        </div>
       </div>
     );
   }
