@@ -136,6 +136,11 @@
       "dir": "pessoas",
       "risk_tier": "ALTO",
       "titulo": "<PREENCHER>"
+    },
+    "ops-v4-financeiro-retirada-garantia": {
+      "dir": "ops-v4-financeiro-retirada-garantia",
+      "risk_tier": "ALTO",
+      "titulo": "Operações V4 — financeiro, retirada e garantia"
     }
   },
   "remote_layer": {
