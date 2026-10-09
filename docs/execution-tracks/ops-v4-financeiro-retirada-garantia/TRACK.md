@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 1,
+  "plan_rev": 2,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -22,6 +22,18 @@ SEQUENCIAIS, um GOAL ativo por vez. Não autoriza reconstruir o ERP, criar V5,
 excluir V3, alterar outros HUBs, nem executar qualquer ação real na
 OS-2026-00025 (regularização, forma de pagamento, pagamento, entrega,
 assinatura, garantia, estoque).
+
+## Revisões do plano
+
+- rev 1 (08/10/2026, PR #250): materialização dos GOALs 001–003.
+- rev 2 (09/10/2026, reconciliação do PR #250 com `9381354`): os
+  test_commands rodavam configs PG completas do 006/007/#234/#235/#237 com
+  um único ambiente, o que falharia por BLOQUEIO_EXPLICITO_PG (cada suíte
+  exige banco com prefixo próprio). Correção: só suítes jsdom dessas frentes
+  no test_command; as PG viram evidência obrigatória em bancos próprios;
+  prefixo comum `ops_v4_frg_qa*` para as suítes desta trilha. Allowlists,
+  objetivos e orçamentos inalterados. Os três GOALs READY sobem juntos para
+  plan_rev 2 (nenhum é SUPERSEDED).
 
 ## Por que trilha própria
 
@@ -42,8 +54,9 @@ aprovado `3ad27c2`), integrado em main pelo merge `9381354` (PR #253);
 satisfeita. Revalidação do plano contra `9381354`: o 007 alterou, dentre os
 caminhos desta trilha, apenas `use-v4-preview.ts`, `preview-honesty.test.ts`
 (001) e `pos-venda-model.ts`, `posvenda-v4.ts`, `PosVendaStage.tsx`,
-`retorno-actions.ts` (003); allowlists, test_commands e orçamentos de leitura
-do 001 continuam suficientes — plan_rev 1 preservado. Base de produto do 001:
+`retorno-actions.ts` (003); allowlists e orçamentos de leitura do 001
+continuam suficientes; o test_command precisou da rev 2 (ver Revisões do
+plano). Base de produto do 001:
 main com o merge deste planejamento sobre `9381354`. Os GOALs 002 e 003
 ratificam seus caminhos contra a main vigente antes do próprio `open`.
 
@@ -71,8 +84,8 @@ Retomada exata (depois do 007 integrado):
 1. `git fetch origin` e conferir em `origin/main` o merge do 007 e
    `node scripts/track.mjs status ops-v4-fluxo-curto` com o 007 DONE.
 2. Revisar este plano contra a main atualizada (caminhos, assinaturas que o
-   007 mudou). Divergência de caminho = nova revisão do plano (plan_rev 2)
-   pelo rito humano ANTES do `open`; nunca ampliar allowlist no meio.
+   007 mudou). Divergência de caminho = nova revisão do plano (plan_rev
+   seguinte) pelo rito humano ANTES do `open`; nunca ampliar allowlist no meio.
 3. Worktree limpa nova sobre a main atualizada, branch do GOAL 001,
    `npm ci`, `npx prisma generate` se faltar `generated/prisma`.
 4. `node scripts/track.mjs status ops-v4-financeiro-retirada-garantia` →
@@ -163,8 +176,10 @@ autorização genérica para `lib/operacoes-v3/**`.
   `goal/ops-v4-financeiro-retirada-garantia-00N`.
 - Não reutilizar `C:/Projetos/omni-gestao` (129 commits atrás, ocupada por
   outra frente) nem a worktree do 007.
-- PostgreSQL local descartável próprio (porta 45708 ou próxima livre,
-  bancos `ops_v4_frg_00N_qa*`), dados sintéticos. Confirmar
+- PostgreSQL local descartável próprio (porta 45708 ou próxima livre),
+  bancos com o prefixo comum da trilha `ops_v4_frg_qa*` (as suítes PG dos
+  três GOALs aceitam o mesmo prefixo, para que 002/003 rodem as anteriores),
+  dados sintéticos. Confirmar
   `current_database()` local antes de scripts/builds; nunca `.env` que aponte
   para candidate/produção; nunca `db push`/`migrate` fora do PG descartável.
 - Dev server de QA em porta isolada (3071 ou próxima livre), sem matar
@@ -176,7 +191,12 @@ test_command do GOAL, testes unitários, componentes/hooks montados,
 PostgreSQL real com concorrência determinística (barreira +
 `pg_stat_activity`, nunca sleep), E2E com `--retries=0 --workers=1`, sem
 skip/fixme, `.first()` arbitrário, catch que engole falha ou reload que
-mascara race. Regressões dos GOALs 001–007 de `ops-v4-fluxo-curto` e dos PRs
+mascara race. Suítes PG de outras frentes exigem bancos com prefixo próprio
+(`ops_v4_fluxo_006_qa*`, `ops_v4_fluxo_007_qa*`, `ops_v3_misto_qa*`,
+`ops_datas_qa*`): por isso o test_command de cada GOAL roda só as suítes
+compatíveis com o banco da trilha, e essas regressões PG externas rodam à
+parte, cada uma no seu banco descartável, como evidência OBRIGATÓRIA no
+relatório e no pacote da R. Regressões dos GOALs 001–007 de `ops-v4-fluxo-curto` e dos PRs
 #234/#235/#237/#238 pertinentes, typecheck, ESLint dos alterados, build
 seguro, `git diff --check`, `verify`, `verify --all` e `check`. Falha
 preexistente só é separada com prova na main.

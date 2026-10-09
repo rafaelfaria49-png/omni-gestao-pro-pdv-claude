@@ -7,10 +7,10 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 1,
+  "plan_rev": 2,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-001",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-001",
-  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financial-projection-actions.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/os-header-transversal.test.ts lib/operacoes-v4/recibo-persistido-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-001.spec.ts --retries=0 --workers=1",
+  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financial-projection-actions.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts lib/operacoes-v4/os-header-transversal.test.ts lib/operacoes-v4/recibo-persistido-v4.test.ts lib/operacoes-v4/pipeline-operacional.test.ts components/operacoes-v4-preview/status-authority.test.ts components/operacoes-v4-preview/focus-workspace.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-005/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-001.spec.ts --retries=0 --workers=1",
   "allowlist": [
     "lib/operacoes-v4/financial-projection.ts",
     "lib/operacoes-v4/financial-projection.test.ts",
@@ -62,8 +62,9 @@ Antes do `open`, comprovar e registrar no relatório:
    ledger de `ops-v4-fluxo-curto`. Sem isso: não abrir; reportar
    `DEPENDENCIA_007` com a retomada do TRACK.
 2. Os caminhos da allowlist continuam corretos na main integrada (o 007 muda
-   `use-v4-preview.ts` e `preview-honesty.test.ts`). Divergência = plan_rev 2
-   pelo rito humano antes do `open`.
+   `use-v4-preview.ts` e `preview-honesty.test.ts`). Divergência = plan_rev
+   seguinte pelo rito humano antes do `open` (a rev 2 já tratou o
+   test_command).
 3. Worktree nova e limpa, `.aep-active` ausente antes do `open`.
 
 ## Objetivo
@@ -241,7 +242,9 @@ banco descartável com título/OS sintéticos) + E2E.
 
 ## Regressões obrigatórias
 
-OPS-V4-FLUXO-CURTO-005/006/007 (configs dedicadas), #235
+OPS-V4-FLUXO-CURTO-005 (config completa), 006/007 (jsdom no test_command;
+suas suítes PG rodam à parte nos bancos `ops_v4_fluxo_006_qa*` e
+`ops_v4_fluxo_007_qa*`, evidência obrigatória), #235
 (`test/ops-v4-recebimento-misto`), guard intacto, testes unitários do
 test_command. O executor roda também as suítes 001–004, #234/#238
 (`test/ops-v3-recebimento-misto`, incl. PG) e #237
