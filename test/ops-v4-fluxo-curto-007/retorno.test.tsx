@@ -1175,3 +1175,143 @@ describe("OPS-V4-FLUXO-CURTO-007 rev 15 — tentativa 3 (achados da R6)", () => 
     expect(screen.getByRole("dialog", { name: "Retorno / Garantia" })).toBe(seletor);
   });
 });
+
+describe("OPS-V4-FLUXO-CURTO-007 rev 16 — R7-01: foco ao fechar o seletor quando o gatilho some", () => {
+  let abrirPaletaPorFora: () => void = () => {};
+  /** Paleta Ctrl+K do AppShell (CommandDialog real do projeto), fora da raiz da V4. */
+  function Paleta() {
+    const [aberta, setAberta] = useState(false);
+    useEffect(() => {
+      abrirPaletaPorFora = () => setAberta(true);
+    }, []);
+    return (
+      <CommandDialog open={aberta} onOpenChange={setAberta} title="Buscar Rota ou Ação" description="Atalhos">
+        <CommandInput placeholder="Digite para buscar" />
+        <CommandList>
+          <CommandEmpty>Nada.</CommandEmpty>
+        </CommandList>
+      </CommandDialog>
+    );
+  }
+  /** Ficha (PosVendaStage) + seletor dentro da raiz REAL da V4 (data-og-v4-raiz, tabIndex=-1). */
+  function FichaNaRaiz({ expor }: { expor: (v: V4Vals) => void }) {
+    const v = useV4Preview();
+    expor(v);
+    return (
+      <>
+        <div data-og-v4-raiz="" tabIndex={-1}>
+          {v.realOS ? <PosVendaStage v={v} /> : null}
+          <RetornoOrigemPickerV4 v={v} />
+        </div>
+        <Paleta />
+      </>
+    );
+  }
+  const raiz = () => document.querySelector<HTMLElement>("[data-og-v4-raiz]")!;
+  /** O "servidor" concluiu a abertura (vínculo gravado com ESTA operação), mas a resposta se perdeu. */
+  const gravarEPerderResposta = async (_s: string, id: string, input: { operacaoId: string; motivo: string }) => {
+    banco[id] = os(id, { retornosV3: [{ id: `ret-${input.operacaoId}`, osOriginalId: id, motivo: input.motivo, criadoEm: NOW, status: "aberto", osRetornoId: "filha-x", osRetornoCodigo: "OS-FILHA-X", operacaoId: input.operacaoId }] });
+    throw new Error("Falha de rede.");
+  };
+  async function abrirPelaFicha(user: ReturnType<typeof userEvent.setup>, osAlvo: OrdemServico) {
+    render(<FichaNaRaiz expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(vAtual.ordens.length).toBeGreaterThan(0));
+    await act(async () => vAtual.selectOS(osAlvo, "posvenda"));
+    const gatilho = await screen.findByRole("button", { name: "Abrir retorno" });
+    await user.click(gatilho);
+    const dialogo = await screen.findByRole("dialog", { name: "Retorno / Garantia" });
+    await within(dialogo).findByText(osAlvo.codigo as string, { selector: "div" });
+    return { gatilho, dialogo };
+  }
+  async function perderRespostaEReler(user: ReturnType<typeof userEvent.setup>, dialogo: HTMLElement) {
+    m.abrirRetornoV3.mockImplementationOnce(gravarEPerderResposta);
+    await user.type(within(dialogo).getByLabelText("Motivo do retorno / novo defeito"), "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await within(dialogo).findByText("A abertura anterior foi concluída no servidor: atendimento OS-FILHA-X.");
+    // A releitura da ficha mostra o retorno criado e desmonta o "Abrir retorno".
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Abrir retorno" })).toBeNull());
+  }
+  beforeEach(() => {
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+    if (!("ResizeObserver" in globalThis)) {
+      (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+    }
+  });
+
+  it("R16-a (R7-01): resposta perdida + releitura desmontam o gatilho — Fechar leva o foco à raiz da V4, nunca ao body; Tab segue navegando", async () => {
+    const user = userEvent.setup();
+    const { dialogo } = await abrirPelaFicha(user, banco.a!);
+    await perderRespostaEReler(user, dialogo);
+    await user.click(within(dialogo).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(raiz());
+    await user.tab();
+    const proximo = document.activeElement as HTMLElement;
+    expect(proximo).not.toBe(document.body);
+    expect(raiz().contains(proximo)).toBe(true);
+    // Fechar não abre de novo, não cria nada e não duplica: UMA chamada, o atendimento é o gravado.
+    expect(m.abrirRetornoV3).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull();
+    expect((await screen.findAllByRole("button", { name: "Abrir atendimento OS-FILHA-X" })).length).toBeGreaterThan(0);
+  });
+
+  it("R16-b (R7-01, Escape): mesmo cenário fechando por Escape — foco na raiz da V4", async () => {
+    const user = userEvent.setup();
+    const { dialogo } = await abrirPelaFicha(user, banco.a!);
+    await perderRespostaEReler(user, dialogo);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(document.activeElement).toBe(raiz());
+    expect(m.abrirRetornoV3).toHaveBeenCalledTimes(1);
+  });
+
+  it("R16-c: gatilho original ainda na tela — Fechar devolve o foco a ele (comportamento preservado)", async () => {
+    const user = userEvent.setup();
+    const { gatilho, dialogo } = await abrirPelaFicha(user, banco.a!);
+    await user.click(within(dialogo).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(gatilho.isConnected).toBe(true);
+    expect(document.activeElement).toBe(gatilho);
+  });
+
+  it("R16-d: trocar de OS com o seletor aberto — ao fechar, o foco NÃO volta ao gatilho do atendimento anterior", async () => {
+    const user = userEvent.setup();
+    banco.a2 = os("a2");
+    const { dialogo } = await abrirPelaFicha(user, banco.a!);
+    await act(async () => vAtual.selectOS(banco.a2!, "posvenda"));
+    await waitFor(() => expect(vAtual.selectedOsId).toBe("a2"));
+    // A ficha da OS a2 também oferece "Abrir retorno" (o mesmo nó pode ser reaproveitado pelo React).
+    await screen.findByRole("button", { name: "Abrir retorno" });
+    await user.click(within(dialogo).getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(document.activeElement).toBe(raiz());
+    expect(m.abrirRetornoV3).not.toHaveBeenCalled();
+  });
+
+  it("R16-e: trocar de LOJA com o seletor aberto — ele fecha e o foco vai à raiz da V4, nunca ao body", async () => {
+    const user = userEvent.setup();
+    const r = render(<FichaNaRaiz expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(vAtual.ordens.length).toBeGreaterThan(0));
+    await act(async () => vAtual.selectOS(banco.a!, "posvenda"));
+    await user.click(await screen.findByRole("button", { name: "Abrir retorno" }));
+    await screen.findByRole("dialog", { name: "Retorno / Garantia" });
+    h.loja = "loja-qa-007-b";
+    r.rerender(<FichaNaRaiz expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(raiz());
+  });
+
+  it("R16-f: camada legítima por cima (paleta) ativa quando o seletor fecha — o foco continua nela", async () => {
+    const user = userEvent.setup();
+    await abrirPelaFicha(user, banco.a!);
+    act(() => abrirPaletaPorFora());
+    const paleta = await screen.findByRole("dialog", { name: "Buscar Rota ou Ação" });
+    const busca = within(paleta).getByPlaceholderText("Digite para buscar");
+    await waitFor(() => expect(document.activeElement).toBe(busca));
+    act(() => vAtual.closeRetornoFluxo());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(document.activeElement).toBe(busca);
+  });
+});

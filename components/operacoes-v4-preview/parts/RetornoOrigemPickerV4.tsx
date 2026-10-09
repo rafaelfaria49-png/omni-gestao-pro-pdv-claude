@@ -185,19 +185,35 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
     return () => document.removeEventListener("focusin", segurar);
   }, []);
 
-  // Foco: entra no diálogo e volta ao controle que o abriu.
+  // Foco: entra no diálogo e, ao fechar, volta ao controle que o abriu — se ele seguir na tela,
+  // visível e habilitado, e a OS selecionada for a mesma da abertura. Senão (ex.: resposta perdida
+  // cuja releitura desmontou o "Abrir retorno" da ficha; troca de OS/loja), vai à raiz DESTA
+  // Operações V4 (tabIndex=-1) — nunca ao body. Se outra camada legítima ou o fluxo seguinte já
+  // estiver com o foco, não o toma.
   useEffect(() => {
     vivo.current = true;
     if (focoOrigem.current === undefined) {
       // O "+ Novo" (via launcher) quando houver; senão o controle que abriu o fluxo (ficha/portfólio).
       focoOrigem.current = vRef.current.focoRetornoFluxo() ?? (document.activeElement as HTMLElement | null);
     }
+    const dialogo = dialogRef.current;
+    const raiz = dialogo?.closest<HTMLElement>("[data-og-v4-raiz]") ?? null;
+    const osDaAbertura = vRef.current.selectedOsId ?? null;
     if (!origemInicial) buscaRef.current?.focus();
-    else dialogRef.current?.focus();
+    else dialogo?.focus();
     return () => {
       vivo.current = false;
+      const ativo = document.activeElement;
+      if (ativo instanceof HTMLElement && ativo !== document.body && ativo.isConnected && !dialogo?.contains(ativo)) return;
       const origem = focoOrigem.current;
-      if (origem && origem.isConnected) origem.focus();
+      const origemValida =
+        !!origem &&
+        origem.isConnected &&
+        !(origem as HTMLButtonElement).disabled &&
+        (typeof origem.checkVisibility === "function" ? origem.checkVisibility() : true) &&
+        (vRef.current.selectedOsId ?? null) === osDaAbertura;
+      if (origemValida) origem.focus();
+      else if (raiz?.isConnected) raiz.focus();
     };
   }, [origemInicial]);
 

@@ -579,3 +579,49 @@ test("R11 — rev 15 (tentativa 3): seletor gravando — clique no backdrop não
   await soltar();
   expect(await filhas(prisma, os.id)).toHaveLength(1);
 });
+
+test("R12 — rev 16 (R7-01): pela ficha, resposta perdida + releitura desmontam 'Abrir retorno' — Fechar leva o foco à raiz da V4, nunca ao body", async ({ page }) => {
+  const os = await semearOS(prisma);
+  await abrirV4(page);
+  await selecionarNaBusca(page, os.codigo);
+  await irPosVenda(page);
+  const raizFocada = () => page.evaluate(() => document.activeElement?.hasAttribute("data-og-v4-raiz") === true);
+
+  // Gatilho presente: Fechar devolve o foco a ele (comportamento preservado).
+  const gatilho = page.getByRole("button", { name: /^Abrir retorno$/ });
+  await gatilho.click();
+  const d = dialogo(page);
+  await expect(d).toBeVisible();
+  await d.getByRole("button", { name: "Fechar", exact: true }).click();
+  await expect(d).toHaveCount(0);
+  await expect(gatilho).toBeFocused();
+
+  // R7-01: o servidor conclui a abertura, a resposta se perde; a ficha relê e o gatilho some.
+  await gatilho.click();
+  await expect(d).toBeVisible();
+  await d.getByLabel("Motivo do retorno / novo defeito").fill("Touch falhando de novo");
+  const soltar = await interceptarProximaAction(page, os.id, async (route) => {
+    await route.fetch();
+    await route.abort("failed");
+  });
+  await d.getByRole("button", { name: "Abrir atendimento de retorno" }).click();
+  await expect(d.getByRole("status")).toContainText("A abertura anterior foi concluída no servidor");
+  await soltar();
+  await expect(page.getByRole("button", { name: /^Abrir retorno$/ })).toHaveCount(0);
+  await d.getByRole("button", { name: "Fechar", exact: true }).click();
+  await expect(d).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
+  expect(await raizFocada()).toBe(true);
+  // Tab segue navegando dentro da V4.
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => {
+    const raiz = document.querySelector("[data-og-v4-raiz]");
+    const ativo = document.activeElement;
+    return !!raiz && !!ativo && ativo !== document.body && raiz.contains(ativo);
+  })).toBe(true);
+  // Nada duplicado nem reaberto: UMA filha vinculada, seletor fechado.
+  await expect(dialogo(page)).toHaveCount(0);
+  const lista = await filhas(prisma, os.id);
+  expect(lista).toHaveLength(1);
+  expect((await lerOS(prisma, os.id)).retornosV3).toEqual([expect.objectContaining({ status: "aberto", osRetornoId: lista[0]!.id })]);
+});
