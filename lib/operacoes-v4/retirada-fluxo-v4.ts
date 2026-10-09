@@ -16,6 +16,12 @@ import { orcamentoRealV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { itensImprimiveisV3 } from "@/lib/operacoes-v3/print-model";
 import { formatarVencimentoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import type { FinancialProjectionOSV4 } from "./financial-projection";
+import {
+  derivarSituacaoAtendimentoV4,
+  explicacaoConferenciaV4,
+  pagamentoEmConferenciaV4,
+  TEXTO_SITUACAO_V4,
+} from "./situacao-atendimento-v4";
 
 export type SituacaoRetiradaFinanceiraV4 =
   | "carregando"
@@ -30,7 +36,9 @@ export type SituacaoRetiradaFinanceiraV4 =
   | "a_prazo"
   | "sem_cobranca_autorizada"
   | "cancelada"
-  | "estornada";
+  | "estornada"
+  /** GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: o que bloqueia é a aprovação comercial, não a leitura. */
+  | "pendencia_comercial";
 
 export type ToneRetiradaV4 = "success" | "info" | "warning" | "danger" | "neutral";
 
@@ -54,6 +62,11 @@ export interface RetiradaFinanceiraV4 {
   podeReceber: boolean;
   /** Espelha `projection.canDeliver` (guard compartilhado); fail-closed. */
   liberaEntrega: boolean;
+  /**
+   * Os valores vêm dos FATOS do título (valor, recebido líquido, saldo do título),
+   * não do total comercial — a tela usa rótulos próprios.
+   */
+  valoresDoTitulo?: boolean;
 }
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -71,7 +84,7 @@ function base(
   rotulo: string,
   descricao: string,
   tone: ToneRetiradaV4,
-  valores: Partial<Pick<RetiradaFinanceiraV4, "total" | "recebido" | "saldo" | "aPrazo" | "podeReceber" | "liberaEntrega">> = {},
+  valores: Partial<Pick<RetiradaFinanceiraV4, "total" | "recebido" | "saldo" | "aPrazo" | "podeReceber" | "liberaEntrega" | "valoresDoTitulo">> = {},
 ): RetiradaFinanceiraV4 {
   return {
     situacao,
@@ -84,6 +97,7 @@ function base(
     aPrazo: valores.aPrazo ?? null,
     podeReceber: valores.podeReceber ?? false,
     liberaEntrega: valores.liberaEntrega ?? false,
+    ...(valores.valoresDoTitulo ? { valoresDoTitulo: true } : {}),
   };
 }
 
@@ -92,6 +106,39 @@ function base(
  * outra OS (stale) conta como carregando — nunca decide nada pela OS atual.
  */
 export function derivarRetiradaFinanceiraV4(input: {
+  osId: string | null | undefined;
+  projection: FinancialProjectionOSV4 | null | undefined;
+  loading: boolean;
+  error: string | null | undefined;
+  entregue?: boolean;
+}): RetiradaFinanceiraV4 {
+  const legado = derivarRetiradaPorStatusV4(input);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: a leitura estrita do título não
+  // comprova o histórico — nenhuma quitação nem valor do título aparece. Gating
+  // (receber/entregar) continua o da decisão legada, sem mudança.
+  // (pendência comercial já descreve o pagamento pelos fatos — "conferência pendente" inclusive.)
+  if (legado.situacao === "carregando" || legado.situacao === "pendencia_comercial") return legado;
+  const s = derivarSituacaoAtendimentoV4({ osId: input.osId, projection: input.projection, loading: input.loading, error: input.error });
+  if (!pagamentoEmConferenciaV4(s)) return legado;
+  const semValores = { total: null, recebido: null, saldo: null, aPrazo: null };
+  // Rev 3: a regra vale em QUALQUER status legado. Estados próprios do título
+  // (inconsistente, cancelada, estornada) mantêm rótulo e tom; os valores, nunca.
+  if (legado.situacao === "inconsistente" || legado.situacao === "cancelada" || legado.situacao === "estornada") {
+    const explicacao = explicacaoConferenciaV4(input.projection);
+    return { ...legado, descricao: legado.descricao.includes(explicacao) ? legado.descricao : `${legado.descricao} ${explicacao}`, ...semValores };
+  }
+  return {
+    ...legado,
+    rotulo: "Pagamento em conferência",
+    descricao: `${TEXTO_SITUACAO_V4.conferenciaPendente}. ${explicacaoConferenciaV4(input.projection)}${
+      legado.liberaEntrega ? " Confira o histórico no Financeiro antes de entregar." : " A entrega fica bloqueada."
+    }`,
+    tone: "warning",
+    ...semValores,
+  };
+}
+
+function derivarRetiradaPorStatusV4(input: {
   osId: string | null | undefined;
   projection: FinancialProjectionOSV4 | null | undefined;
   loading: boolean;
@@ -181,8 +228,26 @@ export function derivarRetiradaFinanceiraV4(input: {
       return base("cancelada", "Cobrança cancelada", "A Conta a Receber desta OS está cancelada. Revise o financeiro antes de entregar.", "danger", valores);
     case "REVERSED":
       return base("estornada", "Cobrança estornada", "A Conta a Receber desta OS foi estornada. Revise o financeiro antes de entregar.", "danger", valores);
-    default:
+    default: {
+      // A leitura funcionou e o motivo é COMERCIAL: os fatos do título aparecem
+      // (só se verificáveis) e a pendência fica separada — nunca "desconhecida".
+      const s = derivarSituacaoAtendimentoV4({ osId, projection: p, loading: false, error: null });
+      if (s.comercial.pendente) {
+        const fatos = [
+          s.pagamento.rotulo,
+          s.pagamento.saldoRotulo,
+          s.pagamento.meio ? `Forma registrada: ${s.pagamento.meio}` : null,
+        ].filter(Boolean).join(" · ");
+        return base("pendencia_comercial", s.comercial.rotulo, `${fatos}.`, "warning", {
+          total: s.pagamento.valorTitulo,
+          recebido: s.pagamento.recebidoLiquido,
+          saldo: s.pagamento.saldoTitulo,
+          liberaEntrega: false,
+          valoresDoTitulo: true,
+        });
+      }
       return base("indisponivel", "Situação financeira desconhecida", motivo ?? "Não foi possível confirmar preço e título desta OS. A entrega fica bloqueada.", "danger", valores);
+    }
   }
 }
 

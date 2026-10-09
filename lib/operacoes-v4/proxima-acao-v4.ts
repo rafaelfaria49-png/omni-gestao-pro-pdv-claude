@@ -23,6 +23,12 @@ import type { V4Stage } from "@/components/operacoes-v4-preview/types";
 import { resolverStatusV4, type OSStatusFonteV4 } from "@/components/operacoes-v4-preview/os-adapter";
 import { podeTransicionarV3, statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import type { FinancialProjectionOSV4, FinancialStatusV4 } from "./financial-projection";
+import {
+  derivarSituacaoAtendimentoV4,
+  pagamentoEmConferenciaV4,
+  TEXTO_SITUACAO_V4,
+  textoImpedimentoV4,
+} from "./situacao-atendimento-v4";
 
 export type EstadoProximaAcaoV4 =
   | "acao"
@@ -187,7 +193,9 @@ function prontaParaFinanceiro(
   recebida: boolean,
 ): ProximaAcaoV4 {
   const { projection, loading, error } = input.financeiro;
-  const prefixoRecebida = recebida ? "OS recebida — falta a confirmação formal de entrega. " : "";
+  // "Recebida" é o marco V3 entre pronta e entregue (status-machine); não prova
+  // pagamento nem retirada do aparelho — o texto só cita o status.
+  const prefixoRecebida = recebida ? "Status “Recebida” — falta a confirmação formal de entrega. " : "";
 
   if (error) {
     return base({
@@ -222,6 +230,10 @@ function prontaParaFinanceiro(
   }
 
   const status = projection.financialStatus;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: o histórico do título não se comprova
+  // pela leitura estrita — a ação segue a decisão legada, mas o texto nunca afirma
+  // quitação nem valores que os fatos rejeitam.
+  const emConferencia = pagamentoEmConferenciaV4(derivarSituacaoAtendimentoV4({ osId, projection, loading: false, error: null }));
   if (status === "OPEN" || status === "PARTIAL") {
     const saldo = typeof projection.balance === "number" && projection.balance > 0 ? brl.format(projection.balance) : null;
     return base({
@@ -229,11 +241,13 @@ function prontaParaFinanceiro(
       id: "receber-pagamento",
       eyebrow: "Próxima ação",
       titulo: "Receber pagamento",
-      descricao: `${prefixoRecebida}${
-        status === "PARTIAL"
-          ? `Pagamento parcial${saldo ? ` — faltam ${saldo}` : ""}.`
-          : `Saldo em aberto${saldo ? ` de ${saldo}` : ""}.`
-      } Registre o recebimento no Financeiro antes da entrega.`,
+      descricao: emConferencia
+        ? `${prefixoRecebida}${TEXTO_SITUACAO_V4.conferenciaPendente}. Confira o histórico no Financeiro antes de receber ou entregar.`
+        : `${prefixoRecebida}${
+            status === "PARTIAL"
+              ? `Pagamento parcial${saldo ? ` — faltam ${saldo}` : ""}.`
+              : `Saldo em aberto${saldo ? ` de ${saldo}` : ""}.`
+          } Registre o recebimento no Financeiro antes da entrega.`,
       efeito: "navigate",
       stage: "financeiro",
       controleNaEtapa: true,
@@ -243,8 +257,9 @@ function prontaParaFinanceiro(
   }
 
   if (projection.canDeliver === true) {
-    const situacao =
-      status === "AUTHORIZED_CREDIT"
+    const situacao = emConferencia
+      ? `${TEXTO_SITUACAO_V4.conferenciaPendente} — confira o histórico antes de entregar.`
+      : status === "AUTHORIZED_CREDIT"
         ? "Saldo autorizado a prazo."
         : status === "AUTHORIZED_NO_CHARGE"
           ? "Entrega sem cobrança autorizada."
@@ -259,7 +274,65 @@ function prontaParaFinanceiro(
       stage: "entrega",
       controleNaEtapa: true,
       cta: { label: "Abrir entrega", disabled: false },
-      tone: "success",
+      tone: emConferencia ? "warning" : "success",
+    });
+  }
+
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: impedimento COMERCIAL (aprovação
+  // pendente, recusada, vencida ou preço ausente) leva ao orçamento — nunca a um
+  // Financeiro que não tem como resolver. Pagamento verificado é citado como fato.
+  const impedimento = projection.acoes?.impedimento ?? null;
+  // Destinos estruturados não comerciais também são respeitados: a classificação de
+  // entrega sem cobrança vive na Entrega; falha de leitura pede releitura.
+  if (impedimento?.destino === "entrega") {
+    const texto = textoImpedimentoV4(impedimento.codigo);
+    return base({
+      estado: "bloqueada",
+      id: "classificar-sem-cobranca",
+      eyebrow: "Revisar",
+      titulo: texto.titulo,
+      descricao: `${prefixoRecebida}${texto.explicacao}`,
+      efeito: "navigate",
+      stage: "entrega",
+      controleNaEtapa: true,
+      cta: { label: texto.acao, disabled: false },
+      tone: "warning",
+    });
+  }
+  if (impedimento?.destino === "recarregar") {
+    return base({
+      estado: "bloqueada",
+      id: "revisar-financeiro",
+      eyebrow: "Revisar",
+      titulo: "Revisar financeiro",
+      descricao: `${prefixoRecebida}Não foi possível ler a situação financeira. A entrega fica bloqueada até a leitura.`,
+      efeito: "navigate",
+      stage: "financeiro",
+      controleNaEtapa: true,
+      cta: { label: "Abrir financeiro", disabled: false },
+      secundaria: { id: "recarregar-financeiro", label: "Tentar novamente", recarregar: "financeiro" },
+      tone: "warning",
+    });
+  }
+  if (impedimento?.destino === "comercial") {
+    const s = derivarSituacaoAtendimentoV4({ osId, projection, loading: false, error: null });
+    const texto = textoImpedimentoV4(impedimento.codigo);
+    // A linha é truncada na barra: o fato do dinheiro e o motivo vêm primeiro.
+    const pagamento =
+      s.pagamento.verificavel && s.pagamento.estado === "registrado"
+        ? `${s.pagamento.rotulo}${s.pagamento.saldoRotulo ? ` · ${s.pagamento.saldoRotulo}` : ""}. `
+        : "";
+    return base({
+      estado: "bloqueada",
+      id: "revisar-comercial",
+      eyebrow: "Revisar",
+      titulo: texto.titulo,
+      descricao: `${pagamento}${texto.explicacao}${prefixoRecebida ? ` ${prefixoRecebida.trim()}` : ""}`,
+      efeito: "navigate",
+      stage: "orcamento",
+      controleNaEtapa: true,
+      cta: { label: texto.acao, disabled: false },
+      tone: "warning",
     });
   }
 

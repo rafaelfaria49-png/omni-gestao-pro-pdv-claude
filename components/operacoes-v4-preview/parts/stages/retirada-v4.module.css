@@ -214,3 +214,39 @@
     font-size: 13px;
   }
 }
+
+/*
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — etapa Entrega como conferência:
+ * coluna principal (conferir retirada, confirmação, fotos) e coluna lateral
+ * (garantia e documentos). Container query: a largura que conta é a do
+ * workspace (com trilhos abertos), não a da janela.
+ */
+.etapa {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.principal,
+.lateral {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+@container (min-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  }
+}

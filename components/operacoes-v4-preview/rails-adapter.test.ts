@@ -14,7 +14,7 @@ import {
   buildSlaView,
 } from "./rails-adapter";
 import type { OrdemServico } from "@/types/os";
-import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
+import { projectFinancialOSV4, type FinancialProjectionOSV4, type FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
 
 function mkOS(p: Record<string, unknown> & { id: string }): OrdemServico {
   return p as unknown as OrdemServico;
@@ -195,5 +195,50 @@ describe("rails-adapter — PDV de serviço", () => {
     expect(view.itens[0]!.statusFaturamento).toBe("Revisar cobrança");
     expect(view.itens[0]!.total).toBe("R$ 300,00");
     expect(view.aReceberCount).toBe(0);
+  });
+});
+
+describe("rails-adapter — PDV de serviço · R3 (OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001)", () => {
+  const LOJA = "loja-rail";
+  const orc = (status: string) => ({ id: "orc", status, sintetizado: false, total: 420, desconto: 0, servicos: [{ id: "s1", descricao: "Troca de Tela", valor: 420 }], pecas: [], criadoEm: "2026-09-18T10:00:00.000Z" });
+  const real = (id: string, orcStatus: string, historico: unknown[], status = "pago"): { os: OrdemServico; p: FinancialProjectionOSV4 } => {
+    const os = mkOS({ id, storeId: LOJA, codigo: `OS-${id}`, status: "pronta", operacaoStatusV3: "pronta", orcamento: orc(orcStatus), timeline: [] });
+    const p = projectFinancialOSV4({
+      storeId: LOJA, osId: id, prismaValorTotal: 420, loadedAt: "2026-10-09T12:00:00.000Z",
+      payload: { ...(os as unknown as Record<string, unknown>), valorTotal: 420 } as unknown as OrdemServico & Record<string, unknown>,
+      titulo: { id: `cr-${id}`, storeId: LOJA, localKey: `os-faturamento:${LOJA}:${id}`, valor: 420, status, payload: { ordemServicoId: id, historico } },
+    });
+    return { os, p };
+  };
+
+  it("título em conferência (duas baixas de 300 em 420): sem saldo, sem 'A receber', sem 'Quitado' nem 'indisponível'", () => {
+    const { os, p } = real("a", "aprovado", [{ tipo: "pagamento", valor: 300, loteId: "a" }, { tipo: "pagamento", valor: 300, loteId: "b" }]);
+    expect(p).toMatchObject({ financialStatus: "INCONSISTENT", balance: 0 });
+    const view = buildPdvView([os], new Map([["a", p]]), LOJA);
+    expect(view.itens[0]).toMatchObject({ statusFaturamento: "Em conferência", saldoLinha: "", podeReceber: false, ctaLabel: "Abrir financeiro", total: "R$ 420,00" });
+    expect(view.aReceberCount).toBe(0);
+  });
+
+  it("título íntegro + rascunho: 'Aprovação pendente' com o saldo DO TÍTULO verificado (nunca 'Financeiro indisponível')", () => {
+    const { os, p } = real("r", "rascunho", [{ tipo: "liquidacao", valor: 420, loteId: "op-1" }]);
+    expect(p.financialStatus).toBe("UNKNOWN");
+    const view = buildPdvView([os], new Map([["r", p]]), LOJA);
+    expect(view.itens[0]).toMatchObject({ statusFaturamento: "Aprovação pendente", saldoLinha: "Saldo do título: R$ 0,00", podeReceber: false });
+  });
+
+  it("isolamento: projeção de outra loja, de outra OS ou lote de loja anterior nunca entra na lista", () => {
+    const a = real("a", "aprovado", [{ tipo: "liquidacao", valor: 420, loteId: "op-1" }]);
+    const b = real("b", "aprovado", [{ tipo: "liquidacao", valor: 420, loteId: "op-1" }]);
+    const c = real("c", "aprovado", [{ tipo: "liquidacao", valor: 420, loteId: "op-1" }]);
+    const mapa = new Map<string, FinancialProjectionOSV4>([["a", a.p], ["b", { ...b.p, storeId: "outra" }], ["c", { ...c.p, osId: "z" }]]);
+    expect(buildPdvView([a.os, b.os, c.os], mapa, LOJA).itens.map((i) => i.id)).toEqual(["a"]);
+    expect(buildPdvView([a.os], new Map([["a", a.p]]), "loja-nova")).toMatchObject({ temDados: false, itens: [] });
+    // OS de outra loja na lista (snapshot antigo) com projeção da loja ativa: também fora
+    expect(buildPdvView([mkOS({ id: "a", storeId: "outra", status: "pronta" })], new Map([["a", a.p]]), LOJA).itens).toEqual([]);
+  });
+
+  it("legado sem a dimensão de fatos e título íntegro seguem como antes", () => {
+    const a = real("a", "aprovado", [{ tipo: "liquidacao", valor: 420, loteId: "op-1" }]);
+    expect(buildPdvView([a.os], new Map([["a", a.p]]), LOJA).itens[0]).toMatchObject({ statusFaturamento: "Quitado", saldoLinha: "Saldo: R$ 0,00" });
   });
 });
