@@ -252,3 +252,39 @@ test("E4 (R1-3) — quitado legado com estorno sem referência válida: nenhuma 
   await expect(page.getByText("Quitado", { exact: true })).toHaveCount(0);
   expect(await efeitos(prisma, os.id)).toBe(antes);
 });
+
+test("E5 (R3-P1) — título de R$ 420 com duas baixas de R$ 300: Entrega, Financeiro e rail não afirmam R$ 600 nem saldo; nada é gravado", async ({ page }) => {
+  const os = await semearOS(prisma, "aprovado", true);
+  const localKey = `os-faturamento:${LOJA}:${os.id}`;
+  const titulo = await prisma.contaReceberTitulo.findFirstOrThrow({ where: { storeId: LOJA, localKey } });
+  const payload = titulo.payload as Record<string, unknown>;
+  await prisma.contaReceberTitulo.update({
+    where: { id: titulo.id },
+    data: { payload: { ...payload, historico: [{ tipo: "pagamento", valor: 300, loteId: "op-qa-a" }, { tipo: "pagamento", valor: 300, loteId: "op-qa-b" }] } as unknown as Prisma.InputJsonValue },
+  });
+  const antes = await efeitos(prisma, os.id);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await abrirOS(page, os.codigo);
+  await expect(guia(page).getByText("Financeiro inconsistente")).toBeVisible();
+  await expect(guia(page).getByText(/O total recebido supera o valor da Conta a Receber\./)).toBeVisible();
+  await expect(guia(page).getByText("R$ 600,00", { exact: false })).toHaveCount(0);
+  await expect(guia(page).getByText("Recebido", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Confirmar entrega real" })).toHaveCount(0);
+
+  await ticketFinanceiro(page).click();
+  const fatos = page.getByLabel("Fatos da Conta a Receber");
+  await expect(fatos.getByText("Em conferência")).toHaveCount(3);
+  await expect(fatos.getByText(/R\$/)).toHaveCount(0);
+  await expect(page.getByText(/Registros brutos — não conciliados/)).toBeVisible();
+  await expect(page.getByText("Vencimento", { exact: true })).toHaveCount(0);
+
+  const railReceber = page.getByRole("button", { name: "Receber", exact: true });
+  await expect(railReceber).toHaveCount(1);
+  await railReceber.click();
+  const linha = page.getByRole("button", { name: new RegExp(os.codigo) });
+  await expect(linha).toHaveCount(1);
+  await expect(linha.getByText("Em conferência")).toBeVisible();
+  await expect(linha.getByText(/Saldo/)).toHaveCount(0);
+  await expect(linha.getByText("Quitado")).toHaveCount(0);
+  expect(await efeitos(prisma, os.id)).toBe(antes);
+});
