@@ -221,6 +221,9 @@ test("R01 — + Novo → Retorno / Garantia: herança sem recadastro, UM atendim
   await d.getByRole("button", { name: "Abrir atendimento de retorno" }).click();
   await expect(d).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByText(/Retorno aberto\. Atendimento .+ vinculado à OS original\./)).toBeVisible();
+  // Rev 16 (R8-01): o sucesso fecha o seletor e seleciona a filha — o foco não volta ao "+ Novo"
+  // do contexto anterior nem cai no body; fica na raiz da V4.
+  expect(await page.evaluate(() => document.activeElement?.hasAttribute("data-og-v4-raiz") === true)).toBe(true);
 
   const [filha] = await filhas(prisma, os.id);
   expect(filha).toBeTruthy();

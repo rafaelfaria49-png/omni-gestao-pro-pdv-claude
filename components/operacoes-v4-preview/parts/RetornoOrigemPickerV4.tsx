@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
+import { useLojaAtiva } from "@/lib/loja-ativa";
 import {
   encerrarOperacaoNoRascunhoV4,
   LIMITE_OBSERVACAO_INTERNA_V3,
@@ -136,13 +137,23 @@ type DetalheEstado =
   | { estado: "nao_encontrada"; osId: string }
   | { estado: "erro"; osId: string; mensagem: string };
 
+/** Loja ativa e OS selecionada AGORA — o que decide se o foco pode voltar ao gatilho. */
+type ContextoFocoV4 = { loja: string | null; os: string | null };
+
 export function RetornoOrigemPickerV4({ v }: { v: V4Vals }) {
+  const { lojaAtivaId } = useLojaAtiva();
+  // O wrapper segue montado e re-renderiza a cada troca de loja/seleção, inclusive no render que
+  // desmonta o conteúdo (troca de loja, sucesso que seleciona a filha): o cleanup do conteúdo lê
+  // daqui o contexto atual, nunca o do último render dele.
+  const contexto = useRef<ContextoFocoV4>({ loja: lojaAtivaId ?? null, os: v.selectedOsId ?? null });
+  contexto.current = { loja: lojaAtivaId ?? null, os: v.selectedOsId ?? null };
+  const lerContexto = useCallback(() => contexto.current, []);
   const fluxo = v.retornoFluxo;
   if (!fluxo) return null;
-  return <RetornoOrigemConteudo key={`${fluxo.lojaId}::${fluxo.origemOsId ?? ""}`} v={v} lojaId={fluxo.lojaId} origemInicial={fluxo.origemOsId} />;
+  return <RetornoOrigemConteudo key={`${fluxo.lojaId}::${fluxo.origemOsId ?? ""}`} v={v} lojaId={fluxo.lojaId} origemInicial={fluxo.origemOsId} lerContexto={lerContexto} />;
 }
 
-function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId: string; origemInicial: string | null }) {
+function RetornoOrigemConteudo({ v, lojaId, origemInicial, lerContexto }: { v: V4Vals; lojaId: string; origemInicial: string | null; lerContexto: () => ContextoFocoV4 }) {
   const uid = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const buscaRef = useRef<HTMLInputElement>(null);
@@ -186,8 +197,9 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
   }, []);
 
   // Foco: entra no diálogo e, ao fechar, volta ao controle que o abriu — se ele seguir na tela,
-  // visível e habilitado, e a OS selecionada for a mesma da abertura. Senão (ex.: resposta perdida
-  // cuja releitura desmontou o "Abrir retorno" da ficha; troca de OS/loja), vai à raiz DESTA
+  // visível e habilitado, e a loja ativa E a OS selecionada forem as da abertura (lidas do
+  // wrapper, que segue montado). Senão (ex.: resposta perdida cuja releitura desmontou o "Abrir
+  // retorno" da ficha; troca de OS/loja; sucesso que selecionou a filha), vai à raiz DESTA
   // Operações V4 (tabIndex=-1) — nunca ao body. Se outra camada legítima ou o fluxo seguinte já
   // estiver com o foco, não o toma.
   useEffect(() => {
@@ -198,7 +210,7 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
     }
     const dialogo = dialogRef.current;
     const raiz = dialogo?.closest<HTMLElement>("[data-og-v4-raiz]") ?? null;
-    const osDaAbertura = vRef.current.selectedOsId ?? null;
+    const abertura = { loja: lojaId, os: lerContexto().os };
     if (!origemInicial) buscaRef.current?.focus();
     else dialogo?.focus();
     return () => {
@@ -211,11 +223,12 @@ function RetornoOrigemConteudo({ v, lojaId, origemInicial }: { v: V4Vals; lojaId
         origem.isConnected &&
         !(origem as HTMLButtonElement).disabled &&
         (typeof origem.checkVisibility === "function" ? origem.checkVisibility() : true) &&
-        (vRef.current.selectedOsId ?? null) === osDaAbertura;
+        lerContexto().loja === abertura.loja &&
+        lerContexto().os === abertura.os;
       if (origemValida) origem.focus();
       else if (raiz?.isConnected) raiz.focus();
     };
-  }, [origemInicial]);
+  }, [origemInicial, lojaId, lerContexto]);
 
   const item = detalhe.estado === "ok" ? detalhe.item : null;
 

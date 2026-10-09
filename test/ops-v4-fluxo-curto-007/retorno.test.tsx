@@ -1315,3 +1315,64 @@ describe("OPS-V4-FLUXO-CURTO-007 rev 16 — R7-01: foco ao fechar o seletor quan
     expect(document.activeElement).toBe(busca);
   });
 });
+
+describe("OPS-V4-FLUXO-CURTO-007 rev 16 — R8-01: destino do foco decidido pelo contexto ATUAL", () => {
+  /** "+ Novo" persistente (como o da TopBar) + launcher + seletor dentro da raiz REAL da V4. */
+  function V4NaRaiz({ expor }: { expor: (v: V4Vals) => void }) {
+    const v = useV4Preview();
+    expor(v);
+    return (
+      <div data-og-v4-raiz="" tabIndex={-1}>
+        <button type="button" onClick={v.openNovoAtendimento}>+ Novo</button>
+        <div data-testid="selecionada">{v.selectedOsId ?? "nenhuma"}</div>
+        <NovoAtendimentoLauncher v={v} />
+        <RetornoOrigemPickerV4 v={v} />
+      </div>
+    );
+  }
+  const raiz = () => document.querySelector<HTMLElement>("[data-og-v4-raiz]")!;
+  async function abrirPeloNovo(user: ReturnType<typeof userEvent.setup>) {
+    const r = render(<V4NaRaiz expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(vAtual.ordens.length).toBeGreaterThan(0));
+    const novo = screen.getByRole("button", { name: "+ Novo" });
+    await user.click(novo);
+    await user.click(await screen.findByRole("button", { name: /Retorno \/ Garantia/ }));
+    const dialogo = await screen.findByRole("dialog", { name: "Retorno / Garantia" });
+    expect(vAtual.selectedOsId ?? null).toBeNull();
+    return { r, novo, dialogo };
+  }
+
+  it("R16-g: aberto pelo + Novo sem OS selecionada, troca de LOJA fecha o seletor — o foco vai à raiz, NÃO ao + Novo da outra loja", async () => {
+    const user = userEvent.setup();
+    const { r, novo } = await abrirPeloNovo(user);
+    h.loja = "loja-qa-007-b";
+    r.rerender(<V4NaRaiz expor={(v) => { vAtual = v; }} />);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(novo.isConnected).toBe(true);
+    expect(document.activeElement).not.toBe(novo);
+    expect(document.activeElement).toBe(raiz());
+  });
+
+  it("R16-h: sucesso fecha o seletor e seleciona a filha no mesmo render — o foco vai à raiz, NÃO ao + Novo", async () => {
+    const user = userEvent.setup();
+    const { novo, dialogo } = await abrirPeloNovo(user);
+    await user.type(within(dialogo).getByRole("combobox", { name: "Buscar OS original" }), "Galaxy A");
+    fireEvent.click(await within(dialogo).findByRole("option", { name: opcao("OS-A") }));
+    await within(dialogo).findByText("OS-A", { selector: "div" });
+    await user.type(within(dialogo).getByLabelText("Motivo do retorno / novo defeito"), "Touch");
+    await user.click(within(dialogo).getByRole("button", { name: "Abrir atendimento de retorno" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(screen.getByTestId("selecionada").textContent).toBe("filha");
+    expect(document.activeElement).not.toBe(novo);
+    expect(document.activeElement).toBe(raiz());
+    expect(m.abrirRetornoV3).toHaveBeenCalledTimes(1);
+  });
+
+  it("R16-i: mesmo contexto (Escape sem trocar loja nem OS) — o foco volta ao + Novo (preservado)", async () => {
+    const user = userEvent.setup();
+    const { novo } = await abrirPeloNovo(user);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Retorno / Garantia" })).toBeNull());
+    expect(document.activeElement).toBe(novo);
+  });
+});
