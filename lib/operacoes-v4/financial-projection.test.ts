@@ -434,3 +434,58 @@ describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — fatos, comercial e im
     expect(divergente.comercial?.divergencias.map((d) => d.codigo)).toEqual(["FONTES_DE_PRECO"]);
   });
 });
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: leitura estrita dos fatos do título", () => {
+  it("R1-1: payload nulo, histórico não-array, entrada nula ou sem tipo NÃO viram fato verificável", () => {
+    const semPayload = project({ payload: rascunho(), titulo: { ...title(300, "pendente"), payload: null } });
+    expect(semPayload.fatos).toMatchObject({ verificavel: false, motivo: "HISTORICO_INVALIDO", recebidoLiquido: null, saldoTitulo: null });
+    for (const historico of [[{ tipo: "liquidacao", valor: 300 }, null], [{ tipo: "liquidacao", valor: 300 }, {}], [{ valor: 300 }]]) {
+      const r = project({ payload: rascunho(), titulo: title(300, "pago", historico as unknown[]) });
+      expect(r.fatos, JSON.stringify(historico)).toMatchObject({ verificavel: false, motivo: "HISTORICO_INVALIDO", liquidado: false, recebidoLiquido: null });
+    }
+    const naoArray = project({ payload: rascunho(), titulo: title(300, "pendente", [], { historico: { 0: { tipo: "liquidacao" } } }) });
+    expect(naoArray.fatos?.motivo).toBe("HISTORICO_INVALIDO");
+  });
+
+  it("R1-1: título recém-criado (sem histórico, pendente, desta OS) é fato verificável de zero recebido", () => {
+    const r = project({ payload: rascunho(), titulo: { ...title(300, "pendente"), payload: { ordemServicoId: osId, origem: "operacoes-v3" } } });
+    expect(r.fatos).toMatchObject({ verificavel: true, recebidoLiquido: 0, saldoTitulo: 300, liquidado: false });
+  });
+
+  it("R1-1: sem ordemServicoId desta OS não há vínculo positivo", () => {
+    const r = project({ payload: rascunho(), titulo: { ...title(300, "pago", [{ tipo: "liquidacao", valor: 300 }]), payload: { historico: [{ tipo: "liquidacao", valor: 300 }] } } });
+    expect(r.fatos).toMatchObject({ verificavel: false, motivo: "TITULO_NAO_VINCULADO" });
+  });
+
+  it("R1-2: estorno sem referência, com referência a baixa já estornada ou com valor diferente = ESTORNO_AMBIGUO", () => {
+    const casos: unknown[][] = [
+      [{ tipo: "pagamento", valor: 150, loteId: "op-a" }, { tipo: "pagamento", valor: 150, loteId: "op-b" }, { tipo: "estorno_pagamento", valor: 150 }],
+      [{ tipo: "pagamento", valor: 200, loteId: "op-a" }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 0 }],
+      [{ tipo: "pagamento", valor: 200, loteId: "op-a" }, { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 0 }, { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 0 }],
+      // estornos de valores trocados que se compensam na soma
+      [{ tipo: "pagamento", valor: 100, loteId: "op-a" }, { tipo: "pagamento", valor: 200, loteId: "op-b" }, { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 0 }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 1 }],
+    ];
+    for (const historico of casos) {
+      const r = project({ payload: rascunho(), titulo: title(300, "parcial", historico) });
+      expect(r.fatos, JSON.stringify(historico)).toMatchObject({ verificavel: false, motivo: "ESTORNO_AMBIGUO", pagamentosVigentes: null, recebidoLiquido: null });
+    }
+  });
+
+  it("R1-2: estorno canônico (referência + mesmo valor) segue verificável e remove exatamente a baixa referida", () => {
+    const r = project({
+      payload: rascunho(),
+      titulo: title(300, "parcial", [{ tipo: "pagamento", valor: 100, loteId: "op-a" }, { tipo: "pagamento", valor: 200, loteId: "op-b" }, { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 0 }]),
+    });
+    expect(r.fatos).toMatchObject({ verificavel: true, recebidoBruto: 300, estornado: 100, recebidoLiquido: 200, saldoTitulo: 100 });
+    expect(r.fatos?.pagamentosVigentes).toEqual([{ amount: 200, operationId: "op-b" }]);
+  });
+
+  it("R1-3: PAID legado com estorno de referência inexistente + reposição → decisão legada intacta, fatos em conferência", () => {
+    const r = project({
+      payload: payload(300, { timeline: [recebimentoOS("op-1", 300)] }),
+      titulo: title(300, "pago", [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }, { tipo: "estorno_pagamento", valor: 300, refHistoricoIndex: 9 }, { tipo: "pagamento", valor: 300 }]),
+    });
+    expect(r).toMatchObject({ financialStatus: "PAID", canDeliver: true, receivedTotal: 300 });
+    expect(r.fatos).toMatchObject({ tituloEncontrado: true, verificavel: false, motivo: "ESTORNO_AMBIGUO" });
+  });
+});

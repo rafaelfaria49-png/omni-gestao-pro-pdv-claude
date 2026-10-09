@@ -13,7 +13,7 @@ import {
   sugestaoAPrazoCentavosV3, SITUACAO_PARCIAL_A_PRAZO_V3, SITUACAO_INTEGRAL_A_PRAZO_V3,
 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { avaliarRecebimentoV4, buildRecebimentoMistoV4, INTENCOES_RECEBIMENTO_V4, valorSugeridoRecebimentoV4, type IntencaoRecebimentoV4, type LinhaRecebimentoV4 } from "@/lib/operacoes-v4/receber-pagamento-form";
-import { situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import { pagamentoEmConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
 
 const box = { marginTop: 0, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 } as const;
 const cellInput: React.CSSProperties = { height: 32, padding: "0 10px", border: `1px solid ${C.inputBd}`, borderRadius: 7, fontSize: 12.5, color: C.body, background: C.surface };
@@ -113,6 +113,11 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const { semTotal, previaNaoMaterializada, quitado, caixaAberto } = v.recebimento;
 
   if (!pendencia && semTotal) return <div style={box}>{previaNaoMaterializada ? "O valor em “Total da OS” ainda é uma prévia. Gere e aprove um orçamento real antes de receber." : "Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber."}</div>;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: "quitado" legado com histórico que a
+  // leitura estrita não comprova não é mostrado como quitação.
+  if (!pendencia && quitado && pagamentoEmConferenciaV4(situacaoAtendimentoDe(v))) {
+    return <div style={box}>Sem ação de recebimento enquanto o histórico do título está em conferência.</div>;
+  }
   if (!pendencia && quitado) return <div style={box}>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>Recebimento desta OS</span><b style={{ color: C.successFg }}>Quitado</b></div>
     {!v.entrega.entregue && <div style={{ marginTop: 9 }}><span style={{ fontSize: 11, color: C.subtle }}>OS pronta e paga — falta confirmar a entrega.</span> <button type="button" onClick={v.goEntrega} style={btnGhost}>Ir para Entrega →</button></div>}

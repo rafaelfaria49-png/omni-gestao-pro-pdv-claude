@@ -172,6 +172,19 @@ const COMERCIAL_PENDENTE = new Set<ImpedimentoCodigoV4>([
   "PRECO_AUSENTE",
 ]);
 
+/**
+ * Forma de pagamento EXIBÍVEL: só a dos fatos (identidade da operação ou a própria
+ * baixa do título). Título não verificável = "Em conferência"; sem título = "Não
+ * registrada". Nunca cai na timeline/espelho sem vínculo.
+ */
+export function formaRegistradaV4(projection: FinancialProjectionOSV4 | null | undefined, legado: string): string {
+  const fatos = projection?.fatos;
+  if (!projection || !fatos) return legado;
+  if (!fatos.tituloEncontrado) return fatos.motivo === "FALHA_LEITURA" ? "Indisponível" : "Não registrada";
+  if (!fatos.verificavel) return "Em conferência";
+  return meiosDe(projection) ?? "Não registrada";
+}
+
 function meiosDe(projection: FinancialProjectionOSV4): string | null {
   const fatos = projection.fatos;
   if (!fatos || !fatos.verificavel) return null;
@@ -300,6 +313,22 @@ export function situacaoAtendimentoDe(v: {
     loading: v.financial?.loading === true,
     error: v.financial?.error ?? null,
   });
+}
+
+/**
+ * Há Conta a Receber desta OS, mas a leitura estrita NÃO comprova seu histórico
+ * (estorno sem referência, entrada malformada, vínculo, excesso…). Vale para
+ * QUALQUER status legado: nenhuma superfície mostra quitação nem valores do título;
+ * a decisão legada de receber/entregar não muda.
+ */
+export function pagamentoEmConferenciaV4(s: SituacaoAtendimentoV4): boolean {
+  return s.estado === "pronta" && s.pagamento.estado === "conferencia_pendente";
+}
+
+/** Explicação do motivo pelo qual o histórico do título está em conferência. */
+export function explicacaoConferenciaV4(projection: FinancialProjectionOSV4 | null | undefined): string {
+  const motivo = projection?.fatos?.motivo;
+  return motivo ? IMPEDIMENTO_TEXTO[motivo].explicacao : "O histórico da Conta a Receber não pôde ser conferido com segurança.";
 }
 
 /** Pendência comercial com pagamento VERIFICADO — o caso que a V4 antes chamava de "indisponível". */

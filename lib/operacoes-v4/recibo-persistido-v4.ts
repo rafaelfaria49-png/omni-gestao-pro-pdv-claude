@@ -178,15 +178,27 @@ export function lerReciboDaProjecaoV4(input: {
     receivableFound: boolean;
     receivablePayments?: ReadonlyArray<PagamentoVigenteV4> | null;
     /** GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: fatos do título (só verificados contam). */
-    fatos?: { verificavel: boolean; recebidoLiquido: number | null } | null;
+    fatos?: {
+      tituloEncontrado?: boolean;
+      verificavel: boolean;
+      recebidoLiquido: number | null;
+      pagamentosVigentes?: ReadonlyArray<PagamentoVigenteV4> | null;
+    } | null;
   };
 }): LeituraReciboV4 {
   const { projection } = input;
-  // Sem o recebido legado (bloqueio comercial), só o recebido líquido VERIFICADO do
-  // título serve de âncora; a correspondência 1:1 abaixo continua a mesma.
-  const recebidoVerificado = projection.fatos?.verificavel ? projection.fatos.recebidoLiquido : null;
-  const recebidoAtual = projection.receivedTotal ?? recebidoVerificado ?? (projection.receivableFound ? null : 0);
-  const pagamentosVigentes = projection.receivablePayments ?? (projection.receivableFound ? null : []);
+  const fatos = projection.fatos ?? null;
+  // Título presente cujo histórico a leitura ESTRITA não comprova (estorno sem
+  // referência, entrada malformada…): nenhum comprovante é oferecido.
+  if (fatos && fatos.tituloEncontrado === true && !fatos.verificavel) return { estado: "indisponivel" };
+  // Sem o recebido legado (bloqueio comercial), a âncora são os fatos VERIFICADOS:
+  // recebido líquido e pagamentos vigentes da leitura estrita; a correspondência 1:1
+  // abaixo continua a mesma.
+  const usarFatos = projection.receivedTotal == null && !!fatos?.verificavel && fatos.recebidoLiquido != null;
+  const recebidoAtual = usarFatos ? fatos!.recebidoLiquido : projection.receivedTotal ?? (projection.receivableFound ? null : 0);
+  const pagamentosVigentes = usarFatos
+    ? fatos!.pagamentosVigentes ?? null
+    : projection.receivablePayments ?? (projection.receivableFound ? null : []);
   if (recebidoAtual == null || pagamentosVigentes == null) return { estado: "indisponivel" };
   return escolherReciboV4({ sessao: input.sessao, os: input.os, recebidoAtual, pagamentosVigentes });
 }

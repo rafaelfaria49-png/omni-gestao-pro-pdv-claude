@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { projectFinancialOSV4, type ProjectFinancialOSV4Input } from "./financial-projection";
-import { derivarSituacaoAtendimentoV4, pagamentoComPendenciaComercialV4, TEXTO_SITUACAO_V4 } from "./situacao-atendimento-v4";
+import { derivarSituacaoAtendimentoV4, formaRegistradaV4, pagamentoComPendenciaComercialV4, TEXTO_SITUACAO_V4 } from "./situacao-atendimento-v4";
 
 const storeId = "loja-sit";
 const osId = "os-sit";
@@ -85,5 +85,20 @@ describe("situação do atendimento — pagamento ≠ aprovação comercial ≠ 
   it("pagamento sem meio identificável não ganha forma inventada", () => {
     const s = ler(projecao({ payload: os("rascunho", { timeline: [] }) }));
     expect(s.pagamento.meio).toBe("Forma não identificada no título");
+  });
+});
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: forma de pagamento só pelos fatos", () => {
+  it("baixa op-1 + timeline Pix de OUTRA operação: forma não identificada (nunca Pix)", () => {
+    const p = projecao({ payload: os("aprovado", { timeline: [{ id: "ev-x", tipo: "operacao_cobranca_gerada", autor: "Op", conteudo: "Pix", criadoEm: "2026-10-05T21:37:38.000Z", metadata: { operacaoId: "op-outra", total: 420, linhas: [{ forma: "pix", valor: 420 }] } }] }) });
+    expect(p.paymentMethods.map((m) => m.label)).toEqual(["Pix"]);
+    expect(formaRegistradaV4(p, "Pix")).toBe("Forma não identificada no título");
+  });
+
+  it("título em conferência = 'Em conferência'; sem título = 'Não registrada'; falha = 'Indisponível'", () => {
+    expect(formaRegistradaV4(projecao({ titulo: { ...liquidado, payload: { ordemServicoId: osId, historico: [{ tipo: "liquidacao", valor: 420 }, null] } } }), "Dinheiro")).toBe("Em conferência");
+    expect(formaRegistradaV4(projecao({ titulo: null }), "Dinheiro")).toBe("Não registrada");
+    expect(formaRegistradaV4(projecao({ falhaLeituraTitulo: true }), "Dinheiro")).toBe("Indisponível");
+    expect(formaRegistradaV4(projecao(), "x")).toBe("Dinheiro");
   });
 });

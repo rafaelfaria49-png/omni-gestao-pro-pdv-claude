@@ -176,8 +176,10 @@ export function montarFinanceiroHeaderV4(input: {
    * bloqueio é comercial (UNKNOWN sem falha de leitura). Nunca vira "Quitado".
    */
   pagamentoVerificado?: { label: string; liquidado: boolean } | null;
-  /** Há registro de pagamento, mas vínculo/histórico não conferem. */
+  /** Há registro de pagamento, mas vínculo/histórico não conferem (qualquer status). */
   pagamentoEmConferencia?: boolean;
+  /** Leitura OK, sem Conta a Receber, bloqueio comercial — não é "indisponível". */
+  semContaAReceber?: boolean;
 }): FinanceiroHeaderV4 {
   if (input.loading) {
     return {
@@ -200,6 +202,11 @@ export function montarFinanceiroHeaderV4(input: {
   }
 
   const status = input.financialStatus;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: fatos do título rejeitados nunca
+  // aparecem como quitação/valor, qualquer que seja o status legado.
+  if (input.pagamentoEmConferencia && status !== "INCONSISTENT" && status !== "CANCELLED" && status !== "REVERSED") {
+    return { eyebrow: "Financeiro", label: "Pagamento em conferência", cta: "Financeiro", tone: "warn", destino: "financeiro" };
+  }
   const situacao: SituacaoFinanceiraOSV4 = status ? situacaoFinanceiraOSV4(status) : "revisar";
   const label = labelTicketFinanceiroV4({
     situacao,
@@ -223,8 +230,8 @@ export function montarFinanceiroHeaderV4(input: {
         destino: "financeiro",
       };
     }
-    if (input.pagamentoEmConferencia) {
-      return { eyebrow: "Financeiro", label: "Pagamento em conferência", cta: "Financeiro", tone: "warn", destino: "financeiro" };
+    if (input.semContaAReceber) {
+      return { eyebrow: "Financeiro", label: "Sem Conta a Receber", cta: "Financeiro", tone: "neutro", destino: "financeiro" };
     }
     return { eyebrow: "Financeiro", label, cta: "Financeiro", tone: "danger", destino: "financeiro" };
   }

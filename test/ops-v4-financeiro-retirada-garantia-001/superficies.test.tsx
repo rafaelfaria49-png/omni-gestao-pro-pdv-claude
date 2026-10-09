@@ -288,3 +288,57 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — superfícies coerentes", (
     expect(confirmar()).toBeTruthy();
   });
 });
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: superfícies com fatos rejeitados", () => {
+  const REJEITADO: Titulo = { status: "pago", historico: [
+    { tipo: "liquidacao", valor: 420, loteId: "op-1" },
+    { tipo: "estorno_pagamento", valor: 420, refHistoricoIndex: 9 },
+    { tipo: "pagamento", valor: 420 },
+  ] };
+
+  it("R1-3: aprovado + estorno de referência inexistente + reposição — nenhuma superfície mostra quitação; gating legado intacto", () => {
+    const a = os("a", "aprovado");
+    const p = projecao(a, REJEITADO);
+    expect(p).toMatchObject({ financialStatus: "PAID", canDeliver: true });
+    montar({ os: a, fin: { projection: p } });
+    const v = sonda.v!;
+    expect(v.financeiroHeader).toMatchObject({ label: "Pagamento em conferência", tone: "warn" });
+    expect(within(guia()).getByText("Pagamento em conferência")).toBeTruthy();
+    expect(within(guia()).queryByText("Valor do título")).toBeNull();
+    expect(within(guia()).queryByText("Quitado")).toBeNull();
+    expect(within(barra()).getByText(/conferência pendente/)).toBeTruthy();
+    expect(contar("Pagamento quitado")).toBe(0);
+    // decisão legada intacta: o servidor ainda libera, a confirmação continua disponível
+    expect(confirmar()).toBeTruthy();
+  });
+
+  it("R1-3: no Financeiro o mesmo caso aparece em conferência, sem valores nem forma presumida", () => {
+    const a = os("a", "aprovado");
+    montar({ os: a, fin: { projection: projecao(a, REJEITADO) }, stage: "financeiro" });
+    // selo + três valores do título + forma de pagamento
+    expect(screen.getAllByText("Em conferência")).toHaveLength(5);
+    expect(within(screen.getByLabelText("Fatos da Conta a Receber")).getAllByText("Em conferência")).toHaveLength(3);
+    expect(screen.getByText("Há registro de pagamento; conferência pendente.")).toBeTruthy();
+    expect(screen.getByText("Sem ação de recebimento enquanto o histórico do título está em conferência.")).toBeTruthy();
+    // a explicação do motivo aparece uma vez no painel (o aviso); a barra só orienta a ação
+    expect(contar("Há estorno sem referência segura ao pagamento estornado.")).toBe(1);
+    expect(screen.queryByText("Quitado")).toBeNull();
+  });
+
+  it("R1-4: forma do Financeiro vem só dos fatos — Pix de OUTRA operação não aparece", () => {
+    const a = os("a", "aprovado", { timeline: [{
+      id: "ev-x", tipo: "operacao_cobranca_gerada", autor: "Op", autorTipo: "usuario", conteudo: "Recebimento Pix", criadoEm: "2026-10-05T21:37:38.000Z",
+      metadata: { operacaoId: "op-outra", total: 420, linhas: [{ forma: "pix", valor: 420 }] },
+    }] });
+    montar({ os: a, fin: { projection: projecao(a, LIQUIDADO) }, stage: "financeiro" });
+    expect(screen.getByText("Forma não identificada no título")).toBeTruthy();
+    expect(screen.queryByText("Pix", { selector: "span" })).toBeNull();
+  });
+
+  it("rascunho sem Conta a Receber: cabeçalho não diz indisponível sem falha de leitura", () => {
+    const a = os("a", "rascunho", { timeline: [] });
+    montar({ os: a, fin: { projection: projecao(a, null) } });
+    expect(sonda.v!.financeiroHeader).toMatchObject({ label: "Sem Conta a Receber", tone: "neutro" });
+    expect(contar("Financeiro indisponível")).toBe(0);
+  });
+});

@@ -598,28 +598,72 @@ function fatosSemValores(
 }
 
 /**
- * Fatos do título, independentes do comercial: mesma checagem de vínculo e de
- * coerência histórico × status que o guard faz, sem depender do preço aprovado.
+ * Leitura ESTRITA do histórico do título para os fatos (mais exigente que a
+ * leitura legada, que segue intacta para as decisões): toda entrada é um registro
+ * com tipo; toda baixa tem valor positivo; todo estorno aponta, por
+ * `refHistoricoIndex`, para uma baixa ainda vigente e de MESMO valor — exatamente
+ * o que o estorno canônico (`estornarContaReceber`) grava. Qualquer outra forma é
+ * ambígua: nada se conclui sobre quem continua pago.
+ */
+function lerPagamentosEstritosV4(titlePayload: Record<string, unknown>):
+  | { ok: true; vigentes: Array<FinancialPaymentV4 & { index: number }>; brutoCentavos: number; estornadoCentavos: number }
+  | { ok: false; motivo: ImpedimentoCodigoV4 } {
+  const historico = titlePayload.historico;
+  if (historico === undefined) return { ok: true, vigentes: [], brutoCentavos: 0, estornadoCentavos: 0 };
+  if (!Array.isArray(historico)) return { ok: false, motivo: "HISTORICO_INVALIDO" };
+  const vigentes: Array<FinancialPaymentV4 & { index: number; centavos: number }> = [];
+  let brutoCentavos = 0;
+  let estornadoCentavos = 0;
+  for (let index = 0; index < historico.length; index++) {
+    const entry = historico[index];
+    if (!isRecord(entry)) return { ok: false, motivo: "HISTORICO_INVALIDO" };
+    const type = text(entry.tipo).toLowerCase();
+    if (!type) return { ok: false, motivo: "HISTORICO_INVALIDO" };
+    if (type === "pagamento" || type === "liquidacao") {
+      const centavos = cents(entry.valor);
+      if (centavos == null || centavos <= 0) return { ok: false, motivo: "HISTORICO_INVALIDO" };
+      const amount = centavos / 100;
+      vigentes.push({ index, centavos, amount, operationId: text(entry.loteId) || mixedReceiptOperationId(historico[index + 1], amount) });
+      brutoCentavos += centavos;
+      continue;
+    }
+    if (type !== "estorno_pagamento") continue;
+    const ref = entry.refHistoricoIndex;
+    const centavos = cents(entry.valor);
+    const pos = typeof ref === "number" && Number.isInteger(ref) ? vigentes.findIndex((item) => item.index === ref) : -1;
+    if (pos < 0 || centavos == null || centavos !== vigentes[pos]!.centavos) return { ok: false, motivo: "ESTORNO_AMBIGUO" };
+    vigentes.splice(pos, 1);
+    estornadoCentavos += centavos;
+  }
+  return { ok: true, vigentes: vigentes.map(({ index, amount, operationId }) => ({ index, amount, operationId })), brutoCentavos, estornadoCentavos };
+}
+
+/**
+ * Fatos do título, independentes do comercial. Vínculo POSITIVO (loja, chave
+ * canônica e `ordemServicoId` desta OS — todo writer o grava), histórico estrito e
+ * coerência histórico × status; só então há valores. Nunca depende do preço aprovado.
  */
 export function lerFatosFinanceirosV4(input: ProjectFinancialOSV4Input): FatosFinanceirosOSV4 {
   const titulo = input.titulo;
   if (input.falhaLeituraTitulo) return fatosSemValores(input, false, "FALHA_LEITURA");
   if (!titulo) return fatosSemValores(input, false, null);
-  const titlePayload = isRecord(titulo.payload) ? titulo.payload : {};
   const valor = cents(titulo.valor);
   if (
     titulo.storeId !== input.storeId ||
     titulo.localKey !== localKeyContaReceberOSV3(input.storeId, input.osId) ||
-    (typeof titlePayload.ordemServicoId === "string" && titlePayload.ordemServicoId !== input.osId) ||
     valor == null
   ) {
     return fatosSemValores(input, true, "TITULO_NAO_VINCULADO");
   }
+  if (!isRecord(titulo.payload)) return fatosSemValores(input, true, "HISTORICO_INVALIDO");
+  if (titulo.payload.ordemServicoId !== input.osId) return fatosSemValores(input, true, "TITULO_NAO_VINCULADO");
+  const estrito = lerPagamentosEstritosV4(titulo.payload);
+  if (!estrito.ok) return fatosSemValores(input, true, estrito.motivo);
   const recebimentos = reconciliarRecebimentosFinanceirosV3(titulo.payload);
-  if (!recebimentos.valido) return fatosSemValores(input, true, "HISTORICO_INVALIDO");
-  const entries = readValidPaymentEntries(titulo.payload);
-  const somaVigentes = entries?.reduce((acc, entry) => acc + Math.round(entry.amount * 100), 0) ?? null;
-  if (!entries || somaVigentes !== recebimentos.centavos) return fatosSemValores(input, true, "ESTORNO_AMBIGUO");
+  const liquidoCentavos = estrito.brutoCentavos - estrito.estornadoCentavos;
+  // A leitura legada (por valor) tem de concordar com a estrita; senão, ambíguo.
+  if (!recebimentos.valido || recebimentos.centavos !== liquidoCentavos) return fatosSemValores(input, true, "ESTORNO_AMBIGUO");
+  const entries = estrito.vigentes;
   if (recebimentos.centavos > valor + TOLERANCIA_CENTAVOS) return fatosSemValores(input, true, "RECEBIDO_ACIMA_DO_TITULO");
   const status = normalizeReceberStatus(titulo.status);
   if (status === RECEBER_STATUS.CANCELADO) return fatosSemValores(input, true, "COBRANCA_CANCELADA");
@@ -640,8 +684,8 @@ export function lerFatosFinanceirosV4(input: ProjectFinancialOSV4Input): FatosFi
     motivo: null,
     tituloId: titulo.id,
     valorTitulo: valor / 100,
-    recebidoBruto: recebimentos.recebidoCentavos / 100,
-    estornado: recebimentos.estornadoCentavos / 100,
+    recebidoBruto: estrito.brutoCentavos / 100,
+    estornado: estrito.estornadoCentavos / 100,
     recebidoLiquido: recebimentos.centavos / 100,
     saldoTitulo: saldo / 100,
     liquidado: saldo <= TOLERANCIA_CENTAVOS && status === RECEBER_STATUS.PAGO,

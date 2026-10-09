@@ -158,7 +158,7 @@ import {
   montarHistoricoHeaderV4,
 } from "@/lib/operacoes-v4/os-header-transversal";
 import { montarResumoFinanceiroOSV4 } from "@/lib/operacoes-v4/financeiro-v4";
-import { derivarSituacaoAtendimentoV4, pagamentoComPendenciaComercialV4 } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import { derivarSituacaoAtendimentoV4, pagamentoComPendenciaComercialV4, pagamentoEmConferenciaV4 } from "@/lib/operacoes-v4/situacao-atendimento-v4";
 import { derivarRetiradaFinanceiraV4, servicoDaRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
 import { lerReciboDaProjecaoV4, type LeituraReciboV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
 import { buildGarantiasPortfolioV4 } from "@/lib/operacoes-v4/posvenda-v4";
@@ -817,7 +817,8 @@ export function buildVals(
     pagamentoVerificado: pagamentoComPendenciaComercialV4(situacaoAtendimento) && situacaoAtendimento.pagamento.estado === "registrado"
       ? { label: situacaoAtendimento.pagamento.rotulo.replace(" — ", " "), liquidado: situacaoAtendimento.pagamento.liquidado }
       : null,
-    pagamentoEmConferencia: situacaoAtendimento.comercial.pendente && situacaoAtendimento.pagamento.estado === "conferencia_pendente",
+    pagamentoEmConferencia: pagamentoEmConferenciaV4(situacaoAtendimento),
+    semContaAReceber: situacaoAtendimento.estado === "pronta" && situacaoAtendimento.pagamento.estado === "sem_titulo",
   });
   const historicoHeader = montarHistoricoHeaderV4(timelineReal.length);
 

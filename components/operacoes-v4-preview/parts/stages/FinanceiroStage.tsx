@@ -3,7 +3,13 @@ import { C, fmt } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import { ReceberPagamentoV4 } from "../ReceberPagamentoV4";
 import styles from "../financeiro-stage.module.css";
-import { pagamentoComPendenciaComercialV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import {
+  explicacaoConferenciaV4,
+  formaRegistradaV4,
+  pagamentoComPendenciaComercialV4,
+  pagamentoEmConferenciaV4,
+  situacaoAtendimentoDe,
+} from "@/lib/operacoes-v4/situacao-atendimento-v4";
 
 const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
 
@@ -50,16 +56,21 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
   const fatosDoTitulo = pagamentoComPendenciaComercialV4(s);
   const pendenciaComercial = s.estado === "pronta" && s.comercial.pendente;
   const inconsistent = !pendenciaComercial && (projection.consistencyStatus === "INCONSISTENT" || projection.consistencyStatus === "UNKNOWN");
+  // Fatos do título rejeitados pela leitura estrita (qualquer status legado): nada de
+  // quitação verde nem valores do título; a decisão legada segue como está.
+  const emConferencia = !inconsistent && pagamentoEmConferenciaV4(s);
   const statusColors = inconsistent
     ? { bg: C.dangerBg, fg: C.dangerFg }
-    : pendenciaComercial
+    : pendenciaComercial || emConferencia
       ? { bg: C.warnBg, fg: C.warnFg }
       : projection.financialStatus === "PAID" || projection.canDeliver
         ? { bg: C.successBg, fg: C.successFg }
         : { bg: C.warnBg, fg: C.warnFg };
-  const stamp = pendenciaComercial ? "Aprovação pendente" : resumo.situacaoLabel;
+  const stamp = pendenciaComercial ? "Aprovação pendente" : emConferencia ? "Em conferência" : resumo.situacaoLabel;
   const recebidoConhecido = projection.receivedTotal ?? (s.pagamento.verificavel ? s.pagamento.recebidoLiquido : null);
   const historico = projection.historico;
+  const valorFato = (n: number | null) => (n == null ? "Em conferência" : fmt(n));
+  const formaExibida = formaRegistradaV4(projection, financial.paymentMethodSummary);
 
   return (
     <div className={styles.panel}>
@@ -74,19 +85,19 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
           <span className={styles.stamp} style={{ background: statusColors.bg, color: statusColors.fg }}>{stamp}</span>
         </div>
 
-        {fatosDoTitulo ? (
+        {fatosDoTitulo || emConferencia ? (
           <div className={styles.strip} aria-label="Fatos da Conta a Receber">
             <div className={styles.cell}>
               <div className={styles.cellLabel}>Valor do título</div>
-              <div className={styles.cellValue}>{amount(s.pagamento.valorTitulo)}</div>
+              <div className={styles.cellValue}>{valorFato(s.pagamento.valorTitulo)}</div>
             </div>
             <div className={styles.cell}>
               <div className={styles.cellLabel}>Recebido</div>
-              <div className={styles.cellValue}>{amount(s.pagamento.recebidoLiquido)}</div>
+              <div className={styles.cellValue}>{valorFato(s.pagamento.recebidoLiquido)}</div>
             </div>
             <div className={styles.cell}>
               <div className={styles.cellLabel}>Saldo do título</div>
-              <div className={styles.cellValue} style={{ color: (s.pagamento.saldoTitulo ?? 0) > 0 ? C.warnFg : C.ink }}>{amount(s.pagamento.saldoTitulo)}</div>
+              <div className={styles.cellValue} style={{ color: (s.pagamento.saldoTitulo ?? 0) > 0 ? C.warnFg : C.ink }}>{valorFato(s.pagamento.saldoTitulo)}</div>
             </div>
           </div>
         ) : (
@@ -116,6 +127,10 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
               {s.impedimento.acao}
             </button>
           </div>
+        ) : emConferencia ? (
+          <div className={styles.issue} style={{ border: `1px solid ${C.warnBd}`, background: C.warnBg, color: C.warnFg }}>
+            <strong>Há registro de pagamento; conferência pendente.</strong> {explicacaoConferenciaV4(projection)}
+          </div>
         ) : projection.consistencyIssues.length > 0 ? (
           <div className={styles.issue} style={{ border: `1px solid ${inconsistent ? C.dangerBd : C.warnBd}`, background: inconsistent ? C.dangerBg : C.warnBg, color: inconsistent ? C.dangerFg : C.warnFg }}>
             {projection.consistencyIssues.join(" ")}
@@ -124,7 +139,7 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
 
         <div className={styles.meta}>
           <div className={styles.metaRow}><span className={styles.metaLabel}>Conta a Receber</span><span className={styles.metaValue}>{projection.receivableFound ? projection.receivableStatus ?? "Encontrada" : "Não criada"}</span></div>
-          <div className={styles.metaRow}><span className={styles.metaLabel}>Forma de pagamento</span><span className={styles.metaValue}>{fatosDoTitulo && s.pagamento.meio ? s.pagamento.meio : financial.paymentMethodSummary}</span></div>
+          <div className={styles.metaRow}><span className={styles.metaLabel}>Forma de pagamento</span><span className={styles.metaValue}>{formaExibida}</span></div>
           {projection.collectionMode ? <div className={styles.metaRow}><span className={styles.metaLabel}>Cobrança</span><span className={styles.metaValue}>{projection.collectionMode}</span></div> : null}
           {projection.authorizedNoCharge && <div className={styles.metaRow}><span className={styles.metaLabel}>Sem cobrança</span><span className={styles.metaValue}>{projection.noChargeCategory ?? "Autorizada"}</span></div>}
           {projection.installments.length > 0 && (

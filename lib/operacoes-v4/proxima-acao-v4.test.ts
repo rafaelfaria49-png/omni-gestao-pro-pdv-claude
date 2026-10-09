@@ -397,3 +397,30 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — impedimento comercial leva
     expect(a.descricao).not.toMatch(/^OS recebida/);
   });
 });
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: destinos estruturados e conferência", () => {
+  const fatosRejeitados = {
+    tituloEncontrado: true, verificavel: false, motivo: "ESTORNO_AMBIGUO" as const, tituloId: "cr-005", valorTitulo: null, recebidoBruto: null,
+    estornado: null, recebidoLiquido: null, saldoTitulo: null, liquidado: false, temRegistroDePagamento: true, pagamentosVigentes: null,
+    meios: [], semMeioIdentificado: null,
+  };
+
+  it("SEM_COBRANCA_EXIGE_AUTORIZACAO leva à Entrega (classificação), não ao Financeiro", () => {
+    const p = projecao("NO_PRICE", { canDeliver: false, deliveryDecision: "BLOCK_NO_CHARGE_AUTH_REQUIRED", acoes: { podeReceber: false, podeEntregar: false, impedimento: { codigo: "SEM_COBRANCA_EXIGE_AUTORIZACAO", destino: "entrega" } } });
+    expect(pronta({ projection: p, loading: false, error: null })).toMatchObject({ id: "classificar-sem-cobranca", stage: "entrega", titulo: "Classificar entrega sem cobrança", cta: { label: "Abrir entrega" } });
+  });
+
+  it("FALHA_LEITURA estruturada pede releitura (secundária), como o erro de leitura", () => {
+    const p = projecao("UNKNOWN", { canDeliver: false, deliveryDecision: "BLOCK_UNKNOWN", errorCode: "FINANCIAL_STATE_UNKNOWN", acoes: { podeReceber: false, podeEntregar: false, impedimento: { codigo: "FALHA_LEITURA", destino: "recarregar" } } });
+    const a = pronta({ projection: p, loading: false, error: null });
+    expect(a).toMatchObject({ id: "revisar-financeiro", stage: "financeiro", secundaria: { recarregar: "financeiro" } });
+  });
+
+  it("canDeliver legado com fatos rejeitados: segue 'Confirmar entrega' (decisão intacta) sem afirmar quitação", () => {
+    const p = projecao("PAID", { fatos: fatosRejeitados, acoes: { podeReceber: false, podeEntregar: true, impedimento: null } });
+    const a = pronta({ projection: p, loading: false, error: null });
+    expect(a).toMatchObject({ id: "confirmar-entrega", stage: "entrega", tone: "warning" });
+    expect(a.descricao).toMatch(/conferência pendente/);
+    expect(a.descricao).not.toMatch(/Pagamento quitado/);
+  });
+});

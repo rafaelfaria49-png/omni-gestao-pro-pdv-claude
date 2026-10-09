@@ -16,7 +16,12 @@ import { orcamentoRealV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { itensImprimiveisV3 } from "@/lib/operacoes-v3/print-model";
 import { formatarVencimentoV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import type { FinancialProjectionOSV4 } from "./financial-projection";
-import { derivarSituacaoAtendimentoV4 } from "./situacao-atendimento-v4";
+import {
+  derivarSituacaoAtendimentoV4,
+  explicacaoConferenciaV4,
+  pagamentoEmConferenciaV4,
+  TEXTO_SITUACAO_V4,
+} from "./situacao-atendimento-v4";
 
 export type SituacaoRetiradaFinanceiraV4 =
   | "carregando"
@@ -101,6 +106,36 @@ function base(
  * outra OS (stale) conta como carregando — nunca decide nada pela OS atual.
  */
 export function derivarRetiradaFinanceiraV4(input: {
+  osId: string | null | undefined;
+  projection: FinancialProjectionOSV4 | null | undefined;
+  loading: boolean;
+  error: string | null | undefined;
+  entregue?: boolean;
+}): RetiradaFinanceiraV4 {
+  const legado = derivarRetiradaPorStatusV4(input);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: a leitura estrita do título não
+  // comprova o histórico — nenhuma quitação nem valor do título aparece. Gating
+  // (receber/entregar) continua o da decisão legada, sem mudança.
+  // (pendência comercial já descreve o pagamento pelos fatos — "conferência pendente" inclusive.)
+  if (legado.situacao === "carregando" || legado.situacao === "indisponivel" || legado.situacao === "inconsistente" ||
+      legado.situacao === "cancelada" || legado.situacao === "estornada" || legado.situacao === "pendencia_comercial") return legado;
+  const s = derivarSituacaoAtendimentoV4({ osId: input.osId, projection: input.projection, loading: input.loading, error: input.error });
+  if (!pagamentoEmConferenciaV4(s)) return legado;
+  return {
+    ...legado,
+    rotulo: "Pagamento em conferência",
+    descricao: `${TEXTO_SITUACAO_V4.conferenciaPendente}. ${explicacaoConferenciaV4(input.projection)}${
+      legado.liberaEntrega ? " Confira o histórico no Financeiro antes de entregar." : " A entrega fica bloqueada."
+    }`,
+    tone: "warning",
+    total: null,
+    recebido: null,
+    saldo: null,
+    aPrazo: null,
+  };
+}
+
+function derivarRetiradaPorStatusV4(input: {
   osId: string | null | undefined;
   projection: FinancialProjectionOSV4 | null | undefined;
   loading: boolean;

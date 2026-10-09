@@ -230,3 +230,26 @@ test("E3 — sem pagamento e orçamento em rascunho: nenhuma Conta a Receber, se
   await semRolagemHorizontal(page);
   await page.setViewportSize({ width: 1440, height: 900 });
 });
+
+test("E4 (R1-3) — quitado legado com estorno sem referência válida: nenhuma superfície mostra quitação; nada é gravado", async ({ page }) => {
+  const os = await semearOS(prisma, "aprovado", true);
+  const localKey = `os-faturamento:${LOJA}:${os.id}`;
+  const titulo = await prisma.contaReceberTitulo.findFirstOrThrow({ where: { storeId: LOJA, localKey } });
+  const payload = titulo.payload as Record<string, unknown> & { historico: unknown[] };
+  await prisma.contaReceberTitulo.update({
+    where: { id: titulo.id },
+    data: { payload: { ...payload, historico: [...payload.historico, { tipo: "estorno_pagamento", valor: 420, refHistoricoIndex: 9 }, { tipo: "pagamento", valor: 420 }] } as unknown as Prisma.InputJsonValue },
+  });
+  const antes = await efeitos(prisma, os.id);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await abrirOS(page, os.codigo);
+  await expect(page.getByRole("button", { name: /Pagamento em conferência/ })).toBeVisible();
+  await expect(guia(page).getByText("Pagamento em conferência")).toBeVisible();
+  await expect(guia(page).getByText("Valor do título")).toHaveCount(0);
+  await expect(page.getByText("Pagamento quitado", { exact: false })).toHaveCount(0);
+  await ticketFinanceiro(page).click();
+  await expect(page.getByLabel("Fatos da Conta a Receber").getByText("Em conferência")).toHaveCount(3);
+  await expect(page.getByText("Quitado", { exact: true })).toHaveCount(0);
+  expect(await efeitos(prisma, os.id)).toBe(antes);
+});
+

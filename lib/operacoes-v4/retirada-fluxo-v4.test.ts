@@ -158,3 +158,14 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — pendência comercial na re
     expect(derivar(outraLoja)).toMatchObject({ situacao: "inconsistente", liberaEntrega: false, recebido: null });
   });
 });
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: retirada com fatos rejeitados", () => {
+  it("PAID legado com estorno de referência inexistente + reposição: 'Pagamento em conferência', sem valores; gating legado intacto", () => {
+    const p = projecao({ titulo: { status: "pago", historico: [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }, { tipo: "estorno_pagamento", valor: 300, refHistoricoIndex: 9 }, { tipo: "pagamento", valor: 300 }] } });
+    expect(p.financialStatus).toBe("PAID");
+    const r = derivar(p);
+    expect(r).toMatchObject({ rotulo: "Pagamento em conferência", tone: "warning", total: null, recebido: null, saldo: null, liberaEntrega: true });
+    expect(r.descricao).toMatch(/conferência pendente/);
+    expect(r.rotulo).not.toMatch(/Quitado/);
+  });
+});

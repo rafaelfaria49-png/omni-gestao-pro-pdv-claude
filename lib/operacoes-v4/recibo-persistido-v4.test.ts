@@ -193,7 +193,7 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — comprovante com bloqueio c
     const leitura = lerReciboDaProjecaoV4({
       sessao: null,
       os: { timeline },
-      projection: { receivedTotal: null, receivableFound: true, receivablePayments: pagamentos, fatos: { verificavel: true, recebidoLiquido: 300 } },
+      projection: { receivedTotal: null, receivableFound: true, receivablePayments: pagamentos, fatos: { tituloEncontrado: true, verificavel: true, recebidoLiquido: 300, pagamentosVigentes: pagamentos } },
     });
     expect(leitura.estado).toBe("disponivel");
   });
@@ -202,7 +202,7 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — comprovante com bloqueio c
     const leitura = lerReciboDaProjecaoV4({
       sessao: null,
       os: { timeline },
-      projection: { receivedTotal: null, receivableFound: true, receivablePayments: pagamentos, fatos: { verificavel: false, recebidoLiquido: null } },
+      projection: { receivedTotal: null, receivableFound: true, receivablePayments: pagamentos, fatos: { tituloEncontrado: true, verificavel: false, recebidoLiquido: null, pagamentosVigentes: null } },
     });
     expect(leitura.estado).toBe("indisponivel");
   });
@@ -211,7 +211,26 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — comprovante com bloqueio c
     const leitura = lerReciboDaProjecaoV4({
       sessao: null,
       os: { timeline: [recebimento("e1", 300, 300), estorno("x1", 300)] },
-      projection: { receivedTotal: null, receivableFound: true, receivablePayments: [{ amount: 300, operationId: null }], fatos: { verificavel: true, recebidoLiquido: 300 } },
+      projection: { receivedTotal: null, receivableFound: true, receivablePayments: [{ amount: 300, operationId: null }], fatos: { tituloEncontrado: true, verificavel: true, recebidoLiquido: 300, pagamentosVigentes: [{ amount: 300, operationId: null }] } },
+    });
+    expect(leitura.estado).toBe("indisponivel");
+  });
+
+  it("R1-2: com recebido legado e fatos rejeitados (estorno sem referência), o comprovante antigo não volta", () => {
+    const leitura = lerReciboDaProjecaoV4({
+      sessao: null,
+      os: { timeline: [recebimento("e1", 150, 150), recebimento("e2", 150, 300)] },
+      // legado presume a 2ª baixa estornada (último vigente) e manteria a 1ª válida
+      projection: { receivedTotal: 150, receivableFound: true, receivablePayments: [{ amount: 150, operationId: "op-e1" }], fatos: { tituloEncontrado: true, verificavel: false, recebidoLiquido: null, pagamentosVigentes: null } },
+    });
+    expect(leitura.estado).toBe("indisponivel");
+  });
+
+  it("R1-2: fatos verificados usam os pagamentos vigentes da leitura ESTRITA, não os do leitor legado", () => {
+    const leitura = lerReciboDaProjecaoV4({
+      sessao: null,
+      os: { timeline },
+      projection: { receivedTotal: null, receivableFound: true, receivablePayments: pagamentos, fatos: { tituloEncontrado: true, verificavel: true, recebidoLiquido: 300, pagamentosVigentes: [{ amount: 300, operationId: "op-outra" }] } },
     });
     expect(leitura.estado).toBe("indisponivel");
   });

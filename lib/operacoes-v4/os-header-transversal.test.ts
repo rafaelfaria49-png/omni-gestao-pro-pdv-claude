@@ -103,3 +103,16 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — chips com pagamento e pend
     expect(montarFinanceiroHeaderV4({ error: "falha" })).toMatchObject({ label: "Financeiro indisponível", tone: "danger" });
   });
 });
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: conferência em qualquer status", () => {
+  it("PAID legado com fatos rejeitados não aparece como Quitado verde", () => {
+    const h = montarFinanceiroHeaderV4({ financialStatus: "PAID", expectedTotal: 300, receivedTotal: 300, balance: 0, pagamentoEmConferencia: true });
+    expect(h).toMatchObject({ label: "Pagamento em conferência", tone: "warn" });
+    expect(montarFinanceiroHeaderV4({ financialStatus: "PARTIAL", pagamentoEmConferencia: true }).label).toBe("Pagamento em conferência");
+    expect(montarFinanceiroHeaderV4({ financialStatus: "INCONSISTENT", pagamentoEmConferencia: true })).toMatchObject({ label: "Financeiro inconsistente", tone: "danger" });
+  });
+
+  it("UNKNOWN sem Conta a Receber e sem falha de leitura não é 'indisponível'", () => {
+    expect(montarFinanceiroHeaderV4({ financialStatus: "UNKNOWN", semContaAReceber: true })).toMatchObject({ label: "Sem Conta a Receber", tone: "neutro" });
+  });
+});
