@@ -852,15 +852,22 @@ describe("R7 · prova autoritativa, replay e serialização real", () => {
     const e = await efeitos(sid, id); expect(e.titulos).toHaveLength(1); expect(e.caixa).toHaveLength(1); expect(e.movs).toBe(1);
     expect(pagamentosDo(await titulo(sid, id))).toEqual([100]); expect((await lerPayload(id)).aPrazoV3).toBeUndefined();
   });
-  it("dois operadores reenviam a MESMA operação em voo: só uma baixa e recibos idênticos", async () => {
-    const { sid, id, input } = await cenario();
+  it("dois operadores com identidades distintas reenviam a MESMA operação em voo: só uma baixa e recibo original", async () => {
+    const { sid, id, input } = await cenario(), operadorOriginal = { ...sessao };
     const pausa = armarPausa({ modelo: "caixaOperacao", metodos: ["create"], quando: (args) => args.data?.payload?.ordemServicoId === id });
-    const a = receberOSV3(sid, id, input); await pausa.naBarreira; const b = receberOSV3(sid, id, input);
-    try { expect(await concluiuOuEsperaTrava(b)).toBe("esperando_trava"); } finally { pausa.liberar(); }
-    const [ra, rb] = await Promise.all([a, b]);
-    if (ra.estado !== "CONFIRMADO" || rb.estado !== "CONFIRMADO") throw Error("Sem confirmação");
-    expect([ra.resultado.jaRegistrado, rb.resultado.jaRegistrado]).toEqual([false, true]); expect(ra.resultado.recibo).toEqual(rb.resultado.recibo);
-    const e = await efeitos(sid, id); expect(e.titulos).toHaveLength(1); expect(e.caixa).toHaveLength(1); expect(e.movs).toBe(1);
+    const a = receberOSV3(sid, id, input); await pausa.naBarreira;
+    // A primeira action já autenticou e segura a trava; a segunda sessão tem outro operador.
+    sessao.id = "qa-frg2-admin-segundo"; sessao.name = "Segundo operador QA FRG2";
+    try {
+      const b = receberOSV3(sid, id, input);
+      try { expect(await concluiuOuEsperaTrava(b)).toBe("esperando_trava"); } finally { pausa.liberar(); }
+      const [ra, rb] = await Promise.all([a, b]);
+      if (ra.estado !== "CONFIRMADO" || rb.estado !== "CONFIRMADO") throw Error("Sem confirmação");
+      expect([ra.resultado.jaRegistrado, rb.resultado.jaRegistrado]).toEqual([false, true]);
+      expect(ra.resultado.recibo).toEqual(rb.resultado.recibo);
+      expect(rb.resultado.recibo.operador).toBe(operadorOriginal.name);
+      const e = await efeitos(sid, id); expect(e.titulos).toHaveLength(1); expect(e.caixa).toHaveLength(1); expect(e.movs).toBe(1);
+    } finally { Object.assign(sessao, operadorOriginal); pausa.liberar(); }
   });
   it("misto Pix + Dinheiro + a prazo bloqueia imediato e outro misto até reconhecer; split e prazo permanecem originais", async () => {
     const { sid, id, caixa } = await cenario();

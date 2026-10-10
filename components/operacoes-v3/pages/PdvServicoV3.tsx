@@ -31,6 +31,7 @@ import {
 } from "@/lib/operacoes-v3/payment-model";
 import {
   avaliarRascunhoMistoV3,
+  conteudoConfirmacaoImediataV3,
   formatarCentavosBRLV3,
   formatarVencimentoV3,
   hojeLojaV3,
@@ -224,7 +225,7 @@ export function PdvServicoV3() {
   };
 
   const onReceber = async () => {
-    if (!os || !sessao?.sessaoId || temAPrazo) return;
+    if (!podeReceber || !os || !sessao?.sessaoId || temAPrazo) return;
     if (!splitMode && !formaUnica) return;
     const alvo = capturarAlvo();
     const ok = await receber(

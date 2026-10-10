@@ -200,6 +200,7 @@ describe("P1-A · hook real: resposta perdida + representação equivalente", ()
     expect(servidor.baixas).toEqual([{ operacaoId: unica!.operacaoId, centavos: 10_000 }]);
     expect(servidor.saldo).toBe(300);
     expect(split!.operacaoId).toBe(unica!.operacaoId);
+    expect(mocks.receberOSV3.mock.calls[1]![2]).toEqual(mocks.receberOSV3.mock.calls[0]![2]);
 
     // 4) Recebimento NOVO legítimo sobre o novo saldo: outra chave, aceito.
     fireEvent.click(screen.getByLabelText(/Pagamento dividido/));
