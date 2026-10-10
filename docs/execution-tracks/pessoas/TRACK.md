@@ -53,17 +53,17 @@ Runner do GOAL em `scripts/pessoas/**`: HEAD commitado, workspace temporário ex
 ## Plano de origem
 
 - plan_ref: OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15
-- plan_rev: 2
+- plan_rev: 3 (sucessor 001B; revisões anteriores preservadas abaixo)
 - recorte: PESSOAS-000 incorporado ao pre-flight; PESSOAS-001A backend; 001B frontend posterior.
 
 ## Estado
 
 O estado ratificado vive em `state.json` e `LEDGER.jsonl`. Gerar derivados somente pela CLI AEP.
 
-## Sucessor obrigatório antes do frontend 001B — revisão 2
+## Histórico — hardening obrigatório antes do frontend 001B — revisão 2
 
 - Predecessor DONE: PESSOAS-DP-FUNDACAO-CADASTRO-FUNCIONARIOS-001A.
-- Sucessor READY: PESSOAS-DP-HARDENING-P2-PRE-001B-001, exclusivamente P2034/retry bounded, jornada/PII em log e cache/offline Pessoas. Os 13 P3 permanecem fora do recorte.
+- Sucessor da revisão 2, agora DONE: PESSOAS-DP-HARDENING-P2-PRE-001B-001, exclusivamente P2034/retry bounded, jornada/PII em log e cache/offline Pessoas. Os 13 P3 permanecem fora do recorte.
 - Branch de planejamento: plan/pessoas-hardening-p2-pre-001b-001; PR governance-only para main, sem open/close, implementação ou merge pelo agente.
 - Branch futura: goal/pessoas-hardening-p2-pre-001b-001.
 - Worktree futura: C:/Projetos/omni-gestao-pessoas-hardening-p2-pre-001b.
@@ -73,3 +73,25 @@ O estado ratificado vive em `state.json` e `LEDGER.jsonl`. Gerar derivados somen
 - G-CONFIG-DEPLOY: aprovado pelo usuário nesta conversa em 01/10/2026 exclusivamente para next.config.mjs e exclusivamente para excluir Pessoas de cache/offline com NetworkOnly same-origin. Esse path integra o recorte do sucessor; preservar caches dos demais módulos e cacheOnFrontEndNav global.
 - Nenhum outro gate liberado para o sucessor. Os paths, gates, teste, branch e worktree do 001A acima são históricos e não ampliam a allowlist do novo GOAL.
 - Hardening concluído/revisado é pré-requisito obrigatório do frontend 001B; este planejamento não autoriza UI, flag DP, migration de ambiente, produção, folha ou GOAL 002.
+
+## Sucessor atual — frontend cadastral 001B — revisão 3
+
+Esta seção define somente o sucessor 001B. Paths/gates/branch/worktree/testes de 001A e P2 acima são históricos e não ampliam a autorização atual. Os dois GOALs permanecem DONE; ledger e arquivos fechados não são alterados.
+
+- Único GOAL READY: `PESSOAS-DP-FRONTEND-CADASTRO-001B`.
+- Fonte executável: `goals/PESSOAS-DP-FRONTEND-CADASTRO-001B.md` (AEP:META e critérios completos).
+- plan_ref: OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15; plan_rev: **3**.
+- Classe C3, risco ALTO, familia_executor openai, revisao_independente true.
+- Branch de planejamento: `plan/pessoas-001b-frontend → main`, somente governança; commit/push/PR autorizados, merge humano.
+- Branch futura: `goal/pessoas-001b-frontend`.
+- Worktree futura: `C:/Projetos/omni-gestao-pessoas-001b-frontend`.
+- Base inspecionada: origin/main `7cd2c65c0bc23a9f1922cbc280494e62257251ff`, 10/10/2026. Os HEADs ratificados 001A e P2 são ancestrais; P2 mergeado pelo PR #255 (`c1736651864bed3959d50af302fd1ed88c7b4d89`).
+- Pré-execução: merge humano do plano, autorização da nova sessão e referência da revisão independente P2. Relatório P2 ainda declara R pendente e PR #255 não contém reviews/comments; não presumir revisão pelo merge.
+- Escopo: visão geral cadastral, lista/pesquisa/filtros, cadastro/edição/ficha, contrato/remuneração/jornada, histórico, documentos privados, setup empregador/estabelecimento e estados DP; persistência exclusivamente pelas actions/APIs 001A.
+- Navegação: Financeiro HUB → Pessoas → Contador HUB, desktop/mobile/focus mode. Reader server-only compõe guards existentes; único transporte novo é GET `app/api/pessoas/disponibilidade/route.ts`, read-only/no-store. Disponibilidade não deriva de enterprise/Financeiro/GERENTE/FULL; preservar bootstrap autorizado.
+- Paths do sucessor: rotas/componentes locais Pessoas; três arquivos de menu; endpoint e reader de disponibilidade; adapter puro de DTO; seis paths específicos de testes/runner; relatório/evidência do GOAL; artefatos AEP de fechamento. **A allowlist exata é somente a do META**, com justificativa de cada path no GOAL.
+- Teste futuro: `node scripts/pessoas/run-frontend-tests.mjs`, a implementar no 001B; HEAD por git archive, instalação limpa, PostgreSQL descartável, suíte 001A/P2 + frontend, E2E autenticado sintético, build/PWA/typecheck/lint, zero skipped/todo e limpeza conferida. Não há runner/frontend novo neste PR de planejamento.
+- Gates liberados: **nenhum**. Auth, schema, migrations, configuração PWA/deploy/CI e core AEP fora da allowlist. Preview exige configuração DP isolada autorizada, incluindo prova documental R2 real; nenhuma ativação produtiva.
+- Fora do recorte: gestão nova de grants/unidades adicionais, P3s, folha, holerite próprio, férias, 13º, rescisão, GOAL 002, integrações Financeiro/Contador e outro backend de funcionários.
+- Nesta missão: não executar open/close, não implementar UI nem fazer merge. Gerar derivados por `registry`, conferir `verify --all` e `git diff --check`.
+- Ponto de parada: **PESSOAS 001B — PLANO AEP PRONTO PARA MERGE HUMANO**.
