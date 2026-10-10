@@ -10,10 +10,17 @@ import {
   afirmacaoValoresTituloV4,
   derivarSituacaoAtendimentoV4,
   formaRegistradaV4,
+  orientacaoGerarOrcamentoV4,
   pagamentoComPendenciaComercialV4,
   pagamentoEmConferenciaV4,
+  podeOferecerAprovarEReceberV4,
+  podeOferecerFormalizacaoV4,
   TEXTO_SITUACAO_V4,
 } from "./situacao-atendimento-v4";
+import {
+  MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3,
+  MENSAGEM_GERAR_ORCAMENTO_PAGAMENTOS_EM_CONFERENCIA_V3,
+} from "@/lib/operacoes-v3/elegibilidade-comercial";
 
 const storeId = "loja-sit";
 const osId = "os-sit";
@@ -138,5 +145,65 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R3: regra única de afirma
     // valor malformado na linha: nada de Pix R$ 420
     expect(ler(projecao({ payload: os("rascunho", { timeline: [evento([{ forma: "pix", valor: [420] }])] }) })).pagamento.meio)
       .toBe("Forma não identificada no título");
+  });
+});
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 — oferta de 'Aprovar e receber' (C) e da formalização (D)", () => {
+  const orcamentoBase = { id: "orc", sintetizado: false, total: 420, desconto: 0, servicos: [{ id: "s1", descricao: "Troca de Tela", valor: 420 }], pecas: [], criadoEm: "2026-09-18T10:00:00.000Z" };
+  const aberto = { id: "cr", storeId, localKey, valor: 420, status: "pendente", payload: { ordemServicoId: osId, historico: [] } };
+  const oferta = (s: ReturnType<typeof ler>) => ({ formalizar: podeOferecerFormalizacaoV4(s), aprovarEReceber: podeOferecerAprovarEReceberV4(s) });
+
+  it("rascunho + título liquidado verificável: formalização; nunca 'Aprovar e receber' (seria 2ª cobrança)", () => {
+    expect(oferta(ler(projecao()))).toEqual({ formalizar: true, aprovarEReceber: false });
+  });
+
+  it("pagamento parcial vigente sobre rascunho também é caso de formalização", () => {
+    const parcial = { ...liquidado, status: "parcial", payload: { ordemServicoId: osId, historico: [{ tipo: "pagamento", valor: 100, loteId: "op-1" }] } };
+    expect(oferta(ler(projecao({ titulo: parcial })))).toEqual({ formalizar: true, aprovarEReceber: false });
+  });
+
+  it("enviado vencido com pagamento: formalização (a ratificação é exigida no servidor)", () => {
+    const p = projecao({ payload: os("enviado", { orcamento: { ...orcamentoBase, status: "enviado", validoAte: "2026-10-01T02:59:59.000Z" } }) });
+    expect(p.acoes?.impedimento?.codigo).toBe("ORCAMENTO_EXPIRADO");
+    expect(oferta(ler(p))).toEqual({ formalizar: true, aprovarEReceber: false });
+  });
+
+  it("rascunho sem título ou com título sem pagamento: 'Aprovar e receber'; nada a formalizar", () => {
+    expect(oferta(ler(projecao({ titulo: null })))).toEqual({ formalizar: false, aprovarEReceber: true });
+    expect(oferta(ler(projecao({ titulo: aberto })))).toEqual({ formalizar: false, aprovarEReceber: true });
+  });
+
+  it("histórico em conferência, aprovado, recusado, carregando ou outra OS: nenhuma das duas", () => {
+    const ilegivel = { ...liquidado, payload: { ordemServicoId: osId, historico: [{ tipo: "pagamento", valor: "abc" }] } };
+    const casos = [
+      ler(projecao({ titulo: ilegivel })),
+      ler(projecao({ payload: os("aprovado", { orcamento: { ...orcamentoBase, status: "aprovado", respondidoEm: "2026-09-19T10:00:00.000Z" } }) })),
+      ler(projecao({ payload: os("recusado") })),
+      ler(projecao(), { loading: true }),
+      ler(projecao(), { osId: "outra-os" }),
+    ];
+    for (const s of casos) expect(oferta(s)).toEqual({ formalizar: false, aprovarEReceber: false });
+  });
+});
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 — orientação antes de 'Gerar orçamento' (B)", () => {
+  it("pagamento verificado (quitado ou parcial) orienta com o MESMO texto da recusa do servidor", () => {
+    expect(orientacaoGerarOrcamentoV4(ler(projecao()))).toBe(MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3);
+    const parcial = { ...liquidado, status: "parcial", payload: { ordemServicoId: osId, historico: [{ tipo: "pagamento", valor: 100, loteId: "op-1" }] } };
+    expect(orientacaoGerarOrcamentoV4(ler(projecao({ titulo: parcial })))).toBe(MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3);
+    const semOrcamento = projecao({ payload: os("rascunho", { orcamento: undefined }) });
+    expect(orientacaoGerarOrcamentoV4(ler(semOrcamento))).toBe(MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3);
+  });
+
+  it("histórico do título em conferência orienta a conferir a Conta a Receber", () => {
+    const ilegivel = { ...liquidado, payload: { ordemServicoId: osId, historico: [{ tipo: "pagamento", valor: "abc" }] } };
+    expect(orientacaoGerarOrcamentoV4(ler(projecao({ titulo: ilegivel })))).toBe(MENSAGEM_GERAR_ORCAMENTO_PAGAMENTOS_EM_CONFERENCIA_V3);
+  });
+
+  it("sem título, título sem pagamento, carregando ou outra OS: nada a orientar (segue ao servidor, que decide)", () => {
+    const aberto = { id: "cr", storeId, localKey, valor: 420, status: "pendente", payload: { ordemServicoId: osId, historico: [] } };
+    for (const s of [ler(projecao({ titulo: null })), ler(projecao({ titulo: aberto })), ler(projecao(), { loading: true }), ler(projecao(), { osId: "outra-os" })]) {
+      expect(orientacaoGerarOrcamentoV4(s)).toBeNull();
+    }
   });
 });

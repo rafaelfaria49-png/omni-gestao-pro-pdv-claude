@@ -2058,7 +2058,8 @@ describe("OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split i
   })
 
   it("envia o split para receberOSV3 no formato `linhas: SplitLinhaV3[]` (nunca forma/valor soltos)", () => {
-    expect(card).toMatch(/pdv\.receber\(\{\s*linhas:\s*linhasValidas,/)
+    expect(card).toMatch(/const inputImediato = pendenciaImediata\?\.input \?\? \{\s*linhas:\s*linhasValidas,/)
+    expect(card).toContain("await pdv.receber(inputImediato)")
     expect(card).not.toMatch(/pdv\.receber\(\{\s*valor:/)
   })
 
@@ -3781,5 +3782,62 @@ describe("OPS-V4-BLOCKERS-FINAL-CLOSEOUT-018 — estoque, recebimento, técnicos
     })
     expect(v.producaoBancada.tecnicosConhecidos).toEqual([{ id: "t1", nome: "Bruno" }])
     expect(v.filaOperacional.tecnicosConhecidos).toEqual([{ id: "t1", nome: "Bruno" }])
+  })
+})
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 — recebimento só sobre preço
+// comercialmente elegível, "Aprovar e receber", formalização e forma explícita.
+// Honestidade de código: a decisão é do servidor (writers V3 + regra única); as
+// telas só oferecem, encadeiam e mostram. Nenhuma forma nasce marcada.
+// ---------------------------------------------------------------------------
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 — honestidade das telas", () => {
+  const ROOT = join(DIR, "..", "..")
+  const receber = readFileSync(join(DIR, "parts", "ReceberPagamentoV4.tsx"), "utf8")
+  const cluster = readFileSync(join(DIR, "parts", "stages", "OrcamentoDecisaoCluster.tsx"), "utf8")
+  const formalizar = readFileSync(join(DIR, "parts", "FormalizarAprovacaoV4.tsx"), "utf8")
+  const orchestrator = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const pdvV3 = readFileSync(join(ROOT, "components", "operacoes-v3", "pages", "PdvServicoV3.tsx"), "utf8")
+  const rapidoV3 = readFileSync(join(ROOT, "components", "operacoes-v3", "pages", "AtendimentoRapidoV3.tsx"), "utf8")
+  const writers = readFileSync(join(ROOT, "lib", "operacoes-v3", "pdv-servico-actions.ts"), "utf8")
+  const misto = readFileSync(join(ROOT, "lib", "operacoes-v3", "recebimento-misto-service.ts"), "utf8")
+
+  it("E: nenhuma forma pré-selecionada (V4, PDV de Serviço V3, atendimento rápido V3) e opção vazia explícita", () => {
+    for (const fonte of [receber, pdvV3, rapidoV3]) {
+      expect(fonte).toContain('<option value="" disabled>Escolha a forma</option>')
+      expect(fonte).not.toMatch(/forma: "(pix|dinheiro)", valorStr/)
+    }
+    expect(pdvV3).not.toMatch(/useState<[^>]*>\("dinheiro"\)/)
+    expect(rapidoV3).not.toContain("FORMAS_SUPORTADAS[0]?.value")
+    expect(rapidoV3).toContain('useState<FormaRecebimentoV3 | "">("")')
+  })
+
+  it("A: a regra única entra nos writers sob a trava e depois do replay (nada de segunda regra de preço na tela)", () => {
+    expect(writers).toContain("avaliarElegibilidadeComercialV3(")
+    // R1: a recusa leva o código e o destino da regra única.
+    expect(misto).toContain('throw new RecebimentoMistoErroV3("comercial_nao_elegivel", elegibilidade.mensagem, undefined, {')
+    expect(receber).not.toContain("reconciliarTotaisFinanceirosV3")
+    expect(cluster).not.toContain("reconciliarTotaisFinanceirosV3")
+  })
+
+  it("C: aprovar e receber são chamadas separadas; recebimento só depois da aprovação e no MESMO alvo", () => {
+    // A aprovação devolve a recusa (em produção a mensagem lançada não chega ao navegador).
+    expect(orchestrator).toMatch(
+      /const noAlvo = capturarAlvoAtualV4\(\);[\s\S]*aprovacao = await aprovarOrcamentoParaReceberV3\(sid, osId, esperado\);[\s\S]*if \(!noAlvo\(\)\) return \{ status: "fora_do_alvo" \};[\s\S]*if \(!aprovacao\.ok\) return \{ status: "aprovacao_recusada", mensagem: aprovacao\.mensagem \};\s*const recebido = await receber\(\);/,
+    )
+    expect(orchestrator).toContain('status: "aprovado_pagamento_nao_confirmado"')
+    expect(receber).toContain("Orçamento aprovado — pagamento não confirmado.")
+    // R1: a aprovação leva a assinatura do escopo conferido no servidor; só a instância viva recebe.
+    expect(receber).toContain("aprovacao.executar(registrarRecebimento, { conteudo: escopo.conteudo })")
+    expect(receber).toContain("if (!ativo.current) return { ok: false, mensagem: null };")
+    expect(cluster).toContain("v.aprovacaoReceber?.abrir()")
+  })
+
+  it("D: a formalização passa só pelas ações do servidor; tela chaveada pela loja+OS", () => {
+    expect(cluster).toContain("<FormalizarAprovacaoV4 key={v.recebimentoContextKey} v={v} />")
+    expect(formalizar).toContain("f.conferir()")
+    expect(formalizar).toContain("f.formalizar(entrada)")
+    for (const proibido of ['from "@/lib/prisma', 'from "@/lib/financeiro', "aprovarOrcamentoV3", "updateOSPayload"]) {
+      expect(formalizar, `referência proibida: ${proibido}`).not.toContain(proibido)
+    }
   })
 })

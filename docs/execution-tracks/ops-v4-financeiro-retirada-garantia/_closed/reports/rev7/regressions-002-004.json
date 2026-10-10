@@ -1,0 +1,35 @@
+{
+  "sourceProductSHA": "b617dcc201e8b73292036836ae461b3d49c961dd",
+  "onlyPendingEdits": "teste da barreira V3 e evidências, sem produto",
+  "database": "/ops_v4_fluxo_006_qa_frg",
+  "results": [
+    {
+      "name": "fluxo002-mounted",
+      "config": "test/ops-v4-fluxo-curto-002/vitest.config.ts",
+      "exitCode": 0,
+      "summary": [
+        " Test Files  4 passed (4)",
+        "      Tests  15 passed (15)"
+      ]
+    },
+    {
+      "name": "fluxo002-pg",
+      "config": "docs\\execution-tracks\\ops-v4-financeiro-retirada-garantia\\review-rev7\\vitest-fluxo002-pg.config.mjs",
+      "exitCode": 0,
+      "summary": [
+        " Test Files  1 passed (1)",
+        "      Tests  1 passed (1)"
+      ]
+    },
+    {
+      "name": "fluxo004",
+      "config": "test/ops-v4-fluxo-curto-004/vitest.config.ts",
+      "exitCode": 0,
+      "summary": [
+        " Test Files  2 passed (2)",
+        "      Tests  45 passed (45)"
+      ]
+    }
+  ],
+  "at": "2026-10-10T19:09:38.999Z"
+}

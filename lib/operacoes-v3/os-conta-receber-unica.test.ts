@@ -142,7 +142,9 @@ const h = vi.hoisted(() => {
     ordemServico: {
       findFirst: async ({ where }: any) => {
         const r = ordens.get(where.id);
-        if (r && (!where.storeId || r.storeId === where.storeId)) return { id: r.id, payload: r.payload };
+        // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002: a coluna `valorTotal` entra na
+        // reconciliação comercial que o writer passa a exigir (mesma regra da entrega).
+        if (r && (!where.storeId || r.storeId === where.storeId)) return { id: r.id, payload: r.payload, valorTotal: r.valorTotal };
         return null;
       },
       update: async ({ where, data }: any) => {
@@ -233,7 +235,9 @@ function buildOrcamento(valor = 480) {
     status: "aprovado",
     criadoEm: "2026-06-01T00:00:00Z",
     desconto: 0,
-    total: 0,
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002: total declarado coerente com as linhas
+    // (antes 0) — o recebimento novo só ocorre sobre preço comercialmente elegível.
+    total: valor,
     servicos: [{ id: "s1", descricao: "Troca de tela", valor, kindV3: "cobrado" }],
     pecas: [],
   };
@@ -243,6 +247,7 @@ function seedOS(valor = 480) {
   h.ordens.set(OS, {
     id: OS,
     storeId: STORE,
+    valorTotal: valor,
     payload: {
       id: OS,
       codigo: "OS-100",

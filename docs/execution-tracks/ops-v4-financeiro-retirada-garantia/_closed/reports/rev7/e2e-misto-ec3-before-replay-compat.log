@@ -1,0 +1,96 @@
+
+Running 6 tests using 1 worker
+
+(node:26936) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26936) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (2.4s)
+(node:23244) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23244) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  2 [chromium] › e2e\specs\ops-recebimento-misto-p1-hardening-001.spec.ts:119:5 › E2E-C · resposta perdida no PIX 100 → saldo relido 300 → PIX 50 + PIX 50 reaproveita a chave: UMA baixa (1.5m)
+(node:21788) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21788) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[E2E-D] loja=000-qa-ops-v3-misto osA=cmv2ql0g30001h2t8jvs64rur osB=cmv2ql0ge0003h2t81u6gvkwo
+  ok 3 [chromium] › e2e\specs\ops-recebimento-misto-p1-hardening-001.spec.ts:182:5 › E2E-D · OS A confirma, operador troca para B e digita antes da resposta de A: rascunho de B intacto (4.1s)
+[OPS-V3-RECEBIMENTO-MISTO-001] loja=000-qa-ops-v3-misto os=cmv2ql3ay0005h2t8y1v1uaek titulo=cmv2ql4e4000ah23svbz42106 venc=2026-11-09
+  ok 4 [chromium] › e2e\specs\ops-v3-recebimento-misto-001.spec.ts:55:5 › PDV de Serviço V3 — débito 350 + 50 a prazo num título único; depois os 50 quitam o MESMO título (5.3s)
+  x  5 [chromium] › e2e\specs\ops-v4-recebimento-misto-paridade-001.spec.ts:32:5 › V4: débito 350 + a prazo 50 em confirmação única; depois 50 quitam e a parcela desaparece (28.0s)
+(node:24516) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24516) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 6 [chromium] › e2e\specs\ops-v4-recebimento-misto-paridade-001.spec.ts:92:5 › R1: recusa por saldo concorrente atualiza a projeção e permite corrigir o mesmo rascunho (5.2s)
+
+
+  1) [chromium] › e2e\specs\ops-recebimento-misto-p1-hardening-001.spec.ts:119:5 › E2E-C · resposta perdida no PIX 100 → saldo relido 300 → PIX 50 + PIX 50 reaproveita a chave: UMA baixa 
+
+    [31mTest timeout of 90000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('button', { name: /^Receber · R\$\s100,00/ })[22m
+    [2m    - locator resolved to <button disabled type="button" class="inline-flex min-h-[var(--ops-v3-btn-h)] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 border border-transparent bg-[var(--ops-v3-primary)] text-white shadow-[var(--ops-v3-shadow-primary-btn)] hover:bg-[var(--ops-v3-primary-hover)] mt-4 w-full">…</button>[22m
+    [2m  - attempting click action[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is not enabled[22m
+    [2m    - retrying click action[22m
+    [2m    - waiting 20ms[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is not enabled[22m
+    [2m    - retrying click action[22m
+    [2m      - waiting 100ms[22m
+    [2m    159 × waiting for element to be visible, enabled and stable[22m
+    [2m        - element is not enabled[22m
+    [2m      - retrying click action[22m
+    [2m        - waiting 500ms[22m
+
+
+      160 |     await page.getByLabel("Forma da linha 2").selectOption("pix");
+      161 |     await page.getByLabel("Valor da linha 2").fill("50");
+    > 162 |     await page.getByRole("button", { name: /^Receber · R\$\s100,00/ }).click();
+          |                                                                        ^
+      163 |     await expect(page.getByText("Pagamento registrado.", { exact: true }).first()).toBeVisible();
+      164 |
+      165 |     const depoisReplay = await efeitos(prisma, storeId, osId);
+        at C:\Projetos\omni-gestao-ops-v4-frg-002\e2e\specs\ops-recebimento-misto-p1-hardening-001.spec.ts:162:72
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\specs-ops-recebimento-mist-c40c3-aproveita-a-chave-UMA-baixa-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › e2e\specs\ops-v4-recebimento-misto-paridade-001.spec.ts:32:5 › V4: débito 350 + a prazo 50 em confirmação única; depois 50 quitam e a parcela desaparece 
+
+    Error: [31mTimed out 25000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByText('🧾 Recibo de pagamento', { exact: true }).locator('..').locator('..').getByText('Recebido nesta operação', { exact: true })
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 25000ms[22m
+    [2m  - waiting for getByText('🧾 Recibo de pagamento', { exact: true }).locator('..').locator('..').getByText('Recebido nesta operação', { exact: true })[22m
+
+
+      74 |     const recibo = page.getByText("🧾 Recibo de pagamento", { exact: true }).locator("..").locator("..");
+      75 |     await expect(recibo).toHaveCount(1);
+    > 76 |     await expect(recibo.getByText("Recebido nesta operação", { exact: true })).toBeVisible();
+         |                                                                                ^
+      77 |     await expect(recibo.getByText(/Saldo a prazo: R\$\s50,00/)).toBeVisible();
+      78 |     await expect(recibo.getByText("Pagamento parcial — saldo a prazo", { exact: true })).toBeVisible();
+      79 |     await page.getByRole("button", { name: "Fechar", exact: true }).click();
+        at C:\Projetos\omni-gestao-ops-v4-frg-002\e2e\specs\ops-v4-recebimento-misto-paridade-001.spec.ts:76:80
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\specs-ops-v4-recebimento-m-e7a1e-itam-e-a-parcela-desaparece-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\specs-ops-v4-recebimento-m-e7a1e-itam-e-a-parcela-desaparece-chromium\error-context.md
+
+  2 failed
+    [chromium] › e2e\specs\ops-recebimento-misto-p1-hardening-001.spec.ts:119:5 › E2E-C · resposta perdida no PIX 100 → saldo relido 300 → PIX 50 + PIX 50 reaproveita a chave: UMA baixa 
+    [chromium] › e2e\specs\ops-v4-recebimento-misto-paridade-001.spec.ts:32:5 › V4: débito 350 + a prazo 50 em confirmação única; depois 50 quitam e a parcela desaparece 
+  4 passed (2.3m)

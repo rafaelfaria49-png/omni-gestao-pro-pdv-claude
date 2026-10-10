@@ -124,6 +124,7 @@ async function prepararDebito350MaisAPrazo() {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   for (const m of Object.values(mocks)) m.mockReset();
   mocks.lerPagamentoOSV3.mockImplementation(async () => leitura());
 });
@@ -199,7 +200,6 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     fireEvent.click(botao);
     await waitFor(() => expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(1));
     expect(mocks.registrarRecebimentoMistoOSV3.mock.calls[0]![2]).toMatchObject({
-      sessaoId: undefined,
       pagamentosAgora: [],
       saldoAPrazo: { valor: 400, vencimento: VENC },
     });
@@ -211,6 +211,11 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     await prepararDebito350MaisAPrazo();
     fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: VENC } });
     fireEvent.click(screen.getByRole("button", { name: /Adicionar forma/ }));
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): a linha nova nasce SEM forma — também
+    // não é descartada em silêncio; escolhida a forma, o valor em branco segue bloqueando.
+    expect(txt(screen.getByTestId("resumo-misto").textContent)).toMatch(/Linha 3: escolha a forma de pagamento/);
+    expect(desabilitado(screen.getByRole("button", { name: /Registrar R\$/ }))).toBe(true);
+    fireEvent.change(screen.getByLabelText("Forma da linha 3"), { target: { value: "pix" } });
     expect(txt(screen.getByTestId("resumo-misto").textContent)).toMatch(/Linha 3 \(PIX\): informe um valor maior que zero/);
     expect(desabilitado(screen.getByRole("button", { name: /Registrar R\$/ }))).toBe(true);
   });
@@ -226,11 +231,11 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: VENC } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar R\$\s350,00/ }));
     const alerta = await screen.findByRole("alert");
-    expect(alerta.textContent).toMatch(/Resultado não confirmado/);
+    expect(alerta.textContent).toMatch(/Confirmação pendente de verificação/);
     // O botão principal fica bloqueado: só a MESMA operação pode ser reenviada.
     expect(desabilitado(screen.getByRole("button", { name: /Registrar R\$\s350,00/ }))).toBe(true);
 
-    fireEvent.click(within(alerta).getByRole("button", { name: /Reenviar a mesma operação/ }));
+    fireEvent.click(within(alerta).getByRole("button", { name: /Verificar mesma confirmação/ }));
     await waitFor(() => expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(2));
     const primeira = mocks.registrarRecebimentoMistoOSV3.mock.calls[0]![2];
     const segunda = mocks.registrarRecebimentoMistoOSV3.mock.calls[1]![2];
@@ -309,7 +314,7 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     await waitFor(() => expect(txt(document.body.textContent)).toContain("R$ 400,00"));
     fireEvent.click(screen.getByRole("button", { name: /^PIX$/ }));
     fireEvent.click(screen.getByRole("button", { name: /Quitar OS/ }));
-    await screen.findByText(/Failed to fetch/);
+    await screen.findByTestId("pendencia-recebimento");
     await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /Quitar OS/ }))).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /Quitar OS/ }));
     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
@@ -327,11 +332,11 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
       op: "parcial",
       recibo: okMisto().recibo,
     });
+    const respostaPerdida = deferred<never>();
+    const confirmacaoRecuperada = deferred<ReturnType<typeof respostaComum>>();
     mocks.receberOSV3
-      .mockImplementationOnce(async () => {
-        throw new Error("Failed to fetch");
-      })
-      .mockImplementationOnce(async () => respostaComum(250))
+      .mockImplementationOnce(() => respostaPerdida.promise)
+      .mockImplementationOnce(() => confirmacaoRecuperada.promise)
       .mockImplementationOnce(async () => ({ ...respostaComum(250), jaRegistrado: true }));
     montar();
     await screen.findByText(/Saldo a receber/);
@@ -344,15 +349,29 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
       await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(chamadas));
     };
     await receberValor("100", 1); // R$100: resposta perdida
-    await screen.findByText(/Failed to fetch/);
-    await receberValor("50", 2); // R$50: confirmado
-    // O saldo novo (250) re-sugere o valor; só então o operador digita de novo.
-    await waitFor(() => expect((screen.getByLabelText(/Valor a receber/) as HTMLInputElement).value).toBe("250.00"));
-    await receberValor("100", 3); // reconciliar os R$100
-    const [cem, cinquenta, cemDeNovo] = mocks.receberOSV3.mock.calls.map((c) => c[2] as { valor: number; operacaoId: string });
-    expect([cem!.valor, cinquenta!.valor, cemDeNovo!.valor]).toEqual([100, 50, 100]);
-    expect(cemDeNovo!.operacaoId).toBe(cem!.operacaoId);
-    expect(cinquenta!.operacaoId).not.toBe(cem!.operacaoId);
+    const pendencia = await screen.findByTestId("pendencia-recebimento");
+    const verificar = () => within(pendencia).getByRole("button", { name: "Verificar mesma confirmação" });
+    // A pendência é persistida ANTES do await. Enquanto processa, nenhum reenvio é permitido.
+    expect(desabilitado(verificar())).toBe(true);
+    expect(mocks.receberOSV3).toHaveBeenCalledTimes(1);
+    await act(async () => { respostaPerdida.reject(new Error("Failed to fetch")); });
+    await waitFor(() => expect(desabilitado(verificar())).toBe(false));
+    // A revisão 7 impede outra confirmação no meio. Somente a original é verificada.
+    fireEvent.change(screen.getByLabelText(/Valor a receber/), { target: { value: "50" } });
+    expect(desabilitado(screen.getByRole("button", { name: /^Receber · / }))).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /^Receber · / }));
+    expect(mocks.receberOSV3).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(screen.getByTestId("pendencia-recebimento")).getByRole("button", { name: "Verificar mesma confirmação" }));
+    await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
+    const [original, verificada] = mocks.receberOSV3.mock.calls.map((c) => c[2] as Record<string, unknown>);
+    expect(verificada).toEqual(original);
+    expect(desabilitado(verificar())).toBe(true);
+    // Reconciliação e efeito de saldo precisam terminar antes de digitar a próxima confirmação.
+    await act(async () => { confirmacaoRecuperada.resolve(respostaComum(250)); });
+    await waitFor(() => expect(screen.queryByTestId("pendencia-recebimento")).toBeNull());
+    expect((screen.getByLabelText(/Valor a receber/) as HTMLInputElement).value).toBe("250.00");
+    await receberValor("50", 3);
+    expect(mocks.receberOSV3.mock.calls[2]![2].operacaoId).not.toBe(original!.operacaoId);
   });
 
   it("misto incerto: recusa NÃO conferida (sessão) mantém a MESMA chave; só ok ou recusa conferida a liberam", async () => {
@@ -366,16 +385,16 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     await prepararDebito350MaisAPrazo();
     fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: VENC } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar R\$\s350,00/ }));
-    fireEvent.click(within(await screen.findByRole("alert")).getByRole("button", { name: /Reenviar a mesma operação/ }));
+    fireEvent.click(within(await screen.findByRole("alert")).getByRole("button", { name: /Verificar mesma confirmação/ }));
     await waitFor(() => expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(2));
-    await screen.findByText(/Faça login para registrar o recebimento/);
+    await screen.findByRole("button", { name: "Verificar mesma confirmação" });
     // Recusa sem conferência: a pendência continua de pé, com a mesma operação.
-    fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: /Reenviar a mesma operação/ }));
+    fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: /Verificar mesma confirmação/ }));
     await waitFor(() => expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(3));
     const chaves = mocks.registrarRecebimentoMistoOSV3.mock.calls.map((c) => (c[2] as { operacaoId: string }).operacaoId);
     expect(new Set(chaves).size).toBe(1);
     // Recusa CONFERIDA (nada gravado com a chave): só agora a pendência é liberada.
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Reenviar a mesma operação/ })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Verificar mesma confirmação/ })).toBeNull());
   });
 
   // R4/P1: pendência do misto é POR OS — uma segunda incerteza em outra OS não apaga a primeira.
@@ -391,7 +410,7 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
 
     fireEvent.change(screen.getByDisplayValue(/OS-A/), { target: { value: "os-b" } });
     await screen.findByRole("heading", { name: /OS-B · Cliente OS-B/ });
-    expect(screen.queryByRole("button", { name: /Reenviar a mesma operação/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Verificar mesma confirmação/ })).toBeNull();
     // O modo dividido continua ligado na troca de OS (só os valores são zerados).
     await waitFor(() => expect(txt(document.body.textContent)).toContain("R$ 400,00"));
     fireEvent.change(screen.getByLabelText("Forma da linha 1"), { target: { value: "debito" } });
@@ -399,13 +418,13 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     fireEvent.click(screen.getByRole("button", { name: /A prazo \/ crediário/ }));
     fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: VENC } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar R\$\s350,00/ }));
-    await screen.findByRole("button", { name: /Reenviar a mesma operação/ });
+    await screen.findByRole("button", { name: /Verificar mesma confirmação/ });
     expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(2);
 
     mocks.registrarRecebimentoMistoOSV3.mockImplementation(async () => okMisto({ jaRegistrado: true }));
     fireEvent.change(screen.getByDisplayValue(/OS-B/), { target: { value: "os-a" } });
     await screen.findByRole("heading", { name: /OS-A · Cliente OS-A/ });
-    fireEvent.click(await screen.findByRole("button", { name: /Reenviar a mesma operação/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Verificar mesma confirmação/ }));
     await waitFor(() => expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(3));
     const [daA, daB, reenvio] = mocks.registrarRecebimentoMistoOSV3.mock.calls;
     expect([daA![1], daB![1], reenvio![1]]).toEqual(["os-a", "os-b", "os-a"]);
@@ -434,7 +453,7 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     fireEvent.change(screen.getByLabelText(/Valor a receber/), { target: { value: "100" } });
     await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /^Receber · / }))).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /^Receber · / }));
-    await screen.findByText(/Failed to fetch/);
+    await screen.findByTestId("pendencia-recebimento");
     // Depois da falha a tela relê o saldo real (o recebimento pode ter entrado).
     await waitFor(() => expect(mocks.lerPagamentoOSV3).toHaveBeenCalledTimes(2));
 
@@ -446,7 +465,7 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
     const [unica, split] = mocks.receberOSV3.mock.calls.map((c) => c[2] as Record<string, unknown>);
     expect(unica).toMatchObject({ valor: 100, forma: "pix", sessaoId: "sessao-1", saldoEsperado: 400 });
-    expect(split).toMatchObject({ linhas: [{ forma: "pix", valor: 100 }], sessaoId: "sessao-1", saldoEsperado: 400 });
+    expect(split).toEqual(unica);
     expect(split!.operacaoId).toBe(unica!.operacaoId);
   });
 

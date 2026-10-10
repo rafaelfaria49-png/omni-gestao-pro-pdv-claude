@@ -670,9 +670,13 @@ const misto500 = (sessaoId: string, K: string): RegistrarRecebimentoMistoInputV3
   saldoEsperado: 500,
 });
 
-/** Writer legítimo REAL do faturamento vigente: orçamento aprovado 500 → adapter grava o título 500 (OS → título). */
+/**
+ * Writer legítimo REAL do faturamento vigente: orçamento aprovado 500 → adapter grava o título 500 (OS → título).
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item A): o total declarado da OS sobe junto (500) — com
+ * `payload.valorTotal` ainda em 400 os totais divergiriam e recebimento novo é recusado por elegibilidade.
+ */
 async function faturamentoVigente500(storeId: string, osId: string) {
-  await updateOSPayload(storeId, osId, { orcamento: orcamento(500, "aprovado"), faturamentoTotal: 500 } as never);
+  await updateOSPayload(storeId, osId, { orcamento: orcamento(500, "aprovado"), faturamentoTotal: 500, valorTotal: 500 } as never);
   const s = await estado(storeId, osId);
   expect(s.titulo?.valor).toBe(500);
   expect(s.os.valorTotal === null ? null : Number(s.os.valorTotal)).not.toBe(400);

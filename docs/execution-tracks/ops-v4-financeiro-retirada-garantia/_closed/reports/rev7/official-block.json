@@ -1,0 +1,16 @@
+{
+  "functionalSHA": "cd69780c81b3bc159cd5f0810daabc98aae06a34",
+  "stateCommit": "bfded919c70b5dcb3f6325999e9ad3cee5027454",
+  "status": "BLOCKED",
+  "blocked_by": "gate",
+  "attempt": 3,
+  "exitCode": 3,
+  "reason": "R independente Anthropic Claude Opus 5.5 (claude-opus-5-5), sessao f20ef356-1f02-462d-90c8-f37564dce04e, sobre cd69780c81b3bc159cd5f0810daabc98aae06a34: REQUEST_CHANGES, P0=0 P1=0 P2=1 P3=5. P2-1: recusa imediata moderna perde codigo/destino comercial na resposta duravel e replay (contrato A). AEP check PASS nesse SHA, mas R nao aprova. Testes parcialmente amostrados pela R, nova R devera le-los integralmente. Teto 3/3 esgotado; aplicar corretivo exige nova decisao humana do mesmo GOAL. Parecer SHA256 c1237bd814e0765fdcdf5ca41140544d057b67d5ec53070741b8f1e0a27db337.",
+  "previousLedgerSHA256": "5b20ce5e48409736a9dd616835736a102b8802fd985d3428544e252516a59e3e",
+  "previousLedgerBytes": 9649,
+  "afterLedgerSHA256": "52294b08bd7926d086baa823577b46d768da0750d1c0b5675d7e948a1e07b0df",
+  "previousLedgerBytePrefixPreserved": true,
+  "goal003Unchanged": true,
+  "functionalDiff": "",
+  "at": "2026-10-10T19:54:40.188Z"
+}

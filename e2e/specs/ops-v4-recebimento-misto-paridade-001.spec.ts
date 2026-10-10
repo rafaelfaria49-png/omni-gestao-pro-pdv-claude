@@ -45,7 +45,9 @@ test("V4: débito 350 + a prazo 50 em confirmação única; depois 50 quitam e a
     const sessao = await prisma.sessaoCaixa.findFirst({ where: { storeId, status: "ABERTA" } }) ?? await prisma.sessaoCaixa.create({ data: { storeId, status: "ABERTA", operador: "QA V4" } });
     await abrirOS(page, codigo);
     const modal = page.getByRole("dialog", { name: "Receber pagamento" });
-    await expect(modal.getByLabel("Forma da linha 1").locator("option")).toHaveText(["Dinheiro", "PIX", "Débito", "Crédito", "A prazo / crediário"]);
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): nenhuma forma pré-selecionada.
+    await expect(modal.getByLabel("Forma da linha 1").locator("option")).toHaveText(["Escolha a forma", "Dinheiro", "PIX", "Débito", "Crédito", "A prazo / crediário"]);
+    await expect(modal.getByLabel("Forma da linha 1")).toHaveValue("");
     await modal.getByLabel("Forma da linha 1").selectOption("debito"); await modal.getByLabel("Valor da linha 1").fill("350");
     await modal.getByRole("button", { name: /Dividir pagamento/ }).click(); await modal.getByLabel("Forma da linha 2").selectOption("a_prazo");
     await expect(modal.getByLabel("Valor da linha 2")).toHaveValue("50,00");

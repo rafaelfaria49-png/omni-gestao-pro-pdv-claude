@@ -1,0 +1,30 @@
+{
+  "sha": "cd69780c81b3bc159cd5f0810daabc98aae06a34",
+  "sessionId": "f20ef356-1f02-462d-90c8-f37564dce04e",
+  "modelObserved": "claude-opus-5-5",
+  "exitCode": 0,
+  "resultSubtype": "success",
+  "isError": false,
+  "toolCalls": 64,
+  "verdict": "REQUEST_CHANGES",
+  "P0": 0,
+  "P1": 0,
+  "P2": 1,
+  "P3": 5,
+  "verdictSHA256": "c1237bd814e0765fdcdf5ca41140544d057b67d5ec53070741b8f1e0a27db337",
+  "rawSHA256": "9e05fbc6b9c6ab1d040903174157606d81be3253b4b9f8455a96b840d77b5471",
+  "packet": {
+    "sha": "cd69780c81b3bc159cd5f0810daabc98aae06a34",
+    "packet": "C:\\Projetos\\omni-gestao-ops-v4-frg-002\\docs\\execution-tracks\\ops-v4-financeiro-retirada-garantia\\review-rev7\\pacote-cd69780c81b3",
+    "files": 125,
+    "manifestSHA256": "4dd6c2ae5a825b754a476c2644aacc179c8b5efcca89684c5cc8d2f717b6dbb5",
+    "at": "2026-10-10T19:34:48.184Z",
+    "zip": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/pacote-cd69780c81b3.zip",
+    "zipSHA256": "eaaf37ce8ca9442d056e76a6f22d68d79159b102398869a66c3d99f076210349",
+    "zipBytes": 709745,
+    "zipVerified": true
+  },
+  "reviewComplete": false,
+  "reviewLimit": "Todos os trechos de produto revisados; parte dos testes amostrada. Parecer recomenda nova R integral dos testes após o corretivo.",
+  "at": "2026-10-10T19:47:58.031Z"
+}

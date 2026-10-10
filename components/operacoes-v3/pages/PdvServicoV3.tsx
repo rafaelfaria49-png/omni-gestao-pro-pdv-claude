@@ -31,6 +31,7 @@ import {
 } from "@/lib/operacoes-v3/payment-model";
 import {
   avaliarRascunhoMistoV3,
+  conteudoConfirmacaoImediataV3,
   formatarCentavosBRLV3,
   formatarVencimentoV3,
   hojeLojaV3,
@@ -40,6 +41,8 @@ import {
   type LinhaRascunhoMistoV3,
 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
+import { avaliarElegibilidadeComercialV3 } from "@/lib/operacoes-v3/elegibilidade-comercial";
+import type { OrdemServico } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { NoStoreBlockV3 } from "../components/ScreenStateV3";
 import { ButtonV3 } from "../components/UiV3";
@@ -77,7 +80,8 @@ function centavosParaCampo(centavos: number): string {
   return centavos > 0 ? (centavos / 100).toFixed(2).replace(".", ",") : "";
 }
 
-type SplitDraft = { forma: FormaRecebimentoV3 | typeof A_PRAZO; valorStr: string };
+/** `""` = forma ainda não escolhida (GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002, item E). */
+type SplitDraft = { forma: FormaRecebimentoV3 | typeof A_PRAZO | ""; valorStr: string };
 
 export function PdvServicoV3() {
   const { ordens, storeId, selectedOsId, openOS, notificar, reload: reloadLista, mudarStatus } = useOperacoesV3();
@@ -108,16 +112,19 @@ export function PdvServicoV3() {
     aPrazo,
     registrandoMisto,
     pendenciaMisto,
+    pendenciaReceber,
+    confirmacaoBloqueada,
     registrarMisto,
   } = usePdvServicoV3(storeId, osId || null);
 
   const [intencao, setIntencao] = useState<RecebimentoIntencaoV3>("parcial");
   const [splitMode, setSplitMode] = useState(false);
-  // Forma única ("a_prazo" = todo o saldo a prazo)
-  const [forma, setForma] = useState<FormaRecebimentoV3 | typeof A_PRAZO>("dinheiro");
+  // Forma única ("a_prazo" = todo o saldo a prazo). Nenhuma forma pré-selecionada: o
+  // operador escolhe antes de confirmar (GOAL 002, item E).
+  const [forma, setForma] = useState<FormaRecebimentoV3 | typeof A_PRAZO | "">("");
   const [valorStr, setValorStr] = useState("");
   // Split
-  const [splitLinhas, setSplitLinhas] = useState<SplitDraft[]>([{ forma: "dinheiro", valorStr: "" }]);
+  const [splitLinhas, setSplitLinhas] = useState<SplitDraft[]>([{ forma: "", valorStr: "" }]);
   // Parte a prazo (vencimento obrigatório; observação opcional)
   const [vencimentoAPrazo, setVencimentoAPrazo] = useState("");
   const [obsAPrazo, setObsAPrazo] = useState("");
@@ -141,8 +148,8 @@ export function PdvServicoV3() {
   // Trocar de OS/loja nunca reaproveita valores digitados para outra OS. Refresh da
   // MESMA OS (Atualizar saldo, recarga) não apaga o que o operador digitou.
   useEffect(() => {
-    setSplitLinhas([{ forma: "dinheiro", valorStr: "" }]);
-    setForma("dinheiro");
+    setSplitLinhas([{ forma: "", valorStr: "" }]);
+    setForma("");
     setVencimentoAPrazo("");
     setObsAPrazo("");
     setReciboAberto(false);
@@ -167,22 +174,54 @@ export function PdvServicoV3() {
     : [{ forma: A_PRAZO, valorStr: saldo > 0 ? saldo.toFixed(2) : "" }];
   const misto = temAPrazo ? avaliarRascunhoMistoV3({ linhas: linhasMisto, vencimento: vencimentoAPrazo, saldo, hoje }) : null;
   const precisaCaixaMisto = (misto?.receberAgoraCentavos ?? 0) > 0;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item A, orientação da V3): a MESMA regra do
+  // servidor, aqui só para orientar. Bloqueia apenas pelos motivos que dependem do status do
+  // orçamento real (pendente, recusado, vencido); valores divergentes ou preço ausente dependem
+  // das colunas da OS e ficam com o writer, que recusa no servidor com motivo e destino.
+  const elegibilidade = os
+    ? avaliarElegibilidadeComercialV3({
+        storeId: storeId ?? "",
+        osId: os.id,
+        payload: os as OrdemServico & Record<string, unknown>,
+        prismaValorTotal: Number((os as { prismaValorTotal?: unknown }).prismaValorTotal ?? 0),
+        agora: Date.now(),
+      })
+    : null;
+  const recusaComercial =
+    elegibilidade &&
+    !elegibilidade.elegivel &&
+    (elegibilidade.codigo === "APROVACAO_COMERCIAL_PENDENTE" || elegibilidade.codigo === "ORCAMENTO_RECUSADO" || elegibilidade.codigo === "ORCAMENTO_EXPIRADO")
+      ? elegibilidade
+      : null;
   const podeRegistrarMisto =
-    !!os && !!pagamento && !loading && !!misto?.ok && (!precisaCaixaMisto || caixaAberto) && !registrandoMisto && !pendenciaMisto;
+    !!os && !!pagamento && !loading && !!misto?.ok && (!precisaCaixaMisto || caixaAberto) && !registrandoMisto && !recebendo && !confirmacaoBloqueada && !pendenciaMisto && !pendenciaReceber && !recusaComercial;
 
   // Linhas de split válidas (number) e validação — caminho IMEDIATO (sem a prazo), inalterado.
   const splitLinhasNum: SplitLinhaV3[] = splitLinhas
-    .flatMap((l) => (l.forma === A_PRAZO ? [] : [{ forma: l.forma, valor: num(l.valorStr) }]))
+    .flatMap((l) => (l.forma === A_PRAZO || !l.forma ? [] : [{ forma: l.forma, valor: num(l.valorStr) }]))
     .filter((l) => l.valor > 0);
   const somaSplit = somaSplitV3(splitLinhasNum);
+  // Linha sem forma escolhida nunca é recebida nem descartada em silêncio: bloqueia a confirmação.
+  const splitSemForma = splitMode && splitLinhas.some((l) => !l.forma);
 
   const valorUnico = num(valorStr);
-  const formaUnica: FormaRecebimentoV3 | null = forma === A_PRAZO ? null : forma;
+  const formaUnica: FormaRecebimentoV3 | null = forma === A_PRAZO || !forma ? null : forma;
   const formaUnicaSuportada = FORMAS_RECEBIMENTO_V3.find((f) => f.value === formaUnica)?.suportada ?? false;
 
   const veredito = splitMode ? validarSplitV3(splitLinhasNum, saldo) : validarRecebimentoV3(valorUnico, saldo);
   const valorAReceber = splitMode ? somaSplit : valorUnico;
-  const podeReceber = !temAPrazo && !!os && caixaAberto && (splitMode || formaUnicaSuportada) && veredito.ok && !recebendo;
+  const inputImediato = splitMode
+    ? { linhas: splitLinhasNum, sessaoId: sessao?.sessaoId ?? "", intencao }
+    : { valor: valorUnico, forma: formaUnica ?? undefined, sessaoId: sessao?.sessaoId ?? "", intencao };
+  // Representação canônica equivalente só recupera o input ORIGINAL; nunca uma nova cobrança.
+  const podeReenviarOriginal = (() => {
+    if (temAPrazo || !pendenciaReceber || pendenciaReceber.key !== alvoAtual) return false;
+    try {
+      return conteudoConfirmacaoImediataV3({ ...inputImediato, saldoEsperado: pendenciaReceber.input.saldoEsperado }) === conteudoConfirmacaoImediataV3(pendenciaReceber.input);
+    } catch { return false; }
+  })();
+  const podeReceber =
+    !temAPrazo && !!os && caixaAberto && (splitMode ? !splitSemForma : formaUnicaSuportada) && veredito.ok && !recebendo && !registrandoMisto && (!confirmacaoBloqueada || podeReenviarOriginal) && !pendenciaMisto && (!pendenciaReceber || podeReenviarOriginal) && !recusaComercial;
 
   /** Captura o alvo ANTES do await; `aindaNoAlvo()` diz se a tela continua nessa loja/OS. */
   const capturarAlvo = () => {
@@ -196,26 +235,23 @@ export function PdvServicoV3() {
   };
 
   const onReceber = async () => {
-    if (!os || !sessao?.sessaoId || temAPrazo) return;
+    if (!podeReceber || !os || !sessao?.sessaoId || temAPrazo) return;
     if (!splitMode && !formaUnica) return;
     const alvo = capturarAlvo();
-    const ok = await receber(
-      splitMode
-        ? { linhas: splitLinhasNum, sessaoId: sessao.sessaoId, intencao }
-        : { valor: valorUnico, forma: formaUnica!, sessaoId: sessao.sessaoId, intencao },
-    );
+    const ok = await receber(podeReenviarOriginal ? pendenciaReceber!.input : inputImediato);
     if (ok) {
       reloadLista();
       alvo.notificar(veredito.op === "liquidar" ? "OS quitada." : "Pagamento registrado.");
-      // Reseta os campos de entrada do split (só na MESMA OS); forma única é re-sugerida pelo efeito do saldo.
-      if (alvo.aindaNoAlvo()) setSplitLinhas([{ forma: "dinheiro", valorStr: "" }]);
+      // Reseta os campos de entrada do split (só na MESMA OS), sem forma marcada; a forma única
+      // fica a que o operador escolheu nesta OS. O valor é re-sugerido pelo efeito do saldo.
+      if (alvo.aindaNoAlvo()) setSplitLinhas([{ forma: "", valorStr: "" }]);
     }
   };
 
   /** Limpa o rascunho misto — só chamado quando a tela ainda está na OS da operação. */
   const limparRascunhoMisto = () => {
-    setSplitLinhas([{ forma: "dinheiro", valorStr: "" }]);
-    setForma("dinheiro");
+    setSplitLinhas([{ forma: "", valorStr: "" }]);
+    setForma("");
     setVencimentoAPrazo("");
     setObsAPrazo("");
   };
@@ -258,6 +294,18 @@ export function PdvServicoV3() {
       reloadLista();
       alvo.notificar(r.resultado.jaRegistrado ? "Confirmado: a operação já estava registrada (sem duplicidade)." : "Operação registrada.");
       if (alvo.aindaNoAlvo()) limparRascunhoMisto();
+    }
+  };
+
+  /** Recebimento imediato sem resposta: reenvia a MESMA confirmação (chave, sessão, linhas) — o servidor deduplica. */
+  const onReenviarRecebimentoPendente = async () => {
+    if (!pendenciaReceber) return;
+    const alvo = capturarAlvo();
+    const ok = await receber(pendenciaReceber.input);
+    if (ok) {
+      reloadLista();
+      alvo.notificar("Recebimento confirmado (sem duplicidade).");
+      if (alvo.aindaNoAlvo()) setSplitLinhas([{ forma: "", valorStr: "" }]);
     }
   };
 
@@ -442,7 +490,9 @@ export function PdvServicoV3() {
                           <span className="mb-1 block text-xs font-medium text-muted-foreground">Valor a receber (R$)</span>
                           <input className={inputCls} value={valorStr} onChange={(e) => setValorStr(e.target.value)} placeholder="0,00" inputMode="decimal" />
                         </label>
-                        {!formaUnicaSuportada ? (
+                        {!forma ? (
+                          <p className="mt-2 text-xs text-muted-foreground">Escolha a forma de pagamento antes de confirmar.</p>
+                        ) : !formaUnicaSuportada ? (
                           <p className="mt-2 text-xs text-warning">Esta forma ainda não está conectada ao recebimento real — escolha Dinheiro, PIX, Débito ou Crédito.</p>
                         ) : null}
                       </>
@@ -459,6 +509,7 @@ export function PdvServicoV3() {
                           aria-label={`Forma da linha ${i + 1}`}
                           onChange={(e) => escolherFormaLinha(i, e.target.value as SplitDraft["forma"])}
                         >
+                          <option value="" disabled>Escolha a forma</option>
                           {FORMAS_SUPORTADAS.map((f) => (
                             <option key={f.value} value={f.value}>{f.label}</option>
                           ))}
@@ -487,7 +538,7 @@ export function PdvServicoV3() {
                     ))}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap gap-2">
-                        <ButtonV3 variant="outline" onClick={() => setSplitLinhas((arr) => [...arr, { forma: "pix", valorStr: "" }])}>
+                        <ButtonV3 variant="outline" onClick={() => setSplitLinhas((arr) => [...arr, { forma: "", valorStr: "" }])}>
                           <Plus className="h-4 w-4" /> Adicionar forma
                         </ButtonV3>
                         <ButtonV3
@@ -616,17 +667,44 @@ export function PdvServicoV3() {
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-warning"><AlertTriangle className="h-3.5 w-3.5" /> {veredito.motivo}</p>
               ) : null}
 
+              {confirmacaoBloqueada && !pendenciaMisto && !pendenciaReceber ? <p role="alert" className="mt-3 text-xs text-warning">Confirmação pendente de verificação. Não registre outro recebimento nesta OS até confirmar o resultado anterior. Solicite conferência a um operador autorizado.</p> : null}
               {pendenciaMisto ? (
                 <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground" role="alert">
                   <p>
-                    <strong>Resultado não confirmado</strong> da operação anterior. Reenvie a <strong>mesma</strong> operação para
-                    verificar — o servidor reconhece a chave e não lança em dobro.
+                    Confirmação pendente de verificação. Não registre outro recebimento nesta OS até confirmar o resultado anterior.
                   </p>
                   <ButtonV3 variant="outline" className="mt-2 w-full" disabled={registrandoMisto} onClick={onReenviarPendente}>
                     {registrandoMisto ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                    Reenviar a mesma operação
+                    Verificar mesma confirmação
                   </ButtonV3>
                 </div>
+              ) : null}
+
+              {pendenciaReceber ? (
+                <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground" role="alert" data-testid="pendencia-recebimento">
+                  <p>
+                    Confirmação pendente de verificação. Não registre outro recebimento nesta OS até confirmar o resultado anterior.
+                  </p>
+                  <ButtonV3 variant="outline" className="mt-2 w-full" disabled={recebendo} onClick={onReenviarRecebimentoPendente}>
+                    {recebendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    Verificar mesma confirmação
+                  </ButtonV3>
+                </div>
+              ) : null}
+
+              {os && recusaComercial ? (
+                <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground" role="alert" data-testid="recusa-comercial">
+                  <p className="flex items-start gap-1.5">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden /> {recusaComercial.mensagem}
+                  </p>
+                  <button type="button" onClick={() => openOS(os.id)} className="mt-2 text-xs text-primary hover:underline">
+                    {recusaComercial.destino === "comercial" ? "Abrir o orçamento no prontuário da OS →" : "Abrir o prontuário da OS para conferir a cobrança →"}
+                  </button>
+                </div>
+              ) : null}
+
+              {splitSemForma && !temAPrazo ? (
+                <p className="mt-2 text-xs text-muted-foreground">Escolha a forma de pagamento de cada linha antes de confirmar.</p>
               ) : null}
 
               {temAPrazo ? (
@@ -737,7 +815,7 @@ export function PdvServicoV3() {
                   onChange={(e) => setMotivoEstorno(e.target.value)}
                   placeholder="Motivo (opcional)"
                 />
-                <ButtonV3 variant="outline" className="mt-2 w-full" disabled={!caixaAberto || estornando} onClick={onEstornar}>
+                <ButtonV3 variant="outline" className="mt-2 w-full" disabled={!caixaAberto || estornando || recebendo || registrandoMisto || confirmacaoBloqueada || !!pendenciaMisto || !!pendenciaReceber} onClick={onEstornar}>
                   {estornando ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                   Estornar último recebimento
                 </ButtonV3>

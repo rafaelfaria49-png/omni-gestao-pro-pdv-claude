@@ -1,66 +1,39 @@
 "use client";
 
-// ============================================================================
-// Operações V3 — Fase 2A/2B · estado do PDV de Serviço (client)
-// ----------------------------------------------------------------------------
-// Carrega o pagamento da OS (saldo/status + sessão de caixa) e expõe `receber`
-// (com split + intenção), `estornar` (correção do último recebimento) e o
-// `ultimoRecibo` para impressão do comprovante. Toda a lógica financeira fica no
-// servidor (`pdv-servico-actions`). `registrarMisto` = pagamento imediato + saldo
-// a prazo numa única confirmação, com `operacaoId` estável por confirmação.
-// ============================================================================
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  estornarRecebimentoOSV3,
-  lerPagamentoOSV3,
-  receberOSV3,
-  registrarRecebimentoMistoOSV3,
-  type CaixaSessaoV3,
-  type EstornarRecebimentoInputV3,
-  type ReceberOSInputV3,
-  type RegistrarRecebimentoMistoInputV3,
-  type RegistrarRecebimentoMistoResultV3,
+  estornarRecebimentoOSV3, lerPagamentoOSV3, receberOSV3, registrarRecebimentoMistoOSV3,
+  type CaixaSessaoV3, type EstornarRecebimentoInputV3, type ReceberOSInputV3,
+  type RegistrarRecebimentoMistoInputV3, type RegistrarRecebimentoMistoResultV3,
 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import { aPrazoVisivelV3, type APrazoV3, type ComprovanteReciboV3, type PagamentoV3 } from "@/lib/operacoes-v3/payment-model";
-import { conteudoRecebimentoCanonicoV3, gerarOperacaoIdV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
+import {
+  conteudoConfirmacaoImediataV3, conteudoConfirmacaoMistaV3, gerarOperacaoIdV3,
+  lerPendenciaConfirmacaoV3, MENSAGEM_CONFIRMACAO_PENDENTE_V3,
+  type PendenciaConfirmacaoFinanceiraV3, type ProvaConfirmacaoFinanceiraV3,
+} from "@/lib/operacoes-v3/recebimento-misto-model";
 
 export interface PdvServicoState {
-  pagamento: PagamentoV3 | null;
-  sessao: CaixaSessaoV3 | null;
-  loading: boolean;
-  recebendo: boolean;
-  estornando: boolean;
-  error: string | null;
-  ultimoRecibo: ComprovanteReciboV3 | null;
-  reload: () => void;
+  pagamento: PagamentoV3 | null; sessao: CaixaSessaoV3 | null; loading: boolean;
+  recebendo: boolean; estornando: boolean; error: string | null;
+  ultimoRecibo: ComprovanteReciboV3 | null; reload: () => void;
   receber: (input: ReceberOSInputV3) => Promise<boolean>;
-  estornar: (input: EstornarRecebimentoInputV3) => Promise<boolean>;
-  limparRecibo: () => void;
+  estornar: (input: EstornarRecebimentoInputV3) => Promise<boolean>; limparRecibo: () => void;
 }
-
-/** Dados de UMA confirmação mista (a `operacaoId` é do hook, estável por confirmação). */
 export type DadosRecebimentoMistoV3 = Omit<RegistrarRecebimentoMistoInputV3, "operacaoId">;
-
-/** Confirmação cujo resultado é DESCONHECIDO (erro de transporte): só pode ser reenviada com a mesma chave. */
-export interface PendenciaRecebimentoMistoV3 {
-  key: string;
-  operacaoId: string;
-  input: RegistrarRecebimentoMistoInputV3;
-}
-
+export interface PendenciaRecebimentoMistoV3 { key: string; operacaoId: string; input: RegistrarRecebimentoMistoInputV3; }
+export interface PendenciaRecebimentoV3 { key: string; operacaoId: string; input: ReceberOSInputV3; }
 export type RegistroMistoResultadoUIV3 =
   | { status: "ok"; resultado: Extract<RegistrarRecebimentoMistoResultV3, { ok: true }> }
   | { status: "recusado"; code: string; mensagem: string; saldoAtual?: number }
-  | { status: "incerto"; mensagem: string }
-  | { status: "em_andamento" };
-
-/** Superfície da V3 (aditiva). A V4 continua consumindo só `PdvServicoState`. */
+  | { status: "incerto"; mensagem: string } | { status: "em_andamento" };
 export interface PdvServicoV3Completo extends PdvServicoState {
-  /** Saldo a prazo PERSISTIDO na OS (lido do servidor), quando ainda há saldo. */
-  aPrazo: APrazoV3 | null;
-  registrandoMisto: boolean;
+  aPrazo: APrazoV3 | null; registrandoMisto: boolean;
   pendenciaMisto: PendenciaRecebimentoMistoV3 | null;
+  pendenciaReceber?: PendenciaRecebimentoV3 | null;
+  pendenciaConfirmacao?: PendenciaConfirmacaoFinanceiraV3 | null;
+  confirmacaoBloqueada?: boolean;
+  verificarConfirmacao?: () => Promise<boolean>;
   registrarMisto: (dados: DadosRecebimentoMistoV3) => Promise<RegistroMistoResultadoUIV3>;
 }
 
@@ -84,251 +57,205 @@ export function projetarLeituraAtualPdvServicoV3(input: {
   };
 }
 
+/** Uma exceção nunca constitui prova negativa, independentemente de mensagem ou digest. */
+export function recebimentoSemRespostaV3(_e: unknown): boolean { return true; }
+
+const PREFIXO = "omni:confirmacao-financeira:v1:";
+const EVENTO = "omni:confirmacao-financeira";
+// Exclusão síncrona entre instâncias no mesmo documento. Entre abas/sessões, o fence
+// persistido na MESMA transação financeira e a consultiva por OS são a autoridade.
+const emVoo = new Set<string>();
+function lerLocal(storeId: string, osId: string): { pendencia: PendenciaConfirmacaoFinanceiraV3 | null; bloqueada: boolean } {
+  try {
+    const raw = window.localStorage.getItem(PREFIXO + JSON.stringify([storeId, osId]));
+    const pendencia = raw ? lerPendenciaConfirmacaoV3(JSON.parse(raw), storeId, osId) : null;
+    return { pendencia, bloqueada: raw !== null && !pendencia };
+  } catch { return { pendencia: null, bloqueada: true }; }
+}
+function persistir(p: PendenciaConfirmacaoFinanceiraV3): void {
+  // Antes de enviar: o refresh não pode transformar incerteza em operação nova.
+  window.localStorage.setItem(PREFIXO + p.key, JSON.stringify(p));
+  window.dispatchEvent(new Event(EVENTO));
+}
+function remover(p: PendenciaConfirmacaoFinanceiraV3): void {
+  if (lerLocal(p.storeId, p.osId).pendencia?.operacaoId !== p.operacaoId) return;
+  window.localStorage.removeItem(PREFIXO + p.key);
+  window.dispatchEvent(new Event(EVENTO));
+}
+function mesmoConteudo(a: PendenciaConfirmacaoFinanceiraV3, b: PendenciaConfirmacaoFinanceiraV3): boolean {
+  if (a.key !== b.key || a.tipo !== b.tipo || a.operacaoId !== b.operacaoId) return false;
+  return a.tipo === "imediato" && b.tipo === "imediato"
+    ? conteudoConfirmacaoImediataV3(a.input) === conteudoConfirmacaoImediataV3(b.input)
+    : a.tipo === "misto" && b.tipo === "misto" && conteudoConfirmacaoMistaV3(a.input) === conteudoConfirmacaoMistaV3(b.input);
+}
+
 export function usePdvServicoV3(storeId: string | null, osId: string | null): PdvServicoV3Completo {
-  const sidAtual = (storeId ?? "").trim();
-  const osIdAtual = (osId ?? "").trim();
-  const targetKey = sidAtual && osIdAtual ? JSON.stringify([sidAtual, osIdAtual]) : null;
+  const sid = (storeId ?? "").trim(), id = (osId ?? "").trim();
+  const targetKey = sid && id ? JSON.stringify([sid, id]) : null;
   const [pagamento, setPagamento] = useState<PagamentoV3 | null>(null);
   const [sessao, setSessao] = useState<CaixaSessaoV3 | null>(null);
   const [loading, setLoading] = useState(false);
-  const [recebendo, setRecebendo] = useState(false);
+  const [recebendo, setRecebendo] = useState(false), [registrandoMisto, setRegistrandoMisto] = useState(false);
   const [estornando, setEstornando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [ultimoRecibo, setUltimoRecibo] = useState<ComprovanteReciboV3 | null>(null);
-  const [reciboKey, setReciboKey] = useState<string | null>(null);
-  const [nonce, setNonce] = useState(0);
-  const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null), [errorKey, setErrorKey] = useState<string | null>(null);
+  const [ultimoRecibo, setUltimoRecibo] = useState<ComprovanteReciboV3 | null>(null), [reciboKey, setReciboKey] = useState<string | null>(null);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null), [nonce, setNonce] = useState(0);
   const [aPrazo, setAPrazo] = useState<APrazoV3 | null>(null);
-  const [registrandoMisto, setRegistrandoMisto] = useState(false);
-  // Confirmações mistas com resultado DESCONHECIDO, uma por loja/OS: trocar de OS (ou ter
-  // outra incerteza em outra OS) nunca descarta a pendência desta.
-  const [pendenciasMisto, setPendenciasMisto] = useState<Record<string, PendenciaRecebimentoMistoV3>>({});
-  const reqRef = useRef(0);
-  const activeKeyRef = useRef(targetKey);
-  // Travas SÍNCRONAS (antes do primeiro await): duplo clique nunca dispara 2 envios.
-  const recebendoRef = useRef(false);
-  const mistoEmVooRef = useRef(false);
-  const pendenciasMistoRef = useRef<Record<string, PendenciaRecebimentoMistoV3>>({});
-  // Recebimentos sem resultado confirmado, por loja/OS + conteúdo ECONÔMICO (o mesmo do
-  // servidor: forma única e split iguais são o mesmo recebimento): reenviar reaproveita a
-  // chave — se a tentativa original gravou (resposta perdida), o servidor devolve o já
-  // gravado. Só o sucesso DAQUELE conteúdo libera a chave; outro recebimento no meio não.
-  const receberPendentesRef = useRef(new Map<string, string>());
-  // Saldo que a tela mostra para a OS carregada: vai junto do recebimento (concorrência
-  // otimista) — gravar sobre um saldo que o operador não viu é recusado no servidor.
-  const saldoVistoRef = useRef<{ key: string; saldo: number } | null>(null);
-  // Atualização síncrona no render: a primeira renderização da OS B já mascara
-  // qualquer snapshot que ainda pertença à OS A, antes mesmo de o effect rodar.
+  const [pendencias, setPendencias] = useState<Record<string, PendenciaConfirmacaoFinanceiraV3>>({});
+  const [bloqueios, setBloqueios] = useState<Record<string, boolean>>({});
+  const reqRef = useRef(0), activeKeyRef = useRef(targetKey);
   activeKeyRef.current = targetKey;
-  saldoVistoRef.current = loadedKey !== null && pagamento ? { key: loadedKey, saldo: pagamento.saldo } : null;
-
-  const definirPendenciaMisto = useCallback((key: string, pendencia: PendenciaRecebimentoMistoV3 | null) => {
-    const proximas = { ...pendenciasMistoRef.current };
-    if (pendencia) proximas[key] = pendencia;
-    else delete proximas[key];
-    pendenciasMistoRef.current = proximas;
-    setPendenciasMisto(proximas);
+  const saldoVistoRef = useRef<{ key: string; saldo: number } | null>(null);
+  saldoVistoRef.current = loadedKey && pagamento ? { key: loadedKey, saldo: pagamento.saldo } : null;
+  const sincronizar = useCallback((s: string, o: string) => {
+    const key = JSON.stringify([s, o]), local = lerLocal(s, o);
+    setPendencias((prev) => { const next = { ...prev }; if (local.pendencia) next[key] = local.pendencia; else delete next[key]; return next; });
+    if (local.bloqueada) setBloqueios((prev) => ({ ...prev, [key]: true }));
   }, []);
+  const erro = useCallback((key: string, mensagem = MENSAGEM_CONFIRMACAO_PENDENTE_V3) => {
+    if (activeKeyRef.current === key) { setErrorKey(key); setError(mensagem); }
+  }, []);
+  const assimilar = useCallback((s: string, o: string, res: Awaited<ReturnType<typeof lerPagamentoOSV3>>) => {
+    const key = JSON.stringify([s, o]);
+    if (res.pendenciaConfirmacao) persistir(res.pendenciaConfirmacao);
+    setBloqueios((prev) => ({ ...prev, [key]: !!res.confirmacaoBloqueada || lerLocal(s, o).bloqueada }));
+    sincronizar(s, o);
+    if (activeKeyRef.current !== key) return;
+    const { sessao: caixa, aPrazo: ap, pendenciaConfirmacao: _p, confirmacaoBloqueada: _b, ...pag } = res;
+    setPagamento(pag); setSessao(caixa); setAPrazo(ap ?? null); setLoadedKey(key);
+  }, [sincronizar]);
 
   useEffect(() => {
-    const sid = sidAtual;
-    const id = osIdAtual;
-    const reqId = ++reqRef.current;
-    setPagamento(null);
-    setSessao(null);
-    setAPrazo(null);
-    setLoadedKey(null);
-    setErrorKey(null);
-    setError(null);
-    if (!sid || !id) {
-      setLoading(false);
-      return;
-    }
+    if (!sid || !id) return;
+    const sync = () => sincronizar(sid, id);
+    sync(); window.addEventListener(EVENTO, sync); window.addEventListener("storage", sync);
+    return () => { window.removeEventListener(EVENTO, sync); window.removeEventListener("storage", sync); };
+  }, [sid, id, sincronizar]);
+  useEffect(() => {
+    const req = ++reqRef.current;
+    setPagamento(null); setSessao(null); setAPrazo(null); setLoadedKey(null); setErrorKey(null); setError(null);
+    if (!sid || !id) { setLoading(false); return; }
     setLoading(true);
-    lerPagamentoOSV3(sid, id)
-      .then((res) => {
-        if (reqRef.current !== reqId || activeKeyRef.current !== targetKey) return;
-        const { sessao: s, aPrazo: ap, ...pag } = res;
-        setPagamento(pag);
-        setSessao(s);
-        setAPrazo(ap ?? null);
-        setLoadedKey(targetKey);
-        setLoading(false);
-      })
-      .catch((e) => {
-        if (reqRef.current !== reqId || activeKeyRef.current !== targetKey) return;
-        setPagamento(null);
-        setSessao(null);
-        setAPrazo(null);
-        setLoadedKey(null);
-        setErrorKey(targetKey);
-        setError(e instanceof Error ? e.message : "Falha ao carregar o pagamento da OS.");
-        setLoading(false);
-      });
-  }, [sidAtual, osIdAtual, targetKey, nonce]);
+    lerPagamentoOSV3(sid, id).then((res) => {
+      if (req !== reqRef.current || activeKeyRef.current !== targetKey) return;
+      assimilar(sid, id, res); setLoading(false);
+    }).catch((e) => {
+      if (req !== reqRef.current || activeKeyRef.current !== targetKey) return;
+      erro(targetKey!, e instanceof Error ? e.message : "Falha ao carregar o pagamento da OS."); setLoading(false);
+    });
+  }, [sid, id, targetKey, nonce, assimilar, erro]);
 
+  const enviar = useCallback(async (solicitada: PendenciaConfirmacaoFinanceiraV3): Promise<{ confirmado: boolean; misto?: RegistroMistoResultadoUIV3 }> => {
+    const local = lerLocal(solicitada.storeId, solicitada.osId);
+    // Mesmo conteúdo canônico nunca substitui a representação original congelada.
+    const p = local.pendencia && mesmoConteudo(local.pendencia, solicitada) ? local.pendencia : solicitada;
+    if (emVoo.has(p.key)) return { confirmado: false, misto: { status: "em_andamento" } };
+    if (local.bloqueada || (local.pendencia && !mesmoConteudo(local.pendencia, p))) {
+      erro(p.key); return { confirmado: false, misto: { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 } };
+    }
+    try { persistir(p); } catch {
+      setBloqueios((prev) => ({ ...prev, [p.key]: true })); erro(p.key);
+      return { confirmado: false, misto: { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 } };
+    }
+    emVoo.add(p.key);
+    if (p.tipo === "imediato") setRecebendo(true); else setRegistrandoMisto(true);
+    if (activeKeyRef.current === p.key) { setError(null); setErrorKey(null); }
+    const reconhecer = async (prova?: ProvaConfirmacaoFinanceiraV3) => {
+      if (prova) {
+        if (prova.operacaoId !== p.operacaoId || prova.tipo !== p.tipo) throw new Error("Prova incompatível.");
+        const leitura = await lerPagamentoOSV3(p.storeId, p.osId, prova);
+        assimilar(p.storeId, p.osId, leitura);
+        if (leitura.confirmacaoBloqueada || leitura.pendenciaConfirmacao) throw new Error("Reconhecimento ainda pendente.");
+      }
+      remover(p); sincronizar(p.storeId, p.osId);
+    };
+    try {
+      if (p.tipo === "imediato") {
+        const resposta = await receberOSV3(p.storeId, p.osId, { ...p.input, confirmacaoClienteV3: true });
+        if ("estado" in resposta && resposta.estado === "RECUSADO_DEFINITIVAMENTE" && resposta.operacaoId === p.operacaoId) {
+          remover(p); sincronizar(p.storeId, p.osId); erro(p.key, resposta.mensagem); return { confirmado: false };
+        }
+        if ("estado" in resposta && resposta.estado === "INCERTO") {
+          if (resposta.pendencia) persistir(resposta.pendencia);
+          erro(p.key); return { confirmado: false };
+        }
+        // Compatibilidade com o contrato positivo anterior (consumidores e testes legados).
+        const positivo = "estado" in resposta && resposta.estado === "CONFIRMADO" ? resposta.resultado : resposta as unknown as import("@/lib/operacoes-v3/pdv-servico-actions").ReceberOSResultV3;
+        if (!positivo.pagamento || !positivo.recibo) throw new Error("Sem prova positiva.");
+        await reconhecer("estado" in resposta && resposta.estado === "CONFIRMADO" ? resposta.prova : undefined);
+        if (activeKeyRef.current === p.key) {
+          setPagamento(positivo.pagamento); setAPrazo(aPrazoVisivelV3(positivo.os, positivo.pagamento.saldo)); setLoadedKey(p.key);
+          setErrorKey(null); setUltimoRecibo(positivo.recibo); setReciboKey(p.key);
+        }
+        return { confirmado: true };
+      }
+      const res = await registrarRecebimentoMistoOSV3(p.storeId, p.osId, { ...p.input, confirmacaoClienteV3: true });
+      if (!res.ok) {
+        if (res.pendencia) persistir(res.pendencia);
+        if (res.naoRegistrada) { remover(p); sincronizar(p.storeId, p.osId); }
+        erro(p.key, res.naoRegistrada ? res.mensagem : MENSAGEM_CONFIRMACAO_PENDENTE_V3);
+        return { confirmado: false, misto: res.naoRegistrada ? { status: "recusado", code: res.code, mensagem: res.mensagem, saldoAtual: res.saldoAtual } : { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 } };
+      }
+      await reconhecer(res.prova);
+      if (activeKeyRef.current === p.key) {
+        setPagamento(res.pagamento); setAPrazo(aPrazoVisivelV3({ aPrazoV3: res.aPrazo }, res.pagamento.saldo));
+        setLoadedKey(p.key); setErrorKey(null); setUltimoRecibo(res.recibo); setReciboKey(p.key);
+      }
+      return { confirmado: true, misto: { status: "ok", resultado: res } };
+    } catch {
+      // Transporte, digest, timeout e autorização não provam rollback/ausência.
+      erro(p.key);
+      lerPagamentoOSV3(p.storeId, p.osId).then((res) => assimilar(p.storeId, p.osId, res)).catch(() => undefined);
+      return { confirmado: false, misto: { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 } };
+    } finally {
+      emVoo.delete(p.key); sincronizar(p.storeId, p.osId);
+      if (p.tipo === "imediato") setRecebendo(false); else setRegistrandoMisto(false);
+    }
+  }, [assimilar, erro, sincronizar]);
+
+  const receber = useCallback(async (input: ReceberOSInputV3) => {
+    if (!sid || !id || !targetKey) return false;
+    const anterior = lerLocal(sid, id).pendencia;
+    if (bloqueios[targetKey] || (anterior && anterior.tipo !== "imediato")) { erro(targetKey); return false; }
+    const enviado: ReceberOSInputV3 = JSON.parse(JSON.stringify({ ...input, confirmacaoClienteV3: true,
+      operacaoId: input.operacaoId ?? anterior?.operacaoId ?? gerarOperacaoIdV3(),
+      saldoEsperado: input.saldoEsperado ?? (anterior?.tipo === "imediato" ? anterior.input.saldoEsperado : saldoVistoRef.current?.key === targetKey ? saldoVistoRef.current.saldo : undefined),
+    }));
+    return (await enviar({ versao: 1, key: targetKey, storeId: sid, osId: id, operacaoId: enviado.operacaoId!, tipo: "imediato", input: enviado })).confirmado;
+  }, [sid, id, targetKey, bloqueios, enviar, erro]);
+  const registrarMisto = useCallback(async (dados: DadosRecebimentoMistoV3): Promise<RegistroMistoResultadoUIV3> => {
+    if (!sid || !id || !targetKey) return { status: "recusado", code: "entrada_invalida", mensagem: "Selecione a OS." };
+    const anterior = lerLocal(sid, id).pendencia;
+    if (bloqueios[targetKey] || (anterior && anterior.tipo !== "misto")) { erro(targetKey); return { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 }; }
+    const input: RegistrarRecebimentoMistoInputV3 = JSON.parse(JSON.stringify({ ...dados, confirmacaoClienteV3: true, operacaoId: anterior?.operacaoId ?? gerarOperacaoIdV3() }));
+    return (await enviar({ versao: 1, key: targetKey, storeId: sid, osId: id, operacaoId: input.operacaoId, tipo: "misto", input })).misto ?? { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 };
+  }, [sid, id, targetKey, bloqueios, enviar, erro]);
+  const verificarConfirmacao = useCallback(async () => {
+    if (!sid || !id) return false;
+    const p = lerLocal(sid, id).pendencia;
+    return p ? (await enviar(p)).confirmado : false;
+  }, [sid, id, enviar]);
+  const estornar = useCallback(async (input: EstornarRecebimentoInputV3) => {
+    if (!sid || !id || !targetKey) return false;
+    const local = lerLocal(sid, id);
+    if (local.pendencia || local.bloqueada || bloqueios[targetKey] || emVoo.has(targetKey)) { erro(targetKey); return false; }
+    setEstornando(true); setError(null);
+    try {
+      const res = await estornarRecebimentoOSV3(sid, id, input);
+      if (activeKeyRef.current === targetKey) {
+        setPagamento(res.pagamento); setAPrazo(aPrazoVisivelV3(res.os, res.pagamento.saldo)); setLoadedKey(targetKey); setErrorKey(null);
+      }
+      return true;
+    } catch (e) { erro(targetKey, e instanceof Error ? e.message : "Não foi possível estornar o recebimento."); return false; }
+    finally { setEstornando(false); }
+  }, [sid, id, targetKey, bloqueios, erro]);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   const limparRecibo = useCallback(() => setUltimoRecibo(null), []);
-
-  const receber = useCallback(
-    async (input: ReceberOSInputV3) => {
-      const sid = (storeId ?? "").trim();
-      const id = (osId ?? "").trim();
-      if (!sid || !id) return false;
-      // Duplo clique: o 2º chamado volta antes de qualquer await (sem 2º recebimento).
-      if (recebendoRef.current) return false;
-      recebendoRef.current = true;
-      const key = JSON.stringify([sid, id]);
-      const conteudo = JSON.stringify([sid, id, conteudoRecebimentoCanonicoV3(input)]);
-      const operacaoId = input.operacaoId ?? receberPendentesRef.current.get(conteudo) ?? gerarOperacaoIdV3();
-      const saldoEsperado = input.saldoEsperado ?? (saldoVistoRef.current?.key === key ? saldoVistoRef.current.saldo : undefined);
-      setRecebendo(true);
-      setError(null);
-      try {
-        const res = await receberOSV3(sid, id, { ...input, operacaoId, saldoEsperado });
-        receberPendentesRef.current.delete(conteudo);
-        if (activeKeyRef.current === key) {
-          setPagamento(res.pagamento);
-          // O servidor reconcilia o "a prazo" com o saldo real: a tela acompanha.
-          setAPrazo(aPrazoVisivelV3(res.os, res.pagamento.saldo));
-          setLoadedKey(key);
-          setErrorKey(null);
-          setUltimoRecibo(res.recibo);
-          setReciboKey(key);
-        }
-        return true;
-      } catch (e) {
-        receberPendentesRef.current.set(conteudo, operacaoId);
-        if (activeKeyRef.current === key) {
-          setErrorKey(key);
-          setError(e instanceof Error ? e.message : "Não foi possível registrar o recebimento.");
-        }
-        // Resultado incerto ou saldo mudou: relê o saldo REAL (mantendo o erro na tela) para o
-        // operador ver se o recebimento entrou antes de confirmar de novo.
-        lerPagamentoOSV3(sid, id)
-          .then((atual) => {
-            if (activeKeyRef.current !== key) return;
-            const { sessao: s, aPrazo: ap, ...pag } = atual;
-            setPagamento(pag);
-            setSessao(s);
-            setAPrazo(ap ?? null);
-            setLoadedKey(key);
-          })
-          .catch(() => undefined);
-        return false;
-      } finally {
-        recebendoRef.current = false;
-        setRecebendo(false);
-      }
-    },
-    [storeId, osId],
-  );
-
-  const registrarMisto = useCallback(
-    async (dados: DadosRecebimentoMistoV3): Promise<RegistroMistoResultadoUIV3> => {
-      const sid = (storeId ?? "").trim();
-      const id = (osId ?? "").trim();
-      if (!sid || !id) return { status: "recusado", code: "entrada_invalida", mensagem: "Selecione a OS." };
-      // Trava síncrona ANTES do primeiro await: o 2º clique nunca chega ao servidor.
-      if (mistoEmVooRef.current) return { status: "em_andamento" };
-      mistoEmVooRef.current = true;
-      const key = JSON.stringify([sid, id]);
-      // Resultado anterior DESCONHECIDO nesta OS: reenvia exatamente a mesma operação
-      // (mesma chave) para reconciliar — nunca gera chave nova por conta própria.
-      const pendente = pendenciasMistoRef.current[key] ?? null;
-      const input: RegistrarRecebimentoMistoInputV3 = pendente ? pendente.input : { ...dados, operacaoId: gerarOperacaoIdV3() };
-      setRegistrandoMisto(true);
-      setError(null);
-      try {
-        const res = await registrarRecebimentoMistoOSV3(sid, id, input);
-        // A chave de uma operação incerta só é liberada quando o servidor dá o resultado
-        // TERMINAL dela: gravada (ok) ou recusada de vez (`naoRegistrada`). Recusa sem
-        // conferência (sessão, permissão, conflito transitório) mantém a pendência.
-        if ((res.ok || res.naoRegistrada) && pendenciasMistoRef.current[key]?.operacaoId === input.operacaoId) {
-          definirPendenciaMisto(key, null);
-        }
-        if (!res.ok) {
-          if (activeKeyRef.current === key) {
-            setErrorKey(key);
-            setError(res.mensagem);
-          }
-          return { status: "recusado", code: res.code, mensagem: res.mensagem, saldoAtual: res.saldoAtual };
-        }
-        if (activeKeyRef.current === key) {
-          setPagamento(res.pagamento);
-          setAPrazo(aPrazoVisivelV3({ aPrazoV3: res.aPrazo }, res.pagamento.saldo));
-          setLoadedKey(key);
-          setErrorKey(null);
-          setUltimoRecibo(res.recibo);
-          setReciboKey(key);
-        }
-        return { status: "ok", resultado: res };
-      } catch {
-        definirPendenciaMisto(key, { key, operacaoId: input.operacaoId, input });
-        const mensagem =
-          "Não foi possível confirmar se o registro foi gravado. Reenvie a MESMA operação para verificar — não haverá lançamento em dobro.";
-        if (activeKeyRef.current === key) {
-          setErrorKey(key);
-          setError(mensagem);
-        }
-        return { status: "incerto", mensagem };
-      } finally {
-        mistoEmVooRef.current = false;
-        setRegistrandoMisto(false);
-      }
-    },
-    [storeId, osId, definirPendenciaMisto],
-  );
-
-  const estornar = useCallback(
-    async (input: EstornarRecebimentoInputV3) => {
-      const sid = (storeId ?? "").trim();
-      const id = (osId ?? "").trim();
-      if (!sid || !id) return false;
-      setEstornando(true);
-      setError(null);
-      try {
-        const res = await estornarRecebimentoOSV3(sid, id, input);
-        const key = JSON.stringify([sid, id]);
-        if (activeKeyRef.current === key) {
-          setPagamento(res.pagamento);
-          setAPrazo(aPrazoVisivelV3(res.os, res.pagamento.saldo));
-          setLoadedKey(key);
-          setErrorKey(null);
-        }
-        return true;
-      } catch (e) {
-        if (activeKeyRef.current === JSON.stringify([sid, id])) {
-          setErrorKey(JSON.stringify([sid, id]));
-          setError(e instanceof Error ? e.message : "Não foi possível estornar o recebimento.");
-        }
-        return false;
-      } finally {
-        setEstornando(false);
-      }
-    },
-    [storeId, osId],
-  );
-
-  const leituraAtual = projetarLeituraAtualPdvServicoV3({ targetKey, loadedKey, errorKey, pagamento, sessao, loading, error });
-  const carregadoParaAlvo = targetKey !== null && loadedKey === targetKey;
-  return {
-    pagamento: leituraAtual.pagamento,
-    sessao: leituraAtual.sessao,
-    loading: leituraAtual.loading,
-    recebendo,
-    estornando,
-    error: leituraAtual.error,
-    // Comprovante pertence à OS em que foi emitido: trocar de OS/loja nunca o reaproveita.
-    ultimoRecibo: targetKey !== null && reciboKey === targetKey ? ultimoRecibo : null,
-    reload,
-    receber,
-    estornar,
-    limparRecibo,
-    aPrazo: carregadoParaAlvo ? aPrazo : null,
-    registrandoMisto,
-    pendenciaMisto: targetKey !== null ? (pendenciasMisto[targetKey] ?? null) : null,
-    registrarMisto,
+  const leitura = projetarLeituraAtualPdvServicoV3({ targetKey, loadedKey, errorKey, pagamento, sessao, loading, error });
+  const p = targetKey ? pendencias[targetKey] ?? null : null;
+  return { ...leitura, recebendo, registrandoMisto, estornando, ultimoRecibo: targetKey && reciboKey === targetKey ? ultimoRecibo : null,
+    aPrazo: targetKey && loadedKey === targetKey ? aPrazo : null, reload, receber, registrarMisto, estornar, limparRecibo,
+    pendenciaConfirmacao: p, pendenciaMisto: p?.tipo === "misto" ? p : null, pendenciaReceber: p?.tipo === "imediato" ? p : null,
+    confirmacaoBloqueada: !!p || !!(targetKey && bloqueios[targetKey]), verificarConfirmacao,
   };
 }

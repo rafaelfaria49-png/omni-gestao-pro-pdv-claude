@@ -162,6 +162,7 @@ function servidorComLedger(saldoInicial = 400) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   for (const m of Object.values(mocks)) m.mockReset();
   mocks.lerPagamentoOSV3.mockImplementation(async () => leitura());
 });
@@ -178,7 +179,7 @@ describe("P1-A · hook real: resposta perdida + representação equivalente", ()
     fireEvent.click(screen.getByRole("button", { name: /^PIX$/ }));
     fireEvent.change(screen.getByLabelText(/Valor a receber/), { target: { value: "100" } });
     fireEvent.click(await screen.findByRole("button", { name: /^Receber · / }));
-    await screen.findByText(/Failed to fetch/);
+    await screen.findByTestId("pendencia-recebimento");
     // 2) A tela relê o saldo real: 300.
     await waitFor(() => expect(mocks.lerPagamentoOSV3).toHaveBeenCalledTimes(2));
     await saldoNaTela("R$ 300,00");
@@ -190,6 +191,10 @@ describe("P1-A · hook real: resposta perdida + representação equivalente", ()
     fireEvent.click(screen.getByRole("button", { name: /Adicionar forma/ }));
     fireEvent.change(screen.getByLabelText("Forma da linha 2"), { target: { value: "pix" } });
     fireEvent.change(screen.getByLabelText("Valor da linha 2"), { target: { value: "50" } });
+    // Outra forma altera o conteúdo e fica bloqueada; a mesma soma por forma é só replay.
+    fireEvent.change(screen.getByLabelText("Forma da linha 2"), { target: { value: "dinheiro" } });
+    await waitFor(() => expect((screen.getByRole("button", { name: /^Receber · / }) as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.change(screen.getByLabelText("Forma da linha 2"), { target: { value: "pix" } });
     await waitFor(() => expect((screen.getByRole("button", { name: /^Receber · / }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /^Receber · / }));
     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
@@ -199,6 +204,7 @@ describe("P1-A · hook real: resposta perdida + representação equivalente", ()
     expect(servidor.baixas).toEqual([{ operacaoId: unica!.operacaoId, centavos: 10_000 }]);
     expect(servidor.saldo).toBe(300);
     expect(split!.operacaoId).toBe(unica!.operacaoId);
+    expect(mocks.receberOSV3.mock.calls[1]![2]).toEqual(mocks.receberOSV3.mock.calls[0]![2]);
 
     // 4) Recebimento NOVO legítimo sobre o novo saldo: outra chave, aceito.
     fireEvent.click(screen.getByLabelText(/Pagamento dividido/));
@@ -279,7 +285,7 @@ describe("P2 · a resposta da OS A nunca mexe no rascunho da OS B", () => {
 
     const pendente = deferred<unknown>();
     mocks.registrarRecebimentoMistoOSV3.mockImplementation(() => pendente.promise);
-    fireEvent.click(within(alerta).getByRole("button", { name: /Reenviar a mesma operação/ }));
+    fireEvent.click(within(alerta).getByRole("button", { name: /Verificar mesma confirmação/ }));
     await waitFor(() => expect(mocks.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(2));
 
     await irParaBEDigitar();

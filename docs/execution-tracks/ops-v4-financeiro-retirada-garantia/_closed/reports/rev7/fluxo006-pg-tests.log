@@ -1,0 +1,11 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  3 passed (3)
+      Tests  70 passed (70)
+   Start at  14:34:52
+   Duration  36.10s (transform 2.22s, setup 0ms, import 3.45s, tests 23.82s, environment 7.73s)
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package

@@ -18,7 +18,8 @@ const source = readFileSync(join(DIR, "pdv-servico-actions.ts"), "utf8");
 
 /** Extrai o corpo de uma função exportada pelo nome, da assinatura até o `\n}` que fecha no início da linha. */
 function extractFunctionBody(src: string, fnName: string): string {
-  const start = src.indexOf(`export async function ${fnName}(`);
+  const assinatura = fnName === "receberOSV3" ? "async function executarRecebimentoImediatoOSV3(" : `export async function ${fnName}(`;
+  const start = src.indexOf(assinatura);
   expect(start, `função ${fnName} não encontrada`).toBeGreaterThan(-1);
   const end = src.indexOf("\n}", start);
   expect(end, `fechamento de ${fnName} não encontrado`).toBeGreaterThan(-1);
@@ -202,5 +203,40 @@ describe("writers de pagamento da OS — uma transação, trava por OS, nada bes
   it("estornarRecebimentoOSV3: o estorno do título participa da transação (db: tx)", () => {
     const body = extractFunctionBody(source, "estornarRecebimentoOSV3");
     expect(body).toMatch(/estornarContaReceber\(\{[\s\S]*db: tx,[\s\S]*\}\);/);
+  });
+});
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item A) — elegibilidade depois do replay e antes do título", () => {
+  const ordemDe = (corpo: string, marcos: string[]) => marcos.map((m) => corpo.indexOf(m));
+
+  it("receberOSV3: replay → período → sessão → OS travada → elegibilidade → título → baixa", () => {
+    const ordem = ordemDe(extractFunctionBody(source, "receberOSV3"), [
+      "replayRecebimentoOSV3(",
+      "periodo.fechado",
+      "travarSessaoCaixa(",
+      "lerOSTravadaV3(",
+      "exigirElegibilidadeComercialV3(",
+      "garantirTituloOSTravadoV3(",
+      "liquidarContaReceber(",
+    ]);
+    expect(ordem.every((i) => i >= 0)).toBe(true);
+    expect([...ordem].sort((a, b) => a - b)).toEqual(ordem);
+  });
+
+  it("lancarOSAPrazoV3: trava → OS travada → elegibilidade → título (formalizar dívida também presume preço)", () => {
+    const ordem = ordemDe(extractFunctionBody(source, "lancarOSAPrazoV3"), [
+      "recebimentoLoteAdvisoryLock(",
+      "lerOSTravadaV3(",
+      "exigirElegibilidadeComercialV3(",
+      "garantirTituloOSTravadoV3(",
+      "upsertContaReceber(",
+    ]);
+    expect(ordem.every((i) => i >= 0)).toBe(true);
+    expect([...ordem].sort((a, b) => a - b)).toEqual(ordem);
+  });
+
+  it("a recusa usa a regra única (avaliarElegibilidadeComercialV3) e carrega motivo/destino", () => {
+    expect(source).toMatch(/function exigirElegibilidadeComercialV3[\s\S]*avaliarElegibilidadeComercialV3\(/);
+    expect(source).toContain("throw new RecebimentoInelegivelErroV3(elegibilidade)");
   });
 });

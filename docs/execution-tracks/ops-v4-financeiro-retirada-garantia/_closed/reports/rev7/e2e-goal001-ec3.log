@@ -1,0 +1,19 @@
+
+Running 6 tests using 1 worker
+
+(node:14120) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14120) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (3.3s)
+(node:2876) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2876) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 2 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:146:5 › E1 (A1) — rascunho + título liquidado: pagamento registrado, pendência comercial separada, entrega bloqueada, ação para o orçamento; nada é gravado (36.7s)
+  ok 3 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:186:5 › E2 (A2) — aprovado + pago: quitado nas superfícies; retirante, data e custódia antes de confirmar; impressão do termo sobre modal com Escape (37.6s)
+  ok 4 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:223:5 › E3 — sem pagamento e orçamento em rascunho: nenhuma Conta a Receber, sem zero inventado, ação comercial (43.3s)
+  ok 5 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:234:5 › E4 (R1-3) — quitado legado com estorno sem referência válida: nenhuma superfície mostra quitação; nada é gravado (32.5s)
+  ok 6 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:256:5 › E5 (R3-P1) — título de R$ 420 com duas baixas de R$ 300: Entrega, Financeiro e rail não afirmam R$ 600 nem saldo; nada é gravado (44.7s)
+
+  6 passed (3.4m)
