@@ -25,7 +25,7 @@ function os(extra: Record<string, unknown> = {}): OrdemServico {
 }
 
 describe("buildRetornoAtendimentoDraftV3", () => {
-  it("clona cliente/aparelho e classifica origem pela cobertura", () => {
+  it("herda cliente/identidade do aparelho e classifica origem pela cobertura", () => {
     const draft = buildRetornoAtendimentoDraftV3(
       os(),
       { motivo: "  Touch voltou a falhar  ", observacao: "  Cliente deixou o aparelho  ", garantiaAtiva: true },
@@ -38,15 +38,33 @@ describe("buildRetornoAtendimentoDraftV3", () => {
       marca: "Samsung",
       modelo: "S22",
       imei: "IMEI-1",
-      senha: "1478",
-      senhaTipo: "numerica",
-      acessorios: ["Chip"],
     });
     expect(draft.recepcao.origem).toBe("garantia");
     expect(draft.recepcao.prioridade).toBe("alta");
     expect(draft.problema.defeitoRelatado).toBe("Touch voltou a falhar");
     expect(draft.problema.observacoesInternas).toBe("Retorno da OS OS-1042. Cliente deixou o aparelho");
     expect(validarNovaOSDraftV3(draft)).toBeNull();
+  });
+
+  it("GOAL 007: senha e acessórios da original NUNCA são herdados — vêm só da recepção nova", () => {
+    const sem = buildRetornoAtendimentoDraftV3(os(), { motivo: "Falha", garantiaAtiva: true }, NOW);
+    expect(sem.equipamento.senha).toBeUndefined();
+    expect(sem.equipamento.acessorios).toEqual([]);
+    expect(JSON.stringify(sem)).not.toContain("1478");
+
+    const com = buildRetornoAtendimentoDraftV3(
+      os(),
+      { motivo: "Falha", garantiaAtiva: true, recepcao: { acessorios: [" Carregador ", ""], senha: " 2580 ", senhaTipo: "texto" } },
+      NOW,
+    );
+    expect(com.equipamento).toMatchObject({ senha: "2580", senhaTipo: "texto", acessorios: ["Carregador"] });
+  });
+
+  it("GOAL 007: atendimento novo nasce sem garantia própria iniciada, sem itens e sem pagamento previsto", () => {
+    const draft = buildRetornoAtendimentoDraftV3(os(), { motivo: "Falha", garantiaAtiva: true }, NOW);
+    expect(draft.garantia).toMatchObject({ modelo: "sem_garantia", prazoDias: 0 });
+    expect(draft.itens).toEqual([]);
+    expect(draft.pagamento).toEqual({ forma: "a_combinar" });
   });
 
   it("usa origem retorno quando a garantia não está ativa", () => {

@@ -20,6 +20,7 @@ import { STATUS_LABEL, TONE } from "./mock-data";
 import { aparelhoLabel, fmtData, resolverStatusV4 } from "./os-adapter";
 import { isOrcamentoPreOsAtivoV4 } from "@/lib/operacoes-v4/orcamento-pre-os";
 import { C, fmt } from "./tokens";
+import { afirmacaoValoresTituloV4, derivarSituacaoAtendimentoV4 } from "@/lib/operacoes-v4/situacao-atendimento-v4";
 
 function txt(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
@@ -182,14 +183,21 @@ export function buildSlaView(ordens: OrdemServico[]): SlaView {
 // ---- PDV de serviço ---------------------------------------------------------
 // Badge, recebido e saldo usam a mesma projeção server-side da aba Financeiro.
 // Ausência/erro de projeção permanece indisponível, nunca "Sem pendência".
+// GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 (rev 3): cada linha passa pela MESMA
+// regra de afirmação dos valores do título (`afirmacaoValoresTituloV4`) — título em
+// conferência não mostra saldo, quitação nem "A receber"; pendência comercial com
+// fatos verificados não vira "indisponível"; projeção de outra loja/OS não entra.
 
-const FATURA_TONE: Record<"aReceber" | "quitado" | "incompleto" | "cancelado" | "semCobranca" | "indisponivel", V4Tone> = {
+const FATURA_TONE: Record<"aReceber" | "quitado" | "incompleto" | "cancelado" | "semCobranca" | "indisponivel" | "conferencia" | "inconsistente" | "comercial", V4Tone> = {
   aReceber: { bg: C.warnBg, fg: C.warnFg, dot: C.warn },
   quitado: { bg: C.successBg, fg: C.successFg, dot: C.success },
   incompleto: { bg: C.infoBg, fg: C.infoFg, dot: C.info },
   cancelado: { bg: C.dangerBg, fg: C.dangerFg, dot: C.danger },
   semCobranca: { bg: C.line3, fg: C.bodySoft, dot: C.subtle },
   indisponivel: { bg: C.dangerBg, fg: C.dangerFg, dot: C.danger },
+  conferencia: { bg: C.warnBg, fg: C.warnFg, dot: C.warn },
+  inconsistente: { bg: C.dangerBg, fg: C.dangerFg, dot: C.danger },
+  comercial: { bg: C.warnBg, fg: C.warnFg, dot: C.warn },
 };
 
 export interface PdvRow {
@@ -229,6 +237,7 @@ function toneKeyDaProjecao(status: FinancialStatusV4): ToneKey {
   if (status === "CANCELLED" || status === "REVERSED") return "cancelado";
   if (status === "NO_PRICE" || status === "AUTHORIZED_NO_CHARGE") return "semCobranca";
   if (status === "PRICE_DEFINED" || status === "CHARGE_NOT_CREATED") return "incompleto";
+  if (status === "INCONSISTENT") return "inconsistente";
   return "indisponivel";
 }
 
@@ -239,25 +248,54 @@ const STATUS_FATURAMENTO_LABEL: Record<ToneKey, string> = {
   incompleto: "Revisar cobrança",
   semCobranca: "Sem cobrança",
   indisponivel: "Financeiro indisponível",
+  conferencia: "Em conferência",
+  inconsistente: "Financeiro inconsistente",
+  comercial: "Aprovação pendente",
 };
 
+/** Situação da linha pela regra única: o que o rail pode afirmar sobre o título desta OS. */
+function linhaFinanceira(os: OrdemServico, projection: FinancialProjectionOSV4): { toneKey: ToneKey; saldoLinha: string } {
+  const s = derivarSituacaoAtendimentoV4({ osId: os.id, projection, loading: false, error: null });
+  if (afirmacaoValoresTituloV4(s) === "conferencia") return { toneKey: "conferencia", saldoLinha: "" };
+  if (s.estado === "pronta" && s.comercial.pendente) {
+    return { toneKey: "comercial", saldoLinha: s.pagamento.verificavel && s.pagamento.saldoTitulo != null ? `Saldo do título: ${fmt(s.pagamento.saldoTitulo)}` : "" };
+  }
+  return { toneKey: toneKeyDaProjecao(projection.financialStatus), saldoLinha: projection.balance != null ? `Saldo: ${fmt(projection.balance)}` : "" };
+}
+
+/**
+ * `lojaAtivaId` (quando informado) e o `osId` da própria projeção amarram cada linha à
+ * MESMA loja e OS: um lote atrasado de outra loja ou uma projeção fora do lugar não
+ * aparecem (nem como valor, nem como contagem).
+ */
 export function buildPdvView(
   ordens: OrdemServico[],
   projectionsByOsId: ReadonlyMap<string, FinancialProjectionOSV4>,
+  lojaAtivaId?: string | null,
 ): PdvView {
-  const comFin = ordens.filter((os) => projectionsByOsId.has(os.id));
+  const loja = (lojaAtivaId ?? "").trim();
+  const projecaoDa = (os: OrdemServico): FinancialProjectionOSV4 | null => {
+    const projection = projectionsByOsId.get(os.id);
+    if (!projection || projection.osId !== os.id) return null;
+    if (loja && projection.storeId !== loja) return null;
+    const lojaDaOS = txt((os as { storeId?: unknown }).storeId);
+    if (lojaDaOS && projection.storeId !== lojaDaOS) return null;
+    return projection;
+  };
+  const comFin = ordens.flatMap((os) => {
+    const projection = projecaoDa(os);
+    return projection ? [{ os, projection }] : [];
+  });
   if (comFin.length === 0) {
     return { temDados: false, itens: [], totalGeral: "—", aReceberCount: 0 };
   }
 
   const itens: PdvRow[] = comFin
     .slice()
-    .sort((a, b) => (projectionsByOsId.get(b.id)?.expectedTotal ?? -1) - (projectionsByOsId.get(a.id)?.expectedTotal ?? -1))
-    .map((os) => {
-      const projection = projectionsByOsId.get(os.id)!;
-      const toneKey = toneKeyDaProjecao(projection.financialStatus);
+    .sort((a, b) => (b.projection.expectedTotal ?? -1) - (a.projection.expectedTotal ?? -1))
+    .map(({ os, projection }) => {
+      const { toneKey, saldoLinha } = linhaFinanceira(os, projection);
       const totalNum = projection.expectedTotal;
-      const saldoLinha = projection.balance != null ? `Saldo: ${fmt(projection.balance)}` : "";
       const podeReceber = toneKey === "aReceber";
       return {
         id: os.id,
@@ -275,6 +313,6 @@ export function buildPdvView(
 
   const totals = itens.map((item) => item.totalNum).filter((value): value is number => value != null);
   const totalGeral = totals.length === itens.length ? fmt(totals.reduce((sum, value) => sum + value, 0)) : "Parcialmente indisponível";
-  const aReceberCount = comFin.filter((os) => toneKeyDaProjecao(projectionsByOsId.get(os.id)!.financialStatus) === "aReceber").length;
+  const aReceberCount = itens.filter((item) => item.podeReceber).length;
   return { temDados: true, itens, totalGeral, aReceberCount };
 }

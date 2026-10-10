@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "pessoas",
-  "status": "RUNNING",
+  "status": "PAUSED",
   "risk_tier": "ALTO",
-  "current_goal": "PESSOAS-DP-HARDENING-P2-PRE-001B-001",
+  "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
-    "goals_done": 1,
+    "goals_done": 2,
     "goals_blocked": 0,
     "goals_imported": 0,
-    "ledger_lines": 1
+    "ledger_lines": 2
   },
-  "last_goal": "PESSOAS-DP-FUNDACAO-CADASTRO-FUNCIONARIOS-001A",
+  "last_goal": "PESSOAS-DP-HARDENING-P2-PRE-001B-001",
   "last_result": "DONE",
-  "last_ratified_at": "2026-10-01T17:34:30.933Z"
+  "last_ratified_at": "2026-10-08T05:58:44.842Z"
 }

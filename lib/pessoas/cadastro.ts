@@ -2,7 +2,7 @@ import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { executarComando } from "./commands"
 import { pendenciasCadastro, type CamposCadastro } from "./cadastro-validation"
-import { abrirCpf, cpfNormalizado, dataCivil, dataCivilDto, decimalCanonico, PessoasError, protegerCpf, texto } from "./domain"
+import { abrirCpf, cpfNormalizado, dataCivil, dataCivilDto, decimalCanonico, jornadaSemanal, PessoasError, protegerCpf, texto } from "./domain"
 import { exigirEscopo, type EscopoPessoas } from "./scope"
 
 export type FuncionarioInput = {
@@ -65,7 +65,7 @@ function camposInput(input: FuncionarioInput): CamposCadastro {
     cbo: texto(input.cbo, 12),
     salarioBase: decimalCanonico(input.salarioBase),
     unidadeSalario: texto(input.unidadeSalario, 24),
-    jornadaSemanal: decimalCanonico(input.jornadaSemanal),
+    jornadaSemanal: jornadaSemanal(input.jornadaSemanal),
     divisor,
     contractValidFrom: dataCivil(input.contractValidFrom),
   }
@@ -322,7 +322,7 @@ export async function criarVersaoContrato(input: {
   const validTo = dataCivil(input.validTo)
   if (validTo && validTo <= validFrom) throw new PessoasError("VIGENCIA_INVALIDA")
   const salario = decimalCanonico(input.salarioBase)
-  const jornada = decimalCanonico(input.jornadaSemanal)
+  const jornada = jornadaSemanal(input.jornadaSemanal, true)
   if (!salario || !jornada || !Number.isInteger(input.divisor) || input.divisor <= 0 || input.divisor > 1000) {
     throw new PessoasError("CONTRATO_INVALIDO")
   }

@@ -13,6 +13,7 @@ import {
   sugestaoAPrazoCentavosV3, SITUACAO_PARCIAL_A_PRAZO_V3, SITUACAO_INTEGRAL_A_PRAZO_V3,
 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { avaliarRecebimentoV4, buildRecebimentoMistoV4, INTENCOES_RECEBIMENTO_V4, valorSugeridoRecebimentoV4, type IntencaoRecebimentoV4, type LinhaRecebimentoV4 } from "@/lib/operacoes-v4/receber-pagamento-form";
+import { pagamentoEmConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
 
 const box = { marginTop: 0, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 } as const;
 const cellInput: React.CSSProperties = { height: 32, padding: "0 10px", border: `1px solid ${C.inputBd}`, borderRadius: 7, fontSize: 12.5, color: C.body, background: C.surface };
@@ -22,9 +23,10 @@ const btnGhostSm: React.CSSProperties = { ...btnGhost, minHeight: 32, padding: "
 const FORMAS = [...FORMAS_RECEBIMENTO_V3.filter((f) => f.suportada).map(({ value, label }) => ({ value, label })), { value: "a_prazo" as const, label: "A prazo / crediário" }];
 const valorStr = (centavos: number) => deCentavosV3(centavos).toFixed(2).replace(".", ",");
 
-function APrazoResumo({ amount, dueAt }: { amount: number; dueAt: string | null }) {
+function APrazoResumo({ amount, dueAt, emConferencia = false }: { amount: number | null; dueAt: string | null; emConferencia?: boolean }) {
+  // Rev 3: em conferência a parcela a prazo (valor e vencimento) não é cobrança vigente confirmada.
   return <div data-testid="a-prazo-persistido" style={{ background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 12, fontSize: 11.5, color: C.infoFg }}>
-    <b>Saldo a prazo: {fmt(amount)}</b><div>Vencimento: {formatarVencimentoV3(dueAt)}</div>
+    <b>Saldo a prazo: {amount == null || emConferencia ? "Em conferência" : fmt(amount)}</b><div>Vencimento: {emConferencia ? "em conferência" : formatarVencimentoV3(dueAt)}</div>
   </div>;
 }
 
@@ -54,17 +56,22 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const projection = v.financial.projection;
   const saldo = projection?.balance ?? (projection?.financialStatus === "CHARGE_NOT_CREATED" ? projection.expectedTotal : 0) ?? 0;
   const pendencia = pdv.pendenciaMisto;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: com o histórico do título em
+  // conferência, o saldo legado continua decidindo (receber segue igual), mas nunca é
+  // exibido nem sugerido como fato — o operador informa o valor que recebe agora.
+  const situacao = situacaoAtendimentoDe(v);
+  const emConferencia = pagamentoEmConferenciaV4(situacao);
   const formAberto = open || v.receberPagamentoOpen;
   const busy = enviando || pdv.recebendo || !!pdv.registrandoMisto;
   const travado = busy || !!pendencia;
   const seedForm = useCallback(() => {
     const p = pendencia?.input;
-    setLinhas(p ? [...p.pagamentosAgora.map((l) => ({ forma: l.forma, valorStr: String(l.valor) })), { forma: "a_prazo", valorStr: String(p.saldoAPrazo.valor) }] : [{ forma: "pix", valorStr: saldo > 0 ? String(saldo) : "" }]);
+    setLinhas(p ? [...p.pagamentosAgora.map((l) => ({ forma: l.forma, valorStr: String(l.valor) })), { forma: "a_prazo", valorStr: String(p.saldoAPrazo.valor) }] : [{ forma: "pix", valorStr: saldo > 0 && !emConferencia ? String(saldo) : "" }]);
     setVencimento(p?.saldoAPrazo.vencimento ?? "");
     setObservacao(p?.observacao ?? "");
     setIntencao(p?.intencao ?? "quitacao");
     setErro(null);
-  }, [pendencia, saldo]);
+  }, [pendencia, saldo, emConferencia]);
   useEffect(() => { ativo.current = true; setMounted(true); return () => { ativo.current = false; }; }, []);
   useEffect(() => {
     if (v.receberPagamentoOpen && !open && !v.financial.loading && !v.financial.error && projection?.expectedTotal != null) { seedForm(); setOpen(true); }
@@ -112,20 +119,30 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const { semTotal, previaNaoMaterializada, quitado, caixaAberto } = v.recebimento;
 
   if (!pendencia && semTotal) return <div style={box}>{previaNaoMaterializada ? "O valor em “Total da OS” ainda é uma prévia. Gere e aprove um orçamento real antes de receber." : "Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber."}</div>;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: "quitado" legado com histórico que a
+  // leitura estrita não comprova não é mostrado como quitação.
+  if (!pendencia && quitado && emConferencia) {
+    return <div style={box}>Sem ação de recebimento enquanto o histórico do título está em conferência.</div>;
+  }
   if (!pendencia && quitado) return <div style={box}>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>Recebimento desta OS</span><b style={{ color: C.successFg }}>Quitado</b></div>
     {!v.entrega.entregue && <div style={{ marginTop: 9 }}><span style={{ fontSize: 11, color: C.subtle }}>OS pronta e paga — falta confirmar a entrega.</span> <button type="button" onClick={v.goEntrega} style={btnGhost}>Ir para Entrega →</button></div>}
   </div>;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: título VERIFICADO e liquidado não é
+  // "recebimento bloqueado" — não há nada a receber; o que falta (comercial) é outra coisa.
+  if (!pendencia && !projection.canReceive && situacao.pagamento.verificavel && situacao.pagamento.liquidado) {
+    return <div style={box}>Nada a receber — título liquidado ({fmt(situacao.pagamento.recebidoLiquido ?? 0)}).</div>;
+  }
   if (!pendencia && !projection.canReceive && projection.financialStatus !== "CHARGE_NOT_CREATED") return <div style={box}>Recebimento bloqueado: {projection.consistencyIssues[0] ?? "revise a cobrança desta OS."}</div>;
   if (pdv.loading) return <div style={box}>Carregando sessão de caixa…</div>;
 
-  const credito = authorizedCredit ? <APrazoResumo amount={creditInstallment?.amount ?? pagamento.saldo} dueAt={creditInstallment?.dueAt ?? null} /> : null;
+  const credito = authorizedCredit ? <APrazoResumo amount={emConferencia ? null : creditInstallment?.amount ?? pagamento.saldo} dueAt={creditInstallment?.dueAt ?? null} emConferencia={emConferencia} /> : null;
   if (!formAberto) return <div style={box}>
     {credito}
     {!caixaAberto && <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 9 }}>Caixa fechado — o recebimento imediato exige caixa aberto. Você pode formalizar 100% a prazo.</div>}
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-      <span style={{ fontSize: 11.5, color: C.muted }}>Saldo a receber: <b style={{ color: C.warnFg }}>{fmt(pagamento.saldo)}</b></span>
-      <button type="button" onClick={openForm} style={btnPrimary}>{pendencia ? "Verificar registro pendente" : `Receber ${fmt(pagamento.saldo)}`}</button>
+      <span style={{ fontSize: 11.5, color: C.muted }}>Saldo a receber: <b style={{ color: C.warnFg }}>{emConferencia ? "Em conferência" : fmt(pagamento.saldo)}</b></span>
+      <button type="button" onClick={openForm} style={btnPrimary}>{pendencia ? "Verificar registro pendente" : emConferencia ? "Receber pagamento" : `Receber ${fmt(pagamento.saldo)}`}</button>
     </div>
   </div>;
 
@@ -133,16 +150,22 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const receberAgora = deCentavosV3(rascunho.receberAgoraCentavos);
   const deixarAPrazo = deCentavosV3(rascunho.aPrazoCentavos);
   const saldoRestante = Math.max(0, pagamento.saldo - receberAgora);
+  // Em conferência: valores INFORMADOS agora (rotulados) × fatos do título não comprovados.
+  const resumoLinhas: Array<[string, number | null]> = emConferencia
+    ? [["Total da OS", pagamento.total], ["Já recebido", null], ["Receber agora (informado)", receberAgora], ["Deixar a prazo (informado)", deixarAPrazo], ["Saldo em aberto", null]]
+    : [["Total da OS", pagamento.total], ["Já recebido", pagamento.recebido], ["Receber agora", receberAgora], ["Deixar a prazo", deixarAPrazo], ["Saldo em aberto", saldoRestante]];
+  // As mensagens de limite citam o saldo legado entre parênteses: em conferência, sem o valor.
+  const errosVisiveis = emConferencia ? rascunho.erros.map((mensagem) => mensagem.replace(/\s*\((?:R\$\s*)?[\d.,]+\)/g, "")) : rascunho.erros;
   const podeConfirmar = !busy && (!!pendencia || (rascunho.ok && (!rascunho.temAPrazo || !!pdv.registrarMisto)));
   const usarRestante = (i: number) => setLinhas((arr) => arr.map((l, idx) => idx === i ? { ...l, valorStr: valorStr(sugestaoAPrazoCentavosV3(arr, i, pagamento.saldo)) } : l));
   const escolherForma = (i: number, value: string) => {
     const forma = FORMAS.find((f) => f.value === value)?.value;
     if (!forma) return;
-    setLinhas((arr) => arr.map((l, idx) => idx === i ? { forma, valorStr: forma === "a_prazo" ? valorStr(sugestaoAPrazoCentavosV3(arr, i, pagamento.saldo)) : l.valorStr } : l));
+    setLinhas((arr) => arr.map((l, idx) => idx === i ? { forma, valorStr: forma === "a_prazo" && !emConferencia ? valorStr(sugestaoAPrazoCentavosV3(arr, i, pagamento.saldo)) : l.valorStr } : l));
   };
   const escolherIntencao = (next: IntencaoRecebimentoV4) => {
     setIntencao(next);
-    if (next === "quitacao" && !rascunho.temAPrazo) setLinhas([{ forma: linhas[0]?.forma ?? "pix", valorStr: String(valorSugeridoRecebimentoV4(next, pagamento.saldo)) }]);
+    if (next === "quitacao" && !rascunho.temAPrazo && !emConferencia) setLinhas([{ forma: linhas[0]?.forma ?? "pix", valorStr: String(valorSugeridoRecebimentoV4(next, pagamento.saldo)) }]);
   };
   const onConfirmar = async () => {
     if (!podeConfirmar || envio.current) return;
@@ -190,8 +213,9 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
         <div className={sheetStyles.body}>
           <RealActionNotice kind={rascunho.temAPrazo && receberAgora === 0 ? "aPrazo" : "pagamento"} />
           {credito}
+          {emConferencia && <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 9 }}>Histórico do título em conferência: o saldo não é exibido. Informe o valor recebido agora.</div>}
           <div style={{ fontSize: 10, color: C.subtle }}>Saldo da OS</div>
-          <div className={sheetStyles.money} style={{ fontSize: 22, fontWeight: 700, color: C.warnFg, marginBottom: 12 }}>{fmt(pagamento.saldo)}</div>
+          <div className={sheetStyles.money} style={{ fontSize: 22, fontWeight: 700, color: C.warnFg, marginBottom: 12 }}>{emConferencia ? "Em conferência" : fmt(pagamento.saldo)}</div>
           <div style={{ fontSize: 10, color: C.subtle, marginBottom: 6 }}>Tipo</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
             {INTENCOES_RECEBIMENTO_V4.filter((item) => !rascunho.temAPrazo || item.value !== "quitacao").map((item) => <button key={item.value} type="button" disabled={travado} aria-pressed={intencao === item.value || (rascunho.temAPrazo && intencao === "quitacao" && item.value === "parcial")} onClick={() => escolherIntencao(item.value)} style={btnGhostSm}>{item.label}</button>)}
@@ -208,12 +232,12 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
                 <input aria-label={`Valor da linha ${i + 1}`} type="text" inputMode="decimal" value={l.valorStr} disabled={travado} onChange={(e) => setLinhas((arr) => arr.map((x, idx) => idx === i ? { ...x, valorStr: e.target.value } : x))} className={sheetStyles.money} style={{ ...cellInput, width: "100%" }} />
               </label>
               <div className={sheetStyles.linhaActions}>
-                <button type="button" disabled={travado} onClick={() => usarRestante(i)} style={btnGhostSm}>Usar restante</button>
+                {!emConferencia && <button type="button" disabled={travado} onClick={() => usarRestante(i)} style={btnGhostSm}>Usar restante</button>}
                 <button type="button" aria-label={`Remover forma ${i + 1}`} disabled={travado || linhas.length <= 1} onClick={() => setLinhas((arr) => arr.filter((_, idx) => idx !== i))} style={btnGhostSm}>×</button>
               </div>
             </div>)}
           </div>
-          <button type="button" disabled={travado} onClick={() => setLinhas((arr) => [...arr, { forma: "pix", valorStr: valorStr(sugestaoAPrazoCentavosV3(arr, -1, pagamento.saldo)) }])} style={{ ...btnGhost, marginBottom: 9 }}>+ Dividir pagamento</button>
+          <button type="button" disabled={travado} onClick={() => setLinhas((arr) => [...arr, { forma: "pix", valorStr: emConferencia ? "" : valorStr(sugestaoAPrazoCentavosV3(arr, -1, pagamento.saldo)) }])} style={{ ...btnGhost, marginBottom: 9 }}>+ Dividir pagamento</button>
           {rascunho.temAPrazo && <div style={{ marginBottom: 9 }}>
             <label style={{ fontSize: 11, color: C.subtle }}>Vencimento da parte a prazo
               <input aria-label="Vencimento da parte a prazo" type="date" min={hojeLojaV3()} value={vencimento} disabled={travado} onChange={(e) => setVencimento(e.target.value)} style={{ ...cellInput, width: "100%" }} />
@@ -221,13 +245,13 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
             <div style={{ fontSize: 10.5, color: C.infoFg, marginTop: 5 }}>Crédito da loja com um vencimento. O valor a prazo não é recebido agora.</div>
           </div>}
           <div data-testid="resumo-misto" aria-live="polite" style={{ fontSize: 11.5, display: "flex", flexDirection: "column", gap: 4, borderTop: `1px solid ${C.line2}`, paddingTop: 9, marginBottom: 9 }}>
-            {[["Total da OS", pagamento.total], ["Já recebido", pagamento.recebido], ["Receber agora", receberAgora], ["Deixar a prazo", deixarAPrazo], ["Saldo em aberto", saldoRestante]].map(([label, value]) => <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>{label}</span><b className={sheetStyles.money}>{fmt(Number(value))}</b></div>)}
-            {rascunho.temAPrazo && rascunho.restanteCentavos > 0 && <div style={{ color: C.warnFg }}>Ainda falta distribuir: {fmt(deCentavosV3(rascunho.restanteCentavos))}</div>}
+            {resumoLinhas.map(([label, value]) => <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>{label}</span><b className={sheetStyles.money}>{value == null ? "Em conferência" : fmt(value)}</b></div>)}
+            {rascunho.temAPrazo && rascunho.restanteCentavos > 0 && <div style={{ color: C.warnFg }}>{emConferencia ? "Ainda falta distribuir o saldo registrado no título." : `Ainda falta distribuir: ${fmt(deCentavosV3(rascunho.restanteCentavos))}`}</div>}
           </div>
           <label style={{ fontSize: 10, color: C.subtle }}>Observação (opcional)
             <input aria-label="Observação (opcional)" type="text" value={observacao} disabled={travado} onChange={(e) => setObservacao(e.target.value)} maxLength={200} style={{ ...cellInput, width: "100%" }} />
           </label>
-          {!pendencia && rascunho.erros.map((mensagem) => <div key={mensagem} role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 8 }}>{mensagem}</div>)}
+          {!pendencia && errosVisiveis.map((mensagem) => <div key={mensagem} role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 8 }}>{mensagem}</div>)}
           {!caixaAberto && receberAgora > 0 && !pendencia && <a href="/dashboard/vendas" style={{ display: "inline-block", color: C.primary, marginTop: 8, fontSize: 11 }}>Abrir Caixa</a>}
           {(erro || pdv.error || pendencia) && <div role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 9 }}>{erro ?? pdv.error ?? "Resultado ainda desconhecido. Reenvie a mesma confirmação para verificar o registro."}</div>}
         </div>

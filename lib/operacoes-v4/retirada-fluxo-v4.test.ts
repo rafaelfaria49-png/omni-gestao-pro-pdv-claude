@@ -75,7 +75,10 @@ describe("OPS-V4-FLUXO-CURTO-006 — condição financeira da retirada", () => {
     expect(derivar(inconsistente)).toMatchObject({ situacao: "inconsistente", tone: "danger", liberaEntrega: false, podeReceber: false });
     const desconhecida = projecao({ orcStatus: "enviado" });
     expect(desconhecida.financialStatus).toBe("UNKNOWN");
-    expect(derivar(desconhecida)).toMatchObject({ situacao: "indisponivel", liberaEntrega: false, podeReceber: false });
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: UNKNOWN por aprovação comercial
+    // pendente deixa de ser "indisponível" e vira pendência comercial — continua
+    // fail-closed (não libera nem recebe). Indisponível fica para falha de leitura (acima).
+    expect(derivar(desconhecida)).toMatchObject({ situacao: "pendencia_comercial", liberaEntrega: false, podeReceber: false });
   });
 
   it("total zero sem autorização exige classificação; cancelado/estornado bloqueiam", () => {
@@ -111,5 +114,90 @@ describe("OPS-V4-FLUXO-CURTO-006 — retirado por", () => {
 
   it("sem a guia da retirada (obrigatorio: false) o vazio segue para a regra do servidor", () => {
     expect(validarRetiranteV4("", { obrigatorio: false })).toEqual({ ok: true, recebidoPor: undefined });
+  });
+});
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — pendência comercial na retirada", () => {
+  const liquidado: Titulo = { status: "pago", historico: [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }] };
+
+  it("A1: rascunho + título liquidado = pendência comercial com os FATOS do título, nunca 'desconhecida'", () => {
+    const r = derivar(projecao({ orcStatus: "rascunho", titulo: liquidado }));
+    expect(r).toMatchObject({
+      situacao: "pendencia_comercial",
+      rotulo: "Aprovação comercial pendente — revisar autorização",
+      tone: "warning",
+      total: 300,
+      recebido: 300,
+      saldo: 0,
+      podeReceber: false,
+      liberaEntrega: false,
+      valoresDoTitulo: true,
+    });
+    expect(r.descricao).toBe("Pagamento registrado — R$ 300,00 · Saldo do título — R$ 0,00 · Forma registrada: Forma não identificada no título.");
+    expect(r.rotulo).not.toMatch(/desconhecida|indisponível/i);
+  });
+
+  it("falha real de leitura continua 'indisponível' e bloqueia (fail-closed)", () => {
+    expect(derivar(null, { error: "Falha de rede." })).toMatchObject({ situacao: "indisponivel", liberaEntrega: false });
+  });
+
+  it("A2: aprovado + título liquidado segue quitado, sem rótulos do título", () => {
+    const r = derivar(projecao({ titulo: liquidado }));
+    expect(r).toMatchObject({ situacao: "quitado", liberaEntrega: true });
+    expect(r.valoresDoTitulo).toBeUndefined();
+  });
+
+  it("A3: título de outra loja não vira pendência comercial com valores: segue inconsistente", () => {
+    const p = projecao({ orcStatus: "rascunho", titulo: liquidado });
+    const outraLoja = projectFinancialOSV4({
+      storeId: STORE, osId: OS_ID, prismaValorTotal: 300, loadedAt: "2026-10-08T12:00:00Z",
+      payload: { id: OS_ID, codigo: "OS-A", valorTotal: 300, orcamento: orcamento(300, "rascunho") } as unknown as OrdemServico & Record<string, unknown>,
+      titulo: { id: "cr", storeId: "outra", localKey: `os-faturamento:outra:${OS_ID}`, valor: 300, status: "pago", payload: { ordemServicoId: OS_ID, historico: [{ tipo: "liquidacao", valor: 300 }] } },
+    });
+    expect(p.fatos?.verificavel).toBe(true);
+    expect(derivar(outraLoja)).toMatchObject({ situacao: "inconsistente", liberaEntrega: false, recebido: null });
+  });
+});
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: retirada com fatos rejeitados", () => {
+  it("PAID legado com estorno de referência inexistente + reposição: 'Pagamento em conferência', sem valores; gating legado intacto", () => {
+    const p = projecao({ titulo: { status: "pago", historico: [{ tipo: "liquidacao", valor: 300, loteId: "op-1" }, { tipo: "estorno_pagamento", valor: 300, refHistoricoIndex: 9 }, { tipo: "pagamento", valor: 300 }] } });
+    expect(p.financialStatus).toBe("PAID");
+    const r = derivar(p);
+    expect(r).toMatchObject({ rotulo: "Pagamento em conferência", tone: "warning", total: null, recebido: null, saldo: null, liberaEntrega: true });
+    expect(r.descricao).toMatch(/conferência pendente/);
+    expect(r.rotulo).not.toMatch(/Quitado/);
+  });
+});
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R3: retirada sem valores não conciliados em QUALQUER status", () => {
+  const aPrazo320 = { aPrazoV3: { modo: "a_prazo", status: "pendente", valor: 320, vencimento: "2026-11-10", autorizadoEntrega: true, autorizadoEm: "2026-10-03T10:00:00Z", autorizadoPor: "QA", tituloLocalKey: `os-faturamento:${STORE}:${OS_ID}` } };
+
+  it("R3-P1: título de 420 com duas baixas de 300 (INCONSISTENT legado, recebido 600) não mostra recebido nem saldo", () => {
+    const p = projecao({ total: 420, titulo: { status: "pago", historico: [{ tipo: "pagamento", valor: 300, loteId: "a" }, { tipo: "pagamento", valor: 300, loteId: "b" }] }, extra: aPrazo320 });
+    expect(p).toMatchObject({ financialStatus: "INCONSISTENT", receivedTotal: 600 });
+    const r = derivar(p);
+    expect(r).toMatchObject({ situacao: "inconsistente", rotulo: "Financeiro inconsistente", tone: "danger", total: null, recebido: null, saldo: null, aPrazo: null, liberaEntrega: false });
+    expect(r.descricao).toContain("O total recebido supera o valor da Conta a Receber.");
+    expect(r.descricao).not.toMatch(/R\$/);
+  });
+
+  it("R3-P1: a prazo legado (AUTHORIZED_CREDIT) com estorno ambíguo — conferência, sem 'R$ 320' nem vencimento como cobrança", () => {
+    const p = projecao({ total: 420, titulo: { status: "parcial", historico: [{ tipo: "pagamento", valor: 300, loteId: "p" }, { tipo: "estorno_pagamento", valor: 200, refHistoricoIndex: 7 }, { tipo: "a_prazo_autorizado", valor: 320 }] }, extra: aPrazo320 });
+    expect(p).toMatchObject({ financialStatus: "AUTHORIZED_CREDIT", balance: 320, canDeliver: true });
+    const r = derivar(p);
+    expect(r).toMatchObject({ rotulo: "Pagamento em conferência", total: null, recebido: null, saldo: null, aPrazo: null, liberaEntrega: true });
+    expect(r.descricao).not.toMatch(/R\$|10\/11\/2026/);
+  });
+
+  it("R3-P1: cobrança cancelada mantém o próprio estado, sem valores e sem repetir a explicação", () => {
+    const r = derivar(projecao({ titulo: { status: "cancelado", historico: [{ tipo: "pagamento", valor: 100, loteId: "a" }] } }));
+    expect(r).toMatchObject({ situacao: "cancelada", rotulo: "Cobrança cancelada", total: null, recebido: null, saldo: null });
+    expect(r.descricao.split("está cancelada").length - 1).toBe(1);
+  });
+
+  it("R3: falha real de leitura e título íntegro seguem como antes", () => {
+    expect(derivar(null, { error: "Falha de rede." })).toMatchObject({ situacao: "indisponivel", rotulo: "Situação financeira indisponível" });
+    expect(derivar(projecao({ titulo: { status: "pago", historico: [{ tipo: "liquidacao", valor: 300 }] } }))).toMatchObject({ situacao: "quitado", recebido: 300, saldo: 0 });
   });
 });

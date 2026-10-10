@@ -55,9 +55,9 @@ import { atendDataCampo } from "../atendimento/field-styles";
 import { RealActionNotice } from "../RealActionNotice";
 import { ReceberPagamentoV4 } from "../ReceberPagamentoV4";
 import { RETIRANTE_MAX_V4, validarRetiranteV4, type ToneRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
+import { pagamentoEmConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
 import styles from "./retirada-v4.module.css";
 
-const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
 
 const btnPrimary: React.CSSProperties = {
@@ -253,6 +253,25 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
     );
   }
 
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: leitura OK e bloqueio COMERCIAL — a
+  // explicação já está na Próxima ação; aqui, só o estado da confirmação e o atalho.
+  const sit = situacaoAtendimentoDe(v);
+  if (ea.leituraFinanceiraBloqueada && !ea.financeiroCarregando && !ea.financeiroErro && sit.estado === "pronta" && sit.comercial.pendente && sit.impedimento) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 12, color: C.warnFg, lineHeight: 1.5 }}>
+          Para liberar a confirmação da entrega: <strong>{sit.impedimento.titulo}</strong>.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          <button type="button" onClick={() => v.irParaImpedimento?.()} style={btnSecundario}>
+            {sit.impedimento.acao}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (ea.leituraFinanceiraBloqueada) {
     return (
       <div style={card}>
@@ -276,6 +295,28 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
             ) : null}
           </div>
         ) : null}
+      </div>
+    );
+  }
+
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: saldo legado com histórico do título
+  // em conferência bloqueia igual, mas não é exibido como "pagamento pendente R$ X".
+  if (ea.bloqueadaPorSaldo && pagamentoEmConferenciaV4(sit)) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.warnFg, marginBottom: 4 }}>Pagamento em conferência</div>
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 10 }}>
+          A entrega continua bloqueada. Confira a Conta a Receber no Financeiro; receber não entrega: a confirmação continua aqui, separada.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {botaoReceber}
+          {v.goFinanceiro ? (
+            <button type="button" onClick={v.goFinanceiro} style={btnSecundario}>
+              Revisar no Financeiro
+            </button>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -458,7 +499,7 @@ function GuiaRetirada({ v }: { v: V4Vals }) {
   return (
     <section className={styles.guia} aria-label="Guia de retirada">
       <div className={styles.canhoto}>
-        <span className={styles.canhotoRotulo}>Retirada</span>
+        <span className={styles.canhotoRotulo}>Conferir retirada</span>
         <span className={styles.codigo}>{v.os.codigo}</span>
         <span className={styles.estadoEntrega}>{e.statusLabel}</span>
       </div>
@@ -479,10 +520,10 @@ function GuiaRetirada({ v }: { v: V4Vals }) {
             <div className={styles.vereditoTexto}>{f.descricao}</div>
           </div>
         </div>
-        {f.situacao !== "carregando" && f.situacao !== "indisponivel" ? (
+        {f.situacao !== "carregando" && f.situacao !== "indisponivel" && (f.total != null || f.recebido != null || f.saldo != null) ? (
           <div className={styles.valores}>
             <div className={styles.valor}>
-              <div className={styles.valorRotulo}>Total</div>
+              <div className={styles.valorRotulo}>{f.valoresDoTitulo ? "Valor do título" : "Total"}</div>
               <div className={styles.valorNumero}>{valor(f.total)}</div>
             </div>
             <div className={styles.valor}>
@@ -490,7 +531,7 @@ function GuiaRetirada({ v }: { v: V4Vals }) {
               <div className={styles.valorNumero}>{valor(f.recebido)}</div>
             </div>
             <div className={styles.valor}>
-              <div className={styles.valorRotulo}>{f.situacao === "a_prazo" ? "A prazo" : "Saldo"}</div>
+              <div className={styles.valorRotulo}>{f.situacao === "a_prazo" ? "A prazo" : f.valoresDoTitulo ? "Saldo do título" : "Saldo"}</div>
               <div className={styles.valorNumero}>{valor(f.saldo)}</div>
             </div>
           </div>
@@ -699,6 +740,10 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
   const [error, setError] = useState("");
   const fotos = v.entrega.fotosSaida;
   const remaining = Math.max(0, FOTO_MAX_V3 - fotos.length);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: foto de saída é opcional (nenhuma
+  // obrigação nova): sem fotos, o formulário só abre quando o operador pede.
+  const [aberto, setAberto] = useState(false);
+  const mostrarFormulario = aberto || fotos.length > 0;
 
   const onUpload = async (file: File | undefined) => {
     if (!file || busy) return;
@@ -717,10 +762,19 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
 
   return (
     <div style={card}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: mostrarFormulario ? 10 : 0 }}>
         <span style={cardTitle}>Fotos de saída</span>
-        <span style={{ fontSize: 11, color: C.subtle }}>{fotos.length} de {FOTO_MAX_V3}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, color: C.subtle }}>
+          {fotos.length ? `${fotos.length} de ${FOTO_MAX_V3}` : "Opcional"}
+          {!mostrarFormulario ? (
+            <button type="button" onClick={() => setAberto(true)} style={btnSecundario}>
+              Adicionar fotos de saída
+            </button>
+          ) : null}
+        </span>
       </div>
+      {mostrarFormulario ? (
+      <>
       <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 10 }}>
         <label>
           <div style={{ ...upLabel, marginBottom: 4 }}>Categoria</div>
@@ -759,6 +813,8 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
       ) : (
         <div style={{ fontSize: 12, color: C.subtle }}>Nenhuma foto de saída registrada.</div>
       )}
+      </>
+      ) : null}
       {error ? <div style={{ fontSize: 12, color: C.danger, marginTop: 8 }} role="alert">{error}</div> : null}
     </div>
   );
@@ -796,97 +852,99 @@ export function DocumentosEntregaCard({ v }: { v: V4Vals }) {
   );
 }
 
-export function EntregaStage({ v }: { v: V4Vals }) {
-  const e = v.entrega;
-  const g = e.garantia;
-
-  // GOAL OPS-V4-FLUXO-CURTO-006: hospedeiro do MESMO sheet de recebimento, em
-  // posição estável (o rascunho sobrevive à releitura após recusa).
-  const recebimento = <ReceberPagamentoV4 key="recebimento" v={v} somenteSheet />;
-
-  if (!e.temRegistro) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {recebimento}
-        <GuiaRetirada v={v} />
-        <EntregaAcaoCard v={v} />
-        <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "18px 18px", textAlign: "center" }}>
-          <span style={{ fontSize: 22 }}>📦</span>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>Esta Ordem de Serviço ainda não foi entregue.</div>
-          <div style={{ fontSize: 11.5, color: C.subtle, maxWidth: 360, lineHeight: 1.5 }}>
-            O registro de retirada, a assinatura e a garantia aparecem aqui assim que a entrega for concluída.
-          </div>
-        </div>
-        <FotosSaidaCard v={v} />
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 10 }}>🛡 Garantia da OS</div>
-          {g.temGarantia ? (
-            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
-              <Field label="Prazo" value={g.prazo} />
-              <Field label="Cobertura" value={g.cobertura} />
-              <Field label="Início" value={g.inicio} />
-              <Field label="Validade" value={g.fim} />
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div>
-          )}
-          <GarantiaFormCard v={v} />
-        </div>
-        <DocumentosEntregaCard v={v} />
-      </div>
-    );
-  }
-
+/**
+ * Garantia da OS (real) — o MESMO card antes e depois da entrega (definir/editar
+ * modelo e prazo continuam aqui: contrato e E2E do GOAL OPS-V4-FLUXO-CURTO-002).
+ */
+function GarantiaOSCard({ v }: { v: V4Vals }) {
+  const g = v.entrega.garantia;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {recebimento}
-      <GuiaRetirada v={v} />
-      <EntregaAcaoCard v={v} />
-      <DocumentosEntregaCard v={v} />
-      <FotosSaidaCard v={v} />
-      <div style={{ display: "grid", gridTemplateColumns: col3, gap: 12, alignItems: "start" }}>
-      {/* Registro de entrega (real) */}
-      <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <span style={cardTitle}>📦 Registro de entrega</span>
-          <StatusBadge label={e.statusLabel} tone={e.statusTone} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10 }}>
-          <Field label="Retirado por" value={e.retiradoPor} />
-          <Field label="Data da entrega" value={e.retiradoEm} />
-          {e.registradoEm ? <Field label="Registrado no sistema" value={e.registradoEm} /> : null}
-        </div>
-        {e.entregue ? (
-          <button
-            type="button"
-            onClick={v.openCorrigirDatas}
-            style={{ marginTop: 9, padding: 0, border: "none", background: "transparent", color: C.primaryHover, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
-          >
-            Corrigir datas
-          </button>
-        ) : null}
-        {e.observacao && (
-          <div style={{ marginTop: 11 }}>
-            <div style={{ ...upLabel, marginBottom: 3 }}>Observação</div>
-            <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{e.observacao}</div>
+    <div style={card}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
+        <span style={cardTitle}>🛡 Garantia da OS</span>
+        {g.temGarantia && <StatusBadge label={g.situacao} tone={g.situacaoTone} />}
+      </div>
+      {g.temGarantia && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
+            <Field label="Prazo" value={g.prazo} />
+            <Field label="Cobertura" value={g.cobertura} />
+            <Field label="Início" value={g.inicio} />
+            <Field label="Validade" value={g.fim} />
           </div>
-        )}
-
-        <div style={{ ...upLabel, margin: "13px 0 5px" }}>Assinatura de retirada</div>
-        {e.temAssinatura ? (
-          <div style={{ border: `1px solid ${C.line2}`, background: C.surface2, borderRadius: 8, padding: 8, display: "flex", justifyContent: "center" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={e.assinaturaDataUrl} alt="Assinatura de retirada" style={{ maxHeight: 90, objectFit: "contain" }} />
+          {g.observacoes && (
+            <div style={{ marginBottom: 11 }}>
+              <div style={{ ...upLabel, marginBottom: 3 }}>Condições</div>
+              <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{g.observacoes}</div>
+            </div>
+          )}
+          {g.acionamentos && (
+            <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 11 }}>
+              Acionamentos registrados: <b>{g.acionamentos}</b>
+            </div>
+          )}
+          <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 11 }}>
+            <GarantiaFormCard v={v} />
           </div>
-        ) : e.entregue ? (
-          <AssinaturaRetiradaCard v={v} />
-        ) : (
-          <Empty>Nenhuma assinatura de entrega registrada.</Empty>
-        )}
+        </>
+      )}
+      {!g.temGarantia && <><div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div><GarantiaFormCard v={v} /></>}
+    </div>
+  );
+}
 
-        <div style={{ ...upLabel, margin: "14px 0 6px" }}>Linha do tempo da entrega</div>
-        {e.eventos.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+/** Registro efetivo da retirada — só depois da entrega (nunca fabricado pela garantia). */
+function RegistroEntregaCard({ v }: { v: V4Vals }) {
+  const e = v.entrega;
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <span style={cardTitle}>📦 Registro de entrega</span>
+        <StatusBadge label={e.statusLabel} tone={e.statusTone} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10 }}>
+        <Field label="Retirado por" value={e.retiradoPor} />
+        <Field label="Data da entrega" value={e.retiradoEm} />
+        {e.registradoEm ? <Field label="Registrado no sistema" value={e.registradoEm} /> : null}
+      </div>
+      {e.entregue ? (
+        <button
+          type="button"
+          onClick={v.openCorrigirDatas}
+          style={{ marginTop: 9, padding: 0, border: "none", background: "transparent", color: C.primaryHover, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+        >
+          Corrigir datas
+        </button>
+      ) : null}
+      {e.observacao && (
+        <div style={{ marginTop: 11 }}>
+          <div style={{ ...upLabel, marginBottom: 3 }}>Observação</div>
+          <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{e.observacao}</div>
+        </div>
+      )}
+      {e.acessorios.length > 0 && (
+        <div style={{ marginTop: 11 }}>
+          <div style={{ ...upLabel, marginBottom: 3 }}>Acessórios em custódia (registrados na entrada)</div>
+          <div style={{ fontSize: 12, color: C.body, lineHeight: 1.5 }}>{e.acessorios.join(", ")}</div>
+        </div>
+      )}
+
+      <div style={{ ...upLabel, margin: "13px 0 5px" }}>Assinatura de retirada</div>
+      {e.temAssinatura ? (
+        <div style={{ border: `1px solid ${C.line2}`, background: C.surface2, borderRadius: 8, padding: 8, display: "flex", justifyContent: "center" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={e.assinaturaDataUrl} alt="Assinatura de retirada" style={{ maxHeight: 90, objectFit: "contain" }} />
+        </div>
+      ) : e.entregue ? (
+        <AssinaturaRetiradaCard v={v} />
+      ) : (
+        <Empty>Nenhuma assinatura de entrega registrada.</Empty>
+      )}
+
+      {e.eventos.length > 0 ? (
+        <details style={{ marginTop: 14 }}>
+          <summary style={{ ...upLabel, cursor: "pointer" }}>Linha do tempo da entrega ({e.eventos.length})</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {e.eventos.map((ev) => (
               <div key={ev.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: ev.dot, marginTop: 5, flex: "none" }} />
@@ -897,66 +955,37 @@ export function EntregaStage({ v }: { v: V4Vals }) {
               </div>
             ))}
           </div>
-        ) : (
-          <Empty>Nenhum evento de entrega registrado.</Empty>
-        )}
-      </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
 
-      {/* Checklist final + acessórios */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 10 }}>Checklist final de entrega</div>
-          <Empty>Nenhum checklist de entrega registrado.</Empty>
-        </div>
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 9 }}>Acessórios do aparelho</div>
-          {e.acessorios.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 6 }}>
-              {e.acessorios.map((a, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, border: `1px solid ${C.line2}`, background: C.surface, borderRadius: 7, padding: "6px 8px" }}>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.subtle, flex: "none" }} />
-                  <span style={{ fontSize: 11.5, color: C.body, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty>Nenhum acessório registrado para esta OS.</Empty>
-          )}
-        </div>
-      </div>
+export function EntregaStage({ v }: { v: V4Vals }) {
+  const e = v.entrega;
 
-      {/* Garantia da OS (real) */}
-      <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
-          <span style={cardTitle}>🛡 Garantia da OS</span>
-          {g.temGarantia && <StatusBadge label={g.situacao} tone={g.situacaoTone} />}
+  // GOAL OPS-V4-FLUXO-CURTO-006: hospedeiro do MESMO sheet de recebimento, em
+  // posição estável (o rascunho sobrevive à releitura após recusa).
+  const recebimento = <ReceberPagamentoV4 key="recebimento" v={v} somenteSheet />;
+
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: a etapa é uma CONFERÊNCIA de
+  // retirada — coluna principal (conferir, confirmar, fotos opcionais) e lateral
+  // (garantia, documentos). Antes da entrega não há cartões vazios de registro,
+  // checklist sem fonte ou acessórios repetidos; depois, o registro efetivo.
+  return (
+    <div className={styles.etapa}>
+      {recebimento}
+      <div className={styles.layout}>
+        <div className={styles.principal}>
+          <GuiaRetirada v={v} />
+          <EntregaAcaoCard v={v} />
+          {e.entregue ? <RegistroEntregaCard v={v} /> : null}
+          <FotosSaidaCard v={v} />
         </div>
-        {g.temGarantia && (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
-              <Field label="Prazo" value={g.prazo} />
-              <Field label="Cobertura" value={g.cobertura} />
-              <Field label="Início" value={g.inicio} />
-              <Field label="Validade" value={g.fim} />
-            </div>
-            {g.observacoes && (
-              <div style={{ marginBottom: 11 }}>
-                <div style={{ ...upLabel, marginBottom: 3 }}>Condições</div>
-                <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{g.observacoes}</div>
-              </div>
-            )}
-            {g.acionamentos && (
-              <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 11 }}>
-                Acionamentos registrados: <b>{g.acionamentos}</b>
-              </div>
-            )}
-            <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 11 }}>
-              <GarantiaFormCard v={v} />
-            </div>
-          </>
-        )}
-        {!g.temGarantia && <><div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div><GarantiaFormCard v={v} /></>}
-      </div>
+        <aside className={styles.lateral} aria-label="Garantia e documentos da OS">
+          <GarantiaOSCard v={v} />
+          <DocumentosEntregaCard v={v} />
+        </aside>
       </div>
     </div>
   );

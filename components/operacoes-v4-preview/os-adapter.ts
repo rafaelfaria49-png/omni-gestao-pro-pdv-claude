@@ -1527,10 +1527,14 @@ export function adaptEntrega(os: OrdemServico): V4EntregaView {
 
   const garantia = adaptGarantia(os);
   const fotosSaida = adaptFotosSaida(os);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: registro de entrega só com evidência
+  // de RETIRADA. Garantia prevista (ou evento de garantia) nunca fabrica um registro
+  // positivo de entrega — antes ela abria o layout pós-entrega cheio de "Não informado".
+  const eventosDeRetirada = tl.filter((ev: EventoTimeline) => ev.tipo === "entrega_cliente" || ev.tipo === "retirada_confirmada");
 
   return {
     temRegistro:
-      entregue || !!retiradoPor || !!assinaturaDataUrl || !!observacao || eventos.length > 0 || garantia.temGarantia || fotosSaida.length > 0,
+      entregue || !!retiradoPor || !!assinaturaDataUrl || !!observacao || eventosDeRetirada.length > 0 || fotosSaida.length > 0,
     entregue,
     statusLabel,
     statusTone,

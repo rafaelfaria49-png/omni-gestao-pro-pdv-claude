@@ -184,3 +184,54 @@ describe("OPS-V4-FLUXO-CURTO-006 — comprovante a partir da projeção estabele
     expect(lerReciboDaProjecaoV4({ sessao: e1.metadata.comprovante, os: { timeline: [e1] }, projection: { receivedTotal: 300, receivableFound: true, receivablePayments: [{ amount: 300, operationId: "op-e1" }] } })).toMatchObject({ estado: "disponivel", origem: "sessao" });
   });
 });
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — comprovante com bloqueio comercial", () => {
+  const timeline = [recebimento("e1", 300, 300)];
+  const pagamentos = [{ amount: 300, operationId: "op-e1" }];
+
+  it("recebido legado nulo (pendência comercial) + fatos verificados: o comprovante 1:1 continua disponível", () => {
+    const leitura = lerReciboDaProjecaoV4({
+      sessao: null,
+      os: { timeline },
+      projection: { receivedTotal: null, receivableFound: true, receivablePayments: pagamentos, fatos: { tituloEncontrado: true, verificavel: true, recebidoLiquido: 300, pagamentosVigentes: pagamentos } },
+    });
+    expect(leitura.estado).toBe("disponivel");
+  });
+
+  it("fatos NÃO verificados: sem âncora, nada é oferecido", () => {
+    const leitura = lerReciboDaProjecaoV4({
+      sessao: null,
+      os: { timeline },
+      projection: { receivedTotal: null, receivableFound: true, receivablePayments: pagamentos, fatos: { tituloEncontrado: true, verificavel: false, recebidoLiquido: null, pagamentosVigentes: null } },
+    });
+    expect(leitura.estado).toBe("indisponivel");
+  });
+
+  it("A6: estornado + reposição externa do mesmo valor continua indisponível mesmo com fatos verificados", () => {
+    const leitura = lerReciboDaProjecaoV4({
+      sessao: null,
+      os: { timeline: [recebimento("e1", 300, 300), estorno("x1", 300)] },
+      projection: { receivedTotal: null, receivableFound: true, receivablePayments: [{ amount: 300, operationId: null }], fatos: { tituloEncontrado: true, verificavel: true, recebidoLiquido: 300, pagamentosVigentes: [{ amount: 300, operationId: null }] } },
+    });
+    expect(leitura.estado).toBe("indisponivel");
+  });
+
+  it("R1-2: com recebido legado e fatos rejeitados (estorno sem referência), o comprovante antigo não volta", () => {
+    const leitura = lerReciboDaProjecaoV4({
+      sessao: null,
+      os: { timeline: [recebimento("e1", 150, 150), recebimento("e2", 150, 300)] },
+      // legado presume a 2ª baixa estornada (último vigente) e manteria a 1ª válida
+      projection: { receivedTotal: 150, receivableFound: true, receivablePayments: [{ amount: 150, operationId: "op-e1" }], fatos: { tituloEncontrado: true, verificavel: false, recebidoLiquido: null, pagamentosVigentes: null } },
+    });
+    expect(leitura.estado).toBe("indisponivel");
+  });
+
+  it("R1-2: fatos verificados usam os pagamentos vigentes da leitura ESTRITA, não os do leitor legado", () => {
+    const leitura = lerReciboDaProjecaoV4({
+      sessao: null,
+      os: { timeline },
+      projection: { receivedTotal: null, receivableFound: true, receivablePayments: pagamentos, fatos: { tituloEncontrado: true, verificavel: true, recebidoLiquido: 300, pagamentosVigentes: [{ amount: 300, operationId: "op-outra" }] } },
+    });
+    expect(leitura.estado).toBe("indisponivel");
+  });
+});

@@ -254,6 +254,17 @@ export const RETORNO_STATUS_META_V3: Record<RetornoStatusV3, { label: string; to
   finalizado: { label: "Finalizado", tone: "success" },
 };
 
+/**
+ * Reserva da abertura (GOAL OPS-V4-FLUXO-CURTO-007): existe só enquanto o
+ * atendimento do retorno está sendo criado. Quem gravou o `token` sob a trava
+ * da OS original é o único autorizado a criar; `expiraEm` (TTL maior que a
+ * duração máxima de uma função) separa "ainda criando" de "interrompida".
+ */
+export interface ReservaRetornoV3 {
+  token: string;
+  expiraEm: string;
+}
+
 export interface RetornoV3 {
   id: string;
   /** Vínculo com a OS original (item 5). */
@@ -267,12 +278,20 @@ export interface RetornoV3 {
   status: RetornoStatusV3;
   /** Snapshot: a garantia estava ativa quando o retorno foi aberto? */
   garantiaAtivaNaAbertura?: boolean;
+  /** Snapshot da situação da garantia na abertura (ativa, vencida, sem cobertura, não informada). */
+  garantiaSituacaoNaAbertura?: GarantiaSituacaoV3;
   /** Atendimento novo gerado para trabalhar o retorno (OS entregue é status final). */
   osRetornoId?: string;
   osRetornoCodigo?: string;
   finalizadoEm?: string;
   finalizadoPor?: string;
   observacaoFinal?: string;
+  /** Identidade da operação lógica que abriu este retorno (retry = mesmo id). */
+  operacaoId?: string;
+  /** Assinatura do relato do comando dono do `operacaoId` (nunca inclui senha). */
+  assinatura?: string;
+  /** Presente enquanto o atendimento ainda não foi vinculado. */
+  reserva?: ReservaRetornoV3;
 }
 
 /** Vínculo gravado no payload da OS nova (`vinculoRetornoV3`). */
@@ -282,8 +301,41 @@ export interface VinculoRetornoV3 {
   retornoId?: string;
   motivo?: string;
   garantiaAtivaNaAbertura?: boolean;
+  garantiaSituacaoNaAbertura?: GarantiaSituacaoV3;
   finalizadoEm?: string;
   finalizadoPorEntrega?: boolean;
+  operacaoId?: string;
+  /**
+   * Atendimento EXCEDENTE de uma abertura concorrente (o retorno ficou vinculado
+   * a outro atendimento): marcado, nunca órfão silencioso. Não é o vínculo válido.
+   */
+  descartadoEm?: string;
+  descartadoMotivo?: string;
+  /** Atendimento que ficou vinculado ao retorno quando este foi descartado. */
+  vinculoValidoId?: string;
+  vinculoValidoCodigo?: string;
+}
+
+function isGarantiaSituacao(v: unknown): v is GarantiaSituacaoV3 {
+  return v === "nenhuma" || v === "sem_garantia" || v === "prevista" || v === "ativa" || v === "vencida";
+}
+
+function lerReservaV3(v: unknown): ReservaRetornoV3 | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  const token = s(o.token);
+  const expiraEm = s(o.expiraEm);
+  return token && expiraEm ? { token, expiraEm } : undefined;
+}
+
+/**
+ * Retorno ainda SEM atendimento e com reserva VIVA: o atendimento está sendo
+ * criado agora. Reserva expirada (ou ausente) não conta — o servidor a resolve.
+ */
+export function retornoEmAberturaV3(retorno: RetornoV3 | null | undefined, now: Date = new Date()): boolean {
+  if (!retorno || retorno.status !== "aberto" || retorno.osRetornoId || !retorno.reserva) return false;
+  const expira = Date.parse(retorno.reserva.expiraEm);
+  return Number.isFinite(expira) && expira > now.getTime();
 }
 
 export function lerVinculoRetornoV3(os: OrdemServico | null | undefined): VinculoRetornoV3 | undefined {
@@ -298,8 +350,14 @@ export function lerVinculoRetornoV3(os: OrdemServico | null | undefined): Vincul
     retornoId: s(o.retornoId) || undefined,
     motivo: s(o.motivo) || undefined,
     garantiaAtivaNaAbertura: typeof o.garantiaAtivaNaAbertura === "boolean" ? o.garantiaAtivaNaAbertura : undefined,
+    garantiaSituacaoNaAbertura: isGarantiaSituacao(o.garantiaSituacaoNaAbertura) ? o.garantiaSituacaoNaAbertura : undefined,
     finalizadoEm: s(o.finalizadoEm) || undefined,
     finalizadoPorEntrega: o.finalizadoPorEntrega === true ? true : undefined,
+    operacaoId: s(o.operacaoId) || undefined,
+    descartadoEm: s(o.descartadoEm) || undefined,
+    descartadoMotivo: s(o.descartadoMotivo) || undefined,
+    vinculoValidoId: s(o.vinculoValidoId) || undefined,
+    vinculoValidoCodigo: s(o.vinculoValidoCodigo) || undefined,
   };
 }
 
@@ -327,11 +385,15 @@ export function lerRetornosV3(os: OrdemServico | null | undefined): RetornoV3[] 
         criadoPor: s(o.criadoPor) || undefined,
         status: isRetornoStatus(o.status) ? o.status : "aberto",
         garantiaAtivaNaAbertura: typeof o.garantiaAtivaNaAbertura === "boolean" ? o.garantiaAtivaNaAbertura : undefined,
+        garantiaSituacaoNaAbertura: isGarantiaSituacao(o.garantiaSituacaoNaAbertura) ? o.garantiaSituacaoNaAbertura : undefined,
         osRetornoId: s(o.osRetornoId) || undefined,
         osRetornoCodigo: s(o.osRetornoCodigo) || undefined,
         finalizadoEm: s(o.finalizadoEm) || undefined,
         finalizadoPor: s(o.finalizadoPor) || undefined,
         observacaoFinal: s(o.observacaoFinal) || undefined,
+        operacaoId: s(o.operacaoId) || undefined,
+        assinatura: s(o.assinatura) || undefined,
+        reserva: s(o.osRetornoId) ? undefined : lerReservaV3(o.reserva),
       };
     })
     .filter((r): r is RetornoV3 => r !== null);

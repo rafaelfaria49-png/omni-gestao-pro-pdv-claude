@@ -351,3 +351,76 @@ describe("OPS-V4-FLUXO-CURTO-005 — trava da escrita primária", () => {
     expect(travaAtivaProximaAcaoV4(null, atual())).toBe(false);
   });
 });
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — impedimento comercial leva ao orçamento", () => {
+  const comercial = (codigo: "APROVACAO_COMERCIAL_PENDENTE" | "ORCAMENTO_RECUSADO", verificado = true) =>
+    projecao("UNKNOWN", {
+      receivedTotal: null,
+      balance: null,
+      consistencyStatus: "UNKNOWN",
+      consistencyIssues: ["Preço ou aprovação comercial da OS não está materializado de forma confiável."],
+      deliveryDecision: "BLOCK_UNKNOWN",
+      canDeliver: false,
+      canReceive: false,
+      fatos: {
+        tituloEncontrado: true, verificavel: verificado, motivo: verificado ? null : "HISTORICO_INVALIDO", tituloId: "cr-005",
+        valorTitulo: verificado ? 400 : null, recebidoBruto: verificado ? 400 : null, estornado: verificado ? 0 : null,
+        recebidoLiquido: verificado ? 400 : null, saldoTitulo: verificado ? 0 : null, liquidado: verificado,
+        temRegistroDePagamento: true, pagamentosVigentes: verificado ? [{ amount: 400, operationId: "op-1" }] : null,
+        meios: [], semMeioIdentificado: verificado ? 400 : null,
+      },
+      comercial: { orcamento: codigo === "ORCAMENTO_RECUSADO" ? "recusado" : "rascunho", totalOrcamento: 400, totalAprovado: null, confereComTitulo: true, divergencias: [] },
+      acoes: { podeReceber: false, podeEntregar: false, impedimento: { codigo, destino: "comercial" } },
+    });
+
+  it("A1: pronta + aprovação pendente → 'Revisar aprovação comercial' no orçamento, nunca Financeiro nem entrega", () => {
+    const a = pronta({ projection: comercial("APROVACAO_COMERCIAL_PENDENTE"), loading: false, error: null });
+    expect(a).toMatchObject({ estado: "bloqueada", id: "revisar-comercial", titulo: "Revisar aprovação comercial", stage: "orcamento", efeito: "navigate", cta: { label: "Abrir orçamento", disabled: false } });
+    expect(a.descricao.startsWith("Pagamento registrado — R$ 400,00 · Saldo do título — R$ 0,00.")).toBe(true);
+    expect(a.descricao).toMatch(/não está aprovado/);
+    expect(a.stage).not.toBe("entrega");
+  });
+
+  it("pagamento não verificado: o motivo comercial vem sem citar valores", () => {
+    const a = pronta({ projection: comercial("APROVACAO_COMERCIAL_PENDENTE", false), loading: false, error: null });
+    expect(a.descricao).not.toMatch(/Pagamento registrado/);
+    expect(a.stage).toBe("orcamento");
+  });
+
+  it("orçamento recusado também vai ao comercial", () => {
+    expect(pronta({ projection: comercial("ORCAMENTO_RECUSADO"), loading: false, error: null })).toMatchObject({ titulo: "Revisar orçamento recusado", stage: "orcamento" });
+  });
+
+  it("status V3 'recebida' é citado como status — não como retirada ou pagamento", () => {
+    const a = pronta({ projection: comercial("APROVACAO_COMERCIAL_PENDENTE"), loading: false, error: null }, { operacaoStatusV3: "recebida" });
+    expect(a.descricao).toMatch(/Status “Recebida” — falta a confirmação formal de entrega/);
+    expect(a.descricao).not.toMatch(/^OS recebida/);
+  });
+});
+
+describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R1: destinos estruturados e conferência", () => {
+  const fatosRejeitados = {
+    tituloEncontrado: true, verificavel: false, motivo: "ESTORNO_AMBIGUO" as const, tituloId: "cr-005", valorTitulo: null, recebidoBruto: null,
+    estornado: null, recebidoLiquido: null, saldoTitulo: null, liquidado: false, temRegistroDePagamento: true, pagamentosVigentes: null,
+    meios: [], semMeioIdentificado: null,
+  };
+
+  it("SEM_COBRANCA_EXIGE_AUTORIZACAO leva à Entrega (classificação), não ao Financeiro", () => {
+    const p = projecao("NO_PRICE", { canDeliver: false, deliveryDecision: "BLOCK_NO_CHARGE_AUTH_REQUIRED", acoes: { podeReceber: false, podeEntregar: false, impedimento: { codigo: "SEM_COBRANCA_EXIGE_AUTORIZACAO", destino: "entrega" } } });
+    expect(pronta({ projection: p, loading: false, error: null })).toMatchObject({ id: "classificar-sem-cobranca", stage: "entrega", titulo: "Classificar entrega sem cobrança", cta: { label: "Abrir entrega" } });
+  });
+
+  it("FALHA_LEITURA estruturada pede releitura (secundária), como o erro de leitura", () => {
+    const p = projecao("UNKNOWN", { canDeliver: false, deliveryDecision: "BLOCK_UNKNOWN", errorCode: "FINANCIAL_STATE_UNKNOWN", acoes: { podeReceber: false, podeEntregar: false, impedimento: { codigo: "FALHA_LEITURA", destino: "recarregar" } } });
+    const a = pronta({ projection: p, loading: false, error: null });
+    expect(a).toMatchObject({ id: "revisar-financeiro", stage: "financeiro", secundaria: { recarregar: "financeiro" } });
+  });
+
+  it("canDeliver legado com fatos rejeitados: segue 'Confirmar entrega' (decisão intacta) sem afirmar quitação", () => {
+    const p = projecao("PAID", { fatos: fatosRejeitados, acoes: { podeReceber: false, podeEntregar: true, impedimento: null } });
+    const a = pronta({ projection: p, loading: false, error: null });
+    expect(a).toMatchObject({ id: "confirmar-entrega", stage: "entrega", tone: "warning" });
+    expect(a.descricao).toMatch(/conferência pendente/);
+    expect(a.descricao).not.toMatch(/Pagamento quitado/);
+  });
+});
