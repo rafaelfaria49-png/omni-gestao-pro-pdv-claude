@@ -426,8 +426,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   }, [])
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       // Deixa qualquer combo Alt+_ passar (ex.: Alt+L → Alta Legibilidade global),
       // mesmo padrão do Supermercado/Assistência — atalho global nunca é engolido.
       if (e.altKey) return
@@ -484,15 +484,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           if (helpOpen) { e.preventDefault(); setHelpOpen(false) }
           break
       }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal, accessoryProduct, scanUnregisteredPolicy, openItemAvulso],
-  )
-
-  useEffect(() => {
+    }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleKeyDown])
+  // Reinstala após cada render: F1 e clique consultam o mesmo handler e sales atuais.
+  })
 
   // ── Cart helpers ──────────────────────────────────────────────────────────
   const addToCart = useCallback(
@@ -861,7 +857,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     }
     // N5-B1 R2 (P2-06): defesa em profundidade — com venda PENDING de
     // identidade própria registrada, uma nova confirmação não pode nascer.
-    if (pendingSaleIdentityRef.current?.hasPending()) {
+    if (pendingSaleIdentityRef.current?.isUnresolved(sales)) {
       toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
       return false
     }

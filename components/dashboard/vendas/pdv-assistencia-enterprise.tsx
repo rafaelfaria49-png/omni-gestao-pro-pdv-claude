@@ -145,7 +145,7 @@ import {
   findUnresolvedSaleLines,
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
-import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE, type PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
 import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
 import {
   CAPABILITY_BLOCKED_COPY,
@@ -176,6 +176,7 @@ type CartPersisted = {
   discountReais?: number
   discountPercent?: number
   savedAt: string
+  pendingIdentity?: PendingSaleIdentity
 }
 
 // ─── Atalhos types + helpers ──────────────────────────────────────────────────
@@ -966,7 +967,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     storeIdKey,
   )
   const [showCustomerSidebarDropdown, setShowCustomerSidebarDropdown] = useState(false)
-  const cartHydratedRef = useRef(false)
+  const [cartHydratedStoreId, setCartHydratedStoreId] = useState<string | null>(null)
   const cartPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [postSalePrintOpen, setPostSalePrintOpen] = useState(false)
   const [postSalePrintInput, setPostSalePrintInput] = useState<PdvReceiptInput | null>(null)
@@ -1245,7 +1246,17 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Restaurar carrinho do localStorage ──────────────────────────────────────
   useEffect(() => {
-    cartHydratedRef.current = false
+    // O estado restaurável pertence à loja desta leitura, inclusive sem cache.
+    pendingSaleIdentityRef.current?.clear()
+    setCart([])
+    setCustomerName("")
+    setSelectedClienteId(null)
+    setSelectedClienteDoc(null)
+    setDiscountType("reais")
+    setDiscountReais(0)
+    setDiscountPercent(0)
+    setPaymentOpen(false)
+    paymentDiscountSnapshotRef.current = null
     try {
       const raw = localStorage.getItem(CART_STORAGE_KEY(storeIdKey))
       if (raw) {
@@ -1262,6 +1273,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             isAvulso: resolveSaleLineItemType(line) === "avulso" ? true : undefined,
           })) as CartLine[]
           const restoredSubtotal = restoredCart.reduce((s, l) => s + l.price * l.qty, 0)
+          if (data.pendingIdentity) pendingSaleIdentityRef.current?.register(data.pendingIdentity)
           setCart(restoredCart)
           setCustomerName(typeof data.customerName === "string" ? data.customerName : "")
           setSelectedClienteId(typeof data.clienteId === "string" ? data.clienteId : null)
@@ -1292,9 +1304,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         }
       }
     } catch { /* ignore */ }
-    cartHydratedRef.current = true
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeIdKey])
+    setCartHydratedStoreId(storeIdKey)
+  }, [storeIdKey, toast])
 
   // ── Computed totals ────────────────────────────────────────────────────────────
   const subtotal = useMemo(() => cart.reduce((s, l) => s + l.price * l.qty, 0), [cart])
@@ -1327,38 +1338,44 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }, [])
 
   useEffect(() => {
-    if (!cartHydratedRef.current) return
+    // Aguarda o render do restore: o carrinho vazio do mount não zera seu desconto.
+    if (cartHydratedStoreId !== storeIdKey) return
     if (cart.length === 0) {
       resetDiscountState()
     }
-  }, [cart.length, resetDiscountState])
+  }, [cart.length, cartHydratedStoreId, storeIdKey, resetDiscountState])
+
+  // O mesmo serializer atende o debounce e o desfecho PENDING imediato.
+  const persistCart = useCallback(() => {
+    if (cartHydratedStoreId !== storeIdKey) return
+    try {
+      if (cart.length === 0) {
+        localStorage.removeItem(CART_STORAGE_KEY(storeIdKey))
+      } else {
+        const data: CartPersisted = {
+          cart,
+          customerName,
+          clienteId: selectedClienteId,
+          clienteDoc: selectedClienteDoc,
+          discount: desconto,
+          discountType,
+          discountReais,
+          discountPercent,
+          savedAt: new Date().toISOString(),
+          // Lido na gravação: um timer anterior não sobrescreve a identidade.
+          pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
+        }
+        localStorage.setItem(CART_STORAGE_KEY(storeIdKey), JSON.stringify(data))
+      }
+    } catch { /* ignore */ }
+  }, [cartHydratedStoreId, cart, customerName, selectedClienteId, selectedClienteDoc, discountType, discountReais, discountPercent, desconto, storeIdKey])
 
   // ── Persistir carrinho no localStorage (debounced 500ms) ─────────────────────
   useEffect(() => {
-    if (!cartHydratedRef.current) return
     if (cartPersistTimerRef.current) clearTimeout(cartPersistTimerRef.current)
-    cartPersistTimerRef.current = setTimeout(() => {
-      try {
-        if (cart.length === 0) {
-          localStorage.removeItem(CART_STORAGE_KEY(storeIdKey))
-        } else {
-          const data: CartPersisted = {
-            cart,
-            customerName,
-            clienteId: selectedClienteId,
-            clienteDoc: selectedClienteDoc,
-            discount: desconto,
-            discountType,
-            discountReais,
-            discountPercent,
-            savedAt: new Date().toISOString(),
-          }
-          localStorage.setItem(CART_STORAGE_KEY(storeIdKey), JSON.stringify(data))
-        }
-      } catch { /* ignore */ }
-    }, 500)
+    cartPersistTimerRef.current = setTimeout(persistCart, 500)
     return () => { if (cartPersistTimerRef.current) clearTimeout(cartPersistTimerRef.current) }
-  }, [cart, customerName, selectedClienteId, selectedClienteDoc, discountType, discountReais, discountPercent, desconto, storeIdKey])
+  }, [persistCart])
 
   // ── Limpar selectedLineId quando a linha é removida ──────────────────────────
   useEffect(() => {
@@ -1673,8 +1690,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget, accessoryTarget, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
+  // Reinstala após cada render: atalhos e cliques consultam os mesmos handlers atuais.
+  })
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct, priceOverride?: number, qtyToAdd: number = 1) => {
@@ -2088,6 +2105,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         id: result.saleId,
         ...(result.clientSaleId ? { clientSaleId: result.clientSaleId } : {}),
       })
+      // O carrinho não mudou: grava antes de fechar, sem aguardar o debounce.
+      persistCart()
       closePaymentModal(false)
       toast({ title: PENDING_SALE_TITLE, description: PENDING_SALE_DESCRIPTION, duration: 6000 })
       queueMicrotask(() => {
