@@ -210,8 +210,18 @@ export function PdvServicoV3() {
 
   const veredito = splitMode ? validarSplitV3(splitLinhasNum, saldo) : validarRecebimentoV3(valorUnico, saldo);
   const valorAReceber = splitMode ? somaSplit : valorUnico;
+  const inputImediato = splitMode
+    ? { linhas: splitLinhasNum, sessaoId: sessao?.sessaoId ?? "", intencao }
+    : { valor: valorUnico, forma: formaUnica ?? undefined, sessaoId: sessao?.sessaoId ?? "", intencao };
+  // Representação canônica equivalente só recupera o input ORIGINAL; nunca uma nova cobrança.
+  const podeReenviarOriginal = (() => {
+    if (temAPrazo || !pendenciaReceber || pendenciaReceber.key !== alvoAtual) return false;
+    try {
+      return conteudoConfirmacaoImediataV3({ ...inputImediato, saldoEsperado: pendenciaReceber.input.saldoEsperado }) === conteudoConfirmacaoImediataV3(pendenciaReceber.input);
+    } catch { return false; }
+  })();
   const podeReceber =
-    !temAPrazo && !!os && caixaAberto && (splitMode ? !splitSemForma : formaUnicaSuportada) && veredito.ok && !recebendo && !registrandoMisto && !confirmacaoBloqueada && !pendenciaMisto && !pendenciaReceber && !recusaComercial;
+    !temAPrazo && !!os && caixaAberto && (splitMode ? !splitSemForma : formaUnicaSuportada) && veredito.ok && !recebendo && !registrandoMisto && (!confirmacaoBloqueada || podeReenviarOriginal) && !pendenciaMisto && (!pendenciaReceber || podeReenviarOriginal) && !recusaComercial;
 
   /** Captura o alvo ANTES do await; `aindaNoAlvo()` diz se a tela continua nessa loja/OS. */
   const capturarAlvo = () => {
@@ -228,11 +238,7 @@ export function PdvServicoV3() {
     if (!podeReceber || !os || !sessao?.sessaoId || temAPrazo) return;
     if (!splitMode && !formaUnica) return;
     const alvo = capturarAlvo();
-    const ok = await receber(
-      splitMode
-        ? { linhas: splitLinhasNum, sessaoId: sessao.sessaoId, intencao }
-        : { valor: valorUnico, forma: formaUnica!, sessaoId: sessao.sessaoId, intencao },
-    );
+    const ok = await receber(podeReenviarOriginal ? pendenciaReceber!.input : inputImediato);
     if (ok) {
       reloadLista();
       alvo.notificar(veredito.op === "liquidar" ? "OS quitada." : "Pagamento registrado.");

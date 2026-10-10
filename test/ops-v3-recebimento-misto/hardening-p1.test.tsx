@@ -191,8 +191,12 @@ describe("P1-A · hook real: resposta perdida + representação equivalente", ()
     fireEvent.click(screen.getByRole("button", { name: /Adicionar forma/ }));
     fireEvent.change(screen.getByLabelText("Forma da linha 2"), { target: { value: "pix" } });
     fireEvent.change(screen.getByLabelText("Valor da linha 2"), { target: { value: "50" } });
+    // Outra forma altera o conteúdo e fica bloqueada; a mesma soma por forma é só replay.
+    fireEvent.change(screen.getByLabelText("Forma da linha 2"), { target: { value: "dinheiro" } });
     await waitFor(() => expect((screen.getByRole("button", { name: /^Receber · / }) as HTMLButtonElement).disabled).toBe(true));
-    fireEvent.click(within(screen.getByTestId("pendencia-recebimento")).getByRole("button", { name: "Verificar mesma confirmação" }));
+    fireEvent.change(screen.getByLabelText("Forma da linha 2"), { target: { value: "pix" } });
+    await waitFor(() => expect((screen.getByRole("button", { name: /^Receber · / }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: /^Receber · / }));
     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
 
     const [unica, split] = mocks.receberOSV3.mock.calls.map((c) => c[2] as { operacaoId: string; saldoEsperado: number });

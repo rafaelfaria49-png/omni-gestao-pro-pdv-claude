@@ -315,8 +315,8 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^PIX$/ }));
     fireEvent.click(screen.getByRole("button", { name: /Quitar OS/ }));
     await screen.findByTestId("pendencia-recebimento");
-    await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /Quitar OS/ }))).toBe(true));
-    fireEvent.click(within(screen.getByTestId("pendencia-recebimento")).getByRole("button", { name: "Verificar mesma confirmação" }));
+    await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /Quitar OS/ }))).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: /Quitar OS/ }));
     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
     const [primeira, segunda] = mocks.receberOSV3.mock.calls.map((c) => c[2] as { operacaoId?: string });
     expect(primeira!.operacaoId).toMatch(/^[A-Za-z0-9._-]{8,120}$/);
@@ -450,8 +450,8 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     fireEvent.click(screen.getByLabelText(/Pagamento dividido/));
     fireEvent.change(screen.getByLabelText("Forma da linha 1"), { target: { value: "pix" } });
     fireEvent.change(screen.getByLabelText("Valor da linha 1"), { target: { value: "100" } });
-    await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /^Receber · / }))).toBe(true));
-    fireEvent.click(within(screen.getByTestId("pendencia-recebimento")).getByRole("button", { name: "Verificar mesma confirmação" }));
+    await waitFor(() => expect(desabilitado(screen.getByRole("button", { name: /^Receber · / }))).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: /^Receber · / }));
     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
     const [unica, split] = mocks.receberOSV3.mock.calls.map((c) => c[2] as Record<string, unknown>);
     expect(unica).toMatchObject({ valor: 100, forma: "pix", sessaoId: "sessao-1", saldoEsperado: 400 });
