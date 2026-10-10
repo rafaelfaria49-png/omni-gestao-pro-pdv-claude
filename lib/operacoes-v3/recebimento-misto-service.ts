@@ -48,7 +48,11 @@ import {
   type SplitLinhaV3,
 } from "./payment-model";
 import { travarLinhaOSV3 } from "./os-payload-lock";
-import { avaliarElegibilidadeComercialV3 } from "./elegibilidade-comercial";
+import {
+  avaliarElegibilidadeComercialV3,
+  type CodigoInelegibilidadeComercialV3,
+  type DestinoInelegibilidadeComercialV3,
+} from "./elegibilidade-comercial";
 import {
   assinaturaRecebimentoMistoLegadaV1,
   assinaturaRecebimentoMistoV3,
@@ -90,16 +94,25 @@ export interface ResultadoRecebimentoMistoV3 {
 }
 
 /** Recusa da confirmação. LANÇADA para abortar a transação inteira. */
+/** Motivo comercial estruturado da regra única (GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002). */
+export interface RecusaComercialMistaV3 {
+  codigo: CodigoInelegibilidadeComercialV3;
+  destino: DestinoInelegibilidadeComercialV3;
+}
+
 export class RecebimentoMistoErroV3 extends Error {
   readonly code: RecebimentoMistoErroCodigoV3;
   /** Saldo real do ledger, quando a recusa depende dele (conflito recuperável). */
   readonly saldoAtual?: number;
+  /** `comercial_nao_elegivel`: código e destino da regra única (onde o operador resolve). */
+  readonly comercial?: RecusaComercialMistaV3;
 
-  constructor(code: RecebimentoMistoErroCodigoV3, message: string, saldoAtual?: number) {
+  constructor(code: RecebimentoMistoErroCodigoV3, message: string, saldoAtual?: number, comercial?: RecusaComercialMistaV3) {
     super(message);
     this.name = "RecebimentoMistoErroV3";
     this.code = code;
     this.saldoAtual = saldoAtual;
+    this.comercial = comercial;
   }
 }
 
@@ -323,6 +336,7 @@ export interface RecusaMistaV3 {
   code: RecebimentoMistoErroCodigoV3;
   mensagem: string;
   saldoAtual?: number;
+  comercial?: RecusaComercialMistaV3;
 }
 
 export type DecisaoRecebimentoMistoV3 =
@@ -347,7 +361,9 @@ function recusasGravadas(payload: unknown): RecusaTerminalGravadaV3[] {
 }
 
 function recusaDe(r: RecusaMistaV3): RecusaMistaV3 {
-  return r.saldoAtual === undefined ? { code: r.code, mensagem: r.mensagem } : { code: r.code, mensagem: r.mensagem, saldoAtual: r.saldoAtual };
+  const base: RecusaMistaV3 = r.saldoAtual === undefined ? { code: r.code, mensagem: r.mensagem } : { code: r.code, mensagem: r.mensagem, saldoAtual: r.saldoAtual };
+  const c = r.comercial;
+  return c && typeof c.codigo === "string" && typeof c.destino === "string" ? { ...base, comercial: { codigo: c.codigo, destino: c.destino } } : base;
 }
 
 /** Grava a recusa como o resultado TERMINAL da chave, no payload da OS travada. */
@@ -410,7 +426,7 @@ export async function decidirRecebimentoMistoOSV3(
     // Erro inesperado: aborta a transação inteira (resultado incerto para a tela).
     if (!isRecebimentoMistoErroV3(e)) throw e;
     await tx.$executeRaw`ROLLBACK TO SAVEPOINT ops_v3_misto_execucao`;
-    const recusa: RecusaMistaV3 = { code: e.code, mensagem: e.message, saldoAtual: e.saldoAtual };
+    const recusa: RecusaMistaV3 = { code: e.code, mensagem: e.message, saldoAtual: e.saldoAtual, comercial: e.comercial };
     return { tipo: "recusada", recusa: await gravarRecusaTerminal(tx, ctx, n, requestFingerprint, recusa) };
   }
 }
@@ -476,7 +492,12 @@ async function executarSobATrava(
     prismaValorTotal: Number(osRow.valorTotal ?? 0),
     agora: Date.parse(ctx.agora),
   });
-  if (!elegibilidade.elegivel) throw new RecebimentoMistoErroV3("comercial_nao_elegivel", elegibilidade.mensagem);
+  if (!elegibilidade.elegivel) {
+    throw new RecebimentoMistoErroV3("comercial_nao_elegivel", elegibilidade.mensagem, undefined, {
+      codigo: elegibilidade.codigo,
+      destino: elegibilidade.destino,
+    });
+  }
   const totalCobravel = totalCobravelV3({
     ...payload,
     prismaValorTotal: Number(osRow.valorTotal ?? 0) || 0,

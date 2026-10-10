@@ -210,7 +210,9 @@ describe("formalização: travas, gravação e idempotência", () => {
     const escopo = await conferir();
     await formalizarAprovacaoPendenteV3(SID, OS, entrada(escopo));
     const r = await formalizarAprovacaoPendenteV3(SID, OS, entrada(escopo, { motivo: "Outro motivo, outro conteúdo." }));
-    expect(r).toMatchObject({ ok: false, code: "idempotencia_conflito", naoRegistrada: true });
+    // R1: a chave JÁ tem registro (outro conteúdo) — não é "nada gravado".
+    expect(r).toMatchObject({ ok: false, code: "idempotencia_conflito" });
+    expect(r).not.toHaveProperty("naoRegistrada");
     expect(h.updates).toHaveLength(1);
   });
 

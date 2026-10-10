@@ -87,7 +87,8 @@ import {
   receberOSV3,
   registrarRecebimentoMistoOSV3,
 } from "@/lib/operacoes-v3/pdv-servico-actions";
-import { aprovarOrcamentoParaReceberV3, aprovarOrcamentoV3, gerarOrcamentoDaOS } from "@/lib/operacoes-v3/orcamento-actions";
+import { aprovarOrcamentoParaReceberV3, aprovarOrcamentoV3, conferirEscopoAprovacaoV3, gerarOrcamentoDaOS } from "@/lib/operacoes-v3/orcamento-actions";
+import { MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
 import { conferirFormalizacaoAprovacaoV3, formalizarAprovacaoPendenteV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-actions";
 import type { EscopoFormalizacaoV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
 import { finalizarAtendimentoRapidoV3 } from "@/lib/operacoes-v3/atendimento-rapido-actions";
@@ -311,7 +312,7 @@ describe("B1 · recusa server-side com motivo e destino; caminhos legítimos pre
         operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, pagamentosAgora: [{ forma: "debito", valor: 100 }],
         saldoAPrazo: { valor: 320, vencimento: VENC }, saldoEsperado: 420,
       });
-      expect(misto).toMatchObject({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: expect.stringMatching(/^Recebimento recusado: /) });
+      expect(misto).toMatchObject({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: expect.stringMatching(/^Recebimento recusado: /), comercial: { codigo, destino } });
       const depois = await efeitos(sid, osId);
       expect(depois.titulos).toEqual([]);
       expect(depois.caixa).toEqual([]);
@@ -398,16 +399,79 @@ describe("B2 · aprovação e recebimento independentes; replay sem segunda cobr
     sessao.role = "VENDEDOR";
     await expect(aprovarOrcamentoV3(sid, osId)).rejects.toThrow(/Sem permissão/);
     // Recusa devolvida (não lançada): em produção é o único texto que chega ao navegador.
-    expect(await aprovarOrcamentoParaReceberV3(sid, osId)).toEqual({
+    expect(await conferirEscopoAprovacaoV3(sid, osId)).toEqual({ ok: false, mensagem: expect.stringMatching(/^Seu perfil não pode aprovar orçamentos/) });
+    expect(await aprovarOrcamentoParaReceberV3(sid, osId, { conteudo: "qualquer" })).toEqual({
       ok: false,
       mensagem: expect.stringMatching(/^Seu perfil não pode aprovar orçamentos nesta loja\. Peça a aprovação a quem pode editar OS/),
     });
     expect(await foto(sid, osId)).toBe(antes);
     sessao.role = "TECNICO";
-    expect(await aprovarOrcamentoParaReceberV3(sid, osId)).toEqual({ ok: true });
+    const c = await conferirEscopoAprovacaoV3(sid, osId);
+    if (!c.ok) throw new Error(c.mensagem);
+    expect(await aprovarOrcamentoParaReceberV3(sid, osId, { conteudo: c.escopo.conteudo })).toEqual({ ok: true });
     expect((await lerPayload(osId)).orcamento).toMatchObject({ status: "aprovado" });
-    expect(await aprovarOrcamentoParaReceberV3(sid, osId)).toEqual({ ok: false, mensagem: 'Não é possível aprovar um orçamento com status "aprovado".' });
+    expect(await aprovarOrcamentoParaReceberV3(sid, osId, { conteudo: c.escopo.conteudo })).toEqual({ ok: false, mensagem: 'Não é possível aprovar um orçamento com status "aprovado".' });
     expect(await titulo(sid, osId)).toBeNull();
+  });
+
+  it("R1-P1: escopo trocado depois da conferência (MESMO total) não é aprovado; nova conferência aprova o escopo atual", async () => {
+    const sid = await novaLoja();
+    const osId = await novaOS(sid, { orcamento: "enviado" });
+    const c1 = await conferirEscopoAprovacaoV3(sid, osId);
+    if (!c1.ok) throw new Error(c1.mensagem);
+    expect(c1.escopo).toMatchObject({ totalCentavos: 42000, linhas: [{ descricao: "Troca de Tela", situacao: "cobrada", valorCentavos: 42000 }] });
+    // Outra sessão troca o serviço mantendo o total.
+    const p = await lerPayload(osId);
+    const orc = p.orcamento as Payload;
+    await prisma.ordemServico.update({
+      where: { id: osId },
+      data: { payload: { ...p, orcamento: { ...orc, servicos: [{ id: "srv-troca", descricao: "Troca de Bateria", valor: 420 }] } } as unknown as Prisma.InputJsonValue },
+    });
+    const antes = await foto(sid, osId);
+    expect(await aprovarOrcamentoParaReceberV3(sid, osId, { conteudo: c1.escopo.conteudo })).toEqual({ ok: false, mensagem: MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3 });
+    expect(await foto(sid, osId)).toBe(antes);
+    const c2 = await conferirEscopoAprovacaoV3(sid, osId);
+    if (!c2.ok) throw new Error(c2.mensagem);
+    expect(c2.escopo.conteudo).not.toBe(c1.escopo.conteudo);
+    expect(await aprovarOrcamentoParaReceberV3(sid, osId, { conteudo: c2.escopo.conteudo })).toEqual({ ok: true });
+    expect((await lerPayload(osId)).orcamento).toMatchObject({ status: "aprovado", servicos: [{ descricao: "Troca de Bateria" }] });
+  });
+
+  it("R1-P2: a prazo com identidade — reenvio devolve o original sem nova escrita, mesmo após mudança comercial; conteúdo diferente é conflito", async () => {
+    const sid = await novaLoja();
+    const osId = await novaOS(sid);
+    const chave = gerarOperacaoIdV3();
+    const r1 = await lancarOSAPrazoV3(sid, osId, { vencimento: VENC, operacaoId: chave });
+    expect(r1).toMatchObject({ valorFormalizado: 420, aPrazo: { operacaoId: chave, valor: 420, vencimento: VENC } });
+    expect(r1.jaRegistrado).toBeUndefined();
+    const depois1 = await foto(sid, osId);
+    const r2 = await lancarOSAPrazoV3(sid, osId, { vencimento: VENC, operacaoId: chave });
+    expect(r2).toMatchObject({ jaRegistrado: true, valorFormalizado: 420, aPrazo: { operacaoId: chave } });
+    expect(await foto(sid, osId)).toBe(depois1);
+    // O comercial muda depois: a MESMA operação continua devolvendo o original; uma NOVA é recusada.
+    const p = await lerPayload(osId);
+    await prisma.ordemServico.update({
+      where: { id: osId },
+      data: { payload: { ...p, orcamento: { ...(p.orcamento as Payload), status: "rascunho" } } as unknown as Prisma.InputJsonValue },
+    });
+    const depoisMudanca = await foto(sid, osId);
+    expect(await lancarOSAPrazoV3(sid, osId, { vencimento: VENC, operacaoId: chave })).toMatchObject({ jaRegistrado: true, valorFormalizado: 420 });
+    await expect(lancarOSAPrazoV3(sid, osId, { vencimento: VENC, operacaoId: gerarOperacaoIdV3() })).rejects.toMatchObject({ codigo: "APROVACAO_COMERCIAL_PENDENTE", destino: "comercial" });
+    await expect(lancarOSAPrazoV3(sid, osId, { vencimento: "2099-11-30", operacaoId: chave })).rejects.toThrow(/já foi registrada com outros dados/);
+    expect(await foto(sid, osId)).toBe(depoisMudanca);
+    const eventos = ((await lerPayload(osId)).timeline as Array<{ tipo: string; metadata?: Payload }>).filter((e) => e.tipo === "financeiro_conta_receber_criada" && e.metadata?.modo === "a_prazo");
+    expect(eventos).toHaveLength(1);
+  });
+
+  it("R1-P2: recusa comercial do misto guarda código e destino; o reenvio da MESMA chave devolve a mesma recusa estruturada", async () => {
+    const sid = await novaLoja();
+    const caixa = await abrirCaixa(sid);
+    const osId = await novaOS(sid, { orcamento: "aprovado", coluna: 400 });
+    const entrada = { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, pagamentosAgora: [{ forma: "debito" as const, valor: 100 }], saldoAPrazo: { valor: 320, vencimento: VENC }, saldoEsperado: 420 };
+    const r1 = await registrarRecebimentoMistoOSV3(sid, osId, entrada);
+    expect(r1).toMatchObject({ ok: false, code: "comercial_nao_elegivel", comercial: { codigo: "VALORES_DIVERGENTES", destino: "financeiro" } });
+    const r2 = await registrarRecebimentoMistoOSV3(sid, osId, entrada);
+    expect(r2).toEqual(r1);
   });
 
   it("resposta perdida depois do pagamento: a mesma chave devolve o original, sem 2ª baixa, título ou caixa", async () => {

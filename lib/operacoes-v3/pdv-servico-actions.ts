@@ -92,6 +92,7 @@ import {
   travarOS,
   travarSessaoCaixa,
   travarTitulo,
+  type RecusaComercialMistaV3,
   type ResultadoRecebimentoMistoV3,
 } from "./recebimento-misto-service";
 import { avaliarElegibilidadeComercialV3, RecebimentoInelegivelErroV3 } from "./elegibilidade-comercial";
@@ -727,12 +728,30 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
 export interface LancarAPrazoInputV3 {
   vencimento: string;
   observacao?: string;
+  /**
+   * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002: identidade da operação. Reenviar a MESMA
+   * chave com o mesmo conteúdo devolve o lançamento original (sem nova escrita), mesmo que o
+   * comercial tenha mudado depois; conteúdo diferente com a mesma chave é conflito.
+   */
+  operacaoId?: string;
 }
 
 export interface LancarAPrazoResultV3 {
   os: OrdemServico;
   aPrazo: APrazoV3;
   valorFormalizado: number;
+  /** `true` = replay: a mesma operação já estava gravada; nada foi escrito agora. */
+  jaRegistrado?: boolean;
+}
+
+/** Evento da timeline que registrou o lançamento a prazo desta `operacaoId` (fonte do replay). */
+function lancamentoAPrazoGravadoV3(payload: OSPayloadFull, operacaoId: string): Record<string, unknown> | null {
+  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+  for (const ev of timeline) {
+    const md = (ev?.metadata ?? null) as Record<string, unknown> | null;
+    if (ev?.tipo === "financeiro_conta_receber_criada" && md && md.modo === "a_prazo" && md.operacaoId === operacaoId) return md;
+  }
+  return null;
 }
 
 export async function lancarOSAPrazoV3(storeId: string, osId: string, input: LancarAPrazoInputV3): Promise<LancarAPrazoResultV3> {
@@ -759,6 +778,7 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
   const operador = operadorLabel(session);
   const obs = (input.observacao ?? "").trim();
   const dataHora = nowIso();
+  const operacaoId = typeof input.operacaoId === "string" ? input.operacaoId.trim() : "";
 
   // UMA transação sob a MESMA trava por OS dos recebimentos: saldo e status saem do título
   // relido DEPOIS de qualquer baixa concorrente — a formalização nunca grava sobre um
@@ -766,6 +786,22 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
   const resultado = await prisma.$transaction(async (tx): Promise<LancarAPrazoResultV3> => {
     await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
     const { rowId, payload, os, valorTotalColuna } = await lerOSTravadaV3(tx, sid, id);
+    // Replay ANTES da elegibilidade: a mesma operação já gravada é devolvida como foi.
+    if (operacaoId) {
+      const gravado = lancamentoAPrazoGravadoV3(payload, operacaoId);
+      if (gravado) {
+        if (gravado.vencimento !== vencimento || String(gravado.observacao ?? "") !== obs) {
+          throw new Error("Esta operação a prazo já foi registrada com outros dados. Atualize a OS antes de lançar de novo.");
+        }
+        const valor = Number(gravado.valor);
+        const atual = payload.aPrazoV3 as APrazoV3 | undefined;
+        const aPrazo =
+          atual && atual.operacaoId === operacaoId
+            ? atual
+            : { ...montarAPrazoMirrorV3({ valor, vencimento, tituloLocalKey: String(gravado.tituloLocalKey ?? ""), observacao: obs || undefined }), operacaoId };
+        return { os: payload as unknown as OrdemServico, aPrazo, valorFormalizado: valor, jaRegistrado: true };
+      }
+    }
     // Formalizar dívida também presume preço: só sobre orçamento comercialmente elegível.
     exigirElegibilidadeComercialV3(sid, id, payload, valorTotalColuna, dataHora);
     const codigo = os.codigo ?? id;
@@ -812,7 +848,7 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
       db: tx,
     });
 
-    const aPrazo = montarAPrazoMirrorV3({
+    const aPrazoBase = montarAPrazoMirrorV3({
       valor: titulo.saldo,
       vencimento,
       tituloLocalKey: titulo.localKey,
@@ -820,6 +856,7 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
       observacao: obs || undefined,
       now: dataHora,
     });
+    const aPrazo: APrazoV3 = operacaoId ? { ...aPrazoBase, operacaoId } : aPrazoBase;
 
     const evento: EventoTimeline = {
       id: eventId(),
@@ -827,7 +864,14 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
       autor: operador,
       autorTipo: "usuario",
       conteudo: `Entrega autorizada a prazo (OS ${codigo}): R$ ${titulo.saldo.toFixed(2)} · vencimento ${vencimento}. Nenhum valor recebido — não movimenta caixa.`,
-      metadata: { modo: "a_prazo", valor: titulo.saldo, vencimento, tituloLocalKey: titulo.localKey, autorizadoEntrega: true },
+      metadata: {
+        modo: "a_prazo",
+        valor: titulo.saldo,
+        vencimento,
+        tituloLocalKey: titulo.localKey,
+        autorizadoEntrega: true,
+        ...(operacaoId ? { operacaoId, observacao: obs } : {}),
+      },
       criadoEm: dataHora,
     };
     const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
@@ -860,6 +904,8 @@ export type RegistrarRecebimentoMistoResultV3 =
       code: RecebimentoMistoErroCodigoV3;
       mensagem: string;
       saldoAtual?: number;
+      /** GOAL 002 (item A): `comercial_nao_elegivel` traz o código e o destino da regra única. */
+      comercial?: RecusaComercialMistaV3;
       /**
        * `true` = o servidor CONFERIU que nada está gravado com esta `operacaoId` (e nada foi
        * gravado agora). Só então a tela pode abandonar a chave de uma operação incerta.
@@ -868,13 +914,19 @@ export type RegistrarRecebimentoMistoResultV3 =
       naoRegistrada?: true;
     };
 
-function falhaMistaV3(code: RecebimentoMistoErroCodigoV3, mensagem: string, saldoAtual?: number): RegistrarRecebimentoMistoResultV3 {
-  return saldoAtual === undefined ? { ok: false, code, mensagem } : { ok: false, code, mensagem, saldoAtual };
+function falhaMistaV3(code: RecebimentoMistoErroCodigoV3, mensagem: string, saldoAtual?: number, comercial?: RecusaComercialMistaV3): RegistrarRecebimentoMistoResultV3 {
+  const base = saldoAtual === undefined ? { ok: false as const, code, mensagem } : { ok: false as const, code, mensagem, saldoAtual };
+  return comercial ? { ...base, comercial } : base;
 }
 
 /** Recusa depois de conferir a identidade: nada gravado com esta chave. */
-function falhaMistaConferidaV3(code: RecebimentoMistoErroCodigoV3, mensagem: string, saldoAtual?: number): RegistrarRecebimentoMistoResultV3 {
-  return { ...(falhaMistaV3(code, mensagem, saldoAtual) as Extract<RegistrarRecebimentoMistoResultV3, { ok: false }>), naoRegistrada: true };
+function falhaMistaConferidaV3(
+  code: RecebimentoMistoErroCodigoV3,
+  mensagem: string,
+  saldoAtual?: number,
+  comercial?: RecusaComercialMistaV3,
+): RegistrarRecebimentoMistoResultV3 {
+  return { ...(falhaMistaV3(code, mensagem, saldoAtual, comercial) as Extract<RegistrarRecebimentoMistoResultV3, { ok: false }>), naoRegistrada: true };
 }
 
 /** Conflito de escrita concorrente detectado pelo banco (título criado em paralelo, deadlock). */
@@ -927,12 +979,14 @@ export async function registrarRecebimentoMistoOSV3(
       TX_PAGAMENTO_OS_V3,
     );
     // Recusa decidida sob a trava e gravada como terminal: a chave nunca mais grava.
-    if (decisao.tipo === "recusada") return falhaMistaConferidaV3(decisao.recusa.code, decisao.recusa.mensagem, decisao.recusa.saldoAtual);
+    if (decisao.tipo === "recusada") {
+      return falhaMistaConferidaV3(decisao.recusa.code, decisao.recusa.mensagem, decisao.recusa.saldoAtual, decisao.recusa.comercial);
+    }
     revalidarOperacoesV3("registrarRecebimentoMistoOSV3");
     return { ok: true, ...decisao.resultado };
   } catch (e) {
     // Mesma chave já usada com outro conteúdo: este conteúdo nunca foi gravado com ela.
-    if (isRecebimentoMistoErroV3(e)) return falhaMistaConferidaV3(e.code, e.message, e.saldoAtual);
+    if (isRecebimentoMistoErroV3(e)) return falhaMistaConferidaV3(e.code, e.message, e.saldoAtual, e.comercial);
     // Conflito transitório do banco: nada desta tentativa ficou gravado, mas a chave segue
     // em aberto (não conferida) — a tela mantém a pendência e reenvia a MESMA operação.
     if (conflitoConcorrenteV3(e)) {

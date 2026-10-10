@@ -13,7 +13,12 @@ import { useEffect, useRef, useState } from "react";
 import { C, card, cardTitle, fmt, upLabel } from "../tokens";
 import type { ConferenciaFormalizacaoUiV4, V4Vals } from "../use-v4-preview";
 import { gerarOperacaoIdV3 } from "@/lib/operacoes-v3/recebimento-misto-model";
-import { MOTIVO_FORMALIZACAO_MIN_V3, type EscopoFormalizacaoV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
+import {
+  MOTIVO_FORMALIZACAO_MIN_V3,
+  type EntradaFormalizacaoV3,
+  type EscopoFormalizacaoV3,
+  type LinhaEscopoFormalizacaoV3,
+} from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
 
 const btnPrimary: React.CSSProperties = { height: 32, width: "100%", padding: "0 14px", border: "none", background: C.primary, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600 };
 const btnGhost: React.CSSProperties = { height: 30, width: "100%", padding: "0 12px", border: `1px solid ${C.inputBd2}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" };
@@ -29,6 +34,15 @@ const LANCAMENTO: Record<EscopoFormalizacaoV3["lancamentos"][number]["tipo"], st
 
 const centavos = (c: number | null) => (c == null ? "—" : fmt(c / 100));
 
+/** Linha como o cliente a vê: valor com desconto, cortesia, interna e alternativa não escolhida. */
+function textoLinha(l: LinhaEscopoFormalizacaoV3): string {
+  const nome = `${l.grupo ? `${l.grupo}: ` : ""}${l.descricao || (l.tipo === "peca" ? "Peça" : "Serviço")}${l.quantidade != null && l.quantidade !== 1 ? ` × ${l.quantidade}` : ""}`;
+  if (l.situacao === "cortesia") return `${nome} — cortesia`;
+  if (l.situacao === "interna") return `${nome} — interno (não exibido ao cliente)`;
+  if (l.situacao === "alternativa_nao_escolhida") return `${nome} — não escolhida (${centavos(l.valorCentavos)})`;
+  return `${nome} — ${centavos(l.valorCentavos)}`;
+}
+
 export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
   const f = v.formalizacao;
   const [aberto, setAberto] = useState(false);
@@ -40,9 +54,11 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
   const [declaracao, setDeclaracao] = useState(false);
   const [ratificar, setRatificar] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
-  const [incerto, setIncerto] = useState(false);
   const [feito, setFeito] = useState(false);
-  // Identidade desta confirmação: estável entre reenvios (resposta perdida = MESMA chave).
+  // Confirmação ENVIADA e ainda sem resultado definitivo (incerto/não conferido): reenviada
+  // byte a byte (mesma chave, mesmo conteúdo) — os campos ficam travados enquanto existir.
+  const [pendente, setPendente] = useState<EntradaFormalizacaoV3 | null>(null);
+  // Identidade desta conferência: nova a cada conferência.
   const operacaoId = useRef<string | null>(null);
   const envio = useRef(false);
   const ativo = useRef(true);
@@ -56,7 +72,7 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
   if (!f?.disponivel && !feito) return null;
 
   const conferir = async () => {
-    if (!f?.conferir) return;
+    if (!f?.conferir || pendente) return;
     setCarregando(true);
     setMensagem(null);
     try {
@@ -64,8 +80,9 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
       if (!ativo.current) return;
       if (r.ok) {
         setConferido(r);
+        // Nova conferência = novo ato: declarações e ratificação são pedidas de novo.
+        setDeclaracao(false);
         setRatificar(false);
-        setIncerto(false);
         operacaoId.current = gerarOperacaoIdV3();
       } else if (r.code !== "fora_do_alvo") {
         setConferido(null);
@@ -82,25 +99,35 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
     void conferir();
   };
 
+  const travado = enviando || !!pendente;
   const motivoOk = motivo.trim().length >= MOTIVO_FORMALIZACAO_MIN_V3;
-  const podeFormalizar = !!conferido && motivoOk && declaracao && (!conferido.vencido || ratificar) && !enviando && !carregando;
+  const podeFormalizar =
+    !!pendente || (!!conferido && !!operacaoId.current && motivoOk && declaracao && (!conferido.vencido || ratificar) && !enviando && !carregando);
 
   const formalizar = async () => {
-    if (!podeFormalizar || envio.current || !conferido || !f?.formalizar || !operacaoId.current) return;
+    if (!podeFormalizar || envio.current || !f?.formalizar) return;
+    const entrada: EntradaFormalizacaoV3 | null =
+      pendente ??
+      (conferido && operacaoId.current
+        ? {
+            operacaoId: operacaoId.current,
+            motivo,
+            declaracaoAceita: declaracao,
+            evidencia: evidencia.trim() || null,
+            escopo: conferido.escopo,
+            ratificarVencido: conferido.vencido ? ratificar : false,
+          }
+        : null);
+    if (!entrada) return;
     envio.current = true;
     setEnviando(true);
     setMensagem(null);
+    setPendente(entrada);
     try {
-      const r = await f.formalizar({
-        operacaoId: operacaoId.current,
-        motivo,
-        declaracaoAceita: declaracao,
-        evidencia: evidencia.trim() || null,
-        escopo: conferido.escopo,
-        ratificarVencido: conferido.vencido ? ratificar : false,
-      });
+      const r = await f.formalizar(entrada);
       if (!ativo.current) return;
       if (r.ok) {
+        setPendente(null);
         setFeito(true);
         setAberto(false);
         setConferido(null);
@@ -108,13 +135,17 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
         return;
       }
       if (r.code === "fora_do_alvo") return;
-      setIncerto(r.code === "incerto");
       setMensagem(r.mensagem);
-      // Recusa conferida: nada gravado com esta chave — a próxima tentativa parte de nova conferência.
-      if ("naoRegistrada" in r && r.naoRegistrada) {
+      // Recusa CONFERIDA (nada gravado com esta chave) ou chave já usada com outro conteúdo:
+      // a próxima tentativa parte de nova conferência, com nova chave e novas declarações.
+      if (("naoRegistrada" in r && r.naoRegistrada) || r.code === "idempotencia_conflito") {
+        setPendente(null);
+        setConferido(null);
+        setDeclaracao(false);
+        setRatificar(false);
         operacaoId.current = null;
-        if (r.code === "escopo_divergente") setConferido(null);
       }
+      // Demais (incerto, conflito transitório, sessão/permissão): a MESMA confirmação segue pendente.
     } finally {
       envio.current = false;
       if (ativo.current) setEnviando(false);
@@ -146,10 +177,7 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
               <div style={upLabel}>Escopo conferido no servidor</div>
               <ul style={{ margin: 0, paddingLeft: 16 }}>
                 {escopo.orcamento.linhas.map((l, i) => (
-                  <li key={`${l.tipo}-${l.id}-${i}`}>
-                    {l.descricao || (l.tipo === "peca" ? "Peça" : "Serviço")}
-                    {l.quantidade != null && l.quantidade !== 1 ? ` × ${l.quantidade}` : ""} — {centavos(l.valorCentavos)}
-                  </li>
+                  <li key={`${l.tipo}-${l.id}-${i}`}>{textoLinha(l)}</li>
                 ))}
               </ul>
               <div>Total do orçamento: <b>{centavos(escopo.orcamento.totalCentavos)}</b> · revisão {escopo.orcamento.revisao}</div>
@@ -162,7 +190,7 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
           )}
           {conferido?.vencido && (
             <label style={{ display: "flex", gap: 6, alignItems: "flex-start", color: C.warnFg }}>
-              <input type="checkbox" checked={ratificar} disabled={enviando} onChange={(e) => setRatificar(e.target.checked)} />
+              <input type="checkbox" checked={ratificar} disabled={travado} onChange={(e) => setRatificar(e.target.checked)} />
               <span>O orçamento está vencido. Ratifico neste momento o escopo e o total acima, sem renovar a validade.</span>
             </label>
           )}
@@ -173,7 +201,7 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
                 <textarea
                   aria-label="Motivo da formalização"
                   value={motivo}
-                  disabled={enviando}
+                  disabled={travado}
                   onChange={(e) => setMotivo(e.target.value)}
                   maxLength={500}
                   style={{ ...campo, minHeight: 54, resize: "vertical" }}
@@ -181,10 +209,10 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
               </label>
               <label>
                 <span style={upLabel}>Referência de evidência (opcional)</span>
-                <input aria-label="Referência de evidência" value={evidencia} disabled={enviando} onChange={(e) => setEvidencia(e.target.value)} maxLength={300} style={campo} />
+                <input aria-label="Referência de evidência" value={evidencia} disabled={travado} onChange={(e) => setEvidencia(e.target.value)} maxLength={300} style={campo} />
               </label>
               <label style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-                <input type="checkbox" aria-label="Declaração do responsável" checked={declaracao} disabled={enviando} onChange={(e) => setDeclaracao(e.target.checked)} />
+                <input type="checkbox" aria-label="Declaração do responsável" checked={declaracao} disabled={travado} onChange={(e) => setDeclaracao(e.target.checked)} />
                 <span>{conferido.declaracao}</span>
               </label>
             </>
@@ -194,9 +222,9 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
               {mensagem}
             </div>
           )}
-          {conferido ? (
-            <button type="button" onClick={() => void formalizar()} disabled={!podeFormalizar} style={{ ...btnPrimary, opacity: podeFormalizar ? 1 : 0.6, cursor: podeFormalizar ? "pointer" : "default" }}>
-              {enviando ? "Formalizando…" : incerto ? "Reenviar a mesma formalização" : "Formalizar aprovação"}
+          {pendente || conferido ? (
+            <button type="button" onClick={() => void formalizar()} disabled={!podeFormalizar || enviando} style={{ ...btnPrimary, opacity: podeFormalizar && !enviando ? 1 : 0.6, cursor: podeFormalizar && !enviando ? "pointer" : "default" }}>
+              {enviando ? "Formalizando…" : pendente ? "Reenviar a mesma formalização" : "Formalizar aprovação"}
             </button>
           ) : (
             !carregando && (
@@ -205,7 +233,7 @@ export function FormalizarAprovacaoV4({ v }: { v: V4Vals }) {
               </button>
             )
           )}
-          <button type="button" onClick={() => { setAberto(false); setMensagem(null); }} disabled={enviando} style={btnGhost}>
+          <button type="button" onClick={() => { setAberto(false); setMensagem(null); }} disabled={enviando || !!pendente} style={btnGhost}>
             Cancelar
           </button>
         </div>

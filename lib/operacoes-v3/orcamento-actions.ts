@@ -74,7 +74,13 @@ import {
   type ConferenciaFormalizacaoResultV3,
   type FormalizacaoAprovacaoResultV3,
 } from "./formalizacao-aprovacao-actions";
-import type { EntradaFormalizacaoV3 } from "./formalizacao-aprovacao-model";
+import {
+  conteudoOrcamentoV3,
+  escopoAprovacaoOrcamentoV3,
+  MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3,
+  type ConferenciaEscopoAprovacaoResultV3,
+  type EntradaFormalizacaoV3,
+} from "./formalizacao-aprovacao-model";
 import {
   diaNaLojaV3,
   fimDoDiaLojaIsoV3,
@@ -418,11 +424,20 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
  * selecionadas que informam `garantiaDias` — nenhuma falha aqui desfaz a
  * aprovação, que já foi gravada).
  */
-export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise<OrdemServico> {
+export async function aprovarOrcamentoV3(
+  storeId: string,
+  osId: string,
+  opcoes?: { conteudoEsperado?: string },
+): Promise<OrdemServico> {
   const { sid, id, session } = await autorizar(storeId, osId);
   const { os, extra: aprovado } = await gravarSobTrava(sid, id, (payload) => {
     const atual = orcamentoEditavel(payload);
     assertStatus(atual, ["rascunho", "enviado"], "aprovar");
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): com escopo consentido, só aprova o
+    // MESMO conteúdo conferido — sob a trava, sobre o payload mais recente.
+    if (opcoes?.conteudoEsperado !== undefined && conteudoOrcamentoV3(atual) !== opcoes.conteudoEsperado) {
+      throw new Error(MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3);
+    }
     // Proposta vencida continua vencida: renovar a validade é a correção auditada
     // ("Corrigir datas" → Válido até), nunca um efeito colateral do aceite.
     if (validadeExpiradaV3(atual.validoAte)) {
@@ -501,11 +516,15 @@ const SEM_PERMISSAO_APROVAR_NO_RECEBIMENTO_V3 =
 export async function aprovarOrcamentoParaReceberV3(
   storeId: string,
   osId: string,
+  esperado: { conteudo: string },
 ): Promise<{ ok: true } | { ok: false; mensagem: string }> {
   try {
     const guard = await requireEnterpriseWith((storeId ?? "").trim(), (p) => p.operacoes.editarOs, SEM_PERMISSAO_APROVAR_NO_RECEBIMENTO_V3);
     if (!guard.ok) return { ok: false, mensagem: guard.error };
-    await aprovarOrcamentoV3(storeId, osId);
+    // A aprovação vale para o escopo que o operador conferiu e o cliente consentiu — nunca "o mais recente".
+    const conteudo = typeof esperado?.conteudo === "string" ? esperado.conteudo : "";
+    if (!conteudo) return { ok: false, mensagem: "Confira o escopo do orçamento antes de aprovar e receber." };
+    await aprovarOrcamentoV3(storeId, osId, { conteudoEsperado: conteudo });
     return { ok: true };
   } catch (e) {
     if (typeof (e as { digest?: unknown } | null)?.digest === "string") throw e;
@@ -513,6 +532,24 @@ export async function aprovarOrcamentoParaReceberV3(
     console.error("[orcamento] aprovar no recebimento falhou", e);
     return { ok: false, mensagem: "Não foi possível confirmar a aprovação agora. Confira o orçamento da OS antes de tentar de novo." };
   }
+}
+
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): leitura do escopo que o operador confere
+ * no "Aprovar e receber" (linhas efetivas, total e a assinatura que a aprovação exige depois).
+ * Mesma permissão da aprovação; resultado devolvido (legível em produção); não grava nada.
+ */
+export async function conferirEscopoAprovacaoV3(storeId: string, osId: string): Promise<ConferenciaEscopoAprovacaoResultV3> {
+  const sid = (storeId ?? "").trim();
+  const id = (osId ?? "").trim();
+  if (!sid || !id) return { ok: false, mensagem: "Selecione uma OS na loja ativa para conferir o orçamento." };
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false, mensagem: "Faça login para conferir o orçamento." };
+  const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, SEM_PERMISSAO_APROVAR_NO_RECEBIMENTO_V3);
+  if (!guard.ok) return { ok: false, mensagem: guard.error };
+  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { payload: true } });
+  if (!row) return { ok: false, mensagem: "OS não encontrada nesta loja." };
+  return escopoAprovacaoOrcamentoV3(row.payload);
 }
 
 /**

@@ -57,12 +57,15 @@ vi.mock("@/lib/prisma", () => {
 import {
   aprovarOrcamentoParaReceberV3,
   aprovarOrcamentoV3,
+  conferirEscopoAprovacaoV3,
   corrigirOrcamentoV3,
   gerarOrcamentoDaOS,
   recusarOrcamentoV3,
   salvarOrcamentoV3,
 } from "./orcamento-actions";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
+import { conteudoOrcamentoV3, MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3 } from "./formalizacao-aprovacao-model";
+import type { OrcamentoV3 } from "./orcamento-model";
 import { totalCobravelV3, lerPagamentoV3, localKeyContaReceberOSV3 } from "./payment-model";
 import { gerarOrcamentoDaOS as materializarImpl } from "@/components/operacoes/lovable/api/os";
 import type { OrdemServico } from "@/types/os";
@@ -497,9 +500,13 @@ describe("aprovarOrcamentoParaReceberV3 — GOAL OPS-V4-FINANCEIRO-RETIRADA-GARA
     vi.restoreAllMocks();
   });
 
-  it("aprova pelo MESMO núcleo de aprovarOrcamentoV3 e devolve ok", async () => {
-    findFirstMock.mockResolvedValue(baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }));
-    await expect(aprovarOrcamentoParaReceberV3("loja-1", "os-1")).resolves.toEqual({ ok: true });
+  const conteudoDe = (row: ReturnType<typeof baseRow>) => conteudoOrcamentoV3(row.payload.orcamento as unknown as OrcamentoV3);
+  const QUALQUER = { conteudo: "conteudo-qualquer" };
+
+  it("aprova pelo MESMO núcleo de aprovarOrcamentoV3, só com o escopo conferido, e devolve ok", async () => {
+    const row = baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] });
+    findFirstMock.mockResolvedValue(row);
+    await expect(aprovarOrcamentoParaReceberV3("loja-1", "os-1", { conteudo: conteudoDe(row) })).resolves.toEqual({ ok: true });
     expect(updateMock).toHaveBeenCalledTimes(1);
     const gravado = updateMock.mock.calls[0]![0] as { data: { payload: { orcamento: { status: string } } } };
     expect(gravado.data.payload.orcamento.status).toBe("aprovado");
@@ -507,7 +514,7 @@ describe("aprovarOrcamentoParaReceberV3 — GOAL OPS-V4-FINANCEIRO-RETIRADA-GARA
 
   it("sem permissão de editar OS: DEVOLVE quem pode aprovar; nada é lido nem gravado", async () => {
     guard.mockImplementation((async (_sid: string, _check: unknown, mensagem: string) => ({ ok: false, error: mensagem, status: 403 })) as never);
-    const r = await aprovarOrcamentoParaReceberV3(" loja-1 ", "os-1");
+    const r = await aprovarOrcamentoParaReceberV3(" loja-1 ", "os-1", QUALQUER);
     expect(r).toEqual({ ok: false, mensagem: expect.stringMatching(/^Seu perfil não pode aprovar orçamentos nesta loja\. Peça a aprovação a quem pode editar OS/) });
     const [sid, check] = guard.mock.calls[0]! as unknown as [string, (p: { operacoes: { editarOs: boolean } }) => boolean];
     expect(sid).toBe("loja-1");
@@ -519,7 +526,7 @@ describe("aprovarOrcamentoParaReceberV3 — GOAL OPS-V4-FINANCEIRO-RETIRADA-GARA
 
   it("recusa da própria regra (orçamento já recusado) volta como mensagem, sem lançar e sem gravar", async () => {
     findFirstMock.mockResolvedValue(baseRow({ status: "recusado" }));
-    await expect(aprovarOrcamentoParaReceberV3("loja-1", "os-1")).resolves.toEqual({
+    await expect(aprovarOrcamentoParaReceberV3("loja-1", "os-1", QUALQUER)).resolves.toEqual({
       ok: false,
       mensagem: 'Não é possível aprovar um orçamento com status "recusado".',
     });
@@ -530,7 +537,7 @@ describe("aprovarOrcamentoParaReceberV3 — GOAL OPS-V4-FINANCEIRO-RETIRADA-GARA
     class ErroDeInfra extends Error {}
     vi.spyOn(console, "error").mockImplementation(() => {});
     findFirstMock.mockRejectedValue(new ErroDeInfra("connection terminated: host=10.0.0.1 user=app"));
-    const r = await aprovarOrcamentoParaReceberV3("loja-1", "os-1");
+    const r = await aprovarOrcamentoParaReceberV3("loja-1", "os-1", QUALQUER);
     expect(r).toEqual({ ok: false, mensagem: "Não foi possível confirmar a aprovação agora. Confira o orçamento da OS antes de tentar de novo." });
     expect(JSON.stringify(r)).not.toContain("10.0.0.1");
   });
@@ -538,6 +545,80 @@ describe("aprovarOrcamentoParaReceberV3 — GOAL OPS-V4-FINANCEIRO-RETIRADA-GARA
   it("controle interno do Next (erro com digest) continua lançado", async () => {
     const interno = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/login;307;" });
     findFirstMock.mockRejectedValue(interno);
-    await expect(aprovarOrcamentoParaReceberV3("loja-1", "os-1")).rejects.toBe(interno);
+    await expect(aprovarOrcamentoParaReceberV3("loja-1", "os-1", QUALQUER)).rejects.toBe(interno);
+  });
+
+  it("R1-P1: escopo trocado depois da conferência (mesmo total) é recusado sob a trava; nada é gravado", async () => {
+    const conferido = baseRow({ servicos: [{ id: "s1", descricao: "Troca de tela", valor: 100 }], total: 100 });
+    const trocado = baseRow({ servicos: [{ id: "s1", descricao: "Troca de bateria", valor: 100 }], total: 100 });
+    findFirstMock.mockResolvedValue(trocado);
+    await expect(aprovarOrcamentoParaReceberV3("loja-1", "os-1", { conteudo: conteudoDe(conferido) })).resolves.toEqual({
+      ok: false,
+      mensagem: MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3,
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("sem escopo conferido: recusa antes de qualquer leitura", async () => {
+    await expect(aprovarOrcamentoParaReceberV3("loja-1", "os-1", { conteudo: "" })).resolves.toEqual({
+      ok: false,
+      mensagem: "Confira o escopo do orçamento antes de aprovar e receber.",
+    });
+    expect(findFirstMock).not.toHaveBeenCalled();
+  });
+
+  it("aprovarOrcamentoV3 sem escopo (chamadores existentes) segue igual: aprova o atual", async () => {
+    findFirstMock.mockResolvedValue(baseRow({ servicos: [{ id: "s1", descricao: "Serviço", valor: 100 }] }));
+    await aprovarOrcamentoV3("loja-1", "os-1");
+    expect(updateMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("conferirEscopoAprovacaoV3 — GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C)", () => {
+  const guard = vi.mocked(requireEnterpriseWith);
+  afterEach(() => {
+    guard.mockReset();
+    guard.mockImplementation(async () => ({ ok: true }) as never);
+    findFirstMock.mockReset();
+    updateMock.mockClear();
+  });
+
+  it("devolve linhas efetivas, total e a MESMA assinatura que a aprovação exige; não grava", async () => {
+    const row = baseRow({
+      servicos: [
+        { id: "a", descricao: "Genérica", valor: 150, grupoId: "g1" },
+        { id: "b", descricao: "Original", valor: 400, desconto: 100, grupoId: "g1", selecionadaV3: true },
+        { id: "c", descricao: "Película", valor: 20, kindV3: "brinde" },
+      ],
+      gruposV3: [{ id: "g1", rotulo: "Tela", regra: "escolha_1" }],
+      total: 300,
+    });
+    findFirstMock.mockResolvedValue(row);
+    const r = await conferirEscopoAprovacaoV3(" loja-1 ", "os-1");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.escopo.conteudo).toBe(conteudoOrcamentoV3(row.payload.orcamento as unknown as OrcamentoV3));
+    expect(r.escopo.totalCentavos).toBe(30000);
+    expect(r.escopo.linhas.map((l) => [l.descricao, l.situacao, l.valorCentavos, l.grupo ?? null])).toEqual([
+      ["Genérica", "alternativa_nao_escolhida", 15000, "Tela"],
+      ["Original", "cobrada", 30000, "Tela"],
+      ["Película", "cortesia", 0, null],
+    ]);
+    expect(findFirstMock.mock.calls[0]![0]).toEqual(expect.objectContaining({ where: { id: "os-1", storeId: "loja-1" } }));
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("sem permissão: devolve quem pode aprovar e não lê a OS", async () => {
+    guard.mockImplementation((async (_sid: string, _check: unknown, mensagem: string) => ({ ok: false, error: mensagem, status: 403 })) as never);
+    const r = await conferirEscopoAprovacaoV3("loja-1", "os-1");
+    expect(r).toEqual({ ok: false, mensagem: expect.stringMatching(/^Seu perfil não pode aprovar orçamentos/) });
+    expect(findFirstMock).not.toHaveBeenCalled();
+  });
+
+  it("orçamento já aprovado ou OS de outra loja: recusa honesta", async () => {
+    findFirstMock.mockResolvedValueOnce(baseRow({ status: "aprovado" }));
+    await expect(conferirEscopoAprovacaoV3("loja-1", "os-1")).resolves.toEqual({ ok: false, mensagem: "Este orçamento não está aguardando aprovação." });
+    findFirstMock.mockResolvedValueOnce(null);
+    await expect(conferirEscopoAprovacaoV3("loja-1", "os-1")).resolves.toEqual({ ok: false, mensagem: "OS não encontrada nesta loja." });
   });
 });

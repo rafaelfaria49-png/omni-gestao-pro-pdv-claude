@@ -3812,7 +3812,8 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 — honestidade das telas", ()
 
   it("A: a regra única entra nos writers sob a trava e depois do replay (nada de segunda regra de preço na tela)", () => {
     expect(writers).toContain("avaliarElegibilidadeComercialV3(")
-    expect(misto).toContain('throw new RecebimentoMistoErroV3("comercial_nao_elegivel", elegibilidade.mensagem)')
+    // R1: a recusa leva o código e o destino da regra única.
+    expect(misto).toContain('throw new RecebimentoMistoErroV3("comercial_nao_elegivel", elegibilidade.mensagem, undefined, {')
     expect(receber).not.toContain("reconciliarTotaisFinanceirosV3")
     expect(cluster).not.toContain("reconciliarTotaisFinanceirosV3")
   })
@@ -3820,18 +3821,20 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 — honestidade das telas", ()
   it("C: aprovar e receber são chamadas separadas; recebimento só depois da aprovação e no MESMO alvo", () => {
     // A aprovação devolve a recusa (em produção a mensagem lançada não chega ao navegador).
     expect(orchestrator).toMatch(
-      /aprovacao = await aprovarOrcamentoParaReceberV3\(sid, osId\);[\s\S]*if \(!noAlvo\(\)\) return \{ status: "fora_do_alvo" \};[\s\S]*if \(!aprovacao\.ok\) return \{ status: "aprovacao_recusada", mensagem: aprovacao\.mensagem \};\s*const recebido = await receber\(\);/,
+      /const noAlvo = capturarAlvoAtualV4\(\);[\s\S]*aprovacao = await aprovarOrcamentoParaReceberV3\(sid, osId, esperado\);[\s\S]*if \(!noAlvo\(\)\) return \{ status: "fora_do_alvo" \};[\s\S]*if \(!aprovacao\.ok\) return \{ status: "aprovacao_recusada", mensagem: aprovacao\.mensagem \};\s*const recebido = await receber\(\);/,
     )
     expect(orchestrator).toContain('status: "aprovado_pagamento_nao_confirmado"')
     expect(receber).toContain("Orçamento aprovado — pagamento não confirmado.")
-    expect(receber).toContain("aprovacao.executar(registrarRecebimento)")
+    // R1: a aprovação leva a assinatura do escopo conferido no servidor; só a instância viva recebe.
+    expect(receber).toContain("aprovacao.executar(registrarRecebimento, { conteudo: escopo.conteudo })")
+    expect(receber).toContain("if (!ativo.current) return { ok: false, mensagem: null };")
     expect(cluster).toContain("v.aprovacaoReceber?.abrir()")
   })
 
   it("D: a formalização passa só pelas ações do servidor; tela chaveada pela loja+OS", () => {
     expect(cluster).toContain("<FormalizarAprovacaoV4 key={v.recebimentoContextKey} v={v} />")
     expect(formalizar).toContain("f.conferir()")
-    expect(formalizar).toContain("f.formalizar({")
+    expect(formalizar).toContain("f.formalizar(entrada)")
     for (const proibido of ['from "@/lib/prisma', 'from "@/lib/financeiro', "aprovarOrcamentoV3", "updateOSPayload"]) {
       expect(formalizar, `referência proibida: ${proibido}`).not.toContain(proibido)
     }

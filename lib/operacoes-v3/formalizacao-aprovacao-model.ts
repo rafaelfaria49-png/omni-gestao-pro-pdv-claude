@@ -18,11 +18,16 @@ import type { EventoTimeline, OrdemServico } from "@/types/os";
 import { reconciliarRecebimentosFinanceirosV3 } from "./delivery-financial-guard";
 import {
   computeTotaisV3,
+  linhaKind,
   orcamentoRealV3,
+  pecaValorCliente,
+  servicoValorCliente,
   validadeExpiradaV3,
   validarSelecaoCompletaV3,
   type OrcamentoV3,
   type OrcamentoVersaoV3,
+  type PecaV3,
+  type ServicoV3,
 } from "./orcamento-model";
 import { localKeyContaReceberOSV3 } from "./payment-model";
 import { OPERACAO_ID_PATTERN_V3 } from "./recebimento-misto-model";
@@ -61,14 +66,24 @@ export interface RecusaFormalizacaoV3 {
   mensagem: string;
 }
 
+/** Situação de uma linha no escopo efetivamente escolhido (exibição). */
+export type SituacaoLinhaEscopoV3 = "cobrada" | "cortesia" | "interna" | "alternativa_nao_escolhida";
+
 /** Linha do orçamento como o responsável a confere (exibição). */
 export interface LinhaEscopoFormalizacaoV3 {
   tipo: "servico" | "peca";
   id: string;
   descricao: string;
   quantidade: number | null;
-  /** Valor da linha ao cliente (centavos) quando legível; `null` caso contrário. */
+  /**
+   * Valor da linha ao cliente (centavos, já com o desconto da linha) quando legível; `null` caso
+   * contrário. Cortesia e interna valem 0; alternativa não escolhida mostra o valor que teria.
+   */
   valorCentavos: number | null;
+  /** Cobrada, cortesia, interna (não exibida ao cliente) ou alternativa não escolhida de um grupo. */
+  situacao: SituacaoLinhaEscopoV3;
+  /** Rótulo do grupo de escolha, quando a linha pertence a um. */
+  grupo?: string;
 }
 
 /** Lançamento financeiro do título (pagamento, liquidação ou estorno), na ordem do histórico. */
@@ -207,27 +222,59 @@ export function canonicoFormalizacaoV3(valor: unknown): string {
   return "null";
 }
 
-function linhasDeExibicao(orc: OrcamentoV3): LinhaEscopoFormalizacaoV3[] {
+function centavosDeReais(v: number): number | null {
+  return Number.isFinite(v) ? Math.round(v * 100) : null;
+}
+
+/**
+ * Escopo EFETIVO do orçamento para conferência (formalização e "Aprovar e receber"): valor ao
+ * cliente com o desconto da linha (helpers de `orcamento-model`), cortesia e interna marcadas,
+ * alternativas de grupo não escolhidas identificadas. Só exibição — a assinatura que o servidor
+ * revalida é `conteudoOrcamentoV3` (orçamento inteiro).
+ */
+export function linhasEscopoOrcamentoV3(orc: OrcamentoV3): LinhaEscopoFormalizacaoV3[] {
   const servicos = Array.isArray(orc.servicos) ? (orc.servicos as unknown[]) : [];
   const pecas = Array.isArray(orc.pecas) ? (orc.pecas as unknown[]) : [];
-  return [
-    ...servicos.map((s): LinhaEscopoFormalizacaoV3 => {
-      const r = isRecord(s) ? s : {};
-      return { tipo: "servico", id: textoOuNull(r.id) ?? "", descricao: textoOuNull(r.descricao) ?? "", quantidade: null, valorCentavos: centavosEstritos(r.valor) };
-    }),
-    ...pecas.map((p): LinhaEscopoFormalizacaoV3 => {
-      const r = isRecord(p) ? p : {};
-      const quantidade = typeof r.quantidade === "number" && Number.isFinite(r.quantidade) ? r.quantidade : null;
-      const unitario = centavosEstritos(r.valorUnitario);
-      return {
-        tipo: "peca",
-        id: textoOuNull(r.id) ?? "",
-        descricao: textoOuNull(r.nome) ?? "",
-        quantidade,
-        valorCentavos: quantidade !== null && unitario !== null ? Math.round(quantidade * unitario) : null,
-      };
-    }),
-  ];
+  const rotulos = new Map<string, string>();
+  for (const g of Array.isArray(orc.gruposV3) ? (orc.gruposV3 as unknown[]) : []) {
+    if (isRecord(g) && textoOuNull(g.id) && textoOuNull(g.rotulo)) rotulos.set(String(textoOuNull(g.id)), String(textoOuNull(g.rotulo)));
+  }
+  const linha = (tipo: "servico" | "peca", bruto: unknown): LinhaEscopoFormalizacaoV3 => {
+    const r = isRecord(bruto) ? bruto : {};
+    const grupoId = textoOuNull(r.grupoId);
+    const kind = linhaKind(r as { kindV3?: never });
+    const situacao: SituacaoLinhaEscopoV3 =
+      grupoId && r.selecionadaV3 !== true ? "alternativa_nao_escolhida" : kind === "brinde" ? "cortesia" : kind === "interno" ? "interna" : "cobrada";
+    let valor: number | null;
+    try {
+      // Alternativa não escolhida mostra o valor que teria; cortesia e interna não cobram nada.
+      const v = tipo === "servico" ? servicoValorCliente(r as unknown as ServicoV3) : pecaValorCliente(r as unknown as PecaV3);
+      valor = situacao === "cortesia" || situacao === "interna" ? 0 : centavosDeReais(v);
+    } catch {
+      valor = null;
+    }
+    const quantidade = tipo === "peca" ? (typeof r.quantidade === "number" && Number.isFinite(r.quantidade) ? r.quantidade : null) : null;
+    return {
+      tipo,
+      id: textoOuNull(r.id) ?? "",
+      descricao: (tipo === "servico" ? textoOuNull(r.descricao) : textoOuNull(r.nome)) ?? "",
+      quantidade,
+      valorCentavos: valor,
+      situacao,
+      ...(grupoId ? { grupo: rotulos.get(grupoId) ?? "Opções" } : {}),
+    };
+  };
+  return [...servicos.map((sv) => linha("servico", sv)), ...pecas.map((p) => linha("peca", p))];
+}
+
+/** Assinatura canônica do CONTEÚDO do orçamento (linhas, seleção, descontos, grupos). */
+export function conteudoOrcamentoV3(orc: OrcamentoV3): string {
+  return canonicoFormalizacaoV3({
+    servicos: orc.servicos ?? null,
+    pecas: orc.pecas ?? null,
+    desconto: orc.desconto ?? null,
+    gruposV3: orc.gruposV3 ?? null,
+  });
 }
 
 function lancamentosDoTitulo(payload: unknown): LancamentoEscopoFormalizacaoV3[] | null {
@@ -324,15 +371,10 @@ export function montarEscopoFormalizacaoV3(estado: EstadoFormalizacaoV3): Montag
       revisao: versoes,
       atualizadoEm: textoOuNull(real.atualizadoEm),
       validoAte,
-      linhas: linhasDeExibicao(real),
+      linhas: linhasEscopoOrcamentoV3(real),
       descontoCentavos,
       totalCentavos,
-      conteudo: canonicoFormalizacaoV3({
-        servicos: real.servicos ?? null,
-        pecas: real.pecas ?? null,
-        desconto: real.desconto ?? null,
-        gruposV3: real.gruposV3 ?? null,
-      }),
+      conteudo: conteudoOrcamentoV3(real),
     },
     titulo: { id: titulo.id, valorCentavos: valorTituloCentavos, status: statusTitulo },
     lancamentos,
@@ -495,5 +537,50 @@ export function aplicarFormalizacaoV3(
       atualizadoEm: p.agora,
     } as OrdemServico & Record<string, unknown>,
     registro,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// "Aprovar e receber" (item C): o escopo que o operador confere e consente
+// ----------------------------------------------------------------------------
+
+export interface EscopoAprovacaoV3 {
+  orcamentoId: string | null;
+  revisao: number;
+  linhas: LinhaEscopoFormalizacaoV3[];
+  totalCentavos: number;
+  /** Assinatura canônica do conteúdo: a aprovação só vale com ela igual, conferida sob a trava. */
+  conteudo: string;
+}
+
+export type ConferenciaEscopoAprovacaoResultV3 = { ok: true; escopo: EscopoAprovacaoV3 } | { ok: false; mensagem: string };
+
+export const MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3 =
+  "O orçamento mudou depois da conferência. Confira o escopo de novo antes de aprovar e receber.";
+
+/** Escopo atual do orçamento aguardando aprovação (puro; o servidor chama sobre o payload lido). */
+export function escopoAprovacaoOrcamentoV3(payload: unknown): ConferenciaEscopoAprovacaoResultV3 {
+  if (!isRecord(payload)) return { ok: false, mensagem: "OS sem dados compatíveis nesta loja." };
+  if (statusV3FromOS(payload as never) === "cancelada") return { ok: false, mensagem: "OS cancelada não tem orçamento a aprovar." };
+  const real = orcamentoRealV3(payload as never);
+  if (!real || (real.status !== "rascunho" && real.status !== "enviado")) {
+    return { ok: false, mensagem: "Este orçamento não está aguardando aprovação." };
+  }
+  let total: number | null;
+  try {
+    total = centavosEstritos(computeTotaisV3({ servicos: real.servicos, pecas: real.pecas, desconto: real.desconto }).total);
+  } catch {
+    total = null;
+  }
+  if (total === null) return { ok: false, mensagem: "O total do orçamento não é legível. Confira o orçamento antes de aprovar." };
+  return {
+    ok: true,
+    escopo: {
+      orcamentoId: textoOuNull(real.id),
+      revisao: Array.isArray(payload.orcamentoVersoesV3) ? payload.orcamentoVersoesV3.length : 0,
+      linhas: linhasEscopoOrcamentoV3(real),
+      totalCentavos: total,
+      conteudo: conteudoOrcamentoV3(real),
+    },
   };
 }

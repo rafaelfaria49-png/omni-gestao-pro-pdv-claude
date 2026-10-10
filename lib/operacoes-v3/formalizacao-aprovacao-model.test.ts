@@ -286,3 +286,31 @@ describe("aplicarFormalizacaoV3 — ato atual, sem reescrever o passado", () => 
     expect(restoDepois).toEqual(restoAntes);
   });
 });
+
+describe("R1-P2 — escopo exibido é o efetivamente escolhido (valor ao cliente, cortesia, alternativa)", () => {
+  it("orçamento R$ 300: escolhido 400 − 100, alternativa 450 não escolhida, brinde 20; assinatura cobre o orçamento inteiro", () => {
+    const orc = {
+      total: 300,
+      gruposV3: [{ id: "g1", rotulo: "Tela", regra: "escolha_1" }],
+      servicos: [
+        { id: "s-orig", descricao: "Tela original", valor: 400, desconto: 100, grupoId: "g1", selecionadaV3: true },
+        { id: "s-alt", descricao: "Tela premium", valor: 450, grupoId: "g1" },
+        { id: "s-brinde", descricao: "Película", valor: 20, kindV3: "brinde" },
+      ],
+    };
+    const p = payload({ valorTotal: 300 }, orc);
+    const t = titulo({ valor: 300 }, [{ tipo: "liquidacao", valor: 300, loteId: "op-1", at: "2026-10-02T12:00:00.000Z" }]);
+    const m = montarEscopoFormalizacaoV3(estado(p, t, 300));
+    expect(m.ok).toBe(true);
+    if (!m.ok) return;
+    expect(m.escopo.orcamento.totalCentavos).toBe(30000);
+    expect(m.escopo.orcamento.linhas.map((l) => [l.descricao, l.situacao, l.valorCentavos, l.grupo ?? null])).toEqual([
+      ["Tela original", "cobrada", 30000, "Tela"],
+      ["Tela premium", "alternativa_nao_escolhida", 45000, "Tela"],
+      ["Película", "cortesia", 0, null],
+    ]);
+    // A assinatura revalidada continua sendo o conteúdo inteiro (seleção, desconto, grupos).
+    const outra = montarEscopoFormalizacaoV3(estado(payload({ valorTotal: 300 }, { ...orc, servicos: [{ ...orc.servicos[0], descricao: "Tela compatível" }, orc.servicos[1], orc.servicos[2]] }), t, 300));
+    expect(outra.ok && outra.escopo.orcamento.conteudo).not.toBe(m.escopo.orcamento.conteudo);
+  });
+});

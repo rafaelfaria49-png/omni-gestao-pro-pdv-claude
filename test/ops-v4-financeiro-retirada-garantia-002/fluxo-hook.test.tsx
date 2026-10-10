@@ -15,6 +15,7 @@ const m = vi.hoisted(() => ({
   lerPagamentoOSV3: vi.fn(),
   receberOSV3: vi.fn(),
   aprovarOrcamentoParaReceberV3: vi.fn(),
+  conferirEscopoAprovacaoV3: vi.fn(),
   conferirFormalizacaoAprovacaoV3: vi.fn(),
   formalizarAprovacaoPendenteV3: vi.fn(),
 }));
@@ -40,6 +41,7 @@ vi.mock("@/lib/operacoes-v3/workspace-actions", () => ({ salvarDiagnosticoV3: vi
 vi.mock("@/lib/operacoes-v3/orcamento-actions", () => ({
   gerarOrcamentoDaOS: vi.fn(), salvarOrcamentoV3: vi.fn(), corrigirOrcamentoV3: vi.fn(), recusarOrcamentoV3: vi.fn(), aprovarOrcamentoV3: vi.fn(),
   aprovarOrcamentoParaReceberV3: m.aprovarOrcamentoParaReceberV3,
+  conferirEscopoAprovacaoV3: m.conferirEscopoAprovacaoV3,
   conferirFormalizacaoAprovacaoV3: m.conferirFormalizacaoAprovacaoV3,
   formalizarAprovacaoPendenteV3: m.formalizarAprovacaoPendenteV3,
 }));
@@ -111,7 +113,40 @@ async function montarComOS(id: "a" | "b") {
   return r;
 }
 
+const ESCOPO = { conteudo: "conteudo-conferido-a" };
+
 describe("B6 · 'Aprovar e receber' — alvo, ordem e falha parcial (hook real)", () => {
+  it("R1-P1: A→B→A antes da resposta da aprovação: a continuação da visita anterior NUNCA recebe", async () => {
+    const r = await montarComOS("a");
+    const pendente = adiado<{ ok: true }>();
+    m.aprovarOrcamentoParaReceberV3.mockReturnValue(pendente.promessa);
+    const receber = vi.fn(async () => ({ ok: true as const }));
+    let promessa!: Promise<unknown>;
+    act(() => { promessa = r.result.current.aprovacaoReceber.executar!(receber, ESCOPO); });
+    await act(async () => r.result.current.selectOS(B, "orcamento"));
+    await waitFor(() => expect(r.result.current.realOS?.id).toBe("b"));
+    await act(async () => r.result.current.selectOS(A, "orcamento"));
+    await waitFor(() => expect(r.result.current.realOS?.id).toBe("a"));
+    await act(async () => pendente.resolver({ ok: true }));
+    expect(await promessa).toEqual({ status: "fora_do_alvo" });
+    expect(receber).not.toHaveBeenCalled();
+    expect(m.receberOSV3).not.toHaveBeenCalled();
+  });
+
+  it("conferência do escopo: devolve o servidor; resposta de outra OS fica fora do alvo", async () => {
+    const r = await montarComOS("a");
+    m.conferirEscopoAprovacaoV3.mockResolvedValueOnce({ ok: true, escopo: { orcamentoId: "orc", revisao: 0, linhas: [], totalCentavos: 30000, conteudo: "c-a" } });
+    await expect(r.result.current.aprovacaoReceber.conferir!()).resolves.toMatchObject({ ok: true, escopo: { conteudo: "c-a" } });
+    expect(m.conferirEscopoAprovacaoV3).toHaveBeenCalledWith(LOJA, "a");
+    const pendente = adiado<unknown>();
+    m.conferirEscopoAprovacaoV3.mockReturnValueOnce(pendente.promessa);
+    let promessa!: Promise<unknown>;
+    act(() => { promessa = r.result.current.aprovacaoReceber.conferir!(); });
+    await act(async () => r.result.current.selectOS(B, "orcamento"));
+    await act(async () => pendente.resolver({ ok: true, escopo: { conteudo: "c-a" } }));
+    expect(await promessa).toMatchObject({ ok: false, foraDoAlvo: true });
+  });
+
   it("oferta e modo pertencem à loja+OS: trocar de OS encerra o modo e ele não ressurge ao voltar", async () => {
     const r = await montarComOS("a");
     expect(r.result.current.aprovacaoReceber.disponivel).toBe(true);
@@ -132,8 +167,8 @@ describe("B6 · 'Aprovar e receber' — alvo, ordem e falha parcial (hook real)"
     m.aprovarOrcamentoParaReceberV3.mockResolvedValue({ ok: true });
     const receber = vi.fn(async () => ({ ok: false as const, mensagem: null }));
     let resultado: unknown;
-    await act(async () => { resultado = await r.result.current.aprovacaoReceber.executar!(receber); });
-    expect(m.aprovarOrcamentoParaReceberV3).toHaveBeenCalledWith(LOJA, "a");
+    await act(async () => { resultado = await r.result.current.aprovacaoReceber.executar!(receber, ESCOPO); });
+    expect(m.aprovarOrcamentoParaReceberV3).toHaveBeenCalledWith(LOJA, "a", ESCOPO);
     expect(receber).toHaveBeenCalledTimes(1);
     expect(resultado).toEqual({ status: "aprovado_pagamento_nao_confirmado", mensagem: null });
   });
@@ -143,7 +178,7 @@ describe("B6 · 'Aprovar e receber' — alvo, ordem e falha parcial (hook real)"
     m.aprovarOrcamentoParaReceberV3.mockResolvedValue({ ok: false, mensagem: "Este orçamento venceu em 20/09/2026." });
     const receber = vi.fn();
     let resultado: unknown;
-    await act(async () => { resultado = await r.result.current.aprovacaoReceber.executar!(receber); });
+    await act(async () => { resultado = await r.result.current.aprovacaoReceber.executar!(receber, ESCOPO); });
     expect(resultado).toEqual({ status: "aprovacao_recusada", mensagem: "Este orçamento venceu em 20/09/2026." });
     expect(receber).not.toHaveBeenCalled();
   });
@@ -153,7 +188,7 @@ describe("B6 · 'Aprovar e receber' — alvo, ordem e falha parcial (hook real)"
     m.aprovarOrcamentoParaReceberV3.mockRejectedValue(new TypeError("Failed to fetch"));
     const receber = vi.fn();
     let resultado: unknown;
-    await act(async () => { resultado = await r.result.current.aprovacaoReceber.executar!(receber); });
+    await act(async () => { resultado = await r.result.current.aprovacaoReceber.executar!(receber, ESCOPO); });
     expect(resultado).toMatchObject({ status: "aprovacao_recusada", mensagem: expect.stringMatching(/^Sem resposta do servidor: não foi possível confirmar a aprovação./) });
     expect(receber).not.toHaveBeenCalled();
     expect(m.receberOSV3).not.toHaveBeenCalled();
@@ -165,7 +200,7 @@ describe("B6 · 'Aprovar e receber' — alvo, ordem e falha parcial (hook real)"
     m.aprovarOrcamentoParaReceberV3.mockReturnValue(pendente.promessa);
     const receber = vi.fn(async () => ({ ok: true as const }));
     let promessa!: Promise<unknown>;
-    act(() => { promessa = r.result.current.aprovacaoReceber.executar!(receber); });
+    act(() => { promessa = r.result.current.aprovacaoReceber.executar!(receber, ESCOPO); });
     if (alvo === "os") {
       await act(async () => r.result.current.selectOS(B, "orcamento"));
     } else {

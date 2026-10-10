@@ -181,7 +181,8 @@ export async function formalizarAprovacaoPendenteV3(
       return { ok: true, jaRegistrado: false, operacaoId: entrada.valor.operacaoId, formalizadoEm: agora, formalizadoPor: acesso.operador };
     }, TX_FORMALIZACAO_V3);
 
-    if (!resultado.ok) return { ...resultado, naoRegistrada: true };
+    // Conflito de idempotência: JÁ há registro com esta chave (outro conteúdo) — não é "nada gravado".
+    if (!resultado.ok) return resultado.code === "idempotencia_conflito" ? resultado : { ...resultado, naoRegistrada: true };
     if (!resultado.jaRegistrado) {
       try {
         revalidatePath("/dashboard/operacoes-v3");

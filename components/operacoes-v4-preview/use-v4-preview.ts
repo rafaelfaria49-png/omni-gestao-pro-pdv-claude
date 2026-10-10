@@ -41,12 +41,13 @@ import {
   corrigirOrcamentoV3,
   aprovarOrcamentoV3,
   aprovarOrcamentoParaReceberV3,
+  conferirEscopoAprovacaoV3,
   recusarOrcamentoV3,
   conferirFormalizacaoAprovacaoV3,
   formalizarAprovacaoPendenteV3,
 } from "@/lib/operacoes-v3/orcamento-actions";
 import type { ConferenciaFormalizacaoResultV3, FormalizacaoAprovacaoResultV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-actions";
-import type { EntradaFormalizacaoV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
+import type { ConferenciaEscopoAprovacaoResultV3, EntradaFormalizacaoV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
 import {
   adicionarObservacaoInternaV3,
@@ -420,8 +421,10 @@ export interface V4DataCtx {
   /** Recebimento aberto em modo "Aprovar e receber" (loja+OS) — estado da sessão, fora do V4State. */
   aprovacaoNoRecebimento?: AprovacaoNoRecebimentoV4 | null;
   definirAprovacaoNoRecebimento?: (valor: AprovacaoNoRecebimentoV4 | null) => void;
-  /** Aprova pela action própria e, só com sucesso e no MESMO alvo, chama `receber`. */
-  aprovarEReceber?: (receber: () => Promise<RecebimentoAposAprovacaoV4>) => Promise<ResultadoAprovarEReceberV4>;
+  /** Escopo do orçamento lido no servidor (linhas efetivas, total, assinatura) para o consentimento. */
+  conferirEscopoAprovacao?: () => Promise<ConferenciaEscopoAprovacaoUiV4>;
+  /** Aprova o escopo CONSENTIDO pela action própria e, só com sucesso e no MESMO alvo, chama `receber`. */
+  aprovarEReceber?: (receber: () => Promise<RecebimentoAposAprovacaoV4>, esperado: { conteudo: string }) => Promise<ResultadoAprovarEReceberV4>;
   /** "Formalizar aprovação pendente": conferência (leitura) e formalização (escrita). */
   conferirFormalizacao?: () => Promise<ConferenciaFormalizacaoUiV4>;
   formalizarAprovacao?: (input: EntradaFormalizacaoV3) => Promise<FormalizacaoAprovacaoUiV4>;
@@ -450,6 +453,9 @@ export type ResultadoAprovarEReceberV4 =
   | { status: "aprovado_pagamento_nao_confirmado"; mensagem: string | null }
   /** Resposta tardia: o operador já está em outra OS/loja — nada mais acontece aqui. */
   | { status: "fora_do_alvo" };
+
+/** `foraDoAlvo` = resposta de outra OS/loja: a tela ignora. */
+export type ConferenciaEscopoAprovacaoUiV4 = ConferenciaEscopoAprovacaoResultV3 | { ok: false; mensagem: string; foraDoAlvo: true };
 
 export type ConferenciaFormalizacaoUiV4 = ConferenciaFormalizacaoResultV3 | { ok: false; code: "fora_do_alvo" | "falha_leitura"; mensagem: string };
 
@@ -933,6 +939,7 @@ export function buildVals(
       update({ stage: "financeiro", receberPagamento: true, alvoSuperficies: chaveSuperficies, module: "workspace", view: "cockpit", menu: null });
     },
     marcarAprovado: () => ctx.definirAprovacaoNoRecebimento?.({ chave: chaveSuperficies, estado: "aprovado_pagamento_pendente" }),
+    conferir: ctx.conferirEscopoAprovacao ?? null,
     executar: ctx.aprovarEReceber ?? null,
   };
   const formalizacao = {
@@ -2144,6 +2151,20 @@ export function useV4Preview(): V4Vals {
   useEffect(() => {
     lojaRef.current = lojaAtivaId;
   }, [lojaAtivaId]);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002: alvo = loja + OS + gerações da seleção e da loja.
+  // Sair e voltar (A→B→A) muda a geração: a continuação de uma visita anterior nunca roda.
+  const lojaGenRef = useRef(0);
+  useEffect(() => {
+    lojaGenRef.current += 1;
+  }, [lojaAtivaId]);
+  const capturarAlvoAtualV4 = useCallback(() => {
+    const alvo = { lojaId: lojaRef.current, osId: selectedRef.current, selecao: selecaoGenRef.current, loja: lojaGenRef.current };
+    return () =>
+      lojaRef.current === alvo.lojaId &&
+      selectedRef.current === alvo.osId &&
+      selecaoGenRef.current === alvo.selecao &&
+      lojaGenRef.current === alvo.loja;
+  }, []);
   // R03: geração de escrita por alvo (loja+OS). Capturada no disparo e
   // conferida no pós-await junto com loja+OS: seleção mudada (A→B), retorno
   // (A→B→A) ou escrita mais nova superando a anterior nunca sofrem
@@ -2369,15 +2390,14 @@ export function useV4Preview(): V4Vals {
     setAprovacaoNoRecebimento((modo) => (modo && modo.chave !== chaveSuperficiesSelecao ? null : modo));
   }, [chaveSuperficiesSelecao]);
   const aprovarEReceber = useCallback(
-    async (receber: () => Promise<RecebimentoAposAprovacaoV4>): Promise<ResultadoAprovarEReceberV4> => {
+    async (receber: () => Promise<RecebimentoAposAprovacaoV4>, esperado: { conteudo: string }): Promise<ResultadoAprovarEReceberV4> => {
       const sid = (lojaAtivaId ?? "").trim();
       const osId = (selectedOsId ?? "").trim();
       if (!sid || !osId) return { status: "aprovacao_recusada", mensagem: "Selecione uma OS na loja ativa para concluir a ação." };
-      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
-      const noAlvo = () => lojaRef.current === alvo.lojaId && selectedRef.current === alvo.osId;
+      const noAlvo = capturarAlvoAtualV4();
       let aprovacao: { ok: true } | { ok: false; mensagem: string };
       try {
-        aprovacao = await aprovarOrcamentoParaReceberV3(sid, osId);
+        aprovacao = await aprovarOrcamentoParaReceberV3(sid, osId, esperado);
       } catch {
         // Sem resposta: a aprovação pode ou não ter sido gravada — relê e NÃO recebe.
         aprovacao = {
@@ -2393,15 +2413,29 @@ export function useV4Preview(): V4Vals {
       const recebido = await receber();
       return recebido.ok ? { status: "recebido" } : { status: "aprovado_pagamento_nao_confirmado", mensagem: recebido.mensagem };
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial],
+    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, capturarAlvoAtualV4],
   );
+  // (C) Escopo conferido no servidor ao abrir o "Aprovar e receber": o consentimento é dado sobre ele.
+  const conferirEscopoAprovacao = useCallback(async (): Promise<ConferenciaEscopoAprovacaoUiV4> => {
+    const sid = (lojaAtivaId ?? "").trim();
+    const osId = (selectedOsId ?? "").trim();
+    if (!sid || !osId) return { ok: false, mensagem: "Selecione uma OS na loja ativa para conferir o orçamento.", foraDoAlvo: true };
+    const noAlvo = capturarAlvoAtualV4();
+    try {
+      const r = await conferirEscopoAprovacaoV3(sid, osId);
+      return noAlvo() ? r : { ok: false, mensagem: "A OS selecionada mudou.", foraDoAlvo: true };
+    } catch {
+      return noAlvo()
+        ? { ok: false, mensagem: "Não foi possível conferir o orçamento agora. Tente de novo." }
+        : { ok: false, mensagem: "A OS selecionada mudou.", foraDoAlvo: true };
+    }
+  }, [lojaAtivaId, selectedOsId, capturarAlvoAtualV4]);
   // (D) "Formalizar aprovação pendente": conferência e escrita no servidor; aqui só o alvo.
   const conferirFormalizacao = useCallback(async (): Promise<ConferenciaFormalizacaoUiV4> => {
     const sid = (lojaAtivaId ?? "").trim();
     const osId = (selectedOsId ?? "").trim();
     if (!sid || !osId) return { ok: false, code: "fora_do_alvo", mensagem: "Selecione uma OS na loja ativa para concluir a ação." };
-    const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
-    const noAlvo = () => lojaRef.current === alvo.lojaId && selectedRef.current === alvo.osId;
+    const noAlvo = capturarAlvoAtualV4();
     try {
       const r = await conferirFormalizacaoAprovacaoV3(sid, osId);
       return noAlvo() ? r : { ok: false, code: "fora_do_alvo", mensagem: "A OS selecionada mudou." };
@@ -2410,14 +2444,13 @@ export function useV4Preview(): V4Vals {
         ? { ok: false, code: "falha_leitura", mensagem: "Não foi possível conferir a OS agora. Tente de novo." }
         : { ok: false, code: "fora_do_alvo", mensagem: "A OS selecionada mudou." };
     }
-  }, [lojaAtivaId, selectedOsId]);
+  }, [lojaAtivaId, selectedOsId, capturarAlvoAtualV4]);
   const formalizarAprovacao = useCallback(
     async (input: EntradaFormalizacaoV3): Promise<FormalizacaoAprovacaoUiV4> => {
       const sid = (lojaAtivaId ?? "").trim();
       const osId = (selectedOsId ?? "").trim();
       if (!sid || !osId) return { ok: false, code: "fora_do_alvo", mensagem: "Selecione uma OS na loja ativa para concluir a ação." };
-      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
-      const noAlvo = () => lojaRef.current === alvo.lojaId && selectedRef.current === alvo.osId;
+      const noAlvo = capturarAlvoAtualV4();
       try {
         const r = await formalizarAprovacaoPendenteV3(sid, osId, input);
         reloadOrdens();
@@ -2439,7 +2472,7 @@ export function useV4Preview(): V4Vals {
         };
       }
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify],
+    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify, capturarAlvoAtualV4],
   );
   const recusarOrcamento = useCallback(
     (input: RecusarOrcamentoV3Input) => runWrite((sid, osId) => recusarOrcamentoV3(sid, osId, input), "Orçamento recusado."),
@@ -3211,6 +3244,7 @@ export function useV4Preview(): V4Vals {
       aprovacaoNoRecebimento,
       definirAprovacaoNoRecebimento: setAprovacaoNoRecebimento,
       aprovarEReceber,
+      conferirEscopoAprovacao,
       conferirFormalizacao,
       formalizarAprovacao,
     }),
@@ -3295,6 +3329,7 @@ export function useV4Preview(): V4Vals {
       definirCancelamentoMotivoPrefill,
       aprovacaoNoRecebimento,
       aprovarEReceber,
+      conferirEscopoAprovacao,
       conferirFormalizacao,
       formalizarAprovacao,
     ],

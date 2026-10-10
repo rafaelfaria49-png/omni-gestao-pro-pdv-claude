@@ -52,7 +52,7 @@ import { OrcamentoDecisaoCluster } from "@/components/operacoes-v4-preview/parts
 import { ReceberPagamentoV4 } from "@/components/operacoes-v4-preview/parts/ReceberPagamentoV4";
 import { projectFinancialOSV4, type FinancialProjectionOSV4 } from "@/lib/operacoes-v4/financial-projection";
 import { montarEscopoFormalizacaoV3, type EntradaFormalizacaoV3, type EscopoFormalizacaoV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
-import { DECLARACAO_FORMALIZACAO_APROVACAO_V3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
+import { DECLARACAO_FORMALIZACAO_APROVACAO_V3, escopoAprovacaoOrcamentoV3, MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
 import { MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3 } from "@/lib/operacoes-v3/elegibilidade-comercial";
 
 const LOJA = "loja-qa-frg2";
@@ -132,6 +132,7 @@ interface Cenario {
   titulo: Titulo;
   pdv?: Pdv;
   aprovarEReceber?: V4DataCtx["aprovarEReceber"];
+  conferirEscopoAprovacao?: V4DataCtx["conferirEscopoAprovacao"];
   conferirFormalizacao?: V4DataCtx["conferirFormalizacao"];
   formalizarAprovacao?: V4DataCtx["formalizarAprovacao"];
 }
@@ -162,6 +163,8 @@ function Harness({ c }: { c: Cenario }) {
       aprovacaoNoRecebimento: modo,
       definirAprovacaoNoRecebimento: setModo,
       aprovarEReceber: c.aprovarEReceber,
+      // Padrão: o "servidor" confere o escopo do próprio orçamento da OS (mesma função pura).
+      conferirEscopoAprovacao: c.conferirEscopoAprovacao ?? (async () => escopoAprovacaoOrcamentoV3(c.os)),
       conferirFormalizacao: c.conferirFormalizacao,
       formalizarAprovacao: c.formalizarAprovacao,
     },
@@ -183,6 +186,12 @@ function montar(c: Cenario) {
 }
 
 const botao = (nome: string | RegExp) => screen.getByRole("button", { name: nome });
+/** Consentimento só depois do escopo conferido no servidor (checkbox habilitado). */
+async function consentir(dialogo: HTMLElement) {
+  const caixa = within(dialogo).getByLabelText("O cliente aprovou este orçamento") as HTMLInputElement;
+  await waitFor(() => expect(caixa.disabled).toBe(false));
+  fireEvent.click(caixa);
+}
 const desabilitado = (el: HTMLElement) => (el as HTMLButtonElement).disabled;
 
 // ─── C · "Aprovar e receber" ───────────────────────────────────────────────────────────────
@@ -197,7 +206,7 @@ describe("C · conferir → aprovar expressamente → receber", () => {
     expect(patches).toContainEqual(expect.objectContaining({ stage: "financeiro", receberPagamento: true, alvoSuperficies: JSON.stringify([LOJA, "a"]) }));
     const dialogo = await screen.findByRole("dialog", { name: "Aprovar e receber" });
     const escopo = within(dialogo).getByTestId("aprovar-e-receber-escopo");
-    expect(escopo.textContent).toMatch(/Troca de Tela — R\$\s420,00/);
+    await waitFor(() => expect(escopo.textContent).toMatch(/Troca de Tela — R\$\s420,00/));
     expect(escopo.textContent).toMatch(/Total do orçamento\s*R\$\s420,00/);
     expect(escopo.textContent).toContain("A aprovação não altera a garantia desta OS.");
     expect(escopo.textContent).toContain("A aprovação não inicia o serviço nem entrega o aparelho.");
@@ -218,10 +227,13 @@ describe("C · conferir → aprovar expressamente → receber", () => {
     fireEvent.change(within(dialogo).getByLabelText("Forma da linha 1"), { target: { value: "pix" } });
     expect(confirmar().textContent).toMatch(/^Aprovar e receber R\$\s420,00$/);
     expect(desabilitado(confirmar())).toBe(true); // falta o consentimento expresso
-    fireEvent.click(within(dialogo).getByLabelText("O cliente aprovou este orçamento"));
+    await consentir(dialogo);
     expect(desabilitado(confirmar())).toBe(false);
     fireEvent.click(confirmar());
     await waitFor(() => expect(aprovarEReceber).toHaveBeenCalledTimes(1));
+    // A aprovação leva a assinatura do escopo CONFERIDO no servidor.
+    const conferido = escopoAprovacaoOrcamentoV3(RASCUNHO);
+    expect((aprovarEReceber.mock.calls[0] as unknown[])[1]).toEqual({ conteudo: conferido.ok ? conferido.escopo.conteudo : "" });
     expect(p.receber).toHaveBeenCalledWith(expect.objectContaining({ linhas: [{ forma: "pix", valor: 420 }], sessaoId: "sessao-qa" }));
     await waitFor(() => expect(patches).toEqual(expect.arrayContaining([{ receberPagamento: false }, { recibo: true, alvoSuperficies: JSON.stringify([LOJA, "a"]) }])));
     expect(sonda.modo).toBeNull();
@@ -234,11 +246,46 @@ describe("C · conferir → aprovar expressamente → receber", () => {
     fireEvent.click(botao("Aprovar e receber"));
     const dialogo = await screen.findByRole("dialog", { name: "Aprovar e receber" });
     fireEvent.change(within(dialogo).getByLabelText("Forma da linha 1"), { target: { value: "dinheiro" } });
-    fireEvent.click(within(dialogo).getByLabelText("O cliente aprovou este orçamento"));
+    await consentir(dialogo);
     fireEvent.click(within(dialogo).getByRole("button", { name: /^Aprovar e receber R\$/ }));
     expect(await within(dialogo).findByText("Este orçamento venceu em 20/09/2026.")).toBeTruthy();
     expect(p.receber).not.toHaveBeenCalled();
     expect(patches.some((x) => x.recibo === true)).toBe(false);
+  });
+
+  it("R1-P1: escopo mudou depois da conferência → recusa; nova conferência e NOVO consentimento antes de repetir", async () => {
+    const conferir = vi.fn(async () => escopoAprovacaoOrcamentoV3(RASCUNHO));
+    const aprovarEReceber = vi.fn(async (): Promise<ResultadoAprovarEReceberV4> => ({ status: "aprovacao_recusada", mensagem: MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3 }));
+    montar({ os: RASCUNHO, titulo: null, aprovarEReceber, conferirEscopoAprovacao: conferir });
+    fireEvent.click(botao("Aprovar e receber"));
+    const dialogo = await screen.findByRole("dialog", { name: "Aprovar e receber" });
+    fireEvent.change(within(dialogo).getByLabelText("Forma da linha 1"), { target: { value: "pix" } });
+    await consentir(dialogo);
+    fireEvent.click(within(dialogo).getByRole("button", { name: /^Aprovar e receber R\$/ }));
+    expect(await within(dialogo).findByText(MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3)).toBeTruthy();
+    await waitFor(() => expect(conferir).toHaveBeenCalledTimes(2));
+    expect((within(dialogo).getByLabelText("O cliente aprovou este orçamento") as HTMLInputElement).checked).toBe(false);
+    expect(desabilitado(within(dialogo).getByRole("button", { name: /^Aprovar e receber R\$/ }))).toBe(true);
+  });
+
+  it("R1-P2: o escopo mostra o efetivamente escolhido — alternativa não escolhida e cortesia identificadas, valor com desconto", async () => {
+    const comGrupo = os("a", "rascunho", {
+      total: 300,
+      servicos: [
+        { id: "s1", descricao: "Tela original", valor: 400, desconto: 100, grupoId: "g1", selecionadaV3: true },
+        { id: "s2", descricao: "Tela premium", valor: 450, grupoId: "g1" },
+        { id: "s3", descricao: "Película", valor: 20, kindV3: "brinde" },
+      ],
+      gruposV3: [{ id: "g1", rotulo: "Tela", regra: "escolha_1" }],
+    });
+    montar({ os: comGrupo, titulo: null, aprovarEReceber: vi.fn() });
+    fireEvent.click(botao("Aprovar e receber"));
+    const dialogo = await screen.findByRole("dialog", { name: "Aprovar e receber" });
+    const escopo = within(dialogo).getByTestId("aprovar-e-receber-escopo");
+    await waitFor(() => expect(escopo.textContent).toMatch(/Tela: Tela original — R\$\s300,00/));
+    expect(escopo.textContent).toMatch(/Tela: Tela premium — não escolhida \(R\$\s450,00\)/);
+    expect(escopo.textContent).toContain("Película — cortesia");
+    expect(escopo.textContent).toMatch(/Total do orçamento\s*R\$\s300,00/);
   });
 
   it("aprovada + pagamento falho: 'Orçamento aprovado — pagamento não confirmado', rascunho preservado, retry só do pagamento", async () => {
@@ -251,7 +298,7 @@ describe("C · conferir → aprovar expressamente → receber", () => {
     fireEvent.click(botao("Aprovar e receber"));
     const dialogo = await screen.findByRole("dialog", { name: "Aprovar e receber" });
     fireEvent.change(within(dialogo).getByLabelText("Forma da linha 1"), { target: { value: "pix" } });
-    fireEvent.click(within(dialogo).getByLabelText("O cliente aprovou este orçamento"));
+    await consentir(dialogo);
     fireEvent.click(within(dialogo).getByRole("button", { name: /^Aprovar e receber R\$/ }));
     await waitFor(() => expect(sonda.modo).toEqual({ chave: JSON.stringify([LOJA, "a"]), estado: "aprovado_pagamento_pendente" }));
     // A leitura do servidor volta com o orçamento aprovado (sem rollback fictício).
@@ -364,15 +411,42 @@ describe("D · formalizar aprovação pendente", () => {
     fireEvent.click(within(grupo).getByLabelText("Declaração do responsável"));
     fireEvent.click(within(grupo).getByRole("button", { name: "Formalizar aprovação" }));
     const reenviar = await within(grupo).findByRole("button", { name: "Reenviar a mesma formalização" });
+    // R1-P2: enquanto incerto, a confirmação enviada fica congelada — nada pode ser editado.
+    expect((within(grupo).getByLabelText("Motivo da formalização") as HTMLTextAreaElement).disabled).toBe(true);
+    expect((within(grupo).getByLabelText("Declaração do responsável") as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(reenviar);
     await within(grupo).findByText(/mudaram desde a conferência/);
     const [primeira, segunda] = formalizarAprovacao.mock.calls.map((c) => c[0]);
     expect(segunda).toEqual(primeira);
     fireEvent.click(within(grupo).getByRole("button", { name: "Conferir de novo" }));
     await waitFor(() => expect(conferirFormalizacao).toHaveBeenCalledTimes(2));
-    fireEvent.click(await within(grupo).findByRole("button", { name: "Formalizar aprovação" }));
+    // Nova conferência = novo ato: a declaração é pedida de novo.
+    const declaracao = (await within(grupo).findByLabelText("Declaração do responsável")) as HTMLInputElement;
+    expect(declaracao.checked).toBe(false);
+    expect(desabilitado(within(grupo).getByRole("button", { name: "Formalizar aprovação" }))).toBe(true);
+    fireEvent.click(declaracao);
+    fireEvent.click(within(grupo).getByRole("button", { name: "Formalizar aprovação" }));
     await waitFor(() => expect(formalizarAprovacao).toHaveBeenCalledTimes(3));
     expect(formalizarAprovacao.mock.calls[2]![0].operacaoId).not.toBe(primeira!.operacaoId);
+  });
+
+  it("R1-P2: recusa conferida (ex.: vencido sem ratificação) leva a 'Conferir de novo' — nunca a um botão que não envia", async () => {
+    const conferirFormalizacao = vi.fn(async () => conferido(true));
+    const formalizarAprovacao = vi.fn<(input: EntradaFormalizacaoV3) => Promise<FormalizacaoAprovacaoUiV4>>()
+      .mockResolvedValueOnce({ ok: false, code: "vencido_sem_ratificacao", mensagem: "O orçamento venceu: ratifique o escopo agora para formalizar.", naoRegistrada: true });
+    montar({ os: RASCUNHO, titulo: LIQUIDADO, conferirFormalizacao, formalizarAprovacao });
+    fireEvent.click(botao("Formalizar aprovação pendente"));
+    const grupo = await screen.findByRole("group", { name: "Formalizar aprovação pendente" });
+    await within(grupo).findByText(/Escopo conferido no servidor/);
+    fireEvent.change(within(grupo).getByLabelText("Motivo da formalização"), { target: { value: "Cliente aprovou no balcão em 02/10." } });
+    fireEvent.click(within(grupo).getByLabelText("Declaração do responsável"));
+    fireEvent.click(within(grupo).getByText(/Ratifico neste momento/));
+    fireEvent.click(within(grupo).getByRole("button", { name: "Formalizar aprovação" }));
+    await within(grupo).findByText(/ratifique o escopo agora/);
+    expect(within(grupo).queryByRole("button", { name: "Formalizar aprovação" })).toBeNull();
+    fireEvent.click(within(grupo).getByRole("button", { name: "Conferir de novo" }));
+    await waitFor(() => expect(conferirFormalizacao).toHaveBeenCalledTimes(2));
+    expect(formalizarAprovacao).toHaveBeenCalledTimes(1);
   });
 
   it("vencido exige a ratificação específica no momento atual", async () => {
