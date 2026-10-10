@@ -41,7 +41,7 @@
   "gate_humano": {
     "requerido": true,
     "pendente": true,
-    "motivo": "Merge humano deste plano e autorização da execução em nova sessão; evidência da revisão independente P2; preview somente com configuração DP isolada explicitamente autorizada. Autorizados nesta missão apenas commit/push/PR do planejamento."
+    "motivo": "Merge humano deste plano e autorização da execução em nova sessão; vinculação documental da revisão R do P2 já realizada externamente; preview somente com configuração DP isolada explicitamente autorizada. Autorizados nesta missão apenas commit/push/PR do planejamento."
   }
 }
 -->
@@ -58,7 +58,9 @@ Materializar a interface operacional Pessoas do OmniGestão Pro sobre o backend 
 - `status pessoas`: dois DONE, zero BLOCKED, duas linhas de ledger, nenhum GOAL aberto.
 - 001A: `PESSOAS-DP-FUNDACAO-CADASTRO-FUNCIONARIOS-001A`, HEAD ratificado `cc6cd01f3833b0fe8a60489379865efa52e497d3`, ancestral da base.
 - P2: `PESSOAS-DP-HARDENING-P2-PRE-001B-001`, HEAD ratificado `5465ba9d2999848c3e937457d7458fa7f59900e4`, ancestral da base; merge [PR #255](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/255), `c1736651864bed3959d50af302fd1ed88c7b4d89`.
-- Lacuna documental: o relatório `docs/pessoas/HARDENING_P2_PRE_001B_001.md` ainda declara revisão independente pendente; o PR #255 mergeado não contém reviews/comments na consulta desta sessão. DONE/merge não comprovam R. Vincular evidência de R do P2 antes de executar 001B; não reabrir nem reclassificar os GOALs DONE.
+- **REVISÃO R REALIZADA EXTERNAMENTE — VINCULAÇÃO DOCUMENTAL PENDENTE.** Conforme referência fornecida pelo usuário nesta conversa em 10/10/2026, a revisão cross-family do P2 ocorreu em **09/10/2026**, por **ZCode/GLM (Z.ai)**, família **Z.ai/GLM**, diferente de OpenAI. A pendência é documental, não de realização da revisão técnica. O texto anterior do relatório P2 não reflete essa revisão externa; não alterar o histórico fechado.
+- Referência R: GOAL `PESSOAS-DP-HARDENING-P2-PRE-001B-001`; branch `goal/pessoas-hardening-p2-pre-001b-001`; **HEAD revisado `53250ef52c4401bdc2e0de22aab12b1f13222117`**. Resultado informado: **REVIEW_CODE=APPROVE; P0=0; P1=0; P2=0; P3=2; runner independente: 95 testes, 0 skipped, 0 todo; MERGE_READINESS=READY; FRONTEND_001B_READINESS=READY**. Estes resultados são atribuídos à revisão externa, não a uma nova execução pelo autor deste plano. O SHA revisado é o commit de close e sua ancestralidade em origin/main foi conferida localmente.
+- O usuário informa que o relatório completo foi entregue na conversa após execução independente. Vincular/preservar esse relatório com autoria, data, SHA revisado e resultado **antes da execução do 001B**. Não houve review formal no GitHub; não inventar aprovação na plataforma. A vinculação documental pendente **não impede o merge do planejamento da PR #260**. Permanecem todos os gates da execução e os dois GOALs DONE, sem reclassificação.
 - Fontes: CLAUDE.md, AEP ENTRYPOINT/EXECUTION_PROTOCOL/TASK_LEVELS, masterplan de 15/09/2026, `docs/pessoas/CONTRATOS_BACKEND_001A.md` e os contratos efetivos abaixo. O recorte atual substitui sugestões históricas de acrescentar Pessoas à matriz enterprise.
 
 Ponto de parada desta missão: **PESSOAS 001B — PLANO AEP PRONTO PARA MERGE HUMANO**. Somente commit, push e PR do planejamento estão autorizados agora. Sem open/close, implementação, merge ou ambiente produtivo.
@@ -208,7 +210,7 @@ Extensão estreita de `runOfficialTests` com modo frontend, preservando o compor
 ## Gates de aceite e entrega futura
 
 - **Gates de caminho:** gates_liberados vazio. G-AUTH, G-DADOS-SCHEMA, G-DADOS-SEED, G-CONFIG-DEPLOY, G-CI e G-AEP-CORE não liberados; aprovação PWA do P2 não é herdada.
-- **Antes de executar:** merge humano do plano, autorização da nova sessão e referência da revisão R do P2. READY não autoriza automaticamente execução ou deploy.
+- **Antes de executar:** merge humano do plano, autorização da nova sessão e vinculação documental do relatório da revisão R do P2 já realizada externamente, conforme referência acima. A pendência documental não impede o merge deste planejamento. READY não autoriza automaticamente execução ou deploy.
 - **Antes de aceitar a implementação:** test_command local PASS no HEAD commitado, critérios da tabela, revisão R por família declarada diferente de openai (ou humano) com evidência vinculada ao SHA, sem findings impeditivos.
 - **Smoke preview:** somente depois de autorização explícita da configuração isolada: banco DP sintético identificado, Store/empregador/usuários de teste, chaves efêmeras, bucket R2 privado exclusivo e credenciais de teste com escopo mínimo/CORS válido. Não herdar .env nem bucket/chaves do operador/produção; não criar recursos/deploy nem alterar configuração nesta missão.
 - Smoke autenticado deve provar **Abrir Pessoas → configurar empregador autorizado → cadastrar funcionário → salvar → recarregar → abrir ficha → completar pendências → alterar contrato com histórico → consultar documentos**, incluindo upload-intent/PUT assinado/complete/list/download com bytes reais e isolamento por capacidades. Guardar somente evidências saneadas; limpar dados/objetos exclusivamente sintéticos conforme autorização.
