@@ -332,11 +332,11 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
       op: "parcial",
       recibo: okMisto().recibo,
     });
+    const respostaPerdida = deferred<never>();
+    const confirmacaoRecuperada = deferred<ReturnType<typeof respostaComum>>();
     mocks.receberOSV3
-      .mockImplementationOnce(async () => {
-        throw new Error("Failed to fetch");
-      })
-      .mockImplementationOnce(async () => respostaComum(250))
+      .mockImplementationOnce(() => respostaPerdida.promise)
+      .mockImplementationOnce(() => confirmacaoRecuperada.promise)
       .mockImplementationOnce(async () => ({ ...respostaComum(250), jaRegistrado: true }));
     montar();
     await screen.findByText(/Saldo a receber/);
@@ -349,7 +349,13 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
       await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(chamadas));
     };
     await receberValor("100", 1); // R$100: resposta perdida
-    await screen.findByTestId("pendencia-recebimento");
+    const pendencia = await screen.findByTestId("pendencia-recebimento");
+    const verificar = () => within(pendencia).getByRole("button", { name: "Verificar mesma confirmação" });
+    // A pendência é persistida ANTES do await. Enquanto processa, nenhum reenvio é permitido.
+    expect(desabilitado(verificar())).toBe(true);
+    expect(mocks.receberOSV3).toHaveBeenCalledTimes(1);
+    await act(async () => { respostaPerdida.reject(new Error("Failed to fetch")); });
+    await waitFor(() => expect(desabilitado(verificar())).toBe(false));
     // A revisão 7 impede outra confirmação no meio. Somente a original é verificada.
     fireEvent.change(screen.getByLabelText(/Valor a receber/), { target: { value: "50" } });
     expect(desabilitado(screen.getByRole("button", { name: /^Receber · / }))).toBe(true);
@@ -359,7 +365,11 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(2));
     const [original, verificada] = mocks.receberOSV3.mock.calls.map((c) => c[2] as Record<string, unknown>);
     expect(verificada).toEqual(original);
+    expect(desabilitado(verificar())).toBe(true);
+    // Reconciliação e efeito de saldo precisam terminar antes de digitar a próxima confirmação.
+    await act(async () => { confirmacaoRecuperada.resolve(respostaComum(250)); });
     await waitFor(() => expect(screen.queryByTestId("pendencia-recebimento")).toBeNull());
+    expect((screen.getByLabelText(/Valor a receber/) as HTMLInputElement).value).toBe("250.00");
     await receberValor("50", 3);
     expect(mocks.receberOSV3.mock.calls[2]![2].operacaoId).not.toBe(original!.operacaoId);
   });
