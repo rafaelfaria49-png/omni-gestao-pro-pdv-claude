@@ -111,6 +111,7 @@ export function PdvServicoV3() {
     aPrazo,
     registrandoMisto,
     pendenciaMisto,
+    pendenciaReceber,
     registrarMisto,
   } = usePdvServicoV3(storeId, osId || null);
 
@@ -285,6 +286,18 @@ export function PdvServicoV3() {
       reloadLista();
       alvo.notificar(r.resultado.jaRegistrado ? "Confirmado: a operação já estava registrada (sem duplicidade)." : "Operação registrada.");
       if (alvo.aindaNoAlvo()) limparRascunhoMisto();
+    }
+  };
+
+  /** Recebimento imediato sem resposta: reenvia a MESMA confirmação (chave, sessão, linhas) — o servidor deduplica. */
+  const onReenviarRecebimentoPendente = async () => {
+    if (!pendenciaReceber) return;
+    const alvo = capturarAlvo();
+    const ok = await receber(pendenciaReceber.input);
+    if (ok) {
+      reloadLista();
+      alvo.notificar("Recebimento confirmado (sem duplicidade).");
+      if (alvo.aindaNoAlvo()) setSplitLinhas([{ forma: "", valorStr: "" }]);
     }
   };
 
@@ -655,6 +668,19 @@ export function PdvServicoV3() {
                   <ButtonV3 variant="outline" className="mt-2 w-full" disabled={registrandoMisto} onClick={onReenviarPendente}>
                     {registrandoMisto ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                     Reenviar a mesma operação
+                  </ButtonV3>
+                </div>
+              ) : null}
+
+              {pendenciaReceber ? (
+                <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground" role="alert" data-testid="pendencia-recebimento">
+                  <p>
+                    <strong>Resultado não confirmado</strong> do recebimento anterior. Até o resultado, toda confirmação desta OS
+                    repete a <strong>mesma</strong> (chave, sessão e valores) — o servidor reconhece a chave e não lança em dobro.
+                  </p>
+                  <ButtonV3 variant="outline" className="mt-2 w-full" disabled={recebendo} onClick={onReenviarRecebimentoPendente}>
+                    {recebendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    Reenviar a mesma confirmação
                   </ButtonV3>
                 </div>
               ) : null}

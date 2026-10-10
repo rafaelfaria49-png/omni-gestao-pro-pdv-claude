@@ -56,11 +56,25 @@ export type RegistroMistoResultadoUIV3 =
   | { status: "em_andamento" };
 
 /** Superfície da V3 (aditiva). A V4 continua consumindo só `PdvServicoState`. */
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (R2): recebimento imediato sem RESPOSTA do
+ * servidor (transporte). A confirmação original inteira (chave, sessão, linhas, saldo esperado)
+ * fica fixada para a OS: o próximo envio a repete idêntica — o servidor devolve o já gravado ou
+ * grava uma vez —, nunca com chave nova. Sai com o sucesso dela ou com uma resposta do servidor.
+ */
+export interface PendenciaRecebimentoV3 {
+  key: string;
+  operacaoId: string;
+  input: ReceberOSInputV3;
+}
+
 export interface PdvServicoV3Completo extends PdvServicoState {
   /** Saldo a prazo PERSISTIDO na OS (lido do servidor), quando ainda há saldo. */
   aPrazo: APrazoV3 | null;
   registrandoMisto: boolean;
   pendenciaMisto: PendenciaRecebimentoMistoV3 | null;
+  /** Recebimento imediato com resultado DESCONHECIDO nesta OS (ver `PendenciaRecebimentoV3`). */
+  pendenciaReceber?: PendenciaRecebimentoV3 | null;
   registrarMisto: (dados: DadosRecebimentoMistoV3) => Promise<RegistroMistoResultadoUIV3>;
 }
 
@@ -82,6 +96,17 @@ export function projetarLeituraAtualPdvServicoV3(input: {
     loading: carregandoAlvo,
     error: erroDoAlvo,
   };
+}
+
+/**
+ * Falha SEM resposta do servidor (rede caiu, resposta perdida, resposta que não é da action):
+ * o recebimento pode ter sido gravado. Erro com `digest` (produção) ou erro comum vindo da
+ * action = o servidor respondeu e nada foi gravado por esta chave (ou ela já estava gravada).
+ */
+export function recebimentoSemRespostaV3(e: unknown): boolean {
+  if (typeof (e as { digest?: unknown } | null)?.digest === "string") return false;
+  if (!(e instanceof Error)) return true;
+  return e.name === "TypeError" || e.name === "AbortError" || /unexpected response was received from the server/i.test(e.message);
 }
 
 export function usePdvServicoV3(storeId: string | null, osId: string | null): PdvServicoV3Completo {
@@ -110,6 +135,8 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   const recebendoRef = useRef(false);
   const mistoEmVooRef = useRef(false);
   const pendenciasMistoRef = useRef<Record<string, PendenciaRecebimentoMistoV3>>({});
+  const [pendenciasReceber, setPendenciasReceber] = useState<Record<string, PendenciaRecebimentoV3>>({});
+  const pendenciasReceberRef = useRef<Record<string, PendenciaRecebimentoV3>>({});
   // Recebimentos sem resultado confirmado, por loja/OS + conteúdo ECONÔMICO (o mesmo do
   // servidor: forma única e split iguais são o mesmo recebimento): reenviar reaproveita a
   // chave — se a tentativa original gravou (resposta perdida), o servidor devolve o já
@@ -122,6 +149,14 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   // qualquer snapshot que ainda pertença à OS A, antes mesmo de o effect rodar.
   activeKeyRef.current = targetKey;
   saldoVistoRef.current = loadedKey !== null && pagamento ? { key: loadedKey, saldo: pagamento.saldo } : null;
+
+  const definirPendenciaReceber = useCallback((key: string, pendencia: PendenciaRecebimentoV3 | null) => {
+    const proximas = { ...pendenciasReceberRef.current };
+    if (pendencia) proximas[key] = pendencia;
+    else delete proximas[key];
+    pendenciasReceberRef.current = proximas;
+    setPendenciasReceber(proximas);
+  }, []);
 
   const definirPendenciaMisto = useCallback((key: string, pendencia: PendenciaRecebimentoMistoV3 | null) => {
     const proximas = { ...pendenciasMistoRef.current };
@@ -180,14 +215,23 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       if (recebendoRef.current) return false;
       recebendoRef.current = true;
       const key = JSON.stringify([sid, id]);
-      const conteudo = JSON.stringify([sid, id, conteudoRecebimentoCanonicoV3(input)]);
-      const operacaoId = input.operacaoId ?? receberPendentesRef.current.get(conteudo) ?? gerarOperacaoIdV3();
-      const saldoEsperado = input.saldoEsperado ?? (saldoVistoRef.current?.key === key ? saldoVistoRef.current.saldo : undefined);
+      // Resultado anterior DESCONHECIDO nesta OS: repete exatamente a confirmação original.
+      const pendente = pendenciasReceberRef.current[key] ?? null;
+      const conteudo = JSON.stringify([sid, id, conteudoRecebimentoCanonicoV3(pendente ? pendente.input : input)]);
+      const enviado: ReceberOSInputV3 = pendente
+        ? pendente.input
+        : {
+            ...input,
+            operacaoId: input.operacaoId ?? receberPendentesRef.current.get(conteudo) ?? gerarOperacaoIdV3(),
+            saldoEsperado: input.saldoEsperado ?? (saldoVistoRef.current?.key === key ? saldoVistoRef.current.saldo : undefined),
+          };
+      const operacaoId = enviado.operacaoId!;
       setRecebendo(true);
       setError(null);
       try {
-        const res = await receberOSV3(sid, id, { ...input, operacaoId, saldoEsperado });
+        const res = await receberOSV3(sid, id, enviado);
         receberPendentesRef.current.delete(conteudo);
+        if (pendenciasReceberRef.current[key]?.operacaoId === operacaoId) definirPendenciaReceber(key, null);
         if (activeKeyRef.current === key) {
           setPagamento(res.pagamento);
           // O servidor reconcilia o "a prazo" com o saldo real: a tela acompanha.
@@ -200,9 +244,20 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         return true;
       } catch (e) {
         receberPendentesRef.current.set(conteudo, operacaoId);
+        const semResposta = recebimentoSemRespostaV3(e);
+        if (semResposta) definirPendenciaReceber(key, { key, operacaoId, input: enviado });
+        // O servidor RESPONDEU (recusa decidida antes do commit ou chave já gravada com outro
+        // conteúdo): nada novo gravado por esta chave — a pendência desta OS se resolve.
+        else if (pendenciasReceberRef.current[key]?.operacaoId === operacaoId) definirPendenciaReceber(key, null);
         if (activeKeyRef.current === key) {
           setErrorKey(key);
-          setError(e instanceof Error ? e.message : "Não foi possível registrar o recebimento.");
+          setError(
+            semResposta
+              ? "Não foi possível confirmar se o recebimento foi gravado. Reenvie a MESMA confirmação para verificar — não haverá lançamento em dobro."
+              : e instanceof Error
+                ? e.message
+                : "Não foi possível registrar o recebimento.",
+          );
         }
         // Resultado incerto ou saldo mudou: relê o saldo REAL (mantendo o erro na tela) para o
         // operador ver se o recebimento entrou antes de confirmar de novo.
@@ -222,7 +277,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
         setRecebendo(false);
       }
     },
-    [storeId, osId],
+    [storeId, osId, definirPendenciaReceber],
   );
 
   const registrarMisto = useCallback(
@@ -329,6 +384,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
     aPrazo: carregadoParaAlvo ? aPrazo : null,
     registrandoMisto,
     pendenciaMisto: targetKey !== null ? (pendenciasMisto[targetKey] ?? null) : null,
+    pendenciaReceber: targetKey !== null ? (pendenciasReceber[targetKey] ?? null) : null,
     registrarMisto,
   };
 }

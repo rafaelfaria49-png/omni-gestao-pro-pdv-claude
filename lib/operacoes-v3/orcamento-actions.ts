@@ -58,6 +58,8 @@ import {
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { salvarGarantiaOSV3 } from "./garantia-actions";
 import { mutarPayloadOSV3 } from "./os-payload-lock";
+import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
+import { uid as uidLovable } from "@/components/operacoes/lovable/api/_helpers";
 import { prisma } from "@/lib/prisma";
 import { getContaReceberByLocalKey } from "@/lib/financeiro/services/contas-receber-service";
 import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
@@ -92,24 +94,26 @@ import {
   somarDiasCivisV3,
 } from "./datas-operacionais-model";
 
-/** Segura a trava dos writers de pagamento enquanto o rascunho é materializado (mesmos limites deles). */
+/** Conferência + materialização na mesma transação, com os limites dos writers de pagamento. */
 const TX_MATERIALIZAR_ORCAMENTO_V3 = { maxWait: 5_000, timeout: 15_000 } as const;
 
 /**
- * Materializa o rascunho a partir dos itens da OS (reuso seguro do @/api/os).
+ * Materializa o rascunho a partir dos itens da OS (mesmo construtor puro do @/api/os,
+ * `buildOrcamentoRascunhoFromOS`; orçamento real já existente = no-op).
  *
  * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item B): nunca sobre OS cujo título já tem
- * pagamento vigente — o rascunho novo deixaria esse pagamento sem aprovação comercial. A
- * conferência roda sob a MESMA trava consultiva por OS dos writers de pagamento, mantida até a
- * materialização terminar: nenhum recebimento entra entre a conferência e a gravação. Nada é
- * apagado ou alterado na recusa (orçamento, título, histórico).
+ * pagamento vigente — o rascunho novo deixaria esse pagamento sem aprovação comercial. Conferência
+ * E gravação acontecem na MESMA transação, na ordem de travas dos writers de pagamento (consultiva
+ * por OS → linha da OS): nenhum recebimento entra entre as duas, e a expiração da transação desfaz
+ * as duas juntas. Nada é apagado ou alterado na recusa (orçamento, título, histórico).
  */
 export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise<OrdemServico> {
-  const sid = (storeId ?? "").trim();
-  const id = (osId ?? "").trim();
+  const sid0 = (storeId ?? "").trim();
+  const id0 = (osId ?? "").trim();
   // Entrada inválida segue o caminho (e a mensagem) de sempre.
-  if (!sid || !id) return gerarOrcamentoDaOSImpl(storeId, osId);
-  return prisma.$transaction(async (tx) => {
+  if (!sid0 || !id0) return gerarOrcamentoDaOSImpl(storeId, osId);
+  const { sid, id, session } = await autorizar(sid0, id0);
+  const os = await prisma.$transaction(async (tx) => {
     await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
     const titulo = await getContaReceberByLocalKey(sid, localKeyContaReceberOSV3(sid, id), tx);
     if (titulo) {
@@ -117,9 +121,27 @@ export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise
       if (!recebimentos.valido) throw new Error(MENSAGEM_GERAR_ORCAMENTO_PAGAMENTOS_EM_CONFERENCIA_V3);
       if (recebimentos.centavos > 0) throw new Error(MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3);
     }
-    // A materialização roda em outra conexão, sob a trava da linha da OS, com esta trava mantida.
-    return gerarOrcamentoDaOSImpl(sid, id);
+    return mutarPayloadOSV3({
+      storeId: sid,
+      osId: id,
+      tx,
+      mutate: ({ payload }) => {
+        const atual = payload.orcamento as { sintetizado?: boolean } | undefined;
+        // Orçamento real já persistido: não recria (no-op sobre o estado atual).
+        if (atual && typeof atual === "object" && atual.sintetizado !== true) {
+          return { payload: null, resultado: payload as unknown as OrdemServico };
+        }
+        const orcamento = buildOrcamentoRascunhoFromOS(payload as unknown as OrdemServico, { uid: uidLovable, nowIso }) as unknown as OrcamentoV3;
+        const { nextPayload, colunas } = montarGravacao(payload as OSPayloadFull, {
+          orcamento,
+          eventos: [makeEvento("orcamento_criado", operadorLabel(session), "Orçamento gerado a partir dos itens da OS (rascunho editável).")],
+        });
+        return { payload: nextPayload, colunas, resultado: nextPayload as unknown as OrdemServico };
+      },
+    });
   }, TX_MATERIALIZAR_ORCAMENTO_V3);
+  revalidatePath("/dashboard/operacoes-v3");
+  return os;
 }
 
 function nowIso(): string {

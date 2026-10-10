@@ -769,12 +769,6 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para lançar a prazo nesta OS.");
   if (!guard.ok) throw new Error(guard.error);
 
-  // Mesmo lock de período financeiro que o recebimento imediato respeita — criar/
-  // atualizar um título em aberto também é uma operação financeira (não precisa de
-  // caixa, mas precisa respeitar o fechamento do período).
-  const lock = await verificarPeriodoFechado(sid, new Date());
-  if (lock.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para lançar a prazo.");
-
   const operador = operadorLabel(session);
   const obs = (input.observacao ?? "").trim();
   const dataHora = nowIso();
@@ -802,6 +796,12 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
         return { os: payload as unknown as OrdemServico, aPrazo, valorFormalizado: valor, jaRegistrado: true };
       }
     }
+    // Mesmo lock de período financeiro que o recebimento imediato respeita — criar/
+    // atualizar um título em aberto também é uma operação financeira (não precisa de
+    // caixa, mas precisa respeitar o fechamento do período). Depois do replay: um lançamento
+    // JÁ gravado continua sendo devolvido mesmo com o período fechado depois.
+    const lock = await verificarPeriodoFechado(sid, new Date());
+    if (lock.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para lançar a prazo.");
     // Formalizar dívida também presume preço: só sobre orçamento comercialmente elegível.
     exigirElegibilidadeComercialV3(sid, id, payload, valorTotalColuna, dataHora);
     const codigo = os.codigo ?? id;

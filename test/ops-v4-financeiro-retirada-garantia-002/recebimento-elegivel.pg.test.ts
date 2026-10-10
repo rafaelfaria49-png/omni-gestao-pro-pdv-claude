@@ -461,6 +461,15 @@ describe("B2 · aprovação e recebimento independentes; replay sem segunda cobr
     expect(await foto(sid, osId)).toBe(depoisMudanca);
     const eventos = ((await lerPayload(osId)).timeline as Array<{ tipo: string; metadata?: Payload }>).filter((e) => e.tipo === "financeiro_conta_receber_criada" && e.metadata?.modo === "a_prazo");
     expect(eventos).toHaveLength(1);
+
+    // R2-P2: o período financeiro fecha depois — o reenvio da MESMA operação ainda devolve o original;
+    // só um lançamento NOVO é barrado pelo fechamento.
+    const hoje = new Date().toISOString().slice(0, 10);
+    const [ano, mes] = hoje.split("-").map(Number);
+    await prisma.fechamentoFinanceiro.create({ data: { storeId: sid, tipo: "mensal", dataReferencia: `${hoje.slice(0, 7)}-01`, mes: mes!, ano: ano!, status: "fechado" } });
+    expect(await lancarOSAPrazoV3(sid, osId, { vencimento: VENC, operacaoId: chave })).toMatchObject({ jaRegistrado: true, valorFormalizado: 420 });
+    await expect(lancarOSAPrazoV3(sid, osId, { vencimento: VENC, operacaoId: gerarOperacaoIdV3() })).rejects.toThrow(/Período financeiro fechado/);
+    expect(await foto(sid, osId)).toBe(depoisMudanca);
   });
 
   it("R1-P2: recusa comercial do misto guarda código e destino; o reenvio da MESMA chave devolve a mesma recusa estruturada", async () => {

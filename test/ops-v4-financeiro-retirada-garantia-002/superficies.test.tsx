@@ -327,6 +327,23 @@ describe("C · conferir → aprovar expressamente → receber", () => {
     expect(within(dialogo).getByTestId("aprovar-e-receber-escopo").textContent).toContain("Ao aprovar, a garantia da OS passa a ser de 180 dias (opção escolhida: Original).");
   });
 
+  it("R2-P2: o efeito sobre a garantia vem do MESMO snapshot conferido no servidor (não do estado local)", async () => {
+    const comVariante = os("a", "rascunho", {
+      servicos: [{ id: "s1", descricao: "Tela original", valor: 420, grupoId: "g1", selecionadaV3: true, varianteV3: { rotulo: "Original", garantiaDias: 180 } }],
+      gruposV3: [{ id: "g1", rotulo: "Tela", regra: "escolha_1" }],
+    });
+    const servidor = os("a", "rascunho", {
+      servicos: [{ id: "s1", descricao: "Tela genérica", valor: 420, grupoId: "g1", selecionadaV3: true, varianteV3: { rotulo: "Genérica", garantiaDias: 30 } }],
+      gruposV3: [{ id: "g1", rotulo: "Tela", regra: "escolha_1" }],
+    });
+    montar({ os: comVariante, titulo: null, aprovarEReceber: vi.fn(), conferirEscopoAprovacao: async () => escopoAprovacaoOrcamentoV3(servidor) });
+    fireEvent.click(botao("Aprovar e receber"));
+    const dialogo = await screen.findByRole("dialog", { name: "Aprovar e receber" });
+    const escopo = within(dialogo).getByTestId("aprovar-e-receber-escopo");
+    await waitFor(() => expect(escopo.textContent).toContain("Ao aprovar, a garantia da OS passa a ser de 30 dias (opção escolhida: Genérica)."));
+    expect(escopo.textContent).not.toContain("180 dias");
+  });
+
   it("não é oferecido com pagamento já registrado, com orçamento aprovado, nem sem a ação ligada", () => {
     montar({ os: RASCUNHO, titulo: LIQUIDADO, aprovarEReceber: vi.fn(), conferirFormalizacao: vi.fn(), formalizarAprovacao: vi.fn() });
     expect(screen.queryByRole("button", { name: "Aprovar e receber" })).toBeNull();
@@ -476,6 +493,22 @@ describe("D · formalizar aprovação pendente", () => {
 });
 
 // ─── E · forma explícita no sheet da V4 ────────────────────────────────────────────────────
+describe("R2-P1 · recebimento imediato sem resultado: só a confirmação ORIGINAL é reenviada", () => {
+  it("rascunho travado e botão 'Reenviar mesma confirmação' (o hook repete a original — ver fluxo-hook)", async () => {
+    const original = { linhas: [{ forma: "pix" as const, valor: 100 }], sessaoId: "sessao-anterior", intencao: "parcial" as const, operacaoId: "op-original-1", saldoEsperado: 420 };
+    const p = pdv({ pendenciaReceber: { key: JSON.stringify([LOJA, "a"]), operacaoId: "op-original-1", input: original } } as never);
+    montar({ os: os("a", "aprovado", { respondidoEm: "2026-09-19T12:00:00Z" }), titulo: null, pdv: p });
+    act(() => sonda.v!.openReceberPagamentoAqui());
+    const sheet = await screen.findByRole("dialog", { name: "Receber pagamento" });
+    expect((within(sheet).getByLabelText("Forma da linha 1") as HTMLSelectElement).disabled).toBe(true);
+    expect((within(sheet).getByLabelText("Forma da linha 1") as HTMLSelectElement).value).toBe("pix");
+    fireEvent.click(within(sheet).getByRole("button", { name: "Reenviar mesma confirmação" }));
+    await waitFor(() => expect(p.receber).toHaveBeenCalledTimes(1));
+    // O rascunho mostrado é o da confirmação original (travado); o reenvio idêntico é do hook.
+    expect((within(sheet).getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("100");
+  });
+});
+
 describe("E · nenhuma forma pré-selecionada no recebimento da V4", () => {
   it("abre sem forma; confirmar exige escolha; dividir adiciona linha também sem forma", async () => {
     const p = pdv();

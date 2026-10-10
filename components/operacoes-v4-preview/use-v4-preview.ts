@@ -377,7 +377,7 @@ export interface V4DataCtx {
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
   // recarregar lista+detalhe da V4 depois do sucesso.
-  pdvServico: PdvServicoState & Partial<Pick<PdvServicoV3Completo, "registrarMisto" | "registrandoMisto" | "pendenciaMisto" | "aPrazo">>;
+  pdvServico: PdvServicoState & Partial<Pick<PdvServicoV3Completo, "registrarMisto" | "registrandoMisto" | "pendenciaMisto" | "pendenciaReceber" | "aPrazo">>;
   // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
   // Action SEPARADA de `receberOSV3`/`pdvServico.receber` — formaliza o saldo
   // aberto como Conta a Receber PENDENTE (vencimento), sem receber dinheiro.

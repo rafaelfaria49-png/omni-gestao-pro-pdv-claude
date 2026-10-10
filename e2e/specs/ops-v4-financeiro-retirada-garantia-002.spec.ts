@@ -11,6 +11,12 @@ import { PrismaClient, type Prisma } from "../../generated/prisma";
 test.use({ serviceWorkers: "block" });
 
 const LOJA = "000-qa-frg-001";
+/**
+ * Espera de um ESTADO que depende de várias idas ao servidor encadeadas (salvar → reler →
+ * abrir → conferir; aprovar → receber → reler). Sob máquina carregada passa dos 25 s padrão;
+ * continua sendo espera pelo fato, nunca um tempo fixo.
+ */
+const IDA_E_VOLTA = { timeout: 60_000 };
 const ENTRADA = "2026-09-18T12:00:00.000Z";
 
 function bancoDescartavel(): string {
@@ -153,6 +159,8 @@ test.afterAll(async () => {
 });
 
 test.beforeEach(async ({ page }) => {
+  // Cada cenário encadeia vários envios reais ao servidor (como as specs de recebimento misto).
+  test.setTimeout(240_000);
   // O assistente de primeira loja abre por cima de forma assíncrona: dispensado nesta sessão QA antes da hidratação.
   await page.addInitScript((loja) => sessionStorage.setItem(`@omnigestao:first-access-wizard:dismissed:${loja}`, "1"), LOJA);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -168,9 +176,9 @@ test("C+E — rascunho sem pagamento: conferir → aprovar expressamente → rec
   await aprovarEReceber.click();
 
   const sheet = page.getByRole("dialog", { name: "Aprovar e receber" });
-  await expect(sheet).toBeVisible();
+  await expect(sheet).toBeVisible(IDA_E_VOLTA);
   const escopo = sheet.getByTestId("aprovar-e-receber-escopo");
-  await expect(escopo).toContainText(/Troca de Tela — R\$\s420,00/);
+  await expect(escopo).toContainText(/Troca de Tela — R\$\s420,00/, IDA_E_VOLTA);
   await expect(escopo).toContainText(/Total do orçamento\s*R\$\s420,00/);
   await expect(escopo).toContainText("A aprovação não inicia o serviço nem entrega o aparelho.");
   const forma = sheet.getByLabel("Forma da linha 1");
@@ -189,7 +197,7 @@ test("C+E — rascunho sem pagamento: conferir → aprovar expressamente → rec
   expect(await titulosDe(prisma, os.id)).toHaveLength(0);
 
   await confirmar.click();
-  await expect(sheet).toBeHidden({ timeout: 30_000 });
+  await expect(sheet).toBeHidden(IDA_E_VOLTA);
   await expect.poll(async () => (await titulosDe(prisma, os.id)).map((t) => [t.status, t.valor])).toEqual([["pago", 420]]);
   const [titulo] = await titulosDe(prisma, os.id);
   const historico = ((titulo!.payload as { historico?: Array<{ tipo: string; valor: number }> }).historico ?? []).filter((e) => e.tipo === "pagamento" || e.tipo === "liquidacao");
@@ -216,7 +224,7 @@ test("C — aprovação recusada no servidor (o orçamento mudou depois da confe
   await abrirComercial(page);
   await page.getByRole("button", { name: "Aprovar e receber", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Aprovar e receber" });
-  await expect(sheet).toBeVisible();
+  await expect(sheet).toBeVisible(IDA_E_VOLTA);
   await sheet.getByLabel("Forma da linha 1").selectOption("pix");
   await sheet.getByLabel("O cliente aprovou este orçamento").check();
   // Outra sessão recusa o orçamento depois que este operador conferiu o escopo.
@@ -226,7 +234,7 @@ test("C — aprovação recusada no servidor (o orçamento mudou depois da confe
     data: { payload: { ...atual.payload, orcamento: { ...atual.payload.orcamento, status: "recusado" } } as unknown as Prisma.InputJsonValue },
   });
   await sheet.getByRole("button", { name: /^Aprovar e receber R\$\s420,00$/ }).click();
-  await expect(sheet.getByRole("alert").filter({ hasText: "Não é possível aprovar um orçamento com status \"recusado\"." })).toBeVisible();
+  await expect(sheet.getByRole("alert").filter({ hasText: "Não é possível aprovar um orçamento com status \"recusado\"." })).toBeVisible(IDA_E_VOLTA);
   expect(await titulosDe(prisma, os.id)).toHaveLength(0);
   expect(await caixaDaOS(prisma, os.id)).toHaveLength(0);
   expect((await linhaOS(prisma, os.id)).payload.orcamento?.status).toBe("recusado");
@@ -246,7 +254,7 @@ test("D — rascunho + título liquidado: formalização administrativa com moti
   await card.getByRole("button", { name: "Formalizar aprovação pendente" }).click();
 
   const grupo = page.getByRole("group", { name: "Formalizar aprovação pendente" });
-  await expect(grupo.getByText("Escopo conferido no servidor")).toBeVisible();
+  await expect(grupo.getByText("Escopo conferido no servidor")).toBeVisible(IDA_E_VOLTA);
   await expect(grupo).toContainText(/Troca de Tela — R\$\s420,00/);
   await expect(grupo).toContainText(/Total do orçamento: R\$\s420,00/);
   await expect(grupo).toContainText(/Recebido vigente: R\$\s420,00/);
@@ -261,7 +269,7 @@ test("D — rascunho + título liquidado: formalização administrativa com moti
 
   await formalizar.click();
   // Aprovado, o orçamento sai do editor e o cartão sai com ele.
-  await expect(page.getByTestId("formalizar-aprovacao")).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.getByTestId("formalizar-aprovacao")).toHaveCount(0, IDA_E_VOLTA);
   await expect.poll(async () => (await linhaOS(prisma, os.id)).payload.orcamento?.status).toBe("aprovado");
   const depois = await linhaOS(prisma, os.id);
   expect(depois.payload.formalizacaoAprovacaoV3).toMatchObject({
@@ -315,7 +323,7 @@ test("E — orçamento aprovado sem pagamento: o sheet abre sem forma; confirmar
   await expect(confirmar).toHaveText(/^Confirmar R\$\s420,00$/);
   await expect(confirmar).toBeEnabled();
   await confirmar.click();
-  await expect(sheet).toBeHidden({ timeout: 30_000 });
+  await expect(sheet).toBeHidden(IDA_E_VOLTA);
   await expect.poll(async () => (await titulosDe(prisma, os.id)).map((t) => [t.status, t.valor])).toEqual([["pago", 420]]);
   const caixa = await caixaDaOS(prisma, os.id);
   expect(caixa.map((c) => [c.valor, (c.payload as { formaPagamento?: string }).formaPagamento])).toEqual([[420, "dinheiro"]]);
@@ -328,8 +336,17 @@ test("B — pagamento registrado sem orçamento real: 'Gerar orçamento' orienta
   await abrirComercial(page);
   const gerar = page.getByRole("button", { name: "Gerar orçamento", exact: true });
   await expect(gerar).toHaveCount(1);
+  // A orientação sai num toast efêmero (1,9 s): um observador registra todo texto que aparece,
+  // para a prova não depender de a amostragem coincidir com a janela do toast.
+  await page.evaluate(() => {
+    const w = window as unknown as { __textosVistosFrg2: string[] };
+    w.__textosVistosFrg2 = [];
+    new MutationObserver(() => w.__textosVistosFrg2.push(document.body.innerText)).observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
   await gerar.click();
-  await expect(page.getByText(/Esta OS já tem pagamento registrado: um novo orçamento em rascunho deixaria esse pagamento sem aprovação comercial\./)).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __textosVistosFrg2: string[] }).__textosVistosFrg2.some((t) => t.includes("Esta OS já tem pagamento registrado: um novo orçamento em rascunho deixaria esse pagamento sem aprovação comercial."))), IDA_E_VOLTA)
+    .toBe(true);
   await expect(gerar).toBeEnabled();
   expect(await efeitos(prisma, os.id)).toBe(antes);
 });

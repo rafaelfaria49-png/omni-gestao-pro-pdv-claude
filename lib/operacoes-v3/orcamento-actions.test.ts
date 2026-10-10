@@ -99,22 +99,42 @@ describe("gerarOrcamentoDaOS — GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (i
     expect(impl).not.toHaveBeenCalled();
   });
 
-  it("sem título, ou com pagamento estornado por inteiro: materializa DENTRO da transação que segura a trava dos writers", async () => {
+  // OS sem orçamento real, com itens do intake: o rascunho sai do MESMO construtor puro do @/api/os.
+  const semOrcamento = () => ({
+    id: "os-1",
+    payload: { id: "os-1", status: "aberta", timeline: [], servicosCatalogo: [{ descricao: "Troca de tela", valorVenda: 420 }], pecas: [] },
+  });
+
+  it("R2-P1: sem título, ou com pagamento estornado por inteiro: conferência E gravação na MESMA transação, na ordem consultiva → OS", async () => {
+    findFirstMock.mockResolvedValue(semOrcamento());
     const dentro: boolean[] = [];
-    impl.mockImplementation(async () => {
+    updateMock.mockImplementation(async () => {
       dentro.push(emTransacao);
-      return {} as OrdemServico;
+      return {};
     });
     await gerarOrcamentoDaOS("loja-1", "os-1");
     tituloMock.mockResolvedValue(titulo([{ tipo: "pagamento", valor: 420, loteId: "op-1" }, { tipo: "estorno_pagamento", valor: 420 }], "pendente"));
     await gerarOrcamentoDaOS("loja-1", "os-1");
-    expect(impl).toHaveBeenCalledTimes(2);
-    expect(impl).toHaveBeenCalledWith("loja-1", "os-1");
+    expect(impl).not.toHaveBeenCalled();
     expect(dentro).toEqual([true, true]);
-    expect(ordemTx).toEqual(["advisory", "titulo", "advisory", "titulo"]);
+    expect(ordemTx).toEqual(["advisory", "titulo", "forUpdate", "findFirst", "update", "advisory", "titulo", "forUpdate", "findFirst", "update"]);
+    const gravado = updateMock.mock.calls[0]![0] as { data: { valorTotal?: number; payload: { orcamento: { status: string; total: number; sintetizado: boolean; servicos: Array<{ descricao: string; valor: number }> }; timeline: Array<{ tipo: string }> } } };
+    expect(gravado.data.payload.orcamento).toMatchObject({ status: "rascunho", total: 420, sintetizado: false, servicos: [{ descricao: "Troca de tela", valor: 420 }] });
+    expect(gravado.data.payload.timeline.map((e) => e.tipo)).toEqual(["orcamento_criado"]);
+    expect(gravado.data.valorTotal).toBe(420);
+    updateMock.mockReset();
+    updateMock.mockImplementation(async () => ({}));
+  });
+
+  it("orçamento real já existente: no-op sob a trava (nada gravado)", async () => {
+    findFirstMock.mockResolvedValue(baseRow({ status: "rascunho" }));
+    await gerarOrcamentoDaOS("loja-1", "os-1");
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(ordemTx).toEqual(["advisory", "titulo", "forUpdate", "findFirst"]);
   });
 
   it("o título conferido é o da chave canônica DESTA loja e OS", async () => {
+    findFirstMock.mockResolvedValue(semOrcamento());
     await gerarOrcamentoDaOS(" loja-1 ", " os-1 ");
     expect(tituloMock).toHaveBeenCalledWith(expect.objectContaining({ where: { storeId_localKey: { storeId: "loja-1", localKey: localKeyContaReceberOSV3("loja-1", "os-1") } } }));
   });

@@ -251,3 +251,47 @@ describe("B6 · formalização — resposta tardia e resultado incerto (hook rea
     expect(resultado).toMatchObject({ ok: false, code: "incerto", mensagem: expect.stringMatching(/MESMA confirmação/) });
   });
 });
+
+describe("R2-P1 · recebimento imediato sem resposta (hook real da V3 dentro da V4)", () => {
+  const resultadoOk = (recebido: number) => ({
+    os: A, pagamento: { total: 300, recebido, saldo: 300 - recebido, status: "parcial" }, valorRecebido: recebido, op: "parcial", recibo: { itens: [] }, jaRegistrado: true,
+  });
+
+  it("sem resposta: a confirmação ORIGINAL fica fixada; o próximo envio — outra sessão, outras linhas — repete a original (mesma chave)", async () => {
+    const r = await montarComOS("a");
+    m.receberOSV3.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    let ok: unknown;
+    await act(async () => { ok = await r.result.current.pdvServico.receber({ linhas: [{ forma: "pix", valor: 100 }], sessaoId: "sessao-1", intencao: "parcial" }); });
+    expect(ok).toBe(false);
+    await waitFor(() => expect(r.result.current.pdvServico.pendenciaReceber).toMatchObject({ input: { sessaoId: "sessao-1", linhas: [{ forma: "pix", valor: 100 }] } }));
+    const original = m.receberOSV3.mock.calls[0]![2] as { operacaoId: string };
+    expect(original.operacaoId).toMatch(/\S/);
+    m.receberOSV3.mockResolvedValueOnce(resultadoOk(100));
+    await act(async () => { ok = await r.result.current.pdvServico.receber({ linhas: [{ forma: "dinheiro", valor: 50 }], sessaoId: "sessao-2", intencao: "parcial" }); });
+    expect(ok).toBe(true);
+    expect(m.receberOSV3.mock.calls[1]![2]).toEqual(original);
+    expect(r.result.current.pdvServico.pendenciaReceber).toBeNull();
+  });
+
+  it("o servidor RESPONDEU (recusa antes do commit): nada fica fixado; o próximo envio é o novo", async () => {
+    const r = await montarComOS("a");
+    m.receberOSV3.mockRejectedValueOnce(Object.assign(new Error("An error occurred in the Server Components render."), { digest: "123" }));
+    await act(async () => { await r.result.current.pdvServico.receber({ linhas: [{ forma: "pix", valor: 100 }], sessaoId: "sessao-1", intencao: "parcial" }); });
+    expect(r.result.current.pdvServico.pendenciaReceber).toBeNull();
+    m.receberOSV3.mockResolvedValueOnce(resultadoOk(50));
+    await act(async () => { await r.result.current.pdvServico.receber({ linhas: [{ forma: "dinheiro", valor: 50 }], sessaoId: "sessao-2", intencao: "parcial" }); });
+    expect(m.receberOSV3.mock.calls[1]![2]).toMatchObject({ linhas: [{ forma: "dinheiro", valor: 50 }], sessaoId: "sessao-2" });
+  });
+
+  it("pendência pertence à OS: trocar de OS e voltar não a perde nem a aplica em outra OS", async () => {
+    const r = await montarComOS("a");
+    m.receberOSV3.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await act(async () => { await r.result.current.pdvServico.receber({ linhas: [{ forma: "pix", valor: 100 }], sessaoId: "sessao-1", intencao: "parcial" }); });
+    await act(async () => r.result.current.selectOS(B, "orcamento"));
+    await waitFor(() => expect(r.result.current.realOS?.id).toBe("b"));
+    expect(r.result.current.pdvServico.pendenciaReceber).toBeNull();
+    await act(async () => r.result.current.selectOS(A, "orcamento"));
+    await waitFor(() => expect(r.result.current.realOS?.id).toBe("a"));
+    expect(r.result.current.pdvServico.pendenciaReceber).toMatchObject({ input: { sessaoId: "sessao-1" } });
+  });
+});

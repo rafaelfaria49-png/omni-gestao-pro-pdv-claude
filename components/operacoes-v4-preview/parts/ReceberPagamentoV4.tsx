@@ -14,7 +14,6 @@ import {
 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { avaliarRecebimentoV4, buildRecebimentoMistoV4, INTENCOES_RECEBIMENTO_V4, valorSugeridoRecebimentoV4, type IntencaoRecebimentoV4, type LinhaRecebimentoV4 } from "@/lib/operacoes-v4/receber-pagamento-form";
 import { pagamentoEmConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
-import { garantiaResultanteAprovacaoV3, orcamentoRealV3 } from "@/lib/operacoes-v3/orcamento-model";
 import type { EscopoAprovacaoV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
 
 const box = { marginTop: 0, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 } as const;
@@ -37,22 +36,19 @@ function APrazoResumo({ amount, dueAt, emConferencia = false }: { amount: number
  * receber. Mostra escopo e total do orçamento, o efeito conhecido da aprovação sobre a garantia
  * e pede o consentimento explícito; o pagamento continua sendo o do próprio sheet.
  */
-function EscopoAprovacaoV4({ v, escopo, conferindo, erroConferencia, onConferir, consentimento, onConsentimento, travado }: {
-  v: V4Vals; escopo: EscopoAprovacaoV3 | null; conferindo: boolean; erroConferencia: string | null; onConferir: () => void;
+function EscopoAprovacaoV4({ escopo, conferindo, erroConferencia, onConferir, consentimento, onConsentimento, travado }: {
+  escopo: EscopoAprovacaoV3 | null; conferindo: boolean; erroConferencia: string | null; onConferir: () => void;
   consentimento: boolean; onConsentimento: (marcado: boolean) => void; travado: boolean;
 }) {
   // Escopo lido no SERVIDOR (linhas efetivas, total e assinatura): o consentimento vale para ele.
   const linhas = (escopo?.linhas ?? []).filter((l) => l.situacao !== "interna");
-  let garantia: ReturnType<typeof garantiaResultanteAprovacaoV3> = null;
-  try {
-    const real = orcamentoRealV3(v.realOS);
-    garantia = real ? garantiaResultanteAprovacaoV3(real) : null;
-  } catch {
-    garantia = null;
-  }
-  const efeitoGarantia = garantia
-    ? `Ao aprovar, a garantia da OS passa a ser de ${garantia.prazoDias} dias (opção escolhida${garantia.rotulo ? `: ${garantia.rotulo}` : ""}).`
-    : "A aprovação não altera a garantia desta OS.";
+  // Efeito sobre a garantia do MESMO snapshot conferido no servidor (vinculado à assinatura).
+  const garantia = escopo?.garantia ?? null;
+  const efeitoGarantia = !escopo
+    ? "O efeito sobre a garantia aparece com o orçamento conferido."
+    : garantia
+      ? `Ao aprovar, a garantia da OS passa a ser de ${garantia.prazoDias} dias (opção escolhida${garantia.rotulo ? `: ${garantia.rotulo}` : ""}).`
+      : "A aprovação não altera a garantia desta OS.";
   const valor = (c: number | null) => (c == null ? "—" : fmt(c / 100));
   return <div data-testid="aprovar-e-receber-escopo" style={{ ...box, marginBottom: 12, fontSize: 11.5, color: C.body, display: "flex", flexDirection: "column", gap: 6 }}>
     <b style={{ color: C.ink }}>1. Conferir orçamento</b>
@@ -101,7 +97,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): em "Aprovar e receber" o orçamento
   // ainda não está aprovado e não há pagamento (condição da oferta) — o saldo é o total dele.
   const aprovacao = v.aprovacaoReceber;
-  const modoAprovacao = !!aprovacao?.ativo && aprovacao.estado === "conferir" && !pdv.pendenciaMisto;
+  const modoAprovacao = !!aprovacao?.ativo && aprovacao.estado === "conferir" && !pdv.pendenciaMisto && !pdv.pendenciaReceber;
   const aprovadoPagamentoPendente = !!aprovacao?.ativo && aprovacao.estado === "aprovado_pagamento_pendente";
   const totalAprovacao = projection?.comercial?.totalOrcamento ?? null;
   const [consentimento, setConsentimento] = useState(false);
@@ -131,7 +127,11 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const saldo = modoAprovacao
     ? totalAprovacao ?? 0
     : projection?.balance ?? (projection?.financialStatus === "CHARGE_NOT_CREATED" ? projection.expectedTotal : 0) ?? 0;
-  const pendencia = pdv.pendenciaMisto;
+  // Confirmação com resultado DESCONHECIDO: mista (hook do misto) ou imediata (GOAL 002, R2) —
+  // as duas só podem ser REENVIADAS iguais; o rascunho fica travado até o resultado.
+  const pendenciaMisto = pdv.pendenciaMisto;
+  const pendenciaImediata = pdv.pendenciaReceber ?? null;
+  const pendencia = pendenciaMisto ?? pendenciaImediata;
   // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: com o histórico do título em
   // conferência, o saldo legado continua decidindo (receber segue igual), mas nunca é
   // exibido nem sugerido como fato — o operador informa o valor que recebe agora.
@@ -141,7 +141,18 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const busy = enviando || pdv.recebendo || !!pdv.registrandoMisto;
   const travado = busy || !!pendencia;
   const seedForm = useCallback(() => {
-    const p = pendencia?.input;
+    const p = pendenciaMisto?.input;
+    const imediata = pendenciaImediata?.input;
+    if (!p && imediata) {
+      const linhasImediatas = imediata.linhas?.length ? imediata.linhas : imediata.forma ? [{ forma: imediata.forma, valor: imediata.valor ?? 0 }] : [];
+      setLinhas(linhasImediatas.map((l: { forma: LinhaRecebimentoV4["forma"]; valor: number }) => ({ forma: l.forma, valorStr: String(l.valor) })));
+      setVencimento("");
+      setObservacao(imediata.observacao ?? "");
+      setIntencao(imediata.intencao ?? "quitacao");
+      setConsentimento(false);
+      setErro(null);
+      return;
+    }
     // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): nenhuma forma pré-selecionada.
     setLinhas(p ? [...p.pagamentosAgora.map((l) => ({ forma: l.forma, valorStr: String(l.valor) })), { forma: "a_prazo", valorStr: String(p.saldoAPrazo.valor) }] : [{ forma: "", valorStr: saldo > 0 && !emConferencia ? String(saldo) : "" }]);
     setVencimento(p?.saldoAPrazo.vencimento ?? "");
@@ -149,7 +160,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
     setIntencao(p?.intencao ?? "quitacao");
     setConsentimento(false);
     setErro(null);
-  }, [pendencia, saldo, emConferencia]);
+  }, [pendenciaMisto, pendenciaImediata, saldo, emConferencia]);
   useEffect(() => { ativo.current = true; setMounted(true); return () => { ativo.current = false; }; }, []);
   useEffect(() => {
     if (v.receberPagamentoOpen && !open && !v.financial.loading && !v.financial.error && projection?.expectedTotal != null) { seedForm(); setOpen(true); }
@@ -266,16 +277,18 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
     const registrarRecebimento = async (): Promise<{ ok: true } | { ok: false; mensagem: string | null }> => {
       // Só a instância deste formulário (loja+OS) recebe: trocada a OS, ela foi desmontada.
       if (!ativo.current) return { ok: false, mensagem: null };
-      if (pendencia || rascunho.temAPrazo) {
+      if (!pendenciaImediata && (pendenciaMisto || rascunho.temAPrazo)) {
         if (!pdv.registrarMisto) return { ok: false, mensagem: null };
         // Pendência do hook é a confirmação original, mesmo se saldo/data/caixa mudaram.
-        const resultado = await pdv.registrarMisto(pendencia?.input ?? buildRecebimentoMistoV4({ rascunho, saldo: pagamento.saldo, vencimento, sessaoId: pdv.sessao?.sessaoId, intencao, observacao }));
+        const resultado = await pdv.registrarMisto(pendenciaMisto?.input ?? buildRecebimentoMistoV4({ rascunho, saldo: pagamento.saldo, vencimento, sessaoId: pdv.sessao?.sessaoId, intencao, observacao }));
         if (resultado.status === "ok") return { ok: true };
         return { ok: false, mensagem: resultado.status === "incerto" || resultado.status === "recusado" ? resultado.mensagem : null };
       }
-      if (!pdv.sessao?.sessaoId) return { ok: false, mensagem: null };
+      if (!pendenciaImediata && !pdv.sessao?.sessaoId) return { ok: false, mensagem: null };
       const linhasValidas = rascunho.pagamentosAgora;
-      const ok = await pdv.receber({ linhas: linhasValidas, sessaoId: pdv.sessao.sessaoId, intencao: intencao === "quitacao" ? undefined : intencao, observacao: observacao.trim() || undefined });
+      // Com recebimento imediato sem resultado, o hook ignora este rascunho e repete a confirmação
+      // ORIGINAL inteira (chave, sessão, linhas, saldo esperado) — nunca uma chave nova.
+      const ok = await pdv.receber({ linhas: linhasValidas, sessaoId: pdv.sessao?.sessaoId ?? "", intencao: intencao === "quitacao" ? undefined : intencao, observacao: observacao.trim() || undefined });
       return ok ? { ok: true } : { ok: false, mensagem: null };
     };
     envio.current = true; setEnviando(true); setErro(null);
@@ -326,7 +339,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
         <div className={sheetStyles.body}>
           {aprovadoPagamentoPendente && <div role="status" style={{ fontSize: 12, fontWeight: 600, color: C.warnFg, marginBottom: 9 }}>Orçamento aprovado — pagamento não confirmado.</div>}
           <RealActionNotice kind={rascunho.temAPrazo && receberAgora === 0 ? "aPrazo" : "pagamento"} />
-          {modoAprovacao && totalAprovacao != null && <EscopoAprovacaoV4 v={v} escopo={escopo} conferindo={conferindo} erroConferencia={erroConferencia} onConferir={() => void conferirEscopo()} consentimento={consentimento} onConsentimento={setConsentimento} travado={travado} />}
+          {modoAprovacao && totalAprovacao != null && <EscopoAprovacaoV4 escopo={escopo} conferindo={conferindo} erroConferencia={erroConferencia} onConferir={() => void conferirEscopo()} consentimento={consentimento} onConsentimento={setConsentimento} travado={travado} />}
           {credito}
           {emConferencia && <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 9 }}>Histórico do título em conferência: o saldo não é exibido. Informe o valor recebido agora.</div>}
           <div style={{ fontSize: 10, color: C.subtle }}>Saldo da OS</div>

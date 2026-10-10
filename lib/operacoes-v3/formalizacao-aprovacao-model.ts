@@ -18,6 +18,7 @@ import type { EventoTimeline, OrdemServico } from "@/types/os";
 import { reconciliarRecebimentosFinanceirosV3 } from "./delivery-financial-guard";
 import {
   computeTotaisV3,
+  garantiaResultanteAprovacaoV3,
   linhaKind,
   orcamentoRealV3,
   pecaValorCliente,
@@ -549,6 +550,8 @@ export interface EscopoAprovacaoV3 {
   revisao: number;
   linhas: LinhaEscopoFormalizacaoV3[];
   totalCentavos: number;
+  /** Efeito conhecido da aprovação sobre a garantia, do MESMO snapshot (`null` = não altera). */
+  garantia: { prazoDias: number; rotulo?: string } | null;
   /** Assinatura canônica do conteúdo: a aprovação só vale com ela igual, conferida sob a trava. */
   conteudo: string;
 }
@@ -573,6 +576,13 @@ export function escopoAprovacaoOrcamentoV3(payload: unknown): ConferenciaEscopoA
     total = null;
   }
   if (total === null) return { ok: false, mensagem: "O total do orçamento não é legível. Confira o orçamento antes de aprovar." };
+  let garantia: EscopoAprovacaoV3["garantia"] = null;
+  try {
+    const g = garantiaResultanteAprovacaoV3(real);
+    garantia = g ? { prazoDias: g.prazoDias, ...(g.rotulo ? { rotulo: g.rotulo } : {}) } : null;
+  } catch {
+    garantia = null;
+  }
   return {
     ok: true,
     escopo: {
@@ -580,6 +590,7 @@ export function escopoAprovacaoOrcamentoV3(payload: unknown): ConferenciaEscopoA
       revisao: Array.isArray(payload.orcamentoVersoesV3) ? payload.orcamentoVersoesV3.length : 0,
       linhas: linhasEscopoOrcamentoV3(real),
       totalCentavos: total,
+      garantia,
       conteudo: conteudoOrcamentoV3(real),
     },
   };
