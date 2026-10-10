@@ -89,7 +89,9 @@ export type RecebimentoMistoErroCodigoV3 =
   | "titulo_alterado"
   | "idempotencia_conflito"
   | "a_prazo_ja_formalizado"
-  | "movimentacao_falhou";
+  | "movimentacao_falhou"
+  /** GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002: preço não aprovado ou inconsistente (`elegibilidade-comercial`). */
+  | "comercial_nao_elegivel";
 
 export type ValidacaoMistaV3<T> =
   | { ok: true; valor: T }
@@ -193,6 +195,10 @@ export function normalizarRecebimentoMistoV3(input: RecebimentoMistoInputV3, hoj
   const pagamentosAgora: LinhaImediataNormalizadaV3[] = [];
   for (const linha of linhasBrutas) {
     const forma = linha?.forma;
+    // Forma ausente nunca vira uma forma (GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002, item E).
+    if (forma === undefined || forma === null || (typeof forma === "string" && !forma.trim())) {
+      return invalida("Escolha a forma de pagamento de cada valor recebido agora.");
+    }
     if (typeof forma !== "string" || !formaSuportadaV3(forma)) {
       return invalida(`Forma "${formaLabelRecebimentoV3(String(forma ?? ""))}" não é dinheiro recebido agora. Use a linha "A prazo / crediário" para o saldo devido.`);
     }
@@ -334,7 +340,8 @@ export function assinaturaRecebimentoMistoLegadaV1(escopo: { storeId: string; os
 // ----------------------------------------------------------------------------
 
 export interface LinhaRascunhoMistoV3 {
-  forma: SplitLinhaV3["forma"] | "a_prazo";
+  /** `""` = forma ainda não escolhida pelo operador (nunca pré-selecionada). */
+  forma: SplitLinhaV3["forma"] | "a_prazo" | "";
   valorStr: string;
 }
 
@@ -365,6 +372,10 @@ export function avaliarRascunhoMistoV3(input: {
 
   if (linhasAPrazo.length > 1) erros.push("Use no máximo uma linha a prazo (um vencimento).");
   input.linhas.forEach((l, idx) => {
+    if (!l.forma) {
+      erros.push(`Linha ${idx + 1}: escolha a forma de pagamento.`);
+      return;
+    }
     const centavos = parseValorDigitadoV3(l.valorStr);
     const rotulo = l.forma === "a_prazo" ? "A prazo" : formaLabelRecebimentoV3(l.forma);
     if (centavos === null || centavos <= 0) {

@@ -196,6 +196,10 @@ function montar(c: Cenario) {
 }
 const guia = () => screen.getByRole("region", { name: "Guia de retirada" });
 const confirmar = () => screen.queryByRole("button", { name: "Confirmar entrega real" });
+// GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): nenhuma forma vem pré-selecionada —
+// o operador escolhe antes de confirmar (antes, Pix vinha marcado; as asserções seguem as mesmas).
+const escolherForma = (dialogo: HTMLElement, forma = "pix", linha = 1) =>
+  fireEvent.change(within(dialogo).getByLabelText(`Forma da linha ${linha}`), { target: { value: forma } });
 function adiado<T>() {
   let resolver!: (v: T) => void;
   const promessa = new Promise<T>((r) => { resolver = r; });
@@ -254,6 +258,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     expect(patches.some((x) => "stage" in x)).toBe(false);
     const dialogo = await screen.findByRole("dialog", { name: "Receber pagamento" });
     expect(within(dialogo).getAllByText(/R\$\s300,00/).length).toBeGreaterThan(0);
+    escolherForma(dialogo);
     fireEvent.click(within(dialogo).getByRole("button", { name: /^Confirmar R\$/ }));
     await waitFor(() => expect(p.receber).toHaveBeenCalledTimes(1));
     expect(p.receber).toHaveBeenCalledWith(expect.objectContaining({ linhas: [{ forma: "pix", valor: 300 }], sessaoId: "sessao-qa" }));
@@ -269,6 +274,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     const p = pdv({ receber: vi.fn(() => pendente.promessa) });
     montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
     const dialogo = await screen.findByRole("dialog", { name: "Receber pagamento" });
+    escolherForma(dialogo);
     const botao = within(dialogo).getByRole("button", { name: /^Confirmar R\$/ });
     fireEvent.click(botao);
     fireEvent.click(botao);
@@ -282,6 +288,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     const p = pdv({ receber: vi.fn(async () => false) });
     montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, confirmarEntrega, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
     const dialogo = await screen.findByRole("dialog", { name: "Receber pagamento" });
+    escolherForma(dialogo);
     fireEvent.click(within(dialogo).getByRole("button", { name: /^Confirmar R\$/ }));
     await waitFor(() => expect(p.receber).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("dialog", { name: "Receber pagamento" })).toBeTruthy();
@@ -295,7 +302,9 @@ describe("OPS-V4-FLUXO-CURTO-006 — guia de retirada e estados financeiros", ()
     const pendente = adiado<boolean>();
     const p = pdv({ receber: vi.fn(() => pendente.promessa) });
     const view = montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
-    fireEvent.click(within(await screen.findByRole("dialog", { name: "Receber pagamento" })).getByRole("button", { name: /^Confirmar R\$/ }));
+    const dialogoA = await screen.findByRole("dialog", { name: "Receber pagamento" });
+    escolherForma(dialogoA);
+    fireEvent.click(within(dialogoA).getByRole("button", { name: /^Confirmar R\$/ }));
     view.trocar({ os: b, fin: { projection: projecao(b, ABERTO) }, pdv: p });
     // O sheet aberto para A não aparece em B.
     expect(screen.queryByRole("dialog", { name: "Receber pagamento" })).toBeNull();
@@ -559,6 +568,7 @@ describe("OPS-V4-FLUXO-CURTO-006 — regressões da R1", () => {
     const view = montar({ os: a, fin: { projection: projecao(a, ABERTO) }, pdv: p, inicial: { receberPagamento: true, alvoSuperficies: chave(LOJA, "a") } });
     const s1 = await screen.findByRole("dialog", { name: "Receber pagamento" });
     fireEvent.click(within(s1).getByRole("button", { name: "Pagamento parcial" }));
+    escolherForma(s1);
     fireEvent.change(within(s1).getByLabelText("Valor da linha 1"), { target: { value: "120" } });
     fireEvent.click(within(s1).getByRole("button", { name: /^Confirmar R\$/ }));
     await waitFor(() => expect(p.receber).toHaveBeenCalledTimes(1));

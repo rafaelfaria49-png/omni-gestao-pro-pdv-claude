@@ -123,6 +123,10 @@ describe("Atendimento rápido V3 — mesma regra da V4 (D11)", () => {
     fireEvent.change(screen.getAllByPlaceholderText("0,00")[0]!, { target: { value: "20" } });
     fireEvent.change(screen.getByLabelText(/^Data do atendimento/), { target: { value: "2026-09-29" } });
     expect(screen.getByText(/A confirmação registra o recebimento agora, no caixa atual\./)).toBeTruthy();
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): sem forma pré-selecionada, finalizar
+    // fica bloqueado até o operador escolher; o restante do cenário segue idêntico.
+    expect((screen.getByRole("button", { name: /Finalizar serviço/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/^Forma de pagamento/), { target: { value: "dinheiro" } });
     fireEvent.click(screen.getByRole("button", { name: /Finalizar serviço/ }));
     await waitFor(() => expect(mocks.finalizarAtendimentoRapidoV3).toHaveBeenCalled());
     expect(mocks.finalizarAtendimentoRapidoV3.mock.calls[0]![1]).toMatchObject({

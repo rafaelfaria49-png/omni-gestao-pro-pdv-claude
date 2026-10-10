@@ -48,6 +48,7 @@ import {
   type SplitLinhaV3,
 } from "./payment-model";
 import { travarLinhaOSV3 } from "./os-payload-lock";
+import { avaliarElegibilidadeComercialV3 } from "./elegibilidade-comercial";
 import {
   assinaturaRecebimentoMistoLegadaV1,
   assinaturaRecebimentoMistoV3,
@@ -465,6 +466,17 @@ async function executarSobATrava(
   if (statusV3FromOS(payload) === "cancelada") {
     throw new RecebimentoMistoErroV3("os_cancelada", "OS cancelada não recebe pagamento nem formalização a prazo.");
   }
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item A): pagamento imediato e saldo a prazo
+  // presumem preço comercialmente elegível — mesma reconciliação da entrega. Depois do replay e
+  // antes de qualquer escrita; a recusa é terminal para esta chave, como as demais.
+  const elegibilidade = avaliarElegibilidadeComercialV3({
+    storeId,
+    osId,
+    payload,
+    prismaValorTotal: Number(osRow.valorTotal ?? 0),
+    agora: Date.parse(ctx.agora),
+  });
+  if (!elegibilidade.elegivel) throw new RecebimentoMistoErroV3("comercial_nao_elegivel", elegibilidade.mensagem);
   const totalCobravel = totalCobravelV3({
     ...payload,
     prismaValorTotal: Number(osRow.valorTotal ?? 0) || 0,

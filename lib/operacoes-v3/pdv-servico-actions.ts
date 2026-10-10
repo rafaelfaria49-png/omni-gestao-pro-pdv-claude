@@ -94,6 +94,7 @@ import {
   travarTitulo,
   type ResultadoRecebimentoMistoV3,
 } from "./recebimento-misto-service";
+import { avaliarElegibilidadeComercialV3, RecebimentoInelegivelErroV3 } from "./elegibilidade-comercial";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -122,7 +123,11 @@ const TX_PAGAMENTO_OS_V3 = { maxWait: 5_000, timeout: 15_000 } as const;
 const DATA_MINIMA_REPLAY_V3 = "0000-01-01";
 
 /** OS travada (FOR UPDATE) e relida dentro da transação, já sob a trava por OS. */
-async function lerOSTravadaV3(tx: Prisma.TransactionClient, storeId: string, osId: string): Promise<{ rowId: string; payload: OSPayloadFull; os: OrdemServico }> {
+async function lerOSTravadaV3(
+  tx: Prisma.TransactionClient,
+  storeId: string,
+  osId: string,
+): Promise<{ rowId: string; payload: OSPayloadFull; os: OrdemServico; valorTotalColuna: number }> {
   if (!(await travarOS(tx, storeId, osId))) throw new Error("OS não encontrada.");
   const row = await tx.ordemServico.findFirst({
     where: { id: osId, storeId },
@@ -136,7 +141,18 @@ async function lerOSTravadaV3(tx: Prisma.TransactionClient, storeId: string, osI
     prismaValorTotal: Number(row.valorTotal ?? 0) || 0,
     prismaValorBase: Number(row.valorBase ?? 0) || 0,
   } as unknown as OrdemServico;
-  return { rowId: row.id, payload, os };
+  // Coluna como o guard de entrega a lê (sem coerção extra): entrada da elegibilidade comercial.
+  return { rowId: row.id, payload, os, valorTotalColuna: Number(row.valorTotal ?? 0) };
+}
+
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item A): operação NOVA só sobre preço
+ * comercialmente elegível. Chamada sob a trava da OS e depois do replay; recusa antes de
+ * qualquer escrita (o título nem é criado).
+ */
+function exigirElegibilidadeComercialV3(storeId: string, osId: string, payload: OSPayloadFull, valorTotalColuna: number, dataHora: string): void {
+  const elegibilidade = avaliarElegibilidadeComercialV3({ storeId, osId, payload, prismaValorTotal: valorTotalColuna, agora: Date.parse(dataHora) });
+  if (!elegibilidade.elegivel) throw new RecebimentoInelegivelErroV3(elegibilidade);
 }
 
 /** Pós-commit: atualizar a tela nunca pode desfazer nem repetir a operação. */
@@ -372,10 +388,12 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para receber esta OS.");
   if (!guard.ok) throw new Error(guard.error);
 
-  // Split (ou forma única normalizada). Todas as formas precisam ser suportadas.
+  // Split (ou forma única normalizada). Todas as formas precisam ser escolhidas e suportadas:
+  // sem forma, nenhuma baixa — ausência nunca vira uma forma (GOAL 002, item E).
   const linhas = normalizarLinhasV3(input);
   if (linhas.length === 0) throw new Error("Informe ao menos uma forma de pagamento com valor.");
   for (const l of linhas) {
+    if (typeof l.forma !== "string" || !l.forma.trim()) throw new Error("Escolha a forma de pagamento antes de confirmar.");
     if (!formaSuportadaV3(l.forma)) throw new Error(`Forma "${formaLabelRecebimentoV3(l.forma)}" ainda não suportada para recebimento real.`);
   }
 
@@ -424,8 +442,9 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
     const sessao = sessaoId ? await travarSessaoCaixa(tx, sid, sessaoId) : null;
     if (!sessao || sessao.status !== "ABERTA") throw new Error("Caixa fechado: abra o caixa no PDV antes de receber.");
 
-    // 4) OS travada, com o payload MAIS RECENTE.
-    const { rowId, payload, os } = await lerOSTravadaV3(tx, sid, id);
+    // 4) OS travada, com o payload MAIS RECENTE — e só preço comercialmente elegível recebe.
+    const { rowId, payload, os, valorTotalColuna } = await lerOSTravadaV3(tx, sid, id);
+    exigirElegibilidadeComercialV3(sid, id, payload, valorTotalColuna, dataHora);
     const codigo = os.codigo ?? id;
 
     // 5) Título ÚNICO da OS, travado e relido (criado se ausente) — fornece o token CAS.
@@ -746,7 +765,9 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
   // snapshot velho (o que apagaria uma baixa commitada no meio do caminho).
   const resultado = await prisma.$transaction(async (tx): Promise<LancarAPrazoResultV3> => {
     await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
-    const { rowId, payload, os } = await lerOSTravadaV3(tx, sid, id);
+    const { rowId, payload, os, valorTotalColuna } = await lerOSTravadaV3(tx, sid, id);
+    // Formalizar dívida também presume preço: só sobre orçamento comercialmente elegível.
+    exigirElegibilidadeComercialV3(sid, id, payload, valorTotalColuna, dataHora);
     const codigo = os.codigo ?? id;
 
     // MESMO título único da OS (localKey canônica), travado e relido — criado se ausente.

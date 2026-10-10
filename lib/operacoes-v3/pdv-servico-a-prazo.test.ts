@@ -204,3 +204,38 @@ describe("writers de pagamento da OS — uma transação, trava por OS, nada bes
     expect(body).toMatch(/estornarContaReceber\(\{[\s\S]*db: tx,[\s\S]*\}\);/);
   });
 });
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item A) — elegibilidade depois do replay e antes do título", () => {
+  const ordemDe = (corpo: string, marcos: string[]) => marcos.map((m) => corpo.indexOf(m));
+
+  it("receberOSV3: replay → período → sessão → OS travada → elegibilidade → título → baixa", () => {
+    const ordem = ordemDe(extractFunctionBody(source, "receberOSV3"), [
+      "replayRecebimentoOSV3(",
+      "periodo.fechado",
+      "travarSessaoCaixa(",
+      "lerOSTravadaV3(",
+      "exigirElegibilidadeComercialV3(",
+      "garantirTituloOSTravadoV3(",
+      "liquidarContaReceber(",
+    ]);
+    expect(ordem.every((i) => i >= 0)).toBe(true);
+    expect([...ordem].sort((a, b) => a - b)).toEqual(ordem);
+  });
+
+  it("lancarOSAPrazoV3: trava → OS travada → elegibilidade → título (formalizar dívida também presume preço)", () => {
+    const ordem = ordemDe(extractFunctionBody(source, "lancarOSAPrazoV3"), [
+      "recebimentoLoteAdvisoryLock(",
+      "lerOSTravadaV3(",
+      "exigirElegibilidadeComercialV3(",
+      "garantirTituloOSTravadoV3(",
+      "upsertContaReceber(",
+    ]);
+    expect(ordem.every((i) => i >= 0)).toBe(true);
+    expect([...ordem].sort((a, b) => a - b)).toEqual(ordem);
+  });
+
+  it("a recusa usa a regra única (avaliarElegibilidadeComercialV3) e carrega motivo/destino", () => {
+    expect(source).toMatch(/function exigirElegibilidadeComercialV3[\s\S]*avaliarElegibilidadeComercialV3\(/);
+    expect(source).toContain("throw new RecebimentoInelegivelErroV3(elegibilidade)");
+  });
+});

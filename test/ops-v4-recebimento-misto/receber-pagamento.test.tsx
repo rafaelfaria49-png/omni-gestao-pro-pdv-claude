@@ -112,6 +112,8 @@ describe("V4 — paridade sobre o hook V3 real (montado)", () => {
   it("T12: crédito já vigente mostra valor/vencimento, recebe 50 sem segunda autorização", async () => {
     await abrir({ credito: true }); expect(screen.getByTestId("a-prazo-persistido").textContent).toMatch(/50,00.*31\/12\/2099/);
     const opcao = within(screen.getByLabelText("Forma da linha 1")).getByRole("option", { name: "A prazo / crediário" }); expect((opcao as HTMLOptionElement).disabled).toBe(true);
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): sem forma pré-selecionada, o operador escolhe.
+    linha(1, "pix");
     fireEvent.click(confirmar()); await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(1)); expect(mocks.receberOSV3.mock.calls[0][2].linhas).toEqual([{ forma: "pix", valor: 50 }]); expect(mocks.registrarRecebimentoMistoOSV3).not.toHaveBeenCalled();
   });
   it("T14: incerto mantém rascunho, bloqueia edição, retry reutiliza operação do hook", async () => {
@@ -148,7 +150,13 @@ describe("V4 — paridade sobre o hook V3 real (montado)", () => {
     expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("400"); expect(screen.queryByLabelText("Vencimento da parte a prazo")).toBeNull();
   });
   it("T18: seletor contém exatamente cinco formas autorizadas", async () => {
-    await abrir(); expect(within(screen.getByLabelText("Forma da linha 1")).getAllByRole("option").map((e) => e.textContent)).toEqual(["Dinheiro", "PIX", "Débito", "Crédito", "A prazo / crediário"]);
+    await abrir();
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): começa SEM forma escolhida (opção vazia
+    // desabilitada); as formas oferecidas continuam exatamente as cinco autorizadas.
+    const opcoes = within(screen.getByLabelText("Forma da linha 1")).getAllByRole("option") as HTMLOptionElement[];
+    expect(opcoes.map((e) => e.textContent)).toEqual(["Escolha a forma", "Dinheiro", "PIX", "Débito", "Crédito", "A prazo / crediário"]);
+    expect(opcoes[0]).toMatchObject({ value: "", disabled: true, selected: true });
+    expect(opcoes.filter((o) => o.value).map((e) => e.textContent)).toEqual(["Dinheiro", "PIX", "Débito", "Crédito", "A prazo / crediário"]);
   });
   it("Usar restante atualiza 50 para 100 só quando solicitado", async () => {
     await preparar(); linha(1, "debito", "300"); expect((screen.getByLabelText("Valor da linha 2") as HTMLInputElement).value).toBe("50,00");
@@ -193,7 +201,10 @@ describe("V4 — paridade sobre o hook V3 real (montado)", () => {
     const view = render(<Harness financialLoading />); fireEvent.click(screen.getByRole("button", { name: "Abrir pelo header" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     view.rerender(<Harness saldoProjetado={380} />); await screen.findByRole("dialog");
-    expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("380"); expect(disabled()).toBe(false);
+    expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("380");
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): sem forma, nada é confirmado; escolhida, libera.
+    expect((screen.getByRole("button", { name: "Escolha a forma de pagamento" }) as HTMLButtonElement).disabled).toBe(true);
+    linha(1, "pix"); expect(disabled()).toBe(false);
   });
   it("R1: 100% a prazo apresenta resumo de formalização, sem rotular recibo de pagamento", () => {
     const formalizacao = montarComprovanteMistoV3({ os, pagamentosAgora: [], valorRecebidoAgora: 0, recebidoAnteriormente: 0, pagamento: { total: 400, recebido: 0, saldo: 400, status: "aberto" }, aPrazo: { valor: 400, vencimento: VENC }, operador: "QA", dataHora: "2026-10-04T15:00:00Z" });

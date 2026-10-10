@@ -356,3 +356,25 @@ describe("P1-A · assinatura do misto agregada por forma (+ legado v1 estrito)",
     expect(JSON.parse(assinaturaRecebimentoMistoV3(escopo, n))).toMatchObject({ v: 2, pagamentosAgora: [{ forma: "pix", centavos: 10000 }] });
   });
 });
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E) — forma ausente nunca vira forma", () => {
+  it("servidor: linha sem forma (vazia, em branco, nula ou ausente) recusa a confirmação inteira", () => {
+    for (const forma of ["", "   ", null, undefined]) {
+      const r = normalizarRecebimentoMistoV3(entrada({ pagamentosAgora: [{ forma: forma as never, valor: 350 }] }), HOJE);
+      expect(r).toMatchObject({ ok: false, code: "entrada_invalida", mensagem: "Escolha a forma de pagamento de cada valor recebido agora." });
+    }
+  });
+
+  it("rascunho: linha sem forma vira erro visível e não é recebida nem somada", () => {
+    const r = avaliarRascunhoMistoV3({ linhas: [{ forma: "", valorStr: "350" }, { forma: "a_prazo", valorStr: "50" }], vencimento: "2026-11-10", saldo: 400, hoje: HOJE });
+    expect(r.ok).toBe(false);
+    expect(r.erros).toContain("Linha 1: escolha a forma de pagamento.");
+    expect(r.pagamentosAgora).toEqual([]);
+    expect(r.receberAgoraCentavos).toBe(0);
+  });
+
+  it("forma escolhida segue o caminho de sempre", () => {
+    const r = avaliarRascunhoMistoV3({ linhas: [{ forma: "debito", valorStr: "350" }, { forma: "a_prazo", valorStr: "50" }], vencimento: "2026-11-10", saldo: 400, hoje: HOJE });
+    expect(r).toMatchObject({ ok: true, receberAgoraCentavos: 35000, aPrazoCentavos: 5000, pagamentosAgora: [{ forma: "debito", valor: 350 }] });
+  });
+});

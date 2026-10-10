@@ -211,6 +211,11 @@ describe("PDV de Serviço V3 — recebimento misto (montado)", () => {
     await prepararDebito350MaisAPrazo();
     fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: VENC } });
     fireEvent.click(screen.getByRole("button", { name: /Adicionar forma/ }));
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): a linha nova nasce SEM forma — também
+    // não é descartada em silêncio; escolhida a forma, o valor em branco segue bloqueando.
+    expect(txt(screen.getByTestId("resumo-misto").textContent)).toMatch(/Linha 3: escolha a forma de pagamento/);
+    expect(desabilitado(screen.getByRole("button", { name: /Registrar R\$/ }))).toBe(true);
+    fireEvent.change(screen.getByLabelText("Forma da linha 3"), { target: { value: "pix" } });
     expect(txt(screen.getByTestId("resumo-misto").textContent)).toMatch(/Linha 3 \(PIX\): informe um valor maior que zero/);
     expect(desabilitado(screen.getByRole("button", { name: /Registrar R\$/ }))).toBe(true);
   });

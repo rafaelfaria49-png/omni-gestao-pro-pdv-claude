@@ -260,6 +260,9 @@ test("E03 — caixa fechado: recebimento imediato bloqueado, nada gravado, entre
     await abrirOS(page, os.codigo);
     await page.getByRole("button", { name: "Receber pagamento" }).click();
     const s = sheet(page);
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): nenhuma forma vem pré-selecionada —
+    // o operador escolhe a forma imediata, e só então o caixa fechado bloqueia a confirmação.
+    await s.getByLabel("Forma da linha 1").selectOption("dinheiro");
     await expect(s.getByText("Abra o caixa para registrar o valor recebido agora.")).toBeVisible();
     await expect(s.getByRole("button", { name: /^Confirmar R\$/ })).toBeDisabled();
     await s.getByRole("button", { name: "Cancelar" }).click();

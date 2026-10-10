@@ -14,6 +14,7 @@ import {
 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { avaliarRecebimentoV4, buildRecebimentoMistoV4, INTENCOES_RECEBIMENTO_V4, valorSugeridoRecebimentoV4, type IntencaoRecebimentoV4, type LinhaRecebimentoV4 } from "@/lib/operacoes-v4/receber-pagamento-form";
 import { pagamentoEmConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import { garantiaResultanteAprovacaoV3, orcamentoRealV3 } from "@/lib/operacoes-v3/orcamento-model";
 
 const box = { marginTop: 0, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 } as const;
 const cellInput: React.CSSProperties = { height: 32, padding: "0 10px", border: `1px solid ${C.inputBd}`, borderRadius: 7, fontSize: 12.5, color: C.body, background: C.surface };
@@ -27,6 +28,47 @@ function APrazoResumo({ amount, dueAt, emConferencia = false }: { amount: number
   // Rev 3: em conferência a parcela a prazo (valor e vencimento) não é cobrança vigente confirmada.
   return <div data-testid="a-prazo-persistido" style={{ background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 12, fontSize: 11.5, color: C.infoFg }}>
     <b>Saldo a prazo: {amount == null || emConferencia ? "Em conferência" : fmt(amount)}</b><div>Vencimento: {emConferencia ? "em conferência" : formatarVencimentoV3(dueAt)}</div>
+  </div>;
+}
+
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): conferir → aprovar expressamente →
+ * receber. Mostra escopo e total do orçamento, o efeito conhecido da aprovação sobre a garantia
+ * e pede o consentimento explícito; o pagamento continua sendo o do próprio sheet.
+ */
+function EscopoAprovacaoV4({ v, total, consentimento, onConsentimento, travado }: {
+  v: V4Vals; total: number; consentimento: boolean; onConsentimento: (marcado: boolean) => void; travado: boolean;
+}) {
+  const view = v.orcamentoClienteView;
+  const itens = view
+    ? [
+        ...view.itensFixosVisiveis.map((i) => ({ descricao: i.quantidade > 1 ? `${i.descricao} × ${i.quantidade}` : i.descricao, valor: i.valorCliente, cortesia: !!i.cortesia })),
+        ...view.grupos.flatMap((g) => g.variantes.filter((x) => x.selecionada).map((x) => ({ descricao: `${g.rotulo}: ${x.rotulo}`, valor: x.valorVariante, cortesia: false }))),
+      ]
+    : [];
+  let garantia: ReturnType<typeof garantiaResultanteAprovacaoV3> = null;
+  try {
+    const real = orcamentoRealV3(v.realOS);
+    garantia = real ? garantiaResultanteAprovacaoV3(real) : null;
+  } catch {
+    garantia = null;
+  }
+  const efeitoGarantia = garantia
+    ? `Ao aprovar, a garantia da OS passa a ser de ${garantia.prazoDias} dias (opção escolhida${garantia.rotulo ? `: ${garantia.rotulo}` : ""}).`
+    : "A aprovação não altera a garantia desta OS.";
+  return <div data-testid="aprovar-e-receber-escopo" style={{ ...box, marginBottom: 12, fontSize: 11.5, color: C.body, display: "flex", flexDirection: "column", gap: 6 }}>
+    <b style={{ color: C.ink }}>1. Conferir orçamento</b>
+    {itens.length === 0
+      ? <span style={{ color: C.subtle }}>Itens indisponíveis aqui — confira na etapa Orçamento antes de aprovar.</span>
+      : <ul style={{ margin: 0, paddingLeft: 16 }}>{itens.map((i, idx) => <li key={idx}>{i.descricao} — {i.cortesia ? "cortesia" : fmt(i.valor)}</li>)}</ul>}
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>Total do orçamento</span><b className={sheetStyles.money}>{fmt(total)}</b></div>
+    <b style={{ color: C.ink, marginTop: 4 }}>2. Aprovar expressamente</b>
+    <span>{efeitoGarantia} A aprovação não inicia o serviço nem entrega o aparelho.</span>
+    <label style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+      <input type="checkbox" aria-label="O cliente aprovou este orçamento" checked={consentimento} disabled={travado} onChange={(e) => onConsentimento(e.target.checked)} />
+      <span>O cliente aprovou este orçamento: escopo e total acima.</span>
+    </label>
+    <b style={{ color: C.ink, marginTop: 4 }}>3. Receber pagamento</b>
   </div>;
 }
 
@@ -54,7 +96,16 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const envio = useRef(false);
   const sheet = useRef<HTMLDivElement>(null);
   const projection = v.financial.projection;
-  const saldo = projection?.balance ?? (projection?.financialStatus === "CHARGE_NOT_CREATED" ? projection.expectedTotal : 0) ?? 0;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): em "Aprovar e receber" o orçamento
+  // ainda não está aprovado e não há pagamento (condição da oferta) — o saldo é o total dele.
+  const aprovacao = v.aprovacaoReceber;
+  const modoAprovacao = !!aprovacao?.ativo && aprovacao.estado === "conferir" && !pdv.pendenciaMisto;
+  const aprovadoPagamentoPendente = !!aprovacao?.ativo && aprovacao.estado === "aprovado_pagamento_pendente";
+  const totalAprovacao = projection?.comercial?.totalOrcamento ?? null;
+  const [consentimento, setConsentimento] = useState(false);
+  const saldo = modoAprovacao
+    ? totalAprovacao ?? 0
+    : projection?.balance ?? (projection?.financialStatus === "CHARGE_NOT_CREATED" ? projection.expectedTotal : 0) ?? 0;
   const pendencia = pdv.pendenciaMisto;
   // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: com o histórico do título em
   // conferência, o saldo legado continua decidindo (receber segue igual), mas nunca é
@@ -66,10 +117,12 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const travado = busy || !!pendencia;
   const seedForm = useCallback(() => {
     const p = pendencia?.input;
-    setLinhas(p ? [...p.pagamentosAgora.map((l) => ({ forma: l.forma, valorStr: String(l.valor) })), { forma: "a_prazo", valorStr: String(p.saldoAPrazo.valor) }] : [{ forma: "pix", valorStr: saldo > 0 && !emConferencia ? String(saldo) : "" }]);
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): nenhuma forma pré-selecionada.
+    setLinhas(p ? [...p.pagamentosAgora.map((l) => ({ forma: l.forma, valorStr: String(l.valor) })), { forma: "a_prazo", valorStr: String(p.saldoAPrazo.valor) }] : [{ forma: "", valorStr: saldo > 0 && !emConferencia ? String(saldo) : "" }]);
     setVencimento(p?.saldoAPrazo.vencimento ?? "");
     setObservacao(p?.observacao ?? "");
     setIntencao(p?.intencao ?? "quitacao");
+    setConsentimento(false);
     setErro(null);
   }, [pendencia, saldo, emConferencia]);
   useEffect(() => { ativo.current = true; setMounted(true); return () => { ativo.current = false; }; }, []);
@@ -118,22 +171,27 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const creditInstallment = authorizedCredit ? projection.installments[0] ?? null : null;
   const { semTotal, previaNaoMaterializada, quitado, caixaAberto } = v.recebimento;
 
-  if (!pendencia && semTotal) return <div style={box}>{previaNaoMaterializada ? "O valor em “Total da OS” ainda é uma prévia. Gere e aprove um orçamento real antes de receber." : "Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber."}</div>;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): o modo "Aprovar e receber" não
+  // depende da decisão legada de receber (o orçamento ainda não foi aprovado), mas exige total.
+  if (modoAprovacao && !(totalAprovacao != null && totalAprovacao > 0)) {
+    return <div style={box}>O total do orçamento não está legível. Confira o orçamento antes de aprovar e receber.</div>;
+  }
+  if (!modoAprovacao && !pendencia && semTotal) return <div style={box}>{previaNaoMaterializada ? "O valor em “Total da OS” ainda é uma prévia. Gere e aprove um orçamento real antes de receber." : "Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber."}</div>;
   // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: "quitado" legado com histórico que a
   // leitura estrita não comprova não é mostrado como quitação.
-  if (!pendencia && quitado && emConferencia) {
+  if (!modoAprovacao && !pendencia && quitado && emConferencia) {
     return <div style={box}>Sem ação de recebimento enquanto o histórico do título está em conferência.</div>;
   }
-  if (!pendencia && quitado) return <div style={box}>
+  if (!modoAprovacao && !pendencia && quitado) return <div style={box}>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>Recebimento desta OS</span><b style={{ color: C.successFg }}>Quitado</b></div>
     {!v.entrega.entregue && <div style={{ marginTop: 9 }}><span style={{ fontSize: 11, color: C.subtle }}>OS pronta e paga — falta confirmar a entrega.</span> <button type="button" onClick={v.goEntrega} style={btnGhost}>Ir para Entrega →</button></div>}
   </div>;
   // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: título VERIFICADO e liquidado não é
   // "recebimento bloqueado" — não há nada a receber; o que falta (comercial) é outra coisa.
-  if (!pendencia && !projection.canReceive && situacao.pagamento.verificavel && situacao.pagamento.liquidado) {
+  if (!modoAprovacao && !pendencia && !projection.canReceive && situacao.pagamento.verificavel && situacao.pagamento.liquidado) {
     return <div style={box}>Nada a receber — título liquidado ({fmt(situacao.pagamento.recebidoLiquido ?? 0)}).</div>;
   }
-  if (!pendencia && !projection.canReceive && projection.financialStatus !== "CHARGE_NOT_CREATED") return <div style={box}>Recebimento bloqueado: {projection.consistencyIssues[0] ?? "revise a cobrança desta OS."}</div>;
+  if (!modoAprovacao && !pendencia && !projection.canReceive && projection.financialStatus !== "CHARGE_NOT_CREATED") return <div style={box}>Recebimento bloqueado: {projection.consistencyIssues[0] ?? "revise a cobrança desta OS."}</div>;
   if (pdv.loading) return <div style={box}>Carregando sessão de caixa…</div>;
 
   const credito = authorizedCredit ? <APrazoResumo amount={emConferencia ? null : creditInstallment?.amount ?? pagamento.saldo} dueAt={creditInstallment?.dueAt ?? null} emConferencia={emConferencia} /> : null;
@@ -156,7 +214,12 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
     : [["Total da OS", pagamento.total], ["Já recebido", pagamento.recebido], ["Receber agora", receberAgora], ["Deixar a prazo", deixarAPrazo], ["Saldo em aberto", saldoRestante]];
   // As mensagens de limite citam o saldo legado entre parênteses: em conferência, sem o valor.
   const errosVisiveis = emConferencia ? rascunho.erros.map((mensagem) => mensagem.replace(/\s*\((?:R\$\s*)?[\d.,]+\)/g, "")) : rascunho.erros;
-  const podeConfirmar = !busy && (!!pendencia || (rascunho.ok && (!rascunho.temAPrazo || !!pdv.registrarMisto)));
+  // Forma é escolha do operador (GOAL 002, item E): sem forma, nada é confirmado.
+  const faltaForma = !pendencia && linhas.some((l) => !l.forma);
+  const podeConfirmar =
+    !busy &&
+    (!!pendencia || (rascunho.ok && (!rascunho.temAPrazo || !!pdv.registrarMisto))) &&
+    (!modoAprovacao || (consentimento && !!aprovacao?.executar));
   const usarRestante = (i: number) => setLinhas((arr) => arr.map((l, idx) => idx === i ? { ...l, valorStr: valorStr(sugestaoAPrazoCentavosV3(arr, i, pagamento.saldo)) } : l));
   const escolherForma = (i: number, value: string) => {
     const forma = FORMAS.find((f) => f.value === value)?.value;
@@ -165,25 +228,41 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   };
   const escolherIntencao = (next: IntencaoRecebimentoV4) => {
     setIntencao(next);
-    if (next === "quitacao" && !rascunho.temAPrazo && !emConferencia) setLinhas([{ forma: linhas[0]?.forma ?? "pix", valorStr: String(valorSugeridoRecebimentoV4(next, pagamento.saldo)) }]);
+    if (next === "quitacao" && !rascunho.temAPrazo && !emConferencia) setLinhas([{ forma: linhas[0]?.forma ?? "", valorStr: String(valorSugeridoRecebimentoV4(next, pagamento.saldo)) }]);
   };
   const onConfirmar = async () => {
     if (!podeConfirmar || envio.current) return;
-    envio.current = true; setEnviando(true); setErro(null);
-    try {
+    // UM recebimento (imediato ou misto) com o rascunho atual — o MESMO caminho com ou sem
+    // aprovação antes, e só a partir deste clique. Chave de idempotência, replay e CAS
+    // continuam no hook V3.
+    const registrarRecebimento = async (): Promise<{ ok: true } | { ok: false; mensagem: string | null }> => {
       if (pendencia || rascunho.temAPrazo) {
-        if (!pdv.registrarMisto) return;
+        if (!pdv.registrarMisto) return { ok: false, mensagem: null };
         // Pendência do hook é a confirmação original, mesmo se saldo/data/caixa mudaram.
         const resultado = await pdv.registrarMisto(pendencia?.input ?? buildRecebimentoMistoV4({ rascunho, saldo: pagamento.saldo, vencimento, sessaoId: pdv.sessao?.sessaoId, intencao, observacao }));
-        if (!ativo.current) return;
-        if (resultado.status === "ok") { cancelar(); v.openRecibo(); }
-        else if (resultado.status === "incerto" || resultado.status === "recusado") setErro(resultado.mensagem);
-      } else {
-        if (!pdv.sessao?.sessaoId) return;
-        const linhasValidas = rascunho.pagamentosAgora;
-        const ok = await pdv.receber({ linhas: linhasValidas, sessaoId: pdv.sessao.sessaoId, intencao: intencao === "quitacao" ? undefined : intencao, observacao: observacao.trim() || undefined });
-        if (ativo.current && ok) { cancelar(); v.openRecibo(); }
+        if (resultado.status === "ok") return { ok: true };
+        return { ok: false, mensagem: resultado.status === "incerto" || resultado.status === "recusado" ? resultado.mensagem : null };
       }
+      if (!pdv.sessao?.sessaoId) return { ok: false, mensagem: null };
+      const linhasValidas = rascunho.pagamentosAgora;
+      const ok = await pdv.receber({ linhas: linhasValidas, sessaoId: pdv.sessao.sessaoId, intencao: intencao === "quitacao" ? undefined : intencao, observacao: observacao.trim() || undefined });
+      return ok ? { ok: true } : { ok: false, mensagem: null };
+    };
+    envio.current = true; setEnviando(true); setErro(null);
+    try {
+      if (modoAprovacao && aprovacao?.executar) {
+        // Aprovação expressa (action própria) e, só com sucesso, o recebimento acima.
+        const resultado = await aprovacao.executar(registrarRecebimento);
+        if (!ativo.current) return;
+        if (resultado.status === "recebido") { cancelar(); v.openRecibo(); }
+        else if (resultado.status === "aprovacao_recusada") setErro(resultado.mensagem);
+        else if (resultado.status === "aprovado_pagamento_nao_confirmado") { aprovacao.marcarAprovado(); setErro(resultado.mensagem); }
+        return;
+      }
+      const resultado = await registrarRecebimento();
+      if (!ativo.current) return;
+      if (resultado.ok) { cancelar(); v.openRecibo(); }
+      else if (resultado.mensagem) setErro(resultado.mensagem);
     } catch {
       if (ativo.current) setErro("Não foi possível confirmar o registro. Confira a mensagem do recebimento antes de reenviar.");
     } finally {
@@ -207,11 +286,13 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
         else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
       }}>
         <div className={sheetStyles.head}>
-          <div id="receber-os-title" style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Receber pagamento</div>
+          <div id="receber-os-title" style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>{modoAprovacao ? "Aprovar e receber" : "Receber pagamento"}</div>
           <button type="button" aria-label="Fechar recebimento" onClick={cancelar} disabled={busy} style={btnGhostSm}>×</button>
         </div>
         <div className={sheetStyles.body}>
+          {aprovadoPagamentoPendente && <div role="status" style={{ fontSize: 12, fontWeight: 600, color: C.warnFg, marginBottom: 9 }}>Orçamento aprovado — pagamento não confirmado.</div>}
           <RealActionNotice kind={rascunho.temAPrazo && receberAgora === 0 ? "aPrazo" : "pagamento"} />
+          {modoAprovacao && totalAprovacao != null && <EscopoAprovacaoV4 v={v} total={totalAprovacao} consentimento={consentimento} onConsentimento={setConsentimento} travado={travado} />}
           {credito}
           {emConferencia && <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 9 }}>Histórico do título em conferência: o saldo não é exibido. Informe o valor recebido agora.</div>}
           <div style={{ fontSize: 10, color: C.subtle }}>Saldo da OS</div>
@@ -225,7 +306,8 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
             {linhas.map((l, i) => <div key={i} className={sheetStyles.linha}>
               <label style={{ fontSize: 10, color: C.subtle }}>Forma {i + 1}
                 <select aria-label={`Forma da linha ${i + 1}`} value={l.forma} disabled={travado} onChange={(e) => escolherForma(i, e.target.value)} style={{ ...cellInput, width: "100%" }}>
-                  {FORMAS.map((f) => <option key={f.value} value={f.value} disabled={f.value === "a_prazo" && (authorizedCredit || (l.forma !== "a_prazo" && rascunho.temAPrazo))}>{f.label}</option>)}
+                  <option value="" disabled>Escolha a forma</option>
+                  {FORMAS.map((f) =><option key={f.value} value={f.value} disabled={f.value === "a_prazo" && (authorizedCredit || (l.forma !== "a_prazo" && rascunho.temAPrazo))}>{f.label}</option>)}
                 </select>
               </label>
               <label style={{ fontSize: 10, color: C.subtle }}>Valor
@@ -237,7 +319,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
               </div>
             </div>)}
           </div>
-          <button type="button" disabled={travado} onClick={() => setLinhas((arr) => [...arr, { forma: "pix", valorStr: emConferencia ? "" : valorStr(sugestaoAPrazoCentavosV3(arr, -1, pagamento.saldo)) }])} style={{ ...btnGhost, marginBottom: 9 }}>+ Dividir pagamento</button>
+          <button type="button" disabled={travado} onClick={() => setLinhas((arr) => [...arr, { forma: "", valorStr: emConferencia ? "" : valorStr(sugestaoAPrazoCentavosV3(arr, -1, pagamento.saldo)) }])} style={{ ...btnGhost, marginBottom: 9 }}>+ Dividir pagamento</button>
           {rascunho.temAPrazo && <div style={{ marginBottom: 9 }}>
             <label style={{ fontSize: 11, color: C.subtle }}>Vencimento da parte a prazo
               <input aria-label="Vencimento da parte a prazo" type="date" min={hojeLojaV3()} value={vencimento} disabled={travado} onChange={(e) => setVencimento(e.target.value)} style={{ ...cellInput, width: "100%" }} />
@@ -257,7 +339,15 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
         </div>
         <div className={sheetStyles.footer}>
           <button type="button" onClick={() => void onConfirmar()} disabled={!podeConfirmar} style={{ ...btnPrimary, flex: 1, cursor: podeConfirmar ? "pointer" : "default", opacity: podeConfirmar ? 1 : 0.6 }}>
-            {busy ? "Confirmando…" : pendencia ? "Reenviar mesma confirmação" : rascunho.temAPrazo ? rotuloBotaoRecebimentoMistoV3(rascunho.receberAgoraCentavos, rascunho.aPrazoCentavos) : `Confirmar ${fmt(receberAgora)}`}
+            {busy
+              ? "Confirmando…"
+              : pendencia
+                ? "Reenviar mesma confirmação"
+                : faltaForma
+                  ? "Escolha a forma de pagamento"
+                  : modoAprovacao
+                    ? `Aprovar e ${rascunho.temAPrazo ? rotuloBotaoRecebimentoMistoV3(rascunho.receberAgoraCentavos, rascunho.aPrazoCentavos).replace(/^./, (c) => c.toLowerCase()) : `receber ${fmt(receberAgora)}`}`
+                    : rascunho.temAPrazo ? rotuloBotaoRecebimentoMistoV3(rascunho.receberAgoraCentavos, rascunho.aPrazoCentavos) : `Confirmar ${fmt(receberAgora)}`}
           </button>
           <button type="button" onClick={cancelar} disabled={busy} style={btnGhost}>Cancelar</button>
         </div>

@@ -378,6 +378,9 @@ describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — R2: recebimento parcial co
     expect(sheet.getByText("Histórico do título em conferência: o saldo não é exibido. Informe o valor recebido agora.")).toBeTruthy();
     const valor = sheet.getByLabelText("Valor da linha 1") as HTMLInputElement;
     expect(valor.value).toBe("");
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E): nenhuma forma pré-selecionada — o
+    // operador escolhe (antes, Pix vinha marcado); o restante do cenário segue idêntico.
+    fireEvent.change(sheet.getByLabelText("Forma da linha 1"), { target: { value: "pix" } });
     expect(sheet.queryByRole("button", { name: "Usar restante" })).toBeNull();
     const resumo = within(sheet.getByTestId("resumo-misto"));
     expect(resumo.getAllByText("Em conferência")).toHaveLength(2);
