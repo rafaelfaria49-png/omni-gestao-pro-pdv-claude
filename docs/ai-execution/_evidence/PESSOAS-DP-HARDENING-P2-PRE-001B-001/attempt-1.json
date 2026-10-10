@@ -1,0 +1,24 @@
+{
+  "head": "07fc1fca4d3cfd5b4a42b7f692dccf27af1f3988",
+  "result": "FAIL",
+  "passedTests": 91,
+  "failedSuites": 1,
+  "skipped": 0,
+  "todo": 0,
+  "failure": "runner-safety.test.ts: SyntaxError na carga do módulo CLI",
+  "nextPwaVersion": "10.2.9",
+  "invariants": {
+    "check": 10,
+    "index": 7,
+    "trigger": 10,
+    "function": 4
+  },
+  "drift": "NONE",
+  "pwa": "NOT_RUN",
+  "typecheck": "NOT_RUN",
+  "lint": "NOT_RUN",
+  "build": "NOT_RUN",
+  "cleanup": "PASS",
+  "port55439": "FREE",
+  "aepNextAttempt": 2
+}
