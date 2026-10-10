@@ -48,10 +48,11 @@ function linha(i: number, forma: string, valor?: string) {
 function dividir() { fireEvent.click(screen.getByRole("button", { name: /Dividir pagamento/ })); }
 function prazo() { fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: VENC } }); }
 async function preparar() { const view = await abrir(); linha(1, "debito", "350"); dividir(); linha(2, "a_prazo"); prazo(); return view; }
-const confirmar = () => screen.getByRole("button", { name: /^(Registrar|Formalizar|Confirmar|Reenviar)/ });
+const confirmar = () => screen.getByRole("button", { name: /^(Registrar|Formalizar|Confirmar|Verificar)/ });
 const disabled = () => (confirmar() as HTMLButtonElement).disabled;
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
 beforeEach(() => {
+  localStorage.clear();
   aberto = true; abrirRecibo.mockReset();
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.lerPagamentoOSV3.mockImplementation(async () => leitura());
@@ -86,7 +87,7 @@ describe("V4 — paridade sobre o hook V3 real (montado)", () => {
   it("T04/T20: débito 400 segue receber normal", async () => {
     await abrir(); linha(1, "debito", "400"); fireEvent.click(confirmar());
     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTimes(1));
-    expect(mocks.receberOSV3.mock.calls[0][2]).toMatchObject({ linhas: [{ forma: "debito", valor: 400 }], sessaoId: "sessao-qa", intencao: undefined });
+    expect(mocks.receberOSV3.mock.calls[0][2]).toMatchObject({ linhas: [{ forma: "debito", valor: 400 }], sessaoId: "sessao-qa" });
     expect(mocks.registrarRecebimentoMistoOSV3).not.toHaveBeenCalled();
   });
   it("T05: parcial imediato sem a prazo preserva intenção e não pede vencimento", async () => {
@@ -118,23 +119,23 @@ describe("V4 — paridade sobre o hook V3 real (montado)", () => {
   });
   it("T14: incerto mantém rascunho, bloqueia edição, retry reutiliza operação do hook", async () => {
     mocks.registrarRecebimentoMistoOSV3.mockRejectedValueOnce(new Error("transporte interrompido"));
-    await preparar(); fireEvent.click(confirmar()); await screen.findByRole("button", { name: "Reenviar mesma confirmação" });
+    await preparar(); fireEvent.click(confirmar()); await screen.findByRole("button", { name: "Verificar mesma confirmação" });
     expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("350"); expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByRole("alert").textContent).toMatch(/MESMA operação/);
+    expect(screen.getByRole("alert").textContent).toMatch(/Confirmação pendente de verificação/);
     fireEvent.click(confirmar()); await waitFor(() => expect(abrirRecibo).toHaveBeenCalledTimes(1));
     const [a, b] = mocks.registrarRecebimentoMistoOSV3.mock.calls; expect(b[2]).toEqual(a[2]); expect(mocks.receberOSV3).not.toHaveBeenCalled();
   });
   it("pendência volta ao reabrir e trocar A→B→A, mesmo após o caixa fechar", async () => {
     mocks.registrarRecebimentoMistoOSV3.mockRejectedValueOnce(new Error("sem resposta"));
-    const view = await preparar(); fireEvent.click(confirmar()); await screen.findByRole("button", { name: "Reenviar mesma confirmação" });
+    const view = await preparar(); fireEvent.click(confirmar()); await screen.findByRole("button", { name: "Verificar mesma confirmação" });
     const enviado = mocks.registrarRecebimentoMistoOSV3.mock.calls[0][2];
     view.rerender(<Harness osId="os-b" />); await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    aberto = false; view.rerender(<Harness osId="os-a" />); await screen.findByRole("button", { name: "Verificar registro pendente" });
-    fireEvent.click(screen.getByRole("button", { name: "Verificar registro pendente" })); await screen.findByRole("button", { name: "Reenviar mesma confirmação" }); fireEvent.click(confirmar());
+    aberto = false; view.rerender(<Harness osId="os-a" />); await screen.findByRole("button", { name: "Verificar mesma confirmação" });
+    fireEvent.click(screen.getByRole("button", { name: "Verificar mesma confirmação" })); await screen.findByRole("button", { name: "Verificar mesma confirmação" }); fireEvent.click(confirmar());
     await waitFor(() => expect(abrirRecibo).toHaveBeenCalledTimes(1)); expect(mocks.registrarRecebimentoMistoOSV3.mock.calls[1][2]).toEqual(enviado);
   });
   it("T15: recusado mostra mensagem real e mantém rascunho editável", async () => {
-    mocks.registrarRecebimentoMistoOSV3.mockResolvedValue({ ok: false, code: "saldo_divergente", mensagem: "Saldo mudou para R$ 380,00." });
+    mocks.registrarRecebimentoMistoOSV3.mockResolvedValue({ ok: false, code: "saldo_divergente", mensagem: "Saldo mudou para R$ 380,00.", naoRegistrada: true });
     await preparar(); fireEvent.click(confirmar()); await screen.findByText("Saldo mudou para R$ 380,00."); expect(screen.getByRole("dialog")).toBeTruthy(); expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).disabled).toBe(false); expect(abrirRecibo).not.toHaveBeenCalled();
   });
   it("T16: duplo clique em misto dispara uma confirmação", async () => {
@@ -183,7 +184,7 @@ describe("V4 — paridade sobre o hook V3 real (montado)", () => {
     expect(p).toMatchObject({ financialStatus: "PAID", balance: 0, installments: [] });
   });
   it("R1: recusa conserva o rascunho durante a recarga e aceita a nova distribuição de 380", async () => {
-    mocks.registrarRecebimentoMistoOSV3.mockResolvedValueOnce({ ok: false, code: "saldo_divergente", mensagem: "Saldo mudou para R$ 380,00." });
+    mocks.registrarRecebimentoMistoOSV3.mockResolvedValueOnce({ ok: false, code: "saldo_divergente", mensagem: "Saldo mudou para R$ 380,00.", naoRegistrada: true });
     const view = await abrir({ stage: true }); linha(1, "debito", "350"); dividir(); linha(2, "a_prazo"); prazo();
     fireEvent.click(confirmar()); await screen.findByText("Saldo mudou para R$ 380,00.");
     view.rerender(<Harness stage financialLoading />); expect(screen.queryByRole("dialog")).toBeNull();

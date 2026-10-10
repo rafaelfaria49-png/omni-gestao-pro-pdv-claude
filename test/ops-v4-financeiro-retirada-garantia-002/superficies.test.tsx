@@ -494,7 +494,7 @@ describe("D · formalizar aprovação pendente", () => {
 
 // ─── E · forma explícita no sheet da V4 ────────────────────────────────────────────────────
 describe("R2-P1 · recebimento imediato sem resultado: só a confirmação ORIGINAL é reenviada", () => {
-  it("rascunho travado e botão 'Reenviar mesma confirmação' (o hook repete a original — ver fluxo-hook)", async () => {
+  it("rascunho travado e botão 'Verificar mesma confirmação' (o hook repete a original — ver fluxo-hook)", async () => {
     const original = { linhas: [{ forma: "pix" as const, valor: 100 }], sessaoId: "sessao-anterior", intencao: "parcial" as const, operacaoId: "op-original-1", saldoEsperado: 420 };
     const p = pdv({ pendenciaReceber: { key: JSON.stringify([LOJA, "a"]), operacaoId: "op-original-1", input: original } } as never);
     montar({ os: os("a", "aprovado", { respondidoEm: "2026-09-19T12:00:00Z" }), titulo: null, pdv: p });
@@ -502,9 +502,10 @@ describe("R2-P1 · recebimento imediato sem resultado: só a confirmação ORIGI
     const sheet = await screen.findByRole("dialog", { name: "Receber pagamento" });
     expect((within(sheet).getByLabelText("Forma da linha 1") as HTMLSelectElement).disabled).toBe(true);
     expect((within(sheet).getByLabelText("Forma da linha 1") as HTMLSelectElement).value).toBe("pix");
-    fireEvent.click(within(sheet).getByRole("button", { name: "Reenviar mesma confirmação" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "Verificar mesma confirmação" }));
     await waitFor(() => expect(p.receber).toHaveBeenCalledTimes(1));
-    // O rascunho mostrado é o da confirmação original (travado); o reenvio idêntico é do hook.
+    expect(p.receber).toHaveBeenCalledWith(original);
+    // O rascunho e o envio são os da confirmação original.
     expect((within(sheet).getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("100");
   });
 });

@@ -112,6 +112,7 @@ export function PdvServicoV3() {
     registrandoMisto,
     pendenciaMisto,
     pendenciaReceber,
+    confirmacaoBloqueada,
     registrarMisto,
   } = usePdvServicoV3(storeId, osId || null);
 
@@ -192,7 +193,7 @@ export function PdvServicoV3() {
       ? elegibilidade
       : null;
   const podeRegistrarMisto =
-    !!os && !!pagamento && !loading && !!misto?.ok && (!precisaCaixaMisto || caixaAberto) && !registrandoMisto && !pendenciaMisto && !recusaComercial;
+    !!os && !!pagamento && !loading && !!misto?.ok && (!precisaCaixaMisto || caixaAberto) && !registrandoMisto && !recebendo && !confirmacaoBloqueada && !pendenciaMisto && !pendenciaReceber && !recusaComercial;
 
   // Linhas de split válidas (number) e validação — caminho IMEDIATO (sem a prazo), inalterado.
   const splitLinhasNum: SplitLinhaV3[] = splitLinhas
@@ -209,7 +210,7 @@ export function PdvServicoV3() {
   const veredito = splitMode ? validarSplitV3(splitLinhasNum, saldo) : validarRecebimentoV3(valorUnico, saldo);
   const valorAReceber = splitMode ? somaSplit : valorUnico;
   const podeReceber =
-    !temAPrazo && !!os && caixaAberto && (splitMode ? !splitSemForma : formaUnicaSuportada) && veredito.ok && !recebendo && !recusaComercial;
+    !temAPrazo && !!os && caixaAberto && (splitMode ? !splitSemForma : formaUnicaSuportada) && veredito.ok && !recebendo && !registrandoMisto && !confirmacaoBloqueada && !pendenciaMisto && !pendenciaReceber && !recusaComercial;
 
   /** Captura o alvo ANTES do await; `aindaNoAlvo()` diz se a tela continua nessa loja/OS. */
   const capturarAlvo = () => {
@@ -659,15 +660,15 @@ export function PdvServicoV3() {
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-warning"><AlertTriangle className="h-3.5 w-3.5" /> {veredito.motivo}</p>
               ) : null}
 
+              {confirmacaoBloqueada && !pendenciaMisto && !pendenciaReceber ? <p role="alert" className="mt-3 text-xs text-warning">Confirmação pendente de verificação. Não registre outro recebimento nesta OS até confirmar o resultado anterior. Solicite conferência a um operador autorizado.</p> : null}
               {pendenciaMisto ? (
                 <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground" role="alert">
                   <p>
-                    <strong>Resultado não confirmado</strong> da operação anterior. Reenvie a <strong>mesma</strong> operação para
-                    verificar — o servidor reconhece a chave e não lança em dobro.
+                    Confirmação pendente de verificação. Não registre outro recebimento nesta OS até confirmar o resultado anterior.
                   </p>
                   <ButtonV3 variant="outline" className="mt-2 w-full" disabled={registrandoMisto} onClick={onReenviarPendente}>
                     {registrandoMisto ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                    Reenviar a mesma operação
+                    Verificar mesma confirmação
                   </ButtonV3>
                 </div>
               ) : null}
@@ -675,12 +676,11 @@ export function PdvServicoV3() {
               {pendenciaReceber ? (
                 <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground" role="alert" data-testid="pendencia-recebimento">
                   <p>
-                    <strong>Resultado não confirmado</strong> do recebimento anterior. Até o resultado, toda confirmação desta OS
-                    repete a <strong>mesma</strong> (chave, sessão e valores) — o servidor reconhece a chave e não lança em dobro.
+                    Confirmação pendente de verificação. Não registre outro recebimento nesta OS até confirmar o resultado anterior.
                   </p>
                   <ButtonV3 variant="outline" className="mt-2 w-full" disabled={recebendo} onClick={onReenviarRecebimentoPendente}>
                     {recebendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                    Reenviar a mesma confirmação
+                    Verificar mesma confirmação
                   </ButtonV3>
                 </div>
               ) : null}
@@ -808,7 +808,7 @@ export function PdvServicoV3() {
                   onChange={(e) => setMotivoEstorno(e.target.value)}
                   placeholder="Motivo (opcional)"
                 />
-                <ButtonV3 variant="outline" className="mt-2 w-full" disabled={!caixaAberto || estornando} onClick={onEstornar}>
+                <ButtonV3 variant="outline" className="mt-2 w-full" disabled={!caixaAberto || estornando || recebendo || registrandoMisto || confirmacaoBloqueada || !!pendenciaMisto || !!pendenciaReceber} onClick={onEstornar}>
                   {estornando ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                   Estornar último recebimento
                 </ButtonV3>

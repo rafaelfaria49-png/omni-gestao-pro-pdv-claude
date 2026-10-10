@@ -75,6 +75,11 @@ import {
   type SplitLinhaV3,
 } from "./payment-model";
 import {
+  CAMPO_CONFIRMACAO_PENDENTE_V3,
+  MENSAGEM_CONFIRMACAO_PENDENTE_V3,
+  lerPendenciaConfirmacaoV3,
+  type PendenciaConfirmacaoFinanceiraV3,
+  type ProvaConfirmacaoFinanceiraV3,
   gerarOperacaoIdV3,
   hojeLojaV3,
   normalizarRecebimentoMistoV3,
@@ -83,6 +88,11 @@ import {
   type RecebimentoMistoInputV3,
 } from "./recebimento-misto-model";
 import {
+  ConfirmacaoFinanceiraPendenteErroV3,
+  conferirPendenciaFinanceiraV3,
+  gravarPendenciaFinanceiraV3,
+  fingerprintConfirmacaoImediataV3,
+  fingerprintRecebimentoMistoV3,
   chaveLockRecebimentoMistoV3,
   decidirRecebimentoMistoOSV3,
   fingerprintRecebimentoCanonicoV3,
@@ -250,9 +260,11 @@ async function resolverTituloOS(storeId: string, osId: string, loaded: OSCarrega
 export async function lerPagamentoOSV3(
   storeId: string,
   osId: string,
-): Promise<PagamentoV3 & { sessao: CaixaSessaoV3; aPrazo: APrazoV3 | null }> {
+  reconhecer?: ProvaConfirmacaoFinanceiraV3,
+): Promise<PagamentoV3 & { sessao: CaixaSessaoV3; aPrazo: APrazoV3 | null; pendenciaConfirmacao?: PendenciaConfirmacaoFinanceiraV3 | null; confirmacaoBloqueada?: boolean }> {
   const sid = (storeId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
+  if (reconhecer) await reconhecerConfirmacaoFinanceiraV3(sid, osId, reconhecer);
   const loaded = await carregarOS(sid, osId);
   const t = await resolverTituloOS(sid, osId, loaded);
   const sessao = await getCaixaSessaoAbertaV3(sid);
@@ -260,7 +272,47 @@ export async function lerPagamentoOSV3(
   // Saldo a prazo PERSISTIDO (reabrir a OS mostra valor/vencimento); sem saldo, não há o que
   // exibir. O valor exibido nunca passa do saldo real: baixas posteriores feitas por outro
   // caminho (ex.: Financeiro) não atualizam o espelho da OS.
-  return { ...mirror, sessao, aPrazo: aPrazoVisivelV3(loaded.payload, mirror.saldo) };
+  const raw = loaded.payload[CAMPO_CONFIRMACAO_PENDENTE_V3];
+  const pendencia = lerPendenciaConfirmacaoV3(raw, sid, osId);
+  let confirmacaoBloqueada = raw != null && !pendencia;
+  let autorizada = false;
+  if (pendencia) {
+    const session = await auth();
+    if (session?.user?.id) {
+      const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs && (pendencia.tipo !== "misto" || p.operacoes.gerarCobranca), "Sem permissão para verificar a confirmação original.");
+      autorizada = guard.ok;
+    }
+    confirmacaoBloqueada = !autorizada;
+  }
+  return { ...mirror, sessao, aPrazo: aPrazoVisivelV3(loaded.payload, mirror.saldo), pendenciaConfirmacao: autorizada ? pendencia : null, confirmacaoBloqueada };
+
+}
+
+/** Reconhecimento autenticado de um resultado POSITIVO já devolvido pelo writer/replay. */
+async function reconhecerConfirmacaoFinanceiraV3(storeId: string, osId: string, prova: ProvaConfirmacaoFinanceiraV3): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Faça login para verificar a confirmação original.");
+  const guard = await requireEnterpriseWith(storeId, (p) => p.operacoes.editarOs && (prova.tipo !== "misto" || p.operacoes.gerarCobranca), "Sem permissão para verificar a confirmação original.");
+  if (!guard.ok) throw new Error(guard.error);
+  await prisma.$transaction(async (tx) => {
+    await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(storeId, osId));
+    const primeira = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+    const raw = isRecordV3(primeira?.payload) ? primeira.payload[CAMPO_CONFIRMACAO_PENDENTE_V3] : null;
+    if (raw == null) return;
+    const p = lerPendenciaConfirmacaoV3(raw, storeId, osId);
+    if (!p) throw new Error("A confirmação original precisa de conferência autorizada.");
+    // Mesma ordem: consultiva → sessão (mesmo fechada) → OS. Nenhum título/caixa é alterado.
+    if (p.input.sessaoId) await travarSessaoCaixa(tx, storeId, p.input.sessaoId);
+    const { rowId, payload } = await lerOSTravadaV3(tx, storeId, osId);
+    const atual = lerPendenciaConfirmacaoV3(payload[CAMPO_CONFIRMACAO_PENDENTE_V3], storeId, osId);
+    if (!atual || atual.operacaoId !== prova.operacaoId || atual.requestFingerprint !== prova.requestFingerprint || atual.tipo !== prova.tipo) {
+      throw new Error("A prova não corresponde à confirmação pendente desta OS.");
+    }
+    const next = { ...payload };
+    delete next[CAMPO_CONFIRMACAO_PENDENTE_V3];
+    next.confirmacaoRecebimentoReconhecidaV3 = { ...prova, at: nowIso(), por: session.user.id };
+    await tx.ordemServico.update({ where: { id: rowId }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+  }, TX_PAGAMENTO_OS_V3);
 }
 
 // ----------------------------------------------------------------------------
@@ -268,6 +320,8 @@ export async function lerPagamentoOSV3(
 // ----------------------------------------------------------------------------
 
 export interface ReceberOSInputV3 {
+  /** Resposta estruturada aditiva; os callers existentes conservam o resultado/erros anteriores. */
+  confirmacaoClienteV3?: true;
   /** Forma única (compat). */
   valor?: number;
   forma?: FormaRecebimentoV3;
@@ -378,7 +432,33 @@ function normalizarLinhasV3(input: ReceberOSInputV3): SplitLinhaV3[] {
   return [];
 }
 
-export async function receberOSV3(storeId: string, osId: string, input: ReceberOSInputV3): Promise<ReceberOSResultV3> {
+export type RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE"; operacaoId: string; requestFingerprint: string; mensagem: string };
+export type ResultadoConfirmacaoImediataV3 =
+  | { estado: "CONFIRMADO"; resultado: ReceberOSResultV3; prova: ProvaConfirmacaoFinanceiraV3 }
+  | RecusaConfirmacaoImediataV3
+  | { estado: "INCERTO"; operacaoId: string; mensagem: string; pendencia?: PendenciaConfirmacaoFinanceiraV3 };
+class RecusaRecebimentoImediatoV3 extends Error {}
+
+/** Opt-in estruturado sem mudar os consumidores server-side existentes. */
+export async function receberOSV3<I extends ReceberOSInputV3>(storeId: string, osId: string, input: I): Promise<I extends { confirmacaoClienteV3: true } ? ResultadoConfirmacaoImediataV3 : ReceberOSResultV3> {
+  type R = I extends { confirmacaoClienteV3: true } ? ResultadoConfirmacaoImediataV3 : ReceberOSResultV3;
+  try {
+    const r = await executarRecebimentoImediatoOSV3(storeId, osId, input);
+    if (!input.confirmacaoClienteV3) return r as R;
+    if ("estado" in r) return r as R;
+    return { estado: "CONFIRMADO", resultado: r, prova: { operacaoId: r.operacaoId!, requestFingerprint: fingerprintConfirmacaoImediataV3(storeId.trim(), osId.trim(), input), tipo: "imediato" } } as R;
+  } catch (e) {
+    if (!input.confirmacaoClienteV3) throw e;
+    let pendencia = e instanceof ConfirmacaoFinanceiraPendenteErroV3 ? e.pendencia : undefined;
+    if (pendencia?.tipo === "misto") {
+      const acesso = await requireEnterpriseWith(storeId.trim(), (p) => p.operacoes.editarOs && p.operacoes.gerarCobranca, "Sem permissão para verificar a confirmação original.");
+      if (!acesso.ok) pendencia = undefined;
+    }
+    return { estado: "INCERTO", operacaoId: input.operacaoId ?? "", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3, ...(pendencia ? { pendencia } : {}) } as R;
+  }
+}
+
+async function executarRecebimentoImediatoOSV3(storeId: string, osId: string, input: ReceberOSInputV3): Promise<ReceberOSResultV3 | RecusaConfirmacaoImediataV3> {
   const sid = (storeId ?? "").trim();
   const id = (osId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
@@ -388,6 +468,8 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
   if (!session?.user?.id) throw new Error("Faça login para receber a OS.");
   const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para receber esta OS.");
   if (!guard.ok) throw new Error(guard.error);
+
+  if (input.confirmacaoClienteV3 && !OPERACAO_ID_PATTERN_V3.test(input.operacaoId ?? "")) throw new Error("Identificador da confirmação original obrigatório.");
 
   // Split (ou forma única normalizada). Todas as formas precisam ser escolhidas e suportadas:
   // sem forma, nenhuma baixa — ausência nunca vira uma forma (GOAL 002, item E).
@@ -412,16 +494,19 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
   const obsBase = (input.observacao ?? "").trim();
   // Identidade = TOTAL por forma (centavos) + sessão + loja/OS. O v1 (pré-fix) da MESMA
   // requisição também é aceito no replay; novas operações gravam só o atual.
-  const requestFingerprint = fingerprintRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas });
-  const fingerprintsAceitos = fingerprintsAceitosRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas });
+  const fingerprintCompleto = fingerprintConfirmacaoImediataV3(sid, id, input);
+  const requestFingerprint = input.confirmacaoClienteV3 ? fingerprintCompleto : fingerprintRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas });
+  const fingerprintsAceitos = [fingerprintCompleto, ...fingerprintsAceitosRecebimentoCanonicoV3({ storeId: sid, osId: id, sessaoId, linhas })];
   const dataHora = nowIso();
 
   // UMA transação sob a MESMA trava por OS de todos os writers de pagamento da V3 (misto,
   // estorno, a prazo): nada é lido antes dela, e baixa, movimentação, caixa e espelho da
   // OS entram juntos ou não entram.
-  const resultado = await prisma.$transaction(async (tx): Promise<ReceberOSResultV3> => {
+  const resultado = await prisma.$transaction(async (tx): Promise<ReceberOSResultV3 | RecusaConfirmacaoImediataV3> => {
     // 1) Serialização por OS — PRIMEIRA instrução, antes de qualquer leitura de estado.
     await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
+    if (input.confirmacaoClienteV3) await tx.$executeRaw`SAVEPOINT ops_v3_imediato_confirmacao`;
+    try {
 
     // 2) Replay: esta confirmação já foi gravada (resposta perdida, reenvio)? A busca é pela
     // `operacaoId` na loja, em QUALQUER sessão: a sessão, a OS e o conteúdo entram no
@@ -437,11 +522,21 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
     if (gravadas.length > 0) {
       return replayRecebimentoOSV3(tx, { storeId: sid, osId: id, operacaoId, fingerprintsAceitos, gravadas, operador, dataHora });
     }
-    if (periodo.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para receber.");
+    const rowRecusas = await tx.ordemServico.findFirst({ where: { id, storeId: sid }, select: { payload: true } });
+    const recusas = isRecordV3(rowRecusas?.payload) && Array.isArray(rowRecusas.payload.recebimentoImediatoRecusasV3) ? rowRecusas.payload.recebimentoImediatoRecusasV3 : [];
+    const anterior = recusas.find((r) => isRecordV3(r) && r.operacaoId === operacaoId);
+    if (isRecordV3(anterior)) {
+      if (anterior.requestFingerprint !== fingerprintCompleto) throw new Error("Esta confirmação já foi usada com outro conteúdo.");
+      const recusa = { estado: "RECUSADO_DEFINITIVAMENTE" as const, operacaoId, requestFingerprint: fingerprintCompleto, mensagem: String(anterior.mensagem) };
+      if (!input.confirmacaoClienteV3) throw new Error(recusa.mensagem);
+      return recusa;
+    }
+    await conferirPendenciaFinanceiraV3(tx, sid, id, operacaoId, "imediato");
+    if (periodo.fechado) throw new RecusaRecebimentoImediatoV3("Período financeiro fechado. Reabra o fechamento para receber.");
 
     // 3) Sessão de caixa ABERTA da loja, travada: o fechamento do caixa espera este recebimento.
     const sessao = sessaoId ? await travarSessaoCaixa(tx, sid, sessaoId) : null;
-    if (!sessao || sessao.status !== "ABERTA") throw new Error("Caixa fechado: abra o caixa no PDV antes de receber.");
+    if (!sessao || sessao.status !== "ABERTA") throw new RecusaRecebimentoImediatoV3("Caixa fechado: abra o caixa no PDV antes de receber.");
 
     // 4) OS travada, com o payload MAIS RECENTE — e só preço comercialmente elegível recebe.
     const { rowId, payload, os, valorTotalColuna } = await lerOSTravadaV3(tx, sid, id);
@@ -457,7 +552,7 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
       total: totalCobravelV3(os),
       vencimento: ((payload.aberturaV3 as { pagamentoPrevisto?: { vencimentoPrevisto?: string } } | undefined)?.pagamentoPrevisto?.vencimentoPrevisto) || dataHora,
     });
-    if (!tituloSnapshot) throw new Error("Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de receber.");
+    if (!tituloSnapshot) throw new RecusaRecebimentoImediatoV3("Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de receber.");
     const localKey = localKeyContaReceberOSV3(sid, id);
 
     // Valida a SOMA do split contra o saldo REAL (proteção contra valor > saldo no motor único).
@@ -468,11 +563,11 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
     if (input.saldoEsperado !== undefined && input.saldoEsperado !== null) {
       const esperadoCentavos = Math.round(Number(input.saldoEsperado) * 100);
       if (!Number.isFinite(esperadoCentavos) || esperadoCentavos !== Math.round(saldoSnapshot * 100)) {
-        throw new Error(`O saldo desta OS mudou (agora R$ ${saldoSnapshot.toFixed(2)}). Atualize e confirme de novo.`);
+        throw new RecusaRecebimentoImediatoV3(`O saldo desta OS mudou (agora R$ ${saldoSnapshot.toFixed(2)}). Atualize e confirme de novo.`);
       }
     }
     const veredito = validarSplitV3(linhas, saldoSnapshot);
-    if (!veredito.ok) throw new Error(veredito.motivo ?? "Recebimento inválido.");
+    if (!veredito.ok) throw new RecusaRecebimentoImediatoV3(veredito.motivo ?? "Recebimento inválido.");
     const op: "liquidar" | "parcial" = veredito.op ?? "parcial";
 
     const splitDesc = descreverSplitV3(linhas);
@@ -503,7 +598,7 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
         });
     if (!baixa.ok) {
       const prefixo = op === "liquidar" ? "quitar" : "registrar o pagamento";
-      throw new Error(`Não foi possível ${prefixo} (${baixa.reason}).`);
+      throw new RecusaRecebimentoImediatoV3(`Não foi possível ${prefixo} (${baixa.reason}).`);
     }
     const tituloRow = baixa.data;
     const recebidoTotal = sumPagamentosFromHistoricoPayload(tituloRow.payload);
@@ -517,7 +612,7 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
       total,
       { parcial: op === "parcial", db: tx, idempotenciaDoChamador: true },
     );
-    if (!mov.ok) throw new Error(`Falha ao lançar a movimentação financeira (${mov.reason}).`);
+    if (!mov.ok) throw new RecusaRecebimentoImediatoV3(`Falha ao lançar a movimentação financeira (${mov.reason}).`);
 
     // 8) Operação de caixa POR FORMA → fechamento separa por forma; dinheiro entra na gaveta.
     for (const [indice, l] of linhas.entries()) {
@@ -591,7 +686,23 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
     } as OSPayloadFull;
     await tx.ordemServico.update({ where: { id: rowId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
 
+    if (input.confirmacaoClienteV3) {
+      await gravarPendenciaFinanceiraV3(tx, { versao: 1, key: JSON.stringify([sid, id]), storeId: sid, osId: id, operacaoId, tipo: "imediato", input: { ...input, operacaoId } }, fingerprintCompleto);
+    }
     return { os: nextPayload as unknown as OrdemServico, pagamento: mirror, valorRecebido: total, op: op, recibo, operacaoId, jaRegistrado: false };
+    } catch (e) {
+      if (!input.confirmacaoClienteV3 || (!(e instanceof RecusaRecebimentoImediatoV3) && !(e instanceof RecebimentoInelegivelErroV3))) throw e;
+      // Desfaz TODA escrita da tentativa, mantendo a consultiva. A recusa é cercada de forma
+      // durável: uma requisição original atrasada da mesma chave nunca poderá gravar depois.
+      await tx.$executeRaw`ROLLBACK TO SAVEPOINT ops_v3_imediato_confirmacao`;
+      if (sessaoId) await travarSessaoCaixa(tx, sid, sessaoId);
+      const { rowId, payload } = await lerOSTravadaV3(tx, sid, id);
+      const recusa: RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE", operacaoId, requestFingerprint: fingerprintCompleto, mensagem: e.message };
+      const anteriores = Array.isArray(payload.recebimentoImediatoRecusasV3) ? payload.recebimentoImediatoRecusasV3 : [];
+      const next = { ...payload, recebimentoImediatoRecusasV3: [...anteriores.filter((r: unknown) => !isRecordV3(r) || r.operacaoId !== operacaoId), { ...recusa, at: dataHora }] };
+      await tx.ordemServico.update({ where: { id: rowId }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+      return recusa;
+    }
   }, TX_PAGAMENTO_OS_V3);
 
   revalidarOperacoesV3("receberOSV3");
@@ -640,6 +751,7 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
   // snapshot velho nem sobrescreve uma baixa gravada no meio do caminho.
   const resultado = await prisma.$transaction(async (tx): Promise<EstornarRecebimentoResultV3> => {
     await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
+    await conferirPendenciaFinanceiraV3(tx, sid, id, "", "outro");
     const sessao = sessaoId ? await travarSessaoCaixa(tx, sid, sessaoId) : null;
     if (!sessao || sessao.status !== "ABERTA") throw new Error("Caixa fechado: abra o caixa para estornar o recebimento.");
     const { rowId, payload, os } = await lerOSTravadaV3(tx, sid, id);
@@ -796,6 +908,7 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
         return { os: payload as unknown as OrdemServico, aPrazo, valorFormalizado: valor, jaRegistrado: true };
       }
     }
+    await conferirPendenciaFinanceiraV3(tx, sid, id, operacaoId ?? "", "outro");
     // Mesmo lock de período financeiro que o recebimento imediato respeita — criar/
     // atualizar um título em aberto também é uma operação financeira (não precisa de
     // caixa, mas precisa respeitar o fechamento do período). Depois do replay: um lançamento
@@ -898,9 +1011,10 @@ export async function lancarOSAPrazoV3(storeId: string, osId: string, input: Lan
 export type RegistrarRecebimentoMistoInputV3 = RecebimentoMistoInputV3;
 
 export type RegistrarRecebimentoMistoResultV3 =
-  | ({ ok: true } & ResultadoRecebimentoMistoV3)
+  | ({ ok: true; prova?: ProvaConfirmacaoFinanceiraV3 } & ResultadoRecebimentoMistoV3)
   | {
       ok: false;
+      pendencia?: PendenciaConfirmacaoFinanceiraV3;
       code: RecebimentoMistoErroCodigoV3;
       mensagem: string;
       saldoAtual?: number;
@@ -960,8 +1074,12 @@ export async function registrarRecebimentoMistoOSV3(
   const ctx = { storeId: sid, osId: id, operador: operadorLabel(session), operadorId: session.user.id, agora: nowIso() };
   // Identidade da confirmação: a data de hoje não importa para ela (só valida vencimento ≥ hoje).
   const identidade = normalizarRecebimentoMistoV3(input, DATA_MINIMA_REPLAY_V3);
-  // Malformada: nada jamais pode ser gravado com ela — recusa terminal por construção.
-  if (!identidade.ok) return falhaMistaConferidaV3(identidade.code, identidade.mensagem);
+  // O opt-in de confirmação exige prova SERIALIZADA: validação prévia não libera uma
+  // identidade pendente. O retorno legado de validação continua compatível com os callers
+  // server-side; ele não reconhece nem remove o fence autoritativo da OS.
+  if (!identidade.ok) return input.confirmacaoClienteV3
+    ? falhaMistaV3(identidade.code, identidade.mensagem)
+    : falhaMistaConferidaV3(identidade.code, identidade.mensagem);
   const normal = normalizarRecebimentoMistoV3(input, hojeLojaV3());
   const periodo = await verificarPeriodoFechado(sid, new Date());
   // O que barraria uma operação NOVA (vencimento passado, período fechado). Não é decidido
@@ -975,7 +1093,13 @@ export async function registrarRecebimentoMistoOSV3(
 
   try {
     const decisao = await prisma.$transaction(
-      (tx) => decidirRecebimentoMistoOSV3(tx, ctx, identidade.valor, recusaPrevia),
+      async (tx) => {
+        const d = await decidirRecebimentoMistoOSV3(tx, ctx, identidade.valor, recusaPrevia);
+        if (d.tipo === "gravada" && !d.resultado.jaRegistrado && input.confirmacaoClienteV3) {
+          await gravarPendenciaFinanceiraV3(tx, { versao: 1, key: JSON.stringify([sid, id]), storeId: sid, osId: id, operacaoId: input.operacaoId, tipo: "misto", input }, fingerprintRecebimentoMistoV3({ storeId: sid, osId: id }, identidade.valor));
+        }
+        return d;
+      },
       TX_PAGAMENTO_OS_V3,
     );
     // Recusa decidida sob a trava e gravada como terminal: a chave nunca mais grava.
@@ -983,10 +1107,11 @@ export async function registrarRecebimentoMistoOSV3(
       return falhaMistaConferidaV3(decisao.recusa.code, decisao.recusa.mensagem, decisao.recusa.saldoAtual, decisao.recusa.comercial);
     }
     revalidarOperacoesV3("registrarRecebimentoMistoOSV3");
-    return { ok: true, ...decisao.resultado };
+    return { ok: true, ...decisao.resultado, ...(input.confirmacaoClienteV3 ? { prova: { operacaoId: input.operacaoId, requestFingerprint: fingerprintRecebimentoMistoV3({ storeId: sid, osId: id }, identidade.valor), tipo: "misto" as const } } : {}) };
   } catch (e) {
     // Mesma chave já usada com outro conteúdo: este conteúdo nunca foi gravado com ela.
-    if (isRecebimentoMistoErroV3(e)) return falhaMistaConferidaV3(e.code, e.message, e.saldoAtual, e.comercial);
+    if (e instanceof ConfirmacaoFinanceiraPendenteErroV3) return { ...falhaMistaV3("confirmacao_pendente", e.message), ok: false, code: "confirmacao_pendente", mensagem: e.message, pendencia: e.pendencia };
+    if (isRecebimentoMistoErroV3(e)) return falhaMistaV3(e.code, e.message, e.saldoAtual, e.comercial);
     // Conflito transitório do banco: nada desta tentativa ficou gravado, mas a chave segue
     // em aberto (não conferida) — a tela mantém a pendência e reenvia a MESMA operação.
     if (conflitoConcorrenteV3(e)) {

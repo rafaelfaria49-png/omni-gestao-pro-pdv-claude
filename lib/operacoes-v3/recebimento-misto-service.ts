@@ -54,6 +54,11 @@ import {
   type DestinoInelegibilidadeComercialV3,
 } from "./elegibilidade-comercial";
 import {
+  CAMPO_CONFIRMACAO_PENDENTE_V3,
+  MENSAGEM_CONFIRMACAO_PENDENTE_V3,
+  lerPendenciaConfirmacaoV3,
+  conteudoConfirmacaoImediataV3,
+  type PendenciaConfirmacaoFinanceiraV3,
   assinaturaRecebimentoMistoLegadaV1,
   assinaturaRecebimentoMistoV3,
   conteudoRecebimentoCanonicoLegadoV1,
@@ -404,7 +409,6 @@ export async function decidirRecebimentoMistoOSV3(
   await travarParaDecidir(tx, ctx, n);
   const replay = await replayDaOperacao(tx, ctx, n);
   if (replay) return { tipo: "gravada", resultado: replay };
-
   const requestFingerprint = fingerprintRecebimentoMistoV3({ storeId, osId }, n);
   const os = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
   const anterior = recusasGravadas(os?.payload).find((r) => r.operacaoId === n.operacaoId);
@@ -417,6 +421,7 @@ export async function decidirRecebimentoMistoOSV3(
     }
     return { tipo: "recusada", recusa: recusaDe(anterior) };
   }
+  await conferirPendenciaFinanceiraV3(tx, storeId, osId, n.operacaoId, "misto");
   if (recusaPrevia) return { tipo: "recusada", recusa: await gravarRecusaTerminal(tx, ctx, n, requestFingerprint, recusaPrevia) };
 
   await tx.$executeRaw`SAVEPOINT ops_v3_misto_execucao`;
@@ -429,6 +434,35 @@ export async function decidirRecebimentoMistoOSV3(
     const recusa: RecusaMistaV3 = { code: e.code, mensagem: e.message, saldoAtual: e.saldoAtual, comercial: e.comercial };
     return { tipo: "recusada", recusa: await gravarRecusaTerminal(tx, ctx, n, requestFingerprint, recusa) };
   }
+}
+
+
+/** A recusa desta tentativa NÃO resolve a confirmação original de outra identidade. */
+export class ConfirmacaoFinanceiraPendenteErroV3 extends Error {
+  constructor(readonly pendencia: PendenciaConfirmacaoFinanceiraV3) {
+    super(MENSAGEM_CONFIRMACAO_PENDENTE_V3); this.name = "ConfirmacaoFinanceiraPendenteErroV3";
+  }
+}
+export function fingerprintConfirmacaoImediataV3(storeId: string, osId: string, input: import("./pdv-servico-actions").ReceberOSInputV3): string {
+  return createHash("sha256").update(JSON.stringify([storeId, osId, conteudoConfirmacaoImediataV3(input)])).digest("hex");
+}
+/** Chamado sob a consultiva por OS antes de qualquer operação financeira nova. */
+export async function conferirPendenciaFinanceiraV3(tx: RecebimentoMistoTxV3, storeId: string, osId: string, operacaoId: string, tipo: "imediato" | "misto" | "outro"): Promise<void> {
+  const row = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const payload = isRecord(row?.payload) ? row.payload : {};
+  const camposRecusa = tipo === "imediato" ? ["recebimentoMistoRecusasV3"] : tipo === "misto" ? ["recebimentoImediatoRecusasV3"] : ["recebimentoMistoRecusasV3", "recebimentoImediatoRecusasV3"];
+  if (operacaoId && camposRecusa.some((campo) => Array.isArray(payload[campo]) && (payload[campo] as unknown[]).some((r) => isRecord(r) && r.operacaoId === operacaoId))) throw new Error("Esta confirmação já foi usada com outro conteúdo.");
+  const raw = payload[CAMPO_CONFIRMACAO_PENDENTE_V3];
+  const p = lerPendenciaConfirmacaoV3(raw, storeId, osId);
+  if (raw != null && !p) throw new Error(MENSAGEM_CONFIRMACAO_PENDENTE_V3);
+  if (p && (p.operacaoId !== operacaoId || p.tipo !== tipo)) throw new ConfirmacaoFinanceiraPendenteErroV3(p);
+}
+/** Mesmo commit da baixa: sem resposta/refresh/outro operador continua havendo uma pendência autoritativa. */
+export async function gravarPendenciaFinanceiraV3(tx: RecebimentoMistoTxV3, p: PendenciaConfirmacaoFinanceiraV3, requestFingerprint: string): Promise<void> {
+  const row = await tx.ordemServico.findFirst({ where: { id: p.osId, storeId: p.storeId }, select: { id: true, payload: true } });
+  if (!row || !isRecord(row.payload)) throw new Error("Não foi possível preservar a confirmação financeira.");
+  const payload = { ...row.payload, [CAMPO_CONFIRMACAO_PENDENTE_V3]: { ...p, requestFingerprint } };
+  await tx.ordemServico.update({ where: { id: row.id }, data: { payload: payload as unknown as Prisma.InputJsonValue } });
 }
 
 // ─── execução ─────────────────────────────────────────────────────────────────
@@ -446,6 +480,7 @@ export async function executarRecebimentoMistoOSV3(
   // da sessão: repetir uma confirmação já gravada continua válido com o caixa fechado.
   const replay = await replayDaOperacao(tx, ctx, n);
   if (replay) return replay;
+  await conferirPendenciaFinanceiraV3(tx, ctx.storeId, ctx.osId, n.operacaoId, "misto");
   return executarSobATrava(tx, ctx, n, fingerprintRecebimentoMistoV3({ storeId: ctx.storeId, osId: ctx.osId }, n));
 }
 

@@ -1,0 +1,49 @@
+
+Running 9 tests using 1 worker
+
+(node:26608) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26608) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (5.7s)
+(node:17252) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17252) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  2 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:169:5 › C+E — rascunho sem pagamento: conferir → aprovar expressamente → receber com forma escolhida; uma cobrança, sem iniciar serviço nem entregar (1.4m)
+  -  3 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:221:5 › C — aprovação recusada no servidor (o orçamento mudou depois da conferência): o motivo aparece no sheet e nada é cobrado
+  -  4 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:243:5 › D — rascunho + título liquidado: formalização administrativa com motivo e declaração; preço, título, caixa e status preservados
+  -  5 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:298:5 › E — orçamento aprovado sem pagamento: o sheet abre sem forma; confirmar exige a escolha; dividir não herda forma
+  -  6 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:332:5 › B — pagamento registrado sem orçamento real: 'Gerar orçamento' orienta e nada é materializado
+  -  7 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:354:5 › A — PDV de Serviço V3: rascunho sem pagamento mostra a recusa comercial e não deixa receber; nada é gravado
+  -  8 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — imediato: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original
+  -  9 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — misto: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original
+
+
+  1) [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:169:5 › C+E — rascunho sem pagamento: conferir → aprovar expressamente → receber com forma escolhida; uma cobrança, sem iniciar serviço nem entregar 
+
+    Error: [31mTimed out 25000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByText('🧾 Recibo de pagamento', { exact: true })
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 25000ms[22m
+    [2m  - waiting for getByText('🧾 Recibo de pagamento', { exact: true })[22m
+
+
+      212 |
+      213 |   const recibo = page.getByText("🧾 Recibo de pagamento", { exact: true });
+    > 214 |   await expect(recibo).toBeVisible();
+          |                        ^
+      215 |   await page.getByRole("button", { name: "Fechar", exact: true }).click();
+      216 |   await etapa(page, /Entrega/).click();
+      217 |   await expect(guia(page).getByText("Pagamento quitado — confirmar entrega.")).toBeVisible();
+        at C:\Projetos\omni-gestao-ops-v4-frg-002\e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:214:24
+
+    Error Context: test-results\specs-ops-v4-financeiro-re-daa02-niciar-serviço-nem-entregar-chromium\error-context.md
+
+  1 failed
+    [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:169:5 › C+E — rascunho sem pagamento: conferir → aprovar expressamente → receber com forma escolhida; uma cobrança, sem iniciar serviço nem entregar 
+  7 did not run
+  1 passed (1.6m)

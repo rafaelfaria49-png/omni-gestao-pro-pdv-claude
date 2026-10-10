@@ -211,7 +211,7 @@ test("C+E — rascunho sem pagamento: conferir → aprovar expressamente → rec
   expect(depois.payload.timeline.filter((e) => e.tipo === "entrega_cliente")).toHaveLength(0);
 
   const recibo = page.getByText("🧾 Recibo de pagamento", { exact: true });
-  await expect(recibo).toBeVisible();
+  await expect(recibo).toBeVisible(IDA_E_VOLTA);
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
   await etapa(page, /Entrega/).click();
   await expect(guia(page).getByText("Pagamento quitado — confirmar entrega.")).toBeVisible();
@@ -373,3 +373,58 @@ test("A — PDV de Serviço V3: rascunho sem pagamento mostra a recusa comercial
   await expect(receber).toBeDisabled();
   expect(await efeitos(prisma, os.id)).toBe(antes);
 });
+
+
+for (const modalidade of ["imediato", "misto"] as const) {
+  test(`R7 — ${modalidade}: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original`, async ({ page }) => {
+    const os = await semearOS(prisma, "aprovado", false);
+    await abrirOS(page, os.codigo); await ticketFinanceiro(page).click();
+    await page.getByRole("button", { name: /^Receber R\$\s420,00$/ }).click();
+    let sheet = page.getByRole("dialog", { name: "Receber pagamento" });
+    await sheet.getByRole("button", { name: "Pagamento parcial", exact: true }).click();
+    await sheet.getByLabel("Forma da linha 1").selectOption("pix");
+    await sheet.getByLabel("Valor da linha 1").fill("100");
+    if (modalidade === "misto") {
+      await sheet.getByRole("button", { name: "+ Dividir pagamento" }).click();
+      await sheet.getByLabel("Forma da linha 2").selectOption("a_prazo");
+      await sheet.getByLabel("Vencimento da parte a prazo").fill("2099-12-31");
+    }
+    const envios: string[] = [];
+    let perdeu = false;
+    await page.route("**/*", async (route) => {
+      const request = route.request(), body = request.postData() ?? "";
+      const writer = request.method() === "POST" && !!request.headers()["next-action"] && body.includes(os.id) && body.includes('"confirmacaoClienteV3":true') && body.includes(modalidade === "imediato" ? '"linhas"' : '"pagamentosAgora"');
+      if (!writer) { await route.continue(); return; }
+      envios.push(body);
+      if (perdeu) { await route.continue(); return; }
+      perdeu = true;
+      // route.fetch termina a resposta REAL depois do commit; só a entrega ao browser se perde.
+      const resposta = await route.fetch(); expect(resposta.ok()).toBe(true);
+      await route.abort("connectionclosed");
+    });
+    await sheet.getByRole("button", { name: modalidade === "misto" ? /^Registrar R\$\s100,00/ : /^Confirmar R\$\s100,00$/ }).click();
+    await expect(sheet.getByRole("alert")).toContainText("Confirmação pendente de verificação.", IDA_E_VOLTA);
+    await expect.poll(() => envios.length).toBe(1);
+    const antes = JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id) });
+    await sheet.getByRole("button", { name: "Fechar recebimento" }).click();
+    await page.getByRole("button", { name: "Verificar mesma confirmação", exact: true }).click();
+    sheet = page.getByRole("dialog", { name: "Receber pagamento" });
+    await expect(sheet.getByLabel("Forma da linha 1")).toBeDisabled();
+    await expect(sheet.getByLabel("Forma da linha 1")).toHaveValue("pix");
+    await page.reload();
+    await abrirOS(page, os.codigo); await ticketFinanceiro(page).click();
+    await page.getByRole("button", { name: "Verificar mesma confirmação", exact: true }).click();
+    sheet = page.getByRole("dialog", { name: "Receber pagamento" });
+    await expect(sheet.getByLabel("Valor da linha 1")).toHaveValue("100");
+    await expect(sheet.getByRole("button", { name: "+ Dividir pagamento" })).toBeDisabled();
+    await sheet.getByRole("button", { name: "Verificar mesma confirmação", exact: true }).click();
+    await expect(sheet).toBeHidden(IDA_E_VOLTA);
+    expect(envios).toHaveLength(2); expect(JSON.parse(envios[1]!)).toEqual(JSON.parse(envios[0]!));
+    expect(JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id) })).toBe(antes);
+    const titulo = (await titulosDe(prisma, os.id))[0]!;
+    const historico = ((titulo.payload as { historico: Array<{ tipo: string; valor: number }> }).historico).filter((e) => e.tipo === "pagamento" || e.tipo === "liquidacao");
+    expect(historico.map((e) => e.valor)).toEqual([100]);
+    expect(await prisma.ordemServico.count({ where: { id: os.id, storeId: LOJA } })).toBe(1);
+    expect((await linhaOS(prisma, os.id)).payload.confirmacaoRecebimentoPendenteV3).toBeUndefined();
+  });
+}

@@ -2058,7 +2058,8 @@ describe("OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split i
   })
 
   it("envia o split para receberOSV3 no formato `linhas: SplitLinhaV3[]` (nunca forma/valor soltos)", () => {
-    expect(card).toMatch(/pdv\.receber\(\{\s*linhas:\s*linhasValidas,/)
+    expect(card).toMatch(/const inputImediato = pendenciaImediata\?\.input \?\? \{\s*linhas:\s*linhasValidas,/)
+    expect(card).toContain("await pdv.receber(inputImediato)")
     expect(card).not.toMatch(/pdv\.receber\(\{\s*valor:/)
   })
 

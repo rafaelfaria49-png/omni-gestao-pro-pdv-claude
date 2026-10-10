@@ -36,6 +36,7 @@ const AGORA = new Date("2026-10-04T18:00:00.000Z"); // 04/10/2026 15:00 na loja
 const TZ_ORIGINAL = process.env.TZ;
 
 beforeEach(() => {
+  localStorage.clear();
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(AGORA);
   vi.clearAllMocks();

@@ -84,6 +84,7 @@ import { prisma } from "@/lib/prisma";
 import {
   estornarRecebimentoOSV3,
   lancarOSAPrazoV3,
+  lerPagamentoOSV3,
   receberOSV3,
   registrarRecebimentoMistoOSV3,
 } from "@/lib/operacoes-v3/pdv-servico-actions";
@@ -746,4 +747,193 @@ describe("B5 · gerarOrcamentoDaOS não materializa rascunho sobre OS paga", () 
     expect(await titulo(sid, osId)).toBeNull();
     expect(await prisma.caixaOperacao.count({ where: { storeId: sid } })).toBe(0);
   });
+});
+
+describe("R7 · P1: resposta perdida não permite nova confirmação entre operadores", () => {
+  it("imediato incerto seguido de misto: uma baixa, um título, uma movimentação e nenhuma parcela duplicada", async () => {
+    const sid = await novaLoja();
+    const id = await novaOS(sid);
+    const caixa = await abrirCaixa(sid);
+    // A resposta deste commit se perde: outro operador não recebeu prova nem reconheceu o resultado.
+    const original = { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, linhas: [{ forma: "pix" as const, valor: 100 }], saldoEsperado: 420, confirmacaoClienteV3: true as const };
+    await receberOSV3(sid, id, original);
+    const antes = await fotoFinanceira(sid, id);
+    await registrarRecebimentoMistoOSV3(sid, id, {
+      operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, pagamentosAgora: [{ forma: "dinheiro", valor: 100 }],
+      saldoAPrazo: { valor: 220, vencimento: VENC }, saldoEsperado: 320,
+    });
+    expect(await fotoFinanceira(sid, id)).toBe(antes);
+    const e = await efeitos(sid, id);
+    expect(e.titulos).toHaveLength(1);
+    expect(e.caixa).toHaveLength(1);
+    expect(e.movs).toBe(1);
+    expect((await lerPayload(id)).aPrazoV3).toBeUndefined();
+  });
+});
+
+
+describe("R7 · prova autoritativa, replay e serialização real", () => {
+  async function cenario() {
+    const sid = await novaLoja(), id = await novaOS(sid), caixa = await abrirCaixa(sid);
+    return { sid, id, caixa, input: { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, linhas: [{ forma: "pix" as const, valor: 100 }], saldoEsperado: 420, intencao: "parcial" as const, observacao: "Original QA", confirmacaoClienteV3: true as const } };
+  }
+  it("replay devolve recibo e operação originais sem segunda baixa; reconhecimento libera recebimento NOVO", async () => {
+    const { sid, id, input } = await cenario();
+    const a = await receberOSV3(sid, id, input); expect(a.estado).toBe("CONFIRMADO");
+    const antes = await fotoFinanceira(sid, id), b = await receberOSV3(sid, id, input);
+    expect(b).toMatchObject({ estado: "CONFIRMADO", resultado: { jaRegistrado: true, operacaoId: input.operacaoId } });
+    if (a.estado !== "CONFIRMADO" || b.estado !== "CONFIRMADO") throw Error("Sem resultado positivo");
+    expect(b.resultado.recibo).toEqual(a.resultado.recibo); expect(await fotoFinanceira(sid, id)).toBe(antes);
+    expect((await lerPagamentoOSV3(sid, id)).pendenciaConfirmacao?.operacaoId).toBe(input.operacaoId);
+    expect((await lerPagamentoOSV3(sid, id, b.prova)).pendenciaConfirmacao).toBeNull();
+    const nova = await receberOSV3(sid, id, { ...input, operacaoId: gerarOperacaoIdV3(), saldoEsperado: 320, linhas: [{ forma: "pix", valor: 50 }] });
+    expect(nova.estado).toBe("CONFIRMADO"); expect(pagamentosDo(await titulo(sid, id))).toEqual([100, 50]);
+    const e = await efeitos(sid, id); expect(e.titulos).toHaveLength(1); expect(e.caixa).toHaveLength(2); expect(e.movs).toBe(2);
+    expect(await prisma.ordemServico.count({ where: { storeId: sid } })).toBe(1);
+  });
+  it.each(["forma", "valor", "sessão", "saldo", "observação"])("mesma operacaoId com %s diferente: conflito, nenhuma mutação financeira", async (campo) => {
+    const { sid, id, caixa, input } = await cenario(); await receberOSV3(sid, id, input);
+    const antes = await fotoFinanceira(sid, id);
+    const alteracao = campo === "forma" ? { linhas: [{ forma: "dinheiro" as const, valor: 100 }] } : campo === "valor" ? { linhas: [{ forma: "pix" as const, valor: 50 }] } : campo === "sessão" ? { sessaoId: caixa + "-outra" } : campo === "saldo" ? { saldoEsperado: 320 } : { observacao: "Outro conteúdo" };
+    expect(await receberOSV3(sid, id, { ...input, ...alteracao })).toMatchObject({ estado: "INCERTO" });
+    expect(await fotoFinanceira(sid, id)).toBe(antes);
+  });
+  it("permissão negada antes do replay mantém fence; permissão restaurada recupera a MESMA operação", async () => {
+    const { sid, id, input } = await cenario(); await receberOSV3(sid, id, input);
+    const antes = await fotoFinanceira(sid, id);
+    sessao.role = "VENDEDOR";
+    expect(await receberOSV3(sid, id, input)).toMatchObject({ estado: "INCERTO" });
+    const leitura = await lerPagamentoOSV3(sid, id);
+    expect(leitura).toMatchObject({ pendenciaConfirmacao: null, confirmacaoBloqueada: true });
+    expect(await fotoFinanceira(sid, id)).toBe(antes);
+    sessao.role = "ADMIN";
+    expect(await receberOSV3(sid, id, input)).toMatchObject({ estado: "CONFIRMADO", resultado: { jaRegistrado: true } });
+    expect(await fotoFinanceira(sid, id)).toBe(antes);
+  });
+  it("prova de outra chave, outro fingerprint ou outra loja nunca reconhece a pendência original", async () => {
+    const { sid, id, input } = await cenario(); const r = await receberOSV3(sid, id, input);
+    if (r.estado !== "CONFIRMADO") throw Error("Sem confirmação");
+    const antes = await foto(sid, id);
+    await expect(lerPagamentoOSV3(sid, id, { ...r.prova, operacaoId: gerarOperacaoIdV3() })).rejects.toThrow(/prova/);
+    await expect(lerPagamentoOSV3(sid, id, { ...r.prova, requestFingerprint: "outro-hash" })).rejects.toThrow(/prova/);
+    const outra = await novaLoja();
+    await expect(lerPagamentoOSV3(outra, id, r.prova)).rejects.toThrow();
+    expect(await foto(sid, id)).toBe(antes);
+  });
+  it("caixa fechado depois do commit não bloqueia replay nem reconhecimento legítimo", async () => {
+    const { sid, id, caixa, input } = await cenario(); await receberOSV3(sid, id, input);
+    await prisma.sessaoCaixa.update({ where: { id: caixa }, data: { status: "FECHADA" } });
+    const antes = await fotoFinanceira(sid, id), r = await receberOSV3(sid, id, input);
+    expect(r).toMatchObject({ estado: "CONFIRMADO", resultado: { jaRegistrado: true } });
+    if (r.estado !== "CONFIRMADO") throw Error("Sem confirmação");
+    expect((await lerPagamentoOSV3(sid, id, r.prova)).pendenciaConfirmacao).toBeNull();
+    expect(await fotoFinanceira(sid, id)).toBe(antes);
+  });
+  it("terminal negativo é durável: caixa reaberto não permite à requisição atrasada gravar depois", async () => {
+    const { sid, id, caixa, input } = await cenario();
+    await prisma.sessaoCaixa.update({ where: { id: caixa }, data: { status: "FECHADA" } });
+    const a = await receberOSV3(sid, id, input);
+    expect(a).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE", operacaoId: input.operacaoId });
+    await prisma.sessaoCaixa.update({ where: { id: caixa }, data: { status: "ABERTA" } });
+    const antes = await fotoFinanceira(sid, id);
+    expect(await receberOSV3(sid, id, input)).toEqual(a);
+    expect(await fotoFinanceira(sid, id)).toBe(antes); expect(await titulo(sid, id)).toBeNull();
+    const nova = await receberOSV3(sid, id, { ...input, operacaoId: gerarOperacaoIdV3() });
+    expect(nova.estado).toBe("CONFIRMADO"); expect(pagamentosDo(await titulo(sid, id))).toEqual([100]);
+  });
+  it("segunda chave durante transação ainda em processamento ESPERA o lock e recusa após commit", async () => {
+    const { sid, id, caixa, input } = await cenario();
+    const pausa = armarPausa({ modelo: "caixaOperacao", metodos: ["create"], quando: (args) => args.data?.payload?.ordemServicoId === id });
+    const a = receberOSV3(sid, id, input); await pausa.naBarreira;
+    const b = registrarRecebimentoMistoOSV3(sid, id, { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, pagamentosAgora: [{ forma: "dinheiro", valor: 100 }], saldoAPrazo: { valor: 220, vencimento: VENC }, saldoEsperado: 320, confirmacaoClienteV3: true });
+    try { expect(await concluiuOuEsperaTrava(b)).toBe("esperando_trava"); } finally { pausa.liberar(); }
+    const [ra, rb] = await Promise.all([a, b]); expect(ra.estado).toBe("CONFIRMADO");
+    expect(rb).toMatchObject({ ok: false, code: "confirmacao_pendente", pendencia: { tipo: "imediato", operacaoId: input.operacaoId } });
+    const e = await efeitos(sid, id); expect(e.titulos).toHaveLength(1); expect(e.caixa).toHaveLength(1); expect(e.movs).toBe(1);
+    expect(pagamentosDo(await titulo(sid, id))).toEqual([100]); expect((await lerPayload(id)).aPrazoV3).toBeUndefined();
+  });
+  it("dois operadores reenviam a MESMA operação em voo: só uma baixa e recibos idênticos", async () => {
+    const { sid, id, input } = await cenario();
+    const pausa = armarPausa({ modelo: "caixaOperacao", metodos: ["create"], quando: (args) => args.data?.payload?.ordemServicoId === id });
+    const a = receberOSV3(sid, id, input); await pausa.naBarreira; const b = receberOSV3(sid, id, input);
+    try { expect(await concluiuOuEsperaTrava(b)).toBe("esperando_trava"); } finally { pausa.liberar(); }
+    const [ra, rb] = await Promise.all([a, b]);
+    if (ra.estado !== "CONFIRMADO" || rb.estado !== "CONFIRMADO") throw Error("Sem confirmação");
+    expect([ra.resultado.jaRegistrado, rb.resultado.jaRegistrado]).toEqual([false, true]); expect(ra.resultado.recibo).toEqual(rb.resultado.recibo);
+    const e = await efeitos(sid, id); expect(e.titulos).toHaveLength(1); expect(e.caixa).toHaveLength(1); expect(e.movs).toBe(1);
+  });
+  it("misto Pix + Dinheiro + a prazo bloqueia imediato e outro misto até reconhecer; split e prazo permanecem originais", async () => {
+    const { sid, id, caixa } = await cenario();
+    const input = { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, pagamentosAgora: [{ forma: "pix" as const, valor: 100 }, { forma: "dinheiro" as const, valor: 70 }], saldoAPrazo: { valor: 250, vencimento: VENC, observacao: "Prazo QA" }, saldoEsperado: 420, confirmacaoClienteV3: true as const };
+    const a = await registrarRecebimentoMistoOSV3(sid, id, input); expect(a.ok).toBe(true);
+    const antes = await fotoFinanceira(sid, id);
+    expect(await receberOSV3(sid, id, { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, linhas: [{ forma: "pix", valor: 50 }], saldoEsperado: 250, confirmacaoClienteV3: true })).toMatchObject({ estado: "INCERTO", pendencia: { tipo: "misto", operacaoId: input.operacaoId } });
+    expect(await registrarRecebimentoMistoOSV3(sid, id, { ...input, operacaoId: gerarOperacaoIdV3(), pagamentosAgora: [{ forma: "pix", valor: 50 }], saldoAPrazo: { valor: 200, vencimento: VENC }, saldoEsperado: 250 })).toMatchObject({ ok: false, code: "confirmacao_pendente" });
+    await expect(lancarOSAPrazoV3(sid, id, { vencimento: VENC })).rejects.toThrow(/Confirmação pendente/);
+    await expect(estornarRecebimentoOSV3(sid, id, { sessaoId: caixa })).rejects.toThrow(/Confirmação pendente/);
+    expect(await fotoFinanceira(sid, id)).toBe(antes);
+    const replay = await registrarRecebimentoMistoOSV3(sid, id, input); expect(replay).toMatchObject({ ok: true, jaRegistrado: true });
+    if (!a.ok || !replay.ok || !replay.prova) throw Error("Sem prova mista"); expect(replay.recibo).toEqual(a.recibo);
+    expect((await lerPagamentoOSV3(sid, id, replay.prova)).pendenciaConfirmacao).toBeNull();
+    const e = await efeitos(sid, id); expect(e.titulos).toHaveLength(1); expect(e.caixa).toHaveLength(2); expect(e.movs).toBe(1);
+    expect(e.caixa.map((c) => [c.valor, (c.payload as Payload).formaPagamento]).sort()).toEqual([[100, "pix"], [70, "dinheiro"]].sort());
+    expect(pagamentosDo(await titulo(sid, id))).toEqual([170]);
+    expect((await lerPayload(id)).aPrazoV3).toMatchObject({ valor: 250, vencimento: VENC });
+  });
+  it("estorno posterior não transforma replay antigo em nova cobrança; nova identidade continua distinguível", async () => {
+    const { sid, id, caixa, input } = await cenario(), a = await receberOSV3(sid, id, input);
+    if (a.estado !== "CONFIRMADO") throw Error("Sem confirmação");
+    await lerPagamentoOSV3(sid, id, a.prova); await estornarRecebimentoOSV3(sid, id, { sessaoId: caixa, motivo: "QA estorno" });
+    const antes = await fotoFinanceira(sid, id), replay = await receberOSV3(sid, id, input);
+    expect(replay).toMatchObject({ estado: "CONFIRMADO", resultado: { jaRegistrado: true } }); expect(await fotoFinanceira(sid, id)).toBe(antes);
+    expect(await receberOSV3(sid, id, { ...input, operacaoId: gerarOperacaoIdV3() })).toMatchObject({ estado: "CONFIRMADO", resultado: { jaRegistrado: false } });
+    expect(pagamentosDo(await titulo(sid, id))).toEqual([100, 100]);
+    expect((await lerPagamentoOSV3(sid, id)).recebido).toBe(100);
+  });
+  it("metadado autoritativo malformado bloqueia em vez de assumir ausência", async () => {
+    const { sid, id, input } = await cenario(), p = await lerPayload(id);
+    await prisma.ordemServico.update({ where: { id }, data: { payload: { ...p, confirmacaoRecebimentoPendenteV3: { versao: 99 } } as Prisma.InputJsonValue } });
+    const antes = await fotoFinanceira(sid, id);
+    expect(await receberOSV3(sid, id, input)).toMatchObject({ estado: "INCERTO" });
+    expect((await lerPagamentoOSV3(sid, id)).confirmacaoBloqueada).toBe(true); expect(await fotoFinanceira(sid, id)).toBe(antes);
+  });
+});
+
+
+it("R7 · opt-in malformado não libera chave já gravada; modernidade não inventa operacaoId", async () => {
+ const sid = await novaLoja(), id = await novaOS(sid), caixa = await abrirCaixa(sid);
+ expect(await receberOSV3(sid, id, { sessaoId: caixa, linhas: [{ forma: "pix", valor: 100 }], confirmacaoClienteV3: true })).toMatchObject({ estado: "INCERTO" });
+ expect(await titulo(sid, id)).toBeNull();
+ const input = { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, pagamentosAgora: [{ forma: "pix" as const, valor: 100 }], saldoAPrazo: { valor: 320, vencimento: VENC }, saldoEsperado: 420, confirmacaoClienteV3: true as const };
+ expect(await registrarRecebimentoMistoOSV3(sid, id, input)).toMatchObject({ ok: true });
+ const antes = await fotoFinanceira(sid, id);
+ const falha = await registrarRecebimentoMistoOSV3(sid, id, { ...input, saldoAPrazo: { valor: 320, vencimento: "" } });
+ expect(falha).toMatchObject({ ok: false, code: "entrada_invalida" }); expect(falha).not.toHaveProperty("naoRegistrada");
+ expect((await lerPagamentoOSV3(sid, id)).pendenciaConfirmacao?.operacaoId).toBe(input.operacaoId);
+ expect(await fotoFinanceira(sid, id)).toBe(antes);
+});
+
+
+it.each(["imediato", "misto"] as const)("R7 · recusa terminal %s não permite reutilizar a chave em OUTRA modalidade", async (tipo) => {
+ const sid = await novaLoja(), id = await novaOS(sid), caixa = await abrirCaixa(sid), operacaoId = gerarOperacaoIdV3();
+ await prisma.sessaoCaixa.update({ where: { id: caixa }, data: { status: "FECHADA" } });
+ const imediato = { operacaoId, sessaoId: caixa, linhas: [{ forma: "pix" as const, valor: 100 }], saldoEsperado: 420, confirmacaoClienteV3: true as const };
+ const misto = { operacaoId, sessaoId: caixa, pagamentosAgora: [{ forma: "pix" as const, valor: 100 }], saldoAPrazo: { valor: 320, vencimento: VENC }, saldoEsperado: 420, confirmacaoClienteV3: true as const };
+ if (tipo === "imediato") expect(await receberOSV3(sid, id, imediato)).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE" });
+ else expect(await registrarRecebimentoMistoOSV3(sid, id, misto)).toMatchObject({ ok: false, naoRegistrada: true });
+ await prisma.sessaoCaixa.update({ where: { id: caixa }, data: { status: "ABERTA" } });
+ const antes = await fotoFinanceira(sid, id);
+ if (tipo === "imediato") await expect(registrarRecebimentoMistoOSV3(sid, id, misto)).rejects.toThrow(/outro conteúdo/);
+ else expect(await receberOSV3(sid, id, imediato)).toMatchObject({ estado: "INCERTO" });
+ expect(await fotoFinanceira(sid, id)).toBe(antes); expect(await titulo(sid, id)).toBeNull();
+});
+
+it("R7 · nova pendência não impede recuperar a recusa terminal anterior", async () => {
+ const sid = await novaLoja(), id = await novaOS(sid), caixa = await abrirCaixa(sid);
+ const input = { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, linhas: [{ forma: "pix" as const, valor: 100 }], saldoEsperado: 420, confirmacaoClienteV3: true as const };
+ await prisma.sessaoCaixa.update({ where: { id: caixa }, data: { status: "FECHADA" } });
+ const recusa = await receberOSV3(sid, id, input);
+ await prisma.sessaoCaixa.update({ where: { id: caixa }, data: { status: "ABERTA" } });
+ expect(await receberOSV3(sid, id, { ...input, operacaoId: gerarOperacaoIdV3() })).toMatchObject({ estado: "CONFIRMADO" });
+ const antes = await fotoFinanceira(sid, id); expect(await receberOSV3(sid, id, input)).toEqual(recusa); expect(await fotoFinanceira(sid, id)).toBe(antes);
 });

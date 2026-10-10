@@ -40,6 +40,8 @@ export interface SaldoAPrazoInputV3 {
 /** Contrato discriminado da confirmação mista (enviado pela tela ao servidor). */
 export interface RecebimentoMistoInputV3 {
   operacaoId: string;
+  /** Opt-in aditivo da UI: persiste a confirmação até reconhecimento autenticado. */
+  confirmacaoClienteV3?: true;
   /** Obrigatório quando há pagamento imediato (caixa aberto da loja). */
   sessaoId?: string;
   /** Somente dinheiro efetivamente recebido agora (dinheiro/pix/débito/crédito). */
@@ -71,6 +73,7 @@ export interface RecebimentoMistoNormalizadoV3 {
 }
 
 export type RecebimentoMistoErroCodigoV3 =
+  | "confirmacao_pendente"
   | "entrada_invalida"
   | "nao_autenticado"
   | "sem_permissao"
@@ -526,4 +529,43 @@ export function conteudoRecebimentoCanonicoLegadoV1(input: EntradaConteudoRecebi
     .map((l) => [l.forma, l.centavos] as [string, number])
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
   return JSON.stringify({ v: 1, sessaoId: (input.sessaoId ?? "").trim(), linhas });
+}
+
+// Confirmação financeira única por loja/OS (imediato e misto). Sem dados de cliente/credenciais.
+export const MENSAGEM_CONFIRMACAO_PENDENTE_V3 = "Confirmação pendente de verificação. Não registre outro recebimento nesta OS até confirmar o resultado anterior.";
+export const CAMPO_CONFIRMACAO_PENDENTE_V3 = "confirmacaoRecebimentoPendenteV3";
+export interface ProvaConfirmacaoFinanceiraV3 { operacaoId: string; requestFingerprint: string; tipo: "imediato" | "misto"; }
+export type PendenciaConfirmacaoFinanceiraV3 = {
+  versao: 1; key: string; storeId: string; osId: string; operacaoId: string;
+  requestFingerprint?: string;
+} & (
+  | { tipo: "imediato"; input: import("./pdv-servico-actions").ReceberOSInputV3 }
+  | { tipo: "misto"; input: RecebimentoMistoInputV3 }
+);
+
+/** Identidade completa das confirmações novas; fingerprints v1/v2 continuam reconhecíveis no servidor. */
+export function conteudoConfirmacaoImediataV3(input: import("./pdv-servico-actions").ReceberOSInputV3): string {
+  return JSON.stringify({
+    v: 3, economico: conteudoRecebimentoCanonicoV3(input),
+    saldoEsperadoCentavos: input.saldoEsperado == null ? null : Math.round(input.saldoEsperado * 100),
+    intencao: input.intencao ?? null, observacao: (input.observacao ?? "").trim() || null,
+  });
+}
+export function conteudoConfirmacaoMistaV3(input: RecebimentoMistoInputV3): string {
+  const n = normalizarRecebimentoMistoV3(input, "0000-01-01");
+  return n.ok ? assinaturaRecebimentoMistoV3({ storeId: "", osId: "" }, n.valor) : JSON.stringify(input);
+}
+
+/** Decodificação estrita do envelope persistido. Conteúdo econômico é revalidado pelo writer. */
+export function lerPendenciaConfirmacaoV3(value: unknown, storeId: string, osId: string): PendenciaConfirmacaoFinanceiraV3 | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const p = value as Record<string, unknown>;
+  const key = JSON.stringify([storeId, osId]);
+  if (p.versao !== 1 || p.key !== key || p.storeId !== storeId || p.osId !== osId || typeof p.operacaoId !== "string" || !OPERACAO_ID_PATTERN_V3.test(p.operacaoId)) return null;
+  if (!p.input || typeof p.input !== "object" || Array.isArray(p.input)) return null;
+  const i = p.input as Record<string, unknown>;
+  if (i.operacaoId !== p.operacaoId || (p.tipo !== "imediato" && p.tipo !== "misto")) return null;
+  if (p.tipo === "imediato" && (typeof i.sessaoId !== "string" || (!Array.isArray(i.linhas) && typeof i.forma !== "string"))) return null;
+  if (p.tipo === "misto" && !normalizarRecebimentoMistoV3(i as unknown as RecebimentoMistoInputV3, "0000-01-01").ok) return null;
+  return p as unknown as PendenciaConfirmacaoFinanceiraV3;
 }

@@ -9,7 +9,7 @@ import { RealActionNotice } from "./RealActionNotice";
 import sheetStyles from "./receber-pagamento.module.css";
 import { FORMAS_RECEBIMENTO_V3 } from "@/lib/operacoes-v3/payment-model";
 import {
-  deCentavosV3, formatarVencimentoV3, hojeLojaV3, rotuloBotaoRecebimentoMistoV3,
+  MENSAGEM_CONFIRMACAO_PENDENTE_V3, deCentavosV3, formatarVencimentoV3, hojeLojaV3, rotuloBotaoRecebimentoMistoV3,
   sugestaoAPrazoCentavosV3, SITUACAO_PARCIAL_A_PRAZO_V3, SITUACAO_INTEGRAL_A_PRAZO_V3,
 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { avaliarRecebimentoV4, buildRecebimentoMistoV4, INTENCOES_RECEBIMENTO_V4, valorSugeridoRecebimentoV4, type IntencaoRecebimentoV4, type LinhaRecebimentoV4 } from "@/lib/operacoes-v4/receber-pagamento-form";
@@ -139,7 +139,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const emConferencia = pagamentoEmConferenciaV4(situacao);
   const formAberto = open || v.receberPagamentoOpen;
   const busy = enviando || pdv.recebendo || !!pdv.registrandoMisto;
-  const travado = busy || !!pendencia;
+  const travado = busy || !!pendencia || !!pdv.confirmacaoBloqueada;
   const seedForm = useCallback(() => {
     const p = pendenciaMisto?.input;
     const imediata = pendenciaImediata?.input;
@@ -202,6 +202,8 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   const openForm = () => { seedForm(); setOpen(true); };
   // Hospedado na Entrega: nada inline — só o sheet quando aberto e pronto (a
   // mesma instância mantém o rascunho vivo durante a releitura após recusa).
+  if ((pendencia || pdv.confirmacaoBloqueada) && (!projection || projection.expectedTotal == null || v.financial.loading || v.financial.error || pdv.loading)) return <div style={box} role="alert">{MENSAGEM_CONFIRMACAO_PENDENTE_V3}{pendencia && pdv.verificarConfirmacao ? <button type="button" style={btnPrimary} disabled={busy} onClick={() => void pdv.verificarConfirmacao?.()}>Verificar mesma confirmação</button> : <p>Solicite conferência a um operador autorizado.</p>}</div>;
+  if (pdv.confirmacaoBloqueada && !pendencia) return <div style={box} role="alert">{MENSAGEM_CONFIRMACAO_PENDENTE_V3} Solicite conferência a um operador autorizado.</div>;
   if (somenteSheet && (!formAberto || v.financial.loading || v.financial.error || !projection || projection.expectedTotal == null || pdv.loading)) return null;
   if (v.financial.loading) return <div style={box}>Carregando projeção financeira…</div>;
   if (v.financial.error || !projection || projection.expectedTotal == null) return <div style={box}>Recebimento bloqueado: situação financeira indisponível ou incompleta.</div>;
@@ -239,7 +241,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
     {!caixaAberto && <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 9 }}>Caixa fechado — o recebimento imediato exige caixa aberto. Você pode formalizar 100% a prazo.</div>}
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
       <span style={{ fontSize: 11.5, color: C.muted }}>Saldo a receber: <b style={{ color: C.warnFg }}>{emConferencia ? "Em conferência" : fmt(pagamento.saldo)}</b></span>
-      <button type="button" onClick={openForm} style={btnPrimary}>{pendencia ? "Verificar registro pendente" : emConferencia ? "Receber pagamento" : `Receber ${fmt(pagamento.saldo)}`}</button>
+      <button type="button" onClick={openForm} style={btnPrimary}>{pendencia ? "Verificar mesma confirmação" : emConferencia ? "Receber pagamento" : `Receber ${fmt(pagamento.saldo)}`}</button>
     </div>
   </div>;
 
@@ -277,6 +279,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
     const registrarRecebimento = async (): Promise<{ ok: true } | { ok: false; mensagem: string | null }> => {
       // Só a instância deste formulário (loja+OS) recebe: trocada a OS, ela foi desmontada.
       if (!ativo.current) return { ok: false, mensagem: null };
+      if (pendencia && pdv.verificarConfirmacao) return await pdv.verificarConfirmacao() ? { ok: true } : { ok: false, mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 };
       if (!pendenciaImediata && (pendenciaMisto || rascunho.temAPrazo)) {
         if (!pdv.registrarMisto) return { ok: false, mensagem: null };
         // Pendência do hook é a confirmação original, mesmo se saldo/data/caixa mudaram.
@@ -288,7 +291,8 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
       const linhasValidas = rascunho.pagamentosAgora;
       // Com recebimento imediato sem resultado, o hook ignora este rascunho e repete a confirmação
       // ORIGINAL inteira (chave, sessão, linhas, saldo esperado) — nunca uma chave nova.
-      const ok = await pdv.receber({ linhas: linhasValidas, sessaoId: pdv.sessao?.sessaoId ?? "", intencao: intencao === "quitacao" ? undefined : intencao, observacao: observacao.trim() || undefined });
+      const inputImediato = pendenciaImediata?.input ?? { linhas: linhasValidas, sessaoId: pdv.sessao?.sessaoId ?? "", intencao: intencao === "quitacao" ? undefined : intencao, observacao: observacao.trim() || undefined };
+      const ok = await pdv.receber(inputImediato);
       return ok ? { ok: true } : { ok: false, mensagem: null };
     };
     envio.current = true; setEnviando(true); setErro(null);
@@ -382,14 +386,14 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
           </label>
           {!pendencia && errosVisiveis.map((mensagem) => <div key={mensagem} role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 8 }}>{mensagem}</div>)}
           {!caixaAberto && receberAgora > 0 && !pendencia && <a href="/dashboard/vendas" style={{ display: "inline-block", color: C.primary, marginTop: 8, fontSize: 11 }}>Abrir Caixa</a>}
-          {(erro || pdv.error || pendencia) && <div role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 9 }}>{erro ?? pdv.error ?? "Resultado ainda desconhecido. Reenvie a mesma confirmação para verificar o registro."}</div>}
+          {(erro || pdv.error || pendencia) && <div role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 9 }}>{pendencia ? MENSAGEM_CONFIRMACAO_PENDENTE_V3 + " Se não conseguir verificar, solicite conferência a um operador autorizado." : erro ?? pdv.error}</div>}
         </div>
         <div className={sheetStyles.footer}>
           <button type="button" onClick={() => void onConfirmar()} disabled={!podeConfirmar} style={{ ...btnPrimary, flex: 1, cursor: podeConfirmar ? "pointer" : "default", opacity: podeConfirmar ? 1 : 0.6 }}>
             {busy
               ? "Confirmando…"
               : pendencia
-                ? "Reenviar mesma confirmação"
+                ? "Verificar mesma confirmação"
                 : faltaForma
                   ? "Escolha a forma de pagamento"
                   : modoAprovacao

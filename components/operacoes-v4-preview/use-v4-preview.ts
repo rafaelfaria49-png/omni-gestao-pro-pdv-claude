@@ -377,7 +377,7 @@ export interface V4DataCtx {
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
   // recarregar lista+detalhe da V4 depois do sucesso.
-  pdvServico: PdvServicoState & Partial<Pick<PdvServicoV3Completo, "registrarMisto" | "registrandoMisto" | "pendenciaMisto" | "pendenciaReceber" | "aPrazo">>;
+  pdvServico: PdvServicoState & Partial<Pick<PdvServicoV3Completo, "registrarMisto" | "registrandoMisto" | "pendenciaMisto" | "pendenciaReceber" | "pendenciaConfirmacao" | "confirmacaoBloqueada" | "verificarConfirmacao" | "aPrazo">>;
   // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
   // Action SEPARADA de `receberOSV3`/`pdvServico.receber` — formaliza o saldo
   // aberto como Conta a Receber PENDENTE (vencimento), sem receber dinheiro.
@@ -2074,6 +2074,7 @@ export function useV4Preview(): V4Vals {
     limparRecibo: limparReciboPdvV3,
     receber: receberPdvV3,
     registrarMisto: registrarMistoPdvV3,
+    verificarConfirmacao: verificarPdvV3,
     reload: reloadPdvV3,
     estornar: estornarPdvV3,
   } = pdvServicoV3;
@@ -2345,9 +2346,17 @@ export function useV4Preview(): V4Vals {
     },
     [registrarMistoPdvV3, reloadPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
   );
+  const verificarConfirmacaoV4 = useCallback(async () => {
+    const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
+    const ok = await verificarPdvV3?.();
+    if (ok) reloadOrdens();
+    if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return false;
+    reloadPdvV3(); reloadDetail(); reloadFinancial();
+    return !!ok;
+  }, [verificarPdvV3, reloadOrdens, reloadPdvV3, reloadDetail, reloadFinancial]);
   const pdvServico = useMemo<PdvServicoV3Completo>(
-    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, registrarMisto: registrarMistoV4, estornar: estornarRecebimentoV4 }),
-    [pdvServicoV3, receberPagamentoV4, registrarMistoV4, estornarRecebimentoV4],
+    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, registrarMisto: registrarMistoV4, verificarConfirmacao: verificarConfirmacaoV4, estornar: estornarRecebimentoV4 }),
+    [pdvServicoV3, receberPagamentoV4, registrarMistoV4, verificarConfirmacaoV4, estornarRecebimentoV4],
   );
 
   const salvarDiagnostico = useCallback(

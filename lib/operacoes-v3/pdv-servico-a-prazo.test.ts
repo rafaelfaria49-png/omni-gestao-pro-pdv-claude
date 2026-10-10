@@ -18,7 +18,8 @@ const source = readFileSync(join(DIR, "pdv-servico-actions.ts"), "utf8");
 
 /** Extrai o corpo de uma função exportada pelo nome, da assinatura até o `\n}` que fecha no início da linha. */
 function extractFunctionBody(src: string, fnName: string): string {
-  const start = src.indexOf(`export async function ${fnName}(`);
+  const assinatura = fnName === "receberOSV3" ? "async function executarRecebimentoImediatoOSV3(" : `export async function ${fnName}(`;
+  const start = src.indexOf(assinatura);
   expect(start, `função ${fnName} não encontrada`).toBeGreaterThan(-1);
   const end = src.indexOf("\n}", start);
   expect(end, `fechamento de ${fnName} não encontrado`).toBeGreaterThan(-1);

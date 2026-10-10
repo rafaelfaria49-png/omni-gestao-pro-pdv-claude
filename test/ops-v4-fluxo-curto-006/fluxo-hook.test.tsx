@@ -106,6 +106,7 @@ const A = os("a");
 const B = os("b");
 
 beforeEach(() => {
+  localStorage.clear();
   h.loja = LOJA;
   recebidoPorOS = { a: 0, b: 0 };
   timelines = { a: [], b: [] };

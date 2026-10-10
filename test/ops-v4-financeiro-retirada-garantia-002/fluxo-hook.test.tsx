@@ -93,6 +93,7 @@ function adiado<T>() {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   h.loja = LOJA;
   for (const fn of Object.values(m)) fn.mockReset();
   m.listOrdens.mockImplementation(async () => [A, B]);
@@ -257,7 +258,7 @@ describe("R2-P1 · recebimento imediato sem resposta (hook real da V3 dentro da 
     os: A, pagamento: { total: 300, recebido, saldo: 300 - recebido, status: "parcial" }, valorRecebido: recebido, op: "parcial", recibo: { itens: [] }, jaRegistrado: true,
   });
 
-  it("sem resposta: a confirmação ORIGINAL fica fixada; o próximo envio — outra sessão, outras linhas — repete a original (mesma chave)", async () => {
+  it("sem resposta: alteração é bloqueada; a ação explícita verifica a confirmação ORIGINAL", async () => {
     const r = await montarComOS("a");
     m.receberOSV3.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     let ok: unknown;
@@ -268,14 +269,17 @@ describe("R2-P1 · recebimento imediato sem resposta (hook real da V3 dentro da 
     expect(original.operacaoId).toMatch(/\S/);
     m.receberOSV3.mockResolvedValueOnce(resultadoOk(100));
     await act(async () => { ok = await r.result.current.pdvServico.receber({ linhas: [{ forma: "dinheiro", valor: 50 }], sessaoId: "sessao-2", intencao: "parcial" }); });
+    expect(ok).toBe(false);
+    expect(m.receberOSV3).toHaveBeenCalledTimes(1);
+    await act(async () => { ok = await r.result.current.pdvServico.verificarConfirmacao!(); });
     expect(ok).toBe(true);
     expect(m.receberOSV3.mock.calls[1]![2]).toEqual(original);
     expect(r.result.current.pdvServico.pendenciaReceber).toBeNull();
   });
 
-  it("o servidor RESPONDEU (recusa antes do commit): nada fica fixado; o próximo envio é o novo", async () => {
+  it("recusa terminal estruturada e cercada libera a próxima confirmação com conteúdo novo", async () => {
     const r = await montarComOS("a");
-    m.receberOSV3.mockRejectedValueOnce(Object.assign(new Error("An error occurred in the Server Components render."), { digest: "123" }));
+    m.receberOSV3.mockImplementationOnce(async (_s: string, _o: string, input: { operacaoId: string }) => ({ estado: "RECUSADO_DEFINITIVAMENTE", operacaoId: input.operacaoId, requestFingerprint: "prova-da-recusa-cercada", mensagem: "Saldo alterado. Confira." }));
     await act(async () => { await r.result.current.pdvServico.receber({ linhas: [{ forma: "pix", valor: 100 }], sessaoId: "sessao-1", intencao: "parcial" }); });
     expect(r.result.current.pdvServico.pendenciaReceber).toBeNull();
     m.receberOSV3.mockResolvedValueOnce(resultadoOk(50));

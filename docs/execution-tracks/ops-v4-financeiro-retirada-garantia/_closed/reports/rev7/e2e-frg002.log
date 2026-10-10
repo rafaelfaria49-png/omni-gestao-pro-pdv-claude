@@ -1,0 +1,44 @@
+
+Running 9 tests using 1 worker
+
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (3.5s)
+  ok 2 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:169:5 › C+E — rascunho sem pagamento: conferir → aprovar expressamente → receber com forma escolhida; uma cobrança, sem iniciar serviço nem entregar (2.2m)
+  ok 3 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:221:5 › C — aprovação recusada no servidor (o orçamento mudou depois da conferência): o motivo aparece no sheet e nada é cobrado (56.3s)
+  ok 4 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:243:5 › D — rascunho + título liquidado: formalização administrativa com motivo e declaração; preço, título, caixa e status preservados (45.8s)
+  ok 5 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:298:5 › E — orçamento aprovado sem pagamento: o sheet abre sem forma; confirmar exige a escolha; dividir não herda forma (32.0s)
+  ok 6 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:332:5 › B — pagamento registrado sem orçamento real: 'Gerar orçamento' orienta e nada é materializado (23.1s)
+  ok 7 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:354:5 › A — PDV de Serviço V3: rascunho sem pagamento mostra a recusa comercial e não deixa receber; nada é gravado (1.7s)
+  x  8 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — imediato: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original (1.6m)
+  -  9 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — misto: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original
+
+
+  1) [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — imediato: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m"[\"000-qa-frg-001\",\"qa-frg2-mv2onucx7\",{\"linhas\":[{\"forma\":\"pix\",\"valor\":100}],\"sessaoId\":\"cmv1zwvm00001h2ws41jg1ppo\",\"[7mintencao\":\"parcial\",\"confirmacaoClienteV3\":true,\"[27moperacaoId\":\"e6d1585a-7f3e-48a2-ad4c-8bcc148857ad\",\"saldoEsperado\":420}]"[39m
+    Received: [31m"[\"000-qa-frg-001\",\"qa-frg2-mv2onucx7\",{\"linhas\":[{\"forma\":\"pix\",\"valor\":100}],\"[7mintencao\":\"parcial\",\"[27msessaoId\":\"cmv1zwvm00001h2ws41jg1ppo\",\"operacaoId\":\"e6d1585a-7f3e-48a2-ad4c-8bcc148857ad\",\"saldoEsperado\":420[7m,\"confirmacaoClienteV3\":true[27m}]"[39m
+
+      420 |     await sheet.getByRole("button", { name: "Verificar mesma confirmação", exact: true }).click();
+      421 |     await expect(sheet).toBeHidden(IDA_E_VOLTA);
+    > 422 |     expect(envios).toHaveLength(2); expect(envios[1]).toBe(envios[0]);
+          |                                                       ^
+      423 |     expect(JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id) })).toBe(antes);
+      424 |     const titulo = (await titulosDe(prisma, os.id))[0]!;
+      425 |     const historico = ((titulo.payload as { historico: Array<{ tipo: string; valor: number }> }).historico).filter((e) => e.tipo === "pagamento" || e.tipo === "liquidacao");
+        at C:\Projetos\omni-gestao-ops-v4-frg-002\e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:422:55
+
+    Error Context: test-results\specs-ops-v4-financeiro-re-5926f-epete-a-identidade-original-chromium\error-context.md
+
+  1 failed
+    [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — imediato: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original 
+  1 did not run
+  7 passed (6.6m)
+(node:18916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16380) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16380) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)

@@ -1,0 +1,4 @@
+# Arquivos brutos de evidência: preservar bytes e espaços originais.
+*.log -text -whitespace
+veredito-r*.md -text -whitespace
+pacote-r3.md -text -whitespace
