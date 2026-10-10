@@ -41,3 +41,9 @@ Todos os testes financeiros usaram PostgreSQL local descartável, host 127.0.0.1
 veredito-r1.md, veredito-r2.md, veredito-r3.md e pacote-r3.md são cópias fiéis dos pareceres anteriores OpenAI sobre o candidato Anthropic. NÃO aprovam o novo candidato OpenAI. R final deverá analisar o diff COMPLETO contra 60337ff e o SHA exato por Anthropic ou humano qualificado. Sem APPROVE real e P0=P1=P2=0: não executar close, merge de produto nem deploy. GOAL 003 e 008 permanecem intocados.
 
 Os logs brutos e pareceres anteriores são arquivados sem normalização de fim de linha ou limpeza de espaços. O .gitattributes deste diretório aplica essa preservação somente aos arquivos de evidência, mantendo texto e diffs legíveis e deixando os checks de whitespace dos fontes inalterados.
+
+## Tentativa 1 da revisão 7 — AEP check em 3027772
+
+O check falhou no item 10: o novo E2E misto fotografava o banco ao ver o aviso LOCAL de pendência, antes de a requisição do servidor terminar. A foto inicial era vazia e a foto posterior tinha exatamente uma baixa de R$ 100 e uma parcela de R$ 320. O teste passa a aguardar explicitamente route.fetch + abort da resposta real e exige título/caixa já presentes na foto inicial. Nenhuma asserção econômica removida. attempt1-* preservam check, SHA, contexto e resultado originais. A CLI oficial registrou a falha e abriu tentativa 2/3; o produto não foi fechado/publicado. A correção seguinte altera somente a barreira do novo teste e documentação de evidência.
+
+Prova da barreira corrigida: attempt2-e2e-barreira.log registra 3/3 (autenticação sintética + imediato + misto), sem retries. Ambos comprovam commit real antes da foto, input original após refresh e ausência de segunda baixa/caixa/OS. A validação integral será repetida após este commit.

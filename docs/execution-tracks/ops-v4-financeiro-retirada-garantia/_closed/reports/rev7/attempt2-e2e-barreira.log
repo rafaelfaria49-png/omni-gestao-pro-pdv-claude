@@ -1,0 +1,16 @@
+
+Running 3 tests using 1 worker
+
+(node:13620) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13620) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (2.9s)
+(node:25912) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25912) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 2 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — imediato: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original (1.3m)
+  ok 3 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — misto: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original (1.1m)
+
+  3 passed (2.5m)

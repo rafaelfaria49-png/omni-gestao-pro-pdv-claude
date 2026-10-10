@@ -390,7 +390,7 @@ for (const modalidade of ["imediato", "misto"] as const) {
       await sheet.getByLabel("Vencimento da parte a prazo").fill("2099-12-31");
     }
     const envios: string[] = [];
-    let perdeu = false;
+    let perdeu = false, respostaPerdidaConcluida = false;
     await page.route("**/*", async (route) => {
       const request = route.request(), body = request.postData() ?? "";
       const writer = request.method() === "POST" && !!request.headers()["next-action"] && body.includes(os.id) && body.includes('"confirmacaoClienteV3":true') && body.includes(modalidade === "imediato" ? '"linhas"' : '"pagamentosAgora"');
@@ -401,11 +401,16 @@ for (const modalidade of ["imediato", "misto"] as const) {
       // route.fetch termina a resposta REAL depois do commit; só a entrega ao browser se perde.
       const resposta = await route.fetch(); expect(resposta.ok()).toBe(true);
       await route.abort("connectionclosed");
+      respostaPerdidaConcluida = true;
     });
     await sheet.getByRole("button", { name: modalidade === "misto" ? /^Registrar R\$\s100,00/ : /^Confirmar R\$\s100,00$/ }).click();
     await expect(sheet.getByRole("alert")).toContainText("Confirmação pendente de verificação.", IDA_E_VOLTA);
+    // O aviso local aparece antes de a requisição terminar: a foto exige o commit REAL.
+    await expect.poll(() => respostaPerdidaConcluida, IDA_E_VOLTA).toBe(true);
     await expect.poll(() => envios.length).toBe(1);
-    const antes = JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id) });
+    const titulosAntes = await titulosDe(prisma, os.id), caixaAntes = await caixaDaOS(prisma, os.id);
+    expect(titulosAntes).toHaveLength(1); expect(caixaAntes).toHaveLength(1);
+    const antes = JSON.stringify({ titulos: titulosAntes, caixa: caixaAntes });
     await sheet.getByRole("button", { name: "Fechar recebimento" }).click();
     await page.getByRole("button", { name: "Verificar mesma confirmação", exact: true }).click();
     sheet = page.getByRole("dialog", { name: "Receber pagamento" });
