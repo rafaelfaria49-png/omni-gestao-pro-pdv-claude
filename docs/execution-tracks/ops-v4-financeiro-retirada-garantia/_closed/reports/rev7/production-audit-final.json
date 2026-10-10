@@ -1,0 +1,32 @@
+{
+  "recordedAt": "2026-10-10T20:05:47.489Z",
+  "source": "Vercel CLI 57.0.0, list --environment production --limit 1 --format json; leitura, nenhuma criação ou alteração",
+  "mainObserved": "55effa0d8830ccc1e380bd227881e74f22bc8483",
+  "mainChange": "Merge PR #260, planejamento Pessoas 001B",
+  "functionalSHA": "cd69780c81b3bc159cd5f0810daabc98aae06a34",
+  "functionalBase": "60337ff116e831e1e7e13597a4e6622a6df131ed",
+  "integrated": false,
+  "integrationGate": "GOAL002 BLOCKED; retomar somente por decisão humana, merge normal e revalidação antes da publicação",
+  "canonical": "https://omni-gestao-pro.vercel.app",
+  "deployments": [
+    {
+      "project": "omni-gestao",
+      "url": "https://omni-gestao-4ns0k5jyw-rafaelfaria49-4373s-projects.vercel.app",
+      "state": "READY",
+      "target": "production",
+      "sha": "55effa0d8830ccc1e380bd227881e74f22bc8483"
+    },
+    {
+      "project": "omni-gestao-pro",
+      "url": "https://omni-gestao-684zi4zop-rafaelfaria49-4373s-projects.vercel.app",
+      "state": "READY",
+      "target": "production",
+      "sha": "55effa0d8830ccc1e380bd227881e74f22bc8483"
+    }
+  ],
+  "candidatePublished": false,
+  "smoke": "OWNER_PENDING_AUTH",
+  "realFinancialMutation": false,
+  "migrationExecuted": false,
+  "note": "Primeira consulta sem acesso de rede falhou; repetição somente de leitura com acesso permitido retornou estes resultados."
+}
