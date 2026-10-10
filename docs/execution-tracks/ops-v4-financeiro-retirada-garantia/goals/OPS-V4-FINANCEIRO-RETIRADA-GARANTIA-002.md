@@ -7,10 +7,10 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 4,
+  "plan_rev": 5,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-002",
-  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/elegibilidade-comercial.test.ts lib/operacoes-v3/formalizacao-aprovacao-model.test.ts lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts lib/operacoes-v3/payment-model.test.ts lib/operacoes-v3/pdv-servico-a-prazo.test.ts lib/operacoes-v3/recebimento-misto-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/atendimento-rapido-model.test.ts lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v4/receber-pagamento-form.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[12]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v3-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts --retries=0 --workers=1",
+  "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/elegibilidade-comercial.test.ts lib/operacoes-v3/formalizacao-aprovacao-model.test.ts lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts lib/operacoes-v3/payment-model.test.ts lib/operacoes-v3/pdv-servico-a-prazo.test.ts lib/operacoes-v3/recebimento-misto-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/atendimento-rapido-model.test.ts lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v3/os-conta-receber-unica.test.ts lib/operacoes-v4/receber-pagamento-form.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[12]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v3-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts test/ops-datas-retroativas-001/v3-e-correcao.test.tsx && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts --retries=0 --workers=1",
   "allowlist": [
     "lib/operacoes-v3/elegibilidade-comercial.ts",
     "lib/operacoes-v3/elegibilidade-comercial.test.ts",
@@ -27,6 +27,7 @@
     "lib/operacoes-v3/recebimento-misto-model.test.ts",
     "lib/operacoes-v3/orcamento-actions.ts",
     "lib/operacoes-v3/orcamento-actions.test.ts",
+    "lib/operacoes-v3/os-conta-receber-unica.test.ts",
     "components/operacoes-v3/pages/PdvServicoV3.tsx",
     "components/operacoes-v3/pages/AtendimentoRapidoV3.tsx",
     "components/operacoes-v3/hooks/use-pdv-servico-v3.ts",
@@ -44,13 +45,17 @@
     "test/ops-v4-recebimento-misto/receber-pagamento.test.tsx",
     "test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx",
     "test/ops-v3-recebimento-misto/hardening-p1.test.tsx",
+    "test/ops-datas-retroativas-001/v3-e-correcao.test.tsx",
+    "test/ops-v4-financeiro-retirada-garantia-001/projecao.pg.test.ts",
+    "test/ops-v4-financeiro-retirada-garantia-001/superficies.test.tsx",
     "test/ops-v4-financeiro-retirada-garantia-002/**",
     "e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts",
+    "e2e/specs/ops-v4-recebimento-misto-paridade-001.spec.ts",
     "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/**",
     "docs/execution-tracks/REGISTRY.md"
   ],
   "gates_liberados": [],
-  "read_budget": 45,
+  "read_budget": 50,
   "revisao_independente": true,
   "familia_executor": "anthropic",
   "reversibilidade": "baixa"
@@ -238,3 +243,42 @@ Somente metadados: `plan_rev` sobe para 4 junto com o desbloqueio do GOAL
 nenhum GOAL READY da trilha é SUPERSEDED). Objetivo, contrato, allowlist,
 test_command, orçamento e dependência (001 DONE + merge) inalterados; este
 GOAL continua NÃO autorizado a abrir antes disso.
+
+## Revisão 5 (09/10/2026)
+
+Ratificação pré-`open` exigida em "Autoridade e pré-condições" e no item E,
+feita contra a main integrada `23380ab` (GOAL 001 DONE, PR #254), sob a
+autorização do proprietário no comando do GOAL 002 de 09/10/2026 ("Se a
+allowlist, os contratos ou os testes exigirem uma alteração formal, fazer a
+revisão de planejamento pelo rito AEP antes do `open`"). Cinco regressões
+fora da allowlist afirmam exatamente o comportamento que este contrato muda;
+todas passam hoje na main (`23380ab`: 25 + 10 + 76 testes verdes, com
+PostgreSQL):
+
+| Caminho | Comportamento fixado hoje | Item |
+| --- | --- | --- |
+| `test/ops-v4-financeiro-retirada-garantia-001/projecao.pg.test.ts` | A1 cria o caso legado chamando `receberOSV3` sobre orçamento em rascunho | A |
+| `lib/operacoes-v3/os-conta-receber-unica.test.ts` | Prisma em memória sem a coluna `valorTotal` e orçamento aprovado com `total: 0` (reconciliação inconsistente) recebendo | A |
+| `test/ops-v4-financeiro-retirada-garantia-001/superficies.test.tsx` | R2-2 confirma sem escolher a forma e espera `pix` | E |
+| `test/ops-datas-retroativas-001/v3-e-correcao.test.tsx` | Atendimento rápido V3 finaliza sem escolher a forma | E |
+| `e2e/specs/ops-v4-recebimento-misto-paridade-001.spec.ts` | lista exata das opções de "Forma da linha 1", sem a opção vazia que a forma explícita exige | E |
+
+Decisões:
+
+1. Os cinco caminhos entram na allowlist só para adaptar fixture ou entrada ao
+   contrato (estado legado semeado sem o writer; dados comercialmente
+   consistentes; forma escolhida explicitamente; opção vazia na lista
+   esperada), sem remover asserção de valor, identidade, concorrência ou
+   efeito.
+2. O test_command passa a rodar também `os-conta-receber-unica.test.ts` e
+   `v3-e-correcao.test.tsx` (sem banco). `projecao.pg.test.ts` e
+   `superficies.test.tsx` já rodam pela config do 001; o E2E de paridade
+   segue como evidência obrigatória à parte, no banco próprio.
+3. Orçamento de leitura 45 → 50 (os cinco caminhos novos). Objetivo,
+   contrato A–E, não objetivos, classe, risco, R obrigatória e dependência
+   inalterados.
+4. Achado fora do contrato, só relatado ao proprietário e não incluído: o
+   atendimento rápido da V4 (`AtendimentoRapidoModal.tsx` +
+   `lib/operacoes-v4/atendimento-rapido-form.ts`) continua iniciando a forma
+   em Dinheiro; o item E cobre o recebimento da V4, o PDV de Serviço V3 e o
+   atendimento rápido V3.

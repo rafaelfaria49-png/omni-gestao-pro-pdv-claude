@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 4,
+  "plan_rev": 5,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -19,6 +19,9 @@ Revisão 3: "COMANDO — GOAL 001 / REV 3" do proprietário, de 09/10/2026
 (desbloqueio do 001; ver Revisões do plano).
 Revisão 4: "DECISÃO HUMANA — GOAL 001 / REVISÃO 4" do proprietário, de
 09/10/2026 (desbloqueio do 001 restrito ao achado R6; ver Revisões do plano).
+Revisão 5: ratificação pré-`open` do GOAL 002 contra a main `23380ab`, sob a
+autorização do comando do GOAL 002 do proprietário, de 09/10/2026 (ver
+Revisões do plano).
 
 A autorização cobre planejamento formal, implementação, testes reais,
 revisão independente e publicação condicionada aos gates — em ENTREGAS
@@ -94,6 +97,30 @@ assinatura, garantia, estoque).
   Rito: PR exclusivo de governança (block da rev 3 materializado byte a byte
   + desbloqueio) → merge normal na main → merge normal da main na branch do
   001 → `open` (tentativa 1 da rev 4).
+- rev 5 (09/10/2026, ratificação pré-`open` do GOAL 002 contra `23380ab`,
+  sob a autorização do comando do GOAL 002: "Se a allowlist, os contratos ou
+  os testes exigirem uma alteração formal, fazer a revisão de planejamento
+  pelo rito AEP antes do `open`"): cinco regressões fora da allowlist do 002
+  fixam o comportamento que o contrato muda — A: o A1 do 001 recebe sobre
+  rascunho pelo writer real e `os-conta-receber-unica.test.ts` recebe com
+  Prisma simulado sem `valorTotal` e orçamento inconsistente; E: R2-2 do 001
+  e o atendimento rápido V3 de #237 confirmam sem escolher a forma, e o E2E
+  de paridade de #235 fixa a lista exata de formas. Todas verdes na main.
+  Decisões:
+  1. os cinco caminhos entram na allowlist do 002 só para adaptar fixture ou
+     entrada ao contrato, sem remover asserção de valor, identidade,
+     concorrência ou efeito;
+  2. o test_command do 002 roda também os dois testes sem banco; o E2E de
+     paridade segue como evidência obrigatória à parte; orçamento de
+     leitura do 002 45 → 50;
+  3. objetivos, contratos, classe, risco e R obrigatória inalterados; 002 e
+     003 sobem para plan_rev 5 (nenhum SUPERSEDED); não abrir 003 nem o
+     OPS-V4-FLUXO-CURTO-008 sem autorização nova;
+  4. achado fora do contrato, só relatado: o atendimento rápido da V4
+     (`AtendimentoRapidoModal.tsx` + `atendimento-rapido-form.ts`) continua
+     iniciando a forma em Dinheiro.
+  Rito: PR exclusivo de plano → merge normal na main → a branch do 002
+  recebe a main → `open` (tentativa 1 da rev 5).
 
 ## Por que trilha própria
 
