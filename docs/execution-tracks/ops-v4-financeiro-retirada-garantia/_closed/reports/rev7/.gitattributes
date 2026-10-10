@@ -2,3 +2,4 @@
 *.log -text -whitespace
 veredito-r*.md -text -whitespace
 pacote-r3.md -text -whitespace
+proposta-p2.patch -text -whitespace

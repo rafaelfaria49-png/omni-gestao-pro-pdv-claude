@@ -1,0 +1,14 @@
+AEP/1.0-R2 · attempt ops-v4-financeiro-retirada-garantia · GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002
+tentativa 3/3 falhou — TETO DE TENTATIVAS ESGOTADO.
+Convertendo para BLOCKED (by=externo se não houver causa melhor).
+
+BLOQUEADO · AEP/1.0-R2 · trilha ops-v4-financeiro-retirada-garantia · GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 → BLOCKED (gate)
+motivo: R independente Anthropic Claude Opus 5.5 (claude-opus-5-5), sessao f20ef356-1f02-462d-90c8-f37564dce04e, sobre cd69780c81b3bc159cd5f0810daabc98aae06a34: REQUEST_CHANGES, P0=0 P1=0 P2=1 P3=5. P2-1: recusa imediata moderna perde codigo/destino comercial na resposta duravel e replay (contrato A). AEP check PASS nesse SHA, mas R nao aprova. Testes parcialmente amostrados pela R, nova R devera le-los integralmente. Teto 3/3 esgotado; aplicar corretivo exige nova decisao humana do mesmo GOAL. Parecer SHA256 c1237bd814e0765fdcdf5ca41140544d057b67d5ec53070741b8f1e0a27db337.
+tentativas anteriores: 3
+commit de estado: bfded919c70b5dcb3f6325999e9ad3cee5027454
+state.json: status RUNNING
+.aep-active REMOVIDO.
+Desbloqueio é ato HUMANO: mover o arquivo de _closed/goals/ de volta para goals/
+com status READY, ou planejar um GOAL sucessor.
+
+CONTEXTO: NEW_SESSION
