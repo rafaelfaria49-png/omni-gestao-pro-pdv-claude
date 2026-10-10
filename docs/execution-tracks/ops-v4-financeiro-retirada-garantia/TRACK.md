@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 5,
+  "plan_rev": 7,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -22,6 +22,10 @@ Revisão 4: "DECISÃO HUMANA — GOAL 001 / REVISÃO 4" do proprietário, de
 Revisão 5: ratificação pré-`open` do GOAL 002 contra a main `23380ab`, sob a
 autorização do comando do GOAL 002 do proprietário, de 09/10/2026 (ver
 Revisões do plano).
+Revisão 7: COMANDO MESTRE do proprietário de 10/10/2026, desbloqueio do 002
+e transferência excepcional da execução C4 para OpenAI/Codex (ver abaixo).
+Revisão 6: ampliação da allowlist do GOAL 002 durante a execução, sob a mesma
+autorização do comando do GOAL 002 (ver Revisões do plano).
 
 A autorização cobre planejamento formal, implementação, testes reais,
 revisão independente e publicação condicionada aos gates — em ENTREGAS
@@ -121,6 +125,54 @@ assinatura, garantia, estoque).
      iniciando a forma em Dinheiro.
   Rito: PR exclusivo de plano → merge normal na main → a branch do 002
   recebe a main → `open` (tentativa 1 da rev 5).
+- rev 6 (10/10/2026, ampliação de allowlist do GOAL 002 durante a execução,
+  sob a mesma autorização do comando do GOAL 002): as regressões
+  obrigatórias, no candidato contra a base `98ef717`, revelaram mais dois
+  caminhos fora da allowlist que fixam o comportamento que o contrato muda —
+  A: o P1-T7 de #238 recebe sobre totais divergentes (fixture deixa
+  `payload.valorTotal` em 400 com orçamento, faturamento e coluna em 500);
+  E: o E03 do E2E do OPS-V4-FLUXO-CURTO-006 confirma o caixa fechado
+  contando com a forma pré-selecionada. Decisões:
+  1. os dois caminhos entram na allowlist do 002 só para adaptar fixture
+     (valores consistentes) ou entrada (forma escolhida), sem remover
+     asserção;
+  2. seguem como evidência obrigatória à parte, nos bancos próprios;
+     test_command inalterado; orçamento de leitura do 002 50 → 52;
+  3. objetivos, contratos, classe, risco e R obrigatória inalterados; 002 e
+     003 sobem para plan_rev 6 (nenhum SUPERSEDED); não abrir 003 nem o
+     OPS-V4-FLUXO-CURTO-008 sem autorização nova.
+  Rito: PR exclusivo de plano → merge normal na main → a branch do 002
+  recebe a main → `.aep-active` recriado (tentativa 1, sem falha
+  registrada) → `open`.
+
+- rev 7 (10/10/2026, COMANDO MESTRE do proprietário, desbloqueio humano):
+  o 002 esgotou 3/3 na rev 6. O bloqueio original f3e3bdf é transportado
+  por commit documental, preservando byte a byte o LEDGER (blocked_by
+  externo, R3 e previous_attempts). O MESMO GOAL volta a READY, plan_rev 7,
+  tentativa 1/3. A execução é transferida de Claude Code/Anthropic para
+  Codex GPT-6.1/OpenAI por limitação temporária de cota. Autorização humana
+  EXCEPCIONAL para este C4; classe C4, risco ALTO e R obrigatória
+  permanecem. executors.json não é alterado. Decisões:
+  1. corrigir exclusivamente os dois P1 da R3 em 6155b4d: resultado
+     imediato incerto não libera nova confirmação; imediato e misto
+     compartilham pendência por loja/OS, preservando identidade e conteúdo
+     econômico original; reproduções vermelhas antes e provas reais depois;
+  2. preservar integralmente A–E, idempotência, locks/CAS, permissões,
+     isolamento e todos os corretivos R1/R2; allowlist, test_command e
+     orçamento de leitura inalterados; refresh/remount e abas simultâneas
+     precisam ser avaliados sem declarar memória como persistência;
+  3. R final sobre TODO o GOAL e SHA exato por outra família declarada e
+     aceita, diferente de OpenAI. Codex/GPT não conta como R independente
+     deste executor. Sem R elegível, concluir implementação/testes/auditoria
+     e preparar pacote imutável e PR draft AGUARDANDO R INDEPENDENTE — NÃO
+     MERGEAR; proibidos close, merge de produto e publicação sem APPROVE
+     válido e P0=P1=P2=0;
+  4. 001 permanece DONE; 003 permanece READY e sobe apenas plan_rev para 7,
+     com objetivo, família executora e dependência do 002 DONE + merge
+     preservados. Não abrir 003 nem OPS-V4-FLUXO-CURTO-008.
+  Rito: transportar bloqueio → planejamento humano rev 7 → registry e
+  verify/verify --all → PR documental exclusivo → merge normal na main →
+  merge normal da main na branch funcional → status e open do 002.
 
 ## Por que trilha própria
 
@@ -290,13 +342,13 @@ preexistente só é separada com prova na main.
 
 ## Publicação e revisão independente
 
-Por GOAL: commits por caminho explícito → check → R OpenAI/Codex read-only
-sobre o SHA exato (P0=P1=P2=0, VERDICT=APPROVE; P3 registrado) → `close`
+Por GOAL: commits por caminho explícito → check → R read-only de outra família declarada e aceita, diferente da família
+executora do GOAL, sobre o SHA exato (P0=P1=P2=0, VERDICT=APPROVE; P3 registrado) → `close`
 separado → PR atualizado → checks → merge normal. PR draft pode abrir antes.
 Main avançando: merge normal, revalidação, R do candidato alterado.
 Proibidos force, rebase, squash, amend, reset destrutivo e bypass. Achado
 P0/P1/P2 corrige-se no MESMO GOAL (tentativas, teto 3). Sem R real:
-`R_STATUS=AGUARDANDO_OPENAI`, `AEP_CLOSE=PENDENTE`, `MERGE=PENDENTE` e parar.
+`R_STATUS=AGUARDANDO_FAMILIA_INDEPENDENTE`, `AEP_CLOSE=PENDENTE`, `MERGE=PENDENTE` e parar.
 
 Depois do merge: conferir o SHA integrado e os deployments dos projetos
 Vercel `omni-gestao` e `omni-gestao-pro`. Smoke de produção só leitura e com

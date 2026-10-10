@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 5,
+  "plan_rev": 7,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-003",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-003",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/garantia-servicos-model.test.ts lib/operacoes-v3/garantia-textos.test.ts lib/operacoes-v3/garantia-templates.test.ts lib/operacoes-v3/garantia-actions.test.ts lib/operacoes-v3/entrega-actions.test.ts lib/operacoes-v3/pos-venda-model.test.ts lib/operacoes-v3/print-model.test.ts lib/operacoes-v3/datas-correcao-model.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/nova-os-actions.test.ts lib/operacoes-v3/nova-os-model.test.ts lib/operacoes-v3/retorno-actions.test.ts lib/operacoes-v3/historico-aparelho-model.test.ts lib/operacoes-v4/nova-os-draft-from-form.test.ts lib/operacoes-v4/posvenda-v4.test.ts lib/operacoes-v4/documento-mensagem.test.ts lib/operacoes-v4/historico-v4.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[2567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[123]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-003.spec.ts --retries=0 --workers=1",
@@ -253,3 +253,12 @@ do GOAL 002 (allowlist, test_command e orçamento de leitura do 002; nenhum
 GOAL READY da trilha é SUPERSEDED). Objetivo, contrato (incluindo o item E
 da rev 3), allowlist, test_command, orçamento e dependência (002 DONE +
 merge) inalterados; este GOAL continua NÃO autorizado a abrir antes disso.
+
+## Revisão 6 (10/10/2026)
+
+Somente metadados: `plan_rev` sobe para 6 junto com a ampliação de allowlist
+do GOAL 002 durante a execução (P1-T7 de #238 e E03 do E2E do
+OPS-V4-FLUXO-CURTO-006; nenhum GOAL READY da trilha é SUPERSEDED). Objetivo,
+contrato (incluindo o item E da rev 3), allowlist, test_command, orçamento e
+dependência (002 DONE + merge) inalterados; este GOAL continua NÃO autorizado
+a abrir antes disso.

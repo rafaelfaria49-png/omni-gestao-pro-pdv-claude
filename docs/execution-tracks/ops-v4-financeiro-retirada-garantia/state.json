@@ -8,11 +8,11 @@
   "bootstrap_commit": null,
   "counters": {
     "goals_done": 1,
-    "goals_blocked": 0,
+    "goals_blocked": 1,
     "goals_imported": 0,
-    "ledger_lines": 3
+    "ledger_lines": 4
   },
-  "last_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001",
-  "last_result": "DONE",
-  "last_ratified_at": "2026-10-09T23:12:11.954Z"
+  "last_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002",
+  "last_result": "BLOCKED",
+  "last_ratified_at": "2026-10-10T15:24:10.630Z"
 }
