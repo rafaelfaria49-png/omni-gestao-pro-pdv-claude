@@ -7,7 +7,7 @@ Semáforo: 🟢 rodando · 🟡 esperando humano · 🔴 bloqueado ou check falh
 | Trilha | Semáforo | Status | Risco | GOAL atual | Próximo | DONE | BLOCKED | Última ratificação |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | contador | 🟡 amarelo | PAUSED | MEDIO | — | — | 17 | 0 | 2026-08-20T20:16:31.782Z |
-| fiscal | 🔴 vermelho | BLOCKED | ALTO | — | — | 8 | 2 | 2026-10-07T19:36:47.716Z |
+| fiscal | 🟢 verde | RUNNING | ALTO | FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025 | — | 8 | 2 | 2026-10-07T19:36:47.716Z |
 | ops-v4-financeiro-retirada-garantia | 🟢 verde | RUNNING | ALTO | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003 | 1 | 1 | 2026-10-10T15:24:10.630Z |
 | ops-v4-fluxo-curto | 🟡 amarelo | PAUSED | ALTO | — | — | 7 | 0 | 2026-10-09T06:14:58.471Z |
 | pdv | 🟡 amarelo | PAUSED | ALTO | — | — | 3 | 0 | 2026-08-29T21:00:50.288Z |
