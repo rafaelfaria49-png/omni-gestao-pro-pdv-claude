@@ -28,12 +28,17 @@ function APrazoResumo({ amount, dueAt }: { amount: number; dueAt: string | null 
   </div>;
 }
 
-export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
+/**
+ * `somenteSheet` (GOAL OPS-V4-FLUXO-CURTO-006): o MESMO componente/contrato,
+ * hospedado na etapa Entrega só para abrir o sheet ali (`v.openReceberPagamentoAqui`)
+ * — sem o card inline do Financeiro e sem nenhuma regra nova.
+ */
+export function ReceberPagamentoV4({ v, somenteSheet = false }: { v: V4Vals; somenteSheet?: boolean }) {
   if (!v.osSelected) return null;
-  return <ReceberPagamentoFormV4 key={v.recebimentoContextKey} v={v} />;
+  return <ReceberPagamentoFormV4 key={v.recebimentoContextKey} v={v} somenteSheet={somenteSheet} />;
 }
 
-function ReceberPagamentoFormV4({ v }: { v: V4Vals }) {
+function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: boolean }) {
   const pdv = v.pdvServico;
   const [open, setOpen] = useState(false);
   const [linhas, setLinhas] = useState<LinhaRecebimentoV4[]>([]);
@@ -64,15 +69,41 @@ function ReceberPagamentoFormV4({ v }: { v: V4Vals }) {
   useEffect(() => {
     if (v.receberPagamentoOpen && !open && !v.financial.loading && !v.financial.error && projection?.expectedTotal != null) { seedForm(); setOpen(true); }
   }, [v.receberPagamentoOpen, open, v.financial.loading, v.financial.error, projection?.expectedTotal, seedForm]);
+  // Hospedado na Entrega: só um estado TERMINAL (quitada por outra sessão ou sem
+  // valor a cobrar) encerra o pedido de abertura. Leitura bloqueada/inconsistente
+  // ou em releitura após uma recusa só esconde o sheet: rascunho e mensagem ficam
+  // e voltam com a leitura (mesma regra do Financeiro).
+  const nadaAReceber = !!projection && !pendencia && (v.recebimento.semTotal || v.recebimento.quitado);
   useEffect(() => {
-    if (!formAberto || !mounted) return;
-    const anterior = document.activeElement;
-    sheet.current?.querySelector<HTMLElement>("select, button")?.focus();
-    return () => { if (anterior instanceof HTMLElement && anterior.isConnected) anterior.focus(); };
-  }, [formAberto, mounted]);
+    if (somenteSheet && formAberto && !busy && !v.financial.loading && nadaAReceber) { setOpen(false); v.closeReceberPagamento(); }
+  }, [somenteSheet, formAberto, busy, v.financial.loading, nadaAReceber, v]);
+  // Teclado: toda vez que o sheet (re)aparece — inclusive depois de sumir numa
+  // releitura — o foco entra nele, para Tab/Escape funcionarem. O controle de
+  // origem é guardado na PRIMEIRA aparição e recebe o foco de volta no fechamento.
+  const origemFoco = useRef<Element | null>(null);
+  const sheetRef = useCallback((el: HTMLDivElement | null) => {
+    sheet.current = el;
+    if (!el) return;
+    if (!origemFoco.current) origemFoco.current = document.activeElement;
+    if (el.contains(document.activeElement)) return;
+    // Com uma operação ainda em voo os controles estão desabilitados: o foco vai ao
+    // próprio sheet (tabIndex -1), que segue recebendo Tab/Escape quando liberar.
+    (el.querySelector<HTMLElement>("select:not(:disabled), input:not(:disabled), button:not(:disabled)") ?? el).focus();
+  }, []);
+  useEffect(() => {
+    if (!formAberto) return;
+    return () => {
+      const origem = origemFoco.current;
+      origemFoco.current = null;
+      if (origem instanceof HTMLElement && origem.isConnected) origem.focus();
+    };
+  }, [formAberto]);
 
   const cancelar = () => { setOpen(false); v.closeReceberPagamento(); };
   const openForm = () => { seedForm(); setOpen(true); };
+  // Hospedado na Entrega: nada inline — só o sheet quando aberto e pronto (a
+  // mesma instância mantém o rascunho vivo durante a releitura após recusa).
+  if (somenteSheet && (!formAberto || v.financial.loading || v.financial.error || !projection || projection.expectedTotal == null || pdv.loading)) return null;
   if (v.financial.loading) return <div style={box}>Carregando projeção financeira…</div>;
   if (v.financial.error || !projection || projection.expectedTotal == null) return <div style={box}>Recebimento bloqueado: situação financeira indisponível ou incompleta.</div>;
   const pagamento = { total: projection.expectedTotal, recebido: projection.receivedTotal ?? 0, saldo };
@@ -141,13 +172,15 @@ function ReceberPagamentoFormV4({ v }: { v: V4Vals }) {
   if (!mounted) return null;
   return createPortal(
     <div className={sheetStyles.overlay} role="dialog" aria-modal="true" aria-labelledby="receber-os-title">
-      <div ref={sheet} className={sheetStyles.sheet} onKeyDown={(e) => {
+      <div ref={sheetRef} tabIndex={-1} className={sheetStyles.sheet} onKeyDown={(e) => {
         if (e.key === "Escape" && !busy) { e.preventDefault(); cancelar(); }
         if (e.key !== "Tab") return;
         const itens = sheet.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]');
-        if (!itens?.length) return;
+        // Sem controle habilitado (operação em voo), o foco fica no próprio sheet.
+        if (!itens?.length) { e.preventDefault(); return; }
         const primeiro = itens[0], ultimo = itens[itens.length - 1];
-        if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+        if (document.activeElement === sheet.current) { e.preventDefault(); (e.shiftKey ? ultimo : primeiro).focus(); }
+        else if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
         else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
       }}>
         <div className={sheetStyles.head}>
