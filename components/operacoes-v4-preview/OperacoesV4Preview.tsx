@@ -28,6 +28,7 @@ import { SlaV4 } from "./parts/SlaV4";
 import { DashboardV4 } from "./parts/DashboardV4";
 import { NovaOSModal } from "./parts/NovaOSModal";
 import { NovoAtendimentoLauncher } from "./parts/NovoAtendimentoLauncher";
+import { RetornoOrigemPickerV4 } from "./parts/RetornoOrigemPickerV4";
 import { AtendimentoRapidoModal } from "./parts/AtendimentoRapidoModal";
 import { OrcamentoRapidoModal } from "./parts/OrcamentoRapidoModal";
 import { EstornoRecebimentoModal } from "./parts/EstornoRecebimentoModal";
@@ -46,9 +47,14 @@ export function OperacoesV4Preview() {
     return () => setFocusMode(false);
   }, [setFocusMode, v.focusActive]);
 
+  // Raiz focável (tabIndex -1, fora da ordem de Tab): destino de foco quando um diálogo fecha
+  // e o controle que o abriu saiu da tela (troca de OS/loja/etapa) — nunca o body.
   return (
     <div
+      data-og-v4-raiz=""
+      tabIndex={-1}
       style={{
+        outline: "none",
         width: "100%",
         height: "100%",
         minWidth: 0,
@@ -75,6 +81,7 @@ export function OperacoesV4Preview() {
       </div>
 
       <NovoAtendimentoLauncher v={v} />
+      <RetornoOrigemPickerV4 v={v} />
       <NovaOSModal v={v} />
       <AtendimentoRapidoModal v={v} />
       <OrcamentoRapidoModal v={v} />

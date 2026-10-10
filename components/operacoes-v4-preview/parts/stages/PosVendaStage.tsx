@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as TecladoEvent, type ReactNode, type RefObject } from "react";
 import { Clock3, RotateCcw, ShieldCheck, X } from "lucide-react";
-import type { RetornoV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { retornoEmAberturaV3, type RetornoV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { C, card, cardTitle, upLabel } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 
@@ -73,20 +73,108 @@ function DataPoint({ label, value, strong = false }: { label: string; value: Rea
   );
 }
 
-function Modal({ title, onClose, children, footer, initialFocus }: { title: string; onClose: () => void; children: ReactNode; footer: ReactNode; initialFocus?: RefObject<HTMLInputElement | HTMLTextAreaElement | null> }) {
+/** Raiz da V4 (OperacoesV4Preview): destino de foco quando a etapa sai da tela. */
+const ANCORA_FOCO_V4 = "[data-og-v4-raiz]";
+/** Controles que recebem foco por teclado dentro do diálogo. */
+const FOCAVEIS = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Camada legítima POR CIMA do diálogo — não é fundo: outro diálogo `aria-modal`, ou um diálogo
+ * fora da raiz da V4 (portal do AppShell, ex.: paleta Ctrl+K do Radix, que não declara aria-modal).
+ */
+function camadaPorCima(alvo: Element, dialogo: HTMLElement): boolean {
+  const camada = alvo.closest('[aria-modal="true"], [role="dialog"], [role="alertdialog"]');
+  if (!camada || camada === dialogo || camada.contains(dialogo)) return false;
+  if (camada.getAttribute("aria-modal") === "true") return true;
+  const raiz = dialogo.closest("[data-og-v4-raiz]");
+  return !raiz || !raiz.contains(camada);
+}
+
+function focoValido(el: HTMLElement | null | undefined): el is HTMLElement {
+  return !!el && el.isConnected && !(el as HTMLButtonElement).disabled;
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+  footer,
+  initialFocus,
+  busy = false,
+  restaurarFoco,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer: ReactNode;
+  initialFocus?: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
+  busy?: boolean;
+  /** Chamado ao fechar: devolve o foco a um destino válido (quem abriu decide qual). */
+  restaurarFoco?: () => void;
+}) {
+  const dialogo = useRef<HTMLElement>(null);
+  // Fundo inacessível: foco que saia do diálogo — clique, foco programático, Tab a partir do
+  // body — volta para dentro dele. Camada legítima por cima (outro modal, paleta Ctrl+K do
+  // AppShell) não é fundo: fica com o foco. Declarado ANTES da restauração para sair antes dela.
   useEffect(() => {
-    initialFocus?.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const segurar = (e: FocusEvent) => {
+      const d = dialogo.current;
+      if (!d?.isConnected || !(e.target instanceof Element) || d.contains(e.target)) return;
+      if (camadaPorCima(e.target, d)) return;
+      (d.querySelector<HTMLElement>(FOCAVEIS) ?? d).focus();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [initialFocus, onClose]);
+    document.addEventListener("focusin", segurar);
+    return () => document.removeEventListener("focusin", segurar);
+  }, []);
+  // Foco entra no diálogo e, ao fechar, sai para o destino que quem abriu indicar.
+  useEffect(() => {
+    (initialFocus?.current ?? dialogo.current)?.focus();
+    return () => restaurarFoco?.();
+  }, [initialFocus, restaurarFoco]);
+  // Ocupado: o botão acionado fica desabilitado e perderia o foco para o body — o foco vai para
+  // o próprio diálogo (a contenção segue valendo e Enter não alcança o fundo).
+  useEffect(() => {
+    const d = dialogo.current;
+    const ativo = document.activeElement;
+    if (busy && d && (!(ativo instanceof HTMLElement) || !d.contains(ativo) || (ativo as HTMLButtonElement).disabled)) d.focus();
+  }, [busy]);
+  // Tab/Shift+Tab circulam só pelos controles habilitados do diálogo (mesmo padrão do recibo e
+  // do seletor de retorno); Escape segue a regra de fechamento de quem abriu.
+  const teclado = (e: TecladoEvent<HTMLElement>) => {
+    // Atalho global da paleta (Ctrl/⌘+K do AppShell) suspenso com este diálogo aberto: ela abriria
+    // POR TRÁS dele (z-index menor), invisível, e levaria o foco do teclado. No App Router o React
+    // escuta no próprio document, o mesmo nó do atalho: só stopImmediatePropagation o alcança.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    const d = dialogo.current;
+    if (e.key !== "Tab" || !d) return;
+    const itens = Array.from(d.querySelectorAll<HTMLElement>(FOCAVEIS));
+    if (!itens.length) {
+      e.preventDefault();
+      d.focus();
+      return;
+    }
+    const primeiro = itens[0]!, ultimo = itens[itens.length - 1]!;
+    const ativo = document.activeElement;
+    if (!ativo || !itens.includes(ativo as HTMLElement)) { e.preventDefault(); (e.shiftKey ? ultimo : primeiro).focus(); }
+    else if (e.shiftKey && ativo === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && ativo === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 90, display: "grid", placeItems: "center", padding: 16 }}>
-      <button type="button" aria-label="Fechar janela" onClick={onClose} style={{ position: "absolute", inset: 0, border: 0, background: "rgba(17, 19, 26, .46)", cursor: "default" }} />
-      <section role="dialog" aria-modal="true" aria-label={title} style={{ position: "relative", width: "min(100%, 480px)", maxHeight: "min(680px, calc(100vh - 32px))", overflow: "auto", border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface, boxShadow: "0 24px 70px rgba(17, 19, 26, .26)" }}>
+      <button type="button" aria-label="Fechar janela" tabIndex={-1} onClick={onClose} style={{ position: "absolute", inset: 0, border: 0, background: "rgba(17, 19, 26, .46)", cursor: "default" }} />
+      <section ref={dialogo} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} onKeyDown={teclado} style={{ position: "relative", width: "min(100%, 480px)", maxHeight: "min(680px, calc(100vh - 32px))", overflow: "auto", border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface, boxShadow: "0 24px 70px rgba(17, 19, 26, .26)", outline: "none" }}>
         <header style={{ position: "sticky", top: 0, zIndex: 1, display: "flex", alignItems: "center", gap: 12, minHeight: 52, padding: "0 16px", borderBottom: `1px solid ${C.line2}`, background: C.surface }}>
           <h2 style={{ flex: 1, margin: 0, color: C.ink, fontSize: 14, fontWeight: 750 }}>{title}</h2>
           <button type="button" onClick={onClose} aria-label="Fechar" style={{ width: 32, height: 32, display: "grid", placeItems: "center", border: 0, borderRadius: 8, background: "transparent", color: C.muted, cursor: "pointer" }}><X size={16} /></button>
@@ -108,6 +196,8 @@ function RetornoResumo({
   onAbrirVinculo?: (osId: string) => void;
 }) {
   const tone = retorno.status === "aberto" ? "warn" : "success";
+  // GOAL OPS-V4-FLUXO-CURTO-007: reserva viva = atendimento ainda sendo criado pelo servidor.
+  const emAbertura = retornoEmAberturaV3(retorno);
   const atendimentoId = retorno.osRetornoId;
   return (
     <article style={{ border: `1px solid ${emphasis ? C.warnBd : C.line2}`, borderLeft: `3px solid ${emphasis ? C.warn : C.line2}`, borderRadius: 9, background: emphasis ? C.warnBg : C.surface2, padding: "11px 12px" }}>
@@ -116,7 +206,7 @@ function RetornoResumo({
           <div style={{ color: C.body, fontSize: 12.5, fontWeight: 700, lineHeight: 1.4, overflowWrap: "anywhere" }}>{retorno.motivo || "Motivo não informado"}</div>
           <div style={{ marginTop: 3, color: C.subtle, fontSize: 10.5 }}>Aberto em {formatDateTime(retorno.criadoEm)}{retorno.criadoPor ? ` · ${retorno.criadoPor}` : ""}</div>
         </div>
-        <Badge tone={tone}>{retorno.status === "aberto" ? "Em andamento" : "Finalizado"}</Badge>
+        <Badge tone={emAbertura ? "info" : tone}>{retorno.status === "aberto" ? (emAbertura ? "Abertura em processamento" : "Em andamento") : "Finalizado"}</Badge>
       </div>
       <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap", color: C.muted, fontSize: 11 }}>
         <span>OS original: <strong style={{ color: C.body }}>{retorno.osOriginalCodigo || retorno.osOriginalId}</strong></span>
@@ -145,78 +235,112 @@ function RetornoResumo({
 export function PosVendaStage({ v }: { v: V4Vals }) {
   const posVenda = v.posVenda;
   const garantia = posVenda.garantia;
-  const [abrirOpen, setAbrirOpen] = useState(false);
-  const [finalizar, setFinalizar] = useState<RetornoV3 | null>(null);
-  const [motivo, setMotivo] = useState("");
-  const [obsAbertura, setObsAbertura] = useState("");
-  const [obsFinal, setObsFinal] = useState("");
-  const [busy, setBusy] = useState<"abrir" | "finalizar" | null>(null);
-  const motivoRef = useRef<HTMLTextAreaElement>(null);
+  const vinculo = posVenda.vinculoOrigem;
+  const osId = v.realOS?.id?.trim() ?? "";
+  // O diálogo pertence à OS em que foi aberto: trocar de OS (ou de loja) o DESCARTA — voltar
+  // à OS anterior não o reabre — e a resolução digitada nunca viaja para outro atendimento.
+  const [finalizarAberto, setFinalizarAberto] = useState<{ osId: string; retorno: RetornoV3 } | null>(null);
+  if (finalizarAberto && finalizarAberto.osId !== osId) setFinalizarAberto(null);
+  const finalizar = finalizarAberto && finalizarAberto.osId === osId ? finalizarAberto.retorno : null;
+  const abertoRef = useRef(finalizarAberto);
+  abertoRef.current = finalizarAberto;
+  const chaveResolucao = finalizar ? `${osId}:${finalizar.id}` : "";
+  const [resolucao, setResolucao] = useState<{ chave: string; texto: string }>({ chave: "", texto: "" });
+  const obsFinal = resolucao.chave === chaveResolucao ? resolucao.texto : "";
+  const [busy, setBusy] = useState<"finalizar" | null>(null);
   const observacaoRef = useRef<HTMLTextAreaElement>(null);
-  const abrirTriggerRef = useRef<HTMLButtonElement>(null);
   const finalizarTriggerRef = useRef<HTMLButtonElement>(null);
+  const retornoCardRef = useRef<HTMLElement>(null);
 
-  const closeAbrir = useCallback(() => {
-    if (busy) return;
-    setAbrirOpen(false);
-    queueMicrotask(() => abrirTriggerRef.current?.focus());
-  }, [busy]);
+  // Ao fechar, o foco volta ao "Finalizar retorno" se ele ainda existir e estiver habilitado;
+  // trocando de OS/loja ele pode ter sumido — então vai ao card do Retorno. Retorno
+  // finalizado: o gatilho deixa de existir assim que a OS é relida, então vai direto ao card.
+  // Se a própria etapa saiu da tela (troca de OS/loja/etapa), vai à raiz da V4 — nunca a um
+  // elemento desmontado nem ao body.
+  const finalizado = useRef(false);
+  const restaurarFocoFinalizar = useCallback(() => {
+    const gatilho = finalizarTriggerRef.current;
+    const candidatos = [finalizado.current ? null : gatilho, retornoCardRef.current, document.querySelector<HTMLElement>(ANCORA_FOCO_V4)];
+    finalizado.current = false;
+    candidatos.find(focoValido)?.focus();
+  }, []);
+
   const closeFinalizar = useCallback(() => {
     if (busy) return;
-    setFinalizar(null);
-    queueMicrotask(() => finalizarTriggerRef.current?.focus());
+    setFinalizarAberto(null);
   }, [busy]);
 
-  const abrirRetorno = async () => {
-    if (busy || !motivo.trim()) return;
-    setBusy("abrir");
-    try {
-      const ok = await v.abrirRetorno(motivo.trim(), obsAbertura.trim() || undefined);
-      if (ok) {
-        setMotivo("");
-        setObsAbertura("");
-        setAbrirOpen(false);
-        queueMicrotask(() => abrirTriggerRef.current?.focus());
-      }
-    } finally {
-      setBusy(null);
-    }
+  // GOAL OPS-V4-FLUXO-CURTO-007: abrir retorno / registrar ocorrência passam pelo
+  // MESMO fluxo Retorno / Garantia (seletor com a OS pré-selecionada, relida no
+  // servidor) — não existe segundo formulário de abertura aqui.
+  const abrirFluxo = () => {
+    if (busy || !osId) return;
+    v.openRetornoFluxo(osId);
   };
 
   const finalizarRetorno = async () => {
     if (busy || !finalizar) return;
+    const alvo = finalizarAberto;
     setBusy("finalizar");
     try {
       const ok = await v.finalizarRetorno(finalizar.id, obsFinal.trim() || undefined);
       if (ok) {
-        setObsFinal("");
-        setFinalizar(null);
-        queueMicrotask(() => finalizarTriggerRef.current?.focus());
+        setResolucao({ chave: "", texto: "" });
+        // Só fecha (e só leva o foco ao card) se o diálogo ainda for o desta finalização.
+        if (abertoRef.current === alvo) {
+          finalizado.current = true;
+          setFinalizarAberto(null);
+        }
       }
     } finally {
       setBusy(null);
     }
   };
 
+  const coberturaReferencia =
+    vinculo?.garantiaSituacaoNaAbertura === "ativa" || vinculo?.garantiaAtivaNaAbertura === true
+      ? "Garantia da OS original vigente na abertura (cobertura do novo defeito a avaliar)."
+      : vinculo?.garantiaSituacaoNaAbertura === "vencida"
+        ? "Garantia da OS original vencida na abertura: sem cobertura confirmada."
+        : vinculo?.garantiaSituacaoNaAbertura === "sem_garantia" || vinculo?.garantiaAtivaNaAbertura === false
+          ? "OS original sem cobertura na abertura: sem cobertura confirmada."
+          : "Garantia da OS original não informada na abertura.";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {posVenda.vinculoOrigem ? (
-        <section style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px" }}>
-          <div>
-            <div style={{ ...upLabel, marginBottom: 3 }}>Atendimento de retorno</div>
+      {vinculo ? (
+        <section style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 14px", flexWrap: "wrap", borderLeft: `3px solid ${vinculo.descartadoEm ? C.danger : C.warn}` }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...upLabel, marginBottom: 3 }}>{vinculo.descartadoEm ? "Atendimento descartado" : "Atendimento de retorno"}</div>
             <div style={{ color: C.body, fontSize: 13, fontWeight: 700 }}>
-              Vinculado à {posVenda.vinculoOrigem.osOrigemCodigo || "OS original"}
+              Retorno da {vinculo.osOrigemCodigo || "OS original"}
             </div>
+            {vinculo.descartadoEm ? (
+              <div style={{ marginTop: 3, color: C.dangerFg, fontSize: 11.5 }}>
+                Criado em paralelo e descartado: o retorno ficou no atendimento {vinculo.vinculoValidoCodigo || vinculo.vinculoValidoId || "vinculado"}. Cancele este atendimento se ele não for usado.
+              </div>
+            ) : (
+              <div style={{ marginTop: 3, color: C.subtle, fontSize: 11.5 }}>
+                {vinculo.motivo ? `Relato: ${vinculo.motivo}. ` : ""}{coberturaReferencia} A garantia deste atendimento é própria e não começa sozinha.
+              </div>
+            )}
           </div>
-          <button type="button" onClick={() => v.abrirOsVinculada(posVenda.vinculoOrigem!.osOrigemId)} style={secondaryButton}>
-            Abrir OS original
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {vinculo.descartadoEm && vinculo.vinculoValidoId ? (
+              <button type="button" onClick={() => v.abrirOsVinculada(vinculo.vinculoValidoId!)} style={secondaryButton}>
+                Abrir atendimento válido
+              </button>
+            ) : null}
+            <button type="button" onClick={() => v.abrirOsVinculada(vinculo.osOrigemId)} style={secondaryButton}>
+              Abrir OS original
+            </button>
+          </div>
         </section>
       ) : null}
       <div style={{ display: "grid", gridTemplateColumns: sectionGrid, gap: 12, alignItems: "stretch" }}>
         <section style={{ ...card, borderTop: `3px solid ${garantia.tone === "success" ? C.success : garantia.tone === "warn" ? C.warn : C.line2}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
-            <span style={{ ...cardTitle, display: "inline-flex", alignItems: "center", gap: 7 }}><ShieldCheck size={15} aria-hidden /> Garantia</span>
+            <span style={{ ...cardTitle, display: "inline-flex", alignItems: "center", gap: 7 }}><ShieldCheck size={15} aria-hidden /> Garantia{vinculo ? " deste atendimento" : ""}</span>
             <Badge tone={garantia.tone}>{garantia.situacaoLabel}</Badge>
           </div>
           {garantia.temGarantia ? (
@@ -234,7 +358,7 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           )}
         </section>
 
-        <section style={{ ...card, borderTop: `3px solid ${posVenda.retornoAberto ? C.warn : C.line2}` }}>
+        <section ref={retornoCardRef} tabIndex={-1} style={{ ...card, borderTop: `3px solid ${posVenda.retornoAberto ? C.warn : C.line2}`, outline: "none" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
             <span style={{ ...cardTitle, display: "inline-flex", alignItems: "center", gap: 7 }}><RotateCcw size={15} aria-hidden /> Retorno</span>
             <Badge tone={posVenda.elegibilidade.tone}>{posVenda.elegibilidade.label}</Badge>
@@ -242,17 +366,34 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           {posVenda.retornoAberto ? (
             <>
               <RetornoResumo retorno={posVenda.retornoAberto} emphasis onAbrirVinculo={v.abrirOsVinculada} />
-              <button ref={finalizarTriggerRef} type="button" disabled={busy !== null} onClick={() => setFinalizar(posVenda.retornoAberto ?? null)} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", marginTop: 11, background: C.ink, opacity: busy ? .65 : 1 }}>
-                Finalizar retorno
-              </button>
+              {posVenda.retornoEmAbertura ? (
+                <p style={{ margin: "10px 0 0", color: C.subtle, fontSize: 11.5, lineHeight: 1.5 }}>O atendimento deste retorno está sendo criado. Recarregue em instantes para abri-lo.</p>
+              ) : (
+                <>
+                  {posVenda.atendimentoPendente ? (
+                    <button type="button" disabled={busy !== null || !osId} onClick={abrirFluxo} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...secondaryButton, width: "100%", marginTop: 11 }}>
+                      Abrir atendimento deste retorno
+                    </button>
+                  ) : null}
+                  <button ref={finalizarTriggerRef} type="button" disabled={busy !== null || !posVenda.podeFinalizarRetorno} onClick={() => setFinalizarAberto(posVenda.retornoAberto ? { osId, retorno: posVenda.retornoAberto } : null)} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", marginTop: 11, background: C.ink, opacity: busy ? .65 : 1 }}>
+                    Finalizar retorno
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>
               <div style={{ padding: "8px 0 2px", color: C.body, fontSize: 13, fontWeight: 700 }}>Nenhum retorno em andamento.</div>
               <p style={{ margin: "5px 0 13px", color: C.subtle, fontSize: 11.5, lineHeight: 1.5 }}>{posVenda.elegibilidade.descricao}</p>
-              <button ref={abrirTriggerRef} type="button" disabled={!posVenda.podeAbrirRetorno || busy !== null} onClick={() => setAbrirOpen(true)} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", opacity: !posVenda.podeAbrirRetorno || busy ? .55 : 1 }}>
-                {posVenda.elegibilidade.id === "fora_garantia" ? "Registrar retorno fora da garantia" : "Abrir retorno"}
-              </button>
+              {posVenda.podeRegistrarOcorrencia ? (
+                <button type="button" disabled={busy !== null || !osId} onClick={abrirFluxo} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...secondaryButton, width: "100%" }}>
+                  Registrar ocorrência
+                </button>
+              ) : (
+                <button type="button" disabled={!posVenda.podeAbrirRetorno || busy !== null || !osId} onClick={abrirFluxo} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ ...primaryButton, width: "100%", opacity: !posVenda.podeAbrirRetorno || busy ? .55 : 1 }}>
+                  {posVenda.elegibilidade.id === "fora_garantia" ? "Registrar retorno fora da garantia" : "Abrir retorno"}
+                </button>
+              )}
             </>
           )}
         </section>
@@ -281,39 +422,13 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
         )}
       </section>
 
-      {abrirOpen ? (
-        <Modal
-          title="Abrir retorno"
-          onClose={closeAbrir}
-          initialFocus={motivoRef}
-          footer={<><button type="button" disabled={!!busy} onClick={closeAbrir} style={secondaryButton}>Cancelar</button><button type="button" disabled={!!busy || !motivo.trim()} onClick={() => void abrirRetorno()} style={{ ...primaryButton, opacity: busy || !motivo.trim() ? .55 : 1 }}>{busy === "abrir" ? "Abrindo…" : "Abrir retorno"}</button></>}
-        >
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 14 }}>
-            <DataPoint label="OS original" value={v.os.codigo} />
-            <DataPoint label="Garantia" value={garantia.situacao === "ativa" && garantia.vencimento ? `Vigente até ${formatDate(garantia.vencimento)}` : posVenda.elegibilidade.label} />
-          </div>
-          <label style={{ display: "block" }}>
-            <span style={{ display: "block", marginBottom: 6, color: C.body, fontSize: 12, fontWeight: 700 }}>Motivo</span>
-            <textarea ref={motivoRef} rows={4} maxLength={1000} value={motivo} onChange={(event) => setMotivo(event.target.value)} placeholder="Descreva o que voltou a falhar" style={{ width: "100%", resize: "vertical", minHeight: 96, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
-          </label>
-          <label style={{ display: "block", marginTop: 12 }}>
-            <span style={{ display: "block", marginBottom: 6, color: C.body, fontSize: 12, fontWeight: 700 }}>Observações <span style={{ color: C.subtle, fontWeight: 500 }}>(opcional)</span></span>
-            <textarea rows={3} maxLength={1000} value={obsAbertura} onChange={(event) => setObsAbertura(event.target.value)} placeholder="Relato do cliente, condição do aparelho, combinados" style={{ width: "100%", resize: "vertical", minHeight: 72, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
-          </label>
-          <p style={{ margin: "9px 0 0", color: C.subtle, fontSize: 11.5 }}>
-            {posVenda.elegibilidade.id === "os_nao_entregue"
-              ? "O relato fica no histórico desta OS."
-              : "A OS original permanece entregue. Será aberto um atendimento novo, vinculado, na fila."}
-          </p>
-          {posVenda.elegibilidade.id === "fora_garantia" ? <p style={{ margin: "9px 0 0", color: C.warnFg, fontSize: 11.5 }}>Este registro não confirma cobertura nem cria cobrança automática.</p> : null}
-        </Modal>
-      ) : null}
-
       {finalizar ? (
         <Modal
           title="Finalizar retorno"
           onClose={closeFinalizar}
           initialFocus={observacaoRef}
+          busy={busy !== null}
+          restaurarFoco={restaurarFocoFinalizar}
           footer={<><button type="button" disabled={!!busy} onClick={closeFinalizar} style={secondaryButton}>Cancelar</button><button type="button" disabled={!!busy} onClick={() => void finalizarRetorno()} style={{ ...primaryButton, background: C.ink, opacity: busy ? .55 : 1 }}>{busy === "finalizar" ? "Finalizando…" : "Finalizar retorno"}</button></>}
         >
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 14 }}>
@@ -322,9 +437,9 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           </div>
           <label style={{ display: "block" }}>
             <span style={{ display: "block", marginBottom: 6, color: C.body, fontSize: 12, fontWeight: 700 }}>Resolução <span style={{ color: C.subtle, fontWeight: 500 }}>(opcional)</span></span>
-            <textarea ref={observacaoRef} rows={4} maxLength={1000} value={obsFinal} onChange={(event) => setObsFinal(event.target.value)} placeholder="Ex.: conector ressoldado" style={{ width: "100%", resize: "vertical", minHeight: 96, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
+            <textarea ref={observacaoRef} rows={4} maxLength={1000} value={obsFinal} onChange={(event) => setResolucao({ chave: chaveResolucao, texto: event.target.value })} placeholder="Ex.: conector ressoldado" style={{ width: "100%", resize: "vertical", minHeight: 96, padding: 10, border: `1px solid ${C.inputBd}`, borderRadius: 8, background: C.surface, color: C.body, font: "inherit", fontSize: 12.5, lineHeight: 1.5, boxSizing: "border-box" }} />
           </label>
-          <p style={{ margin: "9px 0 0", color: C.subtle, fontSize: 11.5 }}>O encerramento será confirmado pelo servidor e aparecerá no histórico após o reload.</p>
+          <p style={{ margin: "9px 0 0", color: C.subtle, fontSize: 11.5 }}>O encerramento será confirmado pelo servidor e aparecerá no histórico após o reload. Finalizar não cobra, não estorna e não renova garantia.</p>
         </Modal>
       ) : null}
     </div>

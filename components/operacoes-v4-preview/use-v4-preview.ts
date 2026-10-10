@@ -131,8 +131,17 @@ import { montarMensagemAtualizacaoOSV4 } from "@/lib/operacoes-v4/documento-mens
 import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
 import type { EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operacoes-v3/garantia-actions";
-import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
-import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
+import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { abrirRetornoV3, buscarOrigensRetornoV3, finalizarRetornoV3, lerOrigemRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
+import {
+  encerrarOperacaoNoRascunhoV4,
+  gerarOperacaoRetornoIdV4,
+  type ComandoRetornoV4,
+  type RascunhoRetornoV4,
+  type RespostaOrigemRetornoV4,
+  type RespostaOrigensRetornoV4,
+  type ResultadoRetornoV4,
+} from "@/lib/operacoes-v4/retorno-origem-v4";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
 import { alvoAindaSelecionado, fatiaTocada, patchTocadoCredenciais, patchTocadoIdentificacao, resolverOSSelecionada, seedEntradaEditor, type EntradaEditorV4, type EsperadosDadosBasicosV3, type EsperadosProvaEntradaV3, type OpcoesSalvarAcessoriosV4, type OpcoesSalvarProvaEntradaV4 } from "@/lib/operacoes-v4/entrada-form";
@@ -149,6 +158,9 @@ import {
   montarHistoricoHeaderV4,
 } from "@/lib/operacoes-v4/os-header-transversal";
 import { montarResumoFinanceiroOSV4 } from "@/lib/operacoes-v4/financeiro-v4";
+import { derivarSituacaoAtendimentoV4, pagamentoComPendenciaComercialV4, pagamentoEmConferenciaV4 } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import { derivarRetiradaFinanceiraV4, servicoDaRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
+import { lerReciboDaProjecaoV4, type LeituraReciboV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
 import { buildGarantiasPortfolioV4 } from "@/lib/operacoes-v4/posvenda-v4";
 import {
   adaptAcessoriosEntrada,
@@ -297,7 +309,12 @@ export interface V4DataCtx {
   // ---- Entrega (slice OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
   // Confirma pela action canônica `registrarEntregaV3`; o servidor sempre revalida
   // financeiro, mesmo quando o cliente chama fora do gate visual.
-  confirmarEntrega: (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"]) => Promise<boolean>;
+  /** GOAL OPS-V4-FLUXO-CURTO-006: `recebidoPor` = "Retirado por" informado (ausente = cliente da OS, regra do servidor). */
+  confirmarEntrega: (
+    semCobranca?: EntregaSemCobrancaSolicitacaoV3,
+    dataEntrega?: RegistrarEntregaInputV3["dataEntrega"],
+    recebidoPor?: string,
+  ) => Promise<boolean>;
   // ---- Assinatura de retirada + auditoria de impressão (GOAL OPS-V4-DOCS-
   // ASSINATURA-TERMOS-ANEXOS-012) ----
   /** Persiste a assinatura de retirada (reuso de `salvarAssinaturaRetiradaV3`). */
@@ -310,12 +327,31 @@ export interface V4DataCtx {
   // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
   /** Define/edita a garantia prevista da OS (reuso de `salvarGarantiaOSV3`). */
   salvarGarantia: (input: { modeloId: string; prazoDias?: number }) => Promise<boolean>;
-  /** Abre retorno no payload da OS original via motor V3 e, se entregue, o atendimento vinculado. */
+  /**
+   * Abre o retorno da OS SELECIONADA (motor V3, operação nova). Mantido por
+   * compatibilidade; a V4 usa o fluxo Retorno / Garantia (`abrirRetornoDaOrigem`).
+   */
   abrirRetorno: (motivo: string, observacao?: string) => Promise<boolean>;
   /** Finaliza o retorno indicado via motor V3. */
   finalizarRetorno: (retornoId: string, observacao?: string) => Promise<boolean>;
   /** Abre a OS original ou o atendimento de retorno pelo id persistido. */
   abrirOsVinculada: (osId: string) => void;
+  // ---- Retorno / Garantia pela OS original (GOAL OPS-V4-FLUXO-CURTO-007) ----
+  // Opcionais por compatibilidade com fixtures legados (ausente = fluxo indisponível).
+  /** Abre o fluxo na loja ativa (OS original pré-selecionada ou `null` = escolher). */
+  abrirFluxoRetorno?: (origemOsId: string | null, opcoes?: { focoRetorno?: HTMLElement | null }) => void;
+  fecharFluxoRetorno?: () => void;
+  /** Controle persistente que deve receber o foco quando o fluxo fechar (ex.: o "+ Novo"). */
+  focoRetornoFluxo?: () => HTMLElement | null;
+  /** Busca server-side da OS original na loja ativa; a resposta carrega a loja consultada. */
+  buscarOrigensRetorno?: (termo: string) => Promise<RespostaOrigensRetornoV4>;
+  /** Releitura server-side da OS original pré-selecionada. */
+  lerOrigemRetorno?: (osId: string) => Promise<RespostaOrigemRetornoV4>;
+  /** Abre o retorno pela OS original — idempotente por `operacaoId` (retry = mesmo id). */
+  abrirRetornoDaOrigem?: (origemOsId: string, comando: ComandoRetornoV4) => Promise<ResultadoRetornoV4>;
+  /** Rascunho do relato por loja+OS (memória da sessão, sem senha). */
+  rascunhoRetorno?: (origemOsId: string) => RascunhoRetornoV4 | null;
+  salvarRascunhoRetorno?: (origemOsId: string, rascunho: RascunhoRetornoV4 | null) => void;
   // ---- Cancelamento de OS (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) ----
   /** Cancela a OS via `aplicarTransicaoStatusV3(sid, osId, "cancelada", { motivo })` (motivo obrigatório, contrato já blindado — commit f825867). */
   cancelarOS: (motivo: string) => Promise<boolean>;
@@ -467,6 +503,11 @@ export function buildVals(
   // OS real selecionada → identidade/financeiro reais (vazio honesto quando ausente).
   const realOS = ctx.realOS;
   const financialProjection = ctx.financialProjection.projection;
+  // GOAL OPS-V4-FLUXO-CURTO-006: loja+OS das superfícies abertas sobre a seleção
+  // (sheet de recebimento, recibo, estorno, documento impresso). Aberta para outra
+  // seleção = fechada nesta — nunca mostra/age sobre a OS errada.
+  const chaveSuperficies = JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]);
+  const noAlvoSuperficies = !!st.selectedOsId && st.alvoSuperficies === chaveSuperficies;
   const financialStatusLabel = financialProjection
     ? FINANCIAL_STATUS_LABEL[financialProjection.financialStatus]
     : ctx.financialProjection.loading
@@ -663,7 +704,13 @@ export function buildVals(
       notify("Defina a garantia da OS antes de emitir o termo.");
       return;
     }
-    update({ docPrint: tipo, menu: null });
+    // GOAL OPS-V4-FLUXO-CURTO-006: o Termo de Entrega declara uma retirada — só
+    // existe depois da entrega real (antes, o documento afirmaria um fato inexistente).
+    if (tipo === "termo_entrega" && !lerEntregaV3(realOS).entregue) {
+      notify("O Termo de Entrega fica disponível depois da entrega confirmada.");
+      return;
+    }
+    update({ docPrint: tipo, alvoSuperficies: chaveSuperficies, menu: null });
   };
   // GOAL 023: "Orçamento (via cliente)" só aparece no menu com orçamento REAL
   // materializado (`estado === "persistido"`) — prévia/ausente não têm o que
@@ -727,10 +774,32 @@ export function buildVals(
   const orcamentoEditavel = orcamentoMaterializado && (orcStatusRaw === "rascunho" || orcStatusRaw === "enviado");
   const orcamentoPodeDecidir = orcamentoEditavel;
   const orcamentoEditorSeed = seedEditorFromOS(realOS);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: UMA leitura das três dimensões
+  // (fatos do título, comercial, impedimento) para Header, Financeiro, Entrega e
+  // Próxima ação. Projeção de outra OS (resposta tardia) = carregando.
+  const situacaoAtendimento = derivarSituacaoAtendimentoV4({
+    osId: realOS?.id ?? null,
+    projection: financialProjection,
+    loading: ctx.financialProjection.loading,
+    error: ctx.financialProjection.error,
+  });
   const comercialHeader = montarComercialHeaderV4({
     estado: orcamentoReal.estado,
     status: orcStatusRaw,
     total: typeof orcRaw?.total === "number" ? orcRaw.total : financialProjection?.approvedBudgetTotal,
+    pendencia: situacaoAtendimento.comercial.pendente
+      ? {
+          rotulo:
+            situacaoAtendimento.impedimento?.codigo === "ORCAMENTO_RECUSADO"
+              ? "Orçamento recusado"
+              : situacaoAtendimento.impedimento?.codigo === "ORCAMENTO_EXPIRADO"
+                ? "Orçamento vencido"
+                : situacaoAtendimento.impedimento?.codigo === "PRECO_AUSENTE"
+                  ? "Cobrança não definida"
+                  : "Aprovação pendente",
+          tone: situacaoAtendimento.impedimento?.codigo === "ORCAMENTO_RECUSADO" ? "danger" : "warn",
+        }
+      : null,
   });
   const financeiroResumo = montarResumoFinanceiroOSV4({
     loading: ctx.financialProjection.loading,
@@ -745,6 +814,11 @@ export function buildVals(
     expectedTotal: financialProjection?.expectedTotal,
     receivedTotal: financialProjection?.receivedTotal,
     balance: financialProjection?.balance,
+    pagamentoVerificado: pagamentoComPendenciaComercialV4(situacaoAtendimento) && situacaoAtendimento.pagamento.estado === "registrado"
+      ? { label: situacaoAtendimento.pagamento.rotulo.replace(" — ", " "), liquidado: situacaoAtendimento.pagamento.liquidado }
+      : null,
+    pagamentoEmConferencia: pagamentoEmConferenciaV4(situacaoAtendimento),
+    semContaAReceber: situacaoAtendimento.estado === "pronta" && situacaoAtendimento.pagamento.estado === "sem_titulo",
   });
   const historicoHeader = montarHistoricoHeaderV4(timelineReal.length);
 
@@ -879,8 +953,45 @@ export function buildVals(
     financeiroCarregando: leituraFinanceiraBloqueada && ctx.financialProjection.loading,
     financeiroErro: leituraFinanceiraBloqueada ? ctx.financialProjection.error : null,
     financeiroMotivo: financialProjection?.consistencyIssues[0] ?? null,
-    saldoPendente: saldoPendenteConfirmado ? financialProjection?.balance ?? null : null,
+    // Saldo legado só é exibido como fato quando o histórico do título não está em conferência.
+    saldoPendente: saldoPendenteConfirmado && !pagamentoEmConferenciaV4(situacaoAtendimento) ? financialProjection?.balance ?? null : null,
+    // GOAL OPS-V4-FLUXO-CURTO-006: total aprovado sem Conta a Receber — o título
+    // único nasce no primeiro recebimento/lançamento a prazo (nunca pela leitura).
+    cobrancaNaoFormalizada:
+      !!realOS && status === "pronta" && !ctx.financialProjection.loading && !ctx.financialProjection.error &&
+      financialProjection?.financialStatus === "CHARGE_NOT_CREATED",
   };
+
+  // ---- Retirada (GOAL OPS-V4-FLUXO-CURTO-006) ----
+  // Contexto final da OS na Entrega: condição financeira da MESMA OS (projeção de
+  // outra OS = carregando), serviço do orçamento real. Derivação pura; a decisão
+  // de entrega continua no servidor (`registrarEntregaV3`).
+  const retirada = {
+    financeiro: derivarRetiradaFinanceiraV4({
+      osId: realOS?.id ?? null,
+      projection: financialProjection,
+      loading: ctx.financialProjection.loading,
+      error: ctx.financialProjection.error,
+      entregue: entregaReal.entregue,
+    }),
+    servico: servicoDaRetiradaV4(realOS),
+    clienteNome: (realOS?.cliente?.nome ?? "").trim(),
+  };
+  // Comprovante da MESMA OS, sempre da evidência PERSISTIDA (timeline da OS × pagamentos
+  // vigentes do título): só com o detalhe e a projeção desta OS estabelecidos; a sessão
+  // apenas marca "acabou de receber". Leitura com erro nunca vira "confirmando" eterno.
+  const leituraReciboEstabelecida =
+    !!realOS &&
+    cargaOS === "estabelecida" &&
+    !!financialProjection &&
+    financialProjection.osId === realOS.id &&
+    !ctx.financialProjection.loading;
+  const reciboAtual: LeituraReciboV4 =
+    ctx.financialProjection.error || cargaOS === "erro"
+      ? { estado: "erro" }
+      : !leituraReciboEstabelecida || !financialProjection
+        ? { estado: "confirmando" }
+        : lerReciboDaProjecaoV4({ sessao: ctx.pdvServico.ultimoRecibo, os: realOS, projection: financialProjection });
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
   const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);
@@ -905,7 +1016,7 @@ export function buildVals(
   const producaoBancadaComCadastro = { ...producaoBancada, tecnicosConhecidos: tecnicosSeletor };
   const filaOperacionalComCadastro = { ...filaOperacional, tecnicosConhecidos: tecnicosSeletor };
   const slaOperacionalComCadastro = { ...slaOperacional, tecnicosConhecidos: tecnicosSeletor };
-  const pdvView = buildPdvView(ctx.ordens, ctx.financialProjectionsByOsId);
+  const pdvView = buildPdvView(ctx.ordens, ctx.financialProjectionsByOsId, ctx.lojaAtivaId);
 
   // R04: chave do rascunho da seleção ATUAL (loja+OS) para as saídas reais.
   const chaveRascunhoAtual = () =>
@@ -1307,9 +1418,13 @@ export function buildVals(
     // GOAL OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005: usado pelo bloqueio "saldo em
     // aberto" da Entrega — só navega (o recebimento real vive no botão do Financeiro).
     goFinanceiro: () => update({ stage: "financeiro", module: "workspace", view: "cockpit", menu: null }),
-    openReceberPagamento: () => update({ stage: "financeiro", receberPagamento: true, module: "workspace", view: "cockpit", menu: null }),
+    openReceberPagamento: () =>
+      update({ stage: "financeiro", receberPagamento: true, alvoSuperficies: chaveSuperficies, module: "workspace", view: "cockpit", menu: null }),
+    // GOAL OPS-V4-FLUXO-CURTO-006: o MESMO sheet (ReceberPagamentoV4 + hook V3),
+    // aberto sem sair da etapa Entrega — pagar nunca entrega sozinho.
+    openReceberPagamentoAqui: () => update({ receberPagamento: true, alvoSuperficies: chaveSuperficies, menu: null }),
     closeReceberPagamento: () => update({ receberPagamento: false }),
-    receberPagamentoOpen: st.receberPagamento,
+    receberPagamentoOpen: st.receberPagamento && noAlvoSuperficies,
     // GOAL OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002: usado pelo alerta "OS sem cobrança"
     // da Entrega — leva o operador a lançar o orçamento antes de entregar (só navega).
     goOrcamento: () => update({ stage: "orcamento", module: "workspace", view: "cockpit", menu: null }),
@@ -1320,6 +1435,16 @@ export function buildVals(
     financeiroHeader,
     financeiroResumo,
     historicoHeader,
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: situação única + atalho para o
+    // lugar que resolve o impedimento (só navega ou relê; nunca escreve).
+    situacaoAtendimento,
+    irParaImpedimento: () => {
+      const destino = situacaoAtendimento.impedimento?.destino;
+      if (destino === "comercial") update({ stage: "orcamento", module: "workspace", view: "cockpit", menu: null });
+      else if (destino === "entrega") update({ stage: "entrega", module: "workspace", view: "cockpit", menu: null });
+      else if (destino === "recarregar") ctx.financialProjection.reload();
+      else update({ stage: "financeiro", module: "workspace", view: "cockpit", menu: null });
+    },
     backFromSeguranca: () => update({ stage: "execucao", module: "workspace", view: "cockpit", menu: null }),
 
     menu: st.menu, menuPrint: st.menu === "print", menuMore: st.menu === "more",
@@ -1359,10 +1484,36 @@ export function buildVals(
     openNovoAtendimento: () => update(patchAbrirLauncherNovoAtendimentoV4()),
     closeNovoAtendimento: () => update({ novoAtendimento: false }),
     novoAtendimentoOpen: st.novoAtendimento,
-    escolherNovoAtendimento: (id: NovoAtendimentoModalidadeV4) => {
+    escolherNovoAtendimento: (id: NovoAtendimentoModalidadeV4, focoRetorno?: HTMLElement | null) => {
       if (id === "orcamento") ctx.definirOrcamentoRapidoPrefill(null);
       update(patchEscolherNovoAtendimentoV4(id));
+      // GOAL OPS-V4-FLUXO-CURTO-007: "Retorno / Garantia" só abre o seletor da OS
+      // original (nada é criado aqui); sem orquestrador do fluxo, avisa e não finge.
+      if (id === "retorno") {
+        if (ctx.abrirFluxoRetorno) ctx.abrirFluxoRetorno(null, { focoRetorno });
+        else notify("Retorno / Garantia indisponível nesta tela.");
+      }
     },
+    // ---- Retorno / Garantia pela OS original (GOAL OPS-V4-FLUXO-CURTO-007) ----
+    // O fluxo só existe na loja em que foi aberto (troca de loja o fecha).
+    retornoFluxo:
+      st.retornoFluxo && ctx.abrirFluxoRetorno && st.retornoFluxo.lojaId === (ctx.lojaAtivaId ?? "") ? st.retornoFluxo : null,
+    openRetornoFluxo: (origemOsId: string | null) => {
+      if (ctx.abrirFluxoRetorno) ctx.abrirFluxoRetorno(origemOsId);
+      else notify("Retorno / Garantia indisponível nesta tela.");
+    },
+    closeRetornoFluxo: () => ctx.fecharFluxoRetorno?.(),
+    focoRetornoFluxo: (): HTMLElement | null => ctx.focoRetornoFluxo?.() ?? null,
+    buscarOrigensRetorno: (termo: string): Promise<RespostaOrigensRetornoV4> =>
+      ctx.buscarOrigensRetorno ? ctx.buscarOrigensRetorno(termo) : Promise.reject(new Error("Busca indisponível.")),
+    lerOrigemRetorno: (osId: string): Promise<RespostaOrigemRetornoV4> =>
+      ctx.lerOrigemRetorno ? ctx.lerOrigemRetorno(osId) : Promise.reject(new Error("Leitura indisponível.")),
+    abrirRetornoDaOrigem: (origemOsId: string, comando: ComandoRetornoV4): Promise<ResultadoRetornoV4> =>
+      ctx.abrirRetornoDaOrigem
+        ? ctx.abrirRetornoDaOrigem(origemOsId, comando)
+        : Promise.resolve({ ok: false as const, mensagem: "Retorno / Garantia indisponível nesta tela." }),
+    rascunhoRetorno: (origemOsId: string): RascunhoRetornoV4 | null => ctx.rascunhoRetorno?.(origemOsId) ?? null,
+    salvarRascunhoRetorno: (origemOsId: string, rascunho: RascunhoRetornoV4 | null) => ctx.salvarRascunhoRetorno?.(origemOsId, rascunho),
     // Nova OS real: o modal coleta o formulário localmente, cria via `criarOSEnterpriseV3`
     // e chama `onOSCriada(osId)` no sucesso (fecha modal + abre a OS criada + recarrega).
     onOSCriada,
@@ -1404,9 +1555,9 @@ export function buildVals(
     // ---- Estorno de recebimento REAL (GOAL OPS-V4-RECEBIMENTO-ESTORNO-016) ----
     // Modal só abre atrás de ação explícita (botão na aba Financeiro, já gated por
     // `v.estorno.podeEstornar`); a escrita real é `v.pdvServico.estornar` (acima).
-    openEstornoRecebimento: () => update({ estornoRecebimento: true }),
+    openEstornoRecebimento: () => update({ estornoRecebimento: true, alvoSuperficies: chaveSuperficies }),
     closeEstornoRecebimento: () => update({ estornoRecebimento: false }),
-    estornoRecebimentoOpen: st.estornoRecebimento,
+    estornoRecebimentoOpen: st.estornoRecebimento && noAlvoSuperficies,
 
     // ---- Cancelamento de OS REAL (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) ----
     // Modal só abre atrás de ação explícita (menu "Mais ações"); a escrita real é
@@ -1442,7 +1593,10 @@ export function buildVals(
     cancelamento,
     cancelarOS: ctx.cancelarOS,
 
-    openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
+    openRecibo: () => update({ recibo: true, alvoSuperficies: chaveSuperficies }),
+    closeRecibo: () => update({ recibo: false }),
+    reciboOpen: st.recibo && noAlvoSuperficies,
+    reciboAtual,
 
     diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, entrega: entregaReal,
     os: osView,
@@ -1467,6 +1621,7 @@ export function buildVals(
     // saldo usada pelo CTA global e pelo aviso do Financeiro).
     confirmarEntrega: ctx.confirmarEntrega,
     entregaAcoes,
+    retirada,
 
     // ---- Assinatura de retirada + documentos reais (GOAL OPS-V4-DOCS-
     // ASSINATURA-TERMOS-ANEXOS-012) ----
@@ -1476,7 +1631,16 @@ export function buildVals(
     salvarAssinaturaRetirada: ctx.salvarAssinaturaRetirada,
     adicionarFotoSaida: ctx.adicionarFotoSaida,
     removerFotoSaida: ctx.removerFotoSaida,
-    docPrintTipo: st.docPrint as DocumentoTipoV3 | null,
+    // GOAL OPS-V4-FLUXO-CURTO-006: o documento aberto vale só para a loja+OS em que
+    // foi pedido; Termo de Entrega só de OS realmente entregue e Termo de Garantia
+    // só com garantia definida — as guardas valem a cada render, não só na abertura.
+    docPrintTipo:
+      st.docPrint &&
+      noAlvoSuperficies &&
+      !(st.docPrint === "termo_entrega" && !lerEntregaV3(realOS).entregue) &&
+      !(st.docPrint === "termo_garantia" && !lerGarantiaV3(realOS).temGarantia)
+        ? (st.docPrint as DocumentoTipoV3)
+        : null,
     closeDocPrint: () => update({ docPrint: null }),
     registrarImpressaoDoc: ctx.registrarImpressaoDoc,
     // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
@@ -1492,7 +1656,7 @@ export function buildVals(
     // Sessão de caixa/recibo e ações do motor V3; totais vêm da projeção server-side.
     // `recebimento` é o gating pré-computado dessa projeção com a sessão do caixa.
     pdvServico: ctx.pdvServico,
-    recebimentoContextKey: JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]),
+    recebimentoContextKey: chaveSuperficies,
     recebimento,
     estorno,
     // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
@@ -1823,6 +1987,17 @@ export function useV4Preview(): V4Vals {
   useEffect(() => {
     limparReciboPdvV3();
   }, [st.selectedOsId, limparReciboPdvV3]);
+  // GOAL OPS-V4-FLUXO-CURTO-006: superfícies abertas para outra loja+OS (sheet,
+  // recibo, estorno, documento) já não aparecem na seleção nova (`alvoSuperficies`);
+  // aqui são descartadas para não ressurgirem ao voltar à OS anterior.
+  const chaveSuperficiesSelecao = JSON.stringify([lojaAtivaId ?? null, st.selectedOsId]);
+  useEffect(() => {
+    setSt((prev) =>
+      prev.alvoSuperficies == null || prev.alvoSuperficies === chaveSuperficiesSelecao
+        ? prev
+        : { ...prev, receberPagamento: false, recibo: false, estornoRecebimento: false, docPrint: null, alvoSuperficies: null },
+    );
+  }, [chaveSuperficiesSelecao]);
 
   useEffect(() => {
     return () => {
@@ -1871,8 +2046,12 @@ export function useV4Preview(): V4Vals {
   // T05 + R03: espelhos da seleção para comparar DEPOIS do await — a seleção
   // (loja e/ou OS) pode ter mudado enquanto a action rodava.
   const selectedRef = useRef(st.selectedOsId);
+  // GOAL OPS-V4-FLUXO-CURTO-007: geração da SELEÇÃO (cobre A→B→A na mesma loja) para que
+  // a resposta de uma abertura de retorno nunca troque uma seleção feita depois do disparo.
+  const selecaoGenRef = useRef(0);
   useEffect(() => {
     selectedRef.current = st.selectedOsId;
+    selecaoGenRef.current += 1;
   }, [st.selectedOsId]);
   const lojaRef = useRef(lojaAtivaId);
   useEffect(() => {
@@ -2016,15 +2195,27 @@ export function useV4Preview(): V4Vals {
   // V3) só para também recarregar lista+detalhe da V4 depois do sucesso.
   const estornarRecebimentoV4 = useCallback(
     async (input: EstornarRecebimentoInputV3) => {
+      const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
       const ok = await estornarPdvV3(input);
+      // GOAL OPS-V4-FLUXO-CURTO-006: resposta de A com o operador já em B (OS ou
+      // loja) só atualiza a lista — nunca limpa o recibo, relê ou fecha superfícies
+      // de B; o chamador obsoleto recebe `false`.
+      if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) {
+        if (ok) reloadOrdens();
+        return false;
+      }
       if (ok) {
         reloadOrdens();
         reloadDetail();
         reloadFinancial();
       }
+      // GOAL OPS-V4-FLUXO-CURTO-006: o comprovante da sessão era do recebimento
+      // agora estornado — nunca mais é oferecido como válido (a reimpressão passa
+      // a vir só da evidência persistida que ainda vale).
+      if (ok) limparReciboPdvV3();
       return ok;
     },
-    [estornarPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
+    [estornarPdvV3, reloadOrdens, reloadDetail, reloadFinancial, limparReciboPdvV3],
   );
   // A chave/idempotência e o comprovante continuam inteiramente no hook V3.
   // A lista atualiza após resultado terminal; detalhe/financeiro só no alvo.
@@ -2198,13 +2389,15 @@ export function useV4Preview(): V4Vals {
   // `registrarEntregaV3` é o caminho canônico e agora sempre refaz a decisão
   // financeira no servidor. O gate cliente serve apenas para orientar a UX.
   const confirmarEntrega = useCallback(
-    (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"]) =>
+    (semCobranca?: EntregaSemCobrancaSolicitacaoV3, dataEntrega?: RegistrarEntregaInputV3["dataEntrega"], recebidoPor?: string) =>
       runWrite(
         (sid, osId) =>
           registrarEntregaV3(sid, osId, {
             ...(semCobranca ? { semCobranca } : {}),
             // Data efetiva da entrega; o servidor valida e refaz toda a decisão.
             ...(dataEntrega ? { dataEntrega } : {}),
+            // GOAL OPS-V4-FLUXO-CURTO-006: quem retirou (ausente = cliente da OS).
+            ...(recebidoPor ? { recebidoPor } : {}),
           }),
         "Entrega confirmada.",
         () => update({ status: "entregue", stage: "entrega" }),
@@ -2278,6 +2471,137 @@ export function useV4Preview(): V4Vals {
     },
     [ordens, update, reloadOrdens],
   );
+  // ---- Retorno / Garantia pela OS original (GOAL OPS-V4-FLUXO-CURTO-007) ----
+  // O fluxo vale só para a loja em que foi aberto; cada abertura/fechamento consome
+  // uma geração. A resposta de `abrirRetornoV3` só navega/fecha/notifica se a loja e
+  // a geração ainda são as mesmas — resposta atrasada nunca contamina outro contexto.
+  const retornoGenRef = useRef(0);
+  const retornoFluxoRef = useRef<V4State["retornoFluxo"]>(null);
+  useEffect(() => {
+    retornoFluxoRef.current = st.retornoFluxo ?? null;
+  }, [st.retornoFluxo]);
+  useEffect(() => {
+    retornoGenRef.current += 1;
+    setSt((prev) => (prev.retornoFluxo && prev.retornoFluxo.lojaId !== (lojaAtivaId ?? "") ? { ...prev, retornoFluxo: null } : prev));
+  }, [lojaAtivaId]);
+  const rascunhosRetornoRef = useRef(new Map<string, RascunhoRetornoV4>());
+  const chaveRascunhoRetorno = useCallback((origemOsId: string) => `${(lojaAtivaId ?? "").trim()}::${origemOsId.trim()}`, [lojaAtivaId]);
+  const rascunhoRetorno = useCallback(
+    (origemOsId: string) => rascunhosRetornoRef.current.get(chaveRascunhoRetorno(origemOsId)) ?? null,
+    [chaveRascunhoRetorno],
+  );
+  const salvarRascunhoRetorno = useCallback(
+    (origemOsId: string, rascunho: RascunhoRetornoV4 | null) => {
+      const chave = chaveRascunhoRetorno(origemOsId);
+      if (rascunho) rascunhosRetornoRef.current.set(chave, rascunho);
+      else rascunhosRetornoRef.current.delete(chave);
+    },
+    [chaveRascunhoRetorno],
+  );
+  // Gatilho persistente para devolver o foco (o launcher desmonta antes do seletor montar).
+  const retornoFocoRef = useRef<HTMLElement | null>(null);
+  const focoRetornoFluxo = useCallback(() => retornoFocoRef.current, []);
+  const abrirFluxoRetorno = useCallback(
+    (origemOsId: string | null, opcoes?: { focoRetorno?: HTMLElement | null }) => {
+      const sid = (lojaAtivaId ?? "").trim();
+      if (!sid) {
+        notify("Selecione a loja ativa para registrar um retorno.");
+        return;
+      }
+      retornoFocoRef.current = opcoes?.focoRetorno ?? null;
+      retornoGenRef.current += 1;
+      update({ retornoFluxo: { lojaId: sid, origemOsId: origemOsId?.trim() || null }, novoAtendimento: false, menu: null });
+    },
+    [lojaAtivaId, notify, update],
+  );
+  const fecharFluxoRetorno = useCallback(() => {
+    retornoGenRef.current += 1;
+    update({ retornoFluxo: null });
+  }, [update]);
+  const buscarOrigensRetorno = useCallback(
+    async (termo: string): Promise<RespostaOrigensRetornoV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      if (!sid) throw new Error("Selecione a loja ativa.");
+      const itens = await buscarOrigensRetornoV3(sid, termo);
+      return { lojaId: sid, termo, itens };
+    },
+    [lojaAtivaId],
+  );
+  const lerOrigemRetorno = useCallback(
+    async (osId: string): Promise<RespostaOrigemRetornoV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      if (!sid) throw new Error("Selecione a loja ativa.");
+      const item = await lerOrigemRetornoV3(sid, osId);
+      return { lojaId: sid, osId, item };
+    },
+    [lojaAtivaId],
+  );
+  const abrirRetornoDaOrigem = useCallback(
+    async (origemOsId: string, comando: ComandoRetornoV4): Promise<ResultadoRetornoV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      const origem = (origemOsId ?? "").trim();
+      if (!sid || !origem) return { ok: false, mensagem: "Selecione a OS original na loja ativa." };
+      const geracao = retornoGenRef.current;
+      const selecao = selecaoGenRef.current;
+      const mesmoContexto = () =>
+        lojaRef.current === sid &&
+        retornoGenRef.current === geracao &&
+        selecaoGenRef.current === selecao &&
+        retornoFluxoRef.current?.lojaId === sid;
+      try {
+        const r = await abrirRetornoV3(sid, origem, {
+          motivo: comando.motivo,
+          observacao: comando.observacao,
+          operacaoId: comando.operacaoId,
+          recepcao: {
+            acessorios: comando.acessorios,
+            ...(comando.senha ? { senha: comando.senha, ...(comando.senhaTipo ? { senhaTipo: comando.senhaTipo } : {}) } : {}),
+          },
+        });
+        reloadOrdens();
+        const atendimentoId = r.atendimento?.id?.trim() ?? "";
+        const atendimentoCodigo = r.atendimento?.codigo?.trim() || atendimentoId;
+        if (!atendimentoId) return { ok: false, mensagem: "O servidor não confirmou o atendimento do retorno. Recarregue a OS original." };
+        // A operação foi concluída: encerra SÓ a identidade dela (texto editado depois fica).
+        const chaveRascunho = `${sid}::${origem}`;
+        const encerrado = encerrarOperacaoNoRascunhoV4(rascunhosRetornoRef.current.get(chaveRascunho), comando.operacaoId);
+        if (encerrado === null) rascunhosRetornoRef.current.delete(chaveRascunho);
+        else if (encerrado) rascunhosRetornoRef.current.set(chaveRascunho, encerrado);
+        if (!mesmoContexto()) {
+          // Sem navegar: se a original segue selecionada nesta loja, a ficha relê o servidor.
+          if (lojaRef.current === sid && selectedRef.current === origem) reloadDetail();
+          return { ok: true, atendimentoId, atendimentoCodigo, situacao: r.situacao, navegou: false };
+        }
+        retornoGenRef.current += 1;
+        update({
+          retornoFluxo: null,
+          selectedOsId: atendimentoId,
+          status: "aberta",
+          stage: "entrada",
+          module: "workspace",
+          view: "cockpit",
+          menu: null,
+          focus: true,
+          left: false,
+          right: false,
+        });
+        notify(
+          r.situacao === "criado"
+            ? `Retorno aberto. Atendimento ${atendimentoCodigo} vinculado à OS original.`
+            : `Retorno já registrado: atendimento ${atendimentoCodigo}.`,
+        );
+        return { ok: true, atendimentoId, atendimentoCodigo, situacao: r.situacao, navegou: true };
+      } catch (e) {
+        // Falha (inclusive resposta perdida com retorno gravado): a lista e, se a original
+        // segue selecionada nesta loja, a ficha relêem o servidor — nada de CTA velho.
+        reloadOrdens();
+        if (lojaRef.current === sid && selectedRef.current === origem) reloadDetail();
+        return { ok: false, mensagem: e instanceof Error ? e.message : "Não foi possível abrir o retorno." };
+      }
+    },
+    [lojaAtivaId, reloadOrdens, reloadDetail, update, notify],
+  );
+  /** Compatibilidade: retorno da OS selecionada, sem o seletor (uma operação nova por chamada). */
   const abrirRetorno = useCallback(
     async (motivo: string, observacao?: string) => {
       const sid = (lojaAtivaId ?? "").trim();
@@ -2286,42 +2610,11 @@ export function useV4Preview(): V4Vals {
         notify("Selecione uma OS na loja ativa para concluir a ação.");
         return false;
       }
-      try {
-        const result = await abrirRetornoV3(sid, osId, { motivo, observacao });
-        reloadOrdens();
-        reloadDetail();
-        reloadFinancial();
-        const atendimentoId = result.atendimento?.id?.trim();
-        if (atendimentoId) {
-          update({
-            selectedOsId: atendimentoId,
-            status: "aberta",
-            stage: "entrada",
-            module: "workspace",
-            view: "cockpit",
-            menu: null,
-            focus: true,
-            left: false,
-            right: false,
-          });
-          notify(
-            result.atendimento?.codigo
-              ? `Retorno aberto. Atendimento ${result.atendimento.codigo} vinculado.`
-              : "Retorno aberto e atendimento vinculado.",
-          );
-        } else {
-          notify("Retorno aberto.");
-        }
-        return true;
-      } catch (e) {
-        reloadOrdens();
-        reloadDetail();
-        reloadFinancial();
-        notify(e instanceof Error ? e.message : "Não foi possível concluir a ação.");
-        return false;
-      }
+      const r = await abrirRetornoDaOrigem(osId, { motivo, observacao, acessorios: [], operacaoId: gerarOperacaoRetornoIdV4() });
+      if (!r.ok) notify(r.mensagem);
+      return r.ok;
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify, update],
+    [lojaAtivaId, selectedOsId, abrirRetornoDaOrigem, notify],
   );
   const finalizarRetorno = useCallback(
     (retornoId: string, observacao?: string) =>
@@ -2707,6 +3000,14 @@ export function useV4Preview(): V4Vals {
       abrirRetorno,
       finalizarRetorno,
       abrirOsVinculada,
+      abrirFluxoRetorno,
+      fecharFluxoRetorno,
+      focoRetornoFluxo,
+      buscarOrigensRetorno,
+      lerOrigemRetorno,
+      abrirRetornoDaOrigem,
+      rascunhoRetorno,
+      salvarRascunhoRetorno,
       lancarAPrazo,
       cancelarOS,
       pdvServico,
@@ -2779,6 +3080,14 @@ export function useV4Preview(): V4Vals {
       abrirRetorno,
       finalizarRetorno,
       abrirOsVinculada,
+      abrirFluxoRetorno,
+      fecharFluxoRetorno,
+      focoRetornoFluxo,
+      buscarOrigensRetorno,
+      lerOrigemRetorno,
+      abrirRetornoDaOrigem,
+      rascunhoRetorno,
+      salvarRascunhoRetorno,
       lancarAPrazo,
       cancelarOS,
       pdvServico,

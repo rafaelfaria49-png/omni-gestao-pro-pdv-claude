@@ -24,12 +24,18 @@
  * da V3 (`GARANTIA_CATALOGO_V3`/`prazoPadraoGarantiaV3` de `garantia-textos.ts`,
  * `salvarGarantiaOSV3` via `v.salvarGarantia`). Paridade com `GarantiaOSV3.tsx`
  * da V3: só modelo + prazo (sem termo customizado nesta etapa).
+ *
+ * GOAL OPS-V4-FLUXO-CURTO-006: a etapa vira o contexto final da OS — guia de
+ * retirada (identidade, serviço, condição financeira honesta, garantia, custódia,
+ * fotos), "Receber pagamento" abrindo o MESMO sheet do ReceberPagamentoV4 sem sair
+ * daqui (pagar nunca entrega sozinho), "Retirado por" enviado a
+ * `registrarEntregaV3` e Termo de Entrega só depois da entrega real.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { C, card, cardTitle, fmt, upLabel, pill, inputBase } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import { SignaturePadV3 } from "@/components/operacoes-v3/components/SignaturePadV3";
-import { CATEGORIAS_FOTO_SAIDA_V3, lerGarantiaV3, type CategoriaFotoSaidaV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { CATEGORIAS_FOTO_SAIDA_V3, lerEntregaV3, lerGarantiaV3, type CategoriaFotoSaidaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { FOTO_MAX_V3 } from "@/lib/operacoes-v3/prova-entrada-model";
 import { GARANTIA_CATALOGO_V3, garantiaCatalogoV3, normalizarGarantiaPrevistaV3, prazoPadraoGarantiaV3 } from "@/lib/operacoes-v3/garantia-textos";
 import type { EntregaSemCobrancaCategoriaV3, EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
@@ -47,8 +53,11 @@ import {
 import { DataOperacionalCampoV3 } from "@/components/operacoes-v3/components/DataOperacionalCampoV3";
 import { atendDataCampo } from "../atendimento/field-styles";
 import { RealActionNotice } from "../RealActionNotice";
+import { ReceberPagamentoV4 } from "../ReceberPagamentoV4";
+import { RETIRANTE_MAX_V4, validarRetiranteV4, type ToneRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
+import { pagamentoEmConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import styles from "./retirada-v4.module.css";
 
-const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
 
 const btnPrimary: React.CSSProperties = {
@@ -59,6 +68,18 @@ const btnPrimary: React.CSSProperties = {
   fontSize: 12.5,
   fontWeight: 600,
   color: C.white,
+};
+
+const btnSecundario: React.CSSProperties = {
+  height: 30,
+  padding: "0 12px",
+  border: `1px solid ${C.inputBd}`,
+  background: C.surface,
+  color: C.body,
+  borderRadius: 8,
+  fontSize: 11.5,
+  fontWeight: 500,
+  cursor: "pointer",
 };
 
 /**
@@ -83,6 +104,14 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
   const [dataEntrega, setDataEntrega] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
   const [erroData, setErroData] = useState<string | null>(null);
   const dataRef = useRef<HTMLInputElement>(null);
+  // GOAL OPS-V4-FLUXO-CURTO-006: quem retira — começa com o cliente da OS, é
+  // editável (portador) e obrigatório com a guia da retirada carregada (sempre, na
+  // V4 real): a entrega nunca registra um retirante deduzido.
+  const clienteNome = v.retirada?.clienteNome ?? "";
+  const exigeRetirante = !!v.retirada;
+  const [retirante, setRetirante] = useState(clienteNome);
+  const [erroRetirante, setErroRetirante] = useState<string | null>(null);
+  const retiranteRef = useRef<HTMLInputElement>(null);
   const ea = v.entregaAcoes;
   const osKey = v.realOS?.id ?? "";
   useEffect(() => {
@@ -91,9 +120,12 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
     setMotivo("");
   }, [osKey, ea.semCobrancaLancada]);
   useEffect(() => {
-    // Troca de OS: nada da OS anterior (data/erro) sobrevive.
+    // Troca de OS: nada da OS anterior (data/erro/retirante) sobrevive.
     setDataEntrega(campoAgoraV3());
     setErroData(null);
+    setRetirante(clienteNome);
+    setErroRetirante(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [osKey]);
 
   if (!ea.podeConfirmar && !ea.bloqueadaPorSaldo && !ea.semCobrancaLancada && !ea.leituraFinanceiraBloqueada) return null;
@@ -102,6 +134,8 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
   const montada = montarDataOperacionalV3(dataEntrega);
   const lida = montada.ok ? lerDataOperacionalV3(montada.valor.iso, montada.valor.meta) : null;
   const retroativa = dataRetroativaV3(lida);
+  // O MESMO sheet do Financeiro (ReceberPagamentoV4 + hook V3), aberto aqui.
+  const abrirRecebimento = v.openReceberPagamentoAqui ?? v.openReceberPagamento;
 
   const run = async (semCobranca?: EntregaSemCobrancaSolicitacaoV3) => {
     if (busy) return;
@@ -112,18 +146,28 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
       requestAnimationFrame(() => dataRef.current?.focus());
       return;
     }
+    const quem = validarRetiranteV4(retirante, { obrigatorio: exigeRetirante });
+    if (!quem.ok) {
+      setErroRetirante(quem.mensagem);
+      requestAnimationFrame(() => retiranteRef.current?.focus());
+      return;
+    }
     const quando = retroativa ? ` em ${formatarDataOperacionalV3(lida)}` : "";
+    const por = quem.recebidoPor ? `, retirada por ${quem.recebidoPor}` : "";
     const confirmado = window.confirm(
       semCobranca
-        ? `A entrega${quando} será registrada sem cobrança, com categoria, motivo e responsável na auditoria. Confirmar?`
-        : `Entrega real${quando}: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?`
+        ? `A entrega${quando}${por} será registrada sem cobrança, com categoria, motivo e responsável na auditoria. Confirmar?`
+        : `Entrega real${quando}${por}: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?`
     );
     if (!confirmado) return;
     // Padrão intacto ("hoje, agora" automático) = horário exato do servidor.
     const informada = !(dataEntrega.horaAutomatica && dataEntrega.dia === hojeNaLojaV3());
+    const data = informada && montada.ok ? montada.valor : undefined;
     setBusy(true);
     try {
-      await v.confirmarEntrega(semCobranca, informada && montada.ok ? montada.valor : undefined);
+      // Pagamento e entrega são comandos separados: aqui só a entrega canônica.
+      if (quem.recebidoPor) await v.confirmarEntrega(semCobranca, data, quem.recebidoPor);
+      else await v.confirmarEntrega(semCobranca, data);
     } finally {
       setBusy(false);
     }
@@ -151,6 +195,83 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
     </div>
   );
 
+  const campoRetirante = (
+    <div style={{ display: "grid", gap: 4, marginBottom: 12 }}>
+      <label htmlFor="entrega-retirante" style={{ fontSize: 11.5, fontWeight: 600, color: C.body }}>Retirado por</label>
+      <input
+        ref={retiranteRef}
+        id="entrega-retirante"
+        type="text"
+        value={retirante}
+        maxLength={RETIRANTE_MAX_V4}
+        disabled={busy}
+        autoComplete="off"
+        required={exigeRetirante}
+        aria-invalid={erroRetirante ? true : undefined}
+        aria-describedby="entrega-retirante-ajuda"
+        onChange={(event) => {
+          setRetirante(event.target.value);
+          setErroRetirante(null);
+        }}
+        style={{ ...inputBase, height: 34 }}
+      />
+      <span id="entrega-retirante-ajuda" style={{ fontSize: 10.5, color: erroRetirante ? C.dangerFg : C.subtle, lineHeight: 1.45 }}>
+        {erroRetirante ?? "Cliente ou portador que está levando o aparelho."}
+      </span>
+    </div>
+  );
+
+  const botaoReceber = (
+    <button type="button" onClick={abrirRecebimento} style={{ ...btnPrimary, background: C.primary, cursor: "pointer" }}>
+      Receber pagamento
+    </button>
+  );
+
+  // Projeção ainda não confirmada para ESTA OS (em leitura ou de outra OS que
+  // chegou atrasada): nada se decide — nem receber, nem confirmar (fail-closed).
+  if (v.retirada?.financeiro.situacao === "carregando") {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5 }}>Confirmando a situação financeira desta OS…</div>
+      </div>
+    );
+  }
+
+  // Total aprovado sem Conta a Receber: o recebimento (ou o saldo a prazo)
+  // formaliza o título único da OS — a leitura nunca cria nada.
+  if (ea.cobrancaNaoFormalizada && v.retirada?.financeiro.podeReceber) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.warnFg, marginBottom: 4 }}>Cobrança ainda não formalizada</div>
+        <div style={{ fontSize: 11.5, color: C.body, lineHeight: 1.5, marginBottom: 10 }}>
+          Receba o pagamento (ou deixe o saldo a prazo) para formalizar a cobrança desta OS. A entrega continua bloqueada até lá.
+        </div>
+        {botaoReceber}
+      </div>
+    );
+  }
+
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: leitura OK e bloqueio COMERCIAL — a
+  // explicação já está na Próxima ação; aqui, só o estado da confirmação e o atalho.
+  const sit = situacaoAtendimentoDe(v);
+  if (ea.leituraFinanceiraBloqueada && !ea.financeiroCarregando && !ea.financeiroErro && sit.estado === "pronta" && sit.comercial.pendente && sit.impedimento) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 12, color: C.warnFg, lineHeight: 1.5 }}>
+          Para liberar a confirmação da entrega: <strong>{sit.impedimento.titulo}</strong>.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          <button type="button" onClick={() => v.irParaImpedimento?.()} style={btnSecundario}>
+            {sit.impedimento.acao}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (ea.leituraFinanceiraBloqueada) {
     return (
       <div style={card}>
@@ -159,6 +280,42 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
           {ea.financeiroCarregando
             ? "Confirmando a situação financeira desta OS…"
             : ea.financeiroMotivo ?? "Não foi possível confirmar a situação financeira desta OS. Revise a cobrança antes de entregar."}
+        </div>
+        {!ea.financeiroCarregando && (v.goFinanceiro || (ea.financeiroErro && v.financial?.reload)) ? (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+            {v.goFinanceiro ? (
+              <button type="button" onClick={v.goFinanceiro} style={btnSecundario}>
+                Revisar no Financeiro
+              </button>
+            ) : null}
+            {ea.financeiroErro && v.financial?.reload ? (
+              <button type="button" onClick={v.financial.reload} style={btnSecundario}>
+                Tentar novamente
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: saldo legado com histórico do título
+  // em conferência bloqueia igual, mas não é exibido como "pagamento pendente R$ X".
+  if (ea.bloqueadaPorSaldo && pagamentoEmConferenciaV4(sit)) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.warnFg, marginBottom: 4 }}>Pagamento em conferência</div>
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 10 }}>
+          A entrega continua bloqueada. Confira a Conta a Receber no Financeiro; receber não entrega: a confirmação continua aqui, separada.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {botaoReceber}
+          {v.goFinanceiro ? (
+            <button type="button" onClick={v.goFinanceiro} style={btnSecundario}>
+              Revisar no Financeiro
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -172,15 +329,9 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
           Pagamento pendente{ea.saldoPendente != null ? `  ${fmt(ea.saldoPendente)}` : ""}
         </div>
         <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 10 }}>
-          Receba o pagamento (ou lance a prazo) antes de confirmar a entrega.
+          Receba o pagamento (ou lance a prazo) antes de confirmar a entrega. Receber não entrega: a confirmação continua aqui, separada.
         </div>
-        <button
-          type="button"
-          onClick={v.openReceberPagamento}
-          style={{ height: 30, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 11.5, fontWeight: 500, cursor: "pointer" }}
-        >
-          Receber pagamento
-        </button>
+        {botaoReceber}
       </div>
     );
   }
@@ -230,6 +381,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
           A classificação e a justificativa serão validadas e auditadas pelo servidor antes da entrega.
         </div>
         {campoData}
+        {campoRetirante}
         <label style={{ display: "grid", gap: 5, marginBottom: 10 }}>
           <span style={upLabel}>Categoria obrigatória</span>
           <select
@@ -288,10 +440,18 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
           <span style={{ fontSize: 11.5, color: C.infoFg, lineHeight: 1.45 }}><strong>Entrega sem cobrança autorizada.</strong> A classificação persistida será revalidada pelo servidor.</span>
         </div>
+      ) : v.retirada?.financeiro.situacao === "quitado" && v.reciboAtual?.estado === "disponivel" && v.reciboAtual.origem === "sessao" ? (
+        // Logo após receber nesta sessão (o estado persistido já aparece na guia).
+        <div role="status" style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.successBg, border: `1px solid ${C.successBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
+          <span style={{ fontSize: 11.5, color: C.successFg, lineHeight: 1.45 }}>
+            <strong>Pagamento registrado. Falta confirmar a entrega.</strong> A entrega só acontece quando você confirmar abaixo.
+          </span>
+        </div>
       ) : (
         <RealActionNotice kind="entrega" />
       )}
       {campoData}
+      {campoRetirante}
       <button
         type="button"
         disabled={busy}
@@ -313,6 +473,87 @@ const TONE_MAP: Record<Tone, { bg: string; fg: string; dot: string }> = {
   danger: { bg: C.dangerBg, fg: C.dangerFg, dot: C.danger },
   neutro: { bg: C.muted100, fg: C.muted, dot: C.subtle },
 };
+
+const TOM_RETIRADA: Record<ToneRetiradaV4, { classe: string; icone: string }> = {
+  success: { classe: styles.tomSuccess, icone: "✓" },
+  info: { classe: styles.tomInfo, icone: "i" },
+  warning: { classe: styles.tomWarning, icone: "!" },
+  danger: { classe: styles.tomDanger, icone: "!" },
+  neutral: { classe: styles.tomNeutral, icone: "…" },
+};
+
+/**
+ * Guia de retirada (GOAL OPS-V4-FLUXO-CURTO-006): o contexto final da OS em um
+ * só lugar, só com dado real — ausente aparece como ausente, nunca como
+ * confirmação. A situação financeira vem da projeção server-side da MESMA OS.
+ */
+function GuiaRetirada({ v }: { v: V4Vals }) {
+  const r = v.retirada;
+  if (!r || !v.realOS) return null;
+  const f = r.financeiro;
+  const e = v.entrega;
+  const g = e.garantia;
+  const tom = TOM_RETIRADA[f.tone];
+  const valor = (n: number | null) => (n == null ? "—" : fmt(n));
+  const servico = r.servico.itens.length ? r.servico.itens.join(", ") : "não informado";
+  return (
+    <section className={styles.guia} aria-label="Guia de retirada">
+      <div className={styles.canhoto}>
+        <span className={styles.canhotoRotulo}>Conferir retirada</span>
+        <span className={styles.codigo}>{v.os.codigo}</span>
+        <span className={styles.estadoEntrega}>{e.statusLabel}</span>
+      </div>
+      <div className={styles.corpo}>
+        <div>
+          <div className={styles.quem}>
+            {v.os.cliente}
+            <span style={{ fontWeight: 500, color: C.subtle }}>{" — "}{v.os.aparelho}</span>
+          </div>
+          <div className={styles.servico}>
+            {r.servico.aprovado ? "Serviço aprovado" : "Serviço previsto (orçamento não aprovado)"}: {servico}
+          </div>
+        </div>
+        <div className={`${styles.veredito} ${tom.classe}`} role="status" aria-live="polite">
+          <span className={styles.vereditoIcone} aria-hidden="true">{tom.icone}</span>
+          <div style={{ minWidth: 0 }}>
+            <div className={styles.vereditoTitulo}>{f.rotulo}</div>
+            <div className={styles.vereditoTexto}>{f.descricao}</div>
+          </div>
+        </div>
+        {f.situacao !== "carregando" && f.situacao !== "indisponivel" && (f.total != null || f.recebido != null || f.saldo != null) ? (
+          <div className={styles.valores}>
+            <div className={styles.valor}>
+              <div className={styles.valorRotulo}>{f.valoresDoTitulo ? "Valor do título" : "Total"}</div>
+              <div className={styles.valorNumero}>{valor(f.total)}</div>
+            </div>
+            <div className={styles.valor}>
+              <div className={styles.valorRotulo}>Recebido</div>
+              <div className={styles.valorNumero}>{valor(f.recebido)}</div>
+            </div>
+            <div className={styles.valor}>
+              <div className={styles.valorRotulo}>{f.situacao === "a_prazo" ? "A prazo" : f.valoresDoTitulo ? "Saldo do título" : "Saldo"}</div>
+              <div className={styles.valorNumero}>{valor(f.saldo)}</div>
+            </div>
+          </div>
+        ) : null}
+        <dl className={styles.fatos}>
+          <div className={styles.fato}>
+            <dt>Garantia</dt>
+            <dd>{g.temGarantia ? <>{g.prazo}<br /><span style={{ color: C.subtle }}>{g.situacao}</span></> : "Não definida"}</dd>
+          </div>
+          <div className={styles.fato}>
+            <dt>Acessórios em custódia</dt>
+            <dd>{e.acessorios.length ? e.acessorios.join(", ") : "Nenhum registrado na entrada"}</dd>
+          </div>
+          <div className={styles.fato}>
+            <dt>Fotos de saída</dt>
+            <dd>{e.fotosSaida.length ? `${e.fotosSaida.length} registrada${e.fotosSaida.length > 1 ? "s" : ""}` : "Nenhuma registrada"}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}
 
 function StatusBadge({ label, tone }: { label: string; tone: Tone }) {
   const t = TONE_MAP[tone];
@@ -499,6 +740,10 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
   const [error, setError] = useState("");
   const fotos = v.entrega.fotosSaida;
   const remaining = Math.max(0, FOTO_MAX_V3 - fotos.length);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: foto de saída é opcional (nenhuma
+  // obrigação nova): sem fotos, o formulário só abre quando o operador pede.
+  const [aberto, setAberto] = useState(false);
+  const mostrarFormulario = aberto || fotos.length > 0;
 
   const onUpload = async (file: File | undefined) => {
     if (!file || busy) return;
@@ -517,10 +762,19 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
 
   return (
     <div style={card}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: mostrarFormulario ? 10 : 0 }}>
         <span style={cardTitle}>Fotos de saída</span>
-        <span style={{ fontSize: 11, color: C.subtle }}>{fotos.length} de {FOTO_MAX_V3}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, color: C.subtle }}>
+          {fotos.length ? `${fotos.length} de ${FOTO_MAX_V3}` : "Opcional"}
+          {!mostrarFormulario ? (
+            <button type="button" onClick={() => setAberto(true)} style={btnSecundario}>
+              Adicionar fotos de saída
+            </button>
+          ) : null}
+        </span>
       </div>
+      {mostrarFormulario ? (
+      <>
       <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 10 }}>
         <label>
           <div style={{ ...upLabel, marginBottom: 4 }}>Categoria</div>
@@ -559,6 +813,8 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
       ) : (
         <div style={{ fontSize: 12, color: C.subtle }}>Nenhuma foto de saída registrada.</div>
       )}
+      </>
+      ) : null}
       {error ? <div style={{ fontSize: 12, color: C.danger, marginTop: 8 }} role="alert">{error}</div> : null}
     </div>
   );
@@ -566,6 +822,8 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
 
 export function DocumentosEntregaCard({ v }: { v: V4Vals }) {
   const garantiaDefinida = lerGarantiaV3(v.realOS).temGarantia;
+  // GOAL OPS-V4-FLUXO-CURTO-006: o termo declara a retirada — só após a entrega real.
+  const entregue = lerEntregaV3(v.realOS).entregue;
   const btn: React.CSSProperties = {
     height: 32,
     padding: "0 12px",
@@ -582,10 +840,11 @@ export function DocumentosEntregaCard({ v }: { v: V4Vals }) {
       <div style={{ ...cardTitle, marginBottom: 10 }}>Documentos</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button type="button" style={btn} disabled={!garantiaDefinida} onClick={() => v.openDocPrint("termo_garantia")}>Imprimir Termo de Garantia</button>
-        <button type="button" style={btn} onClick={() => v.openDocPrint("termo_entrega")}>Imprimir Termo de Entrega</button>
+        <button type="button" style={btn} disabled={!entregue} onClick={() => v.openDocPrint("termo_entrega")}>Imprimir Termo de Entrega</button>
         <button type="button" style={btn} onClick={() => v.openDocPrint("os_cliente")}>Imprimir OS (cliente)</button>
       </div>
       {!garantiaDefinida && <div style={{ fontSize: 11, color: C.subtle, marginTop: 8 }}>Defina a garantia da OS antes de emitir o termo.</div>}
+      {!entregue && <div style={{ fontSize: 11, color: C.subtle, marginTop: 8 }}>O Termo de Entrega fica disponível depois da entrega confirmada.</div>}
       <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>
         Reimpressão abre o mesmo documento. WhatsApp no modal, quando o cliente tiver telefone válido.
       </div>
@@ -593,89 +852,99 @@ export function DocumentosEntregaCard({ v }: { v: V4Vals }) {
   );
 }
 
-export function EntregaStage({ v }: { v: V4Vals }) {
-  const e = v.entrega;
-  const g = e.garantia;
-
-  if (!e.temRegistro) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <EntregaAcaoCard v={v} />
-        <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "40px 18px", textAlign: "center" }}>
-          <span style={{ fontSize: 22 }}>📦</span>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>Esta Ordem de Serviço ainda não foi entregue.</div>
-          <div style={{ fontSize: 11.5, color: C.subtle, maxWidth: 360, lineHeight: 1.5 }}>
-            O registro de retirada, a assinatura e a garantia aparecem aqui assim que a entrega for concluída.
-          </div>
-        </div>
-        <FotosSaidaCard v={v} />
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 10 }}>🛡 Garantia da OS</div>
-          {g.temGarantia ? (
-            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
-              <Field label="Prazo" value={g.prazo} />
-              <Field label="Cobertura" value={g.cobertura} />
-              <Field label="Início" value={g.inicio} />
-              <Field label="Validade" value={g.fim} />
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div>
-          )}
-          <GarantiaFormCard v={v} />
-        </div>
-        <DocumentosEntregaCard v={v} />
-      </div>
-    );
-  }
-
+/**
+ * Garantia da OS (real) — o MESMO card antes e depois da entrega (definir/editar
+ * modelo e prazo continuam aqui: contrato e E2E do GOAL OPS-V4-FLUXO-CURTO-002).
+ */
+function GarantiaOSCard({ v }: { v: V4Vals }) {
+  const g = v.entrega.garantia;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <EntregaAcaoCard v={v} />
-      <DocumentosEntregaCard v={v} />
-      <FotosSaidaCard v={v} />
-      <div style={{ display: "grid", gridTemplateColumns: col3, gap: 12, alignItems: "start" }}>
-      {/* Registro de entrega (real) */}
-      <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <span style={cardTitle}>📦 Registro de entrega</span>
-          <StatusBadge label={e.statusLabel} tone={e.statusTone} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10 }}>
-          <Field label="Retirado por" value={e.retiradoPor} />
-          <Field label="Data da entrega" value={e.retiradoEm} />
-          {e.registradoEm ? <Field label="Registrado no sistema" value={e.registradoEm} /> : null}
-        </div>
-        {e.entregue ? (
-          <button
-            type="button"
-            onClick={v.openCorrigirDatas}
-            style={{ marginTop: 9, padding: 0, border: "none", background: "transparent", color: C.primaryHover, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
-          >
-            Corrigir datas
-          </button>
-        ) : null}
-        {e.observacao && (
-          <div style={{ marginTop: 11 }}>
-            <div style={{ ...upLabel, marginBottom: 3 }}>Observação</div>
-            <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{e.observacao}</div>
+    <div style={card}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
+        <span style={cardTitle}>🛡 Garantia da OS</span>
+        {g.temGarantia && <StatusBadge label={g.situacao} tone={g.situacaoTone} />}
+      </div>
+      {g.temGarantia && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
+            <Field label="Prazo" value={g.prazo} />
+            <Field label="Cobertura" value={g.cobertura} />
+            <Field label="Início" value={g.inicio} />
+            <Field label="Validade" value={g.fim} />
           </div>
-        )}
-
-        <div style={{ ...upLabel, margin: "13px 0 5px" }}>Assinatura de retirada</div>
-        {e.temAssinatura ? (
-          <div style={{ border: `1px solid ${C.line2}`, background: C.surface2, borderRadius: 8, padding: 8, display: "flex", justifyContent: "center" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={e.assinaturaDataUrl} alt="Assinatura de retirada" style={{ maxHeight: 90, objectFit: "contain" }} />
+          {g.observacoes && (
+            <div style={{ marginBottom: 11 }}>
+              <div style={{ ...upLabel, marginBottom: 3 }}>Condições</div>
+              <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{g.observacoes}</div>
+            </div>
+          )}
+          {g.acionamentos && (
+            <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 11 }}>
+              Acionamentos registrados: <b>{g.acionamentos}</b>
+            </div>
+          )}
+          <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 11 }}>
+            <GarantiaFormCard v={v} />
           </div>
-        ) : e.entregue ? (
-          <AssinaturaRetiradaCard v={v} />
-        ) : (
-          <Empty>Nenhuma assinatura de entrega registrada.</Empty>
-        )}
+        </>
+      )}
+      {!g.temGarantia && <><div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div><GarantiaFormCard v={v} /></>}
+    </div>
+  );
+}
 
-        <div style={{ ...upLabel, margin: "14px 0 6px" }}>Linha do tempo da entrega</div>
-        {e.eventos.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+/** Registro efetivo da retirada — só depois da entrega (nunca fabricado pela garantia). */
+function RegistroEntregaCard({ v }: { v: V4Vals }) {
+  const e = v.entrega;
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <span style={cardTitle}>📦 Registro de entrega</span>
+        <StatusBadge label={e.statusLabel} tone={e.statusTone} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10 }}>
+        <Field label="Retirado por" value={e.retiradoPor} />
+        <Field label="Data da entrega" value={e.retiradoEm} />
+        {e.registradoEm ? <Field label="Registrado no sistema" value={e.registradoEm} /> : null}
+      </div>
+      {e.entregue ? (
+        <button
+          type="button"
+          onClick={v.openCorrigirDatas}
+          style={{ marginTop: 9, padding: 0, border: "none", background: "transparent", color: C.primaryHover, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+        >
+          Corrigir datas
+        </button>
+      ) : null}
+      {e.observacao && (
+        <div style={{ marginTop: 11 }}>
+          <div style={{ ...upLabel, marginBottom: 3 }}>Observação</div>
+          <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{e.observacao}</div>
+        </div>
+      )}
+      {e.acessorios.length > 0 && (
+        <div style={{ marginTop: 11 }}>
+          <div style={{ ...upLabel, marginBottom: 3 }}>Acessórios em custódia (registrados na entrada)</div>
+          <div style={{ fontSize: 12, color: C.body, lineHeight: 1.5 }}>{e.acessorios.join(", ")}</div>
+        </div>
+      )}
+
+      <div style={{ ...upLabel, margin: "13px 0 5px" }}>Assinatura de retirada</div>
+      {e.temAssinatura ? (
+        <div style={{ border: `1px solid ${C.line2}`, background: C.surface2, borderRadius: 8, padding: 8, display: "flex", justifyContent: "center" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={e.assinaturaDataUrl} alt="Assinatura de retirada" style={{ maxHeight: 90, objectFit: "contain" }} />
+        </div>
+      ) : e.entregue ? (
+        <AssinaturaRetiradaCard v={v} />
+      ) : (
+        <Empty>Nenhuma assinatura de entrega registrada.</Empty>
+      )}
+
+      {e.eventos.length > 0 ? (
+        <details style={{ marginTop: 14 }}>
+          <summary style={{ ...upLabel, cursor: "pointer" }}>Linha do tempo da entrega ({e.eventos.length})</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {e.eventos.map((ev) => (
               <div key={ev.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: ev.dot, marginTop: 5, flex: "none" }} />
@@ -686,66 +955,37 @@ export function EntregaStage({ v }: { v: V4Vals }) {
               </div>
             ))}
           </div>
-        ) : (
-          <Empty>Nenhum evento de entrega registrado.</Empty>
-        )}
-      </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
 
-      {/* Checklist final + acessórios */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 10 }}>Checklist final de entrega</div>
-          <Empty>Nenhum checklist de entrega registrado.</Empty>
-        </div>
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 9 }}>Acessórios do aparelho</div>
-          {e.acessorios.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 6 }}>
-              {e.acessorios.map((a, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, border: `1px solid ${C.line2}`, background: C.surface, borderRadius: 7, padding: "6px 8px" }}>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.subtle, flex: "none" }} />
-                  <span style={{ fontSize: 11.5, color: C.body, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty>Nenhum acessório registrado para esta OS.</Empty>
-          )}
-        </div>
-      </div>
+export function EntregaStage({ v }: { v: V4Vals }) {
+  const e = v.entrega;
 
-      {/* Garantia da OS (real) */}
-      <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
-          <span style={cardTitle}>🛡 Garantia da OS</span>
-          {g.temGarantia && <StatusBadge label={g.situacao} tone={g.situacaoTone} />}
+  // GOAL OPS-V4-FLUXO-CURTO-006: hospedeiro do MESMO sheet de recebimento, em
+  // posição estável (o rascunho sobrevive à releitura após recusa).
+  const recebimento = <ReceberPagamentoV4 key="recebimento" v={v} somenteSheet />;
+
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: a etapa é uma CONFERÊNCIA de
+  // retirada — coluna principal (conferir, confirmar, fotos opcionais) e lateral
+  // (garantia, documentos). Antes da entrega não há cartões vazios de registro,
+  // checklist sem fonte ou acessórios repetidos; depois, o registro efetivo.
+  return (
+    <div className={styles.etapa}>
+      {recebimento}
+      <div className={styles.layout}>
+        <div className={styles.principal}>
+          <GuiaRetirada v={v} />
+          <EntregaAcaoCard v={v} />
+          {e.entregue ? <RegistroEntregaCard v={v} /> : null}
+          <FotosSaidaCard v={v} />
         </div>
-        {g.temGarantia && (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
-              <Field label="Prazo" value={g.prazo} />
-              <Field label="Cobertura" value={g.cobertura} />
-              <Field label="Início" value={g.inicio} />
-              <Field label="Validade" value={g.fim} />
-            </div>
-            {g.observacoes && (
-              <div style={{ marginBottom: 11 }}>
-                <div style={{ ...upLabel, marginBottom: 3 }}>Condições</div>
-                <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{g.observacoes}</div>
-              </div>
-            )}
-            {g.acionamentos && (
-              <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 11 }}>
-                Acionamentos registrados: <b>{g.acionamentos}</b>
-              </div>
-            )}
-            <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 11 }}>
-              <GarantiaFormCard v={v} />
-            </div>
-          </>
-        )}
-        {!g.temGarantia && <><div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div><GarantiaFormCard v={v} /></>}
-      </div>
+        <aside className={styles.lateral} aria-label="Garantia e documentos da OS">
+          <GarantiaOSCard v={v} />
+          <DocumentosEntregaCard v={v} />
+        </aside>
       </div>
     </div>
   );

@@ -1,0 +1,26 @@
+{
+  "head": "c9b33ab3791837203d822865cd1a32269ba09499",
+  "result": "FAIL",
+  "total": 95,
+  "passedTests": 94,
+  "failedTests": 1,
+  "skipped": 0,
+  "todo": 0,
+  "failure": "Fixture válida antes do caso criarVersaoContrato/NaN esgotou 3 P2034 durante execução paralela dos arquivos de integração",
+  "correction": "--no-file-parallelism; corridas determinísticas internas preservadas",
+  "nextPwaVersion": "10.2.9",
+  "invariants": {
+    "check": 10,
+    "index": 7,
+    "trigger": 10,
+    "function": 4
+  },
+  "drift": "NONE",
+  "pwa": "NOT_RUN",
+  "typecheck": "NOT_RUN",
+  "lint": "NOT_RUN",
+  "build": "NOT_RUN",
+  "cleanup": "PASS",
+  "port55439": "FREE",
+  "aepNextAttempt": 3
+}
