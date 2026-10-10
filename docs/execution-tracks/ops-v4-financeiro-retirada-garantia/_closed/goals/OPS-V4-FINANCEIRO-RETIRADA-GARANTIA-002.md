@@ -4,7 +4,7 @@
   "id": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Recebimento só sobre preço comercialmente elegível e formalização controlada de aprovação pendente",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C4",
   "risk_tier": "ALTO",
   "plan_rev": 7,
