@@ -4,10 +4,10 @@
   "id": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Recebimento só sobre preço comercialmente elegível e formalização controlada de aprovação pendente",
-  "status": "BLOCKED",
+  "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 6,
+  "plan_rev": 7,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-002",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/elegibilidade-comercial.test.ts lib/operacoes-v3/formalizacao-aprovacao-model.test.ts lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts lib/operacoes-v3/payment-model.test.ts lib/operacoes-v3/pdv-servico-a-prazo.test.ts lib/operacoes-v3/recebimento-misto-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/atendimento-rapido-model.test.ts lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v3/os-conta-receber-unica.test.ts lib/operacoes-v4/receber-pagamento-form.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[12]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v3-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts test/ops-datas-retroativas-001/v3-e-correcao.test.tsx && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts --retries=0 --workers=1",
@@ -59,7 +59,7 @@
   "gates_liberados": [],
   "read_budget": 52,
   "revisao_independente": true,
-  "familia_executor": "anthropic",
+  "familia_executor": "openai",
   "reversibilidade": "baixa"
 }
 -->
@@ -317,3 +317,49 @@ Decisões:
    SUPERSEDED). A tentativa 1 do 002 continua: a branch recebe a main e o
    `.aep-active` é recriado (tentativa 1, sem falha registrada) para carregar a
    allowlist nova.
+
+## Revisão 7 (10/10/2026) — desbloqueio humano e transferência de executor
+
+Autoridade: COMANDO MESTRE do proprietário para retomada deste MESMO GOAL,
+recebido pelo Codex em 10/10/2026. Autoriza excepcionalmente OpenAI/Codex
+a executar este C4; classificação C4, risco ALTO, reversibilidade baixa,
+R obrigatória, allowlist, test_command e orçamento de leitura permanecem.
+O cadastro consultivo executors.json não é alterado; verificado permanece
+honesto. Claude Code/Anthropic entregou a implementação preservada em
+2223aa3, 7e45876 e 6155b4d. O bloqueio f3e3bdf (externo, tentativa 3/3) e
+seu LEDGER são transportados sem reescrita. Tentativa 1/3 da revisão 7.
+
+Escopo exclusivo do corretivo: os dois P1 da R3 em 6155b4d.
+
+- P1-A: ausência de resposta, Connection closed. sem digest, timeout,
+  exceção ou recusa de permissão anterior ao replay mantêm resultado
+  INCERTO. Nenhum catch ou classificação de mensagem prova ausência de
+  pagamento. Resultado aditivo compatível distingue CONFIRMADO, RECUSADO
+  DEFINITIVAMENTE sob serialização e identidade, e INCERTO. Replay
+  autenticado devolve o resultado original; recusa negativa só é terminal
+  quando consistente com as travas e a identidade, mesmo com outra
+  transação em andamento.
+- P1-B: pendência única por storeId + osId compartilhada pelo imediato e
+  misto, com tipo, operacaoId e conteúdo econômico originais completos
+  (formas, valores, sessão, saldo, parcela a prazo, vencimento e demais
+  campos do fingerprint). Sem operação nova ou troca de modalidade
+  enquanto incerta; mesma chave com outro conteúdo é conflito. V3 e V4
+  oferecem Verificar mesma confirmação e o aviso de pendência. Preservar
+  em fechamento de modal, releitura, troca de OS/loja, remount e refresh;
+  avaliar abas simultâneas e persistência mínima sem segredos ou dados
+  pessoais desnecessários. Autoridade final no banco, locks, replay e CAS.
+
+Antes da correção, reproduzir ambos os P1 em 6155b4d com testes vermelhos;
+depois, provas verdes, PostgreSQL descartável com concorrência
+determinística, matriz de segurança do comando (24 cenários), E2E e
+regressões completas. Preservar A–E e todos os corretivos anteriores.
+Necessidade real fora da allowlist exige decisão humana antes de editar.
+
+R final deve revisar o conjunto funcional inteiro contra a base ratificada
+e o SHA exato, por família DECLARADA e aceita diferente de OpenAI
+(Anthropic ou humano qualificado). Outra sessão Codex/GPT/OpenAI não conta;
+a R3 antiga não aprova este candidato. Sem R elegível: terminar código,
+testes, auditoria e pacote imutável, preservar branch e preparar PR draft
+AGUARDANDO R INDEPENDENTE — NÃO MERGEAR. Não executar close, merge de
+produto ou publicação antes de APPROVE real, P0=P1=P2=0 e todos os gates.
+GOAL 003 e OPS-V4-FLUXO-CURTO-008 não são iniciados.
