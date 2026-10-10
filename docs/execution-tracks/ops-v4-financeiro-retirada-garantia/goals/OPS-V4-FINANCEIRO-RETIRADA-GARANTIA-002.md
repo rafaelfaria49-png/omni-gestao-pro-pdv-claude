@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 5,
+  "plan_rev": 6,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-002",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/elegibilidade-comercial.test.ts lib/operacoes-v3/formalizacao-aprovacao-model.test.ts lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts lib/operacoes-v3/payment-model.test.ts lib/operacoes-v3/pdv-servico-a-prazo.test.ts lib/operacoes-v3/recebimento-misto-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/atendimento-rapido-model.test.ts lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v3/os-conta-receber-unica.test.ts lib/operacoes-v4/receber-pagamento-form.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[12]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v3-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts test/ops-datas-retroativas-001/v3-e-correcao.test.tsx && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts --retries=0 --workers=1",
@@ -45,17 +45,19 @@
     "test/ops-v4-recebimento-misto/receber-pagamento.test.tsx",
     "test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx",
     "test/ops-v3-recebimento-misto/hardening-p1.test.tsx",
+    "test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts",
     "test/ops-datas-retroativas-001/v3-e-correcao.test.tsx",
     "test/ops-v4-financeiro-retirada-garantia-001/projecao.pg.test.ts",
     "test/ops-v4-financeiro-retirada-garantia-001/superficies.test.tsx",
     "test/ops-v4-financeiro-retirada-garantia-002/**",
     "e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts",
     "e2e/specs/ops-v4-recebimento-misto-paridade-001.spec.ts",
+    "e2e/specs/operacoes-v4-fluxo-curto-006.spec.ts",
     "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/**",
     "docs/execution-tracks/REGISTRY.md"
   ],
   "gates_liberados": [],
-  "read_budget": 50,
+  "read_budget": 52,
   "revisao_independente": true,
   "familia_executor": "anthropic",
   "reversibilidade": "baixa"
@@ -282,3 +284,36 @@ Decisões:
    `lib/operacoes-v4/atendimento-rapido-form.ts`) continua iniciando a forma
    em Dinheiro; o item E cobre o recebimento da V4, o PDV de Serviço V3 e o
    atendimento rápido V3.
+
+## Revisão 6 (10/10/2026)
+
+Ampliação de allowlist durante a execução (tentativa 1), pelo rito AEP, sob a
+mesma autorização do comando do GOAL 002 ("Se a allowlist, os contratos ou os
+testes exigirem uma alteração formal, fazer a revisão de planejamento pelo
+rito AEP"; "Não ampliar caminhos ou autorizações silenciosamente"). As
+regressões obrigatórias, rodadas no candidato contra a base `98ef717`,
+revelaram mais dois caminhos fora da allowlist que fixam exatamente o
+comportamento que o contrato muda (os demais cenários dos mesmos arquivos
+passam no candidato):
+
+| Caminho | Comportamento fixado hoje | Item |
+| --- | --- | --- |
+| `test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts` (#238, P1-T7, PostgreSQL) | o fixture `faturamentoVigente500` sobe orçamento, faturamento e coluna para 500 mas deixa `payload.valorTotal` em 400; o misto K 350+150 recebe sobre totais divergentes | A |
+| `e2e/specs/operacoes-v4-fluxo-curto-006.spec.ts` (E03) | abre o recebimento com caixa fechado e espera, SEM escolher forma, "Abra o caixa para registrar o valor recebido agora." e o botão "Confirmar R$ …" desabilitado — os dois só existem com uma forma imediata escolhida (antes, Dinheiro pré-selecionado) | E |
+
+Decisões:
+
+1. Os dois caminhos entram na allowlist só para adaptar fixture ou entrada ao
+   contrato: o P1-T7 grava `valorTotal: 500` junto do faturamento vigente
+   (dados comercialmente consistentes; o cenário — título da OS 500, saldo 150,
+   lista antiga da tela em 400 — não depende da divergência); o E03 escolhe a
+   forma (Dinheiro) explicitamente antes das MESMAS asserções. Nenhuma
+   asserção de valor, identidade, concorrência ou efeito é removida.
+2. Ambos seguem como evidência obrigatória à parte, nos bancos próprios
+   (`ops_v3_misto_qa*`, `ops_v4_fluxo_006_qa*`); test_command inalterado.
+   Orçamento de leitura 50 → 52.
+3. Objetivo, contrato A–E, não objetivos, classe, risco, R obrigatória e
+   dependências inalterados; 002 e 003 sobem para plan_rev 6 (nenhum
+   SUPERSEDED). A tentativa 1 do 002 continua: a branch recebe a main e o
+   `.aep-active` é recriado (tentativa 1, sem falha registrada) para carregar a
+   allowlist nova.
