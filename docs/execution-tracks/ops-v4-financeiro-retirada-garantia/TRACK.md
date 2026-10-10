@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 5,
+  "plan_rev": 6,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -22,6 +22,8 @@ Revisão 4: "DECISÃO HUMANA — GOAL 001 / REVISÃO 4" do proprietário, de
 Revisão 5: ratificação pré-`open` do GOAL 002 contra a main `23380ab`, sob a
 autorização do comando do GOAL 002 do proprietário, de 09/10/2026 (ver
 Revisões do plano).
+Revisão 6: ampliação da allowlist do GOAL 002 durante a execução, sob a mesma
+autorização do comando do GOAL 002 (ver Revisões do plano).
 
 A autorização cobre planejamento formal, implementação, testes reais,
 revisão independente e publicação condicionada aos gates — em ENTREGAS
@@ -121,6 +123,25 @@ assinatura, garantia, estoque).
      iniciando a forma em Dinheiro.
   Rito: PR exclusivo de plano → merge normal na main → a branch do 002
   recebe a main → `open` (tentativa 1 da rev 5).
+- rev 6 (10/10/2026, ampliação de allowlist do GOAL 002 durante a execução,
+  sob a mesma autorização do comando do GOAL 002): as regressões
+  obrigatórias, no candidato contra a base `98ef717`, revelaram mais dois
+  caminhos fora da allowlist que fixam o comportamento que o contrato muda —
+  A: o P1-T7 de #238 recebe sobre totais divergentes (fixture deixa
+  `payload.valorTotal` em 400 com orçamento, faturamento e coluna em 500);
+  E: o E03 do E2E do OPS-V4-FLUXO-CURTO-006 confirma o caixa fechado
+  contando com a forma pré-selecionada. Decisões:
+  1. os dois caminhos entram na allowlist do 002 só para adaptar fixture
+     (valores consistentes) ou entrada (forma escolhida), sem remover
+     asserção;
+  2. seguem como evidência obrigatória à parte, nos bancos próprios;
+     test_command inalterado; orçamento de leitura do 002 50 → 52;
+  3. objetivos, contratos, classe, risco e R obrigatória inalterados; 002 e
+     003 sobem para plan_rev 6 (nenhum SUPERSEDED); não abrir 003 nem o
+     OPS-V4-FLUXO-CURTO-008 sem autorização nova.
+  Rito: PR exclusivo de plano → merge normal na main → a branch do 002
+  recebe a main → `.aep-active` recriado (tentativa 1, sem falha
+  registrada) → `open`.
 
 ## Por que trilha própria
 
