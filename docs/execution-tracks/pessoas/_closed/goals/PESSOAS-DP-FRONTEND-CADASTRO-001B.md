@@ -4,7 +4,7 @@
   "id": "PESSOAS-DP-FRONTEND-CADASTRO-001B",
   "track": "pessoas",
   "title": "Frontend operacional do cadastro Pessoas sobre 001A e hardening P2",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "branch": "goal/pessoas-001b-frontend",
