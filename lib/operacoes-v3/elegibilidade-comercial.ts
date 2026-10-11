@@ -57,6 +57,21 @@ export const DESTINO_INELEGIBILIDADE_COMERCIAL_V3: Readonly<Record<CodigoInelegi
   VALORES_DIVERGENTES: "financeiro",
 };
 
+/** Metadado de apresentação; nunca constitui prova financeira. */
+export type MotivoRecusaComercialV3 = Pick<RecusaComercialV3, "codigo" | "destino">;
+
+/** Só aceita pares canônicos próprios. Histórico ausente/inválido continua sem destino. */
+export function lerMotivoRecusaComercialV3(value: unknown): MotivoRecusaComercialV3 | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  try {
+    if (!Object.hasOwn(value, "codigo") || !Object.hasOwn(value, "destino")) return null;
+    const { codigo, destino } = value as Record<string, unknown>;
+    if (typeof codigo !== "string" || typeof destino !== "string" || !Object.hasOwn(DESTINO_INELEGIBILIDADE_COMERCIAL_V3, codigo)) return null;
+    const canonico = codigo as CodigoInelegibilidadeComercialV3;
+    return DESTINO_INELEGIBILIDADE_COMERCIAL_V3[canonico] === destino ? { codigo: canonico, destino } as MotivoRecusaComercialV3 : null;
+  } catch { return null; }
+}
+
 export const MENSAGEM_INELEGIBILIDADE_COMERCIAL_V3: Readonly<Record<CodigoInelegibilidadeComercialV3, string>> = {
   APROVACAO_COMERCIAL_PENDENTE: "Recebimento recusado: o orçamento ainda não foi aprovado. Confira e aprove o orçamento antes de receber.",
   ORCAMENTO_RECUSADO: "Recebimento recusado: o orçamento foi recusado. Nada foi cobrado.",

@@ -1,0 +1,66 @@
+{
+  "at": "2026-10-11T02:16:34.312Z",
+  "reason": "Cópias temporárias de proposta, fora do pacote selado, eram incluídas por **/*.ts e **/*.tsx do tsconfig. Somente extensão alterada; bytes preservados. Nenhum fonte, ZIP, manifesto ou relatório rev7 alterado.",
+  "sealed": [
+    {
+      "path": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/pacote-cd69780c81b3.zip",
+      "sha256": "eaaf37ce8ca9442d056e76a6f22d68d79159b102398869a66c3d99f076210349"
+    },
+    {
+      "path": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/pacote-cd69780c81b3/MANIFEST.json",
+      "sha256": "4dd6c2ae5a825b754a476c2644aacc179c8b5efcca89684c5cc8d2f717b6dbb5"
+    }
+  ],
+  "snapshots": [
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/components/operacoes-v3/hooks/use-pdv-servico-v3.ts",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/components/operacoes-v3/hooks/use-pdv-servico-v3.ts.snapshot.txt",
+      "sha256": "578a2a992e73dcc022ffbaf16ad5533b249ef6dbf583247cc6406d7d35fb0b44"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/components/operacoes-v3/pages/PdvServicoV3.tsx",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/components/operacoes-v3/pages/PdvServicoV3.tsx.snapshot.txt",
+      "sha256": "e0e48545ca50a12c1e8157d5f6a4b0768f370328e060f58623acc6c6e704fedb"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx.snapshot.txt",
+      "sha256": "160047b271434864fa956e30e1921e860975e882578b25f5f369046468c4a851"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/lib/operacoes-v3/pdv-servico-actions.ts",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/lib/operacoes-v3/pdv-servico-actions.ts.snapshot.txt",
+      "sha256": "bf448ffbccfd1e933231f50de958b943dc33517a2a2ba86d60323dd06761ac91"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/original/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts.snapshot.txt",
+      "sha256": "2a5401304b1cc5598fdf28df5fa7fbe1c75a7617300327c5bc06fb682f36b712"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/components/operacoes-v3/hooks/use-pdv-servico-v3.ts",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/components/operacoes-v3/hooks/use-pdv-servico-v3.ts.snapshot.txt",
+      "sha256": "06b44ac3bb723f18345906c62e82c27a1bcfb2ac2f23e26ffe92c53fdac4a307"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/components/operacoes-v3/pages/PdvServicoV3.tsx",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/components/operacoes-v3/pages/PdvServicoV3.tsx.snapshot.txt",
+      "sha256": "6cdcfb15e7e7549b2813bb04a3949fee46495e3548c0dd8c15f69c4dce43752f"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx.snapshot.txt",
+      "sha256": "b4d883c2bab3d568cc16ece5d2380392ee87072ceb60cc931ba394f6c933c927"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/lib/operacoes-v3/pdv-servico-actions.ts",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/lib/operacoes-v3/pdv-servico-actions.ts.snapshot.txt",
+      "sha256": "941a7d40a88efe81d66d156ca9dd2d287b618962f14a6061f7dbabad54a434fd"
+    },
+    {
+      "original": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts",
+      "snapshot": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev7/proposta-p2/proposto/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts.snapshot.txt",
+      "sha256": "4c2c9b4109ea62a4719aa908753058503956e39992f088339011806d6d0a98f3"
+    }
+  ]
+}

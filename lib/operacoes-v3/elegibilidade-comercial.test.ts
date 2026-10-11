@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import {
   avaliarElegibilidadeComercialV3,
+  lerMotivoRecusaComercialV3,
   DESTINO_INELEGIBILIDADE_COMERCIAL_V3,
   RecebimentoInelegivelErroV3,
   type CodigoInelegibilidadeComercialV3,
@@ -142,5 +143,18 @@ describe("RecebimentoInelegivelErroV3", () => {
     const e = new RecebimentoInelegivelErroV3(r);
     expect(e).toBeInstanceOf(Error);
     expect(e).toMatchObject({ name: "RecebimentoInelegivelErroV3", codigo: "APROVACAO_COMERCIAL_PENDENTE", destino: "comercial", message: r.mensagem });
+  });
+});
+
+
+describe("R8 · metadado comercial canônico", () => {
+  it.each(Object.entries(DESTINO_INELEGIBILIDADE_COMERCIAL_V3))("aceita %s → %s sem transportar campos extras", (codigo, destino) => {
+    expect(lerMotivoRecusaComercialV3({ codigo, destino, url: "https://externo.invalid" })).toEqual({ codigo, destino });
+  });
+  it.each([undefined, null, [], "comercial", { codigo: 1, destino: "comercial" }, { codigo: "constructor", destino: "comercial" }, { codigo: "__proto__", destino: "comercial" }, { codigo: "toString", destino: "comercial" }, { codigo: "PRECO_AUSENTE", destino: "https://externo.invalid" }, { codigo: "VALORES_DIVERGENTES", destino: "comercial" }, Object.create({ codigo: "PRECO_AUSENTE", destino: "comercial" }), Object.assign(Object.create({ codigo: "PRECO_AUSENTE" }), { destino: "comercial" })])("ignora metadado inválido %#", value => {
+    expect(lerMotivoRecusaComercialV3(value)).toBeNull();
+  });
+  it("getter hostil usa fallback sem propagar exceção", () => {
+    expect(lerMotivoRecusaComercialV3({ get codigo() { throw Error("hostil"); }, destino: "comercial" })).toBeNull();
   });
 });

@@ -150,7 +150,7 @@ async function novaLoja(): Promise<string> {
 
 interface OpcoesOS {
   /** `null` = sem orçamento real (itens só no catálogo da OS, preço na coluna). */
-  orcamento?: "rascunho" | "enviado" | "aprovado" | "recusado" | null;
+  orcamento?: "rascunho" | "enviado" | "aprovado" | "recusado" | "expirado" | null;
   total?: number;
   coluna?: number;
   validoAte?: string;
@@ -943,4 +943,70 @@ it("R7 · nova pendência não impede recuperar a recusa terminal anterior", asy
  await prisma.sessaoCaixa.update({ where: { id: caixa }, data: { status: "ABERTA" } });
  expect(await receberOSV3(sid, id, { ...input, operacaoId: gerarOperacaoIdV3() })).toMatchObject({ estado: "CONFIRMADO" });
  const antes = await fotoFinanceira(sid, id); expect(await receberOSV3(sid, id, input)).toEqual(recusa); expect(await fotoFinanceira(sid, id)).toBe(antes);
+});
+
+// ─── R8 · o motivo acompanha a prova de recusa; não altera sua autoridade ─────
+describe("R8 · motivo comercial inicial, durável, replay e legado", () => {
+  const matriz: Array<[string, OpcoesOS, string, string, ((p: Payload) => Payload)?]> = [
+    ["rascunho", { orcamento: "rascunho" }, "APROVACAO_COMERCIAL_PENDENTE", "comercial"],
+    ["enviado válido", { orcamento: "enviado", validoAte: "2099-12-31T23:59:59.000Z" }, "APROVACAO_COMERCIAL_PENDENTE", "comercial"],
+    ["enviado vencido", { orcamento: "enviado", validoAte: VENCIDA }, "ORCAMENTO_EXPIRADO", "comercial"],
+    ["rascunho vencido continua pendente", { orcamento: "rascunho", validoAte: VENCIDA }, "APROVACAO_COMERCIAL_PENDENTE", "comercial"],
+    ["recusado", { orcamento: "recusado" }, "ORCAMENTO_RECUSADO", "comercial"],
+    ["expirado persistido", { orcamento: "expirado" }, "ORCAMENTO_EXPIRADO", "comercial"],
+    ["zeros sem preço", { orcamento: null, total: 0, coluna: 0 }, "PRECO_AUSENTE", "comercial"],
+    ["coluna divergente", { coluna: 400 }, "VALORES_DIVERGENTES", "financeiro"],
+    ["payload inválido", {}, "VALORES_DIVERGENTES", "financeiro", (p) => ({ ...p, valorTotal: "abc" })],
+    ["declarado difere das linhas", {}, "VALORES_DIVERGENTES", "financeiro", (p) => ({ ...p, orcamento: { ...p.orcamento, total: 0 } })],
+  ];
+  it.each(matriz)("%s: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro", async (_nome, opcoes, codigo, destino, alterar) => {
+    const sid = await novaLoja(), caixa = await abrirCaixa(sid), osId = await novaOS(sid, opcoes);
+    if (alterar) await prisma.ordemServico.update({ where: { id: osId }, data: { payload: alterar(await lerPayload(osId)) as Prisma.InputJsonValue } });
+    const financeiroAntes = await fotoFinanceira(sid, osId);
+    const original = { linhas: [{ forma: "pix" as const, valor: 100 }], sessaoId: caixa, saldoEsperado: 420, operacaoId: gerarOperacaoIdV3(), confirmacaoClienteV3: true as const };
+    const recusada = await receberOSV3(sid, osId, original);
+    expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE", operacaoId: original.operacaoId, requestFingerprint: expect.any(String), comercial: { codigo, destino } });
+    const registros = (await lerPayload(osId)).recebimentoImediatoRecusasV3;
+    expect(registros).toHaveLength(1);
+    expect(registros[0]).toMatchObject({ ...recusada, comercial: { codigo, destino }, at: expect.any(String) });
+    expect(await fotoFinanceira(sid, osId)).toBe(financeiroAntes);
+    const aposRecusa = await foto(sid, osId);
+    expect(await receberOSV3(sid, osId, original)).toEqual(recusada);
+    expect(await foto(sid, osId)).toBe(aposRecusa);
+    // Situação atual passa a ser outra. Replay NÃO recalcula nem inventa uma razão histórica.
+    const p = await lerPayload(osId);
+    await prisma.ordemServico.update({ where: { id: osId }, data: { valorTotal: 420, payload: { ...p, valorTotal: 420, orcamento: { id: "orc-resolvido", status: "aprovado", sintetizado: false, total: 420, desconto: 0, criadoEm: ENTRADA, respondidoEm: ENTRADA, servicos: [{ id: "s1", descricao: "Troca de Tela", valor: 420 }], pecas: [] } } as Prisma.InputJsonValue } });
+    const aposMudanca = await foto(sid, osId);
+    expect(await receberOSV3(sid, osId, original)).toEqual(recusada);
+    const { confirmacaoClienteV3: _optIn, ...legado } = original;
+    await expect(receberOSV3(sid, osId, legado)).rejects.toMatchObject({ codigo, destino });
+    expect(await receberOSV3(sid, osId, { ...original, linhas: [{ forma: "pix", valor: 101 }] })).toMatchObject({ estado: "INCERTO" });
+    await expect(receberOSV3(sid, osId, { ...legado, linhas: [{ forma: "pix", valor: 101 }] })).rejects.toThrow("outro conteúdo");
+    expect(await foto(sid, osId)).toBe(aposMudanca);
+    expect(await fotoFinanceira(sid, osId)).toBe(financeiroAntes);
+    expect(await prisma.ordemServico.count({ where: { storeId: sid } })).toBe(1);
+  });
+  it.each([
+    ["antiga sem metadado", undefined], ["null", null], ["lista", []], ["texto", "comercial"],
+    ["código desconhecido", { codigo: "constructor", destino: "comercial" }],
+    ["código numérico", { codigo: 1, destino: "comercial" }],
+    ["destino arbitrário", { codigo: "PRECO_AUSENTE", destino: "https://externo.invalid" }],
+    ["par não canônico", { codigo: "VALORES_DIVERGENTES", destino: "comercial" }],
+  ])("%s: replay mantém a recusa, sem backfill/navegação fabricada e sem escrita", async (_nome, comercial) => {
+    const sid = await novaLoja(), caixa = await abrirCaixa(sid), osId = await novaOS(sid, { orcamento: "rascunho" });
+    const original = { linhas: [{ forma: "pix" as const, valor: 100 }], sessaoId: caixa, operacaoId: gerarOperacaoIdV3(), confirmacaoClienteV3: true as const };
+    await receberOSV3(sid, osId, original);
+    const p = await lerPayload(osId), registro = { ...p.recebimentoImediatoRecusasV3[0] };
+    if (comercial === undefined) delete registro.comercial; else registro.comercial = comercial;
+    await prisma.ordemServico.update({ where: { id: osId }, data: { payload: { ...p, recebimentoImediatoRecusasV3: [registro] } as Prisma.InputJsonValue } });
+    const antes = await foto(sid, osId);
+    const r = await receberOSV3(sid, osId, original);
+    expect(r).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE", operacaoId: original.operacaoId, mensagem: registro.mensagem });
+    expect(r).not.toHaveProperty("comercial");
+    const { confirmacaoClienteV3: _optIn, ...legado } = original;
+    await expect(receberOSV3(sid, osId, legado)).rejects.toMatchObject({ message: registro.mensagem });
+    const erroLegado = await receberOSV3(sid, osId, legado).then(() => null, (e: unknown) => e);
+    expect(erroLegado).toBeInstanceOf(Error); expect(erroLegado).not.toHaveProperty("codigo"); expect(erroLegado).not.toHaveProperty("destino");
+    expect(await foto(sid, osId)).toBe(antes);
+  });
 });

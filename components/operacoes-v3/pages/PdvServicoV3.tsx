@@ -104,6 +104,8 @@ export function PdvServicoV3() {
     recebendo,
     estornando,
     error,
+    recusaComercial: recusaDoServidor,
+    limparRecusaComercial,
     ultimoRecibo,
     reload,
     receber,
@@ -193,6 +195,10 @@ export function PdvServicoV3() {
     (elegibilidade.codigo === "APROVACAO_COMERCIAL_PENDENTE" || elegibilidade.codigo === "ORCAMENTO_RECUSADO" || elegibilidade.codigo === "ORCAMENTO_EXPIRADO")
       ? elegibilidade
       : null;
+  // O motivo histórico orienta; a elegibilidade atual continua decidindo uma operação nova.
+  const recusaExibida = !pendenciaMisto && !pendenciaReceber && !confirmacaoBloqueada
+    ? recusaDoServidor ? { ...recusaDoServidor, mensagem: error } : recusaComercial
+    : null;
   const podeRegistrarMisto =
     !!os && !!pagamento && !loading && !!misto?.ok && (!precisaCaixaMisto || caixaAberto) && !registrandoMisto && !recebendo && !confirmacaoBloqueada && !pendenciaMisto && !pendenciaReceber && !recusaComercial;
 
@@ -692,13 +698,13 @@ export function PdvServicoV3() {
                 </div>
               ) : null}
 
-              {os && recusaComercial ? (
+              {os && recusaExibida ? (
                 <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground" role="alert" data-testid="recusa-comercial">
                   <p className="flex items-start gap-1.5">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden /> {recusaComercial.mensagem}
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden /> {recusaExibida.mensagem}
                   </p>
-                  <button type="button" onClick={() => openOS(os.id)} className="mt-2 text-xs text-primary hover:underline">
-                    {recusaComercial.destino === "comercial" ? "Abrir o orçamento no prontuário da OS →" : "Abrir o prontuário da OS para conferir a cobrança →"}
+                  <button type="button" disabled={recebendo || registrandoMisto || estornando} onClick={() => { limparRecusaComercial?.(); openOS(os.id); }} className="mt-2 text-xs text-primary hover:underline">
+                    {recusaExibida.destino === "comercial" ? "Abrir o orçamento no prontuário da OS →" : "Abrir o prontuário da OS para conferir a cobrança →"}
                   </button>
                 </div>
               ) : null}

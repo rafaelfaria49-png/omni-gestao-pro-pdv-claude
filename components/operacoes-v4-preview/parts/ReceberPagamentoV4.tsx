@@ -14,6 +14,7 @@ import {
 } from "@/lib/operacoes-v3/recebimento-misto-model";
 import { avaliarRecebimentoV4, buildRecebimentoMistoV4, INTENCOES_RECEBIMENTO_V4, valorSugeridoRecebimentoV4, type IntencaoRecebimentoV4, type LinhaRecebimentoV4 } from "@/lib/operacoes-v4/receber-pagamento-form";
 import { pagamentoEmConferenciaV4, situacaoAtendimentoDe } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import { lerMotivoRecusaComercialV3, MENSAGEM_INELEGIBILIDADE_COMERCIAL_V3 } from "@/lib/operacoes-v3/elegibilidade-comercial";
 import type { EscopoAprovacaoV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
 
 const box = { marginTop: 0, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 } as const;
@@ -198,15 +199,24 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
     };
   }, [formAberto]);
 
-  const cancelar = () => { setOpen(false); setEscopo(null); setErroConferencia(null); setConsentimento(false); v.closeReceberPagamento(); };
+  const cancelar = () => { pdv.limparRecusaComercial?.(); setOpen(false); setEscopo(null); setErroConferencia(null); setConsentimento(false); v.closeReceberPagamento(); };
   const openForm = () => { seedForm(); setOpen(true); };
+  const recusa = !pendencia && !pdv.confirmacaoBloqueada ? lerMotivoRecusaComercialV3(pdv.recusaComercial) : null;
+  const avisoRecusa = recusa ? <div role="alert" data-testid="recusa-comercial" style={{ ...box, color: C.warnFg }}>
+    <p>{pdv.error ?? MENSAGEM_INELEGIBILIDADE_COMERCIAL_V3[recusa.codigo]}</p>
+    <button type="button" disabled={travado || pdv.estornando} style={btnGhostSm} onClick={() => {
+      if (travado || pdv.estornando) return;
+      cancelar();
+      if (recusa.destino === "comercial") v.goOrcamento(); else v.goFinanceiro();
+    }}>{recusa.destino === "comercial" ? "Conferir orçamento →" : "Conferir cobrança →"}</button>
+  </div> : null;
   // Hospedado na Entrega: nada inline — só o sheet quando aberto e pronto (a
   // mesma instância mantém o rascunho vivo durante a releitura após recusa).
   if ((pendencia || pdv.confirmacaoBloqueada) && (!projection || projection.expectedTotal == null || v.financial.loading || v.financial.error || pdv.loading)) return <div style={box} role="alert">{MENSAGEM_CONFIRMACAO_PENDENTE_V3}{pendencia && pdv.verificarConfirmacao ? <button type="button" style={btnPrimary} disabled={busy} onClick={() => void pdv.verificarConfirmacao?.()}>Verificar mesma confirmação</button> : <p>Solicite conferência a um operador autorizado.</p>}</div>;
   if (pdv.confirmacaoBloqueada && !pendencia) return <div style={box} role="alert">{MENSAGEM_CONFIRMACAO_PENDENTE_V3} Solicite conferência a um operador autorizado.</div>;
-  if (somenteSheet && (!formAberto || v.financial.loading || v.financial.error || !projection || projection.expectedTotal == null || pdv.loading)) return null;
-  if (v.financial.loading) return <div style={box}>Carregando projeção financeira…</div>;
-  if (v.financial.error || !projection || projection.expectedTotal == null) return <div style={box}>Recebimento bloqueado: situação financeira indisponível ou incompleta.</div>;
+  if (somenteSheet && (!formAberto || v.financial.loading || v.financial.error || !projection || projection.expectedTotal == null || pdv.loading)) return formAberto ? avisoRecusa : null;
+  if (v.financial.loading) return <>{avisoRecusa}<div style={box}>Carregando projeção financeira…</div></>;
+  if (v.financial.error || !projection || projection.expectedTotal == null) return <>{avisoRecusa}<div style={box}>Recebimento bloqueado: situação financeira indisponível ou incompleta.</div></>;
   const pagamento = { total: projection.expectedTotal, recebido: projection.receivedTotal ?? 0, saldo };
   const authorizedCredit = projection.financialStatus === "AUTHORIZED_CREDIT";
   const creditInstallment = authorizedCredit ? projection.installments[0] ?? null : null;
@@ -217,7 +227,7 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   if (modoAprovacao && !(totalAprovacao != null && totalAprovacao > 0)) {
     return <div style={box}>O total do orçamento não está legível. Confira o orçamento antes de aprovar e receber.</div>;
   }
-  if (!modoAprovacao && !pendencia && semTotal) return <div style={box}>{previaNaoMaterializada ? "O valor em “Total da OS” ainda é uma prévia. Gere e aprove um orçamento real antes de receber." : "Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber."}</div>;
+  if (!modoAprovacao && !pendencia && semTotal) return <div style={box}>{avisoRecusa}{previaNaoMaterializada ? "O valor em “Total da OS” ainda é uma prévia. Gere e aprove um orçamento real antes de receber." : "Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber."}</div>;
   // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001: "quitado" legado com histórico que a
   // leitura estrita não comprova não é mostrado como quitação.
   if (!modoAprovacao && !pendencia && quitado && emConferencia) {
@@ -232,11 +242,12 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
   if (!modoAprovacao && !pendencia && !projection.canReceive && situacao.pagamento.verificavel && situacao.pagamento.liquidado) {
     return <div style={box}>Nada a receber — título liquidado ({fmt(situacao.pagamento.recebidoLiquido ?? 0)}).</div>;
   }
-  if (!modoAprovacao && !pendencia && !projection.canReceive && projection.financialStatus !== "CHARGE_NOT_CREATED") return <div style={box}>Recebimento bloqueado: {projection.consistencyIssues[0] ?? "revise a cobrança desta OS."}</div>;
-  if (pdv.loading) return <div style={box}>Carregando sessão de caixa…</div>;
+  if (!modoAprovacao && !pendencia && !projection.canReceive && projection.financialStatus !== "CHARGE_NOT_CREATED") return <div style={box}>{avisoRecusa}Recebimento bloqueado: {projection.consistencyIssues[0] ?? "revise a cobrança desta OS."}</div>;
+  if (pdv.loading) return <>{avisoRecusa}<div style={box}>Carregando sessão de caixa…</div></>;
 
   const credito = authorizedCredit ? <APrazoResumo amount={emConferencia ? null : creditInstallment?.amount ?? pagamento.saldo} dueAt={creditInstallment?.dueAt ?? null} emConferencia={emConferencia} /> : null;
   if (!formAberto) return <div style={box}>
+    {avisoRecusa}
     {credito}
     {!caixaAberto && <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 9 }}>Caixa fechado — o recebimento imediato exige caixa aberto. Você pode formalizar 100% a prazo.</div>}
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
@@ -386,7 +397,8 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet: 
           </label>
           {!pendencia && errosVisiveis.map((mensagem) => <div key={mensagem} role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 8 }}>{mensagem}</div>)}
           {!caixaAberto && receberAgora > 0 && !pendencia && <a href="/dashboard/vendas" style={{ display: "inline-block", color: C.primary, marginTop: 8, fontSize: 11 }}>Abrir Caixa</a>}
-          {(erro || pdv.error || pendencia) && <div role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 9 }}>{pendencia ? MENSAGEM_CONFIRMACAO_PENDENTE_V3 + " Se não conseguir verificar, solicite conferência a um operador autorizado." : erro ?? pdv.error}</div>}
+          {avisoRecusa}
+          {!avisoRecusa && (erro || pdv.error || pendencia) && <div role="alert" style={{ fontSize: 11, color: C.dangerFg, marginTop: 9 }}>{pendencia ? MENSAGEM_CONFIRMACAO_PENDENTE_V3 + " Se não conseguir verificar, solicite conferência a um operador autorizado." : erro ?? pdv.error}</div>}
         </div>
         <div className={sheetStyles.footer}>
           <button type="button" onClick={() => void onConfirmar()} disabled={!podeConfirmar} style={{ ...btnPrimary, flex: 1, cursor: podeConfirmar ? "pointer" : "default", opacity: podeConfirmar ? 1 : 0.6 }}>

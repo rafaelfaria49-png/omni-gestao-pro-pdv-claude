@@ -105,7 +105,7 @@ import {
   type RecusaComercialMistaV3,
   type ResultadoRecebimentoMistoV3,
 } from "./recebimento-misto-service";
-import { avaliarElegibilidadeComercialV3, RecebimentoInelegivelErroV3 } from "./elegibilidade-comercial";
+import { avaliarElegibilidadeComercialV3, lerMotivoRecusaComercialV3, RecebimentoInelegivelErroV3, type MotivoRecusaComercialV3 } from "./elegibilidade-comercial";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -432,7 +432,7 @@ function normalizarLinhasV3(input: ReceberOSInputV3): SplitLinhaV3[] {
   return [];
 }
 
-export type RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE"; operacaoId: string; requestFingerprint: string; mensagem: string };
+export type RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE"; operacaoId: string; requestFingerprint: string; mensagem: string; comercial?: MotivoRecusaComercialV3 };
 export type ResultadoConfirmacaoImediataV3 =
   | { estado: "CONFIRMADO"; resultado: ReceberOSResultV3; prova: ProvaConfirmacaoFinanceiraV3 }
   | RecusaConfirmacaoImediataV3
@@ -527,8 +527,13 @@ async function executarRecebimentoImediatoOSV3(storeId: string, osId: string, in
     const anterior = recusas.find((r) => isRecordV3(r) && r.operacaoId === operacaoId);
     if (isRecordV3(anterior)) {
       if (anterior.requestFingerprint !== fingerprintCompleto) throw new Error("Esta confirmação já foi usada com outro conteúdo.");
-      const recusa = { estado: "RECUSADO_DEFINITIVAMENTE" as const, operacaoId, requestFingerprint: fingerprintCompleto, mensagem: String(anterior.mensagem) };
-      if (!input.confirmacaoClienteV3) throw new Error(recusa.mensagem);
+      // Replay usa o motivo ORIGINAL do tombstone, nunca a situação comercial atual.
+      const comercial = lerMotivoRecusaComercialV3(anterior.comercial);
+      const recusa: RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE", operacaoId, requestFingerprint: fingerprintCompleto, mensagem: String(anterior.mensagem), ...(comercial ? { comercial } : {}) };
+      if (!input.confirmacaoClienteV3) {
+        if (comercial) throw new RecebimentoInelegivelErroV3({ elegivel: false, ...comercial, mensagem: recusa.mensagem });
+        throw new Error(recusa.mensagem);
+      }
       return recusa;
     }
     await conferirPendenciaFinanceiraV3(tx, sid, id, operacaoId, "imediato");
@@ -697,7 +702,8 @@ async function executarRecebimentoImediatoOSV3(storeId: string, osId: string, in
       await tx.$executeRaw`ROLLBACK TO SAVEPOINT ops_v3_imediato_confirmacao`;
       if (sessaoId) await travarSessaoCaixa(tx, sid, sessaoId);
       const { rowId, payload } = await lerOSTravadaV3(tx, sid, id);
-      const recusa: RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE", operacaoId, requestFingerprint: fingerprintCompleto, mensagem: e.message };
+      const comercial = e instanceof RecebimentoInelegivelErroV3 ? lerMotivoRecusaComercialV3(e) : null;
+      const recusa: RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE", operacaoId, requestFingerprint: fingerprintCompleto, mensagem: e.message, ...(comercial ? { comercial } : {}) };
       const anteriores = Array.isArray(payload.recebimentoImediatoRecusasV3) ? payload.recebimentoImediatoRecusasV3 : [];
       const next = { ...payload, recebimentoImediatoRecusasV3: [...anteriores.filter((r: unknown) => !isRecordV3(r) || r.operacaoId !== operacaoId), { ...recusa, at: dataHora }] };
       await tx.ordemServico.update({ where: { id: rowId }, data: { payload: next as unknown as Prisma.InputJsonValue } });

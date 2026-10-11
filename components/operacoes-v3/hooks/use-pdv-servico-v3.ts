@@ -13,10 +13,13 @@ import {
   type PendenciaConfirmacaoFinanceiraV3, type ProvaConfirmacaoFinanceiraV3,
 } from "@/lib/operacoes-v3/recebimento-misto-model";
 
+import { lerMotivoRecusaComercialV3, type MotivoRecusaComercialV3 } from "@/lib/operacoes-v3/elegibilidade-comercial";
+
 export interface PdvServicoState {
   pagamento: PagamentoV3 | null; sessao: CaixaSessaoV3 | null; loading: boolean;
   recebendo: boolean; estornando: boolean; error: string | null;
   ultimoRecibo: ComprovanteReciboV3 | null; reload: () => void;
+  recusaComercial?: MotivoRecusaComercialV3 | null; limparRecusaComercial?: () => void;
   receber: (input: ReceberOSInputV3) => Promise<boolean>;
   estornar: (input: EstornarRecebimentoInputV3) => Promise<boolean>; limparRecibo: () => void;
 }
@@ -105,6 +108,10 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   const [bloqueios, setBloqueios] = useState<Record<string, boolean>>({});
   const reqRef = useRef(0), activeKeyRef = useRef(targetKey);
   activeKeyRef.current = targetKey;
+  // Identidade da apresentação: A→B→A e reload não aceitam respostas da visita anterior.
+  const vistaRef = useRef({ key: targetKey, nonce });
+  if (vistaRef.current.key !== targetKey || vistaRef.current.nonce !== nonce) vistaRef.current = { key: targetKey, nonce };
+  const [recusa, setRecusa] = useState<{ key: string; operacaoId: string; vista: typeof vistaRef.current; motivo: MotivoRecusaComercialV3 } | null>(null);
   const saldoVistoRef = useRef<{ key: string; saldo: number } | null>(null);
   saldoVistoRef.current = loadedKey && pagamento ? { key: loadedKey, saldo: pagamento.saldo } : null;
   const sincronizar = useCallback((s: string, o: string) => {
@@ -112,8 +119,8 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
     setPendencias((prev) => { const next = { ...prev }; if (local.pendencia) next[key] = local.pendencia; else delete next[key]; return next; });
     if (local.bloqueada) setBloqueios((prev) => ({ ...prev, [key]: true }));
   }, []);
-  const erro = useCallback((key: string, mensagem = MENSAGEM_CONFIRMACAO_PENDENTE_V3) => {
-    if (activeKeyRef.current === key) { setErrorKey(key); setError(mensagem); }
+  const erro = useCallback((key: string, mensagem = MENSAGEM_CONFIRMACAO_PENDENTE_V3, vista = vistaRef.current) => {
+    if (activeKeyRef.current === key && vistaRef.current === vista) { setErrorKey(key); setError(mensagem); }
   }, []);
   const assimilar = useCallback((s: string, o: string, res: Awaited<ReturnType<typeof lerPagamentoOSV3>>) => {
     const key = JSON.stringify([s, o]);
@@ -133,7 +140,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   }, [sid, id, sincronizar]);
   useEffect(() => {
     const req = ++reqRef.current;
-    setPagamento(null); setSessao(null); setAPrazo(null); setLoadedKey(null); setErrorKey(null); setError(null);
+    setPagamento(null); setSessao(null); setAPrazo(null); setLoadedKey(null); setErrorKey(null); setError(null); setRecusa(null);
     if (!sid || !id) { setLoading(false); return; }
     setLoading(true);
     lerPagamentoOSV3(sid, id).then((res) => {
@@ -146,6 +153,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   }, [sid, id, targetKey, nonce, assimilar, erro]);
 
   const enviar = useCallback(async (solicitada: PendenciaConfirmacaoFinanceiraV3): Promise<{ confirmado: boolean; misto?: RegistroMistoResultadoUIV3 }> => {
+    const vista = vistaRef.current;
     const local = lerLocal(solicitada.storeId, solicitada.osId);
     // Mesmo conteúdo canônico nunca substitui a representação original congelada.
     const p = local.pendencia && mesmoConteudo(local.pendencia, solicitada) ? local.pendencia : solicitada;
@@ -159,7 +167,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
     }
     emVoo.add(p.key);
     if (p.tipo === "imediato") setRecebendo(true); else setRegistrandoMisto(true);
-    if (activeKeyRef.current === p.key) { setError(null); setErrorKey(null); }
+    if (activeKeyRef.current === p.key) { setError(null); setErrorKey(null); setRecusa(null); }
     const reconhecer = async (prova?: ProvaConfirmacaoFinanceiraV3) => {
       if (prova) {
         if (prova.operacaoId !== p.operacaoId || prova.tipo !== p.tipo) throw new Error("Prova incompatível.");
@@ -173,11 +181,14 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       if (p.tipo === "imediato") {
         const resposta = await receberOSV3(p.storeId, p.osId, { ...p.input, confirmacaoClienteV3: true });
         if ("estado" in resposta && resposta.estado === "RECUSADO_DEFINITIVAMENTE" && resposta.operacaoId === p.operacaoId) {
-          remover(p); sincronizar(p.storeId, p.osId); erro(p.key, resposta.mensagem); return { confirmado: false };
+          remover(p); sincronizar(p.storeId, p.osId);
+          const comercial = Object.hasOwn(resposta, "comercial") ? lerMotivoRecusaComercialV3(resposta.comercial) : null;
+          if (activeKeyRef.current === p.key && vistaRef.current === vista) setRecusa(comercial ? { key: p.key, operacaoId: p.operacaoId, vista, motivo: comercial } : null);
+          erro(p.key, resposta.mensagem, vista); return { confirmado: false };
         }
         if ("estado" in resposta && resposta.estado === "INCERTO") {
           if (resposta.pendencia) persistir(resposta.pendencia);
-          erro(p.key); return { confirmado: false };
+          erro(p.key, undefined, vista); return { confirmado: false };
         }
         // Compatibilidade com o contrato positivo anterior (consumidores e testes legados).
         const positivo = "estado" in resposta && resposta.estado === "CONFIRMADO" ? resposta.resultado : resposta as unknown as import("@/lib/operacoes-v3/pdv-servico-actions").ReceberOSResultV3;
@@ -193,7 +204,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       if (!res.ok) {
         if (res.pendencia) persistir(res.pendencia);
         if (res.naoRegistrada) { remover(p); sincronizar(p.storeId, p.osId); }
-        erro(p.key, res.naoRegistrada ? res.mensagem : MENSAGEM_CONFIRMACAO_PENDENTE_V3);
+        erro(p.key, res.naoRegistrada ? res.mensagem : MENSAGEM_CONFIRMACAO_PENDENTE_V3, vista);
         return { confirmado: false, misto: res.naoRegistrada ? { status: "recusado", code: res.code, mensagem: res.mensagem, saldoAtual: res.saldoAtual } : { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 } };
       }
       await reconhecer(res.prova);
@@ -204,7 +215,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       return { confirmado: true, misto: { status: "ok", resultado: res } };
     } catch {
       // Transporte, digest, timeout e autorização não provam rollback/ausência.
-      erro(p.key);
+      erro(p.key, undefined, vista);
       lerPagamentoOSV3(p.storeId, p.osId).then((res) => assimilar(p.storeId, p.osId, res)).catch(() => undefined);
       return { confirmado: false, misto: { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 } };
     } finally {
@@ -251,11 +262,23 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
   }, [sid, id, targetKey, bloqueios, erro]);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   const limparRecibo = useCallback(() => setUltimoRecibo(null), []);
+  const limparRecusaComercial = useCallback(() => {
+    if (recusa?.vista === vistaRef.current) { setError(null); setErrorKey(null); }
+    setRecusa(null);
+  }, [recusa]);
   const leitura = projetarLeituraAtualPdvServicoV3({ targetKey, loadedKey, errorKey, pagamento, sessao, loading, error });
   const p = targetKey ? pendencias[targetKey] ?? null : null;
+  useEffect(() => {
+    // Outra instância/aba também pode iniciar uma confirmação para este mesmo alvo.
+    if (p && recusa?.key === p.key && recusa.operacaoId !== p.operacaoId) {
+      setRecusa(null); setError(null); setErrorKey(null);
+    }
+  }, [p, recusa]);
   return { ...leitura, recebendo, registrandoMisto, estornando, ultimoRecibo: targetKey && reciboKey === targetKey ? ultimoRecibo : null,
     aPrazo: targetKey && loadedKey === targetKey ? aPrazo : null, reload, receber, registrarMisto, estornar, limparRecibo,
     pendenciaConfirmacao: p, pendenciaMisto: p?.tipo === "misto" ? p : null, pendenciaReceber: p?.tipo === "imediato" ? p : null,
     confirmacaoBloqueada: !!p || !!(targetKey && bloqueios[targetKey]), verificarConfirmacao,
+    recusaComercial: recusa?.key === targetKey && recusa.vista === vistaRef.current && !p && !bloqueios[targetKey!] ? recusa.motivo : null,
+    limparRecusaComercial,
   };
 }

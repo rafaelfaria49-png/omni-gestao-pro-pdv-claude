@@ -433,3 +433,52 @@ for (const modalidade of ["imediato", "misto"] as const) {
     expect((await linhaOS(prisma, os.id)).payload.confirmacaoRecebimentoPendenteV3).toBeUndefined();
   });
 }
+
+
+for (const destino of ["comercial", "financeiro"] as const) {
+  test(`R8 — recusa imediata real preserva motivo, navega para ${destino} e permite nova confirmação após resolução`, async ({ page }) => {
+    const os = await semearOS(prisma, "aprovado", false);
+    await abrirOS(page, os.codigo); await ticketFinanceiro(page).click();
+    await page.getByRole("button", { name: /^Receber R\$\s420,00$/ }).click();
+    let sheet = page.getByRole("dialog", { name: "Receber pagamento" });
+    await sheet.getByRole("button", { name: "Pagamento parcial", exact: true }).click();
+    await sheet.getByLabel("Forma da linha 1").selectOption("pix");
+    await sheet.getByLabel("Valor da linha 1").fill("100");
+    await sheet.getByLabel("Observação (opcional)").fill("Rascunho R8 preservado");
+    // Mudança concorrente no QA: o navegador continua com a leitura aprovada anterior.
+    const row = await linhaOS(prisma, os.id);
+    const alterado = destino === "comercial" ? { ...row.payload, orcamento: { ...row.payload.orcamento, status: "rascunho" } } : row.payload;
+    await prisma.ordemServico.update({ where: { id: os.id }, data: { payload: alterado as unknown as Prisma.InputJsonValue, valorTotal: destino === "financeiro" ? 400 : 420 } });
+    const antesFinanceiro = JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id), timeline: (await linhaOS(prisma, os.id)).payload.timeline });
+    await sheet.getByRole("button", { name: /^Confirmar R\$\s100,00$/ }).click();
+    const aviso = sheet.getByTestId("recusa-comercial");
+    await expect(aviso).toContainText(destino === "comercial" ? "o orçamento ainda não foi aprovado" : "os valores desta OS não conferem entre si", IDA_E_VOLTA);
+    await expect(sheet.getByLabel("Observação (opcional)")).toHaveValue("Rascunho R8 preservado");
+    await expect(sheet.getByRole("button", { name: /^Confirmar R\$\s100,00$/ })).toBeEnabled();
+    const recusas = (await linhaOS(prisma, os.id)).payload.recebimentoImediatoRecusasV3 as Array<{ operacaoId: string; comercial: { codigo: string; destino: string } }>;
+    expect(recusas).toHaveLength(1);
+    expect(recusas[0]!.comercial).toEqual({ codigo: destino === "comercial" ? "APROVACAO_COMERCIAL_PENDENTE" : "VALORES_DIVERGENTES", destino });
+    expect(JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id), timeline: (await linhaOS(prisma, os.id)).payload.timeline })).toBe(antesFinanceiro);
+    const antesNav = await efeitos(prisma, os.id);
+    await aviso.getByRole("button", { name: destino === "comercial" ? "Conferir orçamento →" : "Conferir cobrança →" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(destino === "comercial" ? ticketComercial(page) : ticketFinanceiro(page)).toHaveAttribute("aria-current", "page");
+    expect(await efeitos(prisma, os.id)).toBe(antesNav);
+    const chaves = await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith("omni:confirmacao-financeira:v1:")));
+    expect(chaves.filter(k => k.includes(os.id))).toHaveLength(0);
+    // Resolução sintética, sem aprovar/cobrar pelo atalho: a próxima operação é NOVA.
+    const recusada = await linhaOS(prisma, os.id);
+    await prisma.ordemServico.update({ where: { id: os.id }, data: { valorTotal: 420, payload: { ...recusada.payload, orcamento: { ...recusada.payload.orcamento, status: "aprovado" } } as unknown as Prisma.InputJsonValue } });
+    await abrirOS(page, os.codigo); await ticketFinanceiro(page).click();
+    await page.getByRole("button", { name: /^Receber R\$\s420,00$/ }).click();
+    sheet = page.getByRole("dialog", { name: "Receber pagamento" });
+    await expect(sheet.getByTestId("recusa-comercial")).toHaveCount(0);
+    await sheet.getByRole("button", { name: "Pagamento parcial", exact: true }).click();
+    await sheet.getByLabel("Forma da linha 1").selectOption("pix"); await sheet.getByLabel("Valor da linha 1").fill("100");
+    await sheet.getByRole("button", { name: /^Confirmar R\$\s100,00$/ }).click(); await expect(sheet).toBeHidden(IDA_E_VOLTA);
+    const caixa = await caixaDaOS(prisma, os.id); expect(caixa).toHaveLength(1); expect(caixa[0]!.valor).toBe(100);
+    expect((caixa[0]!.payload as { operacaoId: string }).operacaoId).not.toBe(recusas[0]!.operacaoId);
+    expect((await linhaOS(prisma, os.id)).payload.recebimentoImediatoRecusasV3).toEqual(recusas);
+    expect(await titulosDe(prisma, os.id)).toHaveLength(1);
+  });
+}
