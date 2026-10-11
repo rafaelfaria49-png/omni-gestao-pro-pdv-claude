@@ -1,0 +1,23 @@
+{
+  "head": "fde0794c4f11712034e60d785904cec14ce99216",
+  "base": "9f1b511a21ab98a924513428d465725e6839fdc2",
+  "source": "Resumo das saídas do runner observadas nesta sessão; não é runner.json de sucesso",
+  "command": "node scripts/pessoas/run-frontend-tests.mjs",
+  "exit": 1,
+  "vitest": {
+    "total": 111,
+    "passed": 111,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "build": "PASS_MIGRATION_SKIPPED",
+  "pwa": "PASS",
+  "typecheck": "FAIL_TS2769_ByRoleOptions_exact",
+  "focusedLint": "PASS",
+  "globalLint": "NOT_RUN",
+  "e2e": "NOT_RUN",
+  "visual": "NOT_RUN",
+  "cleanup": "PASS",
+  "previewR2": "PENDENTE_NAO_AUTORIZADO"
+}
