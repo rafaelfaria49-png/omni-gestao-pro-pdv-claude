@@ -225,3 +225,5 @@ Extensão estreita de `runOfficialTests` com modo frontend, preservando o compor
 Usuário autorizou nesta sessão: replanejar o escopo, corrigir exposição no backend e adicionar regressão; publicar relatório externo e prova na branch goal/pessoas-001b-frontend do origin; continuar implementação e validação local.
 
 A allowlist inclui lib/pessoas/cadastro.ts exclusivamente para suprimir motivo contratual sem viewRemuneracao (preservando valor armazenado e leitura autorizada) e lib/pessoas/historico-privacidade.test.ts para regressão. Esta exceção prevalece sobre a exclusão anterior somente neste recorte. BLOCKED anterior é preservado no ledger; retorno a READY por autorização humana. Gate pré-execução satisfeito pela autorização e revisão vinculada; preview/R2/produção continuam não autorizados.
+
+A correção autorizada inclui motivo pessoal do histórico: criarFuncionario grava o mesmo motivo livre nas versões pessoal e contratual iniciais; omitir apenas o motivo contratual deixaria a mesma exposição na seção pessoal. Ambos são redigidos na leitura sem viewRemuneracao, preservando os valores armazenados e as versões.

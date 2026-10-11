@@ -7,7 +7,7 @@ import { control, Notice, Section, useResource } from "./ui"
 import { civilDisplay } from "@/lib/pessoas/adapters/cadastro-ui"
 export function ListaPessoas({ overview = false }: { overview?: boolean }) {
   const { empregadorId, capacidades, podeConfigurar } = usePessoas()
-  const load = useCallback(() => listarFuncionarios(empregadorId), [empregadorId])
+  const load = useCallback(() => empregadorId ? listarFuncionarios(empregadorId) : Promise.resolve({ ok: true as const, data: [] }), [empregadorId])
   const resource = useResource(load)
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState("")

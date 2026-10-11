@@ -18,7 +18,7 @@ export function NovoFuncionario() {
       action={async (values, comandoId) => {
         try {
           const optional = Object.fromEntries(Object.entries(values).filter(([key, value]) => value !== "" && !["divisor", "salarioBase", "jornadaSemanal"].includes(key)))
-          return await criarFuncionario({ ...optional, motivo: values.motivo, empregadorId, comandoId,
+          return criarFuncionario({ ...optional, motivo: values.motivo, empregadorId, comandoId,
             ...(editContrato ? { salarioBase: decimalInput(values.salarioBase), jornadaSemanal: decimalInput(values.jornadaSemanal),
               divisor: values.divisor ? Number(values.divisor) : undefined } : {}) })
         } catch (error) { return { ok: false, code: error instanceof Error && error.message === "DECIMAL_INVALIDO" ? "DECIMAL_INVALIDO" : "REDE" } }

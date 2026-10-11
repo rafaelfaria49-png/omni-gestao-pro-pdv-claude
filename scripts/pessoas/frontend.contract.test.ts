@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
+import { webcrypto } from "node:crypto"
 import { createElement } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
 const identity = vi.hoisted(() => ({ store: "A", user: "user-A" }))
 vi.mock("next-auth/react", () => ({ useSession: () => ({ status: "authenticated", data: { user: { id: identity.user }, expires: "fixed" } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: identity.store }) }))
+vi.mock("@/components/dashboard/pessoas/contexto", () => ({ usePessoas: () => ({ empregadorId: "emp-synthetic", capacidades: ["viewCadastro", "viewDocumento", "editCadastro"] }) }))
+import { Documentos } from "@/components/dashboard/pessoas/documentos"
 import { useDisponibilidade } from "@/components/dashboard/pessoas/use-disponibilidade"
 import { CommandForm } from "@/components/dashboard/pessoas/ui"
 import { filterDashboardNav, hubsNavItems } from "@/lib/navigation/dashboard-nav-items"
@@ -56,5 +59,37 @@ describe("Frontend: contratos de privacidade e consistência", () => {
     fireEvent.click(screen.getByText("Salvar"))
     await waitFor(() => expect(conflict).toHaveBeenCalledTimes(1))
     expect(action).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("Documentos: transporte controlado, não comprova R2", () => {
+  it("faz hash, envia headers assinados e repete complete perdido sem repetir PUT", async () => {
+    vi.stubGlobal("crypto", webcrypto)
+    let completes = 0, puts = 0
+    const requests: Array<{ url: string; body?: string; headers?: HeadersInit }> = []
+    const fetcher = vi.fn(async (url: string, options: RequestInit = {}) => {
+      requests.push({ url, body: typeof options.body === "string" ? options.body : undefined, headers: options.headers })
+      if (url.includes("upload-intent")) return { ok: true, json: async () => ({ ok: true, data: { signedUrl: "https://storage.example.invalid/synthetic", headersObrigatorios: { "If-None-Match": "*", "Content-Type": "application/pdf" }, uploadIntent: "synthetic-intent" } }) }
+      if (url.startsWith("https:")) { puts++; return { ok: true } }
+      if (url.includes("complete")) { completes++; if (completes === 1) throw new Error("lost response"); return { ok: true, json: async () => ({ ok: true, data: {} }) } }
+      return { ok: true, json: async () => ({ ok: true, data: [] }) }
+    })
+    vi.stubGlobal("fetch", fetcher)
+    render(createElement(Documentos, { id: "link-synthetic" }))
+    await screen.findByText("Nenhum documento disponível para suas permissões.")
+    expect(screen.queryByText("Contrato", { selector: "option" })).toBeNull()
+    const file = new File(["%PDF-1.7 synthetic"], "sintetico.pdf", { type: "application/pdf" })
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode("%PDF-1.7 synthetic").buffer })
+    fireEvent.change(screen.getByLabelText("Arquivo"), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText("Origem"), { target: { value: "INTERNO" } })
+    fireEvent.click(screen.getByText("Enviar documento"))
+    await screen.findByText("Resposta não confirmada. Você pode repetir o mesmo comando.")
+    fireEvent.click(screen.getByText("Repetir confirmação"))
+    await screen.findByText("Documento salvo.")
+    expect(puts).toBe(1); expect(completes).toBe(2)
+    expect(requests.filter(r => r.url.includes("complete")).map(r => r.body)).toEqual(['{"uploadIntent":"synthetic-intent"}', '{"uploadIntent":"synthetic-intent"}'])
+    expect(requests.find(r => r.url.startsWith("https:"))?.headers).toEqual({ "If-None-Match": "*", "Content-Type": "application/pdf" })
+    expect(JSON.parse(requests.find(r => r.url.includes("upload-intent"))!.body!).sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(JSON.stringify({ ...localStorage })).not.toContain("synthetic-intent")
   })
 })

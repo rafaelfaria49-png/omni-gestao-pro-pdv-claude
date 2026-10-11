@@ -41,7 +41,7 @@ export function CommandForm({ fields, action, submitLabel = "Salvar", onSaved, o
       if (accessCodes.includes(code)) { refreshPessoas(); return }
       setError(code)
       if (conflictCodes.includes(code)) { command.current = null; onConflict?.(); return }
-      setUnknown(code === "FALHA_INTERNA")
+      setUnknown(code === "FALHA_INTERNA" || code === "REDE")
     } catch { if (alive.current) { setError("REDE"); setUnknown(true) } }
     finally { lock.current = false; if (alive.current) { setBusy(false); requestAnimationFrame(() => feedback.current?.focus()) } }
   }
@@ -64,7 +64,7 @@ export function CommandForm({ fields, action, submitLabel = "Salvar", onSaved, o
     {unknown ? <div className="flex min-w-0 flex-wrap gap-2">
       <Button type="button" disabled={busy} onClick={() => command.current && void execute(command.current.values)}>Repetir o mesmo comando</Button>
       <Button type="button" variant="outline" onClick={() => { command.current = null; setUnknown(false); onConflict?.() }}>Reler antes de alterar</Button>
-    </div> : <Button disabled={busy} type="submit">{busy ? "Salvando…" : submitLabel}</Button>}
+    </div> : <Button className="min-h-11" disabled={busy} type="submit">{busy ? "Salvando…" : submitLabel}</Button>}
   </form>
 }
 export function useResource<T>(load: () => Promise<{ ok: true; data: T } | { ok: false; code: string }>) {
