@@ -38,7 +38,7 @@ const target = JSON.parse(probeResult.stdout.trim());
 assert.equal(target.db, entry.db); assert.equal(target.host, '127.0.0.1/32'); assert.equal(target.port, 45708);
 console.log('QA confirmado: ' + JSON.stringify(target) + ' SHA=' + sha);
 const sourceHashes = {};
-for (const p of ['lib/operacoes-v3/elegibilidade-comercial.ts', 'lib/operacoes-v3/pdv-servico-actions.ts', 'components/operacoes-v3/hooks/use-pdv-servico-v3.ts', 'components/operacoes-v3/pages/PdvServicoV3.tsx', 'components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx']) sourceHashes[p] = crypto.createHash('sha256').update(fs.readFileSync(path.join(cwd, p))).digest('hex');
+for (const p of ['lib/operacoes-v3/elegibilidade-comercial.ts', 'lib/operacoes-v3/pdv-servico-actions.ts', 'components/operacoes-v3/hooks/use-pdv-servico-v3.ts', 'components/operacoes-v3/pages/PdvServicoV3.tsx', 'components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx']) sourceHashes[p] = fs.existsSync(path.join(cwd, p)) ? crypto.createHash('sha256').update(fs.readFileSync(path.join(cwd, p))).digest('hex') : null;
 const vitest = path.join(root, 'node_modules/vitest/vitest.mjs'), config = 'test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts';
 let command, name, shell = false;
 const serverMode = ['e2e', 'ratified', 'check', 'close'].includes(mode);

@@ -30,7 +30,7 @@ for(const [name,group,command] of jobs){
  const exitCode=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve)});
  results.push({name,group,command:args,exitCode});
 }
-const file=path.join(root,'docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8',base?'baseline-regressions.json':'candidate-regressions.json');
-if(fs.existsSync(file))throw Error('Sumário já existe; preservar evidência anterior');
+let file=path.join(root,'docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8',base?'baseline-regressions.json':'candidate-regressions.json');
+if(fs.existsSync(file))file=file.replace(/\.json$/, '-'+Date.now()+'.json');
 fs.writeFileSync(file,JSON.stringify({base,results},null,2)+'\n');
 process.exitCode=results.some(r=>r.exitCode!==0)?1:0;

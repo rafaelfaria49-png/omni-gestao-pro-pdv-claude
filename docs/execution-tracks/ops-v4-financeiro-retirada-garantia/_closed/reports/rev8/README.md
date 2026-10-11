@@ -26,3 +26,5 @@ Os JSON/logs deste diretório são execuções preparatórias, com HEAD 7fab1d1 
 - O primeiro build falhou EPERM no prisma generate porque o próprio runner mantinha a DLL carregada após o probe PG. Probe passou a processo curto separado, liberando a DLL antes do build. Build seguinte passou com MIGRATION_SKIPPED. Nenhuma migration, configuração global ou dependência alterada.
 
 Nenhuma mutação produtiva, acesso administrativo produtivo, mudança nas OS reais ou início dos GOALs 003/008/datas retroativas. Worktrees, junction da base e WIP alheio preservados. Só servidores QA próprios têm encerramento programado no finally do runner.
+
+A primeira chamada do runner de baseline parou antes da coleta: tentava calcular hash de elegibilidade-comercial.ts, arquivo ainda inexistente em 98ef717. O runner passou a registrar null para fonte ausente na base, sem alterar ou pular qualquer teste. Sumários anteriores são preservados com identidade própria; o setup abortado não é resultado de regressão nem check AEP. Nenhum fonte de produto foi alterado nesse ajuste.
