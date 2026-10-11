@@ -13,7 +13,7 @@ export function FichaFuncionario({ id }: { id: string }) {
   const [revision, setRevision] = useState(0)
   const [message, setMessage] = useState("")
   const feedback = useRef<HTMLParagraphElement>(null)
-  useEffect(() => { if (message) feedback.current?.focus() }, [message])
+  useEffect(() => { if (message) feedback.current?.focus() }, [message, resource.data])
   const reload = (conflict = false) => {
     setMessage(conflict ? "O cadastro foi relido. Revise os dados atuais e escolha novamente a seção que deseja editar." : "Seção salva. As outras seções permanecem independentes.")
     setEdit(""); resource.reload(); setRevision(n => n + 1)
@@ -91,7 +91,7 @@ function Historico({ id }: { id: string }) {
         <p className="font-medium">Versão {row.versao} · Vigência {civilDisplay(row.validFrom)}</p>
         <p className="text-xs text-muted-foreground">Registrado {new Date(row.recordedAt).toLocaleString("pt-BR")} · Autor {row.autorId}</p>
         {"salarioBase" in row && <p>{moneyDisplay(row.salarioBase, row.remuneracaoOculta || !capacidades.includes("viewRemuneracao"))}</p>}
-        {!("salarioBase" in row) ? <p className="break-words">{row.motivo}</p> : !row.remuneracaoOculta && capacidades.includes("viewRemuneracao") && <p className="break-words">{row.motivo}</p>}
+        {!("salarioBase" in row) ? <p className="break-words">{row.motivo ?? "Motivo restrito"}</p> : !row.remuneracaoOculta && capacidades.includes("viewRemuneracao") && <p className="break-words">{row.motivo}</p>}
         <p className="break-all text-xs text-muted-foreground">{row.supersedesId ? "Substitui " + row.supersedesId : "Versão inicial"}{"supersededAt" in row && row.supersededAt ? " · Substituída em " + new Date(row.supersededAt).toLocaleString("pt-BR") : ""}</p>
       </li>)}</ol>
     </div>)}

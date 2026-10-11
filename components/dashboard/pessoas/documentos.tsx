@@ -16,7 +16,7 @@ async function api<T>(url: string, body?: unknown, signal?: AbortSignal): Promis
   return result.data
 }
 export function Documentos({ id }: { id: string }) {
-  const { empregadorId, capacidades } = usePessoas()
+  const { empregadorId, capacidades, categoriasDocumentais } = usePessoas()
   const resource = useResource(useCallback(async () => {
     try { return { ok: true as const, data: await api<DocumentosDto>("/api/pessoas/documentos?" + new URLSearchParams({ empregadorId, vinculoId: id })) } }
     catch (error) { return { ok: false as const, code: error instanceof Error ? error.message : "REDE" } }
@@ -64,13 +64,14 @@ export function Documentos({ id }: { id: string }) {
       if (!mounted.current || ac.signal.aborted) return
       const origem = category === "holerite_externo" ? "CONTADOR_EXTERNO" : new FormData(form).get("origem")
       setStage("Solicitando autorização de envio…")
+      const expires = Date.now() + 9 * 60 * 1000
       const intent = await api<Intent>("/api/pessoas/documentos/upload-intent", { empregadorId, vinculoId: id, categoria: category,
         origem, nomeArquivo: file.name, mime: file.type, bytes: file.size, sha256: hash }, ac.signal)
       if (!mounted.current || ac.signal.aborted) return
       setStage("Enviando bytes ao armazenamento privado…")
       const put = await fetch(intent.signedUrl, { method: "PUT", body: file, headers: intent.headersObrigatorios, signal: ac.signal, credentials: "omit", referrerPolicy: "no-referrer" })
       if (!put.ok) throw new Error("PUT_FALHOU")
-      pending.current = { token: intent.uploadIntent, expires: Date.now() + 9 * 60 * 1000 }
+      pending.current = { token: intent.uploadIntent, expires }
       setRetryComplete(true)
       await complete(ac.signal)
     } catch (reason) { fail(reason) }
@@ -102,8 +103,7 @@ export function Documentos({ id }: { id: string }) {
       <fieldset disabled={busy || retryComplete} className="grid min-w-0 gap-3 sm:grid-cols-2">
         <label className="min-w-0 text-sm">Arquivo<input ref={fileInput} className={control} type="file" accept=".pdf,.png,.jpg" required /></label>
         <label className="min-w-0 text-sm">Categoria<select className={control} value={category} onChange={event => setCategory(event.target.value)}>
-          <option value="identificacao">Identificação</option>
-          {capacidades.includes("viewRemuneracao") && <><option value="contrato">Contrato</option><option value="holerite_externo">Holerite externo · recebido do contador</option><option value="comprovante">Comprovante</option><option value="outro">Outro</option></>}
+          {categoriasDocumentais.map(value => <option key={value} value={value}>{value === "holerite_externo" ? "Holerite externo · recebido do contador" : value}</option>)}
         </select></label>
         {category !== "holerite_externo" && <label className="min-w-0 text-sm">Origem<select className={control} name="origem" required><option value="">Selecione</option><option value="INTERNO">Interno</option><option value="CONTADOR_EXTERNO">Recebido do contador</option></select></label>}
       </fieldset>

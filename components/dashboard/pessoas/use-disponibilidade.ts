@@ -8,12 +8,12 @@ export function refreshPessoas() { window.dispatchEvent(new Event("pessoas:refre
 export function useDisponibilidade() {
   const { data: session, status } = useSession()
   const { lojaAtivaId } = useLojaAtiva()
-  const key = JSON.stringify([status, session?.user?.id, session?.expires, lojaAtivaId])
+  const key = JSON.stringify([status, session?.user?.id, session?.user?.role, lojaAtivaId])
   const [state, setState] = useState<{ key: string; data?: Disponibilidade; error?: string; generation: number }>()
   const [generation, setGeneration] = useState(0)
-  const refresh = useCallback(() => { setState(undefined); setGeneration(n => n + 1) }, [])
+  const refresh = useCallback(() => { setGeneration(n => n + 1) }, [])
   useEffect(() => {
-    const visible = () => { if (document.visibilityState === "visible") refresh(); else setState(undefined) }
+    const visible = () => refresh()
     window.addEventListener("focus", refresh)
     window.addEventListener("pageshow", refresh)
     window.addEventListener("pessoas:refresh", refresh)
@@ -28,7 +28,7 @@ export function useDisponibilidade() {
   }, [refresh])
   useEffect(() => {
     const controller = new AbortController()
-    if (status !== "authenticated" || !lojaAtivaId) return () => controller.abort()
+    if (status !== "authenticated" || !lojaAtivaId || document.visibilityState === "hidden") return () => controller.abort()
     void (async () => {
       try {
         const response = await fetch("/api/pessoas/disponibilidade", { cache: "no-store", credentials: "same-origin", signal: controller.signal })
@@ -41,6 +41,6 @@ export function useDisponibilidade() {
     return () => controller.abort()
   }, [key, generation, status, lojaAtivaId])
   const current = state?.key === key && state.generation === generation ? state : undefined
-  return { data: current?.data, error: current?.error, refresh, contextKey: key + ":" + generation,
+  return { data: current?.data, retainedData: state?.key === key ? state.data : undefined, error: current?.error, refresh, contextKey: key,
     loading: !current, disponivel: current?.data?.disponivel === true }
 }

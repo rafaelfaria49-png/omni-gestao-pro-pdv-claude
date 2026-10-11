@@ -6,9 +6,11 @@ import { Notice } from "@/components/dashboard/pessoas/ui"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 export default async function Layout({ children }: { children: ReactNode }) {
+  let code: string | undefined
   try {
     const availability = await lerDisponibilidade()
-    if (!availability.disponivel) return <Notice code="ESCOPO_NEGADO" />
-  } catch (error) { return <Notice code={error instanceof PessoasError ? error.code : "FALHA_INTERNA"} /> }
+    if (!availability.disponivel) code = "ESCOPO_NEGADO"
+  } catch (error) { code = error instanceof PessoasError ? error.code : "FALHA_INTERNA" }
+  if (code) return <Notice code={code} />
   return <PessoasProvider>{children}</PessoasProvider>
 }

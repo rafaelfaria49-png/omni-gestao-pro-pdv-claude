@@ -12,8 +12,10 @@ let userId = ""
 test.beforeAll(async () => {
   const url = process.env.PESSOAS_HOMOLOGATION_DATABASE_URL
   if (!url || url !== process.env.DATABASE_URL || !url.includes("@127.0.0.1:55439/omni_pessoas_001a_homolog")) throw new Error("BANCO_NAO_ISOLADO")
-  await db.store.create({ data: { id: storeId, name: "Loja E2E sintética" } })
+  await db.store.create({ data: { id: storeId, name: "Loja E2E sintética " + suffix } })
+  await db.store.create({ data: { id: storeId + "-b", name: "Segunda loja sintética " + suffix } })
   userId = (await db.adminUser.create({ data: { name: "Admin sintético", email, password: hashSync(password, 10), role: "ADMIN", lojaId: storeId } })).id
+  await db.adminUserStore.create({ data: { adminUserId: userId, storeId: storeId + "-b" } })
 })
 test.afterAll(async () => { await db.$disconnect() })
 async function login(page: Page) {
@@ -22,7 +24,9 @@ async function login(page: Page) {
   await page.getByLabel("Senha", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Entrar", exact: true }).click()
   await page.waitForURL("**/dashboard")
-  await expect.poll(async () => (await page.context().cookies()).some(cookie => cookie.name.includes("loja") && cookie.value === storeId)).toBe(true)
+  await page.goto("/dashboard/unidades")
+  await page.getByText(storeId, { exact: true }).click()
+  await expect.poll(async () => (await page.context().cookies()).some(cookie => cookie.name === "assistec-active-store" && cookie.value === storeId)).toBe(true)
 }
 async function fill(page: Page, values: Record<string, string>) {
   for (const [name, value] of Object.entries(values)) await page.locator('[name="' + name + '"]').fill(value)
@@ -86,7 +90,10 @@ if (!enabled) {
         await expect(page.locator("html")).toHaveAttribute("data-studio-theme", theme)
         await page.keyboard.press("Escape")
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+        await page.getByRole("heading", { name: "Pessoas", exact: true }).scrollIntoViewIfNeeded()
         await page.screenshot({ path: info.outputPath(theme + "-" + viewport.width + ".png"), fullPage: true })
+        await page.getByRole("heading", { name: "Histórico", exact: true }).scrollIntoViewIfNeeded()
+        await page.screenshot({ path: info.outputPath(theme + "-" + viewport.width + "-historico.png"), fullPage: true })
       }
       if (viewport.width < 1000) {
         await page.getByRole("button", { name: "Abrir menu de navegação" }).click()
@@ -102,6 +109,15 @@ if (!enabled) {
     await expect(page.getByText("Remuneração restrita").first()).toBeVisible()
     await expect(page.getByText("Salário sintético 9876.54")).toHaveCount(0)
     expect(await page.content()).not.toContain("9.876,54")
+    const fichaUrl = page.url()
+    await page.goto("/dashboard/unidades")
+    await page.getByText(storeId + "-b", { exact: true }).click()
+    await page.goto(fichaUrl)
+    await expect(page.getByText("Você não tem acesso a este cadastro nesta loja.")).toBeVisible()
+    await page.goto("/dashboard/unidades")
+    await page.getByText(storeId, { exact: true }).click()
+    await page.goto(fichaUrl)
+    await expect(page.getByText("Remuneração restrita").first()).toBeVisible()
     await db.dpAcesso.updateMany({ where: { adminUserId: userId }, data: { revogadoEm: new Date() } })
     await page.reload()
     await expect(page.getByText("Você não tem acesso a este cadastro nesta loja.")).toBeVisible()

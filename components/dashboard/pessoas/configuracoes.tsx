@@ -14,7 +14,7 @@ export function ConfiguracoesPessoas() {
   if (!empregadorId) return podeConfigurar ? <Section title="Configurar empregador">
     <p className="text-sm text-muted-foreground">Identifique o empregador e seu estabelecimento. A loja atual será vinculada explicitamente a esse estabelecimento.</p>
     <CommandForm fields={[...identity, ...address, { name: "regime", label: "Regime do empregador" }, ...identity.map(field => ({ ...field, name: "est_" + field.name, label: "Estabelecimento · " + field.label })), vigencia, motivo]}
-      submitLabel="Criar empregador e estabelecimento" onSaved={refreshPessoas}
+      submitLabel="Criar empregador e estabelecimento" onSaved={refreshPessoas} onConflict={refreshPessoas}
       action={(v, comandoId) => setupEmpregador({ comandoId, nome: v.nome, tipoInscricao: v.tipoInscricao, inscricao: v.inscricao,
         regime: v.regime || undefined, endereco: endereco(v), validFrom: v.validFrom, motivo: v.motivo,
         estabelecimento: { nome: v.est_nome, tipoInscricao: v.est_tipoInscricao, inscricao: v.est_inscricao } })} />

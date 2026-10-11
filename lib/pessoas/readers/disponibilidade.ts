@@ -1,4 +1,5 @@
 import "server-only"
+import { categoriasLegiveis } from "../documentos/politica"
 import { exigirBootstrap, listarEscopos } from "../scope"
 import { PessoasError } from "../domain"
 
@@ -12,6 +13,6 @@ export async function lerDisponibilidade() {
   return {
     disponivel: escopos.length > 0 || podeConfigurarEmpregador,
     podeConfigurarEmpregador,
-    escopos: escopos.map(({ empregadorId, capacidades }) => ({ empregadorId, capacidades: [...capacidades] })),
+    escopos: escopos.map(({ empregadorId, capacidades }) => ({ empregadorId, capacidades: [...capacidades], categoriasDocumentais: categoriasLegiveis(capacidades) })),
   }
 }

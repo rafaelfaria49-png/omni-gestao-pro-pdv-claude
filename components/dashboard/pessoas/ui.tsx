@@ -69,15 +69,16 @@ export function CommandForm({ fields, action, submitLabel = "Salvar", onSaved, o
 }
 export function useResource<T>(load: () => Promise<{ ok: true; data: T } | { ok: false; code: string }>) {
   const [revision, setRevision] = useState(0)
-  const [state, setState] = useState<{ data?: T; error?: string }>({})
+  const [state, setState] = useState<{ data?: T; error?: string; source?: typeof load }>({})
   useEffect(() => {
     let alive = true
     void load().then(result => {
       if (!alive) return
       if (!result.ok && accessCodes.includes(result.code)) refreshPessoas()
-      setState(result.ok ? { data: result.data } : { error: result.code })
-    }).catch(() => { if (alive) setState({ error: "REDE" }) })
+      setState(result.ok ? { source: load, data: result.data } : { source: load, error: result.code })
+    }).catch(() => { if (alive) setState({ source: load, error: "REDE" }) })
     return () => { alive = false }
   }, [load, revision])
-  return { ...state, reload: () => { setState({}); setRevision(n => n + 1) } }
+  const current = state.source === load ? state : {}
+  return { ...current, reload: () => { setState({}); setRevision(n => n + 1) } }
 }

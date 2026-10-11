@@ -15,6 +15,7 @@ export function NovoFuncionario() {
     <CommandForm fields={[...personal, ...vinculo, ...(editContrato ? [...contrato, { name: "contractValidFrom", label: "Vigência do contrato", type: "date" }] : []), motivo]}
       submitLabel="Salvar cadastro"
       onSaved={() => router.push("/dashboard/pessoas/funcionarios")}
+      onConflict={() => router.push("/dashboard/pessoas/funcionarios")}
       action={async (values, comandoId) => {
         try {
           const optional = Object.fromEntries(Object.entries(values).filter(([key, value]) => value !== "" && !["divisor", "salarioBase", "jornadaSemanal"].includes(key)))

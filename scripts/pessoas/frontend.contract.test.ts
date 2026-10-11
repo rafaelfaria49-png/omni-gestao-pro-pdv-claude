@@ -1,15 +1,21 @@
 // @vitest-environment jsdom
 import { webcrypto } from "node:crypto"
-import { createElement } from "react"
+import { createElement, type ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
-const identity = vi.hoisted(() => ({ store: "A", user: "user-A" }))
+const identity = vi.hoisted(() => ({ store: "A", user: "user-A", expanded: false }))
 vi.mock("next-auth/react", () => ({ useSession: () => ({ status: "authenticated", data: { user: { id: identity.user }, expires: "fixed" } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: identity.store }) }))
-vi.mock("@/components/dashboard/pessoas/contexto", () => ({ usePessoas: () => ({ empregadorId: "emp-synthetic", capacidades: ["viewCadastro", "viewDocumento", "editCadastro"] }) }))
+vi.mock("@/components/dashboard/pessoas/contexto", () => ({ usePessoas: () => ({ empregadorId: "emp-synthetic", capacidades: ["viewCadastro", "viewDocumento", "editCadastro"], categoriasDocumentais: ["identificacao"] }) }))
+vi.mock("next/link", () => ({ default: ({ children, prefetch, ...props }: { children: ReactNode; prefetch?: boolean; href: string }) => createElement("a", { ...props, "data-prefetch": String(prefetch) }, children) }))
+vi.mock("next/image", () => ({ default: () => null }))
+vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard/pessoas" }))
+vi.mock("@/components/ui/collapsible-hover-rail", () => ({ CollapsibleHoverRail: ({ children }: { children: (state: { expanded: boolean; pinned: boolean; togglePinned: () => void; collapse: () => void }) => ReactNode }) =>
+  createElement("div", null, children({ expanded: identity.expanded, pinned: false, togglePinned: () => undefined, collapse: () => undefined })) }))
+import { Sidebar } from "@/components/painel-inicial/Sidebar"
 import { Documentos } from "@/components/dashboard/pessoas/documentos"
 import { useDisponibilidade } from "@/components/dashboard/pessoas/use-disponibilidade"
-import { CommandForm } from "@/components/dashboard/pessoas/ui"
+import { CommandForm, useResource } from "@/components/dashboard/pessoas/ui"
 import { filterDashboardNav, hubsNavItems } from "@/lib/navigation/dashboard-nav-items"
 import { civilDisplay, decimalInput, moneyDisplay } from "@/lib/pessoas/adapters/cadastro-ui"
 vi.setConfig({ testTimeout: 30_000 })
@@ -83,7 +89,7 @@ describe("Documentos: transporte controlado, não comprova R2", () => {
     Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode("%PDF-1.7 synthetic").buffer })
     fireEvent.change(screen.getByLabelText("Arquivo"), { target: { files: [file] } })
     fireEvent.change(screen.getByLabelText("Origem"), { target: { value: "INTERNO" } })
-    fireEvent.click(screen.getByText("Enviar documento"))
+    fireEvent.submit(screen.getByText("Enviar documento").closest("form")!)
     await screen.findByText("Resposta não confirmada. Você pode repetir o mesmo comando.")
     fireEvent.click(screen.getByText("Repetir confirmação"))
     await screen.findByText("Documento salvo.")
@@ -92,5 +98,48 @@ describe("Documentos: transporte controlado, não comprova R2", () => {
     expect(requests.find(r => r.url.startsWith("https:"))?.headers).toEqual({ "If-None-Match": "*", "Content-Type": "application/pdf" })
     expect(JSON.parse(requests.find(r => r.url.includes("upload-intent"))!.body!).sha256).toMatch(/^[a-f0-9]{64}$/)
     expect(JSON.stringify({ ...localStorage })).not.toContain("synthetic-intent")
+  })
+})
+
+describe("Sidebar: consumidor desktop e focus mode", () => {
+  it("aplica o mesmo estado DP nos três modos e desabilita prefetch", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ disponivel: true, podeConfigurarEmpregador: true, escopos: [] }) })))
+    const view = render(createElement(Sidebar))
+    await waitFor(() => expect(screen.getByRole("link", { name: "Pessoas", exact: true }).getAttribute("data-prefetch")).toBe("false"))
+    view.rerender(createElement(Sidebar, { focusMode: true }))
+    expect(screen.getByRole("link", { name: "Pessoas", exact: true }).getAttribute("data-prefetch")).toBe("false")
+    identity.expanded = true
+    view.rerender(createElement(Sidebar, { focusMode: true }))
+    expect(screen.getByRole("link", { name: "Pessoas", exact: true }).getAttribute("data-prefetch")).toBe("false")
+  })
+})
+
+describe("Revalidação e descarte de respostas", () => {
+  it("oculta durante foco, preservando somente o contexto da mesma identidade", async () => {
+    let finish: (response: unknown) => void = () => undefined
+    const dto = { disponivel: true, podeConfigurarEmpregador: false, escopos: [] }
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce({ ok: true, json: async () => dto })
+      .mockImplementationOnce(() => new Promise(resolve => { finish = resolve })))
+    const { result } = renderHook(() => useDisponibilidade())
+    await waitFor(() => expect(result.current.data).toEqual(dto))
+    const key = result.current.contextKey
+    act(() => result.current.refresh())
+    expect(result.current.data).toBeUndefined()
+    expect(result.current.disponivel).toBe(false)
+    expect(result.current.retainedData).toEqual(dto)
+    await act(async () => finish({ ok: true, json: async () => dto }))
+    expect(result.current.contextKey).toBe(key)
+    expect(result.current.data).toEqual(dto)
+  })
+  it("não mostra a ficha anterior quando muda o carregador", async () => {
+    const first = async () => ({ ok: true as const, data: "ficha-A" })
+    let finish: (result: { ok: true; data: string }) => void = () => undefined
+    const second = () => new Promise<{ ok: true; data: string }>(resolve => { finish = resolve })
+    const { result, rerender } = renderHook(({ loader }) => useResource(loader), { initialProps: { loader: first } })
+    await waitFor(() => expect(result.current.data).toBe("ficha-A"))
+    rerender({ loader: second })
+    expect(result.current.data).toBeUndefined()
+    await act(async () => finish({ ok: true, data: "ficha-B" }))
+    expect(result.current.data).toBe("ficha-B")
   })
 })

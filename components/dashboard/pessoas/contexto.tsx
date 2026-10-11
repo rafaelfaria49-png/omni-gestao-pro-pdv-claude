@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import { listarEmpregadores } from "@/app/actions/pessoas"
 import { useDisponibilidade, type Disponibilidade } from "./use-disponibilidade"
 import { control, Notice, useResource } from "./ui"
-type Context = { empregadorId: string; capacidades: string[]; podeConfigurar: boolean }
+type Context = { empregadorId: string; capacidades: string[]; categoriasDocumentais: string[]; podeConfigurar: boolean }
 const Contexto = createContext<Context | null>(null)
 export function usePessoas() {
   const value = useContext(Contexto)
@@ -15,9 +15,15 @@ export function usePessoas() {
 export function PessoasProvider({ children }: { children: ReactNode }) {
   const availability = useDisponibilidade()
   if (availability.error) return <Notice code={availability.error} retry={availability.refresh} />
-  if (!availability.data) return <p role="status">Verificando acesso a Pessoas…</p>
-  if (!availability.disponivel) return <Notice code="ESCOPO_NEGADO" retry={availability.refresh} />
-  return <ContextoAutorizado key={availability.contextKey} availability={availability.data}>{children}</ContextoAutorizado>
+  const retained = availability.data ?? availability.retainedData
+  if (!retained) return <p role="status">Verificando acesso a Pessoas…</p>
+  if (availability.data && !availability.disponivel) return <Notice code="ESCOPO_NEGADO" retry={availability.refresh} />
+  return <>
+    {!availability.data && <p role="status">Revalidando acesso a Pessoas…</p>}
+    <div hidden={!availability.data} inert={!availability.data}>
+      <ContextoAutorizado key={availability.contextKey + JSON.stringify(retained)} availability={retained}>{children}</ContextoAutorizado>
+    </div>
+  </>
 }
 function ContextoAutorizado({ children, availability }: { children: ReactNode; availability: Disponibilidade }) {
   const resource = useResource(useCallback(() => listarEmpregadores(), []))
@@ -27,7 +33,7 @@ function ContextoAutorizado({ children, availability }: { children: ReactNode; a
   if (!resource.data) return <p role="status">Carregando empregadores…</p>
   const empregadorId = selected ?? resource.data[0]?.id ?? ""
   const scope = availability.escopos.find(item => item.empregadorId === empregadorId)
-  const value = { empregadorId, capacidades: scope?.capacidades ?? [], podeConfigurar: availability.podeConfigurarEmpregador }
+  const value = { empregadorId, capacidades: scope?.capacidades ?? [], categoriasDocumentais: scope?.categoriasDocumentais ?? [], podeConfigurar: availability.podeConfigurarEmpregador }
   return <div className="min-w-0 space-y-6 text-foreground">
     <header className="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
       <div className="min-w-0"><p className="text-xs uppercase tracking-widest text-muted-foreground">Departamento pessoal</p>
@@ -44,6 +50,6 @@ function ContextoAutorizado({ children, availability }: { children: ReactNode; a
           className="rounded-md border border-border px-4 py-3 text-sm hover:bg-muted aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground">{title}</Link>)}
     </nav>
     <Contexto.Provider key={empregadorId} value={value}>{children}</Contexto.Provider>
-    <p className="text-xs text-muted-foreground">Dados privados. Ao trocar de contexto ou retornar à aba, o acesso é revalidado e formulários não salvos são descartados.</p>
+    <p className="text-xs text-muted-foreground">Dados privados. O acesso é revalidado ao retornar à aba. Trocar de contexto ou perder acesso descarta formulários não salvos.</p>
   </div>
 }
