@@ -40,3 +40,23 @@ describe("R8 · V3 montada com hook real", () => {
     m.receberOSV3.mockImplementation(async (_s, _o, i) => negativo(i, { codigo: "PRECO_AUSENTE", destino: "comercial" })); const r = await montar(); enviar(); await screen.findByTestId("recusa-comercial"); r.unmount(); await montar(); expect(screen.queryByTestId("recusa-comercial")).toBeNull();
   });
 });
+
+
+function enviarMisto() {
+  fireEvent.click(screen.getByRole("checkbox", { name: "Pagamento dividido (split)" }));
+  fireEvent.change(screen.getByLabelText("Forma da linha 1"), { target: { value: "pix" } });
+  fireEvent.change(screen.getByLabelText("Valor da linha 1"), { target: { value: "100" } });
+  fireEvent.click(screen.getByRole("button", { name: "A prazo / crediário" }));
+  fireEvent.change(screen.getByLabelText("Vencimento da parte a prazo"), { target: { value: "2099-12-31" } });
+  const b = screen.getByRole("button", { name: /^Registrar R/ }); expect((b as HTMLButtonElement).disabled).toBe(false); fireEvent.click(b);
+}
+describe("N2 · V3 mista montada com hook real", () => {
+  it.each([["PRECO_AUSENTE", "comercial"], ["VALORES_DIVERGENTES", "financeiro"]])("%s mostra mensagem e destino apenas por ação do operador", async (codigo, destino) => {
+    m.registrarRecebimentoMistoOSV3.mockResolvedValue({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: "Recusa mista original do servidor", comercial: { codigo, destino } }); const r = await montar(); enviarMisto();
+    const aviso = await screen.findByTestId("recusa-comercial"); expect(aviso.textContent).toContain("Recusa mista original do servidor"); expect(r.c.openOS).not.toHaveBeenCalled(); expect(r.c.navigate).not.toHaveBeenCalled();
+    expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("100"); expect((screen.getByLabelText("Vencimento da parte a prazo") as HTMLInputElement).value).toBe("2099-12-31");
+    expect((screen.getByRole("button", { name: /^Registrar R/ }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: destino === "comercial" ? /Abrir o orçamento no prontuário/ : /conferir a cobrança/ }));
+    expect(r.c.openOS).toHaveBeenCalledWith(A.id); expect(m.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(1); expect(m.receberOSV3).not.toHaveBeenCalled(); expect(m.estornarRecebimentoOSV3).not.toHaveBeenCalled(); expect(screen.queryByTestId("recusa-comercial")).toBeNull();
+  });
+});

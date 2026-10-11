@@ -1010,3 +1010,28 @@ describe("R8 · motivo comercial inicial, durável, replay e legado", () => {
     expect(await foto(sid, osId)).toBe(antes);
   });
 });
+
+
+describe("N2 · recusa mista inicial, persistência e replay preservam destino sem dinheiro", () => {
+  it.each([
+    ["PRECO_AUSENTE", "comercial", { orcamento: null, total: 0, coluna: 0 }],
+    ["VALORES_DIVERGENTES", "financeiro", { coluna: 400 }],
+  ] as const)("%s → %s: resultado durável original mesmo após resolver o comercial", async (codigo, destino, opcoes) => {
+    const sid = await novaLoja(), caixa = await abrirCaixa(sid), osId = await novaOS(sid, opcoes);
+    const input = { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, pagamentosAgora: [{ forma: "pix" as const, valor: 100 }], saldoAPrazo: { valor: 320, vencimento: VENC }, saldoEsperado: 420, confirmacaoClienteV3: true as const };
+    const antesFinanceiro = await fotoFinanceira(sid, osId), payloadAntes = await lerPayload(osId);
+    const recusada = await registrarRecebimentoMistoOSV3(sid, osId, input);
+    expect(recusada).toMatchObject({ ok: false, naoRegistrada: true, code: "comercial_nao_elegivel", comercial: { codigo, destino }, mensagem: expect.stringMatching(/^Recebimento recusado: /) });
+    const payloadRecusado = await lerPayload(osId), registros = payloadRecusado.recebimentoMistoRecusasV3;
+    expect(registros).toHaveLength(1); expect(registros[0]).toMatchObject({ operacaoId: input.operacaoId, requestFingerprint: expect.any(String), at: expect.any(String), code: "comercial_nao_elegivel", comercial: { codigo, destino }, mensagem: recusada.ok ? "" : recusada.mensagem });
+    expect(registros[0].requestFingerprint.length).toBeGreaterThan(0); expect(payloadRecusado.timeline).toEqual(payloadAntes.timeline); expect(payloadRecusado.confirmacaoRecebimentoPendenteV3).toBeUndefined();
+    expect(await fotoFinanceira(sid, osId)).toBe(antesFinanceiro); const depoisRecusa = await foto(sid, osId);
+    expect(await registrarRecebimentoMistoOSV3(sid, osId, input)).toEqual(recusada); expect(await foto(sid, osId)).toBe(depoisRecusa);
+    // Alteração sintética só para provar que replay não reavalia elegibilidade nem cobra.
+    await prisma.ordemServico.update({ where: { id: osId }, data: { valorTotal: 420, payload: { ...payloadRecusado, valorTotal: 420, orcamento: { id: "orc-n2-resolvido", status: "aprovado", sintetizado: false, total: 420, desconto: 0, criadoEm: ENTRADA, respondidoEm: ENTRADA, servicos: [{ id: "s", descricao: "Troca de Tela", valor: 420 }], pecas: [] } } as Prisma.InputJsonValue } });
+    const depoisResolucao = await foto(sid, osId); expect(await registrarRecebimentoMistoOSV3(sid, osId, input)).toEqual(recusada);
+    const { confirmacaoClienteV3: _optIn, ...legado } = input; expect(await registrarRecebimentoMistoOSV3(sid, osId, legado)).toEqual(recusada);
+    expect(await foto(sid, osId)).toBe(depoisResolucao); expect((await lerPayload(osId)).recebimentoMistoRecusasV3).toEqual(registros); expect(await fotoFinanceira(sid, osId)).toBe(antesFinanceiro);
+    expect(await titulo(sid, osId)).toBeNull(); expect(await prisma.ordemServico.count({ where: { storeId: sid } })).toBe(1);
+  });
+});

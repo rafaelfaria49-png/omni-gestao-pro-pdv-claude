@@ -2338,7 +2338,9 @@ export function useV4Preview(): V4Vals {
       if (recarregar) reloadOrdens();
       if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return { status: "em_andamento" } as const;
       if (recarregar) {
-        if (resultado.status === "recusado") void reloadPdvV3();
+        // A recusa comercial terminal orienta esta visita; reload do hook apagaria
+        // seu motivo original. Detalhe e projeção continuam relendo a autoridade.
+        if (resultado.status === "recusado" && resultado.code !== "comercial_nao_elegivel") void reloadPdvV3();
         reloadDetail();
         reloadFinancial();
       }

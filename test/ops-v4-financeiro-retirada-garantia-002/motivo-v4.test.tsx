@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   lerProjecoesFinanceirasOSV4: vi.fn(async () => []),
   lerPagamentoOSV3: vi.fn(),
   receberOSV3: vi.fn(),
+  registrarRecebimentoMistoOSV3: vi.fn(),
   aprovarOrcamentoParaReceberV3: vi.fn(),
   conferirEscopoAprovacaoV3: vi.fn(),
   conferirFormalizacaoAprovacaoV3: vi.fn(),
@@ -28,7 +29,7 @@ vi.mock("@/lib/operacoes-v3/pdv-servico-actions", () => ({
   lerPagamentoOSV3: m.lerPagamentoOSV3,
   receberOSV3: m.receberOSV3,
   estornarRecebimentoOSV3: vi.fn(),
-  registrarRecebimentoMistoOSV3: vi.fn(),
+  registrarRecebimentoMistoOSV3: m.registrarRecebimentoMistoOSV3,
   lancarOSAPrazoV3: vi.fn(),
 }));
 vi.mock("@/lib/operacoes-v3/entrega-actions", () => ({
@@ -152,5 +153,49 @@ describe("R8 · V4 montada com useV4Preview e hook V3 reais", () => {
     else { await act(async () => vivo.selectOS(B, "financeiro")); await waitFor(() => expect(vivo.realOS?.id).toBe("b")); if (campo === "A-B-A") { await act(async () => vivo.selectOS(A, "financeiro")); await waitFor(() => expect(vivo.realOS?.id).toBe("a")); } act(() => vivo.openReceberPagamentoAqui()); }
     await act(async () => resolver(negativo(m.receberOSV3.mock.calls[0]![2])));
     expect(screen.queryByTestId("recusa-comercial")).toBeNull(); expect(vivo.pdvServico.recusaComercial).toBeNull(); expect(m.receberOSV3).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+function confirmarMisto() {
+  const d = screen.getByRole("dialog", { name: "Receber pagamento" });
+  fireEvent.change(within(d).getByLabelText("Forma da linha 1"), { target: { value: "pix" } }); fireEvent.change(within(d).getByLabelText("Valor da linha 1"), { target: { value: "100" } });
+  fireEvent.click(within(d).getByRole("button", { name: "+ Dividir pagamento" })); fireEvent.change(within(d).getByLabelText("Forma da linha 2"), { target: { value: "a_prazo" } });
+  fireEvent.change(within(d).getByLabelText("Vencimento da parte a prazo"), { target: { value: "2099-12-31" } }); fireEvent.change(within(d).getByLabelText("Observação (opcional)"), { target: { value: "Rascunho misto N2" } });
+  const b = within(d).getByRole("button", { name: /^Registrar R/ }); expect((b as HTMLButtonElement).disabled).toBe(false); fireEvent.click(b);
+}
+describe("N2 · V4 mista montada com useV4Preview e hook real", () => {
+  it.each([["PRECO_AUSENTE", "comercial"], ["VALORES_DIVERGENTES", "financeiro"]])("%s preserva rascunho e só navega ao clicar no destino correto", async (codigo, destino) => {
+    m.registrarRecebimentoMistoOSV3.mockResolvedValue({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: "Recusa mista original do servidor", comercial: { codigo, destino } }); await abrirTela(); confirmarMisto();
+    const aviso = await screen.findByTestId("recusa-comercial"); expect(aviso.textContent).toContain("Recusa mista original do servidor"); expect(vivo.stage).toBe("financeiro"); expect(vivo.receberPagamentoOpen).toBe(true);
+    expect((screen.getByLabelText("Observação (opcional)") as HTMLInputElement).value).toBe("Rascunho misto N2"); expect((screen.getByLabelText("Valor da linha 1") as HTMLInputElement).value).toBe("100"); expect(vivo.pdvServico.pendenciaMisto).toBeNull();
+    expect((screen.getByRole("button", { name: /^Registrar R/ }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(within(aviso).getByRole("button", { name: destino === "comercial" ? "Conferir orçamento →" : "Conferir cobrança →" }));
+    await waitFor(() => expect(vivo.stage).toBe(destino === "comercial" ? "orcamento" : "financeiro")); expect(vivo.receberPagamentoOpen).toBe(false); expect(vivo.pdvServico.recusaComercial).toBeNull();
+    expect(m.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(1); expect(m.receberOSV3).not.toHaveBeenCalled(); expect(m.aprovarOrcamentoParaReceberV3).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("N2 · ciclo de vida da orientação mista na V4", () => {
+  it.each(["os", "loja", "A-B-A"])("resposta mista tardia em %s não publica orientação na superfície atual", async campo => {
+    let resolver!: (r: unknown) => void; m.registrarRecebimentoMistoOSV3.mockReturnValue(new Promise(r => { resolver = r; })); const r = await abrirTela(); confirmarMisto();
+    if (campo === "loja") { h.loja = "loja-b"; r.rerender(<TelaReal />); await waitFor(() => expect(vivo.pdvServico.pagamento).toBeNull()); }
+    else { await act(async () => vivo.selectOS(B, "financeiro")); await waitFor(() => expect(vivo.realOS?.id).toBe("b")); if (campo === "A-B-A") { await act(async () => vivo.selectOS(A, "financeiro")); await waitFor(() => expect(vivo.realOS?.id).toBe("a")); } act(() => vivo.openReceberPagamentoAqui()); }
+    await act(async () => resolver({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: "Recusa mista de visita antiga", comercial: { codigo: "VALORES_DIVERGENTES", destino: "financeiro" } }));
+    expect(screen.queryByTestId("recusa-comercial")).toBeNull(); expect(vivo.pdvServico.recusaComercial).toBeNull(); expect(m.registrarRecebimentoMistoOSV3).toHaveBeenCalledTimes(1);
+  });
+  it("fechar/reabrir limpa a orientação mista e restaura foco", async () => {
+    const origem = document.createElement("button"); document.body.append(origem); origem.focus();
+    try {
+      m.registrarRecebimentoMistoOSV3.mockResolvedValue({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: "Recusa mista original", comercial: { codigo: "PRECO_AUSENTE", destino: "comercial" } }); await abrirTela(); confirmarMisto(); await screen.findByTestId("recusa-comercial"); fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+      expect(document.activeElement).toBe(origem); act(() => vivo.openReceberPagamentoAqui()); await screen.findByRole("dialog"); expect(screen.queryByTestId("recusa-comercial")).toBeNull(); expect(vivo.pdvServico.recusaComercial).toBeNull();
+    } finally { origem.remove(); }
+  });
+  it("nova confirmação mista incerta limpa orientação e mantém o rascunho bloqueado", async () => {
+    m.registrarRecebimentoMistoOSV3.mockResolvedValue({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: "Recusa mista original", comercial: { codigo: "PRECO_AUSENTE", destino: "comercial" } }); await abrirTela(); confirmarMisto(); await screen.findByTestId("recusa-comercial");
+    let resolver!: (r: unknown) => void; m.registrarRecebimentoMistoOSV3.mockReturnValue(new Promise(r => { resolver = r; })); fireEvent.click(screen.getByRole("button", { name: /^Registrar R/ })); await waitFor(() => expect(vivo.pdvServico.registrandoMisto).toBe(true));
+    expect(screen.queryByTestId("recusa-comercial")).toBeNull(); expect((screen.getByLabelText("Observação (opcional)") as HTMLInputElement).disabled).toBe(true); expect((screen.getByRole("button", { name: "Cancelar" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => resolver({ ok: false, code: "sem_permissao", mensagem: "Sem conferência", comercial: { codigo: "PRECO_AUSENTE", destino: "comercial" } })); expect(vivo.pdvServico.pendenciaMisto).not.toBeNull(); expect(screen.queryByRole("button", { name: /Conferir orçamento/ })).toBeNull();
   });
 });

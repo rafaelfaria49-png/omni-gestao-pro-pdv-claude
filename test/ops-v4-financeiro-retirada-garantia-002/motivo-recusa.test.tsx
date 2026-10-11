@@ -65,3 +65,62 @@ describe("R8 · hook vincula motivo à recusa e ao contexto", () => {
   });
 
 });
+
+
+const inputMisto = { sessaoId: "caixa", pagamentosAgora: [{ forma: "pix" as const, valor: 100 }], saldoAPrazo: { valor: 320, vencimento: "2099-12-31" }, saldoEsperado: 420 };
+const terminalMisto = (comercial: unknown = motivo) => ({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: "Recusa mista original", comercial });
+describe("N2 · orientação da recusa mista usa a prova terminal e a visita atual", () => {
+  it.each([["APROVACAO_COMERCIAL_PENDENTE", "comercial"], ["ORCAMENTO_RECUSADO", "comercial"], ["ORCAMENTO_EXPIRADO", "comercial"], ["PRECO_AUSENTE", "comercial"], ["VALORES_DIVERGENTES", "financeiro"]])("%s → %s é preservado sem pendência financeira", async (codigo, destino) => {
+    const r = await montar(); m.misto.mockResolvedValue(terminalMisto({ codigo, destino }));
+    await act(async () => { expect(await r.result.current.registrarMisto(inputMisto)).toMatchObject({ status: "recusado", code: "comercial_nao_elegivel" }); });
+    expect(r.result.current.recusaComercial).toEqual({ codigo, destino }); expect(r.result.current.error).toBe("Recusa mista original");
+    expect(r.result.current.pendenciaMisto).toBeNull(); expect(r.result.current.confirmacaoBloqueada).toBe(false); expect(localStorage.length).toBe(0);
+    expect(m.receber).not.toHaveBeenCalled(); expect(m.estornar).not.toHaveBeenCalled();
+  });
+  it.each([null, undefined, [], "comercial", { codigo: "constructor", destino: "comercial" }, { codigo: "PRECO_AUSENTE", destino: "https://externo.invalid" }, { codigo: "VALORES_DIVERGENTES", destino: "comercial" }, Object.create(motivo)])("metadado misto inválido %# mantém a recusa sem fabricar destino", async comercial => {
+    const r = await montar(); m.misto.mockResolvedValue({ ...terminalMisto(), comercial });
+    await act(async () => { await r.result.current.registrarMisto(inputMisto); });
+    expect(r.result.current.recusaComercial ?? null).toBeNull(); expect(r.result.current.error).toBe("Recusa mista original"); expect(r.result.current.pendenciaMisto).toBeNull();
+  });
+  it("campo comercial herdado da resposta não publica destino", async () => {
+    const r = await montar(); const res = { ...terminalMisto() }; delete (res as { comercial?: unknown }).comercial; Object.setPrototypeOf(res, { comercial: motivo }); m.misto.mockResolvedValue(res);
+    await act(async () => { await r.result.current.registrarMisto(inputMisto); }); expect(r.result.current.recusaComercial ?? null).toBeNull(); expect(r.result.current.pendenciaMisto).toBeNull();
+  });
+  it("metadado não transforma recusa sem naoRegistrada em terminal", async () => {
+    const r = await montar(); m.misto.mockResolvedValue({ ...terminalMisto(), naoRegistrada: undefined });
+    await act(async () => { expect(await r.result.current.registrarMisto(inputMisto)).toMatchObject({ status: "incerto" }); });
+    expect(r.result.current.recusaComercial ?? null).toBeNull(); expect(r.result.current.pendenciaMisto).not.toBeNull(); expect(r.result.current.confirmacaoBloqueada).toBe(true);
+  });
+  it("recusa não comercial não adota metadado comercial", async () => {
+    const r = await montar(); m.misto.mockResolvedValue({ ...terminalMisto(), code: "caixa_fechado" });
+    await act(async () => { await r.result.current.registrarMisto(inputMisto); }); expect(r.result.current.recusaComercial ?? null).toBeNull(); expect(r.result.current.pendenciaMisto).toBeNull();
+  });
+  it.each(["os", "loja", "A-B-A"])("resposta mista tardia em %s não publica motivo de outra visita", async campo => {
+    const r = await montar(), c = adiado<unknown>(); m.misto.mockReturnValue(c.promessa); let p!: ReturnType<typeof r.result.current.registrarMisto>;
+    act(() => { p = r.result.current.registrarMisto(inputMisto); });
+    r.rerender({ s: campo === "loja" ? "loja-b" : "loja-a", o: campo === "loja" ? "os-a" : "os-b" }); await waitFor(() => expect(r.result.current.loading).toBe(false));
+    if (campo === "A-B-A") { r.rerender({ s: "loja-a", o: "os-a" }); await waitFor(() => expect(r.result.current.loading).toBe(false)); }
+    await act(async () => { c.resolver(terminalMisto()); await p; }); expect(r.result.current.recusaComercial ?? null).toBeNull(); expect(r.result.current.error).toBeNull();
+  });
+  it.each(["sucesso", "recusa não comercial", "incerto", "reload", "remontar"])("%s posterior limpa a orientação mista anterior", async caso => {
+    const r = await montar(); m.misto.mockResolvedValue(terminalMisto()); await act(async () => { await r.result.current.registrarMisto(inputMisto); }); expect(r.result.current.recusaComercial).toEqual(motivo);
+    if (caso === "reload") { act(() => r.result.current.reload()); await waitFor(() => expect(r.result.current.loading).toBe(false)); }
+    else if (caso === "remontar") { r.unmount(); const novo = await montar(); expect(novo.result.current.recusaComercial ?? null).toBeNull(); return; }
+    else {
+      if (caso === "sucesso") m.misto.mockResolvedValue({ ok: true, ...positivo });
+      else if (caso === "incerto") m.misto.mockRejectedValue(new Error("Connection closed."));
+      else m.misto.mockResolvedValue({ ...terminalMisto(null), code: "caixa_fechado" });
+      await act(async () => { await r.result.current.registrarMisto(inputMisto); }); expect(m.misto.mock.calls[1]![2].operacaoId).not.toBe(m.misto.mock.calls[0]![2].operacaoId);
+      if (caso === "incerto") expect(r.result.current.pendenciaMisto).not.toBeNull();
+    }
+    expect(r.result.current.recusaComercial ?? null).toBeNull();
+  });
+  it("outra instância iniciando confirmação invalida a orientação mista", async () => {
+    const a = await montar(), b = await montar(); m.misto.mockResolvedValue(terminalMisto()); await act(async () => { await a.result.current.registrarMisto(inputMisto); }); expect(a.result.current.recusaComercial).toEqual(motivo);
+    const c = adiado<unknown>(); m.misto.mockReturnValue(c.promessa); let p!: ReturnType<typeof b.result.current.registrarMisto>;
+    act(() => { p = b.result.current.registrarMisto(inputMisto); });
+    try { await waitFor(() => expect(a.result.current.recusaComercial ?? null).toBeNull()); }
+    finally { await act(async () => { c.resolver(terminalMisto(null)); await p; }); }
+    expect(a.result.current.error).toBeNull(); expect(a.result.current.pendenciaMisto).toBeNull();
+  });
+});

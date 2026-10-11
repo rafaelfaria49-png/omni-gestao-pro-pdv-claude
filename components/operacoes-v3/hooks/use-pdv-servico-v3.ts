@@ -203,7 +203,11 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
       const res = await registrarRecebimentoMistoOSV3(p.storeId, p.osId, { ...p.input, confirmacaoClienteV3: true });
       if (!res.ok) {
         if (res.pendencia) persistir(res.pendencia);
-        if (res.naoRegistrada) { remover(p); sincronizar(p.storeId, p.osId); }
+        if (res.naoRegistrada) {
+          remover(p); sincronizar(p.storeId, p.osId);
+          const comercial = res.code === "comercial_nao_elegivel" && Object.hasOwn(res, "comercial") ? lerMotivoRecusaComercialV3(res.comercial) : null;
+          if (activeKeyRef.current === p.key && vistaRef.current === vista) setRecusa(comercial ? { key: p.key, operacaoId: p.operacaoId, vista, motivo: comercial } : null);
+        }
         erro(p.key, res.naoRegistrada ? res.mensagem : MENSAGEM_CONFIRMACAO_PENDENTE_V3, vista);
         return { confirmado: false, misto: res.naoRegistrada ? { status: "recusado", code: res.code, mensagem: res.mensagem, saldoAtual: res.saldoAtual } : { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 } };
       }
