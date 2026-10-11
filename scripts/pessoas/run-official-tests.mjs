@@ -6,7 +6,7 @@
  * Nenhum node_modules/.env da worktree é usado. Limpeza verificada em finally.
  */
 import { spawnSync } from "node:child_process"
-import { createHash } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs"
 import net from "node:net"
 import os from "node:os"
@@ -128,7 +128,7 @@ function suiteInteira(rel, name) {
   return passed
 }
 
-export async function runOfficialTests({ hardening = false } = {}) {
+export async function runOfficialTests({ hardening = false, frontend = false } = {}) {
   const root = exigir(run("git", ["rev-parse", "--show-toplevel"]), 5, "fora de um repositório git").out.trim()
   const head = exigir(run("git", ["rev-parse", "HEAD"], { cwd: root }), 5, "HEAD inválido").out.trim()
   const protocolo = JSON.parse(fs.readFileSync(path.join(root, "docs/ai-execution/protocol.json"), "utf8"))
@@ -159,6 +159,10 @@ export async function runOfficialTests({ hardening = false } = {}) {
     }
     log(`workspace externo: ${tmp}`)
     const env = envFilho(tmp)
+    if (frontend) {
+      env.AUTH_SECRET = randomBytes(32).toString("base64"); env.AUTH_TRUST_HOST = "true"
+      for (const key of ["PESSOAS_CPF_ENC_KEY", "PESSOAS_CPF_HMAC_KEY", "PESSOAS_DOCUMENT_INTENT_KEY"]) env[key] = randomBytes(32).toString("base64")
+    }
     const npm = (args) => run(process.execPath, [npmCli(), ...args], { cwd: ws, env })
     log("npm ci (lockfile) + prisma generate no workspace externo…")
     exigir(npm(["ci", "--no-audit", "--no-fund", "--prefer-offline", "--loglevel=error"]), 5, "npm ci")
@@ -190,7 +194,7 @@ export async function runOfficialTests({ hardening = false } = {}) {
     if (drift.code !== 0) throw new Falha(1, `drift migration × schema.prisma: ${(drift.out + drift.err).trim().slice(0, 1500)}`)
     log("drift migration × schema.prisma: nenhum")
     const json = path.join(tmp, "vitest.json")
-    const t = run(process.execPath, [path.join(ws, "node_modules/vitest/vitest.mjs"), "run", "lib/pessoas", "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile.json=${json}`], { cwd: ws, env, inherit: true })
+    const t = run(process.execPath, [path.join(ws, "node_modules/vitest/vitest.mjs"), "run", "lib/pessoas", ...(frontend ? ["scripts/pessoas/frontend.contract.test.ts", "scripts/pessoas/frontend.integration.test.ts"] : []), "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile.json=${json}`], { cwd: ws, env, inherit: true })
     if (!fs.existsSync(json)) throw new Falha(1, `vitest não produziu relatório (exit ${t.code})`)
     const rel = JSON.parse(fs.readFileSync(json, "utf8"))
     log(`vitest: ${rel.numPassedTests} passaram · ${rel.numFailedTests} falharam · ${rel.numPendingTests} pulados · ${rel.numTodoTests} todo`)
@@ -222,7 +226,7 @@ export async function runOfficialTests({ hardening = false } = {}) {
         summary.typecheck = "PASS"
       })
       await conferirEtapa("ESLint focado", () => {
-        exigir(run(process.execPath, [path.join(ws, "node_modules/eslint/bin/eslint.js"), "lib/pessoas", "scripts/pessoas", "next.config.mjs", "--max-warnings=0"], { cwd: ws, env }), 1, "ESLint focado")
+        exigir(run(process.execPath, [path.join(ws, "node_modules/eslint/bin/eslint.js"), "lib/pessoas", "scripts/pessoas", "next.config.mjs", ...(frontend ? ["app/dashboard/pessoas", "components/dashboard/pessoas", "app/api/pessoas/disponibilidade", "lib/navigation/dashboard-nav-items.ts", "components/painel-inicial/Sidebar.tsx", "components/painel-inicial/MobileNavSheet.tsx"] : []), "--max-warnings=0"], { cwd: ws, env }), 1, "ESLint focado")
         summary.lint = "PASS"
       })
       if (failures.length) throw new Falha(1, failures.join("\n"))
@@ -231,6 +235,22 @@ export async function runOfficialTests({ hardening = false } = {}) {
       await inspectPwaBuild(ws, log)
       summary.build = "PASS"
       summary.p2034MaxAttempts = 3
+      if (frontend) {
+        const port = await new Promise((resolve, reject) => { const server = net.createServer(); server.once("error", reject); server.listen(0, "127.0.0.1", () => { const port = server.address().port; server.close(() => resolve(port)) }) })
+        summary.globalLintExit = npm(["run", "lint"]).code
+        summary.e2e = {}
+        for (const flag of ["on", "off"]) {
+          const report = path.join(tmp, "playwright-" + flag + ".json")
+          const e2eEnv = { ...env, PESSOAS_DP_ENABLED: flag, PESSOAS_TEST_PORT: String(port), NEXTAUTH_URL: "http://127.0.0.1:" + port, PESSOAS_E2E_REPORT: report }
+          exigir(run(process.execPath, [path.join(ws, "node_modules/@playwright/test/cli.js"), "test", "--config=scripts/pessoas/playwright.frontend.config.ts"], { cwd: ws, env: e2eEnv, inherit: true }), 1, "E2E " + flag)
+          if (!fs.existsSync(report)) throw new Falha(1, "E2E sem relatório")
+          const result = JSON.parse(fs.readFileSync(report, "utf8"))
+          if (!result.stats.expected || result.stats.unexpected || result.stats.skipped || result.stats.flaky) throw new Falha(1, "E2E incompleto")
+          summary.e2e[flag] = result.stats
+          if (!(await portaLivre(port))) throw new Falha(5, "E2E deixou servidor ativo")
+        }
+        summary.previewR2 = "PENDENTE_NAO_AUTORIZADO"
+      }
     }
   } finally {
     let cleanupError

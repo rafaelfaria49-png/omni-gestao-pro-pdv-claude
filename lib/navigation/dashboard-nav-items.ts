@@ -16,6 +16,7 @@ import {
   BarChart3,
   ClipboardCheck,
   Calculator,
+  UsersRound,
   ScanSearch,
   type LucideIcon,
 } from "lucide-react"
@@ -132,6 +133,9 @@ export const hubsNavItems: DashboardNavItem[] = [
         } satisfies DashboardNavItem,
       ]),
   {
+    to: "/dashboard/pessoas", label: "Pessoas", icon: UsersRound,
+  },
+  {
     to: "/dashboard/contador",
     label: "Contador HUB",
     icon: Calculator,
@@ -179,8 +183,10 @@ export const dashboardNavSections: DashboardNavSection[] = [
 export function filterDashboardNav(
   items: DashboardNavItem[],
   perms: EnterprisePermissions | null,
+  pessoasDisponivel = false,
 ): DashboardNavItem[] {
   return items.filter((i) => {
+    if (i.to === "/dashboard/pessoas") return pessoasDisponivel;
     if (i.experimental && !roadmapHubsEnabled) return false
     if (!perms) return true
     return i.visible ? i.visible(perms) : true

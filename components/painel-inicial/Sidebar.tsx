@@ -1,5 +1,6 @@
 "use client";
 
+import { useDisponibilidade } from "@/components/dashboard/pessoas/use-disponibilidade"
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/navigation/dashboard-nav-items";
 
 export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
+  const { disponivel: pessoasDisponivel } = useDisponibilidade()
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const { collapsed, setCollapsed } = useSidebarCollapsed();
@@ -31,7 +33,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
   }, [status, session?.user?.role]);
 
   const workspaceFiltered = useMemo(() => filterDashboardNav(workspaceNavItems, perms), [perms]);
-  const hubsFiltered = useMemo(() => filterDashboardNav(hubsNavItems, perms), [perms]);
+  const hubsFiltered = useMemo(() => filterDashboardNav(hubsNavItems, perms, pessoasDisponivel), [perms, pessoasDisponivel]);
   const adminFiltered = useMemo(() => filterDashboardNav(administrationNavItems, perms), [perms]);
 
   const rowClasses = (active: boolean) =>
@@ -51,7 +53,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
   }) => {
     const { to, label, Icon, active, badge } = params;
     return (
-      <Link key={to} href={to} className={rowClasses(active)}>
+      <Link key={to} href={to} prefetch={to === "/dashboard/pessoas" ? false : undefined} className={rowClasses(active)}>
         <span
           className={[
             "absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-r-full bg-primary transition-opacity",
@@ -162,6 +164,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
                         <Link
                           key={item.to}
                           href={item.to}
+                          prefetch={item.to === "/dashboard/pessoas" ? false : undefined}
                           onClick={collapse}
                           title={!expanded ? item.label : undefined}
                           aria-current={active ? "page" : undefined}

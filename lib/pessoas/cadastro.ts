@@ -417,7 +417,7 @@ export async function listarHistorico(empregadorId: string, vinculoId: string) {
       remuneracaoOculta: !remuneracao,
       validFrom: dataCivilDto(c.validFrom), validTo: dataCivilDto(c.validTo),
       recordedAt: c.recordedAt.toISOString(), supersedesId: c.supersedesId,
-      supersededAt: c.supersededAt?.toISOString() ?? null, autorId: c.autorId, motivo: c.motivo,
+      supersededAt: c.supersededAt?.toISOString() ?? null, autorId: c.autorId, motivo: remuneracao ? c.motivo : null,
     })),
   }
 }
