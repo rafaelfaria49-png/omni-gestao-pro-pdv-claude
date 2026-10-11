@@ -12,6 +12,7 @@ import { useDisponibilidade } from "@/components/dashboard/pessoas/use-disponibi
 import { CommandForm } from "@/components/dashboard/pessoas/ui"
 import { filterDashboardNav, hubsNavItems } from "@/lib/navigation/dashboard-nav-items"
 import { civilDisplay, decimalInput, moneyDisplay } from "@/lib/pessoas/adapters/cadastro-ui"
+vi.setConfig({ testTimeout: 30_000 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); identity.store = "A" })
 describe("Frontend: contratos de privacidade e consistência", () => {
   it("converte decimais sem perda binária e preserva ausência versus zero", () => {

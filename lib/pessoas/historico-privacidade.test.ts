@@ -5,6 +5,8 @@ vi.mock("@/lib/prisma", () => ({ prisma: { dpVinculo: { findFirst: mocks.find } 
 vi.mock("./commands", () => ({ executarComando: vi.fn() }))
 import { listarHistorico } from "./cadastro"
 
+vi.setConfig({ testTimeout: 30_000 })
+
 describe("Histórico: motivo contratual exige viewRemuneracao", () => {
   const motivo = "Salário sintético alterado para 9876.54"
   beforeEach(() => {

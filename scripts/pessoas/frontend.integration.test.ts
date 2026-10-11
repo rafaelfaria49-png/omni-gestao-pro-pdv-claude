@@ -12,7 +12,7 @@ function data<T>(result: { ok: true; data: T } | { ok: false; code: string }): T
   return result.data
 }
 describe.sequential("Frontend: actions reais em PostgreSQL descartável", () => {
-  const suffix = randomUUID()
+  const suffix = randomUUID().slice(0, 16)
   let employer = "", vinculo = "", user = ""
   beforeAll(async () => {
     const url = process.env.PESSOAS_HOMOLOGATION_DATABASE_URL

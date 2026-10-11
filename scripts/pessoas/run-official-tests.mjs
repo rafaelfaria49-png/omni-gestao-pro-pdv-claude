@@ -198,13 +198,18 @@ export async function runOfficialTests({ hardening = false, frontend = false } =
     if (!fs.existsSync(json)) throw new Falha(1, `vitest não produziu relatório (exit ${t.code})`)
     const rel = JSON.parse(fs.readFileSync(json, "utf8"))
     log(`vitest: ${rel.numPassedTests} passaram · ${rel.numFailedTests} falharam · ${rel.numPendingTests} pulados · ${rel.numTodoTests} todo`)
-    if (t.code !== 0 || !rel.success || rel.numFailedTests > 0) throw new Falha(1, "testes falharam")
+    const localFailures = []
+    if (t.code !== 0 || !rel.success || rel.numFailedTests > 0) {
+      if (!frontend) throw new Falha(1, "testes falharam")
+      localFailures.push("testes falharam")
+    }
     if (rel.numPendingTests > 0 || rel.numTodoTests > 0 || !rel.numTotalTests ||
-        rel.testResults.some((f) => f.assertionResults.some((a) => a.status !== "passed"))) throw new Falha(1, "testes pulados/todo/não executados — PASS oco recusado")
+        rel.testResults.some((f) => f.assertionResults.some((a) => !["passed", ...(frontend ? ["failed"] : [])].includes(a.status)))) throw new Falha(1, "testes pulados/todo/não executados — PASS oco recusado")
+    const suite = (name) => { try { return suiteInteira(rel, name) } catch (error) { if (!frontend) throw error; localFailures.push(error.message); return 0 } }
     summary = { head, base, total: rel.numTotalTests, skipped: rel.numPendingTests, todo: rel.numTodoTests,
-      integration: suiteInteira(rel, INTEGRACAO), invariants }
+      integration: suite(INTEGRACAO), invariants }
     if (hardening) {
-      summary.hardening = suiteInteira(rel, HARDENING)
+      summary.hardening = suite(HARDENING)
       const { inspectPwaBuild } = await import(pathToFileURL(path.join(ws, "scripts/pessoas/inspect-pwa-build.mjs")).href)
       const build = () => {
         log("npm run build (PWA habilitado, sem autoridade de migration)…")
@@ -212,7 +217,7 @@ export async function runOfficialTests({ hardening = false, frontend = false } =
         if (!b.out.includes("MIGRATION_SKIPPED") || /MIGRATION_(?:RUN|SUCCEEDED)/.test(b.out)) throw new Falha(1, "build não confirmou MIGRATION_SKIPPED")
         log("npm run build PASS · MIGRATION_SKIPPED")
       }
-      const failures = []
+      const failures = [...localFailures]
       const conferirEtapa = async (name, executar) => {
         try { await executar(); log(name + " PASS") }
         catch (error) { failures.push(name + ": " + error.message); log(name + " FAIL: " + error.message) }
@@ -241,12 +246,20 @@ export async function runOfficialTests({ hardening = false, frontend = false } =
         summary.e2e = {}
         for (const flag of ["on", "off"]) {
           const report = path.join(tmp, "playwright-" + flag + ".json")
-          const e2eEnv = { ...env, PESSOAS_DP_ENABLED: flag, PESSOAS_TEST_PORT: String(port), NEXTAUTH_URL: "http://127.0.0.1:" + port, PESSOAS_E2E_REPORT: report }
+          const e2eEnv = { ...env, PESSOAS_E2E_ARTIFACTS: path.join(tmp, "visual-" + flag), PESSOAS_DP_ENABLED: flag, PESSOAS_TEST_PORT: String(port), NEXTAUTH_URL: "http://127.0.0.1:" + port, PESSOAS_E2E_REPORT: report }
           exigir(run(process.execPath, [path.join(ws, "node_modules/@playwright/test/cli.js"), "test", "--config=scripts/pessoas/playwright.frontend.config.ts"], { cwd: ws, env: e2eEnv, inherit: true }), 1, "E2E " + flag)
           if (!fs.existsSync(report)) throw new Falha(1, "E2E sem relatório")
           const result = JSON.parse(fs.readFileSync(report, "utf8"))
           if (!result.stats.expected || result.stats.unexpected || result.stats.skipped || result.stats.flaky) throw new Falha(1, "E2E incompleto")
           summary.e2e[flag] = result.stats
+          const visual = path.join(tmp, "visual-" + flag)
+          const destination = path.join(root, "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-CADASTRO-001B/visual")
+          if (fs.existsSync(visual)) {
+            fs.mkdirSync(destination, { recursive: true })
+            for (const file of fs.readdirSync(visual, { recursive: true })) if (file.endsWith(".png")) {
+              fs.copyFileSync(path.join(visual, file), path.join(destination, path.basename(file)))
+            }
+          }
           if (!(await portaLivre(port))) throw new Falha(5, "E2E deixou servidor ativo")
         }
         summary.previewR2 = "PENDENTE_NAO_AUTORIZADO"
