@@ -1,0 +1,30 @@
+[
+  {
+    "name": "candidate-e2e-frg001",
+    "exitCode": 0
+  },
+  {
+    "name": "candidate-e2e-fluxo006",
+    "exitCode": 0
+  },
+  {
+    "name": "candidate-e2e-misto",
+    "exitCode": 1
+  },
+  {
+    "name": "candidate-e2e-datas",
+    "exitCode": 1
+  },
+  {
+    "name": "base-build-current",
+    "exitCode": 0
+  },
+  {
+    "name": "base-e2e-misto",
+    "exitCode": 1
+  },
+  {
+    "name": "base-e2e-datas",
+    "exitCode": 1
+  }
+]

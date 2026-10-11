@@ -1,0 +1,10 @@
+{
+  "command": [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "--check",
+    "C:\\Projetos\\omni-gestao-ops-v4-frg-002\\docs\\execution-tracks\\ops-v4-financeiro-retirada-garantia\\review-rev8\\audit-review-coverage.mjs"
+  ],
+  "exitCode": 1,
+  "scope": "Auditor local ignorado, antes de qualquer R; nenhum fonte/teste funcional modificado",
+  "at": "2026-10-11T03:04:24.173Z"
+}

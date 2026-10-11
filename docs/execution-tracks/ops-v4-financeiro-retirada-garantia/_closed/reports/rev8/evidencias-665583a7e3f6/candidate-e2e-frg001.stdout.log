@@ -1,0 +1,11 @@
+
+Running 6 tests using 1 worker
+
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (3.2s)
+  ok 2 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:146:5 › E1 (A1) — rascunho + título liquidado: pagamento registrado, pendência comercial separada, entrega bloqueada, ação para o orçamento; nada é gravado (35.6s)
+  ok 3 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:186:5 › E2 (A2) — aprovado + pago: quitado nas superfícies; retirante, data e custódia antes de confirmar; impressão do termo sobre modal com Escape (33.2s)
+  ok 4 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:223:5 › E3 — sem pagamento e orçamento em rascunho: nenhuma Conta a Receber, sem zero inventado, ação comercial (23.2s)
+  ok 5 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:234:5 › E4 (R1-3) — quitado legado com estorno sem referência válida: nenhuma superfície mostra quitação; nada é gravado (31.5s)
+  ok 6 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-001.spec.ts:256:5 › E5 (R3-P1) — título de R$ 420 com duas baixas de R$ 300: Entrega, Financeiro e rail não afirmam R$ 600 nem saldo; nada é gravado (38.0s)
+
+  6 passed (2.8m)

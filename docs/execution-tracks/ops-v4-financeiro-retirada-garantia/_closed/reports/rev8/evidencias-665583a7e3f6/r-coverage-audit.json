@@ -1,0 +1,1599 @@
+{
+  "sha": "665583a7e3f6f1b9552b4c56b3d6a3dd97299167",
+  "reviewSession": "1ae5fc8e-ca83-4d47-84dd-cfbd4f3df5dc",
+  "model": "claude-opus-5-5",
+  "rawSHA256": "71bcdfe05034b6ee9f5e8d3dad697443d3abf9d3d6ce4949709aafe0f29f34e0",
+  "manifestSHA256": "05d1499b2544ff38589222d5bb1a88f937afbb1bb39160b01a99ce8d36a5c61c",
+  "zipSHA256": "1552742edf104c00005a402c9a291aa3c0bef2258922878eaef161957ffdabc3",
+  "requiredFiles": 85,
+  "completeFiles": 79,
+  "complete": false,
+  "hashVerified": true,
+  "hashRuns": [
+    {
+      "id": "toolu_01ThwBXiSTBExxW8GMKQY1nx",
+      "command": "node C:/Projetos/omni-gestao-ops-v4-frg-002/docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/verify-rev8-packet.mjs C:/Projetos/omni-gestao-ops-v4-frg-002/docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/packet-seal.json",
+      "content": "{\"status\":\"PASS\",\"sha\":\"665583a7e3f6f1b9552b4c56b3d6a3dd97299167\",\"files\":320,\"bytes\":4231094,\"gitBindings\":50,\"manifestSHA256\":\"05d1499b2544ff38589222d5bb1a88f937afbb1bb39160b01a99ce8d36a5c61c\",\"zipSHA256\":\"1552742edf104c00005a402c9a291aa3c0bef2258922878eaef161957ffdabc3\"}"
+    }
+  ],
+  "failedReads": [],
+  "files": [
+    {
+      "path": "diffs/components/operacoes-v3/hooks/use-pdv-servico-v3.ts.patch",
+      "source": "components/operacoes-v3/hooks/use-pdv-servico-v3.ts",
+      "category": "diff-funcional-integral",
+      "lines": 563,
+      "covered": 563,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01TJ8U2p9H1zskRjTjC956hJ",
+          "offset": 1,
+          "numLines": 427,
+          "inputLimit": 427
+        },
+        {
+          "id": "toolu_01B6itfL3FcuTUp4njL5rjXV",
+          "offset": 428,
+          "numLines": 136,
+          "inputLimit": 136
+        }
+      ]
+    },
+    {
+      "path": "diffs/components/operacoes-v3/pages/AtendimentoRapidoV3.tsx.patch",
+      "source": "components/operacoes-v3/pages/AtendimentoRapidoV3.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 236,
+      "covered": 236,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_0153ejHF2WEUK9cyZspNnssV",
+          "offset": 1,
+          "numLines": 237,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/components/operacoes-v3/pages/PdvServicoV3.tsx.patch",
+      "source": "components/operacoes-v3/pages/PdvServicoV3.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 648,
+      "covered": 648,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01KCqKbBESx8EA3uFE7v117t",
+          "offset": 1,
+          "numLines": 465,
+          "inputLimit": 465
+        },
+        {
+          "id": "toolu_01G11N8HZzUu3CGk7VVdfPHG",
+          "offset": 466,
+          "numLines": 183,
+          "inputLimit": 183
+        }
+      ]
+    },
+    {
+      "path": "diffs/components/operacoes-v4-preview/parts/FormalizarAprovacaoV4.tsx.patch",
+      "source": "components/operacoes-v4-preview/parts/FormalizarAprovacaoV4.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 249,
+      "covered": 249,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01MPmzdgRGHvGjuRCc5yBhKR",
+          "offset": 1,
+          "numLines": 250,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx.patch",
+      "source": "components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 461,
+      "covered": 461,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_019JhTCAz3K2tVsg56vyc7gR",
+          "offset": 1,
+          "numLines": 300,
+          "inputLimit": 300
+        },
+        {
+          "id": "toolu_01EVfMKGnBf2euLWSbBW3EAV",
+          "offset": 301,
+          "numLines": 161,
+          "inputLimit": 161
+        }
+      ]
+    },
+    {
+      "path": "diffs/components/operacoes-v4-preview/parts/stages/OrcamentoDecisaoCluster.tsx.patch",
+      "source": "components/operacoes-v4-preview/parts/stages/OrcamentoDecisaoCluster.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 288,
+      "covered": 288,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01Dw4n1tPrNMJbwwjfNrgCwt",
+          "offset": 1,
+          "numLines": 289,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/components/operacoes-v4-preview/preview-honesty.test.ts.patch",
+      "source": "components/operacoes-v4-preview/preview-honesty.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 156,
+      "covered": 0,
+      "complete": false,
+      "missing": [
+        {
+          "offset": 1,
+          "limit": 156
+        }
+      ],
+      "reads": []
+    },
+    {
+      "path": "fontes/components/operacoes-v4-preview/preview-honesty.test.ts.txt",
+      "source": "components/operacoes-v4-preview/preview-honesty.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 3843,
+      "covered": 0,
+      "complete": false,
+      "missing": [
+        {
+          "offset": 1,
+          "limit": 3843
+        }
+      ],
+      "reads": []
+    },
+    {
+      "path": "diffs/components/operacoes-v4-preview/use-v4-preview.ts.patch",
+      "source": "components/operacoes-v4-preview/use-v4-preview.ts",
+      "category": "diff-funcional-integral",
+      "lines": 977,
+      "covered": 977,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01W9uPWgAcz6rKXLeAMueYUB",
+          "offset": 1,
+          "numLines": 425,
+          "inputLimit": 425
+        },
+        {
+          "id": "toolu_01LEfQsY4QkQ6ykgt4iov3rZ",
+          "offset": 426,
+          "numLines": 473,
+          "inputLimit": 473
+        },
+        {
+          "id": "toolu_01VnRqgmUzVxJZhcaZbEKYJt",
+          "offset": 899,
+          "numLines": 79,
+          "inputLimit": 79
+        }
+      ]
+    },
+    {
+      "path": "diffs/e2e/specs/operacoes-v4-fluxo-curto-006.spec.ts.patch",
+      "source": "e2e/specs/operacoes-v4-fluxo-curto-006.spec.ts",
+      "category": "diff-funcional-integral",
+      "lines": 68,
+      "covered": 68,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01WaH3KGB3fNWFki3LpyceVi",
+          "offset": 1,
+          "numLines": 69,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/e2e/specs/operacoes-v4-fluxo-curto-006.spec.ts.txt",
+      "source": "e2e/specs/operacoes-v4-fluxo-curto-006.spec.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 528,
+      "covered": 528,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01V8hNusw5z1E3EWZ24D8L5Y",
+          "offset": 1,
+          "numLines": 447,
+          "inputLimit": 447
+        },
+        {
+          "id": "toolu_01WQJ49m35ffReojyoKyRgSo",
+          "offset": 448,
+          "numLines": 81,
+          "inputLimit": 81
+        }
+      ]
+    },
+    {
+      "path": "diffs/e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts.patch",
+      "source": "e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts",
+      "category": "diff-funcional-integral",
+      "lines": 490,
+      "covered": 490,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01D5HgN7dZzBTRhjkiUjWDyT",
+          "offset": 1,
+          "numLines": 400,
+          "inputLimit": 400
+        },
+        {
+          "id": "toolu_01GQZpg9xBAXGSUZFS6zfpeU",
+          "offset": 401,
+          "numLines": 90,
+          "inputLimit": 90
+        }
+      ]
+    },
+    {
+      "path": "fontes/e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts.txt",
+      "source": "e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 484,
+      "covered": 484,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01Dc1XmarLE1JbHN812sSfHV",
+          "offset": 1,
+          "numLines": 402,
+          "inputLimit": 402
+        },
+        {
+          "id": "toolu_0154JkkBx7jsdHDQUzAwhbQ8",
+          "offset": 403,
+          "numLines": 82,
+          "inputLimit": 82
+        }
+      ]
+    },
+    {
+      "path": "diffs/e2e/specs/ops-v4-recebimento-misto-paridade-001.spec.ts.patch",
+      "source": "e2e/specs/ops-v4-recebimento-misto-paridade-001.spec.ts",
+      "category": "diff-funcional-integral",
+      "lines": 69,
+      "covered": 69,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_013Fe9MpaVUPA23ufoqryu6E",
+          "offset": 1,
+          "numLines": 70,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/e2e/specs/ops-v4-recebimento-misto-paridade-001.spec.ts.txt",
+      "source": "e2e/specs/ops-v4-recebimento-misto-paridade-001.spec.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 140,
+      "covered": 140,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01YMJe6m3vHjhPN2Fs7VM1B8",
+          "offset": 1,
+          "numLines": 141,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/elegibilidade-comercial.test.ts.patch",
+      "source": "lib/operacoes-v3/elegibilidade-comercial.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 166,
+      "covered": 166,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01SEvdaxeJa79uiuxoLf4wev",
+          "offset": 1,
+          "numLines": 167,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v3/elegibilidade-comercial.test.ts.txt",
+      "source": "lib/operacoes-v3/elegibilidade-comercial.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 160,
+      "covered": 160,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01L9bYpDgjVuBT6Vu9VdwGLH",
+          "offset": 1,
+          "numLines": 161,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/elegibilidade-comercial.ts.patch",
+      "source": "lib/operacoes-v3/elegibilidade-comercial.ts",
+      "category": "diff-funcional-integral",
+      "lines": 163,
+      "covered": 163,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01J5FqEXQfVds8a6D3XVaeES",
+          "offset": 1,
+          "numLines": 164,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts.patch",
+      "source": "lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 255,
+      "covered": 255,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_018HZABDzdA8qVP6R4zqCWsd",
+          "offset": 1,
+          "numLines": 256,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts.txt",
+      "source": "lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 249,
+      "covered": 249,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_0157W6jThei5KwWbj97UCP1z",
+          "offset": 1,
+          "numLines": 250,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/formalizacao-aprovacao-actions.ts.patch",
+      "source": "lib/operacoes-v3/formalizacao-aprovacao-actions.ts",
+      "category": "diff-funcional-integral",
+      "lines": 206,
+      "covered": 206,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01MciqkcBbTEBPejn1SQELBg",
+          "offset": 1,
+          "numLines": 207,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/formalizacao-aprovacao-model.test.ts.patch",
+      "source": "lib/operacoes-v3/formalizacao-aprovacao-model.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 322,
+      "covered": 322,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01W3cPSDSDo3yeE3vbQ7K2Xd",
+          "offset": 1,
+          "numLines": 323,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v3/formalizacao-aprovacao-model.test.ts.txt",
+      "source": "lib/operacoes-v3/formalizacao-aprovacao-model.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 316,
+      "covered": 316,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01AvkcjFpuZXzEr8wN5g4sv1",
+          "offset": 1,
+          "numLines": 317,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/formalizacao-aprovacao-model.ts.patch",
+      "source": "lib/operacoes-v3/formalizacao-aprovacao-model.ts",
+      "category": "diff-funcional-integral",
+      "lines": 603,
+      "covered": 603,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01DiHHesj7MWdWhq34MUTRWx",
+          "offset": 1,
+          "numLines": 500,
+          "inputLimit": 500
+        },
+        {
+          "id": "toolu_01DpXUL3Z3eDj69TnYXMMVEh",
+          "offset": 501,
+          "numLines": 103,
+          "inputLimit": 103
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/orcamento-actions.test.ts.patch",
+      "source": "lib/operacoes-v3/orcamento-actions.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 353,
+      "covered": 353,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01VKr7zkqCEHpshyWy1oC7Cx",
+          "offset": 1,
+          "numLines": 354,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v3/orcamento-actions.test.ts.txt",
+      "source": "lib/operacoes-v3/orcamento-actions.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 644,
+      "covered": 644,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01Veuz9u8jnZvvu4nRAoRKXY",
+          "offset": 1,
+          "numLines": 468,
+          "inputLimit": 468
+        },
+        {
+          "id": "toolu_01G4wGUja3QmzPuBoqbQYzwU",
+          "offset": 469,
+          "numLines": 176,
+          "inputLimit": 176
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/orcamento-actions.ts.patch",
+      "source": "lib/operacoes-v3/orcamento-actions.ts",
+      "category": "diff-funcional-integral",
+      "lines": 392,
+      "covered": 392,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01VBdgjDdLe7DDLBtZ9N3pno",
+          "offset": 1,
+          "numLines": 393,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/os-conta-receber-unica.test.ts.patch",
+      "source": "lib/operacoes-v3/os-conta-receber-unica.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 144,
+      "covered": 144,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01Gytc27pmmGA3stNATUvNfW",
+          "offset": 1,
+          "numLines": 145,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v3/os-conta-receber-unica.test.ts.txt",
+      "source": "lib/operacoes-v3/os-conta-receber-unica.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 603,
+      "covered": 603,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01YHzkfYwe3PncpPXeYds3S5",
+          "offset": 1,
+          "numLines": 500,
+          "inputLimit": 500
+        },
+        {
+          "id": "toolu_01CD142jvs9SYnB6HFYH8Syi",
+          "offset": 501,
+          "numLines": 103,
+          "inputLimit": 103
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/pdv-servico-a-prazo.test.ts.patch",
+      "source": "lib/operacoes-v3/pdv-servico-a-prazo.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 124,
+      "covered": 124,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_012yGCrUsA7WzZDjYRfgXGe1",
+          "offset": 1,
+          "numLines": 125,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v3/pdv-servico-a-prazo.test.ts.txt",
+      "source": "lib/operacoes-v3/pdv-servico-a-prazo.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 242,
+      "covered": 242,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01TsnXeRpgU35fA6CzWYEP5M",
+          "offset": 1,
+          "numLines": 243,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/pdv-servico-actions.ts.patch",
+      "source": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "category": "diff-funcional-integral",
+      "lines": 1001,
+      "covered": 1001,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_018U1YNN25eWjyQXHe8W6LFX",
+          "offset": 1,
+          "numLines": 446,
+          "inputLimit": 446
+        },
+        {
+          "id": "toolu_01DEqtS1oDg1uiDMJDXapQ91",
+          "offset": 447,
+          "numLines": 455,
+          "inputLimit": 455
+        },
+        {
+          "id": "toolu_01Fv2u4WJidbwAtRpL7batjn",
+          "offset": 902,
+          "numLines": 100,
+          "inputLimit": 100
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/recebimento-misto-model.test.ts.patch",
+      "source": "lib/operacoes-v3/recebimento-misto-model.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 57,
+      "covered": 57,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01UwBJVC4xqU9XdydntZphLJ",
+          "offset": 1,
+          "numLines": 58,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v3/recebimento-misto-model.test.ts.txt",
+      "source": "lib/operacoes-v3/recebimento-misto-model.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 380,
+      "covered": 380,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01W8ekcY9qLRZd7n25phAMSC",
+          "offset": 1,
+          "numLines": 381,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/recebimento-misto-model.ts.patch",
+      "source": "lib/operacoes-v3/recebimento-misto-model.ts",
+      "category": "diff-funcional-integral",
+      "lines": 354,
+      "covered": 354,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01P5cFuKDRptLR8KiuKTXTyw",
+          "offset": 1,
+          "numLines": 355,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v3/recebimento-misto-service.ts.patch",
+      "source": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "category": "diff-funcional-integral",
+      "lines": 391,
+      "covered": 391,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_015H5xyUvQ9VRbWCeZxG5qre",
+          "offset": 1,
+          "numLines": 392,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v4/receber-pagamento-form.test.ts.patch",
+      "source": "lib/operacoes-v4/receber-pagamento-form.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 88,
+      "covered": 88,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_0124FVUo9B7oJ1p9NpGjceda",
+          "offset": 1,
+          "numLines": 89,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v4/receber-pagamento-form.test.ts.txt",
+      "source": "lib/operacoes-v4/receber-pagamento-form.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 165,
+      "covered": 165,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_018ySzBzgwhXvyVyhZX8MNgh",
+          "offset": 1,
+          "numLines": 166,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v4/situacao-atendimento-v4.test.ts.patch",
+      "source": "lib/operacoes-v4/situacao-atendimento-v4.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 149,
+      "covered": 149,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01MG2p5MAceVWD4ZJoo393cF",
+          "offset": 1,
+          "numLines": 150,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/lib/operacoes-v4/situacao-atendimento-v4.test.ts.txt",
+      "source": "lib/operacoes-v4/situacao-atendimento-v4.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 209,
+      "covered": 209,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01Rw3eKPPR1U9ZZ8KCmGojb9",
+          "offset": 1,
+          "numLines": 210,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/lib/operacoes-v4/situacao-atendimento-v4.ts.patch",
+      "source": "lib/operacoes-v4/situacao-atendimento-v4.ts",
+      "category": "diff-funcional-integral",
+      "lines": 127,
+      "covered": 127,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01GkvAew1NQxmMopm7hvboQH",
+          "offset": 1,
+          "numLines": 128,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-datas-retroativas-001/v3-e-correcao.test.tsx.patch",
+      "source": "test/ops-datas-retroativas-001/v3-e-correcao.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 131,
+      "covered": 131,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01AAiHaAXAC9wbyQ5rdwGiC9",
+          "offset": 1,
+          "numLines": 132,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-datas-retroativas-001/v3-e-correcao.test.tsx.txt",
+      "source": "test/ops-datas-retroativas-001/v3-e-correcao.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 336,
+      "covered": 336,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01VvY5bmJaaK3jTPVgxREGSo",
+          "offset": 1,
+          "numLines": 337,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts.patch",
+      "source": "test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts",
+      "category": "diff-funcional-integral",
+      "lines": 74,
+      "covered": 74,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01DkkdXzkb4zkeSJKKXht3hr",
+          "offset": 1,
+          "numLines": 75,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts.txt",
+      "source": "test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 1713,
+      "covered": 1713,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01QkQGQ6CCJtVwbWkrQ5d5nd",
+          "offset": 1,
+          "numLines": 500,
+          "inputLimit": 500
+        },
+        {
+          "id": "toolu_01GsMcYBtDb2Bkf5a6babzxA",
+          "offset": 501,
+          "numLines": 473,
+          "inputLimit": 473
+        },
+        {
+          "id": "toolu_01LZtezHeUgCjvKtFPB9pktn",
+          "offset": 974,
+          "numLines": 424,
+          "inputLimit": 424
+        },
+        {
+          "id": "toolu_01C9gBnzL3jzuewWcThTuGPb",
+          "offset": 1398,
+          "numLines": 316,
+          "inputLimit": 316
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v3-recebimento-misto/hardening-p1.test.tsx.patch",
+      "source": "test/ops-v3-recebimento-misto/hardening-p1.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 172,
+      "covered": 172,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01VXHW3qDqwd8o6wxgJ9EJ6N",
+          "offset": 1,
+          "numLines": 173,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v3-recebimento-misto/hardening-p1.test.tsx.txt",
+      "source": "test/ops-v3-recebimento-misto/hardening-p1.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 376,
+      "covered": 376,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01HkGcQF2qDkvZ9rPYBA1k1u",
+          "offset": 1,
+          "numLines": 377,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx.patch",
+      "source": "test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 402,
+      "covered": 402,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01BxaCq2CnWjPTGUAPcVxJaz",
+          "offset": 1,
+          "numLines": 402,
+          "inputLimit": 402
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx.txt",
+      "source": "test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 507,
+      "covered": 507,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01FrthZqbRH4bfxNuc6HDn6d",
+          "offset": 1,
+          "numLines": 457,
+          "inputLimit": 457
+        },
+        {
+          "id": "toolu_01RNT4kaje7T3JY6hi1GcKNx",
+          "offset": 458,
+          "numLines": 50,
+          "inputLimit": 50
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-001/projecao.pg.test.ts.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-001/projecao.pg.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 98,
+      "covered": 98,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01VMouMZhPbxd2Pd8NBpXod8",
+          "offset": 1,
+          "numLines": 99,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-001/projecao.pg.test.ts.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-001/projecao.pg.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 227,
+      "covered": 227,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01N4bK2KMMtsunAvevQ6Zd4M",
+          "offset": 1,
+          "numLines": 228,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-001/superficies.test.tsx.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-001/superficies.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 68,
+      "covered": 68,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01B4nXJYg3cD9PXLpHiBHisF",
+          "offset": 1,
+          "numLines": 69,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-001/superficies.test.tsx.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-001/superficies.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 723,
+      "covered": 723,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01P8qcShAbcnsqRwXshhsgEG",
+          "offset": 1,
+          "numLines": 399,
+          "inputLimit": 399
+        },
+        {
+          "id": "toolu_01KKGTKMMzQBV32sXqcyuUMg",
+          "offset": 400,
+          "numLines": 324,
+          "inputLimit": 324
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 236,
+      "covered": 236,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01UeGLQRnHfsf1bbiUnr9mBb",
+          "offset": 1,
+          "numLines": 237,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 230,
+      "covered": 230,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01HV3xeBdExdSWdasE8Q1Xkk",
+          "offset": 1,
+          "numLines": 231,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/fluxo-hook.test.tsx.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/fluxo-hook.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 307,
+      "covered": 307,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01ReUz9cyuyYpnF3avLCPCh3",
+          "offset": 1,
+          "numLines": 308,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/fluxo-hook.test.tsx.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/fluxo-hook.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 301,
+      "covered": 301,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_019F6dnYGEjEXdXkNF6h3h1G",
+          "offset": 1,
+          "numLines": 302,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 73,
+      "covered": 73,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01GXqVYPoF96RKz8MYdvTVGB",
+          "offset": 1,
+          "numLines": 74,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 67,
+      "covered": 67,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01FAfx3L2B9kEUQDp6qYKS4s",
+          "offset": 1,
+          "numLines": 68,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/motivo-v3.test.tsx.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/motivo-v3.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 48,
+      "covered": 48,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01LVGVTCZaz3RT6z9agxndeE",
+          "offset": 1,
+          "numLines": 49,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/motivo-v3.test.tsx.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/motivo-v3.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 42,
+      "covered": 42,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01D7XumZAKhQFVRowjwocnJC",
+          "offset": 1,
+          "numLines": 43,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/motivo-v4.test.tsx.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/motivo-v4.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 162,
+      "covered": 162,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_014rtQAKN7rdeqAt9Q94ymba",
+          "offset": 1,
+          "numLines": 163,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/motivo-v4.test.tsx.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/motivo-v4.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 156,
+      "covered": 156,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_012RxJw5hv6G8oxnAvZ8VMRF",
+          "offset": 1,
+          "numLines": 157,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/qa-e2e.mjs.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/qa-e2e.mjs",
+      "category": "diff-funcional-integral",
+      "lines": 51,
+      "covered": 51,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01RXyCjeXVcuMTFazVjVa9AP",
+          "offset": 1,
+          "numLines": 52,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/qa-e2e.mjs.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/qa-e2e.mjs",
+      "category": "teste-ou-runner-integral",
+      "lines": 45,
+      "covered": 45,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_0133cYsPeZaqiQuk8VfXvrYr",
+          "offset": 1,
+          "numLines": 46,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/qa-rev8-regressoes.mjs.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8-regressoes.mjs",
+      "category": "diff-funcional-integral",
+      "lines": 42,
+      "covered": 42,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01C5vp3H2Dx7yNCt3bGU6uQr",
+          "offset": 1,
+          "numLines": 43,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/qa-rev8-regressoes.mjs.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8-regressoes.mjs",
+      "category": "teste-ou-runner-integral",
+      "lines": 36,
+      "covered": 36,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_017FEhP2MqK98R6GkRqGpxfA",
+          "offset": 1,
+          "numLines": 37,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+      "category": "diff-funcional-integral",
+      "lines": 87,
+      "covered": 87,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_016gRUUUC6B7TMPRoK3PpNvX",
+          "offset": 1,
+          "numLines": 88,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+      "category": "teste-ou-runner-integral",
+      "lines": 81,
+      "covered": 81,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_017ieRD1wj9e8fd42watwTbU",
+          "offset": 1,
+          "numLines": 82,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/qa-server.mjs.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/qa-server.mjs",
+      "category": "diff-funcional-integral",
+      "lines": 22,
+      "covered": 22,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01RqfFAgQqGVwPGpHhCrhr3o",
+          "offset": 1,
+          "numLines": 23,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/qa-server.mjs.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/qa-server.mjs",
+      "category": "teste-ou-runner-integral",
+      "lines": 16,
+      "covered": 16,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01PdtUfB4wjf6mYVGgCHSxce",
+          "offset": 1,
+          "numLines": 17,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts",
+      "category": "diff-funcional-integral",
+      "lines": 1018,
+      "covered": 1018,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01MtkxP93m8wrUBsDuXoLXNR",
+          "offset": 1,
+          "numLines": 429,
+          "inputLimit": 429
+        },
+        {
+          "id": "toolu_01HijHsKNqqZHyj5nVf2Y7LL",
+          "offset": 430,
+          "numLines": 354,
+          "inputLimit": 354
+        },
+        {
+          "id": "toolu_012KgMjx8Tck8jcittGr5xNi",
+          "offset": 784,
+          "numLines": 235,
+          "inputLimit": 235
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 1012,
+      "covered": 1012,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01FdaHe5DVZ1TYHhVHofCTXo",
+          "offset": 1,
+          "numLines": 435,
+          "inputLimit": 435
+        },
+        {
+          "id": "toolu_01XV2aF4N5QQaxDmBpUA8pgk",
+          "offset": 436,
+          "numLines": 353,
+          "inputLimit": 353
+        },
+        {
+          "id": "toolu_01BXqNQqpvJzVpvmsG9wHGNK",
+          "offset": 789,
+          "numLines": 224,
+          "inputLimit": 224
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/superficies.test.tsx.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/superficies.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 566,
+      "covered": 566,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01MshrNvgYRA17g8T6SVY4M7",
+          "offset": 1,
+          "numLines": 369,
+          "inputLimit": 369
+        },
+        {
+          "id": "toolu_0113GmPx4ARGvb3A8hAE8Ec6",
+          "offset": 370,
+          "numLines": 197,
+          "inputLimit": 197
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/superficies.test.tsx.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/superficies.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 560,
+      "covered": 560,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01Eqib53ji4PbHFFF3iLf9bB",
+          "offset": 1,
+          "numLines": 372,
+          "inputLimit": 372
+        },
+        {
+          "id": "toolu_01Ar6kA6ATJixrU8HsmgiZ8R",
+          "offset": 373,
+          "numLines": 188,
+          "inputLimit": 188
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/vitest-fluxo002-pg.config.mjs.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/vitest-fluxo002-pg.config.mjs",
+      "category": "diff-funcional-integral",
+      "lines": 11,
+      "covered": 11,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01LBSzrvbqrBupxJ3RmeMhqR",
+          "offset": 1,
+          "numLines": 12,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/vitest-fluxo002-pg.config.mjs.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/vitest-fluxo002-pg.config.mjs",
+      "category": "teste-ou-runner-integral",
+      "lines": 5,
+      "covered": 5,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_0129rgaUp99GUE9ihnN1VWbq",
+          "offset": 1,
+          "numLines": 6,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts.patch",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts",
+      "category": "diff-funcional-integral",
+      "lines": 37,
+      "covered": 37,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01D7wK21qHW5ygZgC9FuHg5B",
+          "offset": 1,
+          "numLines": 38,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts.txt",
+      "source": "test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts",
+      "category": "teste-ou-runner-integral",
+      "lines": 31,
+      "covered": 31,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_016fZNw5hr451UDwSQmCgu1o",
+          "offset": 1,
+          "numLines": 32,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx.patch",
+      "source": "test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 66,
+      "covered": 66,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_01PcoiC6tvQnmPHiEetSup7B",
+          "offset": 1,
+          "numLines": 67,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "fontes/test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx.txt",
+      "source": "test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 287,
+      "covered": 287,
+      "complete": true,
+      "missing": [],
+      "reads": [
+        {
+          "id": "toolu_012Rx3WNfmcYX9vACpF9kxhE",
+          "offset": 1,
+          "numLines": 288,
+          "inputLimit": null
+        }
+      ]
+    },
+    {
+      "path": "diffs/test/ops-v4-fluxo-curto-006/retirada.test.tsx.patch",
+      "source": "test/ops-v4-fluxo-curto-006/retirada.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 237,
+      "covered": 0,
+      "complete": false,
+      "missing": [
+        {
+          "offset": 1,
+          "limit": 237
+        }
+      ],
+      "reads": []
+    },
+    {
+      "path": "fontes/test/ops-v4-fluxo-curto-006/retirada.test.tsx.txt",
+      "source": "test/ops-v4-fluxo-curto-006/retirada.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 851,
+      "covered": 0,
+      "complete": false,
+      "missing": [
+        {
+          "offset": 1,
+          "limit": 851
+        }
+      ],
+      "reads": []
+    },
+    {
+      "path": "diffs/test/ops-v4-recebimento-misto/receber-pagamento.test.tsx.patch",
+      "source": "test/ops-v4-recebimento-misto/receber-pagamento.test.tsx",
+      "category": "diff-funcional-integral",
+      "lines": 233,
+      "covered": 0,
+      "complete": false,
+      "missing": [
+        {
+          "offset": 1,
+          "limit": 233
+        }
+      ],
+      "reads": []
+    },
+    {
+      "path": "fontes/test/ops-v4-recebimento-misto/receber-pagamento.test.tsx.txt",
+      "source": "test/ops-v4-recebimento-misto/receber-pagamento.test.tsx",
+      "category": "teste-ou-runner-integral",
+      "lines": 237,
+      "covered": 0,
+      "complete": false,
+      "missing": [
+        {
+          "offset": 1,
+          "limit": 237
+        }
+      ],
+      "reads": []
+    }
+  ]
+}

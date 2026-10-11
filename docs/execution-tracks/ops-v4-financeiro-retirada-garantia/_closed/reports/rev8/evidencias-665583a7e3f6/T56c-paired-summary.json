@@ -1,0 +1,13 @@
+{
+  "purpose": "Resolver variante de espera não observada no trio base; execuções únicas sequenciais após demais provas, sem alterar teste/dependência e sem retries até verde.",
+  "results": [
+    {
+      "name": "base-T56c-paired",
+      "exitCode": 1
+    },
+    {
+      "name": "candidate-T56c-paired",
+      "exitCode": 1
+    }
+  ]
+}
