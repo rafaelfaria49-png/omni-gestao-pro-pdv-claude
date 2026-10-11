@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 7,
+  "plan_rev": 8,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -33,6 +33,9 @@ SEQUENCIAIS, um GOAL ativo por vez. Não autoriza reconstruir o ERP, criar V5,
 excluir V3, alterar outros HUBs, nem executar qualquer ação real na
 OS-2026-00025 (regularização, forma de pagamento, pagamento, entrega,
 assinatura, garantia, estoque).
+
+Revisão 8: decisão humana CODEX — GOAL 002 / REVISÃO 8 de 10/10/2026,
+restrita ao P2-1 da R Anthropic em cd69780; ver decisão vigente abaixo.
 
 ## Revisões do plano
 
@@ -365,3 +368,24 @@ Redesenho de SLA ("ATRASADA" em OS pronta/paga — defeito de apresentação
 registrado; nova política exige contrato próprio), CRM, NPS, automação
 WhatsApp, Fiscal, Marketplace, corretivo de forma de pagamento, saneamento
 massivo, auditorias de peças alternativas e de estorno duplicado.
+
+## Decisão vigente — revisão 8 / GOAL 002
+
+O proprietário autoriza reativar o MESMO 002, C4/ALTO/OpenAI excepcional,
+para corrigir apenas o transporte de comercial={codigo,destino} na
+recusa imediata, persistência, replay e UI V3/V4. Allowlist, gates vazios,
+read_budget 52 e test_command permanecem; testes novos entram em configs
+e E2E já ratificados. Contrato e provas detalhados na Revisão 8 do 002.
+
+Preservado literalmente o BLOCKED rev7 de bfded919, por transporte dos
+artefatos Git oficiais após prova de prefixo compatível, sem cherry-pick
+de produto nem evento duplicado. Derivados pela CLI. Governança isolada
+sobre main 55effa0, incluindo Pessoas #260; PR apenas documental antes
+de integrar main por merge normal na branch funcional preservada.
+
+R Anthropic nova e efetiva, diff A–E completo, testes integrais, logs e
+hashes; APPROVE/P0=P1=P2=0. Cinco P3 permanecem enumerados sem corretivo
+automático. Só depois check/R: close separado, PR #262, checks, merge
+normal e deployments conferidos. Sem nova autorização de desbloqueio
+além desta revisão. GOAL001 DONE; GOAL003 READY plan_rev 8 com a mesma
+família/dependência, não iniciar; 008 e datas/Caixa retroativo fora.

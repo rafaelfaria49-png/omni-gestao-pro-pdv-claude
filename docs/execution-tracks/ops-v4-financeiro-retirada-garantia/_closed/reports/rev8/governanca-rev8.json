@@ -1,0 +1,27 @@
+{
+  "decision": "CODEX — GOAL 002 / REVISÃO 8, proprietário, 10/10/2026",
+  "mainBase": "55effa0d8830ccc1e380bd227881e74f22bc8483",
+  "officialBlock": "bfded919c70b5dcb3f6325999e9ad3cee5027454",
+  "blockMaterialization": "96a9a3784fcb333dcac2657f451114422759b7bc",
+  "officialLedgerSHA256": "c94dd6ea9c84646e242bf0fb02c0f1db1e7f539d9b16c29a03425a675c80f26f",
+  "prefixByteExact": true,
+  "newOfficialEvents": 1,
+  "previousAttemptsPreserved": true,
+  "goal002MetaOnly": [
+    "status",
+    "plan_rev"
+  ],
+  "goal003OnlyPlanRev": true,
+  "unchanged": [
+    "allowlist",
+    "gates_liberados",
+    "read_budget",
+    "test_command",
+    "class",
+    "risk_tier",
+    "familia_executor",
+    "revisao_independente",
+    "reversibilidade"
+  ],
+  "productInGovernance": false
+}

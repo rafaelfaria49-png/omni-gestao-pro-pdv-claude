@@ -1,9 +1,9 @@
 {
   "aep": "1.0-R2",
   "track": "pessoas",
-  "status": "PAUSED",
+  "status": "RUNNING",
   "risk_tier": "ALTO",
-  "current_goal": null,
+  "current_goal": "PESSOAS-DP-FRONTEND-CADASTRO-001B",
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {

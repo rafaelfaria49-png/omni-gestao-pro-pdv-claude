@@ -4,10 +4,10 @@
   "id": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Recebimento só sobre preço comercialmente elegível e formalização controlada de aprovação pendente",
-  "status": "BLOCKED",
+  "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 7,
+  "plan_rev": 8,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-002",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/elegibilidade-comercial.test.ts lib/operacoes-v3/formalizacao-aprovacao-model.test.ts lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts lib/operacoes-v3/payment-model.test.ts lib/operacoes-v3/pdv-servico-a-prazo.test.ts lib/operacoes-v3/recebimento-misto-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/atendimento-rapido-model.test.ts lib/operacoes-v3/delivery-financial-guard.test.ts lib/operacoes-v3/os-conta-receber-unica.test.ts lib/operacoes-v4/receber-pagamento-form.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/financial-projection.test.ts lib/operacoes-v4/financeiro-v4.test.ts lib/operacoes-v4/proxima-acao-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[12]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v3-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-recebimento-misto/vitest.config.ts && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts test/ops-datas-retroativas-001/v3-e-correcao.test.tsx && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts --retries=0 --workers=1",
@@ -363,3 +363,62 @@ testes, auditoria e pacote imutável, preservar branch e preparar PR draft
 AGUARDANDO R INDEPENDENTE — NÃO MERGEAR. Não executar close, merge de
 produto ou publicação antes de APPROVE real, P0=P1=P2=0 e todos os gates.
 GOAL 003 e OPS-V4-FLUXO-CURTO-008 não são iniciados.
+
+## Revisão 8 (10/10/2026) — motivo comercial da recusa imediata
+
+Decisão explícita do proprietário: CODEX — GOAL 002 / REVISÃO 8, recebida
+em 10/10/2026. Reativa este MESMO GOAL como READY, tentativa 1/3 da revisão
+8; mantém a autorização excepcional OpenAI/Codex C4 ALTO, reversibilidade
+baixa e R obrigatória de outra família. Não altera allowlist, gates,
+read_budget, test_command, executors.json nem os contratos A–E.
+
+O BLOCKED rev7 produzido oficialmente em bfded919 foi transportado sem
+sintetizar evento: ledger Git byte a byte com prefixo compatível,
+blocked_by=gate, motivo e previous_attempts 3/3 preservados. SHA funcional
+revisado cd69780; Anthropic REQUEST_CHANGES P0=0/P1=0/P2=1/P3=5. ZIP e
+relatórios rev7 permanecem imutáveis; novas evidências identificadas rev8.
+
+Único corretivo novo: P2-1 — conservar comercial={codigo,destino} oriundo
+da elegibilidade canônica na resposta imediata, registro durável, replay
+e hook/telas V3/V4. Validar propriedades próprias, tipos e pares
+canônicos; ausência/invalidez usa fallback seguro. Não inferir pelo texto
+nem aceitar URLs do cliente. Motivo acompanha a prova terminal e nunca
+converte INCERTO em terminal. Replay devolve motivo ORIGINAL, inclusive
+após alteração comercial; antigas recusas sem metadados não recebem
+backfill. Legado conserva erro estruturado quando os metadados existem.
+
+Preservar identidade, fingerprints, locks, savepoint, tombstone, fence,
+reconhecimento, replay anterior à elegibilidade e os dois P1 da rev7.
+UI deve isolar por loja/OS/confirmação, inclusive A–B–A, resposta tardia,
+sucesso/recusa não comercial posterior, reload/reabertura. Destinos usam
+navegação existente, busy/foco/rascunhos; não aprovam nem recebem e não
+contornam pendência incerta ou bloqueiam para sempre uma nova tentativa
+legítima após resolução.
+
+Provas obrigatórias nos paths já permitidos (coletados pelo test_command
+inalterado): vermelho em cd69780; cinco classes B1 e matriz canônica
+completa (rascunho/enviado inclusos), resposta/persistência/replay real e
+legado, mudança comercial posterior, metadados ausentes/inválidos,
+identidade/conflito, fotos financeiras e ausência de duplicação da recusa;
+montados hook/V3/V4 com navegação/isolamento e E2E do destino em build de
+produção LOCAL sem retries. Reexecutar proteção P1 e regressões completas
+em bancos descartáveis verificados. Registrar logs integrais, exits,
+comandos, contagens e SHAs, não só totais históricos.
+
+Nova R de outra família sobre SHA congelado e pacote rev8 com hashes,
+lendo diff funcional A–E completo e trechos integrais de todos os testes
+alterados/adicionados; conferir T56c/base/candidato, logs/contagens e
+manifesto. Declarar inspeção, evidências, reexecuções, arquivos e limites.
+APPROVE exige P0=P1=P2=0 e os cinco P3 explicitamente documentados. Não
+corrigir/reclassificar P3 automaticamente; risco bloqueante novo exige
+parada específica. Sem R disponível: terminar código/testes e preservar
+PR #262 draft, sem close. Respeitar teto 3/3; nenhum desbloqueio futuro
+pré-autorizado.
+
+Publicação autorizada somente após check e R aprovados: close oficial
+separado, PR #262 existente, checks e merge normal; main avançando exige
+integração e revalidação/R proporcionais. Sem force/reset/stash/rebase/
+squash/bypass ou mutações reais. GOAL003 acompanha plan_rev 8 com família,
+objetivo e dependência preservados, sem iniciar; 008 e datas/Caixa
+retroativo ficam fora. Smoke produtivo somente leitura autorizada ou
+OWNER_PENDING_AUTH.
