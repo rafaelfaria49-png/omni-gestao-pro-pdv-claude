@@ -500,15 +500,12 @@ for (const [codigo, destino] of [["PRECO_AUSENTE", "comercial"], ["APROVACAO_COM
     await sheet.getByRole("button", { name: /^Registrar R\$\s100,00/ }).click(); const aviso = page.getByTestId("recusa-comercial");
     await expect(aviso).toContainText(destino === "financeiro" ? "os valores desta OS não conferem entre si" : semPreco ? "esta OS não tem preço aprovado" : "o orçamento ainda não foi aprovado", IDA_E_VOLTA);
     await expect(ticketFinanceiro(page)).toHaveAttribute("aria-current", "page");
-    if (semPreco) {
-      // A releitura autoritativa não oferece saldo inventado: mantém a orientação fora do sheet.
-      await expect(page.getByText("Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber.", { exact: true })).toBeVisible();
-      await expect(sheet).toBeHidden(); await expect(aviso.getByRole("button", { name: "Conferir orçamento →" })).toBeEnabled();
-    } else {
-      await expect(sheet).toBeVisible();
-      await expect(sheet.getByLabel("Observação (opcional)")).toHaveValue("Rascunho misto N2 preservado"); await expect(sheet.getByLabel("Valor da linha 1")).toHaveValue("100");
-      await expect(sheet.getByRole("button", { name: /^Registrar R\$\s100,00/ })).toBeEnabled();
-    }
+    // A projeção autoritativa relida bloqueia a cobrança: o motivo original
+    // continua disponível fora do sheet, sem inventar saldo ou navegar.
+    if (semPreco) await expect(page.getByText("Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber.")).toBeVisible();
+    else await expect(page.getByText(/Recebimento bloqueado:/)).toBeVisible();
+    await expect(sheet).toBeHidden();
+    await expect(aviso.getByRole("button", { name: destino === "comercial" ? "Conferir orçamento →" : "Conferir cobrança →" })).toBeEnabled();
     const recusas = (await linhaOS(prisma, os.id)).payload.recebimentoMistoRecusasV3 as Array<{ comercial: { codigo: string; destino: string } }>;
     expect(recusas).toHaveLength(1); expect(recusas[0]!.comercial).toEqual({ codigo, destino });
     expect(JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id), timeline: (await linhaOS(prisma, os.id)).payload.timeline })).toBe(antesFinanceiro);
