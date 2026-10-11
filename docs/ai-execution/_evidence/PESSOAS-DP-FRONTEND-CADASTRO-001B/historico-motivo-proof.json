@@ -1,0 +1,12 @@
+{
+  "proof": "SYNTHETIC_DTO_BOUNDARY_ONLY",
+  "source_sha256": "f6a74418d36a2ac7796293e954ef93d236dd9e1e1e5fd1be7325312ba9509577",
+  "viewRemuneracao": false,
+  "salarioBase": null,
+  "remuneracaoOculta": true,
+  "salary_sentinel_leaked_in_motivo": true,
+  "database_accessed": false,
+  "production_accessed": false,
+  "integration_test": false,
+  "official_runner": "NOT_RUN"
+}
