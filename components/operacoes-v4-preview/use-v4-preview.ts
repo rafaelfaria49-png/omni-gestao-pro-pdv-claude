@@ -508,6 +508,23 @@ export function buildVals(
   // seleção = fechada nesta — nunca mostra/age sobre a OS errada.
   const chaveSuperficies = JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]);
   const noAlvoSuperficies = !!st.selectedOsId && st.alvoSuperficies === chaveSuperficies;
+  const cargaDatasEstabelecida =
+    !!ctx.lojaAtivaId && !!st.selectedOsId && ctx.detailCarregada === true &&
+    !ctx.detailLoading && !ctx.detailError && !!realOS &&
+    realOS.id === st.selectedOsId && realOS.storeId === ctx.lojaAtivaId;
+  const entradaComRascunhoDatas = ctx.entradaComRascunho === true ||
+    ctx.rascunhos?.sujo((ctx.lojaAtivaId ?? "") + "::" + (st.selectedOsId ?? "")) === true;
+  const openCorrigirDatas = () => {
+    if (!cargaDatasEstabelecida) {
+      notify("Aguarde o carregamento completo da OS antes de corrigir datas.");
+      return;
+    }
+    if (entradaComRascunhoDatas) {
+      notify("Salve ou descarte as alterações da Entrada antes de corrigir datas.");
+      return;
+    }
+    update({ corrigirDatas: true, alvoCorrecaoDatas: chaveSuperficies, menu: null });
+  };
   const financialStatusLabel = financialProjection
     ? FINANCIAL_STATUS_LABEL[financialProjection.financialStatus]
     : ctx.financialProjection.loading
@@ -745,7 +762,7 @@ export function buildVals(
   if (status === "aguardando_peca")
     moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => go("execucao") });
   // Correção auditada de datas (só datas — nunca refaz entrega, cobrança ou estoque).
-  if (realOS) moreItems.push({ icon: "📅", label: "Corrigir datas", color: C.body, onClick: () => update({ corrigirDatas: true }) });
+  if (realOS) moreItems.push({ icon: "📅", label: "Corrigir datas", color: C.body, onClick: openCorrigirDatas });
   if (status !== "entregue" && status !== "cancelada")
     moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => update({ cancelamentoOS: true }) });
 
@@ -1574,11 +1591,15 @@ export function buildVals(
     },
     cancelamentoOSOpen: st.cancelamentoOS,
     // ---- Corrigir datas (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001) ----
-    corrigirDatasOpen: !!st.corrigirDatas && !!ctx.realOS,
-    openCorrigirDatas: () => update({ corrigirDatas: true }),
-    closeCorrigirDatas: () => update({ corrigirDatas: false }),
+    // Exige carga completa ao abrir; refresh da mesma OS preserva a janela
+    // e a baseline CAS já capturada pelo editor auditado.
+    corrigirDatasOpen:
+      !!st.corrigirDatas && st.alvoCorrecaoDatas === chaveSuperficies &&
+      realOS?.id === st.selectedOsId && realOS?.storeId === ctx.lojaAtivaId && !entradaComRascunhoDatas,
+    openCorrigirDatas,
+    closeCorrigirDatas: () => update({ corrigirDatas: false, alvoCorrecaoDatas: null }),
     onDatasCorrigidas: () => {
-      update({ corrigirDatas: false });
+      update({ corrigirDatas: false, alvoCorrecaoDatas: null });
       ctx.reloadOrdens();
       ctx.reloadDetail();
       notify("Datas corrigidas.");
@@ -1996,6 +2017,13 @@ export function useV4Preview(): V4Vals {
       prev.alvoSuperficies == null || prev.alvoSuperficies === chaveSuperficiesSelecao
         ? prev
         : { ...prev, receberPagamento: false, recibo: false, estornoRecebimento: false, docPrint: null, alvoSuperficies: null },
+    );
+  }, [chaveSuperficiesSelecao]);
+  useEffect(() => {
+    setSt((prev) =>
+      prev.alvoCorrecaoDatas == null || prev.alvoCorrecaoDatas === chaveSuperficiesSelecao
+        ? prev
+        : { ...prev, corrigirDatas: false, alvoCorrecaoDatas: null },
     );
   }, [chaveSuperficiesSelecao]);
 

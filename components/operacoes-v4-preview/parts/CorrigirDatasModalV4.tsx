@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { OrdemServico } from "@/types/os";
 import { C } from "../tokens";
 import { useLojaAtiva } from "@/lib/loja-ativa";
@@ -24,13 +25,19 @@ export function CorrigirDatasModalV4({
   onClose: () => void;
   onSalvo: () => void;
 }) {
-  if (!open || !os) return null;
-  return <Conteudo key={os.id} os={os} onClose={onClose} onSalvo={onSalvo} />;
+  const { lojaAtivaId } = useLojaAtiva();
+  if (!open || !os || !lojaAtivaId || (os.storeId && os.storeId !== lojaAtivaId)) return null;
+  return <Conteudo key={JSON.stringify([lojaAtivaId, os.id])} os={os} storeId={lojaAtivaId} onClose={onClose} onSalvo={onSalvo} />;
 }
 
-function Conteudo({ os, onClose, onSalvo }: { os: OrdemServico; onClose: () => void; onSalvo: () => void }) {
-  const { lojaAtivaId } = useLojaAtiva();
-  const estado = useCorrigirDatas({ os, storeId: lojaAtivaId ?? null, onSalvo });
+function Conteudo({ os, storeId, onClose, onSalvo }: { os: OrdemServico; storeId: string; onClose: () => void; onSalvo: () => void }) {
+  // Uma resposta da janela desmontada não fecha nem recarrega a seleção nova.
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => { montado.current = false; };
+  }, []);
+  const estado = useCorrigirDatas({ os, storeId, onSalvo: () => { if (montado.current) onSalvo(); } });
   const impacto = resumoImpactoGarantia(estado.garantia);
 
   return (
@@ -60,6 +67,9 @@ function Conteudo({ os, onClose, onSalvo }: { os: OrdemServico; onClose: () => v
         </>
       }
     >
+      <p style={{ margin: "0 0 12px", fontSize: 12, lineHeight: 1.5, color: C.bodySoft }}>
+        A correção de datas operacionais não altera automaticamente pagamento, Caixa ou fechamento financeiro.
+      </p>
       <div style={atendGradeDatas}>
         <CorrigirDatasCampos
           estado={estado}

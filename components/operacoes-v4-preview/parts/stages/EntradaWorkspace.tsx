@@ -27,7 +27,7 @@ import { toDadosBasicosInput, type DadosBasicosEditorV4 } from "@/lib/operacoes-
 import type { V4Vals } from "../../use-v4-preview";
 import type { AcaoSaidaRascunhoV4 } from "../../use-entrada-draft-guard";
 import { EntradaSectionRail } from "./EntradaSectionRail";
-import { EntradaSections } from "./EntradaSections";
+import { DatasAtendimentoSection, EntradaSections } from "./EntradaSections";
 import styles from "./entrada-workspace.module.css";
 
 /** Metadados publicados com o rascunho (R04): sujeira + ações de saída. */
@@ -422,6 +422,8 @@ export function EntradaWorkspace({
               O servidor atualizou {conflitos.join(", ")} enquanto você editava. Revise os valores ou descarte suas alterações antes de salvar.
             </div>
           ) : null}
+
+          <DatasAtendimentoSection v={v} rascunhoSujo={algumDirty} busy={busy} />
 
           <div
             className={styles.formBody}
