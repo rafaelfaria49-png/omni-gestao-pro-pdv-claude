@@ -61,7 +61,7 @@ Uma futura autorização de execução precisa fornecer enquadramento AEP compat
 - [Matriz A/B/C](../../../decisions/drafts/FISCAL_025_A_PERSISTENCE_MATRIX.md): comparação e perfis de storage.
 - [Auditoria sanitizada](../../../ai-execution/_evidence/FISCAL-025-A-ARCHITECTURE/AUDIT.md): evidência por arquivo/linha, testes futuros, validações e limites.
 - [Pacote de solicitação de R](../../../ai-execution/_evidence/FISCAL-025-A-ARCHITECTURE/REVIEW_REQUEST.md): escopo e critérios, sem XML/credenciais.
-- O resultado atribuível ao revisor será registrado separadamente após a solicitação; nenhum APPROVE próprio Codex.
+- [Estado das solicitações de R](../../../ai-execution/_evidence/FISCAL-025-A-ARCHITECTURE/REVIEW_STATUS.md): Google e alternativa Anthropic recusaram por acesso/cota; nenhum parecer independente ou APPROVE próprio Codex.
 
 ## Invariantes e ponto de parada
 

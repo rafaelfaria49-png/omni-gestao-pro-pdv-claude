@@ -99,7 +99,7 @@ Verificações documentais da sessão; resultados finais de publicação/revisã
 - git diff --check inicial: PASS; checagem do delta completo staged/commit e scan por padrões serão repetidos antes da publicação.
 - Integridade de links/tabelas/blocos, escopo e hashes dos arquivos canônicos: ver registro final de validação desta pasta.
 - Typecheck/build/testes fiscais/DB/storage: NOT_RUN, por mudança exclusivamente documental; sem dependências ou execução funcional.
-- R independente: solicitada ao publicar, sempre com SHA completo; nenhum parecer do plano é reciclado como aprovação desta fase.
+- R independente: duas solicitações tentadas com SHA completo; Google recusou auth/trust e Anthropic retornou limite semanal 429. Nenhum parecer obtido; [registro sanitizado](REVIEW_STATUS.md). Nenhum parecer do plano é reciclado como aprovação desta fase.
 - CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT: não alterados, pois não houve mudança funcional nem decisão humana de arquitetura.
 
 SECRET_SCAN limita-se aos arquivos novos/delta, por padrões; não é atestado sobre todo o repositório. Revisão/publicação contém somente documentos sanitizados, sem XML, dados integrais, segredos, credentials ou URLs privadas.
