@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import type { OrdemServico } from "@/types/os";
 import { useEffect } from "react";
+import userEvent from "@testing-library/user-event";
 
 const h = vi.hoisted(() => ({ loja: "loja-qa-datas" as string | null, reloadDetail: () => {} }));
 const m = vi.hoisted(() => ({
   listOrdens: vi.fn(), getOrdem: vi.fn(), corrigirDatas: vi.fn(),
   receber: vi.fn(), entregar: vi.fn(),
+  acessorios: vi.fn(), dadosBasicos: vi.fn(), checklist: vi.fn(),
 }));
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: h.loja }), registrarGuardaTrocaLojaV4: vi.fn() }));
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null }) }));
@@ -34,17 +36,17 @@ vi.mock("@/lib/operacoes-v3/pdv-servico-actions", () => ({
 vi.mock("@/lib/operacoes-v3/entrega-actions", () => ({
   registrarEntregaV3: m.entregar, salvarAssinaturaRetiradaV3: vi.fn(), adicionarFotoSaidaV3: vi.fn(), removerFotoSaidaV3: vi.fn(),
 }));
-vi.mock("@/lib/operacoes-v3/workspace-actions", () => ({ salvarDiagnosticoV3: vi.fn(), salvarChecklistEntradaV3: vi.fn() }));
+vi.mock("@/lib/operacoes-v3/workspace-actions", () => ({ salvarDiagnosticoV3: vi.fn(), salvarChecklistEntradaV3: m.checklist }));
 vi.mock("@/lib/operacoes-v3/orcamento-actions", () => ({
   gerarOrcamentoDaOS: vi.fn(), salvarOrcamentoV3: vi.fn(), corrigirOrcamentoV3: vi.fn(),
   aprovarOrcamentoV3: vi.fn(), recusarOrcamentoV3: vi.fn(),
 }));
 vi.mock("@/lib/operacoes-v3/status-actions", () => ({ aplicarTransicaoStatusV3: vi.fn() }));
 vi.mock("@/lib/operacoes-v3/prova-entrada-actions", () => ({
-  salvarIdentificacaoV3: vi.fn(), salvarProvaEntradaV3: vi.fn(), salvarAcessoriosEntradaV3: vi.fn(),
+  salvarIdentificacaoV3: vi.fn(), salvarProvaEntradaV3: vi.fn(), salvarAcessoriosEntradaV3: m.acessorios,
   adicionarFotoEntradaV3: vi.fn(), removerFotoEntradaV3: vi.fn(), salvarAssinaturaClienteV3: vi.fn(),
 }));
-vi.mock("@/lib/operacoes-v3/dados-basicos-actions", () => ({ salvarDadosBasicosOSV3: vi.fn() }));
+vi.mock("@/lib/operacoes-v3/dados-basicos-actions", () => ({ salvarDadosBasicosOSV3: m.dadosBasicos }));
 vi.mock("@/lib/operacoes-v3/producao-actions", () => ({
   atribuirTecnicoV3: vi.fn(), definirPrioridadeV3: vi.fn(), definirLocalFisicoV3: vi.fn(),
   adicionarObservacaoInternaV3: vi.fn(), salvarChecklistTecnicoV3: vi.fn(),
@@ -408,5 +410,186 @@ describe("Novo acesso -> hook real -> editor auditado existente", () => {
     await act(async () => p.resolve(servidor[0]!));
     act(() => r.result.current.openCorrigirDatas());
     expect(r.result.current.corrigirDatasOpen).toBe(true);
+  });
+});
+
+function bloquearTodosOsAcessos() {
+  expect((datas().getByRole("button", { name: "Corrigir datas" }) as HTMLButtonElement).disabled).toBe(true);
+  act(() => atual.openCorrigirDatas());
+  act(() => atual.moreItems.find((item) => item.label === "Corrigir datas")!.onClick());
+  expect(atual.corrigirDatasOpen).toBe(false);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(atual.toast).toContain("Aguarde o salvamento");
+  expect(m.corrigirDatas).not.toHaveBeenCalled();
+}
+
+describe("Corretivo P2: ocupação compartilhada da Entrada", () => {
+  it("P2-2: registrar nenhum acessório sem sujeira bloqueia botão, comando e menu até terminar", async () => {
+    const p = deferred<undefined>();
+    m.acessorios.mockReturnValueOnce(p.promise);
+    await montar();
+    fireEvent.click(screen.getByRole("button", { name: /Segurança/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Registrar: nenhum acessório recebido" }));
+    await waitFor(() => expect(m.acessorios).toHaveBeenCalledTimes(1));
+    try {
+      expect(atual.rascunhos!.sujo(LOJA + "::a")).toBe(false);
+      expect(datas().getByRole("status").textContent).toContain("Aguarde o salvamento");
+      bloquearTodosOsAcessos();
+    } finally { await act(async () => p.resolve(undefined)); }
+    await waitFor(() => expect((datas().getByRole("button", { name: "Corrigir datas" }) as HTMLButtonElement).disabled).toBe(false));
+    act(() => atual.moreItems.find((item) => item.label === "Corrigir datas")!.onClick());
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("comando já capturado recusa salvamento sem rascunho no mesmo evento, antes do render", async () => {
+    const p = deferred<undefined>();
+    m.checklist.mockReturnValueOnce(p.promise);
+    await montar();
+    const comando = atual.moreItems.find((item) => item.label === "Corrigir datas")!.onClick;
+    let salvamento!: Promise<boolean>;
+    act(() => { salvamento = atual.salvarChecklist([]); comando(); });
+    try {
+      expect(atual.rascunhos!.sujo(LOJA + "::a")).toBe(false);
+      expect(atual.corrigirDatasOpen).toBe(false);
+      bloquearTodosOsAcessos();
+    } finally { await act(async () => { p.resolve(undefined); await salvamento; }); }
+    abrir();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("rascunho que volta ao original durante o salvamento continua bloqueado e preservado", async () => {
+    const p = deferred<undefined>();
+    m.dadosBasicos.mockReturnValueOnce(p.promise);
+    await montar();
+    recepcao();
+    const campo = screen.getByLabelText("Observações internas (opcional)") as HTMLTextAreaElement;
+    fireEvent.change(campo, { target: { value: "Anotação em gravação" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() => expect(m.dadosBasicos).toHaveBeenCalledTimes(1));
+    fireEvent.change(campo, { target: { value: "" } });
+    try {
+      expect(atual.rascunhos!.sujo(LOJA + "::a")).toBe(false);
+      bloquearTodosOsAcessos();
+      expect(campo.value).toBe("");
+    } finally { await act(async () => p.resolve(undefined)); }
+    await waitFor(() => expect(atual.entradaOcupada).toBe(false));
+    expect(campo.value).toBe("");
+    // A gravação confirmou o snapshot enviado. A edição posterior continua
+    // preservada como rascunho; só a ocupação deve ser liberada neste ponto.
+    expect(datas().getByRole("status").textContent).toContain("Salve ou descarte");
+    fireEvent.change(campo, { target: { value: "Anotação em gravação" } });
+    await waitFor(() => expect((datas().getByRole("button", { name: "Corrigir datas" }) as HTMLButtonElement).disabled).toBe(false));
+    abrir();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("operações simultâneas no mesmo alvo só liberam após a última resposta", async () => {
+    const a = deferred<undefined>();
+    const b = deferred<undefined>();
+    m.acessorios.mockReturnValueOnce(a.promise);
+    m.checklist.mockReturnValueOnce(b.promise);
+    await montar();
+    let pa!: Promise<boolean>;
+    let pb!: Promise<boolean>;
+    act(() => {
+      pa = atual.salvarAcessorios([], { registrarSemAlteracao: true });
+      pb = atual.salvarChecklist([]);
+    });
+    await act(async () => { a.resolve(undefined); await pa; });
+    await waitFor(() => expect(atual.cargaEntradaEstabelecida).toBe(true));
+    try { bloquearTodosOsAcessos(); }
+    finally { await act(async () => { b.resolve(undefined); await pb; }); }
+    await waitFor(() => expect((datas().getByRole("button", { name: "Corrigir datas" }) as HTMLButtonElement).disabled).toBe(false));
+    abrir();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("recusa do servidor libera a ocupação e preserva o rascunho para revisão", async () => {
+    m.dadosBasicos.mockRejectedValueOnce(new Error("Permissão recusada no servidor"));
+    await montar();
+    recepcao();
+    const campo = screen.getByLabelText("Observações internas (opcional)") as HTMLTextAreaElement;
+    fireEvent.change(campo, { target: { value: "Preservar após recusa" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() => expect(m.dadosBasicos).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeTruthy());
+    expect(campo.value).toBe("Preservar após recusa");
+    expect(datas().getByRole("status").textContent).toContain("Salve ou descarte");
+    fireEvent.change(campo, { target: { value: "" } });
+    await waitFor(() => expect((datas().getByRole("button", { name: "Corrigir datas" }) as HTMLButtonElement).disabled).toBe(false));
+    abrir();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it.each(["os", "loja"])("ocupação pertence ao alvo: troca de %s e resposta antiga não liberam a operação nova", async (troca) => {
+    const a = deferred<undefined>();
+    const b = deferred<undefined>();
+    m.acessorios.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+    const r = await montar();
+    let pa!: Promise<boolean>;
+    let pb!: Promise<boolean>;
+    act(() => { pa = atual.salvarAcessorios([], { registrarSemAlteracao: true }); });
+    if (troca === "os") act(() => atual.selectOS(servidor[1]!, "entrada"));
+    else { h.loja = "loja-qa-outra"; r.rerender(<Harness />); }
+    await waitFor(() => expect(atual.cargaEntradaEstabelecida).toBe(true));
+    abrir();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancelar" }));
+    act(() => { pb = atual.salvarAcessorios([], { registrarSemAlteracao: true }); });
+    await act(async () => { a.resolve(undefined); await pa; });
+    try { bloquearTodosOsAcessos(); }
+    finally { await act(async () => { b.resolve(undefined); await pb; }); }
+    await waitFor(() => expect((datas().getByRole("button", { name: "Corrigir datas" }) as HTMLButtonElement).disabled).toBe(false));
+    abrir();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("A→B→A conserva a ocupação original até a action terminar", async () => {
+    const p = deferred<undefined>();
+    m.acessorios.mockReturnValueOnce(p.promise);
+    await montar();
+    let salvamento!: Promise<boolean>;
+    act(() => { salvamento = atual.salvarAcessorios([], { registrarSemAlteracao: true }); });
+    act(() => atual.selectOS(servidor[1]!, "entrada"));
+    await waitFor(() => expect(atual.cargaEntradaEstabelecida).toBe(true));
+    act(() => atual.selectOS(servidor[0]!, "entrada"));
+    await waitFor(() => expect(atual.cargaEntradaEstabelecida).toBe(true));
+    try { bloquearTodosOsAcessos(); }
+    finally { await act(async () => { p.resolve(undefined); await salvamento; }); }
+    await waitFor(() => expect((datas().getByRole("button", { name: "Corrigir datas" }) as HTMLButtonElement).disabled).toBe(false));
+    abrir();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+});
+
+describe("Corretivo P2: recuperação de foco e listeners", () => {
+  it("recupera foco externo, contém teclado ocupado e remove os listeners ao desmontar", async () => {
+    const p = deferred<unknown>();
+    m.corrigirDatas.mockReturnValueOnce(p.promise);
+    const r = await montar();
+    const acesso = datas().getByRole("button", { name: "Corrigir datas" });
+    acesso.focus();
+    abrir();
+    preencherEntrada();
+    const dialog = screen.getByRole("dialog");
+    await userEvent.setup().click(within(dialog).getByRole("button", { name: "Salvar correção" }));
+    expect((within(dialog).getByRole("button", { name: "Salvando…" }) as HTMLButtonElement).disabled).toBe(true);
+    acesso.focus();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    // Exercita o fallback mesmo se nenhum controle puder receber Tab.
+    dialog.querySelectorAll<HTMLInputElement>("button,input,textarea,select").forEach((c) => { c.disabled = true; });
+    fireEvent.keyDown(document.body, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(dialog);
+    r.unmount();
+    const externo = document.createElement("button");
+    document.body.append(externo);
+    externo.focus();
+    expect(document.activeElement).toBe(externo);
+    expect(fireEvent.keyDown(externo, { key: "Tab" })).toBe(true);
+    expect(fireEvent.keyDown(externo, { key: "Escape" })).toBe(true);
+    externo.remove();
+    await act(async () => p.resolve({ ok: true, diff: [], garantia: null, os: {} }));
   });
 });

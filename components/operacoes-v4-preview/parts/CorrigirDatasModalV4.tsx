@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { OrdemServico } from "@/types/os";
 import { C } from "../tokens";
 import { useLojaAtiva } from "@/lib/loja-ativa";
@@ -42,12 +42,19 @@ function Conteudo({ os, storeId, onClose, onSalvo }: { os: OrdemServico; storeId
   // Tab permanece no editor para não alterar o rascunho atrás da janela.
   const raizRef = useRef<HTMLDivElement>(null);
   const janelaRef = useRef({ onClose, busy: estado.busy });
-  useEffect(() => { janelaRef.current = { onClose, busy: estado.busy }; }, [onClose, estado.busy]);
-  useEffect(() => {
+  useLayoutEffect(() => { janelaRef.current = { onClose, busy: estado.busy }; }, [onClose, estado.busy]);
+  useLayoutEffect(() => {
     const raiz = raizRef.current;
     if (!raiz) return;
+    const janela = raiz.querySelector<HTMLElement>('[role="dialog"]');
+    if (!janela) return;
+    janela.tabIndex = -1;
     const anterior = document.activeElement as HTMLElement | null;
-    raiz.querySelector<HTMLInputElement>("input")?.focus();
+    const focarDentro = () => (raiz.querySelector<HTMLElement>(CONTROLES_FOCO) ?? janela).focus();
+    (raiz.querySelector<HTMLInputElement>("input") ?? janela).focus();
+    const conterFoco = (event: FocusEvent) => {
+      if (!raiz.contains(event.target as Node)) focarDentro();
+    };
     const teclado = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -56,11 +63,16 @@ function Conteudo({ os, storeId, onClose, onSalvo }: { os: OrdemServico; storeId
         return;
       }
       if (event.key !== "Tab") return;
-      const controles = raiz.querySelectorAll<HTMLElement>(":is(button, input, textarea, select):enabled");
+      const controles = raiz.querySelectorAll<HTMLElement>(CONTROLES_FOCO);
       const primeiro = controles[0];
       const ultimo = controles[controles.length - 1];
-      if (!primeiro || !ultimo) return;
-      const fora = !raiz.contains(document.activeElement);
+      if (!primeiro || !ultimo) {
+        event.preventDefault();
+        janela.focus();
+        return;
+      }
+      const fora = !raiz.contains(document.activeElement) || document.activeElement === janela ||
+        (document.activeElement instanceof HTMLElement && document.activeElement.matches(":disabled"));
       if (event.shiftKey && (document.activeElement === primeiro || fora)) {
         event.preventDefault();
         ultimo.focus();
@@ -69,12 +81,23 @@ function Conteudo({ os, storeId, onClose, onSalvo }: { os: OrdemServico; storeId
         primeiro.focus();
       }
     };
-    raiz.addEventListener("keydown", teclado);
+    // O navegador pode mover o foco ao body ao desabilitar Salvar. O evento
+    // seguinte precisa ser contido mesmo quando nasce fora da raiz da janela.
+    document.addEventListener("keydown", teclado, true);
+    document.addEventListener("focusin", conterFoco, true);
     return () => {
-      raiz.removeEventListener("keydown", teclado);
+      document.removeEventListener("keydown", teclado, true);
+      document.removeEventListener("focusin", conterFoco, true);
       if (anterior?.isConnected) anterior.focus();
     };
   }, []);
+  useLayoutEffect(() => {
+    const raiz = raizRef.current;
+    const ativo = document.activeElement;
+    if (raiz && (!raiz.contains(ativo) || (ativo instanceof HTMLElement && ativo.matches(":disabled")))) {
+      (raiz.querySelector<HTMLElement>(CONTROLES_FOCO) ?? raiz.querySelector<HTMLElement>('[role="dialog"]'))?.focus();
+    }
+  }, [estado.busy]);
 
   const modal = (
     <AtendimentoModalShell
@@ -170,6 +193,8 @@ function Conteudo({ os, storeId, onClose, onSalvo }: { os: OrdemServico; storeId
   );
   return <div ref={raizRef} style={{ display: "contents" }}>{modal}</div>;
 }
+
+const CONTROLES_FOCO = ':is(button, input, textarea, select):enabled:not([tabindex="-1"]):not([type="hidden"])';
 
 const ghost: React.CSSProperties = {
   height: 36,

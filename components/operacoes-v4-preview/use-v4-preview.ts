@@ -31,6 +31,7 @@ import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes
 import { useLojaAtiva, registrarGuardaTrocaLojaV4 } from "@/lib/loja-ativa";
 import { useGuardaRascunhos, saidaEtapaExigeGuardaV4, type GuardaRascunhosV4 } from "./use-entrada-draft-guard";
 import type { RascunhoEntradaV4 } from "./parts/stages/EntradaWorkspace";
+import { useEntradaOcupadaV4, type OcupacaoEntradaV4 } from "./use-entrada-ocupada";
 import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
 // Actions REAIS reaproveitadas da V3 (sem criar backend novo) — slices OPS-V4-ORCAMENTO-REAL-002 / -ENTRADA-RECEPCAO-REAL-003.
@@ -232,6 +233,8 @@ export interface V4DataCtx {
   /** R04: guarda de rascunhos da Entrada (memória da sessão, por loja+OS).
    *  Opcional por compatibilidade (ausente = saídas imediatas, sem guarda). */
   rascunhos?: GuardaRascunhosV4<RascunhoEntradaV4>;
+  /** Estado vivo por loja+OS, compartilhado pelo acesso visível e pelo menu. */
+  ocupacaoEntrada?: Pick<OcupacaoEntradaV4, "ocupada">;
   reloadOrdens: () => void;
   /** Recarrega o detalhe da OS selecionada após uma escrita. */
   reloadDetail: () => void;
@@ -514,9 +517,16 @@ export function buildVals(
     realOS.id === st.selectedOsId && realOS.storeId === ctx.lojaAtivaId;
   const entradaComRascunhoDatas = ctx.entradaComRascunho === true ||
     ctx.rascunhos?.sujo((ctx.lojaAtivaId ?? "") + "::" + (st.selectedOsId ?? "")) === true;
+  const entradaOcupada = ctx.ocupacaoEntrada?.ocupada(ctx.lojaAtivaId, st.selectedOsId) === true;
   const openCorrigirDatas = () => {
     if (!cargaDatasEstabelecida) {
       notify("Aguarde o carregamento completo da OS antes de corrigir datas.");
+      return;
+    }
+    // Consulta viva: também recusa comandos capturados antes do render que
+    // publica o busy (registro explícito pode não produzir rascunho sujo).
+    if (ctx.ocupacaoEntrada?.ocupada(ctx.lojaAtivaId, st.selectedOsId)) {
+      notify("Aguarde o salvamento da Entrada antes de corrigir datas.");
       return;
     }
     if (entradaComRascunhoDatas) {
@@ -1735,6 +1745,7 @@ export function buildVals(
     // R04: guarda de rascunhos da Entrada (memória da sessão, por loja+OS).
     // Sempre presente no hook real; fixtures legados podem omitir no ctx.
     rascunhos: ctx.rascunhos ?? null,
+    entradaOcupada,
     clearSelection: () => update({ selectedOsId: null, focus: false, left: true }),
     // lista real para o seletor
     ordens: ctx.ordens,
@@ -1948,6 +1959,7 @@ export function useV4Preview(): V4Vals {
   // V4); ponte opt-in para a troca de loja (lib/loja-ativa) com limpeza ao
   // desmontar e ao perder a loja.
   const rascunhos = useGuardaRascunhos<RascunhoEntradaV4>();
+  const ocupacaoEntrada = useEntradaOcupadaV4();
   useEffect(() => {
     registrarGuardaTrocaLojaV4({
       temRascunhoSujo: () => rascunhos.temSujo(),
@@ -2678,26 +2690,34 @@ export function useV4Preview(): V4Vals {
   );
 
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
+  const runEntradaWrite = useCallback(async (
+    fn: (sid: string, osId: string) => Promise<unknown>,
+    mensagem: string,
+  ) => {
+    const finalizar = ocupacaoEntrada.iniciar(lojaAtivaId, selectedOsId);
+    try { return await runWrite(fn, mensagem); }
+    finally { finalizar(); }
+  }, [ocupacaoEntrada, lojaAtivaId, selectedOsId, runWrite]);
   // (salvarAcessorios vive após `realOS` — usa a seleção atual como baseline.)
   const salvarChecklist = useCallback(
     (itens: ChecklistEntradaItemV3[]) =>
-      runWrite((sid, osId) => salvarChecklistEntradaV3(sid, osId, itens), "Checklist salvo."),
-    [runWrite],
+      runEntradaWrite((sid, osId) => salvarChecklistEntradaV3(sid, osId, itens), "Checklist salvo."),
+    [runEntradaWrite],
   );
   const adicionarFotoEntrada = useCallback(
     (input: AdicionarFotoEntradaInputV3) =>
-      runWrite((sid, osId) => adicionarFotoEntradaV3(sid, osId, input), "Foto da entrada adicionada."),
-    [runWrite],
+      runEntradaWrite((sid, osId) => adicionarFotoEntradaV3(sid, osId, input), "Foto da entrada adicionada."),
+    [runEntradaWrite],
   );
   const removerFotoEntrada = useCallback(
     (fotoId: string) =>
-      runWrite((sid, osId) => removerFotoEntradaV3(sid, osId, fotoId), "Foto da entrada removida."),
-    [runWrite],
+      runEntradaWrite((sid, osId) => removerFotoEntradaV3(sid, osId, fotoId), "Foto da entrada removida."),
+    [runEntradaWrite],
   );
   const salvarAssinaturaCliente = useCallback(
     (dataUrl: string) =>
-      runWrite((sid, osId) => salvarAssinaturaClienteV3(sid, osId, dataUrl), "Assinatura da entrada salva."),
-    [runWrite],
+      runEntradaWrite((sid, osId) => salvarAssinaturaClienteV3(sid, osId, dataUrl), "Assinatura da entrada salva."),
+    [runEntradaWrite],
   );
 
   // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
@@ -2721,12 +2741,12 @@ export function useV4Preview(): V4Vals {
       const seed = seedEntradaEditor(realOS).acessorios;
       const explicito = opcoes?.registrarSemAlteracao === true;
       if (!explicito && !fatiaTocada(acessorios, seed)) return Promise.resolve(true);
-      return runWrite(
+      return runEntradaWrite(
         (sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios, seed),
         explicito ? "Acessórios registrados." : "Acessórios salvos.",
       );
     },
-    [runWrite, realOS],
+    [runEntradaWrite, realOS],
   );
 
   // R02: somente tocados viajam, sempre com baseline (input × semente do
@@ -2739,7 +2759,7 @@ export function useV4Preview(): V4Vals {
       const t = patchTocadoIdentificacao(input, seed);
       if (Object.keys(t.valores).length === 0 && t.limpar.length === 0) return Promise.resolve(true);
       const esperados = Object.keys(t.esperados).length > 0 ? t.esperados : undefined;
-      return runWrite(
+      return runEntradaWrite(
         (sid, osId) =>
           salvarIdentificacaoV3(
             sid,
@@ -2751,7 +2771,7 @@ export function useV4Preview(): V4Vals {
         "Identificação salva.",
       );
     },
-    [runWrite, realOS],
+    [runEntradaWrite, realOS],
   );
   // OPS-V4-FLUXO-CURTO-004: `confirmarEstadoFisico` registra o estado exibido
   // (inclusive "tudo íntegro", igual à semente) com baseline — só assim o
@@ -2786,12 +2806,12 @@ export function useV4Preview(): V4Vals {
         avarias: incluir.includes("avarias") ? input.avarias : [],
         credenciais: { ...t.valores },
       };
-      return runWrite(
+      return runEntradaWrite(
         (sid, osId) => salvarProvaEntradaV3(sid, osId, inputEnxuto, limparCred, esp, incluir),
         confirmarEstado ? "Estado físico registrado." : "Prova de entrada salva.",
       );
     },
-    [runWrite, realOS],
+    [runEntradaWrite, realOS],
   );
 
   // T01 + R03: detalhe da seleção atual confirmado (loja+OS, sem loading nem
@@ -2820,9 +2840,9 @@ export function useV4Preview(): V4Vals {
       const base = toDadosBasicosInput(seedDadosBasicos(realOS));
       const esperados = intencaoDadosBasicos(input, base) as EsperadosDadosBasicosV3;
       if (Object.keys(esperados).length === 0) return Promise.resolve(true);
-      return runWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input, esperados), "Dados básicos salvos.");
+      return runEntradaWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input, esperados), "Dados básicos salvos.");
     },
-    [runWrite, realOS],
+    [runEntradaWrite, realOS],
   );
 
   const atribuirTecnico = useCallback(
@@ -2992,6 +3012,7 @@ export function useV4Preview(): V4Vals {
       ordensError,
       lojaAtivaId,
       rascunhos,
+      ocupacaoEntrada,
       reloadOrdens,
       reloadDetail,
       realOS,
@@ -3072,6 +3093,7 @@ export function useV4Preview(): V4Vals {
       ordensError,
       lojaAtivaId,
       rascunhos,
+      ocupacaoEntrada,
       reloadOrdens,
       reloadDetail,
       realOS,

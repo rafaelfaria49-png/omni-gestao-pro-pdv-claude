@@ -423,7 +423,7 @@ export function EntradaWorkspace({
             </div>
           ) : null}
 
-          <DatasAtendimentoSection v={v} rascunhoSujo={algumDirty} busy={busy} />
+          <DatasAtendimentoSection v={v} rascunhoSujo={algumDirty} busy={busy || v.entradaOcupada} />
 
           <div
             className={styles.formBody}
