@@ -20,6 +20,24 @@ O diff está limitado à CLI/testes AEP, protocolo, TRACK, evidência e projeç�
 geradas pela CLI. Não houve mudança ou execução de código de produto, transporte da
 UI, typecheck/build/E2E de produto, provisionamento ou ativação DP.
 
+Arquivos do PR (caminhos relativos ao repositório):
+
+- `scripts/track.mjs` — comando oficial de reconciliação.
+- `scripts/track.test.mjs` — testes de preservação, recusa, rollback e idempotência.
+- `docs/ai-execution/EXECUTION_PROTOCOL.md` — contrato do comando.
+- `docs/ai-execution/_evidence/PESSOAS-001B-BLOCKED-RECONCILIATION.md` — esta evidência.
+- `docs/ai-execution/_evidence/PESSOAS-001B-BLOCKED-RECONCILIATION-tests.log` — log integral.
+- `docs/execution-tracks/pessoas/TRACK.md` — contexto histórico e estado reconciliado.
+- `docs/execution-tracks/pessoas/LEDGER.jsonl` — dois eventos anexados pela CLI.
+- `docs/execution-tracks/pessoas/goals/PESSOAS-DP-FRONTEND-CADASTRO-001B.md` → `docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-CADASTRO-001B.md` — arquivamento pela CLI com o conteúdo fechado da origem.
+- `docs/execution-tracks/pessoas/_closed/reports/RECONCILE-BLOCKED-25b5fda2612b.json` — relatório gerado pela CLI.
+- `docs/execution-tracks/pessoas/state.json` — projeção gerada pela CLI.
+- `docs/execution-tracks/REGISTRY.md` — derivado gerado pela CLI.
+
+Nenhum diff de produto ou de outra trilha. `CURRENT_STATUS.md`, `CHANGELOG.md` e
+`MASTER_CONTEXT.md` permanecem intactos: a mudança é de governança interna,
+documentada no protocolo, TRACK e nesta evidência, sem entrega de produto/roadmap.
+
 ## Origem e histórico confirmado
 
 Ref remota atualizada por fetch: `refs/remotes/origin/goal/pessoas-001b-frontend`.
@@ -73,12 +91,18 @@ repositórios Git temporários e não carrega produto/banco/browser.
 | Reconciliação real com `--dry-run` | PASS: 2 eventos previstos, nenhum arquivo/commit escrito |
 | Reconciliação real sem `--dry-run` | PASS: commit de estado acima, 2 eventos literais e GOAL arquivado |
 | Repetição com os mesmos argumentos | PASS: NO-OP, nenhum evento/arquivo/commit adicional |
+| `node scripts/track.mjs registry` | PASS: derivados regenerados somente pela CLI |
 | `node scripts/track.mjs verify --all` após aplicação | PASS: todas as trilhas, REGISTRY e GATES coerentes |
+| `git diff --check` | PASS |
 | Comparação dos dois blobs com a origem | PASS: identidades acima |
 | Diff dos arquivos fechados de 001A/P2 contra a base | Vazio |
 
 Log completo da suíte: [PESSOAS-001B-BLOCKED-RECONCILIATION-tests.log](PESSOAS-001B-BLOCKED-RECONCILIATION-tests.log).
 Relatório de aplicação: [RECONCILE-BLOCKED-25b5fda2612b.json](../../execution-tracks/pessoas/_closed/reports/RECONCILE-BLOCKED-25b5fda2612b.json).
+
+Typecheck global e build de produto não se aplicam a este corretivo `.mjs` de
+governança: não há mudança `.ts`/`.tsx`, config, rota, layout, Server Action ou Prisma,
+e a missão proíbe execução de produto. Não foram executados nem declarados PASS.
 
 Os 16 testes R-BLOCKED cobrem dry-run, preservação literal LF/CRLF, DONE, ambos
 BLOCKED e campos extras, rejeição sem escrita de divergências/tentativa 4/origem
