@@ -74,12 +74,12 @@ O estado ratificado vive em `state.json` e `LEDGER.jsonl`. Gerar derivados somen
 - Nenhum outro gate liberado para o sucessor. Os paths, gates, teste, branch e worktree do 001A acima são históricos e não ampliam a allowlist do novo GOAL.
 - Hardening concluído/revisado é pré-requisito obrigatório do frontend 001B; este planejamento não autoriza UI, flag DP, migration de ambiente, produção, folha ou GOAL 002.
 
-## Sucessor atual — frontend cadastral 001B — revisão 3
+## Histórico — planejamento frontend cadastral 001B — revisão 3
 
-Esta seção define somente o sucessor 001B. Paths/gates/branch/worktree/testes de 001A e P2 acima são históricos e não ampliam a autorização atual. Os dois GOALs permanecem DONE; ledger e arquivos fechados não são alterados.
+Esta seção preserva o planejamento original do 001B, agora BLOCKED. Paths/gates/branch/worktree/testes de 001A e P2 acima são históricos. Os dois predecessores permanecem DONE, com seus eventos e arquivos fechados preservados.
 
-- Único GOAL READY: `PESSOAS-DP-FRONTEND-CADASTRO-001B`.
-- Fonte executável: `goals/PESSOAS-DP-FRONTEND-CADASTRO-001B.md` (AEP:META e critérios completos).
+- GOAL originalmente READY, agora BLOCKED: `PESSOAS-DP-FRONTEND-CADASTRO-001B`.
+- Fonte histórica arquivada: `_closed/goals/PESSOAS-DP-FRONTEND-CADASTRO-001B.md` (AEP:META e critérios completos; não autoriza execução).
 - plan_ref: OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15; plan_rev: **3**.
 - Classe C3, risco ALTO, familia_executor openai, revisao_independente true.
 - Branch de planejamento: `plan/pessoas-001b-frontend → main`, somente governança; commit/push/PR autorizados, merge humano.
@@ -95,3 +95,17 @@ Esta seção define somente o sucessor 001B. Paths/gates/branch/worktree/testes 
 - Fora do recorte: gestão nova de grants/unidades adicionais, P3s, folha, holerite próprio, férias, 13º, rescisão, GOAL 002, integrações Financeiro/Contador e outro backend de funcionários.
 - Nesta missão: não executar open/close, não implementar UI nem fazer merge. Gerar derivados por `registry`, conferir `verify --all` e `git diff --check`.
 - Ponto de parada: **PESSOAS 001B — PLANO AEP PRONTO PARA MERGE HUMANO**.
+
+## Reconciliação dos dois BLOCKED executados — 12/10/2026
+
+- Autorização humana: G-AEP-CORE exclusivamente para reconciliação fiel dos dois eventos BLOCKED do Pessoas 001B, testes, PR separado e revisão independente, sem merge automático.
+- Base desta branch de governança: origin/main `1fd90905e05656444576cf83c9df6c46919a917a`.
+- Origem fixada após fetch: `refs/remotes/origin/goal/pessoas-001b-frontend` em `25b5fda2612b35b6daccd2103fb69060f5107f73`.
+- Aplicação pela CLI oficial: `node scripts/track.mjs reconcile-blocked pessoas --goal=PESSOAS-DP-FRONTEND-CADASTRO-001B --source-ref=refs/remotes/origin/goal/pessoas-001b-frontend --source-commit=25b5fda2612b35b6daccd2103fb69060f5107f73`.
+- Os dois eventos originais, de tentativa 1 e de tentativa 3 com `previous_attempts` 1/2/3, foram anexados literalmente. O ledger ratificado é idêntico ao blob Git remoto. Nenhuma tentativa nova, reclassificação ou edição manual de ledger/state/registry.
+- Projeção atual desta branch: dois GOALs DONE, um GOAL BLOCKED, quatro eventos e nenhum GOAL READY. O 001B foi retirado do caminho quente; seu arquivo fechado foi preservado integralmente da origem.
+- A reconciliação só chegará à main após merge humano deste PR de core AEP. Não reabrir o 001B nem iniciar tentativa 4.
+- Evidências e validação: `docs/ai-execution/_evidence/PESSOAS-001B-BLOCKED-RECONCILIATION.md` e relatório gerado `_closed/reports/RECONCILE-BLOCKED-25b5fda2612b.json`.
+- O sucessor `PESSOAS-DP-FRONTEND-001B-RECOVERY-001`, classe C3, risco ALTO, plan_rev 5, depende de planejamento separado na origin/main corrente após integração deste corretivo. Não foi criado por este PR.
+- Código de produto, backend 001A, hardening P2 e UI permanecem intactos. Testes de produto/frontend não foram executados nesta sessão de governança.
+- Preview com R2 isolado, provisionamento de banco/bucket/chaves, ativação DP produtiva, produção, folha/holerites e GOAL 002 continuam NÃO AUTORIZADOS. A revisão independente e o merge humano deste PR permanecem gates de entrega.
