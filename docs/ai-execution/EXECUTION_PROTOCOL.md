@@ -263,8 +263,10 @@ um commit `aep(<trilha>): reconcile-blocked <GOAL>`. Não executar `open`, `atte
 - O GOAL fechado BLOCKED é copiado integralmente do mesmo commit para `_closed/goals/`;
   sua projeção antiga em `goals/` é removida. Arquivo fechado local conflitante para
   no gate humano. O conteúdo histórico arquivado não é autorização de execução.
-- A CLI gera state/REGISTRY/GATES e um relatório `RECONCILE-BLOCKED-<GOAL>-<SHA>.json`
-  com a origem e as contagens. Não toca produto nem libera gates, preview ou produção.
+- A CLI gera state/REGISTRY/GATES e um relatório `RECONCILE-BLOCKED-<SHA12>.json`
+  com GOAL, SHA completo, origem e contagens. O nome curto evita o limite de caminho
+  do Git no Windows; colisão de relatório para no gate humano sem sobrescrever.
+  Não toca produto nem libera gates, preview ou produção.
 - Dry-run não escreve nada. Repetição idêntica é NO-OP, sem linha, arquivo ou commit
   novo. Falha de escrita/commit restaura os arquivos e o índice ao estado anterior;
   falha na restauração do índice é reportada para intervenção humana.

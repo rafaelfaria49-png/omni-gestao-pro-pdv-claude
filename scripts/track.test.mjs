@@ -2033,6 +2033,7 @@ for (const crlf of [false, true]) test(`R-BLOCKED: preserva dois DONE, ambos BLO
   assert.equal(aep(f.repo, ['verify', '--all']).code, 0);
   const reports = fs.readdirSync(path.join(f.repo, 'docs/execution-tracks/demo/_closed/reports')).filter((p) => p.endsWith('.json'));
   assert.equal(reports.length, 1);
+  assert.equal(reports[0], `RECONCILE-BLOCKED-${f.sourceCommit.slice(0, 12)}.json`);
   const proof = JSON.parse(fs.readFileSync(path.join(f.repo, 'docs/execution-tracks/demo/_closed/reports', reports[0]), 'utf8'));
   assert.equal(proof.source_commit, f.sourceCommit);
   assert.equal(proof.events_appended, 2);

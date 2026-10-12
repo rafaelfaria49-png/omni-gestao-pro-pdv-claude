@@ -2684,7 +2684,7 @@ function cmdReconcileBlocked(root, protocol, track, flags) {
     return 0;
   }
 
-  const reportRel = `${rel}/_closed/reports/RECONCILE-BLOCKED-${goal}-${sourceCommit}.json`;
+  const reportRel = `${rel}/_closed/reports/RECONCILE-BLOCKED-${sourceCommit.slice(0, 12)}.json`;
   if (fs.existsSync(path.join(root, reportRel))) fail(4, 'divergência de estado', command, 'relatório desta origem já existe com reconciliação incompleta', 'Revise a reconciliação anterior no gate humano.');
   const paths = [ledgerRel, hotRel, closedRel, `${rel}/state.json`, `${protocol.tracks_dir}/REGISTRY.md`, 'docs/ai-execution/GATES.md', reportRel];
   const before = new Map(paths.map((p) => [p, fs.existsSync(path.join(root, p)) ? fs.readFileSync(path.join(root, p)) : null]));
