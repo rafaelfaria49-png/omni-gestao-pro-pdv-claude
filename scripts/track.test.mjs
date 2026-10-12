@@ -1931,3 +1931,202 @@ test('E3: BLOCKED que muda de categoria é ALTERADO — divergencia por gate nã
   assert.deepEqual(projecaoDe(repo), { DONE: 0, BLOCKED: 1, SUPERSEDED: 0 });
   assert.equal(aep(repo, ['verify', '--all']).code, 0);
 });
+
+// ---------------------------------------------------------------------------
+// Reconciliação fiel de BLOCKED executado — cenário Pessoas 001B, sem open/close.
+// ---------------------------------------------------------------------------
+
+function blockedHistoryFixture(t, options = {}) {
+  const fixture = makeRepo(t);
+  const { repo, name } = fixture;
+  initTrack(repo);
+  g(repo, 'config', 'core.autocrlf', options.crlf ? 'true' : 'false');
+  const goal = 'demo-003';
+  const sourceBranch = 'goal/demo-blocked';
+  const rel = 'docs/execution-tracks/demo';
+  const ledger = `${rel}/LEDGER.jsonl`;
+  const hot = `${rel}/goals/${goal}.md`;
+  const closed = `${rel}/_closed/goals/${goal}.md`;
+  const predecessors = [1, 2].map((n) => ({ aep: '1.0-R2', track: 'demo', goal: `demo-00${n}`,
+    result: 'DONE', source: 'executado', attempt: n, ts: `2026-10-0${n}T12:00:00.000Z`, custom_evidence: `Preservar ${n}` }));
+  // A formatação deliberadamente incomum detecta reserialização de eventos.
+  const prefix = Buffer.from(predecessors.map((e) => `  ${JSON.stringify(e)} `).join('\n') + '\n');
+  w(repo, ledger, prefix);
+  for (const e of predecessors) w(repo, `${rel}/_closed/goals/${e.goal}.md`,
+    `<!-- AEP:META\n${JSON.stringify(META_DEFAULTS(name, { id: e.goal, status: 'DONE' }), null, 2)}\n-->\n# predecessor\n`);
+  assert.equal(g(repo, 'add', '--', ledger, ...predecessors.map((e) => `${rel}/_closed/goals/${e.goal}.md`)).code, 0);
+  const planned = addGoal(repo, META_DEFAULTS(name, { id: goal, branch: sourceBranch }));
+  assert.equal(planned.commit.code, 0, planned.commit.all);
+  const base = g(repo, 'rev-parse', 'HEAD').out.trim();
+  assert.equal(g(repo, 'checkout', '-q', '-b', sourceBranch).code, 0);
+  const attempts = [1, 2, 3].map((n) => ({ n, at: `2026-10-11T1${n}:00:00.000Z`, reason: `Falha histórica ${n}: E2E NOT_RUN` }));
+  const events = [1, 3].map((attempt) => ({ aep: '1.0-R2', ts: `2026-10-11T1${attempt}:00:00.000Z`, track: 'demo', goal,
+    result: 'BLOCKED', source: 'executado', blocked_by: 'decisao', attempt, branch: sourceBranch, base_commit: base,
+    reason: attempt === 1 ? 'Privacidade salarial; exige replanejamento' : 'Typecheck FAIL; E2E e temas NOT_RUN; teto 3',
+    previous_attempts: attempt === 1 ? [] : attempts, extra_provenance: { must_survive: '\u00e7/\\literal' } }));
+  if (options.mutate) options.mutate(events, predecessors);
+  const remotePrefix = options.prefixMismatch ? prefix.toString().replace('Preservar 1', 'Reescrito 1') : prefix.toString();
+  w(repo, ledger, remotePrefix + events.map((e) => ` ${JSON.stringify(e)}  `).join('\n') + '\n');
+  const closedMeta = META_DEFAULTS(name, { id: options.wrongGoal ? 'demo-wrong' : goal, branch: sourceBranch, status: options.readySource ? 'READY' : 'BLOCKED', plan_rev: 4 });
+  w(repo, closed, `<!-- AEP:META\n${JSON.stringify(closedMeta, null, 2)}\n-->\n\n# Evidência histórica imutável\nGate preview/R2 NÃO AUTORIZADO.\n`);
+  fs.unlinkSync(path.join(repo, hot));
+  assert.equal(aep(repo, ['registry']).code, 0);
+  assert.equal(g(repo, 'add', '--', ledger, hot, closed, `${rel}/state.json`, 'docs/execution-tracks/REGISTRY.md').code, 0);
+  const commit = sh('git', ['commit', '-m', 'aep(demo): fixture remote blocked'], { cwd: repo, env: { AEP_WRITE: '1' } });
+  assert.equal(commit.code, 0, commit.all);
+  const sourceCommit = g(repo, 'rev-parse', 'HEAD').out.trim();
+  const pushed = g(repo, 'push', 'origin', sourceBranch);
+  assert.equal(pushed.code, 0, pushed.all);
+  assert.equal(g(repo, 'fetch', 'origin').code, 0);
+  assert.equal(g(repo, 'checkout', '-q', '-b', 'plan/demo-recovery', base).code, 0);
+  const sourceRef = `refs/remotes/origin/${sourceBranch}`;
+  const args = ['reconcile-blocked', 'demo', `--goal=${goal}`, `--source-ref=${sourceRef}`, `--source-commit=${sourceCommit}`];
+  return { ...fixture, goal, ledger, hot, closed, sourceRef, sourceCommit, args, events, prefix };
+}
+
+function reconciliationSnapshot(repo) {
+  const tracked = g(repo, 'ls-files', '-z').out.split('\0').filter(Boolean);
+  return {
+    head: g(repo, 'rev-parse', 'HEAD').out.trim(),
+    status: g(repo, 'status', '--porcelain').out,
+    files: Object.fromEntries(tracked.map((p) => [p, fs.readFileSync(path.join(repo, p)).toString('base64')])),
+  };
+}
+
+test('R-BLOCKED: dry-run preserva todos os arquivos, índice e HEAD', (t) => {
+  const f = blockedHistoryFixture(t);
+  const before = reconciliationSnapshot(f.repo);
+  const r = aep(f.repo, [...f.args, '--dry-run']);
+  assert.equal(r.code, 0, r.all);
+  assert.match(r.all, /eventos BLOCKED a anexar: 2/);
+  assert.match(r.all, /tentativa histórica 3\/3/);
+  assert.deepEqual(reconciliationSnapshot(f.repo), before);
+  assert.equal(fs.existsSync(path.join(f.repo, '.aep-active')), false);
+  assert.equal(fs.readdirSync(path.join(f.repo, 'docs/execution-tracks/demo/_closed/reports')).filter((p) => p.endsWith('.json')).length, 0);
+});
+
+for (const crlf of [false, true]) test(`R-BLOCKED: preserva dois DONE, ambos BLOCKED, tentativas, bytes e produto; CRLF=${crlf}`, (t) => {
+  const f = blockedHistoryFixture(t, { crlf });
+  const before = reconciliationSnapshot(f.repo);
+  const localBytes = fs.readFileSync(path.join(f.repo, f.ledger));
+  const remoteBytes = spawnSync('git', ['cat-file', 'blob', `${f.sourceCommit}:${f.ledger}`], { cwd: f.repo }).stdout;
+  const remoteGoal = spawnSync('git', ['cat-file', 'blob', `${f.sourceCommit}:${f.closed}`], { cwd: f.repo }).stdout;
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 0, r.all);
+  const afterBytes = fs.readFileSync(path.join(f.repo, f.ledger));
+  assert.ok(afterBytes.subarray(0, localBytes.length).equals(localBytes), 'bytes preexistentes da worktree preservados');
+  assert.ok(afterBytes.subarray(localBytes.length).equals(remoteBytes.subarray(f.prefix.length)), 'sufixo literal, sem reserialização');
+  assert.ok(fs.readFileSync(path.join(f.repo, f.closed)).equals(remoteGoal));
+  assert.equal(fs.existsSync(path.join(f.repo, f.hot)), false);
+  assert.equal(fs.existsSync(path.join(f.repo, '.aep-active')), false);
+  const ledger = ledgerDe(f.repo);
+  assert.equal(ledger.length, 4);
+  assert.deepEqual(ledger.slice(2), f.events);
+  assert.deepEqual(stateDe(f.repo).counters, { goals_done: 2, goals_blocked: 1, goals_imported: 0, ledger_lines: 4 });
+  assert.equal(stateDe(f.repo).current_goal, null);
+  assert.equal(stateDe(f.repo).status, 'BLOCKED');
+  for (const p of ['app/produtivo.ts', 'docs/execution-tracks/demo/_closed/goals/demo-001.md', 'docs/execution-tracks/demo/_closed/goals/demo-002.md']) {
+    assert.equal(fs.readFileSync(path.join(f.repo, p)).toString('base64'), before.files[p]);
+  }
+  const committed = spawnSync('git', ['cat-file', 'blob', `HEAD:${f.ledger}`], { cwd: f.repo }).stdout;
+  assert.ok(committed.equals(remoteBytes), 'ledger ratificado idêntico ao objeto Git remoto');
+  assert.equal(aep(f.repo, ['verify', '--all']).code, 0);
+  const reports = fs.readdirSync(path.join(f.repo, 'docs/execution-tracks/demo/_closed/reports')).filter((p) => p.endsWith('.json'));
+  assert.equal(reports.length, 1);
+  const proof = JSON.parse(fs.readFileSync(path.join(f.repo, 'docs/execution-tracks/demo/_closed/reports', reports[0]), 'utf8'));
+  assert.equal(proof.source_commit, f.sourceCommit);
+  assert.equal(proof.events_appended, 2);
+  const reconciled = reconciliationSnapshot(f.repo);
+  const again = aep(f.repo, f.args);
+  assert.equal(again.code, 0, again.all);
+  assert.match(again.all, /NO-OP/);
+  assert.deepEqual(reconciliationSnapshot(f.repo), reconciled, 'repetição não cria eventos, arquivos ou commit');
+});
+
+for (const [label, options, expected] of [
+  ['prefixo divergente', { prefixMismatch: true }, /prefixo literal/],
+  ['evento de outro GOAL', { mutate: (events) => { events[0].goal = 'outro'; } }, /fora do recorte/],
+  ['DONE no sufixo', { mutate: (events) => { events[0].result = 'DONE'; } }, /fora do recorte/],
+  ['tentativa 4', { mutate: (events) => { events[1].attempt = 4; } }, /fora do recorte/],
+  ['previous_attempts inválido', { mutate: (events) => { events[1].previous_attempts[2].n = 4; } }, /fora do recorte/],
+  ['evento importado', { mutate: (events) => { events[0].source = 'importado'; } }, /fora do recorte/],
+  ['branch de evento divergente', { mutate: (events) => { events[0].branch = 'goal/outra'; } }, /fora do recorte/],
+  ['base histórica inexistente', { mutate: (events) => { events[0].base_commit = 'f'.repeat(40); } }, /base histórica/],
+  ['GOAL fechado errado', { wrongGoal: true }, /GOAL fechado/],
+  ['GOAL fechado READY', { readySource: true }, /GOAL fechado/],
+]) test(`R-BLOCKED: rejeita ${label} sem escrever`, (t) => {
+  const f = blockedHistoryFixture(t, options);
+  const before = reconciliationSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 4, r.all);
+  assert.match(r.all, expected);
+  assert.deepEqual(reconciliationSnapshot(f.repo), before);
+});
+
+test('R-BLOCKED: SHA/ref divergentes, path traversal, sessão ativa e índice sujo não escrevem', (t) => {
+  const f = blockedHistoryFixture(t);
+  for (const replacement of [
+    [`--source-commit=${f.sourceCommit}`, `--source-commit=${'f'.repeat(40)}`],
+    [`--source-ref=${f.sourceRef}`, '--source-ref=HEAD'],
+    [`--goal=${f.goal}`, '--goal=../../externo'],
+  ]) {
+    const before = reconciliationSnapshot(f.repo);
+    const r = aep(f.repo, f.args.map((a) => a === replacement[0] ? replacement[1] : a));
+    assert.notEqual(r.code, 0, r.all);
+    assert.deepEqual(reconciliationSnapshot(f.repo), before);
+  }
+  for (const flag of ['--dry-run=true', '--dryrun']) {
+    const before = reconciliationSnapshot(f.repo);
+    assert.equal(aep(f.repo, [...f.args, flag]).code, 1);
+    assert.deepEqual(reconciliationSnapshot(f.repo), before);
+  }
+  w(f.repo, '.aep-active', JSON.stringify({ goal: f.goal, attempt: 3 }));
+  const active = reconciliationSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 5);
+  assert.deepEqual(reconciliationSnapshot(f.repo), active);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.repo, '.aep-active'), 'utf8')).attempt, 3);
+  fs.unlinkSync(path.join(f.repo, '.aep-active'));
+  w(f.repo, 'app/staged.ts', 'export const unrelated = true;\n');
+  assert.equal(g(f.repo, 'add', '--', 'app/staged.ts').code, 0);
+  const staged = reconciliationSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 5);
+  assert.deepEqual(reconciliationSnapshot(f.repo), staged);
+});
+
+test('R-BLOCKED: recusa default branch e arquivo fechado conflitante sem sobrescrever', (t) => {
+  const f = blockedHistoryFixture(t);
+  assert.equal(g(f.repo, 'checkout', '-q', 'main').code, 0);
+  const before = reconciliationSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 5);
+  assert.deepEqual(reconciliationSnapshot(f.repo), before);
+  assert.equal(g(f.repo, 'checkout', '-q', 'plan/demo-recovery').code, 0);
+  w(f.repo, f.closed, '# Histórico local diferente\n');
+  assert.equal(g(f.repo, 'add', '--', f.closed).code, 0);
+  assert.equal(sh('git', ['commit', '-m', 'aep(demo): fixture closed conflict'], { cwd: f.repo, env: { AEP_WRITE: '1' } }).code, 0);
+  const conflict = reconciliationSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 4, r.all);
+  assert.match(r.all, /fechado local diverge/);
+  assert.deepEqual(reconciliationSnapshot(f.repo), conflict);
+});
+
+test('R-BLOCKED: falha de commit restaura ledger, GOALs, derivados, índice e HEAD; retry não duplica', (t) => {
+  const f = blockedHistoryFixture(t);
+  const hook = path.join(f.repo, '.githooks/commit-msg');
+  const hookBefore = fs.readFileSync(hook);
+  fs.writeFileSync(hook, '#!/bin/sh\ncase "$(cat "$1")" in *reconcile-blocked*) exit 1;; esac\nexit 0\n');
+  // Hook alterado fica commitado: precondição de árvore limpa continua verdadeira.
+  assert.equal(g(f.repo, 'add', '--', '.githooks/commit-msg').code, 0);
+  const first = g(f.repo, 'commit', '-m', 'fixture: reject reconciliation commit');
+  assert.equal(first.code, 0, first.all);
+  const before = reconciliationSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 3, r.all);
+  assert.deepEqual(reconciliationSnapshot(f.repo), before);
+  assert.equal(fs.readdirSync(path.join(f.repo, 'docs/execution-tracks/demo/_closed/reports')).filter((p) => p.endsWith('.json')).length, 0);
+  fs.writeFileSync(hook, hookBefore);
+  assert.equal(g(f.repo, 'add', '--', '.githooks/commit-msg').code, 0);
+  assert.equal(g(f.repo, 'commit', '-m', 'fixture: restore commit-msg').code, 0);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  assert.equal(ledgerDe(f.repo).length, 4);
+});
