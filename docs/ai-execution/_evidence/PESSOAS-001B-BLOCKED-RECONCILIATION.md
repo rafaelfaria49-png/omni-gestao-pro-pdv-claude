@@ -132,7 +132,13 @@ REVIEW_CODE=PENDING. A revisão deve ser de família não-OpenAI, com HEAD e tes
 efetivamente executados identificados. Não há aprovação R nem review formal GitHub
 registrados nesta evidência. O envio ao Claude/Anthropic foi impedido pela revisão
 automática de permissões por exigir autorização explícita do conteúdo privado e
-do destino; foi solicitado consentimento específico ao usuário, sem contorno.
+do destino. Em 12/10/2026, o usuário respondeu ao pedido de consentimento:
+**"Manter revisão humana externa pendente"**. Essa é a decisão vigente; não há
+autorização para o envio. A revisão Claude/Anthropic não foi executada.
+
+O PR permanece draft, aguardando evidência da revisão humana externa. Não registrar
+R como cumprido nem tornar o PR pronto para merge sem essa evidência. A decisão não
+autoriza merge automático, abertura de tentativa ou criação antecipada do sucessor.
 
 Os resultados históricos de produto descritos no ledger permanecem evidências da
 origem. Não houve nova validação de produto nesta sessão. Typecheck frontend, E2E
@@ -142,7 +148,7 @@ Preview com R2 isolado, banco/bucket/chaves, DP produtivo e liberação de produ
 continuam NÃO AUTORIZADOS. Storage simulado não é prova de R2 real. Não iniciar
 folha/holerites/GOAL 002.
 
-Próximo gate: revisão independente deste corretivo e merge humano do PR separado.
+Próximo gate: revisão humana externa deste corretivo e merge humano do PR separado.
 Depois disso, retomar o planejamento `plan/pessoas-001b-recovery-001` a partir da
 origin/main corrente e criar um único sucessor READY `PESSOAS-DP-FRONTEND-001B-RECOVERY-001`
 (C3, ALTO, plan_rev 5) em PR somente de governança. Esse sucessor ainda não foi criado.
