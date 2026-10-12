@@ -234,6 +234,40 @@ function preencherEntrada() {
 function salvarCorrecao() { fireEvent.click(screen.getByRole("button", { name: "Salvar correção" })); }
 
 describe("Novo acesso -> hook real -> editor auditado existente", () => {
+  it("mantém o teclado dentro da correção e devolve foco ao acesso visível", async () => {
+    await montar();
+    const acesso = datas().getByRole("button", { name: "Corrigir datas" });
+    acesso.focus();
+    abrir();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    const janela = within(dialog);
+    const fechar = janela.getByRole("button", { name: "Fechar" });
+    const cancelar = janela.getByRole("button", { name: "Cancelar" });
+    fechar.focus();
+    fireEvent.keyDown(fechar, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(cancelar);
+    fireEvent.keyDown(cancelar, { key: "Tab" });
+    expect(document.activeElement).toBe(fechar);
+    fireEvent.keyDown(fechar, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(acesso);
+  });
+
+  it("Escape durante o salvamento preserva a janela e a requisição auditada", async () => {
+    const p = deferred<unknown>();
+    m.corrigirDatas.mockReturnValueOnce(p.promise);
+    await montar();
+    abrir();
+    preencherEntrada();
+    salvarCorrecao();
+    await waitFor(() => expect(m.corrigirDatas).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(screen.getByLabelText(/^Data de entrada do aparelho/), { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    await act(async () => p.resolve({ ok: true, diff: [], garantia: null, os: {} }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("entrega de 06/10 não registrada: corrige só a entrada, sem criar entrega/pagamento", async () => {
     await montar();
     abrir();

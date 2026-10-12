@@ -39,8 +39,44 @@ function Conteudo({ os, storeId, onClose, onSalvo }: { os: OrdemServico; storeId
   }, []);
   const estado = useCorrigirDatas({ os, storeId, onSalvo: () => { if (montado.current) onSalvo(); } });
   const impacto = resumoImpactoGarantia(estado.garantia);
+  // Tab permanece no editor para não alterar o rascunho atrás da janela.
+  const raizRef = useRef<HTMLDivElement>(null);
+  const janelaRef = useRef({ onClose, busy: estado.busy });
+  useEffect(() => { janelaRef.current = { onClose, busy: estado.busy }; }, [onClose, estado.busy]);
+  useEffect(() => {
+    const raiz = raizRef.current;
+    if (!raiz) return;
+    const anterior = document.activeElement as HTMLElement | null;
+    raiz.querySelector<HTMLInputElement>("input")?.focus();
+    const teclado = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!janelaRef.current.busy) janelaRef.current.onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controles = raiz.querySelectorAll<HTMLElement>(":is(button, input, textarea, select):enabled");
+      const primeiro = controles[0];
+      const ultimo = controles[controles.length - 1];
+      if (!primeiro || !ultimo) return;
+      const fora = !raiz.contains(document.activeElement);
+      if (event.shiftKey && (document.activeElement === primeiro || fora)) {
+        event.preventDefault();
+        ultimo.focus();
+      } else if (!event.shiftKey && (document.activeElement === ultimo || fora)) {
+        event.preventDefault();
+        primeiro.focus();
+      }
+    };
+    raiz.addEventListener("keydown", teclado);
+    return () => {
+      raiz.removeEventListener("keydown", teclado);
+      if (anterior?.isConnected) anterior.focus();
+    };
+  }, []);
 
-  return (
+  const modal = (
     <AtendimentoModalShell
       titulo={`Corrigir datas · ${os.codigo}`}
       subtitulo="Corrige só as datas. Nada é entregue, cobrado ou enviado de novo."
@@ -50,8 +86,7 @@ function Conteudo({ os, storeId, onClose, onSalvo }: { os: OrdemServico; storeId
       erro={estado.erroGeral}
       footer={
         <>
-          <span style={{ fontSize: 11.5, color: C.subtle, minWidth: 0 }}>Fica no histórico com seu usuário, o horário de agora e o motivo.</span>
-          <div style={{ display: "flex", gap: 8, flex: "none" }}>
+          <div style={{ display: "flex", gap: 8, flex: 1, minWidth: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button type="button" onClick={onClose} disabled={estado.busy} style={ghost}>
               Cancelar
             </button>
@@ -128,8 +163,12 @@ function Conteudo({ os, storeId, onClose, onSalvo }: { os: OrdemServico; storeId
           </span>
         ) : null}
       </label>
+      <p style={{ margin: "10px 0 0", fontSize: 11.5, color: C.subtle, lineHeight: 1.5 }}>
+        Fica no histórico com seu usuário, o horário de agora e o motivo.
+      </p>
     </AtendimentoModalShell>
   );
+  return <div ref={raizRef} style={{ display: "contents" }}>{modal}</div>;
 }
 
 const ghost: React.CSSProperties = {
