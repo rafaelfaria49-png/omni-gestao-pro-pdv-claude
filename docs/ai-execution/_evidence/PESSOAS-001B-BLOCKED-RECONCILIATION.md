@@ -27,6 +27,8 @@ Arquivos do PR (caminhos relativos ao repositório):
 - `docs/ai-execution/EXECUTION_PROTOCOL.md` — contrato do comando.
 - `docs/ai-execution/_evidence/PESSOAS-001B-BLOCKED-RECONCILIATION.md` — esta evidência.
 - `docs/ai-execution/_evidence/PESSOAS-001B-BLOCKED-RECONCILIATION-tests.log` — log integral.
+- `docs/ai-execution/_evidence/PR-264-GLM-5.3-REVIEW.md` — revisão técnica independente informada pelo usuário e validação final Codex.
+- `docs/ai-execution/_evidence/PR-264-GLM-5.3-CODEX-tests.log` — log da nova execução completa pelo Codex, separado da execução GLM e do log anterior.
 - `docs/execution-tracks/pessoas/TRACK.md` — contexto histórico e estado reconciliado.
 - `docs/execution-tracks/pessoas/LEDGER.jsonl` — dois eventos anexados pela CLI.
 - `docs/execution-tracks/pessoas/goals/PESSOAS-DP-FRONTEND-CADASTRO-001B.md` → `docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-CADASTRO-001B.md` — arquivamento pela CLI com o conteúdo fechado da origem.
@@ -128,17 +130,25 @@ git diff --check
 
 ## Revisão independente e gates
 
-REVIEW_CODE=PENDING. A revisão deve ser de família não-OpenAI, com HEAD e testes
-efetivamente executados identificados. Não há aprovação R nem review formal GitHub
-registrados nesta evidência. O envio ao Claude/Anthropic foi impedido pela revisão
-automática de permissões por exigir autorização explícita do conteúdo privado e
-do destino. Em 12/10/2026, o usuário respondeu ao pedido de consentimento:
-**"Manter revisão humana externa pendente"**. Essa é a decisão vigente; não há
-autorização para o envio. A revisão Claude/Anthropic não foi executada.
+INDEPENDENT_AI_REVIEW=APPROVE. O usuário forneceu a revisão técnica independente
+ZCode/GLM 5.3, família `zai/GLM-5.3`, do SHA
+`066c6131fa356ee5ae5cf6e7ed8c7eb4a1253265`: P0=0, P1=0, P2=0, P3=1.
+O GLM executou os 16 testes novos com sucesso; não reexecutou os 65 anteriores por
+ENOSPC no ambiente de revisão. O PASS 81/81 do executor Codex preservado acima não
+é atribuído ao GLM. P3-1 (NO-OP após rollback/retry) é não bloqueante e apenas registrado.
+Relatório e proveniência: [PR-264-GLM-5.3-REVIEW.md](PR-264-GLM-5.3-REVIEW.md).
+Na missão de registro, o Codex reexecutou a suíte completa: 81/81 PASS, zero
+falhas/skips/todo, em 292881.4736 ms, com log próprio vinculado no relatório.
 
-O PR permanece draft, aguardando evidência da revisão humana externa. Não registrar
-R como cumprido nem tornar o PR pronto para merge sem essa evidência. A decisão não
-autoriza merge automático, abertura de tentativa ou criação antecipada do sucessor.
+HUMAN_EXTERNAL_REVIEW=PENDING. HUMAN_MERGE_AUTHORIZATION=PENDING. A revisão GLM é
+por IA e não cumpre automaticamente o gate adicional de revisão humana externa.
+Esse gate só poderá ser substituído por decisão expressa do usuário específica para
+esta PR, sem mudança da governança global. O PR permanece draft e MERGE_READY=NO.
+Não foi criado review formal em nome do GLM nem autorizada nova tentativa ou sucessor.
+
+A decisão anterior do usuário, **"Manter revisão humana externa pendente"**, continua
+preservada. O envio ao Claude/Anthropic foi impedido pela revisão automática de
+permissões e não foi autorizado nem executado.
 
 Os resultados históricos de produto descritos no ledger permanecem evidências da
 origem. Não houve nova validação de produto nesta sessão. Typecheck frontend, E2E
