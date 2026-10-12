@@ -33,7 +33,7 @@ import/                       gitignored — insumo bruto de importação, nunca
 ## 2. Regra de ouro do ciclo de estado
 
 `status`, `open`, `check` e `attempt --fail` **não escrevem nenhum arquivo versionado**.
-Somente `close`, `block`, `import`, `registry`, `init` e `sync-adapters` escrevem.
+Somente `close`, `block`, `import`, `reconcile-blocked`, `registry`, `init` e `sync-adapters` escrevem.
 `open` escreve apenas `.aep-active`.
 
 `state.json` é 100% **derivado** de `protocol.json` + `LEDGER.jsonl` + `goals/` +
@@ -227,6 +227,53 @@ Consequências contratuais:
   deixa metade do lote ratificada;
 - `--dry-run` calcula o delta completo, informa quantas linhas seriam anexadas e **não
   escreve nada**.
+
+### Reconciliação fiel de bloqueios remotos executados
+
+Quando o ledger remoto contém bloqueios executados ausentes da branch default,
+`import` não é o fluxo adequado: ele reconcilia classificações de um plano e não
+transporta eventos de execução. Use `reconcile-blocked` **somente com autorização
+humana específica para o GOAL e a origem**, fora de uma sessão `.aep-active`:
+
+```bash
+node scripts/track.mjs reconcile-blocked pessoas \
+  --goal=PESSOAS-DP-FRONTEND-CADASTRO-001B \
+  --source-ref=refs/remotes/origin/goal/pessoas-001b-frontend \
+  --source-commit=25b5fda2612b35b6daccd2103fb69060f5107f73 --dry-run
+```
+
+Depois de conferir o dry-run, repetir sem `--dry-run` aplica a reconciliação e cria
+um commit `aep(<trilha>): reconcile-blocked <GOAL>`. Não executar `open`, `attempt`,
+`block` ou `close`, nem fabricar `.aep-active` para recuperar o histórico.
+
+- A origem deve ser uma ref local de `refs/remotes/origin/`, atualizada por fetch,
+  com tip exatamente igual ao SHA completo declarado. O comando não faz fetch.
+- Árvore/índice devem estar limpos e os derivados coerentes, inclusive no dry-run.
+  A escrita exige uma branch diferente da default e HEAD não destacado.
+- O blob Git do ledger local deve ser **prefixo literal** do blob remoto. Divergência,
+  truncamento, evento de outro GOAL ou resultado diferente de BLOCKED no sufixo
+  param sem escrita. Nenhum evento é filtrado, reclassificado ou reserializado.
+- Só entram eventos `source: executado`, da trilha/GOAL/branch declarados, com base
+  ancestral comprovada, tentativas dentro do teto e `previous_attempts` válido.
+  DONE/SUPERSEDED locais não podem regredir. Timestamps, motivos, tentativas e
+  campos de proveniência permanecem como no objeto de origem.
+- A CLI anexa o sufixo original e preserva os bytes preexistentes da worktree.
+  A comparação da worktree tolera a conversão CRLF do Git no Windows; a comparação
+  entre os blobs Git é literal. O comando não reescreve linhas antigas para ajustar EOL.
+- O GOAL fechado BLOCKED é copiado integralmente do mesmo commit para `_closed/goals/`;
+  sua projeção antiga em `goals/` é removida. Arquivo fechado local conflitante para
+  no gate humano. O conteúdo histórico arquivado não é autorização de execução.
+- A CLI gera state/REGISTRY/GATES e um relatório `RECONCILE-BLOCKED-<SHA12>.json`
+  com GOAL, SHA completo, origem e contagens. O nome curto evita o limite de caminho
+  do Git no Windows; colisão de relatório para no gate humano sem sobrescrever.
+  Não toca produto nem libera gates, preview ou produção.
+- Dry-run não escreve nada. Repetição idêntica é NO-OP, sem linha, arquivo ou commit
+  novo. Falha de escrita/commit restaura os arquivos e o índice ao estado anterior;
+  falha na restauração do índice é reportada para intervenção humana.
+
+Este comando recupera evidências existentes; não reinicia o teto de tentativas.
+Planejar um sucessor continua sendo ato humano separado. Conflitos exigem decisão
+humana, nunca edição manual de LEDGER/state/REGISTRY.
 
 ## 13. Códigos de saída
 
