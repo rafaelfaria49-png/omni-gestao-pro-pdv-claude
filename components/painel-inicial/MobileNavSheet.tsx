@@ -1,5 +1,6 @@
 "use client"
 
+import { useDisponibilidade } from "@/components/dashboard/pessoas/use-disponibilidade"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useMemo, useState } from "react"
@@ -24,6 +25,7 @@ function NavLinkRow({ item, path, onNavigate }: { item: DashboardNavItem; path: 
   return (
     <Link
       href={item.to}
+                          prefetch={item.to === "/dashboard/pessoas" ? false : undefined}
       onClick={onNavigate}
       className={cn(
         "flex min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
@@ -51,6 +53,7 @@ function NavLinkRow({ item, path, onNavigate }: { item: DashboardNavItem; path: 
 }
 
 export function MobileNavSheet() {
+  const { disponivel: pessoasDisponivel } = useDisponibilidade()
   const pathname = usePathname()
   const { data: session, status } = useSession()
   const [open, setOpen] = useState(false)
@@ -62,7 +65,7 @@ export function MobileNavSheet() {
 
   const sections = useMemo(() => {
     const workspace = filterDashboardNav(workspaceNavItems, perms)
-    const hubs = filterDashboardNav(hubsNavItems, perms)
+    const hubs = filterDashboardNav(hubsNavItems, perms, pessoasDisponivel)
     const admin = filterDashboardNav(administrationNavItems, perms)
     return dashboardNavSections
       .map((s) => {
@@ -72,7 +75,7 @@ export function MobileNavSheet() {
         return s
       })
       .filter((s) => s.items.length > 0)
-  }, [perms])
+  }, [perms, pessoasDisponivel])
 
   const path = pathname || ""
   const close = () => setOpen(false)

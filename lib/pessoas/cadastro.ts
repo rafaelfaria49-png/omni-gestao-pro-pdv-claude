@@ -409,7 +409,7 @@ export async function listarHistorico(empregadorId: string, vinculoId: string) {
     pessoa: v.pessoa.versoes.map((p) => ({
       id: p.id, versao: p.versao, nome: p.nome,
       validFrom: dataCivilDto(p.validFrom), recordedAt: p.recordedAt.toISOString(),
-      supersedesId: p.supersedesId, autorId: p.autorId, motivo: p.motivo,
+      supersedesId: p.supersedesId, autorId: p.autorId, motivo: remuneracao ? p.motivo : null,
     })),
     contratos: v.contratos.map((c) => ({
       id: c.id, versao: c.versao, cargo: c.cargo, cbo: c.cbo,
@@ -417,7 +417,7 @@ export async function listarHistorico(empregadorId: string, vinculoId: string) {
       remuneracaoOculta: !remuneracao,
       validFrom: dataCivilDto(c.validFrom), validTo: dataCivilDto(c.validTo),
       recordedAt: c.recordedAt.toISOString(), supersedesId: c.supersedesId,
-      supersededAt: c.supersededAt?.toISOString() ?? null, autorId: c.autorId, motivo: c.motivo,
+      supersededAt: c.supersededAt?.toISOString() ?? null, autorId: c.autorId, motivo: remuneracao ? c.motivo : null,
     })),
   }
 }
