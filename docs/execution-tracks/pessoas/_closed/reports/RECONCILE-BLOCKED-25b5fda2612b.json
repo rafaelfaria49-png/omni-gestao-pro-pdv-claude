@@ -1,0 +1,13 @@
+{
+  "aep": "1.0-R2",
+  "track": "pessoas",
+  "goal": "PESSOAS-DP-FRONTEND-CADASTRO-001B",
+  "source_ref": "refs/remotes/origin/goal/pessoas-001b-frontend",
+  "source_commit": "25b5fda2612b35b6daccd2103fb69060f5107f73",
+  "events_appended": 2,
+  "previous_ledger_lines": 2,
+  "final_ledger_lines": 4,
+  "result": "BLOCKED",
+  "attempt": 3,
+  "product_code_changed": false
+}

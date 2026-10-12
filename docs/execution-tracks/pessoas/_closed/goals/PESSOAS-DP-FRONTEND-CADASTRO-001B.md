@@ -4,7 +4,7 @@
   "id": "PESSOAS-DP-FRONTEND-CADASTRO-001B",
   "track": "pessoas",
   "title": "Frontend operacional do cadastro Pessoas sobre 001A e hardening P2",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "branch": "goal/pessoas-001b-frontend",
@@ -18,6 +18,8 @@
     "components/painel-inicial/Sidebar.tsx",
     "components/painel-inicial/MobileNavSheet.tsx",
     "lib/pessoas/readers/disponibilidade.ts",
+    "lib/pessoas/cadastro.ts",
+    "lib/pessoas/historico-privacidade.test.ts",
     "lib/pessoas/adapters/cadastro-ui.ts",
     "scripts/pessoas/run-frontend-tests.mjs",
     "scripts/pessoas/run-official-tests.mjs",
@@ -34,7 +36,7 @@
   "gates_liberados": [],
   "read_budget": 65,
   "plan_ref": "OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15",
-  "plan_rev": 3,
+  "plan_rev": 4,
   "familia_executor": "openai",
   "revisao_independente": true,
   "reversibilidade": "git revert do frontend, reader de disponibilidade e testes; nenhuma mudança de schema/auth/PWA. Revert de código não desfaz comandos DP já persistidos; conservar histórico.",
@@ -216,3 +218,12 @@ Extensão estreita de `runOfficialTests` com modo frontend, preservando o compor
 - Smoke autenticado deve provar **Abrir Pessoas → configurar empregador autorizado → cadastrar funcionário → salvar → recarregar → abrir ficha → completar pendências → alterar contrato com histórico → consultar documentos**, incluindo upload-intent/PUT assinado/complete/list/download com bytes reais e isolamento por capacidades. Guardar somente evidências saneadas; limpar dados/objetos exclusivamente sintéticos conforme autorização.
 - Preview sem configuração/autorização = PENDENTE, não PASS; não concluir GOAL sem essa evidência ou replanejamento humano explícito. Produção e PESSOAS_DP_ENABLED produtivo permanecem OFF/não autorizados.
 - Merge da implementação depende de decisão humana em fluxo próprio. Revert de UI não reverte dados já gravados: preservar versões/documentos/auditoria. Não deletar cadastros para “desfazer” release.
+
+
+## Autorização humana — revisão 4 — 11/10/2026
+
+Usuário autorizou nesta sessão: replanejar o escopo, corrigir exposição no backend e adicionar regressão; publicar relatório externo e prova na branch goal/pessoas-001b-frontend do origin; continuar implementação e validação local.
+
+A allowlist inclui lib/pessoas/cadastro.ts exclusivamente para suprimir motivo contratual sem viewRemuneracao (preservando valor armazenado e leitura autorizada) e lib/pessoas/historico-privacidade.test.ts para regressão. Esta exceção prevalece sobre a exclusão anterior somente neste recorte. BLOCKED anterior é preservado no ledger; retorno a READY por autorização humana. Gate pré-execução satisfeito pela autorização e revisão vinculada; preview/R2/produção continuam não autorizados.
+
+A correção autorizada inclui motivo pessoal do histórico: criarFuncionario grava o mesmo motivo livre nas versões pessoal e contratual iniciais; omitir apenas o motivo contratual deixaria a mesma exposição na seção pessoal. Ambos são redigidos na leitura sem viewRemuneracao, preservando os valores armazenados e as versões.
