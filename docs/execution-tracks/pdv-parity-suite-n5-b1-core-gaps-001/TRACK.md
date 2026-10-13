@@ -80,3 +80,20 @@ Não edite nenhum dos dois à mão: `node scripts/track.mjs verify` detecta a di
 - Classe C3, risco ALTO, revisão independente obrigatória. Cache real da Assistência, sales corrente nos atalhos e gate único são os únicos gaps do sucessor.
 - O test_command do GOAL 003 amplia a regressão read-only N5-B1 com N1, N3, N4 e scanner 005/006/007; paths_base desta trilha não ampliam sua allowlist.
 - Planejamento governance-only: goal/pdv-n5-b1-current-main-correction-aep-plan, em worktree dedicada. Não executar open nesta sessão nem implementar antes do merge humano.
+
+## GOAL sucessor 004 — smoke autenticado de produção e closeout
+
+- Autorização humana: PDV-N5-B1-PRODUCTION-SMOKE-CLOSEOUT-004-PLAN (13/10/2026).
+- Contrato: [PDV-PARITY-N5-B1-PRODUCTION-SMOKE-CLOSEOUT-004](goals/PDV-PARITY-N5-B1-PRODUCTION-SMOKE-CLOSEOUT-004.md).
+- PR #248 integrado por merge normal 9b0a0e81f4030c1d3df2592d48021d8206f229af, ancestral da main observada no planejamento: 1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d. GOALs 001–003 permanecem DONE.
+- Classe C3, risco ALTO; executor futuro Codex / família openai; revisão R futura obrigatória por outra família declarada.
+- Branch futura: goal/pdv-n5b1-production-smoke-closeout-004.
+- Worktree futura: C:/Projetos/omni-gestao-pdv-n5b1-production-smoke-004.
+- Base futura: origin/main corrente, após merge humano deste plano e novo pré-flight sem GOAL ativo ou conflito paralelo na trilha.
+- Smoke não destrutivo nas duas produções; Classic, Assistência, Supermercado e Venda Completa recebem PASS, NOT_ACCESSIBLE ou BLOCKED individualmente, com evidência e motivo, sem alterar StoreSettings.
+- Sessão válida autorizada obrigatória; se ausente: SMOKE_BLOCKED=AUTH_REQUIRED. Proibidos venda real, finalizar pagamento, abrir/fechar caixa, movimentar estoque, migrations, configurações permanentes e interferência em terminal ocupado.
+- PRODUCTION_AUTHENTICATED_SMOKE é separado de PENDING_PRODUCTION_END_TO_END=NOT_EXECUTED_BY_DESIGN. A prova comportamental R4 aprovada não será fabricada em produção.
+- Allowlist documental exclusiva do GOAL 004 prevalece sobre paths_base e teste históricos da trilha; nenhuma alteração produtiva autorizada. Test_command: node scripts/track.mjs verify --all.
+- Commit/close AEP/push e PR documental de execução somente após aprovação R, na branch do GOAL 004; merge reservado ao humano.
+- Planejamento governance-only: plan/pdv-n5b1-production-smoke-closeout-004, em worktree dedicada; commit/push e PR contra main autorizados. Não executar open/close ou smoke, nem iniciar N5-B2/N5-C nesta sessão.
+- Próximo passo exclusivo: NEXT_STEP=HUMANO_MERGEAR_PLANO_SMOKE_004.
