@@ -1,4 +1,5 @@
 // Fixture de componentes reais: nenhuma action ou credencial produtiva.
+import { createElement, type ComponentProps } from "react";
 import type { OrdemServico } from "@/types/os";
 export const qa = {
   loja: "loja-qa-datas",
@@ -19,7 +20,13 @@ export function ordem(id = "a", storeId = qa.loja): OrdemServico {
     } }, timeline: [],
   } as unknown as OrdemServico;
 }
-export const useSession = () => ({ data: null });
+export const useSession = () => ({ data: null, status: "unauthenticated" });
+export const usePathname = () => "/dashboard/operacoes-v4";
+export const useUserCredits = () => ({ credits: 500, loading: false, error: null });
+export const useSidebarCollapsed = () => ({ collapsed: false, setCollapsed: () => {} });
+export const ThemeSwitcher = () => null;
+export const LegibilityToggle = () => null;
+export const MobileNavSheet = () => null;
 export const useLojaAtiva = () => ({ lojaAtivaId: qa.loja });
 export const registrarGuardaTrocaLojaV4 = () => {};
 export const useRouter = () => ({ push: () => {} });
@@ -51,3 +58,6 @@ export {
   noop as abrirRetornoV3, noop as finalizarRetornoV3, noop as buscarOrigensRetornoV3, noop as lerOrigemRetornoV3,
   noop as enviarOrcamentoPorCanalV3,
 };
+
+// Link é só uma âncora no ambiente sem roteador Next. Topbar/Command/Dialog são reais.
+export default function Link(props: ComponentProps<"a">) { return createElement("a", props); }

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import type { OrdemServico } from "@/types/os";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import userEvent from "@testing-library/user-event";
 
 const h = vi.hoisted(() => ({ loja: "loja-qa-datas" as string | null, reloadDetail: () => {} }));
@@ -13,7 +13,12 @@ const m = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: h.loja }), registrarGuardaTrocaLojaV4: vi.fn() }));
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/dashboard/operacoes-v4" }));
+vi.mock("@/hooks/useUserCredits", () => ({ useUserCredits: () => ({ credits: 500, loading: false, error: null }) }));
+vi.mock("@/hooks/use-sidebar-collapsed", () => ({ useSidebarCollapsed: () => ({ collapsed: false, setCollapsed: vi.fn() }) }));
+vi.mock("@/components/ia-mestre/ThemeSwitcher", () => ({ ThemeSwitcher: () => null }));
+vi.mock("@/components/theme/LegibilityToggle", () => ({ LegibilityToggle: () => null }));
+vi.mock("@/components/painel-inicial/MobileNavSheet", () => ({ MobileNavSheet: () => null }));
 vi.mock("@/app/actions/ordens", () => ({ listOrdens: m.listOrdens, getOrdem: m.getOrdem }));
 // Mantém o leitor real; expõe somente seu comando de refresh ao harness.
 vi.mock("@/components/operacoes-v4-preview/use-ordens-v4", async (importOriginal) => {
@@ -60,6 +65,9 @@ vi.mock("@/lib/operacoes-v3/orcamento-envio-actions", () => ({ enviarOrcamentoPo
 vi.mock("@/lib/operacoes-v3/datas-correcao-actions", () => ({ corrigirDatasOSV3: m.corrigirDatas }));
 vi.mock("@/components/operacoes-v3/components/SignaturePadV3", () => ({ SignaturePadV3: () => null }));
 
+import { Topbar } from "@/components/painel-inicial/Topbar";
+import { CommandDialog, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
+import { CommandHeader } from "@/components/operacoes-v4-preview/parts/CommandHeader";
 import { seedEntradaEditor } from "@/lib/operacoes-v4/entrada-form";
 import { seedDadosBasicos } from "@/lib/operacoes-v4/dados-basicos-form";
 import { EntradaWorkspace } from "@/components/operacoes-v4-preview/parts/stages/EntradaWorkspace";
@@ -113,7 +121,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 let servidor: OrdemServico[] = [];
+const scrollIntoViewOriginal = HTMLElement.prototype.scrollIntoView;
 beforeEach(() => {
+  // jsdom não faz layout. Só adapta APIs de medição/scroll; Dialog e foco são reais.
+  vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn(); });
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-11T18:00:00.000Z"));
   h.loja = LOJA;
@@ -127,7 +139,10 @@ beforeEach(() => {
   m.corrigirDatas.mockResolvedValue({ ok: true, diff: [], garantia: { temImpacto: false, linhas: [] }, os: {} });
   window.localStorage.clear();
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => {
+  cleanup(); vi.useRealTimers(); vi.unstubAllGlobals();
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoViewOriginal });
+});
 
 describe("Datas persistidas e acesso visível na Entrada", () => {
   it("cadastro em 10/10 e entrada física anterior: mantém precisão, fuso e significados", () => {
@@ -213,16 +228,26 @@ describe("Datas persistidas e acesso visível na Entrada", () => {
 });
 
 let atual: V4Vals;
-function Harness() {
+let janelaLegitima: (aberta: boolean) => void;
+function Harness({ overlays = false }: { overlays?: boolean }) {
+  const [legitima, setLegitima] = useState(false);
   const v = useV4Preview();
-  useEffect(() => { atual = v; });
+  useEffect(() => { atual = v; janelaLegitima = setLegitima; });
   return <>
+    {overlays ? <Topbar /> : null}
+    <div data-og-v4-raiz="" tabIndex={-1}>
+    {overlays ? <CommandHeader v={v} /> : null}
     <EntradaStage v={v} />
     <CorrigirDatasModalV4 open={v.corrigirDatasOpen} os={v.realOS} onClose={v.closeCorrigirDatas} onSalvo={v.onDatasCorrigidas} />
+    </div>
+    {overlays ? <CommandDialog open={legitima} onOpenChange={setLegitima} title="Janela legítima">
+      <CommandInput placeholder="Comando legítimo" />
+      <CommandList><CommandItem>Uma ação legítima</CommandItem></CommandList>
+    </CommandDialog> : null}
   </>;
 }
-async function montar() {
-  const r = render(<Harness />);
+async function montar(overlays = false) {
+  const r = render(<Harness overlays={overlays} />);
   await waitFor(() => expect(atual.ordens).toHaveLength(2));
   act(() => atual.selectOS(servidor[0]!, "entrada"));
   await waitFor(() => expect(atual.cargaEntradaEstabelecida).toBe(true));
@@ -253,7 +278,7 @@ describe("Novo acesso -> hook real -> editor auditado existente", () => {
     expect(document.activeElement).toBe(fechar);
     fireEvent.keyDown(fechar, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.activeElement).toBe(acesso);
+    await waitFor(() => expect(document.activeElement).toBe(acesso));
   });
 
   it("Escape durante o salvamento preserva a janela e a requisição auditada", async () => {
@@ -580,7 +605,8 @@ describe("Corretivo P2: recuperação de foco e listeners", () => {
     expect(screen.getByRole("dialog")).toBe(dialog);
     // Exercita o fallback mesmo se nenhum controle puder receber Tab.
     dialog.querySelectorAll<HTMLInputElement>("button,input,textarea,select").forEach((c) => { c.disabled = true; });
-    fireEvent.keyDown(document.body, { key: "Tab", shiftKey: true });
+    dialog.focus();
+    fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(dialog);
     r.unmount();
     const externo = document.createElement("button");
@@ -591,5 +617,131 @@ describe("Corretivo P2: recuperação de foco e listeners", () => {
     expect(fireEvent.keyDown(externo, { key: "Escape" })).toBe(true);
     externo.remove();
     await act(async () => p.resolve({ ok: true, diff: [], garantia: null, os: {} }));
+  });
+});
+
+
+describe("P2/P3 — Topbar + CommandDialog Radix + correção reais", () => {
+  it.each([false, true])("Ctrl+K respeita a correção (ocupada=%s)", async (busy) => {
+    const p = deferred<unknown>();
+    if (busy) m.corrigirDatas.mockReturnValueOnce(p.promise);
+    await montar(true);
+    abrir();
+    if (busy) { preencherEntrada(); salvarCorrecao(); }
+    await userEvent.setup().keyboard("{Control>}k{/Control}");
+    expect(screen.queryByRole("dialog", { name: "Buscar Rota ou Ação" })).toBeNull();
+    const dialog = screen.getByRole("dialog", { name: /^Corrigir datas/ });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    if (busy) await act(async () => p.resolve({ ok: false, tipo: "conflito", mensagem: "Recusa sintética" }));
+  });
+
+  it("Ctrl+K alterna normalmente fora da correção", async () => {
+    await montar(true);
+    const origem = datas().getByRole("button", { name: "Corrigir datas" });
+    origem.focus();
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = screen.getByRole("dialog", { name: "Buscar Rota ou Ação" });
+    expect(palette.contains(document.activeElement)).toBe(true);
+    await user.keyboard("{Control>}k{/Control}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(origem));
+    await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("outra janela mantém foco/Escape quando o busy termina", async () => {
+    const p = deferred<unknown>();
+    m.corrigirDatas.mockReturnValueOnce(p.promise);
+    await montar(true);
+    abrir(); preencherEntrada(); salvarCorrecao();
+    act(() => janelaLegitima(true));
+    const legitima = screen.getByRole("dialog", { name: "Janela legítima" });
+    await waitFor(() => expect(legitima.contains(document.activeElement)).toBe(true));
+    await act(async () => p.resolve({ ok: false, tipo: "conflito", mensagem: "Recusa sintética" }));
+    expect(legitima.contains(document.activeElement)).toBe(true);
+    await userEvent.setup().keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Janela legítima" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: /^Corrigir datas/ })).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole("dialog", { name: /^Corrigir datas/ }).contains(document.activeElement)).toBe(true));
+  });
+
+  it("correção solicitada aguarda a paleta ativa sem disputar foco", async () => {
+    await montar(true);
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = screen.getByRole("dialog", { name: "Buscar Rota ou Ação" });
+    act(() => atual.openCorrigirDatas());
+    expect(palette.contains(document.activeElement)).toBe(true);
+    expect(screen.queryByRole("dialog", { name: /^Corrigir datas/ })).toBeNull();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("dialog", { name: /^Corrigir datas/ }).contains(document.activeElement)).toBe(true));
+  });
+
+  it("pedido no mesmo evento que fecha a paleta não fica aguardando um nó removido", async () => {
+    await montar(true);
+    await userEvent.setup().keyboard("{Control>}k{/Control}");
+    act(() => {
+      atual.openCorrigirDatas();
+      fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    });
+    await waitFor(() => expect(screen.getByRole("dialog", { name: /^Corrigir datas/ }).contains(document.activeElement)).toBe(true));
+  });
+
+  it("menu removido restaura foco à raiz da V4", async () => {
+    const r = await montar(true);
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Mais ações"));
+    const item = screen.getByRole("button", { name: /📅.*Corrigir datas/ });
+    await user.click(item);
+    expect(item.isConnected).toBe(false);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(document.activeElement).toBe(r.container.querySelector("[data-og-v4-raiz]")));
+  });
+
+  it("sucesso restaura o botão original após a recarga da mesma Entrada", async () => {
+    await montar(true);
+    const acesso = datas().getByRole("button", { name: "Corrigir datas" });
+    acesso.focus(); abrir(); preencherEntrada(); salvarCorrecao();
+    await waitFor(() => expect(atual.corrigirDatasOpen).toBe(false));
+    await waitFor(() => expect(atual.cargaEntradaEstabelecida).toBe(true));
+    expect(acesso.isConnected).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(acesso));
+  });
+
+  it.each([false, true])("recarga atrasada não rouba foco escolhido nem deixa restauração após unmount=%s", async (desmontar) => {
+    const r = await montar(true);
+    const acesso = datas().getByRole("button", { name: "Corrigir datas" });
+    acesso.focus(); abrir(); preencherEntrada();
+    const reload = deferred<OrdemServico | null>();
+    m.getOrdem.mockReturnValueOnce(reload.promise);
+    salvarCorrecao();
+    await waitFor(() => expect(atual.corrigirDatasOpen).toBe(false));
+    await waitFor(() => expect(document.activeElement).toBe(r.container.querySelector("[data-og-v4-raiz]")));
+    if (desmontar) r.unmount();
+    const destino = document.createElement("button");
+    document.body.append(destino); destino.focus();
+    await act(async () => reload.resolve(servidor[0]!));
+    if (!desmontar) await waitFor(() => expect(atual.cargaEntradaEstabelecida).toBe(true));
+    expect(document.activeElement).toBe(destino);
+    destino.remove();
+  });
+
+  it("a restauração adiada não rouba foco da nova OS ou do unmount", async () => {
+    const r = await montar(true);
+    const acesso = datas().getByRole("button", { name: "Corrigir datas" });
+    acesso.focus(); abrir();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    act(() => atual.selectOS(servidor[1]!, "entrada"));
+    const destino = document.createElement("button");
+    document.body.append(destino); destino.focus();
+    await waitFor(() => expect(atual.realOS?.id).toBe("b"));
+    expect(document.activeElement).toBe(destino);
+    r.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(document.activeElement).toBe(destino);
+    expect(fireEvent.keyDown(destino, { key: "Escape" })).toBe(true);
+    destino.remove();
   });
 });
