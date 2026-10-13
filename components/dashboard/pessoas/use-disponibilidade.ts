@@ -15,6 +15,7 @@ export function useDisponibilidade() {
   const [generation, setGeneration] = useState(0)
   const [scopeRevision, setScopeRevision] = useState(0)
   const request = useRef(0)
+  const scopeKey = key + ":" + scopeRevision
   const refresh = useCallback(() => { request.current++; setGeneration(n => n + 1) }, [])
   const invalidate = useCallback(() => {
     scopeEpoch++
@@ -42,20 +43,22 @@ export function useDisponibilidade() {
   useEffect(() => {
     const controller = new AbortController()
     const currentRequest = ++request.current
+    const fail = (error: string) => setState(previous => ({ key: scopeKey, generation, error,
+      ...(error === "REDE" && previous?.key === scopeKey && previous.data?.disponivel === true ? { data: previous.data } : {}) }))
     if (status !== "authenticated" || !lojaAtivaId || document.visibilityState === "hidden") return () => controller.abort()
     void (async () => {
       try {
         const response = await fetch("/api/pessoas/disponibilidade", { cache: "no-store", credentials: "same-origin", signal: controller.signal })
         const body = await response.json()
         if (controller.signal.aborted || currentRequest !== request.current) return
-        if (!response.ok) setState({ key, generation, error: body.code ?? "FALHA_INTERNA" })
-        else if (body.storeId !== lojaAtivaId) setState({ key, generation, error: "LOJA_DIVERGENTE" })
-        else setState({ key, generation, data: body })
-      } catch { if (!controller.signal.aborted && currentRequest === request.current) setState({ key, generation, error: "REDE" }) }
+        if (!response.ok) fail(body.code ?? "FALHA_INTERNA")
+        else if (body.storeId !== lojaAtivaId) fail("LOJA_DIVERGENTE")
+        else setState({ key: scopeKey, generation, data: body })
+      } catch { if (!controller.signal.aborted && currentRequest === request.current) fail("REDE") }
     })()
     return () => controller.abort()
-  }, [key, generation, status, lojaAtivaId])
-  const current = state?.key === key && state.generation === generation ? state : undefined
-  return { data: current?.data, retainedData: state?.key === key ? state.data : undefined, error: current?.error, refresh, contextKey: key + ":" + scopeRevision,
-    loading: !current, disponivel: current?.data?.disponivel === true }
+  }, [scopeKey, generation, status, lojaAtivaId])
+  const current = state?.key === scopeKey && state.generation === generation ? state : undefined
+  return { data: current?.error ? undefined : current?.data, retainedData: state?.key === scopeKey ? state.data : undefined, error: current?.error, refresh, contextKey: scopeKey,
+    loading: !current, disponivel: !current?.error && current?.data?.disponivel === true }
 }

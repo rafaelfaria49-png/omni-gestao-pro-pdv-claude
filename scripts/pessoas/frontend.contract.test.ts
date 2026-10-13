@@ -3,7 +3,7 @@ import { webcrypto } from "node:crypto"
 import { createElement, type ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
-const identity = vi.hoisted(() => ({ store: "A", user: "user-A", expanded: false, capacidades: ["viewCadastro", "viewDocumento", "editCadastro"] }))
+const identity = vi.hoisted(() => ({ store: "A", user: "user-A", expanded: false, realContext: false, status: "authenticated" as "authenticated" | "unauthenticated", capacidades: ["viewCadastro", "viewDocumento", "editCadastro"] }))
 const backend = vi.hoisted(() => ({ store: "A" }))
 vi.mock("@/lib/pessoas/scope", () => ({ exigirAtor: async () => ({ userId: "user-A", storeId: backend.store, role: "ADMIN" }) }))
 vi.mock("@/app/actions/pessoas", () => ({
@@ -12,15 +12,21 @@ vi.mock("@/app/actions/pessoas", () => ({
   setupEmpregador: vi.fn(), obterEmpregador: vi.fn(), editarEmpregador: vi.fn(), criarEstabelecimento: vi.fn(), editarEstabelecimento: vi.fn(),
 }))
 vi.mock("@/lib/pessoas/documentos/service", () => ({ listarDocumentos: vi.fn(), criarUploadIntent: vi.fn(), confirmarUpload: vi.fn(), autorizarDownload: vi.fn() }))
-vi.mock("next-auth/react", () => ({ useSession: () => ({ status: "authenticated", data: { user: { id: identity.user }, expires: "fixed" } }) }))
+vi.mock("next-auth/react", () => ({ useSession: () => ({ status: identity.status, data: { user: { id: identity.user }, expires: "fixed" } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: identity.store }) }))
-vi.mock("@/components/dashboard/pessoas/contexto", () => ({ usePessoas: () => ({ storeId: identity.store, empregadorId: "emp-synthetic", capacidades: identity.capacidades, categoriasDocumentais: ["identificacao"] }) }))
+vi.mock("@/components/dashboard/pessoas/contexto", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/components/dashboard/pessoas/contexto")>()
+  return { ...actual, usePessoas: () => identity.realContext ? actual.usePessoas() : {
+    storeId: identity.store, empregadorId: "emp-synthetic", capacidades: identity.capacidades, categoriasDocumentais: ["identificacao"],
+  } }
+})
 vi.mock("next/link", () => ({ default: ({ children, prefetch, ...props }: { children: ReactNode; prefetch?: boolean; href: string }) => createElement("a", { ...props, "data-prefetch": String(prefetch) }, children) }))
 vi.mock("next/image", () => ({ default: () => null }))
 vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard/pessoas" }))
 vi.mock("@/components/ui/collapsible-hover-rail", () => ({ CollapsibleHoverRail: ({ children }: { children: (state: { expanded: boolean; pinned: boolean; togglePinned: () => void; collapse: () => void }) => ReactNode }) =>
   createElement("div", null, children({ expanded: identity.expanded, pinned: false, togglePinned: () => undefined, collapse: () => undefined })) }))
 import { Sidebar } from "@/components/painel-inicial/Sidebar"
+import { PessoasProvider } from "@/components/dashboard/pessoas/contexto"
 import { Documentos, type DocumentActions } from "@/components/dashboard/pessoas/documentos"
 import { FichaFuncionario } from "@/components/dashboard/pessoas/ficha"
 import { ConfiguracoesPessoas } from "@/components/dashboard/pessoas/configuracoes"
@@ -35,8 +41,8 @@ import { filterDashboardNav, hubsNavItems } from "@/lib/navigation/dashboard-nav
 import { civilDisplay, decimalInput, moneyDisplay } from "@/lib/pessoas/adapters/cadastro-ui"
 vi.setConfig({ testTimeout: 30_000 })
 afterEach(() => {
-  cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks()
-  identity.store = "A"; backend.store = "A"; identity.expanded = false
+  cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks()
+  identity.store = "A"; identity.user = "user-A"; identity.status = "authenticated"; identity.realContext = false; backend.store = "A"; identity.expanded = false
   identity.capacidades = ["viewCadastro", "viewDocumento", "editCadastro"]
 })
 describe("Frontend: contratos de privacidade e consistência", () => {
@@ -95,7 +101,7 @@ describe("Documentos: transporte controlado, não comprova R2", () => {
     vi.stubGlobal("fetch", put)
     const actions: DocumentActions = {
       listar: vi.fn().mockResolvedValue({ ok: true, data: [] }),
-      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { signedUrl: "https://storage.example.invalid/synthetic", headersObrigatorios: { "If-None-Match": "*", "Content-Type": "application/pdf" }, uploadIntent: "synthetic-intent" } }),
+      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { signedUrl: "https://storage.example.invalid/synthetic", headersObrigatorios: { "If-None-Match": "*", "Content-Type": "application/pdf" }, uploadIntent: "synthetic-intent", expiresInSec: 300 } }),
       confirmar: vi.fn().mockRejectedValueOnce(new Error("lost response")).mockResolvedValue({ ok: true, data: {} }),
       download: vi.fn(),
     }
@@ -238,7 +244,7 @@ describe("Recovery R2: ficha e documentos coordenam operações", () => {
     }
     const documentActions: DocumentActions = {
       listar: vi.fn().mockResolvedValue({ ok: true, data: [] }),
-      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { signedUrl: "https://storage.example.invalid/synthetic", headersObrigatorios: {}, uploadIntent: "intent-coordination" } }),
+      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { signedUrl: "https://storage.example.invalid/synthetic", headersObrigatorios: {}, uploadIntent: "intent-coordination", expiresInSec: 300 } }),
       confirmar: vi.fn().mockRejectedValueOnce(new Error("lost response")).mockResolvedValue({ ok: true, data: {} }),
       download: vi.fn(),
     }
@@ -290,5 +296,310 @@ describe("Recovery R5: foco após releitura da configuração", () => {
     expect(form.isConnected).toBe(false)
     await act(async () => finish({ ok: true, data: { ...employer, versaoAtual: 2 } }))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByText("Configuração salva e atualizada.")))
+  })
+})
+
+describe("Recovery R2 final: contexto e retomada documental em memória", () => {
+  function fixture() {
+    const documentActions: DocumentActions = {
+      listar: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { documentoId: "doc-recovery", signedUrl: "https://storage.example.invalid/recovery",
+        headersObrigatorios: { "If-None-Match": "*" }, expiresInSec: 300, uploadIntent: "intent-recovery" } }),
+      confirmar: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+      download: vi.fn(),
+    }
+    const actions = {
+      obterFuncionario: vi.fn().mockResolvedValue({ ok: true, data: { nome: "Pessoa sintética", cpf: null, nascimento: null,
+        status: "RASCUNHO", pessoaVersaoAtual: 1, versaoAtual: 1, pendencias: [], contrato: null } }),
+      listarHistorico: vi.fn().mockResolvedValue({ ok: true, data: { pessoa: [], contratos: [] } }),
+      atualizarDadosPessoais: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+      completarVinculoRascunho: vi.fn(), criarVersaoContrato: vi.fn(),
+    }
+    const listarEmpregadoresAction = vi.fn().mockResolvedValue({ ok: true, data: [
+      { id: "emp-synthetic", nome: "Empregador sintético" }, { id: "emp-second", nome: "Outro empregador" },
+    ] })
+    const tree = (provider = false) => {
+      const children = createElement(FichaFuncionario, { id: "link-synthetic", actions, documentActions })
+      return provider ? createElement(PessoasProvider, { children, listarEmpregadoresAction, listarFuncionariosAction: vi.fn() }) : children
+    }
+    return { documentActions, actions, tree }
+  }
+  function availability() {
+    return { storeId: identity.store, disponivel: true, podeConfigurarEmpregador: false,
+      escopos: ["emp-synthetic", "emp-second"].map(empregadorId => ({ empregadorId, capacidades: identity.capacidades, categoriasDocumentais: ["identificacao"] })) }
+  }
+  async function startUpload() {
+    const input = await screen.findByLabelText("Arquivo")
+    const file = new File(["%PDF-1.7 recovery"], "recovery.pdf", { type: "application/pdf" })
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode("%PDF-1.7 recovery").buffer })
+    fireEvent.change(input, { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText("Origem"), { target: { value: "INTERNO" } })
+    fireEvent.submit(screen.getByText("Enviar documento").closest("form")!)
+    return { file, input }
+  }
+  async function openSection() {
+    fireEvent.click(await screen.findByText("Editar dados pessoais"))
+    return screen.getByRole("button", { name: "Salvar" }) as HTMLButtonElement
+  }
+  it("preserva o intent na árvore oculta/inert após REDE e só retoma depois de validar a mesma identidade", async () => {
+    identity.realContext = true
+    vi.stubGlobal("crypto", webcrypto)
+    let reads = 0, finish: (value: unknown) => void = () => undefined
+    const put = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
+      if (!url.startsWith("/api/")) return put(url, options)
+      reads++
+      if (reads === 2) return Promise.reject(new Error("offline"))
+      if (reads === 3) return new Promise(resolve => { finish = resolve })
+      return Promise.resolve({ ok: true, json: async () => availability() })
+    }))
+    const f = fixture()
+    vi.mocked(f.documentActions.confirmar).mockRejectedValueOnce(new Error("lost complete"))
+    render(f.tree(true))
+    const save = await openSection()
+    const { input } = await startUpload()
+    await screen.findByText("Confirmação sem resposta conclusiva. Confira a lista ou repita a confirmação.")
+    act(() => window.dispatchEvent(new Event("focus")))
+    const retryAccess = await screen.findByRole("button", { name: "Tentar novamente" })
+    expect(input.isConnected).toBe(true)
+    expect(input.closest("[hidden]")?.hasAttribute("inert")).toBe(true)
+    fireEvent.click(screen.getByText("Repetir confirmação"))
+    fireEvent.submit(save.closest("form")!)
+    expect(f.documentActions.confirmar).toHaveBeenCalledTimes(1)
+    expect(f.actions.atualizarDadosPessoais).not.toHaveBeenCalled()
+    fireEvent.click(retryAccess)
+    expect(input.closest("[hidden]")).not.toBeNull()
+    await act(async () => finish({ ok: true, json: async () => availability() }))
+    await waitFor(() => expect(input.closest("[hidden]")).toBeNull())
+    expect(screen.getByLabelText("Arquivo")).toBe(input)
+    fireEvent.click(screen.getByText("Repetir confirmação"))
+    await screen.findByText("Documento salvo.")
+    expect(vi.mocked(f.documentActions.confirmar).mock.calls).toEqual([["A", "intent-recovery"], ["A", "intent-recovery"]])
+    expect(put).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(save.disabled).toBe(false))
+  })
+  it.each(["ESCOPO_NEGADO", "LOJA_DIVERGENTE", "PESSOAS_DESABILITADO", "SEM_ESCOPO"])("descarta a recuperação quando a revalidação confirma %s", async code => {
+    identity.realContext = true
+    vi.stubGlobal("crypto", webcrypto)
+    let reads = 0
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (!url.startsWith("/api/")) return { ok: true, status: 200 }
+      if (++reads === 1) return { ok: true, json: async () => availability() }
+      return code === "SEM_ESCOPO" ? { ok: true, json: async () => ({ ...availability(), disponivel: false, escopos: [] }) }
+        : { ok: false, json: async () => ({ code }) }
+    }))
+    const f = fixture()
+    vi.mocked(f.documentActions.confirmar).mockRejectedValueOnce(new Error("lost complete"))
+    render(f.tree(true))
+    const { input } = await startUpload()
+    await screen.findByText("Repetir confirmação")
+    act(() => window.dispatchEvent(new Event("focus")))
+    await waitFor(() => expect(input.isConnected).toBe(false))
+    expect(screen.queryByText("Repetir confirmação")).toBeNull()
+    expect(f.documentActions.confirmar).toHaveBeenCalledTimes(1)
+  })
+  it.each(["Store", "usuário", "logout", "empregador", "geração de escopo"])("descarta arquivo e intent ao mudar %s", async change => {
+    identity.realContext = true
+    vi.stubGlobal("crypto", webcrypto)
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.startsWith("/api/")
+      ? { ok: true, json: async () => availability() } : { ok: true, status: 200 }))
+    const f = fixture()
+    vi.mocked(f.documentActions.confirmar).mockRejectedValueOnce(new Error("lost complete"))
+    const view = render(f.tree(true))
+    const { input } = await startUpload()
+    await screen.findByText("Repetir confirmação")
+    if (change === "empregador") fireEvent.change(screen.getByLabelText("Empregador"), { target: { value: "emp-second" } })
+    else if (change === "geração de escopo") act(() => window.dispatchEvent(new StorageEvent("storage", { key: "assistec-pro-loja-ativa-v1", newValue: "B" })))
+    else {
+      if (change === "Store") identity.store = "B"
+      if (change === "usuário") identity.user = "user-B"
+      if (change === "logout") identity.status = "unauthenticated"
+      view.rerender(f.tree(true))
+    }
+    await waitFor(() => expect(input.isConnected).toBe(false))
+    expect(screen.queryByText("Repetir confirmação")).toBeNull()
+    expect(f.documentActions.confirmar).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } })).not.toContain("intent-recovery")
+  })
+  it.each(["falha HTTP", "cancelamento"])("retoma PUT após %s com o mesmo File, URL, intent e headers exclusivos", async failure => {
+    vi.stubGlobal("crypto", webcrypto)
+    const put = vi.fn().mockImplementationOnce((_url: string, options: RequestInit) => failure === "falha HTTP"
+      ? Promise.resolve({ ok: false, status: 503 })
+      : new Promise((_resolve, reject) => options.signal?.addEventListener("abort", () => reject(new DOMException("Abortado", "AbortError")), { once: true })))
+      .mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal("fetch", put)
+    const f = fixture()
+    render(f.tree())
+    const save = await openSection()
+    const { file } = await startUpload()
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
+    if (failure === "cancelamento") fireEvent.click(screen.getByText("Cancelar"))
+    const retry = await screen.findByText("Repetir envio de bytes")
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false))
+    expect(save.disabled).toBe(true)
+    fireEvent.click(retry)
+    await screen.findByText("Documento salvo.")
+    expect(put).toHaveBeenCalledTimes(2)
+    for (const [url, options] of put.mock.calls) {
+      expect(url).toBe("https://storage.example.invalid/recovery")
+      expect(options.body).toBe(file)
+      expect(options.headers).toEqual({ "If-None-Match": "*" })
+    }
+    expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(1)
+    expect(f.documentActions.confirmar).toHaveBeenCalledWith("A", "intent-recovery")
+    await waitFor(() => expect(save.disabled).toBe(false))
+  })
+  it.each(["PUT 412", "verificação direta"])("confere o mesmo intent após resposta PUT desconhecida e %s", async recovery => {
+    vi.stubGlobal("crypto", webcrypto)
+    const put = vi.fn().mockRejectedValueOnce(new Error("lost PUT")).mockResolvedValue({ ok: false, status: 412 })
+    vi.stubGlobal("fetch", put)
+    const f = fixture()
+    render(f.tree())
+    const save = await openSection()
+    await startUpload()
+    await screen.findByText("Resposta do envio de bytes não confirmada. Repita o envio ou verifique a confirmação.")
+    const button = screen.getByText(recovery === "PUT 412" ? "Repetir envio de bytes" : "Verificar confirmação")
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false))
+    expect(screen.queryByText("Documento salvo.")).toBeNull()
+    fireEvent.click(button)
+    await screen.findByText("Documento salvo.")
+    expect(put).toHaveBeenCalledTimes(recovery === "PUT 412" ? 2 : 1)
+    expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(1)
+    expect(f.documentActions.confirmar).toHaveBeenCalledWith("A", "intent-recovery")
+    await waitFor(() => expect(save.disabled).toBe(false))
+  })
+  it("não repete URL vencida e conserva intent válido para confirmação/listagem", async () => {
+    vi.stubGlobal("crypto", webcrypto)
+    const now = Date.now()
+    const time = vi.spyOn(Date, "now").mockReturnValue(now)
+    const put = vi.fn().mockRejectedValue(new Error("lost PUT"))
+    vi.stubGlobal("fetch", put)
+    const f = fixture()
+    render(f.tree())
+    const save = await openSection()
+    await startUpload()
+    await screen.findByText("Resposta do envio de bytes não confirmada. Repita o envio ou verifique a confirmação.")
+    const retryPut = screen.getByText("Repetir envio de bytes") as HTMLButtonElement
+    await waitFor(() => expect(retryPut.disabled).toBe(false))
+    time.mockReturnValue(now + 301_000)
+    fireEvent.click(retryPut)
+    await screen.findByText("A URL de envio expirou. O documento ainda pode ser confirmado: confira a lista ou verifique a confirmação.")
+    expect(retryPut.disabled).toBe(true)
+    expect(put).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByText("Conferir lista antes de novo envio"))
+    expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(1)
+    expect(save.disabled).toBe(true)
+    fireEvent.click(screen.getByText("Verificar confirmação"))
+    await screen.findByText("Documento salvo.")
+    expect(f.documentActions.confirmar).toHaveBeenCalledWith("A", "intent-recovery")
+    expect(put).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(save.disabled).toBe(false))
+  })
+  it.each(["INTENT_INVALIDO", "INTENT_EXPIRADO"])("exige descarte explícito após %s, sem novo intent automático", async code => {
+    vi.stubGlobal("crypto", webcrypto)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }))
+    const f = fixture()
+    vi.mocked(f.documentActions.confirmar).mockResolvedValueOnce({ ok: false, code })
+    render(f.tree())
+    const save = await openSection()
+    await startUpload()
+    const discard = await screen.findByText("Descartar envio recusado")
+    await waitFor(() => expect((discard as HTMLButtonElement).disabled).toBe(false))
+    expect(screen.queryByText("Documento salvo.")).toBeNull()
+    expect(screen.queryByText("Enviar documento")).toBeNull()
+    expect(save.disabled).toBe(true)
+    expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(1)
+    fireEvent.click(discard)
+    await waitFor(() => expect(save.disabled).toBe(false))
+    expect(screen.getByText("Enviar documento")).toBeTruthy()
+    expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(1)
+    await startUpload()
+    await screen.findByText("Documento salvo.")
+    expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(2)
+  })
+  it("mantém confirmação cancelada como desconhecida até replay confirmado", async () => {
+    vi.stubGlobal("crypto", webcrypto)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }))
+    const f = fixture()
+    let finish: (value: Awaited<ReturnType<DocumentActions["confirmar"]>>) => void = () => undefined
+    vi.mocked(f.documentActions.confirmar).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    render(f.tree())
+    const save = await openSection()
+    await startUpload()
+    await waitFor(() => expect(f.documentActions.confirmar).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByText("Cancelar"))
+    await act(async () => finish({ ok: true, data: { id: "doc-recovery", vinculoId: "link-synthetic", categoria: "identificacao",
+      classificacao: "COMUM", origem: "INTERNO", nomeArquivo: "recovery.pdf", mime: "application/pdf", bytes: 17,
+      sha256: "a".repeat(64), createdAt: "2026-10-13T12:00:00.000Z" } }))
+    expect(screen.queryByText("Documento salvo.")).toBeNull()
+    expect(save.disabled).toBe(true)
+    fireEvent.click(screen.getByText("Repetir confirmação"))
+    await screen.findByText("Documento salvo.")
+    expect(vi.mocked(f.documentActions.confirmar).mock.calls).toEqual([["A", "intent-recovery"], ["A", "intent-recovery"]])
+    await waitFor(() => expect(save.disabled).toBe(false))
+  })
+})
+
+describe("Recovery R2 final: etapas pendentes e confirmação inconclusiva", () => {
+  function documentActions(): DocumentActions {
+    return {
+      listar: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { documentoId: "doc-stage", uploadIntent: "intent-stage",
+        signedUrl: "https://storage.example.invalid/stage", headersObrigatorios: { "If-None-Match": "*" }, expiresInSec: 300 } }),
+      confirmar: vi.fn().mockResolvedValue({ ok: true, data: {} }), download: vi.fn(),
+    }
+  }
+  async function selectFile() {
+    const input = await screen.findByLabelText("Arquivo")
+    const file = new File(["%PDF-1.7 stage"], "stage.pdf", { type: "application/pdf" })
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode("%PDF-1.7 stage").buffer })
+    fireEvent.change(input, { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText("Origem"), { target: { value: "INTERNO" } })
+    fireEvent.submit(screen.getByText("Enviar documento").closest("form")!)
+    return file
+  }
+  it("continua permitindo retry do PUT depois de complete inconclusivo sem objeto confirmado", async () => {
+    vi.stubGlobal("crypto", webcrypto)
+    const put = vi.fn().mockRejectedValueOnce(new Error("lost PUT")).mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal("fetch", put)
+    const actions = documentActions()
+    vi.mocked(actions.confirmar).mockResolvedValueOnce({ ok: false, code: "FALHA_INTERNA" })
+    render(createElement(Documentos, { id: "link-synthetic", actions }))
+    const file = await selectFile()
+    await screen.findByText("Resposta do envio de bytes não confirmada. Repita o envio ou verifique a confirmação.")
+    const verify = screen.getByText("Verificar confirmação") as HTMLButtonElement
+    await waitFor(() => expect(verify.disabled).toBe(false))
+    fireEvent.click(verify)
+    await screen.findByText("Confirmação sem resposta conclusiva. Confira a lista ou repita a confirmação.")
+    const retryPut = screen.getByText("Repetir envio de bytes") as HTMLButtonElement
+    await waitFor(() => expect(retryPut.disabled).toBe(false))
+    fireEvent.click(retryPut)
+    await screen.findByText("Documento salvo.")
+    expect(put).toHaveBeenCalledTimes(2)
+    expect(put.mock.calls[1][1].body).toBe(file)
+    expect(actions.criarIntent).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(actions.confirmar).mock.calls).toEqual([["A", "intent-stage"], ["A", "intent-stage"]])
+  })
+  it("conserva intent recebido depois de Cancelar sem iniciar PUT automaticamente", async () => {
+    vi.stubGlobal("crypto", webcrypto)
+    const put = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal("fetch", put)
+    const actions = documentActions()
+    let finish: (value: Awaited<ReturnType<DocumentActions["criarIntent"]>>) => void = () => undefined
+    vi.mocked(actions.criarIntent).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    render(createElement(Documentos, { id: "link-synthetic", actions }))
+    const file = await selectFile()
+    await waitFor(() => expect(actions.criarIntent).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByText("Cancelar"))
+    await act(async () => finish({ ok: true, data: { documentoId: "doc-stage", uploadIntent: "intent-stage",
+      signedUrl: "https://storage.example.invalid/stage", headersObrigatorios: { "If-None-Match": "*" }, expiresInSec: 300 } }))
+    expect(put).not.toHaveBeenCalled()
+    const retryPut = screen.getByText("Repetir envio de bytes") as HTMLButtonElement
+    await waitFor(() => expect(retryPut.disabled).toBe(false))
+    fireEvent.click(retryPut)
+    await screen.findByText("Documento salvo.")
+    expect(put).toHaveBeenCalledTimes(1)
+    expect(put.mock.calls[0][1].body).toBe(file)
+    expect(actions.criarIntent).toHaveBeenCalledTimes(1)
   })
 })

@@ -176,3 +176,76 @@ NEXT_GATE=AUTORIZACAO_DA_VALIDACAO_ISOLADA
 A rodada autorizada não iniciou Docker, PostgreSQL, Vitest, Playwright, typecheck, lint, build, runner oficial ou aplicação/browser. A inspeção estática não comprova tipagem, compilação de Server Actions, persistência, isolamento em runtime, acessibilidade visual, upload real ou smoke R2. A validação futura deve usar o HEAD corretivo exato, executar as regressões preparadas e a bateria exigida pelo GOAL, seguida de revisão independente GLM 5.3 e preview/R2 com autorização específica. Produção, merge para main, close/DONE, folha/holerites e GOAL 002 continuam sem execução.
 
 Ponto de parada: **PESSOAS 001B — ACHADOS CORRIGIDOS EM BRANCH, AGUARDANDO VALIDAÇÃO E REVISÃO INDEPENDENTE.**
+
+## Corretivo final R2-01/R2-02 — 13/10/2026
+
+Missão humana: corrigir exclusivamente a recuperação documental apontada na revisão estática do HEAD `34cd1b4a755e38d8eaa816bbab37d28129a13ad3`, preservar os corretivos R1–R5 e preparar cobertura sem executar validação de produto. Um commit corretivo e push normal na branch existente estão autorizados. O GOAL continua aberto, sem close/DONE.
+
+- Branch/worktree: `goal/pessoas-001b-recovery-001` / `C:/Projetos/omni-gestao-pessoas-001b-recovery-001`.
+- BASE_HEAD deste corretivo final: `34cd1b4a755e38d8eaa816bbab37d28129a13ad3`.
+- Entrada: `track.mjs status pessoas` e `open pessoas`; GOAL `PESSOAS-DP-FRONTEND-001B-RECOVERY-001`, tentativa 1/3, árvore limpa na base.
+- Identificação do commit: `goal(pessoas-001b-recovery-001): recupera revalidacao transitoria e PUT documental`. O SHA exato é registrado na entrega/histórico Git.
+- A revisão desta base foi feita por Codex/OpenAI; não representa a revisão independente GLM 5.3 exigida pelo GOAL.
+
+### R2-01: revalidação transitória
+
+O hook conserva a disponibilidade anterior exclusivamente em erro REDE da mesma identidade, Store esperada e geração de escopo. Esse dado é apenas retido: não é devolvido como disponibilidade atual nem como autorização válida. Durante a falha ou a nova requisição, o provider mantém a árvore anterior montada, oculta e inert, com erro e tentativa novamente fora da área oculta. A interação dos formulários/documentos fica suspensa também por contexto local; novas operações aguardam validação positiva.
+
+A nova validação positiva do mesmo escopo recupera a árvore e seu estado documental em memória. ESCOPO_NEGADO, LOJA_DIVERGENTE, flag OFF, logout, mudança de usuário/Store/empregador ou invalidação da geração continuam desmontando o contexto e limpando o estado transitório. Não há persistência ou exibição interativa de dados antigos durante REDE.
+
+### R2-02: PUT e confirmação independentes
+
+Documentos distingue preparação, bytes pendentes, resposta PUT desconhecida, confirmação pendente, resposta complete desconhecida, confirmação concluída e intent recusado. Enquanto houver recuperação, conserva somente em memória o uploadIntent, File original, URL assinada, headers obrigatórios e validade da URL.
+
+- Falha HTTP/cancelamento/resposta PUT perdida permite repetir os mesmos bytes na mesma URL com os mesmos headers enquanto ela for válida. `If-None-Match: *` é preservado; nenhum caminho retira a criação exclusiva ou sobrescreve o objeto.
+- HTTP 412 segue para o complete do mesmo intent. O backend 001A existente decide publicação/integridade; não há substituição de objeto nem outro intent automático.
+- Uma resposta PUT desconhecida também permite verificar a confirmação diretamente, sem repetir bytes. Se essa verificação falhar sem comprovar o aceite dos bytes, o mesmo PUT continua recuperável enquanto a URL for válida.
+- A validade da URL usa o TTL devolvido pelo backend, contado conservadoramente desde o início da solicitação do intent. O retry verifica o prazo antes de cada PUT; a interface também sinaliza expiração. URL vencida não é reutilizada, e seu vencimento não descarta o intent.
+- Mesmo com URL vencida, confirmação e listagem continuam disponíveis para o mesmo intent. A invalidade/expiração do intent permanece decisão do backend.
+- Cancelar uma action já enviada não cancela sua execução no servidor. Um intent recebido depois do cancelamento é retido sem iniciar PUT; complete cancelado permanece desconhecido e admite replay.
+- Sucesso é anunciado somente após complete confirmado. Uma recusa definitiva encerra a recuperação, orienta conferir a lista e exige a ação explícita `Descartar envio recusado` antes de outro envio. Nenhum intent válido é abandonado silenciosamente.
+- Durante revalidação, etapas posteriores do envio aguardam a recuperação da autorização; releitura documental necessária fica adiada enquanto a árvore está suspensa.
+
+A trava existente da ficha é mantida durante bytes/complete recuperáveis, incluindo respostas desconhecidas. Documentos continua montado nas releituras da ficha. A edição cadastral é liberada após confirmação ou descarte explícito de uma recuperação definitivamente recusada. Não foi criado cancelamento backend fictício para abandonar um intent ainda válido.
+
+### Cobertura preparada, sem execução
+
+A suíte focada existente ganhou cenários com o provider real para REDE → árvore oculta/inert → revalidação positiva da mesma identidade e replay do mesmo intent. Também prepara descarte por revogação, Store divergente, flag OFF, troca de Store/usuário/empregador/logout e geração de escopo. A cobertura documental preparada inclui PUT falho/abortado seguido de retry do mesmo File/URL/headers, resposta PUT perdida seguida de HTTP 412 ou confirmação direta, URL vencida com intent ainda válido, intent inválido/expirado, cancelamento de complete e manutenção/liberação da trava da ficha.
+
+São cenários de transporte controlado, não prova de storage R2 ou autorização em runtime. Os testes anteriores de R1–R5 foram preservados; fixtures de intent agora incluem o TTL da URL. Nenhum desses testes foi executado.
+
+### Escopo e situação desta rodada
+
+Somente estes seis caminhos foram alterados:
+
+```text
+components/dashboard/pessoas/use-disponibilidade.ts
+components/dashboard/pessoas/contexto.tsx
+components/dashboard/pessoas/ui.tsx
+components/dashboard/pessoas/documentos.tsx
+scripts/pessoas/frontend.contract.test.ts
+docs/pessoas/VALIDACAO_FRONTEND_001B_RECOVERY_001.md
+```
+
+Inspeção permitida: diff estático, paths/allowlist, whitespace e estado Git. Backend 001A, wrappers de Store, schema, auth, proxy, PWA, adapter R2, contrato/histórico e corretivos visuais/foco não foram alterados. Nenhum File, intent, URL ou bytes foi persistido no cliente. CURRENT_STATUS/CHANGELOG/memória global e derivados AEP não são editados nesta missão restrita.
+
+```text
+R2_01_TRANSIENT_REVALIDATION=IMPLEMENTED_STATIC_RUNTIME_PENDING
+R2_02_PUT_RECOVERY=IMPLEMENTED_STATIC_RUNTIME_PENDING
+SIGNED_URL_EXPIRATION=PUT_BLOCKED_INTENT_RETAINED
+INTENT_EXPIRATION=BACKEND_DECISION_EXPLICIT_DISCARD
+DOCUMENT_LOCK=HELD_UNTIL_CONFIRMED_OR_EXPLICIT_SAFE_DISCARD
+TESTS=NOT_RUN
+TYPECHECK=NOT_RUN
+LINT=NOT_RUN
+BUILD=NOT_RUN
+E2E=NOT_RUN
+GLM_REVIEW=PENDING
+PREVIEW_R2=PENDING
+AEP_CLOSE=NOT_RUN
+NEXT_GATE=GLM_5_3_STATIC_REVIEW
+```
+
+Não foram executados Docker, PostgreSQL, npm ci, Vitest, Playwright, E2E, typecheck, lint, build, runner oficial, preview/R2 ou merge. Não há PASS de runtime, visual, tipagem ou aceite; a validação futura deve fixar o HEAD corretivo e obedecer à autorização própria.
+
+Ponto de parada: **R2-01 E R2-02 CORRIGIDOS NA BRANCH — AGUARDANDO REVISÃO INDEPENDENTE E VALIDAÇÃO.**

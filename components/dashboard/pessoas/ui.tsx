@@ -1,11 +1,12 @@
 "use client"
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { errorMessage, conflictCodes, accessCodes } from "@/lib/pessoas/adapters/cadastro-ui"
 import { pessoasScopeEpoch, refreshPessoas } from "./use-disponibilidade"
 export type StoreAction<F extends (...args: never[]) => Promise<unknown>> = (expectedStoreId: string, ...args: Parameters<F>) => ReturnType<F>
 export type StoreResourceAction<F extends (...args: never[]) => Promise<unknown>> = (expectedStoreId: string, ...args: Parameters<F>) => Promise<{ ok: true; data: Awaited<ReturnType<F>> } | { ok: false; code: string }>
+export const PessoasInteracaoContext = createContext(true)
 export const control = "h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 export function Notice({ code, retry }: { code: string; retry?: () => void }) {
   return <div role="alert" className="min-w-0 space-y-3 [overflow-wrap:anywhere] rounded-lg border border-border bg-muted/40 p-4 text-sm">
@@ -23,6 +24,9 @@ export function CommandForm({ fields, action, submitLabel = "Salvar", onSaved, o
   submitLabel?: string; onSaved: () => void; onConflict?: () => void
   disabled?: boolean; onPendingChange?: (pending: boolean) => void; acquireMutation?: () => boolean
 }) {
+  const interativo = useContext(PessoasInteracaoContext)
+  const autorizado = useRef(interativo)
+  autorizado.current = interativo
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [unknown, setUnknown] = useState(false)
@@ -34,7 +38,7 @@ export function CommandForm({ fields, action, submitLabel = "Salvar", onSaved, o
   useEffect(() => { onPendingChange?.(busy || unknown) }, [busy, unknown, onPendingChange])
   useEffect(() => () => onPendingChange?.(false), [onPendingChange])
   async function execute(values: Record<string, string>) {
-    if (lock.current || disabled || (acquireMutation && !acquireMutation())) return
+    if (lock.current || disabled || !autorizado.current || (acquireMutation && !acquireMutation())) return
     const operationEpoch = pessoasScopeEpoch()
     let pendingAfter = false
     onPendingChange?.(true)
@@ -59,7 +63,7 @@ export function CommandForm({ fields, action, submitLabel = "Salvar", onSaved, o
     const values = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>
     void execute(values)
   }} className="space-y-4">
-    <fieldset disabled={disabled || busy || unknown} className="grid min-w-0 gap-4 sm:grid-cols-2">
+    <fieldset disabled={!interativo || disabled || busy || unknown} className="grid min-w-0 gap-4 sm:grid-cols-2">
       {fields.map(field => <label key={field.name} className="min-w-0 space-y-1 text-sm">
         <span className="block font-medium">{field.label}{field.required ? " *" : ""}</span>
         {field.options ? <select aria-describedby={field.hint ? field.name + "-hint" : undefined} className={control} name={field.name} required={field.required} defaultValue={field.value ?? ""}>
@@ -71,9 +75,9 @@ export function CommandForm({ fields, action, submitLabel = "Salvar", onSaved, o
     </fieldset>
     <div ref={feedback} tabIndex={-1} aria-live="polite">{error && <Notice code={error} />}</div>
     {unknown ? <div className="flex min-w-0 flex-wrap gap-2">
-      <Button type="button" disabled={disabled || busy} onClick={() => command.current && void execute(command.current.values)}>Repetir o mesmo comando</Button>
-      <Button type="button" variant="outline" disabled={disabled || busy} onClick={() => { command.current = null; setUnknown(false); onConflict?.() }}>Reler antes de alterar</Button>
-    </div> : <Button className="min-h-11" disabled={disabled || busy} type="submit">{busy ? "Salvando…" : submitLabel}</Button>}
+      <Button type="button" disabled={!interativo || disabled || busy} onClick={() => command.current && void execute(command.current.values)}>Repetir o mesmo comando</Button>
+      <Button type="button" variant="outline" disabled={!interativo || disabled || busy} onClick={() => { command.current = null; setUnknown(false); onConflict?.() }}>Reler antes de alterar</Button>
+    </div> : <Button className="min-h-11" disabled={!interativo || disabled || busy} type="submit">{busy ? "Salvando…" : submitLabel}</Button>}
   </form>
 }
 export function useResource<T>(load: () => Promise<{ ok: true; data: T } | { ok: false; code: string }>) {

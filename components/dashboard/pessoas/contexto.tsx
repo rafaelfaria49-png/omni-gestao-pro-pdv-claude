@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { listarEmpregadores, listarFuncionarios } from "@/app/actions/pessoas"
 import { useDisponibilidade, type Disponibilidade } from "./use-disponibilidade"
-import { control, Notice, useResource, type StoreAction } from "./ui"
+import { control, Notice, PessoasInteracaoContext, useResource, type StoreAction } from "./ui"
 type Context = { storeId: string; empregadorId: string; capacidades: string[]; categoriasDocumentais: string[]; podeConfigurar: boolean; listarFuncionarios: StoreAction<typeof listarFuncionarios> }
 const Contexto = createContext<Context | null>(null)
 export function usePessoas() {
@@ -15,18 +15,18 @@ export function usePessoas() {
 type ProviderProps = { children: ReactNode; listarEmpregadoresAction: StoreAction<typeof listarEmpregadores>; listarFuncionariosAction: StoreAction<typeof listarFuncionarios> }
 export function PessoasProvider({ children, listarEmpregadoresAction, listarFuncionariosAction }: ProviderProps) {
   const availability = useDisponibilidade()
-  if (availability.error) return <Notice code={availability.error} retry={availability.refresh} />
   const retained = availability.data ?? availability.retainedData
+  if (availability.error && (availability.error !== "REDE" || !retained)) return <Notice code={availability.error} retry={availability.refresh} />
   if (!retained) return <p role="status">Verificando acesso a Pessoas…</p>
-  if (availability.data && !availability.disponivel) return <Notice code="ESCOPO_NEGADO" retry={availability.refresh} />
+  if (!retained.disponivel) return <Notice code="ESCOPO_NEGADO" retry={availability.refresh} />
   return <>
-    {!availability.data && <p role="status">Revalidando acesso a Pessoas…</p>}
+    {!availability.data && (availability.error ? <Notice code={availability.error} retry={availability.refresh} /> : <p role="status">Revalidando acesso a Pessoas…</p>)}
     <div hidden={!availability.data} inert={!availability.data}>
-      <ContextoAutorizado key={availability.contextKey + JSON.stringify(retained)} availability={retained} listarEmpregadoresAction={listarEmpregadoresAction} listarFuncionariosAction={listarFuncionariosAction}>{children}</ContextoAutorizado>
+      <ContextoAutorizado key={availability.contextKey + JSON.stringify(retained)} availability={retained} interativo={!!availability.data} listarEmpregadoresAction={listarEmpregadoresAction} listarFuncionariosAction={listarFuncionariosAction}>{children}</ContextoAutorizado>
     </div>
   </>
 }
-function ContextoAutorizado({ children, availability, listarEmpregadoresAction, listarFuncionariosAction }: ProviderProps & { availability: Disponibilidade }) {
+function ContextoAutorizado({ children, availability, interativo, listarEmpregadoresAction, listarFuncionariosAction }: ProviderProps & { availability: Disponibilidade; interativo: boolean }) {
   const resource = useResource(useCallback(() => listarEmpregadoresAction(availability.storeId), [listarEmpregadoresAction, availability.storeId]))
   const [selected, setSelected] = useState<string | null>(null)
   const path = usePathname()
@@ -50,7 +50,9 @@ function ContextoAutorizado({ children, availability, listarEmpregadoresAction, 
         <Link key={suffix} prefetch={false} href={"/dashboard/pessoas" + suffix} aria-current={path === "/dashboard/pessoas" + suffix ? "page" : undefined}
           className="rounded-md border border-border px-4 py-3 text-sm hover:bg-muted aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground">{title}</Link>)}
     </nav>
-    <Contexto.Provider key={availability.storeId + ":" + empregadorId} value={value}>{children}</Contexto.Provider>
+    <PessoasInteracaoContext.Provider value={interativo}>
+      <Contexto.Provider key={availability.storeId + ":" + empregadorId} value={value}>{children}</Contexto.Provider>
+    </PessoasInteracaoContext.Provider>
     <p className="text-xs text-muted-foreground">Dados privados. O acesso é revalidado ao retornar à aba. Trocar de contexto ou perder acesso descarta formulários não salvos.</p>
   </div>
 }
