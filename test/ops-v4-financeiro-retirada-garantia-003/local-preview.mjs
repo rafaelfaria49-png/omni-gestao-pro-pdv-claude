@@ -18,7 +18,7 @@ if (spawnSync(pgCtl,["-D",pg,"status"],{stdio:"ignore",windowsHide:true}).status
   const r = spawnSync(pgCtl,["-D",pg,"-l",path.join(pg,"../postgres.log"),"-o","-h 127.0.0.1 -p 55439","start"],{stdio:"inherit",windowsHide:true});
   if (r.status !== 0) throw new Error("Não foi possível iniciar o PostgreSQL QA.");
 }
-const env = { ...process.env, ...e, DATABASE_URL: esperado, DIRECT_URL: esperado, AUTH_URL: "http://127.0.0.1:3043", NEXTAUTH_URL: "http://127.0.0.1:3043", NEXT_TELEMETRY_DISABLED: "1", NODE_OPTIONS: process.env.QA_NODE_OPTIONS || "--max-old-space-size=1536" };
+const env = { ...process.env, ...e, DATABASE_URL: esperado, DIRECT_URL: esperado, AUTH_URL: "http://127.0.0.1:3043", NEXTAUTH_URL: "http://127.0.0.1:3043", NEXT_TELEMETRY_DISABLED: "1", NODE_OPTIONS: process.env.QA_NODE_OPTIONS || "--max-old-space-size=3072" };
 const child = spawn(process.execPath,[path.join(root,"node_modules/next/dist/bin/next"),"dev","--webpack","-p","3043","-H","127.0.0.1"],{ cwd:root,env,stdio:"inherit",windowsHide:true });
 child.on("exit",(code) => process.exit(code ?? 1));
 console.log("V4 experimental: http://127.0.0.1:3043/dashboard/operacoes-v4-preview — somente dados sintéticos.");

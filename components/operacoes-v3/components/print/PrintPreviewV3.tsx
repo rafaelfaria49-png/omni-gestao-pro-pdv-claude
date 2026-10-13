@@ -73,7 +73,6 @@ export function PrintPreviewV3({
   const [escolha, setEscolha] = useState<{ alvo: string; versao: number } | null>(null);
   const versao = escolha?.alvo === alvo ? escolha.versao : versoes.at(-1)?.versao;
   const retornoFoco = useRef<HTMLElement | null>(null);
-  useEffect(() => { if (open) retornoFoco.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }, [open, alvo]);
   const docGarantia = useMemo(() => os && tipo === "termo_garantia" ? montarTermoGarantiaDocV3(os, empresa, { versao }) : null, [os, tipo, empresa, versao]);
   const whatsappEfetivo = tipo === "termo_garantia" && os
     ? docGarantia?.limitacao ? null : montarLinkWaV4(docGarantia?.cliente.telefone, montarMensagemDocumentoV4(tipo, os, versao))
@@ -114,7 +113,7 @@ export function PrintPreviewV3({
 
   return (
     <Dialog.Root open={open} onOpenChange={(value) => { if (!value) onClose(); }}><Dialog.Portal>
-    <Dialog.Content data-og-print-overlay aria-describedby={undefined} onEscapeKeyDown={(e) => e.stopPropagation()} onCloseAutoFocus={(e) => { e.preventDefault(); retornoFoco.current?.focus(); }} className="fixed inset-0 z-[80] overflow-y-auto bg-zinc-700/60 outline-none">
+    <Dialog.Content data-og-print-overlay aria-describedby={undefined} onOpenAutoFocus={() => { retornoFoco.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }} onEscapeKeyDown={(e) => e.stopPropagation()} onCloseAutoFocus={(e) => { e.preventDefault(); retornoFoco.current?.focus(); }} className="fixed inset-0 z-[80] overflow-y-auto bg-zinc-700/60 outline-none">
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
 
       <div data-no-print className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-2.5 shadow-sm">

@@ -18,6 +18,7 @@ export function normalizarGarantiaPrevistaV3(input: { modeloId: string; prazoDia
   modelo: GarantiaModeloCatalogoV3;
   prazoDias: number;
 } {
+  if (!CATALOGO_POR_ID.has((input.modeloId ?? "").trim())) throw new Error("Modelo de garantia desconhecido. Confirme um modelo válido.");
   const modelo = garantiaCatalogoV3(input.modeloId);
   if (modelo.semCobertura) return { modelo, prazoDias: 0 };
   const prazo = input.prazoDias;
@@ -46,6 +47,11 @@ export function gerarTermoGarantiaV3(input: GerarTermoInputV3): TermoGarantiaV3 
   const modeloId = conhecido ? idBruto : idBruto ? "desconhecido" : "sem_garantia";
   const def = garantiaCatalogoV3(conhecido ? idBruto : idBruto ? "personalizado" : "sem_garantia");
   const custom = (input.termoCustom ?? "").trim();
+  if (idBruto && !conhecido) return {
+    modeloId: "desconhecido", titulo: "Garantia do serviço", semCobertura: false,
+    ...(typeof input.prazoDias === "number" && Number.isFinite(input.prazoDias) && input.prazoDias > 0 ? { prazoDias: input.prazoDias } : {}),
+    cobertura: custom ? [custom] : [], exclusoes: [], observacao: "Modelo legado não identificado; consulte o registro existente. Nenhum prazo é presumido.",
+  };
   const prazoDias =
     typeof input.prazoDias === "number" && input.prazoDias > 0 ? input.prazoDias : def.prazoDiasPadrao > 0 ? def.prazoDiasPadrao : undefined;
 

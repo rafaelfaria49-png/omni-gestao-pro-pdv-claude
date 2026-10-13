@@ -8,11 +8,13 @@ test("garantias por serviço, entrega, aditivo e reimpressão fiel em 1440/768/3
   if (baseURL !== "http://127.0.0.1:3043") throw new Error("Somente prévia sintética local.");
   const root = path.resolve(__dirname,"../..");
   execFileSync(process.execPath,["--env-file=.env","--import","tsx","test/ops-v4-financeiro-retirada-garantia-003/qa-seed.ts","--reset"],{cwd:root,stdio:"pipe"});
-  await page.route("**/*",(route) => new URL(route.request().url()).origin === baseURL ? route.continue() : route.abort());
   page.on("dialog",(dialog) => dialog.accept());
-  await page.addInitScript(() => { window.print = () => { (window as unknown as { qaPrints: number }).qaPrints = ((window as unknown as { qaPrints: number }).qaPrints || 0) + 1; }; });
   await page.setViewportSize({width:1440,height:1000});
+  const lojasProntas = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/stores" && r.ok());
+  const ordensProntas = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/ops/ordens" && new URL(r.url()).searchParams.get("lojaId") === "000-qa-frg-001" && r.ok());
   await page.goto("/dashboard/operacoes-v4-preview");
+  await Promise.all([lojasProntas,ordensProntas]);
+  await page.evaluate(() => { window.print = () => { (window as unknown as { qaPrints: number }).qaPrints = ((window as unknown as { qaPrints: number }).qaPrints || 0) + 1; }; });
   await dismissFirstAccessWizardIfPresent(page);
   await page.getByPlaceholder(/Buscar por Nº da OS/).fill("OS-QA-GARANTIAS");
   const linha = page.getByRole("button").filter({hasText:"OS-QA-GARANTIAS"});
@@ -53,6 +55,7 @@ test("garantias por serviço, entrega, aditivo e reimpressão fiel em 1440/768/3
     await page.screenshot({path:path.join(root,`test/ops-v4-financeiro-retirada-garantia-003/.local/termo-${width}.png`),fullPage:true});
   }
   await page.keyboard.press("Escape"); await expect(doc).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Imprimir Termo de Garantia",exact:true})).toBeFocused();
   await page.setViewportSize({width:1440,height:1000});
   const editor = card.getByRole("button",{name:"Alterar prazo",exact:true});
   if (await editor.getAttribute("aria-expanded") !== "true") await editor.click();
@@ -65,6 +68,6 @@ test("garantias por serviço, entrega, aditivo e reimpressão fiel em 1440/768/3
   await expect(page.getByRole("combobox",{name:"Versão do termo"})).toHaveValue("2");
   await expect(doc).toContainText("60 dias");
   await page.getByRole("combobox",{name:"Versão do termo"}).selectOption("1");
-  await expect(doc).toHaveText(original);
+  await expect.poll(() => doc.innerText()).toBe(original);
   await page.getByRole("button",{name:"Voltar",exact:true}).click();
 });

@@ -6,7 +6,7 @@ Esta experiência não abre/fecha o GOAL 003, não promove AEP, não altera sche
 
 ## Abrir e testar
 
-Na worktree desta experiência:
+Na worktree `codex/experiment-ops-v4-garantias` desta experiência (o launcher também aceita execução por caminho absoluto a partir de outra pasta):
 
 ```powershell
 node test/ops-v4-financeiro-retirada-garantia-003/local-preview.mjs
@@ -41,6 +41,8 @@ O primeiro acesso pode compilar rotas sob demanda; não há build de produção.
 Para reprovisionar fora desta worktree, use o schema existente no banco descartável acima, gere o Prisma Client local, execute `qa-bootstrap.mjs` da trilha 001 e depois `qa-seed.ts` desta pasta. As credenciais e o segredo de sessão devem ser exclusivos do QA. Não copie ambientes de produção.
 
 ## Verificação
+
+Validação experimental em 13/10/2026: typecheck completo aprovado; lint dos arquivos alterados sem erros (um aviso preexistente em `app/actions/operacoes.ts:1433`); 395 testes unitários em 22 arquivos, 62 testes de componentes e 12 testes de PostgreSQL aprovados. Os dois cenários E2E abaixo e a autenticação real passaram, com zero retries e um worker. O termo foi conferido visualmente em 1440, 768 e 390 px, incluindo foco por teclado e retorno ao botão de origem. Nenhum build de produção foi executado. Os logs e screenshots desta sessão estão em `.local/`.
 
 Os testes novos cobrem identidade das linhas, padrões 90/30/0, extensão sem teto comercial, motivo e permissão no servidor, escopo de loja/OS, versões imutáveis, ausência de dados internos, legado, retorno, concorrência e não duplicação.
 `vitest.config.ts` monta os componentes reais; `vitest.pg.config.ts` executa os writers reais em PostgreSQL descartável; `playwright.config.ts` usa Credentials real e Edge na prévia local, com zero retries.
