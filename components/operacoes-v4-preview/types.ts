@@ -92,6 +92,8 @@ export interface V4State {
   cancelamentoOS: boolean;
   /** Modal "Corrigir datas" (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001). */
   corrigirDatas?: boolean;
+  /** Loja+OS em que a correção foi aberta; outra seleção nunca reutiliza o modal. */
+  alvoCorrecaoDatas?: string | null;
   /** null = tela limpa (empty state); id = OS real selecionada. */
   selectedOsId: string | null;
   /**
