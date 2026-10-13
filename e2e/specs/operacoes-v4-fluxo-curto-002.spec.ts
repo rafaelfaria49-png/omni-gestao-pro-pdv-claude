@@ -75,12 +75,14 @@ test("OPS-V4-FLUXO-CURTO-002 — garantia e identidade documental coerentes", as
   await page.getByRole("button", { name: "Voltar" }).click();
   await expect(doc).toHaveCount(0);
 
+  await card.getByRole("button", { name: "Alterar prazo", exact: true }).click();
   const editor = card.getByLabel("Modelo de garantia");
   await expect(editor).toHaveValue("tela");
   await editor.selectOption("sem_garantia");
   const prazo = card.getByRole("spinbutton");
   await expect(prazo).toHaveValue("0");
   await expect(prazo).toBeDisabled();
+  await card.getByLabel(/Motivo da alteração/).fill("Alteração de condição solicitada no cenário sintético");
   await card.getByRole("button", { name: "Salvar garantia" }).click();
   await expect(card.getByText("0 dias", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(card.getByText("Sem cobertura", { exact: true })).toHaveCount(2);
@@ -97,6 +99,7 @@ test("OPS-V4-FLUXO-CURTO-002 — garantia e identidade documental coerentes", as
   const cardReaberto = page.getByText("🛡 Garantia da OS", { exact: true }).locator("../..");
   await expect(cardReaberto.getByText("Sem cobertura", { exact: true })).toHaveCount(2);
   await expect(cardReaberto.getByText("0 dias", { exact: true })).toBeVisible();
+  await cardReaberto.getByRole("button", { name: "Alterar prazo", exact: true }).click();
   await expect(cardReaberto.getByLabel("Modelo de garantia")).toHaveValue("sem_garantia");
   await expect(cardReaberto.getByRole("spinbutton")).toHaveValue("0");
   await botaoTermo.click();

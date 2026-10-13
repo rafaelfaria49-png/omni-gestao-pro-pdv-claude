@@ -57,6 +57,8 @@ export interface ServicoAutorizadoV4 {
   valor: number;
   custo: number;
   garantiaDias: number;
+  garantiaModeloId?: string;
+  garantiaMotivo?: string;
   /** Snapshot textual do prazo/tempo estimado (ex.: "2 horas"). Nunca vira SLA. */
   prazoTexto?: string;
   /** Rastreabilidade opcional ao `Servico` de catálogo. Snapshot textual/comercial continua autoritativo. */
@@ -172,14 +174,16 @@ export function buildNovaOSDraftFromFormV4(form: NovaOSFormV4, now: Date = new D
           valorUnitario: Math.max(0, serv.valor),
           kind: "cobrado" as const,
           baixaEstoque: false,
-          garantiaDias: serv.garantiaDias > 0 ? serv.garantiaDias : undefined,
+          garantiaDias: serv.garantiaDias >= 0 ? serv.garantiaDias : undefined,
+          ...(serv.garantiaModeloId ? { garantiaModeloId: serv.garantiaModeloId } : serv.catalogoServicoId ? { garantiaModeloId: sugerirGarantiaPorDescricaoV3(serv.descricao) ?? "personalizado" } : {}),
+          ...(serv.garantiaMotivo?.trim() ? { garantiaMotivo: serv.garantiaMotivo.trim() } : {}),
           ...(clean(serv.prazoTexto) ? { prazoTexto: clean(serv.prazoTexto) } : {}),
           ...(clean(serv.catalogoServicoId) ? { catalogoServicoId: clean(serv.catalogoServicoId) } : {}),
         }))
       : base.itens;
 
-  // Garantia da OS: snapshot do 1º serviço com garantia (singular legado = o único).
-  const comGarantia = validos.find((s) => s.garantiaDias > 0);
+  // Compatibilidade singular. Multi-serviço mantém os padrões em cada linha.
+  const comGarantia = validos.length === 1 && validos[0].garantiaDias > 0 ? validos[0] : null;
   const garantiaServico = comGarantia
     ? normalizarGarantiaPrevistaV3({
         modeloId: sugerirGarantiaPorDescricaoV3(comGarantia.descricao) ?? "personalizado",

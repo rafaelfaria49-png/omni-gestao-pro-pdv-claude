@@ -15,6 +15,8 @@
 // apenas PREVISTO; o recebimento real acontece depois no PDV de Serviço.
 // ============================================================================
 
+import { comPadroesGarantiaServicosV3 } from "./garantia-servicos-model";
+import { prepararGarantiasAberturaV3 } from "./garantia-abertura-server";
 import { revalidatePath } from "next/cache";
 import type { Session } from "next-auth";
 import type { OrdemServico } from "@/types/os";
@@ -160,6 +162,9 @@ async function criarOSCore(
 
   const operador = operadorLabel(session);
 
+  const garantiasAbertura = await prepararGarantiasAberturaV3(sid, draft, { id: session.user.id, nome: operador });
+  draft = garantiasAbertura.draft;
+
   // 1. Resolve um cliente REAL — nunca um id temporário (evita violar a FK da OS).
   //    GOAL 022: helper único (`resolverClienteOperacoesV3`), sem Cliente Balcão
   //    aqui (`permitirBalcao: false`) e com documento/email/tipo PJ habilitados
@@ -279,6 +284,7 @@ async function criarOSCore(
     totaisPrevistos: totais,
     desconto: totais.desconto,
     itensV3: draft.itens,
+    ...(garantiasAbertura.auditoria.length ? { garantiasAuditoriaV3: garantiasAbertura.auditoria } : {}),
   };
 
   // Orçamento e autorização compõem o snapshot antes da única chamada de criação.
@@ -307,7 +313,7 @@ async function criarOSCore(
       }]
     : [];
 
-  const input = {
+  const inputBase = {
     storeId: sid,
     clienteId,
     cliente: {
@@ -360,6 +366,7 @@ async function criarOSCore(
     ...(opcoes?.comercialV4 ? { comercialV4: opcoes.comercialV4 } : {}),
   };
 
+  const input = comPadroesGarantiaServicosV3(inputBase as unknown as OrdemServico);
   const criada = await criarOSImpl(input as unknown as Parameters<typeof criarOSImpl>[0], operador);
 
   // Espinha de eventos (3C.0): anuncia a abertura — produtora-only, best-effort.

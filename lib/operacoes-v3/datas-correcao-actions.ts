@@ -16,6 +16,7 @@
 // otimista por campo (`esperados`) — snapshot velho recebe conflito explícito.
 // ============================================================================
 
+import { adicionarVersaoTermoGarantiaV3, lerVersoesTermoGarantiaV3 } from "./garantia-termos-model";
 import { revalidatePath } from "next/cache";
 import type { Session } from "next-auth";
 import type { Prisma } from "@/generated/prisma";
@@ -156,6 +157,9 @@ export async function corrigirDatasOSV3(
         const lidas = new Set(garantias.map((g) => g.id));
         const agoraNaOS = await tx.garantiaOrdemServico.findMany({ where: { storeId: sid, ordemServicoId: id }, select: { id: true } });
         if (agoraNaOS.some((g) => !lidas.has(g.id))) throw garantiaMudou();
+      }
+      if (plano.diff.some((d) => d.campo === "dataEntrega") && lerVersoesTermoGarantiaV3(plano.next).length) {
+        plano.next = adicionarVersaoTermoGarantiaV3(plano.next, { tipo: "correcao_data", agora: agora.toISOString(), operadorId, operador, motivo: input.motivo.trim(), origem: "corrigirDatasOSV3" });
       }
       // 4) Payload: só datas + auditoria. Prisma atualiza `updatedAt` (trava otimista dos outros editores).
       await tx.ordemServico.update({ where: { id }, data: { payload: plano.next as unknown as Prisma.InputJsonValue } });

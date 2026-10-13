@@ -15,6 +15,8 @@ export type PosVendaToneV4 = "success" | "info" | "warn" | "danger" | "neutro";
 
 export interface GarantiaPosVendaV4 {
   temGarantia: boolean;
+  coberturas?: import("@/lib/operacoes-v3/garantia-servicos-model").CoberturaServicoViewV3[];
+  condicoesDistintas?: boolean;
   situacao: GarantiaSituacaoV3;
   situacaoLabel: string;
   tone: PosVendaToneV4;
@@ -153,8 +155,10 @@ export function buildGarantiaPosVendaV4(os: OrdemServico, now: Date = new Date()
   const termo = garantia.temGarantia ? termoGarantiaDaOSV3(os) : null;
   return {
     temGarantia: garantia.temGarantia,
+    coberturas: garantia.coberturas,
+    condicoesDistintas: garantia.condicoesDistintas,
     situacao: garantia.situacao,
-    situacaoLabel: LABEL_GARANTIA[garantia.situacao],
+    situacaoLabel: garantia.condicoesDistintas ? "Consultar por serviço" : LABEL_GARANTIA[garantia.situacao],
     tone: TONE_GARANTIA[garantia.situacao],
     label: garantia.label,
     prazoDias: garantia.prazoDias,

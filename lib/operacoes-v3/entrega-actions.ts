@@ -53,6 +53,9 @@ import {
 } from "./datas-operacionais-model";
 import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
 import { chaveLockRecebimentoMistoV3, travarOS } from "./recebimento-misto-service";
+import { comPadroesGarantiaServicosV3 } from "./garantia-servicos-model";
+import { adicionarVersaoTermoGarantiaV3 } from "./garantia-termos-model";
+import { lerEmpresaTermoGarantiaV3 } from "./garantia-empresa-server";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -311,7 +314,7 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
 
     const prevEntrega =
       payload.entregaV3 && typeof payload.entregaV3 === "object" ? (payload.entregaV3 as Record<string, unknown>) : {};
-    const next: OSPayloadFull = {
+    let next: OSPayloadFull = {
       ...payload,
       operacaoStatusV3: "entregue",
       operacaoStatus: projetarStatusV2("entregue"),
@@ -335,6 +338,11 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
       atualizadoEm: now,
     } as OSPayloadFull;
 
+    // Emissão v1 e entrega são um único UPDATE sob a trava; retry não reemite.
+    next = adicionarVersaoTermoGarantiaV3(comPadroesGarantiaServicosV3(next), {
+      tipo: "original", agora: now, operadorId: session.user.id, operador,
+      motivo: "Entrega confirmada", origem: "registrarEntregaV3", empresa: await lerEmpresaTermoGarantiaV3(tx, sid),
+    }) as OSPayloadFull;
     await tx.ordemServico.update({
       where: { id },
       data: {

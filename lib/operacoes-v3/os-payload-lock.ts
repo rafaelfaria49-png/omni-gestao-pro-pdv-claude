@@ -46,9 +46,21 @@ export type TxOSPayloadV3 = Prisma.TransactionClient;
  */
 export const CAMPOS_FINANCEIROS_SERVIDOR_V3 = ["pagamentoV3", "aPrazoV3", "recebimentoMistoRecusasV3"] as const;
 
-export function semCamposFinanceirosDoServidorV3<T extends object>(patch: T): T {
+export function semCamposFinanceirosDoServidorV3<T extends object>(patch: T, current?: object): T {
   const limpo = { ...patch } as Record<string, unknown>;
   for (const campo of CAMPOS_FINANCEIROS_SERVIDOR_V3) delete limpo[campo];
+  // Termos e coberturas só são escritos pelas actions auditadas de garantia.
+  delete limpo.termosGarantiaV3;
+  if (Object.prototype.hasOwnProperty.call(limpo, "aberturaV3")) {
+    const previo = (current as { aberturaV3?: Record<string, unknown> } | undefined)?.aberturaV3 ?? {};
+    const entrada = limpo.aberturaV3 && typeof limpo.aberturaV3 === "object" ? limpo.aberturaV3 as Record<string, unknown> : {};
+    const abertura = { ...previo, ...entrada };
+    for (const campo of ["garantiasServicosV3", "garantiaPrevista"]) {
+      if (Object.prototype.hasOwnProperty.call(previo, campo)) abertura[campo] = previo[campo];
+      else delete abertura[campo];
+    }
+    limpo.aberturaV3 = abertura;
+  }
   return limpo as T;
 }
 
