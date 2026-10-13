@@ -1,8 +1,8 @@
 # 025-A · Matriz de alternativas de preservação
 
-Data: 2026-10-12. **Análise documental; nenhuma alternativa aprovada ou implantada.**
+Data: 2026-10-12. **Decisão humana documental: B aprovada; nenhuma alternativa implantada.**
 Base 1fd90905e05656444576cf83c9df6c46919a917a, GOAL 025 plan_rev=5 intacto.
-[Proposta completa](ADR_PROPOSAL_0024_FISCAL_025_A_PRESERVACAO_IMUTAVEL.md) ·
+[ADR-0024 aceita](../ADR-0024-arquivo-historico-worm-referencia-protegida.md) · [Proveniência da proposta](ADR_PROPOSAL_0024_FISCAL_025_A_PRESERVACAO_IMUTAVEL.md) ·
 [Auditoria e testes](../../ai-execution/_evidence/FISCAL-025-A-ARCHITECTURE/AUDIT.md).
 
 Definições: A = bytes/manifesto/vínculo somente no PostgreSQL protegido; B = bytes/manifesto em objeto privado WORM, PostgreSQL contém somente vínculo protegido; C = bytes/manifesto integrais no PostgreSQL protegido e objeto WORM independente, com vínculo protegido. B não dispensa a extensão de persistência do vínculo. As notas abaixo pressupõem proteções futuras efetivas; não descrevem o ambiente atual.
@@ -21,7 +21,7 @@ Definições: A = bytes/manifesto/vínculo somente no PostgreSQL protegido; B = 
 | Recuperação de desastre | Backup/PITR e restore com comparação de bytes; comprometimento de backup/DB é domínio comum | Recuperar vínculo DB a partir de backup e manifesto WORM, sempre sob gate; testar acesso/chaves/réplica | Restore DB + conferência com WORM independente; segunda custódia recomendada; RPO/RTO e réplica são critérios a aprovar |
 | Operação/custo | Menor infra nova; crescimento PostgreSQL, WAL, backup, roles/triggers/RLS | Menos bytes DB; custo storage/requests/retenção/tráfego e custódia; consistência entre backends | Maior custo fixo e duplicação; para uma tentativa o custo operacional domina o volume |
 | Sistema atual | Exige schema/role/permissões/porta histórica nova; mantém colunas ADR-0018 | Exige vínculo novo e adapter obrigatório; xmlStorageRef/mirror opcional atuais insuficientes | Exige ambas extensões e reader histórico puro; coluna corrente permanece primária, sem reusar mirror como requisito genérico |
-| Quando escolher | Humano aceita ameaça administrativa DB e DR comprovado | Humano prioriza menor crescimento DB e aceita dependência externa de bytes | Humano exige defesa contra adulteração do banco e melhor auditabilidade da recuperação |
+| Decisão 025-A | Rejeitada pelo humano para ameaça administrativa forte | Escolhida pelo humano: WORM COMPLIANCE + referência protegida, sem cópia integral DB | Alternativa viável não escolhida; réplica DB adicional não é necessária para o modelo forte quando B é corretamente protegido |
 
 ## Perfil do backend de objetos
 
@@ -29,12 +29,14 @@ Definições: A = bytes/manifesto/vínculo somente no PostgreSQL protegido; B = 
 | --- | --- | --- |
 | S3 Object Lock COMPLIANCE | Versão retida não pode ser sobrescrita/excluída mesmo por root durante o prazo | Não bloqueia novas versões/delete markers por si; exigir policy, deny deletes e versionId selado; não protege chave/acesso/conta |
 | S3 GOVERNANCE | Retenção contra papéis sem bypass | Quem tem BypassGovernanceRetention pode contornar; não satisfaz o perfil administrativo mais forte recomendado |
-| R2 Bucket Locks | Impede overwrite/delete durante período ou indefinidamente; lock prevalece sobre lifecycle | Administrador pode remover regras; não equiparar a COMPLIANCE resistente ao administrador. Exige separação do controle e aceite explícito desse residual |
+| R2 Bucket Locks | Impede overwrite/delete durante período ou indefinidamente; lock prevalece sobre lifecycle | Administrador pode remover regras; não equiparar a COMPLIANCE resistente ao administrador. Só substitui o perfil aprovado mediante nova aceitação humana explícita dos riscos administrativos; separação do controle não elimina esse residual |
 | S3-compatible genérico / bucket privado / versionamento isolado | Confidencialidade ou preservação de versões pode existir | Compatibilidade de SDK não prova Object Lock, retenção ou enforcement; não admissível sem prova específica |
 
 R2 não é descartado como simples convenção de aplicação: Bucket Locks é proteção real. Sua administração removível é um trade-off. A API S3 de R2 declara PutObject condicional, mas não os headers S3 Object Lock/retenção/legal hold, PutObjectLockConfiguration ou PutBucketVersioning; o contrato deve usar recursos R2 documentados e provas próprias, não prometer semântica S3 COMPLIANCE.
 
-**Recomendação principal: C**, pelo registro transacional e âncora de conteúdo em custódia distinta. Preferência técnica de perfil: COMPLIANCE com retenção fixa suficiente e versão selada. Fornecedor, escopo operacional e implantação dependem de decisão humana posterior. A/B são alternativas viáveis sob modelos de ameaça explicitamente menos fortes; no estado atual nenhuma está demonstrada.
+**Opção escolhida: B — WORM_OBJECTS_WITH_PROTECTED_REFERENCE**, conforme recomendação da [R Google/Gemini](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265#issuecomment-6134615719) e decisão humana explícita de 2026-10-12. B atende ao modelo administrativo forte com o perfil S3 Object Lock COMPLIANCE, versão permanente e referência protegida, sujeitos às futuras provas de backend. C não acrescenta uma garantia necessária que justifique a duplicação integral DB para esta tentativa; permanece alternativa documentada. A foi rejeitada nesse modelo.
+
+COMPLIANCE é referência técnica, sem fornecedor contratado. Retenção/hold/marco, conta/região, credenciais/custódia/chaves, custo/orçamento, backup/réplica e RPO/RTO permanecem pendentes de gates próprios. R2 não substitui o perfil aprovado sem nova aceitação humana explícita. A aprovação de B é documental; nenhum backend está demonstrado ou provisionado. IMPLEMENTATION_AUTHORIZED=false; STORAGE_PROVISIONING_AUTHORIZED=false; G_F7=BLOCKED; G_F12=BLOCKED.
 
 ## Fontes técnicas verificadas
 

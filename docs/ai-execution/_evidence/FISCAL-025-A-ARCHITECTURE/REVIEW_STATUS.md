@@ -1,41 +1,51 @@
-# 025-A · Estado da solicitação de revisão independente
+# 025-A · Proveniência das revisões independentes
 
 Data: 2026-10-12 (America/Sao_Paulo).
-PR próprio: [#265](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265).
-Executor/autor dos documentos: Codex / OpenAI. Não realizou sua própria R.
+PR: [#265](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265).
+Autor/executor documental: Codex / OpenAI. Revisor independente: Google/Gemini.
 
-SHA alvo das duas solicitações:
-9cb53355b303fa64255a8fe70439b7b08ee27311.
-Base: 1fd90905e05656444576cf83c9df6c46919a917a.
-O SHA é alvo solicitado, **não SHA aprovado ou efetivamente revisado**.
+## Tentativas iniciais sem parecer
 
-## Tentativa preferencial · Google/Gemini
+As solicitações iniciais tiveram alvo 9cb53355b303fa64255a8fe70439b7b08ee27311, base 1fd90905e05656444576cf83c9df6c46919a917a. Esse alvo não foi aprovado por essas tentativas.
 
-Gemini CLI chamado com pacote documental sanitizado, solicitação de parecer atribuível, restrições de somente leitura e approval-mode plan. A CLI informou que a pasta não era trusted e substituiu o modo por default; recusou a execução headless. Também retornou erro de autenticação IneligibleTierError, reasonCode=UNSUPPORTED_CLIENT: cliente não mais suportado para o tier configurado.
+- Gemini CLI legado: exit 55, IneligibleTierError / UNSUPPORTED_CLIENT; trust ausente e recusa headless. Nenhum parecer. Não houve alteração de auth/trust/permissões nem contorno.
+- Claude Code: HTTP 429 semanal, exit 1, session_id=20c9ee6c-26d6-44c8-a54a-37a109f2f7c7; duration_api_ms=0, input/output_tokens=0, modelUsage vazio. Nenhum parecer. Reset informado: 2026-10-15 às 11:00 America/Sao_Paulo. Alternativa após reposição de cota, sem nova tentativa nesta ratificação.
 
-Exit code observado: 55. Nenhum parecer/modelo de revisão retornado; não houve revisão técnica. Não foi alterada confiança/configuração/auth nem tentado contornar o erro. Esta tentativa não comprova que plan mode tenha sido aplicado: a própria CLI declarou a substituição e a recusa, registradas acima.
+Esses impedimentos históricos não são vereditos técnicos e não invalidam a execução independente posterior.
 
-## Alternativa autorizada · Anthropic/Claude Code
+## R efetiva Google via Antigravity
 
-Claude Code chamado com safe-mode, strict-mcp-config, permission-mode plan e somente ferramentas Read/Glob/Grep, sem execução/mutação. Mesmo pacote/SHA alvo e restrições. A CLI retornou api_error_status=429, is_error=true, terminal_reason=api_error e mensagem de limite semanal atingido; reset informado: 2026-10-15 às 11:00 America/Sao_Paulo.
+[Texto integral atribuível publicado na PR](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265#issuecomment-6134615719).
 
-Exit code observado: 1. session_id=20c9ee6c-26d6-44c8-a54a-37a109f2f7c7.
-duration_api_ms=0; input_tokens=0; output_tokens=0; modelUsage vazio.
-Nenhum parecer/modelo de revisão retornado; não houve inferência nem R concluída.
+~~~text
+PR=265
+REVIEWED_SHA=e3c9d4a416972a65b1283b568ae5b13d3897b5c8
+R_EXECUTOR=Antigravity CLI 1.3.2 / Gemini
+R_MODEL=gemini-3.8-flash-high
+R_FAMILY=google
+INDEPENDENCE_VALID=true
+OPTION_A_VERDICT=REJECTED_UNDER_STRONG_ADMIN_THREAT_MODEL
+OPTION_B_VERDICT=VIABLE_RECOMMENDED
+OPTION_C_VERDICT=VIABLE_CANDIDATE
+RECOMMENDED_OPTION_AFTER_REVIEW=B_WORM_OBJECTS_WITH_PROTECTED_REFERENCE
+NEW_BLOCKERS=NONE
+R_VERDICT=APPROVE
+~~~
 
-Logs brutos de ferramenta permanecem temporários fora do Git; este registro contém apenas campos sanitizados necessários. Não há XML, payload privado, credenciais, URL privada ou token.
+Conversa a1a0e0e3-97b1-46a7-aac8-a6a9545bb774. Transporte stream-json por stdin, corpus versionado completo com caminhos/linhas/blobs, GOAL/plano, ADRs, governança, contratos fiscais e diff integral. Corpus: 752514 bytes, SHA-256 07b14d409e29cc7aec17c8f602f85d3232e7005376e93c936c73e4914267aba3; diff: 69928 bytes, SHA-256 3a55b4e0b01aa10da2dc0899c6c3f4134a9f1374164d4977e412e1d212bf34c2.
 
-## Resultado e próxima decisão
+Modelo confirmado no catálogo/init: gemini-3.8-flash-high, família Google. Gemini 3.1 Pro do PR #247 não estava no catálogo; não é o modelo desta R. Execução terminou SUCCESS com análise efetiva; consolidação e erratas foram feitas pelo próprio revisor. Chamadas de ferramenta observadas: zero. O catálogo anunciava ferramentas; o wrapper instruía uso exclusivo do corpus e interromperia qualquer chamada. permission_mode reportado: request-review. Não se declara plan mode ou remoção do catálogo. Nenhuma alteração de autenticação, confiança ou permissões.
 
-R_REQUEST_ATTEMPTED=true.
-PREFERRED_REVIEWER=GOOGLE_GEMINI; GOOGLE_REVIEW=NOT_COMPLETED_UNSUPPORTED_CLIENT_AND_UNTRUSTED_WORKSPACE.
-ALTERNATIVE_REVIEWER=ANTHROPIC_CLAUDE_CODE; ANTHROPIC_REVIEW=NOT_COMPLETED_HTTP_429_WEEKLY_LIMIT.
-INDEPENDENT_REVIEW=PENDING; R_VERDICT=NOT_OBTAINED; R_REVIEWED_SHA=NONE.
-HUMAN_ARCHITECTURE_DECISION=PENDING.
+O parecer foi publicado como comentário de Conversation pela conta GitHub do usuário, com Codex/OpenAI identificado como publicador e Google como revisor. **Não é review nativa GitHub**, decisão humana ou prova de backend.
 
-O [pedido de R](REVIEW_REQUEST.md) e os documentos estão disponíveis no PR para revisão por uma família autorizada quando houver acesso/cota. Nova solicitação deve citar o HEAD completo vigente e comparar todo o diff documental, inclusive este registro; não transferir qualquer aprovação do plano #247 para a 025-A.
+## Decisão humana e revisão incremental
 
-Nenhum gate foi liberado. Não há merge, implementação, schema/migration, banco, provisionamento, rearm, contato SEFAZ ou abertura 025-B/C/D.
+O humano aprovou B explicitamente após o parecer, rejeitou A para ameaça administrativa forte e manteve C como alternativa. HUMAN_ARCHITECTURE_DECISION=B_APPROVED. O perfil de referência é S3 Object Lock COMPLIANCE; R2 exige nova aceitação humana de riscos administrativos.
+
+O SHA acima é a âncora da R já concluída. A ratificação, promoção da ADR/índice, contratos de B e reconciliação de main mudam o HEAD: **exigem nova R incremental efetiva no SHA final antes do merge**. A solicitação está em [REVIEW_REQUEST.md](REVIEW_REQUEST.md). Resultado/modelo/família/SHA/comment URL do novo parecer e estado de merge serão registrados no PR, sem alegar aprovação antecipada neste commit.
+
+Se não houver inferência efetiva independente: R_VERDICT=NOT_ISSUED para a tentativa incremental e STOP=R_RUNTIME_BLOCKED; não substituir por autoavaliação Codex.
+
+IMPLEMENTATION_AUTHORIZED=false; STORAGE_PROVISIONING_AUTHORIZED=false.
 CODE_CHANGED=false; SCHEMA_CHANGED=false; DB_WRITES=0; SEFAZ_TRANSMISSIONS=0.
-FINAL_DECISION=AWAITING_025_A_ARCHITECTURE_REVIEW.
-STOP=AWAITING_025_A_ARCHITECTURE_REVIEW.
+G_F7=BLOCKED; G_F12=BLOCKED. Nenhuma abertura de 025-B/C/D.
