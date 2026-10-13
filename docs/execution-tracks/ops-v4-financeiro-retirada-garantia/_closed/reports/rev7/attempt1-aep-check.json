@@ -1,0 +1,8 @@
+{
+  "sha": "3027772bfb8fae4a5b6d0ec1e077ed52fe08820e",
+  "start": "2026-10-10T18:13:09.370Z",
+  "end": "2026-10-10T18:22:26.180Z",
+  "exitCode": 3,
+  "database": "/ops_v4_frg_qa_002",
+  "host": "127.0.0.1"
+}

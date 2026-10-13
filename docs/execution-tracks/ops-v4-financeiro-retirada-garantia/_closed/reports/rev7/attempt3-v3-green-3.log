@@ -1,0 +1,497 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+ ❯ test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx (14 tests | 1 failed) 2790ms
+     × recebimento comum: outro recebimento no meio NÃO descarta a chave do resultado incerto 340ms
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 19 passed (20)
+   Start at  16:08:34
+   Duration  4.80s (transform 691ms, setup 0ms, import 1.40s, tests 4.84s, environment 1.90s)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx > PDV de Serviço V3 — recebimento misto (montado) > recebimento comum: outro recebimento no meio NÃO descarta a chave do resultado incerto
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name `/^Receber · /`
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4 sm:gap-3"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "PDV de serviço":
+  [36m<h1[39m
+    [33mclass[39m=[32m"truncate text-[18px] font-bold tracking-tight text-[var(--ops-v3-ink)] sm:text-[21px]"[39m
+  [36m/>[39m
+
+  Name "OS-A · Cliente OS-A":
+  [36m<h3[39m
+    [33mclass[39m=[32m"text-sm font-semibold text-foreground"[39m
+  [36m/>[39m
+
+  Name "Recebimento":
+  [36m<h3[39m
+    [33mclass[39m=[32m"text-sm font-semibold text-foreground"[39m
+  [36m/>[39m
+
+  Name "Pagamento":
+  [36m<h3[39m
+    [33mclass[39m=[32m"text-sm font-semibold text-foreground"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-0.5 text-[12.5px] text-[var(--ops-v3-muted)] sm:text-sm"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-1.5 text-[11px] text-success"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-2 text-center text-[11px] text-muted-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"flex items-center gap-1.5 text-sm font-semibold text-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-1 text-xs text-muted-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"flex items-center gap-1.5 text-xs font-medium text-muted-foreground"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  strong:
+
+  Name "":
+  [36m<strong />[39m
+
+  Name "":
+  [36m<strong />[39m
+
+  --------------------------------------------------
+  combobox:
+
+  Name "Ordem de serviço":
+  [36m<select[39m
+    [33mclass[39m=[32m"w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  option:
+
+  Name "Selecione uma OS com valor…":
+  [36m<option[39m
+    [33mvalue[39m=[32m""[39m
+  [36m/>[39m
+
+  Name "OS-A · Cliente OS-A · R$ 400,00":
+  [36m<option[39m
+    [33mvalue[39m=[32m"os-a"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  term:
+
+  Name "":
+  [36m<dt[39m
+    [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dt[39m
+    [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dt[39m
+    [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dt[39m
+    [33mclass[39m=[32m"text-muted-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dt[39m
+    [33mclass[39m=[32m"text-muted-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dt[39m
+    [33mclass[39m=[32m"font-semibold text-foreground"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  definition:
+
+  Name "":
+  [36m<dd[39m
+    [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dd[39m
+    [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dd[39m
+    [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dd[39m
+    [33mclass[39m=[32m"tabular-nums text-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dd[39m
+    [33mclass[39m=[32m"tabular-nums text-foreground"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dd[39m
+    [33mclass[39m=[32m"text-lg font-semibold tabular-nums text-primary"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "Abrir prontuário da OS →":
+  [36m<button[39m
+    [33mclass[39m=[32m"mt-3 text-xs text-primary hover:underline"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Sinal":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors border-border bg-background text-muted-foreground hover:text-foreground"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Entrada":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors border-border bg-background text-muted-foreground hover:text-foreground"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Pagamento parcial":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors border-primary/30 bg-primary/10 text-primary"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Dinheiro":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 border-border bg-background text-muted-foreground hover:text-foreground"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "PIX":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 border-primary/30 bg-primary/10 text-primary"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Débito":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 border-border bg-background text-muted-foreground hover:text-foreground"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Crédito":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 border-border bg-background text-muted-foreground hover:text-foreground"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Parcelado(a conectar)":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 border-border bg-background text-muted-foreground hover:text-foreground"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtitle[39m=[32m"A conectar nesta fase"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Carteira / crédito do cliente(a conectar)":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 border-border bg-background text-muted-foreground hover:text-foreground"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtitle[39m=[32m"A conectar nesta fase"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "A prazo / crediário":
+  [36m<button[39m
+    [33mclass[39m=[32m"rounded-full border px-3 py-1.5 text-xs font-medium transition-colors border-border bg-background text-muted-foreground hover:text-foreground"[39m
+    [33mtitle[39m=[32m"Deixar todo o saldo a prazo, com vencimento (não é dinheiro recebido)"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Quitar OS · R$ 250,00":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex min-h-[var(--ops-v3-btn-h)] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 border border-transparent bg-[var(--ops-v3-primary)] text-white shadow-[var(--ops-v3-shadow-primary-btn)] hover:bg-[var(--ops-v3-primary-hover)] mt-4 w-full"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Atualizar saldo":
+  [36m<button[39m
+    [33mclass[39m=[32m"mt-2 w-full text-center text-[11px] text-muted-foreground hover:text-foreground"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Imprimir comprovante":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex min-h-[var(--ops-v3-btn-h)] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 border border-[var(--ops-v3-input)] bg-[var(--ops-v3-surface)] text-[var(--ops-v3-body)] hover:bg-[var(--ops-v3-muted-bg)]"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Dispensar":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex min-h-[var(--ops-v3-btn-h)] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 border border-transparent bg-transparent text-[var(--ops-v3-muted)] hover:bg-[var(--ops-v3-muted-bg)] hover:text-[var(--ops-v3-ink)]"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Estornar último recebimento":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex min-h-[var(--ops-v3-btn-h)] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 border border-[var(--ops-v3-input)] bg-[var(--ops-v3-surface)] text-[var(--ops-v3-body)] hover:bg-[var(--ops-v3-muted-bg)] mt-2 w-full"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  checkbox:
+
+  Name "Pagamento dividido (split)":
+  [36m<input[39m
+    [33mclass[39m=[32m"accent-primary"[39m
+    [33mtype[39m=[32m"checkbox"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  textbox:
+
+  Name "Valor a receber (R$)":
+  [36m<input[39m
+    [33mclass[39m=[32m"w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"[39m
+    [33minputmode[39m=[32m"decimal"[39m
+    [33mplaceholder[39m=[32m"0,00"[39m
+    [33mvalue[39m=[32m"250.00"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<input[39m
+    [33mclass[39m=[32m"w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 mt-2"[39m
+    [33mplaceholder[39m=[32m"Motivo (opcional)"[39m
+    [33mvalue[39m=[32m""[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  complementary:
+
+  Name "":
+  [36m<aside[39m
+    [33mclass[39m=[32m"space-y-3"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-w-0"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4 sm:gap-3"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-2"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"truncate text-[18px] font-bold tracking-tight text-[var(--ops-v3-ink)] sm:text-[21px]"[39m
+            [36m>[39m
+              [0mPDV de serviço[0m
+            [36m</h1>[39m
+          [36m</div>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-0.5 text-[12.5px] text-[var(--ops-v3-muted)] sm:text-sm"[39m
+          [36m>[39m
+            [0mRecebimento da OS no balcão, com formas e parciais.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-4"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm border-success/30 bg-success/5 text-foreground"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-wallet h-4 w-4 text-success"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"24"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"24"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mCaixa [0m
+            [36m<strong>[39m
+              [0maberto[0m
+            [36m</strong>[39m
+            [0m · Caixa QA[0m
+            [0m — recebimento liberado.[0m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid gap-4 lg:grid-cols-[1fr_340px]"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-xl border border-border bg-card p-4 shadow-sm"[39m
+            [36m>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"block"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"mb-1 block text-xs font-medium text-muted-foreground"[39m
+                [36m>[39m
+                  [0mOrdem de serviço[0m
+                [36m</span>[39m
+                [36m<select[39m
+                  [33mclass[39m=[32m"w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"[39m
+                [36m>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m>[39m
+                    [0mSelecione uma OS com valor…[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"os-a"[39m
+                  [36m>[39m
+                    [0mOS-A[0m
+                    [0m · [0m
+                    [0mCliente OS-A[0m
+                    [0m · [0m
+                    [0mR$ 400,00[0m
+                  [36m</option>[39m
+                [36m</select>[39m
+              [36m</label>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rounded-xl border border-border bg-card p-4 shadow-sm"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-wrap items-center justify-between gap-2"[39m
+              [36m>[39m
+                [36m<h3[39m
+                  [33mclass[39m=[32m"text-sm font-semibold text-foreground"[39m
+                [36m>[39m
+                  [0mOS-A[0m
+                  [0m · [0m
+                  [0mCliente OS-A[0m
+                [36m</h3>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-px text-[11px] font-semibold border-[var(--ops-v3-success-bd)] bg-[var(--ops-v3-success-bg)] text-[var(--ops-v3-success-fg)]"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"h-1 w-1 rounded-full bg-current"[39m
+                  [36m/>[39m
+                  [0mPronta[0m
+                [36m</span>[39m
+              [36m</div>[39m
+              [36m<dl[39m
+                [33mclass[39m=[32m"mt-3 grid gap-3 sm:grid-cols-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"min-w-0"[39m
+                [36m>[39m
+                  [36m<dt[39m
+                    [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+                  [36m>[39m
+                    [0mEquipamento[0m
+                  [36m</dt>[39m
+                  [36m<dd[39m
+                    [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+                  [36m>[39m
+                    [0mSamsung A54[0m
+                  [36m</dd>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"min-w-0"[39m
+                [36m>[39m
+                  [36m<dt[39m
+                    [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+                  [36m>[39m
+                    [0mTotal da OS[0m
+                  [36m</dt>[39m
+                  [36m<dd[39m
+                    [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+                  [36m>[39m
+                    [0mR$ 400,00[0m
+                  [36m</dd>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"min-w-0"[39m
+                [36m>[39m
+                  [36m<dt[39m
+                    [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+                  [36m>[39m
+                    [0mRecebido[0m
+                  [36m</dt>[39m
+  ...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ receberValor test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx:347:30
+    345|       fireEvent.change(screen.getByLabelText(/Valor a receber/), { tar…
+    346|       await waitFor(() => expect(desabilitado(screen.getByRole("button…
+    347|       fireEvent.click(screen.getByRole("button", { name: /^Receber · /…
+       |                              ^
+    348|       await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTi…
+    349|     };
+ ❯ test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx:368:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

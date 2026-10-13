@@ -1,0 +1,9 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  3 passed (3)
+      Tests  47 passed (47)
+   Start at  23:31:44
+   Duration  4.42s (transform 2.67s, setup 0ms, import 4.24s, tests 1.92s, environment 3.31s)
+

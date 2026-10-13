@@ -106,7 +106,9 @@ export function AtendimentoRapidoV3() {
   const [equipModelo, setEquipModelo] = useState("");
 
   // Pagamento
-  const [forma, setForma] = useState<FormaRecebimentoV3>(FORMAS_SUPORTADAS[0]?.value ?? "dinheiro");
+  // Nenhuma forma pré-selecionada: o operador escolhe antes de finalizar (GOAL
+  // OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002, item E) — ausência nunca vira Dinheiro.
+  const [forma, setForma] = useState<FormaRecebimentoV3 | "">("");
   const [observacao, setObservacao] = useState("");
 
   // Data do atendimento (default = hoje, agora; editável p/ registro retroativo).
@@ -209,7 +211,7 @@ export function AtendimentoRapidoV3() {
     (clienteModo === "existente" && !!clienteSel) ||
     (clienteModo === "novo" && novoNome.trim().length > 0);
   const podeFinalizar =
-    caixaAberta === true && clienteOk && servicoNome.trim().length > 0 && servicoValor > 0 && !saving;
+    caixaAberta === true && clienteOk && servicoNome.trim().length > 0 && servicoValor > 0 && !!forma && !saving;
 
   const resetForm = useCallback(() => {
     setClienteModo("balcao");
@@ -227,7 +229,7 @@ export function AtendimentoRapidoV3() {
     setNsDescricao("");
     setEquipMarca("");
     setEquipModelo("");
-    setForma(FORMAS_SUPORTADAS[0]?.value ?? "dinheiro");
+    setForma("");
     setObservacao("");
     setDatasState(camposDatasAtendimentoAgoraV3());
     setErrosDatas({});
@@ -245,6 +247,10 @@ export function AtendimentoRapidoV3() {
       const alvo = refsDatas[resolvidas.erros[0]!.campo as keyof typeof refsDatas];
       requestAnimationFrame(() => alvo?.current?.focus());
       setErro("Revise a data do atendimento.");
+      return;
+    }
+    if (!forma) {
+      setErro("Escolha a forma de pagamento antes de finalizar.");
       return;
     }
     const input: AtendimentoRapidoInputV3 = {
@@ -522,6 +528,7 @@ export function AtendimentoRapidoV3() {
           <div className="grid gap-3 sm:grid-cols-2">
             <Campo label="Forma de pagamento">
               <select className={inputCls} value={forma} onChange={(e) => setForma(e.target.value as FormaRecebimentoV3)}>
+                <option value="" disabled>Escolha a forma</option>
                 {FORMAS_SUPORTADAS.map((f) => (
                   <option key={f.value} value={f.value}>{f.label}</option>
                 ))}

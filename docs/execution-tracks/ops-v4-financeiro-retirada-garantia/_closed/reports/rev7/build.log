@@ -1,0 +1,416 @@
+MIGRATION_SKIPPED
+Prisma schema loaded from prisma\schema.prisma
+
+✔ Generated Prisma Client (v6.19.3) to .\generated\prisma in 1.48s
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+
+▲ Next.js 16.2.0 (webpack)
+- Environments: .env
+
+  Creating an optimized production build ...
+ ✓ (pwa) Compiling for server...
+ ✓ (pwa) Compiling for server...
+ ✓ (pwa) Compiling for client (static)...
+ ○ (pwa) Service worker: C:\Projetos\omni-gestao-ops-v4-frg-002\public\sw.js
+ ○ (pwa)   URL: /sw.js
+ ○ (pwa)   Scope: /
+ ○ (pwa) Custom runtimeCaching array found, using it to extend the default one.
+✓ Compiled successfully in 3.2min
+  Skipping validation of types
+  Finished TypeScript config validation in 135ms ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/102) ...
+  Generating static pages using 11 workers (25/102) 
+  Generating static pages using 11 workers (50/102) 
+  Generating static pages using 11 workers (76/102) 
+✓ Generating static pages using 11 workers (102/102) in 11.4s
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/admin/supervisor-pin
+├ ƒ /api/admin/users
+├ ƒ /api/admin/users/[id]
+├ ƒ /api/ai/orchestrate
+├ ƒ /api/ai/processar-texto-financeiro
+├ ƒ /api/audit/log
+├ ƒ /api/audit/logs
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/auth/admin
+├ ƒ /api/auth/contador
+├ ƒ /api/automation/handle-event
+├ ƒ /api/billing/checkout
+├ ƒ /api/billing/portal
+├ ƒ /api/catalogo/aparelhos/produto/[id]
+├ ƒ /api/catalogo/aparelhos/search
+├ ƒ /api/catalogo/peliculas/search
+├ ƒ /api/clientes
+├ ƒ /api/clientes/[id]
+├ ƒ /api/clientes/bulk-action
+├ ƒ /api/clientes/bulk-check-dependencies
+├ ƒ /api/clientes/bulk-delete
+├ ƒ /api/clientes/duplicates
+├ ƒ /api/clientes/importar
+├ ƒ /api/clientes/match-by-phone
+├ ƒ /api/clientes/merge/execute
+├ ƒ /api/clientes/merge/plan
+├ ƒ /api/clientes/quick
+├ ƒ /api/clients
+├ ƒ /api/config-audit
+├ ƒ /api/contador-externo/acessos
+├ ƒ /api/contador-externo/acessos/[id]/reativar
+├ ƒ /api/contador-externo/acessos/[id]/revogar
+├ ƒ /api/contador-externo/acessos/[id]/suspender
+├ ƒ /api/contador-externo/auth/login
+├ ƒ /api/contador-externo/auth/logout
+├ ƒ /api/contador-externo/auth/sessao
+├ ƒ /api/contador-externo/convite/aceitar
+├ ƒ /api/contador-externo/convite/consultar
+├ ƒ /api/contador-externo/convites
+├ ƒ /api/contador-externo/convites/[id]/revogar
+├ ƒ /api/contador-externo/lojas
+├ ƒ /api/contador-externo/lojas/[loja]/comentarios
+├ ƒ /api/contador-externo/lojas/[loja]/competencias
+├ ƒ /api/contador-externo/lojas/[loja]/competencias/[c]/checklist
+├ ƒ /api/contador-externo/lojas/[loja]/competencias/[c]/documentos
+├ ƒ /api/contador-externo/lojas/[loja]/competencias/[c]/pacotes
+├ ƒ /api/contador-externo/lojas/[loja]/competencias/[c]/resumo
+├ ƒ /api/contador-externo/lojas/[loja]/competencias/[c]/timeline
+├ ƒ /api/contador-externo/lojas/[loja]/documentos/[id]/conferir
+├ ƒ /api/contador-externo/lojas/[loja]/documentos/[id]/download
+├ ƒ /api/contador-externo/lojas/[loja]/pacotes/confirmar
+├ ƒ /api/contador-externo/lojas/[loja]/pacotes/download
+├ ƒ /api/contador-externo/usuarios/[id]/reativar
+├ ƒ /api/contador-externo/usuarios/[id]/suspender
+├ ƒ /api/contador/agenda
+├ ƒ /api/contador/agenda/guias
+├ ƒ /api/contador/agenda/guias/[id]
+├ ƒ /api/contador/agenda/guias/[id]/pagar
+├ ƒ /api/contador/agenda/obrigacoes
+├ ƒ /api/contador/agenda/obrigacoes/[id]
+├ ƒ /api/contador/agenda/obrigacoes/[id]/status
+├ ƒ /api/contador/agenda/obrigacoes/instanciar
+├ ƒ /api/contador/agenda/templates
+├ ƒ /api/contador/agenda/templates/[id]
+├ ƒ /api/contador/comentarios
+├ ƒ /api/contador/documentos
+├ ƒ /api/contador/documentos/[id]
+├ ƒ /api/contador/documentos/[id]/download
+├ ƒ /api/contador/documentos/complete
+├ ƒ /api/contador/documentos/upload-intent
+├ ƒ /api/contador/fechamento
+├ ƒ /api/contador/fechamento/divergencia
+├ ƒ /api/contador/fechamento/reabrir
+├ ƒ /api/contador/notificacoes
+├ ƒ /api/contador/notificacoes/[id]/rascunho
+├ ƒ /api/contador/notificacoes/[id]/tratar
+├ ƒ /api/contador/notificacoes/avaliar
+├ ƒ /api/contador/pacote
+├ ƒ /api/contador/pacote/comparar
+├ ƒ /api/contador/pacote/download
+├ ƒ /api/contador/pacote/versoes
+├ ƒ /api/contador/status
+├ ƒ /api/contador/timeline
+├ ƒ /api/credits/history
+├ ƒ /api/credits/purchase
+├ ƒ /api/credits/purchases/history
+├ ƒ /api/dashboard/elite
+├ ƒ /api/dashboard/resumo
+├ ƒ /api/debug/build-version
+├ ƒ /api/debug/operacoes-history
+├ ƒ /api/debug/pdv-layouts-version
+├ ƒ /api/debug/prod-health
+├ ƒ /api/debug/webhook-echo
+├ ƒ /api/debug/whatsapp-env-check
+├ ƒ /api/debug/whatsapp-latest
+├ ƒ /api/debug/whatsapp-send-fake-meta
+├ ƒ /api/debug/whatsapp-send-test
+├ ƒ /api/debug/whatsapp-webhook-ping
+├ ƒ /api/finance/accounts
+├ ƒ /api/finance/categories
+├ ƒ /api/finance/dashboard
+├ ƒ /api/finance/transactions
+├ ƒ /api/financeiro/analytics
+├ ƒ /api/financeiro/auditoria
+├ ƒ /api/financeiro/auditoria/[entidade]/[entidadeId]
+├ ƒ /api/financeiro/carteiras
+├ ƒ /api/financeiro/carteiras/[id]
+├ ƒ /api/financeiro/carteiras/transferencia
+├ ƒ /api/financeiro/conciliacao
+├ ƒ /api/financeiro/conciliacao/[id]
+├ ƒ /api/financeiro/contas-pagar/estornar
+├ ƒ /api/financeiro/contas-pagar/estornar-ultimo-pagamento
+├ ƒ /api/financeiro/contas-pagar/liquidar
+├ ƒ /api/financeiro/contas-pagar/pagamento-parcial
+├ ƒ /api/financeiro/contas-receber/estornar
+├ ƒ /api/financeiro/contas-receber/estornar-parcela
+├ ƒ /api/financeiro/contas-receber/estornar-ultimo-pagamento
+├ ƒ /api/financeiro/contas-receber/liquidar
+├ ƒ /api/financeiro/contas-receber/pagamento-parcial
+├ ƒ /api/financeiro/dre
+├ ƒ /api/financeiro/fechamentos
+├ ƒ /api/financeiro/fechamentos/[id]/reabrir
+├ ƒ /api/financeiro/fechamentos/fechar-dia
+├ ƒ /api/financeiro/fechamentos/fechar-mes
+├ ƒ /api/financeiro/fluxo-caixa
+├ ƒ /api/financeiro/movimentacoes
+├ ƒ /api/financeiro/pagar
+├ ƒ /api/financeiro/receber
+├ ƒ /api/financeiro/relatorios/categorias
+├ ƒ /api/financeiro/relatorios/exportar
+├ ƒ /api/financeiro/relatorios/fluxo
+├ ƒ /api/financeiro/relatorios/indicadores
+├ ƒ /api/financeiro/relatorios/rankings
+├ ƒ /api/financeiro/relatorios/resumo
+├ ƒ /api/fiscal/certificado
+├ ƒ /api/fiscal/certificado/[id]
+├ ƒ /api/fiscal/certificado/[id]/rotacionar
+├ ƒ /api/fiscal/certificado/selftest
+├ ƒ /api/fiscal/config
+├ ƒ /api/fiscal/contingencia
+├ ƒ /api/fiscal/inutilizacao
+├ ƒ /api/fiscal/notas/[id]/cancelar
+├ ƒ /api/fiscal/onboarding/certificado
+├ ƒ /api/fiscal/onboarding/certificado/custodia
+├ ƒ /api/fiscal/onboarding/confirmar
+├ ƒ /api/fiscal/wsdl/ephemeral-execution
+├ ƒ /api/ia-mestre/conversations
+├ ƒ /api/ia-mestre/conversations/[id]
+├ ƒ /api/import/advanced
+├ ƒ /api/import/produtos/lote
+├ ƒ /api/import/produtos/preview
+├ ƒ /api/import/validate/clientes
+├ ƒ /api/import/validate/financeiro
+├ ƒ /api/import/validate/produtos
+├ ƒ /api/import/validate/vendas
+├ ƒ /api/internal/fiscal/contingencia-drill
+├ ƒ /api/internal/fiscal/observability
+├ ƒ /api/internal/fiscal/queue
+├ ƒ /api/marketing/avatar
+├ ƒ /api/marketing/consultoria
+├ ƒ /api/marketing/image
+├ ƒ /api/marketing/media-credits
+├ ƒ /api/marketing/posts
+├ ƒ /api/marketing/posts/[id]
+├ ƒ /api/marketing/schedule
+├ ƒ /api/marketing/studio-ia-posts
+├ ƒ /api/marketing/text
+├ ƒ /api/marketing/video
+├ ƒ /api/marketing/voice
+├ ƒ /api/marketing/voice/demo
+├ ƒ /api/marketplace/anuncios
+├ ƒ /api/marketplace/connections
+├ ƒ /api/marketplace/connections/[id]
+├ ƒ /api/marketplace/links/[id]
+├ ƒ /api/marketplace/produtos
+├ ƒ /api/marketplace/produtos/[id]
+├ ƒ /api/marketplace/produtos/exportar
+├ ƒ /api/marketplace/sync-logs
+├ ƒ /api/meta-whatsapp-verify
+├ ƒ /api/ops/caixa/abrir
+├ ƒ /api/ops/caixa/fechar
+├ ƒ /api/ops/caixa/operacao
+├ ƒ /api/ops/caixa/sessao-detalhe
+├ ƒ /api/ops/caixa/sessoes
+├ ƒ /api/ops/categorias-produto
+├ ƒ /api/ops/contas-pagar-list
+├ ƒ /api/ops/contas-pagar-persist
+├ ƒ /api/ops/contas-receber-list
+├ ƒ /api/ops/contas-receber-persist
+├ ƒ /api/ops/credito-cliente
+├ ƒ /api/ops/devolucao
+├ ƒ /api/ops/devolucoes
+├ ƒ /api/ops/import/clientes
+├ ƒ /api/ops/inventory
+├ ƒ /api/ops/inventory/import
+├ ƒ /api/ops/inventory/lookup
+├ ƒ /api/ops/ordens
+├ ƒ /api/ops/ordens/import
+├ ƒ /api/ops/servicos
+├ ƒ /api/ops/sync-ledger
+├ ƒ /api/ops/sync-legacy-financeiro
+├ ƒ /api/ops/sync-legacy-vendas
+├ ƒ /api/ops/terminal/heartbeat
+├ ƒ /api/ops/terminal/lock
+├ ƒ /api/ops/terminal/unlock
+├ ƒ /api/ops/venda-persist
+├ ƒ /api/ops/venda-persist/v2
+├ ƒ /api/ops/vendas-list
+├ ƒ /api/ops/vendas/by-client-sale-id
+├ ƒ /api/ops/vendas/quarantine-recovery/auto
+├ ƒ /api/ops/vendas/quarantine-recovery/batch
+├ ƒ /api/ops/vendas/quarantine-recovery/preview
+├ ƒ /api/ops/vendas/recover-quarantined
+├ ƒ /api/ordens-servico
+├ ƒ /api/ordens-servico/[id]
+├ ƒ /api/pdv/receber-conta
+├ ƒ /api/pdv/receber-conta-lote
+├ ƒ /api/pessoas/documentos
+├ ƒ /api/pessoas/documentos/[id]/download
+├ ƒ /api/pessoas/documentos/complete
+├ ƒ /api/pessoas/documentos/upload-intent
+├ ƒ /api/print/raw
+├ ƒ /api/product/fiscal-classify
+├ ƒ /api/product/ncm-suggest
+├ ƒ /api/product/voice-form
+├ ƒ /api/product/voice-form-text
+├ ƒ /api/product/voice-metadata
+├ ƒ /api/produtos
+├ ƒ /api/produtos/[id]
+├ ƒ /api/produtos/[id]/codigos
+├ ƒ /api/produtos/bulk-action
+├ ƒ /api/produtos/bulk-check-dependencies
+├ ƒ /api/produtos/bulk-delete
+├ ƒ /api/produtos/correcao-codigos
+├ ƒ /api/settings/perfil-loja
+├ ƒ /api/stores
+├ ƒ /api/stores/[id]
+├ ƒ /api/stores/[id]/settings
+├ ƒ /api/stores/[id]/summary
+├ ƒ /api/stores/import-catalog
+├ ƒ /api/stores/numeracao-venda
+├ ƒ /api/subscription/seal
+├ ƒ /api/subscription/verify
+├ ƒ /api/user/credits
+├ ƒ /api/user/credits/history
+├ ƒ /api/vendas/[id]
+├ ƒ /api/vendas/[id]/cancelar
+├ ƒ /api/vendas/[id]/corrigir
+├ ƒ /api/vendas/[id]/corrigir-item-meta
+├ ƒ /api/vendas/[id]/corrigir-itens
+├ ƒ /api/vendas/[id]/corrigir-parcelas
+├ ƒ /api/vendas/[id]/corrigir-titulo
+├ ƒ /api/vendas/[id]/solicitar-emissao
+├ ƒ /api/vendas/historico
+├ ƒ /api/version
+├ ƒ /api/vision/product-scan
+├ ƒ /api/webhooks/stripe
+├ ƒ /api/webhooks/whatsapp
+├ ƒ /api/whatsapp/ai-settings
+├ ƒ /api/whatsapp/automations
+├ ƒ /api/whatsapp/automations/[id]
+├ ƒ /api/whatsapp/contacts
+├ ƒ /api/whatsapp/conversations
+├ ƒ /api/whatsapp/conversations/[id]
+├ ƒ /api/whatsapp/conversations/[id]/ai-analysis
+├ ƒ /api/whatsapp/conversations/[id]/assistance-quote
+├ ƒ /api/whatsapp/conversations/[id]/etiquetas
+├ ƒ /api/whatsapp/conversations/[id]/etiquetas/[etiquetaId]
+├ ƒ /api/whatsapp/conversations/[id]/product-suggestion
+├ ƒ /api/whatsapp/etiquetas
+├ ƒ /api/whatsapp/etiquetas/[id]
+├ ƒ /api/whatsapp/messages
+├ ƒ /api/whatsapp/quick-replies
+├ ƒ /api/whatsapp/quick-replies/[id]
+├ ƒ /api/whatsapp/send
+├ ƒ /api/whatsapp/send-daily
+├ ƒ /api/whatsapp/webhook
+├ ƒ /clientes
+├ ○ /configuracoes
+├ ○ /configuracoes-v2
+├ ○ /configuracoes-v3
+├ ○ /contador
+├ ƒ /contador-externo
+├ ○ /contador-externo/convite
+├ ƒ /contador-externo/login
+├ ƒ /contador-externo/lojas/[loja]
+├ ƒ /contador-externo/lojas/[loja]/competencias/[c]
+├ ○ /contador-externo/sessao-expirada
+├ ○ /contas-pagar
+├ ○ /contas-receber
+├ ○ /dashboard
+├ ƒ /dashboard/billing
+├ ○ /dashboard/cadastros
+├ ƒ /dashboard/cadastros-v2
+├ ƒ /dashboard/caixa/historico
+├ ○ /dashboard/catalogo-aparelhos
+├ ƒ /dashboard/clientes
+├ ○ /dashboard/configuracoes
+├ ○ /dashboard/configuracoes-v2
+├ ƒ /dashboard/contador
+├ ○ /dashboard/creditos
+├ ƒ /dashboard/dev-health
+├ ○ /dashboard/estoque
+├ ○ /dashboard/estoque/auditoria
+├ ○ /dashboard/estoque/inventario
+├ ○ /dashboard/estoque/produtos-a-cadastrar
+├ ○ /dashboard/expedicao
+├ ○ /dashboard/finance
+├ ○ /dashboard/financeiro
+├ ƒ /dashboard/financeiro-v2
+├ ○ /dashboard/financeiro/contas-a-pagar
+├ ○ /dashboard/financeiro/contas-a-receber
+├ ○ /dashboard/historico-vendas
+├ ○ /dashboard/ia-mestre
+├ ○ /dashboard/ia-mestre/configuracoes
+├ ○ /dashboard/ia-mestre/gerador-imagens
+├ ○ /dashboard/ia-mestre/projetos
+├ ○ /dashboard/ia-mestre/treinar
+├ ○ /dashboard/marketing
+├ ○ /dashboard/marketing-ia
+├ ○ /dashboard/marketing/imagens
+├ ○ /dashboard/marketplace
+├ ○ /dashboard/marketplaces
+├ ○ /dashboard/master-console
+├ ƒ /dashboard/omni-agent
+├ ○ /dashboard/operacoes
+├ ○ /dashboard/operacoes-v2
+├ ○ /dashboard/operacoes-v3
+├ ○ /dashboard/operacoes-v4-preview
+├ ○ /dashboard/orcamentos
+├ ○ /dashboard/os
+├ ○ /dashboard/pdv
+├ ○ /dashboard/pdv-github-original
+├ ○ /dashboard/pdv-next
+├ ○ /dashboard/produtos
+├ ○ /dashboard/produtos/assistente-ia
+├ ○ /dashboard/relatorios
+├ ○ /dashboard/unidades
+├ ○ /dashboard/vendas
+├ ○ /dashboard/vendas-arquivo-geral
+├ ƒ /dashboard/vendas-hub/[[...slug]]
+├ ○ /dashboard/vendas/mesas
+├ ○ /dashboard/vendas/venda-completa
+├ ƒ /dashboard/whatsapp
+├ ○ /dashboard/whatsapp-automation
+├ ○ /fluxo-caixa
+├ ƒ /login
+├ ○ /login-admin
+├ ○ /login-contador
+├ ○ /logs-sistema
+├ ○ /manifest.webmanifest
+├ ○ /meu-plano
+├ ○ /os
+├ ○ /portal
+├ ○ /privacy
+├ ○ /relatorios-financeiros
+├ ○ /suporte
+├ ○ /vendas
+├ ○ /vendas-hub
+└ ƒ /vendas-hub/[...slug]
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+Environment variables loaded from .env
+┌─────────────────────────────────────────────────────────┐
+│  Update available 6.19.3 -> 8.0.0-rc.22                 │
+│                                                         │
+│  This is a major update - please follow the guide at    │
+│  https://pris.ly/d/major-version-upgrade                │
+│                                                         │
+│  Run the following to update                            │
+│    npm i --save-dev prisma@latest                       │
+│    npm i @prisma/client@latest                          │
+└─────────────────────────────────────────────────────────┘
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme

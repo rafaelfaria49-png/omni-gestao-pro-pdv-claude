@@ -1,0 +1,1077 @@
+{
+  "functionalSHA": "665583a7e3f6f1b9552b4c56b3d6a3dd97299167",
+  "revision": 8,
+  "attempt": 1,
+  "status": "AGUARDANDO_R_INDEPENDENTE",
+  "at": "2026-10-11T03:19:53.494Z",
+  "files": [
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-build-current.json",
+      "path": "base-build-current.json",
+      "bytes": 1030,
+      "sha256": "521ea66803b8f3be2277be6ca2c29a5cf2b1638ff80f18d1b6593e845c429b2e"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-build-current.stderr.log",
+      "path": "base-build-current.stderr.log",
+      "bytes": 230,
+      "sha256": "452154420f00deeae19dec6a427eb8eff08843076a17d7f28bfab2f3d1a20eb9"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-build-current.stdout.log",
+      "path": "base-build-current.stdout.log",
+      "bytes": 14183,
+      "sha256": "f17c80b39947f10c953b2bb77dea587b7fbb274d09d4660d1262011a9a82b3dd"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-datas-bootstrap.json",
+      "path": "base-e2e-datas-bootstrap.json",
+      "bytes": 1052,
+      "sha256": "d456b8fdc020273d7423acb70d09d8368ca038047ccc07342b0e615d8bc263c0"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-datas-bootstrap.stderr.log",
+      "path": "base-e2e-datas-bootstrap.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-datas-bootstrap.stdout.log",
+      "path": "base-e2e-datas-bootstrap.stdout.log",
+      "bytes": 108,
+      "sha256": "7974119258d10771d90112fc65febfb914a027f0cf3bf0f1e4381b9c017574ed"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-datas-server.stderr.log",
+      "path": "base-e2e-datas-server.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-datas-server.stdout.log",
+      "path": "base-e2e-datas-server.stdout.log",
+      "bytes": 1184,
+      "sha256": "5939544ca9dc31490b6c9c3253240ad20a06b22b95c6975d7f4387639641a769"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-datas.json",
+      "path": "base-e2e-datas.json",
+      "bytes": 1187,
+      "sha256": "c4dad5592a5b4a1f07e35616bc11905129706fe10c1f993d596ae145c0c86683"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-datas.stderr.log",
+      "path": "base-e2e-datas.stderr.log",
+      "bytes": 982,
+      "sha256": "647dd89541963ab98129f886be8c3ad3b9971c06521b3baeeca16eaf512ca8ab"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-datas.stdout.log",
+      "path": "base-e2e-datas.stdout.log",
+      "bytes": 3882,
+      "sha256": "dbe9e7ecf486a4748d6341fac9ebeaf9b897c0f014381ee672d64e738cd44115"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-misto-bootstrap.json",
+      "path": "base-e2e-misto-bootstrap.json",
+      "bytes": 1054,
+      "sha256": "2bc7808c603825e81b39f506d0c7d4a41f984b0e8ccb8ecc08f261c46447ab64"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-misto-bootstrap.stderr.log",
+      "path": "base-e2e-misto-bootstrap.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-misto-bootstrap.stdout.log",
+      "path": "base-e2e-misto-bootstrap.stdout.log",
+      "bytes": 114,
+      "sha256": "77460659bc93a3ad47274306b626d2eb7c74e4ba31ce99f91d27127db8ab3700"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-misto-server.stderr.log",
+      "path": "base-e2e-misto-server.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-misto-server.stdout.log",
+      "path": "base-e2e-misto-server.stdout.log",
+      "bytes": 2107,
+      "sha256": "0c93ea87c76cb87d5363bd780d36b7343a7ecea7d70d0158a9cb653c9bfc240f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-misto.json",
+      "path": "base-e2e-misto.json",
+      "bytes": 1320,
+      "sha256": "3236f9777530b03d7e3c8d59b7e165b76b6cd19a114ae081e805a15bddd1c1bb"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-misto.stderr.log",
+      "path": "base-e2e-misto.stderr.log",
+      "bytes": 982,
+      "sha256": "69093e21975f9ef96d195f77fcd34dad8c29d1e285b098bb76c8a30e1b8e7134"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-e2e-misto.stdout.log",
+      "path": "base-e2e-misto.stdout.log",
+      "bytes": 3942,
+      "sha256": "cc8398dbbac9b8a4c7408a2c9c1231c09eb1dda2f4f9b7926411f09816710410"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-fluxo007-full.json",
+      "path": "base-fluxo007-full.json",
+      "bytes": 1121,
+      "sha256": "2fe3e60b880692611fdc6aeb345803c7eaf46572f53087844870dd1c6c5c0eaa"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-fluxo007-full.stderr.log",
+      "path": "base-fluxo007-full.stderr.log",
+      "bytes": 1043,
+      "sha256": "9c22b79f8e0f02a45bb918b569d958663aca63e523a141f23043d0a9a86d20a7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-fluxo007-full.stdout.log",
+      "path": "base-fluxo007-full.stdout.log",
+      "bytes": 461,
+      "sha256": "9960d2743264040658d5e0c2ee88c923a644838efd9e2080709bc72a4924640b"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-preview-full.json",
+      "path": "base-preview-full.json",
+      "bytes": 1110,
+      "sha256": "b6d4ce55737da7ea76c34eed1a611ef2c1def86b5df4152117297ba168f22d67"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-preview-full.stderr.log",
+      "path": "base-preview-full.stderr.log",
+      "bytes": 191377,
+      "sha256": "30a3116f57a54aa2907f85c39df37d717fd517187ef63a14c06e5da6ab5256ae"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-preview-full.stdout.log",
+      "path": "base-preview-full.stdout.log",
+      "bytes": 1374,
+      "sha256": "b147685fb8fa13e594ab07da75247c03180d32863f1004b27e99f55ff6c83c4e"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-1.json",
+      "path": "base-T56c-1.json",
+      "bytes": 1143,
+      "sha256": "8f5467ddb8fbbdb604ded9374051d4ac0c27052fb80ca9636a5632a64868f79e"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-1.stderr.log",
+      "path": "base-T56c-1.stderr.log",
+      "bytes": 1043,
+      "sha256": "9c22b79f8e0f02a45bb918b569d958663aca63e523a141f23043d0a9a86d20a7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-1.stdout.log",
+      "path": "base-T56c-1.stdout.log",
+      "bytes": 473,
+      "sha256": "e34b48c902f0a19dbaa7775453ac87c86f58974386eb661eafadaecb84348243"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-2.json",
+      "path": "base-T56c-2.json",
+      "bytes": 1143,
+      "sha256": "76b212f44f0fb06a5451f1352875b4e07bc1e7614c6589f57b40762132cad019"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-2.stderr.log",
+      "path": "base-T56c-2.stderr.log",
+      "bytes": 1043,
+      "sha256": "9c22b79f8e0f02a45bb918b569d958663aca63e523a141f23043d0a9a86d20a7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-2.stdout.log",
+      "path": "base-T56c-2.stdout.log",
+      "bytes": 473,
+      "sha256": "19a364484e4052c41962ef74ec8fbdff80dc07d582b84f5aadc7b33fdbcad92e"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-3.json",
+      "path": "base-T56c-3.json",
+      "bytes": 1143,
+      "sha256": "941e17d27795fdde1ca89fb01365eaf7734c0a64ca6d927520ece70e691fa66b"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-3.stderr.log",
+      "path": "base-T56c-3.stderr.log",
+      "bytes": 1043,
+      "sha256": "9c22b79f8e0f02a45bb918b569d958663aca63e523a141f23043d0a9a86d20a7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-3.stdout.log",
+      "path": "base-T56c-3.stdout.log",
+      "bytes": 473,
+      "sha256": "57d831db8fda0561456b40320a2bc8dd710a0dc1637ebbb473bcdc9666f944ef"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-paired.json",
+      "path": "base-T56c-paired.json",
+      "bytes": 1143,
+      "sha256": "55b564ab8f7c04d438c21c5a9de5e52c6aa8acff51afe48885def61474cc0848"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-paired.stderr.log",
+      "path": "base-T56c-paired.stderr.log",
+      "bytes": 1043,
+      "sha256": "9c22b79f8e0f02a45bb918b569d958663aca63e523a141f23043d0a9a86d20a7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/base-T56c-paired.stdout.log",
+      "path": "base-T56c-paired.stdout.log",
+      "bytes": 473,
+      "sha256": "3aeba287e0f1a9c37a1b8a2c4f2acf73a5f7a753324a47dface9f885cdffeb76"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/baseline-regressions-1791685785112.json",
+      "path": "baseline-regressions-1791685785112.json",
+      "bytes": 2260,
+      "sha256": "4825864b430cff8ebefddc2b02342b59593093c8051e161b11a3fca0e3eeacc4"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/baseline-regressions.json",
+      "path": "baseline-regressions.json",
+      "bytes": 2260,
+      "sha256": "4825864b430cff8ebefddc2b02342b59593093c8051e161b11a3fca0e3eeacc4"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-aep-check-attempt1-bootstrap.json",
+      "path": "candidate-aep-check-attempt1-bootstrap.json",
+      "bytes": 2927,
+      "sha256": "e4d101472034816ea3d1510c8cd83169ba0343d85b92dbf1191e337c8ca5d1b6"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-aep-check-attempt1-bootstrap.stderr.log",
+      "path": "candidate-aep-check-attempt1-bootstrap.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-aep-check-attempt1-bootstrap.stdout.log",
+      "path": "candidate-aep-check-attempt1-bootstrap.stdout.log",
+      "bytes": 107,
+      "sha256": "424aa92baab2b95e1caa19f62ec986105e3d9d4d78d9e44628e7480b3cf65708"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-aep-check-attempt1-server.stderr.log",
+      "path": "candidate-aep-check-attempt1-server.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-aep-check-attempt1-server.stdout.log",
+      "path": "candidate-aep-check-attempt1-server.stdout.log",
+      "bytes": 2840,
+      "sha256": "5314cf463babfa5fa2c21db50812107096a2653c07326e81ffd60b4781a0cb15"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-aep-check-attempt1.json",
+      "path": "candidate-aep-check-attempt1.json",
+      "bytes": 2939,
+      "sha256": "2f8cbd7e83189048f488e41b1342ef9ac5396c5a2966fe715d6cb1ed62c1d3f2"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-aep-check-attempt1.stderr.log",
+      "path": "candidate-aep-check-attempt1.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-aep-check-attempt1.stdout.log",
+      "path": "candidate-aep-check-attempt1.stdout.log",
+      "bytes": 3872,
+      "sha256": "5b26cf957e21beeafb44f76b92c9b15428ea3326736da94fbc3a8802083ba363"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-build-final.json",
+      "path": "candidate-build-final.json",
+      "bytes": 1089,
+      "sha256": "971be2eb05f7544541a16ba3c8c1da90770acc4604e63b3972cb3cbaed3fa6f6"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-build-final.stderr.log",
+      "path": "candidate-build-final.stderr.log",
+      "bytes": 230,
+      "sha256": "452154420f00deeae19dec6a427eb8eff08843076a17d7f28bfab2f3d1a20eb9"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-build-final.stdout.log",
+      "path": "candidate-build-final.stdout.log",
+      "bytes": 14262,
+      "sha256": "fb34a804d126aef93759a454e2842b960137b33d1128ddaf3c965850c858bb33"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-build-frozen.json",
+      "path": "candidate-build-frozen.json",
+      "bytes": 1089,
+      "sha256": "e096dcec684c959170a031e1b6a2097d38e0404ec86c70f6a588de3b4b4a4a6f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-build-frozen.stderr.log",
+      "path": "candidate-build-frozen.stderr.log",
+      "bytes": 230,
+      "sha256": "452154420f00deeae19dec6a427eb8eff08843076a17d7f28bfab2f3d1a20eb9"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-build-frozen.stdout.log",
+      "path": "candidate-build-frozen.stdout.log",
+      "bytes": 14262,
+      "sha256": "7924e084d6ff4d4580c0459da7c25964995082d1987b767513379584837ae232"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-datas-pg.json",
+      "path": "candidate-datas-pg.json",
+      "bytes": 1179,
+      "sha256": "346ce2db02701bfd0467b70ddf527998323c7b8420f4cd1ccd21592a50afd937"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-datas-pg.stderr.log",
+      "path": "candidate-datas-pg.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-datas-pg.stdout.log",
+      "path": "candidate-datas-pg.stdout.log",
+      "bytes": 224,
+      "sha256": "1aba7696b7239bee10fd74a54d42276d89c61ca7b92620b7f68216f1f65abcaf"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-diff-check.json",
+      "path": "candidate-diff-check.json",
+      "bytes": 255,
+      "sha256": "013954e7f12fb7023676f9ff93bce425d5f2a710fb672503af3a9f24934f64d0"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-diff-check.stderr.log",
+      "path": "candidate-diff-check.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-diff-check.stdout.log",
+      "path": "candidate-diff-check.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-datas-bootstrap.json",
+      "path": "candidate-e2e-datas-bootstrap.json",
+      "bytes": 1111,
+      "sha256": "7b078713c6ce65cbca3ab332cb476b4f0c7d0088f0ff269158d060a6f3c65d1c"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-datas-bootstrap.stderr.log",
+      "path": "candidate-e2e-datas-bootstrap.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-datas-bootstrap.stdout.log",
+      "path": "candidate-e2e-datas-bootstrap.stdout.log",
+      "bytes": 108,
+      "sha256": "7974119258d10771d90112fc65febfb914a027f0cf3bf0f1e4381b9c017574ed"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-datas-server.stderr.log",
+      "path": "candidate-e2e-datas-server.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-datas-server.stdout.log",
+      "path": "candidate-e2e-datas-server.stdout.log",
+      "bytes": 1184,
+      "sha256": "ae6419bf7a97fc5f4e7d59ac32f6ecb1fc7dffa1bf6da3435c7b1bb0cbd7b06a"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-datas.json",
+      "path": "candidate-e2e-datas.json",
+      "bytes": 1246,
+      "sha256": "04da188cdf52019d7489470872725efaac0cb4e59ead522ec757ddf953b4edfb"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-datas.stderr.log",
+      "path": "candidate-e2e-datas.stderr.log",
+      "bytes": 984,
+      "sha256": "b19bc9739be985852b71a67d2b92214d1fb0b983c4443df1fb2cf09a1a433e86"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-datas.stdout.log",
+      "path": "candidate-e2e-datas.stdout.log",
+      "bytes": 3877,
+      "sha256": "1491b0f289d93b46339a79f6229206dac97e0f5e3f2de54bb2a68ce9c7a8f968"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-fluxo006-bootstrap.json",
+      "path": "candidate-e2e-fluxo006-bootstrap.json",
+      "bytes": 1115,
+      "sha256": "608f872cb703b34c004131083c80f8de2e86aa8db37e34fc239cb61eb5cea855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-fluxo006-bootstrap.stderr.log",
+      "path": "candidate-e2e-fluxo006-bootstrap.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-fluxo006-bootstrap.stdout.log",
+      "path": "candidate-e2e-fluxo006-bootstrap.stdout.log",
+      "bytes": 113,
+      "sha256": "9be74685bb57bb5b1e8d8432ebd6d0116fc7b7a12251aba4475b63f82e726b21"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-fluxo006-server.stderr.log",
+      "path": "candidate-e2e-fluxo006-server.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-fluxo006-server.stdout.log",
+      "path": "candidate-e2e-fluxo006-server.stdout.log",
+      "bytes": 3192,
+      "sha256": "2a17fc93ff4c8c2a32cc1f128b7deaf266470401270348e7cbcf8d039fa6f469"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-fluxo006.json",
+      "path": "candidate-e2e-fluxo006.json",
+      "bytes": 1256,
+      "sha256": "42221d69b8959d11d80de0a2ce43ebddd4ae6fad85a007e90d10a51530a29cd2"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-fluxo006.stderr.log",
+      "path": "candidate-e2e-fluxo006.stderr.log",
+      "bytes": 656,
+      "sha256": "113b20594b10296a5f8ee3ac811025f914cc128cc88cecdaaeeb2c01c4b69ce4"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-fluxo006.stdout.log",
+      "path": "candidate-e2e-fluxo006.stdout.log",
+      "bytes": 2773,
+      "sha256": "06aaf03c0bd0d55bc2f21a35187e1c6a31b2cdac10d5dc01f63c119540e01588"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-frg001-bootstrap.json",
+      "path": "candidate-e2e-frg001-bootstrap.json",
+      "bytes": 1126,
+      "sha256": "3f7931cd3518a364371ce3f318cad1c7fcf91c92dcf170d76ca71e09e9ac303a"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-frg001-bootstrap.stderr.log",
+      "path": "candidate-e2e-frg001-bootstrap.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-frg001-bootstrap.stdout.log",
+      "path": "candidate-e2e-frg001-bootstrap.stdout.log",
+      "bytes": 107,
+      "sha256": "424aa92baab2b95e1caa19f62ec986105e3d9d4d78d9e44628e7480b3cf65708"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-frg001-server.stderr.log",
+      "path": "candidate-e2e-frg001-server.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-frg001-server.stdout.log",
+      "path": "candidate-e2e-frg001-server.stdout.log",
+      "bytes": 1172,
+      "sha256": "83c407fff76cf0014c0d96b60a893b886bf03f8f9f9a4377e5772281ae7cb8cc"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-frg001.json",
+      "path": "candidate-e2e-frg001.json",
+      "bytes": 1261,
+      "sha256": "138f2e8ca161b67ddd4fd614ebacfc91fdf814630414bec0bd7bf207a59c7d8c"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-frg001.stderr.log",
+      "path": "candidate-e2e-frg001.stderr.log",
+      "bytes": 656,
+      "sha256": "7c2e114a2cb9f617792c73194522b93285b0374fd28e6c85a4a57516ea862728"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-frg001.stdout.log",
+      "path": "candidate-e2e-frg001.stdout.log",
+      "bytes": 1288,
+      "sha256": "5046e513fed7ebdb72b9dc037b1880c5032fd43f4f38989f718618b69df6b22b"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-misto-bootstrap.json",
+      "path": "candidate-e2e-misto-bootstrap.json",
+      "bytes": 1113,
+      "sha256": "d5cba579a4e1fe3746b77be8f3f16092856c0aac93cd8b05657a4a1aea9e0bac"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-misto-bootstrap.stderr.log",
+      "path": "candidate-e2e-misto-bootstrap.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-misto-bootstrap.stdout.log",
+      "path": "candidate-e2e-misto-bootstrap.stdout.log",
+      "bytes": 114,
+      "sha256": "77460659bc93a3ad47274306b626d2eb7c74e4ba31ce99f91d27127db8ab3700"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-misto-server.stderr.log",
+      "path": "candidate-e2e-misto-server.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-misto-server.stdout.log",
+      "path": "candidate-e2e-misto-server.stdout.log",
+      "bytes": 2010,
+      "sha256": "78579301403b1bf9d99b8f59cc8877ced8de2be71451f4fd178fcbcd5ca430b7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-misto.json",
+      "path": "candidate-e2e-misto.json",
+      "bytes": 1379,
+      "sha256": "5ab218b165785c82bf51a2827c21169e214e89aebe3cbef6117dbe275080155e"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-misto.stderr.log",
+      "path": "candidate-e2e-misto.stderr.log",
+      "bytes": 982,
+      "sha256": "702f27a273dc1f3903d2156ef1f4d891f5c4496d6d40e8df70e7f7e9253c4b87"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-e2e-misto.stdout.log",
+      "path": "candidate-e2e-misto.stdout.log",
+      "bytes": 3937,
+      "sha256": "c25d2574d6920c8b864fc2bbb25051aebc472d9f846ef3de2ad4351e2a2f4eab"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo001.json",
+      "path": "candidate-fluxo001.json",
+      "bytes": 1222,
+      "sha256": "59dfe8bd2b6c3d303445fabaaa91169039434005504c34cb84ced826ab689d28"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo001.stderr.log",
+      "path": "candidate-fluxo001.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo001.stdout.log",
+      "path": "candidate-fluxo001.stdout.log",
+      "bytes": 224,
+      "sha256": "b056c2c7d75f85759b324e9624b29fabffd534580c3b54ca23d7f23061198f4a"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo002-mounted.json",
+      "path": "candidate-fluxo002-mounted.json",
+      "bytes": 1180,
+      "sha256": "7cc79401b2440bc70e265ddaedd36840ed3777dde22834635b249583fc5979a5"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo002-mounted.stderr.log",
+      "path": "candidate-fluxo002-mounted.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo002-mounted.stdout.log",
+      "path": "candidate-fluxo002-mounted.stdout.log",
+      "bytes": 226,
+      "sha256": "32636c138002302c363ecf7a7819d8a51c8b30fc9a89ba0d5624a25c5935b6ad"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo002-pg.json",
+      "path": "candidate-fluxo002-pg.json",
+      "bytes": 1210,
+      "sha256": "f4da99281fb9d49383cec9df6d8a5dd298fc9b909314440e61d0990ca4b264a9"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo002-pg.stderr.log",
+      "path": "candidate-fluxo002-pg.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo002-pg.stdout.log",
+      "path": "candidate-fluxo002-pg.stdout.log",
+      "bytes": 222,
+      "sha256": "e5555d019179074c40aa13d27a54b6e76dcbaab8f8bab35e9575173902b8b7d4"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo003.json",
+      "path": "candidate-fluxo003.json",
+      "bytes": 1180,
+      "sha256": "c0a195257ff87dbb0ed3fcc36ba0feaaa976dd21716546715b1c936e1887a3cf"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo003.stderr.log",
+      "path": "candidate-fluxo003.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo003.stdout.log",
+      "path": "candidate-fluxo003.stdout.log",
+      "bytes": 224,
+      "sha256": "b320187924f0dd6806c4a4727608126282054bfb9b25e5e4594f70d5576848b1"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo004.json",
+      "path": "candidate-fluxo004.json",
+      "bytes": 1180,
+      "sha256": "56b37ee81e9064c01cbce52bb0f7b762e70733c2c035589136dccaf9139e4769"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo004.stderr.log",
+      "path": "candidate-fluxo004.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo004.stdout.log",
+      "path": "candidate-fluxo004.stdout.log",
+      "bytes": 226,
+      "sha256": "96ddcd088306d48129e1445ab9d764be92c7b2a251765dac5285386f03a20df7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo005.json",
+      "path": "candidate-fluxo005.json",
+      "bytes": 1180,
+      "sha256": "e1ce056d3180673f0d3eb8bc8640ce85dd8a712fc05f5e9a19481943ed1bff2f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo005.stderr.log",
+      "path": "candidate-fluxo005.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo005.stdout.log",
+      "path": "candidate-fluxo005.stdout.log",
+      "bytes": 226,
+      "sha256": "ccf73a31547a7eb7ea5ec736e50335cebeda5a7525dc83f8cea7efd7db222f9f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo006.json",
+      "path": "candidate-fluxo006.json",
+      "bytes": 1180,
+      "sha256": "909cd07bcbda802b6b19fca33826db714afe4c1793f0612e1f9f020def0171a9"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo006.stderr.log",
+      "path": "candidate-fluxo006.stderr.log",
+      "bytes": 200,
+      "sha256": "ad9ef12f2f19d2532fbd05b9772e28e31d4b97c1b0de43e902d3b8edc87fcee5"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo006.stdout.log",
+      "path": "candidate-fluxo006.stdout.log",
+      "bytes": 228,
+      "sha256": "e3ebd073459c66c8f2265389c33b5beb906535f29f9744433777def1e8f37c1c"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo007-full.json",
+      "path": "candidate-fluxo007-full.json",
+      "bytes": 1180,
+      "sha256": "0bca7a0541ebfc04a9727a33ea5a915c7278f9d09211260f0e027f5a7e9624ef"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo007-full.stderr.log",
+      "path": "candidate-fluxo007-full.stderr.log",
+      "bytes": 1043,
+      "sha256": "9c22b79f8e0f02a45bb918b569d958663aca63e523a141f23043d0a9a86d20a7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-fluxo007-full.stdout.log",
+      "path": "candidate-fluxo007-full.stdout.log",
+      "bytes": 455,
+      "sha256": "b68eea4f868508dadb7b49af5f45c227322af7c7bbc744fb0cd263a9d783ee94"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-lint-frozen.json",
+      "path": "candidate-lint-frozen.json",
+      "bytes": 2020,
+      "sha256": "73595880118e6e30e2a664f4584c350f7cf8e3b2aab5b03159357b8d53bfe2f9"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-lint-frozen.stderr.log",
+      "path": "candidate-lint-frozen.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-lint-frozen.stdout.log",
+      "path": "candidate-lint-frozen.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-preview-full.json",
+      "path": "candidate-preview-full.json",
+      "bytes": 1169,
+      "sha256": "39fde45e83c780e4cddd2f7ebd21f900ffcce41ce7450d1dc660163361bbc86a"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-preview-full.stderr.log",
+      "path": "candidate-preview-full.stderr.log",
+      "bytes": 284669,
+      "sha256": "b5e5f13cbab437062dd98be40f8378efa26464fab0ca0f0f0abf4c3182d6fd87"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-preview-full.stdout.log",
+      "path": "candidate-preview-full.stdout.log",
+      "bytes": 1368,
+      "sha256": "d1c10ca358b3e78ddfaa617ffbeb8f96c5f771e1a32cc2a9a648da6e49b6943c"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-ratified-bootstrap.json",
+      "path": "candidate-ratified-bootstrap.json",
+      "bytes": 2927,
+      "sha256": "611e4b36e41f5dc7eb2112d1fc2df5a08d951f2cc4f79cea5351a54f1597d000"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-ratified-bootstrap.stderr.log",
+      "path": "candidate-ratified-bootstrap.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-ratified-bootstrap.stdout.log",
+      "path": "candidate-ratified-bootstrap.stdout.log",
+      "bytes": 107,
+      "sha256": "424aa92baab2b95e1caa19f62ec986105e3d9d4d78d9e44628e7480b3cf65708"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-ratified-server.stderr.log",
+      "path": "candidate-ratified-server.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-ratified-server.stdout.log",
+      "path": "candidate-ratified-server.stdout.log",
+      "bytes": 2924,
+      "sha256": "549cffc422ffa7452e7b5da3a33a58ee2da5212db1cb597b44b1d806e2be704f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-ratified.json",
+      "path": "candidate-ratified.json",
+      "bytes": 4613,
+      "sha256": "58545a69791b5bf4929071e2c3c2edaa0ac919d9fda16abb373f2fc3eec08e5d"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-ratified.stderr.log",
+      "path": "candidate-ratified.stderr.log",
+      "bytes": 954,
+      "sha256": "8dd9f8a1b474ca7b4b293300f70827b3d3c7293ac92e490e792cabbc376b7703"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-ratified.stdout.log",
+      "path": "candidate-ratified.stdout.log",
+      "bytes": 4464,
+      "sha256": "1da279c062bada812fcb76c779500cb708b525564303af9bae5c86289f906bc9"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-regressions.json",
+      "path": "candidate-regressions.json",
+      "bytes": 6385,
+      "sha256": "6a4dd423aa4541a5eda17ff04d271cfe4f30112220689d23c5f70d374f21393d"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-1.json",
+      "path": "candidate-T56c-1.json",
+      "bytes": 1202,
+      "sha256": "a6263d171edd23a19fe1a3dafa526ab255961ce9ae80edb658e61db3d6197d42"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-1.stderr.log",
+      "path": "candidate-T56c-1.stderr.log",
+      "bytes": 753,
+      "sha256": "6ae255127a74552eee547b5424ef195c21802a80ab4320b78ce836f1f483753b"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-1.stdout.log",
+      "path": "candidate-T56c-1.stdout.log",
+      "bytes": 474,
+      "sha256": "72e9d296c74d8b6be88c8c866a286f3eb9c46610975d72a247292e8342c25c56"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-2.json",
+      "path": "candidate-T56c-2.json",
+      "bytes": 1202,
+      "sha256": "3b19dd62545b67ea37c700c40a984599fd8d3a4a1660f7e0cdf9c96ef3da2253"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-2.stderr.log",
+      "path": "candidate-T56c-2.stderr.log",
+      "bytes": 1043,
+      "sha256": "9c22b79f8e0f02a45bb918b569d958663aca63e523a141f23043d0a9a86d20a7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-2.stdout.log",
+      "path": "candidate-T56c-2.stdout.log",
+      "bytes": 468,
+      "sha256": "8222dd5d150e89dd6e7343a034f77a236d0a2d7825843a6700ad38266d4f8e18"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-3.json",
+      "path": "candidate-T56c-3.json",
+      "bytes": 1202,
+      "sha256": "df381035ce2df5f62b54d8015a41cccc29748e8bc285ebfd905f80cd14006065"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-3.stderr.log",
+      "path": "candidate-T56c-3.stderr.log",
+      "bytes": 753,
+      "sha256": "6ae255127a74552eee547b5424ef195c21802a80ab4320b78ce836f1f483753b"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-3.stdout.log",
+      "path": "candidate-T56c-3.stdout.log",
+      "bytes": 474,
+      "sha256": "98d504767ef1554304b7784b8dddcb3640e25203adf739273b516560c86c1d7f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-paired.json",
+      "path": "candidate-T56c-paired.json",
+      "bytes": 1202,
+      "sha256": "7a8968486dea370cd2d2552223aefe8a7d8fda28bdeb20f3880199b6d88deedd"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-paired.stderr.log",
+      "path": "candidate-T56c-paired.stderr.log",
+      "bytes": 1043,
+      "sha256": "9c22b79f8e0f02a45bb918b569d958663aca63e523a141f23043d0a9a86d20a7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-T56c-paired.stdout.log",
+      "path": "candidate-T56c-paired.stdout.log",
+      "bytes": 468,
+      "sha256": "82e828865c69b5740d963b26c296a7b9b2bd0c56b31972300b76b1941dc5b61e"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-v3-misto-pg.json",
+      "path": "candidate-v3-misto-pg.json",
+      "bytes": 1181,
+      "sha256": "016c6a8d87bb23af60870e2b166707bccfbbe5ddf16ffab6126453d9c5034657"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-v3-misto-pg.stderr.log",
+      "path": "candidate-v3-misto-pg.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-v3-misto-pg.stdout.log",
+      "path": "candidate-v3-misto-pg.stdout.log",
+      "bytes": 228,
+      "sha256": "bc5b75e8f62405e030772f682401336cb7f5664345b7806aeba2c9155a2f2240"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-v4-misto-pg.json",
+      "path": "candidate-v4-misto-pg.json",
+      "bytes": 1181,
+      "sha256": "a16a34d12af384471f07dbdc89a4a7a291867b876e129ee4a5efa5a180e5bfbb"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-v4-misto-pg.stderr.log",
+      "path": "candidate-v4-misto-pg.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-v4-misto-pg.stdout.log",
+      "path": "candidate-v4-misto-pg.stdout.log",
+      "bytes": 222,
+      "sha256": "30339ade29cbcded8950960cda2463ed31ca6e6d6ab33078e3356ad977da8237"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-verify-all-frozen.json",
+      "path": "candidate-verify-all-frozen.json",
+      "bytes": 1109,
+      "sha256": "da631ecf7d3d51229e9546783344157ede7ddcd192f8ef43c329c5b8a6f6c336"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-verify-all-frozen.stderr.log",
+      "path": "candidate-verify-all-frozen.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/candidate-verify-all-frozen.stdout.log",
+      "path": "candidate-verify-all-frozen.stdout.log",
+      "bytes": 1120,
+      "sha256": "0029b6c636babfb295d429ee718bb1b3e66f96c00033962a765bd8e6a7442e8b"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/comparacao-falhas-atual.json",
+      "path": "comparacao-falhas-atual.json",
+      "bytes": 5226,
+      "sha256": "a8d448fa0278af24921a37ef0ac32bb0f1141f9dce671aa36bb747573ba81ec3"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/MATRIZ-REV8.json",
+      "path": "MATRIZ-REV8.json",
+      "bytes": 57192,
+      "sha256": "4c4d3785c2a7f9864e9d97e9fc42a2e95618dd135d45680fc55806004643f5ba"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/MATRIZ-REV8.md",
+      "path": "MATRIZ-REV8.md",
+      "bytes": 4572,
+      "sha256": "3f913976cb0a0c888e02bcfb16689c8508a3576bcda5f14c379224d3dd81c3e7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/packet-seal.json",
+      "path": "packet-seal.json",
+      "bytes": 348,
+      "sha256": "5c9c15101110cb2bdd086ddbeee4e81bc20dbcce053f97c36b0082d3f0092029"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-anthropic-invocation.json",
+      "path": "r-anthropic-invocation.json",
+      "bytes": 1507,
+      "sha256": "5bcb53b3e7be6163f286ac6daf715357eb87e4501024c90886c13ea372595477"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-anthropic-raw.jsonl",
+      "path": "r-anthropic-raw.jsonl",
+      "bytes": 3656289,
+      "sha256": "71bcdfe05034b6ee9f5e8d3dad697443d3abf9d3d6ce4949709aafe0f29f34e0"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-anthropic-result.json",
+      "path": "r-anthropic-result.json",
+      "bytes": 4245,
+      "sha256": "da2b2fe31c1f68f5f82272dce6b13da295cb4c6e33ce2d0922e305ca1f2bd34b"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-anthropic-stderr.log",
+      "path": "r-anthropic-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-anthropic-verdict.md",
+      "path": "r-anthropic-cli-message-sem-veredito.md",
+      "bytes": 71,
+      "sha256": "d76e6ba585025430783bc04b2f3d1741fc19463988376eaf972376974ab9732d"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-coverage-audit.json",
+      "path": "r-coverage-audit.json",
+      "bytes": 45021,
+      "sha256": "7114c1d3a24a4652de24d71ad625395a290a777ca67fce8c333d591470a585f7"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-google-probe.json",
+      "path": "r-google-probe.json",
+      "bytes": 722,
+      "sha256": "576876cef0f00c2f28b7652099d550c098a713cbf634f5426be08e774d2b0e5d"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-google-probe.stderr.log",
+      "path": "r-google-probe.stderr.log",
+      "bytes": 1902,
+      "sha256": "dc1c9d192047b0ec214291c67eb5013ecdc05cb61044a71a2b4fabaa9a86286f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/r-google-probe.stdout.log",
+      "path": "r-google-probe.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/remaining-e2e-summary.json",
+      "path": "remaining-e2e-summary.json",
+      "bytes": 429,
+      "sha256": "f870b63bf6fb2bacae884f52af9bbcc137d0aa62e00f2b40aeaa12427b99821d"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/scripts-evidencia-syntax-preparatoria.json",
+      "path": "scripts-evidencia-syntax-preparatoria.json",
+      "bytes": 380,
+      "sha256": "4f744f92929233706de2fb1f8cce77b28784f0f4dcf6aa81ad5e4881c20ec93f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/scripts-evidencia-syntax-preparatoria.stderr.log",
+      "path": "scripts-evidencia-syntax-preparatoria.stderr.log",
+      "bytes": 483,
+      "sha256": "13535190f56b37644ffd7f528fbb08a0b08afe2971087df6d6ac58361caf592a"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/scripts-evidencia-syntax-preparatoria.stdout.log",
+      "path": "scripts-evidencia-syntax-preparatoria.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/scripts-evidencia-syntax.json",
+      "path": "scripts-evidencia-syntax.json",
+      "bytes": 823,
+      "sha256": "fcc6c757ac10f4eccbc698c0220eec14215a25981ace0480c0a0f31aeb2f9d4f"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/T56c-paired-summary.json",
+      "path": "T56c-paired-summary.json",
+      "bytes": 343,
+      "sha256": "b2b7df5e6fa88d8a5e66e06f37f251dd5ca42d86063a6f0776e4b7603bf54fd5"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/pacote-rev8-665583a7e3f6.zip",
+      "path": "pacote-rev8-665583a7e3f6.zip",
+      "bytes": 1123683,
+      "sha256": "1552742edf104c00005a402c9a291aa3c0bef2258922878eaef161957ffdabc3"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/pacote-rev8-665583a7e3f6/MANIFEST.json",
+      "path": "MANIFEST-PACOTE-REV8.json",
+      "bytes": 59035,
+      "sha256": "05d1499b2544ff38589222d5bb1a88f937afbb1bb39160b01a99ce8d36a5c61c"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/verify-rev8-packet.mjs",
+      "path": "scripts/verify-rev8-packet.mjs.txt",
+      "bytes": 1784,
+      "sha256": "e479c67cb3e9d7afb261dbdbbd384af217ea7a6fb998b2a0cd03d795ea4ac7db"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/audit-review-coverage.mjs",
+      "path": "scripts/audit-review-coverage.mjs.txt",
+      "bytes": 3675,
+      "sha256": "5acd033f4c73e4ab6dcf01b61e676746ac89d4db15b0991e1733830ce5c4f4b5"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/run-review-rev8.mjs",
+      "path": "scripts/run-review-rev8.mjs.txt",
+      "bytes": 4143,
+      "sha256": "705fcc02fa7d4952ceb045401b892498914c33bdc8476042dc82d794382b81ad"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/run-close-after-r.mjs",
+      "path": "scripts/run-close-after-r.mjs.txt",
+      "bytes": 3587,
+      "sha256": "62945b4ad7298448cbe3e95e998137d599a974fb09c0eb737f924ce8386516fd"
+    },
+    {
+      "source": "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/review-request.md",
+      "path": "pedido-r-anthropic.md",
+      "bytes": 7497,
+      "sha256": "b847de3e2cd878618c70423477404bc1d47eaae6787473a6cc4c65404e6ea557"
+    },
+    {
+      "source": "generated",
+      "path": "EVIDENCIAS-E-HANDOFF.md",
+      "bytes": 3732,
+      "sha256": "6413c33ca282d0fabc1d23f84d03ea5a3bf9e4a21bbc919bac5aad0ed5e5f23a"
+    }
+  ]
+}
