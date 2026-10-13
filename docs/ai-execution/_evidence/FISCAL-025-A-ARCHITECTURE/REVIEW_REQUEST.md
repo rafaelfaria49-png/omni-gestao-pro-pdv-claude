@@ -1,17 +1,24 @@
 # 025-A · Solicitação de R incremental da decisão B
 
-Autor/publicador: Codex / OpenAI. Preferência autorizada: Google/Gemini via Antigravity CLI; alternativa Anthropic/Claude Code após disponibilidade. Somente corpus versionado por stdin, sem chamadas de ferramentas ou escrita.
+Autor/publicador: Codex / OpenAI (implementador, família openai). Preferência autorizada: Google/Gemini via Antigravity CLI; alternativa Anthropic/Claude Code após disponibilidade. Rafael Faria autorizou explicitamente ZCode/GLM, família zai, como alternativa adicional exclusivamente para Fiscal 025-A em 2026-10-13 (America/Sao_Paulo); ver [autorização da fase](../../../execution-tracks/fiscal/phases/025-A-ARCHITECTURE.md). Somente corpus versionado fornecido ao revisor, sem chamadas de ferramentas ou escrita. Nenhuma autorização global de R é criada.
 
 ## Âncoras e escopo
 
 PR [#265](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265), branch codex/fiscal-025-a-architecture.
 R anterior: [APPROVE Google/Gemini](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265#issuecomment-6134615719), modelo gemini-3.8-flash-high, SHA e3c9d4a416972a65b1283b568ae5b13d3897b5c8, NEW_BLOCKERS=NONE, preferência B.
 Base reconciliada: 1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d; merge de drift independente de main: 4bb7025ffc5d9384701ce242377dff6289155df6, sem conflitos.
-O SHA incremental completo é informado na chamada e no parecer publicado; conferir HEAD/PR exatos, sem referência circular dentro do commit.
+O [parecer histórico ZCode/GLM-5.3](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265#issuecomment-6137375809), família zai, registrou REVIEWED_SHA=6def6fabc407434562330e5b6274f4c8df167a85, R_VERDICT=APPROVE e NEW_BLOCKERS=NONE. É tecnicamente válido para esse SHA, sem atribuição de variante Flash e sem aprovação do novo commit.
+O novo SHA completo após o push é informado na chamada e no parecer publicado; conferir HEAD/PR exatos, sem referência circular dentro do commit. A R histórica não substitui a nova revisão efetiva.
 
 Rafael Faria aprovou explicitamente B: WORM OBJECT STORAGE + PROTECTED POSTGRESQL REFERENCE; rejeitou A para ameaça administrativa forte; C permanece alternativa não escolhida. S3 Object Lock COMPLIANCE é referência técnica. R2 só substitui esse perfil com nova aceitação humana explícita dos riscos administrativos. A arquitetura aprovada não define prazo, região, custo, RPO/RTO ou fornecedor contratado.
 
 Revisar integralmente os documentos finais e o delta desde a R anterior, incluindo a [ADR-0024 aceita](../../../decisions/ADR-0024-arquivo-historico-worm-referencia-protegida.md), [índice oficial](../../../decisions/INDEX.md), [ponte da proposta](../../../decisions/drafts/ADR_PROPOSAL_0024_FISCAL_025_A_PRESERVACAO_IMUTAVEL.md), [matriz](../../../decisions/drafts/FISCAL_025_A_PERSISTENCE_MATRIX.md), [fase](../../../execution-tracks/fiscal/phases/025-A-ARCHITECTURE.md) e todos os documentos desta pasta. Entregar também GOAL 025 canônico rev. 5/plano, ADR-0017/0018, governança R/AEP, contratos relevantes de storage/emission/reconciliation/queue/schema por leitura e diff completo contra a base do PR. Preservar caminhos, linhas, SHAs, blobs e referências.
+
+## Regularização do revisor — nova R obrigatória
+
+Após publicar o commit de regularização, obter análise efetiva ZCode/GLM sobre o novo SHA completo. Conferir [executors.json](../../executors.json): slug=zcode, familia=zai, classes conservadoras [C1], verificado=false, sem C4 e sem mudanças nos demais executores. Conferir independência zai versus openai, autorização adicional restrita à fase 025-A e política global de R preservada. Examinar o delta desde 6def6fabc407434562330e5b6274f4c8df167a85 e o diff completo contra a base do PR, confirmando arquitetura B aprovada, ADR-0024 consistente e preservada, nenhum código/schema/gate fiscal alterado e ausência de novos blockers.
+
+Publicar parecer atribuível no PR #265 com executor, modelo efetivamente identificado, família, SHA completo e R_VERDICT=APPROVE ou R_VERDICT=REQUEST_CHANGES. Sem confirmação do identificador, não declarar variante Flash. Se ZCode/GLM estiver indisponível, registrar R_VERDICT=NOT_ISSUED e parar. Nenhum merge nesta execução; STOP=AWAITING_PR_265_DOCUMENTARY_MERGE_AUTHORIZATION.
 
 ## Focos obrigatórios
 

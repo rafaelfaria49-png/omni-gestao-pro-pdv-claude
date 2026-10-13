@@ -1,8 +1,8 @@
 # 025-A · Proveniência das revisões independentes
 
-Data: 2026-10-12 (America/Sao_Paulo).
+Data original: 2026-10-12; regularização: 2026-10-13 (America/Sao_Paulo).
 PR: [#265](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265).
-Autor/executor documental: Codex / OpenAI. Revisor independente: Google/Gemini.
+Autor/executor documental: Codex / OpenAI, família openai. Revisores históricos: Google/Gemini e ZCode/GLM, família zai.
 
 ## Tentativas iniciais sem parecer
 
@@ -38,13 +38,31 @@ Modelo confirmado no catálogo/init: gemini-3.8-flash-high, família Google. Gem
 
 O parecer foi publicado como comentário de Conversation pela conta GitHub do usuário, com Codex/OpenAI identificado como publicador e Google como revisor. **Não é review nativa GitHub**, decisão humana ou prova de backend.
 
+## R histórica ZCode/GLM e autorização humana restrita
+
+[Texto integral atribuível publicado no PR](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/265#issuecomment-6137375809), em 2026-10-13T03:13:34Z. Revisor efetivo: ZCode (agente interativo), família zai; publicador: conta GitHub do coordenador, a pedido humano. O comentário registra análise efetiva do checkout exato, sem escrita ou acesso DB/storage/SEFAZ. Não é review nativa GitHub.
+
+~~~text
+PR=265
+REVIEWED_SHA=6def6fabc407434562330e5b6274f4c8df167a85
+R_EXECUTOR=ZCode
+R_FAMILY=zai
+R_MODEL=GLM-5.3
+R_VERDICT=APPROVE
+NEW_BLOCKERS=NONE
+~~~
+
+O identificador publicado é GLM-5.3; nenhuma variante Flash foi confirmada ou atribuída. O parecer declarou originalmente o desvio das famílias google/anthropic autorizadas à época. Em 2026-10-13 (America/Sao_Paulo), Rafael Faria autorizou explicitamente registrar zcode/zai em executors.json e habilitar essa família como alternativa adicional de R exclusivamente para Fiscal 025-A; [registro da autorização](../../../execution-tracks/fiscal/phases/025-A-ARCHITECTURE.md). Mantêm-se preferência google, alternativa anthropic e implementador openai.
+
+O parecer é preservado como revisão histórica tecnicamente válida sobre o SHA declarado. A regularização não muda seu alvo nem atribui APPROVE ao novo commit. O registro conservador classes=[C1], verificado=false não concede C4 nem confunde classes de execução com R. A política global de independência e os gates fiscais permanecem inalterados; a autorização não se estende a outros GOALs críticos.
+
 ## Decisão humana e revisão incremental
 
 O humano aprovou B explicitamente após o parecer, rejeitou A para ameaça administrativa forte e manteve C como alternativa. HUMAN_ARCHITECTURE_DECISION=B_APPROVED. O perfil de referência é S3 Object Lock COMPLIANCE; R2 exige nova aceitação humana de riscos administrativos.
 
-O SHA acima é a âncora da R já concluída. A ratificação, promoção da ADR/índice, contratos de B e reconciliação de main mudam o HEAD: **exigem nova R incremental efetiva no SHA final antes do merge**. A solicitação está em [REVIEW_REQUEST.md](REVIEW_REQUEST.md). Resultado/modelo/família/SHA/comment URL do novo parecer e estado de merge serão registrados no PR, sem alegar aprovação antecipada neste commit.
+Os dois SHAs históricos acima são âncoras distintas de R já concluídas. A ratificação documental B foi revisada pelo ZCode em 6def6fabc407434562330e5b6274f4c8df167a85. Este commit regulariza o executor e sua autorização específica, muda o HEAD e **exige nova R independente efetiva do ZCode/GLM sobre o novo SHA completo após o push e antes de qualquer merge**. A solicitação está em [REVIEW_REQUEST.md](REVIEW_REQUEST.md). Conferir inclusão correta em executors.json, independência zai versus openai, limite 025-A, arquitetura B/ADR-0024 preservadas, ausência de mudanças funcionais e de novos blockers. Resultado/executor/modelo/família/SHA/comment URL serão registrados no PR, sem alegar aprovação antecipada neste commit.
 
-Se não houver inferência efetiva independente: R_VERDICT=NOT_ISSUED para a tentativa incremental e STOP=R_RUNTIME_BLOCKED; não substituir por autoavaliação Codex.
+Exigir R_VERDICT=APPROVE ou R_VERDICT=REQUEST_CHANGES, em parecer atribuível no PR. Se ZCode/GLM estiver indisponível ou não houver inferência efetiva independente: registrar R_VERDICT=NOT_ISSUED para a nova tentativa e parar; não substituir por autoavaliação Codex nem pelo parecer histórico. Nenhum merge autorizado nesta execução. FINAL_DECISION=AWAITING_PR_265_DOCUMENTARY_MERGE_AUTHORIZATION; STOP=AWAITING_PR_265_DOCUMENTARY_MERGE_AUTHORIZATION.
 
 IMPLEMENTATION_AUTHORIZED=false; STORAGE_PROVISIONING_AUTHORIZED=false.
 CODE_CHANGED=false; SCHEMA_CHANGED=false; DB_WRITES=0; SEFAZ_TRANSMISSIONS=0.
