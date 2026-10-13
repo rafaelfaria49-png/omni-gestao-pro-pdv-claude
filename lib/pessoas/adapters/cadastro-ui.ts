@@ -18,11 +18,13 @@ export function moneyDisplay(value: string | null | undefined, hidden: boolean):
   return "R$ " + whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + cents
 }
 export const conflictCodes = ["VERSION_CONFLICT", "SUPERSESSAO_INVALIDA", "VIGENCIA_SOBREPOSTA"]
-export const accessCodes = ["NAO_AUTENTICADO", "ESCOPO_NEGADO", "BOOTSTRAP_NEGADO", "LOJA_AUSENTE", "PESSOAS_DESABILITADO"]
+export const accessCodes = ["NAO_AUTENTICADO", "ESCOPO_NEGADO", "BOOTSTRAP_NEGADO", "LOJA_AUSENTE", "LOJA_DIVERGENTE", "PESSOAS_DESABILITADO"]
 const messages: Record<string, string> = {
   PESSOAS_DESABILITADO: "Pessoas está desativado neste ambiente.",
   NAO_AUTENTICADO: "Sua sessão terminou. Entre novamente.",
   ESCOPO_NEGADO: "Você não tem acesso a este cadastro nesta loja.",
+  LOJA_DIVERGENTE: "A loja mudou em outra aba. Selecione novamente a loja ou recarregue a página antes de editar.",
+  INTENT_INVALIDO: "A autorização do documento é inválida ou expirou. Confira a lista antes de iniciar outro envio.",
   LOJA_AUSENTE: "Selecione uma loja autorizada para continuar.",
   BOOTSTRAP_NEGADO: "A configuração inicial exige um administrador autorizado.",
   VERSION_CONFLICT: "O cadastro mudou em outra sessão. Releia e revise antes de salvar.",

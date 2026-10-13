@@ -5,6 +5,7 @@ vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: actor.userId } }) })
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: actor.storeId }) }) }))
 import { prisma } from "@/lib/prisma"
 import * as actions from "@/app/actions/pessoas"
+import NovoPage from "@/app/dashboard/pessoas/funcionarios/novo/page"
 import { lerDisponibilidade } from "@/lib/pessoas/readers/disponibilidade"
 import { GET } from "@/app/api/pessoas/disponibilidade/route"
 function data<T>(result: { ok: true; data: T } | { ok: false; code: string }): T {
@@ -25,12 +26,33 @@ describe.sequential("Frontend: actions reais em PostgreSQL descartável", () => 
     actor.userId = user
   })
   it("disponibilidade permite bootstrap sem grant e endpoint é no-store", async () => {
-    expect(await lerDisponibilidade()).toEqual({ disponivel: true, podeConfigurarEmpregador: true, escopos: [] })
+    expect(await lerDisponibilidade()).toEqual({ storeId: actor.storeId, disponivel: true, podeConfigurarEmpregador: true, escopos: [] })
     const response = await GET()
     expect(response.headers.get("cache-control")).toContain("no-store")
     employer = data(await actions.setupEmpregador({ comandoId: randomUUID(), nome: "Empregador frontend", inscricao: suffix, tipoInscricao: "CNPJ", validFrom: "2020-01-01", motivo: "fixture",
       estabelecimento: { nome: "Sede frontend", inscricao: suffix, tipoInscricao: "CNPJ" } })).id
     expect((await lerDisponibilidade()).escopos[0].empregadorId).toBe(employer)
+  })
+  it("wrapper impede criação na Store efetiva B quando o formulário espera A, mesmo com empregador e grants em ambas", async () => {
+    const storeA = actor.storeId, storeB = storeA + "-b"
+    await prisma.store.create({ data: { id: storeB, name: "Segunda Store frontend sintética" } })
+    await prisma.adminUserStore.create({ data: { adminUserId: user, storeId: storeB } })
+    const estabelecimentoId = data(await actions.obterEmpregador(employer)).estabelecimentos[0].id
+    data(await actions.vincularUnidade({ empregadorId: employer, comandoId: randomUUID(), storeId: storeB, estabelecimentoId,
+      validFrom: "2020-01-01", motivo: "fixture multi-store", confirmarAcessoGestor: true }))
+    const guarded = NovoPage().props.actions.criarFuncionario as (storeId: string, input: Parameters<typeof actions.criarFuncionario>[0]) => ReturnType<typeof actions.criarFuncionario>
+    const input = { empregadorId: employer, comandoId: randomUUID(), nome: "Pessoa multi-store sintética", motivo: "fixture" }
+    try {
+      actor.storeId = storeB
+      const availability = await lerDisponibilidade()
+      expect(availability.storeId).toBe(storeB)
+      expect(availability.escopos.find(scope => scope.empregadorId === employer)?.capacidades).toContain("editCadastro")
+      const before = await prisma.dpVinculo.count({ where: { empregadorId: employer, storeId: { in: [storeA, storeB] } } })
+      expect(await guarded(storeA, input)).toEqual({ ok: false, code: "LOJA_DIVERGENTE" })
+      expect(await prisma.dpVinculo.count({ where: { empregadorId: employer, storeId: { in: [storeA, storeB] } } })).toBe(before)
+      const accepted = data(await guarded(storeB, input))
+      expect(await prisma.dpVinculo.findFirst({ where: { id: accepted.id, empregadorId: employer, storeId: storeB } })).not.toBeNull()
+    } finally { actor.storeId = storeA }
   })
   it("rascunho persiste, replay é único e payload diferente conflita", async () => {
     const input = { comandoId: randomUUID(), empregadorId: employer, nome: "Pessoa sintética", motivo: "rascunho" }

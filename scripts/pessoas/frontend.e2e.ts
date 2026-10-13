@@ -84,10 +84,12 @@ if (!enabled) {
     await expect(page.getByText("O armazenamento privado está indisponível.")).toBeVisible()
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 360, height: 800 }]) {
       await page.setViewportSize(viewport)
-      for (const [theme, label] of [["light", "Light"], ["soft-ice", "Soft Ice"], ["midnight", "Midnight"], ["black-edition", "Black"]]) {
+      for (const [theme, label] of [["light", "Light"], ["soft-ice", "Soft Ice"], ["midnight", "Midnight"], ["black", "Black"]]) {
         await page.getByRole("button", { name: /Tema atual:/ }).click()
         await page.getByRole("option", { name: label, exact: true }).click()
         await expect(page.locator("html")).toHaveAttribute("data-studio-theme", theme)
+        if (theme === "black") await expect(page.locator("html")).toHaveClass(/(?:^|\s)black-edition(?:\s|$)/)
+        else await expect(page.locator("html")).not.toHaveClass(/(?:^|\s)black-edition(?:\s|$)/)
         await page.keyboard.press("Escape")
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
         await page.getByRole("heading", { name: "Pessoas", exact: true }).scrollIntoViewIfNeeded()

@@ -3,23 +3,42 @@ import { webcrypto } from "node:crypto"
 import { createElement, type ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
-const identity = vi.hoisted(() => ({ store: "A", user: "user-A", expanded: false }))
+const identity = vi.hoisted(() => ({ store: "A", user: "user-A", expanded: false, capacidades: ["viewCadastro", "viewDocumento", "editCadastro"] }))
+const backend = vi.hoisted(() => ({ store: "A" }))
+vi.mock("@/lib/pessoas/scope", () => ({ exigirAtor: async () => ({ userId: "user-A", storeId: backend.store, role: "ADMIN" }) }))
+vi.mock("@/app/actions/pessoas", () => ({
+  criarFuncionario: vi.fn(async () => ({ ok: true, data: { id: "new-synthetic" } })),
+  obterFuncionario: vi.fn(), listarHistorico: vi.fn(), atualizarDadosPessoais: vi.fn(), completarVinculoRascunho: vi.fn(), criarVersaoContrato: vi.fn(),
+  setupEmpregador: vi.fn(), obterEmpregador: vi.fn(), editarEmpregador: vi.fn(), criarEstabelecimento: vi.fn(), editarEstabelecimento: vi.fn(),
+}))
+vi.mock("@/lib/pessoas/documentos/service", () => ({ listarDocumentos: vi.fn(), criarUploadIntent: vi.fn(), confirmarUpload: vi.fn(), autorizarDownload: vi.fn() }))
 vi.mock("next-auth/react", () => ({ useSession: () => ({ status: "authenticated", data: { user: { id: identity.user }, expires: "fixed" } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: identity.store }) }))
-vi.mock("@/components/dashboard/pessoas/contexto", () => ({ usePessoas: () => ({ empregadorId: "emp-synthetic", capacidades: ["viewCadastro", "viewDocumento", "editCadastro"], categoriasDocumentais: ["identificacao"] }) }))
+vi.mock("@/components/dashboard/pessoas/contexto", () => ({ usePessoas: () => ({ storeId: identity.store, empregadorId: "emp-synthetic", capacidades: identity.capacidades, categoriasDocumentais: ["identificacao"] }) }))
 vi.mock("next/link", () => ({ default: ({ children, prefetch, ...props }: { children: ReactNode; prefetch?: boolean; href: string }) => createElement("a", { ...props, "data-prefetch": String(prefetch) }, children) }))
 vi.mock("next/image", () => ({ default: () => null }))
 vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard/pessoas" }))
 vi.mock("@/components/ui/collapsible-hover-rail", () => ({ CollapsibleHoverRail: ({ children }: { children: (state: { expanded: boolean; pinned: boolean; togglePinned: () => void; collapse: () => void }) => ReactNode }) =>
   createElement("div", null, children({ expanded: identity.expanded, pinned: false, togglePinned: () => undefined, collapse: () => undefined })) }))
 import { Sidebar } from "@/components/painel-inicial/Sidebar"
-import { Documentos } from "@/components/dashboard/pessoas/documentos"
+import { Documentos, type DocumentActions } from "@/components/dashboard/pessoas/documentos"
+import { FichaFuncionario } from "@/components/dashboard/pessoas/ficha"
+import { ConfiguracoesPessoas } from "@/components/dashboard/pessoas/configuracoes"
+import NovoPage from "@/app/dashboard/pessoas/funcionarios/novo/page"
+import FichaPage from "@/app/dashboard/pessoas/funcionarios/[id]/page"
+import ConfigPage from "@/app/dashboard/pessoas/configuracoes/page"
+import * as canonical from "@/app/actions/pessoas"
+import * as documentService from "@/lib/pessoas/documentos/service"
 import { useDisponibilidade } from "@/components/dashboard/pessoas/use-disponibilidade"
 import { CommandForm, useResource } from "@/components/dashboard/pessoas/ui"
 import { filterDashboardNav, hubsNavItems } from "@/lib/navigation/dashboard-nav-items"
 import { civilDisplay, decimalInput, moneyDisplay } from "@/lib/pessoas/adapters/cadastro-ui"
 vi.setConfig({ testTimeout: 30_000 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); identity.store = "A" })
+afterEach(() => {
+  cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks()
+  identity.store = "A"; backend.store = "A"; identity.expanded = false
+  identity.capacidades = ["viewCadastro", "viewDocumento", "editCadastro"]
+})
 describe("Frontend: contratos de privacidade e consistência", () => {
   it("converte decimais sem perda binária e preserva ausência versus zero", () => {
     expect(decimalInput("9999999999999999,99")).toBe("9999999999999999.99")
@@ -43,7 +62,7 @@ describe("Frontend: contratos de privacidade e consistência", () => {
     const { result, rerender } = renderHook(() => useDisponibilidade())
     expect(result.current.disponivel).toBe(false)
     identity.store = "B"; rerender()
-    await act(async () => pending[0]({ ok: true, json: async () => ({ disponivel: true, escopos: [] }) }))
+    await act(async () => pending[0]({ ok: true, json: async () => ({ storeId: "A", disponivel: true, escopos: [] }) }))
     expect(result.current.disponivel).toBe(false)
     await act(async () => pending[1]({ ok: false, json: async () => ({ code: "ESCOPO_NEGADO" }) }))
     expect(result.current.error).toBe("ESCOPO_NEGADO")
@@ -70,19 +89,17 @@ describe("Frontend: contratos de privacidade e consistência", () => {
 })
 
 describe("Documentos: transporte controlado, não comprova R2", () => {
-  it("faz hash, envia headers assinados e repete complete perdido sem repetir PUT", async () => {
+  it("faz hash, envia headers assinados e mantém o intent ao conferir a lista antes de repetir complete", async () => {
     vi.stubGlobal("crypto", webcrypto)
-    let completes = 0, puts = 0
-    const requests: Array<{ url: string; body?: string; headers?: HeadersInit }> = []
-    const fetcher = vi.fn(async (url: string, options: RequestInit = {}) => {
-      requests.push({ url, body: typeof options.body === "string" ? options.body : undefined, headers: options.headers })
-      if (url.includes("upload-intent")) return { ok: true, json: async () => ({ ok: true, data: { signedUrl: "https://storage.example.invalid/synthetic", headersObrigatorios: { "If-None-Match": "*", "Content-Type": "application/pdf" }, uploadIntent: "synthetic-intent" } }) }
-      if (url.startsWith("https:")) { puts++; return { ok: true } }
-      if (url.includes("complete")) { completes++; if (completes === 1) throw new Error("lost response"); return { ok: true, json: async () => ({ ok: true, data: {} }) } }
-      return { ok: true, json: async () => ({ ok: true, data: [] }) }
-    })
-    vi.stubGlobal("fetch", fetcher)
-    render(createElement(Documentos, { id: "link-synthetic" }))
+    const put = vi.fn(async () => ({ ok: true }))
+    vi.stubGlobal("fetch", put)
+    const actions: DocumentActions = {
+      listar: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { signedUrl: "https://storage.example.invalid/synthetic", headersObrigatorios: { "If-None-Match": "*", "Content-Type": "application/pdf" }, uploadIntent: "synthetic-intent" } }),
+      confirmar: vi.fn().mockRejectedValueOnce(new Error("lost response")).mockResolvedValue({ ok: true, data: {} }),
+      download: vi.fn(),
+    }
+    render(createElement(Documentos, { id: "link-synthetic", actions }))
     await screen.findByText("Nenhum documento disponível para suas permissões.")
     expect(screen.queryByText("Contrato", { selector: "option" })).toBeNull()
     const file = new File(["%PDF-1.7 synthetic"], "sintetico.pdf", { type: "application/pdf" })
@@ -91,19 +108,25 @@ describe("Documentos: transporte controlado, não comprova R2", () => {
     fireEvent.change(screen.getByLabelText("Origem"), { target: { value: "INTERNO" } })
     fireEvent.submit(screen.getByText("Enviar documento").closest("form")!)
     await screen.findByText("Resposta não confirmada. Você pode repetir o mesmo comando.")
+    expect(screen.queryByText("Documento salvo.")).toBeNull()
+    fireEvent.click(screen.getByText("Conferir lista antes de novo envio"))
+    await waitFor(() => expect(actions.listar).toHaveBeenCalledTimes(2))
+    expect(screen.getByText("Repetir confirmação")).toBeTruthy()
     fireEvent.click(screen.getByText("Repetir confirmação"))
     await screen.findByText("Documento salvo.")
-    expect(puts).toBe(1); expect(completes).toBe(2)
-    expect(requests.filter(r => r.url.includes("complete")).map(r => r.body)).toEqual(['{"uploadIntent":"synthetic-intent"}', '{"uploadIntent":"synthetic-intent"}'])
-    expect(requests.find(r => r.url.startsWith("https:"))?.headers).toEqual({ "If-None-Match": "*", "Content-Type": "application/pdf" })
-    expect(JSON.parse(requests.find(r => r.url.includes("upload-intent"))!.body!).sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(put).toHaveBeenCalledTimes(1)
+    expect(actions.confirmar).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(actions.confirmar).mock.calls).toEqual([["A", "synthetic-intent"], ["A", "synthetic-intent"]])
+    expect(vi.mocked(put).mock.calls[0]).toEqual(["https://storage.example.invalid/synthetic", expect.objectContaining({ method: "PUT", headers: { "If-None-Match": "*", "Content-Type": "application/pdf" } })])
+    expect(vi.mocked(actions.criarIntent).mock.calls[0][0]).toBe("A")
+    expect(vi.mocked(actions.criarIntent).mock.calls[0][1].sha256).toMatch(/^[a-f0-9]{64}$/)
     expect(JSON.stringify({ ...localStorage })).not.toContain("synthetic-intent")
   })
 })
 
 describe("Sidebar: consumidor desktop e focus mode", () => {
   it("aplica o mesmo estado DP nos três modos e desabilita prefetch", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ disponivel: true, podeConfigurarEmpregador: true, escopos: [] }) })))
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ storeId: "A", disponivel: true, podeConfigurarEmpregador: true, escopos: [] }) })))
     const view = render(createElement(Sidebar))
     await waitFor(() => expect(screen.getByRole("link", { name: "Pessoas" }).getAttribute("data-prefetch")).toBe("false"))
     view.rerender(createElement(Sidebar, { focusMode: true }))
@@ -117,7 +140,7 @@ describe("Sidebar: consumidor desktop e focus mode", () => {
 describe("Revalidação e descarte de respostas", () => {
   it("oculta durante foco, preservando somente o contexto da mesma identidade", async () => {
     let finish: (response: unknown) => void = () => undefined
-    const dto = { disponivel: true, podeConfigurarEmpregador: false, escopos: [] }
+    const dto = { storeId: "A", disponivel: true, podeConfigurarEmpregador: false, escopos: [] }
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce({ ok: true, json: async () => dto })
       .mockImplementationOnce(() => new Promise(resolve => { finish = resolve })))
     const { result } = renderHook(() => useDisponibilidade())
@@ -141,5 +164,131 @@ describe("Revalidação e descarte de respostas", () => {
     expect(result.current.data).toBeUndefined()
     await act(async () => finish({ ok: true, data: "ficha-B" }))
     expect(result.current.data).toBe("ficha-B")
+  })
+})
+
+describe("Recovery R1: Store esperada e Store do backend", () => {
+  it("recusa criar na Store B com formulário da Store A antes da action canônica", async () => {
+    const input = { empregadorId: "emp-synthetic", comandoId: "command-synthetic", nome: "Pessoa sintética", motivo: "fixture" }
+    const action = NovoPage().props.actions.criarFuncionario
+    backend.store = "B"
+    expect(await action("A", input)).toEqual({ ok: false, code: "LOJA_DIVERGENTE" })
+    expect(canonical.criarFuncionario).not.toHaveBeenCalled()
+    backend.store = "A"
+    expect(await action("A", input)).toMatchObject({ ok: true })
+    expect(canonical.criarFuncionario).toHaveBeenCalledWith(input)
+  })
+  it("fecha manutenção, edição e documentos antes de consultar ou escrever com Store divergente", async () => {
+    backend.store = "B"
+    const config = ConfigPage().props.actions
+    for (const action of Object.values(config) as Array<(store: string, input: object) => Promise<unknown>>) {
+      expect(await action("A", { empregadorId: "emp-synthetic" })).toEqual({ ok: false, code: "LOJA_DIVERGENTE" })
+    }
+    const ficha = await FichaPage({ params: Promise.resolve({ id: "link-synthetic" }) })
+    for (const action of Object.values(ficha.props.actions) as Array<(store: string, input: object) => Promise<unknown>>) {
+      expect(await action("A", { empregadorId: "emp-synthetic" })).toEqual({ ok: false, code: "LOJA_DIVERGENTE" })
+    }
+    for (const action of Object.values(ficha.props.documentActions) as Array<(store: string, input: object) => Promise<unknown>>) {
+      expect(await action("A", { empregadorId: "emp-synthetic" })).toEqual({ ok: false, code: "LOJA_DIVERGENTE" })
+    }
+    for (const action of [canonical.setupEmpregador, canonical.obterEmpregador, canonical.editarEmpregador, canonical.criarEstabelecimento,
+      canonical.editarEstabelecimento, canonical.obterFuncionario, canonical.listarHistorico, canonical.atualizarDadosPessoais,
+      canonical.completarVinculoRascunho, canonical.criarVersaoContrato, documentService.listarDocumentos, documentService.criarUploadIntent,
+      documentService.confirmarUpload, documentService.autorizarDownload]) expect(action).not.toHaveBeenCalled()
+  })
+  it("nega disponibilidade de B quando o contexto React ainda espera A", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ storeId: "B", disponivel: true, escopos: [] }) })))
+    const { result } = renderHook(() => useDisponibilidade())
+    await waitFor(() => expect(result.current.error).toBe("LOJA_DIVERGENTE"))
+    expect(result.current.data).toBeUndefined()
+    expect(result.current.retainedData).toBeUndefined()
+    expect(result.current.disponivel).toBe(false)
+  })
+  it("storage invalida o contexto retido e descarta uma resposta anterior mesmo voltando a A", async () => {
+    const dto = { storeId: "A", disponivel: true, podeConfigurarEmpregador: false, escopos: [] }
+    const pending: Array<(value: unknown) => void> = []
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce({ ok: true, json: async () => dto })
+      .mockImplementation(() => new Promise(resolve => pending.push(resolve))))
+    const { result } = renderHook(() => useDisponibilidade())
+    await waitFor(() => expect(result.current.data).toEqual(dto))
+    const initialKey = result.current.contextKey
+    act(() => result.current.refresh())
+    expect(result.current.retainedData).toEqual(dto)
+    act(() => window.dispatchEvent(new StorageEvent("storage", { key: "assistec-pro-loja-ativa-v1", newValue: "B" })))
+    expect(result.current.retainedData).toBeUndefined()
+    expect(result.current.contextKey).not.toBe(initialKey)
+    await act(async () => pending[0]({ ok: true, json: async () => dto }))
+    expect(result.current.data).toBeUndefined()
+    await act(async () => pending[1]({ ok: true, json: async () => dto }))
+    expect(result.current.data).toEqual(dto)
+  })
+})
+
+describe("Recovery R2: ficha e documentos coordenam operações", () => {
+  it("bloqueia salvar durante upload/complete pendente e mantém Documentos montado ao reler a ficha", async () => {
+    vi.stubGlobal("crypto", webcrypto)
+    let finishPut: (value: { ok: boolean }) => void = () => undefined
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(resolve => { finishPut = resolve })))
+    const dto = { nome: "Pessoa sintética", cpf: null, nascimento: null, status: "RASCUNHO", pessoaVersaoAtual: 1, versaoAtual: 1, pendencias: [], contrato: null }
+    const actions = {
+      obterFuncionario: vi.fn().mockResolvedValue({ ok: true, data: dto }),
+      listarHistorico: vi.fn().mockResolvedValue({ ok: true, data: { pessoa: [], contratos: [] } }),
+      atualizarDadosPessoais: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+      completarVinculoRascunho: vi.fn(), criarVersaoContrato: vi.fn(),
+    }
+    const documentActions: DocumentActions = {
+      listar: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { signedUrl: "https://storage.example.invalid/synthetic", headersObrigatorios: {}, uploadIntent: "intent-coordination" } }),
+      confirmar: vi.fn().mockRejectedValueOnce(new Error("lost response")).mockResolvedValue({ ok: true, data: {} }),
+      download: vi.fn(),
+    }
+    render(createElement(FichaFuncionario, { id: "link-synthetic", actions, documentActions }))
+    fireEvent.click(await screen.findByText("Editar dados pessoais"))
+    const save = screen.getByRole("button", { name: "Salvar" }) as HTMLButtonElement
+    const file = new File(["%PDF-1.7 synthetic"], "sintetico.pdf", { type: "application/pdf" })
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode("%PDF-1.7 synthetic").buffer })
+    fireEvent.change(await screen.findByLabelText("Arquivo"), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText("Origem"), { target: { value: "INTERNO" } })
+    fireEvent.submit(screen.getByText("Enviar documento").closest("form")!)
+    await waitFor(() => expect(documentActions.criarIntent).toHaveBeenCalledTimes(1))
+    expect(save.disabled).toBe(true)
+    fireEvent.submit(save.closest("form")!)
+    expect(actions.atualizarDadosPessoais).not.toHaveBeenCalled()
+    await act(async () => finishPut({ ok: true }))
+    await screen.findByText("Resposta não confirmada. Você pode repetir o mesmo comando.")
+    expect(save.disabled).toBe(true)
+    fireEvent.click(screen.getByText("Conferir lista antes de novo envio"))
+    expect(save.disabled).toBe(true)
+    fireEvent.click(screen.getByText("Repetir confirmação"))
+    await screen.findByText("Documento salvo.")
+    await waitFor(() => expect(save.disabled).toBe(false))
+    actions.obterFuncionario.mockImplementationOnce(() => new Promise(() => {}))
+    fireEvent.submit(save.closest("form")!)
+    await waitFor(() => expect(actions.atualizarDadosPessoais).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole("heading", { name: "Documentos privados" })).toBeTruthy()
+    expect(screen.getByText("Documento salvo.")).toBeTruthy()
+    expect(screen.queryByText("Carregando ficha…")).toBeNull()
+  })
+})
+
+describe("Recovery R5: foco após releitura da configuração", () => {
+  it.each(["empregador", "estabelecimento"])("restaura foco após salvar %s sem usar o formulário desmontado", async tipo => {
+    identity.capacidades = ["viewCadastro", "manageAccess"]
+    const employer = { nome: "Empregador sintético", tipoInscricao: "CNPJ", inscricao: "synthetic", storeGestoraId: "A", versaoAtual: 1,
+      versoes: [], estabelecimentos: [{ id: "est-synthetic", nome: "Sede sintética", tipoInscricao: "CNPJ", inscricao: "est-synthetic", versaoAtual: 1, versoes: [] }] }
+    let finish: (value: unknown) => void = () => undefined
+    const actions = {
+      obterEmpregador: vi.fn().mockResolvedValueOnce({ ok: true, data: employer }).mockImplementationOnce(() => new Promise(resolve => { finish = resolve })),
+      setupEmpregador: vi.fn(), editarEmpregador: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+      criarEstabelecimento: vi.fn(), editarEstabelecimento: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+    }
+    render(createElement(ConfiguracoesPessoas, { actions }))
+    fireEvent.click(await screen.findByRole("button", { name: tipo === "empregador" ? "Editar empregador" : "Editar estabelecimento" }))
+    const form = screen.getByRole("button", { name: "Salvar" }).closest("form")!
+    fireEvent.submit(form)
+    await screen.findByText("Carregando configuração…")
+    expect(form.isConnected).toBe(false)
+    await act(async () => finish({ ok: true, data: { ...employer, versaoAtual: 2 } }))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByText("Configuração salva e atualizada.")))
   })
 })

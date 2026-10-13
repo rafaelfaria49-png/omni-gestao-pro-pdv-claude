@@ -1,12 +1,12 @@
 "use client"
 import { useRouter } from "next/navigation"
-import { criarFuncionario } from "@/app/actions/pessoas"
+import type { criarFuncionario } from "@/app/actions/pessoas"
 import { decimalInput } from "@/lib/pessoas/adapters/cadastro-ui"
 import { usePessoas } from "./contexto"
-import { CommandForm, Notice, Section } from "./ui"
+import { CommandForm, Notice, Section, type StoreAction } from "./ui"
 import { personal, vinculo, contrato, motivo } from "./campos"
-export function NovoFuncionario() {
-  const { empregadorId, capacidades } = usePessoas()
+export function NovoFuncionario({ actions }: { actions: { criarFuncionario: StoreAction<typeof criarFuncionario> } }) {
+  const { storeId, empregadorId, capacidades } = usePessoas()
   const router = useRouter()
   if (!empregadorId || !capacidades.includes("editCadastro")) return <Notice code="ESCOPO_NEGADO" />
   const editContrato = capacidades.includes("editContrato")
@@ -19,7 +19,7 @@ export function NovoFuncionario() {
       action={async (values, comandoId) => {
         try {
           const optional = Object.fromEntries(Object.entries(values).filter(([key, value]) => value !== "" && !["divisor", "salarioBase", "jornadaSemanal"].includes(key)))
-          return criarFuncionario({ ...optional, motivo: values.motivo, empregadorId, comandoId,
+          return actions.criarFuncionario(storeId, { ...optional, motivo: values.motivo, empregadorId, comandoId,
             ...(editContrato ? { salarioBase: decimalInput(values.salarioBase), jornadaSemanal: decimalInput(values.jornadaSemanal),
               divisor: values.divisor ? Number(values.divisor) : undefined } : {}) })
         } catch (error) { return { ok: false, code: error instanceof Error && error.message === "DECIMAL_INVALIDO" ? "DECIMAL_INVALIDO" : "REDE" } }

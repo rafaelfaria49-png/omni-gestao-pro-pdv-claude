@@ -1,13 +1,12 @@
 "use client"
 import { useCallback, useState } from "react"
 import Link from "next/link"
-import { listarFuncionarios } from "@/app/actions/pessoas"
 import { usePessoas } from "./contexto"
 import { control, Notice, Section, useResource } from "./ui"
 import { civilDisplay } from "@/lib/pessoas/adapters/cadastro-ui"
 export function ListaPessoas({ overview = false }: { overview?: boolean }) {
-  const { empregadorId, capacidades, podeConfigurar } = usePessoas()
-  const load = useCallback(() => empregadorId ? listarFuncionarios(empregadorId) : Promise.resolve({ ok: true as const, data: [] }), [empregadorId])
+  const { storeId, empregadorId, capacidades, podeConfigurar, listarFuncionarios } = usePessoas()
+  const load = useCallback(() => empregadorId ? listarFuncionarios(storeId, empregadorId) : Promise.resolve({ ok: true as const, data: [] }), [listarFuncionarios, storeId, empregadorId])
   const resource = useResource(load)
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState("")
@@ -32,8 +31,8 @@ export function ListaPessoas({ overview = false }: { overview?: boolean }) {
     </div>
     {!resource.data.length ? <p className="py-8 text-center text-sm text-muted-foreground">Nenhum funcionário cadastrado nesta loja.</p> : !rows.length ? <p role="status" className="py-8 text-center text-sm">Nenhum resultado para esses filtros.</p> :
       <ul className="divide-y divide-border">{rows.map(row => <li key={row.id} className="grid min-w-0 gap-2 py-4 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-center">
-        <div className="min-w-0"><Link prefetch={false} className="break-words font-medium text-primary underline-offset-4 hover:underline" href={"/dashboard/pessoas/funcionarios/" + row.id}>{row.nome ?? "Nome não informado"}</Link><p className="text-xs text-muted-foreground">Matrícula {row.matricula ?? "não informada"}</p></div>
-        <span className="min-w-0 break-words text-sm text-muted-foreground">{row.cargo ?? "Cargo não informado"}</span>
+        <div className="min-w-0"><Link prefetch={false} className="min-w-0 [overflow-wrap:anywhere] font-medium text-primary underline-offset-4 hover:underline" href={"/dashboard/pessoas/funcionarios/" + row.id}>{row.nome ?? "Nome não informado"}</Link><p className="min-w-0 [overflow-wrap:anywhere] text-xs text-muted-foreground">Matrícula {row.matricula ?? "não informada"}</p></div>
+        <span className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">{row.cargo ?? "Cargo não informado"}</span>
         <span className="min-w-0 text-sm">Admissão: {civilDisplay(row.admissao)}</span><span className="min-w-0 text-xs font-semibold">{row.status}</span>
       </li>)}</ul>}
   </Section>

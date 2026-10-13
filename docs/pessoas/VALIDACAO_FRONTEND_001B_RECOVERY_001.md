@@ -1,6 +1,6 @@
 # Pessoas 001B — recuperação de código, validação pendente
 
-Data: 12/10/2026. GOAL: PESSOAS-DP-FRONTEND-001B-RECOVERY-001.
+Recuperação inicial: 12/10/2026. Adendo corretivo R1–R5: 13/10/2026. GOAL: PESSOAS-DP-FRONTEND-001B-RECOVERY-001.
 
 O frontend existente foi recuperado seletivamente e commitado. Esta entrega encerra somente a rodada de implementação direta autorizada; o GOAL continua aberto, sem DONE, sem close e sem aceite de liberação. Nenhum teste ou ambiente de validação foi iniciado.
 
@@ -19,7 +19,7 @@ O frontend existente foi recuperado seletivamente e commitado. Esta entrega ence
 
 ## Recuperado e corrigido
 
-As telas, componentes e sua estrutura visual foram mantidos. As mutações continuam usando `app/actions/pessoas/index.ts`; documentos usam as APIs 001A. O reader/endpoint de disponibilidade é read-only, composto dos guards existentes e com resposta privada/no-store.
+As telas, componentes e sua estrutura visual foram mantidos. As mutações continuam delegando às actions de `app/actions/pessoas/index.ts`; o corretivo abaixo acrescenta wrappers de Store e reutiliza os serviços documentais canônicos das APIs 001A. O reader/endpoint de disponibilidade é read-only, composto dos guards existentes e com resposta privada/no-store.
 
 | Superfície | Presente no código recuperado | Validação runtime |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ As telas, componentes e sua estrutura visual foram mantidos. As mutações conti
 | Navegação | Financeiro → Pessoas → Contador em desktop, mobile e focus mode; prefetch=false | PENDENTE |
 | Estados e contexto | Loading, vazio, erro/retry, OFF, negado, rascunho/conflito; descarte de respostas tardias | PENDENTE |
 
-Em `scripts/pessoas/frontend.contract.test.ts`, foram removidas apenas as três opções `exact: true` das consultas getByRole nas linhas 108, 110 e 113 do snapshot. Permanecem role link, nome Pessoas e a asserção data-prefetch=false nos três modos. `scripts/pessoas/frontend.e2e.ts` permanece idêntico ao snapshot, incluindo seus usos válidos de exact no Playwright.
+Em `scripts/pessoas/frontend.contract.test.ts`, foram removidas apenas as três opções `exact: true` das consultas getByRole nas linhas 108, 110 e 113 do snapshot. Permanecem role link, nome Pessoas e a asserção data-prefetch=false nos três modos. Na recuperação inicial, `scripts/pessoas/frontend.e2e.ts` permaneceu idêntico ao snapshot; o adendo R3 abaixo corrige somente a expectativa do tema Black e sua classe. Seus usos válidos de exact no Playwright permanecem.
 
 O fix de `lib/pessoas/cadastro.ts` permanece exatamente igual ao snapshot: listarHistorico redige motivos pessoais/contratuais e salário sem viewRemuneracao; a leitura autorizada preserva os valores. Nenhuma versão, motivo armazenado, vigência, supersessão ou auditoria foi reescrita. `lib/pessoas/historico-privacidade.test.ts` foi recuperado integralmente, incluindo escopo Store/empregador e revogação antes da consulta.
 
@@ -103,3 +103,76 @@ scripts/pessoas/playwright.frontend.config.ts
 scripts/pessoas/run-frontend-tests.mjs
 scripts/pessoas/run-official-tests.mjs
 ```
+
+## Adendo corretivo R1–R5 — 13/10/2026
+
+Missão autorizada nesta rodada: corrigir os cinco achados da revisão estática, preservar o frontend recuperado, criar commit corretivo e fazer push normal da mesma branch. Sem transporte adicional, novo GOAL, execução de testes ou fechamento AEP.
+
+- GOAL confirmado por `track.mjs status pessoas` e `open pessoas`: `PESSOAS-DP-FRONTEND-001B-RECOVERY-001`, RUNNING, tentativa 1/3.
+- Base imediata do corretivo (`BASE_HEAD`): `b5b59b677f2149da7cbaada79a86ffef422a9399`. A base de execução da recuperação continua `1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d`.
+- Branch/worktree confirmadas: `goal/pessoas-001b-recovery-001` / `C:/Projetos/omni-gestao-pessoas-001b-recovery-001`; árvore limpa antes das edições.
+- Identificação do commit: `goal(pessoas-001b-recovery-001): corrige achados R1-R5 da revisao estatica`. O SHA exato do commit que contém este adendo é fornecido na entrega e no histórico Git.
+- Este adendo registra implementação e inspeção estática; nenhum achado recebeu PASS de runtime.
+
+| Achado | Correção implementada | Verificação de produto |
+| --- | --- | --- |
+| R1 — P1, Store entre abas | Disponibilidade devolve `storeId` de `exigirAtor`. Contexto/formulários usam essa Store validada. Wrappers inline nas páginas existentes e no layout comparam `expectedStoreId` com o ator da mesma requisição antes de delegar leituras e comandos às actions/serviços 001A. Divergência retorna `LOJA_DIVERGENTE` antes da operação. Troca via storage invalida o contexto retido; foco/pageshow revalidam com resposta no-store; gerações e desmontagem descartam respostas anteriores. | PENDENTE |
+| R2 — P2, upload interrompido | Ficha coordena seções e documentos com trava síncrona e estados pendentes, incluindo resultado de mutação incerto. Formulários e novos uploads ficam bloqueados quando outra operação está pendente. A releitura da ficha conserva o componente Documentos montado no mesmo contexto e impede editar versões antigas. | PENDENTE |
+| R3 — P2, tema Black | Cenário espera `data-studio-theme="black"` e verifica separadamente a classe CSS `black-edition`; os demais temas e cenários permanecem. | E2E NOT_RUN |
+| R4 — P2, overflow | Quebra `overflow-wrap:anywhere` em conteúdos da ficha, nome/cargo/matrícula da lista e títulos/seções locais. Mantidos min-w-0, densidade, tipografia, tokens e composição; sem CSS global ou componentes compartilhados. | Matriz visual PENDENTE |
+| R5 — P3, foco | Manutenção de empregador/estabelecimento mantém uma intenção de foco e só foca a confirmação montada quando a releitura retorna. Callback de foco do formulário também confere que segue montado. | Teclado/foco PENDENTE |
+
+O vínculo de R1 é conferido no servidor na própria requisição da operação; não depende de comparar dois GETs ou de ler localStorage antes de salvar. O empregador, vínculo, versões esperadas e comando continuam sujeitos aos guards e à idempotência 001A. Não houve mudança em `scope.ts`, `admin.ts`, `cadastro.ts`, `app/actions/pessoas/index.ts` ou serviços/APIs documentais. Os wrappers documentais reutilizam os mesmos serviços canônicos das APIs 001A; PUT continua direto na URL assinada com todos os headers obrigatórios.
+
+Em R2, o uploadIntent é conservado somente em memória, desde a tentativa de PUT até complete confirmado ou recusa definitiva do backend. Conferir a lista, perder a resposta ou cancelar a espera não apaga um intent que ainda admite replay. A expiração/invalidade é decidida pelo backend, removendo o corte local antecipado de nove minutos. Uma confirmação já enviada pode terminar no servidor mesmo após cancelar a espera; repetir o mesmo intent usa a idempotência canônica. Sucesso só é anunciado após complete confirmado. Trocar/perder escopo descarta o estado transitório por segurança. Tokens, URLs assinadas, bytes e formulários não são persistidos no navegador.
+
+As suítes existentes foram adaptadas aos wrappers/DTO e receberam regressões preparadas, sem execução: Store React A/backend B; invalidação por storage e resposta anterior; wrappers recusando antes das chamadas canônicas; upload/complete pendente bloqueando salvamento; intent preservado ao conferir lista; Documentos montado na releitura; foco após salvar empregador e estabelecimento. A integração PostgreSQL preparada autoriza o mesmo usuário/empregador em A e B, verifica que o comando esperado para A é recusado em B sem novo vínculo e que o mesmo comando continua disponível para uma execução legítima em B.
+
+### Caminhos deste corretivo
+
+```text
+app/dashboard/pessoas/configuracoes/page.tsx
+app/dashboard/pessoas/funcionarios/[id]/page.tsx
+app/dashboard/pessoas/funcionarios/novo/page.tsx
+app/dashboard/pessoas/layout.tsx
+components/dashboard/pessoas/configuracoes.tsx
+components/dashboard/pessoas/contexto.tsx
+components/dashboard/pessoas/documentos.tsx
+components/dashboard/pessoas/ficha.tsx
+components/dashboard/pessoas/lista.tsx
+components/dashboard/pessoas/novo.tsx
+components/dashboard/pessoas/ui.tsx
+components/dashboard/pessoas/use-disponibilidade.ts
+lib/pessoas/adapters/cadastro-ui.ts
+lib/pessoas/readers/disponibilidade.ts
+scripts/pessoas/frontend.contract.test.ts
+scripts/pessoas/frontend.e2e.ts
+scripts/pessoas/frontend.integration.test.ts
+docs/pessoas/VALIDACAO_FRONTEND_001B_RECOVERY_001.md
+```
+
+### Inspeção estática e pendências desta rodada
+
+Inspeção limitada a código, diff Git, whitespace, caminhos e consistência estática dos consumidores/props. Os 18 caminhos deste corretivo pertencem à allowlist do open. Nenhum arquivo novo, histórico/derivado AEP ou área protegida foi alterado; WIPs da worktree principal preservados. Staging por caminhos explícitos. Nenhum teste foi executado pelo commit.
+
+```text
+R1_STORE_BINDING=CORRECTED_STATIC_RUNTIME_PENDING
+R2_UPLOAD_COORDINATION=CORRECTED_STATIC_RUNTIME_PENDING
+R3_BLACK_THEME=CORRECTED_E2E_NOT_RUN
+R4_OVERFLOW=CORRECTED_VISUAL_PENDING
+R5_FOCUS=CORRECTED_RUNTIME_PENDING
+TESTS=NOT_RUN
+TYPECHECK=NOT_RUN
+LINT=NOT_RUN
+BUILD=NOT_RUN
+E2E=NOT_RUN
+INDEPENDENT_REVIEW=PENDING_GLM_5_3
+PREVIEW_R2=PENDING
+AEP_CLOSE=NOT_RUN
+BLOCKERS=NONE_FOR_CORRECTIVE_IMPLEMENTATION; ACCEPTANCE_VALIDATION_AND_GATES_PENDING
+NEXT_GATE=AUTORIZACAO_DA_VALIDACAO_ISOLADA
+```
+
+A rodada autorizada não iniciou Docker, PostgreSQL, Vitest, Playwright, typecheck, lint, build, runner oficial ou aplicação/browser. A inspeção estática não comprova tipagem, compilação de Server Actions, persistência, isolamento em runtime, acessibilidade visual, upload real ou smoke R2. A validação futura deve usar o HEAD corretivo exato, executar as regressões preparadas e a bateria exigida pelo GOAL, seguida de revisão independente GLM 5.3 e preview/R2 com autorização específica. Produção, merge para main, close/DONE, folha/holerites e GOAL 002 continuam sem execução.
+
+Ponto de parada: **PESSOAS 001B — ACHADOS CORRIGIDOS EM BRANCH, AGUARDANDO VALIDAÇÃO E REVISÃO INDEPENDENTE.**
