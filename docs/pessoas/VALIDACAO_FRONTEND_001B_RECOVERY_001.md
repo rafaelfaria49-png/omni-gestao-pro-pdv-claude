@@ -249,3 +249,56 @@ NEXT_GATE=GLM_5_3_STATIC_REVIEW
 Não foram executados Docker, PostgreSQL, npm ci, Vitest, Playwright, E2E, typecheck, lint, build, runner oficial, preview/R2 ou merge. Não há PASS de runtime, visual, tipagem ou aceite; a validação futura deve fixar o HEAD corretivo e obedecer à autorização própria.
 
 Ponto de parada: **R2-01 E R2-02 CORRIGIDOS NA BRANCH — AGUARDANDO REVISÃO INDEPENDENTE E VALIDAÇÃO.**
+
+## Corretivo F-01 — cancelamento de complete pendente · 13/10/2026
+
+Missão humana restrita: corrigir F-01, preparar cobertura sem executá-la e criar um único commit corretivo com push normal na mesma branch. GOAL permanece aberto; sem PR, merge, rebase ou close/DONE.
+
+- GOAL confirmado por `track.mjs status pessoas` e `open pessoas`: `PESSOAS-DP-FRONTEND-001B-RECOVERY-001`, tentativa 1/3.
+- Branch/worktree: `goal/pessoas-001b-recovery-001` / `C:/Projetos/omni-gestao-pessoas-001b-recovery-001`.
+- BASE_HEAD: `6c372f98a92ea2c77a4176d3194044719cf84c58`; árvore limpa antes das edições.
+- Identificação do commit: `goal(pessoas-001b-recovery-001): libera espera cancelada do complete documental`. O SHA exato é fornecido na entrega e no histórico Git.
+
+### Implementação e limites
+
+Somente a Promise de `actions.confirmar` passa por uma espera local sensível ao AbortSignal. Cancelar encerra essa espera mesmo se a Promise original nunca terminar; o tratamento existente marca `complete_unknown`, conserva o uploadIntent e libera busy e o lock operacional. A trava documental da ficha permanece enquanto houver recuperação; conferir a lista e repetir complete usam o mesmo intent. Sucesso continua condicionado à resposta positiva da tentativa atual.
+
+Cada espera liquida uma única vez e remove seu listener de aborto ao cancelar, resolver ou rejeitar, inclusive se receber um sinal já abortado. Handlers de sucesso e rejeição permanecem ligados à Promise original para consumir respostas tardias, sem alterar estado visual, mensagens ou locks de outra tentativa. O cancelamento é exclusivamente da espera no navegador: a operação no servidor pode concluir normalmente.
+
+`actionData` e a chamada de `criarUploadIntent` permanecem sem alteração. Um intent recebido depois de Cancelar ainda é retido em memória sem iniciar PUT automaticamente. Recuperação PUT/HTTP 412, expiração da signedUrl, guards, privacidade e corretivos R1–R5 são preservados.
+
+### Cobertura preparada — NOT_RUN
+
+- Primeiro complete fica em uma Promise que nunca resolve; cancelar deve liberar os botões de recuperação antes de qualquer resposta, mantendo a ficha protegida e sem sucesso ou descarte automático.
+- Conferir a lista não abandona o envio; a segunda confirmação usa exatamente o mesmo token, sem outro intent ou PUT, e libera a ficha somente após resposta positiva.
+- Sucesso, recusa definitiva e rejeição tardios da tentativa cancelada chegam enquanto uma segunda confirmação está pendente; não podem trocar mensagens, anunciar sucesso, descartar o intent ou liberar busy/locks atuais.
+- O cenário anterior de intent recebido depois de Cancelar permanece na suíte sem modificação.
+
+### Caminhos e validação desta missão
+
+```text
+components/dashboard/pessoas/documentos.tsx
+scripts/pessoas/frontend.contract.test.ts
+docs/pessoas/VALIDACAO_FRONTEND_001B_RECOVERY_001.md
+```
+
+Validação limitada à inspeção do diff, comparação dos três caminhos com a allowlist e `git diff --check`. Nenhuma validação de produto foi executada. Nenhuma alteração em backend, Server Actions, schema, auth, proxy, PWA, configuração ou derivados AEP versionados. CURRENT_STATUS/CHANGELOG/memória global não foram alterados nesta missão restrita.
+
+```text
+F01=IMPLEMENTED_STATIC_RUNTIME_PENDING
+CANCEL_WITH_UNRESOLVED_PROMISE=IMPLEMENTED_COVERAGE_PREPARED_NOT_RUN
+INTENT_PRESERVATION=SAME_INTENT_RETAINED_IN_MEMORY
+LATE_RESPONSE_ISOLATION=SETTLED_WAIT_IGNORES_LATE_SUCCESS_AND_REJECTION
+DOCUMENT_LOCK=HELD_UNTIL_CONFIRMED_OR_EXPLICIT_SAFE_DISCARD
+TESTS=NOT_RUN
+TYPECHECK=NOT_RUN
+LINT=NOT_RUN
+BUILD=NOT_RUN
+E2E=NOT_RUN
+GLM_REVIEW=PENDING
+PREVIEW_R2=PENDING
+AEP_CLOSE=NOT_RUN
+NEXT_ACTION=REVISAO_INDEPENDENTE_ZAI_GLM_5_3
+```
+
+Ponto de parada desta missão: **F-01 CORRIGIDO E PUBLICADO NA BRANCH.** Não representa aceite do GOAL, revisão GLM ou PASS de runtime.

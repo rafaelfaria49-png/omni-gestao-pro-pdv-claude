@@ -22,6 +22,21 @@ async function actionData<T>(operation: Promise<{ ok: true; data: T } | { ok: fa
   if (!result.ok) throw new Error(result.code)
   return result.data
 }
+// Cancela somente a espera do complete; a Server Action continua e pode responder depois.
+function waitForConfirmation<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const settle = (finish: () => void) => {
+      if (settled) return
+      settled = true; signal.removeEventListener("abort", abort); finish()
+    }
+    const abort = () => settle(() => reject(new DOMException("Operação interrompida", "AbortError")))
+    signal.addEventListener("abort", abort, { once: true })
+    // Ambos os handlers consomem respostas tardias sem tocar em estado ou locks.
+    operation.then(value => settle(() => resolve(value)), reason => settle(() => reject(reason)))
+    if (signal.aborted) abort()
+  })
+}
 export function Documentos({ id, actions, disabled = false, onPendingChange, acquireMutation }: {
   id: string; actions: DocumentActions; disabled?: boolean; onPendingChange?: (pending: boolean) => void; acquireMutation?: () => boolean
 }) {
@@ -78,7 +93,7 @@ export function Documentos({ id, actions, disabled = false, onPendingChange, acq
     const intent = pending.current
     if (!intent || signal.aborted || !autorizado.current || intent.scopeEpoch !== pessoasScopeEpoch()) return
     transition("confirmation_pending"); setStage("Confirmando integridade e publicação…")
-    try { await actionData(actions.confirmar(storeId, intent.token), signal) }
+    try { await actionData(waitForConfirmation(actions.confirmar(storeId, intent.token), signal), signal) }
     catch (reason) {
       if (!mounted.current || intent.scopeEpoch !== pessoasScopeEpoch()) return
       // A expiração da URL não invalida o intent: somente a recusa definitiva do backend o encerra.

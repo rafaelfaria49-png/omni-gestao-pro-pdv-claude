@@ -517,25 +517,86 @@ describe("Recovery R2 final: contexto e retomada documental em memória", () => 
     await screen.findByText("Documento salvo.")
     expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(2)
   })
-  it("mantém confirmação cancelada como desconhecida até replay confirmado", async () => {
+  it("libera complete cancelado com a primeira Promise sem resolução e repete o mesmo intent", async () => {
     vi.stubGlobal("crypto", webcrypto)
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }))
+    const put = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal("fetch", put)
     const f = fixture()
-    let finish: (value: Awaited<ReturnType<DocumentActions["confirmar"]>>) => void = () => undefined
-    vi.mocked(f.documentActions.confirmar).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    vi.mocked(f.documentActions.confirmar).mockImplementationOnce(() => new Promise<never>(() => undefined))
     render(f.tree())
     const save = await openSection()
     await startUpload()
     await waitFor(() => expect(f.documentActions.confirmar).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByText("Cancelar"))
-    await act(async () => finish({ ok: true, data: { id: "doc-recovery", vinculoId: "link-synthetic", categoria: "identificacao",
-      classificacao: "COMUM", origem: "INTERNO", nomeArquivo: "recovery.pdf", mime: "application/pdf", bytes: 17,
-      sha256: "a".repeat(64), createdAt: "2026-10-13T12:00:00.000Z" } }))
+    await screen.findByText("Confirmação sem resposta conclusiva. Confira a lista ou repita a confirmação.")
+    const retry = screen.getByText("Repetir confirmação") as HTMLButtonElement
+    const list = screen.getByText("Conferir lista antes de novo envio") as HTMLButtonElement
+    await waitFor(() => {
+      expect(retry.disabled).toBe(false)
+      expect(list.disabled).toBe(false)
+      expect(screen.queryByText("Cancelar")).toBeNull()
+    })
     expect(screen.queryByText("Documento salvo.")).toBeNull()
+    expect(screen.queryByText("Descartar envio recusado")).toBeNull()
+    expect(screen.queryByText("Enviar documento")).toBeNull()
     expect(save.disabled).toBe(true)
-    fireEvent.click(screen.getByText("Repetir confirmação"))
+    const reads = vi.mocked(f.documentActions.listar).mock.calls.length
+    fireEvent.click(list)
+    await waitFor(() => expect(vi.mocked(f.documentActions.listar).mock.calls.length).toBeGreaterThan(reads))
+    expect(f.documentActions.confirmar).toHaveBeenCalledTimes(1)
+    expect(save.disabled).toBe(true)
+    fireEvent.click(retry)
     await screen.findByText("Documento salvo.")
     expect(vi.mocked(f.documentActions.confirmar).mock.calls).toEqual([["A", "intent-recovery"], ["A", "intent-recovery"]])
+    expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(1)
+    expect(put).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(save.disabled).toBe(false))
+  })
+  it.each(["sucesso", "recusa", "rejeição"])("ignora %s tardio do complete cancelado durante a nova tentativa", async outcome => {
+    vi.stubGlobal("crypto", webcrypto)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }))
+    const f = fixture()
+    type Confirmation = Awaited<ReturnType<DocumentActions["confirmar"]>>
+    const confirmed: Confirmation = { ok: true, data: { id: "doc-recovery", vinculoId: "link-synthetic", categoria: "identificacao",
+      classificacao: "COMUM", origem: "INTERNO", nomeArquivo: "recovery.pdf", mime: "application/pdf", bytes: 17,
+      sha256: "a".repeat(64), createdAt: "2026-10-13T12:00:00.000Z" } }
+    let first: (value: Confirmation) => void = () => undefined
+    let rejectFirst: (reason: unknown) => void = () => undefined
+    let second: (value: Confirmation) => void = () => undefined
+    vi.mocked(f.documentActions.confirmar)
+      .mockImplementationOnce(() => new Promise((resolve, reject) => { first = resolve; rejectFirst = reject }))
+      .mockImplementationOnce(() => new Promise(resolve => { second = resolve }))
+    render(f.tree())
+    const save = await openSection()
+    await startUpload()
+    await waitFor(() => expect(f.documentActions.confirmar).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByText("Cancelar"))
+    await screen.findByText("Confirmação sem resposta conclusiva. Confira a lista ou repita a confirmação.")
+    const retry = screen.getByText("Repetir confirmação") as HTMLButtonElement
+    const list = screen.getByText("Conferir lista antes de novo envio") as HTMLButtonElement
+    await waitFor(() => expect(retry.disabled).toBe(false))
+    expect(save.disabled).toBe(true)
+    fireEvent.click(retry)
+    await waitFor(() => expect(f.documentActions.confirmar).toHaveBeenCalledTimes(2))
+    await screen.findByText("Confirmando integridade e publicação…")
+    await act(async () => {
+      if (outcome === "sucesso") first(confirmed)
+      else if (outcome === "recusa") first({ ok: false, code: "INTENT_INVALIDO" })
+      else rejectFirst(new Error("late complete rejection"))
+    })
+    expect(screen.getByText("Confirmando integridade e publicação…")).toBeTruthy()
+    expect(screen.getByText("Cancelar")).toBeTruthy()
+    expect(screen.queryByText("Documento salvo.")).toBeNull()
+    expect(screen.queryByText("Descartar envio recusado")).toBeNull()
+    expect(screen.queryByText("Resposta não confirmada. Você pode repetir o mesmo comando.")).toBeNull()
+    expect(retry.disabled).toBe(true)
+    expect(list.disabled).toBe(true)
+    expect(save.disabled).toBe(true)
+    expect(f.documentActions.confirmar).toHaveBeenCalledTimes(2)
+    await act(async () => second(confirmed))
+    await screen.findByText("Documento salvo.")
+    expect(vi.mocked(f.documentActions.confirmar).mock.calls).toEqual([["A", "intent-recovery"], ["A", "intent-recovery"]])
+    expect(f.documentActions.criarIntent).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(save.disabled).toBe(false))
   })
 })
