@@ -141,6 +141,11 @@
       "dir": "ops-v4-financeiro-retirada-garantia",
       "risk_tier": "ALTO",
       "titulo": "Operações V4 — financeiro, retirada e garantia"
+    },
+    "ops-v4-datas-ui-promocao": {
+      "dir": "ops-v4-datas-ui-promocao",
+      "risk_tier": "ALTO",
+      "titulo": "Operações V4 — promoção do experimento de datas"
     }
   },
   "remote_layer": {
