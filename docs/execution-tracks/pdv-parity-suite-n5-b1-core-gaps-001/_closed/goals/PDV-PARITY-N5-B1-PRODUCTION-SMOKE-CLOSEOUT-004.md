@@ -4,7 +4,7 @@
   "id": "PDV-PARITY-N5-B1-PRODUCTION-SMOKE-CLOSEOUT-004",
   "track": "pdv-parity-suite-n5-b1-core-gaps-001",
   "title": "N5-B1: smoke autenticado não destrutivo nas duas produções e encerramento operacional",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "branch": "goal/pdv-n5b1-production-smoke-closeout-004",

@@ -1,0 +1,45 @@
+AEP/1.0-R2 · verify --all
+  [OK]   contador — state.json bate com o estado derivado; ledger append-only.
+  [OK]   fiscal — state.json bate com o estado derivado; ledger append-only.
+  [OK]   ops-v4-datas-ui-promocao — state.json bate com o estado derivado; ledger append-only.
+  [OK]   ops-v4-financeiro-retirada-garantia — state.json bate com o estado derivado; ledger append-only.
+  [OK]   ops-v4-fluxo-curto — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv-parity-suite-n5-a-foundation-001 — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv-parity-suite-n5-b1-core-gaps-001 — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv-scan-inline-feedback-autofocus-006 — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv-scan-unregistered-action-settings-007 — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pessoas — state.json bate com o estado derivado; ledger append-only.
+  [OK]   REGISTRY.md idêntico ao gerado.
+  [OK]   GATES.md idêntico ao gerado a partir de protocol.json.
+
+verify: sem divergências.
+VERIFY_EXIT=0
+{
+  "textWhitespace": "PASS",
+  "jsonParsing": "PASS",
+  "surfaceRows": 8,
+  "blockedRows": 8,
+  "contracts": "PASS",
+  "jpegValidation": "PASS",
+  "sanitization": "VISUALLY_INSPECTED_IN_TOOL",
+  "hashes": [
+    {
+      "file": "docs/ai-execution/_evidence/PDV_N5_B1_PRODUCTION_SMOKE_CLOSEOUT_004/omni-gestao-pro-assistencia-observacao-parcial.jpg",
+      "bytes": 56088,
+      "sha256": "22787babeb72eab0017472eb065dd79154cd79cfb470e532abc8cd6cad128d06"
+    },
+    {
+      "file": "docs/ai-execution/_evidence/PDV_N5_B1_PRODUCTION_SMOKE_CLOSEOUT_004/omni-gestao-onboarding-blocked.jpg",
+      "bytes": 65846,
+      "sha256": "36dfe3c2896390c216ee363744d65845c269e9abf8946d18369d7324ea1eef9b"
+    }
+  ],
+  "allowlist": "PASS",
+  "changedPaths": 7,
+  "technicalFilesChanged": 0,
+  "stagedPaths": 0
+}
+TEXT_AND_ARTIFACT_CHECK_EXIT=0
+GIT_DIFF_CHECK_EXIT=0 (tracked diff; new documents checked explicitly above)
+TEMPORARY_SCREENSHOT_EXPORT=REMOVED_AFTER_VERIFIED_COPY
