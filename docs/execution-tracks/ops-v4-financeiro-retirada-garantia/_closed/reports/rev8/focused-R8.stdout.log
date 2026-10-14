@@ -1,0 +1,24 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-v4.test.tsx (10 tests | 10 failed) 9625ms
+     × APROVACAO_COMERCIAL_PENDENTE: preserva rascunho e navega apenas ao destino canônico 1515ms
+     × ORCAMENTO_RECUSADO: preserva rascunho e navega apenas ao destino canônico 1247ms
+     × ORCAMENTO_EXPIRADO: preserva rascunho e navega apenas ao destino canônico 1251ms
+     × PRECO_AUSENTE: preserva rascunho e navega apenas ao destino canônico 1195ms
+     × VALORES_DIVERGENTES: preserva rascunho e navega apenas ao destino canônico 1187ms
+     × fechar e reabrir não recupera motivo histórico; restaura foco 1202ms
+     × nova confirmação pendente retira o atalho comercial e mantém o rascunho original travado 1194ms
+     × resposta tardia em os não vaza motivo nem fecha superfície nova 275ms
+     × resposta tardia em loja não vaza motivo nem fecha superfície nova 236ms
+     × resposta tardia em A-B-A não vaza motivo nem fecha superfície nova 320ms
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-v3.test.tsx (8 tests | 3 failed) 4535ms
+     × A→B→A: resposta tardia não apaga rascunho nem publica motivo de visita anterior 1150ms
+     × incerteza posterior remove orientação comercial e mantém verificação da mesma confirmação 1108ms
+     × remontar a tela não restaura motivo de recusa anterior 1106ms
+
+ Test Files  2 failed | 2 passed | 3 skipped (7)
+      Tests  13 failed | 46 passed | 109 skipped (168)
+   Start at  23:11:35
+   Duration  55.93s (transform 6.19s, setup 0ms, import 11.28s, tests 17.86s, environment 22.53s)
+

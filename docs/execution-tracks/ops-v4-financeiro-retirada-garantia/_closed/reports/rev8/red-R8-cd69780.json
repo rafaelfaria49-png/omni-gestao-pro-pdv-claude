@@ -1,0 +1,31 @@
+{
+  "sha": "cd69780c81b3bc159cd5f0810daabc98aae06a34",
+  "cwd": "C:/Projetos/omni-gestao-ops-v4-frg-002-rev8-red",
+  "executable": "C:\\Program Files\\nodejs\\node.exe",
+  "command": [
+    "C:\\Projetos\\omni-gestao-ops-v4-frg-002\\node_modules\\vitest\\vitest.mjs",
+    "run",
+    "--config",
+    "test/ops-v4-financeiro-retirada-garantia-002/vitest.config.ts",
+    "test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts",
+    "test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx",
+    "-t",
+    "R8"
+  ],
+  "start": "2026-10-11T01:15:09.205Z",
+  "end": "2026-10-11T01:16:07.860Z",
+  "exitCode": 1,
+  "target": {
+    "db": "ops_v4_frg_qa_002",
+    "host": "127.0.0.1/32",
+    "port": 45708
+  },
+  "sourceHashes": {
+    "lib/operacoes-v3/elegibilidade-comercial.ts": "69d588fa369c0a0c0e500173e3aa259462954ee5371af4e855b1a809f29dd5a2",
+    "lib/operacoes-v3/pdv-servico-actions.ts": "fd9945df3a370ddf3873f6b815b49768422a6a5b5fe1c75605cbc34ca3336aa6",
+    "components/operacoes-v3/hooks/use-pdv-servico-v3.ts": "04129e2e421aeeb7c785f888faf305b95b61fc15668d0ab62308460d862b1285",
+    "components/operacoes-v3/pages/PdvServicoV3.tsx": "050de4b20c0d5aa52a20576894984253e0f1c068f1af52d3184ba088a7d7e41f",
+    "components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx": "1cf4c9dab1d6f13645c0369497ba209fdb0f56278eb2575f8e5520c7ad4e5056"
+  },
+  "expectedRed": true
+}

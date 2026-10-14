@@ -1,0 +1,21 @@
+import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import assert from 'node:assert/strict';import {spawn,spawnSync} from 'node:child_process';
+const root=process.cwd(),dir=path.join(root,'docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8');
+const sha=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).stdout.trim();
+const check=JSON.parse(fs.readFileSync(path.join(dir,'candidate-aep-check-attempt1.json'),'utf8'));assert.equal(check.sha,sha);assert.equal(check.exitCode,0);
+const sealFile=path.join(dir,'packet-seal.json'),seal=JSON.parse(fs.readFileSync(sealFile,'utf8'));assert.equal(seal.sha,sha);
+const verified=spawnSync(process.execPath,[path.join(dir,'verify-rev8-packet.mjs'),sealFile],{cwd:root,encoding:'utf8'});assert.equal(verified.status,0,verified.stderr);console.log(verified.stdout.trim());
+const prompt=fs.readFileSync(path.join(dir,'review-request.md'),'utf8'),sessionId=crypto.randomUUID();
+const exe='C:/Users/rafae/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe';
+const hashCommand='node '+path.join(dir,'verify-rev8-packet.mjs').replaceAll('\\','/')+' '+sealFile.replaceAll('\\','/');
+const args=['--print','--model','opus','--effort','high','--safe-mode','--tools','Read,Glob,Grep,Bash','--allowedTools','Read','Glob','Grep','Bash('+hashCommand+')','--permission-mode','dontAsk','--strict-mcp-config','--mcp-config',JSON.stringify({mcpServers:{}}),'--output-format','stream-json','--verbose','--session-id',sessionId];
+assert(!fs.existsSync(path.join(dir,'r-anthropic-result.json')),'R anterior preservada; usar identidade nova para repetição');
+const invocation={familyRequested:'anthropic',executorRequested:'claude-code',modelRequested:'opus',sessionId,sha,packet:seal.packetRelative,manifestSHA256:seal.manifestSHA256,zipSHA256:seal.zipSHA256,exe,args,start:new Date().toISOString(),promptSHA256:crypto.createHash('sha256').update(prompt).digest('hex'),mode:'Nova sessão; Read/Glob/Grep; Bash limitado ao verificador somente leitura; sem MCP/Write/Edit; sem execução de testes/writers'};
+fs.writeFileSync(path.join(dir,'r-anthropic-invocation.json'),JSON.stringify(invocation,null,2));
+const raw=fs.createWriteStream(path.join(dir,'r-anthropic-raw.jsonl')),err=fs.createWriteStream(path.join(dir,'r-anthropic-stderr.log'));
+const env={...process.env};for(const k of Object.keys(env))if(/^(DATABASE_URL|DIRECT_URL|.*TEST_DATABASE_URL|PLAYWRIGHT_E2E_PASSWORD|NEXTAUTH_SECRET|AUTH_SECRET|VERCEL_TOKEN|GH_TOKEN|GITHUB_TOKEN)$/.test(k))delete env[k];
+const child=spawn(exe,args,{cwd:root,env,windowsHide:true,stdio:['pipe','pipe','pipe']});let pending='',result=null,modelObserved=null,toolCalls=0,events=0;
+function event(line){try{const e=JSON.parse(line);events++;if(e.type==='system'&&e.subtype==='init'){modelObserved=e.model??null;console.log('Anthropic iniciou modelo='+modelObserved+' sessão='+sessionId)}if(e.type==='assistant')for(const c of e.message?.content??[])if(c.type==='tool_use'){toolCalls++;console.log('R leitura '+toolCalls+': '+c.name+(c.name==='Read'?' '+c.input?.file_path+' offset='+(c.input?.offset??1)+' limit='+(c.input?.limit??'default'):''))}if(e.type==='result')result=e}catch{}}
+child.stdout.on('data',c=>{raw.write(c);pending+=c.toString();let i;while((i=pending.indexOf('\n'))>=0){event(pending.slice(0,i));pending=pending.slice(i+1)}});child.stderr.on('data',c=>err.write(c));
+const exitCode=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);child.stdin.end(prompt)});if(pending.trim())event(pending);await new Promise(r=>raw.end(r));await new Promise(r=>err.end(r));
+fs.writeFileSync(path.join(dir,'r-anthropic-result.json'),JSON.stringify({...invocation,end:new Date().toISOString(),exitCode,modelObserved,events,toolCalls,result},null,2));if(typeof result?.result==='string')fs.writeFileSync(path.join(dir,'r-anthropic-verdict.md'),result.result);
+console.log(JSON.stringify({exitCode,modelObserved,toolCalls,resultSubtype:result?.subtype,isError:result?.is_error,verdict:result?.result?.slice(0,1800)}));process.exitCode=exitCode??1;

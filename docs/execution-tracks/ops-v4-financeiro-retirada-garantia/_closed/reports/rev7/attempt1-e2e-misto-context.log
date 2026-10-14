@@ -1,0 +1,129 @@
+# Test info
+
+- Name: R7 — misto: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original
+- Location: C:\Projetos\omni-gestao-ops-v4-frg-002\e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7
+
+# Error details
+
+```
+Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: "{\"titulos\":[],\"caixa\":[]}"
+Received: "{\"titulos\":[{\"id\":\"cmv2q0dl7000fh2hsxufsnho4\",\"status\":\"parcial\",\"valor\":420,\"payload\":{\"codigo\":\"OS-QA-FRG2-mv2pzu4s8\",\"origem\":\"operacoes-v3\",\"historico\":[{\"at\":\"2026-10-10T18:21:22.514Z\",\"tipo\":\"pagamento\",\"valor\":100,\"userLabel\":\"Operador QA FRG\",\"observacao\":\"OS OS-QA-FRG2-mv2pzu4s8 · PDV Serviço · Pagamento parcial · PIX R$ 100,00 · saldo a prazo R$ 320.00 (venc. 31/12/2099)\"},{\"at\":\"2026-10-10T18:21:22.526Z\",\"tipo\":\"a_prazo_autorizado\",\"valor\":320,\"origem\":\"operacoes-v3-recebimento-misto\",\"userLabel\":\"Operador QA FRG\",\"operacaoId\":\"9cddd894-3f94-4670-a6c1-f389c1ebfb8a\",\"vencimento\":\"2099-12-31\",\"recebidoAgora\":100,\"autorizadoPorId\":\"cmv1tbmx20000h2gomz3mkjkd\",\"requestFingerprint\":\"ea7964183416fd846f6ad4646e588c352ff6509eb87a7b8d38519390a3a1ebef\"}],\"ordemServicoId\":\"qa-frg2-mv2pzu4s8\"}}],\"caixa\":[{\"tipo\":\"recebimento_cr\",\"valor\":100,\"payload\":{\"op\":\"parcial\",\"origem\":\"operacoes-v3-os\",\"localId\":\"ops-v3-misto:000-qa-frg-001:qa-frg2-mv2pzu4s8:9cddd894-3f94-4670-a6c1-f389c1ebfb8a:0\",\"intencao\":\"Pagamento parcial\",\"localKey\":\"os-faturamento:000-qa-frg-001:qa-frg2-mv2pzu4s8\",\"tituloId\":\"cmv2q0dl7000fh2hsxufsnho4\",\"operacaoId\":\"9cddd894-3f94-4670-a6c1-f389c1ebfb8a\",\"formaPagamento\":\"pix\",\"ordemServicoId\":\"qa-frg2-mv2pzu4s8\"}}]}"
+    at C:\Projetos\omni-gestao-ops-v4-frg-002\e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:423:112
+```
+
+# Test source
+
+```ts
+  323 |   await expect(confirmar).toHaveText(/^Confirmar R\$\s420,00$/);
+  324 |   await expect(confirmar).toBeEnabled();
+  325 |   await confirmar.click();
+  326 |   await expect(sheet).toBeHidden(IDA_E_VOLTA);
+  327 |   await expect.poll(async () => (await titulosDe(prisma, os.id)).map((t) => [t.status, t.valor])).toEqual([["pago", 420]]);
+  328 |   const caixa = await caixaDaOS(prisma, os.id);
+  329 |   expect(caixa.map((c) => [c.valor, (c.payload as { formaPagamento?: string }).formaPagamento])).toEqual([[420, "dinheiro"]]);
+  330 | });
+  331 |
+  332 | test("B — pagamento registrado sem orçamento real: 'Gerar orçamento' orienta e nada é materializado", async ({ page }) => {
+  333 |   const os = await semearOS(prisma, null, true);
+  334 |   const antes = await efeitos(prisma, os.id);
+  335 |   await abrirOS(page, os.codigo);
+  336 |   await abrirComercial(page);
+  337 |   const gerar = page.getByRole("button", { name: "Gerar orçamento", exact: true });
+  338 |   await expect(gerar).toHaveCount(1);
+  339 |   // A orientação sai num toast efêmero (1,9 s): um observador registra todo texto que aparece,
+  340 |   // para a prova não depender de a amostragem coincidir com a janela do toast.
+  341 |   await page.evaluate(() => {
+  342 |     const w = window as unknown as { __textosVistosFrg2: string[] };
+  343 |     w.__textosVistosFrg2 = [];
+  344 |     new MutationObserver(() => w.__textosVistosFrg2.push(document.body.innerText)).observe(document.body, { childList: true, subtree: true, characterData: true });
+  345 |   });
+  346 |   await gerar.click();
+  347 |   await expect
+  348 |     .poll(() => page.evaluate(() => (window as unknown as { __textosVistosFrg2: string[] }).__textosVistosFrg2.some((t) => t.includes("Esta OS já tem pagamento registrado: um novo orçamento em rascunho deixaria esse pagamento sem aprovação comercial."))), IDA_E_VOLTA)
+  349 |     .toBe(true);
+  350 |   await expect(gerar).toBeEnabled();
+  351 |   expect(await efeitos(prisma, os.id)).toBe(antes);
+  352 | });
+  353 |
+  354 | test("A — PDV de Serviço V3: rascunho sem pagamento mostra a recusa comercial e não deixa receber; nada é gravado", async ({ page }) => {
+  355 |   const os = await semearOS(prisma, "rascunho", false);
+  356 |   const antes = await efeitos(prisma, os.id);
+  357 |   await page.goto("/dashboard/operacoes-v3");
+  358 |   // UI pronta antes do clique: a árvore remonta quando a loja ativa resolve (E2E da V3).
+  359 |   await expect(page.getByRole("heading", { name: "Precisa de atenção", exact: true })).toBeVisible();
+  360 |   const aba = page.getByRole("navigation", { name: "Operações" }).getByRole("button", { name: "Receber", exact: true });
+  361 |   await expect(aba).toBeVisible();
+  362 |   await aba.click();
+  363 |   await expect(aba).toHaveAttribute("aria-current", "page");
+  364 |   const seletor = page.getByRole("combobox").filter({ has: page.locator(`option[value="${os.id}"]`) });
+  365 |   await seletor.selectOption(os.id);
+  366 |   await expect(page.getByRole("heading", { name: new RegExp(`^${os.codigo} · `) })).toBeVisible();
+  367 |   const recusa = page.getByTestId("recusa-comercial");
+  368 |   await expect(recusa).toContainText("Recebimento recusado: o orçamento ainda não foi aprovado. Confira e aprove o orçamento antes de receber.");
+  369 |   await expect(recusa.getByRole("button", { name: "Abrir o orçamento no prontuário da OS →" })).toBeVisible();
+  370 |   await page.getByRole("button", { name: "PIX", exact: true }).click();
+  371 |   const receber = page.getByRole("button", { name: /^(Quitar OS|Receber) · R\$/ });
+  372 |   await expect(receber).toHaveCount(1);
+  373 |   await expect(receber).toBeDisabled();
+  374 |   expect(await efeitos(prisma, os.id)).toBe(antes);
+  375 | });
+  376 |
+  377 |
+  378 | for (const modalidade of ["imediato", "misto"] as const) {
+  379 |   test(`R7 — ${modalidade}: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original`, async ({ page }) => {
+  380 |     const os = await semearOS(prisma, "aprovado", false);
+  381 |     await abrirOS(page, os.codigo); await ticketFinanceiro(page).click();
+  382 |     await page.getByRole("button", { name: /^Receber R\$\s420,00$/ }).click();
+  383 |     let sheet = page.getByRole("dialog", { name: "Receber pagamento" });
+  384 |     await sheet.getByRole("button", { name: "Pagamento parcial", exact: true }).click();
+  385 |     await sheet.getByLabel("Forma da linha 1").selectOption("pix");
+  386 |     await sheet.getByLabel("Valor da linha 1").fill("100");
+  387 |     if (modalidade === "misto") {
+  388 |       await sheet.getByRole("button", { name: "+ Dividir pagamento" }).click();
+  389 |       await sheet.getByLabel("Forma da linha 2").selectOption("a_prazo");
+  390 |       await sheet.getByLabel("Vencimento da parte a prazo").fill("2099-12-31");
+  391 |     }
+  392 |     const envios: string[] = [];
+  393 |     let perdeu = false;
+  394 |     await page.route("**/*", async (route) => {
+  395 |       const request = route.request(), body = request.postData() ?? "";
+  396 |       const writer = request.method() === "POST" && !!request.headers()["next-action"] && body.includes(os.id) && body.includes('"confirmacaoClienteV3":true') && body.includes(modalidade === "imediato" ? '"linhas"' : '"pagamentosAgora"');
+  397 |       if (!writer) { await route.continue(); return; }
+  398 |       envios.push(body);
+  399 |       if (perdeu) { await route.continue(); return; }
+  400 |       perdeu = true;
+  401 |       // route.fetch termina a resposta REAL depois do commit; só a entrega ao browser se perde.
+  402 |       const resposta = await route.fetch(); expect(resposta.ok()).toBe(true);
+  403 |       await route.abort("connectionclosed");
+  404 |     });
+  405 |     await sheet.getByRole("button", { name: modalidade === "misto" ? /^Registrar R\$\s100,00/ : /^Confirmar R\$\s100,00$/ }).click();
+  406 |     await expect(sheet.getByRole("alert")).toContainText("Confirmação pendente de verificação.", IDA_E_VOLTA);
+  407 |     await expect.poll(() => envios.length).toBe(1);
+  408 |     const antes = JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id) });
+  409 |     await sheet.getByRole("button", { name: "Fechar recebimento" }).click();
+  410 |     await page.getByRole("button", { name: "Verificar mesma confirmação", exact: true }).click();
+  411 |     sheet = page.getByRole("dialog", { name: "Receber pagamento" });
+  412 |     await expect(sheet.getByLabel("Forma da linha 1")).toBeDisabled();
+  413 |     await expect(sheet.getByLabel("Forma da linha 1")).toHaveValue("pix");
+  414 |     await page.reload();
+  415 |     await abrirOS(page, os.codigo); await ticketFinanceiro(page).click();
+  416 |     await page.getByRole("button", { name: "Verificar mesma confirmação", exact: true }).click();
+  417 |     sheet = page.getByRole("dialog", { name: "Receber pagamento" });
+  418 |     await expect(sheet.getByLabel("Valor da linha 1")).toHaveValue("100");
+  419 |     await expect(sheet.getByRole("button", { name: "+ Dividir pagamento" })).toBeDisabled();
+  420 |     await sheet.getByRole("button", { name: "Verificar mesma confirmação", exact: true }).click();
+  421 |     await expect(sheet).toBeHidden(IDA_E_VOLTA);
+  422 |     expect(envios).toHaveLength(2); expect(JSON.parse(envios[1]!)).toEqual(JSON.parse(envios[0]!));
+> 423 |     expect(JSON.stringify({ titulos: await titulosDe(prisma, os.id), caixa: await caixaDaOS(prisma, os.id) })).toBe(antes);
+      |                                                                                                                ^ Error: expect(received).toBe(expected) // Object.is equality
+  424 |     const titulo = (await titulosDe(prisma, os.id))[0]!;
+  425 |     const historico = ((titulo.payload as { historico: Array<{ tipo: string; valor: number }> }).historico).filter((e) => e.tipo === "pagamento" || e.tipo === "liquidacao");
+  426 |     expect(historico.map((e) => e.valor)).toEqual([100]);
+  427 |     expect(await prisma.ordemServico.count({ where: { id: os.id, storeId: LOJA } })).toBe(1);
+  428 |     expect((await linhaOS(prisma, os.id)).payload.confirmacaoRecebimentoPendenteV3).toBeUndefined();
+  429 |   });
+  430 | }
+  431 |
+```

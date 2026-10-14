@@ -1,0 +1,15 @@
+// Verificador somente leitura: hashes do manifesto, snapshots Git e arquivo ZIP.
+import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';
+const sealPath=process.argv[2];assert(sealPath,'Informe packet-seal.json');
+const seal=JSON.parse(fs.readFileSync(sealPath,'utf8')),dir=path.resolve(path.dirname(sealPath),seal.packetRelative);
+const hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+assert.equal(hash(path.join(dir,'MANIFEST.json')),seal.manifestSHA256);
+const manifest=JSON.parse(fs.readFileSync(path.join(dir,'MANIFEST.json'),'utf8'));
+assert.equal(manifest.sha,seal.sha);let bytes=0;
+for(const f of manifest.files){const p=path.resolve(dir,f.path);assert(p.startsWith(dir+path.sep));assert.equal(fs.statSync(p).size,f.bytes,f.path+' bytes');assert.equal(hash(p),f.sha256,f.path+' hash');bytes+=f.bytes;}
+assert.equal(hash(import.meta.filename),hash(path.join(dir,'VERIFICADOR-SOMENTE-LEITURA.mjs.txt')),'Verificador difere da cópia selada');
+const index=JSON.parse(fs.readFileSync(path.join(dir,'ARQUIVOS-REVISAO.json'),'utf8'));
+let gitBindings=0;
+for(const item of index){const result=spawnSync('git',['show',seal.sha+':'+item.path],{encoding:'utf8',maxBuffer:16*1024*1024});assert.equal(result.status,0,result.stderr);assert.equal(fs.readFileSync(path.join(dir,item.snapshot),'utf8'),result.stdout,item.path+' Git snapshot');gitBindings++}
+if(seal.zipRelative)assert.equal(hash(path.resolve(path.dirname(sealPath),seal.zipRelative)),seal.zipSHA256,'ZIP');
+console.log(JSON.stringify({status:'PASS',sha:seal.sha,files:manifest.files.length,bytes,gitBindings,manifestSHA256:seal.manifestSHA256,zipSHA256:seal.zipSHA256??null}));

@@ -58,6 +58,31 @@ import {
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { salvarGarantiaOSV3 } from "./garantia-actions";
 import { mutarPayloadOSV3 } from "./os-payload-lock";
+import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
+import { uid as uidLovable } from "@/components/operacoes/lovable/api/_helpers";
+import { prisma } from "@/lib/prisma";
+import { getContaReceberByLocalKey } from "@/lib/financeiro/services/contas-receber-service";
+import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
+import { reconciliarRecebimentosFinanceirosV3 } from "./delivery-financial-guard";
+import { localKeyContaReceberOSV3 } from "./payment-model";
+import { chaveLockRecebimentoMistoV3 } from "./recebimento-misto-service";
+import {
+  MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3,
+  MENSAGEM_GERAR_ORCAMENTO_PAGAMENTOS_EM_CONFERENCIA_V3,
+} from "./elegibilidade-comercial";
+import {
+  conferirFormalizacaoAprovacaoV3 as conferirFormalizacaoAprovacaoImplV3,
+  formalizarAprovacaoPendenteV3 as formalizarAprovacaoPendenteImplV3,
+  type ConferenciaFormalizacaoResultV3,
+  type FormalizacaoAprovacaoResultV3,
+} from "./formalizacao-aprovacao-actions";
+import {
+  conteudoOrcamentoV3,
+  escopoAprovacaoOrcamentoV3,
+  MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3,
+  type ConferenciaEscopoAprovacaoResultV3,
+  type EntradaFormalizacaoV3,
+} from "./formalizacao-aprovacao-model";
 import {
   diaNaLojaV3,
   fimDoDiaLojaIsoV3,
@@ -69,9 +94,54 @@ import {
   somarDiasCivisV3,
 } from "./datas-operacionais-model";
 
-/** Materializa o rascunho a partir dos itens da OS (reuso seguro do @/api/os). */
+/** Conferência + materialização na mesma transação, com os limites dos writers de pagamento. */
+const TX_MATERIALIZAR_ORCAMENTO_V3 = { maxWait: 5_000, timeout: 15_000 } as const;
+
+/**
+ * Materializa o rascunho a partir dos itens da OS (mesmo construtor puro do @/api/os,
+ * `buildOrcamentoRascunhoFromOS`; orçamento real já existente = no-op).
+ *
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item B): nunca sobre OS cujo título já tem
+ * pagamento vigente — o rascunho novo deixaria esse pagamento sem aprovação comercial. Conferência
+ * E gravação acontecem na MESMA transação, na ordem de travas dos writers de pagamento (consultiva
+ * por OS → linha da OS): nenhum recebimento entra entre as duas, e a expiração da transação desfaz
+ * as duas juntas. Nada é apagado ou alterado na recusa (orçamento, título, histórico).
+ */
 export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise<OrdemServico> {
-  return gerarOrcamentoDaOSImpl(storeId, osId);
+  const sid0 = (storeId ?? "").trim();
+  const id0 = (osId ?? "").trim();
+  // Entrada inválida segue o caminho (e a mensagem) de sempre.
+  if (!sid0 || !id0) return gerarOrcamentoDaOSImpl(storeId, osId);
+  const { sid, id, session } = await autorizar(sid0, id0);
+  const os = await prisma.$transaction(async (tx) => {
+    await recebimentoLoteAdvisoryLock(tx, chaveLockRecebimentoMistoV3(sid, id));
+    const titulo = await getContaReceberByLocalKey(sid, localKeyContaReceberOSV3(sid, id), tx);
+    if (titulo) {
+      const recebimentos = reconciliarRecebimentosFinanceirosV3(titulo.payload);
+      if (!recebimentos.valido) throw new Error(MENSAGEM_GERAR_ORCAMENTO_PAGAMENTOS_EM_CONFERENCIA_V3);
+      if (recebimentos.centavos > 0) throw new Error(MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3);
+    }
+    return mutarPayloadOSV3({
+      storeId: sid,
+      osId: id,
+      tx,
+      mutate: ({ payload }) => {
+        const atual = payload.orcamento as { sintetizado?: boolean } | undefined;
+        // Orçamento real já persistido: não recria (no-op sobre o estado atual).
+        if (atual && typeof atual === "object" && atual.sintetizado !== true) {
+          return { payload: null, resultado: payload as unknown as OrdemServico };
+        }
+        const orcamento = buildOrcamentoRascunhoFromOS(payload as unknown as OrdemServico, { uid: uidLovable, nowIso }) as unknown as OrcamentoV3;
+        const { nextPayload, colunas } = montarGravacao(payload as OSPayloadFull, {
+          orcamento,
+          eventos: [makeEvento("orcamento_criado", operadorLabel(session), "Orçamento gerado a partir dos itens da OS (rascunho editável).")],
+        });
+        return { payload: nextPayload, colunas, resultado: nextPayload as unknown as OrdemServico };
+      },
+    });
+  }, TX_MATERIALIZAR_ORCAMENTO_V3);
+  revalidatePath("/dashboard/operacoes-v3");
+  return os;
 }
 
 function nowIso(): string {
@@ -376,11 +446,20 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
  * selecionadas que informam `garantiaDias` — nenhuma falha aqui desfaz a
  * aprovação, que já foi gravada).
  */
-export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise<OrdemServico> {
+export async function aprovarOrcamentoV3(
+  storeId: string,
+  osId: string,
+  opcoes?: { conteudoEsperado?: string },
+): Promise<OrdemServico> {
   const { sid, id, session } = await autorizar(storeId, osId);
   const { os, extra: aprovado } = await gravarSobTrava(sid, id, (payload) => {
     const atual = orcamentoEditavel(payload);
     assertStatus(atual, ["rascunho", "enviado"], "aprovar");
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): com escopo consentido, só aprova o
+    // MESMO conteúdo conferido — sob a trava, sobre o payload mais recente.
+    if (opcoes?.conteudoEsperado !== undefined && conteudoOrcamentoV3(atual) !== opcoes.conteudoEsperado) {
+      throw new Error(MENSAGEM_ESCOPO_APROVACAO_ALTERADO_V3);
+    }
     // Proposta vencida continua vencida: renovar a validade é a correção auditada
     // ("Corrigir datas" → Válido até), nunca um efeito colateral do aceite.
     if (validadeExpiradaV3(atual.validoAte)) {
@@ -443,6 +522,58 @@ export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise
   return os;
 }
 
+/** Quem não pode aprovar recebe a orientação de quem pode (GOAL 002, item C). */
+const SEM_PERMISSAO_APROVAR_NO_RECEBIMENTO_V3 =
+  "Seu perfil não pode aprovar orçamentos nesta loja. Peça a aprovação a quem pode editar OS (por exemplo, gerente ou administrador).";
+
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): a MESMA aprovação de
+ * `aprovarOrcamentoV3` (permissão, validações, versão, garantia best-effort) para o
+ * "Aprovar e receber", com a recusa DEVOLVIDA em vez de lançada: em build de produção a
+ * mensagem de um erro lançado numa Server Action não chega ao navegador, e o operador precisa
+ * do motivo (inclusive de quem pode aprovar). Só as recusas da própria regra (`Error` simples)
+ * atravessam; falha inesperada vira texto genérico, sem detalhe interno; controle interno do
+ * Next (erro com `digest`) segue lançado.
+ */
+export async function aprovarOrcamentoParaReceberV3(
+  storeId: string,
+  osId: string,
+  esperado: { conteudo: string },
+): Promise<{ ok: true } | { ok: false; mensagem: string }> {
+  try {
+    const guard = await requireEnterpriseWith((storeId ?? "").trim(), (p) => p.operacoes.editarOs, SEM_PERMISSAO_APROVAR_NO_RECEBIMENTO_V3);
+    if (!guard.ok) return { ok: false, mensagem: guard.error };
+    // A aprovação vale para o escopo que o operador conferiu e o cliente consentiu — nunca "o mais recente".
+    const conteudo = typeof esperado?.conteudo === "string" ? esperado.conteudo : "";
+    if (!conteudo) return { ok: false, mensagem: "Confira o escopo do orçamento antes de aprovar e receber." };
+    await aprovarOrcamentoV3(storeId, osId, { conteudoEsperado: conteudo });
+    return { ok: true };
+  } catch (e) {
+    if (typeof (e as { digest?: unknown } | null)?.digest === "string") throw e;
+    if (e instanceof Error && Object.getPrototypeOf(e) === Error.prototype && e.message.trim()) return { ok: false, mensagem: e.message };
+    console.error("[orcamento] aprovar no recebimento falhou", e);
+    return { ok: false, mensagem: "Não foi possível confirmar a aprovação agora. Confira o orçamento da OS antes de tentar de novo." };
+  }
+}
+
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): leitura do escopo que o operador confere
+ * no "Aprovar e receber" (linhas efetivas, total e a assinatura que a aprovação exige depois).
+ * Mesma permissão da aprovação; resultado devolvido (legível em produção); não grava nada.
+ */
+export async function conferirEscopoAprovacaoV3(storeId: string, osId: string): Promise<ConferenciaEscopoAprovacaoResultV3> {
+  const sid = (storeId ?? "").trim();
+  const id = (osId ?? "").trim();
+  if (!sid || !id) return { ok: false, mensagem: "Selecione uma OS na loja ativa para conferir o orçamento." };
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false, mensagem: "Faça login para conferir o orçamento." };
+  const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, SEM_PERMISSAO_APROVAR_NO_RECEBIMENTO_V3);
+  if (!guard.ok) return { ok: false, mensagem: guard.error };
+  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { payload: true } });
+  if (!row) return { ok: false, mensagem: "OS não encontrada nesta loja." };
+  return escopoAprovacaoOrcamentoV3(row.payload);
+}
+
 /**
  * Recusa o orçamento. Aceita a entrada estruturada `{motivo, observacao?}`
  * (GOAL OPS-V4-ORC-APROVACAO-SELECAO-026) OU uma string livre legada —
@@ -475,6 +606,24 @@ export async function recusarOrcamentoV3(
   };
   });
   return os;
+}
+
+// ----------------------------------------------------------------------------
+// "Formalizar aprovação pendente" (GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002, item D)
+// ----------------------------------------------------------------------------
+// Ponto de entrada do domínio de orçamento para as telas; regras, permissões, travas e
+// idempotência vivem em `formalizacao-aprovacao-actions.ts`.
+
+export async function conferirFormalizacaoAprovacaoV3(storeId: string, osId: string): Promise<ConferenciaFormalizacaoResultV3> {
+  return conferirFormalizacaoAprovacaoImplV3(storeId, osId);
+}
+
+export async function formalizarAprovacaoPendenteV3(
+  storeId: string,
+  osId: string,
+  input: EntradaFormalizacaoV3,
+): Promise<FormalizacaoAprovacaoResultV3> {
+  return formalizarAprovacaoPendenteImplV3(storeId, osId, input);
 }
 
 // ----------------------------------------------------------------------------

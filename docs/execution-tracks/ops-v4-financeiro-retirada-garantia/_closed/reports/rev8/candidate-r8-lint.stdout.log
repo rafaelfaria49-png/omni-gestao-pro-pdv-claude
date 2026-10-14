@@ -1,0 +1,17 @@
+
+C:\Projetos\omni-gestao-ops-v4-frg-002\test\ops-v4-financeiro-retirada-garantia-002\motivo-v4.test.tsx
+  116:23  error  Error: Cannot reassign variables declared outside of the component/hook
+
+Variable `vivo` is declared outside of the component/hook. Reassigning this value during render is a form of side effect, which can cause unpredictable behavior depending on when the component happens to re-render. If this variable is used in rendering, use useState instead. Otherwise, consider updating it in an effect. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#side-effects-must-run-outside-of-render).
+
+C:\Projetos\omni-gestao-ops-v4-frg-002\test\ops-v4-financeiro-retirada-garantia-002\motivo-v4.test.tsx:116:23
+  114 | import { ReceberPagamentoV4 } from "@/components/operacoes-v4-preview/parts/ReceberPagamentoV4";
+  115 | let vivo: ReturnType<typeof useV4Preview>;
+> 116 | function TelaReal() { vivo = useV4Preview(); return <ReceberPagamentoV4 v={vivo} />; }
+      |                       ^^^^ `vivo` cannot be reassigned
+  117 | async function abrirTela() {
+  118 |   const r = render(<TelaReal />); await waitFor(() => expect(vivo.ordens.length).toBe(2));
+  119 |   await act(async () => vivo.selectOS(A, "financeiro")); await waitFor(() => expect(vivo.realOS?.id).toBe("a")); await waitFor(() => expect(vivo.pdvServico.loading).toBe(false));  react-hooks/globals
+
+✖ 1 problem (1 error, 0 warnings)
+

@@ -1,0 +1,13 @@
+{
+  "sha": "98ef7172a915713ad177207112f6aff3db9801a1",
+  "results": [
+    {
+      "group": "misto",
+      "exitCode": 1
+    },
+    {
+      "group": "datas",
+      "exitCode": 1
+    }
+  ]
+}
