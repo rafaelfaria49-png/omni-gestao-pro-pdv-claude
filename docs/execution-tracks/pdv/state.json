@@ -1,10 +1,10 @@
 {
   "aep": "1.0-R2",
   "track": "pdv",
-  "status": "PAUSED",
+  "status": "RUNNING",
   "risk_tier": "ALTO",
-  "current_goal": null,
-  "next_goal": null,
+  "current_goal": "PDV-PARITY-N5-B2-PIN-KEYMAP-001",
+  "next_goal": "PDV-PARITY-N5-C-E2E-002",
   "bootstrap_commit": "2b223705a3a2d6982a50b2fbb1d025cedc8541d5",
   "counters": {
     "goals_done": 3,
