@@ -302,3 +302,63 @@ NEXT_ACTION=REVISAO_INDEPENDENTE_ZAI_GLM_5_3
 ```
 
 Ponto de parada desta missão: **F-01 CORRIGIDO E PUBLICADO NA BRANCH.** Não representa aceite do GOAL, revisão GLM ou PASS de runtime.
+
+## Revisão GLM recebida, PR draft e caminho de visualização — 14/10/2026
+
+Missão documental autorizada: registrar a revisão recebida do usuário, abrir uma única PR draft e identificar os previews existentes do SHA revisado. Nenhum código de produto foi alterado nesta rodada.
+
+### Aprovação estática restrita ao F-01
+
+O usuário informou `REVIEW_FAMILY=zai/GLM-5.3`, `REVIEWED_SHA=6cd20313ad7f1404a99d691644c82fc92ae47a55`, `REVIEW_CODE=APPROVE`, P0=0, P1=0, P2=0 e P3=1. A aprovação abrange exclusivamente o corretivo F-01. O P3 remanescente é o aviso cosmético de rede após Cancelar.
+
+Evidência com proveniência explícita: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/REVISAO_GLM_F01_RECEBIDA_USUARIO_2026-10-14.md`. Registro realizado por Codex/OpenAI a partir da mensagem do usuário; nenhuma nova execução GLM ou review formal em nome desse modelo foi realizada. A revisão integral da implementação e a validação de runtime não são declaradas aprovadas. Os registros anteriores GLM_REVIEW=PENDING descrevem suas respectivas rodadas; o estado atual é GLM_F01=APPROVE_RECEBIDO_USUARIO, com aceite integral/runtime ainda pendentes.
+
+### PR, divergência da main e escopo Git
+
+- PR draft única: [#273 — feat(pessoas): recuperar frontend cadastral e privacidade](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/273), `goal/pessoas-001b-recovery-001` → `main`.
+- Main consultada: `a70469ddb96ba60f9575ab8036a78a71da35d35d`; merge-base: `1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d`.
+- No SHA revisado, a branch tinha cinco commits exclusivos e a main sete; 33 caminhos na entrega, dos quais 31 são produto/testes recuperados e dois são documentação/evidência. O commit desta rodada acrescenta somente documentação.
+- Nenhum caminho alterado na branch se sobrepõe aos caminhos modificados pelos sete commits da main. O GitHub retornou `mergeable=true` e `mergeable_state=clean` para a PR na consulta inicial, sem conflitos reais identificados.
+- Todos os caminhos da entrega estão na allowlist. Nesta rodada, apenas a evidência acima e este relatório são alterados. Nenhum arquivo de outras trilhas é incorporado; sem fetch de código para a worktree, rebase, merge local ou force push.
+
+### Deployments existentes do SHA revisado
+
+Os statuses GitHub do SHA `6cd20313ad7f1404a99d691644c82fc92ae47a55` apontam para os deployments abaixo; a consulta read-only `vercel inspect --format=json` confirmou os IDs, projetos, URLs, estado READY e target preview. As URLs imutáveis continuam vinculadas à versão de produto revisada; o commit documental desta rodada não está incluído nesse SHA.
+
+| Projeto | Deployment | URL HTTPS de visita | Painel Vercel |
+| --- | --- | --- | --- |
+| omni-gestao-pro | `dpl_J5FzLGvpKeNaGWPtXDNJDmcEACW3` · READY · preview | [Abrir Pessoas](https://omni-gestao-4qne0onlj-rafaelfaria49-4373s-projects.vercel.app/dashboard/pessoas) | [Deployment](https://vercel.com/rafaelfaria49-4373s-projects/omni-gestao-pro/J5FzLGvpKeNaGWPtXDNJDmcEACW3) |
+| omni-gestao | `dpl_EFEKeZ113DuUgfrfkD5XgPiUZQE2` · READY · preview | [Abrir Pessoas](https://omni-gestao-r2152ssd0-rafaelfaria49-4373s-projects.vercel.app/dashboard/pessoas) | [Deployment](https://vercel.com/rafaelfaria49-4373s-projects/omni-gestao/EFEKeZ113DuUgfrfkD5XgPiUZQE2) |
+
+Consulta de acesso não autenticado, sem cookies ou credenciais de aplicação:
+
+- **omni-gestao-pro:** `/api/pessoas/disponibilidade` respondeu HTTP 404 com `code=PESSOAS_DESABILITADO`, comprovando a flag OFF nessa resposta. `/dashboard/pessoas` respondeu HTTP 307 para `https://omni-gestao-pro.vercel.app/login`, domínio de produção; esse redirecionamento não demonstra uma sessão de preview nem visualização da interface Pessoas. Não foi seguido um fluxo de login em produção.
+- **omni-gestao:** ambas as rotas responderam HTTP 302 para `https://vercel.com/sso-api`; a proteção SSO da Vercel impede a inspeção não autenticada. O estado da flag e a disponibilidade da aplicação atrás desse gate não foram confirmados.
+- **Visualização real da interface Pessoas: bloqueada.** Os links de visita existem, mas não demonstram o cadastro aberto. A infraestrutura isolada e o preview/R2 autenticado exigidos pelo GOAL continuam pendentes, sem provisionamento ou mudança de variáveis/banco/auth/R2. PESSOAS_DP_ENABLED produtivo permanece sem ativação nesta missão.
+
+### Checks existentes e validações pendentes
+
+No SHA revisado, os statuses automáticos `Vercel – omni-gestao-pro` e `Vercel – omni-gestao` estão em success. O check `Vercel Preview Comments` está completed/success, com zero feedbacks não resolvidos; isso não é teste funcional. A consulta de workflows GitHub Actions para esse SHA retornou lista vazia. Nenhum desses resultados é atribuído aos testes locais, à bateria Recovery, ao novo commit documental ou ao gate preview/R2.
+
+Nesta missão, a validação permanece limitada à inspeção de escopo Git/allowlist e `git diff --check`. Docker, PostgreSQL, Vitest, Playwright, typecheck, lint, build e runner oficial não foram executados. Permanecem pendentes a bateria isolada do GOAL, a matriz visual/acessibilidade, a revisão integral quando exigida para aceite e o preview/R2 com bytes reais em recursos sintéticos autorizados.
+
+```text
+REVIEW_GLM_F01=APPROVE_RECEBIDO_USUARIO
+REVIEWED_SHA=6cd20313ad7f1404a99d691644c82fc92ae47a55
+REVIEW_INTEGRAL_FRONTEND=NOT_DECLARED_APPROVED
+PR_URL=https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/273
+PR_DRAFT=YES
+MAIN_HEAD_INSPECTED=a70469ddb96ba60f9575ab8036a78a71da35d35d
+MERGEABILITY_INSPECTED=CLEAN
+VISUALIZACAO_REAL=BLOCKED_FLAG_OFF_AND_AUTHENTICATION
+TESTS=NOT_RUN
+TYPECHECK=NOT_RUN
+LINT=NOT_RUN
+BUILD=NOT_RUN
+RUNTIME_VALIDATION=PENDING
+PREVIEW_R2=PENDING
+AEP_CLOSE=NOT_RUN
+NEXT_GATE=AUTORIZACAO_DA_VALIDACAO_ISOLADA_E_PREVIEW_R2
+```
+
+Ponto de parada: **PR DRAFT ABERTA, REVISÃO REGISTRADA E CAMINHO DE VISUALIZAÇÃO IDENTIFICADO.** Sem merge da PR, close/DONE, produção, liberação de dados reais ou GOAL 002.
