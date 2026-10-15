@@ -1,0 +1,9 @@
+{
+  "observedAt": "2026-10-15T13:52:04.984Z",
+  "database": "omnigestao_prod",
+  "publicSchema": true,
+  "transactionReadOnly": true,
+  "serverVersion": "17.11 (59c914d)",
+  "databaseOidHash": "7d8e67064ff51e8745b0f448a92d07766531c16efc5b9ae9baf2673ab430acb0",
+  "datasourceFingerprint": "c4f2567332c8f613"
+}

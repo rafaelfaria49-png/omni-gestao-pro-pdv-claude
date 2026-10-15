@@ -1,5 +1,5 @@
 // R8: superfície V4 montada com useV4Preview e hook financeiro reais; actions espiãs.
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 
@@ -115,7 +115,9 @@ async function montarComOS(id: "a" | "b") {
 
 import { ReceberPagamentoV4 } from "@/components/operacoes-v4-preview/parts/ReceberPagamentoV4";
 let vivo: ReturnType<typeof useV4Preview>;
-function TelaReal() { const v = useV4Preview(); useEffect(() => { vivo = v; }, [v]); return <ReceberPagamentoV4 v={v} />; }
+// A observação do hook acompanha o mesmo commit do DOM; uma recusa já visível
+// não pode ser comparada com o snapshot exposto só pelo efeito passivo anterior.
+function TelaReal() { const v = useV4Preview(); useLayoutEffect(() => { vivo = v; }, [v]); return <ReceberPagamentoV4 v={v} />; }
 async function abrirTela() {
   const r = render(<TelaReal />); await waitFor(() => expect(vivo.ordens.length).toBe(2));
   await act(async () => vivo.selectOS(A, "financeiro")); await waitFor(() => expect(vivo.realOS?.id).toBe("a")); await waitFor(() => expect(vivo.pdvServico.loading).toBe(false));

@@ -37,6 +37,25 @@ assinatura, garantia, estoque).
 Revisão 8: decisão humana CODEX — GOAL 002 / REVISÃO 8 de 10/10/2026,
 restrita ao P2-1 da R Anthropic em cd69780; ver decisão vigente abaixo.
 
+## Decisão humana — autoria e família do GOAL 003 (15/10/2026)
+
+No comando "CODEX — FINALIZAR E PUBLICAR OPERAÇÕES V4", o proprietário
+autorizou excepcionalmente Codex/OpenAI como executor real C4/ALTO do
+GOAL 003 e determinou a correção documental de `familia_executor` para
+`openai`. A implementação experimental preservada no SHA
+`fd42b06648ad2abb217bdd7fb5f3bc7b9dec3030`, branch
+`codex/experiment-ops-v4-garantias`, tem autoria Codex/OpenAI. A família
+Anthropic antes declarada no GOAL não correspondia ao executor real.
+
+Esta decisão regulariza a declaração e autoriza a adoção e execução
+oficial por Codex/OpenAI, sem abrir o 003 antes do 002 DONE e integrado em
+main. Claude Code real/Anthropic permanece exclusivamente revisor
+independente do SHA final de cada candidato. Não há aprovação ou parecer
+presumido. A alteração é exclusivamente documental: preserva C4, ALTO,
+plan_rev 8, testes, ledger, tentativas, pré-condições e R obrigatória, sem
+modificar `executors.json` nem ampliar gates. Sua integração ocorre por PR
+documental e merge normal, somente com as verificações aprovadas.
+
 ## Revisões do plano
 
 - rev 1 (08/10/2026, PR #250): materialização dos GOALs 001–003.

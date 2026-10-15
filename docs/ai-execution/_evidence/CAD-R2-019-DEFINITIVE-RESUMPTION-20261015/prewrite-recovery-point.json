@@ -1,0 +1,12 @@
+{
+  "observedAt": "2026-10-15T13:52:07.983Z",
+  "recoveryTimestampUtc": "2026-10-15T13:52:05.983Z",
+  "projectId": "dry-mouse-36002471",
+  "branchId": "br-muddy-meadow-ac7ah2wl",
+  "database": "omnigestao_prod",
+  "historyRetentionSeconds": 21600,
+  "recoveryMethod": "NEON_POINT_IN_TIME_HISTORY",
+  "permanentSnapshotId": "snap-little-hat-acjrs3lh",
+  "newSnapshotCreated": false,
+  "restorePerformed": false
+}
