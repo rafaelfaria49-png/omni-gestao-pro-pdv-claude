@@ -1,33 +1,18 @@
-import { NextResponse } from "next/server"
-import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { isVencimentoExpired } from "@/lib/subscription-seal"
-import { getTrustedTimeMs } from "@/lib/trusted-time"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { validateClientesImport, type MappingRecord } from "@/lib/import-validate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-async function requireSubscription() {
-  const sub = await getVerifiedSubscriptionFromCookies()
-  if (!sub.ok) {
-    return { ok: false as const, res: NextResponse.json({ error: "Não autorizado" }, { status: 401 }) }
-  }
-  const now = await getTrustedTimeMs()
-  if (isVencimentoExpired(now, sub.vencimento) || sub.status !== "ativa") {
-    return { ok: false as const, res: NextResponse.json({ error: "Assinatura inválida" }, { status: 403 }) }
-  }
-  return { ok: true as const, sub }
-}
-
 export async function POST(req: Request) {
-  const gate = await requireSubscription()
-  if (!gate.ok) return gate.res
+  const gate = await requireCadastrosHubApi(req, "write", "admin")
+  if (!gate.ok) return gate.response
 
-  const storeId = storeIdFromAssistecRequestForWrite(req)
+  const storeId = gate.storeId
   if (!storeId) {
-    return NextResponse.json(
+    return clientPrivateJson(
       { error: "Unidade obrigatória: selecione a loja no cabeçalho e envie x-assistec-loja-id." },
       { status: 400 }
     )
@@ -37,16 +22,16 @@ export async function POST(req: Request) {
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
+    return clientPrivateJson({ error: "JSON inválido" }, { status: 400 })
   }
 
   const rows = (body as { rows?: unknown }).rows
   const mapping = (body as { mapping?: unknown }).mapping
   if (!Array.isArray(rows)) {
-    return NextResponse.json({ error: "rows deve ser um array" }, { status: 400 })
+    return clientPrivateJson({ error: "rows deve ser um array" }, { status: 400 })
   }
   if (!mapping || typeof mapping !== "object") {
-    return NextResponse.json({ error: "mapping deve ser um objeto" }, { status: 400 })
+    return clientPrivateJson({ error: "mapping deve ser um objeto" }, { status: 400 })
   }
 
   const errors = validateClientesImport({
@@ -54,7 +39,7 @@ export async function POST(req: Request) {
     mapping: mapping as MappingRecord,
   })
 
-  return NextResponse.json({
+  return clientPrivateJson({
     ok: errors.length === 0,
     storeId,
     errors,

@@ -1,9 +1,8 @@
-import { NextResponse } from "next/server"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
+import { CLIENT_RETENTION_BLOCK } from "@/lib/cadastros/client-privacy"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
 import {
-  cadastrosAuditLogFields,
   cadastrosAuditPrincipalFromSession,
 } from "@/lib/cadastros/cadastros-audit-principal"
 import { updateClientTx } from "@/lib/cadastros/client-write-service"
@@ -15,125 +14,56 @@ export const revalidate = 0
 const MAX_IDS = 200
 
 export async function POST(req: Request) {
-  const gate = await requireAdmin()
-  if (!gate.ok) return gate.res
+  const gate = await requireCadastrosHubApi(req, "write", "admin")
+  if (!gate.ok) return gate.response
 
   let body: { ids?: string[]; action?: "delete" | "inactivate"; userLabel?: string }
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
+    return clientPrivateJson({ error: "JSON inválido" }, { status: 400 })
   }
 
-  const { ids, action, userLabel } = body
+  const { ids, action } = body
+  if (action === "delete") return clientPrivateJson(CLIENT_RETENTION_BLOCK, { status: 409 })
   if (!Array.isArray(ids)) {
-    return NextResponse.json({ error: "ids deve ser um array" }, { status: 400 })
+    return clientPrivateJson({ error: "ids deve ser um array" }, { status: 400 })
   }
-  if (action !== "delete" && action !== "inactivate") {
-    return NextResponse.json({ error: "action deve ser delete ou inactivate" }, { status: 400 })
+  if (action !== "inactivate") {
+    return clientPrivateJson({ error: "action deve ser delete ou inactivate" }, { status: 400 })
   }
 
-  const storeId = storeIdFromAssistecRequestForWrite(req)
+  const storeId = gate.storeId
   if (!storeId) {
-    return NextResponse.json({ error: "Loja não selecionada" }, { status: 400 })
+    return clientPrivateJson({ error: "Loja não selecionada" }, { status: 400 })
   }
 
   const normalizedIds = Array.from(new Set(ids.filter((x) => typeof x === "string").map((s) => s.trim()).filter(Boolean)))
   if (normalizedIds.length === 0) {
-    return NextResponse.json({ error: "Nenhum id válido fornecido" }, { status: 400 })
+    return clientPrivateJson({ error: "Nenhum id válido fornecido" }, { status: 400 })
   }
   if (normalizedIds.length > MAX_IDS) {
-    return NextResponse.json({ error: `Máximo de ${MAX_IDS} itens por lote` }, { status: 400 })
+    return clientPrivateJson({ error: `Máximo de ${MAX_IDS} itens por lote` }, { status: 400 })
   }
 
-  const audit = cadastrosAuditLogFields(cadastrosAuditPrincipalFromSession(gate.session), {
-    operatorNote: userLabel,
-  })
-  const operator = audit.userLabel
   const writeContext = {
     storeId,
     principal: cadastrosAuditPrincipalFromSession(gate.session),
   }
 
-  const items = await prisma.cliente.findMany({
-    where: { id: { in: normalizedIds }, storeId },
-    select: { id: true, name: true },
-  })
-
-  // Dependências só são consultadas quando necessário (action === "delete")
-  let linkedIds: string[] = []
-  let freeIds: string[] = []
-
-  if (action === "delete") {
-    const [osLinks, vendasLinks, transLinks] = await Promise.all([
-      prisma.ordemServico.findMany({
-        where: { clienteId: { in: normalizedIds } },
-        select: { clienteId: true },
-      }),
-      prisma.venda.findMany({
-        where: { clienteId: { in: normalizedIds } },
-        select: { clienteId: true },
-      }),
-      prisma.financialTransaction.findMany({
-        where: { clienteId: { in: normalizedIds } },
-        select: { clienteId: true },
-      }),
-    ])
-
-    const linkedSet = new Set<string>([
-      ...osLinks.map((l) => l.clienteId).filter((id): id is string => id != null),
-      ...vendasLinks.map((l) => l.clienteId).filter((id): id is string => id != null),
-      ...transLinks.map((l) => l.clienteId).filter((id): id is string => id != null),
-    ])
-
-    linkedIds = items.filter((c) => linkedSet.has(c.id)).map((c) => c.id)
-    freeIds = items.filter((c) => !linkedSet.has(c.id)).map((c) => c.id)
-  }
-
-  let deletedCount = 0
-  let inactivatedCount = 0
-
-  await prisma.$transaction(async (tx) => {
-    if (action === "inactivate") {
+  try {
+    const inactivated = await prisma.$transaction(async (tx) => {
+      let count = 0
       for (const id of normalizedIds) {
-        const r = await updateClientTx(tx, writeContext, id, { active: false })
-        if (r.ok) inactivatedCount += 1
+        const result = await updateClientTx(tx, writeContext, id, { active: false })
+        if (!result.ok) throw new Error("Falha na inativação")
+        count += 1
       }
-    } else {
-      if (freeIds.length > 0) {
-        const delRes = await tx.cliente.deleteMany({
-          where: { id: { in: freeIds }, storeId },
-        })
-        deletedCount = delRes.count
-      }
-
-      for (const id of linkedIds) {
-        const r = await updateClientTx(tx, writeContext, id, { active: false })
-        if (r.ok) inactivatedCount += 1
-      }
-
-      if (deletedCount > 0) {
-        await tx.logsAuditoria.create({
-          data: {
-            action: "cliente.bulk_delete",
-            userLabel: operator,
-            detail: `${operator} excluiu ${deletedCount} cliente(s) em lote na loja ${storeId}.`,
-            metadata: JSON.stringify({
-              entidade: "Cliente",
-              deletedIds: freeIds,
-              deleted: items.filter((c) => freeIds.includes(c.id)).map((c) => ({ id: c.id, nome: c.name })),
-              ...audit.actorMeta,
-            }),
-            source: "dashboard",
-          },
-        })
-      }
-    }
-  })
-
-  return NextResponse.json({
-    ok: true,
-    deleted: deletedCount,
-    inactivated: inactivatedCount,
-  })
+      return count
+    })
+    return clientPrivateJson({ ok: true, deleted: 0, inactivated })
+  } catch {
+    console.error("[clientes/bulk-action] operation_failed")
+    return clientPrivateJson({ error: "Falha na inativação" }, { status: 503 })
+  }
 }

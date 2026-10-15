@@ -71,7 +71,7 @@ export function validateClientesImport(params: {
       const raw = r[colDoc]
       const s = String(raw ?? "").trim()
       if (s && !docBrasilOk(raw)) {
-        pushError(errors, line, `CPF/CNPJ inválido (use 11 ou 14 dígitos). Valor: ${s.slice(0, 32)}`)
+        pushError(errors, line, "CPF/CNPJ inválido (use 11 ou 14 dígitos).")
       }
     }
   })
@@ -144,7 +144,7 @@ export function validateOrdensImport(params: {
     const doc = colDoc ? String(r[colDoc] ?? "").trim() : ""
     if (!num && !nome && !doc) return
     if (colDoc && doc && !docBrasilOk(doc)) {
-      pushError(errors, line, `CPF/CNPJ do cliente inválido: ${doc.slice(0, 32)}`)
+      pushError(errors, line, "CPF/CNPJ do cliente inválido.")
     }
   })
   return errors

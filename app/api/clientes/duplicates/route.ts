@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import {
   discoverDuplicateGroups,
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 function json(data: unknown, init?: ResponseInit) {
-  return NextResponse.json(data, init)
+  return clientPrivateJson(data, init)
 }
 
 /**
@@ -25,7 +25,7 @@ function json(data: unknown, init?: ResponseInit) {
  */
 export async function GET(req: Request) {
   try {
-    const gate = await requireCadastrosHubApi(req, "read", "shared")
+    const gate = await requireCadastrosHubApi(req, "read", "admin")
     if (!gate.ok) return gate.response
     const storeId = gate.storeId
 
@@ -51,8 +51,7 @@ export async function GET(req: Request) {
 
     return json({ error: 'Informe "clientId" ou "scan=1".' }, { status: 400 })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[api/clientes/duplicates GET]", msg)
+    console.error("[api/clientes/duplicates GET]")
     return json({ error: "Falha ao listar duplicidades" }, { status: 503 })
   }
 }

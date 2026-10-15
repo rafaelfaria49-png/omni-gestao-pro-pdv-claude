@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import {
   CLIENT_WRITE_MESSAGES,
   type ClientWriteFailure,
@@ -17,17 +17,17 @@ export function mapClientWriteFailureToResponse(result: ClientWriteFailure) {
 
   switch (result.code) {
     case "VALIDATION":
-      return NextResponse.json(body, { status: 400 })
+      return clientPrivateJson(body, { status: 400 })
     case "NOT_FOUND":
-      return NextResponse.json({ error: CLIENT_WRITE_MESSAGES.notFound, code: "NOT_FOUND" }, { status: 404 })
+      return clientPrivateJson({ error: CLIENT_WRITE_MESSAGES.notFound, code: "NOT_FOUND" }, { status: 404 })
     case "IDENTITY_REVIEW_REQUIRED":
     case "IDENTITY_CONFLICT":
     case "AMBIGUOUS":
-      return NextResponse.json(body, { status: 409 })
+      return clientPrivateJson(body, { status: 409 })
     case "UNTRUSTED_SCOPE":
-      return NextResponse.json({ error: result.message, code: result.code }, { status: 401 })
+      return clientPrivateJson({ error: result.message, code: result.code }, { status: 401 })
     case "PERSISTENCE":
     default:
-      return NextResponse.json({ error: "Falha ao salvar cliente", code: "PERSISTENCE" }, { status: 503 })
+      return clientPrivateJson({ error: "Falha ao salvar cliente", code: "PERSISTENCE" }, { status: 503 })
   }
 }

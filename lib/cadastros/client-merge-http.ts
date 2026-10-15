@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import {
   CLIENT_MERGE_MESSAGES,
   type ClientMergeFailure,
@@ -17,19 +17,19 @@ export function mapClientMergeFailureToResponse(result: ClientMergeFailure) {
 
   switch (result.code) {
     case "VALIDATION":
-      return NextResponse.json(body, { status: 400 })
+      return clientPrivateJson(body, { status: 400 })
     case "NOT_FOUND":
-      return NextResponse.json({ error: CLIENT_MERGE_MESSAGES.notFound, code: "NOT_FOUND" }, { status: 404 })
+      return clientPrivateJson({ error: CLIENT_MERGE_MESSAGES.notFound, code: "NOT_FOUND" }, { status: 404 })
     case "NOT_ELIGIBLE":
     case "IDENTITY_CONFLICT":
     case "AMBIGUOUS":
-      return NextResponse.json(body, { status: 409 })
+      return clientPrivateJson(body, { status: 409 })
     case "STALE_PLAN":
-      return NextResponse.json(body, { status: 410 })
+      return clientPrivateJson(body, { status: 410 })
     case "UNTRUSTED_SCOPE":
-      return NextResponse.json({ error: result.message, code: result.code }, { status: 401 })
+      return clientPrivateJson({ error: result.message, code: result.code }, { status: 401 })
     case "PERSISTENCE":
     default:
-      return NextResponse.json({ error: CLIENT_MERGE_MESSAGES.persist, code: "PERSISTENCE" }, { status: 503 })
+      return clientPrivateJson({ error: CLIENT_MERGE_MESSAGES.persist, code: "PERSISTENCE" }, { status: 503 })
   }
 }

@@ -8,6 +8,10 @@ function protegerWorkerPessoas() {
     if (event.data?.type === "__FRONTEND_NAV_CACHE__" || event.data?.type === "__START_URL_CACHE__") {
       const url = new URL(event.data.url, self.location.href)
       if (url.origin === self.location.origin && (
+        url.pathname === "/api/clientes" || url.pathname.startsWith("/api/clientes/") ||
+        url.pathname === "/api/clients" || url.pathname.startsWith("/api/import/") ||
+        url.pathname === "/api/ops/import/clientes" ||
+        url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
         url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
       )) return Promise.resolve()
@@ -51,9 +55,14 @@ const withPWA = withPWAInit({
   extendDefaultRuntimeCaching: true,
   workboxOptions: {
     disableDevLogs: true,
+    importScripts: ["/client-privacy-cache.js"],
     runtimeCaching: [{
       // Callback autocontido: Workbox o serializa para o SW de produção.
       urlPattern: ({ sameOrigin, url }) => sameOrigin && (
+        url.pathname === "/api/clientes" || url.pathname.startsWith("/api/clientes/") ||
+        url.pathname === "/api/clients" || url.pathname.startsWith("/api/import/") ||
+        url.pathname === "/api/ops/import/clientes" ||
+        url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
         url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
       ),

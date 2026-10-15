@@ -1,54 +1,22 @@
-import { NextResponse } from "next/server"
+import { clientPrivateJson as json } from "@/lib/cadastros/client-private-response"
 import { matchClientesByPhone } from "@/lib/cliente-phone-match"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
-
-export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const revalidate = 0
-
-function json(data: unknown, init?: ResponseInit) {
-  return NextResponse.json(data, init)
+export async function GET() {
+  return json({ error: "Use POST para buscas por telefone." }, { status: 405 })
 }
-
-function badRequest(message: string) {
-  return json({ error: message }, { status: 400 })
-}
-
-/**
- * GET /api/clientes/match-by-phone?phone=5511999990000
- * Match seguro de cliente por telefone WhatsApp na loja ativa.
- */
-export async function GET(req: Request) {
+export async function POST(req: Request) {
   try {
     const gate = await requireCadastrosHubApi(req, "read", "shared")
     if (!gate.ok) return gate.response
-    const storeId = gate.storeId
-
-    const url = new URL(req.url)
-    const phone = url.searchParams.get("phone")?.trim() ?? ""
-    if (!phone) {
-      return badRequest('Query "phone" é obrigatória')
-    }
-
-    const result = await matchClientesByPhone(storeId, phone)
-
-    return json({
-      ok: true,
-      status: result.status,
-      phoneNormalized: result.phoneNormalized,
-      candidates: result.candidates,
-      uniqueMatch:
-        result.candidates.length === 1 ? result.candidates[0] : null,
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[api/clientes/match-by-phone GET]", msg)
-    return json(
-      {
-        error: "Falha ao buscar match por telefone",
-        ...(process.env.NODE_ENV === "development" ? { detail: msg } : {}),
-      },
-      { status: 503 }
-    )
+    const body = await req.json().catch(() => null)
+    const phone = typeof body?.phone === "string" ? body.phone.trim() : ""
+    if (!phone || phone.length > 40) return json({ error: "Telefone inválido" }, { status: 400 })
+    const result = await matchClientesByPhone(gate.storeId, phone)
+    const candidates = result.candidates.map(({ id, name, phone }) => ({ id, name, phone }))
+    return json({ ok: true, status: result.status, candidates, uniqueMatch: candidates.length === 1 ? candidates[0] : null })
+  } catch {
+    console.error("[clientes/match-by-phone] operation_failed")
+    return json({ error: "Falha ao buscar cliente" }, { status: 503 })
   }
 }

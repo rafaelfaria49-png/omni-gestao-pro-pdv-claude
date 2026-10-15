@@ -23,7 +23,8 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/icon")) return true
   if (pathname === "/apple-icon.png" || pathname === "/apple-touch-icon.png") return true
   if (pathname === "/manifest.webmanifest" || pathname === "/manifest.json") return true
-  if (pathname === "/sw.js") return true
+  if (pathname === "/sw.js" || pathname === "/client-privacy-cache.js") return true
+  if (pathname === "/privacy" || pathname === "/privacy/") return true
   if (pathname.startsWith("/workbox-") || pathname.startsWith("/worker-")) return true
   if (/\.(png|svg|ico|webp|jpg|jpeg|gif|webmanifest)$/i.test(pathname)) return true
   if (pathname === "/login" || pathname.startsWith("/login/")) return true

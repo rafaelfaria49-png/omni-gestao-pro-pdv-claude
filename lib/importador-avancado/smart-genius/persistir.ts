@@ -117,13 +117,12 @@ export async function persistirClientesSmart(
       out.erros++
       out.log.push({ chave: `linha ${c.linha}`, acao: "erro", detalhe: clientWriteImportMessage(written) })
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      if (msg.includes("Unique") || msg.includes("P2002")) {
+      if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
         out.pulados++
         out.log.push({ chave: `linha ${c.linha}`, acao: "pulado", detalhe: "duplicata (race)" })
       } else {
         out.erros++
-        out.log.push({ chave: `linha ${c.linha}`, acao: "erro", detalhe: msg })
+        out.log.push({ chave: `linha ${c.linha}`, acao: "erro", detalhe: "Falha ao importar cliente" })
       }
     }
   }

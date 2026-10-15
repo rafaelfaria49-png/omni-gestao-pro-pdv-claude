@@ -418,7 +418,9 @@ describe("telemetria / PII", () => {
       incoming: toClientIdentitySignals({ document: CPF_VALID, email: "ana@x.com", phone: "11988887777" }),
       records: [rec({ id: "c1", storeId: STORE_A, document: CPF_VALID })],
     })
+    Object.assign(v.telemetry, { email: "private-marker", rawDocument: "private-marker" })
     const t = sanitizedClientIdentityTelemetry(v)
+    expect(JSON.stringify(t)).not.toContain("private-marker")
     const dumped = JSON.stringify(t)
     expect(dumped).not.toContain(CPF_VALID_DIGITS)
     expect(dumped).not.toContain("ana@x.com")

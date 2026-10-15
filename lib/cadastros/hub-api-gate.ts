@@ -1,3 +1,4 @@
+import { canUseClientOperations } from "./client-privacy"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
@@ -64,6 +65,9 @@ export async function requireCadastrosApi(
   const identity = await requireCadastrosIdentity()
   if (!identity.ok) return identity
   const { session } = identity
+  if (!canUseClientOperations(session)) {
+    return { ok: false as const, response: NextResponse.json({ error: "Sem permissão" }, { status: 403 }) }
+  }
 
   if (opts.profile === "admin" && !isCadastrosAdminPrincipal(session)) {
     return {
