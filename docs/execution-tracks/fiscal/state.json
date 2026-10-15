@@ -3,8 +3,8 @@
   "track": "fiscal",
   "status": "RUNNING",
   "risk_tier": "ALTO",
-  "current_goal": "FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025",
-  "next_goal": null,
+  "current_goal": "FISCAL-025B-OFFLINE-ARCHIVE-FOUNDATION-001",
+  "next_goal": "FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025",
   "bootstrap_commit": null,
   "counters": {
     "goals_done": 8,

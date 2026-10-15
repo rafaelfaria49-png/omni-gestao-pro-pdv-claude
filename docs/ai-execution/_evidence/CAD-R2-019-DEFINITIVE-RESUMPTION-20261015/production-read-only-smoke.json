@@ -1,0 +1,28 @@
+{
+  "observedAt": "2026-10-15T12:59:19.417Z",
+  "mode": "anonymous-read-only-baseline",
+  "results": [
+    {
+      "path": "/api/version",
+      "status": 200,
+      "buildId": "4a85dd95202b"
+    },
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/login",
+      "status": 200
+    },
+    {
+      "path": "/dashboard",
+      "status": 307
+    },
+    {
+      "path": "/api/clientes",
+      "status": 401
+    }
+  ],
+  "databaseWrites": 0
+}

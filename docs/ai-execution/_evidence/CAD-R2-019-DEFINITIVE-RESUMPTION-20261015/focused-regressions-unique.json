@@ -1,0 +1,17 @@
+{
+  "observedAt": "2026-10-15T13:56:24.576Z",
+  "result": "PASS",
+  "exitCode": 0,
+  "passedTests": 11,
+  "failedTests": 0,
+  "pendingTests": 0,
+  "files": [
+    {
+      "path": "lib/cadastros/client-document-unique.test.ts",
+      "status": "passed",
+      "tests": 11
+    }
+  ],
+  "datasource": "DUMMY_LOOPBACK",
+  "productionDatabaseAccess": false
+}

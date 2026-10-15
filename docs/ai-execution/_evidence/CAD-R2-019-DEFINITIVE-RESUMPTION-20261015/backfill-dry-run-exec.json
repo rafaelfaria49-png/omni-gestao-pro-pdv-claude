@@ -1,0 +1,15 @@
+{
+  "goal": "CAD-R2-019",
+  "mode": "backfill-dry-run",
+  "batchSize": 500,
+  "scanned": 275,
+  "alreadyCanonical": 226,
+  "planned": 49,
+  "skippedCollisions": [],
+  "written": 0,
+  "result": "PASS",
+  "safeCount": 49,
+  "safeNullCount": 0,
+  "observedAt": "2026-10-15T13:52:07.760Z",
+  "exitCode": 0
+}
