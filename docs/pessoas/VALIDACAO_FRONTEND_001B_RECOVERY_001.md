@@ -2,7 +2,7 @@
 
 Recuperação inicial: 12/10/2026. Adendo corretivo R1–R5: 13/10/2026. GOAL: PESSOAS-DP-FRONTEND-001B-RECOVERY-001.
 
-O frontend existente foi recuperado seletivamente e commitado. Esta entrega encerra somente a rodada de implementação direta autorizada; o GOAL continua aberto, sem DONE, sem close e sem aceite de liberação. Nenhum teste ou ambiente de validação foi iniciado.
+O frontend existente foi recuperado seletivamente e commitado. O GOAL continua aberto, sem DONE, sem close e sem aceite de liberação. Na rodada inicial, nenhum teste ou ambiente de validação foi iniciado. Estado atual em 15/10/2026: homologação isolada autorizada; projeto Neon gratuito exclusivo criado e vazio, sem DDL; inicialização e acesso R2 bloqueados, conforme o último adendo.
 
 ## Proveniência e escopo
 
@@ -362,3 +362,47 @@ NEXT_GATE=AUTORIZACAO_DA_VALIDACAO_ISOLADA_E_PREVIEW_R2
 ```
 
 Ponto de parada: **PR DRAFT ABERTA, REVISÃO REGISTRADA E CAMINHO DE VISUALIZAÇÃO IDENTIFICADO.** Sem merge da PR, close/DONE, produção, liberação de dados reais ou GOAL 002.
+
+## Homologação isolada autorizada — preflight de 15/10/2026
+
+O pedido humano de 14/10/2026 autorizou PostgreSQL sintético independente, usuários/Stores fictícios, bucket R2 privado exclusivo, credenciais mínimas, variáveis isoladas, Preview privado e verificação manual. Isso atualiza a pendência de autorização específica descrita nas rodadas anteriores; não equivale a validação executada, liberação de produção ou aprovação dos caminhos protegidos.
+
+O preflight confirmou branch/worktree, HEAD inicial local/remoto `3a5d8b563aa0160aa7a71c403a1f9c7558b9f947`, PR #273 draft e AEP RUNNING na tentativa 1/3. A main inicialmente consultada era `a70469ddb96ba60f9575ab8036a78a71da35d35d`; a consulta posterior confirmou `4a85dd95202b56873487b31c318fc2d751fc26f5`, com 17 commits desde a base comum e nenhum caminho sobreposto à entrega Pessoas. Nenhum rebase, merge ou force push foi realizado.
+
+Foi criado no plano Free da organização Neon Omni Gestão QA o projeto exclusivo `omni-gestao-pessoas-001b-qa`, ID `orange-voice-83394974`, branch `br-twilight-shape-b5zrtyts`, endpoint ID `ep-steep-hall-b5ml41wv`, região AWS Ohio. Uma consulta somente de leitura confirmou banco `pessoas_001b_qa`, usuário `pessoas_001b_qa_owner`, PostgreSQL 17.11 e zero tabelas públicas. O hostname completo permanece pendente; nenhum DDL, migration, baseline, seed ou usuário de aplicação foi criado. A branch padrão denominada “Produção” no painel pertence a esse projeto novo de homologação, sem relação com o banco produtivo.
+
+**Bloqueio de banco:** o limite humano “apenas migrations existentes” não cobre a baseline de schema necessária ao banco vazio. A cadeia histórica pressupõe tabelas-base que não cria (users/admin_users/tecnicos); o próprio runner versionado usa schema da base comum + invariantes 0022. Foi preparada uma proposta restrita ao projeto novo, sem execução de DDL, aguardando autorização adicional ou banco sintético previamente inicializado.
+
+**Bloqueio R2/acesso:** a aba R2 redirecionou ao login; uma inspeção posterior foi recusada pela revisão automática por possível acesso amplo a Cloudflare/DNS. A revisão automática também recusou abrir “Conecte-se” no Neon por possível exposição de credenciais. Não houve contorno. Permanecem necessários acesso restrito R2 e confirmação segura do hostname, sem senha/token/URL completa neste relatório.
+
+A Vercel está acessível via CLI no plano Hobby. Nenhum projeto dedicado, deployment ou variável foi criado/alterado; nenhum bucket/credencial/CORS R2 foi provisionado. Não houve contratação paga nova. A franquia disponível da conta R2 ainda não foi confirmada.
+
+Evidência completa com custos, identificadores seguros, consulta de identidade, proposta de bootstrap e imagens saneadas: [HOMOLOGACAO_ISOLADA_PREFLIGHT_2026-10-15.md](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/HOMOLOGACAO_ISOLADA_PREFLIGHT_2026-10-15.md). As duas imagens comprovam somente infraestrutura Neon; nenhuma tela Pessoas foi aberta ou homologada.
+
+```text
+PREVIEW_URL=NOT_CREATED
+PREVIEW_AUTH=PENDING_PRIVATE_DEPLOYMENT
+ISOLATED_DATABASE=CREATED_FREE_EMPTY_IDENTITY_CONFIRMED_HOST_PENDING
+SYNTHETIC_USERS=NOT_CREATED
+PRIVATE_R2=NOT_CREATED_ACCESS_BLOCKED
+COST_ADDITIONAL=NO_NEW_PAID_SERVICE; R2_ACCOUNT_ALLOWANCE_UNVERIFIED
+SCREENS_VISUALIZED=NONE_PESSOAS
+MANUAL_CADASTRO=NOT_RUN
+MANUAL_RELOAD=NOT_RUN
+MANUAL_DOCUMENT_UPLOAD=NOT_RUN
+MANUAL_STORE_ISOLATION=NOT_RUN
+SCREENSHOTS=NEON_INFRASTRUCTURE_ONLY
+PRODUCTION_UNCHANGED=YES_BY_THIS_MISSION
+AUTOMATED_TESTS=PENDING_NOT_RUN
+TYPECHECK=NOT_RUN
+LINT=NOT_RUN
+LOCAL_BUILD=NOT_RUN
+AEP_CLOSE=NOT_RUN
+PR_DRAFT=YES
+BLOCKERS=FRESH_DATABASE_BOOTSTRAP_SCOPE; DATABASE_HOST_VERIFICATION; R2_ACCESS_AUTO_REVIEW_AND_LOGIN
+NEXT_GATE=HUMAN_BOOTSTRAP_DECISION_AND_SAFE_PROVIDER_ACCESS
+```
+
+O commit desta rodada altera somente documentação/evidências na allowlist; validação limitada a escopo Git e `git diff --check`. Sem Docker, Vitest, E2E/runner, typecheck, lint ou build local. Nenhum build automático de provedor é tratado como teste aprovado. A revisão GLM aprovada continua exclusivamente a de F-01 no SHA `6cd20313ad7f1404a99d691644c82fc92ae47a55`; runtime e revisão integral permanecem pendentes.
+
+Ponto de parada desta etapa: **BLOQUEIO EXATO IDENTIFICADO — INICIALIZAÇÃO DO BANCO VAZIO E ACESSO SEGURO AOS PROVEDORES.** O GOAL permanece aberto, PR draft, sem close/DONE, merge, produção ou GOAL 002.
