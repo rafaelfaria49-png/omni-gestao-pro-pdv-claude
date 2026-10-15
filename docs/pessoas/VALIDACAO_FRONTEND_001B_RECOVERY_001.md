@@ -406,3 +406,53 @@ NEXT_GATE=HUMAN_BOOTSTRAP_DECISION_AND_SAFE_PROVIDER_ACCESS
 O commit desta rodada altera somente documentação/evidências na allowlist; validação limitada a escopo Git e `git diff --check`. Sem Docker, Vitest, E2E/runner, typecheck, lint ou build local. Nenhum build automático de provedor é tratado como teste aprovado. A revisão GLM aprovada continua exclusivamente a de F-01 no SHA `6cd20313ad7f1404a99d691644c82fc92ae47a55`; runtime e revisão integral permanecem pendentes.
 
 Ponto de parada desta etapa: **BLOQUEIO EXATO IDENTIFICADO — INICIALIZAÇÃO DO BANCO VAZIO E ACESSO SEGURO AOS PROVEDORES.** O GOAL permanece aberto, PR draft, sem close/DONE, merge, produção ou GOAL 002.
+
+
+## Baseline concluída e Preview privado real — 15/10/2026
+
+O pedido humano “CONCLUIR BASELINE, R2 E PREVIEW PRIVADO REAL” autorizou a baseline no banco QA identificado e o acesso restrito aos provedores. Essa autorização e a execução abaixo substituem as pendências de bootstrap/conexão do preflight anterior; não liberam produção ou close.
+
+- HEAD inicial e deployado: `3ed789c689b41acbdc3e8f5ca5e10c26ff6d7479`. Worktree/branch preservadas. Main remota consultada: `4a85dd95202b56873487b31c318fc2d751fc26f5`. AEP RUNNING, sessão aberta, tentativa 1/3.
+- Neon conectado: projeto `orange-voice-83394974`, branch `br-twilight-shape-b5zrtyts`, banco `pessoas_001b_qa`. Identidade/vazio confirmados antes do DDL.
+- Baseline offline da base fixa `1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d` aplicada em transação; 109 tabelas e invariantes 0022 verificadas (10 CHECKs, sete índices parciais, dez triggers, quatro funções).
+- Estratégia de histórico: baseline QA por schema fixo + invariantes; nenhuma migration histórica foi marcada ficticiamente como aplicada. `_prisma_migrations` ausente, sem reset/db push/schema novo.
+- Drift específico no ambiente Vercel QA: `No difference detected.`, exit zero. Compilação remota concluída com `MIGRATION_SKIPPED` e tipos pulados; sem atribuir PASS ao typecheck, lint ou à bateria.
+- [Preview privado Pessoas — visita real](https://omni-gestao-pessoas-001b-fiohd84il-rafaelfaria49-4373s-projects.vercel.app/dashboard/pessoas), deployment `dpl_BiqCTkxCT5kNZmLj7ermmFnyoZmH`, projeto exclusivo `omni-gestao-pessoas-001b-qa`, target API staging/Preview, proteção Vercel all + NextAuth normal.
+- Cadastro manual real: empregador/estabelecimento, funcionário A ATIVO, reload, edição pessoal v2, contrato ALTERACAO v2 e histórico preservado; funcionário B RASCUNHO salvo e recarregado. Fixtures e credenciais são exclusivamente sintéticas.
+- Store A/B: listas separadas, URL direta A em contexto B negada; SQL confirma um vínculo por Store. Leitor apenas viewCadastro vê remuneração/motivos restritos, sem edição ou documentos; valores e motivos ausentes no DOM inspecionado.
+- Oito capturas reais da lista nos quatro temas em 1440×900 e 390×844, mais visão geral, histórico restrito e recusa por Store. Amostra parcial; matriz completa/360×800/acessibilidade pendentes.
+- R2 ainda sem painel autenticado observado: após o usuário informar login concluído, a Cloudflare permaneceu no login com aviso de SSO. Nenhum bucket/token/CORS criado, plano/franquia não verificados.
+- Upload não iniciado: além do R2 pendente, a extensão Edge bloqueou a seleção automática do PDF local. Zero documentos no banco; não há prova de intent/PUT/complete/list/download reais.
+
+Evidência detalhada, ocorrências e galeria: [BASELINE_PREVIEW_PRIVADO_2026-10-15.md](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/BASELINE_PREVIEW_PRIVADO_2026-10-15.md). Metadados saneados em `QA_BASELINE_PREVIEW_2026-10-15.json` no mesmo diretório. Nenhum CPF, segredo, URI de conexão, cookie ou URL assinada foi incluído.
+
+Ocorrência declarada: o primeiro deployment, com target omitido, foi classificado production pela Vercel no projeto QA novo e imediatamente cancelado (CANCELED confirmado). Os seguintes usaram staging/Preview explícito. Os projetos e recursos produtivos existentes permaneceram sem alteração.
+
+```text
+NEON_PLUGIN=CONNECTED_AND_VERIFIED
+BASELINE=APPLIED_QA_109_TABLES_INVARIANTS_VERIFIED
+MIGRATION_HISTORY=FIXED_SCHEMA_QA_BASELINE_NO_FAKE_REPLAY
+SCHEMA_DRIFT=ZERO_TARGETED_PROVIDER_CHECK
+LOGIN_QA=REAL_NEXTAUTH_ADMIN_AND_RESTRICTED_PRIVATE_VERCEL
+CADASTRO_MANUAL=CREATE_RELOAD_EDIT_CONTRACT_HISTORY_AND_DRAFT_OBSERVED
+STORE_ISOLATION=MANUAL_A_B_LIST_AND_DIRECT_ID_DENIAL_OBSERVED
+R2_PRIVATE=PENDING_AUTHENTICATED_SSO_DASHBOARD
+DOCUMENT_UPLOAD=NOT_STARTED_R2_AND_BROWSER_FILE_SELECTION_BLOCKED
+VISUAL_SCREENSHOTS=11_REAL_IMAGES_PARTIAL_MATRIX
+ADDITIONAL_COST=NO_NEW_PAID_SERVICE_R2_ALLOWANCE_UNVERIFIED
+PRODUCTION_UNCHANGED=EXISTING_PRODUCTION_RESOURCES_UNCHANGED
+AUTOMATED_TESTS=PENDING
+TYPECHECK=NOT_RUN
+LINT=NOT_RUN
+LOCAL_BUILD=NOT_RUN
+REMOTE_COMPILE=COMPLETED_TYPES_SKIPPED_MIGRATION_SKIPPED
+GLM_F01=APPROVE_RECEIVED_USER_SHA_6cd20313ad7f1404a99d691644c82fc92ae47a55
+GLM_INTEGRAL=PENDING
+AEP_CLOSE=NOT_RUN
+PR_DRAFT=YES
+NEXT_GATE=R2_SSO_PRIVATE_BUCKET_REAL_BYTES_THEN_FULL_VALIDATION_AND_INDEPENDENT_REVIEW
+```
+
+Esta rodada altera somente relatório/evidências na allowlist. CURRENT_STATUS, CHANGELOG, memória global e derivados AEP não são editados nesta missão restrita. A bateria oficial, regressões completas R1–R5 e revisão integral independente continuam pendentes. A aprovação GLM recebida continua limitada a F-01; Codex/OpenAI não declara revisão cross-family realizada.
+
+Ponto de parada: **PREVIEW PRIVADO DO CADASTRO REAL DISPONÍVEL; R2/UPLOAD E ACEITE INTEGRAL PENDENTES.** Sem merge, close/DONE, liberação de dados reais ou GOAL 002.

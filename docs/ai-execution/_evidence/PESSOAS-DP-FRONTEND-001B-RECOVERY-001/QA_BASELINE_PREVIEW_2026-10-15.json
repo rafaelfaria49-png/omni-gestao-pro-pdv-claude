@@ -1,0 +1,269 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-15",
+  "executor": "Codex/OpenAI",
+  "deployedSha": "3ed789c689b41acbdc3e8f5ca5e10c26ff6d7479",
+  "canonicalSchemaBase": "1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d",
+  "neon": {
+    "projectId": "orange-voice-83394974",
+    "branchId": "br-twilight-shape-b5zrtyts",
+    "endpointId": "ep-steep-hall-b5ml41wv",
+    "database": "pessoas_001b_qa",
+    "baselineRole": "pessoas_001b_qa_owner",
+    "runtimeRole": "pessoas_001b_qa_app",
+    "publicTablesBefore": 0,
+    "publicTablesAfter": 109,
+    "postgresVersion": "17.11",
+    "plan": "Free/free_v3"
+  },
+  "baseline": {
+    "bytes": 129453,
+    "sha256": "74A3C5B88CCDAF70161F60143024C7D2EED20F14902C839506390CC11D302C79",
+    "tables": 109,
+    "enums": 36,
+    "foreignKeys": 169,
+    "indexes": 275,
+    "baselineStatements": 590,
+    "invariantStatements": 31,
+    "missingForeignKeyTargets": [],
+    "unexpectedBaselineStatements": [],
+    "migrationHistory": "QA_FIXED_SCHEMA_BASELINE_NO_PRISMA_MIGRATIONS_TABLE_OR_FAKE_REPLAY",
+    "expectedInvariants": {
+      "check": [
+        "dp_empregador_vigencia_ck",
+        "dp_estabelecimento_vigencia_ck",
+        "dp_unidade_vigencia_ck",
+        "dp_pessoa_vigencia_ck",
+        "dp_contrato_vigencia_ck",
+        "dp_contrato_salario_ck",
+        "dp_contrato_jornada_ck",
+        "dp_vinculo_datas_ck",
+        "dp_documento_bytes_ck",
+        "dp_acesso_capacidades_ck"
+      ],
+      "index": [
+        "dp_unidade_ativa_key",
+        "dp_acesso_ativo_key",
+        "dp_pessoa_usuario_ativo_key",
+        "dp_pessoa_tecnico_ativo_key",
+        "dp_contrato_atual_key",
+        "dp_empregador_versao_atual_key",
+        "dp_estabelecimento_versao_atual_key"
+      ],
+      "trigger": [
+        "dp_auditoria_immutable",
+        "dp_pessoa_versao_immutable",
+        "dp_documento_immutable",
+        "dp_empregador_versao_immutable",
+        "dp_estabelecimento_versao_immutable",
+        "dp_contrato_versao_immutable",
+        "dp_vinculo_admissao_immutable",
+        "dp_vinculo_store_scope",
+        "dp_acesso_store_scope",
+        "dp_documento_store_scope"
+      ],
+      "function": [
+        "dp_no_history_delete",
+        "dp_only_supersession",
+        "dp_preserve_admission",
+        "dp_require_mapped_store"
+      ]
+    },
+    "verifiedInvariants": {
+      "missing": [],
+      "counts": {
+        "check": 10,
+        "index": 7,
+        "trigger": 10,
+        "function": 4
+      }
+    }
+  },
+  "drift": {
+    "where": "Vercel QA install step",
+    "exit": 0,
+    "observedMarkers": [
+      "No difference detected.",
+      "PESSOAS_QA_SCHEMA_DRIFT_ZERO",
+      "MIGRATION_SKIPPED"
+    ],
+    "fullTests": false
+  },
+  "vercel": {
+    "projectId": "prj_oeXN2OJGa0fXLvkoLynD39H3hPOK",
+    "projectName": "omni-gestao-pessoas-001b-qa",
+    "deploymentId": "dpl_BiqCTkxCT5kNZmLj7ermmFnyoZmH",
+    "target": "staging",
+    "environment": "Preview",
+    "readyState": "READY",
+    "visitUrl": "https://omni-gestao-pessoas-001b-fiohd84il-rafaelfaria49-4373s-projects.vercel.app/dashboard/pessoas",
+    "ssoProtection": "all",
+    "gitConnected": false,
+    "productionEnvKeys": [],
+    "unauthenticatedAccess": {
+      "status": 302,
+      "redirectHost": "vercel.com",
+      "redirectPath": "/sso-api"
+    },
+    "remoteTypesValidation": "SKIPPED",
+    "initialMisclassifiedAttempt": {
+      "id": "dpl_D93hDttKdiYhzifQcfgH37kuNtxR",
+      "target": "production",
+      "state": "CANCELED",
+      "scope": "NEW_QA_PROJECT_ONLY"
+    }
+  },
+  "manual": {
+    "employerId": "cmv9llplm0001lf08a0i4qq9a",
+    "establishmentId": "cmv9llpnu0005lf08c1pt0t52",
+    "storeA": {
+      "id": "qa-pessoas-a",
+      "vinculoId": "cmv9lrx2i000jlf08qokb78z8",
+      "matricula": "QA-001B-A-001",
+      "status": "ATIVO",
+      "personalVersion": 2,
+      "vinculoVersion": 2,
+      "personalHistoryCount": 2,
+      "contractHistoryCount": 2
+    },
+    "storeB": {
+      "id": "qa-pessoas-b",
+      "vinculoId": "cmv9n3lhl0005ie083wgpmip0",
+      "matricula": "QA-001B-B-001",
+      "status": "RASCUNHO",
+      "vinculoVersion": 1
+    },
+    "crossStoreDirectIdResult": "Registro não encontrado neste contexto.",
+    "restrictedUser": {
+      "capabilities": [
+        "viewCadastro"
+      ],
+      "salaryValuesPresentInDOM": false,
+      "privateReasonsPresentInDOM": false,
+      "editControlsPresent": false,
+      "documentAccess": false,
+      "networkPayloadInspected": false
+    },
+    "documentCount": 0
+  },
+  "screenshots": [
+    {
+      "file": "pessoas-qa-light-1440.jpg",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pageWidth": 1440,
+      "scope": "EMPLOYEE_LIST_ONLY",
+      "sha256": "84863CBC14AD83D2E3883A95F26A1274DD274AD506CCA4F26E622E10A1558ED0"
+    },
+    {
+      "file": "pessoas-qa-light-390.jpg",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pageWidth": 390,
+      "scope": "EMPLOYEE_LIST_ONLY",
+      "sha256": "7C2C4C6C8902242A0C34D1C18F5673307E9E449C9D3560D874C72A6638440990"
+    },
+    {
+      "file": "pessoas-qa-soft-ice-1440.jpg",
+      "theme": "soft-ice",
+      "width": 1440,
+      "height": 900,
+      "pageWidth": 1440,
+      "scope": "EMPLOYEE_LIST_ONLY",
+      "sha256": "D0E76518E7A07689F2D7627750E7C0B00B3039483A746BDE2244292953358722"
+    },
+    {
+      "file": "pessoas-qa-soft-ice-390.jpg",
+      "theme": "soft-ice",
+      "width": 390,
+      "height": 844,
+      "pageWidth": 390,
+      "scope": "EMPLOYEE_LIST_ONLY",
+      "sha256": "A87E1F2A9C3C2B40E32B36DFB6D2F89710DCA3C7272D62062199021583523713"
+    },
+    {
+      "file": "pessoas-qa-midnight-1440.jpg",
+      "theme": "midnight",
+      "width": 1440,
+      "height": 900,
+      "pageWidth": 1440,
+      "scope": "EMPLOYEE_LIST_ONLY",
+      "sha256": "E142B97FD39A584989FD559A23A1211214154BEE6AEA69005493D162F7D7F4E8"
+    },
+    {
+      "file": "pessoas-qa-midnight-390.jpg",
+      "theme": "midnight",
+      "width": 390,
+      "height": 844,
+      "pageWidth": 390,
+      "scope": "EMPLOYEE_LIST_ONLY",
+      "sha256": "CA8E7D53A025431BD7A745978F27861FC8D095AA0F2B2273C9E3B05E641D85D6"
+    },
+    {
+      "file": "pessoas-qa-black-1440.jpg",
+      "theme": "black",
+      "width": 1440,
+      "height": 900,
+      "pageWidth": 1440,
+      "scope": "EMPLOYEE_LIST_ONLY",
+      "sha256": "C40038ED91A0EAE3D8EE300B027727F1D71B974D8A2CA7CBC934E20C7BCBE786"
+    },
+    {
+      "file": "pessoas-qa-black-390.jpg",
+      "theme": "black",
+      "width": 390,
+      "height": 844,
+      "pageWidth": 390,
+      "scope": "EMPLOYEE_LIST_ONLY",
+      "sha256": "B26E2679B5F0CD73C2C43D9E8E27C5E31DDB6569197E95C257F5B53BA95EB5AA"
+    },
+    {
+      "file": "pessoas-qa-overview-1440.jpg",
+      "scope": "OVERVIEW",
+      "sha256": "6897D9CFDEC4F1204D6C2AEA53E8487F0A69108334D3A025AED9D55DBC08728D"
+    },
+    {
+      "file": "pessoas-qa-restricted-history-1440.jpg",
+      "scope": "RESTRICTED_HISTORY_NO_CPF",
+      "sha256": "36F1C8B995FCD9114597A609B5325AFD5C0F70A015C3C9B945C40022CE61CCA7"
+    },
+    {
+      "file": "pessoas-qa-store-b-denial-1440.jpg",
+      "scope": "STORE_B_DIRECT_ID_DENIAL",
+      "sha256": "0C9BA0290AF4DE0A0F496DD8898457F914CD14AD8611D2DB73719943A85912F3"
+    }
+  ],
+  "r2": {
+    "status": "SSO_LOGIN_NOT_COMPLETED_IN_OBSERVED_R2_TABS",
+    "bucketCreated": false,
+    "credentialsCreated": false,
+    "corsChanged": false,
+    "planVerified": false,
+    "otherCloudflareServicesAccessed": false
+  },
+  "upload": {
+    "started": false,
+    "browserBlocker": "EDGE_EXTENSION_FILE_URL_ACCESS_NOT_GRANTED",
+    "pdfSynthetic": true,
+    "pdfBytes": 673,
+    "pdfSha256": "2ec690891bb826e2d9934b2c84a1e1d9b472e45bbdf0e93bad17103fdb03b02d"
+  },
+  "automatedTests": "PENDING_NOT_RUN",
+  "aepClose": "NOT_RUN",
+  "prDraft": true,
+  "productionResourcesChanged": false,
+  "fullRuntimeApproval": false,
+  "glmF01": {
+    "provenance": "USER_SUPPLIED_REPORT",
+    "family": "zai/GLM-5.3",
+    "sha": "6cd20313ad7f1404a99d691644c82fc92ae47a55",
+    "code": "APPROVE",
+    "scope": "F-01_ONLY",
+    "p0": 0,
+    "p1": 0,
+    "p2": 0,
+    "p3": 1
+  }
+}
