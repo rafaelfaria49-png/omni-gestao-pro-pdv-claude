@@ -68,7 +68,7 @@
   "gates_liberados": [],
   "read_budget": 55,
   "revisao_independente": true,
-  "familia_executor": "anthropic",
+  "familia_executor": "openai",
   "reversibilidade": "baixa"
 }
 -->
@@ -81,6 +81,23 @@ Autorização do proprietário de 08/10/2026 (ver TRACK), incluindo ajustes
 estritamente necessários no núcleo OPERACIONAL de garantia e entrega. Classe
 C4, risco ALTO, reversibilidade baixa (documento contratual emitido), R de
 outra família obrigatória. `gates_liberados` vazio.
+
+Regularização documental autorizada pelo proprietário em 15/10/2026, no
+comando "CODEX — FINALIZAR E PUBLICAR OPERAÇÕES V4": "autorizo
+excepcionalmente Codex/OpenAI como executor real C4/ALTO". A implementação
+experimental reaproveitada, em `fd42b06648ad2abb217bdd7fb5f3bc7b9dec3030`
+(`codex/experiment-ops-v4-garantias`), foi executada por Codex/OpenAI;
+`familia_executor: openai` registra essa autoria real, sem atribuí-la a
+Anthropic. A autorização cobre sua adoção e a execução oficial por
+Codex/OpenAI, excepcionalmente em C4/ALTO. Claude Code/Anthropic atua
+somente como revisor independente do SHA final, sem implementar ou alterar
+o código avaliado.
+
+Esta correção não abre nem fecha o GOAL, não ratifica a execução
+experimental como execução AEP anterior e não concede aprovação de R.
+Classe, risco, plan_rev, testes, ledger, tentativas, gates e revisão
+independente obrigatória permanecem preservados; `executors.json` não é
+alterado. O `open` continua condicionado ao 002 DONE e integrado em main.
 
 Não reabre o OPS-V4-FLUXO-CURTO-002: multi-garantia foi excluída daquele
 contrato e é evolução nova aqui. Os critérios G01–G08/D01–D06 do 002
