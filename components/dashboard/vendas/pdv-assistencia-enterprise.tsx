@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { consumePdvShortcut, hasPdvShortcutOverlay, isPdvRepeatedOrHandled, isPdvTyping } from "@/lib/pdv-keymap"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
@@ -490,19 +491,24 @@ function QuickRow({
 // ─── HelpOverlay ─────────────────────────────────────────────────────────────
 
 const HELP_SHORTCUTS: { key: string; label: string; status: "ok" | "partial" | "soon" }[] = [
-  { key: "F1",  label: "Finalizar venda (Dinheiro)",  status: "ok" },
+  { key: "F1",  label: "Pagamento (Dinheiro ou primeira forma ativa)", status: "ok" },
   { key: "F2",  label: "Buscar / Selecionar cliente", status: "ok" },
   { key: "F3",  label: "Foco na busca / bipe",        status: "ok" },
-  { key: "F4",  label: "Alterar quantidade (último item)", status: "ok" },
-  { key: "F6",  label: "Cancelar último item",        status: "ok" },
+  { key: "F4",  label: "Alterar quantidade (selecionado ou último)", status: "ok" },
+  { key: "F5",  label: "Remover item com confirmação", status: "ok" },
+  { key: "F6",  label: "Remover item selecionado ou último", status: "ok" },
+  { key: "F7",  label: "Venda em espera (colocar / retomar)", status: "ok" },
   { key: "F8",  label: "Troca / Devolução",           status: "ok" },
-  { key: "F9",  label: "Limpar carrinho",             status: "ok" },
-  { key: "F10", label: "Desconto / Acréscimo",        status: "ok" },
+  { key: "F9",  label: "Recebimento de Contas", status: "ok" },
+  { key: "Ctrl+L", label: "Limpar carrinho com confirmação", status: "ok" },
+  { key: "Insert", label: "Item avulso", status: "ok" },
+  { key: "↑ / ↓", label: "Selecionar item; Enter edita quantidade", status: "ok" },
+  { key: "F10", label: "Desconto no pagamento (modo padrão)", status: "ok" },
   { key: "F11", label: "Tela cheia / Modo foco",      status: "ok" },
-  { key: "F12", label: "Pagamento avançado",          status: "ok" },
+  { key: "F12", label: "Pagamento múltiplo", status: "ok" },
   { key: "END", label: "Esta ajuda",                  status: "ok" },
-  { key: "DEL", label: "Cancelar último item",        status: "ok" },
-  { key: "ESC", label: "Fechar modal / painel",       status: "ok" },
+  { key: "DEL", label: "Remover item selecionado ou último", status: "ok" },
+  { key: "ESC", label: "Fechar modal / limpar busca; remover último somente no modo rápido, fora de campos e modais", status: "ok" },
 ]
 
 function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -1085,6 +1091,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [discountReais, setDiscountReais] = useState(0)
   const [discountPercent, setDiscountPercent] = useState(0)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  const [removeConfirmLineId, setRemoveConfirmLineId] = useState<string | null>(null)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
   /** Contexto transitório (GOAL 007): código bipado não cadastrado semeado no modal. */
   const [avulsoSeedCodigo, setAvulsoSeedCodigo] = useState<string | null>(null)
@@ -1471,20 +1478,18 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat || e.metaKey) return
+      if (isPdvRepeatedOrHandled(e) || e.metaKey || e.altKey || e.shiftKey) return
+      const anyModalOpen = paymentOpen || clearConfirmOpen || removeConfirmLineId !== null || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen || showItemAvulsoModal || servicoPrecoTarget !== null || accessoryTarget !== null
+      if (e.key === "End" && helpOpen) { consumePdvShortcut(e); setHelpOpen(false); return }
+      if (hasPdvShortcutOverlay(anyModalOpen || (showCustomerSidebarDropdown && (clienteSugestoes.length > 0 || buscandoCliente)))) return
+      const inInput = isPdvTyping(e)
       // Ctrl+L — Limpar carrinho (migrado de F9 para liberar F9 = Recebimento de Contas,
       // alinhando ao keymap canônico do projeto). Cobre o muscle memory do operador
       // do Assistência sem colidir com o atalho canônico.
       if (e.ctrlKey && (e.key === "l" || e.key === "L")) {
-        const target = e.target as HTMLElement | null
-        const isInput =
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          (target instanceof HTMLElement && target.isContentEditable)
-        if (isInput) return
+        if (inInput) return
         if (cart.length > 0) {
-          e.preventDefault()
-          e.stopPropagation()
+          consumePdvShortcut(e)
           setClearConfirmOpen(true)
         }
         return
@@ -1493,25 +1498,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       if (e.ctrlKey) return
 
       const active = document.activeElement
-      const inInput =
-        active instanceof HTMLInputElement ||
-        active instanceof HTMLTextAreaElement ||
-        active instanceof HTMLSelectElement ||
-        (active instanceof HTMLElement && active.isContentEditable)
-
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen || showItemAvulsoModal || servicoPrecoTarget !== null || accessoryTarget !== null
 
       // ESC fora de campo de texto (sem modal): limpa a busca e o aviso, foco volta à busca.
-      if (e.key === "Escape" && !inInput && !anyModalOpen && !document.querySelector('[role="dialog"], [role="alertdialog"]')) {
-        setSearch("")
-        scanFeedback.dismiss()
+      if (e.key === "Escape" && !inInput) {
+        consumePdvShortcut(e)
+        if (isModoRapido && !inputRef.current?.value.trim() && cart.length > 0) {
+          setCart((prev) => prev.slice(0, -1))
+          setSelectedLineId(null)
+        } else {
+          setSearch("")
+          scanFeedback.dismiss()
+        }
         queueMicrotask(() => inputRef.current?.focus())
         return
       }
 
-      // END — toggle help overlay (always works)
+      // END — ajuda sem sobrepor outro modal ou dropdown.
       if (e.key === "End") {
-        e.preventDefault()
+        consumePdvShortcut(e)
         setHelpOpen((o) => !o)
         return
       }
@@ -1519,7 +1523,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       // DEL — cancelar item selecionado ou último (não em input, não em modal)
       if (e.key === "Delete" && !inInput && !anyModalOpen) {
         if (cart.length > 0) {
-          e.preventDefault()
+          consumePdvShortcut(e)
           if (selectedLineId) {
             const line = cart.find((l) => l.lineId === selectedLineId)
             if (line) {
@@ -1583,7 +1587,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       // Limpa a busca se ela estava focada (evita texto residual após o avulso).
       if (e.key === "Insert") {
         if (anyModalOpen) return
-        e.preventDefault()
+        consumePdvShortcut(e)
         if (active === inputRef.current) setSearch("")
         // GOAL 007 (modos B/C): contexto do último código não cadastrado, seguro apenas
         // se o campo segue vazio (nada digitado depois do miss). Modo A abre limpo.
@@ -1596,10 +1600,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
       const F_KEYS = ["F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"]
       if (!F_KEYS.includes(e.key)) return
-      e.preventDefault()
-
-      // F2 / F3 funcionam mesmo com modais não-bloqueantes abertos
-      if (anyModalOpen && e.key !== "F2" && e.key !== "F3") return
+      consumePdvShortcut(e)
 
       switch (e.key) {
         case "F1": {
@@ -1621,17 +1622,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           break
         case "F5":
           if (!inInput && cart.length > 0) {
-            if (selectedLineId) {
-              const line = cart.find((l) => l.lineId === selectedLineId)
-              if (line) appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
-              setCart((prev) => prev.filter((l) => l.lineId !== selectedLineId))
-              setSelectedLineId(null)
-            } else {
-              const line = cart[cart.length - 1]
-              if (line) appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
-              setCart((prev) => prev.slice(0, -1))
-            }
-            queueMicrotask(() => inputRef.current?.focus())
+            const line = cart.find((l) => l.lineId === selectedLineId) ?? cart[cart.length - 1]!
+            setRemoveConfirmLineId(line.lineId)
           }
           break
         case "F6":
@@ -2188,34 +2180,6 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     return true
   }
 
-  useEffect(() => {
-    if (!isModoRapido) return
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "Escape") return
-      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || servicoPrecoTarget !== null || accessoryTarget !== null) return
-      // Texto na busca: Esc limpa a busca primeiro — não remove item do carrinho.
-      if (inputRef.current?.value.trim()) {
-        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
-        e.preventDefault()
-        e.stopPropagation()
-        setSearch("")
-        scanFeedback.dismiss()
-        queueMicrotask(() => inputRef.current?.focus())
-        return
-      }
-      if (cart.length === 0) return
-      e.preventDefault()
-      e.stopPropagation()
-      setCart((prev) => prev.slice(0, -1))
-      queueMicrotask(() => {
-        inputRef.current?.focus()
-        window.requestAnimationFrame(() => inputRef.current?.focus())
-      })
-    }
-    window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, servicoPrecoTarget, accessoryTarget, cart.length, scanFeedback])
-
   // ─── Venda em espera ────────────────────────────────────────────────────────
 
   const terminalIdForHold = readSelectedTerminal(storeIdKey)?.id ?? "default"
@@ -2572,7 +2536,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   { key: "F2",  label: "Cliente" },
                   { key: "F3",  label: "Busca" },
                   { key: "F6",  label: "Canc. item" },
-                  { key: "F9",  label: "Limpar" },
+                  { key: "F5",  label: "Confirmar remoção" },
+                  { key: "F9",  label: "Receber conta" },
+                  { key: "Ctrl+L", label: "Limpar" },
                   { key: "F10", label: "Desconto" },
                   { key: "F12", label: "Pgto. múltiplo" },
                 ].map(({ key, label }) => (
@@ -2917,7 +2883,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               >
                 Limpar
                 <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[9px] font-bold">
-                  F9
+                  Ctrl+L
                 </kbd>
               </Button>
             </div>
@@ -3055,7 +3021,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 </div>
               ) : null}
               {discountOverTotal && desconto > 0.009 && (
-                <p className="text-xs text-destructive">Desconto acima do subtotal — ajuste antes de finalizar (F7).</p>
+                <p className="text-xs text-destructive">Desconto acima do subtotal — ajuste antes de finalizar (F1). No modo padrão, F10 abre o pagamento para desconto.</p>
               )}
               <Separator className="bg-border" />
               <div className="flex items-baseline justify-between pt-0.5">
@@ -3156,6 +3122,31 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         onConfirm={handlePaymentConfirm}
         onClose={() => closePaymentModal(true)}
       />
+
+      <AlertDialog open={removeConfirmLineId !== null} onOpenChange={(open) => { if (!open) setRemoveConfirmLineId(null) }}>
+        <AlertDialogContent className="max-w-sm rounded-2xl border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover item do carrinho?</AlertDialogTitle>
+            <AlertDialogDescription>
+              F5 remove um item após esta confirmação; para receber contas, use F9.
+              {" "}{cart.find((line) => line.lineId === removeConfirmLineId)?.title}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Manter item</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              const line = cart.find((item) => item.lineId === removeConfirmLineId)
+              if (line) {
+                appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
+                setCart((prev) => prev.filter((item) => item.lineId !== line.lineId))
+                setSelectedLineId(null)
+              }
+              setRemoveConfirmLineId(null)
+              queueMicrotask(() => inputRef.current?.focus())
+            }}>Remover item</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Clear-cart confirmation */}
       <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>

@@ -33,6 +33,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { consumePdvShortcut, hasPdvShortcutOverlay, isPdvRepeatedOrHandled, isPdvTyping } from "@/lib/pdv-keymap"
 import { useToast } from "@/hooks/use-toast"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useCaixa } from "../caixa/caixa-provider"
@@ -263,6 +264,22 @@ export function PdvSupermercado({
   const [supervisorErr, setSupervisorErr] = useState<string | null>(null)
   const [supervisorAction, setSupervisorAction] = useState<"clear_cart" | "remove_line" | null>(null)
   const [pendingRemoveLineId, setPendingRemoveLineId] = useState<string | null>(null)
+  const supervisorRequestRef = useRef(0)
+  const supervisorBusyRef = useRef(false)
+  const handleSupervisorDialogOpenChange = useCallback((open: boolean) => {
+    setSupervisorDialogOpen(open)
+    if (!open) {
+      // Uma resposta tardia de PIN nunca autoriza uma ação cancelada.
+      supervisorRequestRef.current += 1
+      supervisorBusyRef.current = false
+      setSupervisorPin("")
+      setSupervisorErr(null)
+      setSupervisorBusy(false)
+      setSupervisorAction(null)
+      setPendingRemoveLineId(null)
+    }
+  }, [])
+  useEffect(() => () => { supervisorRequestRef.current += 1 }, [])
 
   const [postSalePrintOpen, setPostSalePrintOpen] = useState(false)
   const [postSalePrintInput, setPostSalePrintInput] = useState<PdvReceiptInput | null>(null)
@@ -321,29 +338,6 @@ export function PdvSupermercado({
     }, 220)
     return () => window.clearTimeout(t)
   }, [isModoRapido, hardFocusSearch])
-
-  useEffect(() => {
-    if (!isModoRapido) return
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "Escape") return
-      if (isPaymentModalOpen || supervisorDialogOpen || weightDialogOpen || attrDialogOpen || accessoryProduct !== null || postSalePrintOpen) return
-      // Texto na busca: Esc limpa a busca primeiro — não remove item do carrinho.
-      if (productInputRef.current?.value.trim()) {
-        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
-        e.preventDefault()
-        setSearchTerm("")
-        scanFeedback.dismiss()
-        queueMicrotask(hardFocusSearch)
-        return
-      }
-      if (cart.length === 0) return
-      e.preventDefault()
-      setCart((prev) => prev.slice(0, -1))
-      queueMicrotask(hardFocusSearch)
-    }
-    window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, isPaymentModalOpen, supervisorDialogOpen, weightDialogOpen, attrDialogOpen, accessoryProduct, cart.length, hardFocusSearch, scanFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -576,6 +570,21 @@ export function PdvSupermercado({
     },
     [cart, cashierId]
   )
+
+  // Clique e Escape rápido atravessam a mesma política vigente; sem novas exceções.
+  const requestRemoveLine = (lineId: string) => {
+    if (supervisorBusyRef.current || isPaymentModalOpen) return
+    if (isModoRapido || adminSessionOk) {
+      removeFromCart(lineId)
+      if (isModoRapido) queueMicrotask(hardFocusSearch)
+      return
+    }
+    setSupervisorAction("remove_line")
+    setPendingRemoveLineId(lineId)
+    setSupervisorErr(null)
+    setSupervisorPin("")
+    setSupervisorDialogOpen(true)
+  }
 
   /** Item Avulso (INSERT) — não passa por `addToCart` porque não há produto/estoque. */
   const addItemAvulso = useCallback(
@@ -950,16 +959,17 @@ export function PdvSupermercado({
   // Atalhos de teclado (evitar conflitos com o navegador)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return
+      if (isPdvRepeatedOrHandled(e)) return
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      const anyModalOpen = isPaymentModalOpen || supervisorDialogOpen || supervisorBusy || attrDialogOpen || weightDialogOpen || accessoryProduct !== null || showItemAvulsoModal || vendaEsperaOpen || recebimentoOpen || trocasOpen || editAtalhosOpen || aPrazoClientePickerOpen || postSalePrintOpen
+      if (hasPdvShortcutOverlay(anyModalOpen)) return
       // Esc fora de campo de texto (sem modal): limpa a busca e o aviso, foco volta à busca.
       if (e.key === "Escape") {
-        const active = document.activeElement
-        const emCampo =
-          active instanceof HTMLInputElement ||
-          active instanceof HTMLTextAreaElement ||
-          active instanceof HTMLSelectElement
-        if (!emCampo && !document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+        if (isPdvTyping(e)) return
+        consumePdvShortcut(e)
+        if (isModoRapido && !productInputRef.current?.value.trim() && cart.length > 0) {
+          requestRemoveLine(cart[cart.length - 1]!.lineId)
+        } else {
           setSearchTerm("")
           scanFeedback.dismiss()
           hardFocusSearch()
@@ -967,6 +977,7 @@ export function PdvSupermercado({
         return
       }
       if (
+        e.key !== "F1" &&
         e.key !== "F2" &&
         e.key !== "F3" &&
         e.key !== "F4" &&
@@ -978,11 +989,7 @@ export function PdvSupermercado({
         e.key !== "Insert"
       )
         return
-      // Quando modal aberto, não interceptar (deixa o modal controlar o teclado)
-      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || accessoryProduct !== null || showItemAvulsoModal || vendaEsperaOpen || recebimentoOpen || trocasOpen) return
-
-      e.preventDefault()
-      e.stopPropagation()
+      consumePdvShortcut(e)
       if (e.key === "Insert") {
         // GOAL 007 (modos B/C): contexto do último código não cadastrado, seguro apenas
         // se o campo segue vazio (nada digitado depois do miss). Modo A abre limpo.
@@ -1001,20 +1008,23 @@ export function PdvSupermercado({
         setTrocasOpen(true)
       } else if (e.key === "F9") setRecebimentoOpen(true)
       else if (e.key === "F10") { if (customerSearchEnabled) setAPrazoClientePickerOpen(true) }
-      else if (e.key === "F2") {
-        const r = toPaymentMethodType(formasSupermercado.quick[0]?.id ?? "dinheiro")
+      else if (e.key === "F1" || e.key === "F2") {
+        const first = formasSupermercado.quick[0]
+        const r = first && toPaymentMethodType(first.id)
         if (r) openPaymentModal(r)
       } else if (e.key === "F3") {
-        const r = toPaymentMethodType(formasSupermercado.quick[1]?.id ?? "pix")
+        const second = formasSupermercado.quick[1]
+        const r = second && toPaymentMethodType(second.id)
         if (r) openPaymentModal(r)
       } else if (e.key === "F4") {
-        const r = toPaymentMethodType(formasSupermercado.quick[2]?.id ?? "cartao_debito")
+        const third = formasSupermercado.quick[2]
+        const r = third && toPaymentMethodType(third.id)
         if (r) openPaymentModal(r)
       } else if (e.key === "F12" && formasSupermercado.multiplo) openMultipayModal()
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado, heldSalesEnabled, customerSearchEnabled, hardFocusSearch, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true })
+  })
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = useHeldSales(lojaKey, terminalIdForHold, "supermercado")
@@ -1456,23 +1466,7 @@ export function PdvSupermercado({
                         variant="ghost"
                         size="icon"
                         className="h-10 w-10 text-foreground/55 hover:text-destructive dark:text-white/50"
-                        onClick={() => {
-                          // PDV Rápido: remoção direta (sem PIN) para alta rotatividade.
-                          if (isModoRapido) {
-                            removeFromCart(item.lineId)
-                            queueMicrotask(hardFocusSearch)
-                            return
-                          }
-                          if (adminSessionOk) {
-                            removeFromCart(item.lineId)
-                            return
-                          }
-                          setSupervisorAction("remove_line")
-                          setPendingRemoveLineId(item.lineId)
-                          setSupervisorErr(null)
-                          setSupervisorPin("")
-                          setSupervisorDialogOpen(true)
-                        }}
+                        onClick={() => requestRemoveLine(item.lineId)}
                         title="Remover item"
                       >
                         {isModoRapido ? <X className="h-5 w-5" /> : <Trash2 className="h-5 w-5" />}
@@ -1521,7 +1515,7 @@ export function PdvSupermercado({
                 const runtime = toPaymentMethodType(forma.id)
                 if (!runtime) return null
                 const Icon = getFormaPagamentoIcon(forma.icon)
-                const hotkey = forma.hotkey ?? (idx === 0 ? "F2" : idx === 1 ? "F3" : idx === 2 ? "F4" : undefined)
+                const hotkey = idx === 0 ? "F1/F2" : idx === 1 ? "F3" : idx === 2 ? "F4" : undefined
                 return (
                   <Button
                     key={forma.id}
@@ -1547,6 +1541,12 @@ export function PdvSupermercado({
                 )
               })}
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              F7: espera · F8: trocas · F9: receber contas · F10: cliente/CPF · Insert: item avulso.
+              {" "}F5: sem atalho. F12: múltiplo quando habilitado. Escape fecha modais ou limpa a busca;
+              no modo rápido, fora de campos e modais, remove o último item.
+              {" "}{isModoRapido ? "Modo rápido: remoção e limpeza sem PIN." : "Remoção e limpeza exigem PIN, salvo sessão de administrador autorizada."}
+            </p>
 
             {formasSupermercado.multiplo && pdvCapabilities.isEnabled("pdv.multiplePayments") ? (
               <Button
@@ -2012,16 +2012,7 @@ export function PdvSupermercado({
 
       <Dialog
         open={supervisorDialogOpen}
-        onOpenChange={(open) => {
-          setSupervisorDialogOpen(open)
-          if (!open) {
-            setSupervisorPin("")
-            setSupervisorErr(null)
-            setSupervisorBusy(false)
-            setSupervisorAction(null)
-            setPendingRemoveLineId(null)
-          }
-        }}
+        onOpenChange={handleSupervisorDialogOpenChange}
       >
         <DialogContent className="max-w-sm border-border bg-card">
           <DialogHeader>
@@ -2046,7 +2037,7 @@ export function PdvSupermercado({
             </div>
             {supervisorErr ? <p className="text-xs text-destructive">{supervisorErr}</p> : null}
             <div className="flex gap-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setSupervisorDialogOpen(false)}>
+              <Button type="button" variant="outline" className="flex-1" onClick={() => handleSupervisorDialogOpenChange(false)}>
                 Cancelar
               </Button>
               <Button
@@ -2054,6 +2045,9 @@ export function PdvSupermercado({
                 className="flex-1 bg-emerald-600 font-bold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
                 disabled={supervisorBusy || supervisorPin.trim().length === 0}
                 onClick={async () => {
+                  if (supervisorBusyRef.current || !supervisorAction || !supervisorPin.trim()) return
+                  supervisorBusyRef.current = true
+                  const requestId = ++supervisorRequestRef.current
                   setSupervisorErr(null)
                   setSupervisorBusy(true)
                   try {
@@ -2063,6 +2057,7 @@ export function PdvSupermercado({
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ pin: supervisorPin.trim() }),
                     })
+                    if (supervisorRequestRef.current !== requestId) return
                     if (!r.ok) {
                       setSupervisorErr("Senha inválida.")
                       setAdminSessionOk(false)
@@ -2072,7 +2067,7 @@ export function PdvSupermercado({
                     if (supervisorAction === "remove_line" && pendingRemoveLineId) {
                       removeFromCart(pendingRemoveLineId)
                       toast({ title: "Item removido", description: "Autorizado pelo supervisor." })
-                    } else {
+                    } else if (supervisorAction === "clear_cart") {
                       appendAuditLog({
                         action: "pdv_carrinho_limpo",
                         userLabel: cashierId.slice(0, 8),
@@ -2085,13 +2080,17 @@ export function PdvSupermercado({
                       pendingSaleIdentityRef.current?.clear()
                       toast({ title: "Carrinho limpo", description: "Autorizado pelo supervisor." })
                     }
-                    setSupervisorDialogOpen(false)
+                    handleSupervisorDialogOpenChange(false)
                     queueMicrotask(hardFocusSearch)
                   } catch {
+                    if (supervisorRequestRef.current !== requestId) return
                     setSupervisorErr("Falha ao validar senha.")
                     setAdminSessionOk(false)
                   } finally {
-                    setSupervisorBusy(false)
+                    if (supervisorRequestRef.current === requestId) {
+                      supervisorBusyRef.current = false
+                      setSupervisorBusy(false)
+                    }
                   }
                 }}
               >
