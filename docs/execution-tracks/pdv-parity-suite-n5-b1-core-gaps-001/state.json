@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "pdv-parity-suite-n5-b1-core-gaps-001",
-  "status": "PAUSED",
+  "status": "BLOCKED",
   "risk_tier": "ALTO",
   "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
     "goals_done": 3,
-    "goals_blocked": 0,
+    "goals_blocked": 1,
     "goals_imported": 0,
-    "ledger_lines": 3
+    "ledger_lines": 4
   },
-  "last_goal": "PDV-PARITY-N5-B1-CURRENT-MAIN-CORRECTION-003",
-  "last_result": "DONE",
-  "last_ratified_at": "2026-10-01T21:23:18.789Z"
+  "last_goal": "PDV-PARITY-N5-B1-PRODUCTION-SMOKE-CLOSEOUT-004",
+  "last_result": "BLOCKED",
+  "last_ratified_at": "2026-10-13T21:35:17.451Z"
 }

@@ -16,7 +16,7 @@
  *
  * REGRA DE OURO DO CICLO DE ESTADO:
  *   status, open, check e `attempt --fail` NÃO escrevem nenhum arquivo versionado.
- *   Somente close, block, import, registry, init e sync-adapters escrevem.
+ *   Somente close, block, import, reconcile-blocked, registry, init e sync-adapters escrevem.
  *   open escreve apenas .aep-active (gitignored).
  *   state.json representa exclusivamente o ÚLTIMO ESTADO RATIFICADO.
  */
@@ -676,6 +676,7 @@ function dispatch(cmd, positional, flags) {
   if (cmd === 'registry') return cmdRegistry(root, protocol);
   if (cmd === 'verify') return cmdVerify(root, protocol, positional[0], flags);
   if (cmd === 'import') return cmdImport(root, protocol, positional[0], flags);
+  if (cmd === 'reconcile-blocked') return cmdReconcileBlocked(root, protocol, positional[0], flags);
   if (cmd === 'status') return cmdStatus(root, protocol, positional[0], flags);
   if (cmd === 'open') return cmdOpen(root, protocol, positional[0]);
   if (cmd === 'check') return cmdCheck(root, protocol, positional[0]);
@@ -2555,6 +2556,173 @@ function cmdImport(root, protocol, track, flags) {
 
 
 // ---------------------------------------------------------------------------
+// reconcile-blocked — histórico executado, sem reclassificar nem abrir tentativa.
+// ---------------------------------------------------------------------------
+
+function cmdReconcileBlocked(root, protocol, track, flags) {
+  requireTrack(root, protocol, track);
+  const rel = trackRel(protocol, track);
+  const goal = flags.goal;
+  const sourceRef = flags['source-ref'];
+  const sourceCommit = flags['source-commit'];
+  const dry = flags['dry-run'] === true;
+  const command = 'node scripts/track.mjs reconcile-blocked <trilha> --goal=<ID> --source-ref=refs/remotes/origin/<branch> --source-commit=<SHA> [--dry-run]';
+  if (Object.keys(flags).some((k) => !['goal', 'source-ref', 'source-commit', 'dry-run'].includes(k))
+      || (flags['dry-run'] !== undefined && flags['dry-run'] !== true)
+      || !Object.hasOwn(protocol.tracks, track) || typeof goal !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/i.test(goal)
+      || typeof sourceRef !== 'string' || !sourceRef.startsWith('refs/remotes/origin/')
+      || git(['check-ref-format', sourceRef], { cwd: root }).code !== 0
+      || typeof sourceCommit !== 'string' || !/^[a-f0-9]{40}$/.test(sourceCommit)) {
+    fail(1, 'erro de uso', command, 'trilha, GOAL, ref remota ou SHA completo inválido',
+      'Declare a origem imutável e exatamente um GOAL. Reconciliação exige autorização humana própria.');
+  }
+  const tip = git(['rev-parse', '--verify', `${sourceRef}^{commit}`], { cwd: root });
+  if (tip.code !== 0 || tip.stdout.trim() !== sourceCommit) {
+    fail(4, 'divergência de estado', tip.cmd, tip.stderr || tip.stdout,
+      'Faça fetch e confira o SHA da ref de origem; nenhum arquivo foi escrito.');
+  }
+  const branch = currentBranch(root);
+  if (fs.existsSync(path.join(root, ACTIVE_FILE)) || (!dry && (!branch || branch === 'HEAD' || branch === defaultBranch(protocol)))) {
+    fail(5, 'pré-condição de ambiente', command, 'sessão ativa ou escrita na branch default/HEAD destacado',
+      'Use uma branch de governança sem sessão AEP aberta; não abra tentativa do GOAL bloqueado.');
+  }
+  const status = git(['status', '--porcelain', '--untracked-files=normal'], { cwd: root });
+  if (status.code !== 0 || status.stdout.trim()) {
+    fail(5, 'pré-condição de ambiente', status.cmd, status.stderr || status.stdout,
+      'A reconciliação exige árvore e índice limpos, inclusive no dry-run.');
+  }
+  const problems = Object.keys(protocol.tracks).flatMap((t) => verifyTrack(root, protocol, t));
+  const generatedMatches = (file, expected) => fs.existsSync(file) && fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n') === expected;
+  if (problems.length || !generatedMatches(path.join(tracksRoot(root, protocol), 'REGISTRY.md'), renderRegistry(root, protocol))
+      || !generatedMatches(path.join(root, 'docs/ai-execution/GATES.md'), renderGates(protocol))) {
+    fail(4, 'divergência de estado', 'node scripts/track.mjs verify --all', problems.map((p) => p.out).join('; ') || 'derivados divergentes',
+      'Reconcilie os derivados pelo fluxo oficial antes de importar histórico.');
+  }
+
+  // Git blobs são lidos como Buffer: nem JSON.stringify nem normalização alteram
+  // os eventos de origem. A conversão CRLF só participa da comparação da worktree.
+  const blob = (spec) => {
+    const r = spawnSync('git', ['cat-file', 'blob', spec], { cwd: root, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+    if (r.status !== 0) fail(4, 'divergência de estado', `git cat-file blob ${spec}`, r.stderr?.toString() || r.error,
+      'O objeto de origem deve existir no Git; nenhum arquivo foi escrito.');
+    return r.stdout;
+  };
+  const ledgerRel = `${rel}/LEDGER.jsonl`;
+  const committed = blob(`HEAD:${ledgerRel}`);
+  const remote = blob(`${sourceCommit}:${ledgerRel}`);
+  const working = fs.readFileSync(path.join(root, ledgerRel));
+  if (!Buffer.from(working.toString('utf8').replace(/\r\n/g, '\n')).equals(Buffer.from(committed.toString('utf8').replace(/\r\n/g, '\n')))
+      || !remote.subarray(0, committed.length).equals(committed)) {
+    fail(4, 'divergência de estado', `git cat-file blob ${sourceCommit}:${ledgerRel}`, 'ledger local não é prefixo literal do ledger de origem',
+      'Pare no gate humano: eventos divergentes nunca são removidos, reescritos ou filtrados.');
+  }
+  const parseLines = (raw) => {
+    if (raw.length && raw[raw.length - 1] !== 10) fail(4, 'divergência de estado', command, 'ledger sem newline final', 'Não anexar um evento a uma linha incompleta.');
+    if (!Buffer.from(raw.toString('utf8')).equals(raw)) fail(4, 'divergência de estado', command, 'ledger não é UTF-8 válido', 'Não transportar eventos com codificação inválida.');
+    try {
+      return raw.length ? raw.toString('utf8').trimEnd().split('\n').map((line) => JSON.parse(line)) : [];
+    } catch (err) {
+      fail(4, 'divergência de estado', command, err.message, 'Cada linha do ledger de origem deve ser JSON válido; nenhum arquivo foi escrito.');
+    }
+  };
+  const localEvents = parseLines(committed);
+  const suffix = remote.subarray(committed.length);
+  const events = parseLines(suffix);
+  const remoteEvents = parseLines(remote);
+  const latest = projectLatestGoalStates(remoteEvents).get(goal);
+  const old = projectLatestGoalStates(localEvents).get(goal);
+  if (!latest || latest.result !== 'BLOCKED' || (old && old.result !== 'BLOCKED')) {
+    fail(4, 'divergência de estado', command, 'origem sem BLOCKED vigente ou regressão de estado local',
+      'Este comando só recupera bloqueios históricos; DONE e SUPERSEDED não são reclassificados.');
+  }
+  const validEvent = (e) => e && e.aep === AEP_VERSION && e.track === track && e.goal === goal
+    && e.result === 'BLOCKED' && e.source === 'executado'
+    && e.branch === sourceRef.slice('refs/remotes/origin/'.length)
+    && Number.isInteger(e.attempt) && e.attempt >= 1 && e.attempt <= protocol.max_attempts
+    && ['gate', 'dependencia', 'externo', 'decisao'].includes(e.blocked_by)
+    && typeof e.reason === 'string' && e.reason.trim() && typeof e.ts === 'string' && !Number.isNaN(Date.parse(e.ts))
+    && typeof e.base_commit === 'string' && /^[a-f0-9]{40}$/.test(e.base_commit)
+    && Array.isArray(e.previous_attempts) && e.previous_attempts.every((a, i, all) => a
+      && Number.isInteger(a.n) && a.n >= 1 && a.n <= e.attempt && (!i || a.n > all[i - 1].n)
+      && typeof a.at === 'string' && !Number.isNaN(Date.parse(a.at)) && typeof a.reason === 'string' && a.reason.trim());
+  for (const e of [...events, latest.entrada]) {
+    if (!validEvent(e)) fail(4, 'divergência de estado', command, 'sufixo contém evento fora do recorte BLOCKED executado ou metadados inválidos',
+      'Nenhum evento pode ser filtrado ou convertido. Pare e revise a origem.');
+    const proof = verifyCommit(root, e.base_commit, sourceCommit);
+    if (!proof.ok) fail(4, 'divergência de estado', proof.cmd, proof.out, 'A base histórica deve existir e ser ancestral da origem.');
+  }
+
+  const hotRel = `${rel}/goals/${goal}.md`;
+  const closedRel = `${rel}/_closed/goals/${goal}.md`;
+  const archived = blob(`${sourceCommit}:${closedRel}`);
+  const meta = extractBlock(archived.toString('utf8'), 'AEP:META', `${sourceCommit}:${closedRel}`);
+  if (!meta || meta.aep !== AEP_VERSION || meta.id !== goal || meta.track !== track || meta.status !== 'BLOCKED') {
+    fail(4, 'divergência de estado', command, 'GOAL fechado de origem não corresponde ao BLOCKED', 'Não arquivar um GOAL diferente ou executável.');
+  }
+  const sameText = (a, b) => a.toString('utf8').replace(/\r\n/g, '\n') === b.toString('utf8').replace(/\r\n/g, '\n');
+  const hot = fs.existsSync(path.join(root, hotRel));
+  if (hot) {
+    const m = readGoalMeta(path.join(root, hotRel), protocol);
+    if (m.id !== goal || m.track !== track || !['READY', 'BLOCKED'].includes(m.status)) {
+      fail(4, 'divergência de estado', command, 'GOAL quente incompatível', 'Pare no gate humano antes de remover o GOAL do caminho quente.');
+    }
+  }
+  const closed = fs.existsSync(path.join(root, closedRel));
+  if (closed && !sameText(fs.readFileSync(path.join(root, closedRel)), archived)) {
+    fail(4, 'divergência de estado', command, 'arquivo fechado local diverge da origem', 'O histórico fechado nunca é sobrescrito silenciosamente.');
+  }
+  const summary = [`${AEP_LABEL} · reconcile-blocked ${track}${dry ? ' · DRY-RUN' : ''}`,
+    `origem: ${sourceRef} @ ${sourceCommit}`, `GOAL: ${goal} · BLOCKED · tentativa histórica ${latest.entrada.attempt}/${protocol.max_attempts}`,
+    `eventos BLOCKED a anexar: ${events.length} · previous_attempts preservados literalmente`,
+    `GOAL quente a arquivar: ${hot ? 'sim' : 'não'} · nenhum produto ou tentativa nova`];
+  if (dry) {
+    process.stdout.write([...summary, 'MODO DRY-RUN: nenhum arquivo ou commit foi escrito.', ''].join('\n'));
+    return 0;
+  }
+  if (!events.length && !hot && closed) {
+    process.stdout.write([...summary, 'NO-OP: histórico e arquivo fechado já reconciliados; nenhum arquivo ou commit foi escrito.', ''].join('\n'));
+    return 0;
+  }
+
+  const reportRel = `${rel}/_closed/reports/RECONCILE-BLOCKED-${sourceCommit.slice(0, 12)}.json`;
+  if (fs.existsSync(path.join(root, reportRel))) fail(4, 'divergência de estado', command, 'relatório desta origem já existe com reconciliação incompleta', 'Revise a reconciliação anterior no gate humano.');
+  const paths = [ledgerRel, hotRel, closedRel, `${rel}/state.json`, `${protocol.tracks_dir}/REGISTRY.md`, 'docs/ai-execution/GATES.md', reportRel];
+  const before = new Map(paths.map((p) => [p, fs.existsSync(path.join(root, p)) ? fs.readFileSync(path.join(root, p)) : null]));
+  let sha;
+  try {
+    if (suffix.length) fs.appendFileSync(path.join(root, ledgerRel), suffix);
+    if (!closed) {
+      fs.mkdirSync(path.dirname(path.join(root, closedRel)), { recursive: true });
+      fs.writeFileSync(path.join(root, closedRel), archived);
+    }
+    if (hot) fs.unlinkSync(path.join(root, hotRel));
+    fs.mkdirSync(path.dirname(path.join(root, reportRel)), { recursive: true });
+    fs.writeFileSync(path.join(root, reportRel), canonicalJson({ aep: AEP_VERSION, track, goal,
+      source_ref: sourceRef, source_commit: sourceCommit, events_appended: events.length,
+      previous_ledger_lines: localEvents.length, final_ledger_lines: remoteEvents.length,
+      result: 'BLOCKED', attempt: latest.entrada.attempt, product_code_changed: false }));
+    writeState(root, protocol, track);
+    writeGenerated(root, protocol);
+    // O caminho quente pode já estar ausente; stage só paths existentes em HEAD
+    // ou na árvore, nunca um pathspec inexistente que recusaria o commit.
+    const stagePaths = paths.filter((p) => fs.existsSync(path.join(root, p)) || git(['ls-files', '--error-unmatch', '--', p], { cwd: root }).code === 0);
+    sha = stateCommit(root, `aep(${track}): reconcile-blocked ${goal}`, stagePaths);
+  } catch (err) {
+    const rollbackPaths = paths.filter((p) => before.get(p) !== null || git(['ls-files', '--error-unmatch', '--', p], { cwd: root }).code === 0);
+    const restore = rollbackPaths.length ? git(['restore', '--staged', '--', ...rollbackPaths], { cwd: root }) : { code: 0 };
+    for (const [p, content] of before) {
+      const file = path.join(root, p);
+      if (content === null) { if (fs.existsSync(file)) fs.unlinkSync(file); }
+      else { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); }
+    }
+    if (restore.code !== 0) fail(4, 'divergência de estado', restore.cmd, restore.stderr, 'Arquivos restaurados; confira o índice antes de repetir.');
+    throw err;
+  }
+  process.stdout.write([...summary, `relatório: ${reportRel}`, `commit de estado: ${sha}`, ''].join('\n'));
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
 // Entrada
 // ---------------------------------------------------------------------------
 
@@ -2572,7 +2740,7 @@ function parseArgs(argv) {
 }
 
 const COMMANDS = new Set(['status', 'open', 'check', 'close', 'attempt', 'block', 'init',
-  'import', 'registry', 'verify', 'doctor', 'sync-adapters', 'hook']);
+  'import', 'reconcile-blocked', 'registry', 'verify', 'doctor', 'sync-adapters', 'hook']);
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -2601,6 +2769,7 @@ function usage() {
     '  block <trilha> --reason="..." --by=gate|dependencia|externo|decisao',
     '  init <trilha> [--risk=BAIXO|MEDIO|ALTO|CRITICO]',
     '  import <trilha> --manifest=<caminho> [--dry-run]',
+    '  reconcile-blocked <trilha> --goal=<ID> --source-ref=refs/remotes/origin/<branch> --source-commit=<SHA> [--dry-run]',
     '  registry                        regenera REGISTRY.md e GATES.md',
     '  verify [<trilha>] [--all]       recalcula o estado a partir do Git',
     '  doctor                          camada local + camada remota',
