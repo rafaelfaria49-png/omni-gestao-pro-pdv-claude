@@ -1,0 +1,34 @@
+{
+  "observedAt": "2026-10-15T13:52:04.636Z",
+  "source": "OFFICIAL_AUTHENTICATED_NEON_CLI",
+  "authenticated": true,
+  "project": {
+    "id": "dry-mouse-36002471",
+    "name": "omnigestao-migracao",
+    "region": "aws-sa-east-1",
+    "historyRetentionSeconds": 21600
+  },
+  "branch": {
+    "id": "br-muddy-meadow-ac7ah2wl",
+    "name": "production",
+    "state": "ready",
+    "default": true,
+    "protected": false
+  },
+  "database": "omnigestao_prod",
+  "datasourceFingerprint": "c4f2567332c8f613",
+  "directConnection": true,
+  "snapshot": {
+    "id": "snap-little-hat-acjrs3lh",
+    "name": "production at 2026-10-09 01:04:00 UTC (manual)",
+    "sourceBranchId": "br-muddy-meadow-ac7ah2wl",
+    "createdAt": "2026-10-09T01:04:00Z",
+    "expiresAt": null,
+    "manual": true,
+    "fullSize": 127418368,
+    "listedByProvider": true,
+    "restoreTestPerformed": false
+  },
+  "credentialsWritten": false,
+  "credentialsPrinted": false
+}
