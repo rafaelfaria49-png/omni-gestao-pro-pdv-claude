@@ -1,0 +1,65 @@
+{
+  "observedAt": "2026-10-15T13:52:07.982Z",
+  "mode": "exec",
+  "result": "PASS",
+  "database": "omnigestao_prod",
+  "datasourceFingerprint": "c4f2567332c8f613",
+  "snapshotConfirmed": true,
+  "snapshotId": "snap-little-hat-acjrs3lh",
+  "liveIdentity": {
+    "observedAt": "2026-10-15T13:52:04.984Z",
+    "database": "omnigestao_prod",
+    "publicSchema": true,
+    "transactionReadOnly": true,
+    "serverVersion": "17.11 (59c914d)",
+    "databaseOidHash": "7d8e67064ff51e8745b0f448a92d07766531c16efc5b9ae9baf2673ab430acb0",
+    "datasourceFingerprint": "c4f2567332c8f613"
+  },
+  "migrations": {
+    "observedAt": "2026-10-15T13:52:06.540Z",
+    "command": "prisma migrate status",
+    "readOnly": true,
+    "result": "PASS",
+    "exitCode": 0,
+    "localMigrations": 22,
+    "reportedMigrations": 22,
+    "datasourceFingerprint": "c4f2567332c8f613",
+    "migrationsExecuted": false
+  },
+  "documents": {
+    "columnPresent": true,
+    "total": 275,
+    "strong": 51,
+    "weakOrEmpty": 224,
+    "notNull": 2,
+    "mismatchedKeys": 49,
+    "sameStoreStrongDuplicates": 0,
+    "crossStoreReuse": 18
+  },
+  "uniqueActive": true,
+  "dryRun": {
+    "scanned": 275,
+    "planned": 49,
+    "safeCount": 49,
+    "safeNullCount": 0,
+    "written": 0
+  },
+  "protectedState": {
+    "observedAt": "2026-10-15T13:52:07.967Z",
+    "counts": {
+      "store": 10,
+      "cliente": 275,
+      "produto": 14106,
+      "venda": 2156,
+      "ordemServico": 31,
+      "movimentacaoEstoque": 2428
+    },
+    "clientIdsHash": "6d9f177f0317a3566718adbc465ba85a485a428b6f8e27a35b0dec72d793e94e",
+    "protectedClientDataHash": "f1bbb5b85319618a138d63b5ffa45758c568e7af8916e034527c02db6e0c4b30",
+    "excludedExpectedBackfillFields": [
+      "documentKey",
+      "updatedAt"
+    ]
+  },
+  "databaseWrites": 0
+}

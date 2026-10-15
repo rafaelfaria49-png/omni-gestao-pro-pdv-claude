@@ -1,0 +1,16 @@
+{
+  "goal": "CAD-R2-019",
+  "mode": "preflight-read-only",
+  "batchSize": 500,
+  "totalClients": 275,
+  "emptyDocuments": 215,
+  "invalidDocuments": 9,
+  "strongDocuments": 51,
+  "maskedStrong": 44,
+  "canonicalStrong": 7,
+  "sameStoreStrongDuplicates": [],
+  "crossStoreReuse": 18,
+  "result": "PASS",
+  "observedAt": "2026-10-15T13:49:58.877Z",
+  "exitCode": 0
+}

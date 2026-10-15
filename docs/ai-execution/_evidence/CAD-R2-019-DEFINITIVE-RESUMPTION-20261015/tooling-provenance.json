@@ -1,0 +1,34 @@
+{
+  "observedAt": "2026-10-15T14:02:43.906Z",
+  "mainCurrent": "4a85dd95202b56873487b31c318fc2d751fc26f5",
+  "nodeVersion": "v24.14.1",
+  "neonCliVersion": "8.4.5",
+  "prismaVersion": "6.19.3",
+  "officialSources": [
+    {
+      "path": "scripts/cad-r2-019-document-backfill.ts",
+      "sha256": "af5591735824b26b5f1be20d480512a45c67c279009a0c5d556c4d6a9e7759e4",
+      "gitBlob": "7aa61e0183c36f9a94218d039f61bc631fe2811c"
+    },
+    {
+      "path": "scripts/cad-r2-019-document-preflight.ts",
+      "sha256": "c612c33339e76957c3760f05f202cc5c46532fa8a98a684db73f7bdad97187e0",
+      "gitBlob": "94a92937622800316cc7d7ac28f79fd72e9e4f7a"
+    },
+    {
+      "path": "lib/cadastros/client-identity/document.ts",
+      "sha256": "475a04a83da7937d202ff5581700fdfb01a6342cde0150cdf280991968601f8c",
+      "gitBlob": "a053ab8e2c2f8868fbb670d29ed6f4ae1963785d"
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "sha256": "ef68dd97b7a46c2f8ed6d6a8f9da7806ca97660ab02629a60960e0ba5db68297",
+      "gitBlob": "63283f20f3a65ff168bb73d667699083e38392c3"
+    }
+  ],
+  "existingReadOnlyAuditor": {
+    "sourcePath": "C:/Projetos/omni-gestao/scripts/db-migration-reconciliation-001.mjs",
+    "sha256": "c8c0023b3aa3ad69dc56e6767ce692da47098f81b10e8ad3de8c6aac79a073e1",
+    "copiedUnmodified": true
+  }
+}

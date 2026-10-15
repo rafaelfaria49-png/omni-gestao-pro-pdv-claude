@@ -1,0 +1,172 @@
+{
+  "goal": "DB-MIGRATION-RECONCILIATION-001",
+  "mode": "post-read-only",
+  "readOnly": true,
+  "result": "BLOCKED",
+  "drift": [
+    "documents:backfill-inconsistent"
+  ],
+  "structure": {
+    "contadorMatchesOriginalIncludingChecks": true,
+    "stockNullableKeyAndUnique": true,
+    "documentNullableKeyAndExpandIndex": true,
+    "documentUniqueValidWithDistinctNulls": true
+  },
+  "correctiveVerification": {
+    "statements": 3,
+    "exactOriginalChecks": true
+  },
+  "contadorRows": {
+    "templates": 0,
+    "obrigacoes": 0,
+    "guias": 0
+  },
+  "pinHashStructureMatches0018": true,
+  "pendingHistory": [],
+  "history": [
+    {
+      "name": "0001_init_clientes_produtos",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0002_product_price_cost",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0003_aux_ledger_audit_whatsapp_app_settings",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0004_multistore_stores_units",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0005_multitenant_product_sku_composite",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0006_store_settings_contact_per_store",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0007_ledger_per_store_conta_receber_composite_localkey",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0008_fornecedores_contas_pagar",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0009_produto_barcode",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0010_whatsapp_phone_number",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0011_deposito_produto_deposito",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0012_inventario_assistido",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0013_fiscal_foundation",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0014_contador_hub_nucleo",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0015_contador_identidade_externa",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0016_add_sale_numbering_infrastructure",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0017_contador_agenda",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0018_user_pin_hash",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0019_movimentacao_estoque_idempotency",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0020_cliente_document_key",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0021_cliente_document_key_unique",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    },
+    {
+      "name": "0022_pessoas_cadastro_backend",
+      "finished": true,
+      "rolledBack": false,
+      "checksumMatchesVersionedSql": true
+    }
+  ],
+  "documents": {
+    "columnPresent": true,
+    "total": 275,
+    "strong": 51,
+    "weakOrEmpty": 224,
+    "notNull": 2,
+    "mismatchedKeys": 49,
+    "sameStoreStrongDuplicates": 0,
+    "crossStoreReuse": 18
+  },
+  "observedAt": "2026-10-15T13:49:58.374Z",
+  "datasourceFingerprint": "c4f2567332c8f613"
+}

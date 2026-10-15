@@ -1,0 +1,35 @@
+{
+  "observedAt": "2026-10-15T13:54:12.044Z",
+  "mode": "anonymous-read-only-after-backfill",
+  "result": "PASS",
+  "results": [
+    {
+      "path": "/api/version",
+      "status": 200,
+      "expectedStatus": 200,
+      "buildId": "4a85dd95202b"
+    },
+    {
+      "path": "/",
+      "status": 200,
+      "expectedStatus": 200
+    },
+    {
+      "path": "/login",
+      "status": 200,
+      "expectedStatus": 200
+    },
+    {
+      "path": "/dashboard",
+      "status": 307,
+      "expectedStatus": 307
+    },
+    {
+      "path": "/api/clientes",
+      "status": 401,
+      "expectedStatus": 401
+    }
+  ],
+  "applicationWrites": 0,
+  "clientDataRead": false
+}
