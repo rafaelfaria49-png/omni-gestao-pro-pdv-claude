@@ -68,7 +68,7 @@ Use o alias estável abaixo para uploads: ele é a única origem liberada no COR
 3. SQL somente de leitura confirmou o documento `677db717-9621-463c-9057-5b379c73e6e8`, empregador `cmv9llplm0001lf08a0i4qq9a`, vínculo `cmv9lrx2i000jlf08qokb78z8`, Store `qa-pessoas-a`, MIME `application/pdf`, classificação `COMUM`, 729 bytes e SHA abaixo. Auditoria: `DOCUMENTO_CONFIRMAR` por `qa-001b-admin` em 16/10/2026 15:22:19 UTC.
 4. A lista continuou exibindo o documento após reload. O snapshot após complete positivo mostrou **Criar versão do contrato habilitado**, sem trava documental permanente.
 5. O botão Baixar foi acionado e o banco registrou `DOCUMENTO_DOWNLOAD_AUTORIZAR` pelo usuário QA, inclusive às 15:46:48, 15:48:31 e 15:50:38 UTC. O backend usa nome neutro **`documento.pdf`** para o arquivo baixado.
-6. **Captura do download no navegador pendente:** a ferramenta CUA sofreu timeout de foco/evento e reinicialização, sem retornar arquivo local inspecionável. Autorização de download no servidor está comprovada; bytes baixados pelo navegador e seu hash não são declarados aprovados. Isso não sustenta, isoladamente, um defeito do produto. A confirmação visual humana do download foi solicitada e ainda não recebida neste registro.
+6. **Download real confirmado pelo usuário:** após os acionamentos de Baixar, o usuário respondeu em 16/10/2026 **“Sim, o PDF foi baixado”**. Proveniência: mensagem humana neste chat; essa confirmação não é uma captura da ferramenta. A CUA sofreu timeout de foco/evento e reinicialização, sem retornar arquivo local inspecionável. O hash do arquivo recebido pelo navegador não foi conferido pela ferramenta; a integridade dos bytes do objeto QA foi conferida separadamente pelo SDK, como descrito abaixo. O nome neutro usado pelo backend é `documento.pdf`; a pergunta inicial citou o nome da listagem e a distinção foi corrigida antes da resposta. Nenhum defeito de produto é inferido do timeout da CUA.
 7. Smoke específico pelo SDK existente, restrito ao objeto QA: HEAD/GET retornaram 729 bytes e hash idêntico ao original. PUT sobre o mesmo objeto com **`If-None-Match: *` recebeu HTTP 412**; GET posterior manteve o hash. Essa prova é de storage, não execução da recuperação HTTP 412 pela interface.
 8. Com o documento já existente, o contexto Store B negou a URL direta do funcionário A com **“Registro não encontrado neste contexto.”**. Store A restaurada; SQL confirma um vínculo A, um B e somente um documento A.
 
@@ -116,7 +116,8 @@ UPLOAD=REAL_POSITIVE_COMPLETE_LIST_RELOAD_CONFIRMED
 STORAGE_GET_INTEGRITY=MATCH_729_BYTES
 STORAGE_EXCLUSIVE_PUT=HTTP_412_OBJECT_UNCHANGED
 FRONTEND_DOWNLOAD_AUTHORIZATION=AUDITED_REAL_SERVER_ACTION
-FRONTEND_DOWNLOADED_FILE=PENDING_BROWSER_CAPTURE
+FRONTEND_DOWNLOAD=CONFIRMED_BY_USER
+FRONTEND_DOWNLOADED_FILE_HASH=NOT_INSPECTED_BY_TOOL
 STORE_ISOLATION=STORE_B_DENIED_A_WITH_DOCUMENT_A_RESTORED
 TESTS=NOT_RUN
 TYPECHECK=NOT_RUN
@@ -128,7 +129,7 @@ GLM_F01=APPROVE_RECEIVED_USER_ONLY
 GLM_INTEGRAL=PENDING
 AEP_CLOSE=NOT_RUN
 PR_DRAFT=YES
-NEXT_GATE=BROWSER_DOWNLOAD_ARTIFACT_THEN_FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL
+NEXT_GATE=FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL
 ```
 
-Inspeção Git/allowlist e `git diff --check` são os checks locais desta missão. Sem Docker, bateria Vitest/Playwright/E2E, typecheck, lint ou build local. Ponto de parada: **PREVIEW PRIVADO REAL E R2 QA COM UPLOAD CONFIRMADO; CAPTURA DE DOWNLOAD E ACEITE INTEGRAL PENDENTES.**
+Inspeção Git/allowlist e `git diff --check` são os checks locais desta missão. Sem Docker, bateria Vitest/Playwright/E2E, typecheck, lint ou build local. Ponto de parada: **PREVIEW PRIVADO REAL, UPLOAD CONFIRMADO E DOWNLOAD RELATADO PELO USUÁRIO; ACEITE INTEGRAL PENDENTE.**

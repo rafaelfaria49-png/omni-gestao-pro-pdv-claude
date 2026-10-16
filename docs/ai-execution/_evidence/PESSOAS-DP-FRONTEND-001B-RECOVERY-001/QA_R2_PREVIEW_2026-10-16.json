@@ -130,9 +130,16 @@
     "storeIsolation": "STORE_B_DENIED_STORE_A_ID_WITH_DOCUMENT_PRESENT_STORE_A_RESTORED",
     "capabilityRegression": "2026_10_15_RESTRICTED_USER_EVIDENCE_REUSED_NOT_RERUN",
     "frontendDownloadAuthorization": "REAL_SERVER_ACTION_AUDITED",
-    "browserDownloadArtifact": "PENDING_CUA_DOWNLOAD_EVENT_TIMEOUT_NO_LOCAL_FILE_INSPECTED",
+    "browserDownloadArtifact": "NOT_CAPTURED_BY_TOOL",
     "downloadFilename": "documento.pdf",
-    "unresolvedCompleteCancellation": "NOT_RUN_THIS_MISSION"
+    "unresolvedCompleteCancellation": "NOT_RUN_THIS_MISSION",
+    "browserDownloadUserConfirmation": {
+      "source": "USER_MESSAGE_IN_THIS_CHAT",
+      "date": "2026-10-16",
+      "answer": "Sim, o PDF foi baixado",
+      "downloadedFileHashInspectedByTool": false,
+      "actualNeutralFilename": "documento.pdf"
+    }
   },
   "review": {
     "glmF01": "APPROVE_RECEIVED_FROM_USER_ONLY",
@@ -218,7 +225,7 @@
       "sha256": "996e26d864681275a9c28b0bb6dd0447f3027c81f0c7e7c28f33649484d47d83"
     }
   ],
-  "nextGate": "BROWSER_DOWNLOAD_ARTIFACT_THEN_FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL",
+  "nextGate": "FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL",
   "storageSmoke": {
     "bucket": "omni-gestao-pessoas-001b-qa",
     "documentId": "677db717-9621-463c-9057-5b379c73e6e8",

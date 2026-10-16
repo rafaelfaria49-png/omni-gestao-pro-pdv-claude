@@ -468,7 +468,7 @@ A confirmação humana final autorizou o token R2 restrito ao bucket QA, com val
 - [Preview privado real — abrir Pessoas](https://omni-gestao-pessoas-001b-qa-rafaelfaria49-4373s-projects.vercel.app/dashboard/pessoas), deployment `dpl_AjM5mPXsASK6JUPwLQVWnK8smKzg`, staging/Preview explícito, proteção Vercel all + NextAuth. Treze variáveis exclusivas de Preview; zero production e Git link ausente.
 - Upload real pela interface: PDF sintético de 729 bytes, intent/PUT/complete positivo, “Documento salvo”, listagem e reload. SQL/auditoria confirmam o documento `677db717-9621-463c-9057-5b379c73e6e8` somente na Store A. Após complete, Criar versão do contrato voltou habilitado.
 - HEAD/GET QA pelo SDK confirmam SHA-256 `d658d6542efa23246c0e9a8e8d77c0519c1b61e541b74d505cb9486ddd049c64`; PUT exclusivo sobre o mesmo objeto recebeu HTTP 412, sem alteração. Não é prova da recuperação HTTP 412 pela interface.
-- O botão Baixar gerou autorizações reais auditadas. A captura do arquivo baixado pelo navegador ficou **pendente** por timeout/reinicialização da ferramenta CUA; hash do download no navegador não foi conferido. Nome neutro esperado: `documento.pdf`. Nenhum defeito do produto é inferido somente desse bloqueio de ferramenta.
+- O botão Baixar gerou autorizações reais auditadas. Depois, o usuário confirmou em 16/10/2026 **“Sim, o PDF foi baixado”**, com proveniência explícita de mensagem humana neste chat. O backend usa nome neutro `documento.pdf`; a distinção para o nome da listagem foi esclarecida antes da resposta. A ferramenta CUA não retornou arquivo local por timeout/reinicialização, portanto o hash do arquivo recebido pelo navegador não foi inspecionado; a integridade foi conferida separadamente no objeto R2 pelo SDK. Nenhum defeito do produto é inferido desse timeout.
 - Com documento já existente, Store B negou a URL direta da ficha A; contexto A restaurado. Capacidades restritas/contratos permanecem na evidência manual anterior; regressões integrais pendentes.
 - Seis novas imagens saneadas; matriz completa de quatro temas/responsividade/teclado permanece pendente. Nenhuma imagem contém CPF, segredo ou URL assinada.
 - Sem contratação paga nova; Neon Free, Vercel Hobby, R2 faturável US$ 0,00 observado antes do smoke. Franquia Standard oficial e limites da observação estão na evidência.
@@ -481,7 +481,8 @@ R2_PRIVATE=QA_PRIVATE_CREATED_TOKEN_LIMITED_UNTIL_2026_10_23
 DOCUMENT_UPLOAD=REAL_INTENT_PUT_POSITIVE_COMPLETE_LIST_RELOAD
 DOCUMENT_STORAGE_INTEGRITY=MATCH_729_BYTES_HTTP_412_NO_OVERWRITE
 DOCUMENT_DOWNLOAD_AUTHORIZATION=REAL_AUDITED
-DOCUMENT_BROWSER_DOWNLOAD=PENDING_CUA_CAPTURE
+DOCUMENT_BROWSER_DOWNLOAD=CONFIRMED_BY_USER
+DOCUMENT_BROWSER_DOWNLOAD_HASH=NOT_INSPECTED_BY_TOOL
 STORE_ISOLATION=REAL_B_DENIED_A_WITH_DOCUMENT_A_RESTORED
 AUTOMATED_TESTS=PENDING
 TESTS=NOT_RUN
@@ -492,9 +493,9 @@ GLM_F01=APPROVE_RECEIVED_USER_ONLY
 GLM_INTEGRAL=PENDING
 AEP_CLOSE=NOT_RUN
 PR_DRAFT=YES
-NEXT_GATE=BROWSER_DOWNLOAD_ARTIFACT_THEN_FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL
+NEXT_GATE=FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL
 ```
 
 Somente documentação/evidências na allowlist, inspeção de escopo Git e `git diff --check`. Sem testes automatizados, typecheck, lint, build local, runner oficial, merge, close/DONE, produção ou GOAL 002. Não há aceite integral ou revisão cross-family realizada por Codex/OpenAI.
 
-Ponto de parada: **PREVIEW PRIVADO REAL COM R2 QA E UPLOAD CONFIRMADO; CAPTURA DE DOWNLOAD E ACEITE INTEGRAL PENDENTES.**
+Ponto de parada: **PREVIEW PRIVADO REAL COM R2 QA, UPLOAD CONFIRMADO E DOWNLOAD RELATADO PELO USUÁRIO; ACEITE INTEGRAL PENDENTE.**
