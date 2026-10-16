@@ -65,6 +65,8 @@ export function useClienteSearchV4(storeId: string | null): ClienteSearchV4 {
   const term = query.trim();
 
   useEffect(() => {
+    ++reqRef.current;
+    setClientes([]);
     if (!sid || term.length < MIN_CHARS) {
       setClientes([]);
       setLoading(false);
@@ -72,21 +74,24 @@ export function useClienteSearchV4(storeId: string | null): ClienteSearchV4 {
       setBuscou(false);
       return;
     }
+    let cancelled = false;
     const reqId = ++reqRef.current;
     setLoading(true);
     setError(null);
     const timer = setTimeout(() => {
-      const url = `/api/clientes?q=${encodeURIComponent(term)}&lojaId=${encodeURIComponent(sid)}`;
+      const url = "/api/clientes/search";
       fetch(url, {
+        method: "POST",
+        body: JSON.stringify({ q: term }),
         credentials: "include",
         cache: "no-store",
-        headers: { [ASSISTEC_LOJA_HEADER]: sid },
+        headers: { [ASSISTEC_LOJA_HEADER]: sid, "Content-Type": "application/json" },
       })
         .then(async (res) => {
           const data = (await res.json().catch(() => null)) as
             | { clientes?: Array<Record<string, unknown>>; error?: string }
             | null;
-          if (reqRef.current !== reqId) return;
+          if (cancelled || reqRef.current !== reqId) return;
           if (!res.ok) throw new Error(data?.error || `Falha ao buscar clientes (HTTP ${res.status})`);
           const rows = Array.isArray(data?.clientes) ? data!.clientes! : [];
           setClientes(rows.slice(0, MAX_RESULTS).map(mapCliente).filter((c) => c.id));
@@ -94,14 +99,14 @@ export function useClienteSearchV4(storeId: string | null): ClienteSearchV4 {
           setBuscou(true);
         })
         .catch((e) => {
-          if (reqRef.current !== reqId) return;
+          if (cancelled || reqRef.current !== reqId) return;
           setError(e instanceof Error ? e.message : "Falha ao buscar clientes.");
           setLoading(false);
           setBuscou(true);
         });
     }, DEBOUNCE_MS);
 
-    return () => clearTimeout(timer);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [sid, term]);
 
   return {

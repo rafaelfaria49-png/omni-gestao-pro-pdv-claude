@@ -7,7 +7,7 @@
  */
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { Prisma } from "@/generated/prisma"
 import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
 import type { ClientIdentityRecord } from "@/lib/cadastros/client-identity"
@@ -602,4 +602,30 @@ describe("ClientWriteService — identitySource injetável na mesma tx", () => {
     expect(res.candidateIds).toEqual(["ghost"])
     expect(fake.rows.size).toBe(0)
   })
+})
+
+
+describe("CAD-R2-020 editor metadata preservation", () => {
+  it("updates displayed tags through the canonical transaction without exposing or erasing hidden metadata", async () => {
+    const fake = makeFakeDb([seedRow({ id: "c1", storeId: "loja-a", tags: { rg: "private-marker", gcCodigo: "import-id", address: { street: "Old", zip: "private-marker" }, operational: { notes: "Old", secret: "private-marker" } } })])
+    const result = await updateClient(ctx(), "c1", { tags: { rg: "spoof", address: { street: "New", zip: "spoof" }, operational: { notes: "New" } } }, { tagsMode: "editor" }, { db: fake.db })
+    expect(result.ok).toBe(true)
+    expect(fake.rows.get("c1")?.tags).toEqual({ rg: "private-marker", gcCodigo: "import-id", address: { street: "New", zip: "private-marker" }, operational: { notes: "New", secret: "private-marker" } })
+    expect(JSON.stringify(fake.audits)).not.toContain("private-marker")
+    expect(JSON.parse(fake.audits[0].metadata).actor.userId).toBe(PRINCIPAL.userId)
+  })
+})
+
+
+it("CAD-R2-020 persistence errors never include customer input in logs", async () => {
+  const marker = "private-customer-fixture"
+  const db = { $transaction: async () => { throw new Error(marker) } } as unknown as ClientWriteDb
+  const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+  try {
+    const created = await createClient(ctx(), { nome: marker }, undefined, { db })
+    const updated = await updateClient(ctx(), "c1", { nome: marker }, undefined, { db })
+    expect(created).toMatchObject({ ok: false, code: "PERSISTENCE" })
+    expect(updated).toMatchObject({ ok: false, code: "PERSISTENCE" })
+    expect(JSON.stringify([created, updated, spy.mock.calls])).not.toContain(marker)
+  } finally { spy.mockRestore() }
 })

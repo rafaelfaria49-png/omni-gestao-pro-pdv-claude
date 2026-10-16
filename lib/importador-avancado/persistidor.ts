@@ -100,11 +100,11 @@ async function persistirClientes(
   const nomeParaId = new Map<string, string>()
   const writeContext = { storeId, principal: principal ?? null }
 
-  for (const reg of registros) {
+  for (const [index, reg] of registros.entries()) {
     try {
       const campos = extrairCamposCliente(reg)
       if (!campos.name.trim()) {
-        log.push({ dominio: "clientes", chave: reg.chave, acao: "ignorado", detalhe: "Nome vazio" })
+        log.push({ dominio: "clientes", chave: `linha-${index + 1}`, acao: "ignorado", detalhe: "Nome vazio" })
         continue
       }
 
@@ -126,7 +126,7 @@ async function persistirClientes(
       if (!written.ok) {
         log.push({
           dominio: "clientes",
-          chave: reg.chave,
+          chave: `linha-${index + 1}`,
           acao: written.code === "VALIDATION" ? "erro" : "ignorado",
           detalhe: clientWriteImportMessage(written),
         })
@@ -134,16 +134,16 @@ async function persistirClientes(
       }
 
       const id = written.id
-      log.push({ dominio: "clientes", chave: reg.chave, acao: "criado" })
+      log.push({ dominio: "clientes", chave: `linha-${index + 1}`, acao: "criado" })
 
       nomeParaId.set(nomeNorm, id)
       if (docDigits) nomeParaId.set(docDigits, id)
     } catch (e) {
       log.push({
         dominio: "clientes",
-        chave: reg.chave,
+        chave: `linha-${index + 1}`,
         acao: "erro",
-        detalhe: e instanceof Error ? e.message : String(e),
+        detalhe: "Falha ao importar cliente",
       })
     }
   }

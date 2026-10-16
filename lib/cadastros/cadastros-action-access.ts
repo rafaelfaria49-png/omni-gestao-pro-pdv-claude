@@ -1,3 +1,4 @@
+import { canUseClientOperations } from "./client-privacy"
 import "server-only"
 
 import type { Session } from "next-auth"
@@ -38,6 +39,7 @@ export async function requireCadastrosActionAccess(
   const sid = (storeId ?? "").trim()
   if (!sid) throw new Error(CADASTROS_ACTION_NO_STORE)
   const session = await loadCadastrosSession()
+  if (!canUseClientOperations(session)) throw new Error(CADASTROS_ACTION_HUB_FORBIDDEN)
   if (profile === "admin" && !isCadastrosAdminPrincipal(session)) {
     throw new Error(CADASTROS_ACTION_ADMIN_FORBIDDEN)
   }
@@ -55,6 +57,7 @@ export async function requireCadastrosActionSession(
   profile: CadastrosActionProfile = "hub",
 ): Promise<{ session: Session; storeScope: "all" | string[] }> {
   const session = await loadCadastrosSession()
+  if (!canUseClientOperations(session)) throw new Error(CADASTROS_ACTION_HUB_FORBIDDEN)
   if (profile === "admin" && !isCadastrosAdminPrincipal(session)) {
     throw new Error(CADASTROS_ACTION_ADMIN_FORBIDDEN)
   }

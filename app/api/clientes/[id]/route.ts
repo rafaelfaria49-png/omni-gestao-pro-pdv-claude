@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { clientEditorTags, canReadClientRegister, CLIENT_LOOKUP_SELECT, CLIENT_REGISTER_SELECT, CLIENT_RETENTION_BLOCK } from "@/lib/cadastros/client-privacy"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { Prisma, StatusOrdemServico } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 function json(data: unknown, init?: ResponseInit) {
-  return NextResponse.json(data, init)
+  return clientPrivateJson(data, init)
 }
 
 function badRequest(message: string) {
@@ -29,14 +30,23 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   if (!id?.trim()) return badRequest("ID inválido")
 
   try {
+    if (!canReadClientRegister(gate.session)) {
+      const cliente = await prisma.cliente.findFirst({ where: { id, storeId }, select: CLIENT_LOOKUP_SELECT })
+      return cliente ? json({ ok: true, cliente }) : json({ error: "Cliente não encontrado" }, { status: 404 })
+    }
     const cliente = await prisma.cliente.findFirst({
       where: { id, storeId },
-      include: {
+      select: {
+        ...CLIENT_REGISTER_SELECT,
         ordensServico: {
+          where: { storeId },
+          select: { id: true, numero: true, equipamento: true, defeito: true, status: true, valorTotal: true, createdAt: true, updatedAt: true },
           orderBy: { createdAt: "desc" },
           take: 15,
         },
         vendas: {
+          where: { storeId },
+          select: { id: true, pedidoId: true, total: true, status: true, at: true },
           orderBy: { at: "desc" },
           take: 15,
         },
@@ -70,15 +80,14 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
         totalSpentReal = Number(osAgg._sum.valorTotal ?? 0) + Number(vendaAgg._sum.total ?? 0)
       }
     } catch (aggErr) {
-      console.error("[api/clientes/[id] GET] agregação totalSpent falhou:", aggErr instanceof Error ? aggErr.message : aggErr)
+      console.error("[api/clientes/[id] GET] agregação totalSpent falhou:")
     }
 
-    return json({ ok: true, cliente: { ...cliente, totalSpent: totalSpentReal } })
+    return json({ ok: true, cliente: { ...cliente, tags: clientEditorTags(cliente.tags), totalSpent: totalSpentReal } })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[api/clientes/[id] GET]", msg)
+    console.error("[api/clientes/[id] GET]")
     return json(
-      { error: "Falha ao obter detalhes do cliente", ...(process.env.NODE_ENV === "development" ? { detail: msg } : {}) },
+      { error: "Falha ao obter detalhes do cliente" },
       { status: 503 }
     )
   }
@@ -170,15 +179,14 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       },
     })
 
-    return json({ ok: true, cliente: updated })
+    return json({ ok: true, cliente: updated ? { ...updated, tags: clientEditorTags(updated.tags) } : null })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
       return json({ error: "Cliente não encontrado" }, { status: 404 })
     }
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[api/clientes PATCH]", msg)
+    console.error("[api/clientes PATCH]")
     return json(
-      { error: "Falha ao atualizar cliente", ...(process.env.NODE_ENV === "development" ? { detail: msg } : {}) },
+      { error: "Falha ao atualizar cliente" },
       { status: 503 }
     )
   }
@@ -187,26 +195,8 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
   const gate = await requireCadastrosHubApi(req, "write", "admin")
   if (!gate.ok) return gate.response
-  const storeId = gate.storeId
-
   const { id } = await context.params
   if (!id?.trim()) return badRequest("ID inválido")
 
-  try {
-    const del = await prisma.cliente.deleteMany({ where: { id, storeId } })
-    if (del.count === 0) {
-      return json({ error: "Cliente não encontrado" }, { status: 404 })
-    }
-    return json({ ok: true })
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
-      return json({ error: "Cliente não encontrado" }, { status: 404 })
-    }
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[api/clientes DELETE]", msg)
-    return json(
-      { error: "Falha ao excluir cliente", ...(process.env.NODE_ENV === "development" ? { detail: msg } : {}) },
-      { status: 503 }
-    )
-  }
+  return json(CLIENT_RETENTION_BLOCK, { status: 409 })
 }

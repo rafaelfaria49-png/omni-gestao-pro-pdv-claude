@@ -24,12 +24,15 @@ export function useClienteSearch(
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    if (query.length < 2) {
+    abortRef.current?.abort()
+    setClientes([])
+    if (!lojaId || query.length < 2) {
       setClientes([])
       setIsLoading(false)
       return
     }
 
+    let cancelled = false
     const timer = setTimeout(async () => {
       abortRef.current?.abort()
       const controller = new AbortController()
@@ -42,16 +45,18 @@ export function useClienteSearch(
         if (lojaId) headers["x-assistec-loja-id"] = lojaId
 
         const res = await fetch(
-          `/api/clientes?q=${encodeURIComponent(query)}`,
-          { signal: controller.signal, headers },
+          "/api/clientes/search",
+          { method: "POST", body: JSON.stringify({ q: query }), signal: controller.signal, headers: { ...headers, "Content-Type": "application/json" }, cache: "no-store" },
         )
 
+        if (cancelled) return
         if (!res.ok) {
           setClientes([])
           return
         }
 
         const data = (await res.json()) as { clientes?: unknown }
+        if (cancelled) return
         const arr = Array.isArray(data?.clientes) ? (data.clientes as unknown[]) : []
         setClientes(
           arr.map((item) => {
@@ -66,15 +71,18 @@ export function useClienteSearch(
           }),
         )
       } catch (err) {
+        if (cancelled) return
         if (err instanceof DOMException && err.name === "AbortError") return
         setClientes([])
       } finally {
-        setIsLoading(false)
+        if (!cancelled) setIsLoading(false)
       }
     }, 300)
 
     return () => {
+      cancelled = true
       clearTimeout(timer)
+      abortRef.current?.abort()
     }
   }, [query, lojaId])
 
