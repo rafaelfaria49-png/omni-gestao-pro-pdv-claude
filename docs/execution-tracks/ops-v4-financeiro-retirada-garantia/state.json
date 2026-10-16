@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
-  "status": "RUNNING",
+  "status": "PAUSED",
   "risk_tier": "ALTO",
-  "current_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003",
+  "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
-    "goals_done": 2,
+    "goals_done": 3,
     "goals_blocked": 0,
     "goals_imported": 0,
-    "ledger_lines": 6
+    "ledger_lines": 7
   },
-  "last_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002",
+  "last_goal": "OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003",
   "last_result": "DONE",
-  "last_ratified_at": "2026-10-15T22:38:37.348Z"
+  "last_ratified_at": "2026-10-16T08:01:15.999Z"
 }
