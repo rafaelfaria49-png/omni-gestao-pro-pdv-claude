@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { assinaturaGarantiasServicosV3 } from "@/lib/operacoes-v3/garantia-servicos-model";
 import type { OrdemServico } from "@/types/os";
 import type { V4Vals } from "@/components/operacoes-v4-preview/use-v4-preview";
 import { DocumentosEntregaCard, GarantiaFormCard } from "@/components/operacoes-v4-preview/parts/stages/EntregaStage";
@@ -27,8 +28,9 @@ describe("editor V4 de garantia montado", () => {
     expect(screen.getByRole("spinbutton")).toHaveProperty("value", "0");
     expect(screen.getByRole("spinbutton")).toHaveProperty("disabled", true);
     expect(screen.getByText("Sem cobertura — prazo 0")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Motivo da alteração/), { target: { value: "Motivo sintético" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar garantia" }));
-    await waitFor(() => expect(salvar).toHaveBeenCalledWith({ modeloId: "sem_garantia", prazoDias: 0 }));
+    await waitFor(() => expect(salvar).toHaveBeenCalledWith({ modeloId: "sem_garantia", prazoDias: 0, motivo: "Motivo sintético", origem: "v4", esperado: assinaturaGarantiasServicosV3(os("tela",90)) }));
   });
 
   it("Tela carrega o prazo padrão e permite prazo coberto positivo", async () => {
@@ -39,8 +41,9 @@ describe("editor V4 de garantia montado", () => {
     expect(prazo).toHaveProperty("value", "90");
     expect(prazo).toHaveProperty("disabled", false);
     fireEvent.change(prazo, { target: { value: "45" } });
+    fireEvent.change(screen.getByLabelText(/Motivo da alteração/), { target: { value: "Motivo sintético" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar garantia" }));
-    await waitFor(() => expect(salvar).toHaveBeenCalledWith({ modeloId: "tela", prazoDias: 45 }));
+    await waitFor(() => expect(salvar).toHaveBeenCalledWith({ modeloId: "tela", prazoDias: 45, motivo: "Motivo sintético", origem: "v4", esperado: assinaturaGarantiasServicosV3(os("sem_garantia",0)) }));
   });
 
   it("falha e refresh da mesma OS preservam a edição e mostram erro recuperável", async () => {
@@ -48,6 +51,7 @@ describe("editor V4 de garantia montado", () => {
     const v = vals(os("tela", 90), salvar);
     const view = render(<GarantiaFormCard v={v} />);
     fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "45" } });
+    fireEvent.change(screen.getByLabelText(/Motivo da alteração/), { target: { value: "Motivo sintético" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar garantia" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Não foi possível salvar/));
     view.rerender(<GarantiaFormCard v={{ ...v, realOS: os("tela", 90, "t2") }} />);

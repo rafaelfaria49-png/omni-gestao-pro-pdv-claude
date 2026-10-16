@@ -37,7 +37,9 @@ import type { V4Vals } from "../../use-v4-preview";
 import { SignaturePadV3 } from "@/components/operacoes-v3/components/SignaturePadV3";
 import { CATEGORIAS_FOTO_SAIDA_V3, lerEntregaV3, lerGarantiaV3, type CategoriaFotoSaidaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { FOTO_MAX_V3 } from "@/lib/operacoes-v3/prova-entrada-model";
-import { GARANTIA_CATALOGO_V3, garantiaCatalogoV3, normalizarGarantiaPrevistaV3, prazoPadraoGarantiaV3 } from "@/lib/operacoes-v3/garantia-textos";
+import { GarantiaEditorV3, CoberturasGarantiaResumoV3 } from "@/components/operacoes-v3/components/GarantiaEditorV3";
+import { lerVersoesTermoGarantiaV3 } from "@/lib/operacoes-v3/garantia-termos-model";
+import { assinaturaGarantiasServicosV3 } from "@/lib/operacoes-v3/garantia-servicos-model";
 import type { EntregaSemCobrancaCategoriaV3, EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import {
   campoAgoraV3,
@@ -612,103 +614,7 @@ function AssinaturaRetiradaCard({ v }: { v: V4Vals }) {
  * direto de `salvarGarantiaOSV3` (mesmo contrato/payload que a V3 grava).
  */
 export function GarantiaFormCard({ v }: { v: V4Vals }) {
-  const seed = lerGarantiaV3(v.realOS);
-  const seedModeloId = seed.temGarantia ? seed.modeloId : "sem_garantia";
-  const seedPrazoDias = seed.temGarantia ? seed.prazoDias : prazoPadraoGarantiaV3("sem_garantia");
-
-  const [modeloId, setModeloId] = useState(seedModeloId);
-  const [prazoDias, setPrazoDias] = useState(seedPrazoDias);
-  const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const osIdRef = useRef(v.realOS?.id ?? "");
-  const semCobertura = garantiaCatalogoV3(modeloId).semCobertura;
-
-  // Reseta o formulário quando a OS/garantia muda (troca de OS ou reload pós-save).
-  const seedKey = `${v.realOS?.id ?? ""}:${v.realOS?.atualizadoEm ?? ""}`;
-  useEffect(() => {
-    const osId = v.realOS?.id ?? "";
-    // Uma falha pode recarregar o detalhe; não descarte a edição ainda suja.
-    if (dirty && osIdRef.current === osId) return;
-    osIdRef.current = osId;
-    setModeloId(seedModeloId);
-    setPrazoDias(seedPrazoDias);
-    setDirty(false);
-    setErro(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedKey]);
-
-  const aplicarModelo = (id: string) => {
-    const garantia = normalizarGarantiaPrevistaV3({ modeloId: id });
-    setModeloId(garantia.modelo.id);
-    setPrazoDias(garantia.prazoDias);
-    setDirty(true);
-    setErro(null);
-  };
-
-  const onSalvar = async () => {
-    if (busy || !dirty) return;
-    setBusy(true);
-    setErro(null);
-    try {
-      const garantia = normalizarGarantiaPrevistaV3({ modeloId, prazoDias });
-      const ok = await v.salvarGarantia({ modeloId: garantia.modelo.id, prazoDias: garantia.prazoDias });
-      if (ok) setDirty(false);
-      else setErro("Não foi possível salvar. Revise a mensagem e tente novamente.");
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : "Não foi possível salvar. Tente novamente.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div>
-      <div style={{ ...upLabel, marginBottom: 8 }}>{seed.temGarantia ? "Editar garantia" : "Definir garantia"}</div>
-      <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 10 }}>
-        <label>
-          <div style={{ ...upLabel, marginBottom: 4 }}>Modelo de garantia</div>
-          <select value={modeloId} onChange={(e) => aplicarModelo(e.target.value)} style={inputBase}>
-            {GARANTIA_CATALOGO_V3.map((m) => (
-              <option key={m.id} value={m.id}>{m.titulo}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <div style={{ ...upLabel, marginBottom: 4 }}>{semCobertura ? "Sem cobertura — prazo 0" : "Prazo em dias"}</div>
-          <input
-            type="number"
-            min={semCobertura ? 0 : 1}
-            value={prazoDias}
-            disabled={semCobertura || busy}
-            onChange={(e) => {
-              setPrazoDias(Math.max(1, Math.trunc(Number(e.target.value) || 0)));
-              setDirty(true);
-              setErro(null);
-            }}
-            style={inputBase}
-          />
-        </label>
-      </div>
-      <button
-        type="button"
-        disabled={busy || !dirty}
-        onClick={() => void onSalvar()}
-        style={{
-          ...btnPrimary,
-          background: C.primary,
-          cursor: busy || !dirty ? "default" : "pointer",
-          opacity: busy || !dirty ? 0.6 : 1,
-        }}
-      >
-        {busy ? "Salvando…" : "Salvar garantia"}
-      </button>
-      {erro && <div role="alert" style={{ color: C.danger, fontSize: 11, marginTop: 8 }}>{erro}</div>}
-      <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>
-        A garantia fica prevista na OS e passa a valer na entrega.
-      </div>
-    </div>
-  );
+  return <GarantiaEditorV3 key={v.realOS?.storeId + ":" + v.realOS?.id} os={v.realOS} salvar={v.salvarGarantia} origem="v4" />;
 }
 
 async function comprimirFotoSaida(file: File): Promise<string> {
@@ -821,6 +727,11 @@ function FotosSaidaCard({ v }: { v: V4Vals }) {
 }
 
 export function DocumentosEntregaCard({ v }: { v: V4Vals }) {
+  const [motivoReemissao, setMotivoReemissao] = useState("");
+  const [reemissaoBusy, setReemissaoBusy] = useState(false);
+  const versoes = lerVersoesTermoGarantiaV3(v.realOS);
+  const legado = lerEntregaV3(v.realOS).entregue && !versoes.length;
+
   const garantiaDefinida = lerGarantiaV3(v.realOS).temGarantia;
   // GOAL OPS-V4-FLUXO-CURTO-006: o termo declara a retirada — só após a entrega real.
   const entregue = lerEntregaV3(v.realOS).entregue;
@@ -843,6 +754,14 @@ export function DocumentosEntregaCard({ v }: { v: V4Vals }) {
         <button type="button" style={btn} disabled={!entregue} onClick={() => v.openDocPrint("termo_entrega")}>Imprimir Termo de Entrega</button>
         <button type="button" style={btn} onClick={() => v.openDocPrint("os_cliente")}>Imprimir OS (cliente)</button>
       </div>
+      {legado ? <div style={{ fontSize: 12, marginTop: 12 }}>
+        <p>Documento legado sem snapshot. Não é possível comprovar o termo original.</p>
+        <label>Motivo da reemissão<input style={inputBase} value={motivoReemissao} onChange={(e) => setMotivoReemissao(e.target.value)} /></label>
+        <button type="button" style={{ ...btnSecundario, marginTop: 8 }} disabled={!motivoReemissao.trim() || reemissaoBusy || !v.reemitirTermoGarantia} onClick={async () => {
+          setReemissaoBusy(true);
+          try { await v.reemitirTermoGarantia?.({ motivo: motivoReemissao, esperado: assinaturaGarantiasServicosV3(v.realOS) }); } finally { setReemissaoBusy(false); }
+        }}>Reemitir termo legado</button>
+      </div> : null}
       {!garantiaDefinida && <div style={{ fontSize: 11, color: C.subtle, marginTop: 8 }}>Defina a garantia da OS antes de emitir o termo.</div>}
       {!entregue && <div style={{ fontSize: 11, color: C.subtle, marginTop: 8 }}>O Termo de Entrega fica disponível depois da entrega confirmada.</div>}
       <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>
@@ -856,41 +775,20 @@ export function DocumentosEntregaCard({ v }: { v: V4Vals }) {
  * Garantia da OS (real) — o MESMO card antes e depois da entrega (definir/editar
  * modelo e prazo continuam aqui: contrato e E2E do GOAL OPS-V4-FLUXO-CURTO-002).
  */
-function GarantiaOSCard({ v }: { v: V4Vals }) {
-  const g = v.entrega.garantia;
-  return (
-    <div style={card}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
-        <span style={cardTitle}>🛡 Garantia da OS</span>
-        {g.temGarantia && <StatusBadge label={g.situacao} tone={g.situacaoTone} />}
-      </div>
-      {g.temGarantia && (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
-            <Field label="Prazo" value={g.prazo} />
-            <Field label="Cobertura" value={g.cobertura} />
-            <Field label="Início" value={g.inicio} />
-            <Field label="Validade" value={g.fim} />
-          </div>
-          {g.observacoes && (
-            <div style={{ marginBottom: 11 }}>
-              <div style={{ ...upLabel, marginBottom: 3 }}>Condições</div>
-              <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{g.observacoes}</div>
-            </div>
-          )}
-          {g.acionamentos && (
-            <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 11 }}>
-              Acionamentos registrados: <b>{g.acionamentos}</b>
-            </div>
-          )}
-          <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 11 }}>
-            <GarantiaFormCard v={v} />
-          </div>
-        </>
-      )}
-      {!g.temGarantia && <><div style={{ fontSize: 12, color: C.subtle, marginBottom: 10 }}>Garantia não definida.</div><GarantiaFormCard v={v} /></>}
+export function GarantiaOSCard({ v }: { v: V4Vals }) {
+  const [aberto, setAberto] = useState<"condicoes" | "editor" | null>(null);
+  const versoes = lerVersoesTermoGarantiaV3(v.realOS);
+  return <div style={card}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}><span style={cardTitle}>🛡 Garantia da OS</span>{v.entrega.garantia.temGarantia ? <StatusBadge label={v.entrega.garantia.situacao} tone={v.entrega.garantia.situacaoTone} /> : null}</div>
+    <CoberturasGarantiaResumoV3 os={v.realOS} />
+    {versoes.length ? <p style={{ fontSize: 11, color: C.subtle, marginTop: 8 }}>Termo v{versoes.at(-1)!.versao} · versões anteriores preservadas</p> : null}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+      <button type="button" style={btnSecundario} aria-expanded={aberto === "condicoes"} aria-controls="garantia-condicoes" onClick={() => setAberto(aberto === "condicoes" ? null : "condicoes")}>Ver condições</button>
+      <button type="button" style={btnSecundario} aria-expanded={aberto === "editor"} aria-controls="garantia-editor" onClick={() => setAberto(aberto === "editor" ? null : "editor")}>Alterar prazo</button>
     </div>
-  );
+    {aberto === "condicoes" ? <section id="garantia-condicoes" aria-label="Condições por serviço" style={{ marginTop: 14 }}><CoberturasGarantiaResumoV3 os={v.realOS} condicoes /></section> : null}
+    {aberto === "editor" ? <section id="garantia-editor" aria-label="Editar garantia" style={{ marginTop: 14 }}><GarantiaFormCard v={v} /></section> : null}
+  </div>;
 }
 
 /** Registro efetivo da retirada — só depois da entrega (nunca fabricado pela garantia). */
@@ -983,7 +881,7 @@ export function EntregaStage({ v }: { v: V4Vals }) {
           <FotosSaidaCard v={v} />
         </div>
         <aside className={styles.lateral} aria-label="Garantia e documentos da OS">
-          <GarantiaOSCard v={v} />
+          <GarantiaOSCard key={v.realOS?.storeId + ":" + v.realOS?.id} v={v} />
           <DocumentosEntregaCard v={v} />
         </aside>
       </div>

@@ -9,10 +9,13 @@
 // Suporta: OS cliente · Termo de garantia · Via interna · Etiqueta técnica.
 // ============================================================================
 
-import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { lerVersoesTermoGarantiaV3 } from "@/lib/operacoes-v3/garantia-termos-model";
 import { ArrowLeft, Printer, MessageCircle } from "lucide-react";
 import type { LinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
+import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
+import { montarMensagemDocumentoV4 } from "@/lib/operacoes-v4/documento-mensagem";
 import type { OrdemServico } from "@/types/os";
 import {
   montarDocumentoOSV3,
@@ -57,7 +60,7 @@ export function PrintPreviewV3({
   os: OrdemServico | null;
   empresa?: EmpresaPrintInputV3;
   onClose: () => void;
-  onPrinted?: (tipo: DocumentoTipoV3) => void;
+  onPrinted?: (tipo: DocumentoTipoV3, versao?: number) => void;
   /** Link wa.me já montado (mesmo contrato do orçamento). Só documentos visíveis ao cliente. */
   whatsapp?: LinkWaV4 | null;
 }) {
@@ -65,6 +68,15 @@ export function PrintPreviewV3({
   useEffect(() => setMounted(true), []);
 
   const open = tipo !== null && !!os;
+  const alvo = os?.storeId + ":" + os?.id + ":" + tipo;
+  const versoes = lerVersoesTermoGarantiaV3(os);
+  const [escolha, setEscolha] = useState<{ alvo: string; versao: number } | null>(null);
+  const versao = escolha?.alvo === alvo ? escolha.versao : versoes.at(-1)?.versao;
+  const retornoFoco = useRef<HTMLElement | null>(null);
+  const docGarantia = useMemo(() => os && tipo === "termo_garantia" ? montarTermoGarantiaDocV3(os, empresa, { versao }) : null, [os, tipo, empresa, versao]);
+  const whatsappEfetivo = tipo === "termo_garantia" && os
+    ? docGarantia?.limitacao ? null : montarLinkWaV4(docGarantia?.cliente.telefone, montarMensagemDocumentoV4(tipo, os, versao))
+    : whatsapp;
 
   const conteudo = useMemo(() => {
     if (!open || !os || !tipo) return null;
@@ -74,7 +86,7 @@ export function PrintPreviewV3({
       case "comprovante_interno":
         return <OSPrintDocumentV3 doc={montarDocumentoOSV3(os, empresa, { variante: "interna" })} />;
       case "termo_garantia":
-        return <TermoGarantiaDocV3 doc={montarTermoGarantiaDocV3(os, empresa)} />;
+        return <TermoGarantiaDocV3 doc={docGarantia!} />;
       case "termo_entrega":
         return <TermoEntregaDocV3 doc={montarTermoEntregaV3(os, empresa)} />;
       case "etiqueta":
@@ -86,16 +98,7 @@ export function PrintPreviewV3({
       default:
         return null;
     }
-  }, [open, os, tipo, empresa]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, os, tipo, empresa, docGarantia]);
 
   if (!open || !mounted || !conteudo || !tipo) return null;
 
@@ -103,41 +106,44 @@ export function PrintPreviewV3({
   const numero = os?.codigo ?? "";
 
   const imprimir = () => {
-    onPrinted?.(tipo);
+    if (docGarantia?.limitacao) return;
+    onPrinted?.(tipo, tipo === "termo_garantia" ? versao : undefined);
     window.print();
   };
 
-  return createPortal(
-    <div data-og-print-overlay className="fixed inset-0 z-[80] overflow-y-auto bg-zinc-700/60">
+  return (
+    <Dialog.Root open={open} onOpenChange={(value) => { if (!value) onClose(); }}><Dialog.Portal>
+    <Dialog.Content data-og-print-overlay aria-describedby={undefined} onOpenAutoFocus={() => { retornoFoco.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }} onEscapeKeyDown={(e) => e.stopPropagation()} onCloseAutoFocus={(e) => { e.preventDefault(); retornoFoco.current?.focus(); }} className="fixed inset-0 z-[80] overflow-y-auto bg-zinc-700/60 outline-none">
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
 
-      <div data-no-print className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-2.5 shadow-sm">
+      <div data-no-print className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-2.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-semibold text-foreground">{meta.label} · {numero}</span>
+          <Dialog.Title className="truncate text-sm font-semibold text-foreground">{meta.label} · {numero}</Dialog.Title>
           {!meta.cliente ? (
             <span className="hidden rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning sm:inline">uso interno</span>
           ) : (
             <span className="hidden text-xs text-muted-foreground sm:inline">A4</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ButtonV3 variant="ghost" onClick={onClose}>
             <ArrowLeft className="h-4 w-4" aria-hidden /> Voltar
           </ButtonV3>
-          {meta.cliente && whatsapp && whatsapp.valido ? (
+          {meta.cliente && whatsappEfetivo && whatsappEfetivo.valido ? (
             <ButtonV3
               variant="outline"
-              onClick={() => window.open(whatsapp.url, "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(whatsappEfetivo.url, "_blank", "noopener,noreferrer")}
             >
               <MessageCircle className="h-4 w-4" aria-hidden /> WhatsApp
             </ButtonV3>
           ) : null}
-          {meta.cliente && whatsapp && !whatsapp.valido ? (
-            <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground sm:inline" title={whatsapp.motivo}>
-              {whatsapp.motivo}
+          {meta.cliente && whatsappEfetivo && !whatsappEfetivo.valido ? (
+            <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground sm:inline" title={whatsappEfetivo.motivo}>
+              {whatsappEfetivo.motivo}
             </span>
           ) : null}
-          <ButtonV3 variant="primary" onClick={imprimir}>
+          {tipo === "termo_garantia" && versoes.length ? <label className="text-xs">Versão<select aria-label="Versão do termo" className="ml-2 rounded border bg-background p-1" value={versao} onChange={(e) => setEscolha({ alvo, versao: Number(e.target.value) })}>{versoes.map((v) => <option key={v.versao} value={v.versao}>v{v.versao} · {v.tipo === "original" ? "Original" : v.tipo === "aditivo" ? "Aditivo" : v.tipo === "correcao_data" ? "Correção de data" : "Reemissão de legado"}</option>)}</select></label> : null}
+          <ButtonV3 variant="primary" disabled={!!docGarantia?.limitacao} onClick={imprimir}>
             <Printer className="h-4 w-4" aria-hidden /> Imprimir
           </ButtonV3>
         </div>
@@ -148,7 +154,6 @@ export function PrintPreviewV3({
           {conteudo}
         </div>
       </div>
-    </div>,
-    document.body,
+    </Dialog.Content></Dialog.Portal></Dialog.Root>
   );
 }

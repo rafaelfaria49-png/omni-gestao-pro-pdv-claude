@@ -7,6 +7,7 @@
 
 import type { ServicoAutorizadoV4 } from "./nova-os-draft-from-form";
 import { lucroEstimadoV4, margemEstimadaV4 } from "./atendimento-comercial";
+import { sugerirGarantiaPorDescricaoV3 } from "@/lib/operacoes-v3/garantia-textos";
 
 /** Mínimo de caracteres para a busca do catálogo exibir resultados. */
 export const MIN_QUERY_CATALOGO_V4 = 2;
@@ -19,6 +20,8 @@ export interface ServicoLinhaFormV4 {
   valor: number;
   custo: number;
   garantia: number;
+  garantiaModeloId?: string;
+  garantiaMotivo?: string;
   prazo: string;
   /** Origem no catálogo (metadata); null = serviço manual. */
   catalogoServicoId: string | null;
@@ -44,6 +47,7 @@ export function linhaServicoDoCatalogoV4(
     valor: Math.max(0, s.preco),
     custo: Math.max(0, s.custo),
     garantia: Math.max(0, Math.trunc(s.garantia) || 0),
+    garantiaModeloId: s.garantia === 0 ? "sem_garantia" : sugerirGarantiaPorDescricaoV3(s.nome) ?? "personalizado",
     prazo: s.tempo === "—" ? "" : s.tempo,
     catalogoServicoId: s.id?.trim() ? s.id : null,
     confirmada: false,
@@ -90,6 +94,8 @@ export function paraServicosAutorizadosV4(linhas: ServicoLinhaFormV4[]): Servico
       valor: Math.max(0, l.valor),
       custo: Math.max(0, l.custo),
       garantiaDias: Math.max(0, Math.trunc(l.garantia) || 0),
+      ...(l.garantiaModeloId ? { garantiaModeloId: l.garantiaModeloId } : {}),
+      ...(l.garantiaMotivo?.trim() ? { garantiaMotivo: l.garantiaMotivo.trim() } : {}),
       ...(clean(l.prazo) ? { prazoTexto: clean(l.prazo) } : {}),
       ...(clean(l.catalogoServicoId) ? { catalogoServicoId: clean(l.catalogoServicoId) } : {}),
     }));

@@ -41,6 +41,8 @@ import {
   type TermoGarantiaV3,
 } from "./garantia-textos";
 import { lerEntregaV3, lerGarantiaV3 } from "./pos-venda-model";
+import { lerCoberturasGarantiaV3, termoCoberturaServicoV3, type CoberturaServicoV3 } from "./garantia-servicos-model";
+import { documentoGarantiaEmitidoV3 } from "./garantia-termos-model";
 import { formatarDataOperacionalV3, lerDatasOSV3 } from "./datas-operacionais-model";
 import {
   ACESSORIOS_ENTRADA_V3,
@@ -289,6 +291,13 @@ export function observacoesClienteV3(os: OrdemServico): string[] {
 
 /** Termo de garantia da OS, derivado da garantia prevista (Nova OS) ou da garantia efetiva. */
 export function termoGarantiaDaOSV3(os: OrdemServico): TermoGarantiaV3 {
+  const coberturas = lerCoberturasGarantiaV3(os);
+  if (coberturas.length > 1) return {
+    modeloId: "por_servico", titulo: "Garantia por serviço", semCobertura: coberturas.every((c) => c.prazoDias === 0),
+    cobertura: coberturas.map((c) => `${c.descricao}: ${c.prazoDias ? `${c.prazoDias} dias` : "sem cobertura"}. ${termoCoberturaServicoV3(c).cobertura.join(" ")}`),
+    exclusoes: [], observacao: "Consulte as condições de cada serviço. A avaliação do defeito determina a cobertura do retorno.",
+  };
+  if (coberturas.length === 1) return termoCoberturaServicoV3(coberturas[0]);
   const prevista = (os as { aberturaV3?: { garantiaPrevista?: { modelo?: unknown; prazoDias?: unknown; termo?: unknown } } }).aberturaV3?.garantiaPrevista;
   const garantia = lerGarantiaV3(os);
   if (!garantia.temGarantia) {
@@ -522,13 +531,22 @@ export interface TermoGarantiaDocV3 {
   equipamento: { marca: string; modelo: string; numeroSerie: string };
   servicoRealizado: string[];
   termo: TermoGarantiaV3;
+  coberturas?: Array<CoberturaServicoV3 & { termo: TermoGarantiaV3; inicio?: string; vencimento?: string; porDia?: boolean }>;
+  versao?: number;
+  tipoVersao?: string;
+  instrucoes?: string;
+  origemTexto?: string;
+  revisaoJuridica?: string;
+  limitacao?: string;
 }
 
 export function montarTermoGarantiaDocV3(
   os: OrdemServico,
   empresa?: EmpresaPrintInputV3,
-  opts?: { now?: Date },
+  opts?: { now?: Date; versao?: number },
 ): TermoGarantiaDocV3 {
+  const emitido = documentoGarantiaEmitidoV3(os, opts?.versao);
+  if (emitido) return emitido;
   const now = opts?.now ?? new Date();
   const servicoRealizado = itensImprimiveisV3(os)
     .filter((i) => i.categoria === "Serviço" || !i.brinde)
@@ -550,6 +568,9 @@ export function montarTermoGarantiaDocV3(
     },
     servicoRealizado,
     termo: termoGarantiaDaOSV3(os),
+    limitacao: lerEntregaV3(os).entregue
+      ? "Documento legado sem snapshot. O conteúdo original não pode ser comprovado. Solicite reemissão autorizada com motivo."
+      : "Prévia. O termo versionado será emitido na confirmação da entrega.",
   };
 }
 

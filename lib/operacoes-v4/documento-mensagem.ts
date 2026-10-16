@@ -6,6 +6,7 @@ import { documentoMetaV3, type DocumentoTipoV3 } from "@/lib/operacoes-v3/docume
 import { termoGarantiaTextoV3 } from "@/lib/operacoes-v3/garantia-textos";
 import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { formatarDataOperacionalV3, lerDatasOSV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
+import { documentoGarantiaEmitidoV3 } from "@/lib/operacoes-v3/garantia-termos-model";
 import { termoGarantiaDaOSV3 } from "@/lib/operacoes-v3/print-model";
 import { statusMetaV3, statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { montarOrcamentoClienteViewV4 } from "./orcamento-cliente-view";
@@ -33,13 +34,15 @@ export function montarMensagemAtualizacaoOSV4(os: OrdemServico): string {
 }
 
 /** Texto do documento aberto no modal de impressão, para envio via wa.me. */
-export function montarMensagemDocumentoV4(tipo: DocumentoTipoV3, os: OrdemServico): string {
+export function montarMensagemDocumentoV4(tipo: DocumentoTipoV3, os: OrdemServico, versao?: number): string {
   const codigo = os.codigo || "OS";
   const cliente = s(os.cliente?.nome);
   const aparelho = aparelhoLabel(os);
 
   switch (tipo) {
     case "termo_garantia": {
+      const doc = documentoGarantiaEmitidoV3(os, versao);
+      if (doc) return [`Termo de Garantia — ${doc.numero} · v${doc.versao}`, `Cliente: ${doc.cliente.nome}`, `Aparelho: ${doc.equipamento.marca} ${doc.equipamento.modelo}`, ...(doc.coberturas ?? []).map((c) => `${c.descricao} — ${c.prazoDias} dias\n${termoGarantiaTextoV3(c.termo)}\nInício: ${c.inicio ?? "não informado"}\nVencimento: ${c.vencimento ?? "não informado"}`)].join("\n");
       if (!lerGarantiaV3(os).temGarantia) return "";
       const linhas = [`Termo de Garantia — ${codigo}`];
       if (cliente) linhas.push(`Cliente: ${cliente}`);

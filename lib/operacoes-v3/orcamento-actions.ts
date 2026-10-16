@@ -41,7 +41,7 @@ import {
 import { gerarOrcamentoDaOS as gerarOrcamentoDaOSImpl } from "@/components/operacoes/lovable/api/os";
 import {
   computeTotaisV3,
-  garantiaResultanteAprovacaoV3,
+
   montarEventoEnvioOrcamentoV3,
   montarEventoRecusaOrcamentoV3,
   recalcOrcamentoV3,
@@ -56,7 +56,7 @@ import {
   type SalvarOrcamentoV3Input,
 } from "./orcamento-model";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
-import { salvarGarantiaOSV3 } from "./garantia-actions";
+import { comPadroesGarantiaServicosV3 } from "./garantia-servicos-model";
 import { mutarPayloadOSV3 } from "./os-payload-lock";
 import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
 import { uid as uidLovable } from "@/components/operacoes/lovable/api/_helpers";
@@ -215,7 +215,7 @@ function montarGravacao(
   next: GravacaoOrcamentoV3,
 ): { nextPayload: OSPayloadFull; colunas: Omit<Prisma.OrdemServicoUpdateInput, "payload"> } {
   const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-  const nextPayload: OSPayloadFull = {
+  let nextPayload: OSPayloadFull = {
     ...payload,
     orcamento: next.orcamento,
     timeline: [...timeline, ...next.eventos],
@@ -231,6 +231,7 @@ function montarGravacao(
     nextPayload.operacaoStatusV3 = next.statusOS;
     colunas.status = operacaoStatusToPrismaStatus(statusV2);
   }
+  if (next.orcamento.status === "aprovado") nextPayload = comPadroesGarantiaServicosV3(nextPayload) as OSPayloadFull;
   // total da OS reflete o total ao cliente do orçamento.
   const totalCliente = computeTotaisV3(next.orcamento).total;
   if (Number.isFinite(totalCliente)) colunas.valorTotal = totalCliente;
@@ -499,17 +500,7 @@ export async function aprovarOrcamentoV3(
   };
   });
 
-  // Garantia da variante escolhida — melhor esforço (best-effort): se falhar,
-  // a aprovação já gravada NÃO é desfeita (efeito auxiliar, não o núcleo da
-  // decisão comercial). Nenhuma sobrescrita quando nenhuma variante informa garantia.
-  const garantia = garantiaResultanteAprovacaoV3(aprovado);
-  if (garantia) {
-    await salvarGarantiaOSV3(sid, id, {
-      modeloId: "personalizado",
-      prazoDias: garantia.prazoDias,
-      termoCustom: garantia.rotulo ? `Garantia da opção aprovada: ${garantia.rotulo}.` : undefined,
-    }).catch((err) => console.error("[orcamento] aplicar garantia da variante falhou", err));
-  }
+  // Coberturas foram materializadas junto da aprovação, sem sobrescrever outras linhas.
 
   // Espinha de eventos (3C.0): aprovação do orçamento.
   emitirEventoOperacaoV3({
