@@ -1062,10 +1062,15 @@ describe("OPS-V4-FLUXO-CURTO-007 rev 15 — tentativa 3 (achados da R6)", () => 
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Buscar Rota ou Ação" })).toBeNull());
     expect(dialogo.isConnected).toBe(true);
-    // A paleta (Radix, sem trigger) solta o foco no body ao fechar: nenhum controle de fundo
-    // fica com ele, Enter não aciona nada e o próximo Tab volta ao diálogo.
+    // A paleta pode restaurar o foco a um controle do diálogo. Nenhum controle
+    // de fundo pode recebê-lo; Enter é exercitado no próprio diálogo, sem escolher
+    // uma modalidade legítima do launcher, e Tab/Shift+Tab continuam contidos.
     const ativo = document.activeElement;
     expect(ativo === document.body || dialogo.contains(ativo)).toBe(true);
+    if (dialogo.contains(ativo)) {
+      act(() => dialogo.focus());
+      expect(document.activeElement).toBe(dialogo);
+    }
     await user.keyboard("{Enter}");
     expect(fundo).not.toHaveBeenCalled();
     await user.tab();
