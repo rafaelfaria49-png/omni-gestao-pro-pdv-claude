@@ -1,0 +1,29 @@
+
+Running 16 tests using 1 worker
+
+(node:4756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (2.5s)
+(node:28532) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28532) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 2 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:221:5 › E01 — parcial 100 + 200 a partir da cobrança não formalizada; uma Conta a Receber; nada entregue (12.6s)
+  ok 3 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:246:5 › E02 — split suportado (PIX + débito) no mesmo recebimento (13.4s)
+  ok 4 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:256:5 › E03 — caixa fechado: recebimento imediato bloqueado, nada gravado, entrega bloqueada (4.1s)
+  ok 5 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:279:5 › E04 — sinal antes de pronta: pagamento real, status técnico preservado, sem entrega (7.9s)
+  ok 6 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:293:5 › E05 — pagamento completo leva à entrega explícita; nada é entregue sozinho; termo só depois (7.3s)
+  ok 7 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:306:5 › E06 — pagou, a entrega falhou (rede): dinheiro preservado; após reload, retry SÓ da entrega (15.7s)
+  ok 8 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:328:5 › E07 — 100% a prazo sem caixa: entrega autorizada, não quitada, nenhum movimento de caixa (16.3s)
+  ok 9 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:348:5 › E08 — saldo sem autorização: entrega bloqueada com o saldo explícito (8.3s)
+  ok 10 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:357:5 › E09 — sem cobrança: categoria + motivo auditados; nunca silencioso (9.9s)
+  ok 11 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:382:5 › E10 — recibo após reload: reimpressão do comprovante persistido da MESMA OS; teclado preso no recibo (rev 13) (12.5s)
+  ok 12 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:419:5 › E11 — estorno: saldo volta, entrega volta a bloquear, comprovante estornado não é reoferecido (10.1s)
+  ok 13 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:440:5 › E12 — duplo clique + resposta perdida + replay real do MESMO pedido: um único fato de entrega e uma baixa (23.0s)
+  ok 14 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:478:5 › E13 — troca A→B com a entrega de A em voo: B intacta (30.0s)
+  ok 15 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:506:5 › E14 — estoque: peça vinculada baixa exatamente uma vez (pagamento e replay não baixam) (18ms)
+  ok 16 [chromium] › e2e\specs\operacoes-v4-fluxo-curto-006.spec.ts:514:5 › E15 — pós-entrega: termo de entrega com retirante e data reais; garantia ativa; recibo da mesma OS (10.3s)
+
+  16 passed (3.1m)

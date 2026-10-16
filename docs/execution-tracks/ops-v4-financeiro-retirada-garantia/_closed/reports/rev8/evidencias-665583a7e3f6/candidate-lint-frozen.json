@@ -1,0 +1,39 @@
+{
+  "sha": "665583a7e3f6f1b9552b4c56b3d6a3dd97299167",
+  "cwd": "C:\\Projetos\\omni-gestao-ops-v4-frg-002",
+  "executable": "C:\\Program Files\\nodejs\\node.exe",
+  "command": [
+    "node_modules/eslint/bin/eslint.js",
+    "lib/operacoes-v3/elegibilidade-comercial.ts",
+    "lib/operacoes-v3/elegibilidade-comercial.test.ts",
+    "lib/operacoes-v3/pdv-servico-actions.ts",
+    "components/operacoes-v3/hooks/use-pdv-servico-v3.ts",
+    "components/operacoes-v3/pages/PdvServicoV3.tsx",
+    "components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx",
+    "test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts",
+    "test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx",
+    "test/ops-v4-financeiro-retirada-garantia-002/motivo-v3.test.tsx",
+    "test/ops-v4-financeiro-retirada-garantia-002/motivo-v4.test.tsx",
+    "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+    "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8-regressoes.mjs",
+    "test/ops-v4-financeiro-retirada-garantia-002/vitest-fluxo002-pg.config.mjs",
+    "e2e/specs/ops-v4-financeiro-retirada-garantia-002.spec.ts"
+  ],
+  "shell": false,
+  "start": "2026-10-11T02:48:33.398Z",
+  "end": "2026-10-11T02:49:08.998Z",
+  "exitCode": 0,
+  "target": {
+    "db": "ops_v4_frg_qa_002",
+    "host": "127.0.0.1/32",
+    "port": 45708
+  },
+  "sourceHashes": {
+    "lib/operacoes-v3/elegibilidade-comercial.ts": "65c4af647eb85f0662e0707f078d65561d8c67ca1d6500e2fe3752c8279d011d",
+    "lib/operacoes-v3/pdv-servico-actions.ts": "7a7f6cd0490797995cbeb116dd0b2360ce53555a00554e3c8d1ffbf56ec7675f",
+    "components/operacoes-v3/hooks/use-pdv-servico-v3.ts": "76f5a9be6ed0e529fb26310b0ae7ef3225a8e227dbdd58c8ecac9ca8872451d3",
+    "components/operacoes-v3/pages/PdvServicoV3.tsx": "11cf7b47819d8f3b46adca07f275a3dd0542b52a1ed162ac290b0770bd0949b0",
+    "components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx": "e02653d5ebf8bc6fb8ee6ffd61d346e852a0edec7dface3b6ff3dc972f98bc2a"
+  },
+  "expectedRed": false
+}

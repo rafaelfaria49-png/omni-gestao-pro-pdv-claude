@@ -1,0 +1,5 @@
+Environment variables loaded from .env
+Error: 
+EPERM: operation not permitted, rename 'C:\Projetos\omni-gestao-ops-v4-frg-002\generated\prisma\query_engine-windows.dll.node.tmp17952' -> 'C:\Projetos\omni-gestao-ops-v4-frg-002\generated\prisma\query_engine-windows.dll.node'
+
+

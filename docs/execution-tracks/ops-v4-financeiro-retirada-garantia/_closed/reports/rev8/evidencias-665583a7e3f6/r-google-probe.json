@@ -1,0 +1,23 @@
+{
+  "family": "google",
+  "sessionId": "4fc6c2c0-a72a-4e12-bc03-f433e9b3bd4a",
+  "args": [
+    "C:/Users/rafae/AppData/Roaming/npm/node_modules/@google/gemini-cli/bundle/gemini.js",
+    "--approval-mode",
+    "plan",
+    "--extensions",
+    "none",
+    "--allowed-mcp-server-names",
+    "__rev8_no_mcp__",
+    "--skip-trust",
+    "--output-format",
+    "json",
+    "--session-id",
+    "4fc6c2c0-a72a-4e12-bc03-f433e9b3bd4a",
+    "--prompt",
+    "Sondagem de disponibilidade para revisão independente autorizada. Não use nenhuma ferramenta, não leia arquivos ou credenciais e não edite nada. Responda apenas DISPONIVEL."
+  ],
+  "start": "2026-10-11T03:17:07.495Z",
+  "end": "2026-10-11T03:17:13.797Z",
+  "exitCode": 1
+}

@@ -13,6 +13,10 @@ import type {
   FinancialProjectionOSV4,
   ImpedimentoCodigoV4,
 } from "./financial-projection";
+import {
+  MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3,
+  MENSAGEM_GERAR_ORCAMENTO_PAGAMENTOS_EM_CONFERENCIA_V3,
+} from "@/lib/operacoes-v3/elegibilidade-comercial";
 
 export type TomSituacaoV4 = "success" | "info" | "warning" | "danger" | "neutral";
 
@@ -365,4 +369,46 @@ export function explicacaoConferenciaV4(projection: FinancialProjectionOSV4 | nu
 /** Pendência comercial com pagamento VERIFICADO — o caso que a V4 antes chamava de "indisponível". */
 export function pagamentoComPendenciaComercialV4(s: SituacaoAtendimentoV4): boolean {
   return s.estado === "pronta" && s.comercial.pendente && s.pagamento.verificavel;
+}
+
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item D): "Formalizar aprovação pendente" só é
+ * OFERECIDA com aprovação pendente (ou orçamento vencido sem aprovação) sobre pagamento
+ * verificado e vigente. Só decide a oferta: permissão, escopo e valores são revalidados no
+ * servidor, sob as travas dos writers de pagamento.
+ */
+export function podeOferecerFormalizacaoV4(s: SituacaoAtendimentoV4): boolean {
+  const codigo = s.impedimento?.codigo;
+  return (
+    pagamentoComPendenciaComercialV4(s) &&
+    (codigo === "APROVACAO_COMERCIAL_PENDENTE" || codigo === "ORCAMENTO_EXPIRADO") &&
+    (s.pagamento.recebidoLiquido ?? 0) > 0
+  );
+}
+
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): "Aprovar e receber" vale para
+ * aprovação pendente SEM pagamento registrado. Com pagamento, o caminho é a conferência e,
+ * se for o caso, a formalização (item D) — nunca uma segunda cobrança.
+ */
+export function podeOferecerAprovarEReceberV4(s: SituacaoAtendimentoV4): boolean {
+  return (
+    s.estado === "pronta" &&
+    s.impedimento?.codigo === "APROVACAO_COMERCIAL_PENDENTE" &&
+    (s.pagamento.estado === "sem_titulo" || s.pagamento.estado === "sem_pagamento")
+  );
+}
+
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item B): orientação ANTES de "Gerar orçamento"
+ * em OS que já tem pagamento registrado (ou histórico do título em conferência) — o mesmo texto
+ * da recusa do servidor, que continua decidindo. Existe porque, em build de produção, a
+ * mensagem de uma recusa lançada numa Server Action não chega ao navegador.
+ * `null` = nada conhecido aqui impede: segue para o servidor.
+ */
+export function orientacaoGerarOrcamentoV4(s: SituacaoAtendimentoV4): string | null {
+  if (s.estado !== "pronta") return null;
+  if (s.pagamento.estado === "conferencia_pendente") return MENSAGEM_GERAR_ORCAMENTO_PAGAMENTOS_EM_CONFERENCIA_V3;
+  if (s.pagamento.verificavel && (s.pagamento.recebidoLiquido ?? 0) > 0) return MENSAGEM_GERAR_ORCAMENTO_COM_PAGAMENTO_V3;
+  return null;
 }

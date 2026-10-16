@@ -1,0 +1,8 @@
+
+Running 3 tests using 1 worker
+
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (3.7s)
+  ok 2 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:439:7 › R8 — recusa imediata real preserva motivo, navega para comercial e permite nova confirmação após resolução (1.3m)
+  ok 3 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:439:7 › R8 — recusa imediata real preserva motivo, navega para financeiro e permite nova confirmação após resolução (1.2m)
+
+  3 passed (2.7m)

@@ -1,0 +1,40 @@
+
+Running 6 tests using 1 worker
+
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (1.5s)
+QA_DATAS_NOVA_OS: os=cmv38jki50004h25ofk4kep63 entrada=2026-10-08 previsao=2026-10-13
+  ok 2 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:140:5 › V4 Nova OS: entrada anterior com horário e previsão combinada; o cadastro fica com o servidor (2.9s)
+QA_DATAS_ORCAMENTO: os=cmv38jmkx000bh25onmtnwbyy proposta=2026-10-06 validoAte=2026-10-13
+  ok 3 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:204:5 › V4 Orçamento: proposta de dias atrás, validade coerente e nenhuma entrada fictícia (2.3s)
+QA_DATAS_ATENDIMENTO: os=cmv38job1000ih25o0x785p63 servico=2026-10-09 caixa_at=2026-10-11T03:00:16.000Z
+  ok 4 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:259:5 › V4 Atendimento rápido: serviço de dias atrás; o recebimento é agora, no caixa atual (2.2s)
+  x  5 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:312:5 › V4 Entrega de dias atrás pelo caminho canônico; depois Corrigir datas desloca a garantia sem refazer nada (3.8s)
+QA_DATAS_V3: os=qa-datas-v3-mv38jsgd entrada 2026-10-01 -> 2026-09-29
+  ok 6 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:440:5 › V3 (paridade): OS entregue mostra as datas efetivas no workspace; Corrigir datas da V3 grava só a entrada (3.4s)
+
+
+  1) [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:312:5 › V4 Entrega de dias atrás pelo caminho canônico; depois Corrigir datas desloca a garantia sem refazer nada 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m"Entrega real em 08/10/2026: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?"[39m
+    Received: [31m"Entrega real em 08/10/2026[7m, retirada por Cliente QA Entrega mv38jose[27m: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?"[39m
+
+      367 |     await capturar(page, campo.locator("xpath=ancestor::div[.//button[normalize-space()='Confirmar entrega real']][1]"), "entrega-data");
+      368 |     const aviso = await confirmarNativo(page, () => page.getByRole("button", { name: "Confirmar entrega real" }).click());
+    > 369 |     expect(aviso).toBe(`Entrega real em ${br(entrega)}: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?`);
+          |                   ^
+      370 |     // "Confirmando…" também tira o rótulo do botão: espera o fim real da ação no servidor.
+      371 |     await expect(page.getByRole("button", { name: /^(Confirmar entrega real|Confirmando…)$/ })).toHaveCount(0, { timeout: 60_000 });
+      372 |     const lerOS = async () => (await prisma.ordemServico.findUniqueOrThrow({ where: { id: os.id } })).payload as Json;
+        at C:\Projetos\omni-gestao-ops-v4-frg-002\e2e\specs\ops-datas-retroativas-001.spec.ts:369:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\specs-ops-datas-retroativa-5ce14-a-garantia-sem-refazer-nada-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\specs-ops-datas-retroativa-5ce14-a-garantia-sem-refazer-nada-chromium\error-context.md
+
+  1 failed
+    [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:312:5 › V4 Entrega de dias atrás pelo caminho canônico; depois Corrigir datas desloca a garantia sem refazer nada 
+  5 passed (18.6s)

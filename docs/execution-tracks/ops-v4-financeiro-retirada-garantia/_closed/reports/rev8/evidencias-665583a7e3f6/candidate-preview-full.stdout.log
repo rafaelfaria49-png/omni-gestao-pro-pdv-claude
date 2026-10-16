@@ -1,0 +1,20 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+ ❯ components/operacoes-v4-preview/preview-honesty.test.ts (335 tests | 10 failed) 759ms
+     × não classifica o Financeiro transversal como somente leitura depois do recebimento conectado 11ms
+     × bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem) 1ms
+     × valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002) 1ms
+     × no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio 1ms
+     × mantém estado de múltiplas linhas (array), não forma única 1ms
+     × bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas 1ms
+     × total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova) 1ms
+     × permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única) 0ms
+     × veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo) 1ms
+     × "Termo de Garantia" no menu Docs abre o modal real (docPrint) em vez do toast de preview 2ms
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 325 passed (335)
+   Start at  23:34:13
+   Duration  2.42s (transform 873ms, setup 0ms, import 1.45s, tests 759ms, environment 0ms)
+

@@ -9,7 +9,7 @@ Semáforo: 🟢 rodando · 🟡 esperando humano · 🔴 bloqueado ou check falh
 | contador | 🟡 amarelo | PAUSED | MEDIO | — | — | 17 | 0 | 2026-08-20T20:16:31.782Z |
 | fiscal | 🟢 verde | RUNNING | ALTO | FISCAL-025B-OFFLINE-ARCHIVE-FOUNDATION-001 | FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025 | 8 | 2 | 2026-10-07T19:36:47.716Z |
 | ops-v4-datas-ui-promocao | 🟢 verde | RUNNING | ALTO | OPS-V4-DATAS-UI-PROMOCAO-001 | — | 0 | 0 | — |
-| ops-v4-financeiro-retirada-garantia | 🟢 verde | RUNNING | ALTO | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003 | 1 | 1 | 2026-10-10T19:54:38.905Z |
+| ops-v4-financeiro-retirada-garantia | 🟢 verde | RUNNING | ALTO | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003 | — | 2 | 0 | 2026-10-15T22:38:37.348Z |
 | ops-v4-fluxo-curto | 🟡 amarelo | PAUSED | ALTO | — | — | 7 | 0 | 2026-10-09T06:14:58.471Z |
 | pdv | 🟢 verde | RUNNING | ALTO | PDV-PARITY-N5-B2-PIN-KEYMAP-001 | PDV-PARITY-N5-C-E2E-002 | 3 | 0 | 2026-08-29T21:00:50.288Z |
 | pdv-parity-suite-n5-a-foundation-001 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-16T14:36:01.262Z |

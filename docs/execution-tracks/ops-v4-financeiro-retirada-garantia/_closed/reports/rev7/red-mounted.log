@@ -1,0 +1,396 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx (11 tests | 11 failed) 1012ms
+     × mantém identidade e conteúdo após Connection closed. sem digest 97ms
+     × mantém identidade e conteúdo após timeout 71ms
+     × mantém identidade e conteúdo após digest 64ms
+     × mantém identidade e conteúdo após permissão anterior ao replay 77ms
+     × permissão alterada no reenvio não libera confirmação antiga 79ms
+     × remount/refresh conserva a confirmação inteira antes de qualquer novo envio 148ms
+     × alteração de forma/valor/sessão não dispara outra operação enquanto incerta 79ms
+     × imediato gravado/resposta perdida bloqueia misto em outra chave 78ms
+     × misto incerto bloqueia imediato 78ms
+     × misto sem permissão/sem conferência fica incerto mesmo na primeira chamada 80ms
+     × duas instâncias da mesma OS compartilham o bloqueio durante o primeiro await 158ms
+
+ Test Files  1 failed (1)
+      Tests  11 failed (11)
+   Start at  14:02:55
+   Duration  22.97s (transform 161ms, setup 0ms, import 3.95s, tests 1.01s, environment 17.35s)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-A: erro nunca comprova ausência da confirmação > mantém identidade e conteúdo após Connection closed. sem digest
+AssertionError: expected null to match object { …(2) }
+
+- Expected:
+{
+  "input": {
+    "intencao": "parcial",
+    "linhas": [
+      {
+        "forma": "pix",
+        "valor": 100,
+      },
+    ],
+    "observacao": "Confirmação original",
+    "operacaoId": "0e3807e7-c806-409f-916b-b90ef7ea0552",
+    "saldoEsperado": 420,
+    "sessaoId": "sessao-original",
+  },
+  "operacaoId": "0e3807e7-c806-409f-916b-b90ef7ea0552",
+}
+
++ Received:
+null
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:45:47
+     43|     await act(async () => { expect(await r.result.current.receber(imed…
+     44|     const original = m.receber.mock.calls[0]![2];
+     45|     expect(r.result.current.pendenciaReceber).toMatchObject({ operacao…
+       |                                               ^
+     46|   });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-A: erro nunca comprova ausência da confirmação > mantém identidade e conteúdo após timeout
+AssertionError: expected null to match object { …(2) }
+
+- Expected:
+{
+  "input": {
+    "intencao": "parcial",
+    "linhas": [
+      {
+        "forma": "pix",
+        "valor": 100,
+      },
+    ],
+    "observacao": "Confirmação original",
+    "operacaoId": "071e5623-000d-457f-9e36-4cb9d256601e",
+    "saldoEsperado": 420,
+    "sessaoId": "sessao-original",
+  },
+  "operacaoId": "071e5623-000d-457f-9e36-4cb9d256601e",
+}
+
++ Received:
+null
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:45:47
+     43|     await act(async () => { expect(await r.result.current.receber(imed…
+     44|     const original = m.receber.mock.calls[0]![2];
+     45|     expect(r.result.current.pendenciaReceber).toMatchObject({ operacao…
+       |                                               ^
+     46|   });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-A: erro nunca comprova ausência da confirmação > mantém identidade e conteúdo após digest
+AssertionError: expected null to match object { …(2) }
+
+- Expected:
+{
+  "input": {
+    "intencao": "parcial",
+    "linhas": [
+      {
+        "forma": "pix",
+        "valor": 100,
+      },
+    ],
+    "observacao": "Confirmação original",
+    "operacaoId": "3997badf-dbd5-4389-ae38-917c62c88d9d",
+    "saldoEsperado": 420,
+    "sessaoId": "sessao-original",
+  },
+  "operacaoId": "3997badf-dbd5-4389-ae38-917c62c88d9d",
+}
+
++ Received:
+null
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:45:47
+     43|     await act(async () => { expect(await r.result.current.receber(imed…
+     44|     const original = m.receber.mock.calls[0]![2];
+     45|     expect(r.result.current.pendenciaReceber).toMatchObject({ operacao…
+       |                                               ^
+     46|   });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-A: erro nunca comprova ausência da confirmação > mantém identidade e conteúdo após permissão anterior ao replay
+AssertionError: expected null to match object { …(2) }
+
+- Expected:
+{
+  "input": {
+    "intencao": "parcial",
+    "linhas": [
+      {
+        "forma": "pix",
+        "valor": 100,
+      },
+    ],
+    "observacao": "Confirmação original",
+    "operacaoId": "a1c3d829-16ac-40dc-bef8-20015700389a",
+    "saldoEsperado": 420,
+    "sessaoId": "sessao-original",
+  },
+  "operacaoId": "a1c3d829-16ac-40dc-bef8-20015700389a",
+}
+
++ Received:
+null
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:45:47
+     43|     await act(async () => { expect(await r.result.current.receber(imed…
+     44|     const original = m.receber.mock.calls[0]![2];
+     45|     expect(r.result.current.pendenciaReceber).toMatchObject({ operacao…
+       |                                               ^
+     46|   });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-A: erro nunca comprova ausência da confirmação > permissão alterada no reenvio não libera confirmação antiga
+AssertionError: expected null to match object { input: { …(6) } }
+
+- Expected:
+{
+  "input": {
+    "intencao": "parcial",
+    "linhas": [
+      {
+        "forma": "pix",
+        "valor": 100,
+      },
+    ],
+    "observacao": "Confirmação original",
+    "operacaoId": "60326ffc-d3af-47ca-8fc8-194058322223",
+    "saldoEsperado": 420,
+    "sessaoId": "sessao-original",
+  },
+}
+
++ Received:
+null
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:55:47
+     53|     m.receber.mockRejectedValueOnce(new Error("Sem permissão."));
+     54|     await act(async () => { await r.result.current.receber(original); …
+     55|     expect(r.result.current.pendenciaReceber).toMatchObject({ input: o…
+       |                                               ^
+     56|   });
+     57|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-A: erro nunca comprova ausência da confirmação > remount/refresh conserva a confirmação inteira antes de qualquer novo envio
+AssertionError: expected null to match object { input: { …(6) } }
+
+- Expected:
+{
+  "input": {
+    "intencao": "parcial",
+    "linhas": [
+      {
+        "forma": "pix",
+        "valor": 100,
+      },
+    ],
+    "observacao": "Confirmação original",
+    "operacaoId": "4a9393da-832e-4016-a039-8f58e0ae6b08",
+    "saldoEsperado": 420,
+    "sessaoId": "sessao-original",
+  },
+}
+
++ Received:
+null
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:65:50
+     63|     r.unmount();
+     64|     const novo = await montar();
+     65|     expect(novo.result.current.pendenciaReceber).toMatchObject({ input…
+       |                                                  ^
+     66|     await act(async () => { await novo.result.current.registrarMisto(m…
+     67|     expect(m.misto).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-A: erro nunca comprova ausência da confirmação > alteração de forma/valor/sessão não dispara outra operação enquanto incerta
+AssertionError: expected "vi.fn()" to be called 1 times, but got 2 times
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:75:23
+     73|     await act(async () => { await r.result.current.receber(imediato); …
+     74|     await act(async () => { await r.result.current.receber({ ...imedia…
+     75|     expect(m.receber).toHaveBeenCalledTimes(1);
+       |                       ^
+     76|   });
+     77| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-B: pendência exclusiva entre imediato e misto > imediato gravado/resposta perdida bloqueia misto em outra chave
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "loja-a",
+      "os-a",
+      Object {
+        "intencao": "parcial",
+        "operacaoId": "b85f62f5-fdde-4da1-9e1b-8acec1b4f1d8",
+        "pagamentosAgora": Array [
+          Object {
+            "forma": "pix",
+            "valor": 100,
+          },
+        ],
+        "saldoAPrazo": Object {
+          "observacao": "Prazo original",
+          "valor": 220,
+          "vencimento": "2099-10-30",
+        },
+        "saldoEsperado": 320,
+        "sessaoId": "sessao-original",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:86:25
+     84|     m.misto.mockResolvedValue({ ok: true, pagamento: resultado.pagamen…
+     85|     await act(async () => { await r.result.current.registrarMisto({ ..…
+     86|     expect(m.misto).not.toHaveBeenCalled();
+       |                         ^
+     87|     expect(r.result.current.pendenciaReceber).not.toBeNull();
+     88|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-B: pendência exclusiva entre imediato e misto > misto incerto bloqueia imediato
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "loja-a",
+      "os-a",
+      Object {
+        "intencao": "parcial",
+        "linhas": Array [
+          Object {
+            "forma": "pix",
+            "valor": 100,
+          },
+        ],
+        "observacao": "Confirmação original",
+        "operacaoId": "2597cb8b-13ec-42b9-bf46-a32b7c90b04e",
+        "saldoEsperado": 420,
+        "sessaoId": "sessao-original",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:96:27
+     94|     m.receber.mockResolvedValue(resultado);
+     95|     await act(async () => { await r.result.current.receber(imediato); …
+     96|     expect(m.receber).not.toHaveBeenCalled();
+       |                           ^
+     97|     expect(r.result.current.pendenciaMisto).not.toBeNull();
+     98|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-B: pendência exclusiva entre imediato e misto > misto sem permissão/sem conferência fica incerto mesmo na primeira chamada
+AssertionError: expected null to match object { input: ObjectContaining{…} }
+
+- Expected:
+{
+  "input": ObjectContaining {
+    "intencao": "parcial",
+    "pagamentosAgora": [
+      {
+        "forma": "pix",
+        "valor": 100,
+      },
+    ],
+    "saldoAPrazo": {
+      "observacao": "Prazo original",
+      "valor": 320,
+      "vencimento": "2099-10-30",
+    },
+    "saldoEsperado": 420,
+    "sessaoId": "sessao-original",
+  },
+}
+
++ Received:
+null
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:104:45
+    102|     m.misto.mockResolvedValue({ ok: false, code: "sem_permissao", mens…
+    103|     await act(async () => { await r.result.current.registrarMisto(mist…
+    104|     expect(r.result.current.pendenciaMisto).toMatchObject({ input: exp…
+       |                                             ^
+    105|     await act(async () => { await r.result.current.receber(imediato); …
+    106|     expect(m.receber).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx > R7 · P1-B: pendência exclusiva entre imediato e misto > duas instâncias da mesma OS compartilham o bloqueio durante o primeiro await
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "loja-a",
+      "os-a",
+      Object {
+        "intencao": "parcial",
+        "operacaoId": "cfbcf32b-0454-496c-b724-8b337497596f",
+        "pagamentosAgora": Array [
+          Object {
+            "forma": "pix",
+            "valor": 100,
+          },
+        ],
+        "saldoAPrazo": Object {
+          "observacao": "Prazo original",
+          "valor": 320,
+          "vencimento": "2099-10-30",
+        },
+        "saldoEsperado": 420,
+        "sessaoId": "sessao-original",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/confirmacao-pendente.test.tsx:117:25
+    115|     act(() => { p = a.result.current.receber(imediato); });
+    116|     await act(async () => { await b.result.current.registrarMisto(mist…
+    117|     expect(m.misto).not.toHaveBeenCalled();
+       |                         ^
+    118|     await act(async () => { controle.resolver(resultado); await p; });
+    119|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+

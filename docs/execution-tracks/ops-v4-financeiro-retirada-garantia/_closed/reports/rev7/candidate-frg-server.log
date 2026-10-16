@@ -1,0 +1,12 @@
+▲ Next.js 16.2.0
+- Local:         http://127.0.0.1:3071
+- Network:       http://127.0.0.1:3071
+✓ Ready in 623ms
+[ops/inventory GET] lojaId recebido=loja-1
+Dados encontrados no banco (por loja): 0
+[ops/inventory GET] lojaId recebido=000-qa-frg-001
+Dados encontrados no banco (por loja): 0
+[ops/inventory GET] lojaId recebido=loja-1
+Dados encontrados no banco (por loja): 0
+[ops/inventory GET] lojaId recebido=000-qa-frg-001
+Dados encontrados no banco (por loja): 0

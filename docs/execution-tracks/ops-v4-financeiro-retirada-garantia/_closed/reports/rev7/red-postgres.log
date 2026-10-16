@@ -1,0 +1,30 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts (31 tests | 1 failed | 30 skipped) 615ms
+     × imediato incerto seguido de misto: uma baixa, um título, uma movimentação e nenhuma parcela duplicada 523ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  14:03:18
+   Duration  3.78s (transform 1.52s, setup 0ms, import 2.99s, tests 615ms, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R7 · P1: resposta perdida não permite nova confirmação entre operadores > imediato incerto seguido de misto: uma baixa, um título, uma movimentação e nenhuma parcela duplicada
+AssertionError: expected '{"titulos":[{"id":"cmv2n82780002h2a8w…' to be '{"titulos":[{"id":"cmv2n82780002h2a8w…' // Object.is equality
+
+Expected: "{"titulos":[{"id":"cmv2n82780002h2a8wrcwfwry","status":"parcial","valor":420,"payload":{"codigo":"OS-QA-FRG2-2","origem":"operacoes-v3","historico":[{"at":"2026-10-10T17:03:22.158Z","tipo":"pagamento","valor":100,"loteId":"7f9942b5-5885-4fa8-a75f-ecd797eb35b5","userLabel":"Admin QA FRG2","observacao":"OS OS-QA-FRG2-2 · PDV Serviço · Pagamento parcial · PIX R$ 100,00"}],"ordemServicoId":"os-qa-frg2-mv2n81wg-2"},"localKey":"os-faturamento:qa-frg2-mv2n81wg-1:os-qa-frg2-mv2n81wg-2"}],"caixa":[{"valor":100,"tipo":"recebimento_cr","payload":{"op":"parcial","origem":"operacoes-v3-os","localId":"ops-v3-receber:qa-frg2-mv2n81wg-1:os-qa-frg2-mv2n81wg-2:7f9942b5-5885-4fa8-a75f-ecd797eb35b5:0","intencao":"Pagamento parcial","localKey":"os-faturamento:qa-frg2-mv2n81wg-1:os-qa-frg2-mv2n81wg-2","tituloId":"cmv2n82780002h2a8wrcwfwry","operacaoId":"7f9942b5-5885-4fa8-a75f-ecd797eb35b5","formaPagamento":"pix","ordemServicoId":"os-qa-frg2-mv2n81wg-2","requestFingerprint":"abfb5d470b760a3de56be7d912013f53d352cafbc5e4b47a164f95b6c02a0f6d"}}],"movs":1}"
+Received: "{"titulos":[{"id":"cmv2n82780002h2a8wrcwfwry","status":"parcial","valor":420,"payload":{"codigo":"OS-QA-FRG2-2","origem":"operacoes-v3","historico":[{"at":"2026-10-10T17:03:22.158Z","tipo":"pagamento","valor":100,"loteId":"7f9942b5-5885-4fa8-a75f-ecd797eb35b5","userLabel":"Admin QA FRG2","observacao":"OS OS-QA-FRG2-2 · PDV Serviço · Pagamento parcial · PIX R$ 100,00"},{"at":"2026-10-10T17:03:22.367Z","tipo":"pagamento","valor":100,"userLabel":"Admin QA FRG2","observacao":"OS OS-QA-FRG2-2 · PDV Serviço · Pagamento parcial · Dinheiro R$ 100,00 · saldo a prazo R$ 220.00 (venc. 09/11/2026)"},{"at":"2026-10-10T17:03:22.379Z","tipo":"a_prazo_autorizado","valor":220,"origem":"operacoes-v3-recebimento-misto","userLabel":"Admin QA FRG2","operacaoId":"9f0d8d40-eaae-401d-ab6c-0eecb5782f1a","vencimento":"2026-11-09","recebidoAgora":100,"autorizadoPorId":"qa-frg2-admin","requestFingerprint":"9ff64cfa7cbb6bc71132edf74dbc529639098eb2ba9fe9d472ce1ef43fe89f02"}],"ordemServicoId":"os-qa-frg2-mv2n81wg-2"},"localKey":"os-faturamento:qa-frg2-mv2n81wg-1:os-qa-frg2-mv2n81wg-2"}],"caixa":[{"valor":100,"tipo":"recebimento_cr","payload":{"op":"parcial","origem":"operacoes-v3-os","localId":"ops-v3-receber:qa-frg2-mv2n81wg-1:os-qa-frg2-mv2n81wg-2:7f9942b5-5885-4fa8-a75f-ecd797eb35b5:0","intencao":"Pagamento parcial","localKey":"os-faturamento:qa-frg2-mv2n81wg-1:os-qa-frg2-mv2n81wg-2","tituloId":"cmv2n82780002h2a8wrcwfwry","operacaoId":"7f9942b5-5885-4fa8-a75f-ecd797eb35b5","formaPagamento":"pix","ordemServicoId":"os-qa-frg2-mv2n81wg-2","requestFingerprint":"abfb5d470b760a3de56be7d912013f53d352cafbc5e4b47a164f95b6c02a0f6d"}},{"valor":100,"tipo":"recebimento_cr","payload":{"op":"parcial","origem":"operacoes-v3-os","localId":"ops-v3-misto:qa-frg2-mv2n81wg-1:os-qa-frg2-mv2n81wg-2:9f0d8d40-eaae-401d-ab6c-0eecb5782f1a:0","intencao":"Pagamento parcial","localKey":"os-faturamento:qa-frg2-mv2n81wg-1:os-qa-frg2-mv2n81wg-2","tituloId":"cmv2n82780002h2a8wrcwfwry","operacaoId":"9f0d8d40-eaae-401d-ab6c-0eecb5782f1a","formaPagamento":"dinheiro","ordemServicoId":"os-qa-frg2-mv2n81wg-2"}}],"movs":2}"
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:764:43
+    762|       saldoAPrazo: { valor: 220, vencimento: VENC }, saldoEsperado: 32…
+    763|     });
+    764|     expect(await fotoFinanceira(sid, id)).toBe(antes);
+       |                                           ^
+    765|     const e = await efeitos(sid, id);
+    766|     expect(e.titulos).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
