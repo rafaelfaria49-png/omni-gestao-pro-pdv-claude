@@ -127,8 +127,8 @@ describe("CAD-R2-018-B — discovery read-only", () => {
 })
 
 describe("CAD-R2-018-B — rotas com gates", () => {
-  it("duplicates é leitura compartilhada; plan/execute exigem escrita admin", () => {
-    expect(ler("app/api/clientes/duplicates/route.ts")).toMatch(/requireCadastrosHubApi\(req,\s*"read",\s*"shared"\)/)
+  it("duplicates exige admin; plan/execute exigem escrita admin", () => {
+    expect(ler("app/api/clientes/duplicates/route.ts")).toMatch(/requireCadastrosHubApi\(req,\s*"read",\s*"admin"\)/)
     expect(ler("app/api/clientes/merge/plan/route.ts")).toMatch(/requireCadastrosHubApi\(req,\s*"write",\s*"admin"\)/)
     expect(ler("app/api/clientes/merge/execute/route.ts")).toMatch(/requireCadastrosHubApi\(req,\s*"write",\s*"admin"\)/)
   })

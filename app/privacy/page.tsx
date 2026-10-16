@@ -19,15 +19,16 @@ export default function PrivacyPage() {
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
             Última atualização:{" "}
-            <time dateTime="2026-05-11">11 de maio de 2026</time>
+            <time dateTime="2026-10-15">15 de outubro de 2026</time>
           </p>
         </header>
 
         <article className="space-y-8 text-base leading-relaxed">
           <section>
             <p>
-              A <strong>OmniGestão Pro</strong> respeita a privacidade dos
-              usuários e protege os dados utilizados na plataforma.
+              Este aviso descreve o tratamento operacional de dados na <strong>OmniGestão Pro</strong>.
+              A definição de responsabilidades, bases jurídicas e retenção deve ser validada
+              pelo responsável pela operação. Este aviso não atesta conformidade LGPD plena.
             </p>
           </section>
 
@@ -36,9 +37,10 @@ export default function PrivacyPage() {
               Coleta e uso de informações
             </h2>
             <p>
-              As informações coletadas são utilizadas apenas para
-              funcionalidades internas do sistema, autenticação, integrações e
-              melhorias da experiência do usuário.
+              O cadastro pode conter nome, contato, CPF/CNPJ, endereço e informações
+              relacionadas ao atendimento. O acesso depende da operação, do perfil
+              autenticado e da unidade autorizada. Evite inserir dados pessoais
+              desnecessários em campos livres e arquivos.
             </p>
           </section>
 
@@ -47,26 +49,28 @@ export default function PrivacyPage() {
               Compartilhamento de dados
             </h2>
             <p>
-              Nenhum dado é vendido para terceiros. As informações podem ser
-              compartilhadas somente quando estritamente necessário para a
-              operação das integrações habilitadas pelo próprio usuário.
+              A operação utiliza hospedagem e integrações configuradas. O inventário
+              de operadores, destinatários e finalidades precisa ser confirmado
+              pelo responsável antes de autorizar novos compartilhamentos.
             </p>
           </section>
 
           <section>
-            <h2 className="mb-3 text-xl font-semibold">Consentimento</h2>
+            <h2 className="mb-3 text-xl font-semibold">Solicitações sobre dados pessoais</h2>
             <p>
-              Ao utilizar a plataforma, o usuário concorda com o processamento
-              necessário para operação do sistema, conforme descrito nesta
-              política.
+              O uso da plataforma não constitui, por si só, consentimento. Solicitações
+              de acesso, correção e exclusão exigem verificação de identidade,
+              autorização e análise de retenção. O encaminhamento interno não
+              executa automaticamente esses direitos. Registros financeiros, fiscais,
+              vendas e ordens de serviço não são eliminados por esse fluxo.
             </p>
           </section>
 
           <section>
             <h2 className="mb-3 text-xl font-semibold">Contato</h2>
             <p>
-              Dúvidas ou solicitações relacionadas à privacidade podem ser
-              enviadas para:{" "}
+              Canal de contato informado nesta página (a designação de responsável
+              e o procedimento de atendimento ainda dependem de validação administrativa):{" "}
               <a
                 href="mailto:rafacellassistec49@gmail.com"
                 className="font-medium text-primary underline underline-offset-4 hover:opacity-80 transition-opacity"

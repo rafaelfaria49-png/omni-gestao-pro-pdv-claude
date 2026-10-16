@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
 import { buildMergePlan } from "@/lib/cadastros/client-merge-service"
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 function json(data: unknown, init?: ResponseInit) {
-  return NextResponse.json(data, init)
+  return clientPrivateJson(data, init)
 }
 
 /**
@@ -42,8 +42,7 @@ export async function POST(req: Request) {
     }
     return json({ ok: true, plan })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[api/clientes/merge/plan POST]", msg)
+    console.error("[api/clientes/merge/plan POST]")
     return json({ error: "Falha ao gerar plano de merge" }, { status: 503 })
   }
 }

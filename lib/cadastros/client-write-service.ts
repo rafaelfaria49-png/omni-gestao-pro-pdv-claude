@@ -1,3 +1,4 @@
+import { mergeClientEditorTags } from "./client-privacy"
 /**
  * CAD-R2-008 — ClientWriteService: boundary canônico server-side de escrita
  * de Cliente (CREATE / UPDATE do cadastro).
@@ -611,7 +612,7 @@ export async function createClient(
         outcome: "AMBIGUOUS",
       }
     }
-    console.error("[client-write-service] create falhou:", e instanceof Error ? e.message : String(e))
+    console.error("[client-write-service] create falhou:")
     return { ok: false, code: "PERSISTENCE", message: CLIENT_WRITE_MESSAGES.persist }
   }
 }
@@ -648,6 +649,11 @@ export async function updateClientTx(
   })
   if (!existing) {
     return { ok: false, code: "NOT_FOUND", message: CLIENT_WRITE_MESSAGES.notFound }
+  }
+
+  if (patch.tagsTouched && opts?.tagsMode === "editor") {
+    patch.tags = mergeClientEditorTags(existing.tags, input.tags) as Prisma.InputJsonValue
+    patch.tagsClear = false
   }
 
   if (patch.identityTouched) {
@@ -738,7 +744,7 @@ export async function updateClient(
     if (isClientDocumentUniqueViolation(e)) {
       return mapDocumentUniqueViolationToFailure()
     }
-    console.error("[client-write-service] update transacional falhou:", e instanceof Error ? e.message : String(e))
+    console.error("[client-write-service] update transacional falhou:")
     return { ok: false, code: "PERSISTENCE", message: CLIENT_WRITE_MESSAGES.persist }
   }
 }

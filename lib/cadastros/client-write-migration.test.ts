@@ -74,9 +74,9 @@ describe("CAD-R2-008 — writers migrados", () => {
     expect(src).not.toMatch(WRITE_RE)
   })
 
-  it("hard delete permanece fora do ClientWriteService", () => {
+  it("hard delete permanece bloqueado por retenção", () => {
     const svc = semComentarios(ler("lib/cadastros/client-write-service.ts"))
     expect(svc).not.toMatch(/deleteMany|\.delete\(/)
-    expect(ler("app/api/clientes/[id]/route.ts")).toMatch(/deleteMany/)
+    expect(ler("app/api/clientes/[id]/route.ts")).toMatch(/CLIENT_RETENTION_BLOCK/)
   })
 })

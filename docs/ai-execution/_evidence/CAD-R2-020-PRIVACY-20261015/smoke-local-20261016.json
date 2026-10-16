@@ -1,0 +1,96 @@
+{
+  "observedAt": "2026-10-16T15:09:12.106Z",
+  "mode": "ANONYMOUS_GET_ONLY",
+  "applicationWrites": 0,
+  "customerDataRead": false,
+  "result": "PASS",
+  "results": [
+    {
+      "path": "/api/version",
+      "method": "GET",
+      "status": 200,
+      "expected": 200,
+      "pass": true,
+      "buildId": "1792162780136"
+    },
+    {
+      "path": "/privacy",
+      "method": "GET",
+      "status": 200,
+      "expected": 200,
+      "pass": true,
+      "honestPolicy": true
+    },
+    {
+      "path": "/client-privacy-cache.js",
+      "method": "GET",
+      "status": 200,
+      "expected": 200,
+      "pass": true,
+      "cleanupPresent": true
+    },
+    {
+      "path": "/api/clientes",
+      "method": "GET",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "path": "/api/clients",
+      "method": "GET",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "path": "/api/clientes/duplicates",
+      "method": "GET",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "path": "/api/clientes/importar",
+      "method": "GET",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "path": "/api/clientes/privacy-request",
+      "method": "GET",
+      "status": 405,
+      "expected": 405,
+      "pass": true
+    },
+    {
+      "path": "/api/clientes/merge/plan",
+      "method": "GET",
+      "status": 405,
+      "expected": 405,
+      "pass": true
+    },
+    {
+      "path": "/api/clientes/merge/execute",
+      "method": "GET",
+      "status": 405,
+      "expected": 405,
+      "pass": true
+    },
+    {
+      "path": "/api/clientes/search",
+      "method": "GET",
+      "status": 405,
+      "expected": 405,
+      "pass": true
+    },
+    {
+      "path": "/api/clientes/match-by-phone",
+      "method": "GET",
+      "status": 405,
+      "expected": 405,
+      "pass": true
+    }
+  ]
+}

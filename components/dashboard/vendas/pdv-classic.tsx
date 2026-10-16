@@ -625,7 +625,7 @@ export function PdvClassic({
       try {
         const headers: Record<string, string> = {}
         if (lojaKey) headers[ASSISTEC_LOJA_HEADER] = lojaKey
-        const res = await fetch(`/api/clientes?q=${encodeURIComponent(q)}`, { headers, cache: "no-store" })
+        const res = await fetch("/api/clientes/search", { method: "POST", body: JSON.stringify({ q }), headers: { ...headers, "Content-Type": "application/json" }, cache: "no-store" })
         const data = (await res.json().catch(() => null)) as { clientes?: ApiClienteResult[] } | null
         const list = data?.clientes ?? []
         const matched = list.find((c) => (c.phone ?? "").replace(/\D/g, "") === q)
