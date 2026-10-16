@@ -456,3 +456,45 @@ NEXT_GATE=R2_SSO_PRIVATE_BUCKET_REAL_BYTES_THEN_FULL_VALIDATION_AND_INDEPENDENT_
 Esta rodada altera somente relatório/evidências na allowlist. CURRENT_STATUS, CHANGELOG, memória global e derivados AEP não são editados nesta missão restrita. A bateria oficial, regressões completas R1–R5 e revisão integral independente continuam pendentes. A aprovação GLM recebida continua limitada a F-01; Codex/OpenAI não declara revisão cross-family realizada.
 
 Ponto de parada: **PREVIEW PRIVADO DO CADASTRO REAL DISPONÍVEL; R2/UPLOAD E ACEITE INTEGRAL PENDENTES.** Sem merge, close/DONE, liberação de dados reais ou GOAL 002.
+
+## R2 privado e Preview com upload real — 16/10/2026
+
+A confirmação humana final autorizou o token R2 restrito ao bucket QA, com validade de uma semana e armazenamento criptografado; o login Vercel foi concluído pelo usuário. Essa execução supera o bloqueio R2 de 15/10, preservando o histórico anterior e os gates de aceite.
+
+- HEAD inicial/remoto e deployado: `cdcd29f2463f98e971034932abfd6a3bc739913f`. Main consultada: `976ebaa294e09441ce0c5be7bbe5776a568f4013`; sem rebase, merge ou force push. AEP RUNNING/aberto, tentativa 1/3.
+- Neon QA existente reutilizado, sem novo DDL/seed. Runtime continua com o role restrito. Drift específico do provedor novamente zero; compilação remota READY com tipos pulados e MIGRATION_SKIPPED.
+- Novo bucket `omni-gestao-pessoas-001b-qa`, Standard/ENAM, acesso público desabilitado, sem domínio público. Token Object Read & Write exclusivo desse bucket, expira em **23/10/2026**; CORS somente do alias estável QA, PUT/GET/HEAD, If-None-Match/Content-Type.
+- Credenciais somente no cofre DPAPI CurrentUser e Vercel QA encrypted/Preview. Transporte plaintext foi rejeitado automaticamente e substituído por transporte criptografado, sem arquivo plaintext de credencial R2.
+- [Preview privado real — abrir Pessoas](https://omni-gestao-pessoas-001b-qa-rafaelfaria49-4373s-projects.vercel.app/dashboard/pessoas), deployment `dpl_AjM5mPXsASK6JUPwLQVWnK8smKzg`, staging/Preview explícito, proteção Vercel all + NextAuth. Treze variáveis exclusivas de Preview; zero production e Git link ausente.
+- Upload real pela interface: PDF sintético de 729 bytes, intent/PUT/complete positivo, “Documento salvo”, listagem e reload. SQL/auditoria confirmam o documento `677db717-9621-463c-9057-5b379c73e6e8` somente na Store A. Após complete, Criar versão do contrato voltou habilitado.
+- HEAD/GET QA pelo SDK confirmam SHA-256 `d658d6542efa23246c0e9a8e8d77c0519c1b61e541b74d505cb9486ddd049c64`; PUT exclusivo sobre o mesmo objeto recebeu HTTP 412, sem alteração. Não é prova da recuperação HTTP 412 pela interface.
+- O botão Baixar gerou autorizações reais auditadas. A captura do arquivo baixado pelo navegador ficou **pendente** por timeout/reinicialização da ferramenta CUA; hash do download no navegador não foi conferido. Nome neutro esperado: `documento.pdf`. Nenhum defeito do produto é inferido somente desse bloqueio de ferramenta.
+- Com documento já existente, Store B negou a URL direta da ficha A; contexto A restaurado. Capacidades restritas/contratos permanecem na evidência manual anterior; regressões integrais pendentes.
+- Seis novas imagens saneadas; matriz completa de quatro temas/responsividade/teclado permanece pendente. Nenhuma imagem contém CPF, segredo ou URL assinada.
+- Sem contratação paga nova; Neon Free, Vercel Hobby, R2 faturável US$ 0,00 observado antes do smoke. Franquia Standard oficial e limites da observação estão na evidência.
+- Bucket `omni-contador-documentos-prod`, suas chaves/objetos, DNS, recursos produtivos e flag produtiva não foram utilizados ou modificados.
+
+Evidência detalhada: [R2_PREVIEW_PRIVADO_REAL_2026-10-16.md](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/R2_PREVIEW_PRIVADO_REAL_2026-10-16.md); metadados saneados em `QA_R2_PREVIEW_2026-10-16.json` no mesmo diretório. O commit desta rodada é documental; o runtime validado permanece fixado no SHA deployado acima.
+
+```text
+R2_PRIVATE=QA_PRIVATE_CREATED_TOKEN_LIMITED_UNTIL_2026_10_23
+DOCUMENT_UPLOAD=REAL_INTENT_PUT_POSITIVE_COMPLETE_LIST_RELOAD
+DOCUMENT_STORAGE_INTEGRITY=MATCH_729_BYTES_HTTP_412_NO_OVERWRITE
+DOCUMENT_DOWNLOAD_AUTHORIZATION=REAL_AUDITED
+DOCUMENT_BROWSER_DOWNLOAD=PENDING_CUA_CAPTURE
+STORE_ISOLATION=REAL_B_DENIED_A_WITH_DOCUMENT_A_RESTORED
+AUTOMATED_TESTS=PENDING
+TESTS=NOT_RUN
+TYPECHECK=NOT_RUN
+LINT=NOT_RUN
+LOCAL_BUILD=NOT_RUN
+GLM_F01=APPROVE_RECEIVED_USER_ONLY
+GLM_INTEGRAL=PENDING
+AEP_CLOSE=NOT_RUN
+PR_DRAFT=YES
+NEXT_GATE=BROWSER_DOWNLOAD_ARTIFACT_THEN_FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL
+```
+
+Somente documentação/evidências na allowlist, inspeção de escopo Git e `git diff --check`. Sem testes automatizados, typecheck, lint, build local, runner oficial, merge, close/DONE, produção ou GOAL 002. Não há aceite integral ou revisão cross-family realizada por Codex/OpenAI.
+
+Ponto de parada: **PREVIEW PRIVADO REAL COM R2 QA E UPLOAD CONFIRMADO; CAPTURA DE DOWNLOAD E ACEITE INTEGRAL PENDENTES.**
