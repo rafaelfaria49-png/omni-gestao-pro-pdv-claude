@@ -155,14 +155,14 @@ export function lerGarantiaV3(os: OrdemServico | null | undefined, now: Date = n
   if (salvas.length) {
     const coberturas: CoberturaServicoViewV3[] = salvas.map((c) => {
       const datas = datasCoberturaGarantiaV3(os, c);
-      return { ...c, ...datas, termo: termoCoberturaServicoV3(c), situacao: c.prazoDias === 0 ? "sem_garantia" : !datas.inicio ? "prevista" : Date.parse(datas.vencimento ?? "") >= now.getTime() ? "ativa" : "vencida" };
+      return { ...c, ...datas, termo: termoCoberturaServicoV3(c), situacao: c.modeloId === "nao_definida" ? "nenhuma" : c.prazoDias === 0 ? "sem_garantia" : !datas.inicio ? "prevista" : Date.parse(datas.vencimento ?? "") >= now.getTime() ? "ativa" : "vencida" };
     });
     const unica = condicaoUnicaGarantiaV3(salvas);
     const primeira = coberturas[0];
-    const situacao: GarantiaSituacaoV3 = coberturas.some((c) => c.situacao === "ativa") ? "ativa" : coberturas.some((c) => c.situacao === "prevista") ? "prevista" : coberturas.some((c) => c.situacao === "vencida") ? "vencida" : "sem_garantia";
+    const situacao: GarantiaSituacaoV3 = coberturas.some((c) => c.situacao === "ativa") ? "ativa" : coberturas.some((c) => c.situacao === "prevista") ? "prevista" : coberturas.some((c) => c.situacao === "vencida") ? "vencida" : coberturas.some((c) => c.situacao === "sem_garantia") ? "sem_garantia" : "nenhuma";
     return {
-      temGarantia: coberturas.some((c) => c.modeloId !== "nao_definida"), modeloId: unica?.modeloId ?? "por_servico", label: unica ? primeira.termo.titulo : "Condições por serviço — consulte cada cobertura", prazoDias: unica?.prazoDias ?? 0,
-      semCobertura: coberturas.every((c) => c.prazoDias === 0), situacao, coberturas, condicoesDistintas: !unica,
+      temGarantia: coberturas.some((c) => c.modeloId !== "nao_definida"), modeloId: unica?.modeloId ?? "por_servico", label: situacao === "nenhuma" ? "Garantia não definida" : unica ? primeira.termo.titulo : "Condições por serviço — consulte cada cobertura", prazoDias: unica?.prazoDias ?? 0,
+      semCobertura: coberturas.every((c) => c.situacao === "sem_garantia"), situacao, coberturas, condicoesDistintas: !unica,
       ...(unica ? { inicio: primeira.inicio, vencimento: primeira.vencimento, ...(primeira.porDia ? { porDia: true } : {}), ...(primeira.vencimento ? { diasRestantes: Math.ceil((Date.parse(primeira.vencimento) - now.getTime()) / DIA_MS) } : {}) } : {}),
     };
   }

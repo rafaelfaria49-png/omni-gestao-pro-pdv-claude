@@ -22,7 +22,7 @@ export interface CoberturaServicoViewV3 extends CoberturaServicoV3 {
   inicio?: string;
   vencimento?: string;
   porDia?: boolean;
-  situacao: "prevista" | "ativa" | "vencida" | "sem_garantia";
+  situacao: "nenhuma" | "prevista" | "ativa" | "vencida" | "sem_garantia";
 }
 export function modeloGarantiaConhecidoV3(id: string): boolean {
   return GARANTIA_CATALOGO_V3.some((m) => m.id === id);
