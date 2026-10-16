@@ -1,0 +1,242 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-16",
+  "executorFamily": "openai/Codex",
+  "baseHead": "cdcd29f2463f98e971034932abfd6a3bc739913f",
+  "deployedSha": "cdcd29f2463f98e971034932abfd6a3bc739913f",
+  "branch": "goal/pessoas-001b-recovery-001",
+  "worktree": "C:/Projetos/omni-gestao-pessoas-001b-recovery-001",
+  "mainHeadInspected": "976ebaa294e09441ce0c5be7bbe5776a568f4013",
+  "rebaseOrMerge": false,
+  "pr": {
+    "number": 273,
+    "url": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/273",
+    "draft": true
+  },
+  "neon": {
+    "project": "orange-voice-83394974",
+    "branch": "br-twilight-shape-b5zrtyts",
+    "database": "pessoas_001b_qa",
+    "baseline": "REUSED_109_TABLES_FIXED_SCHEMA_WITH_0022_INVARIANTS",
+    "runtimeRole": "pessoas_001b_qa_app",
+    "migrationHistory": "NO_FAKE_HISTORICAL_REPLAY",
+    "targetedSchemaDrift": "ZERO_PROVIDER_CHECK"
+  },
+  "r2": {
+    "bucket": "omni-gestao-pessoas-001b-qa",
+    "private": true,
+    "location": "ENAM",
+    "storageClass": "Standard",
+    "publicDevelopmentUrl": false,
+    "customDomains": false,
+    "cors": {
+      "AllowedOrigins": [
+        "https://omni-gestao-pessoas-001b-qa-rafaelfaria49-4373s-projects.vercel.app"
+      ],
+      "AllowedMethods": [
+        "PUT",
+        "GET",
+        "HEAD"
+      ],
+      "AllowedHeaders": [
+        "If-None-Match",
+        "Content-Type"
+      ],
+      "ExposeHeaders": [
+        "ETag"
+      ],
+      "MaxAgeSeconds": 300
+    },
+    "credential": {
+      "bucket": "omni-gestao-pessoas-001b-qa",
+      "permission": "Object Read & Write",
+      "createdDate": "2026-10-16",
+      "expiresDate": "2026-10-23",
+      "scopeVerifiedInUi": true,
+      "vault": "DPAPI_CURRENT_USER",
+      "plaintextCredentialFile": false,
+      "previewEnvironmentKeys": 13,
+      "productionEnvironmentKeys": 0,
+      "autoReviewPlaintextTransferRejected": true,
+      "resolution": "ENCRYPTED_RSA_OAEP_AES_GCM_TRANSPORT_TO_DPAPI_NO_PLAINTEXT_FILE"
+    },
+    "productionBucketAccess": "NO_DETAILS_NO_OBJECTS_NO_CREDENTIAL_USE"
+  },
+  "vercel": {
+    "project": "prj_oeXN2OJGa0fXLvkoLynD39H3hPOK",
+    "name": "omni-gestao-pessoas-001b-qa",
+    "id": "dpl_AjM5mPXsASK6JUPwLQVWnK8smKzg",
+    "sha": "cdcd29f2463f98e971034932abfd6a3bc739913f",
+    "target": "staging",
+    "url": "https://omni-gestao-pessoas-001b-jsp9blanb-rafaelfaria49-4373s-projects.vercel.app",
+    "alias": "https://omni-gestao-pessoas-001b-qa-rafaelfaria49-4373s-projects.vercel.app",
+    "readyState": "READY",
+    "protection": "all",
+    "previewEnvironmentKeys": 13,
+    "productionEnvironmentKeys": [],
+    "gitLinked": false,
+    "remoteCompile": "READY_TYPES_SKIPPED_MIGRATION_SKIPPED"
+  },
+  "manual": {
+    "login": "VERCEL_HUMAN_AND_NEXTAUTH_SYNTHETIC_ADMIN_OBSERVED",
+    "upload": "REAL_INTENT_PUT_POSITIVE_COMPLETE_LIST_RELOAD",
+    "document": {
+      "database": "pessoas_001b_qa",
+      "role": "pessoas_001b_qa_owner",
+      "id": "677db717-9621-463c-9057-5b379c73e6e8",
+      "empregadorId": "cmv9llplm0001lf08a0i4qq9a",
+      "vinculoId": "cmv9lrx2i000jlf08qokb78z8",
+      "storeId": "qa-pessoas-a",
+      "categoria": "identificacao",
+      "classificacao": "COMUM",
+      "origem": "INTERNO",
+      "nomeArquivo": "pessoas-001b-qa-sintetico.pdf",
+      "mime": "application/pdf",
+      "bytes": 729,
+      "sha256": "d658d6542efa23246c0e9a8e8d77c0519c1b61e541b74d505cb9486ddd049c64",
+      "createdAt": "2026-10-16T15:22:19.690Z"
+    },
+    "documentAudit": [
+      {
+        "acao": "DOCUMENTO_CONFIRMAR",
+        "entidadeId": "677db717-9621-463c-9057-5b379c73e6e8",
+        "storeId": "qa-pessoas-a",
+        "atorId": "qa-001b-admin",
+        "createdAt": "2026-10-16T15:22:19.726Z"
+      },
+      {
+        "acao": "DOCUMENTO_DOWNLOAD_AUTORIZAR",
+        "entidadeId": "677db717-9621-463c-9057-5b379c73e6e8",
+        "storeId": "qa-pessoas-a",
+        "atorId": "qa-001b-admin",
+        "createdAt": "2026-10-16T15:46:48.941Z"
+      },
+      {
+        "acao": "DOCUMENTO_DOWNLOAD_AUTORIZAR",
+        "entidadeId": "677db717-9621-463c-9057-5b379c73e6e8",
+        "storeId": "qa-pessoas-a",
+        "atorId": "qa-001b-admin",
+        "createdAt": "2026-10-16T15:48:31.028Z"
+      },
+      {
+        "acao": "DOCUMENTO_DOWNLOAD_AUTORIZAR",
+        "entidadeId": "677db717-9621-463c-9057-5b379c73e6e8",
+        "storeId": "qa-pessoas-a",
+        "atorId": "qa-001b-admin",
+        "createdAt": "2026-10-16T15:50:38.865Z"
+      }
+    ],
+    "fichaLockAfterComplete": "CREATE_CONTRACT_BUTTON_ENABLED",
+    "storeIsolation": "STORE_B_DENIED_STORE_A_ID_WITH_DOCUMENT_PRESENT_STORE_A_RESTORED",
+    "capabilityRegression": "2026_10_15_RESTRICTED_USER_EVIDENCE_REUSED_NOT_RERUN",
+    "frontendDownloadAuthorization": "REAL_SERVER_ACTION_AUDITED",
+    "browserDownloadArtifact": "NOT_CAPTURED_BY_TOOL",
+    "downloadFilename": "documento.pdf",
+    "unresolvedCompleteCancellation": "NOT_RUN_THIS_MISSION",
+    "browserDownloadUserConfirmation": {
+      "source": "USER_MESSAGE_IN_THIS_CHAT",
+      "date": "2026-10-16",
+      "answer": "Sim, o PDF foi baixado",
+      "downloadedFileHashInspectedByTool": false,
+      "actualNeutralFilename": "documento.pdf"
+    }
+  },
+  "review": {
+    "glmF01": "APPROVE_RECEIVED_FROM_USER_ONLY",
+    "reviewedSha": "6cd20313ad7f1404a99d691644c82fc92ae47a55",
+    "glmIntegral": "PENDING",
+    "crossFamilyReviewPerformedByCodex": false
+  },
+  "cost": {
+    "newPaidService": false,
+    "neonPlan": "Free",
+    "vercelPlan": "Hobby",
+    "r2BillableObservedUsd": 0,
+    "r2BillableObservation": "BEFORE_SMOKE_PROVIDER_METRICS_MAY_LAG",
+    "pricingSource": "https://developers.cloudflare.com/r2/pricing/",
+    "standardFreeAllowance": {
+      "storageGbMonth": 10,
+      "classARequests": 1000000,
+      "classBRequests": 10000000
+    }
+  },
+  "production": {
+    "bucket": "omni-contador-documentos-prod",
+    "detailsOpened": false,
+    "objectReadOrWrite": false,
+    "credentialsUsed": false,
+    "dnsAccessed": false,
+    "flagActivated": false,
+    "existingResourcesChanged": false
+  },
+  "validation": {
+    "tests": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "lint": "NOT_RUN",
+    "localBuild": "NOT_RUN",
+    "docker": "NOT_RUN",
+    "officialRunner": "NOT_RUN",
+    "fullVisualMatrix": "PENDING",
+    "aepClose": "NOT_RUN",
+    "goalStatus": "RUNNING_OPEN"
+  },
+  "occurrences": [
+    {
+      "action": "temporary plaintext R2 credential JSON",
+      "autoReview": "REJECTED",
+      "resolution": "RSA_OAEP_SHA256_AES_256_GCM_ENCRYPTED_TRANSFER_TO_DPAPI_NO_PLAINTEXT_CREDENTIAL_FILE",
+      "temporaryEncryptedTransferRemoved": true
+    },
+    {
+      "action": "browser download capture",
+      "result": "CUA_TIMEOUT_AND_KERNEL_RESET",
+      "productDefectProven": false
+    }
+  ],
+  "evidenceImages": [
+    {
+      "file": "pessoas-r2-qa-private-bucket-2026-10-16.jpg",
+      "bytes": 39078,
+      "sha256": "abcd691f73261111eb4293db2ec7b8af1930410b8d66da304af15641d4626295"
+    },
+    {
+      "file": "pessoas-r2-qa-cors-2026-10-16.jpg",
+      "bytes": 48934,
+      "sha256": "00b5ba766bea07429625a234dc08a172bbde49cbb5caaff9d00b53cbb5eb548f"
+    },
+    {
+      "file": "pessoas-r2-qa-token-created-2026-10-16.jpg",
+      "bytes": 48130,
+      "sha256": "f40c395934c061175963e16cf153b2ee755ac13613943c7d4087d0976420bc27"
+    },
+    {
+      "file": "pessoas-qa-documento-confirmado-2026-10-16.jpg",
+      "bytes": 45982,
+      "sha256": "310a96236cee1949148f39fed2455269217eb9f64202af1d186000c8ebdc35cd"
+    },
+    {
+      "file": "pessoas-qa-documento-reload-2026-10-16.jpg",
+      "bytes": 48510,
+      "sha256": "1438cd1e4e0aca1ddbf91f55c254a7d80a1485a998c332234921f9d1fda82db8"
+    },
+    {
+      "file": "pessoas-qa-store-b-com-documento-negado-2026-10-16.jpg",
+      "bytes": 31094,
+      "sha256": "996e26d864681275a9c28b0bb6dd0447f3027c81f0c7e7c28f33649484d47d83"
+    }
+  ],
+  "nextGate": "FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL",
+  "storageSmoke": {
+    "bucket": "omni-gestao-pessoas-001b-qa",
+    "documentId": "677db717-9621-463c-9057-5b379c73e6e8",
+    "headBytes": 729,
+    "mime": "application/pdf",
+    "getBytes": 729,
+    "sha256": "d658d6542efa23246c0e9a8e8d77c0519c1b61e541b74d505cb9486ddd049c64",
+    "integrityMatch": true,
+    "exclusivePutStatus": 412,
+    "after412Sha256": "d658d6542efa23246c0e9a8e8d77c0519c1b61e541b74d505cb9486ddd049c64",
+    "unchangedAfter412": true,
+    "validation": "TARGETED_QA_STORAGE_SMOKE_NOT_FRONTEND_DOWNLOAD_CAPTURE"
+  }
+}
