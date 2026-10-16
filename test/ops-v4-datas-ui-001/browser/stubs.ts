@@ -46,6 +46,15 @@ export const salvarAcessoriosEntradaV3 = async () => {
   return new Promise<void>((resolve) => { qa.entrada.push(resolve); });
 };
 const noop = async () => {};
+// O Financeiro 002 integrado acrescentou estes imports ao hook real. Os casos
+// desta fixture exercitam datas/foco; qualquer comando financeiro é um erro.
+const financeiroForaDoEscopo = async () => { throw new Error("QA_DATAS: comando financeiro inesperado"); };
+export {
+  financeiroForaDoEscopo as aprovarOrcamentoParaReceberV3,
+  financeiroForaDoEscopo as conferirEscopoAprovacaoV3,
+  financeiroForaDoEscopo as conferirFormalizacaoAprovacaoV3,
+  financeiroForaDoEscopo as formalizarAprovacaoPendenteV3,
+};
 export {
   noop as receberOSV3, noop as estornarRecebimentoOSV3, noop as registrarRecebimentoMistoOSV3, noop as lancarOSAPrazoV3,
   noop as registrarEntregaV3, noop as salvarAssinaturaRetiradaV3, noop as adicionarFotoSaidaV3, noop as removerFotoSaidaV3,
