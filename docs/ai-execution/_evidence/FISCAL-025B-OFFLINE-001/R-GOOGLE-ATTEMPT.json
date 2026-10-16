@@ -1,0 +1,15 @@
+{
+  "requestedFamily": "google",
+  "executor": "Gemini CLI 0.62.0",
+  "requestedSha": "d647537c88a763f33f0f3a7f5263ff10ab632a03",
+  "base": "4a85dd95202b56873487b31c318fc2d751fc26f5",
+  "corpusBytes": 291777,
+  "corpusSha256": "b05868fb892faa1824b72d60f9759f1be3441e36051d95f09d0989d7af4ac702",
+  "diffBytes": 241349,
+  "diffSha256": "59eaeb11d7197a7e8d1b36efb99e6f4a88fe83590b54102f2dd78478bf6d6ad8",
+  "exitCode": 55,
+  "signal": null,
+  "errorCode": "EOF",
+  "stdout": "",
+  "stderr": "Approval mode overridden to \"default\" because the current folder is not trusted.\nError authenticating: IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals. To continue using Gemini, please migrate to the Antigravity suite of products: https://antigravity.google\n    at throwIneligibleOrProjectIdError (file:///C:/Users/rafae/AppData/Roaming/npm/node_modules/@google/gemini-cli/bundle/chunk-MLY4WQFO.js:311202:11)\n    at _doSetupUser (file:///C:/Users/rafae/AppData/Roaming/npm/node_modules/@google/gemini-cli/bundle/chunk-MLY4WQFO.js:311191:5)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {\n  ineligibleTiers: [\n    {\n      reasonCode: 'UNSUPPORTED_CLIENT',\n      reasonMessage: 'This client is no longer supported for Gemini Code Assist for individuals. To continue using Gemini, please migrate to the Antigravity suite of products: https://antigravity.google',\n      tierId: 'free-tier',\n      tierName: 'Gemini Code Assist for individuals'\n    }\n  ]\n}\nApproval mode overridden to \"default\" because the current folder is not trusted.\nGemini CLI is not running in a trusted directory. To proceed, either use `--skip-trust`, set the `GEMINI_CLI_TRUST_WORKSPACE=true` environment variable, or trust this directory in interactive mode. For more details, see https://geminicli.com/docs/cli/trusted-folders/#headless-and-automated-environments\n"
+}
