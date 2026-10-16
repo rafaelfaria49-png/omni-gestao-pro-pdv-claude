@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 9,
+  "plan_rev": 10,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-003",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-003",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/garantia-servicos-model.test.ts lib/operacoes-v3/garantia-textos.test.ts lib/operacoes-v3/garantia-templates.test.ts lib/operacoes-v3/garantia-actions.test.ts lib/operacoes-v3/entrega-actions.test.ts lib/operacoes-v3/pos-venda-model.test.ts lib/operacoes-v3/print-model.test.ts lib/operacoes-v3/datas-correcao-model.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/nova-os-actions.test.ts lib/operacoes-v3/nova-os-model.test.ts lib/operacoes-v3/retorno-actions.test.ts lib/operacoes-v3/historico-aparelho-model.test.ts lib/operacoes-v4/nova-os-draft-from-form.test.ts lib/operacoes-v4/posvenda-v4.test.ts lib/operacoes-v4/documento-mensagem.test.ts lib/operacoes-v4/historico-v4.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[2567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[123]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-003.spec.ts --retries=0 --workers=1",
@@ -80,7 +80,9 @@
     "lib/operacoes-v3/os-payload-lock.ts",
     "lib/operacoes-v4/servicos-autorizados-form.ts",
     "lib/operacoes/services/orcamento-builder.ts",
-    "test/ops-v4-fluxo-curto-002/garantia-ui.test.tsx"
+    "test/ops-v4-fluxo-curto-002/garantia-ui.test.tsx",
+    "test/ops-v4-fluxo-curto-007/retorno.test.tsx",
+    "test/ops-v4-fluxo-curto-007/retorno.pg.test.ts"
   ],
   "gates_liberados": [],
   "read_budget": 75,
@@ -320,3 +322,32 @@ contrato funcional, test_command, gates, estado, ledger, tentativas e
 `executors.json` são preservados. Esta revisão documental não abre, fecha
 nem aprova o GOAL; sua integração exige PR documental e merge normal
 com verificações aprovadas. Datas #271 será integrado antes de Garantias #272.
+
+## Proposta rev 10 — exceção restrita para duas regressões (16/10/2026)
+
+PENDENTE DE AUTORIZAÇÃO HUMANA — proposta não ratificada. Não amplia o escopo
+ativo, não autoriza edição dos testes, close, merge de produto ou publicação.
+
+A validação obrigatória do candidato `607c19a65fe7061d90c0071cbc0b6ad86c1b38a7`
+reproduziu duas falhas de infraestrutura/expectativa também na base da main:
+- F3b: a paleta agora restaura o foco a um controle legítimo do launcher; o
+  Enter da fixture escolhe uma modalidade antes da asserção de Tab. A proposta
+  conserva a verificação de foco sem alcançar o fundo e exercita Enter na raiz
+  focável do diálogo antes de Tab/Shift+Tab, sem ativar uma modalidade.
+- T56c: iniciar a action após `setTimeout(0)` não prova que a sessão externa
+  já adquiriu `FOR UPDATE`. A proposta sinaliza uma Promise imediatamente após
+  essa aquisição e aguarda a barreira, preservando a observação da disputa por
+  `pg_stat_activity`, a recusa original e a asserção de zero filhas.
+
+Somente os dois caminhos explícitos acima são propostos para a allowlist.
+Nenhuma asserção, cenário, guard de banco ou comando de teste é removido.
+Nenhum contrato funcional, família, C4/ALTO, gate, orçamento, dependência,
+estado, ledger ou executor é modificado; não se reabre outro GOAL.
+
+Se o proprietário autorizar expressamente a exceção ao escopo ativo, registrar
+o aceite real neste PR antes de seu merge normal, com verify/verify --all e
+checks aprovados. Somente depois atualizar as duas entradas da allowlist de
+`.aep-active` conforme o plano ratificado, preservando tentativa 2/3, a falha
+da tentativa 1, opened_at, base_commit e demais campos. Não bloquear/reabrir
+para reiniciar o contador. R Anthropic real do candidato final continua
+obrigatória antes do close e merge #272. Sem autorização, manter este PR draft.

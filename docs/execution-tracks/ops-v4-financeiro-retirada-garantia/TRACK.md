@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 9,
+  "plan_rev": 10,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -423,3 +423,32 @@ A exigência pré-open do próprio GOAL determina plan_rev novo; TRACK e
 família real, test_command, gates, ledger, tentativas, pré-condições,
 histórico e revisão independente permanecem intactos. Nenhum código,
 `executors.json`, estado derivado ou GOAL encerrado é alterado.
+
+## Proposta rev 10 — exceção restrita para duas regressões (16/10/2026)
+
+PENDENTE DE AUTORIZAÇÃO HUMANA — proposta não ratificada. Não amplia o escopo
+ativo, não autoriza edição dos testes, close, merge de produto ou publicação.
+
+A validação obrigatória do candidato `607c19a65fe7061d90c0071cbc0b6ad86c1b38a7`
+reproduziu duas falhas de infraestrutura/expectativa também na base da main:
+- F3b: a paleta agora restaura o foco a um controle legítimo do launcher; o
+  Enter da fixture escolhe uma modalidade antes da asserção de Tab. A proposta
+  conserva a verificação de foco sem alcançar o fundo e exercita Enter na raiz
+  focável do diálogo antes de Tab/Shift+Tab, sem ativar uma modalidade.
+- T56c: iniciar a action após `setTimeout(0)` não prova que a sessão externa
+  já adquiriu `FOR UPDATE`. A proposta sinaliza uma Promise imediatamente após
+  essa aquisição e aguarda a barreira, preservando a observação da disputa por
+  `pg_stat_activity`, a recusa original e a asserção de zero filhas.
+
+Somente os dois caminhos explícitos acima são propostos para a allowlist.
+Nenhuma asserção, cenário, guard de banco ou comando de teste é removido.
+Nenhum contrato funcional, família, C4/ALTO, gate, orçamento, dependência,
+estado, ledger ou executor é modificado; não se reabre outro GOAL.
+
+Se o proprietário autorizar expressamente a exceção ao escopo ativo, registrar
+o aceite real neste PR antes de seu merge normal, com verify/verify --all e
+checks aprovados. Somente depois atualizar as duas entradas da allowlist de
+`.aep-active` conforme o plano ratificado, preservando tentativa 2/3, a falha
+da tentativa 1, opened_at, base_commit e demais campos. Não bloquear/reabrir
+para reiniciar o contador. R Anthropic real do candidato final continua
+obrigatória antes do close e merge #272. Sem autorização, manter este PR draft.
