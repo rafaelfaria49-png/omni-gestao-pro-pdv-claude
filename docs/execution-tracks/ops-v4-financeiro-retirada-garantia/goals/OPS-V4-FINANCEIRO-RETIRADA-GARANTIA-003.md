@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 9,
+  "plan_rev": 10,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-003",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-003",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/garantia-servicos-model.test.ts lib/operacoes-v3/garantia-textos.test.ts lib/operacoes-v3/garantia-templates.test.ts lib/operacoes-v3/garantia-actions.test.ts lib/operacoes-v3/entrega-actions.test.ts lib/operacoes-v3/pos-venda-model.test.ts lib/operacoes-v3/print-model.test.ts lib/operacoes-v3/datas-correcao-model.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/nova-os-actions.test.ts lib/operacoes-v3/nova-os-model.test.ts lib/operacoes-v3/retorno-actions.test.ts lib/operacoes-v3/historico-aparelho-model.test.ts lib/operacoes-v4/nova-os-draft-from-form.test.ts lib/operacoes-v4/posvenda-v4.test.ts lib/operacoes-v4/documento-mensagem.test.ts lib/operacoes-v4/historico-v4.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[2567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[123]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-003.spec.ts --retries=0 --workers=1",
@@ -80,7 +80,9 @@
     "lib/operacoes-v3/os-payload-lock.ts",
     "lib/operacoes-v4/servicos-autorizados-form.ts",
     "lib/operacoes/services/orcamento-builder.ts",
-    "test/ops-v4-fluxo-curto-002/garantia-ui.test.tsx"
+    "test/ops-v4-fluxo-curto-002/garantia-ui.test.tsx",
+    "test/ops-v4-fluxo-curto-007/retorno.test.tsx",
+    "test/ops-v4-fluxo-curto-007/retorno.pg.test.ts"
   ],
   "gates_liberados": [],
   "read_budget": 75,
@@ -320,3 +322,40 @@ contrato funcional, test_command, gates, estado, ledger, tentativas e
 `executors.json` são preservados. Esta revisão documental não abre, fecha
 nem aprova o GOAL; sua integração exige PR documental e merge normal
 com verificações aprovadas. Datas #271 será integrado antes de Garantias #272.
+
+## Decisão humana rev 10 — exceção restrita ao escopo ativo (16/10/2026)
+
+O proprietário respondeu literalmente **"Autorizar essa exceção delimitada"**
+à pergunta que especificava os dois caminhos abaixo, o PR documental, a
+atualização somente da allowlist de .aep-active após ratificação, a preservação
+do contador e das falhas, ledger, C4/ALTO e revisão Anthropic obrigatória,
+sem bloquear/reabrir o GOAL ou reiniciar tentativas. O aceite é da exceção
+de escopo; não representa aprovação fictícia de testes ou revisão independente.
+
+- test/ops-v4-fluxo-curto-007/retorno.test.tsx: adaptar o ponto de Enter da
+  fixture à restauração legítima do foco no launcher, preservando verificações
+  de foco à frente, isolamento do fundo, Tab/Shift+Tab e os dois Escapes.
+- test/ops-v4-fluxo-curto-007/retorno.pg.test.ts: T56c usa uma Promise como
+  barreira sinalizada imediatamente após FOR UPDATE na sessão externa,
+  preservando observação de espera por pg_stat_activity, recusa e zero filhas.
+
+As duas falhas de teste foram reproduzidas na base da main e no candidato.
+O patch preparado tem SHA-256
+47d4ba31c870d4b7787a7de576a8236808c4efc18c62e61542b5fd2da04cccee.
+Nenhuma asserção, cenário, guard de banco ou comando de teste é removido.
+Nenhum contrato funcional, família, C4/ALTO, gate, orçamento, dependência,
+estado, ledger ou executor é modificado; não se reabre outro GOAL.
+
+O aceite autoriza excepcionalmente estes dois caminhos durante a execução,
+em relação à regra geral "nunca ampliar allowlist no meio". Rito autorizado:
+verify/verify --all e checks aprovados → merge normal do PR documental #280 →
+merge normal da main na branch funcional → atualizar somente as duas entradas
+da allowlist ativa conforme os metadados ratificados, preservando tentativa
+2/3, attempts_log, opened_at e todos os outros campos → status/open oficial.
+O open da CLI apenas atualiza a base por merge-base, sem reiniciar o contador.
+Não se edita à mão base_commit, state.json, LEDGER.jsonl, REGISTRY.md ou
+executors.json. A falha real da tentativa 1 permanece registrada.
+
+Depois: aplicar o patch, check obrigatório, R Anthropic real do SHA final
+com APPROVE/P0=P1=P2=0, close AEP separado e merge normal do #272. Nenhum
+parecer, fechamento ou publicação é presumido por esta autorização.
