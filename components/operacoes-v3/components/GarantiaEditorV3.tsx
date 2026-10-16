@@ -75,7 +75,7 @@ export function CoberturasGarantiaResumoV3({ os, condicoes = false }: { os: Orde
   const unica = condicaoUnicaGarantiaV3(linhas);
   if (linhas.length > 1 && unica && !condicoes) return <div className="space-y-2">
     <p className="text-sm font-medium">{linhas.length} serviços · condições iguais</p>
-    <p className="text-xs"><span>{unica.prazoDias} dias</span> · {linhas[0].situacao === "prevista" ? "A partir da entrega" : linhas[0].situacao === "ativa" ? "Vigente" : linhas[0].situacao === "vencida" ? "Vencida" : "Sem cobertura"}</p>
+    <p className="text-xs"><span>{unica.prazoDias} dias</span> · {linhas[0].situacao === "nenhuma" ? "Condição não informada" : linhas[0].situacao === "prevista" ? "A partir da entrega" : linhas[0].situacao === "ativa" ? "Vigente" : linhas[0].situacao === "vencida" ? "Vencida" : "Sem cobertura"}</p>
     <ul className="list-inside list-disc text-xs text-muted-foreground">{linhas.map((c) => <li key={c.linhaId}>{c.descricao}</li>)}</ul>
   </div>;
   return <div className="space-y-3">{linhas.map((c) => <div key={c.linhaId} className="border-b border-border pb-2 last:border-0">

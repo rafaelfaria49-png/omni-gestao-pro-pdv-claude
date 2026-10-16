@@ -28,6 +28,37 @@ describe("permissões, concorrência e auditoria do servidor", () => {
     await expect(salvarGarantiaOSV3(h.loja,"qa-os",{ linhaId: "tela-1", modeloId: "tela", prazoDias: 180 })).rejects.toThrow("motivo obrigatório");
     expect(h.update).not.toHaveBeenCalled();
   });
+  it("R-ANTHROPIC-P2-1: primeira definição após v1 vazia exige autoridade, motivo e snapshot e cria aditivo", async () => {
+    h.payload = adicionarVersaoTermoGarantiaV3(osGarantiasSinteticaV3({ orcamento: undefined, aberturaV3: {}, entregueEm: "2026-10-10T12:00:00Z" }), { tipo: "original", agora: "2026-10-10T12:00:00Z", operadorId: "qa", operador: "QA", motivo: "Entrega", origem: "teste" }) as unknown as Record<string, unknown>;
+    const antes = structuredClone(h.payload), v1 = structuredClone(lerVersoesTermoGarantiaV3(h.payload)[0]);
+    expect(v1.documento.coberturas).toEqual([]);
+    expect(lerCoberturasGarantiaV3(h.payload)).toEqual([]);
+    const esperado = assinaturaGarantiasServicosV3(h.payload);
+    h.permissao = false;
+    await expect(salvarGarantiaOSV3(h.loja,"qa-os",{ modeloId: "tela", prazoDias: 90, motivo: "Definição autorizada", esperado })).rejects.toThrow("Sem permissão");
+    expect(h.update).not.toHaveBeenCalled(); expect(h.payload).toEqual(antes);
+    h.permissao = true;
+    await expect(salvarGarantiaOSV3(h.loja,"qa-os",{ modeloId: "tela", prazoDias: 90, esperado })).rejects.toThrow("motivo obrigatório");
+    await expect(salvarGarantiaOSV3(h.loja,"qa-os",{ modeloId: "tela", prazoDias: 90, motivo: "Definição autorizada" })).rejects.toThrow("Reabra o editor");
+    await expect(salvarGarantiaOSV3(h.loja,"qa-os",{ modeloId: "tela", prazoDias: 90, motivo: "Definição autorizada", esperado: "obsoleto" })).rejects.toThrow("mudou");
+    expect(h.update).not.toHaveBeenCalled(); expect(h.payload).toEqual(antes);
+    await salvarGarantiaOSV3(h.loja,"qa-os",{ modeloId: "tela", prazoDias: 90, motivo: "Definição autorizada", esperado, origem: "v4" });
+    const versoes = lerVersoesTermoGarantiaV3(h.payload);
+    expect(h.update).toHaveBeenCalledTimes(1);
+    expect(versoes).toHaveLength(2); expect(versoes[0]).toEqual(v1);
+    expect(versoes[1]).toMatchObject({ tipo: "aditivo", marcoOriginal: v1.marcoOriginal, motivo: "Definição autorizada", documento: { coberturas: [{ modeloId: "tela", prazoDias: 90 }] } });
+    expect((h.payload.timeline as Array<{ metadata: unknown }>).at(-1)?.metadata).toMatchObject({ alterada: true, antes: null, depois: { modeloId: "tela", prazoDias: 90 }, motivo: "Definição autorizada", versao: 2 });
+    h.permissao = false;
+    await salvarGarantiaOSV3(h.loja,"qa-os",{ modeloId: "tela", prazoDias: 90, esperado: assinaturaGarantiasServicosV3(h.payload) });
+    expect(lerVersoesTermoGarantiaV3(h.payload)).toEqual(versoes);
+  });
+  it("R-ANTHROPIC-P2-1: definição padrão antes de emitir conserva apenas editarOs", async () => {
+    h.payload = osGarantiasSinteticaV3({ orcamento: undefined, aberturaV3: {} }) as unknown as Record<string, unknown>;
+    h.permissao = false;
+    await salvarGarantiaOSV3(h.loja,"qa-os",{ modeloId: "tela", prazoDias: 90 });
+    expect(lerCoberturasGarantiaV3(h.payload)).toMatchObject([{ modeloId: "tela", prazoDias: 90 }]);
+    expect(lerVersoesTermoGarantiaV3(h.payload)).toEqual([]);
+  });
   it("grava antes/depois, ator, origem e instante e preserva outras coberturas", async () => {
     const antes = lerCoberturasGarantiaV3(h.payload);
     const salva = await salvarGarantiaOSV3(h.loja,"qa-os",{ linhaId: "tela-1", modeloId: "tela", prazoDias: 180, motivo: "Extensão sintética", origem: "v4", esperado: assinaturaGarantiasServicosV3(h.payload) });

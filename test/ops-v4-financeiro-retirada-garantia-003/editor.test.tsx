@@ -18,6 +18,19 @@ describe("editor recolhido e coberturas reais", () => {
     expect(screen.getAllByText("90 dias")).toHaveLength(1);
     expect(screen.getAllByText("Troca de Tela")).toHaveLength(2);
   });
+  it("R-ANTHROPIC-P2-2: resumo compacto distingue condição não definida de exclusão explícita", () => {
+    const indefinida = osGarantiasSinteticaV3({ orcamento: { status: "aprovado", pecas: [], servicos: [{ id: "manual-a", descricao: "Serviço manual A" }, { id: "manual-b", descricao: "Serviço manual B" }] } });
+    const view = render(<CoberturasGarantiaResumoV3 os={indefinida} />);
+    expect(screen.getByText("2 serviços · condições iguais")).toBeTruthy();
+    expect(screen.getByText(/Condição não informada/)).toBeTruthy();
+    expect(screen.queryByText(/Sem cobertura/)).toBeNull();
+    expect(screen.getByText("Serviço manual A")).toBeTruthy(); expect(screen.getByText("Serviço manual B")).toBeTruthy();
+    const explicita = osGarantiasSinteticaV3({ orcamento: { status: "aprovado", pecas: [], servicos: [{ id: "zero-a", descricao: "Sem cobertura A", garantiaModeloId: "sem_garantia", prazoGarantiaDias: 0 }, { id: "zero-b", descricao: "Sem cobertura B", garantiaModeloId: "sem_garantia", prazoGarantiaDias: 0 }] } });
+    view.rerender(<CoberturasGarantiaResumoV3 os={explicita} />);
+    expect(screen.getByText("2 serviços · condições iguais")).toBeTruthy();
+    expect(screen.getByText(/· Sem cobertura/)).toBeTruthy();
+    expect(screen.queryByText(/Condição não informada/)).toBeNull();
+  });
   it("começa recolhido, mostra cada prazo e abre condições ou edição explicitamente", () => {
     const v = { realOS: os(), salvarGarantia: vi.fn(), entrega: { garantia: { temGarantia: true, situacao: "Por serviço", situacaoTone: "info" } } } as unknown as V4Vals;
     render(<GarantiaOSCard v={v} />);

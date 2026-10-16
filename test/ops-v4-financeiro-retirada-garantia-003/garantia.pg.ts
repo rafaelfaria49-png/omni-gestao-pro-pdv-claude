@@ -9,7 +9,7 @@ import { registrarEntregaV3 } from "@/lib/operacoes-v3/entrega-actions";
 import { salvarGarantiaOSV3, registrarImpressaoDocumentoV3, reemitirTermoGarantiaLegadoV3 } from "@/lib/operacoes-v3/garantia-actions";
 import { corrigirDatasOSV3 } from "@/lib/operacoes-v3/datas-correcao-actions";
 import { comPadroesGarantiaServicosV3, lerCoberturasGarantiaV3, assinaturaGarantiasServicosV3 } from "@/lib/operacoes-v3/garantia-servicos-model";
-import { lerVersoesTermoGarantiaV3 } from "@/lib/operacoes-v3/garantia-termos-model";
+import { adicionarVersaoTermoGarantiaV3, lerVersoesTermoGarantiaV3 } from "@/lib/operacoes-v3/garantia-termos-model";
 import { montarTermoGarantiaDocV3 } from "@/lib/operacoes-v3/print-model";
 import { camposCorrigiveisV3 } from "@/lib/operacoes-v3/datas-correcao-model";
 import { osGarantiasSinteticaV3 } from "./fixtures";
@@ -104,6 +104,31 @@ describe("PostgreSQL real — entrega, versões e concorrência", () => {
       expect(versoes[0]).toEqual(v1); expect(versoes[2].documento.coberturas?.[0].inicio).toBe(iso);
       expect(final.timeline.filter((e) => e.tipo === "entrega_cliente")).toHaveLength(1);
       expect(await prisma.contaReceberTitulo.count({ where: { storeId: qa.storeId } })).toBe(0);
+    } finally { await qa.limpar(); }
+  });
+  it("R-ANTHROPIC-P2-1: primeira definição pós-v1 vazia persiste aditivo atômico sem reentrega ou financeiro", async () => {
+    const qa = await criar();
+    try {
+      const base = { ...await qa.ler(), orcamento: undefined, aberturaV3: {}, entregueEm: "2026-10-10T12:00:00Z", operacaoStatusV3: "entregue" };
+      const emitida = adicionarVersaoTermoGarantiaV3(base,{ tipo: "original", agora: "2026-10-10T12:00:00Z", operadorId: "qa", operador: "QA", motivo: "Entrega histórica sintética", origem: "fixture" });
+      await prisma.ordemServico.update({ where: { id: qa.id }, data: { payload: JSON.parse(JSON.stringify(emitida)) as Prisma.InputJsonValue } });
+      const antes = await qa.ler(), v1 = structuredClone(lerVersoesTermoGarantiaV3(antes)[0]);
+      expect(v1.documento.coberturas).toEqual([]);
+      const esperado = assinaturaGarantiasServicosV3(antes);
+      await expect(salvarGarantiaOSV3(qa.storeId,qa.id,{ modeloId: "tela", prazoDias: 90, esperado })).rejects.toThrow("motivo obrigatório");
+      await expect(salvarGarantiaOSV3(qa.storeId,qa.id,{ modeloId: "tela", prazoDias: 90, motivo: "Definição autorizada" })).rejects.toThrow("Reabra o editor");
+      expect(await qa.ler()).toEqual(antes);
+      await salvarGarantiaOSV3(qa.storeId,qa.id,{ modeloId: "tela", prazoDias: 90, motivo: "Definição autorizada", esperado, origem: "v4" });
+      const final = await qa.ler(), versoes = lerVersoesTermoGarantiaV3(final);
+      expect(versoes.map((v) => v.tipo)).toEqual(["original","aditivo"]); expect(versoes[0]).toEqual(v1);
+      expect(versoes[1]).toMatchObject({ marcoOriginal: v1.marcoOriginal, documento: { coberturas: [{ modeloId: "tela", prazoDias: 90 }] } });
+      expect(final.timeline.at(-1)?.metadata).toMatchObject({ alterada: true, antes: null, motivo: "Definição autorizada", versao: 2 });
+      expect(final.entregueEm).toBe(antes.entregueEm);
+      expect(final.timeline.filter((e) => e.tipo === "entrega_cliente")).toHaveLength(0);
+      expect(await prisma.contaReceberTitulo.count({ where: { storeId: qa.storeId } })).toBe(0);
+      expect(await prisma.caixaOperacao.count({ where: { storeId: qa.storeId } })).toBe(0);
+      expect(await prisma.movimentacaoFinanceira.count({ where: { storeId: qa.storeId } })).toBe(0);
+      expect(await prisma.movimentacaoEstoque.count({ where: { storeId: qa.storeId } })).toBe(0);
     } finally { await qa.limpar(); }
   });
   it("legado entregue é preservado, reemissão explicitamente marcada, sem cobrança nova", async () => {

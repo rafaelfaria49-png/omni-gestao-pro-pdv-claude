@@ -95,11 +95,11 @@ export async function salvarGarantiaOSV3(storeId: string, osId: string, input: S
     const antes: CoberturaServicoV3 | undefined = anterior ?? (gp?.modelo ? { linhaId, descricao: "Serviço registrado na OS", modeloId: gp.modelo, prazoDias: gp.prazoDias ?? garantiaCatalogoV3(gp.modelo).prazoDiasPadrao, ...(gp.termo ? { termoCustom: gp.termo } : {}), origem: "legado" as const } : undefined);
     const termoCustom = input.termoCustom === undefined ? antes?.termoCustom : input.termoCustom.trim();
     const depois: CoberturaServicoV3 = { linhaId, descricao: antes?.descricao || "Serviço registrado na OS", modeloId: modelo.id, prazoDias, ...(termoCustom ? { termoCustom } : {}), ...(antes && "inicioOriginal" in antes && antes.inicioOriginal ? { inicioOriginal: antes.inicioOriginal } : {}), ...(antes && "vencimentoOriginal" in antes && antes.vencimentoOriginal && antes.prazoDias === prazoDias ? { vencimentoOriginal: antes.vencimentoOriginal } : {}), origem: "edicao" };
-    const mudou = !!antes && (antes.modeloId !== depois.modeloId || antes.prazoDias !== depois.prazoDias || (antes.termoCustom ?? "") !== (depois.termoCustom ?? ""));
-    const foraPadrao = !antes && (prazoDias !== modelo.prazoDiasPadrao || !!termoCustom);
     const emitidas = lerVersoesTermoGarantiaV3(payload);
+    const mudou = antes ? (antes.modeloId !== depois.modeloId || antes.prazoDias !== depois.prazoDias || (antes.termoCustom ?? "") !== (depois.termoCustom ?? "")) : emitidas.length > 0;
+    const foraPadrao = !antes && (prazoDias !== modelo.prazoDiasPadrao || !!termoCustom);
     if (lerEntregaV3(payload).entregue && !emitidas.length) throw new Error("Documento legado sem snapshot. Faça uma reemissão autorizada antes de criar aditivos.");
-    if (mudou || foraPadrao || emitidas.length && mudou) {
+    if (mudou || foraPadrao) {
       const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.garantia, "Sem permissão para alterar o padrão da garantia.");
       if (!guard.ok) throw new Error(guard.error);
       if (!input.motivo?.trim()) throw new Error("Informe o motivo obrigatório da alteração da garantia.");
