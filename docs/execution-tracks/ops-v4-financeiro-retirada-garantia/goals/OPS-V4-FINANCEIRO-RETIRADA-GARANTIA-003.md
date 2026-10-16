@@ -7,7 +7,7 @@
   "status": "READY",
   "class": "C4",
   "risk_tier": "ALTO",
-  "plan_rev": 8,
+  "plan_rev": 9,
   "branch": "goal/ops-v4-financeiro-retirada-garantia-003",
   "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-003",
   "test_command": "npm run typecheck && npx --no-install vitest run lib/operacoes-v3/garantia-servicos-model.test.ts lib/operacoes-v3/garantia-textos.test.ts lib/operacoes-v3/garantia-templates.test.ts lib/operacoes-v3/garantia-actions.test.ts lib/operacoes-v3/entrega-actions.test.ts lib/operacoes-v3/pos-venda-model.test.ts lib/operacoes-v3/print-model.test.ts lib/operacoes-v3/datas-correcao-model.test.ts lib/operacoes-v3/orcamento-model.test.ts lib/operacoes-v3/orcamento-actions.test.ts lib/operacoes-v3/nova-os-actions.test.ts lib/operacoes-v3/nova-os-model.test.ts lib/operacoes-v3/retorno-actions.test.ts lib/operacoes-v3/historico-aparelho-model.test.ts lib/operacoes-v4/nova-os-draft-from-form.test.ts lib/operacoes-v4/posvenda-v4.test.ts lib/operacoes-v4/documento-mensagem.test.ts lib/operacoes-v4/historico-v4.test.ts lib/operacoes-v4/situacao-atendimento-v4.test.ts lib/operacoes-v4/retirada-fluxo-v4.test.ts && npx --no-install vitest run components/operacoes-v4-preview/preview-honesty.test.ts -t \"OPS-V4-FLUXO-CURTO-00[2567]|OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-00[123]\" && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-003/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-financeiro-retirada-garantia-001/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-002/vitest.config.ts && npx --no-install vitest run --config test/ops-v4-fluxo-curto-006/vitest.config.ts test/ops-v4-fluxo-curto-006/retirada.test.tsx test/ops-v4-fluxo-curto-006/fluxo-hook.test.tsx && npx --no-install vitest run --config test/ops-v4-fluxo-curto-007/vitest.config.ts test/ops-v4-fluxo-curto-007/retorno.test.tsx && npx --no-install vitest run --config test/ops-datas-retroativas-001/vitest.config.ts && npx playwright test e2e/specs/ops-v4-financeiro-retirada-garantia-003.spec.ts --retries=0 --workers=1",
@@ -63,10 +63,27 @@
     "e2e/specs/ops-v4-financeiro-retirada-garantia-003.spec.ts",
     "e2e/specs/operacoes-v4-fluxo-curto-002.spec.ts",
     "docs/execution-tracks/ops-v4-financeiro-retirada-garantia/**",
-    "docs/execution-tracks/REGISTRY.md"
+    "docs/execution-tracks/REGISTRY.md",
+    "app/actions/operacoes.ts",
+    "components/operacoes-v3/components/CorrigirDatasV3.tsx",
+    "components/operacoes-v3/components/GarantiaEditorV3.tsx",
+    "components/operacoes-v3/components/print/TermoGarantiaDocV3.tsx",
+    "components/operacoes-v3/hooks/use-garantia-v3.ts",
+    "components/operacoes-v4-preview/parts/NovaOSModal.tsx",
+    "e2e/ops-v4-garantias-auth.setup.ts",
+    "lib/operacoes-v3/garantia-abertura-server.ts",
+    "lib/operacoes-v3/garantia-catalogo.ts",
+    "lib/operacoes-v3/garantia-empresa-server.ts",
+    "lib/operacoes-v3/garantia-termos-model.ts",
+    "lib/operacoes-v3/nova-os-model.ts",
+    "lib/operacoes-v3/os-payload-import.test.ts",
+    "lib/operacoes-v3/os-payload-lock.ts",
+    "lib/operacoes-v4/servicos-autorizados-form.ts",
+    "lib/operacoes/services/orcamento-builder.ts",
+    "test/ops-v4-fluxo-curto-002/garantia-ui.test.tsx"
   ],
   "gates_liberados": [],
-  "read_budget": 55,
+  "read_budget": 75,
   "revisao_independente": true,
   "familia_executor": "openai",
   "reversibilidade": "baixa"
@@ -279,3 +296,27 @@ OPS-V4-FLUXO-CURTO-006; nenhum GOAL READY da trilha é SUPERSEDED). Objetivo,
 contrato (incluindo o item E da rev 3), allowlist, test_command, orçamento e
 dependência (002 DONE + merge) inalterados; este GOAL continua NÃO autorizado
 a abrir antes disso.
+
+## Revisão 9 — ratificação pré-open da entrega existente (16/10/2026)
+
+O GOAL 002 foi fechado oficialmente em `9dbae6d9744d0539ad07b59fbd4bdc97c5351d2a`
+e integrado por merge normal do PR #262 na main
+`c4f4bb6c187ad1637623299a1a80470f63080e6d`. Esta ratificação técnica
+cumpre a pré-condição documental acima antes de qualquer `open` do 003,
+sob os comandos do proprietário para reaproveitar integralmente a
+implementação já aprovada, regularizar sua autoria e publicar #262 → #271 → #272.
+Não representa um novo aceite humano específico de caminhos nem um parecer R.
+
+Os 17 caminhos explícitos adicionados à allowlist já pertencem ao diff
+experimental de Garantias aprovado no candidato integrado
+`6cbf01fa43cc2183a4a45c543f97c3fc13784186`; ratificam consumidores,
+identidade de linha, emissão, editor e regressão necessários ao contrato A–E.
+Nenhum deles libera schema, migrations, auth, CI, dependências ou outro
+caminho protegido. O orçamento sobe de 55 para 75 arquivos para cobrir
+o diff real e seus consumidores. Não se reimplementa funcionalidade.
+
+C4/ALTO, executor real OpenAI, revisão independente Anthropic obrigatória,
+contrato funcional, test_command, gates, estado, ledger, tentativas e
+`executors.json` são preservados. Esta revisão documental não abre, fecha
+nem aprova o GOAL; sua integração exige PR documental e merge normal
+com verificações aprovadas. Datas #271 será integrado antes de Garantias #272.

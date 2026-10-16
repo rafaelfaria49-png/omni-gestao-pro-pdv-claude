@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 8,
+  "plan_rev": 9,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -408,3 +408,18 @@ automático. Só depois check/R: close separado, PR #262, checks, merge
 normal e deployments conferidos. Sem nova autorização de desbloqueio
 além desta revisão. GOAL001 DONE; GOAL003 READY plan_rev 8 com a mesma
 família/dependência, não iniciar; 008 e datas/Caixa retroativo fora.
+
+## Revisão 9 — escopo pré-open do 003 (16/10/2026)
+
+Depois do 002 DONE e integrado pelo merge normal #262
+(`c4f4bb6c187ad1637623299a1a80470f63080e6d`), ratificam-se os 17
+consumidores e testes existentes do experimento de Garantias que faltavam
+na allowlist do 003; são relacionados explicitamente em seus metadados.
+A autorização de execução continua sendo a dos comandos do proprietário
+para reaproveitar a implementação aprovada e concluir a sequência
+#262 → #271 → #272; não se declara novo aceite humano específico nem R.
+A exigência pré-open do próprio GOAL determina plan_rev novo; TRACK e
+003 READY passam a rev 9. Seu read_budget passa a 75. Classes, risco,
+família real, test_command, gates, ledger, tentativas, pré-condições,
+histórico e revisão independente permanecem intactos. Nenhum código,
+`executors.json`, estado derivado ou GOAL encerrado é alterado.
