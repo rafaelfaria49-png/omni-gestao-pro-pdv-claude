@@ -252,15 +252,13 @@ describe("aprovarOrcamentoV3 — GOAL OPS-V4-ORC-APROVACAO-SELECAO-026", () => {
     expect(dataGravada.data.payload.orcamentoVersoesV3[0]!.status).toBe("aprovado");
     expect(dataGravada.data.payload.orcamentoVersoesV3[0]!.snapshot).toBeDefined();
 
-    // Garantia da variante escolhida aplicada via salvarGarantiaOSV3.
-    expect(salvarGarantiaMock).toHaveBeenCalledTimes(1);
-    const [sidArg, osIdArg, garantiaInput] = salvarGarantiaMock.mock.calls[0]!;
-    expect(sidArg).toBe("loja-x");
-    expect(osIdArg).toBe("os-1");
-    expect(garantiaInput).toEqual({ modeloId: "personalizado", prazoDias: 90, termoCustom: "Garantia da opção aprovada: Original." });
+    // Cobertura gravada na mesma escrita da aprovação, vinculada à linha real.
+    const gravado = updateMock.mock.calls[0]![0].data.payload;
+    expect(gravado.aberturaV3.garantiasServicosV3).toEqual([expect.objectContaining({ linhaId: "b", prazoDias: 90 })]);
+    expect(salvarGarantiaMock).not.toHaveBeenCalled();
   });
 
-  it("multi-grupo: aplica a MENOR garantia entre as variantes selecionadas", async () => {
+  it("multi-grupo: preserva a garantia de cada variante selecionada", async () => {
     findFirstMock.mockResolvedValue(
       baseRow({
         servicos: [
@@ -274,11 +272,11 @@ describe("aprovarOrcamentoV3 — GOAL OPS-V4-ORC-APROVACAO-SELECAO-026", () => {
       }),
     );
     await aprovarOrcamentoV3("loja-x", "os-1");
-    const [, , garantiaInput] = salvarGarantiaMock.mock.calls[0]!;
-    expect((garantiaInput as { prazoDias: number }).prazoDias).toBe(30);
+    expect(updateMock.mock.calls[0]![0].data.payload.aberturaV3.garantiasServicosV3.map((c: { linhaId: string; prazoDias: number }) => [c.linhaId, c.prazoDias])).toEqual([["a", 90], ["b", 30]]);
+    expect(updateMock.mock.calls[0]![0].data.payload.aberturaV3.garantiaPrevista).toBeUndefined();
   });
 
-  it("falha ao aplicar garantia (best-effort) NÃO desfaz a aprovação já gravada", async () => {
+  it("aprovação e garantias usam uma única escrita; writer legado não é acionado", async () => {
     findFirstMock.mockResolvedValue(
       baseRow({
         servicos: [{ id: "a", descricao: "Tela", valor: 100, grupoId: "g1", selecionadaV3: true, varianteV3: { rotulo: "Tela", garantiaDias: 90 } }],

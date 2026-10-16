@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Keyb
 import { Clock3, RotateCcw, ShieldCheck, X } from "lucide-react";
 import { retornoEmAberturaV3, type RetornoV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { C, card, cardTitle, upLabel } from "../../tokens";
+import { CoberturasGarantiaResumoV3 } from "@/components/operacoes-v3/components/GarantiaEditorV3";
 import type { V4Vals } from "../../use-v4-preview";
 
 const sectionGrid = "repeat(auto-fit, minmax(min(100%, 320px), 1fr))";
@@ -345,12 +346,12 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           </div>
           {garantia.temGarantia ? (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "13px 18px" }}>
+              {garantia.condicoesDistintas ? <CoberturasGarantiaResumoV3 os={v.realOS} condicoes /> : <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "13px 18px" }}>
                 <DataPoint label="Prazo" value={garantia.prazoDias > 0 ? `${garantia.prazoDias} dias` : "Sem cobertura"} strong />
                 <DataPoint label={garantia.situacao === "vencida" ? "Garantia vencida em" : "Válida até"} value={garantia.vencimento ? formatDate(garantia.vencimento) : garantia.situacao === "prevista" ? "Após a entrega" : "—"} strong />
                 <DataPoint label="Tipo" value={garantia.label || "Não informado"} />
                 <DataPoint label="Início" value={garantia.inicio ? formatDate(garantia.inicio) : "Na entrega"} />
-              </div>
+              </div>}
               {garantia.origem ? <div style={{ marginTop: 13, paddingTop: 10, borderTop: `1px solid ${C.line3}`, color: C.subtle, fontSize: 11 }}>{garantia.origem}</div> : null}
             </>
           ) : (

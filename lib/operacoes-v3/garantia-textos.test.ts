@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { normalizarGarantiaPrevistaV3 } from "./garantia-textos";
+import { gerarTermoGarantiaV3, normalizarGarantiaPrevistaV3 } from "./garantia-textos";
 
 describe("G04–G08 — normalização canônica da garantia", () => {
+  it("marcador desconhecido não vira personalizado 90 nem condições genéricas", () => {
+    expect(() => normalizarGarantiaPrevistaV3({ modeloId: "por_servico" })).toThrow("desconhecido");
+    expect(gerarTermoGarantiaV3({ modeloId: "marcador_legado" })).toMatchObject({ modeloId: "desconhecido", cobertura: [], exclusoes: [] });
+    expect(gerarTermoGarantiaV3({ modeloId: "marcador_legado" }).prazoDias).toBeUndefined();
+  });
   it("modelos sem cobertura descartam prazo positivo", () => {
     expect(normalizarGarantiaPrevistaV3({ modeloId: "sem_garantia", prazoDias: 90 }).prazoDias).toBe(0);
     expect(normalizarGarantiaPrevistaV3({ modeloId: "oxidacao", prazoDias: 90 }).prazoDias).toBe(0);

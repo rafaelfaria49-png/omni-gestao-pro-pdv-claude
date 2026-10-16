@@ -287,6 +287,9 @@ export function useCorrigirDatas(params: { os: OrdemServico; storeId: string | n
 export function resumoImpactoGarantia(g: ImpactoGarantiaV3 | null): string[] {
   if (!g?.temImpacto) return [];
   const linhas: string[] = [];
+  if ((g.coberturasServicos?.length ?? 0) > 1) {
+    for (const c of g.coberturasServicos ?? []) linhas.push(`${c.descricao || c.linhaId}: início ${formatarDiaDeIsoNaLojaV3(c.inicioAntes) || "—"} → ${formatarDiaDeIsoNaLojaV3(c.inicioDepois) || "—"}; vencimento ${formatarDiaDeIsoNaLojaV3(c.vencimentoAntes) || "sem cobertura"} → ${formatarDiaDeIsoNaLojaV3(c.vencimentoDepois) || "sem cobertura"}.`);
+  }
   if (g.inicioAntes || g.inicioDepois) {
     linhas.push(`Início: ${formatarDiaDeIsoNaLojaV3(g.inicioAntes) || "—"} → ${formatarDiaDeIsoNaLojaV3(g.inicioDepois) || "—"}`);
   }

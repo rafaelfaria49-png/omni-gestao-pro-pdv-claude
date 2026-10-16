@@ -137,7 +137,7 @@ import {
 import { montarMensagemAtualizacaoOSV4 } from "@/lib/operacoes-v4/documento-mensagem";
 import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
 import type { EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
-import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operacoes-v3/garantia-actions";
+import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3, reemitirTermoGarantiaLegadoV3, type SalvarGarantiaInputV3 } from "@/lib/operacoes-v3/garantia-actions";
 import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { abrirRetornoV3, buscarOrigensRetornoV3, finalizarRetornoV3, lerOrigemRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import {
@@ -339,10 +339,11 @@ export interface V4DataCtx {
   adicionarFotoSaida: (input: AdicionarFotoSaidaInputV3) => Promise<boolean>;
   removerFotoSaida: (fotoId: string) => Promise<boolean>;
   /** Registra na timeline que um documento foi impresso (best-effort). */
-  registrarImpressaoDoc: (tipo: DocumentoTipoV3) => void;
+  registrarImpressaoDoc: (tipo: DocumentoTipoV3, versao?: number) => void;
+  reemitirTermoGarantia?: (input: { motivo: string; esperado: string }) => Promise<boolean>;
   // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
   /** Define/edita a garantia prevista da OS (reuso de `salvarGarantiaOSV3`). */
-  salvarGarantia: (input: { modeloId: string; prazoDias?: number }) => Promise<boolean>;
+  salvarGarantia: (input: SalvarGarantiaInputV3) => Promise<boolean>;
   /**
    * Abre o retorno da OS SELECIONADA (motor V3, operação nova). Mantido por
    * compatibilidade; a V4 usa o fluxo Retorno / Garantia (`abrirRetornoDaOrigem`).
@@ -1758,6 +1759,7 @@ export function buildVals(
     // `salvarGarantia` reusa `salvarGarantiaOSV3` (mesmo contrato da V3, mesmo
     // campo `aberturaV3.garantiaPrevista`); consumido pelo form do EntregaStage.
     salvarGarantia: ctx.salvarGarantia,
+    reemitirTermoGarantia: ctx.reemitirTermoGarantia,
     abrirRetorno: ctx.abrirRetorno,
     finalizarRetorno: ctx.finalizarRetorno,
     abrirOsVinculada: ctx.abrirOsVinculada,
@@ -2684,11 +2686,11 @@ export function useV4Preview(): V4Vals {
   // ANEXOS-012): best-effort, mesma action usada pelo `onPrinted` da V3
   // (`PrintPreviewV3`) — registra na timeline, nunca bloqueia a impressão.
   const registrarImpressaoDoc = useCallback(
-    (tipo: DocumentoTipoV3) => {
+    (tipo: DocumentoTipoV3, versao?: number) => {
       const sid = (lojaAtivaId ?? "").trim();
       const osId = (selectedOsId ?? "").trim();
       if (!sid || !osId) return;
-      void registrarImpressaoDocumentoV3(sid, osId, tipo).catch(() => {});
+      void registrarImpressaoDocumentoV3(sid, osId, tipo, versao).catch(() => {});
     },
     [lojaAtivaId, selectedOsId],
   );
@@ -2698,8 +2700,13 @@ export function useV4Preview(): V4Vals {
   // `GarantiaOSV3.tsx`), gravando no mesmo `payload.aberturaV3.garantiaPrevista`.
   // Paridade com a V3: só modelo + prazo (sem termoCustom nesta etapa).
   const salvarGarantia = useCallback(
-    (input: { modeloId: string; prazoDias?: number }) =>
+    (input: SalvarGarantiaInputV3) =>
       runWrite((sid, osId) => salvarGarantiaOSV3(sid, osId, input), "Garantia salva."),
+    [runWrite],
+  );
+
+  const reemitirTermoGarantia = useCallback(
+    (input: { motivo: string; esperado: string }) => runWrite((sid, osId) => reemitirTermoGarantiaLegadoV3(sid, osId, input), "Termo legado reemitido."),
     [runWrite],
   );
 
@@ -3262,6 +3269,7 @@ export function useV4Preview(): V4Vals {
       removerFotoSaida,
       registrarImpressaoDoc,
       salvarGarantia,
+      reemitirTermoGarantia,
       abrirRetorno,
       finalizarRetorno,
       abrirOsVinculada,
@@ -3349,6 +3357,7 @@ export function useV4Preview(): V4Vals {
       removerFotoSaida,
       registrarImpressaoDoc,
       salvarGarantia,
+      reemitirTermoGarantia,
       abrirRetorno,
       finalizarRetorno,
       abrirOsVinculada,
