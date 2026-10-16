@@ -424,31 +424,39 @@ família real, test_command, gates, ledger, tentativas, pré-condições,
 histórico e revisão independente permanecem intactos. Nenhum código,
 `executors.json`, estado derivado ou GOAL encerrado é alterado.
 
-## Proposta rev 10 — exceção restrita para duas regressões (16/10/2026)
+## Decisão humana rev 10 — exceção restrita ao escopo ativo (16/10/2026)
 
-PENDENTE DE AUTORIZAÇÃO HUMANA — proposta não ratificada. Não amplia o escopo
-ativo, não autoriza edição dos testes, close, merge de produto ou publicação.
+O proprietário respondeu literalmente **"Autorizar essa exceção delimitada"**
+à pergunta que especificava os dois caminhos abaixo, o PR documental, a
+atualização somente da allowlist de .aep-active após ratificação, a preservação
+do contador e das falhas, ledger, C4/ALTO e revisão Anthropic obrigatória,
+sem bloquear/reabrir o GOAL ou reiniciar tentativas. O aceite é da exceção
+de escopo; não representa aprovação fictícia de testes ou revisão independente.
 
-A validação obrigatória do candidato `607c19a65fe7061d90c0071cbc0b6ad86c1b38a7`
-reproduziu duas falhas de infraestrutura/expectativa também na base da main:
-- F3b: a paleta agora restaura o foco a um controle legítimo do launcher; o
-  Enter da fixture escolhe uma modalidade antes da asserção de Tab. A proposta
-  conserva a verificação de foco sem alcançar o fundo e exercita Enter na raiz
-  focável do diálogo antes de Tab/Shift+Tab, sem ativar uma modalidade.
-- T56c: iniciar a action após `setTimeout(0)` não prova que a sessão externa
-  já adquiriu `FOR UPDATE`. A proposta sinaliza uma Promise imediatamente após
-  essa aquisição e aguarda a barreira, preservando a observação da disputa por
-  `pg_stat_activity`, a recusa original e a asserção de zero filhas.
+- test/ops-v4-fluxo-curto-007/retorno.test.tsx: adaptar o ponto de Enter da
+  fixture à restauração legítima do foco no launcher, preservando verificações
+  de foco à frente, isolamento do fundo, Tab/Shift+Tab e os dois Escapes.
+- test/ops-v4-fluxo-curto-007/retorno.pg.test.ts: T56c usa uma Promise como
+  barreira sinalizada imediatamente após FOR UPDATE na sessão externa,
+  preservando observação de espera por pg_stat_activity, recusa e zero filhas.
 
-Somente os dois caminhos explícitos acima são propostos para a allowlist.
+As duas falhas de teste foram reproduzidas na base da main e no candidato.
+O patch preparado tem SHA-256
+47d4ba31c870d4b7787a7de576a8236808c4efc18c62e61542b5fd2da04cccee.
 Nenhuma asserção, cenário, guard de banco ou comando de teste é removido.
 Nenhum contrato funcional, família, C4/ALTO, gate, orçamento, dependência,
 estado, ledger ou executor é modificado; não se reabre outro GOAL.
 
-Se o proprietário autorizar expressamente a exceção ao escopo ativo, registrar
-o aceite real neste PR antes de seu merge normal, com verify/verify --all e
-checks aprovados. Somente depois atualizar as duas entradas da allowlist de
-`.aep-active` conforme o plano ratificado, preservando tentativa 2/3, a falha
-da tentativa 1, opened_at, base_commit e demais campos. Não bloquear/reabrir
-para reiniciar o contador. R Anthropic real do candidato final continua
-obrigatória antes do close e merge #272. Sem autorização, manter este PR draft.
+O aceite autoriza excepcionalmente estes dois caminhos durante a execução,
+em relação à regra geral "nunca ampliar allowlist no meio". Rito autorizado:
+verify/verify --all e checks aprovados → merge normal do PR documental #280 →
+merge normal da main na branch funcional → atualizar somente as duas entradas
+da allowlist ativa conforme os metadados ratificados, preservando tentativa
+2/3, attempts_log, opened_at e todos os outros campos → status/open oficial.
+O open da CLI apenas atualiza a base por merge-base, sem reiniciar o contador.
+Não se edita à mão base_commit, state.json, LEDGER.jsonl, REGISTRY.md ou
+executors.json. A falha real da tentativa 1 permanece registrada.
+
+Depois: aplicar o patch, check obrigatório, R Anthropic real do SHA final
+com APPROVE/P0=P1=P2=0, close AEP separado e merge normal do #272. Nenhum
+parecer, fechamento ou publicação é presumido por esta autorização.
