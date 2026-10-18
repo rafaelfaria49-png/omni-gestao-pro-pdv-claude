@@ -98,7 +98,9 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (submitting.current || interpreting || !confirmed) return
-    const nextErrors = editing ? {} : validateClientEditor(values)
+    const nextErrors = validateClientEditor(values, editing ? {
+      tipo: editing.tipo, documento: empty(editing.documento), telefone: empty(editing.telefone), email: empty(editing.email),
+    } : undefined)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length) { setMessage("Corrija os campos indicados antes de salvar."); return }
     submitting.current = true

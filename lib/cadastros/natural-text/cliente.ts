@@ -104,7 +104,8 @@ export function interpretarTextoCliente(texto: unknown): ClientTextSuggestion {
 export type ClientEditorValues = Record<ClientTextField, string> & {
   tipo: "PF" | "PJ"; tags: string; observacoes: string; active: boolean
 }
-export function validateClientEditor(values: ClientEditorValues): Partial<Record<keyof ClientEditorValues, string>> {
+export type ClientEditorIdentity = Pick<ClientEditorValues, "tipo" | "documento" | "telefone" | "email">
+export function validateClientEditor(values: ClientEditorValues, original?: ClientEditorIdentity): Partial<Record<keyof ClientEditorValues, string>> {
   const errors: Partial<Record<keyof ClientEditorValues, string>> = {}
   if (!values.nome.trim() || values.nome.length > 160) errors.nome = "Informe o nome (até 160 caracteres)."
   if (values.telefone && !validClientPhone(values.telefone)) errors.telefone = "Informe DDD e número, com 10 ou 11 dígitos."
@@ -112,6 +113,16 @@ export function validateClientEditor(values: ClientEditorValues): Partial<Record
   if (values.email && !validClientEmail(values.email)) errors.email = "Revise o email."
   if (values.uf && !UFS.has(values.uf.toUpperCase())) errors.uf = "Informe uma UF válida."
   for (const [field, limit] of [["email", 254], ["cidade", 120], ["endereco", 240], ["tags", 500], ["observacoes", 1000]] as const) if (values[field].length > limit) errors[field] = `Use até ${limit} caracteres.`
+  if (original) {
+    // Historical values may be represented without repair. Changed identity must be valid;
+    // kind/document form a pair, so changing either revalidates their compatibility.
+    const changed: typeof errors = {}
+    if (!values.nome.trim()) changed.nome = errors.nome
+    if ((values.tipo !== original.tipo || values.documento.trim() !== original.documento.trim()) && errors.documento) changed.documento = errors.documento
+    if (values.telefone.trim() !== original.telefone.trim() && errors.telefone) changed.telefone = errors.telefone
+    if (values.email.trim() !== original.email.trim() && errors.email) changed.email = errors.email
+    return changed
+  }
   return errors
 }
 

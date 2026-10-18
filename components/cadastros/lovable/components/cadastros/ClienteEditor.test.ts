@@ -3,6 +3,7 @@ import React from "react"
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ClientTextSuggestion } from "@/lib/cadastros/natural-text/cliente-types"
+import type { ClienteDTO } from "@/app/actions/cadastros"
 
 type Interpretation = { ok: true; sugestao: ClientTextSuggestion } | { ok: false; message: string }
 const h = vi.hoisted(() => ({
@@ -122,5 +123,18 @@ describe("HUB real client editor: human review and temporary capture", () => {
     view.rerender(React.createElement(ClienteEditorDialog, { ...p, open: true }))
     expect(screen.queryByLabelText("Sugestão: Nome")).toBeNull()
     expect((screen.getByLabelText("Descreva o novo cliente") as HTMLTextAreaElement).value).toBe("")
+  })
+  it("revalidates document compatibility when type changes during editing", () => {
+    const editing = { id: "synthetic", nome: "Lia de Teste", tipo: "PF", documento: "52998224725", telefone: "14999998888", email: "", tags: [], status: "Ativo" } as unknown as ClienteDTO
+    render(React.createElement(ClienteEditor, { ...props(), editing }))
+    edit("Tipo", "PJ"); fireEvent.click(screen.getByRole("checkbox")); click("Salvar cliente")
+    expect(h.save).not.toHaveBeenCalled()
+    expect(screen.getByText(/CPF\/CNPJ inválido ou incompatível/)).toBeTruthy()
+  })
+  it("allows an unrelated edit while retaining legacy invalid identity", async () => {
+    const editing = { id: "synthetic", nome: "Lia de Teste", tipo: "PF", documento: "LEGACY-SYNTHETIC", telefone: "123", email: "", tags: [], status: "Ativo" } as unknown as ClienteDTO
+    render(React.createElement(ClienteEditor, { ...props(), editing }))
+    edit("Observações", "Nota sintética alterada"); fireEvent.click(screen.getByRole("checkbox")); click("Salvar cliente")
+    await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
   })
 })

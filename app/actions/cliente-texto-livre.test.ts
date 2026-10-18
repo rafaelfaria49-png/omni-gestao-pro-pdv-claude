@@ -13,6 +13,9 @@ vi.mock("@/auth", () => ({ auth: async () => h.session }))
 vi.mock("@/lib/auth/session-entitlement", () => ({ getSessionEntitlement: async () => ({ ok: !!h.session }) }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/lib/prisma", () => ({ prisma: {
+  cliente: {
+    findFirst: async ({ where }: { where: { id: string; storeId: string } }) => h.rows.find((r) => r.id === where.id && r.storeId === where.storeId) ?? null,
+  },
   $transaction: async (fn: (tx: unknown) => unknown) => fn({
     cliente: {
       findMany: async ({ where }: { where: { storeId: string } }) => { h.query(where); return h.rows.filter((r) => r.storeId === where.storeId) },
@@ -96,5 +99,20 @@ describe("Cliente actions with real access gate, identity and ClientWriteService
     const r = await salvarClienteRevisado("loja-a", "synthetic-existing", { ...input(), documento: "LEGACY-SYNTHETIC", telefone: "123" }, true)
     expect(r).toMatchObject({ ok: true })
     expect(h.update).toHaveBeenCalledOnce()
+    expect((h.update.mock.calls[0][0] as { data: Record<string, unknown> }).data).not.toHaveProperty("document")
+  })
+  it("revalidates kind/document together when the operator changes kind", async () => {
+    h.rows = [row({ document: "52998224725", documentKey: "52998224725" })]
+    const r = await salvarClienteRevisado("loja-a", "synthetic-existing", { ...input(), documento: "52998224725", tipo: "PJ" }, true)
+    expect(r).toMatchObject({ ok: false, errors: { documento: expect.any(String) } })
+    expect(h.update).not.toHaveBeenCalled()
+  })
+  it("rejects newly invalid identity values while preserving untouched legacy identity", async () => {
+    h.rows = [row({ document: "LEGACY-SYNTHETIC", phone: "123" })]
+    const base = { ...input(), documento: "LEGACY-SYNTHETIC", telefone: "123" }
+    expect(await salvarClienteRevisado("loja-a", "synthetic-existing", { ...base, documento: "OTHER-INVALID" }, true)).toMatchObject({ ok: false, errors: { documento: expect.any(String) } })
+    expect(await salvarClienteRevisado("loja-a", "synthetic-existing", { ...base, telefone: "456" }, true)).toMatchObject({ ok: false, errors: { telefone: expect.any(String) } })
+    expect(await salvarClienteRevisado("loja-a", "synthetic-existing", { ...base, email: "invalid" }, true)).toMatchObject({ ok: false, errors: { email: expect.any(String) } })
+    expect(h.update).not.toHaveBeenCalled()
   })
 })
