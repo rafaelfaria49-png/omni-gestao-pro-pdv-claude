@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-10-18T20:15:18.741Z",
+  "sha": "17510806bdfe736f6bc8a19ec732b7fd035de69b",
+  "parents": [
+    "8a192acee23dc2b4e702136a3cd86c40291bddf3",
+    "91d778782a6b7712c4c9c0159e2a4063feaa7c62"
+  ],
+  "message": "Merge pull request #281 from rafaelfaria49-png/goal/pdv-parity-n5-b2-pin-keymap-001\n\nPDV N5-B2: PIN e keymap com revisão R aprovada e AEP DONE"
+}

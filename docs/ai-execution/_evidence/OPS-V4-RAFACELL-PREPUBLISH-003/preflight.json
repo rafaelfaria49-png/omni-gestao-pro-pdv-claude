@@ -1,0 +1,2571 @@
+{
+  "capturedAt": "2026-10-18T19:48:51.169Z",
+  "canonical": "C:/Projetos/omni-gestao",
+  "originMain": "17510806bdfe736f6bc8a19ec732b7fd035de69b",
+  "refs": [
+    "refs/codex/snapshots/b5a71cecf70f796275bc7a5849935d77654ffc40 e8cbbdaccbf203204f5d545b31a2e2467d65c87a",
+    "refs/codex/turn-diffs/captures/1792330930378/49be9e8a-6129-4162-9862-7ffd88c8ae52/base cbe19abac83b17045b24aa5ce11f7bd7d7cf5a43",
+    "refs/codex/turn-diffs/captures/1792330998008/6b8c8c6f-bb51-4e19-8d71-e5b16d5100c0/base cbe19abac83b17045b24aa5ce11f7bd7d7cf5a43",
+    "refs/codex/turn-diffs/captures/1792333980729/5e9c1a95-be46-4433-b13c-f5041de88ba1/base cbe19abac83b17045b24aa5ce11f7bd7d7cf5a43",
+    "refs/codex/turn-diffs/captures/1792334012124/36e68013-0ae6-485f-a2ff-48170bbd1e88/base cbe19abac83b17045b24aa5ce11f7bd7d7cf5a43",
+    "refs/codex/turn-diffs/captures/1792352439508/3a3765ab-b70e-417b-82e1-e2ed134e9e07/base c9f3d08af0cab4e2be9600bc6a7a7eb134974757",
+    "refs/codex/turn-diffs/captures/1792352450586/cad8adeb-4294-4e1d-8df0-29e55b6d0757/base c9f3d08af0cab4e2be9600bc6a7a7eb134974757",
+    "refs/codex/turn-diffs/checkpoints/06f3a752853657c33b416a4834fa7f9c/635b3dac5e4907d8b3475e84cc314d6f/1791805461421/8ec6b086-351a-4596-ad80-56e56533aad7 e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/0994edd40f281a3e1b672efc402f1d98/62161f8258e78e4e4c73d68091ee1647/1792023973566/9fa82da7-b5ed-4e1f-bb2e-0ccf58c975dd 57433a783f9517ed4156c844bd46fa89da135917",
+    "refs/codex/turn-diffs/checkpoints/0ada495a7aa415f0ed575e82d9b56cb4/f8e55086f8431ed8ae4de6c8887bb4ca/1791851539545/dad10751-c68b-45ed-b4a2-8621d281d3b5 e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/0e7ac6a418047988155b2da502dbd882/c6c1a6c191bf3f157549df91c78b2217/1791817687997/32c3287b-7831-4639-b6c1-2a446066da3b e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/149dd31cec81c83bdacbf2e066e52ae0/3e2b09b17f916afa4b6400fca1962793/1792073256915/469c0de6-b011-4492-9042-0bf20b9be620 f2592cf996d977be3f744f71e09e71520c778290",
+    "refs/codex/turn-diffs/checkpoints/156a1b017b7371ddafc84aad84dc0cd2/b64376d2119ee2d7cf3bb0be6bd76b5f/1791989710318/fb919a60-74e8-43a8-b0ac-3cd3b96fc16c 7b2e49bfcea7b7c422fb6e86fc819070734a67b6",
+    "refs/codex/turn-diffs/checkpoints/1888df1495d47b8d7b2375b708006fea/58e1dbddb7712acef4ca3e41ce3b3b40/1791991855104/68a6adb8-7901-4a01-9d3a-97d90946fb31 7b2e49bfcea7b7c422fb6e86fc819070734a67b6",
+    "refs/codex/turn-diffs/checkpoints/1dfe13398b6be55ce313affc1485c3b9/a7bfe2419e25a0b1e5ba759afd9fe349/1791908034313/d4e1ebf2-66a7-49ee-b64f-e58f390c1fe3 7b2e49bfcea7b7c422fb6e86fc819070734a67b6",
+    "refs/codex/turn-diffs/checkpoints/28c3b87b572ca580be1f40be80c4939d/06a3fbc5b28e711161f0d2406b99600e/1791852074745/1d401304-2211-4dc2-92de-c93241cf7537 e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/2f4b729c8775ab5fb2b47c1e43684c7d/801b25dfe19f20aba166aca0e7491a02/1791780644284/31dd2afb-1d98-43f2-bcb3-98ba60d7e28f e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/31917a824771b2da684ddcce8260dcd8/6597f6e18cdce9adf1aeb2d9fc230364/1791848366840/2e712133-4d43-4a6c-ad71-8b7c486092ba e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/34769575ff7b704eafb4ad81871906fa/e689f610f5b8eed71f54c449cb5b9393/1791908691287/21179d04-22f4-47c2-ae4a-8cca5aa6fe71 7b2e49bfcea7b7c422fb6e86fc819070734a67b6",
+    "refs/codex/turn-diffs/checkpoints/4480fe1c958135350fcd82246e877ded/3a89da3d34c667c062a120f43c271fc6/1792105341904/a26a558d-22fc-4317-8c56-1c50224e47b8 208abe17d9eeeb002c1d24664c8c1cf89007955e",
+    "refs/codex/turn-diffs/checkpoints/6ef0db23c5a55e599bea38cbcfb57b87/1375b7cac7703772c6c032f990c9f42b/1791863319026/516870be-faf8-4d42-acfe-a0e6d2d8b251 e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/76d072a32ab82a7d96c0a171797ecbd0/5640d6c3e74f0882f451b90581f8100f/1792073274677/37957276-7528-4797-8b11-08f88ded1187 f2592cf996d977be3f744f71e09e71520c778290",
+    "refs/codex/turn-diffs/checkpoints/8395213874423ff7e1278fcba3da03f8/e2ec332cc5c75ae88bdc20295c7077fd/1792012156630/4085498d-80e4-493b-a233-6f0c41a74add 557f15d7acfc5b9214876a2fe5f1e8fcd3835a46",
+    "refs/codex/turn-diffs/checkpoints/8b3f14925a4b2bfcc4b792c8a8f19bf0/de0789b1cab744376e1a38829f9123b6/1792033060324/d4045910-2776-42ec-b353-3d8657e148e7 f2592cf996d977be3f744f71e09e71520c778290",
+    "refs/codex/turn-diffs/checkpoints/91e0a942daee6e4e0a5325239a2f0564/823f1ea71eccdae03b7da94dcea96566/1791862179599/eb20af5f-07e7-4eee-8b5d-10b8399bb771 e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/99ccb40d772b48dca9137272044b061a/885dfaae4b566f57d56336fecc45ef21/1792343369191/6917607c-0cba-4614-920a-7a1bd5d9fefd a077bd4c3647d11be9bdfd9591bbe2d7a42528e9",
+    "refs/codex/turn-diffs/checkpoints/9fc53e6eb55a4ad92b6e2a0a2ba5ac0c/5d9f57fe225e2074c840ea3a1af85d9c/1791844891120/b1cd6448-694f-4c2c-bee7-50ab0fe9e057 e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/a01fed6c34f38f44d430c1a28a5ccfd2/fdfbcff0c3cc1220e8719f52bd417000/1791810666102/7ed28a84-bd62-422d-932f-e3edf56952c5 e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/a0a09e64b5a5883a222bd7e8562f2caa/f467ca64e946049231438a9bf7aaabfa/1791888117883/01869799-0bf3-4e50-bf46-d0ed3770d3a1 7b2e49bfcea7b7c422fb6e86fc819070734a67b6",
+    "refs/codex/turn-diffs/checkpoints/a2ede14186d15f51214908d50a8e9b3a/d7234316ad7763c65b1a9b9187ed52a6/1791834606267/6e8f7619-778c-4b75-b9bd-5d666444f038 e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/a58e53ca9dfaf9979cfa7fcfbc17bc70/397c053fec3af798a7ea50b98af301d3/1792167522063/0783b0d0-9a4a-4cd5-a06d-8d848d4f3b81 cbe19abac83b17045b24aa5ce11f7bd7d7cf5a43",
+    "refs/codex/turn-diffs/checkpoints/abbe019845cbb7491b0793581ede82e3/88391b9ec11548213650f7c5e433bf5b/1791913471563/5999926d-61de-464b-85aa-8a8256706385 7b2e49bfcea7b7c422fb6e86fc819070734a67b6",
+    "refs/codex/turn-diffs/checkpoints/b28cbac2edfc8a79115e49038a5a5d33/bb79b649a9ac91affcaeacdcb0b9316f/1792013945763/d05a2b28-1d3d-41d1-9cf1-857ce324a2c5 557f15d7acfc5b9214876a2fe5f1e8fcd3835a46",
+    "refs/codex/turn-diffs/checkpoints/b80cec66d1a461bf7590291c193443e7/d0873ba139e23ac6061f9a7168aa4f4d/1791775376785/c0d18c80-76f9-4320-8413-491556252eac e78a1f853a86360ffad2cb03678252362c4c657c",
+    "refs/codex/turn-diffs/checkpoints/b9f5d2b9f0b0c99c565d36b0c5c84fd4/1ae26fb20ee21db566544d550e8b924d/1791889389287/fcbffdd4-4469-462b-85c2-72dd0ef39e57 7b2e49bfcea7b7c422fb6e86fc819070734a67b6",
+    "refs/codex/turn-diffs/checkpoints/bd47e0f16269d51e524cc70b9cb4205a/8ec9c6d5d2d08a4fc827660ffbd54faf/1792337209414/1d466ec8-190c-472e-9415-630e906d1d1a 8860ec3da70c80d6c31baa187c6acdfcb31219da",
+    "refs/codex/turn-diffs/checkpoints/c0cd6ca19d234a3c1942e2f5529647be/5e55eacf4d9e43bf018c678a2673bf9a/1792023924879/9c59b433-4610-40d0-be50-40a9fc21d70a 57433a783f9517ed4156c844bd46fa89da135917",
+    "refs/codex/turn-diffs/checkpoints/c8339842130638e5eb00a88ab5b67d08/5366273033eb151a94f2c704a9f1f287/1792341936995/55bd32a9-36c1-4379-ba58-c1a30d0c1115 dc56b121d950395c84561c0785696fd792dc9a25",
+    "refs/codex/turn-diffs/checkpoints/cbc049009beccf95caa35460d546fc66/4172b272b6cec9a9d2a436e5462033cb/1792338467184/a72025af-4007-4191-97d3-c3363c581aa8 674354a32631958d54f0d636a3281d1f4c3b1afe",
+    "refs/codex/turn-diffs/checkpoints/cd6c64a32865903ff62b5a26e264ceb4/5b7ebe34447af71776035b6dc6062c84/1791998646830/d1d9f152-e424-4e45-9263-ba56e26c5efa 557f15d7acfc5b9214876a2fe5f1e8fcd3835a46",
+    "refs/codex/turn-diffs/checkpoints/d26c3d72b5c1966a0e386027136fdefa/e054093df9c3495f49a34a7290a0a70c/1792334953654/132a0599-09c7-4364-9e4e-c02452f7ceeb 0efcd9b7a6fc6f183cacf05eb2529d199cf462e4",
+    "refs/codex/turn-diffs/checkpoints/d73b2443f42b6099734ba1cd2f7634f2/306dddb3d7af2024630a35be230095b7/1792164383291/0de2a0b1-e244-4dff-97f9-5a034ba30cfd cbe19abac83b17045b24aa5ce11f7bd7d7cf5a43",
+    "refs/heads/aep/pdv-close-002 d5d4bae01807bf59fdf16c0d7b2170cfea0fb105",
+    "refs/heads/audit/cadastros-importacao-martins-prod-repair-preflight-001 59bf1e6e4a69f8b4192afd20b74ef71ab6da4328",
+    "refs/heads/audit/cadastros-importacao-produtos-final-readiness-001 866cd76fada1d27857765945e5a0bff58c7f04a0",
+    "refs/heads/audit/cadastros-importacao-produtos-review-readiness-001 bddec9ab4d95945fe796d0d6ae5236b3f679baf9",
+    "refs/heads/audit/cadastros-martins-canonical-unitization-audit-001 950cc18b192baa5599f93ce1d4e11e16662a86ac",
+    "refs/heads/audit/catalogo-saas-base-readiness-001 0bf77c3457f8e5b93d3a15918412270d6a108de2",
+    "refs/heads/audit/contador-010a-storage-acl ecc494409ef857391427baf8ce73f0784eff59ce",
+    "refs/heads/audit/contador-hub-current-state-001 191141591ef22088da7adc4ddced0ae72940a662",
+    "refs/heads/audit/contador-portal-externo-013 950cc18b192baa5599f93ce1d4e11e16662a86ac",
+    "refs/heads/audit/deploy-legacy-project-real-usage-001 020aaca9f97f23da600ef3977c0850bb4f2296f4",
+    "refs/heads/audit/deploy-production-migration-governance bafc203b618e4fbb0193f17a2df890555b82fea6",
+    "refs/heads/audit/deploy-production-migration-governance-docs-publish 9cef9112811c1d743ca6dff98576dbc1b058304a",
+    "refs/heads/audit/fiscal-c14n-external-proof-003-readiness ab802718013f6cc1b39234b175a0bf951e440c50",
+    "refs/heads/audit/fiscal-c14n-goal-003-close-readiness 42728c787853df6b1109bfbfafd91e461361664b",
+    "refs/heads/audit/fiscal-dry-run-005b-formal-audit 818253b91ad33d96fdf004cbbc71b5a908e943dc",
+    "refs/heads/audit/fiscal-dry-run-005b-h2-review 629fc968b821dc33efd0822755cb64518075d72b",
+    "refs/heads/audit/fiscal-dry-run-005b-h4-elevation-readiness 4ebe4b58a1cf9494f9c2a32f73550835c93779c3",
+    "refs/heads/audit/fiscal-dry-run-005b-positive-fixture-readiness 1fbb055199004b4ced63be5f80ba1cfac3fd01cf",
+    "refs/heads/audit/fiscal-dry-run-005b-scope-ratification-readiness 5da7a75579b722be54419ca3ddcf0e8724466769",
+    "refs/heads/audit/fiscal-goal-001-merge-readiness 0bbee596d62ac67746ba84c1fe4ce62ba0c6fd7b",
+    "refs/heads/audit/fiscal-goal-002-close-readiness 18eb7de77ef113f00b4e4f4848ff90974f10f3b2",
+    "refs/heads/audit/fiscal-goal-005-current-main-readiness d8504fdd1ae944c59831caeae9ad84923aa857d7",
+    "refs/heads/audit/fiscal-goal-005-formal-evaluation f6d6f2ac9a24dff2fabc09051e2558f810bdad33",
+    "refs/heads/audit/fiscal-goal-005-scope-reconciliation-readiness 50a3e0179e1b7165339b91127d2fde70d002e41e",
+    "refs/heads/audit/fiscal-produto-upsert-004-close-readiness a93ddae2666e5ef4d94e5524c0371cb71e36d767",
+    "refs/heads/audit/fiscal-produto-upsert-parity-004 61b736f625caeb83595159736168a7bcc066f0a4",
+    "refs/heads/audit/fiscal-produto-upsert-parity-004-readiness fb219c4a5cc2a2b8e505495d9d667cf2a185812b",
+    "refs/heads/audit/fiscal-xsd-005a-final-readiness 84f98bda75642887d0ba5797c7a2394606435389",
+    "refs/heads/audit/fiscal-xsd-005a-post-merge-closure-readiness 3f3c6c02091141f039999656c42f877237b8a175",
+    "refs/heads/audit/fiscal-xsd-adr-0010-readiness 96765194da8fe9deb53f3aed094e38f393f408fe",
+    "refs/heads/audit/fiscal-xsd-gha-infra-readiness eabc11c198af95556f1b7204769a5894c3f4fb7f",
+    "refs/heads/audit/fiscal-xsd-worker-implementation-readiness 2953a9753c786780d10aaffbb465a0dd894e2982",
+    "refs/heads/audit/neon-candidate-structural-verify-001 fdcb336256d850b2dfed71107da3ccaab388cc60",
+    "refs/heads/audit/neon-migration-baseline-strategy-001 7dfce2cec7b9bf8b5e298794d64ec8c2dbf96b30",
+    "refs/heads/audit/pdv-acessorios-persistencia-004 2019f959e1f84e391285c2efc5312732606dfa44",
+    "refs/heads/audit/pdv-acessorios-persistencia-004b-merge-readiness 42f622b8ac0cf6901110de30e5b7d2facf3150bc",
+    "refs/heads/audit/pdv-acessorios-readback-004c-merge-readiness a8b83f768f75d0208cf167227d605f9c689756fc",
+    "refs/heads/audit/pdv-caixa-session-recovery-cart-draft-readiness-001 44243e316d751886ec040b800e2ab65a8f7d78b1",
+    "refs/heads/audit/pdv-caixa-session-recovery-split-readiness-002a deceff64f75dcca6a4bca643605dffebd7698fdb",
+    "refs/heads/audit/pdv-capabilities-modular-settings-001 f42072ae2275aaa53402ea71a6c14ca89e92b30c",
+    "refs/heads/audit/pdv-numbering-002b-db-readiness 6a0d141520d10d66c0e7fbf741439d90f38beb5a",
+    "refs/heads/audit/pdv-numbering-002b-production-migration-state 7fc260867dd27dcda94bcd3d1ef8ec03bfddd399",
+    "refs/heads/audit/pdv-numeracao-002c0-contracts 5856a350fc80a809b824c644b785c71d9fd9489b",
+    "refs/heads/audit/pdv-numeracao-server-writer-002c-readiness ea02bb9386d53d8e0098f122922d31d62d080c8e",
+    "refs/heads/audit/pdv-numeracao-store-code-provision-publish 5e457a3a4385f4662949477dcf04f1acd7402871",
+    "refs/heads/audit/pdv-pedido-id-numeracao-server-safe-002a 8a531fbaa7bbcaa152e99715ac1eab938fe94842",
+    "refs/heads/audit/performance-vercel-neon-001 1f15384b2364992136ce46fb69dc415f35bc39ef",
+    "refs/heads/audit/produto-fiscal-metadata-partial-merge-readiness-001 4d46c92b070fd6ff9b7eba055a105a5bfbd27b1a",
+    "refs/heads/audit/vendas-polling-contract-003a 3889f8786491fddeec93085145f1593e97ac18fa",
+    "refs/heads/backup/cadastros-paralelo-fd2162b fd2162b12489e87ed21132d5c02a5244c7dcde0e",
+    "refs/heads/backup/parallel-head-34e2d7b 34e2d7b6c7ba8e0ab138ec75a76b3e146b662b3d",
+    "refs/heads/backup/pdv-uncommitted-changes-133d996 133d996ee49719965faf8db1633634811b6f3b13",
+    "refs/heads/chore/aep-bootstrap d4817244c8d1f4fdabb2773e419e2910ac62658a",
+    "refs/heads/chore/aep-import-contador ffb279b0547defa5cfd6a585b5766cd4ce7fa644",
+    "refs/heads/close/contador-018-main 6aa470a7b855ef036f78daef3dde0b2481a599d1",
+    "refs/heads/close/contador-019-main ca234e5842995f9882a1e1f57ff3a07852330de2",
+    "refs/heads/close/fiscal-018-main ce1b993591d9953b5960de654cb172074bb2fb3d",
+    "refs/heads/codex/aep-pessoas-001b-blocked-reconciliation 7f505c2b7c15c006fc3832687dc431b7f6f0ab95",
+    "refs/heads/codex/audit/ops-v4-financial-source-of-truth-001 50c1db823215a36622b05fad759ea80357130f24",
+    "refs/heads/codex/cad-r2-019-production-backfill-closeout-20261015 b7d55b532025a00bdf55a911d3767f4c5ac2c583",
+    "refs/heads/codex/cad-r2-020-final f1ad3cc946f701266e2e4c99871c0cb21f349069",
+    "refs/heads/codex/cad-r2-020-privacy ae8793259df48b1cfa27d3e87bd5cfa74da95c13",
+    "refs/heads/codex/cad-r2-021-cliente-texto-voz bf16f06c519496450b531f891f261d9a909df575",
+    "refs/heads/codex/contador-hub-runtime-copy-closeout 3cf35642118cd9349f51753f4d0600f73a280211",
+    "refs/heads/codex/contador-pacote-content-versioning-fix-025 e79e0a2477c085cdabd7c00c237a7241b54610dd",
+    "refs/heads/codex/db-migration-reconciliation-001 5ae661d730af827006fd10c389ddbdd4f18edc51",
+    "refs/heads/codex/experiment-ops-v4-garantias fd42b06648ad2abb217bdd7fb5f3bc7b9dec3030",
+    "refs/heads/codex/fiscal-016d-c-a1-selftest-008 a66aec3f55feb1115f0935202969aca302e573a9",
+    "refs/heads/codex/fiscal-016d-c-empty-body-contract-fix-013 219cc6c49fb433734e15ec9e8e6f3f0186c5ced2",
+    "refs/heads/codex/fiscal-016d-c-soap-oversize-race-fix-021 909980f8897f80f8e77467ba2553f874b293f0c3",
+    "refs/heads/codex/fiscal-017-ephemeral-window-test-contract-026 a296bae4f4beedde18e53b8d525fa2c3d5dacd84",
+    "refs/heads/codex/fiscal-017-h9-h10-a1-preconsume-safety-093 7f2c64a51435dfebdf22bc062e942849c8804bb4",
+    "refs/heads/codex/fiscal-017-h9-h10-anticipate-103 b9fc7dc56aa25c326bfce7a1889e0081382a3437",
+    "refs/heads/codex/fiscal-017-h9-h10-ephemeral-gate-019 a6fbd6f04616ebe27c397b56431990a01a612bc6",
+    "refs/heads/codex/fiscal-017-h9-h10-real-window-025 816547ca13e3722ec68a1e9c581117de6440519b",
+    "refs/heads/codex/fiscal-017-h9-h10-rematerialization-101 2f816b1778bcb36cd4ed98d7ea24b0feccd75dad",
+    "refs/heads/codex/fiscal-025-a-architecture 7157a78b18257b3fcdf0ce7d0b08dfcc238b823b",
+    "refs/heads/codex/fiscal-025b-aep-bootstrap-001 24b96f5932946d0f176480d4e3638e89e82d7fee",
+    "refs/heads/codex/ops-v4-datas-ui-promocao-001 3b87ee8aef643ff5055377bb5c0f4223a235ccf5",
+    "refs/heads/codex/ops-v4-datas-ui-promocao-plan 307824bbe501b66310a12e53cc55ac6bfab161ee",
+    "refs/heads/codex/ops-v4-focus-rail-polish 79020e2180a21bd83574d6760b3f1f5ba319ad10",
+    "refs/heads/codex/ops-v4-frg-002-gov-rev8 4b1691544fb7048140d07f660a3fe26bdc13ca46",
+    "refs/heads/codex/ops-v4-goal003-family-regularization d8be306c6d507ee0af7559a75e5fbc03ad0690fb",
+    "refs/heads/codex/ops-v4-orcamento-envio-real-status-001 93888a2c7277854d254fc970b2c5af8cf38061b0",
+    "refs/heads/codex/ops-v4-rafacell-precificacao-001 ae2be066f4f72e7a2a789c3aa145389218766773",
+    "refs/heads/codex/pdv-acessorios-modal-fechar-classic-rapido-003a e3e35b3c709f326829618a9a6cc83411b027528e",
+    "refs/heads/codex/pdv-numbering-002b-schema-infra-final d110ecbeb3584eced2a5ea9d7d356a02743149d9",
+    "refs/heads/codex/platform-vercel-node24-unblock-001 e8cbbdaccbf203204f5d545b31a2e2467d65c87a",
+    "refs/heads/codex/release-ops-v4-datas 57b1249d25675eb101b0374898ce39a0405de824",
+    "refs/heads/codex/release-ops-v4-vercel 970ed0393dd6a2fa6f9828b4105c6d9111bc6b85",
+    "refs/heads/cursor/fiscal-pilot-homologation-second-attempt-022e-b0e3 ae20f3aa0005c07c49dff9dc8ad3ca769a0a85b8",
+    "refs/heads/cutover/neon-production-004 3e0288558a14515655a9505259d86a5756632d70",
+    "refs/heads/deploy/current-main-production 8166162f69ff9049963f8d1b4a9daba919d93342",
+    "refs/heads/design/pdv-recebimento-multititulo-001 9978e30061d66285cc540bfd508e147a515a1fd1",
+    "refs/heads/dev e1b1da4dba5b18cf942115552b4d986094f05372",
+    "refs/heads/doc/ops-v4-fluxo-curto-001-plan 7d5f28f513ac7b46a15ef232328d486dacf9e969",
+    "refs/heads/doc/ops-v4-fluxo-curto-001-rev5 873f58951811f48c4696a316438e4ed3bbd355be",
+    "refs/heads/docs/contador-012b-storage-provider-decision cdd9f161f111752838a50f815309fd5dd96be781",
+    "refs/heads/docs/contador-smoke-producao-021 607971c75cfa6d614507ee174867292949887c5a",
+    "refs/heads/docs/deploy-migration-authority-activation-006 dd4a86d47f2914e74871de698552caef091e41cf",
+    "refs/heads/docs/fiscal-016d-evidence 9655cddd1378c43c662e65ff3df6ed8010bb7289",
+    "refs/heads/docs/fiscal-dry-run-005b-scope-ratification 8a03b39819cd80a78b520f486b30ea91bdbff353",
+    "refs/heads/docs/fiscal-dry-run-005b-scope-ratification-integrate d8cfd2a1efe9f4e63dfaceed4954136b620e3a88",
+    "refs/heads/docs/fiscal-xsd-005a-post-merge-closure 55d578e35264396081d082dc343ed99ca2c5ab2a",
+    "refs/heads/docs/omnigestao-ai-start-here-neon-policy-001 a6491b6bf00be82acc2d0c02eb0c62d101a67947",
+    "refs/heads/experiment/codex-operacoes-v2-visual 28613dde3ca5833da1c732bab3992b0fdf894517",
+    "refs/heads/experiment/ops-v4-editar-os-datas-ui-001 183898ee9fa34f0ae6e8ee4feebdd52eef74b301",
+    "refs/heads/feat/contador-identidade-convite-014 8b60ddd826bd0244fb14c235a71ba0054388e6dd",
+    "refs/heads/feat/operacoes-v4-preview 27bf3547e9820b328151032321c191e9a7b7c50d",
+    "refs/heads/feat/pdv-numeracao-002c0-contracts 177eee8125ba4d83fe46beb352040f15089288da",
+    "refs/heads/feat/pdv-numeracao-store-code-provision fbd4019f3e07d639483e1a5ce41be5045f7b1ae5",
+    "refs/heads/feat/pdv-recebimento-multititulo-backend-003 7ed3b1443cee764b8a29138a3a01252da94c940e",
+    "refs/heads/feat/whatsapp-hub-visual-v1 3d6596891febde312cc537b39e9506429a878a42",
+    "refs/heads/fiscal/016d-c-a1-mtls-offline-foundation 6a99d94c167e41b25a0f3666660eeb65f68f54f8",
+    "refs/heads/fiscal/ci-provider-sefaz-coverage aca5353039360ed8aa381e6e82d646df838c0bdf",
+    "refs/heads/fiscal/goal-001-status-reconcile f9ce2fcb6b199a64de9bf8271ca21778ba4eba7d",
+    "refs/heads/fiscal/goal-002-xmllint-native-spike 7aee00ec7c81278445a982b85542c89de02957f7",
+    "refs/heads/fiscal/goal-002-xsd-adr-p01 edaaf948062fdd317903ffd1f01af94391bd4965",
+    "refs/heads/fiscal/goal-002-xsd-close 9e308830f776f84406446ae95bb2d59b8f66f56f",
+    "refs/heads/fiscal/goal-002-xsd-official f7026bc165b0789a20c52901e9b57830414a4ddd",
+    "refs/heads/fiscal/goal-002-xsd-wasm-spike c0ec48da6a579ffea49d6b7bba87bc87a3b00f95",
+    "refs/heads/fiscal/goal-002-xsd-worker-implementation d497775e9dd1021d9a54ba6cf8f7b8c0b739f436",
+    "refs/heads/fiscal/goal-003-c14n-close b236f5433d5265ea1e5a473c8787056ffadd4d8d",
+    "refs/heads/fiscal/goal-003-c14n-external-proof 586c13526e940bed8f79df58b0b7886975db84bd",
+    "refs/heads/fiscal/goal-004-produto-upsert-close c49cce5a867125a2f5fec1ab697b28918e715a7a",
+    "refs/heads/fiscal/goal-005-scope-reconciliation d74840c18d707c64989d85995153f220e2654a1b",
+    "refs/heads/fiscal/goal-005-scope-reconciliation-current-main a4375aac3d7585b5bc8ea2a0e4e92db81f1aa093",
+    "refs/heads/fiscal/goal-005-snapshot-runtime 384bb94e6aeee01910f49a8034cc5c053d35b355",
+    "refs/heads/fiscal/goal-006-tax-st-coverage f8df2a4ee59ad9ccf1dc35ae22952b39990f43aa",
+    "refs/heads/fiscal/goal-007-dry-run-gate 3998f8199f8db6e12d8ea0cef4fd7225932fd6c0",
+    "refs/heads/fiscal/goal-008-cert-pilot-vault 6f407da2dddb93ece81b90394828d0b7273a0ca2",
+    "refs/heads/fiscal/goal-009-kms-arch 1aa183fbc2894ff2995d492e591243185aeddf59",
+    "refs/heads/fiscal/goal-010-numbering-series bab86667e1d92913a15b22e9da96c46eaf0c2be6",
+    "refs/heads/fiscal/goal-011-outbox-worker 7a8b5f43556af9c174a12cda123849560f87118f",
+    "refs/heads/fiscal/goal-012-uncertain-state 7f4d12685d308b0a04854ad54a1f8ececa7cc5b3",
+    "refs/heads/fiscal/goal-013-xml-storage 00bd2a85470b92aa6cd990e1ddbfebcb38cc5dbc",
+    "refs/heads/fiscal/goal-014-provider-strategy e33c430ae27c980eb785bdef53b0923e6659a5c5",
+    "refs/heads/fiscal/goal-015-sefaz-research 712abeadb06a6d9eeb6839d4b28bebbdf809876a",
+    "refs/heads/fiscal/goal-016-homolog-adapter 15e5f667275dfb5526473c08268f43dea5df75df",
+    "refs/heads/fiscal/goal-016b-certificate-onboarding a75b1ea87a8e2942cee71a95e9070cc9d4210366",
+    "refs/heads/fiscal/goal-016c-certificate-custody 3e0288558a14515655a9505259d86a5756632d70",
+    "refs/heads/fiscal/goal-016c-secret-provider-custodia-a1 caeb2866f68dce4dcd3db1fac1dc76f444cc5dec",
+    "refs/heads/fiscal/goal-016d-a-sefaz-adapter-offline 3541dc5729215c5b26195797678778b581a05e00",
+    "refs/heads/fiscal/goal-016d-a0-active-certificate-resolver 779556e62a798a92bd4b36903ce9dcac2dd45a61",
+    "refs/heads/fiscal/goal-016d-b-soap-parser-cstat e740b97cc63e9eba1621609a708abe9e24c4e9fc",
+    "refs/heads/fiscal/goal-016d-c0-xml-producer-embeddable 5657d02bc1ba293746cf64d2db1065cfb898cde0",
+    "refs/heads/fiscal/goal-016d-c1-envelope-backstop 101b8d2910cb0dc131603a1c44ffe29212052df1",
+    "refs/heads/fiscal/goal-016d-sefaz-adapter-plan 28c3976223b1152e9f34e0dfd8d8d20e47d2aa61",
+    "refs/heads/fiscal/goal-017-wsdl-acquisition-readiness 268b6722d9b24bc43c18e9bc7fe0f65c91d135a4",
+    "refs/heads/fiscal/h9-h10-window-20260814-2000z 13bc06312f99b9c201b6551ca9d6a59146758cbd",
+    "refs/heads/fiscal/h9-h10-window-20260815-1200z 03ef03a810499d75b6fd2f290b255e6993f7958f",
+    "refs/heads/fiscal/h9-h10-window-20260817-1200z fadcf585435216d478aa21164261f4be0177b22d",
+    "refs/heads/fiscal/xsd-ci-prisma-transitive-fix b401b8ed4760aa0a0cdaf22b4bcf96765f75b56c",
+    "refs/heads/fix/aep-import-contract-human-gates c0bf7a24410e51f9812ed2ebde821ab6be0f4a36",
+    "refs/heads/fix/aep-pessoas-active-scope-refresh-001 8a192acee23dc2b4e702136a3cd86c40291bddf3",
+    "refs/heads/fix/aep-reimport-last-wins 02d514f7a958d8cf070bcb20e4bdd42b70a3545e",
+    "refs/heads/fix/caixa-totais-por-vinculo-de-sessao 97267843bf4af240af27683caf3c933677abdcce",
+    "refs/heads/fix/contador-convite-link-copy-ux-021 104a8c317164c72d67879ea49930132460523674",
+    "refs/heads/fix/contador-storage-503-r2-checker-020 cdb0b0fc00be769b6fdd9bd8c60495a72988ce21",
+    "refs/heads/fix/deploy-migration-authority-guard 9d5f48ecf6d12a418961fa6acbc8819019bd4c46",
+    "refs/heads/fix/deploy-migration-authority-guard-current-main d548c862598875a7d8bfa567d34bdc2ed2829a1f",
+    "refs/heads/fix/deploy-migration-guard-unknown-action a50ad7ebd70508aea7a046932114e35158e5e77d",
+    "refs/heads/fix/fiscal-dry-run-005b-positive-fixture ce8b7b4725a6d72c3a0fed97edbcb041b1b713ae",
+    "refs/heads/fix/marketplace-api-gate-009 6eef23a4caaf75cb3e5aa3dfe50e725002006571",
+    "refs/heads/fix/ops-v4-checklist-rajada-022 ab7d96c5428e9f3fbdd7354690932c70527c2b44",
+    "refs/heads/fix/pdv-recebimento-canonicalidade-002 65a82a5258632474901fe53cf0d1b4eaddbad6ae",
+    "refs/heads/fix/plat-auth-pin-containment-001a 9fe44615dafc7b53c757238844fb83e730ebb784",
+    "refs/heads/fix/plat-auth-pin-containment-001a-current-main 3452b8a1124585896dcc9e9da13426a453452b60",
+    "refs/heads/fix/plat-auth-pin-containment-r1bis-current-main 64e7bd0b49ec242697f0fb4af846ae7d31f9528b",
+    "refs/heads/goal/app-entry-login-routing-001 419735b33e00233f9e994580ed40aa68af66dcb9",
+    "refs/heads/goal/cad-r2-002-rest-ownership 6907f205a5973ef0e9ab15b75b010b6d22535e7d",
+    "refs/heads/goal/cad-r2-005-product-write-service-core 6dd2d42430fad7953e7d279385349c2cf50c9337",
+    "refs/heads/goal/cad-r2-006-product-interactive-writers 23fc8b349e2f797738952ac1b1c6de9c507f625a",
+    "refs/heads/goal/cad-r2-007-product-rest-writers 63a5146a1d2dac2158f210391a24e0892b796df9",
+    "refs/heads/goal/cad-r2-009-stock-ledger-invariant 4ab7ee1c46f396a68dd3eb9a72d0d95f013c5ca2",
+    "refs/heads/goal/cad-r2-014-importers-canonical-write 0806721d28dc2e7623004a1dfd18bf30820c441d",
+    "refs/heads/goal/cad-r2-015-provider-governance 8a34784dce25624549d78f7184e1a641e2520b06",
+    "refs/heads/goal/cad-r2-018b-client-duplicate-merge dff0fbffecac99dadf4e91f799509879bf562478",
+    "refs/heads/goal/cad-r2-019-client-document-unique 49837e0f74bd85cc2ece7cb7b3ab7e4c61f38dd6",
+    "refs/heads/goal/cad-r2-security-foundation-reconcile 897c751d752e15a8ce6d108360d932e90d03668e",
+    "refs/heads/goal/cad-r2-security-foundation-reconcile-v2 8b0b33ac4698931d6d3f1649bb7d42a5339d91f6",
+    "refs/heads/goal/cadastros-importacao-produtos-review-hardening-001 1bdc5d83cf5eeb73ae8b5fed9d19b1a6b74c1d7e",
+    "refs/heads/goal/cadastros-importacao-produtos-review-hardening-corrections-001 efef2d898f1a68c59802945542376d95c6f9dd27",
+    "refs/heads/goal/caixa-fechamento-calculadora-premium-005 f88f38fb40680b7de4c896d37033b30e4e47ece2",
+    "refs/heads/goal/contador-001-status-reconcile f56039918fb34a45e7f7790e861f0d871832469b",
+    "refs/heads/goal/contador-002-honesty e23ce61820533d7d9afb6cf9890a822386c940e4",
+    "refs/heads/goal/contador-003-auth-externa b7805ac39ec49bebac4be3139da20436ff88a1fc",
+    "refs/heads/goal/contador-004-store-scope 549cf94f10cf21f16d245cd7a6bf6bfa27fa2d35",
+    "refs/heads/goal/contador-005-competencia 9472e8db191c051a93ee2d3f01e0a800e7156a93",
+    "refs/heads/goal/contador-006-dados-reais ac5b709b545d9111d577444a9018749ba77ea75a",
+    "refs/heads/goal/contador-007-fechamento-ro 4f901968365efc0cded6d9a2e348b9f381c1d0c4",
+    "refs/heads/goal/contador-007-fechamento-ro-a b50800db0400b6d4c58b1a4b0450a11c9575dd8f",
+    "refs/heads/goal/contador-008-pacote-mvp a5cef3064ce49831da363a40103d61e18f99c171",
+    "refs/heads/goal/contador-009-schema-nucleo 81e63e52d5ad34a3beb94ef898347ba9aed23b83",
+    "refs/heads/goal/contador-010-documentos-supabase 6a9b9890c7e41e9538cd64775a75ae13fd11311d",
+    "refs/heads/goal/contador-011-status-comentarios 1f1190a078ea54e2092da02ce844856f380ec11c",
+    "refs/heads/goal/contador-012-fechamento-snapshot 0e33551394bcdcb18ab59951a1c3c0021780f50b",
+    "refs/heads/goal/contador-012a-fechamento-closure dbcf93228081ca63ebd40103eaa948dea6ec0124",
+    "refs/heads/goal/contador-012c-storage-r2-adapter fb56e7965fc176c736c2077736a918ebc015bd63",
+    "refs/heads/goal/contador-012e-r2-safety-corrections 18a4d8539f670eb77a0db44addeb6729e22e1d76",
+    "refs/heads/goal/contador-015-portal-externo-readonly e1ac31cbf0b7722453f830b384e4d74b93bb8263",
+    "refs/heads/goal/contador-015-portal-externo-readonly-recovery 43b1479865c89afe7780e2793a2ed847f2c7d3f9",
+    "refs/heads/goal/contador-019-production-hardening ca234e5842995f9882a1e1f57ff3a07852330de2",
+    "refs/heads/goal/contador-023-internal-realification d3abd4260675442a934badb90f1d39c36c63496a",
+    "refs/heads/goal/contador-hub-docs-publish-001a 3493162cb9a478d70e9e36f0c8e18cae1f873fde",
+    "refs/heads/goal/fiscal-017-wsdl-production-only-boundary-030 bd7fa04587daad24df8a365f4ca4d597295fb78a",
+    "refs/heads/goal/fiscal-018-nfce-cancellation c64bdf46519d5091202d1ad0563aeb67a7304842",
+    "refs/heads/goal/fiscal-019-nfce-inutilizacao f15b71a7ccfe7c8f87085e53ba1be9642a1b4e16",
+    "refs/heads/goal/fiscal-019-reconcile-current-main-117 2266a5f2f19f04f8f87a5c9afbaad295da023177",
+    "refs/heads/goal/fiscal-020-contingency-offline-nfce d05318752ae4f7f73e6742ec9e8dda5cb126b374",
+    "refs/heads/goal/fiscal-020-h9h10-arming-162 d8e34562c50cb85ffb8049ef148bfd7292673f61",
+    "refs/heads/goal/fiscal-020-h9h10-arming-164 2e4bbcab8c5913f1998fe0bd5fe67b56d95086f6",
+    "refs/heads/goal/fiscal-020-h9h10-consumed-window-containment-evidence-168 16e0c8a5d43fa8b7ae74ce53d738a80e72a37fec",
+    "refs/heads/goal/fiscal-020-h9h10-final-containment-and-close-173 7cd571f41ebfa4d92a465bb7cd780749d5596f69",
+    "refs/heads/goal/fiscal-020-h9h10-final-rearm-172 a94541de2ca20525e41c9e3f6e14200e1457803a",
+    "refs/heads/goal/fiscal-020-h9h10-rearm-fresh-window-166 0ddb3911c82f77efb1dc2180e6e04d3abe61ba32",
+    "refs/heads/goal/fiscal-020-h9h10-second-expired-window-containment-off-165 29158b2f57ee38e03e1bb587708b5115fb4814a4",
+    "refs/heads/goal/fiscal-020-h9h10-second-expired-window-containment-off-165-publish bc043736a0054f549b6578489dd00cb719a690b0",
+    "refs/heads/goal/fiscal-020-nfeautorizacao4-multiop-extraction-fix-169 a9139aaa8a576e4304e62c59fa7b5863bcee25c9",
+    "refs/heads/goal/fiscal-020-sefaz-icpbrasil-v10-trust-160 be1888e661112ad8bd95ee0b76753be62810bbd4",
+    "refs/heads/goal/fiscal-021-observability-scenario-battery 62bb990e1e085e4868a814cb87333e84187739ea",
+    "refs/heads/goal/fiscal-022-pilot-homologation-activation a004c3b33601b09bac3fd5c232dccc86aa2a6120",
+    "refs/heads/goal/fiscal-022B-pilot-homologation-unblock 81db1fda4957904ed6e73d33381db73123df0c77",
+    "refs/heads/goal/fiscal-022C-pilot-emission-authorization-handoff 97b4d166c6b343235c87a42dae6a5db38e11503b",
+    "refs/heads/goal/fiscal-022D-pilot-emission-authorization-handoff e772050aa4542cd86cb89a98ab3c08bf38411e89",
+    "refs/heads/goal/fiscal-023-cstat588-compact-message 6a87eb3ed846fe2f934956da19cdfefe6431354c",
+    "refs/heads/goal/fiscal-024-corrected-retry-readiness 425eb890ee9102122dcd87e074b40903bda0443d",
+    "refs/heads/goal/fiscal-025b-archive-foundation-001 5bd39a94462ff6c70ecd3535781b9cfc0a710125",
+    "refs/heads/goal/localhost-dev-auth-002 c6b72c44e83daef75d3208ecca2bcf299cbd29b0",
+    "refs/heads/goal/neon-baseline-repo-prep-001 7997eaeadf490949d593fe7988dff8357f94b936",
+    "refs/heads/goal/ops-datas-retroativas-001 2573ae829997b605bdaea6e104dc95b61e8070cb",
+    "refs/heads/goal/ops-recebimento-misto-p1-hardening-001 5a66a3419cbe1a5c5d46fa6188ac8fb86c16c0b8",
+    "refs/heads/goal/ops-v3-recebimento-misto-001 257e843df5e6ee82e4e01dab5ac13bffc139e1f7",
+    "refs/heads/goal/ops-v4-blockers-final-closeout-018 0f2431c20c4c48f5df2d157552c3d199ddb885f9",
+    "refs/heads/goal/ops-v4-dashboard-historico-final-017 2317d2f11033060fa18004a10c3f49642b1cbb93",
+    "refs/heads/goal/ops-v4-documentos-assinatura-anexos-015 97a9f0f4e8a42c859868034a5dfad20a3107a865",
+    "refs/heads/goal/ops-v4-fila-kanban-write-004 d13b24c414aa5a87b4371d1db2e0ac8d1210d716",
+    "refs/heads/goal/ops-v4-financeiro-retirada-garantia-001 3f2f97ceb35a2cd8e952e3c443c10979ca0c7bf2",
+    "refs/heads/goal/ops-v4-financeiro-retirada-garantia-002 9dbae6d9744d0539ad07b59fbd4bdc97c5351d2a",
+    "refs/heads/goal/ops-v4-financeiro-retirada-garantia-003 2b0ca49bb696cc9eaf1b143ebac25621cd21e384",
+    "refs/heads/goal/ops-v4-fluxo-curto-001 d69d0c1bde9aa19bd0a3a1c1ca70a58f56df3d4a",
+    "refs/heads/goal/ops-v4-fluxo-curto-002 c257d7da455b68b299bc5cf55ad6400115214bcc",
+    "refs/heads/goal/ops-v4-fluxo-curto-003 4b422e477e274269f0cc9b96e4f84330d32993ed",
+    "refs/heads/goal/ops-v4-fluxo-curto-004 8123fbfa11771a7de3da5bbc5ce73a579670e28d",
+    "refs/heads/goal/ops-v4-fluxo-curto-005 110df8c78bbd46d0c9f39bb4699b66b801fcb992",
+    "refs/heads/goal/ops-v4-fluxo-curto-006 d433a3924ccaca079ae97ccf3d88619e49071e08",
+    "refs/heads/goal/ops-v4-fluxo-curto-007 da4cd7629399f7e6e279217f7bf0ec0d7d877ca3",
+    "refs/heads/goal/ops-v4-multi-servicos-ui-003 639200f00504d93f8f3ded7daa0f1651ef57b20d",
+    "refs/heads/goal/ops-v4-novo-atendimento-comercial-001 319fb751bd7558dba7681d8fda9e87c58d1c7666",
+    "refs/heads/goal/ops-v4-pipeline-entrada-nav-simplify-002 bb441d03753c619e50dcfd7b5684c56033b50dd7",
+    "refs/heads/goal/ops-v4-pos-venda-retorno-garantia-013 789c791327decd031fcbf2b185199762ea8b5489",
+    "refs/heads/goal/ops-v4-posvenda-retorno-garantias-006 d86c37026656af452644fa9733d685f1b9cbc90a",
+    "refs/heads/goal/ops-v4-recebimento-misto-paridade-001 79da783c4594c70df23f44c4be1bf99ad120727a",
+    "refs/heads/goal/ops-v4-recebimento-transversal-005 b5e655aa8c24476107801f33746df05e26586591",
+    "refs/heads/goal/ops-v4-retorno-auto-close-014 31cfba500d4954f1ee9f03517f0b796ef84ea192",
+    "refs/heads/goal/ops-v4-status-authority-fix-003 dcfc982ffe466de2814f8271214e18c2c2acf6b5",
+    "refs/heads/goal/ops-v4-status-authority-rebase-reconcile-005 215ae720448a96e097c7887d729cf460defc7a1f",
+    "refs/heads/goal/ops-v4-tecnico-bancada-fila-016 edbf724ba72b40262b87257d92ce77f46320143c",
+    "refs/heads/goal/pdv-001-trocas-busca-vale-credito 0b94b7c050e44fff6335b9eb1168fbe1c05edf0d",
+    "refs/heads/goal/pdv-002-vale-fail-closed-cancelamento 5f7d79b27627c4d6e15b038dc83c2c79e2c4453c",
+    "refs/heads/goal/pdv-003-venda-em-espera-restore fac5cd0e61fc91f77fb63fff498da18eeee0503a",
+    "refs/heads/goal/pdv-assistencia-layout-carrinho-grade-002 eb55db2f6db8deb21703ed9ea7676ac7b5b587f0",
+    "refs/heads/goal/pdv-caixa-session-recovery-cart-draft-001 2bede50b5db301e6a0186b180425edb771aece00",
+    "refs/heads/goal/pdv-caixa-session-recovery-split-fix-002a 0e355d735a950c7ac5385316aee83f9c11d063ef",
+    "refs/heads/goal/pdv-caixa-session-terminal-scope-002b bc479a485664501590025311ffa1bd88668d42bd",
+    "refs/heads/goal/pdv-capabilities-status-reconcile-001 c11c2908970b5b6b356dbe80e0fd2e1efa19a3d7",
+    "refs/heads/goal/pdv-capabilities-status-reconcile-001b 3bcce8044109be3278d669b586a38458856f9979",
+    "refs/heads/goal/pdv-capability-runtime-n4 89428111d2e3ef473f69c00a5bdd611cfe283b02",
+    "refs/heads/goal/pdv-motor-integrity-n1 1f881398583968f8645a1250e467a870ebd26424",
+    "refs/heads/goal/pdv-n5-a-aep-bootstrap dd5d3da8b880b862dc6d61a049d0c595a26d6f64",
+    "refs/heads/goal/pdv-n5-a-aep-plan-to-main 55981c4fea9438f678f6423d26a50d146f19e89d",
+    "refs/heads/goal/pdv-n5-b1-aep-plan-to-main ca69b44d5a4c9a5a17f6f3feeff3ce55520d9c95",
+    "refs/heads/goal/pdv-n5-b1-current-main-correction-aep-plan aa0bf166127f6464b200930694fd646ccac7d587",
+    "refs/heads/goal/pdv-n5-b1-pending-identity-aep-plan-to-main 8fd4df1bf25cea41c9ae4238d93ad525708d7e62",
+    "refs/heads/goal/pdv-n5-b1-pending-identity-allowlist-amend-004 9edce4329505b349c6fd7c217264debfd365c161",
+    "refs/heads/goal/pdv-n5-b1-r2-aep-plan-to-main e1206b2a28617a16cbe850713a53477f210e976e",
+    "refs/heads/goal/pdv-n5b1-production-smoke-closeout-004 ef98f81aa1ad95e6a2381f21b4ccb737cc7f0048",
+    "refs/heads/goal/pdv-next-absorb-n2 915ea59a9d948b1aced587b3e66f671ec9039fb7",
+    "refs/heads/goal/pdv-numbering-002b-merge-readiness-001 2556d892cd8e9a5186e02d97574b547f0e2496d6",
+    "refs/heads/goal/pdv-numbering-002b-schema-infra f4add4be2402e943e9d96195bacf9c720db2e988",
+    "refs/heads/goal/pdv-parity-n5-b1-core-gaps 43694cbe386e0afec961ebd1a1ceb050c7d971f2",
+    "refs/heads/goal/pdv-parity-n5-b1-core-gaps-r2 ebeab29f9f5b54cc7f7e9b1422ac31fe5a20c0ca",
+    "refs/heads/goal/pdv-parity-n5-b1-current-main-correction-r4 ff78a3938bd2dfc81bb495a3f8bb6332ed182e8c",
+    "refs/heads/goal/pdv-parity-n5-b1-pending-identity-r3 b15db3767fda459be02727729e2e4a13ceee92d2",
+    "refs/heads/goal/pdv-parity-n5-b2-pin-keymap-001 91d778782a6b7712c4c9c0159e2a4063feaa7c62",
+    "refs/heads/goal/pdv-parity-suite-n5-a 5559530785f64feafd5cacc9f0cf25195b23a72d",
+    "refs/heads/goal/pdv-parity-suite-n5-a-final 70f701492fd03da96caf95e845edd3afce4a4147",
+    "refs/heads/goal/pdv-parity-suite-n5-audit 02fc0bfb3cd571b089ac47395fed4f2c3d8e640b",
+    "refs/heads/goal/pdv-pedido-id-collision-readiness-001 3bcaf83cd2bae6c462e05d59fd1c1e16d9960cb8",
+    "refs/heads/goal/pdv-print-agent-local-003a 12fc7bce1e48f20954e7da9ec0061cfa06b70edb",
+    "refs/heads/goal/pdv-quarentena-reconcile-retroativo-007 68e73ded923dcb9a109b23f2eafe1f326d0e7d8d",
+    "refs/heads/goal/pdv-recebimento-multititulo-ui-g3-005 820217372dce436e4f3fd0baf027e094194363bf",
+    "refs/heads/goal/pdv-resumo-caixa-visual-fix-001 71b934c337dfa03086f1bd380830fe2614162b5e",
+    "refs/heads/goal/pdv-scan-inline-feedback-autofocus-006 70afca2a465121cd7b8d56c72b4771fdceb540b6",
+    "refs/heads/goal/pdv-settings-server-first-n3 12fc7bce1e48f20954e7da9ec0061cfa06b70edb",
+    "refs/heads/goal/pdv-surfaces-next-roadmap-002-003 6751b830c0785f223b90ee765c089b3b88b060d2",
+    "refs/heads/goal/pdv-v1-atomic-replay-conflict-harden-001 c98e7941ea890b435bea8a08fe8c089e7b3752ac",
+    "refs/heads/goal/pdv-v1-atomic-replay-readiness-002 e4299631abff974475d38e0f7c14a96d3442849f",
+    "refs/heads/goal/pdv-vendas-server-numbering-recovery-p0-003 b5e655aa8c24476107801f33746df05e26586591",
+    "refs/heads/goal/pessoas-001a-fundacao-backend deecd6401cba785aaa36d1e78da36c2393cbf094",
+    "refs/heads/goal/pessoas-001b-frontend 25b5fda2612b35b6daccd2103fb69060f5107f73",
+    "refs/heads/goal/pessoas-001b-recovery-001 5eac8be5820f0d9a9ef0374e52bf1603112f78ca",
+    "refs/heads/goal/pessoas-hardening-p2-pre-001b-001 53250ef52c4401bdc2e0de22aab12b1f13222117",
+    "refs/heads/goal/pin-containment-candidate-smoke-006b 593a1fdf45dfe6e4befc9be9a9483fda8a400649",
+    "refs/heads/goal/pin-hash-migration-fix-014 036a04bf75c68362a7dca47a04ef8d2939bd0da5",
+    "refs/heads/goal/plat-auth-pin-containment-reapply-001 f7ad03f11af4bbdc6cf0f393ce9459101da2ec4d",
+    "refs/heads/goal/produto-fiscal-metadata-partial-merge-fix-001 96ae3203c8d0ed59aedb10e870671ee9fa16fc29",
+    "refs/heads/goal/produto-fiscal-metadata-partial-merge-rebaseline-001 b237d4c59fcbc09c0e6efb5784b7ea85e3d9ab85",
+    "refs/heads/goal/produto-fiscal-metadata-partial-merge-rebaseline-002 a5a8c4e9e92f5f0fd0c8cb6457ab8ce17af46c77",
+    "refs/heads/goal/store-settings-access-control-004 bfdb8e4a8d46d82b3d5294f6f41d031a7947e63e",
+    "refs/heads/gov/ops-v4-financeiro-retirada-garantia-001-block-rev3 9012e8c7e464d657bd453d882327cb2a104870d7",
+    "refs/heads/gov/ops-v4-financeiro-retirada-garantia-001-block-rev4 4afcfb9f612ed4e9ee6c52af142daecc4172b7bb",
+    "refs/heads/gov/ops-v4-fluxo-curto-005-block-rev11 9d0442b79be348d4fb24d1ce60f0b0e57a6e0c3c",
+    "refs/heads/gov/ops-v4-fluxo-curto-006-block-rev13 8d73a18cfca9f33c18ccc8c59b087c0a98f11297",
+    "refs/heads/gov/ops-v4-fluxo-curto-007-block-rev15 10b3d5b62cd1f3daafd4bf06755af38c88906c8f",
+    "refs/heads/gov/ops-v4-fluxo-curto-007-block-rev16 f2861aef1fe24ef4502cafb9dda5733ff2ba4530",
+    "refs/heads/gov/ops-v4-frg-002-block-rev7 17acbed50afc98cd8a3c22943df5e4da1ecea18b",
+    "refs/heads/hotfix/prod-lojas-load-recovery-001 79176891ccc8e336339df69bfa2fc2e609cfc0db",
+    "refs/heads/hotfix/prod-store-schema-mismatch-rollback-001 79027928e5aaa011cc1872141c659e34b2d3e5d3",
+    "refs/heads/integrate/aep-foundation-contador-current-main b66b03edaa64ea4c565d1ee745038b40e955c67f",
+    "refs/heads/integrate/contador-009-current-main b5f77ff8cec7be6a5320f5a1be77fae7ed77d187",
+    "refs/heads/integrate/contador-012g-final 958698c6b5d9e4c08d31c8a35cb501462c899a9c",
+    "refs/heads/integrate/fiscal-goal-001-status-reconcile 2010fef8b887544ad9c776cb4e0cf0fe5f7aec29",
+    "refs/heads/integrate/pdv-motor-integrity-n1-current-main cd5074efb02ffe186a364dd5fd2cd6eddd745b62",
+    "refs/heads/main c5728f0d001bf13cd89a48ee5b1793bddd42129a",
+    "refs/heads/merge/cadastros-importacao-produtos-review-hardening-001 654ceedea73eb27fc5f3a2c439590f93298a3958",
+    "refs/heads/merge/pdv-caixa-session-recovery-publish-003 e020dee34f11984e3be71fef6831db9222cb56af",
+    "refs/heads/merge/produto-fiscal-metadata-partial-merge-rebaseline-001 f99665b25c925800d7958e1f97858f590db046d6",
+    "refs/heads/merge/produto-fiscal-metadata-partial-merge-rebaseline-002 59bf1e6e4a69f8b4192afd20b74ef71ab6da4328",
+    "refs/heads/ops/neon-candidate-readonly-role-001 0ab6bed40d02204590778844e779f4838dcde3e0",
+    "refs/heads/perf/vendas-polling-003b-r2-cancel-compat 8809ce9a1932395b51cc5209c6a545ea6996e761",
+    "refs/heads/plan/fiscal-025-retry-reconciliation 85b0be2e3336557c564cbafd4a2f6374d5a645e9",
+    "refs/heads/plan/ops-v3-recebimento-misto-001 0df8a46b68c9a6e8b725c4b11aa2975762d7bc1f",
+    "refs/heads/plan/ops-v4-financeiro-retirada-garantia 746e243edf1ba070eaa8049f08ff4df47699d206",
+    "refs/heads/plan/ops-v4-financeiro-retirada-garantia-002-rev6 7a7b4b5098fe471a0c25c538dbbcb756e82e0704",
+    "refs/heads/plan/ops-v4-fluxo-curto-003 0148b0f6b723dd091ab1fa368894b404f55892de",
+    "refs/heads/plan/ops-v4-fluxo-curto-004 58c4435347300d5ff5799020372491fa258779eb",
+    "refs/heads/plan/ops-v4-fluxo-curto-005 324fb21c6892d065fa78fe1d08a0320c35a7c331",
+    "refs/heads/plan/ops-v4-fluxo-curto-005-rev10 188222f5c6f487062f306aa94c54a0732d11728a",
+    "refs/heads/plan/ops-v4-fluxo-curto-006 2163038ce761538f3a00d7e13f5d4b6c43422fac",
+    "refs/heads/plan/ops-v4-fluxo-curto-007 1d85f3710b7d47c8ec09f08d12a8eff6e89613a3",
+    "refs/heads/plan/pdv-n5-b2-c-final-001 110a114c56239fc449db91c5a59d5a54c0310c56",
+    "refs/heads/plan/pdv-n5b1-production-smoke-closeout-004 124fdde68ea9e5b6fa43c51bd16422f294f1f759",
+    "refs/heads/plan/pessoas-001a-aep-bootstrap d4e6f36a683c048d158d36fccb3a49a35479b30b",
+    "refs/heads/plan/pessoas-001b-frontend 93e199d745e2568488a633c1686de76d6de94f86",
+    "refs/heads/plan/pessoas-001b-recovery-001 a51d36bd80b1dd5f5eace11c2bde1310fab657b7",
+    "refs/heads/plan/pessoas-001b-scope-006 79ecb276b53e87e301637bfe19ba69443a141ea8",
+    "refs/heads/plan/pessoas-hardening-p2-pre-001b-001 bae4548e43c7f5c5e50c328c4dd13f1ebf6a5f19",
+    "refs/heads/preview/caixa-fechamento-premium-ux-001 6c8e4aae9ed437ffe29c304a417b03a3167ca5a3",
+    "refs/heads/publish/contador-008-pacote-mvp-final 2a7f102ce7bb22b363cd6d24b17920d483182640",
+    "refs/heads/publish/contador-009-main 2d808c442428f41bc1417917421ac8b6c29ab6e6",
+    "refs/heads/publish/contador-011-main e8946c2c25776839db471ff18e35412e18643ac1",
+    "refs/heads/publish/contador-012g-main 07f3d99c2131adcc1b4dbeb6aa7285d964063077",
+    "refs/heads/publish/contador-hub-g2-closure-001 03e7488aa38a9bf50f3e97991c72fae5217d538c",
+    "refs/heads/publish/fiscal-close-019-main eef992dfd7597a8a82885dcaa6c9afcfd87150b1",
+    "refs/heads/publish/marketplace-api-gate-011 6206489e32f8ec414ab3d940d8f40bb8585318d4",
+    "refs/heads/publish/marketplace-api-gate-011-r2 ee9f4a532f446b0bb1d2c9d38f058220bc31ca67",
+    "refs/heads/publish/ops-v3-lab002-visual-refresh 52a3433e42acfecccaa7366c986b81382d1c1a38",
+    "refs/heads/publish/ops-v4-checklist-rajada-022 2aa1c70a59bec6726c11f6ab2a27fc5d7324e80a",
+    "refs/heads/publish/ops-v4-multi-servicos-ui-003 29d7a8ddab02ec4c9b29187556de10de9d3ebae2",
+    "refs/heads/publish/pdv-acessorios-modelo-cor-audit e55dd50c897937e2fe78302784c820b4cc029050",
+    "refs/heads/publish/pdv-aep-bootstrap-001 4b8494af9b01f27bffaf1c298ffe62902cc63de2",
+    "refs/heads/publish/pdv-aep-ratify-001 7a2b8c90bc6e3337260c4123d31acf5ac44153fc",
+    "refs/heads/publish/pdv-functional-001 3e00c1a37f8af8f3db4e8fb25e7646addcf5a6cd",
+    "refs/heads/publish/pdv-functional-002 b985548e1766f78d99952ac6e9abbfb760dfa09f",
+    "refs/heads/publish/pdv-quarentena-auto-reconcile-007 3f2af81314f22709b2115182c562f970bc1085e9",
+    "refs/heads/publish/peliculas-review-a45b1c2 7cf356bd92a6e1cd4abd26c46bf7674401659095",
+    "refs/heads/publish/pin-containment-007-current-main 665949b69855f19180617577d4588a82b3303678",
+    "refs/heads/publish/pin-containment-007-current-main-r2 f8d7ef90ea5bea8de29f15d3c4c267089518ee04",
+    "refs/heads/publish/pin-hash-migration-016 a1e537cbf816b94b7f17e531811de7b118f6067f",
+    "refs/heads/publish/plat-auth-pin-containment-001a-003 21a9294df9d11799c9fa3c68a0994eb5e5080c63",
+    "refs/heads/publish/plat-sec-seal-auth-joint-003e 1e78bf3371157164ea362d90f179c738ed8f32aa",
+    "refs/heads/publish/produto-variacoes-audit-001 d1ea36777b4521204e79324ff47eed610d166717",
+    "refs/heads/publish/produto-variacoes-audit-001-final d789bbfdec001a67caee1f61819bf64b4fe2a9fa",
+    "refs/heads/publish/servicos-focus 816547ca13e3722ec68a1e9c581117de6440519b",
+    "refs/heads/publish/vendas-polling-003b-final-current-main b756f58f1269a0f3d9f5de775e85f7bc93b26882",
+    "refs/heads/publish/vendas-polling-003b-final-current-main-r2 e08db423ac8b8100f3bf3b2e97405c883e63919f",
+    "refs/heads/recover/cosmos-auth-diag-011 0e5bf9ff3a62a5bfef52ab672310024d4fb80649",
+    "refs/heads/recover/cosmos-auth-diag-011-on-current-main 4136c840e0bc193d95dad01f5082ea5cf0649483",
+    "refs/heads/release/fiscal-xsd-worker-005b 0aa9c3480195965934e720e4e75597d32bc589dd",
+    "refs/heads/rescue/ops-v4-ux-p0-chrome-global-003 19dc40176bf82888b1aeef8e25a9a13983dba992",
+    "refs/heads/review/contador-012f-current-main acb24dce278f2811fa20575a4ceca7dd63da1d05",
+    "refs/heads/safety/ops-v4-fila-kanban-write-004-pre-rebase ccdcf5574c021a2a2041278b595192327c15dfbe",
+    "refs/heads/safety/thermal-print-direct-receipt-backup 4f3935646f3f78bedebed1009a6e140687b910d2",
+    "refs/heads/staging-go-live 1961e9e22a5590cee5e1929761a1356d12f875a9",
+    "refs/heads/terminal-1 66eb251e3cca8dd77666c1a5c4493e87f910ea5b",
+    "refs/heads/terminal-2 c10b6ea15a923b9ace2631ec4e5dc22a1cd0a57e",
+    "refs/heads/terminal-3 c10b6ea15a923b9ace2631ec4e5dc22a1cd0a57e",
+    "refs/heads/verify/contador-018-pr97 5e8331fa0330ead4fb05cd94ceaba2c2090e1716",
+    "refs/heads/work/cadastros-v2-barcode 23516c93c917babafe303f2c42e1a7087804792a",
+    "refs/heads/work/cadastros-v2-categoria-003-current-main 191141591ef22088da7adc4ddced0ae72940a662",
+    "refs/heads/work/caixa-fechamento-origens-pagamento-003a 1b2541448b9bb1bdf1b15e1499fddd24a2f25750",
+    "refs/heads/work/caixa-resumo-kpi-valores-truncamento-004 796259b4a9e0766ec132fa7a2636c45017eb67e1",
+    "refs/heads/work/fiscal-dry-run-005b-h4-elevation-integrate c9040bf343ff27e5f742d2b5a235bc9e976cf882",
+    "refs/heads/work/fiscal-dry-run-005b-h4-elevation-prep ede112743f9e0a35c3d0d978d5a89550761a74b9",
+    "refs/heads/work/fiscal-dry-run-005b-h4-manifest-adoption 975c97b5499570d5a1176917fae5146188662c46",
+    "refs/heads/work/fiscal-dry-run-integrity-proof-005 d4dfcf15b600bf46f51c347e99656800d1ec201a",
+    "refs/heads/work/fiscal-dry-run-integrity-proof-005b 86dd9ad151d618b37f238620eea8c5d62ce98291",
+    "refs/heads/work/fiscal-produto-upsert-parity-004 3f8928c0d8dc7361b6282cbb2b225ae04ed8a501",
+    "refs/heads/work/fiscal-xsd-worker-cve-patch-005b 4000940364ad30fe5f38824dca3bb90eafe1a629",
+    "refs/heads/work/fiscal-xsd-worker-gha-supply-chain-005a d51279461718508d94c534e9afe27232c73f0d6b",
+    "refs/heads/work/ops-upfront-payment-ledger-foundation-003a 7211d84758571eb56f18fa4ab834d419da6297a5",
+    "refs/heads/work/ops-v4-delivery-financial-guard-integrate-current-main-v2 92a531fc53e0ecd61ee6fef0bc8431e7a60af20e",
+    "refs/heads/work/ops-v4-delivery-financial-guard-server-001 e217344a7faa3b60fc9b810440421483241bee9b",
+    "refs/heads/work/ops-v4-financial-projection-unified-002 edc79deb447380a7432220a7f5e7267212984490",
+    "refs/heads/work/ops-v4-ux-p0-chrome-global-003 19dc40176bf82888b1aeef8e25a9a13983dba992",
+    "refs/heads/work/ops-v4-ux-p0-chrome-global-003-main ee3b26f6280b3e061dac171147e01ae9a7e113cf",
+    "refs/heads/work/ops-v4-ux-p1-cta-hierarchy-004 ee3b26f6280b3e061dac171147e01ae9a7e113cf",
+    "refs/heads/work/pdv-acessorios-cadastro-projecao-002 dcec5c9854a63d90bfacbe496fa06b0ec31e9627",
+    "refs/heads/work/pdv-acessorios-contratos-001 d309c7bfd0fffb61b1ad188683fa96bc37b21ed7",
+    "refs/heads/work/pdv-acessorios-contratos-001-current-main 191141591ef22088da7adc4ddced0ae72940a662",
+    "refs/heads/work/pdv-acessorios-modal-fechar-003a-current-main 1ca4288e5979eb88e2bd3c3f18f729ae5d162c3f",
+    "refs/heads/work/pdv-acessorios-persistencia-server-004b 42f622b8ac0cf6901110de30e5b7d2facf3150bc",
+    "refs/heads/work/pdv-acessorios-rapido-close-latency-003b 2b9c51accbf7200cfa840103b341d853065b42fc",
+    "refs/heads/work/pdv-acessorios-selecao-readback-004c a8b83f768f75d0208cf167227d605f9c689756fc",
+    "refs/heads/work/pdv-acessorios-selecao-readback-004c-integrate 2e64fa8fcfae0b06e633a5aec79e49ad5ed7e35e",
+    "refs/heads/work/pdv-acessorios-seletor-modelo-cor-003 738af36e81dca403c91fd3b59c782285275f9221",
+    "refs/heads/work/pdv-pending-sync-atomicity-p0-001 6a11693478a4341a0d15ed22d57eb35e1f09b3aa",
+    "refs/heads/work/pdv-rafacell-load-crash-p0-001 5e7fbd92adef7d4271d7a2c639b848a2d37eb2f9",
+    "refs/heads/work/pdv-scan-search-autoclear-focus-005 f7dde7fefe9e6ca6ff7d372c29b970ad67a39eac",
+    "refs/heads/work/pdv-scan-unregistered-settings-007 7eed73922a3f181ac7a417ff97afc68f9b115519",
+    "refs/heads/work/pdv-stock-drift-p0-002-copy a5435a6b6528a6245f4c86d3a20c6df0dad2c3d7",
+    "refs/heads/work/pdv-stock-drift-residual-p0-002 f5980343a2cdd0faab09d216d20ca916e745f57c",
+    "refs/heads/work/pdv-stock-drift-residual-p0-002-finish 9927e03049c83dad6c3245e204dd8299d70e76d9",
+    "refs/heads/work/pdv-vendas-corrigir-itens-metadata-004a f42072ae2275aaa53402ea71a6c14ca89e92b30c",
+    "refs/heads/work/pdv-vendas-quarentena-recovery-all-p0-006a 083a7806626c821075b0ac913d748d0c3acc546e",
+    "refs/heads/work/peliculas-seeds-expand-002 93b4190ceff7dd11274ff04e5722b3212150af7f",
+    "refs/heads/work/plat-auth-pin-containment-reapply-001 f3a9895ab694f02f3f2256a246c56e38d1b3573a",
+    "refs/heads/work/plat-auth-proxy-session-entitlement-003d 98d8f534a3a2a6cccc99628eb3f5038425c3bab8",
+    "refs/heads/work/plat-sec-seal-003b 2bcd81ebcb95853f93dcd0dcfd1c35339d7049f3",
+    "refs/heads/work/venda-corrigir-itens-metadata-001 5b9dfa2fb49208e0919ceff69ca29b437df082e0",
+    "refs/pr/73 8b528a9358f821081f917b1ef91315172fab4c93",
+    "refs/remotes/origin/HEAD b028c4e11c0755a809a1bfcf5a75d0dfc4461494",
+    "refs/remotes/origin/aep/pdv-close-002 d5d4bae01807bf59fdf16c0d7b2170cfea0fb105",
+    "refs/remotes/origin/audit/cadastros-importacao-produtos-final-readiness-001 866cd76fada1d27857765945e5a0bff58c7f04a0",
+    "refs/remotes/origin/audit/cadastros-importacao-produtos-review-readiness-001 bddec9ab4d95945fe796d0d6ae5236b3f679baf9",
+    "refs/remotes/origin/audit/catalogo-saas-base-readiness-001 0bf77c3457f8e5b93d3a15918412270d6a108de2",
+    "refs/remotes/origin/audit/deploy-production-migration-governance-docs-publish 9cef9112811c1d743ca6dff98576dbc1b058304a",
+    "refs/remotes/origin/audit/fiscal-c14n-external-proof-003-readiness ab802718013f6cc1b39234b175a0bf951e440c50",
+    "refs/remotes/origin/audit/fiscal-c14n-goal-003-close-readiness 42728c787853df6b1109bfbfafd91e461361664b",
+    "refs/remotes/origin/audit/fiscal-dry-run-005b-formal-audit 818253b91ad33d96fdf004cbbc71b5a908e943dc",
+    "refs/remotes/origin/audit/fiscal-dry-run-005b-h2-review 629fc968b821dc33efd0822755cb64518075d72b",
+    "refs/remotes/origin/audit/fiscal-dry-run-005b-h4-elevation-readiness 4ebe4b58a1cf9494f9c2a32f73550835c93779c3",
+    "refs/remotes/origin/audit/fiscal-dry-run-005b-positive-fixture-readiness 1fbb055199004b4ced63be5f80ba1cfac3fd01cf",
+    "refs/remotes/origin/audit/fiscal-dry-run-005b-scope-ratification-readiness 5da7a75579b722be54419ca3ddcf0e8724466769",
+    "refs/remotes/origin/audit/fiscal-goal-001-merge-readiness 0bbee596d62ac67746ba84c1fe4ce62ba0c6fd7b",
+    "refs/remotes/origin/audit/fiscal-goal-002-close-readiness 18eb7de77ef113f00b4e4f4848ff90974f10f3b2",
+    "refs/remotes/origin/audit/fiscal-goal-005-current-main-readiness d8504fdd1ae944c59831caeae9ad84923aa857d7",
+    "refs/remotes/origin/audit/fiscal-goal-005-formal-evaluation f6d6f2ac9a24dff2fabc09051e2558f810bdad33",
+    "refs/remotes/origin/audit/fiscal-goal-005-scope-reconciliation-readiness 50a3e0179e1b7165339b91127d2fde70d002e41e",
+    "refs/remotes/origin/audit/fiscal-produto-upsert-004-close-readiness a93ddae2666e5ef4d94e5524c0371cb71e36d767",
+    "refs/remotes/origin/audit/fiscal-produto-upsert-parity-004 61b736f625caeb83595159736168a7bcc066f0a4",
+    "refs/remotes/origin/audit/fiscal-produto-upsert-parity-004-readiness fb219c4a5cc2a2b8e505495d9d667cf2a185812b",
+    "refs/remotes/origin/audit/fiscal-xsd-005a-final-readiness 84f98bda75642887d0ba5797c7a2394606435389",
+    "refs/remotes/origin/audit/fiscal-xsd-005a-post-merge-closure-readiness 3f3c6c02091141f039999656c42f877237b8a175",
+    "refs/remotes/origin/audit/fiscal-xsd-adr-0010-readiness 96765194da8fe9deb53f3aed094e38f393f408fe",
+    "refs/remotes/origin/audit/fiscal-xsd-gha-infra-readiness eabc11c198af95556f1b7204769a5894c3f4fb7f",
+    "refs/remotes/origin/audit/fiscal-xsd-worker-implementation-readiness 2953a9753c786780d10aaffbb465a0dd894e2982",
+    "refs/remotes/origin/audit/pdv-acessorios-persistencia-004 2019f959e1f84e391285c2efc5312732606dfa44",
+    "refs/remotes/origin/audit/pdv-caixa-session-recovery-split-readiness-002a deceff64f75dcca6a4bca643605dffebd7698fdb",
+    "refs/remotes/origin/audit/pdv-numbering-002b-db-readiness 6a0d141520d10d66c0e7fbf741439d90f38beb5a",
+    "refs/remotes/origin/audit/pdv-numeracao-002c0-contracts 5856a350fc80a809b824c644b785c71d9fd9489b",
+    "refs/remotes/origin/audit/pdv-numeracao-server-writer-002c-readiness ea02bb9386d53d8e0098f122922d31d62d080c8e",
+    "refs/remotes/origin/audit/pdv-numeracao-store-code-provision-publish 5e457a3a4385f4662949477dcf04f1acd7402871",
+    "refs/remotes/origin/audit/produto-fiscal-metadata-partial-merge-readiness-001 4d46c92b070fd6ff9b7eba055a105a5bfbd27b1a",
+    "refs/remotes/origin/claude/cool-fermi-cs7e66 e1a5283524a4f1f19acd7ef00fa97b60a81bab01",
+    "refs/remotes/origin/close/contador-019-main ca234e5842995f9882a1e1f57ff3a07852330de2",
+    "refs/remotes/origin/close/fiscal-018-main 7fdc82738031c337ef0c3c8b54c75448ee14fcb4",
+    "refs/remotes/origin/codex/aep-pessoas-001b-blocked-reconciliation 7f505c2b7c15c006fc3832687dc431b7f6f0ab95",
+    "refs/remotes/origin/codex/cad-r2-019-production-backfill-closeout-20261015 b7d55b532025a00bdf55a911d3767f4c5ac2c583",
+    "refs/remotes/origin/codex/cad-r2-020-privacy f1ad3cc946f701266e2e4c99871c0cb21f349069",
+    "refs/remotes/origin/codex/cad-r2-021-cliente-texto-voz bf16f06c519496450b531f891f261d9a909df575",
+    "refs/remotes/origin/codex/contador-hub-runtime-copy-closeout 2b223705a3a2d6982a50b2fbb1d025cedc8541d5",
+    "refs/remotes/origin/codex/contador-pacote-content-versioning-fix-025 e79e0a2477c085cdabd7c00c237a7241b54610dd",
+    "refs/remotes/origin/codex/experiment-ops-v4-garantias fd42b06648ad2abb217bdd7fb5f3bc7b9dec3030",
+    "refs/remotes/origin/codex/fiscal-016d-c-a1-selftest-008 a66aec3f55feb1115f0935202969aca302e573a9",
+    "refs/remotes/origin/codex/fiscal-016d-c-empty-body-contract-fix-013 219cc6c49fb433734e15ec9e8e6f3f0186c5ced2",
+    "refs/remotes/origin/codex/fiscal-016d-c-soap-oversize-race-fix-021 909980f8897f80f8e77467ba2553f874b293f0c3",
+    "refs/remotes/origin/codex/fiscal-017-ephemeral-window-test-contract-026 a296bae4f4beedde18e53b8d525fa2c3d5dacd84",
+    "refs/remotes/origin/codex/fiscal-017-h9-h10-a1-preconsume-safety-093 b91c6f2a3732c4bafcbb4bc8e1c45e3f3c049dee",
+    "refs/remotes/origin/codex/fiscal-017-h9-h10-anticipate-103 b9fc7dc56aa25c326bfce7a1889e0081382a3437",
+    "refs/remotes/origin/codex/fiscal-017-h9-h10-ephemeral-gate-019 a6fbd6f04616ebe27c397b56431990a01a612bc6",
+    "refs/remotes/origin/codex/fiscal-017-h9-h10-rematerialization-101 2f816b1778bcb36cd4ed98d7ea24b0feccd75dad",
+    "refs/remotes/origin/codex/fiscal-025-a-architecture 7157a78b18257b3fcdf0ce7d0b08dfcc238b823b",
+    "refs/remotes/origin/codex/fiscal-025b-aep-bootstrap-001 24b96f5932946d0f176480d4e3638e89e82d7fee",
+    "refs/remotes/origin/codex/ops-v4-datas-ui-promocao-plan 307824bbe501b66310a12e53cc55ac6bfab161ee",
+    "refs/remotes/origin/codex/ops-v4-frg-002-gov-rev8 4b1691544fb7048140d07f660a3fe26bdc13ca46",
+    "refs/remotes/origin/codex/ops-v4-goal003-family-regularization d8be306c6d507ee0af7559a75e5fbc03ad0690fb",
+    "refs/remotes/origin/codex/platform-vercel-node24-unblock-001 e8cbbdaccbf203204f5d545b31a2e2467d65c87a",
+    "refs/remotes/origin/codex/release-ops-v4-datas 3b87ee8aef643ff5055377bb5c0f4223a235ccf5",
+    "refs/remotes/origin/codex/release-ops-v4-vercel 2b0ca49bb696cc9eaf1b143ebac25621cd21e384",
+    "refs/remotes/origin/cursor/cad-r2-017-product-voice-1221 b1159d42b070321a892f954385e32a5c80c922cd",
+    "refs/remotes/origin/cursor/contador-017-channel-audit-6f5a 5cc5c4ecb6f5b1ec0ea9d26bad527070ae27c1fd",
+    "refs/remotes/origin/cursor/contador-018-adr007-homolog-0ae5 f0c20bdbf663ce0445c7ec19156629c63ad581b0",
+    "refs/remotes/origin/cursor/contador-018-homolog-postgres-c820 a10d5a5c1b7705183cf816523ac36dab1191f60a",
+    "refs/remotes/origin/cursor/contador-018-homologation-readiness-c820 a177d669549ad14253513cc8023b865839b37848",
+    "refs/remotes/origin/cursor/contador-018-passo0-audit-0ae5 dd9cc98285247929bd2e22a147109736a319617b",
+    "refs/remotes/origin/cursor/contador-fiscal-integration-018-47d9 5e8331fa0330ead4fb05cd94ceaba2c2090e1716",
+    "refs/remotes/origin/cursor/fiscal-017-h9-h10-expired-window-recovery-84f7 28840077010a4ef4b1cc34b5c6755916ce83acdc",
+    "refs/remotes/origin/cursor/fiscal-017-h9-h10-missed-window-closeout-63c2 25ecfa1f0a11eba6bc54054b08b72cb330bc7b28",
+    "refs/remotes/origin/cursor/fiscal-017-h9-h10-new-window-20260818-63c2 5274f00349dc1a4ba47fc4d5a64e13fe90bb2962",
+    "refs/remotes/origin/cursor/fiscal-017-h9-h10-new-window-materialization-a58c 8b528a9358f821081f917b1ef91315172fab4c93",
+    "refs/remotes/origin/cursor/fiscal-018-cancelamento-offline-foundation-39c6 a44ffe43505006ab2e479a5ef3ca1f2d74a8a9c2",
+    "refs/remotes/origin/cursor/fiscal-018-cancelamento-regulatory-package-39c6 c70267730bcf978d100f214ff2fbcf8d51e7dc4e",
+    "refs/remotes/origin/cursor/fiscal-019-inutilizacao-nfce-offline-foundation-493f e225f77af6172429a913d54f6d1e73d11aeebbab",
+    "refs/remotes/origin/cursor/fiscal-020-contingencia-nfce-audit-plan-4646 4296c225f76439bed5fdb796358bf8db5037e1c2",
+    "refs/remotes/origin/cursor/fiscal-020a-contingencia-nfce-policy-contracts-5be7 9efd676f9f6f11b7d46d597585fea814de7ee195",
+    "refs/remotes/origin/cursor/fiscal-021-danfce-qr-regulatory-audit-b491 51f9d5bffcf459f117142bf756acab663dd48924",
+    "refs/remotes/origin/cursor/fiscal-021-danfce-qr-runtime-persistence-dadc 5f931121d73cf319e8ba14af8f715b39c9b18da1",
+    "refs/remotes/origin/cursor/fiscal-021-danfce-qr-v3-offline-signed-bytes-a58c bf684d6829a3ad337daa4c3b8568b0a7dd6bb7d6",
+    "refs/remotes/origin/cursor/fiscal-021-danfce-qr-v3-online-infnfesupl-a58c c0f1e4dd9b20c921db4772e2e42fc92fdaedaab5",
+    "refs/remotes/origin/cursor/fiscal-021-danfce-qr-v3-pure-encoder-a58c 8643d3c26fab88c5e22e31201c68ec52aad8af4f",
+    "refs/remotes/origin/cursor/fiscal-021-danfce-render-reprint-4935 b50a5b956f4d0e573f18e8e3231863679f91e462",
+    "refs/remotes/origin/cursor/fiscal-022-homologation-pilot-dormant-wiring-f36b e6da78d5e341e22a1707371874e382c449a8406b",
+    "refs/remotes/origin/cursor/fiscal-029-sat-nfce-sp-44b4 032e755a9955cb47d32b183ab209af7c43d15075",
+    "refs/remotes/origin/cursor/fiscal-030-card-pos-simple-72bc 63cf67430c5f50ee617848e5c7e2b44a06b5fdbf",
+    "refs/remotes/origin/cursor/fiscal-030-cash-tendered-change-41f8 356f1d8632922c0502ad2fd4e3a7dfb2c63e0a17",
+    "refs/remotes/origin/cursor/fiscal-030-payment-boundary-8c97 37ec4fc9b4e9abad78657b7960c45e0f5897f912",
+    "refs/remotes/origin/cursor/fiscal-030-payment-origin-handoff-ba1a 06f30a4d7a1a8a68ffa7b152d3cbc1ad775a955a",
+    "refs/remotes/origin/cursor/fiscal-030-pix-semantics-103c 7d21c21a77e2d376e85cf4335fbe5e3bd74f6820",
+    "refs/remotes/origin/cursor/fiscal-030-pix17-ya04-nonintegrated-31e8 36e5f746dbc4fb4f6da82d7b9bce2cf0c732059d",
+    "refs/remotes/origin/cursor/fiscal-card-tef-boundary-audit-a17d 2f738853baea593a888237cb7a093c03d6bd8c2b",
+    "refs/remotes/origin/cursor/fiscal-ci-xsd-b2-cross-platform-hardening-59e7 8e95bfaa899b81814bffea476d49f66248ca4608",
+    "refs/remotes/origin/cursor/fiscal-deferred-payment-semantics-df08 8cb28761c32b1e29dff8a399a83a95b5625fdbf2",
+    "refs/remotes/origin/cursor/fiscal-pilot-homologation-second-attempt-022e-b0e3 ae20f3aa0005c07c49dff9dc8ad3ca769a0a85b8",
+    "refs/remotes/origin/cursor/fiscal-pix-legacy-fail-closed-4c1c 23f96b99517f11cd5cc81b76ff65183f441452c2",
+    "refs/remotes/origin/cursor/ops-v4-checklist-rajada-fix-08c0 a366524c99a83d91fbc7203306ca5aeb3947323a",
+    "refs/remotes/origin/cursor/pdv-cancelamento-ui-fix-df5f bbeedc181dbffe4f3aea7ed4819adad76ceb1b3f",
+    "refs/remotes/origin/cursor/pdv-vendas-quarantine-remaining-24-63c2 e08db423ac8b8100f3bf3b2e97405c883e63919f",
+    "refs/remotes/origin/cursor/pdv-vendas-server-numbering-recovery-bc92 46e451f183c37d22e10866102448b38bee5daf0a",
+    "refs/remotes/origin/cursor/pdv-vendas-writer-v2-006f-d-audit-ef3b 2ca440410c8de0f473103fe6f47581b422d74c91",
+    "refs/remotes/origin/cursor/setup-dev-environment-b543 a7be1be93dbbe31130980341d3e30ff64b527612",
+    "refs/remotes/origin/cursor/vendas-polling-bounded-003b-8dd3 99e1c5aa0da1fcd232dea0f9cb1ea14d4ca8a092",
+    "refs/remotes/origin/dev e1b1da4dba5b18cf942115552b4d986094f05372",
+    "refs/remotes/origin/doc/ops-v4-fluxo-curto-001-plan 7d5f28f513ac7b46a15ef232328d486dacf9e969",
+    "refs/remotes/origin/doc/ops-v4-fluxo-curto-001-rev5 873f58951811f48c4696a316438e4ed3bbd355be",
+    "refs/remotes/origin/doc/ops-v4-fluxo-curto-002-plan 01d347cc1ecf77259c51200ec9eac05e10e64bbb",
+    "refs/remotes/origin/docs/contador-012b-storage-provider-decision cdd9f161f111752838a50f815309fd5dd96be781",
+    "refs/remotes/origin/docs/contador-smoke-producao-021 607971c75cfa6d614507ee174867292949887c5a",
+    "refs/remotes/origin/docs/fiscal-016d-evidence 9655cddd1378c43c662e65ff3df6ed8010bb7289",
+    "refs/remotes/origin/docs/fiscal-dry-run-005b-scope-ratification 8a03b39819cd80a78b520f486b30ea91bdbff353",
+    "refs/remotes/origin/docs/fiscal-dry-run-005b-scope-ratification-integrate d8cfd2a1efe9f4e63dfaceed4954136b620e3a88",
+    "refs/remotes/origin/docs/fiscal-xsd-005a-post-merge-closure 55d578e35264396081d082dc343ed99ca2c5ab2a",
+    "refs/remotes/origin/docs/omnigestao-ai-start-here-neon-policy-001 a6491b6bf00be82acc2d0c02eb0c62d101a67947",
+    "refs/remotes/origin/feat/operacoes-v4-preview 7fcf326c7e06def58f3f8b9a23f48c78ed5ea6ac",
+    "refs/remotes/origin/feat/pdv-recebimento-multititulo-backend-003 2dcb79e291b9680875ad1f193f497944db3849ed",
+    "refs/remotes/origin/feat/whatsapp-hub-visual-v1 3d6596891febde312cc537b39e9506429a878a42",
+    "refs/remotes/origin/fiscal/016d-c-a1-mtls-offline-foundation 6a99d94c167e41b25a0f3666660eeb65f68f54f8",
+    "refs/remotes/origin/fiscal/ci-provider-sefaz-coverage aca5353039360ed8aa381e6e82d646df838c0bdf",
+    "refs/remotes/origin/fiscal/goal-001-status-reconcile f9ce2fcb6b199a64de9bf8271ca21778ba4eba7d",
+    "refs/remotes/origin/fiscal/goal-002-xmllint-native-spike 7aee00ec7c81278445a982b85542c89de02957f7",
+    "refs/remotes/origin/fiscal/goal-002-xsd-adr-p01 edaaf948062fdd317903ffd1f01af94391bd4965",
+    "refs/remotes/origin/fiscal/goal-002-xsd-close 9e308830f776f84406446ae95bb2d59b8f66f56f",
+    "refs/remotes/origin/fiscal/goal-002-xsd-official f7026bc165b0789a20c52901e9b57830414a4ddd",
+    "refs/remotes/origin/fiscal/goal-002-xsd-wasm-spike c0ec48da6a579ffea49d6b7bba87bc87a3b00f95",
+    "refs/remotes/origin/fiscal/goal-002-xsd-worker-implementation d497775e9dd1021d9a54ba6cf8f7b8c0b739f436",
+    "refs/remotes/origin/fiscal/goal-003-c14n-close b236f5433d5265ea1e5a473c8787056ffadd4d8d",
+    "refs/remotes/origin/fiscal/goal-003-c14n-external-proof 586c13526e940bed8f79df58b0b7886975db84bd",
+    "refs/remotes/origin/fiscal/goal-004-produto-upsert-close c49cce5a867125a2f5fec1ab697b28918e715a7a",
+    "refs/remotes/origin/fiscal/goal-005-scope-reconciliation d74840c18d707c64989d85995153f220e2654a1b",
+    "refs/remotes/origin/fiscal/goal-005-scope-reconciliation-current-main a4375aac3d7585b5bc8ea2a0e4e92db81f1aa093",
+    "refs/remotes/origin/fiscal/goal-005-snapshot-runtime 384bb94e6aeee01910f49a8034cc5c053d35b355",
+    "refs/remotes/origin/fiscal/goal-006-tax-st-coverage f8df2a4ee59ad9ccf1dc35ae22952b39990f43aa",
+    "refs/remotes/origin/fiscal/goal-007-dry-run-gate 3998f8199f8db6e12d8ea0cef4fd7225932fd6c0",
+    "refs/remotes/origin/fiscal/goal-008-cert-pilot-vault 6f407da2dddb93ece81b90394828d0b7273a0ca2",
+    "refs/remotes/origin/fiscal/goal-009-kms-arch 1aa183fbc2894ff2995d492e591243185aeddf59",
+    "refs/remotes/origin/fiscal/goal-010-numbering-series bab86667e1d92913a15b22e9da96c46eaf0c2be6",
+    "refs/remotes/origin/fiscal/goal-011-outbox-worker 7a8b5f43556af9c174a12cda123849560f87118f",
+    "refs/remotes/origin/fiscal/goal-012-uncertain-state 7f4d12685d308b0a04854ad54a1f8ececa7cc5b3",
+    "refs/remotes/origin/fiscal/goal-013-xml-storage 00bd2a85470b92aa6cd990e1ddbfebcb38cc5dbc",
+    "refs/remotes/origin/fiscal/goal-014-provider-strategy e33c430ae27c980eb785bdef53b0923e6659a5c5",
+    "refs/remotes/origin/fiscal/goal-015-sefaz-research 712abeadb06a6d9eeb6839d4b28bebbdf809876a",
+    "refs/remotes/origin/fiscal/goal-016b-certificate-onboarding a75b1ea87a8e2942cee71a95e9070cc9d4210366",
+    "refs/remotes/origin/fiscal/goal-016c-secret-provider-custodia-a1 caeb2866f68dce4dcd3db1fac1dc76f444cc5dec",
+    "refs/remotes/origin/fiscal/goal-016d-a-sefaz-adapter-offline 3541dc5729215c5b26195797678778b581a05e00",
+    "refs/remotes/origin/fiscal/goal-016d-a0-active-certificate-resolver 779556e62a798a92bd4b36903ce9dcac2dd45a61",
+    "refs/remotes/origin/fiscal/goal-016d-b-soap-parser-cstat e740b97cc63e9eba1621609a708abe9e24c4e9fc",
+    "refs/remotes/origin/fiscal/goal-016d-c0-xml-producer-embeddable 5657d02bc1ba293746cf64d2db1065cfb898cde0",
+    "refs/remotes/origin/fiscal/goal-016d-c1-envelope-backstop 101b8d2910cb0dc131603a1c44ffe29212052df1",
+    "refs/remotes/origin/fiscal/goal-016d-sefaz-adapter-plan 28c3976223b1152e9f34e0dfd8d8d20e47d2aa61",
+    "refs/remotes/origin/fiscal/goal-017-wsdl-acquisition-readiness 268b6722d9b24bc43c18e9bc7fe0f65c91d135a4",
+    "refs/remotes/origin/fiscal/h9-h10-window-20260814-2000z 13bc06312f99b9c201b6551ca9d6a59146758cbd",
+    "refs/remotes/origin/fiscal/h9-h10-window-20260815-1200z 03ef03a810499d75b6fd2f290b255e6993f7958f",
+    "refs/remotes/origin/fiscal/h9-h10-window-20260817-1200z fadcf585435216d478aa21164261f4be0177b22d",
+    "refs/remotes/origin/fiscal/xsd-ci-prisma-transitive-fix b401b8ed4760aa0a0cdaf22b4bcf96765f75b56c",
+    "refs/remotes/origin/fix/aep-import-contract-human-gates 3bc80a841c0bb4a26c8bd6f62d3694cd7e51d4aa",
+    "refs/remotes/origin/fix/caixa-totais-por-vinculo-de-sessao 97267843bf4af240af27683caf3c933677abdcce",
+    "refs/remotes/origin/fix/contador-convite-link-copy-ux-021 104a8c317164c72d67879ea49930132460523674",
+    "refs/remotes/origin/fix/contador-storage-503-r2-checker-020 cdb0b0fc00be769b6fdd9bd8c60495a72988ce21",
+    "refs/remotes/origin/fix/deploy-migration-guard-unknown-action a50ad7ebd70508aea7a046932114e35158e5e77d",
+    "refs/remotes/origin/fix/fiscal-dry-run-005b-positive-fixture ce8b7b4725a6d72c3a0fed97edbcb041b1b713ae",
+    "refs/remotes/origin/fix/pdv-recebimento-canonicalidade-002 65a82a5258632474901fe53cf0d1b4eaddbad6ae",
+    "refs/remotes/origin/goal/app-entry-login-routing-001 419735b33e00233f9e994580ed40aa68af66dcb9",
+    "refs/remotes/origin/goal/cad-r2-005-product-write-service-core 6dd2d42430fad7953e7d279385349c2cf50c9337",
+    "refs/remotes/origin/goal/cad-r2-006-product-interactive-writers 23fc8b349e2f797738952ac1b1c6de9c507f625a",
+    "refs/remotes/origin/goal/cad-r2-007-product-rest-writers 63a5146a1d2dac2158f210391a24e0892b796df9",
+    "refs/remotes/origin/goal/cad-r2-008-client-write-service 43e28817abc3fd4039a170f58bec2c33fac03a12",
+    "refs/remotes/origin/goal/cad-r2-009-stock-ledger-invariant 4ab7ee1c46f396a68dd3eb9a72d0d95f013c5ca2",
+    "refs/remotes/origin/goal/cad-r2-014-importers-canonical-write 0806721d28dc2e7623004a1dfd18bf30820c441d",
+    "refs/remotes/origin/goal/cad-r2-015-provider-governance 8a34784dce25624549d78f7184e1a641e2520b06",
+    "refs/remotes/origin/goal/cad-r2-018a-client-identity-dedupe d0d19118e67ffdb6b9f882ea236619dbe1098a83",
+    "refs/remotes/origin/goal/cad-r2-018b-client-duplicate-merge dff0fbffecac99dadf4e91f799509879bf562478",
+    "refs/remotes/origin/goal/cad-r2-019-client-document-unique 49837e0f74bd85cc2ece7cb7b3ab7e4c61f38dd6",
+    "refs/remotes/origin/goal/cad-r2-security-foundation-reconcile-v2 8b0b33ac4698931d6d3f1649bb7d42a5339d91f6",
+    "refs/remotes/origin/goal/cadastros-importacao-produtos-review-hardening-001 1bdc5d83cf5eeb73ae8b5fed9d19b1a6b74c1d7e",
+    "refs/remotes/origin/goal/cadastros-importacao-produtos-review-hardening-corrections-001 efef2d898f1a68c59802945542376d95c6f9dd27",
+    "refs/remotes/origin/goal/caixa-fechamento-calculadora-premium-005 f88f38fb40680b7de4c896d37033b30e4e47ece2",
+    "refs/remotes/origin/goal/contador-001-status-reconcile f56039918fb34a45e7f7790e861f0d871832469b",
+    "refs/remotes/origin/goal/contador-002-honesty e23ce61820533d7d9afb6cf9890a822386c940e4",
+    "refs/remotes/origin/goal/contador-003-auth-externa b7805ac39ec49bebac4be3139da20436ff88a1fc",
+    "refs/remotes/origin/goal/contador-004-store-scope 549cf94f10cf21f16d245cd7a6bf6bfa27fa2d35",
+    "refs/remotes/origin/goal/contador-005-competencia 9472e8db191c051a93ee2d3f01e0a800e7156a93",
+    "refs/remotes/origin/goal/contador-006-dados-reais ac5b709b545d9111d577444a9018749ba77ea75a",
+    "refs/remotes/origin/goal/contador-007-fechamento-ro-a b50800db0400b6d4c58b1a4b0450a11c9575dd8f",
+    "refs/remotes/origin/goal/contador-008-pacote-mvp a5cef3064ce49831da363a40103d61e18f99c171",
+    "refs/remotes/origin/goal/contador-009-schema-nucleo 81e63e52d5ad34a3beb94ef898347ba9aed23b83",
+    "refs/remotes/origin/goal/contador-010-documentos-supabase 6a9b9890c7e41e9538cd64775a75ae13fd11311d",
+    "refs/remotes/origin/goal/contador-011-status-comentarios 1f1190a078ea54e2092da02ce844856f380ec11c",
+    "refs/remotes/origin/goal/contador-012-fechamento-snapshot 0e33551394bcdcb18ab59951a1c3c0021780f50b",
+    "refs/remotes/origin/goal/contador-012a-fechamento-closure dbcf93228081ca63ebd40103eaa948dea6ec0124",
+    "refs/remotes/origin/goal/contador-012c-storage-r2-adapter fb56e7965fc176c736c2077736a918ebc015bd63",
+    "refs/remotes/origin/goal/contador-012e-r2-safety-corrections 18a4d8539f670eb77a0db44addeb6729e22e1d76",
+    "refs/remotes/origin/goal/contador-016-obrigacoes ac6345744618bca0ae098eed379b16196ca0c38d",
+    "refs/remotes/origin/goal/contador-017-omni-agent-integration 96733688b2adf51879edca180e3406089f14d2a7",
+    "refs/remotes/origin/goal/contador-019-production-hardening a0f64b48b610986b401bf02a123d0625a4af118e",
+    "refs/remotes/origin/goal/contador-023-internal-realification d3abd4260675442a934badb90f1d39c36c63496a",
+    "refs/remotes/origin/goal/contador-hub-docs-publish-001a 3493162cb9a478d70e9e36f0c8e18cae1f873fde",
+    "refs/remotes/origin/goal/fiscal-017-wsdl-production-only-boundary-030 bd7fa04587daad24df8a365f4ca4d597295fb78a",
+    "refs/remotes/origin/goal/fiscal-018-nfce-cancellation c64bdf46519d5091202d1ad0563aeb67a7304842",
+    "refs/remotes/origin/goal/fiscal-019-nfce-inutilizacao f15b71a7ccfe7c8f87085e53ba1be9642a1b4e16",
+    "refs/remotes/origin/goal/fiscal-019-reconcile-current-main-117 2266a5f2f19f04f8f87a5c9afbaad295da023177",
+    "refs/remotes/origin/goal/fiscal-020-contingency-offline-nfce d05318752ae4f7f73e6742ec9e8dda5cb126b374",
+    "refs/remotes/origin/goal/fiscal-020-h9h10-arming-162 d8e34562c50cb85ffb8049ef148bfd7292673f61",
+    "refs/remotes/origin/goal/fiscal-020-h9h10-arming-164 2e4bbcab8c5913f1998fe0bd5fe67b56d95086f6",
+    "refs/remotes/origin/goal/fiscal-020-h9h10-final-containment-and-close-173 b75173bf6e0b76b89271b5db14b295a6bade9fd6",
+    "refs/remotes/origin/goal/fiscal-020-h9h10-final-rearm-172 a94541de2ca20525e41c9e3f6e14200e1457803a",
+    "refs/remotes/origin/goal/fiscal-020-nfeautorizacao4-multiop-extraction-fix-169 a9139aaa8a576e4304e62c59fa7b5863bcee25c9",
+    "refs/remotes/origin/goal/fiscal-020-sefaz-icpbrasil-v10-trust-160 be1888e661112ad8bd95ee0b76753be62810bbd4",
+    "refs/remotes/origin/goal/fiscal-021-aep-definition-176 d48dbc214e9545f2245fb2b616cb581619715bed",
+    "refs/remotes/origin/goal/fiscal-021-observability-scenario-battery 62bb990e1e085e4868a814cb87333e84187739ea",
+    "refs/remotes/origin/goal/fiscal-022-aep-definition-184 d38e6a0f93a456436305181c34e4ca8b7f62982b",
+    "refs/remotes/origin/goal/fiscal-022-pilot-homologation-activation a004c3b33601b09bac3fd5c232dccc86aa2a6120",
+    "refs/remotes/origin/goal/fiscal-022B-pilot-homologation-unblock 81db1fda4957904ed6e73d33381db73123df0c77",
+    "refs/remotes/origin/goal/fiscal-022C-pilot-emission-authorization-handoff 97b4d166c6b343235c87a42dae6a5db38e11503b",
+    "refs/remotes/origin/goal/fiscal-022D-pilot-emission-authorization-handoff e772050aa4542cd86cb89a98ab3c08bf38411e89",
+    "refs/remotes/origin/goal/fiscal-023-cstat588-compact-message 6a87eb3ed846fe2f934956da19cdfefe6431354c",
+    "refs/remotes/origin/goal/fiscal-024-corrected-retry-readiness 425eb890ee9102122dcd87e074b40903bda0443d",
+    "refs/remotes/origin/goal/fiscal-025b-archive-foundation-001 5bd39a94462ff6c70ecd3535781b9cfc0a710125",
+    "refs/remotes/origin/goal/fractional-sale-hard-block-005 9a9626d091dd738aa292e122c697170a77a984e4",
+    "refs/remotes/origin/goal/localhost-dev-auth-002 c6b72c44e83daef75d3208ecca2bcf299cbd29b0",
+    "refs/remotes/origin/goal/ops-datas-retroativas-001 2573ae829997b605bdaea6e104dc95b61e8070cb",
+    "refs/remotes/origin/goal/ops-recebimento-misto-p1-hardening-001 5a66a3419cbe1a5c5d46fa6188ac8fb86c16c0b8",
+    "refs/remotes/origin/goal/ops-v3-recebimento-misto-001 257e843df5e6ee82e4e01dab5ac13bffc139e1f7",
+    "refs/remotes/origin/goal/ops-v4-documentos-assinatura-anexos-015 97a9f0f4e8a42c859868034a5dfad20a3107a865",
+    "refs/remotes/origin/goal/ops-v4-fila-kanban-write-004 d13b24c414aa5a87b4371d1db2e0ac8d1210d716",
+    "refs/remotes/origin/goal/ops-v4-financeiro-retirada-garantia-001 3f2f97ceb35a2cd8e952e3c443c10979ca0c7bf2",
+    "refs/remotes/origin/goal/ops-v4-financeiro-retirada-garantia-002 9dbae6d9744d0539ad07b59fbd4bdc97c5351d2a",
+    "refs/remotes/origin/goal/ops-v4-fluxo-curto-001 d69d0c1bde9aa19bd0a3a1c1ca70a58f56df3d4a",
+    "refs/remotes/origin/goal/ops-v4-fluxo-curto-002 c257d7da455b68b299bc5cf55ad6400115214bcc",
+    "refs/remotes/origin/goal/ops-v4-fluxo-curto-003 4b422e477e274269f0cc9b96e4f84330d32993ed",
+    "refs/remotes/origin/goal/ops-v4-fluxo-curto-004 8123fbfa11771a7de3da5bbc5ce73a579670e28d",
+    "refs/remotes/origin/goal/ops-v4-fluxo-curto-005 110df8c78bbd46d0c9f39bb4699b66b801fcb992",
+    "refs/remotes/origin/goal/ops-v4-fluxo-curto-006 d433a3924ccaca079ae97ccf3d88619e49071e08",
+    "refs/remotes/origin/goal/ops-v4-fluxo-curto-007 da4cd7629399f7e6e279217f7bf0ec0d7d877ca3",
+    "refs/remotes/origin/goal/ops-v4-multi-servicos-ui-003 639200f00504d93f8f3ded7daa0f1651ef57b20d",
+    "refs/remotes/origin/goal/ops-v4-pipeline-entrada-nav-simplify-002 bb441d03753c619e50dcfd7b5684c56033b50dd7",
+    "refs/remotes/origin/goal/ops-v4-recebimento-misto-paridade-001 79da783c4594c70df23f44c4be1bf99ad120727a",
+    "refs/remotes/origin/goal/ops-v4-recebimento-transversal-005 b5e655aa8c24476107801f33746df05e26586591",
+    "refs/remotes/origin/goal/ops-v4-status-authority-fix-003 d9b25b18254c20e6ec9f8aead3e411101aa64608",
+    "refs/remotes/origin/goal/pdv-003-venda-em-espera-restore fac5cd0e61fc91f77fb63fff498da18eeee0503a",
+    "refs/remotes/origin/goal/pdv-assistencia-layout-carrinho-grade-002 dcecb6be740a7f32dd58588077c2836174bb2b7e",
+    "refs/remotes/origin/goal/pdv-caixa-session-recovery-cart-draft-001 2bede50b5db301e6a0186b180425edb771aece00",
+    "refs/remotes/origin/goal/pdv-caixa-session-recovery-split-fix-002a 0e355d735a950c7ac5385316aee83f9c11d063ef",
+    "refs/remotes/origin/goal/pdv-caixa-session-terminal-scope-002b bc479a485664501590025311ffa1bd88668d42bd",
+    "refs/remotes/origin/goal/pdv-capabilities-status-reconcile-001 c11c2908970b5b6b356dbe80e0fd2e1efa19a3d7",
+    "refs/remotes/origin/goal/pdv-capabilities-status-reconcile-001b 3bcce8044109be3278d669b586a38458856f9979",
+    "refs/remotes/origin/goal/pdv-capability-runtime-n4 89428111d2e3ef473f69c00a5bdd611cfe283b02",
+    "refs/remotes/origin/goal/pdv-motor-integrity-n1 1f881398583968f8645a1250e467a870ebd26424",
+    "refs/remotes/origin/goal/pdv-n5-a-aep-bootstrap dd5d3da8b880b862dc6d61a049d0c595a26d6f64",
+    "refs/remotes/origin/goal/pdv-n5-a-aep-plan-to-main 55981c4fea9438f678f6423d26a50d146f19e89d",
+    "refs/remotes/origin/goal/pdv-n5-b1-aep-plan-to-main ca69b44d5a4c9a5a17f6f3feeff3ce55520d9c95",
+    "refs/remotes/origin/goal/pdv-n5-b1-current-main-correction-aep-plan aa0bf166127f6464b200930694fd646ccac7d587",
+    "refs/remotes/origin/goal/pdv-n5-b1-pending-identity-aep-plan-to-main 8fd4df1bf25cea41c9ae4238d93ad525708d7e62",
+    "refs/remotes/origin/goal/pdv-n5-b1-pending-identity-allowlist-amend-004 9edce4329505b349c6fd7c217264debfd365c161",
+    "refs/remotes/origin/goal/pdv-n5-b1-r2-aep-plan-to-main e1206b2a28617a16cbe850713a53477f210e976e",
+    "refs/remotes/origin/goal/pdv-n5b1-production-smoke-closeout-004 ef98f81aa1ad95e6a2381f21b4ccb737cc7f0048",
+    "refs/remotes/origin/goal/pdv-next-absorb-n2 915ea59a9d948b1aced587b3e66f671ec9039fb7",
+    "refs/remotes/origin/goal/pdv-parity-n5-b1-core-gaps 43694cbe386e0afec961ebd1a1ceb050c7d971f2",
+    "refs/remotes/origin/goal/pdv-parity-n5-b1-core-gaps-r2 ebeab29f9f5b54cc7f7e9b1422ac31fe5a20c0ca",
+    "refs/remotes/origin/goal/pdv-parity-n5-b1-current-main-correction-r4 ff78a3938bd2dfc81bb495a3f8bb6332ed182e8c",
+    "refs/remotes/origin/goal/pdv-parity-n5-b1-pending-identity-r3 b15db3767fda459be02727729e2e4a13ceee92d2",
+    "refs/remotes/origin/goal/pdv-parity-n5-b2-pin-keymap-001 91d778782a6b7712c4c9c0159e2a4063feaa7c62",
+    "refs/remotes/origin/goal/pdv-parity-suite-n5-a 5559530785f64feafd5cacc9f0cf25195b23a72d",
+    "refs/remotes/origin/goal/pdv-parity-suite-n5-a-final 70f701492fd03da96caf95e845edd3afce4a4147",
+    "refs/remotes/origin/goal/pdv-parity-suite-n5-audit 02fc0bfb3cd571b089ac47395fed4f2c3d8e640b",
+    "refs/remotes/origin/goal/pdv-recebimento-multititulo-ui-g3-005 820217372dce436e4f3fd0baf027e094194363bf",
+    "refs/remotes/origin/goal/pdv-resumo-caixa-visual-fix-001 71b934c337dfa03086f1bd380830fe2614162b5e",
+    "refs/remotes/origin/goal/pdv-scan-inline-feedback-autofocus-006 70afca2a465121cd7b8d56c72b4771fdceb540b6",
+    "refs/remotes/origin/goal/pdv-settings-server-first-n3 12fc7bce1e48f20954e7da9ec0061cfa06b70edb",
+    "refs/remotes/origin/goal/pdv-surfaces-next-roadmap-002-003 6751b830c0785f223b90ee765c089b3b88b060d2",
+    "refs/remotes/origin/goal/pessoas-001a-fundacao-backend deecd6401cba785aaa36d1e78da36c2393cbf094",
+    "refs/remotes/origin/goal/pessoas-001b-frontend 25b5fda2612b35b6daccd2103fb69060f5107f73",
+    "refs/remotes/origin/goal/pessoas-001b-recovery-001 5eac8be5820f0d9a9ef0374e52bf1603112f78ca",
+    "refs/remotes/origin/goal/pessoas-hardening-p2-pre-001b-001 53250ef52c4401bdc2e0de22aab12b1f13222117",
+    "refs/remotes/origin/goal/produto-fiscal-metadata-partial-merge-fix-001 96ae3203c8d0ed59aedb10e870671ee9fa16fc29",
+    "refs/remotes/origin/goal/store-settings-access-control-004 bfdb8e4a8d46d82b3d5294f6f41d031a7947e63e",
+    "refs/remotes/origin/gov/ops-v4-financeiro-retirada-garantia-001-block-rev3 9012e8c7e464d657bd453d882327cb2a104870d7",
+    "refs/remotes/origin/gov/ops-v4-financeiro-retirada-garantia-001-block-rev4 4afcfb9f612ed4e9ee6c52af142daecc4172b7bb",
+    "refs/remotes/origin/gov/ops-v4-fluxo-curto-005-block-rev11 9d0442b79be348d4fb24d1ce60f0b0e57a6e0c3c",
+    "refs/remotes/origin/gov/ops-v4-fluxo-curto-006-block-rev13 8d73a18cfca9f33c18ccc8c59b087c0a98f11297",
+    "refs/remotes/origin/gov/ops-v4-fluxo-curto-007-block-rev15 10b3d5b62cd1f3daafd4bf06755af38c88906c8f",
+    "refs/remotes/origin/gov/ops-v4-fluxo-curto-007-block-rev16 f2861aef1fe24ef4502cafb9dda5733ff2ba4530",
+    "refs/remotes/origin/gov/ops-v4-frg-002-block-rev7 17acbed50afc98cd8a3c22943df5e4da1ecea18b",
+    "refs/remotes/origin/hotfix/prod-lojas-load-recovery-001 79176891ccc8e336339df69bfa2fc2e609cfc0db",
+    "refs/remotes/origin/integrate/contador-009-current-main b5f77ff8cec7be6a5320f5a1be77fae7ed77d187",
+    "refs/remotes/origin/integrate/fiscal-goal-001-status-reconcile 2010fef8b887544ad9c776cb4e0cf0fe5f7aec29",
+    "refs/remotes/origin/integrate/pdv-motor-integrity-n1-current-main cd5074efb02ffe186a364dd5fd2cd6eddd745b62",
+    "refs/remotes/origin/main 17510806bdfe736f6bc8a19ec732b7fd035de69b",
+    "refs/remotes/origin/master b028c4e11c0755a809a1bfcf5a75d0dfc4461494",
+    "refs/remotes/origin/plan/fiscal-025-retry-reconciliation 85b0be2e3336557c564cbafd4a2f6374d5a645e9",
+    "refs/remotes/origin/plan/ops-v4-financeiro-retirada-garantia 746e243edf1ba070eaa8049f08ff4df47699d206",
+    "refs/remotes/origin/plan/ops-v4-financeiro-retirada-garantia-002-rev5 dd71ee1eb5d106799abc5c9ec638f90740704673",
+    "refs/remotes/origin/plan/ops-v4-financeiro-retirada-garantia-002-rev6 7a7b4b5098fe471a0c25c538dbbcb756e82e0704",
+    "refs/remotes/origin/plan/ops-v4-fluxo-curto-003 0148b0f6b723dd091ab1fa368894b404f55892de",
+    "refs/remotes/origin/plan/ops-v4-fluxo-curto-004 58c4435347300d5ff5799020372491fa258779eb",
+    "refs/remotes/origin/plan/ops-v4-fluxo-curto-005 324fb21c6892d065fa78fe1d08a0320c35a7c331",
+    "refs/remotes/origin/plan/ops-v4-fluxo-curto-005-rev10 188222f5c6f487062f306aa94c54a0732d11728a",
+    "refs/remotes/origin/plan/ops-v4-fluxo-curto-006 2163038ce761538f3a00d7e13f5d4b6c43422fac",
+    "refs/remotes/origin/plan/ops-v4-fluxo-curto-007 1d85f3710b7d47c8ec09f08d12a8eff6e89613a3",
+    "refs/remotes/origin/plan/pdv-n5-b2-c-final-001 110a114c56239fc449db91c5a59d5a54c0310c56",
+    "refs/remotes/origin/plan/pdv-n5b1-production-smoke-closeout-004 124fdde68ea9e5b6fa43c51bd16422f294f1f759",
+    "refs/remotes/origin/plan/pessoas-001a-aep-bootstrap d4e6f36a683c048d158d36fccb3a49a35479b30b",
+    "refs/remotes/origin/plan/pessoas-001b-frontend 93e199d745e2568488a633c1686de76d6de94f86",
+    "refs/remotes/origin/plan/pessoas-001b-recovery-001 a51d36bd80b1dd5f5eace11c2bde1310fab657b7",
+    "refs/remotes/origin/plan/pessoas-001b-scope-006 79ecb276b53e87e301637bfe19ba69443a141ea8",
+    "refs/remotes/origin/plan/pessoas-hardening-p2-pre-001b-001 bae4548e43c7f5c5e50c328c4dd13f1ebf6a5f19",
+    "refs/remotes/origin/preview/caixa-fechamento-premium-ux-001 6c8e4aae9ed437ffe29c304a417b03a3167ca5a3",
+    "refs/remotes/origin/publish/contador-hub-g2-closure-001 03e7488aa38a9bf50f3e97991c72fae5217d538c",
+    "refs/remotes/origin/publish/fiscal-close-019-main eef992dfd7597a8a82885dcaa6c9afcfd87150b1",
+    "refs/remotes/origin/publish/ops-v3-lab002-visual-refresh 52a3433e42acfecccaa7366c986b81382d1c1a38",
+    "refs/remotes/origin/publish/ops-v4-multi-servicos-ui-003 29d7a8ddab02ec4c9b29187556de10de9d3ebae2",
+    "refs/remotes/origin/publish/pdv-aep-bootstrap-001 4b8494af9b01f27bffaf1c298ffe62902cc63de2",
+    "refs/remotes/origin/publish/pdv-aep-ratify-001 7a2b8c90bc6e3337260c4123d31acf5ac44153fc",
+    "refs/remotes/origin/publish/pdv-functional-001 3e00c1a37f8af8f3db4e8fb25e7646addcf5a6cd",
+    "refs/remotes/origin/publish/pdv-functional-002 b985548e1766f78d99952ac6e9abbfb760dfa09f",
+    "refs/remotes/origin/publish/pdv-quarentena-auto-reconcile-007 3f2af81314f22709b2115182c562f970bc1085e9",
+    "refs/remotes/origin/release/fiscal-xsd-worker-005b 0aa9c3480195965934e720e4e75597d32bc589dd",
+    "refs/remotes/origin/terminal-1 78030e2ca34c26c6fef22d90007e4a77c39a8ee6",
+    "refs/remotes/origin/terminal-2 c10b6ea15a923b9ace2631ec4e5dc22a1cd0a57e",
+    "refs/remotes/origin/terminal-3 c10b6ea15a923b9ace2631ec4e5dc22a1cd0a57e",
+    "refs/remotes/origin/work/cadastros-v2-barcode 23516c93c917babafe303f2c42e1a7087804792a",
+    "refs/remotes/origin/work/caixa-conferencia-acoes-007-final-main 78efdd09fc69ff2ee07199c6f1305270520406c7",
+    "refs/remotes/origin/work/caixa-conferencia-acoes-007a-hardening 7e762f677f494eb206d4f562379c160af8ad8fa0",
+    "refs/remotes/origin/work/caixa-conferencia-acoes-007b-server-contract bd2da163e45c4fb28fe4a773695622390cab14da",
+    "refs/remotes/origin/work/caixa-fechamento-origens-pagamento-003a 1b2541448b9bb1bdf1b15e1499fddd24a2f25750",
+    "refs/remotes/origin/work/caixa-resumo-kpi-valores-truncamento-004 796259b4a9e0766ec132fa7a2636c45017eb67e1",
+    "refs/remotes/origin/work/estoque-entrada-drift-recovery-p0-001 dd7a31458f3699f74370816fe365814bfbcb57e8",
+    "refs/remotes/origin/work/fiscal-dry-run-005b-h4-elevation-integrate c9040bf343ff27e5f742d2b5a235bc9e976cf882",
+    "refs/remotes/origin/work/fiscal-dry-run-005b-h4-elevation-prep ede112743f9e0a35c3d0d978d5a89550761a74b9",
+    "refs/remotes/origin/work/fiscal-dry-run-005b-h4-manifest-adoption 975c97b5499570d5a1176917fae5146188662c46",
+    "refs/remotes/origin/work/fiscal-dry-run-integrity-proof-005 d4dfcf15b600bf46f51c347e99656800d1ec201a",
+    "refs/remotes/origin/work/fiscal-dry-run-integrity-proof-005b 86dd9ad151d618b37f238620eea8c5d62ce98291",
+    "refs/remotes/origin/work/fiscal-produto-upsert-parity-004 3f8928c0d8dc7361b6282cbb2b225ae04ed8a501",
+    "refs/remotes/origin/work/fiscal-xsd-worker-cve-patch-005b 4000940364ad30fe5f38824dca3bb90eafe1a629",
+    "refs/remotes/origin/work/fiscal-xsd-worker-gha-supply-chain-005a d51279461718508d94c534e9afe27232c73f0d6b",
+    "refs/remotes/origin/work/pdv-acessorios-cadastro-projecao-002 dcec5c9854a63d90bfacbe496fa06b0ec31e9627",
+    "refs/remotes/origin/work/pdv-acessorios-contratos-001 d309c7bfd0fffb61b1ad188683fa96bc37b21ed7",
+    "refs/remotes/origin/work/pdv-acessorios-contratos-001-current-main 191141591ef22088da7adc4ddced0ae72940a662",
+    "refs/remotes/origin/work/pdv-acessorios-persistencia-server-004b 42f622b8ac0cf6901110de30e5b7d2facf3150bc",
+    "refs/remotes/origin/work/pdv-acessorios-selecao-readback-004c a8b83f768f75d0208cf167227d605f9c689756fc",
+    "refs/remotes/origin/work/pdv-acessorios-selecao-readback-004c-integrate 2e64fa8fcfae0b06e633a5aec79e49ad5ed7e35e",
+    "refs/remotes/origin/work/pdv-acessorios-seletor-modelo-cor-003 738af36e81dca403c91fd3b59c782285275f9221",
+    "refs/remotes/origin/work/pdv-pending-sync-atomicity-p0-001 6a11693478a4341a0d15ed22d57eb35e1f09b3aa",
+    "refs/remotes/origin/work/pdv-rafacell-load-crash-p0-001 5e7fbd92adef7d4271d7a2c639b848a2d37eb2f9",
+    "refs/remotes/origin/work/pdv-scan-search-autoclear-focus-005 f7dde7fefe9e6ca6ff7d372c29b970ad67a39eac",
+    "refs/remotes/origin/work/pdv-scan-unregistered-settings-007 7eed73922a3f181ac7a417ff97afc68f9b115519",
+    "refs/remotes/origin/work/pdv-stock-drift-p0-002-copy a5435a6b6528a6245f4c86d3a20c6df0dad2c3d7",
+    "refs/remotes/origin/work/pdv-stock-drift-residual-p0-002 f5980343a2cdd0faab09d216d20ca916e745f57c",
+    "refs/remotes/origin/work/pdv-stock-drift-residual-p0-002-finish 9927e03049c83dad6c3245e204dd8299d70e76d9",
+    "refs/remotes/origin/work/pdv-vendas-corrigir-itens-metadata-004a f42072ae2275aaa53402ea71a6c14ca89e92b30c",
+    "refs/remotes/origin/work/pdv-vendas-quarentena-recovery-all-p0-006a 3889f8786491fddeec93085145f1593e97ac18fa",
+    "refs/remotes/review/pr225 5c1606e73a78fc4dc411199931199483ed03bc10",
+    "refs/stash e1d44d5e8a4faf106af1cbde975d89fde70e820e"
+  ],
+  "worktrees": [
+    {
+      "path": "C:/Projetos/omni-gestao",
+      "head": "5ae661d730af827006fd10c389ddbdd4f18edc51",
+      "branch": "refs/heads/codex/db-migration-reconciliation-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao",
+        "HEAD 5ae661d730af827006fd10c389ddbdd4f18edc51",
+        "branch refs/heads/codex/db-migration-reconciliation-001"
+      ],
+      "exists": true,
+      "status": " M docs/execution-tracks/fiscal/state.json\n M docs/execution-tracks/ops-v4-fluxo-curto/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json\n M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json\n M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json\n M docs/roadmaps/ROADMAP_FINANCEIRO.md\n?? .release/\n?? .worktrees/\n?? docs/ai-execution/_evidence/CAD-R2-019-CANONICAL-BACKFILL-CLOSEOUT-001/\n?? docs/ai-execution/_evidence/OPS-V4-DATAS-UI-PROMOCAO-001/\n?? docs/ai-execution/_evidence/PROD-DATASOURCE-AUTHORITY-RECONCILIATION-002/",
+      "dirty": true,
+      "trackedWip": [
+        {
+          "path": "docs/roadmaps/ROADMAP_FINANCEIRO.md",
+          "sha256": "275c1c8ec8ad76dee030a31f7d7d04c8c78094ad45a1f05f9e3b3da437dca6d9"
+        }
+      ],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/aep-import-contador",
+      "head": "ffb279b0547defa5cfd6a585b5766cd4ce7fa644",
+      "branch": "refs/heads/chore/aep-import-contador",
+      "registration": [
+        "worktree C:/Projetos/aep-import-contador",
+        "HEAD ffb279b0547defa5cfd6a585b5766cd4ce7fa644",
+        "branch refs/heads/chore/aep-import-contador",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/contador-015-portal-externo-readonly",
+      "head": "43b1479865c89afe7780e2793a2ed847f2c7d3f9",
+      "branch": "refs/heads/goal/contador-015-portal-externo-readonly-recovery",
+      "registration": [
+        "worktree C:/Projetos/contador-015-portal-externo-readonly",
+        "HEAD 43b1479865c89afe7780e2793a2ed847f2c7d3f9",
+        "branch refs/heads/goal/contador-015-portal-externo-readonly-recovery"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.claude/worktrees/fiscal-164",
+      "head": "2e4bbcab8c5913f1998fe0bd5fe67b56d95086f6",
+      "branch": "refs/heads/goal/fiscal-020-h9h10-arming-164",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.claude/worktrees/fiscal-164",
+        "HEAD 2e4bbcab8c5913f1998fe0bd5fe67b56d95086f6",
+        "branch refs/heads/goal/fiscal-020-h9h10-arming-164"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.claude/worktrees/fiscal-165",
+      "head": "29158b2f57ee38e03e1bb587708b5115fb4814a4",
+      "branch": "refs/heads/goal/fiscal-020-h9h10-second-expired-window-containment-off-165",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.claude/worktrees/fiscal-165",
+        "HEAD 29158b2f57ee38e03e1bb587708b5115fb4814a4",
+        "branch refs/heads/goal/fiscal-020-h9h10-second-expired-window-containment-off-165"
+      ],
+      "exists": true,
+      "status": " M docs/ai-execution/GATES.md\n M docs/ai/CURRENT_STATUS.md\n M docs/execution-tracks/contador/state.json\n M docs/execution-tracks/pdv/state.json\n M lib/fiscal/provider/sefaz/wsdl/wsdl-ephemeral-execution-window.test.ts\n M lib/fiscal/provider/sefaz/wsdl/wsdl-ephemeral-execution-window.ts\n?? docs/ai-execution/_evidence/FISCAL-NFCE-CONTINGENCY-020-H9H10-SECOND-EXPIRED-WINDOW-CONTAINMENT-165.md\n?? node_modules.npx-cache/",
+      "dirty": true,
+      "trackedWip": [
+        {
+          "path": "docs/ai/CURRENT_STATUS.md",
+          "sha256": "329ca22de404c0f84092babc37b6bce0a5a8ef6a54d3057636f9a7b5d7f983c3"
+        },
+        {
+          "path": "lib/fiscal/provider/sefaz/wsdl/wsdl-ephemeral-execution-window.test.ts",
+          "sha256": "82ef78571d4df1c12a7d2f249dd0c21af42c974cf15bec7d904d4d263028fade"
+        },
+        {
+          "path": "lib/fiscal/provider/sefaz/wsdl/wsdl-ephemeral-execution-window.ts",
+          "sha256": "ae52f9855187618f1526a07c37144a1f512e47f64e16ed30691f84996db3079a"
+        }
+      ],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.claude/worktrees/fiscal-165-publish",
+      "head": "bc043736a0054f549b6578489dd00cb719a690b0",
+      "branch": "refs/heads/goal/fiscal-020-h9h10-second-expired-window-containment-off-165-publish",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.claude/worktrees/fiscal-165-publish",
+        "HEAD bc043736a0054f549b6578489dd00cb719a690b0",
+        "branch refs/heads/goal/fiscal-020-h9h10-second-expired-window-containment-off-165-publish"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.claude/worktrees/fiscal-166",
+      "head": "0ddb3911c82f77efb1dc2180e6e04d3abe61ba32",
+      "branch": "refs/heads/goal/fiscal-020-h9h10-rearm-fresh-window-166",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.claude/worktrees/fiscal-166",
+        "HEAD 0ddb3911c82f77efb1dc2180e6e04d3abe61ba32",
+        "branch refs/heads/goal/fiscal-020-h9h10-rearm-fresh-window-166"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.claude/worktrees/fiscal-168",
+      "head": "16e0c8a5d43fa8b7ae74ce53d738a80e72a37fec",
+      "branch": "refs/heads/goal/fiscal-020-h9h10-consumed-window-containment-evidence-168",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.claude/worktrees/fiscal-168",
+        "HEAD 16e0c8a5d43fa8b7ae74ce53d738a80e72a37fec",
+        "branch refs/heads/goal/fiscal-020-h9h10-consumed-window-containment-evidence-168"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.claude/worktrees/fiscal-169",
+      "head": "a9139aaa8a576e4304e62c59fa7b5863bcee25c9",
+      "branch": "refs/heads/goal/fiscal-020-nfeautorizacao4-multiop-extraction-fix-169",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.claude/worktrees/fiscal-169",
+        "HEAD a9139aaa8a576e4304e62c59fa7b5863bcee25c9",
+        "branch refs/heads/goal/fiscal-020-nfeautorizacao4-multiop-extraction-fix-169"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.qwen/worktrees/fiscal-016d-evidence",
+      "head": "6aa470a7b855ef036f78daef3dde0b2481a599d1",
+      "branch": "refs/heads/close/contador-018-main",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.qwen/worktrees/fiscal-016d-evidence",
+        "HEAD 6aa470a7b855ef036f78daef3dde0b2481a599d1",
+        "branch refs/heads/close/contador-018-main"
+      ],
+      "exists": true,
+      "status": " M lib/fiscal/tax-engine/__snapshots__/calculator.test.ts.snap",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.release/ops-v4",
+      "head": "970ed0393dd6a2fa6f9828b4105c6d9111bc6b85",
+      "branch": "refs/heads/codex/release-ops-v4-vercel",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.release/ops-v4",
+        "HEAD 970ed0393dd6a2fa6f9828b4105c6d9111bc6b85",
+        "branch refs/heads/codex/release-ops-v4-vercel"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.release/ops-v4-governance",
+      "head": "d8be306c6d507ee0af7559a75e5fbc03ad0690fb",
+      "branch": "refs/heads/codex/ops-v4-goal003-family-regularization",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.release/ops-v4-governance",
+        "HEAD d8be306c6d507ee0af7559a75e5fbc03ad0690fb",
+        "branch refs/heads/codex/ops-v4-goal003-family-regularization"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.worktrees/aep-pessoas-active-scope-refresh-001",
+      "head": "8a192acee23dc2b4e702136a3cd86c40291bddf3",
+      "branch": "refs/heads/fix/aep-pessoas-active-scope-refresh-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.worktrees/aep-pessoas-active-scope-refresh-001",
+        "HEAD 8a192acee23dc2b4e702136a3cd86c40291bddf3",
+        "branch refs/heads/fix/aep-pessoas-active-scope-refresh-001"
+      ],
+      "exists": true,
+      "status": " M docs/ai-execution/ENTRYPOINT.md\n M docs/ai-execution/EXECUTION_PROTOCOL.md\n M scripts/track.mjs\n M scripts/track.test.mjs",
+      "dirty": true,
+      "trackedWip": [
+        {
+          "path": "docs/ai-execution/ENTRYPOINT.md",
+          "sha256": "54d8b3522dc34af2ce456d2dfcdc0b8aed17df33d95c897584cbe96c43d0c59d"
+        },
+        {
+          "path": "docs/ai-execution/EXECUTION_PROTOCOL.md",
+          "sha256": "169af2eb973bc4dff8c07a7f5ab7c2c710cb969020132dda7fbbc5a36ebd1a5c"
+        },
+        {
+          "path": "scripts/track.mjs",
+          "sha256": "dec20c2e1ca2477a711e18fe0cc29ee99f3a4e88848268b9c46e87aa6ee05358"
+        },
+        {
+          "path": "scripts/track.test.mjs",
+          "sha256": "b69a196b388e0da8b91ceb773d96bcd21155e43c8af950513937db3783f6cd70"
+        }
+      ],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.worktrees/cad-r2-020-final",
+      "head": "f1ad3cc946f701266e2e4c99871c0cb21f349069",
+      "branch": "refs/heads/codex/cad-r2-020-final",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.worktrees/cad-r2-020-final",
+        "HEAD f1ad3cc946f701266e2e4c99871c0cb21f349069",
+        "branch refs/heads/codex/cad-r2-020-final"
+      ],
+      "exists": true,
+      "status": "?? docs/ai-execution/_evidence/CAD-R2-020-PRIVACY-20261015/RELEASE-20261016.md\n?? docs/ai-execution/_evidence/CAD-R2-020-PRIVACY-20261015/smoke-production-20261016.json\n?? validation-build-resumed.log\n?? validation-build-retry.log\n?? validation-build.log\n?? validation-ci.json\n?? validation-lint.log\n?? validation-pr-body.md\n?? validation-tests.log\n?? validation-tsc.log",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001",
+      "head": "93888a2c7277854d254fc970b2c5af8cf38061b0",
+      "branch": "refs/heads/codex/ops-v4-orcamento-envio-real-status-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001",
+        "HEAD 93888a2c7277854d254fc970b2c5af8cf38061b0",
+        "branch refs/heads/codex/ops-v4-orcamento-envio-real-status-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.worktrees/pdv-n5-b2-merge-pr281-001-verify",
+      "head": "17510806bdfe736f6bc8a19ec732b7fd035de69b",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.worktrees/pdv-n5-b2-merge-pr281-001-verify",
+        "HEAD 17510806bdfe736f6bc8a19ec732b7fd035de69b",
+        "detached"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.worktrees/pdv-n5-b2-pin-keymap-001",
+      "head": "91d778782a6b7712c4c9c0159e2a4063feaa7c62",
+      "branch": "refs/heads/goal/pdv-parity-n5-b2-pin-keymap-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.worktrees/pdv-n5-b2-pin-keymap-001",
+        "HEAD 91d778782a6b7712c4c9c0159e2a4063feaa7c62",
+        "branch refs/heads/goal/pdv-parity-n5-b2-pin-keymap-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/.worktrees/pessoas-001b-scope-006",
+      "head": "79ecb276b53e87e301637bfe19ba69443a141ea8",
+      "branch": "refs/heads/plan/pessoas-001b-scope-006",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao/.worktrees/pessoas-001b-scope-006",
+        "HEAD 79ecb276b53e87e301637bfe19ba69443a141ea8",
+        "branch refs/heads/plan/pessoas-001b-scope-006"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-auth-002",
+      "head": "c6b72c44e83daef75d3208ecca2bcf299cbd29b0",
+      "branch": "refs/heads/goal/localhost-dev-auth-002",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-auth-002",
+        "HEAD c6b72c44e83daef75d3208ecca2bcf299cbd29b0",
+        "branch refs/heads/goal/localhost-dev-auth-002"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-cad-r2-002-rest-ownership",
+      "head": "6907f205a5973ef0e9ab15b75b010b6d22535e7d",
+      "branch": "refs/heads/goal/cad-r2-002-rest-ownership",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-cad-r2-002-rest-ownership",
+        "HEAD 6907f205a5973ef0e9ab15b75b010b6d22535e7d",
+        "branch refs/heads/goal/cad-r2-002-rest-ownership"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-cad-r2-security-reconcile",
+      "head": "897c751d752e15a8ce6d108360d932e90d03668e",
+      "branch": "refs/heads/goal/cad-r2-security-foundation-reconcile",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-cad-r2-security-reconcile",
+        "HEAD 897c751d752e15a8ce6d108360d932e90d03668e",
+        "branch refs/heads/goal/cad-r2-security-foundation-reconcile"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-catalogo-saas-readiness-001",
+      "head": "0bf77c3457f8e5b93d3a15918412270d6a108de2",
+      "branch": "refs/heads/audit/catalogo-saas-base-readiness-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-catalogo-saas-readiness-001",
+        "HEAD 0bf77c3457f8e5b93d3a15918412270d6a108de2",
+        "branch refs/heads/audit/catalogo-saas-base-readiness-001",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-contador-010a-audit",
+      "head": "ecc494409ef857391427baf8ce73f0784eff59ce",
+      "branch": "refs/heads/audit/contador-010a-storage-acl",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-contador-010a-audit",
+        "HEAD ecc494409ef857391427baf8ce73f0784eff59ce",
+        "branch refs/heads/audit/contador-010a-storage-acl"
+      ],
+      "exists": true,
+      "status": "?? docs/audits/CONTADOR_HUB_DOCUMENTOS_PREFLIGHT_010A_AUDIT.md",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-contador-019",
+      "head": "ca234e5842995f9882a1e1f57ff3a07852330de2",
+      "branch": "refs/heads/goal/contador-019-production-hardening",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-contador-019",
+        "HEAD ca234e5842995f9882a1e1f57ff3a07852330de2",
+        "branch refs/heads/goal/contador-019-production-hardening",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-fiscal-005b-xsd-cve-patch",
+      "head": "4000940364ad30fe5f38824dca3bb90eafe1a629",
+      "branch": "refs/heads/work/fiscal-xsd-worker-cve-patch-005b",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-fiscal-005b-xsd-cve-patch",
+        "HEAD 4000940364ad30fe5f38824dca3bb90eafe1a629",
+        "branch refs/heads/work/fiscal-xsd-worker-cve-patch-005b"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-fiscal-018-cancellation",
+      "head": "c64bdf46519d5091202d1ad0563aeb67a7304842",
+      "branch": "refs/heads/goal/fiscal-018-nfce-cancellation",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-fiscal-018-cancellation",
+        "HEAD c64bdf46519d5091202d1ad0563aeb67a7304842",
+        "branch refs/heads/goal/fiscal-018-nfce-cancellation",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-fiscal-019-inutilizacao",
+      "head": "f15b71a7ccfe7c8f87085e53ba1be9642a1b4e16",
+      "branch": "refs/heads/goal/fiscal-019-nfce-inutilizacao",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-fiscal-019-inutilizacao",
+        "HEAD f15b71a7ccfe7c8f87085e53ba1be9642a1b4e16",
+        "branch refs/heads/goal/fiscal-019-nfce-inutilizacao",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-fiscal-019-reconcile-117",
+      "head": "2266a5f2f19f04f8f87a5c9afbaad295da023177",
+      "branch": "refs/heads/goal/fiscal-019-reconcile-current-main-117",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-fiscal-019-reconcile-117",
+        "HEAD 2266a5f2f19f04f8f87a5c9afbaad295da023177",
+        "branch refs/heads/goal/fiscal-019-reconcile-current-main-117",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-fiscal-022-pilot-homologation-activation",
+      "head": "a004c3b33601b09bac3fd5c232dccc86aa2a6120",
+      "branch": "refs/heads/goal/fiscal-022-pilot-homologation-activation",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-fiscal-022-pilot-homologation-activation",
+        "HEAD a004c3b33601b09bac3fd5c232dccc86aa2a6120",
+        "branch refs/heads/goal/fiscal-022-pilot-homologation-activation"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-fiscal-022B-pilot-homologation-unblock",
+      "head": "81db1fda4957904ed6e73d33381db73123df0c77",
+      "branch": "refs/heads/goal/fiscal-022B-pilot-homologation-unblock",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-fiscal-022B-pilot-homologation-unblock",
+        "HEAD 81db1fda4957904ed6e73d33381db73123df0c77",
+        "branch refs/heads/goal/fiscal-022B-pilot-homologation-unblock"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-fiscal-022C-pilot-emission-authorization-handoff",
+      "head": "97b4d166c6b343235c87a42dae6a5db38e11503b",
+      "branch": "refs/heads/goal/fiscal-022C-pilot-emission-authorization-handoff",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-fiscal-022C-pilot-emission-authorization-handoff",
+        "HEAD 97b4d166c6b343235c87a42dae6a5db38e11503b",
+        "branch refs/heads/goal/fiscal-022C-pilot-emission-authorization-handoff"
+      ],
+      "exists": true,
+      "status": "?? docs/execution-tracks/fiscal/goals/FISCAL-PILOT-EMISSION-AUTHORIZATION-HANDOFF-022C.md",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-fiscal-025b-archive-001",
+      "head": "5bd39a94462ff6c70ecd3535781b9cfc0a710125",
+      "branch": "refs/heads/goal/fiscal-025b-archive-foundation-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-fiscal-025b-archive-001",
+        "HEAD 5bd39a94462ff6c70ecd3535781b9cfc0a710125",
+        "branch refs/heads/goal/fiscal-025b-archive-foundation-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-datas-retroativas-001",
+      "head": "2573ae829997b605bdaea6e104dc95b61e8070cb",
+      "branch": "refs/heads/goal/ops-datas-retroativas-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-datas-retroativas-001",
+        "HEAD 2573ae829997b605bdaea6e104dc95b61e8070cb",
+        "branch refs/heads/goal/ops-datas-retroativas-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-recebimento-misto-p1-hardening-001",
+      "head": "5a66a3419cbe1a5c5d46fa6188ac8fb86c16c0b8",
+      "branch": "refs/heads/goal/ops-recebimento-misto-p1-hardening-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-recebimento-misto-p1-hardening-001",
+        "HEAD 5a66a3419cbe1a5c5d46fa6188ac8fb86c16c0b8",
+        "branch refs/heads/goal/ops-recebimento-misto-p1-hardening-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v3-recebimento-misto-001",
+      "head": "257e843df5e6ee82e4e01dab5ac13bffc139e1f7",
+      "branch": "refs/heads/goal/ops-v3-recebimento-misto-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v3-recebimento-misto-001",
+        "HEAD 257e843df5e6ee82e4e01dab5ac13bffc139e1f7",
+        "branch refs/heads/goal/ops-v3-recebimento-misto-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v3-recebimento-misto-001-plan",
+      "head": "0df8a46b68c9a6e8b725c4b11aa2975762d7bc1f",
+      "branch": "refs/heads/plan/ops-v3-recebimento-misto-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v3-recebimento-misto-001-plan",
+        "HEAD 0df8a46b68c9a6e8b725c4b11aa2975762d7bc1f",
+        "branch refs/heads/plan/ops-v3-recebimento-misto-001"
+      ],
+      "exists": true,
+      "status": " M docs/ai-execution/GATES.md\n M docs/ai-execution/protocol.json\n M docs/execution-tracks/REGISTRY.md\n?? docs/execution-tracks/ops-v3-recebimento-misto/",
+      "dirty": true,
+      "trackedWip": [
+        {
+          "path": "docs/ai-execution/protocol.json",
+          "sha256": "f35dc94fd4cb301765063364942a05974b6020687dc48e1b62cbc2d153974ce4"
+        },
+        {
+          "path": "docs/execution-tracks/REGISTRY.md",
+          "sha256": "ea29aad760557f0c7cbfeae0cedb51cd2da2268e9831a64c409ebe3742523bbc"
+        }
+      ],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-datas-ui-001",
+      "head": "183898ee9fa34f0ae6e8ee4feebdd52eef74b301",
+      "branch": "refs/heads/experiment/ops-v4-editar-os-datas-ui-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-datas-ui-001",
+        "HEAD 183898ee9fa34f0ae6e8ee4feebdd52eef74b301",
+        "branch refs/heads/experiment/ops-v4-editar-os-datas-ui-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-datas-ui-promocao-001",
+      "head": "3b87ee8aef643ff5055377bb5c0f4223a235ccf5",
+      "branch": "refs/heads/codex/ops-v4-datas-ui-promocao-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-datas-ui-promocao-001",
+        "HEAD 3b87ee8aef643ff5055377bb5c0f4223a235ccf5",
+        "branch refs/heads/codex/ops-v4-datas-ui-promocao-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-001",
+      "head": "d69d0c1bde9aa19bd0a3a1c1ca70a58f56df3d4a",
+      "branch": "refs/heads/goal/ops-v4-fluxo-curto-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-001",
+        "HEAD d69d0c1bde9aa19bd0a3a1c1ca70a58f56df3d4a",
+        "branch refs/heads/goal/ops-v4-fluxo-curto-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-002",
+      "head": "c257d7da455b68b299bc5cf55ad6400115214bcc",
+      "branch": "refs/heads/goal/ops-v4-fluxo-curto-002",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-002",
+        "HEAD c257d7da455b68b299bc5cf55ad6400115214bcc",
+        "branch refs/heads/goal/ops-v4-fluxo-curto-002"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-003",
+      "head": "4b422e477e274269f0cc9b96e4f84330d32993ed",
+      "branch": "refs/heads/goal/ops-v4-fluxo-curto-003",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-003",
+        "HEAD 4b422e477e274269f0cc9b96e4f84330d32993ed",
+        "branch refs/heads/goal/ops-v4-fluxo-curto-003"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-004",
+      "head": "8123fbfa11771a7de3da5bbc5ce73a579670e28d",
+      "branch": "refs/heads/goal/ops-v4-fluxo-curto-004",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-004",
+        "HEAD 8123fbfa11771a7de3da5bbc5ce73a579670e28d",
+        "branch refs/heads/goal/ops-v4-fluxo-curto-004"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005",
+      "head": "110df8c78bbd46d0c9f39bb4699b66b801fcb992",
+      "branch": "refs/heads/goal/ops-v4-fluxo-curto-005",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005",
+        "HEAD 110df8c78bbd46d0c9f39bb4699b66b801fcb992",
+        "branch refs/heads/goal/ops-v4-fluxo-curto-005"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005-base",
+      "head": "ca245ef6f3713e22dff23465f747649b1d5510c2",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005-base",
+        "HEAD ca245ef6f3713e22dff23465f747649b1d5510c2",
+        "detached"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005-gov",
+      "head": "9d0442b79be348d4fb24d1ce60f0b0e57a6e0c3c",
+      "branch": "refs/heads/gov/ops-v4-fluxo-curto-005-block-rev11",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005-gov",
+        "HEAD 9d0442b79be348d4fb24d1ce60f0b0e57a6e0c3c",
+        "branch refs/heads/gov/ops-v4-fluxo-curto-005-block-rev11"
+      ],
+      "exists": true,
+      "status": " M docs/execution-tracks/contador/state.json\n M docs/execution-tracks/fiscal/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json\n M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json\n M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json\n M docs/execution-tracks/pdv/state.json\n M docs/execution-tracks/pessoas/state.json",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005-plan",
+      "head": "324fb21c6892d065fa78fe1d08a0320c35a7c331",
+      "branch": "refs/heads/plan/ops-v4-fluxo-curto-005",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005-plan",
+        "HEAD 324fb21c6892d065fa78fe1d08a0320c35a7c331",
+        "branch refs/heads/plan/ops-v4-fluxo-curto-005"
+      ],
+      "exists": true,
+      "status": " M docs/ai-execution/GATES.md\n M docs/execution-tracks/contador/state.json\n M docs/execution-tracks/fiscal/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json\n M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json\n M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json\n M docs/execution-tracks/pdv/state.json\n M docs/execution-tracks/pessoas/state.json",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005-plan10",
+      "head": "188222f5c6f487062f306aa94c54a0732d11728a",
+      "branch": "refs/heads/plan/ops-v4-fluxo-curto-005-rev10",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005-plan10",
+        "HEAD 188222f5c6f487062f306aa94c54a0732d11728a",
+        "branch refs/heads/plan/ops-v4-fluxo-curto-005-rev10"
+      ],
+      "exists": true,
+      "status": " M docs/ai-execution/GATES.md\n M docs/execution-tracks/REGISTRY.md\n M docs/execution-tracks/contador/state.json\n M docs/execution-tracks/fiscal/state.json\n M docs/execution-tracks/ops-v4-fluxo-curto/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json\n M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json\n M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json\n M docs/execution-tracks/pdv/state.json\n M docs/execution-tracks/pessoas/state.json",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006",
+      "head": "d433a3924ccaca079ae97ccf3d88619e49071e08",
+      "branch": "refs/heads/goal/ops-v4-fluxo-curto-006",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006",
+        "HEAD d433a3924ccaca079ae97ccf3d88619e49071e08",
+        "branch refs/heads/goal/ops-v4-fluxo-curto-006"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006-gov13",
+      "head": "8d73a18cfca9f33c18ccc8c59b087c0a98f11297",
+      "branch": "refs/heads/gov/ops-v4-fluxo-curto-006-block-rev13",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006-gov13",
+        "HEAD 8d73a18cfca9f33c18ccc8c59b087c0a98f11297",
+        "branch refs/heads/gov/ops-v4-fluxo-curto-006-block-rev13"
+      ],
+      "exists": true,
+      "status": " M docs/ai-execution/GATES.md\n M docs/execution-tracks/contador/state.json\n M docs/execution-tracks/fiscal/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json\n M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json\n M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json\n M docs/execution-tracks/pdv/state.json\n M docs/execution-tracks/pessoas/state.json",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006-plan",
+      "head": "2163038ce761538f3a00d7e13f5d4b6c43422fac",
+      "branch": "refs/heads/plan/ops-v4-fluxo-curto-006",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006-plan",
+        "HEAD 2163038ce761538f3a00d7e13f5d4b6c43422fac",
+        "branch refs/heads/plan/ops-v4-fluxo-curto-006"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007",
+      "head": "da4cd7629399f7e6e279217f7bf0ec0d7d877ca3",
+      "branch": "refs/heads/goal/ops-v4-fluxo-curto-007",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007",
+        "HEAD da4cd7629399f7e6e279217f7bf0ec0d7d877ca3",
+        "branch refs/heads/goal/ops-v4-fluxo-curto-007"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007-gov15",
+      "head": "10b3d5b62cd1f3daafd4bf06755af38c88906c8f",
+      "branch": "refs/heads/gov/ops-v4-fluxo-curto-007-block-rev15",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007-gov15",
+        "HEAD 10b3d5b62cd1f3daafd4bf06755af38c88906c8f",
+        "branch refs/heads/gov/ops-v4-fluxo-curto-007-block-rev15"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007-gov16",
+      "head": "f2861aef1fe24ef4502cafb9dda5733ff2ba4530",
+      "branch": "refs/heads/gov/ops-v4-fluxo-curto-007-block-rev16",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007-gov16",
+        "HEAD f2861aef1fe24ef4502cafb9dda5733ff2ba4530",
+        "branch refs/heads/gov/ops-v4-fluxo-curto-007-block-rev16"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007-plan",
+      "head": "1d85f3710b7d47c8ec09f08d12a8eff6e89613a3",
+      "branch": "refs/heads/plan/ops-v4-fluxo-curto-007",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007-plan",
+        "HEAD 1d85f3710b7d47c8ec09f08d12a8eff6e89613a3",
+        "branch refs/heads/plan/ops-v4-fluxo-curto-007"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-001",
+      "head": "3f2f97ceb35a2cd8e952e3c443c10979ca0c7bf2",
+      "branch": "refs/heads/goal/ops-v4-financeiro-retirada-garantia-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-001",
+        "HEAD 3f2f97ceb35a2cd8e952e3c443c10979ca0c7bf2",
+        "branch refs/heads/goal/ops-v4-financeiro-retirada-garantia-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-002",
+      "head": "9dbae6d9744d0539ad07b59fbd4bdc97c5351d2a",
+      "branch": "refs/heads/goal/ops-v4-financeiro-retirada-garantia-002",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-002",
+        "HEAD 9dbae6d9744d0539ad07b59fbd4bdc97c5351d2a",
+        "branch refs/heads/goal/ops-v4-financeiro-retirada-garantia-002"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-002-base",
+      "head": "98ef7172a915713ad177207112f6aff3db9801a1",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-002-base",
+        "HEAD 98ef7172a915713ad177207112f6aff3db9801a1",
+        "detached"
+      ],
+      "exists": true,
+      "status": " M lib/fiscal/tax-engine/__snapshots__/calculator.test.ts.snap",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-002-gov7",
+      "head": "17acbed50afc98cd8a3c22943df5e4da1ecea18b",
+      "branch": "refs/heads/gov/ops-v4-frg-002-block-rev7",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-002-gov7",
+        "HEAD 17acbed50afc98cd8a3c22943df5e4da1ecea18b",
+        "branch refs/heads/gov/ops-v4-frg-002-block-rev7"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-002-gov8",
+      "head": "4b1691544fb7048140d07f660a3fe26bdc13ca46",
+      "branch": "refs/heads/codex/ops-v4-frg-002-gov-rev8",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-002-gov8",
+        "HEAD 4b1691544fb7048140d07f660a3fe26bdc13ca46",
+        "branch refs/heads/codex/ops-v4-frg-002-gov-rev8"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-002-rev8-red",
+      "head": "cd69780c81b3bc159cd5f0810daabc98aae06a34",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-002-rev8-red",
+        "HEAD cd69780c81b3bc159cd5f0810daabc98aae06a34",
+        "detached"
+      ],
+      "exists": true,
+      "status": " M test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts\n?? test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx",
+      "dirty": true,
+      "trackedWip": [
+        {
+          "path": "test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts",
+          "sha256": "2978b75d32ea4e215c0a728765b1dfcc0e56e3f02b9afc1138c7c72563461c68"
+        }
+      ],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-003",
+      "head": "2b0ca49bb696cc9eaf1b143ebac25621cd21e384",
+      "branch": "refs/heads/goal/ops-v4-financeiro-retirada-garantia-003",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-003",
+        "HEAD 2b0ca49bb696cc9eaf1b143ebac25621cd21e384",
+        "branch refs/heads/goal/ops-v4-financeiro-retirada-garantia-003"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-gov3",
+      "head": "f44eed6a7d48bb210e1e8ec219544fd3db168b96",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-gov3",
+        "HEAD f44eed6a7d48bb210e1e8ec219544fd3db168b96",
+        "detached"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-plan",
+      "head": "746e243edf1ba070eaa8049f08ff4df47699d206",
+      "branch": "refs/heads/plan/ops-v4-financeiro-retirada-garantia",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-plan",
+        "HEAD 746e243edf1ba070eaa8049f08ff4df47699d206",
+        "branch refs/heads/plan/ops-v4-financeiro-retirada-garantia"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-plan6",
+      "head": "7a7b4b5098fe471a0c25c538dbbcb756e82e0704",
+      "branch": "refs/heads/plan/ops-v4-financeiro-retirada-garantia-002-rev6",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-frg-plan6",
+        "HEAD 7a7b4b5098fe471a0c25c538dbbcb756e82e0704",
+        "branch refs/heads/plan/ops-v4-financeiro-retirada-garantia-002-rev6"
+      ],
+      "exists": true,
+      "status": " M docs/ai-execution/GATES.md\n M docs/execution-tracks/REGISTRY.md\n M docs/execution-tracks/contador/state.json\n M docs/execution-tracks/fiscal/state.json\n M docs/execution-tracks/ops-v4-financeiro-retirada-garantia/state.json\n M docs/execution-tracks/ops-v4-fluxo-curto/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json\n M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json\n M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json\n M docs/execution-tracks/pdv/state.json\n M docs/execution-tracks/pessoas/state.json",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-recebimento-misto-paridade-001",
+      "head": "79da783c4594c70df23f44c4be1bf99ad120727a",
+      "branch": "refs/heads/goal/ops-v4-recebimento-misto-paridade-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-ops-v4-recebimento-misto-paridade-001",
+        "HEAD 79da783c4594c70df23f44c4be1bf99ad120727a",
+        "branch refs/heads/goal/ops-v4-recebimento-misto-paridade-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n1",
+      "head": "a9cfd94124861db2d72a4db6cb1a0b125989ae78",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pdv-n1",
+        "HEAD a9cfd94124861db2d72a4db6cb1a0b125989ae78",
+        "detached"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n5b1-core-gaps",
+      "head": "43694cbe386e0afec961ebd1a1ceb050c7d971f2",
+      "branch": "refs/heads/goal/pdv-parity-n5-b1-core-gaps",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pdv-n5b1-core-gaps",
+        "HEAD 43694cbe386e0afec961ebd1a1ceb050c7d971f2",
+        "branch refs/heads/goal/pdv-parity-n5-b1-core-gaps"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n5b1-core-gaps-r2",
+      "head": "ebeab29f9f5b54cc7f7e9b1422ac31fe5a20c0ca",
+      "branch": "refs/heads/goal/pdv-parity-n5-b1-core-gaps-r2",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pdv-n5b1-core-gaps-r2",
+        "HEAD ebeab29f9f5b54cc7f7e9b1422ac31fe5a20c0ca",
+        "branch refs/heads/goal/pdv-parity-n5-b1-core-gaps-r2"
+      ],
+      "exists": true,
+      "status": " M lib/fiscal/tax-engine/__snapshots__/calculator.test.ts.snap",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n5b1-current-main-correction-r4",
+      "head": "ff78a3938bd2dfc81bb495a3f8bb6332ed182e8c",
+      "branch": "refs/heads/goal/pdv-parity-n5-b1-current-main-correction-r4",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pdv-n5b1-current-main-correction-r4",
+        "HEAD ff78a3938bd2dfc81bb495a3f8bb6332ed182e8c",
+        "branch refs/heads/goal/pdv-parity-n5-b1-current-main-correction-r4"
+      ],
+      "exists": true,
+      "status": " M docs/execution-tracks/REGISTRY.md\n M docs/execution-tracks/ops-v4-financeiro-retirada-garantia/state.json\n M docs/execution-tracks/ops-v4-fluxo-curto/state.json\n M docs/execution-tracks/pessoas/state.json",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n5b1-production-smoke-004",
+      "head": "ef98f81aa1ad95e6a2381f21b4ccb737cc7f0048",
+      "branch": "refs/heads/goal/pdv-n5b1-production-smoke-closeout-004",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pdv-n5b1-production-smoke-004",
+        "HEAD ef98f81aa1ad95e6a2381f21b4ccb737cc7f0048",
+        "branch refs/heads/goal/pdv-n5b1-production-smoke-closeout-004"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-print-agent-003a",
+      "head": "12fc7bce1e48f20954e7da9ec0061cfa06b70edb",
+      "branch": "refs/heads/goal/pdv-print-agent-local-003a",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pdv-print-agent-003a",
+        "HEAD 12fc7bce1e48f20954e7da9ec0061cfa06b70edb",
+        "branch refs/heads/goal/pdv-print-agent-local-003a"
+      ],
+      "exists": true,
+      "status": "?? docs/pdv/PDV_PRINT_AGENT_LOCAL_003A.md\n?? docs/pdv/PDV_PRINT_AGENT_RUNTIME_PERSISTENTE_003A2.md\n?? tools/omni-print-agent/",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-recebimento-multititulo-001",
+      "head": "9978e30061d66285cc540bfd508e147a515a1fd1",
+      "branch": "refs/heads/design/pdv-recebimento-multititulo-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pdv-recebimento-multititulo-001",
+        "HEAD 9978e30061d66285cc540bfd508e147a515a1fd1",
+        "branch refs/heads/design/pdv-recebimento-multititulo-001"
+      ],
+      "exists": true,
+      "status": "?? docs/audits/AUDITORIA_PDV_RECEBIMENTO_MULTITITULO_DESIGN_001.md",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pessoas-001b-frontend",
+      "head": "25b5fda2612b35b6daccd2103fb69060f5107f73",
+      "branch": "refs/heads/goal/pessoas-001b-frontend",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pessoas-001b-frontend",
+        "HEAD 25b5fda2612b35b6daccd2103fb69060f5107f73",
+        "branch refs/heads/goal/pessoas-001b-frontend"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pessoas-001b-recovery-001",
+      "head": "5eac8be5820f0d9a9ef0374e52bf1603112f78ca",
+      "branch": "refs/heads/goal/pessoas-001b-recovery-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pessoas-001b-recovery-001",
+        "HEAD 5eac8be5820f0d9a9ef0374e52bf1603112f78ca",
+        "branch refs/heads/goal/pessoas-001b-recovery-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pessoas-hardening-p2-pre-001b",
+      "head": "53250ef52c4401bdc2e0de22aab12b1f13222117",
+      "branch": "refs/heads/goal/pessoas-hardening-p2-pre-001b-001",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-pessoas-hardening-p2-pre-001b",
+        "HEAD 53250ef52c4401bdc2e0de22aab12b1f13222117",
+        "branch refs/heads/goal/pessoas-hardening-p2-pre-001b-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-vercel-production-deploy",
+      "head": "8166162f69ff9049963f8d1b4a9daba919d93342",
+      "branch": "refs/heads/deploy/current-main-production",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-vercel-production-deploy",
+        "HEAD 8166162f69ff9049963f8d1b4a9daba919d93342",
+        "branch refs/heads/deploy/current-main-production"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-wt-fiscal-017-wsdl-prod-030",
+      "head": "bd7fa04587daad24df8a365f4ca4d597295fb78a",
+      "branch": "refs/heads/goal/fiscal-017-wsdl-production-only-boundary-030",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-wt-fiscal-017-wsdl-prod-030",
+        "HEAD bd7fa04587daad24df8a365f4ca4d597295fb78a",
+        "branch refs/heads/goal/fiscal-017-wsdl-production-only-boundary-030",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-wt-fiscal-034",
+      "head": "03ef03a810499d75b6fd2f290b255e6993f7958f",
+      "branch": "refs/heads/fiscal/h9-h10-window-20260815-1200z",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-wt-fiscal-034",
+        "HEAD 03ef03a810499d75b6fd2f290b255e6993f7958f",
+        "branch refs/heads/fiscal/h9-h10-window-20260815-1200z"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-wt-fiscal-h9h10-101",
+      "head": "2f816b1778bcb36cd4ed98d7ea24b0feccd75dad",
+      "branch": "refs/heads/codex/fiscal-017-h9-h10-rematerialization-101",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-wt-fiscal-h9h10-101",
+        "HEAD 2f816b1778bcb36cd4ed98d7ea24b0feccd75dad",
+        "branch refs/heads/codex/fiscal-017-h9-h10-rematerialization-101",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-wt-fiscal-h9h10-103",
+      "head": "b9fc7dc56aa25c326bfce7a1889e0081382a3437",
+      "branch": "refs/heads/codex/fiscal-017-h9-h10-anticipate-103",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-wt-fiscal-h9h10-103",
+        "HEAD b9fc7dc56aa25c326bfce7a1889e0081382a3437",
+        "branch refs/heads/codex/fiscal-017-h9-h10-anticipate-103",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-wt-fiscal-h9h10-window",
+      "head": "13bc06312f99b9c201b6551ca9d6a59146758cbd",
+      "branch": "refs/heads/fiscal/h9-h10-window-20260814-2000z",
+      "registration": [
+        "worktree C:/Projetos/omni-gestao-wt-fiscal-h9h10-window",
+        "HEAD 13bc06312f99b9c201b6551ca9d6a59146758cbd",
+        "branch refs/heads/fiscal/h9-h10-window-20260814-2000z",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/Projetos/work/pdv-rafacell-load-crash-p0-001",
+      "head": "5e7fbd92adef7d4271d7a2c639b848a2d37eb2f9",
+      "branch": "refs/heads/work/pdv-rafacell-load-crash-p0-001",
+      "registration": [
+        "worktree C:/Projetos/work/pdv-rafacell-load-crash-p0-001",
+        "HEAD 5e7fbd92adef7d4271d7a2c639b848a2d37eb2f9",
+        "branch refs/heads/work/pdv-rafacell-load-crash-p0-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/work/pdv-scan-inline-feedback-autofocus-006",
+      "head": "70afca2a465121cd7b8d56c72b4771fdceb540b6",
+      "branch": "refs/heads/goal/pdv-scan-inline-feedback-autofocus-006",
+      "registration": [
+        "worktree C:/Projetos/work/pdv-scan-inline-feedback-autofocus-006",
+        "HEAD 70afca2a465121cd7b8d56c72b4771fdceb540b6",
+        "branch refs/heads/goal/pdv-scan-inline-feedback-autofocus-006"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/work/pdv-stock-drift-residual-p0-002",
+      "head": "a5435a6b6528a6245f4c86d3a20c6df0dad2c3d7",
+      "branch": "refs/heads/work/pdv-stock-drift-p0-002-copy",
+      "registration": [
+        "worktree C:/Projetos/work/pdv-stock-drift-residual-p0-002",
+        "HEAD a5435a6b6528a6245f4c86d3a20c6df0dad2c3d7",
+        "branch refs/heads/work/pdv-stock-drift-p0-002-copy"
+      ],
+      "exists": true,
+      "status": "M  next-env.d.ts",
+      "dirty": true,
+      "trackedWip": [
+        {
+          "path": "next-env.d.ts",
+          "sha256": "083e23c4c5e7761db151134ea1ef7896120c86c5888cdc8a861f534f7e86d6fd"
+        }
+      ],
+      "readOk": true
+    },
+    {
+      "path": "C:/Projetos/work/pdv-stock-drift-residual-p0-002-finish",
+      "head": "9927e03049c83dad6c3245e204dd8299d70e76d9",
+      "branch": "refs/heads/work/pdv-stock-drift-residual-p0-002-finish",
+      "registration": [
+        "worktree C:/Projetos/work/pdv-stock-drift-residual-p0-002-finish",
+        "HEAD 9927e03049c83dad6c3245e204dd8299d70e76d9",
+        "branch refs/heads/work/pdv-stock-drift-residual-p0-002-finish"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/tmp/omni-gestao-cadastros-import-review-corrections",
+      "head": "efef2d898f1a68c59802945542376d95c6f9dd27",
+      "branch": "refs/heads/goal/cadastros-importacao-produtos-review-hardening-corrections-001",
+      "registration": [
+        "worktree C:/tmp/omni-gestao-cadastros-import-review-corrections",
+        "HEAD efef2d898f1a68c59802945542376d95c6f9dd27",
+        "branch refs/heads/goal/cadastros-importacao-produtos-review-hardening-corrections-001",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/tmp/omni-gestao-fiscal-016d-c1-envelope-backstop",
+      "head": "101b8d2910cb0dc131603a1c44ffe29212052df1",
+      "branch": "refs/heads/fiscal/goal-016d-c1-envelope-backstop",
+      "registration": [
+        "worktree C:/tmp/omni-gestao-fiscal-016d-c1-envelope-backstop",
+        "HEAD 101b8d2910cb0dc131603a1c44ffe29212052df1",
+        "branch refs/heads/fiscal/goal-016d-c1-envelope-backstop",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/tmp/omni-gestao-pdv-caixa-session-recovery-readiness-001",
+      "head": "44243e316d751886ec040b800e2ab65a8f7d78b1",
+      "branch": "refs/heads/audit/pdv-caixa-session-recovery-cart-draft-readiness-001",
+      "registration": [
+        "worktree C:/tmp/omni-gestao-pdv-caixa-session-recovery-readiness-001",
+        "HEAD 44243e316d751886ec040b800e2ab65a8f7d78b1",
+        "branch refs/heads/audit/pdv-caixa-session-recovery-cart-draft-readiness-001",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/tmp/omni-gestao-pdv-caixa-session-recovery-split-002a",
+      "head": "0e355d735a950c7ac5385316aee83f9c11d063ef",
+      "branch": "refs/heads/goal/pdv-caixa-session-recovery-split-fix-002a",
+      "registration": [
+        "worktree C:/tmp/omni-gestao-pdv-caixa-session-recovery-split-002a",
+        "HEAD 0e355d735a950c7ac5385316aee83f9c11d063ef",
+        "branch refs/heads/goal/pdv-caixa-session-recovery-split-fix-002a",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/tmp/omni-gestao-pin-containment-smoke-006b",
+      "head": "593a1fdf45dfe6e4befc9be9a9483fda8a400649",
+      "branch": "refs/heads/goal/pin-containment-candidate-smoke-006b",
+      "registration": [
+        "worktree C:/tmp/omni-gestao-pin-containment-smoke-006b",
+        "HEAD 593a1fdf45dfe6e4befc9be9a9483fda8a400649",
+        "branch refs/heads/goal/pin-containment-candidate-smoke-006b",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/tmp/omni-gestao-pin-independent-review-002f",
+      "head": "64e7bd0b49ec242697f0fb4af846ae7d31f9528b",
+      "registration": [
+        "worktree C:/tmp/omni-gestao-pin-independent-review-002f",
+        "HEAD 64e7bd0b49ec242697f0fb4af846ae7d31f9528b",
+        "detached",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/tmp/omni-gestao-plat-auth-pin-containment-001a-current-main",
+      "head": "3452b8a1124585896dcc9e9da13426a453452b60",
+      "branch": "refs/heads/fix/plat-auth-pin-containment-001a-current-main",
+      "registration": [
+        "worktree C:/tmp/omni-gestao-plat-auth-pin-containment-001a-current-main",
+        "HEAD 3452b8a1124585896dcc9e9da13426a453452b60",
+        "branch refs/heads/fix/plat-auth-pin-containment-001a-current-main",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/tmp/omni-gestao-plat-auth-pin-containment-r1bis-current-main",
+      "head": "64e7bd0b49ec242697f0fb4af846ae7d31f9528b",
+      "branch": "refs/heads/fix/plat-auth-pin-containment-r1bis-current-main",
+      "registration": [
+        "worktree C:/tmp/omni-gestao-plat-auth-pin-containment-r1bis-current-main",
+        "HEAD 64e7bd0b49ec242697f0fb4af846ae7d31f9528b",
+        "branch refs/heads/fix/plat-auth-pin-containment-r1bis-current-main",
+        "prunable gitdir file points to non-existent location"
+      ],
+      "exists": false
+    },
+    {
+      "path": "C:/tmp/publish-ops-v4-multi-servicos-ui-003",
+      "head": "29d7a8ddab02ec4c9b29187556de10de9d3ebae2",
+      "branch": "refs/heads/publish/ops-v4-multi-servicos-ui-003",
+      "registration": [
+        "worktree C:/tmp/publish-ops-v4-multi-servicos-ui-003",
+        "HEAD 29d7a8ddab02ec4c9b29187556de10de9d3ebae2",
+        "branch refs/heads/publish/ops-v4-multi-servicos-ui-003"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/07/12/019f5472-7aad-7931-910c-b069f19dace2/pdv-modal-fix-003a",
+      "head": "e3e35b3c709f326829618a9a6cc83411b027528e",
+      "branch": "refs/heads/codex/pdv-acessorios-modal-fechar-classic-rapido-003a",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/07/12/019f5472-7aad-7931-910c-b069f19dace2/pdv-modal-fix-003a",
+        "HEAD e3e35b3c709f326829618a9a6cc83411b027528e",
+        "branch refs/heads/codex/pdv-acessorios-modal-fechar-classic-rapido-003a"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/09/10/01a0889d-4d92-7b30-856e-59dd3b2615c6/ops-runtime-004b",
+      "head": "c6b72c44e83daef75d3208ecca2bcf299cbd29b0",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/09/10/01a0889d-4d92-7b30-856e-59dd3b2615c6/ops-runtime-004b",
+        "HEAD c6b72c44e83daef75d3208ecca2bcf299cbd29b0",
+        "detached"
+      ],
+      "exists": true,
+      "status": " M app/actions/operacoes.ts\n M components/operacoes-v4-preview/os-adapter.ts\n M components/operacoes-v4-preview/parts/NovaOSModal.tsx\n M components/operacoes-v4-preview/parts/atendimento/ServicoCatalogLookup.tsx\n M components/operacoes-v4-preview/use-servicos-v4.ts\n M components/operacoes/lovable/types/os.ts\n M lib/operacoes-v3/nova-os-actions.ts\n M lib/operacoes-v3/nova-os-model.ts\n M lib/operacoes-v4/nova-os-draft-from-form.ts\n M lib/operacoes/services/hydration-service.ts\n M lib/operacoes/services/orcamento-builder.ts\n M next-env.d.ts\n?? lib/operacoes-v4/nova-os-multi-servicos-contract.test.ts\n?? lib/operacoes-v4/servicos-autorizados-form.test.ts\n?? lib/operacoes-v4/servicos-autorizados-form.ts",
+      "dirty": true,
+      "trackedWip": [
+        {
+          "path": "app/actions/operacoes.ts",
+          "sha256": "7f87a36c4e4fb938e279f07128759a94fcbd858742a861af45f152fb60db2e7e"
+        },
+        {
+          "path": "components/operacoes-v4-preview/os-adapter.ts",
+          "sha256": "283821405fdba5b6af58bc4eef1037919bffe379aef74bd663a89cc8cf4ee230"
+        },
+        {
+          "path": "components/operacoes-v4-preview/parts/NovaOSModal.tsx",
+          "sha256": "4617f9ac51fe5d5ff61853b64092ff92d8bf10fbcc21301fc821b3aabd510a65"
+        },
+        {
+          "path": "components/operacoes-v4-preview/parts/atendimento/ServicoCatalogLookup.tsx",
+          "sha256": "20cf4ffb105bc6e3eaf27b3f60ebeea624a7630ffdf1b681c689cd689d95a23e"
+        },
+        {
+          "path": "components/operacoes-v4-preview/use-servicos-v4.ts",
+          "sha256": "cfa4c9e73d2a57e6de03962087546fa51972bbe7ed2c80639ba509884b4bf126"
+        },
+        {
+          "path": "components/operacoes/lovable/types/os.ts",
+          "sha256": "a5ae2abc56388f2d33b682ca7a31097f58dfff596016dc89702236eb8eeab5ed"
+        },
+        {
+          "path": "lib/operacoes-v3/nova-os-actions.ts",
+          "sha256": "3ed1834defa0da4615c08386a533e1084e1e2bcd0fb427c1c632a22bd3aae6f4"
+        },
+        {
+          "path": "lib/operacoes-v3/nova-os-model.ts",
+          "sha256": "91418099f0555e6afacf65fe2b15dd2de292b0776b67175a3f6503e40574812a"
+        },
+        {
+          "path": "lib/operacoes-v4/nova-os-draft-from-form.ts",
+          "sha256": "58a06e09f48ea04cc8d8800dd384b3bb18060d99ec76f1d968cfdd441977b558"
+        },
+        {
+          "path": "lib/operacoes/services/hydration-service.ts",
+          "sha256": "d95801d54556ebe49d3c20a310d4383e6c54f4bb85c7c48396d7b0d5c12cc958"
+        },
+        {
+          "path": "lib/operacoes/services/orcamento-builder.ts",
+          "sha256": "9487114dc2b1568831a57fa3ad319b78ff82ab542cfeea903d4c0ce42faa0734"
+        },
+        {
+          "path": "next-env.d.ts",
+          "sha256": "7ad303e40d4fddf44f156129e397511953a71481c5cfd86b1862649aaaf240cc"
+        }
+      ],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/02/01a0fa0f-108a-7500-9e07-db60183721e7/n5-r4-review",
+      "head": "3f4ed151660c277640d7d13ecfe90fc0cf0b52dc",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/02/01a0fa0f-108a-7500-9e07-db60183721e7/n5-r4-review",
+        "HEAD 3f4ed151660c277640d7d13ecfe90fc0cf0b52dc",
+        "detached"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/04/01a108ac-51b6-7252-a187-3a1124563aac/pessoas-hardening-p2-plan",
+      "head": "bae4548e43c7f5c5e50c328c4dd13f1ebf6a5f19",
+      "branch": "refs/heads/plan/pessoas-hardening-p2-pre-001b-001",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/04/01a108ac-51b6-7252-a187-3a1124563aac/pessoas-hardening-p2-plan",
+        "HEAD bae4548e43c7f5c5e50c328c4dd13f1ebf6a5f19",
+        "branch refs/heads/plan/pessoas-hardening-p2-pre-001b-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/08/01a1197c-6cff-7b13-8316-e4eb89fdd8c2/fiscal-025-plan",
+      "head": "85b0be2e3336557c564cbafd4a2f6374d5a645e9",
+      "branch": "refs/heads/plan/fiscal-025-retry-reconciliation",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/08/01a1197c-6cff-7b13-8316-e4eb89fdd8c2/fiscal-025-plan",
+        "HEAD 85b0be2e3336557c564cbafd4a2f6374d5a645e9",
+        "branch refs/heads/plan/fiscal-025-retry-reconciliation"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/10/01a12612-e7c3-7fa1-9f91-20f31d8312bf/pessoas-001b-plan",
+      "head": "93e199d745e2568488a633c1686de76d6de94f86",
+      "branch": "refs/heads/plan/pessoas-001b-frontend",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/10/01a12612-e7c3-7fa1-9f91-20f31d8312bf/pessoas-001b-plan",
+        "HEAD 93e199d745e2568488a633c1686de76d6de94f86",
+        "branch refs/heads/plan/pessoas-001b-frontend"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/12/01a12e5d-e8b1-7861-8c1e-c286027f3291/aep-pessoas-001b-reconciliation",
+      "head": "7f505c2b7c15c006fc3832687dc431b7f6f0ab95",
+      "branch": "refs/heads/codex/aep-pessoas-001b-blocked-reconciliation",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/12/01a12e5d-e8b1-7861-8c1e-c286027f3291/aep-pessoas-001b-reconciliation",
+        "HEAD 7f505c2b7c15c006fc3832687dc431b7f6f0ab95",
+        "branch refs/heads/codex/aep-pessoas-001b-blocked-reconciliation"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/12/01a13238-628d-71b3-acc4-7217d80fcc72/pessoas-001b-recovery-001-plan",
+      "head": "a51d36bd80b1dd5f5eace11c2bde1310fab657b7",
+      "branch": "refs/heads/plan/pessoas-001b-recovery-001",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/12/01a13238-628d-71b3-acc4-7217d80fcc72/pessoas-001b-recovery-001-plan",
+        "HEAD a51d36bd80b1dd5f5eace11c2bde1310fab657b7",
+        "branch refs/heads/plan/pessoas-001b-recovery-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/13/01a1333c-1826-7d70-b228-205e03eb4ddf/smoke-004-plan",
+      "head": "124fdde68ea9e5b6fa43c51bd16422f294f1f759",
+      "branch": "refs/heads/plan/pdv-n5b1-production-smoke-closeout-004",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/13/01a1333c-1826-7d70-b228-205e03eb4ddf/smoke-004-plan",
+        "HEAD 124fdde68ea9e5b6fa43c51bd16422f294f1f759",
+        "branch refs/heads/plan/pdv-n5b1-production-smoke-closeout-004"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/13/01a13602-ddd6-7552-bd85-78ee8faf8469/ops-v4-datas-ui-promocao-plan",
+      "head": "307824bbe501b66310a12e53cc55ac6bfab161ee",
+      "branch": "refs/heads/codex/ops-v4-datas-ui-promocao-plan",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/13/01a13602-ddd6-7552-bd85-78ee8faf8469/ops-v4-datas-ui-promocao-plan",
+        "HEAD 307824bbe501b66310a12e53cc55ac6bfab161ee",
+        "branch refs/heads/codex/ops-v4-datas-ui-promocao-plan"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/13/01a13721-43c1-7443-b790-9324e9f6c499/ops-v4-garantias",
+      "head": "fd42b06648ad2abb217bdd7fb5f3bc7b9dec3030",
+      "branch": "refs/heads/codex/experiment-ops-v4-garantias",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/13/01a13721-43c1-7443-b790-9324e9f6c499/ops-v4-garantias",
+        "HEAD fd42b06648ad2abb217bdd7fb5f3bc7b9dec3030",
+        "branch refs/heads/codex/experiment-ops-v4-garantias"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/visualizations/2026/10/14/01a13adf-79a3-71c0-8de2-36d5ba71f0ba/pdv-n5-b2-c-plan",
+      "head": "110a114c56239fc449db91c5a59d5a54c0310c56",
+      "branch": "refs/heads/plan/pdv-n5-b2-c-final-001",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/visualizations/2026/10/14/01a13adf-79a3-71c0-8de2-36d5ba71f0ba/pdv-n5-b2-c-plan",
+        "HEAD 110a114c56239fc449db91c5a59d5a54c0310c56",
+        "branch refs/heads/plan/pdv-n5-b2-c-final-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/worktrees/cad-r2-019-definitive-backfill/omni-gestao",
+      "head": "b7d55b532025a00bdf55a911d3767f4c5ac2c583",
+      "branch": "refs/heads/codex/cad-r2-019-production-backfill-closeout-20261015",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/worktrees/cad-r2-019-definitive-backfill/omni-gestao",
+        "HEAD b7d55b532025a00bdf55a911d3767f4c5ac2c583",
+        "branch refs/heads/codex/cad-r2-019-production-backfill-closeout-20261015"
+      ],
+      "exists": true,
+      "status": "?? docs/ai-execution/_evidence/CAD-R2-019-DEFINITIVE-RESUMPTION-20261012/\n?? docs/ai-execution/_evidence/DB-MIGRATION-RECONCILIATION-001/\n?? scripts/db-migration-reconciliation-001.mjs",
+      "dirty": true,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/worktrees/cad-r2-020-privacy/omni-gestao",
+      "head": "ae8793259df48b1cfa27d3e87bd5cfa74da95c13",
+      "branch": "refs/heads/codex/cad-r2-020-privacy",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/worktrees/cad-r2-020-privacy/omni-gestao",
+        "HEAD ae8793259df48b1cfa27d3e87bd5cfa74da95c13",
+        "branch refs/heads/codex/cad-r2-020-privacy"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/worktrees/cad-r2-021-cliente-texto-voz/omni-gestao",
+      "head": "bf16f06c519496450b531f891f261d9a909df575",
+      "branch": "refs/heads/codex/cad-r2-021-cliente-texto-voz",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/worktrees/cad-r2-021-cliente-texto-voz/omni-gestao",
+        "HEAD bf16f06c519496450b531f891f261d9a909df575",
+        "branch refs/heads/codex/cad-r2-021-cliente-texto-voz"
+      ],
+      "exists": true,
+      "status": " M docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/REPORT.md\n?? docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/ci-final.json\n?? docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/production-deployment.json\n?? docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/production-smoke.json\n?? docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/result.json",
+      "dirty": true,
+      "trackedWip": [
+        {
+          "path": "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/REPORT.md",
+          "sha256": "4b28804bff12e22f4c0c6acd31d3943f7df4364e663cd7bdb258fab9f9cf0fa3"
+        }
+      ],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/worktrees/fiscal-025-a-architecture/omni-gestao",
+      "head": "7157a78b18257b3fcdf0ce7d0b08dfcc238b823b",
+      "branch": "refs/heads/codex/fiscal-025-a-architecture",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/worktrees/fiscal-025-a-architecture/omni-gestao",
+        "HEAD 7157a78b18257b3fcdf0ce7d0b08dfcc238b823b",
+        "branch refs/heads/codex/fiscal-025-a-architecture"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/Users/rafae/.codex/worktrees/fiscal-025b-aep-bootstrap/omni-gestao",
+      "head": "24b96f5932946d0f176480d4e3638e89e82d7fee",
+      "branch": "refs/heads/codex/fiscal-025b-aep-bootstrap-001",
+      "registration": [
+        "worktree C:/Users/rafae/.codex/worktrees/fiscal-025b-aep-bootstrap/omni-gestao",
+        "HEAD 24b96f5932946d0f176480d4e3638e89e82d7fee",
+        "branch refs/heads/codex/fiscal-025b-aep-bootstrap-001"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    },
+    {
+      "path": "C:/workspace",
+      "head": "425eb890ee9102122dcd87e074b40903bda0443d",
+      "branch": "refs/heads/goal/fiscal-024-corrected-retry-readiness",
+      "registration": [
+        "worktree C:/workspace",
+        "HEAD 425eb890ee9102122dcd87e074b40903bda0443d",
+        "branch refs/heads/goal/fiscal-024-corrected-retry-readiness"
+      ],
+      "exists": true,
+      "status": "",
+      "dirty": false,
+      "trackedWip": [],
+      "readOk": true
+    }
+  ],
+  "originalCommits": [
+    {
+      "sha": "ae2be066f4f72e7a2a789c3aa145389218766773",
+      "parents": "976ebaa294e09441ce0c5be7bbe5776a568f4013",
+      "tree": "d820efbbf3b162c5ba50f0cecbb7def54aad2895"
+    },
+    {
+      "sha": "93888a2c7277854d254fc970b2c5af8cf38061b0",
+      "parents": "ae2be066f4f72e7a2a789c3aa145389218766773",
+      "tree": "cd2300c93c27cc161685557653af0e67ccbf1054"
+    }
+  ]
+}
