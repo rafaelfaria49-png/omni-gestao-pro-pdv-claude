@@ -18,6 +18,8 @@ import {
   type OrcamentoRapidoInputV3,
 } from "@/lib/operacoes-v3/orcamento-rapido-model";
 import { campoAgoraV3, campoHojeV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
+import { marcarSelecaoVarianteV4 } from "./orcamento-selecao";
+import { CORTESIAS_TELA_V4, reaisParaCentavosV4, type CortesiaTelaV4 } from "./precificacao-telas";
 
 const MIN_VARIANTES = 2;
 
@@ -51,6 +53,8 @@ export interface OrcamentoRapidoItemFixoFormV4 {
   /** 0 = não informado. */
   custoV3: number;
   quantidade: number;
+  /** Identificação local da cortesia; o mapper não a envia ao servidor. */
+  cortesiaTelaV4?: CortesiaTelaV4;
 }
 
 export interface OrcamentoRapidoVarianteFormV4 {
@@ -263,4 +267,66 @@ export function previaTotaisOrcamentoRapidoV4(form: OrcamentoRapidoFormV4): Tota
   if (!input.grupo.variantes.length) return computeTotaisV3({ servicos: [], pecas: [], desconto: 0 });
   const servicos = montarServicosOrcamentoRapidoV3(input, "preview");
   return computeTotaisV3({ servicos, pecas: [], desconto: 0 });
+}
+
+function correspondeCortesiaTelaV4(item: OrcamentoRapidoItemFixoFormV4, tipo: CortesiaTelaV4): boolean {
+  return item.cortesia && (item.cortesiaTelaV4 === tipo || item.descricao.trim().toLocaleLowerCase("pt-BR") === CORTESIAS_TELA_V4[tipo].descricao.toLocaleLowerCase("pt-BR"));
+}
+
+export function cortesiaTelaIncluidaV4(form: OrcamentoRapidoFormV4, tipo: CortesiaTelaV4): boolean {
+  return form.itensFixos.some((it) => correspondeCortesiaTelaV4(it, tipo));
+}
+
+/** Uma linha fixa por cortesia, compartilhada por todas as opções. Sem estoque. */
+export function definirCortesiaTelaV4(form: OrcamentoRapidoFormV4, tipo: CortesiaTelaV4, incluir: boolean): OrcamentoRapidoFormV4 {
+  if (!incluir) return { ...form, itensFixos: form.itensFixos.filter((it) => !correspondeCortesiaTelaV4(it, tipo)) };
+  if (cortesiaTelaIncluidaV4(form, tipo)) return form;
+  const ref = CORTESIAS_TELA_V4[tipo];
+  return {
+    ...form,
+    itensFixos: [...form.itensFixos, {
+      ...novoItemFixoVazioV4(), descricao: ref.descricao, valor: 0, cortesia: true,
+      custoV3: ref.custoCentavos / 100, cortesiaTelaV4: tipo,
+    }],
+  };
+}
+
+export interface ResultadoAlternativaV4 {
+  varianteId: string;
+  resultadoBrutoCentavos: number | null;
+  motivo?: string;
+}
+
+/**
+ * Simula UMA escolha por vez pelo motor canônico, sem selecionar no orçamento.
+ * A montagem V3 é a mesma do save. O motor puro soma/subtrai números sem impor
+ * unidade: nesta simulação recebe TODOS os valores em centavos inteiros para
+ * evitar ponto flutuante. As linhas fixas (inclusive brindes) entram só uma vez.
+ * Não cria custo de mão de obra, reserva de garantia, tributo ou taxa.
+ */
+export function previaResultadosAlternativasV4(form: OrcamentoRapidoFormV4): ResultadoAlternativaV4[] {
+  const input = buildOrcamentoRapidoInputFromFormV4(form);
+  const grupoId = "preview-resultado";
+  const linhas = montarServicosOrcamentoRapidoV3(input, grupoId);
+  const linhasCentavos = linhas.map((s) => ({
+    ...s,
+    valor: reaisParaCentavosV4(s.valor) ?? 0,
+    custoV3: s.custoV3 && s.custoV3 > 0 ? reaisParaCentavosV4(s.custoV3) ?? undefined : undefined,
+  }));
+  const variantes = linhasCentavos.filter((s) => s.grupoId === grupoId);
+  return form.variantes.map((v, i) => {
+    const simulacao = marcarSelecaoVarianteV4({ pecas: [], servicos: linhasCentavos }, grupoId, variantes[i].id);
+    const consideradas = simulacao.servicos.filter((s) => !s.grupoId || s.selecionadaV3);
+    const custoAusente = consideradas.some((s) => s.custoV3 == null);
+    const valorInvalido = linhas.some((s) => (!s.grupoId || s.id === variantes[i].id) && reaisParaCentavosV4(s.valor) == null);
+    const totais = computeTotaisV3({ ...simulacao, desconto: 0 });
+    const resultado = totais.total - totais.custo;
+    const valido = !valorInvalido && Number.isSafeInteger(totais.total) && Number.isSafeInteger(totais.custo) && Number.isSafeInteger(resultado);
+    return {
+      varianteId: v.id,
+      resultadoBrutoCentavos: !custoAusente && valido ? resultado : null,
+      ...(!valido ? { motivo: "Revise os valores monetários: use até duas casas decimais." }
+        : custoAusente ? { motivo: "Custo não informado na tela ou em item fixo; resultado indisponível." } : {}),
+    };
+  });
 }

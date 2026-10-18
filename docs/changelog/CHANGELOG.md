@@ -1,5 +1,11 @@
 # Changelog — OmniGestão Pro
 
+## 2026-10-18 — Orçamento Rápido V4: sugestão opt-in para telas (local, não publicado)
+
+- Sugestão por alternativa em centavos, com revisão e aplicação explícita, preservando preço manual.
+- Capinha/película como cortesias fixas, custo uma vez por orçamento e R$ 0,00 ao cliente; resultado bruto interno por alternativa, sem custos no documento/mensagem do cliente.
+- Ativação temporária por proposta, descartada ao trocar de loja/reabrir. Publicação bloqueada pelo registro preexistente de envio antes do fato real, documentado em `OPS-V4-RAFACELL-PRECIFICACAO-001`.
+
 ## 2026-08-19 — Operações V4: documentos, assinatura, fotos e anexos
 
 - Termo de Garantia, Termo de Entrega, OS cliente, via interna, etiqueta e orçamento imprimem/reimprimem pelo motor V3 já existente.

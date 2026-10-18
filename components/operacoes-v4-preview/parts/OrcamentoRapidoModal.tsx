@@ -16,7 +16,10 @@ import {
   adicionarItemFixoV4,
   adicionarVarianteV4,
   buildOrcamentoRapidoInputFromFormV4,
+  cortesiaTelaIncluidaV4,
+  definirCortesiaTelaV4,
   orcamentoRapidoFormVazioV4,
+  previaResultadosAlternativasV4,
   previaTotaisOrcamentoRapidoV4,
   removerItemFixoV4,
   removerVarianteV4,
@@ -48,13 +51,20 @@ import {
 
 export function OrcamentoRapidoModal({ v }: { v: V4Vals }) {
   if (!v.orcamentoRapidoOpen) return null;
-  return <OrcamentoRapidoModalContent v={v} />;
+  return <OrcamentoRapidoModalSession v={v} />;
 }
 
-function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
+function OrcamentoRapidoModalSession({ v }: { v: V4Vals }) {
   const { lojaAtivaId } = useLojaAtiva();
   const sid = (lojaAtivaId ?? "").trim();
-  const [form, setForm] = useState<OrcamentoRapidoFormV4>(() => v.orcamentoRapidoInitialValues ?? orcamentoRapidoFormVazioV4());
+  const [lojaInicial] = useState(sid);
+  // Trocar de loja descarta o formulário e o opt-in. Prefill de outra loja não é reutilizado.
+  return <OrcamentoRapidoModalContent key={sid} v={v} sid={sid} initialValues={sid === lojaInicial ? v.orcamentoRapidoInitialValues : undefined} />;
+}
+
+function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid: string; initialValues?: OrcamentoRapidoFormV4 | null }) {
+  const [form, setForm] = useState<OrcamentoRapidoFormV4>(() => initialValues ?? orcamentoRapidoFormVazioV4());
+  const [precificacaoTela, setPrecificacaoTela] = useState(false);
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [abertos, setAbertos] = useState({ cliente: true, aparelho: true, diagnostico: false, proposta: true, condicoes: false });
@@ -72,6 +82,7 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
   const invalido = validarOrcamentoRapidoFormV4(form);
   const podeSalvar = !!sid && !invalido && !busy;
   const totais = previaTotaisOrcamentoRapidoV4(form);
+  const resultados = previaResultadosAlternativasV4(form);
   const hoje = hojeNaLojaV3();
   const diasProposta = form.datas.dataProposta.dia && form.datas.dataProposta.dia < hoje ? diasEntreCivisV3(form.datas.dataProposta.dia, hoje) : 0;
   const vencida = validadeVencidaV3(form.datas.validoAteDia);
@@ -239,7 +250,7 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
 
       <AtendimentoAccordionSection titulo="Cliente" aberto={abertos.cliente} onToggle={() => setAbertos((a) => ({ ...a, cliente: !a.cliente }))} resumo={form.clienteExistente?.nome || form.clienteNovoNome || undefined}>
         <ClienteAtendimentoSection
-          storeId={lojaAtivaId}
+          storeId={sid || null}
           value={clienteState}
           origem={form.origemAtendimento}
           onOrigemChange={(o) => setForm((f) => ({ ...f, origemAtendimento: o }))}
@@ -300,7 +311,7 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
 
       <AtendimentoAccordionSection titulo="Proposta comercial" aberto={abertos.proposta} onToggle={() => setAbertos((a) => ({ ...a, proposta: !a.proposta }))}>
         <ServicoCatalogLookup
-          storeId={lojaAtivaId}
+          storeId={sid || null}
           onSelect={(s) =>
             setForm((f) => ({
               ...f,
@@ -336,16 +347,52 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
           <div style={atendLabel}>Rótulo do grupo *</div>
           <input value={form.grupoRotulo} onChange={(e) => setForm((f) => ({ ...f, grupoRotulo: e.target.value }))} placeholder="ESCOLHA A TELA" style={atendInput} autoComplete="off" />
         </div>
+        <div style={{ minWidth: 0, padding: 12, marginBottom: 10, border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 12, color: C.body }}>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, cursor: "pointer" }}>
+            <input type="checkbox" checked={precificacaoTela} disabled={busy || !sid} onChange={(e) => setPrecificacaoTela(e.target.checked)} aria-describedby="orc-regra-tela-ajuda" />
+            <span style={{ minWidth: 0 }}>Usar sugestão de preço para troca de tela neste orçamento</span>
+          </label>
+          <p id="orc-regra-tela-ajuda" style={{ margin: "6px 0 0", fontSize: 11, color: C.subtle, lineHeight: 1.5 }}>
+            Ativação opcional, apenas nesta proposta. Não salva uma configuração da loja. Revise a regra antes de usar.
+          </p>
+          {precificacaoTela ? (
+            <>
+              <p style={{ margin: "8px 0", fontSize: 11, lineHeight: 1.5 }}>
+                Até R$ 200: custo + R$ 200; até R$ 700: custo × 2; até R$ 1.000: custo + R$ 700; acima: custo × 1,70. Mão de obra já incluída. Sem reserva automática de garantia.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, minWidth: 0 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <input type="checkbox" checked={cortesiaTelaIncluidaV4(form, "capinha")} disabled={busy} onChange={(e) => setForm((f) => definirCortesiaTelaV4(f, "capinha", e.target.checked))} />
+                  Capinha de cortesia (custo de referência R$ 3,50)
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <input type="checkbox" checked={cortesiaTelaIncluidaV4(form, "pelicula")} disabled={busy} onChange={(e) => setForm((f) => definirCortesiaTelaV4(f, "pelicula", e.target.checked))} />
+                  Película de cortesia (custo de referência R$ 1,50)
+                </label>
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: C.subtle, lineHeight: 1.5 }}>
+                Cortesias: R$ 0,00 ao cliente, uma unidade de cada no orçamento. Os custos podem ser revisados nos itens fixos.
+              </p>
+            </>
+          ) : null}
+        </div>
         {form.variantes.map((variante, i) => (
           <CommercialOptionEditor
             key={variante.id}
             index={i}
             value={variante}
+            precificacaoTelaHabilitada={precificacaoTela}
+            resultadoBrutoCentavos={resultados[i].resultadoBrutoCentavos}
+            motivoResultado={resultados[i].motivo}
+            disabled={busy}
             canRemove={form.variantes.length > 2}
             onRemove={() => setForm((f) => removerVarianteV4(f, variante.id))}
             onChange={(next) => setForm((f) => ({ ...f, variantes: f.variantes.map((x) => (x.id === variante.id ? next : x)) }))}
           />
         ))}
+        <p style={{ minWidth: 0, margin: "8px 0 0", color: C.subtle, fontSize: 11, lineHeight: 1.5 }}>
+          Cada resultado bruto é uma prévia interna da alternativa, incluindo os itens fixos uma só vez. Depende da escolha do cliente e da operação real. Tributos não parametrizados e taxas de pagamento sem dados reais não foram deduzidos. Não é lucro líquido.
+        </p>
       </AtendimentoAccordionSection>
 
       <AtendimentoAccordionSection titulo="Condições" aberto={abertos.condicoes} onToggle={() => setAbertos((a) => ({ ...a, condicoes: !a.condicoes }))}>
