@@ -1,4 +1,4 @@
-# Pessoas 001B — recuperação de código, validação pendente
+# Pessoas 001B — recuperação, evidências QA e fechamento técnico impedido
 
 Recuperação inicial: 12/10/2026. Adendo corretivo R1–R5: 13/10/2026. GOAL: PESSOAS-DP-FRONTEND-001B-RECOVERY-001.
 
@@ -499,3 +499,38 @@ NEXT_GATE=FULL_ISOLATED_VALIDATION_AND_GLM_INTEGRAL
 Somente documentação/evidências na allowlist, inspeção de escopo Git e `git diff --check`. Sem testes automatizados, typecheck, lint, build local, runner oficial, merge, close/DONE, produção ou GOAL 002. Não há aceite integral ou revisão cross-family realizada por Codex/OpenAI.
 
 Ponto de parada: **PREVIEW PRIVADO REAL COM R2 QA, UPLOAD CONFIRMADO E DOWNLOAD RELATADO PELO USUÁRIO; ACEITE INTEGRAL PENDENTE.**
+
+## Fechamento técnico direto e decisão humana — 18/10/2026
+
+Autorrevisão integral única realizada por Codex/OpenAI sobre `12022ff41c2046350f4c4ab2aff5681e24b95410`, cobrindo cadastro, lista/ficha/edição, contratos/histórico/remuneração, documentos, Store/empregador, capacidades/revogação, contexto e F-01. Não é revisão independente. Nenhum código de produto foi modificado.
+
+```text
+INDEPENDENT_REVIEW=WAIVED_BY_HUMAN_DECISION
+SELF_REVIEW=CODEX
+HUMAN_MERGE_AUTHORIZATION=PENDING
+P0=0
+P1=0
+P2=1
+WAIVER_CONDITION_SATISFIED=NO
+```
+
+A dispensa foi decidida pelo usuário neste chat em 18/10, exclusivamente para a PR #273, condicionada a autorrevisão sem achados bloqueantes. A condição não foi declarada satisfeita. Não houve execução GLM ou envio a outra IA. O GOAL/META, ledger, state, REGISTRY e GATES permanecem preservados; nenhuma exigência técnica foi removida para forçar close.
+
+**P2-01, integração preexistente 001A:** `lib/pessoas/documentos/service.ts:55` aplica mínimo de oito caracteres a storeId; `exigirAtor` aceita 1–100 e os IDs reais `loja-1/loja-2` têm seis. Upload-intent falha com INTENT_INVALIDO/403 antes do R2. Diagnóstico isolado do helper real confirmou as duas recusas e aceitação de `qa-pessoas-a`; sem banco/rede/storage, não equivale a bateria. A correção mínima está em serviço expressamente fora da allowlist e não foi aplicada nem contornada pelo frontend.
+
+**Validação consolidada:** `verify --all` PASS, exit 0. Uma execução de `check pessoas` no SHA acima: itens 1–9 PASS; item 10 FAIL porque o runner oficial saiu com código 5, reserva insuficiente em C:. Node 24.14.1 e binários PostgreSQL 17 presentes; aproximadamente 1,9 GiB livres contra 12 GiB obrigatórios. npm ci, Prisma generate, typecheck, Vitest/integração, build/PWA, lint e Playwright não foram executados. Sem reduzir guard ou limpar arquivos de outras tarefas. Sem nova tentativa/ratificação AEP.
+
+Evidências reais de 15–16/10 reaproveitadas: Neon QA, cadastro/reload/contrato/histórico, restrição salarial no DOM, upload/complete/list/reload R2, integridade do objeto, download confirmado pelo usuário e isolamento A/B. Smokes não repetidos. QA usou IDs longos e não cobre P2-01; matriz integral/360×800/teclado e regressões completas continuam pendentes.
+
+Main confirmada: `976ebaa294e09441ce0c5be7bbe5776a568f4013`; zero interseção líquida entre caminhos alterados da entrega e da main, sem incompatibilidade concreta identificada na inspeção das dependências compartilhadas. O check emitiu aviso upstream por nove commits em padrões da allowlist. Nenhuma combinação final foi compilada; sem rebase, merge ou WIPs incorporados.
+
+Relatório completo, cobertura, decisão humana, correção mínima e resultados: [FECHAMENTO_TECNICO_CODEX_2026-10-18.md](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/FECHAMENTO_TECNICO_CODEX_2026-10-18.md). No mesmo diretório: `self-review-2026-10-18.json`, saída integral `aep-check-2026-10-18.txt` e diagnóstico `store-id-diagnostic-2026-10-18.json`.
+
+```text
+AEP_CLOSE=NOT_RUN_CHECK_FAILED
+PR_DRAFT=YES
+MERGE_READINESS=BLOCKED
+NEXT_ACTION=HUMAN_PLANNING_FOR_SERVICE_ALLOWLIST_AND_AT_LEAST_12_GIB_PER_VOLUME
+```
+
+Ponto de parada: **AUTORREVISÃO CONCLUÍDA; CORREÇÃO DOCUMENTAL FORA DA ALLOWLIST E VALIDAÇÃO OFICIAL IMPEDIDA POR DISCO.** Sem DONE, merge, produção ou GOAL 002.
