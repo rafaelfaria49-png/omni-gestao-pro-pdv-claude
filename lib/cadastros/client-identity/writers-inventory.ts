@@ -22,6 +22,13 @@ export type ClientWriterInventoryEntry = {
 
 export const CLIENT_WRITER_INVENTORY: readonly ClientWriterInventoryEntry[] = [
   {
+    id: "action-salvarClienteRevisado",
+    kind: "INTERACTIVE",
+    path: "app/actions/cliente-texto-livre.ts#salvarClienteRevisado",
+    writes: true,
+    notes: "Editor HUB CAD-R2-021: confirmação humana + gate hub → ClientWriteService. Sugestão temporária não escreve, não decide identidade nem executa merge.",
+  },
+  {
     id: "action-createCliente",
     kind: "INTERACTIVE",
     path: "app/actions/cadastros.ts#createCliente",
