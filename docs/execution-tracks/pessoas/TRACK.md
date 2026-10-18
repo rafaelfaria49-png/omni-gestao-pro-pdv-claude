@@ -12,7 +12,7 @@ Entregar o domínio Pessoas de forma incremental, com identidade do empregador s
 
 ## Escopo histórico 001A — paths_base
 
-Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucessor atual, enumerada exclusivamente no META do GOAL de recuperação da revisão 5.
+Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucessor atual, enumerada exclusivamente no META do GOAL de recuperação da revisão 6.
 
 - lib/pessoas/**
 - app/actions/pessoas/**
@@ -29,7 +29,7 @@ Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucesso
 
 ## Fora de escopo
 
-Motor/fechamento de folha, holerites próprios, pagamentos, integração com Financeiro/Contador, autenticação global, CI, produção e dados reais. Frontend/navegação ficam limitados ao recorte de recuperação da revisão 5.
+Motor/fechamento de folha, holerites próprios, pagamentos, integração com Financeiro/Contador, autenticação global, CI, produção e dados reais. Frontend/navegação ficam limitados ao recorte de recuperação, com a única ampliação P2-01 da revisão 6.
 
 ## Comando de teste da trilha
 
@@ -57,7 +57,7 @@ Gates liberados para a recuperação: nenhum. As autorizações abaixo pertencem
 ## Plano de origem
 
 - plan_ref: OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15
-- plan_rev: 5 (recuperação do frontend 001B; revisões anteriores preservadas abaixo)
+- plan_rev: 6 (ampliação exclusiva P2-01; recuperação da revisão 5 e demais revisões preservadas abaixo)
 - recorte: PESSOAS-000 incorporado ao pre-flight; PESSOAS-001A backend; 001B frontend posterior.
 
 ## Estado
@@ -120,7 +120,7 @@ O bloco abaixo registra a PR #264, já mergeada em main no commit 857e24d. Refer
 - INDEPENDENT_AI_REVIEW=APPROVE; HUMAN_EXTERNAL_REVIEW=PENDING; HUMAN_MERGE_AUTHORIZATION=PENDING. O PR permanece draft. A exigência humana só pode ser substituída por decisão expressa do usuário específica para esta PR; não alterar governança global nem criar review formal em nome do GLM.
 - Preview com R2 isolado, provisionamento de banco/bucket/chaves, ativação DP produtiva, produção, folha/holerites e GOAL 002 continuam NÃO AUTORIZADOS. Revisão humana externa e autorização de merge humano deste PR permanecem gates de entrega.
 
-## Sucessor atual — recuperação frontend 001B — revisão 5
+## Histórico — planejamento de recuperação frontend 001B — revisão 5
 
 - Único GOAL READY: PESSOAS-DP-FRONTEND-001B-RECOVERY-001.
 - Fonte executável: goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-001.md; META, allowlist exata, transporte, runner, critérios e gates completos.
@@ -146,3 +146,14 @@ O bloco abaixo registra a PR #264, já mergeada em main no commit 857e24d. Refer
 - Somente novo GOAL/TRACK e derivados CLI nesta missão; não executar open/close, implementar produto, criar worktree de execução, testar frontend, fazer merge ou iniciar GOAL 002.
 - Gerar derivados por registry; verify --all e git diff --check obrigatórios. Estado esperado após planejamento: dois DONE, um BLOCKED, quatro eventos, somente o sucessor READY.
 - Ponto de parada: **PESSOAS RECOVERY 001B — PLANO PRONTO PARA MERGE HUMANO.**
+
+## Revisão atual 6 — P2-01 e diagnóstico de disco — 18/10/2026
+
+- Mesmo único GOAL READY: PESSOAS-DP-FRONTEND-001B-RECOVERY-001. PR de implementação #273 preservada no HEAD de referência 5eac8be5820f0d9a9ef0374e52bf1603112f78ca. Dois DONE, BLOCKED histórico e quatro eventos permanecem intactos.
+- Branch documental plan/pessoas-001b-scope-006, baseada na main 976ebaa294e09441ce0c5be7bbe5776a568f4013. Somente GOAL existente/documentação necessária e derivados oficiais. Não executar open/close/attempt/block nem alterar a worktree de execução.
+- Única inclusão na allowlist: lib/pessoas/documentos/service.ts, somente refCanonica para storeId conforme exigirAtor, preservando empregadorId/documentoId e namespace. Regressão em scripts/pessoas/frontend.integration.test.ts já permitido. Nenhuma outra inclusão, código, schema/auth/migration/adapter R2/serviço ou gate.
+- Dispensa humana condicional exclusiva da PR #273: INDEPENDENT_REVIEW=WAIVED_BY_HUMAN_DECISION; SELF_REVIEW=CODEX; HUMAN_MERGE_AUTHORIZATION=PENDING. Sem autorrevisão como R, nova solicitação GLM ou dispensa técnica. Condição ainda não satisfeita enquanto houver achado bloqueante/requisito obrigatório pendente.
+- A reserva de 12 GiB por volume e test_command permanecem. Diagnóstico de disco usa somente metadados; nenhuma exclusão, movimentação, compressão ou limpeza autorizada. Recursos e trabalho ativo devem ser preservados até decisão humana específica.
+- Retomada AEP: incorporar o plano futuramente por fluxo Git autorizado deve satisfazer o item 8 (GOAL igual ao da base comum). Isso não basta: cmdOpen mantém allowlist do marcador existente e só atualiza base_commit. Não há refresh oficial de snapshot preservando tentativa/log/data de abertura; não editar/remover/recriar .aep-active nem reiniciar tentativas. Impedimento específico documentado, CLI e G-AEP-CORE intocados.
+- Relatório e diagnóstico: docs/ai-execution/_evidence/PESSOAS-001B-SCOPE-006/PLAN_AND_DISK_2026-10-18.md. Registry/verify --all oficiais, sem manipular ledger/state.
+- Próximo gate: HUMAN_MERGE_PLAN_AND_DISK_DECISION; a execução continua dependente também da resolução formal da retomada AEP. Sem merge pelo agente, produto, testes/build/Docker, produção ou GOAL 002.
