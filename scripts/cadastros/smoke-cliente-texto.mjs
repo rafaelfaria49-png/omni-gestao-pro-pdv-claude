@@ -2,7 +2,7 @@
  * Requires npm run build for the actual application CSS. No auth bypass or DB.
  */
 import { build } from "esbuild"
-import { chromium } from "@playwright/test"
+import { chromium, expect } from "@playwright/test"
 import { createServer } from "node:http"
 import { readFile, readdir, mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
@@ -83,7 +83,7 @@ try {
     assert.equal(await page.getByRole("checkbox").isChecked(), false)
     await page.getByRole("checkbox").check()
     await page.getByRole("button", { name: "Salvar cliente" }).click()
-    await page.waitForFunction(() => window.__saves.length === 1)
+    await expect.poll(() => page.evaluate(() => window.__saves.length)).toBe(1)
     assert.equal(await page.evaluate(() => JSON.stringify(window.__saves).includes("Novo cliente")), false)
     await page.getByRole("button", { name: "Novo cliente isolado" }).click()
     assert.equal(await page.getByLabel("Descreva o novo cliente").inputValue(), "")
@@ -91,7 +91,7 @@ try {
     await page.getByLabel("Descreva o novo cliente").fill("Lia Antiga de Teste")
     await page.getByRole("button", { name: "Interpretar texto", exact: true }).click()
     await page.evaluate(() => window.__switchStore())
-    await page.waitForFunction(() => window.__interpretations === 2)
+    await expect.poll(() => page.evaluate(() => window.__interpretations)).toBe(2)
     assert.equal(await page.getByLabel("Descreva o novo cliente").inputValue(), "")
     assert.equal(await page.getByLabel("Sugestão: Nome", { exact: true }).count(), 0)
     await page.getByRole("button", { name: "Cancelar", exact: true }).click()

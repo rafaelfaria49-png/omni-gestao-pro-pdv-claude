@@ -1,0 +1,47 @@
+{
+  "scope": "Actual editor/parser; Action I/O simulated; production DB writes 0",
+  "results": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "review": "PASS",
+      "save": "SIMULATED_IO_ONLY",
+      "staleStoreResponse": "PASS",
+      "cancelWithoutWrite": "PASS",
+      "overflow": false,
+      "externalRequests": 0,
+      "storageEntries": 0,
+      "pageErrors": 0
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "review": "PASS",
+      "save": "SIMULATED_IO_ONLY",
+      "staleStoreResponse": "PASS",
+      "cancelWithoutWrite": "PASS",
+      "overflow": false,
+      "externalRequests": 0,
+      "storageEntries": 0,
+      "pageErrors": 0
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 740
+      },
+      "review": "PASS",
+      "save": "SIMULATED_IO_ONLY",
+      "staleStoreResponse": "PASS",
+      "cancelWithoutWrite": "PASS",
+      "overflow": false,
+      "externalRequests": 0,
+      "storageEntries": 0,
+      "pageErrors": 0
+    }
+  ]
+}
