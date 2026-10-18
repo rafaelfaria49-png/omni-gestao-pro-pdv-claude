@@ -124,7 +124,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     {!editing && <section aria-label="Cadastro assistido por texto" className="space-y-3 rounded-lg border border-border bg-muted/30 p-3 sm:p-4">
       <div className="flex items-center gap-2 text-sm font-semibold"><WandSparkles aria-hidden="true" className="h-4 w-4 text-primary" />Preencher por descrição</div>
       <label htmlFor={`${id}-text`} className="block text-sm">Descreva o novo cliente</label>
-      <Textarea id={`${id}-text`} value={text} maxLength={CLIENT_TEXT_LIMIT} rows={3} disabled={saving} placeholder="Nome, telefone com DDD, cidade… inclua somente o necessário." aria-describedby={`${id}-capture-help`}
+      <Textarea id={`${id}-text`} value={text} maxLength={CLIENT_TEXT_LIMIT} rows={3} disabled={saving} placeholder="Novo cliente…, telefone…, mora em…; Endereço:…; Cidade:…" aria-describedby={`${id}-capture-help`}
         onChange={(e) => { request.current++; setInterpreting(false); setSuggestion(null); setText(e.target.value); setMessage("") }} />
       <p id={`${id}-capture-help`} className="text-xs text-muted-foreground">Extração determinística, sem enviar o texto a provedores externos de IA. A sugestão é temporária e não salva o cadastro.</p>
       <div className="flex flex-wrap gap-2">

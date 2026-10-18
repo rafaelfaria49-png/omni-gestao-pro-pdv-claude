@@ -34,7 +34,16 @@ export function interpretarTextoCliente(texto: unknown): ClientTextSuggestion {
     campos: Object.fromEntries(CLIENT_TEXT_FIELDS.map((k) => [k, { valor: null, estado: "ausente" }])) as ClientTextSuggestion["campos"],
   }
   const text = texto.trim()
-  const found = Array.from(text.matchAll(new RegExp(MARKER)))
+  let inAddress = false
+  const found = Array.from(text.matchAll(new RegExp(MARKER))).filter((match) => {
+    const label = match[0].replace(/[\s:=]+$/g, "").trim().toLowerCase()
+    const hardBoundary = /[;\n]/.test(text[match.index! - 1] ?? "") || match[0].includes("\n")
+    // Commas belong to street/number/neighborhood too. Inside an address,
+    // a new field needs an explicit ':'/'=' or a semicolon/newline boundary.
+    if (inAddress && !hardBoundary && !/[:=]\s*$/.test(match[0])) return false
+    inAddress = LABELS[label] === "endereco"
+    return true
+  })
   const candidates = new Map<ClientTextField, { raw: string; label: string }[]>()
   const add = (field: ClientTextField, raw: string, label = "") => {
     const clean = raw.replace(/^[\s,:;=-]+|[\s,;.!?]+$/g, "").replace(/\s+/g, " ").trim()

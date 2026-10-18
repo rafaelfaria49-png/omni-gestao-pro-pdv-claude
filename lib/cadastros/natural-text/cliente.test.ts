@@ -39,6 +39,14 @@ describe("Cliente: deterministic text, synthetic data only", () => {
     expect(interpretarTextoCliente("nome: Empresa Telefone Teste").campos.nome.valor).toBe("Empresa Telefone Teste")
     expect(interpretarTextoCliente("Cidadezinha Teste").campos.nome.valor).toBe("Cidadezinha Teste")
   })
+  it("keeps comma-separated neighborhoods inside addresses and requires an explicit next field", () => {
+    const r = interpretarTextoCliente("endereço: Rua de Teste, 10, Cidade Jardim, telefone: 14999998888")
+    expect(r.campos.endereco.valor).toBe("Rua de Teste, 10, Cidade Jardim")
+    expect(r.campos.cidade).toEqual({ valor: null, estado: "ausente" })
+    expect(r.campos.telefone.valor).toBe("(14) 99999-8888")
+    expect(interpretarTextoCliente("endereço: Rua de Teste, 10, Cidade Jardim, cidade: Itaí").campos.cidade.valor).toBe("Itaí")
+    expect(interpretarTextoCliente("endereço: Rua de Teste, 10; cidade Itaí").campos.cidade.valor).toBe("Itaí")
+  })
   it("only accepts explicitly supplied city/state, email and address", () => {
     const r = interpretarTextoCliente("Nome: Loja Teste, email: TESTE@example.invalid, cidade: Itaí/SP, endereço: Rua de Teste, 0")
     expect(r.campos.email.valor).toBe("teste@example.invalid")
