@@ -1,0 +1,58 @@
+name: Cadastros Cliente assistido
+
+on:
+  pull_request:
+    paths:
+      - "app/actions/cliente-texto-livre*"
+      - "components/cadastros/**"
+      - "lib/cadastros/**"
+      - "scripts/cadastros/**"
+      - ".github/workflows/cadastros-cliente-assistido.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated?connect_timeout=1
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated?connect_timeout=1
+      AUTH_SECRET: isolated-ci-fixture-with-no-production-authority
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      VERCEL: "0"
+      VERCEL_ENV: development
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript completo
+        run: node --max-old-space-size=6144 node_modules/typescript/lib/tsc.js --noEmit
+      - name: ESLint completo
+        run: npm run lint
+      - name: Regressões Cadastros e consumidores
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          lib/cadastros app/api/clientes app/actions/cadastros
+          app/actions/cliente-texto-livre.test.ts app/actions/produto-texto-livre.test.ts
+          app/api/import/advanced lib/importador-avancado lib/auth/proxy-session-gate.test.ts
+          components/cadastros/lovable/components/cadastros/ClienteEditor.test.ts
+          lib/contas-receber-cliente-match.test.ts --maxWorkers=2
+      - name: Build completo sem migrations
+        run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke responsivo com I/O isolado
+        run: node scripts/cadastros/smoke-cliente-texto.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cliente-assistido-evidence
+          path: docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/
