@@ -36,8 +36,14 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: TypeScript completo
         run: node --max-old-space-size=6144 node_modules/typescript/lib/tsc.js --noEmit
-      - name: ESLint completo
-        run: node node_modules/eslint/bin/eslint.js . --ignore-pattern 'generated/prisma/**'
+      - name: ESLint fontes ativas
+        # Generated Prisma plus original raw exports/copied components are not application sources.
+        # The live reference wrapper at components/pdv-github-original/*.tsx remains checked.
+        run: >-
+          node node_modules/eslint/bin/eslint.js .
+          --ignore-pattern 'generated/prisma/**'
+          --ignore-pattern 'components/pdv-github-original/claude-export/**'
+          --ignore-pattern 'components/pdv-github-original/components/**'
       - name: Regressões Cadastros e consumidores
         run: >-
           node node_modules/vitest/vitest.mjs run

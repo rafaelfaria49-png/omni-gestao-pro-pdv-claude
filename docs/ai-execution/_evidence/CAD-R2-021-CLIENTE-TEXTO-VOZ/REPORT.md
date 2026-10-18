@@ -38,3 +38,11 @@ Nenhuma especificação REV2.2 posterior/CAD-R2-021 foi encontrada no código ve
 A administração e a assessoria jurídica precisam aprovar e documentar o processamento de voz de Clientes: finalidade, fundamento aplicável, serviço/navegadores autorizados, destinatários, retenção e comunicação ao operador. Essa aprovação não foi fornecida. O gate fica fechado até implementação e validação contra tal decisão; um checkbox do operador não substitui essa autorização.
 
 CAD_R2_021_STATUS=PARTIAL. READY_FOR_NEXT_GOAL=NO. CAD-R2-022 não iniciado.
+
+## Revisão e CI — continuação
+
+- A revisão automatizada da PR #282 identificou dois P2, corrigidos em `66812da`: edições de registros históricos com documento inválido continuam sob a policy do writer; marcadores de campo não dividem palavras dentro de nomes/endereços. Testes específicos acrescentados. Threads respondidas e resolvidas; a nova revisão de `66812da` terminou sem achados.
+- A revisão própria também preservou o tipo PF/PJ escolhido pelo operador e marcou UF explícita conflitante como ambígua.
+- TypeScript completo PASS no runner, execução 39140256136. A execução anterior encontrou `startSaving` removido da inativação inline e uma opção não tipada num helper de teste; ambos corrigidos.
+- Nova regressão local: 988 PASS/20 skipped, seguida de testes focados verdes para o delimitador final. O relatório JSON local registra essa execução; a contagem final do CI pode incluir os casos acrescentados depois.
+- O scan de lint sem excluir cópias encontrou 105 erros antigos apenas em `components/pdv-github-original/claude-export` e `components/pdv-github-original/components/studio/components/bom-dia-modal.tsx`, sem alterações da tarefa. Não foi declarado PASS para esse scan bruto. O Vitest já exclui o espelho e o tsconfig já exclui seus componentes copiados. O wrapper vivo `PdvGithubOriginal.tsx` importa `Icons`, `Modals` e `data` da raiz do espelho, não os exports/cópias defeituosos. A CI verifica todas as fontes ativas, inclusive esse wrapper, excluindo somente Prisma gerado e essas duas árvores de cópias. Nenhuma regra de ESLint ou código do PDV foi modificado.
