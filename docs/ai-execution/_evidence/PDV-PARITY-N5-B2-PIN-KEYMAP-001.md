@@ -58,22 +58,42 @@ ESLint: cinco warnings no Classic, dois no Supermercado e dois na Venda Completa
 
 Preparação local: dependências existentes reutilizadas por junction gitignored `node_modules`. A primeira execução do Vitest no sandbox falhou com EPERM em rename de cache; os comandos finais rodaram fora do sandbox. O cliente Prisma compartilhado estava defasado e causou erros de tipos em Pessoas: somente a junction `generated` desta worktree foi substituída por cliente local gerado via `npx prisma generate --schema prisma/schema.prisma` (v6.19.3), sem alterar o schema ou acessar banco. Nenhuma alteração no cliente da outra checkout, pacote instalado, migration ou build completo. As falhas de fixtures durante desenvolvimento (cliente no draft vazio, label de débito e delay de confirmação), bem como dois ajustes de tipos do teste, foram corrigidas antes da validação final acima.
 
-## Revisão independente e ponto de parada
+## Revisão independente R ratificada
+
+Registro em 2026-10-18 por Codex/openai, conforme parecer do revisor real fornecido pelo usuário no GOAL `PDV-N5-B2-AEP-CLOSE-AND-PUBLISH-003`. Este registro documental não constitui nova revisão OpenAI nem nova execução pelo revisor.
 
 R_EXECUTOR=claude-code
 R_FAMILY=anthropic
 CLAUDE_CODE_VERSION=2.1.288
-R_AVAILABILITY=false
-R_VERDICT=NOT_RUN_429_WEEKLY_LIMIT
-R_REVIEWED_SHA=NONE
+R_VERDICT=APPROVE
+INDEPENDENCE_VALID=YES
+REVIEWED_SHA=21df54b799bec74f2e1761f194221e0d550bb1e0
+R_REVIEWED_SHA=21df54b799bec74f2e1761f194221e0d550bb1e0
+TECHNICAL_COMMIT=21df54b799bec74f2e1761f194221e0d550bb1e0
+TECHNICAL_BLOCKERS=NONE
+USABILITY_ACCEPTANCE=PENDING_USER
 R_PROBE_SESSION_ID=55accaa1-fdec-4356-958c-1d96b8cc8096
-AEP_CHECK=NOT_RUN_PENDING_R
-AEP_CLOSE=NOT_RUN_PENDING_R
-NEXT_STEP=REVISAO_INDEPENDENTE_N5_B2
 
-A família `anthropic` é declarada em `docs/ai-execution/executors.json`. O Claude Code estava instalado e autenticado, mas a sondagem de disponibilidade retornou API 429, `terminal_reason=api_error`, `is_error=true` e a mensagem `You've hit your weekly limit`, sem uso de modelo/tokens. Isso não constitui revisão R nem parecer sobre SHA. Nenhuma instância OpenAI foi apresentada como R.
+A família `anthropic` é declarada em `docs/ai-execution/executors.json`, distinta da família executora `openai`. O revisor conferiu diff/allowlist, PIN e keymap, 119/119 testes PASS (incluindo 100 testes de componentes) e typecheck PASS. ESLint e `verify --all` foram relatados pelo executor; não foram reexecutados pelo revisor.
 
-Publicar somente o candidato técnico autorizado na branch B2. O SHA exato do candidato é o commit que contém esta evidência, informado no relatório de entrega e conferido no remoto. AEP permanece aberto e o GOAL não é DONE. A revisão de outra família declarada deve avaliar esse SHA e o diff contra MAIN_BASE, a allowlist e as provas acima. Só após R favorável poderá haver check/close canônico e novo push do fechamento. Não fazer merge nem iniciar N5-C nesta sessão.
+A sondagem anterior do Claude Code havia falhado por limite semanal (API 429, sem uso de modelo/tokens), sem constituir revisão. O parecer APPROVE acima substitui aquele ponto de parada, preservando o histórico da indisponibilidade.
+
+### Riscos residuais não bloqueantes
+
+- Escape no modo rápido ficou menos acessível com foco permanente no campo de bipagem.
+- O guarda estático tabela↔código-fonte foi removido.
+- Algumas teclas periféricas têm cobertura parcial.
+- F2 da Assistência não fecha seletor aberto.
+- O listener do Supermercado é reinstalado a cada render.
+- Os testes foram realizados em jsdom.
+
+Esses itens permanecem residuais; não foram corrigidos neste GOAL. A homologação de usabilidade pelo usuário permanece pendente, distinta da aprovação técnica R. Nenhuma melhoria adicional foi implementada.
+
+### Proveniência e fechamento
+
+O SHA técnico revisado acima permanece a referência imutável da aprovação. O commit documental desta seção é separado do commit técnico: seu SHA será registrado no relatório de entrega e será o `head_commit` verificado pelo fechamento AEP. O commit de estado AEP é um terceiro objeto, gerado exclusivamente por `node scripts/track.mjs close pdv`. Os valores OPEN/READY e as validações no início deste arquivo descrevem a execução original; o estado final ratificado será o ledger/relatório gerado pelo close.
+
+Publicação autorizada somente na branch B2, com PR contra main e merge humano. Não iniciar N5-C nem reabrir N5-B1. O encerramento e as verificações posteriores serão reportados com seus resultados efetivos.
 
 ## Arquivos da entrega
 
@@ -88,4 +108,4 @@ Publicar somente o candidato técnico autorizado na branch B2. O SHA exato do ca
 - `docs/pdv/PDV_N5_B2_PIN_KEYMAP_001.md` (novo)
 - `docs/ai-execution/_evidence/PDV-PARITY-N5-B2-PIN-KEYMAP-001.md` (novo)
 
-Todos dentro da allowlist. `CURRENT_STATUS.md`, changelog e memória global não foram alterados: fora da allowlist e sem ratificação de DONE. A worktree será mantida para a revisão independente.
+Todos dentro da allowlist. `CURRENT_STATUS.md`, changelog e memória global não foram alterados: fora da allowlist nesta atualização documental. A worktree será mantida para integração por PR e merge humano.
