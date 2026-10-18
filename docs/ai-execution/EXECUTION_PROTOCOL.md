@@ -32,9 +32,9 @@ import/                       gitignored — insumo bruto de importação, nunca
 
 ## 2. Regra de ouro do ciclo de estado
 
-`status`, `open`, `check` e `attempt --fail` **não escrevem nenhum arquivo versionado**.
+`status`, `open`, `refresh-active`, `check` e `attempt --fail` **não escrevem arquivo versionado**.
 Somente `close`, `block`, `import`, `reconcile-blocked`, `registry`, `init` e `sync-adapters` escrevem.
-`open` escreve apenas `.aep-active`.
+`open` e `refresh-active` escrevem apenas `.aep-active`.
 
 `state.json` é 100% **derivado** de `protocol.json` + `LEDGER.jsonl` + `goals/` +
 `_closed/goals/` + `TRACK.md`. Não existe nele um único campo não derivável — é por isso
@@ -132,6 +132,49 @@ divergirem. `base_commit` é sempre `git merge-base HEAD origin/<default>`.
 **Uma trilha = uma branch = uma worktree.** O `open` valida branch e worktree e falha com
 exit 5 se não conferirem. O AEP **nunca** executa `checkout`, `switch`, `stash` ou `reset`
 — trocar de branch é ato seu.
+
+### Atualização oficial de escopo de sessão aberta — Pessoas, revisão 5 → 6
+
+`node scripts/track.mjs refresh-active pessoas [--dry-run]` atende exclusivamente à
+ampliação humana do GOAL `PESSOAS-DP-FRONTEND-001B-RECOVERY-001`: inclusão literal de
+`lib/pessoas/documentos/service.ts`. Não é um mecanismo genérico de replanejamento.
+O plano continua sendo humano; a autoridade é sua versão incorporada em
+`origin/<default>` e na base comum da branch. Faça fetch separadamente e integre o
+plano/mecanismo somente pelo fluxo Git autorizado. O comando não busca nem integra.
+
+Pré-condições verificadas antes de qualquer escrita:
+
+- Sessão existente, arquivo regular, árvore e índice limpos; identidade de protocolo,
+  GOAL, branch, worktree, caminhos do marcador e default iguais às declarações.
+- Base registrada ancestral da base comum única; plano histórico revisão 5 e plano
+  atual revisão 6 com o mesmo `plan_ref`. GOAL atual idêntico na árvore, HEAD, upstream
+  e base comum. Todos os GOALs quentes continuam ausentes de `base..HEAD` (item 8).
+- Snapshot antigo compatível com o GOAL histórico; somente a inclusão literal
+  autorizada, sem exclusão, reordenação ou duplicação de permissões. Teste, gates,
+  classe, risco, orçamento e demais campos contratuais permanecem. Os ajustes
+  documentais específicos da revisão 6 não transportam aprovação de revisão/merge:
+  decisão condicional continua pendente. O trecho do plano desde o runner obrigatório
+  até a entrega deve permanecer integralmente igual ao da revisão 5.
+- Tentativa dentro do teto, log sequencial e abertura válidos; ledger e arquivos
+  fechados da trilha iguais aos da base histórica, sem ratificação interveniente.
+  Estados derivados de todas as trilhas, registry e gates coerentes.
+
+A escrita substitui o marcador por `rename` de um arquivo irmão sincronizado, sem
+remover o original antes. Falha anterior à substituição mantém os bytes originais
+e remove o temporário. Antes da substituição, mudanças concorrentes de marcador,
+branch, HEAD, upstream ou árvore são recusadas. `base_commit` e `allowlist` são os
+únicos campos existentes atualizados; `attempt`, `attempts_log`, `opened_at` e
+campos desconhecidos ficam preservados. `scope_refresh_log` registra bases, revisão,
+blobs Git, inclusão autorizada, sessão preservada e SHA-256 dos bytes anteriores.
+Não há escrita em ledger, state, relatórios versionados, código, hooks ou outras trilhas.
+
+Dry-run faz as mesmas verificações sem criar arquivo temporário, atualizar índice
+ou fazer fetch. A repetição valida a proveniência e retorna NO-OP sem reescrever o
+marcador. O `check` e os hooks conservam todas as regras existentes, inclusive o
+item 8. Refresh não executa teste/close nem aprova preview, produção ou merge.
+Não rode `open` antes para renovar a base: o marcador legado não contém `plan_rev`,
+e a âncora histórica precisa continuar comprovável. Em divergência, preserve a sessão
+e resolva pelo rito humano; não a regenere nem reinicie tentativas.
 
 ## 9. O ciclo de DOIS COMMITS
 

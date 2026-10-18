@@ -18,7 +18,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 import {
   projectLatestGoalStates,
   countProjectedResults,
@@ -2130,4 +2131,325 @@ test('R-BLOCKED: falha de commit restaura ledger, GOALs, derivados, índice e HE
   assert.equal(g(f.repo, 'commit', '-m', 'fixture: restore commit-msg').code, 0);
   assert.equal(aep(f.repo, f.args).code, 0);
   assert.equal(ledgerDe(f.repo).length, 4);
+});
+
+// ---------------------------------------------------------------------------
+// refresh-active — todos os fluxos usam origin bare e sessão/planos descartáveis.
+// ---------------------------------------------------------------------------
+
+function activeRefreshFixture(t, options = {}) {
+  const f = makeRepo(t);
+  const { repo, name } = f;
+  const goal = 'PESSOAS-DP-FRONTEND-001B-RECOVERY-001';
+  const rel = `docs/execution-tracks/pessoas/goals/${goal}.md`;
+  const addition = 'lib/pessoas/documentos/service.ts';
+  const branch = 'goal/pessoas-001b-recovery-001';
+  assert.equal(aep(repo, ['init', 'pessoas', '--risk=ALTO']).code, 0);
+  const oldMeta = META_DEFAULTS(name, { id: goal, track: 'pessoas', branch, class: 'C3', risk_tier: 'ALTO',
+    plan_ref: 'OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15', plan_rev: 5,
+    familia_executor: 'openai', revisao_independente: true,
+    allowlist: ['app/**', rel, 'docs/execution-tracks/pessoas/state.json',
+      'docs/execution-tracks/REGISTRY.md', 'docs/ai-execution/GATES.md'],
+    gate_humano: { requerido: true, pendente: true, motivo: 'Plano aprovado; merge humano pendente.' } });
+  const validations = '\n## Runner obrigatório, preflight e evidências\n\nTestes reais, zero skipped, reserva de 12 GiB.\n\n## Gates e entrega futura\n\nPreview pendente; produção e GOAL 002 proibidos.\n';
+  const doc = (meta, tail = validations) => `<!-- AEP:META\n${JSON.stringify(meta, null, 2)}\n-->\n\n# ${goal}\n${tail}`;
+  w(repo, rel, doc(oldMeta));
+  const ledgerRel = 'docs/execution-tracks/pessoas/LEDGER.jsonl';
+  const history = [
+    { goal: 'pessoas-001a', result: 'DONE', attempt: 1, ts: '2026-10-01T00:00:00.000Z' },
+    { goal: 'pessoas-p2', result: 'DONE', attempt: 1, ts: '2026-10-02T00:00:00.000Z' },
+    { goal: 'pessoas-original', result: 'BLOCKED', attempt: 1, ts: '2026-10-03T00:00:00.000Z' },
+    { goal: 'pessoas-original', result: 'BLOCKED', attempt: 3, ts: '2026-10-04T00:00:00.000Z',
+      previous_attempts: [1, 2, 3].map((n) => ({ n, reason: `falha histórica ${n}` })) },
+  ];
+  w(repo, ledgerRel, history.map((e) => JSON.stringify(e)).join('\n') + '\n');
+  for (const e of history.slice(0, 3)) w(repo, `docs/execution-tracks/pessoas/_closed/goals/${e.goal}.md`,
+    doc({ ...oldMeta, id: e.goal, status: e.result }));
+  w(repo, 'docs/execution-tracks/pessoas/_closed/reports/historico.md', '# Histórico ratificado\n');
+  assert.equal(aep(repo, ['registry']).code, 0);
+  const commitPlan = (message) => {
+    assert.equal(g(repo, 'add', '--', 'docs/ai-execution/protocol.json', 'docs/ai-execution/GATES.md',
+      'docs/execution-tracks/pessoas', 'docs/execution-tracks/REGISTRY.md').code, 0);
+    const r = sh('git', ['commit', '-m', message], { cwd: repo, env: { AEP_WRITE: '1' } });
+    assert.equal(r.code, 0, r.all);
+  };
+  commitPlan('aep(pessoas): fixture plano revisão 5 com histórico');
+  assert.equal(g(repo, 'push', 'origin', 'main').code, 0);
+  const oldBase = g(repo, 'rev-parse', 'HEAD').out.trim();
+  assert.equal(g(repo, 'checkout', '-q', '-b', branch).code, 0);
+  const opened = aep(repo, ['open', 'pessoas']);
+  assert.equal(opened.code, 0, opened.all);
+  for (let n = 1; n < (options.attempt || 1); n += 1) {
+    const r = aep(repo, ['attempt', 'pessoas', '--fail', `--reason=Falha real ${n}`]);
+    assert.equal(r.code, 0, r.all);
+  }
+  w(repo, 'app/produtivo.ts', 'export const produtivo = 2;\n');
+  assert.equal(g(repo, 'add', '--', 'app/produtivo.ts').code, 0);
+  assert.equal(g(repo, 'commit', '-m', 'goal(pessoas-001): fixture produto').code, 0);
+  assert.equal(g(repo, 'checkout', '-q', 'main').code, 0);
+  const meta = { ...oldMeta, plan_rev: 6, allowlist: [...oldMeta.allowlist, addition],
+    gate_humano: { ...oldMeta.gate_humano, motivo: 'Revisão 6 aprovada; demais gates pendentes.' },
+    dispensa_humana_revisao: { INDEPENDENT_REVIEW: 'WAIVED_BY_HUMAN_DECISION', SELF_REVIEW: 'CODEX',
+      HUMAN_MERGE_AUTHORIZATION: 'PENDING', condicao_satisfeita: false } };
+  if (options.mutateMeta) options.mutateMeta(meta);
+  const newDoc = doc(meta, options.validations || validations);
+  w(repo, rel, newDoc);
+  if (options.history) options.history(repo, ledgerRel);
+  assert.equal(aep(repo, ['registry']).code, 0);
+  commitPlan('aep(pessoas): fixture ampliação humana revisão 6');
+  assert.equal(g(repo, 'push', 'origin', 'main').code, 0);
+  const approvedBase = g(repo, 'rev-parse', 'HEAD').out.trim();
+  assert.equal(g(repo, 'checkout', '-q', branch).code, 0);
+  if (options.copyOnly) {
+    w(repo, rel, newDoc);
+    assert.equal(g(repo, 'add', '--', rel).code, 0);
+    assert.equal(sh('git', ['commit', '-m', 'goal(pessoas-001): fixture cópia sem base'],
+      { cwd: repo, env: { AEP_WRITE: '1' } }).code, 0);
+  } else if (!options.noIntegrate) {
+    const merged = g(repo, 'merge', '--no-ff', 'main', '-m', 'goal(pessoas-001): incorporar plano aprovado');
+    assert.equal(merged.code, 0, merged.all);
+  }
+  return { ...f, goal, rel, addition, oldMeta, oldBase, approvedBase, ledgerRel, branch,
+    args: ['refresh-active', 'pessoas'] };
+}
+
+// Inclui bytes e mtimes de arquivos ignorados, índice, refs, reflogs e FETCH_HEAD.
+// Portanto um dry-run que fizesse fetch ou atualizasse o índice também falharia.
+function refreshSnapshot(repo) {
+  const files = {};
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, e.name);
+      if (e.isDirectory()) walk(file);
+      else files[path.relative(repo, file)] = { bytes: fs.readFileSync(file).toString('base64'),
+        mtime: fs.statSync(file).mtimeMs };
+    }
+  };
+  walk(repo);
+  return files;
+}
+
+test('REFRESH: dry-run valida base/revisão 6 sem alterar nenhum arquivo ou metadado Git', (t) => {
+  const f = activeRefreshFixture(t, { attempt: 3 });
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, [...f.args, '--dry-run']);
+  assert.equal(r.code, 0, r.all);
+  assert.match(r.all, /DRY-RUN/);
+  assert.match(r.all, /item 8 preservado/);
+  assert.match(r.all, /tentativa 3\/3/);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+});
+
+test('REFRESH: ampliação legítima preserva sessão/tentativas/histórico; repetição é NO-OP', (t) => {
+  const f = activeRefreshFixture(t, { attempt: 3 });
+  const file = path.join(f.repo, '.aep-active');
+  // Campos futuros/desconhecidos e formatação do marcador antigo não são perdidos.
+  const active = JSON.parse(fs.readFileSync(file, 'utf8'));
+  active.executor_context = { opaque: 'preservar' };
+  fs.writeFileSync(file, JSON.stringify(active, null, 4).replace(/\n/g, '\r\n') + '\r\n');
+  const original = fs.readFileSync(file);
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 0, r.all);
+  const after = refreshSnapshot(f.repo);
+  const updated = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(updated.base_commit, f.approvedBase);
+  assert.deepEqual(updated.allowlist, [...active.allowlist, f.addition]);
+  const { base_commit, allowlist, scope_refresh_log, ...preserved } = updated;
+  const { base_commit: oldBase, allowlist: oldAllowlist, ...oldPreserved } = active;
+  assert.deepEqual(preserved, oldPreserved);
+  assert.equal(scope_refresh_log.length, 1);
+  assert.equal(scope_refresh_log[0].previous_active_sha256, createHash('sha256').update(original).digest('hex'));
+  delete before['.aep-active'];
+  delete after['.aep-active'];
+  assert.deepEqual(after, before, 'somente o marcador foi escrito; nenhum commit, índice ou histórico');
+  for (const args of [f.args, [...f.args, '--dry-run']]) {
+    const snapshot = refreshSnapshot(f.repo);
+    const again = aep(f.repo, args);
+    assert.equal(again.code, 0, again.all);
+    assert.match(again.all, /NO-OP/);
+    assert.deepEqual(refreshSnapshot(f.repo), snapshot);
+  }
+  const check = aep(f.repo, ['check', 'pessoas']);
+  assert.equal(check.code, 0, check.all);
+  assert.match(check.all, /8 \[PASS\s*\].*goals/);
+  assert.equal(aep(f.repo, ['verify', '--all']).code, 0);
+});
+
+for (const [label, options, expected] of [
+  ['plano só na main, não incorporado', { noIntegrate: true }, /idêntico.*base comum/],
+  ['arquivo copiado sem base comum revisão 6', { copyOnly: true }, /idêntico.*base comum/],
+  ['permissão removida', { mutateMeta: (m) => { m.allowlist.shift(); } }, /ampliação exclusiva/],
+  ['outro path acrescentado', { mutateMeta: (m) => { m.allowlist.push('lib/pessoas/**'); } }, /ampliação exclusiva/],
+  ['path duplicado', { mutateMeta: (m) => { m.allowlist.push(m.allowlist[0]); } }, /ampliação exclusiva/],
+  ['teste reduzido', { mutateMeta: (m) => { m.test_command = 'node -e "process.exit(0)"'; } }, /contrato do plano/],
+  ['gate trocado', { mutateMeta: (m) => { m.gates_liberados = ['G-DADOS-SCHEMA']; } }, /contrato do plano/],
+  ['risco reduzido', { mutateMeta: (m) => { m.risk_tier = 'BAIXO'; } }, /contrato do plano/],
+  ['revisão independente removida', { mutateMeta: (m) => { m.revisao_independente = false; } }, /contrato do plano/],
+  ['validações técnicas reduzidas', { validations: '\n## Runner obrigatório, preflight e evidências\n\nTestes opcionais.\n' }, /validações, gates/],
+  ['outra revisão', { mutateMeta: (m) => { m.plan_rev = 7; } }, /revisão fora/],
+  ['outro plano', { mutateMeta: (m) => { m.plan_ref = 'OUTRO'; } }, /plano ou revisão/],
+  ['merge humano declarado aprovado', { mutateMeta: (m) => { m.dispensa_humana_revisao.HUMAN_MERGE_AUTHORIZATION = 'APPROVED'; } }, /condicional divergente/],
+  ['histórico ratificado alterado', { history: (repo, rel) => { fs.appendFileSync(path.join(repo, rel), '{"goal":"outro","result":"DONE"}\n'); } }, /histórico AEP divergente/],
+]) test(`REFRESH: recusa ${label} sem escrita, inclusive dry-run`, (t) => {
+  const f = activeRefreshFixture(t, options);
+  for (const args of [f.args, [...f.args, '--dry-run']]) {
+    const before = refreshSnapshot(f.repo);
+    const r = aep(f.repo, args);
+    assert.equal(r.code, 4, r.all);
+    assert.match(r.all, expected);
+    assert.deepEqual(refreshSnapshot(f.repo), before);
+  }
+});
+
+test('REFRESH: recusa divergências do marcador, falta de sessão e argumentos sem escrita', (t) => {
+  const f = activeRefreshFixture(t);
+  const file = path.join(f.repo, '.aep-active');
+  const original = fs.readFileSync(file);
+  for (const mutate of [
+    (a) => { a.goal = 'outro'; }, (a) => { a.track = 'demo'; },
+    (a) => { a.branch = 'goal/outra'; }, (a) => { a.worktree += '-outra'; },
+    (a) => { a.goal_file = '../fora.md'; }, (a) => { a.goal_file_abs += '.outro'; },
+    (a) => { a.base_commit = 'f'.repeat(40); }, (a) => { a.default_branch = 'outra'; },
+    (a) => { a.attempt = 4; }, (a) => { a.attempt = 2; },
+    (a) => { a.opened_at = 'inválido'; }, (a) => { a.max_attempts = 4; },
+    (a) => { a.test_command = 'node falso.mjs'; }, (a) => { a.allowlist.push(f.addition); },
+    (a) => { a.gates_liberados.push('G-DADOS-SCHEMA'); }, (a) => { a.scope_refresh_log = []; },
+  ]) {
+    const active = JSON.parse(original);
+    mutate(active);
+    fs.writeFileSync(file, JSON.stringify(active));
+    const before = refreshSnapshot(f.repo);
+    const r = aep(f.repo, f.args);
+    assert.notEqual(r.code, 0, r.all);
+    assert.deepEqual(refreshSnapshot(f.repo), before);
+  }
+  fs.writeFileSync(file, original);
+  for (const args of [[...f.args, '--dryrun'], [...f.args, '--dry-run=false'], [...f.args, 'extra'], ['refresh-active', 'demo']]) {
+    const before = refreshSnapshot(f.repo);
+    assert.notEqual(aep(f.repo, args).code, 0);
+    assert.deepEqual(refreshSnapshot(f.repo), before);
+  }
+  fs.writeFileSync(file, '{ JSON inválido');
+  const corrupt = refreshSnapshot(f.repo);
+  const refused = aep(f.repo, f.args);
+  assert.equal(refused.code, 1, refused.all);
+  assert.match(refused.all, /não remova, regenere ou reabra/);
+  assert.deepEqual(refreshSnapshot(f.repo), corrupt);
+  fs.unlinkSync(file);
+  const before = refreshSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 5);
+  assert.deepEqual(refreshSnapshot(f.repo), before, 'não cria nem reabre sessão');
+});
+
+test('REFRESH: índice/árvore sujos e open prévio que perdeu a base histórica são recusados', (t) => {
+  const f = activeRefreshFixture(t);
+  w(f.repo, 'app/sujo.ts', 'não commitado\n');
+  for (const staged of [false, true]) {
+    if (staged) assert.equal(g(f.repo, 'add', '--', 'app/sujo.ts').code, 0);
+    const before = refreshSnapshot(f.repo);
+    assert.equal(aep(f.repo, f.args).code, 4);
+    assert.deepEqual(refreshSnapshot(f.repo), before);
+  }
+  assert.equal(g(f.repo, 'restore', '--staged', '--', 'app/sujo.ts').code, 0);
+  fs.unlinkSync(path.join(f.repo, 'app/sujo.ts'));
+  assert.equal(aep(f.repo, ['open', 'pessoas']).code, 0);
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 4, r.all);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+});
+
+test('REFRESH: falha de rename faz rollback completo e retry não duplica auditoria', (t) => {
+  const f = activeRefreshFixture(t, { attempt: 2 });
+  const preload = w(f.tmp, 'fail-refresh-rename.mjs', "import fs from 'node:fs';\nfs.renameSync = () => { throw new Error('rename recusado no teste'); };\n");
+  const before = refreshSnapshot(f.repo);
+  const r = sh(process.execPath, ['--import', pathToFileURL(preload).href, TRACK, ...f.args], { cwd: f.repo });
+  assert.equal(r.code, 5, r.all);
+  assert.match(r.all, /marcador original preservado/);
+  assert.deepEqual(refreshSnapshot(f.repo), before, 'nenhum temporário, índice ou marcador parcial');
+  assert.equal(aep(f.repo, f.args).code, 0);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.repo, '.aep-active'))).scope_refresh_log.length, 1);
+});
+
+test('REFRESH: compare-and-swap preserva escrita concorrente no marcador', (t) => {
+  const f = activeRefreshFixture(t);
+  const preload = w(f.tmp, 'concurrent-refresh.mjs', "import fs from 'node:fs';\nconst original = fs.fsyncSync;\nfs.fsyncSync = (fd) => { original(fd); const a = JSON.parse(fs.readFileSync('.aep-active')); a.concurrent = true; fs.writeFileSync('.aep-active', JSON.stringify(a)); };\n");
+  const original = JSON.parse(fs.readFileSync(path.join(f.repo, '.aep-active')));
+  const r = sh(process.execPath, ['--import', pathToFileURL(preload).href, TRACK, ...f.args], { cwd: f.repo });
+  assert.equal(r.code, 4, r.all);
+  assert.match(r.all, /mudaram durante o refresh/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.repo, '.aep-active'))), { ...original, concurrent: true });
+  assert.equal(fs.readdirSync(f.repo).filter((p) => p.includes('.refresh-')).length, 0);
+});
+
+test('REFRESH: hooks usam a nova allowlist e item 8 continua recusando GOAL editado', (t) => {
+  const f = activeRefreshFixture(t);
+  w(f.repo, f.addition, 'serviço de fixture\n');
+  assert.equal(g(f.repo, 'add', '--', f.addition).code, 0);
+  const denied = g(f.repo, 'commit', '-m', 'goal(pessoas-001): ainda fora da allowlist');
+  assert.notEqual(denied.code, 0, denied.all);
+  assert.equal(g(f.repo, 'restore', '--staged', '--', f.addition).code, 0);
+  fs.unlinkSync(path.join(f.repo, f.addition));
+  assert.equal(aep(f.repo, f.args).code, 0);
+  w(f.repo, f.addition, 'serviço de fixture\n');
+  assert.equal(g(f.repo, 'add', '--', f.addition).code, 0);
+  const allowed = g(f.repo, 'commit', '-m', 'goal(pessoas-001): path oficialmente ampliado');
+  assert.equal(allowed.code, 0, allowed.all);
+  assert.equal(aep(f.repo, ['check', 'pessoas']).code, 0);
+  fs.appendFileSync(path.join(f.repo, f.rel), '\nEdição local do plano proibida.\n');
+  assert.equal(g(f.repo, 'add', '--', f.rel).code, 0);
+  assert.equal(sh('git', ['commit', '-m', 'aep(pessoas): fixture edição de GOAL'],
+    { cwd: f.repo, env: { AEP_WRITE: '1' } }).code, 0);
+  const before = refreshSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 4);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+  const check = aep(f.repo, ['check', 'pessoas']);
+  assert.equal(check.code, 3, check.all);
+  assert.match(check.all, /8 \[FAIL\s*\].*goals/);
+});
+
+test('REFRESH: item 8 também recusa GOAL de outra trilha no delta', (t) => {
+  const f = activeRefreshFixture(t);
+  const rel = 'docs/execution-tracks/outra/goals/REVISAO-Á.md';
+  w(f.repo, rel, '# Plano local de outra trilha\n');
+  assert.equal(g(f.repo, 'add', '--', rel).code, 0);
+  assert.equal(sh('git', ['commit', '-m', 'aep(outra): fixture plano local'],
+    { cwd: f.repo, env: { AEP_WRITE: '1' } }).code, 0);
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 4, r.all);
+  assert.match(r.all, /item 8: GOALs no delta/);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+});
+
+test('REFRESH: auditoria divergente é recusada; nova tentativa oficial continua válida', (t) => {
+  const f = activeRefreshFixture(t, { attempt: 2 });
+  assert.equal(aep(f.repo, f.args).code, 0);
+  const file = path.join(f.repo, '.aep-active');
+  const original = fs.readFileSync(file);
+  for (const mutate of [
+    (a) => { a.scope_refresh_log[0].from_base_commit = 'f'.repeat(40); },
+    (a) => { a.scope_refresh_log[0].goal_blob_after = 'f'.repeat(40); },
+    (a) => { a.scope_refresh_log[0].added_paths = ['lib/pessoas/**']; },
+    (a) => { a.scope_refresh_log[0].attempt = 1; },
+    (a) => { a.scope_refresh_log[0].opened_at = '2026-01-01T00:00:00.000Z'; },
+    (a) => { a.base_commit = f.oldBase; a.scope_refresh_log[0].base_commit = f.oldBase; },
+  ]) {
+    const active = JSON.parse(original);
+    mutate(active);
+    fs.writeFileSync(file, JSON.stringify(active));
+    const before = refreshSnapshot(f.repo);
+    const r = aep(f.repo, f.args);
+    assert.equal(r.code, 4, r.all);
+    assert.deepEqual(refreshSnapshot(f.repo), before);
+  }
+  fs.writeFileSync(file, original);
+  assert.equal(aep(f.repo, ['attempt', 'pessoas', '--fail', '--reason=Falha posterior ao refresh']).code, 0);
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 0, r.all);
+  assert.match(r.all, /NO-OP/);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+  assert.equal(JSON.parse(fs.readFileSync(file)).attempt, 3);
 });

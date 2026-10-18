@@ -15,15 +15,16 @@
  * Ver docs/ai-execution/EXECUTION_PROTOCOL.md § MODELO DE SEGURANÇA.
  *
  * REGRA DE OURO DO CICLO DE ESTADO:
- *   status, open, check e `attempt --fail` NÃO escrevem nenhum arquivo versionado.
+ *   status, open, refresh-active, check e `attempt --fail` NÃO escrevem arquivo versionado.
  *   Somente close, block, import, reconcile-blocked, registry, init e sync-adapters escrevem.
- *   open escreve apenas .aep-active (gitignored).
+ *   open e refresh-active escrevem apenas .aep-active (gitignored).
  *   state.json representa exclusivamente o ÚLTIMO ESTADO RATIFICADO.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
 
 export const AEP_VERSION = '1.0-R2';
 export const AEP_LABEL = `AEP/${AEP_VERSION}`;
@@ -679,6 +680,7 @@ function dispatch(cmd, positional, flags) {
   if (cmd === 'reconcile-blocked') return cmdReconcileBlocked(root, protocol, positional[0], flags);
   if (cmd === 'status') return cmdStatus(root, protocol, positional[0], flags);
   if (cmd === 'open') return cmdOpen(root, protocol, positional[0]);
+  if (cmd === 'refresh-active') return cmdRefreshActive(root, protocol, positional, flags);
   if (cmd === 'check') return cmdCheck(root, protocol, positional[0]);
   if (cmd === 'close') return cmdClose(root, protocol, positional[0]);
   if (cmd === 'attempt') return cmdAttempt(root, protocol, positional[0], flags);
@@ -853,6 +855,184 @@ function overlaps(a, b) {
   const pa = a.endsWith('/**') ? a.slice(0, -2) : a;
   const pb = b.endsWith('/**') ? b.slice(0, -2) : b;
   return pa.startsWith(pb) || pb.startsWith(pa);
+}
+
+// ---------------------------------------------------------------------------
+// refresh-active — ampliação humana rev. 5 → 6 do Pessoas, sem reabrir sessão.
+// A autoridade é o plano versionado em origin/<default> E na base comum, nunca
+// um arquivo copiado para a branch. Não há autorização genérica para outras revisões.
+// ---------------------------------------------------------------------------
+
+function cmdRefreshActive(root, protocol, positional, flags) {
+  const [track] = positional;
+  const command = 'node scripts/track.mjs refresh-active pessoas [--dry-run]';
+  if (positional.length !== 1 || Object.keys(flags).some((k) => k !== 'dry-run')
+      || (flags['dry-run'] !== undefined && flags['dry-run'] !== true)) {
+    fail(1, 'erro de uso', command, 'argumentos inválidos', 'Use somente a trilha e, opcionalmente, --dry-run.');
+  }
+  const reject = (out, cmd = command) => fail(4, 'divergência de estado', cmd, out,
+    'Preserve a sessão e as tentativas; resolva a divergência no fluxo humano de planejamento/Git.');
+  if (track !== 'pessoas' || !Object.hasOwn(protocol.tracks, track)) reject('ampliação sem autorização para esta trilha');
+  requireTrack(root, protocol, track);
+  const file = activePath(root);
+  if (!fs.existsSync(file)) fail(5, 'pré-condição de ambiente', command, 'sessão existente ausente',
+    'Refresh não cria nem reabre sessão. Preserve as tentativas e resolva pelo fluxo humano.');
+  if (!fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink()) reject('marcador não é arquivo regular');
+  const original = fs.readFileSync(file);
+  let active;
+  try { active = JSON.parse(original.toString('utf8')); } catch (err) {
+    fail(1, 'metadado inválido', `cat ${ACTIVE_FILE}`, err.message,
+      'Preserve o marcador e as tentativas; não remova, regenere ou reabra a sessão. Resolva pelo fluxo humano.');
+  }
+  if (!active || typeof active !== 'object' || Array.isArray(active) || active.track !== track) reject('identidade da sessão divergente');
+  const readGit = (args) => {
+    // Até status fica sem refresh do índice: --dry-run não escreve metadados Git.
+    const r = git(args, { cwd: root, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } });
+    if (r.code !== 0) reject(r.stderr || r.stdout, r.cmd);
+    return r.stdout.trimEnd();
+  };
+  if (readGit(['status', '--porcelain', '--untracked-files=all'])) reject('árvore ou índice sujo');
+  const goal = 'PESSOAS-DP-FRONTEND-001B-RECOVERY-001';
+  const goalRel = trackRel(protocol, track, 'goals', `${goal}.md`);
+  const def = defaultBranch(protocol);
+  const branch = currentBranch(root);
+  if (active.aep !== AEP_VERSION || active.goal !== goal || active.goal_file !== goalRel
+      || active.goal_file_abs !== toPosix(path.join(root, goalRel)) || active.branch !== branch
+      || branch === def || branch === 'HEAD' || active.worktree !== root
+      || active.default_branch !== def || !/^[a-f0-9]{40}$/.test(active.base_commit || '')) {
+    reject('identidade de GOAL, branch, worktree ou base da sessão divergente');
+  }
+  const validDate = (v) => typeof v === 'string' && Number.isFinite(Date.parse(v));
+  if (active.max_attempts !== protocol.max_attempts || !Number.isInteger(active.attempt)
+      || active.attempt < 1 || active.attempt > active.max_attempts || !validDate(active.opened_at)
+      || !Array.isArray(active.attempts_log) || active.attempts_log.length !== active.attempt - 1
+      || active.attempts_log.some((a, i, log) => !a || a.n !== i + 1 || !validDate(a.at)
+        || Date.parse(a.at) < Date.parse(i ? log[i - 1].at : active.opened_at)
+        || typeof a.reason !== 'string' || !a.reason.trim())) reject('histórico de tentativas ou abertura divergente');
+
+  const head = readGit(['rev-parse', '--verify', 'HEAD^{commit}']);
+  const upstream = readGit(['rev-parse', '--verify', `refs/remotes/origin/${def}^{commit}`]);
+  const bases = readGit(['merge-base', '--all', head, upstream]).split('\n');
+  if (bases.length !== 1) reject('base comum ambígua');
+  const [base] = bases;
+  readGit(['merge-base', '--is-ancestor', active.base_commit, base]);
+  const audit = active.scope_refresh_log;
+  if (audit !== undefined && (!Array.isArray(audit) || audit.length !== 1)) reject('histórico de refresh divergente');
+  const previousBase = audit ? audit[0]?.from_base_commit : active.base_commit;
+  if (!/^[a-f0-9]{40}$/.test(previousBase || '')) reject('base histórica do refresh inválida');
+  readGit(['merge-base', '--is-ancestor', previousBase, active.base_commit]);
+  const blob = (ref, rel) => readGit(['show', `${ref}:${rel}`]).replace(/\r\n/g, '\n');
+  const oldText = blob(previousBase, goalRel);
+  const newText = blob(base, goalRel);
+  const oldBlob = readGit(['rev-parse', `${previousBase}:${goalRel}`]);
+  const newBlob = readGit(['rev-parse', `${base}:${goalRel}`]);
+  if (newBlob !== readGit(['rev-parse', `${head}:${goalRel}`])
+      || newBlob !== readGit(['rev-parse', `${upstream}:${goalRel}`])
+      || newText !== fs.readFileSync(path.join(root, goalRel), 'utf8').replace(/\r\n/g, '\n').trimEnd()) {
+    reject('GOAL deve ser idêntico em HEAD, árvore, origin/default e base comum (item 8)');
+  }
+  const before = extractBlock(oldText, 'AEP:META', `${previousBase}:${goalRel}`);
+  const meta = readGoalMeta(path.join(root, goalRel), protocol);
+  if (!before || before.id !== goal || before.track !== track || meta.id !== goal || meta.track !== track
+      || before.plan_rev !== 5 || meta.plan_rev !== 6
+      || meta.plan_ref !== 'OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15'
+      || before.plan_ref !== meta.plan_ref || meta.status !== 'READY'
+      || meta.branch !== branch || !worktreeMatches(root, meta.worktree)) reject('plano ou revisão fora da autorização 5 → 6');
+  const addition = 'lib/pessoas/documentos/service.ts';
+  if (!Array.isArray(before.allowlist) || before.allowlist.includes(addition)
+      || new Set(meta.allowlist).size !== meta.allowlist.length
+      || !deepEqual(meta.allowlist.filter((p) => p !== addition), before.allowlist)
+      || meta.allowlist.filter((p) => p === addition).length !== 1) reject('allowlist não é a ampliação exclusiva autorizada');
+  // Os únicos ajustes documentais do META na revisão humana 6. Nenhuma mudança
+  // de teste, gates, classe, orçamento, identidade ou validação é transportada.
+  const stable = (m) => {
+    const { __file, allowlist, plan_rev, dispensa_humana_revisao, ...rest } = m;
+    if (rest.gate_humano) {
+      const { motivo, ...gate } = rest.gate_humano;
+      rest.gate_humano = gate;
+    }
+    return rest;
+  };
+  if (!deepEqual(stable(before), stable(meta)) || meta.gate_humano?.requerido !== true
+      || meta.gate_humano?.pendente !== true) reject('contrato do plano alterado além da ampliação autorizada');
+  const waiver = meta.dispensa_humana_revisao;
+  if (waiver && (waiver.INDEPENDENT_REVIEW !== 'WAIVED_BY_HUMAN_DECISION' || waiver.SELF_REVIEW !== 'CODEX'
+      || waiver.HUMAN_MERGE_AUTHORIZATION !== 'PENDING' || waiver.condicao_satisfeita !== false)) {
+    reject('decisão humana condicional divergente; refresh não aprova revisão nem merge');
+  }
+  const validations = '\n## Runner obrigatório, preflight e evidências\n';
+  if (!oldText.includes(validations) || !newText.includes(validations)
+      || oldText.slice(oldText.indexOf(validations)) !== newText.slice(newText.indexOf(validations))) {
+    reject('validações, gates e entrega do plano foram alterados');
+  }
+  const expected = { test_command: before.test_command, gates_liberados: before.gates_liberados,
+    read_budget: before.read_budget, classe: before.class };
+  if (Object.entries(expected).some(([k, v]) => !deepEqual(active[k], v))
+      || !deepEqual(active.allowlist, audit ? meta.allowlist : before.allowlist)) reject('snapshot da sessão diverge do plano histórico');
+  const hotDelta = readGit(['diff', '--name-only', '-z', `${base}..${head}`, '--', `${protocol.tracks_dir}/`])
+    .split('\0').filter((p) => structuralRules(protocol).goalsHot.test(p));
+  if (hotDelta.length) reject(`item 8: GOALs no delta: ${hotDelta.join(' ')}`);
+  const rel = trackRel(protocol, track);
+  const history = [`${rel}/LEDGER.jsonl`, `${rel}/_closed/`];
+  if (readGit(['diff', '--name-only', `${previousBase}..${base}`, '--', ...history])
+      || readGit(['diff', '--name-only', `${base}..${head}`, '--', ...history])) reject('histórico AEP divergente da sessão original');
+  const problems = Object.keys(protocol.tracks).flatMap((t) => verifyTrack(root, protocol, t));
+  if (problems.length || fs.readFileSync(path.join(tracksRoot(root, protocol), 'REGISTRY.md'), 'utf8').replace(/\r\n/g, '\n') !== renderRegistry(root, protocol)
+      || fs.readFileSync(path.join(root, 'docs/ai-execution/GATES.md'), 'utf8').replace(/\r\n/g, '\n') !== renderGates(protocol)
+      || eligibleGoals(trackDir(root, protocol, track), protocol)[0]?.id !== goal) reject('estado/ledger/derivados ou sessão elegível divergentes');
+  if (audit) {
+    const entry = audit[0];
+    if (entry.base_commit !== active.base_commit || entry.plan_ref !== meta.plan_ref
+        || readGit(['rev-parse', `${active.base_commit}:${goalRel}`]) !== newBlob || entry.opened_at !== active.opened_at
+        || !Number.isInteger(entry.attempt) || entry.attempt < 1 || entry.attempt > active.attempt
+        || !deepEqual(entry.attempts_log, active.attempts_log.slice(0, entry.attempt - 1))
+        || entry.from_plan_rev !== 5 || entry.plan_rev !== 6 || entry.goal_blob_before !== oldBlob
+        || entry.goal_blob_after !== newBlob || !deepEqual(entry.added_paths, [addition])
+        || !validDate(entry.at) || Date.parse(entry.at) < Date.parse(active.opened_at)
+        || !/^[a-f0-9]{64}$/.test(entry.previous_active_sha256 || '')) reject('proveniência do refresh divergente');
+    process.stdout.write(`${AEP_LABEL} · refresh-active ${track}${flags['dry-run'] ? ' · DRY-RUN' : ''}\nNO-OP: sessão já atualizada; nenhum arquivo escrito.\n`);
+    return 0;
+  }
+  const updated = { ...active, base_commit: base, allowlist: meta.allowlist, scope_refresh_log: [{
+    at: new Date().toISOString(), from_base_commit: previousBase, base_commit: base,
+    attempt: active.attempt, attempts_log: active.attempts_log, opened_at: active.opened_at,
+    plan_ref: meta.plan_ref, from_plan_rev: 5, plan_rev: 6, goal_blob_before: oldBlob,
+    goal_blob_after: newBlob, added_paths: [addition],
+    previous_active_sha256: createHash('sha256').update(original).digest('hex'),
+  }] };
+  const summary = `${AEP_LABEL} · refresh-active ${track}${flags['dry-run'] ? ' · DRY-RUN' : ''}\n`
+    + `GOAL: ${goal} · plan_rev 5 → 6 · base comum: ${base}\n`
+    + `allowlist: +${addition} · tentativa ${active.attempt}/${active.max_attempts} e histórico preservados\n`;
+  if (flags['dry-run']) {
+    process.stdout.write(`${summary}MODO DRY-RUN: nenhum arquivo escrito; item 8 preservado.\n`);
+    return 0;
+  }
+  // Arquivo irmão + fsync + rename, sem unlink do marcador. Falha anterior ao
+  // rename deixa o original intacto; compare-and-swap recusa sessão/Git alterados.
+  const temp = `${file}.refresh-${randomUUID()}.tmp`;
+  let fd;
+  try {
+    fd = fs.openSync(temp, 'wx', fs.statSync(file).mode & 0o777);
+    fs.writeFileSync(fd, canonicalJson(updated));
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    if (!fs.lstatSync(file).isFile() || !fs.readFileSync(file).equals(original)
+        || currentBranch(root) !== branch || readGit(['rev-parse', 'HEAD']) !== head
+        || readGit(['rev-parse', `refs/remotes/origin/${def}`]) !== upstream
+        || readGit(['status', '--porcelain', '--untracked-files=all', '--', '.', `:(exclude)${path.basename(temp)}`])) {
+      reject('sessão, branch, refs ou árvore mudaram durante o refresh');
+    }
+    fs.renameSync(temp, file);
+  } catch (err) {
+    if (err instanceof AepError) throw err;
+    fail(5, 'pré-condição de ambiente', command, err.message, 'Escrita atômica recusada; marcador original preservado. Corrija o acesso e repita.');
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    if (fs.existsSync(temp)) fs.unlinkSync(temp);
+  }
+  process.stdout.write(`${summary}.aep-active atualizado atomicamente; nenhum arquivo versionado escrito.\n`);
+  return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -2740,7 +2920,7 @@ function parseArgs(argv) {
 }
 
 const COMMANDS = new Set(['status', 'open', 'check', 'close', 'attempt', 'block', 'init',
-  'import', 'reconcile-blocked', 'registry', 'verify', 'doctor', 'sync-adapters', 'hook']);
+  'refresh-active', 'import', 'reconcile-blocked', 'registry', 'verify', 'doctor', 'sync-adapters', 'hook']);
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -2763,6 +2943,7 @@ function usage() {
     '',
     '  status <trilha> [--json]        somente leitura',
     '  open <trilha>                   escreve só .aep-active (gitignored)',
+    '  refresh-active pessoas [--dry-run]  amplia sessão existente após plano rev. 6 na base comum',
     '  check <trilha>                  somente leitura; 12 verificações',
     '  close <trilha>                  ratifica: ledger + state + registry + commit aep(...)',
     '  attempt <trilha> --fail --reason="..."',

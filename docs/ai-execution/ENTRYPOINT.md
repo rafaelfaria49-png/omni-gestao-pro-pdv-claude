@@ -7,6 +7,29 @@ Fonte canônica de execução. Vale para qualquer executor. O protocolo é OPT-I
 2. `node scripts/track.mjs open <trilha>` — escreve só `.aep-active` (gitignored) e imprime o briefing: o ÚNICO arquivo de GOAL a ler, branch, base, tentativa, allowlist, gates liberados, teste e orçamento de leitura.
 3. Leia apenas esse arquivo de GOAL. Trabalhe apenas dentro da allowlist.
 
+## Atualizar a allowlist de uma sessão Pessoas já aberta
+
+Para `PESSOAS-DP-FRONTEND-001B-RECOVERY-001`, há um fluxo separado e restrito à
+ampliação humana da revisão 5 para 6: somente `lib/pessoas/documentos/service.ts`.
+Após autorização humana do fluxo Git e integração legítima do mecanismo e do plano
+na branch de execução, com árvore/índice limpos e `origin/main` conferida por fetch:
+
+```bash
+node scripts/track.mjs refresh-active pessoas --dry-run
+node scripts/track.mjs refresh-active pessoas
+```
+
+A revisão 6 precisa estar idêntica em HEAD, árvore, upstream e base comum. Copiar o
+GOAL para a branch não basta. O comando não faz fetch, merge, rebase, testes ou close.
+Escreve atomicamente somente `.aep-active`, preserva abertura/tentativas e acrescenta
+proveniência em `scope_refresh_log`; repetição é NO-OP. Dry-run não escreve arquivo
+nem metadados Git. Nenhum gate técnico, revisão, preview ou merge é aprovado por ele.
+
+Não use `open` para atualizar a base antes do refresh: ele mantém o snapshot antigo
+e pode perder a âncora histórica necessária. Divergência exige resolução humana;
+não apague, edite ou regenere a sessão para contornar a recusa. Outras ampliações
+não estão autorizadas por este comando. Detalhes: `EXECUTION_PROTOCOL.md` § 8.
+
 ## Regras não negociáveis
 - Escreva só dentro da allowlist impressa pelo `open`.
 - Nunca use `git add .`, `git add -A` ou `git commit -a` — adicione por caminho explícito. Regra OPERACIONAL HUMANA: o hook valida o conjunto staged e não tem como saber qual comando você digitou.
