@@ -1,0 +1,34 @@
+import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import assert from 'node:assert/strict';
+const dir=path.join(process.cwd(),'docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8');
+const seal=JSON.parse(fs.readFileSync(path.join(dir,'packet-seal.json'),'utf8')),packet=path.join(dir,seal.packetRelative);
+const required=JSON.parse(fs.readFileSync(path.join(packet,'LEITURA-OBRIGATORIA.json'),'utf8'));
+const review=JSON.parse(fs.readFileSync(path.join(dir,'r-anthropic-result.json'),'utf8'));
+const norm=p=>path.resolve(p).replaceAll('\\','/').toLowerCase();
+const requirements=new Map(required.map(r=>[norm(path.join(packet,r.path)),{...r,covered:new Set(),reads:[]}]));
+const rawPath=path.join(dir,'r-anthropic-raw.jsonl'),calls=new Map(),failedReads=[],hashRuns=[];
+const raw=fs.readFileSync(rawPath,'utf8');
+for(const line of raw.split('\n')){let e;try{e=JSON.parse(line)}catch{continue}
+ if(e.type==='assistant')for(const c of e.message?.content??[])if(c.type==='tool_use')calls.set(c.id,c);
+ if(e.type!=='user')continue;
+ for(const c of e.message?.content??[]){if(c.type!=='tool_result')continue;const call=calls.get(c.tool_use_id);if(!call)continue;
+  const content=typeof c.content==='string'?c.content:JSON.stringify(c.content);
+  if(call.name==='Bash'&&!c.is_error&&content.includes(seal.manifestSHA256)&&content.includes('PASS'))hashRuns.push({id:c.tool_use_id,command:call.input?.command,content});
+  if(call.name!=='Read')continue;const key=norm(call.input.file_path),req=requirements.get(key);if(!req)continue;
+  const file=e.tool_use_result?.file;
+  if(c.is_error||!file||typeof file.content!=='string'){failedReads.push({path:req.path,input:call.input,error:content.slice(0,400)});continue}
+  const canonical=fs.readFileSync(path.join(packet,req.path),'utf8').replaceAll('\r\n','\n').replace(/\n$/,'').split('\n');
+  const start=file.startLine??call.input.offset??1,num=file.numLines;
+  const expected=canonical.slice(start-1,start-1+num).join('\n');
+  const observed=file.content.replaceAll('\r\n','\n').replace(/\n$/,'');
+  const matches=observed===expected||observed===expected.replace(/\n$/,'');
+  if(!matches){failedReads.push({path:req.path,input:call.input,error:'Conteúdo estruturado difere do intervalo canônico',start,num,expectedLength:expected.length,observedLength:observed.length});continue}
+  for(let i=start;i<start+num&&i<=req.lines;i++)req.covered.add(i);
+  req.reads.push({id:c.tool_use_id,offset:start,numLines:num,inputLimit:call.input.limit??null});
+ }
+}
+const files=[...requirements.values()].map(r=>{const missing=[];let start=null;for(let i=1;i<=r.lines+1;i++){if(i<=r.lines&&!r.covered.has(i)){if(start===null)start=i}else if(start!==null){missing.push({offset:start,limit:i-start});start=null}}return{path:r.path,source:r.source,category:r.category,lines:r.lines,covered:r.covered.size,complete:missing.length===0,missing,reads:r.reads}});
+const complete=files.every(f=>f.complete),hashVerified=hashRuns.length>0;
+const result={sha:seal.sha,reviewSession:review.sessionId,model:review.modelObserved,rawSHA256:crypto.createHash('sha256').update(raw).digest('hex'),manifestSHA256:seal.manifestSHA256,zipSHA256:seal.zipSHA256,requiredFiles:files.length,completeFiles:files.filter(f=>f.complete).length,complete,hashVerified,hashRuns,failedReads,files};
+fs.writeFileSync(path.join(dir,'r-coverage-audit.json'),JSON.stringify(result,null,2));
+console.log(JSON.stringify({...result,hashRuns:hashRuns.map(x=>({id:x.id,command:x.command})),failedReads:failedReads.slice(0,12),files:files.filter(f=>!f.complete).map(({reads,...f})=>f)}));
+process.exitCode=complete&&hashVerified?0:1;

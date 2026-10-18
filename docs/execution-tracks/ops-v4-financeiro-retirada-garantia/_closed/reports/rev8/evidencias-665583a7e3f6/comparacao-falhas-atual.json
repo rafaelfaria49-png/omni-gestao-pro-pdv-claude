@@ -1,0 +1,34 @@
+{
+  "sha": "665583a7e3f6f1b9552b4c56b3d6a3dd97299167",
+  "main": "9f1b511a21ab98a924513428d465725e6839fdc2",
+  "baseline": "98ef7172a915713ad177207112f6aff3db9801a1",
+  "preview": {
+    "baseFailures": [
+      "components/operacoes-v4-preview/preview-honesty.test.ts > GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real > \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > mantém estado de múltiplas linhas (array), não forma única",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only > não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)"
+    ],
+    "candidateFailures": [
+      "components/operacoes-v4-preview/preview-honesty.test.ts > GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real > \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > mantém estado de múltiplas linhas (array), não forma única",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only > não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+      "components/operacoes-v4-preview/preview-honesty.test.ts > PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)"
+    ],
+    "nominallyIdentical": true
+  },
+  "baselineVsCurrentMainInFunctionalPaths": [],
+  "comparedPaths": 50
+}

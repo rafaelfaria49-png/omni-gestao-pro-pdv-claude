@@ -220,7 +220,7 @@ describe("requireCadastrosSession — sem inventar store", () => {
 
 describe("rotas alteradas chamam o gate (source scan)", () => {
   const files: Array<[string, string]> = [
-    ["app/api/clientes/route.ts", 'requireCadastrosHubApi(req, "read", "shared")'],
+    ["lib/cadastros/client-read-api.ts", 'requireCadastrosHubApi(req, "read", "shared")'],
     ["app/api/clientes/route.ts", 'requireCadastrosHubApi(req, "write", "admin")'],
     ["app/api/clientes/[id]/route.ts", 'requireCadastrosHubApi(req, "read", "shared")'],
     ["app/api/clientes/match-by-phone/route.ts", 'requireCadastrosHubApi(req, "read", "shared")'],
@@ -231,8 +231,8 @@ describe("rotas alteradas chamam o gate (source scan)", () => {
     ["app/api/catalogo/aparelhos/produto/[id]/route.ts", 'requireCadastrosHubApi(req, "read")'],
     ["app/api/product/fiscal-classify/route.ts", "requireCadastrosSession({ hub: true })"],
     ["app/api/product/ncm-suggest/route.ts", "requireCadastrosSession({ hub: true })"],
-    ["app/api/clientes/importar/route.ts", 'requireCadastrosHubApi(request, "read", "shared")'],
-    ["app/api/ops/import/clientes/route.ts", 'requireCadastrosHubApi(req, "read", "shared")'],
+    ["app/api/clientes/importar/route.ts", 'requireCadastrosHubApi(req, "read", "hub")'],
+    ["lib/import-clientes-json.ts", 'requireCadastrosHubApi(req, "write", "admin")'],
     ["app/api/ops/categorias-produto/route.ts", 'requireCadastrosHubApi(req, "read", "shared")'],
   ]
   it.each(files)("%s contém %s", (file, needle) => {

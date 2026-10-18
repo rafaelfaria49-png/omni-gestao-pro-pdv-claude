@@ -41,10 +41,12 @@ export function TermoGarantiaDocV3({ doc }: { doc: TermoDoc }) {
         <div className="shrink-0 text-right">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-zinc-500">Termo de Garantia</p>
           <p className="text-[16px] font-extrabold leading-none text-black">{doc.numero}</p>
+          <p className="mt-1 text-[10px] text-zinc-600">{doc.versao ? `Versão ${doc.versao} · ${doc.tipoVersao}` : "Sem versão emitida"}</p>
           <p className="mt-1 text-[10px] text-zinc-600">Emitido: {formatDataHora(doc.impressoEm)}</p>
         </div>
       </header>
 
+      {doc.limitacao ? <p role="status" className="mt-3 border border-amber-500 p-2 text-xs">{doc.limitacao}</p> : null}
       <div className="mt-3 grid grid-cols-2 gap-4">
         <section>
           <h2 className="mb-1 border-b border-zinc-400 pb-0.5 text-[11px] font-bold uppercase tracking-wide text-zinc-700">Cliente</h2>
@@ -68,6 +70,15 @@ export function TermoGarantiaDocV3({ doc }: { doc: TermoDoc }) {
         </section>
       ) : null}
 
+      {doc.coberturas?.length ? doc.coberturas.map((c) => <section key={c.linhaId} className="mt-4 break-inside-avoid border-t border-zinc-300 pt-2">
+        <h2 className="text-sm font-bold">{c.descricao}</h2>
+        <p className="text-xs">{c.termo.titulo} · {c.modeloId === "nao_definida" ? "Prazo não informado" : c.prazoDias ? c.prazoDias + " dias" : "Sem cobertura"}</p>
+        {c.inicio ? <Campo rotulo="Início" valor={formatDataHora(c.inicio)} /> : null}
+        {c.vencimento ? <Campo rotulo="Vencimento" valor={formatDataHora(c.vencimento)} /> : null}
+        {c.termo.cobertura.length ? <><p className="mt-2 text-xs font-semibold">Cobertura</p><ul className="ml-4 list-disc whitespace-pre-line text-xs">{c.termo.cobertura.map((x, i) => <li key={i}>{x}</li>)}</ul></> : null}
+        {c.termo.exclusoes.length ? <><p className="mt-2 text-xs font-semibold">Condições aplicáveis</p><ul className="ml-4 list-disc text-xs">{c.termo.exclusoes.map((x, i) => <li key={i}>{x}</li>)}</ul></> : null}
+        {c.termo.observacao ? <p className="mt-2 whitespace-pre-line text-xs">{c.termo.observacao}</p> : null}
+      </section>) : <>
       <section className="mt-3 break-inside-avoid">
         <h2 className="mb-1 border-b border-zinc-400 pb-0.5 text-[11px] font-bold uppercase tracking-wide text-zinc-700">Garantia aplicada</h2>
         <p className="text-[13px] font-semibold text-black">{termo.titulo}{termo.prazoDias ? ` — ${termo.prazoDias} dias a partir da entrega` : ""}</p>
@@ -92,15 +103,11 @@ export function TermoGarantiaDocV3({ doc }: { doc: TermoDoc }) {
         )}
       </section>
 
-      <section className="mt-8 break-inside-avoid">
-        <p className="text-[10px] text-zinc-600">
-          Declaro estar ciente das condições de garantia descritas neste termo.
-        </p>
-        <div className="mt-10 grid grid-cols-2 gap-10">
-          <div className="text-center"><div className="border-t border-black pt-1 text-[11px] text-black">Assinatura do cliente</div></div>
-          <div className="text-center"><div className="border-t border-black pt-1 text-[11px] text-black">Responsável técnico</div></div>
-        </div>
-        <p className="mt-4 text-right text-[10px] text-zinc-600">Data: ____ / ____ / ________</p>
+      </>}
+      <section className="mt-5 break-inside-avoid text-xs text-zinc-600">
+        {doc.instrucoes ? <p>{doc.instrucoes}</p> : null}
+        {doc.revisaoJuridica ? <p>{doc.revisaoJuridica}</p> : null}
+        {doc.origemTexto ? <p className="mt-2 text-[10px]">Origem: {doc.origemTexto}</p> : null}
       </section>
     </div>
   );

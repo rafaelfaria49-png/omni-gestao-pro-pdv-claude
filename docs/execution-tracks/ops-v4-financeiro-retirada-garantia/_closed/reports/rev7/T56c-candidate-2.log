@@ -1,0 +1,27 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+ ❯ test/ops-v4-fluxo-curto-007/retorno.pg.test.ts (13 tests | 1 failed | 12 skipped) 15273ms
+     × T56c outro PROCESSO (outra sessão PostgreSQL) segurando a original: a action espera e respeita a reserva dele 15259ms
+
+ Test Files  1 failed | 1 skipped (2)
+      Tests  1 failed | 66 skipped (67)
+   Start at  14:49:28
+   Duration  44.58s (transform 4.62s, setup 0ms, import 7.61s, tests 15.27s, environment 20.40s)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/ops-v4-fluxo-curto-007/retorno.pg.test.ts > OPS-V4-FLUXO-CURTO-007 — PostgreSQL real > T56c outro PROCESSO (outra sessão PostgreSQL) segurando a original: a action espera e respeita a reserva dele
+Error: a operação concorrente não chegou a esperar a trava
+ ❯ esperarBloqueioNoBanco test/ops-v4-fluxo-curto-007/retorno.pg.test.ts:210:9
+    208|     await new Promise((r) => setTimeout(r, 25));
+    209|   }
+    210|   throw new Error("a operação concorrente não chegou a esperar a trava…
+       |         ^
+    211| }
+    212|
+ ❯ test/ops-v4-fluxo-curto-007/retorno.pg.test.ts:397:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

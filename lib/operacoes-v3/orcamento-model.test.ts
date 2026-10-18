@@ -382,7 +382,7 @@ describe("orçamento V3 — GOAL 026 — garantia resultante da aprovação", ()
     expect(garantiaResultanteAprovacaoV3(orc)).toEqual({ prazoDias: 90, rotulo: "Original" });
   });
 
-  it("multi-grupo: usa a MENOR garantia entre as selecionadas (regra conservadora)", () => {
+  it("multi-grupo: prazos distintos não produzem uma garantia singular", () => {
     const orc = {
       pecas: [],
       servicos: [
@@ -390,7 +390,7 @@ describe("orçamento V3 — GOAL 026 — garantia resultante da aprovação", ()
         { ...servico({ id: "b", descricao: "B", valor: 10, grupoId: "g2", selecionadaV3: true }), varianteV3: { rotulo: "Bateria", garantiaDias: 30 } },
       ],
     };
-    expect(garantiaResultanteAprovacaoV3(orc)).toEqual({ prazoDias: 30, rotulo: "Bateria" });
+    expect(garantiaResultanteAprovacaoV3(orc)).toBeNull();
   });
 
   it("linhas não-selecionadas com garantia maior nunca vencem a comparação", () => {
@@ -409,7 +409,7 @@ describe("orçamento V3 — GOAL 026 — garantia resultante da aprovação", ()
       pecas: [{ ...peca({ id: "p1", grupoId: "g1", selecionadaV3: true }), varianteV3: { rotulo: "Peça", garantiaDias: 60 } }],
       servicos: [{ ...servico({ id: "s1", descricao: "S", valor: 10, grupoId: "g2", selecionadaV3: true }), varianteV3: { rotulo: "Serviço", garantiaDias: 15 } }],
     };
-    expect(garantiaResultanteAprovacaoV3(orc)).toEqual({ prazoDias: 15, rotulo: "Serviço" });
+    expect(garantiaResultanteAprovacaoV3(orc)).toBeNull();
   });
 });
 

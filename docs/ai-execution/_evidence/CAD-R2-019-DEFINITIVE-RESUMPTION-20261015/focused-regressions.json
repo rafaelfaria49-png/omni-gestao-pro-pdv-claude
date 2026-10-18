@@ -1,0 +1,68 @@
+{
+  "observedAt": "2026-10-15T13:56:24.576Z",
+  "result": "PASS",
+  "exitCode": 0,
+  "passedTests": 172,
+  "failedTests": 0,
+  "pendingTests": 0,
+  "files": [
+    {
+      "path": "lib/cadastros/client-document-key.test.ts",
+      "status": "passed",
+      "tests": 12
+    },
+    {
+      "path": "lib/cadastros/client-merge-discovery.test.ts",
+      "status": "passed",
+      "tests": 15
+    },
+    {
+      "path": "lib/cadastros/client-merge-migration.test.ts",
+      "status": "passed",
+      "tests": 17
+    },
+    {
+      "path": "lib/cadastros/client-merge-service.test.ts",
+      "status": "passed",
+      "tests": 32
+    },
+    {
+      "path": "lib/cadastros/client-write-http.test.ts",
+      "status": "passed",
+      "tests": 5
+    },
+    {
+      "path": "lib/cadastros/client-write-migration.test.ts",
+      "status": "passed",
+      "tests": 5
+    },
+    {
+      "path": "lib/cadastros/client-write-service.test.ts",
+      "status": "passed",
+      "tests": 29
+    },
+    {
+      "path": "lib/cadastros/client-identity/boundaries.test.ts",
+      "status": "passed",
+      "tests": 10
+    },
+    {
+      "path": "lib/cadastros/client-identity/client-identity.test.ts",
+      "status": "passed",
+      "tests": 30
+    },
+    {
+      "path": "lib/cadastros/client-identity/lookup-prisma.test.ts",
+      "status": "passed",
+      "tests": 6
+    },
+    {
+      "path": "lib/cadastros/client-document-unique.test.ts",
+      "status": "passed",
+      "tests": 11
+    }
+  ],
+  "datasource": "DUMMY_LOOPBACK",
+  "productionDatabaseAccess": false,
+  "runs": 2
+}

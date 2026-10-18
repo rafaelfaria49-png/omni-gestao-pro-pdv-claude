@@ -25,6 +25,8 @@ const h = vi.hoisted(() => ({
   })),
 }))
 
+vi.mock("@/lib/api-auth", () => ({ getVerifiedSubscriptionFromCookies: async () => ({ ok: true, status: "ativa", vencimento: "2099-12-31" }) }))
+vi.mock("@/lib/trusted-time", () => ({ getTrustedTimeMs: async () => Date.now() }))
 vi.mock("@/auth", () => ({ auth: h.auth }))
 vi.mock("@/lib/prisma", () => ({
   prisma: {

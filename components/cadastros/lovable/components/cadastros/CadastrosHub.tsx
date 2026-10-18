@@ -160,6 +160,7 @@ export function CadastrosHub() {
         )}
         {tab === "clientes" && (
           <ClientesPanel
+            key={storeId}
             storeId={storeId}
             autoOpen={autoOpenNew === "clientes"}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
@@ -540,7 +541,7 @@ function Toolbar({
             if (!open) setActiveRoadmap(null);
           }}
           title="Exportação Multi-Formato"
-          description="Exporte relatórios de cadastros completos em formatos Excel (XLSX), CSV e JSON com controle de colunas e permissões de segurança."
+          description="Exportação geral ainda indisponível. Solicitações de dados pessoais dependem de autorização e revisão de finalidade."
           phase="desenvolvimento"
           icon={Download}
           features={[
@@ -792,31 +793,7 @@ function ClientesPanel({
   };
 
   const handleBulkDelete = async () => {
-    if (selectedClientIds.size === 0) return;
-    setBulkChecking(true);
-    setBulkModalOpen(true);
-    setBulkConfirmText("");
-    setBulkActionSelected("inactivate");
-    try {
-      const res = await fetch("/api/clientes/bulk-check-dependencies", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-assistec-loja-id": storeId,
-        },
-        body: JSON.stringify({
-          ids: Array.from(selectedClientIds),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao verificar dependências");
-      setBulkCheckResults(data.results || []);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao verificar vínculos");
-      setBulkModalOpen(false);
-    } finally {
-      setBulkChecking(false);
-    }
+    toast.info("Exclusão depende de revisão de identidade, finalidade e retenção. Use Inativar para suspender o cadastro.");
   };
 
   const executeBulkAction = async () => {
@@ -1110,7 +1087,7 @@ function ClientesPanel({
           m.close();
         }}
         title={editing ? "Editar cliente" : "Novo cliente"}
-        subtitle="Cadastro completo com consentimento LGPD."
+        subtitle="Cadastro de cliente. Colete apenas os dados necessários ao atendimento."
         size="lg"
       >
         <div className="grid grid-cols-2 gap-4" key={m.open ? "open" : "closed"}>
@@ -1151,11 +1128,8 @@ function ClientesPanel({
               <option>Inativo</option>
             </Select>
           </Field>
-          <Field label="Consentimento LGPD" span={2}>
-            <label className="flex items-center gap-2.5 rounded-lg border border-border bg-background p-3 text-sm text-foreground cursor-pointer select-none">
-              <Checkbox id="lgpd-consent" />
-              <span className="text-xs text-muted-foreground">Cliente autoriza uso dos dados conforme política de privacidade.</span>
-            </label>
+          <Field label="Privacidade" span={2}>
+            <p className="text-xs text-muted-foreground">Este formulário não registra consentimento. Solicitações de acesso, correção ou exclusão dependem de verificação de identidade, autorização e análise de retenção.</p>
           </Field>
         </div>
         <div className="mt-6 flex justify-end gap-2">
@@ -1190,7 +1164,7 @@ function ClientesPanel({
                   };
 
                   if (editing) {
-                    // Preserva chaves não exibidas (rg, financial, importer's gcCodigo etc.)
+                    // Metadados não exibidos são preservados pelo serviço no servidor.
                     // mesclando sobre o tagsRaw do registro. Salvar sem alterar não pode
                     // apagar dados que o modal nem mostra.
                     const previous: Record<string, unknown> =

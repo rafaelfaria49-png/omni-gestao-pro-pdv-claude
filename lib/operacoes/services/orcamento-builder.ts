@@ -30,6 +30,8 @@ export function buildOrcamentoRascunhoFromOS(os: OSItensFonte, deps: BuildOrcame
     observacao: s.observacao,
     prazoGarantiaDias: s.prazoGarantiaDias,
     termoGarantia: s.termoGarantia,
+    ...((s as typeof s & { garantiaModeloId?: string }).garantiaModeloId ? { garantiaModeloId: (s as typeof s & { garantiaModeloId?: string }).garantiaModeloId } : {}),
+    ...((s as typeof s & { kindV3?: "cobrado" | "brinde" | "interno" }).kindV3 ? { kindV3: (s as typeof s & { kindV3?: "cobrado" | "brinde" | "interno" }).kindV3 } : {}),
     // Custo conhecido do intake (GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002):
     // projeta `custoInterno` em `custoV3` para a leitura agregar custo/lucro.
     // Linha legada sem custo → sem `custoV3` (UNKNOWN, nunca zero inventado).

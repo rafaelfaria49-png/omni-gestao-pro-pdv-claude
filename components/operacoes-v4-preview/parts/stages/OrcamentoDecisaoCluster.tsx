@@ -23,6 +23,7 @@ import { C, card, cardTitle, upLabel } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import { MOTIVO_RECUSA_LABEL_V3, statusEfetivoOrcamentoV3, validadeExpiradaV3, type MotivoRecusaOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { formatarDiaDeIsoNaLojaV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
+import { FormalizarAprovacaoV4 } from "../FormalizarAprovacaoV4";
 
 const MOTIVOS: MotivoRecusaOrcamentoV3[] = ["preco", "prazo", "desistiu", "concorrencia", "outro"];
 
@@ -71,6 +72,12 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
   const vencida = validadeExpiradaV3(validoAteRaw);
   const avisoVencida = vencida ? `Proposta vencida em ${formatarDiaDeIsoNaLojaV3(validoAteRaw)}. Para aprovar, atualize o "Válido até" em "Corrigir datas".` : "";
   const podeAprovar = (!temGrupos || todosResolvidos) && !totalZero && !vencida;
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item D): com pagamento vigente sobre orçamento
+  // não aprovado, a aprovação comum registraria um aceite novo e apagaria a ordem real dos
+  // fatos — o caminho é a formalização (administrador), oferecida acima.
+  const formalizacaoDisponivel = v.formalizacao?.disponivel === true;
+  // (item C) "Aprovar e receber": aprovação pendente SEM pagamento registrado.
+  const aprovarEReceberDisponivel = v.aprovacaoReceber?.disponivel === true && !formalizacaoDisponivel;
 
   const [busySelecao, setBusySelecao] = useState<string | null>(null);
   const [busyDecisao, setBusyDecisao] = useState(false);
@@ -102,6 +109,22 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
     }
   };
 
+  // Conferir → aprovar expressamente → receber, no sheet de recebimento. Mesma guarda do
+  // "Aprovar": nunca parte de um editor não salvo. A aprovação acontece no sheet, com consentimento.
+  const aprovarEReceber = async () => {
+    if (!aprovarEReceberDisponivel) return;
+    setBusyDecisao(true);
+    try {
+      if (guard) {
+        const ok = await guard.salvarEditor();
+        if (!ok) return;
+      }
+      v.aprovacaoReceber?.abrir();
+    } finally {
+      setBusyDecisao(false);
+    }
+  };
+
   const recusar = async () => {
     setBusyDecisao(true);
     try {
@@ -120,6 +143,9 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
   const mostrarOfertaCancelamento = v.orcamento.statusLabel === "Recusado" || statusEfetivo === "expirado";
 
   return (
+    <>
+    {/* Chaveado por loja+OS: trocar de OS nunca mostra a conferência de outra. */}
+    <FormalizarAprovacaoV4 key={v.recebimentoContextKey} v={v} />
     <div style={card}>
       {temGrupos && (
         <>
@@ -170,15 +196,31 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
 
       {!modoRecusa ? (
         <>
+          {formalizacaoDisponivel && (
+            <div role="status" style={{ fontSize: 11, color: C.warnFg, marginBottom: 8, lineHeight: 1.5 }}>
+              Há pagamento registrado nesta OS: em vez da aprovação comum, use “Formalizar aprovação pendente” acima (administrador).
+            </div>
+          )}
           <button
             type="button"
             onClick={() => void aprovar()}
-            disabled={busyDecisao || !podeAprovar}
-            title={totalZero ? "Orçamento total R$ 0 — lance um valor antes de aprovar." : vencida ? avisoVencida : !podeAprovar ? "Selecione uma opção em cada grupo antes de aprovar." : undefined}
-            style={{ height: 34, width: "100%", padding: "0 16px", border: "none", background: C.success, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busyDecisao || !podeAprovar ? "default" : "pointer", opacity: busyDecisao || !podeAprovar ? 0.6 : 1, marginBottom: 8 }}
+            disabled={busyDecisao || !podeAprovar || formalizacaoDisponivel}
+            title={totalZero ? "Orçamento total R$ 0 — lance um valor antes de aprovar." : vencida ? avisoVencida : !podeAprovar ? "Selecione uma opção em cada grupo antes de aprovar." : formalizacaoDisponivel ? "Há pagamento registrado: use “Formalizar aprovação pendente”." : undefined}
+            style={{ height: 34, width: "100%", padding: "0 16px", border: "none", background: C.success, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busyDecisao || !podeAprovar || formalizacaoDisponivel ? "default" : "pointer", opacity: busyDecisao || !podeAprovar || formalizacaoDisponivel ? 0.6 : 1, marginBottom: 8 }}
           >
             {busyDecisao ? "Processando…" : guard ? "Salvar e aprovar orçamento" : "Aprovar orçamento"}
           </button>
+          {aprovarEReceberDisponivel && (
+            <button
+              type="button"
+              onClick={() => void aprovarEReceber()}
+              disabled={busyDecisao || !podeAprovar}
+              title={!podeAprovar ? "Resolva o orçamento antes de aprovar." : "Conferir o orçamento, aprovar com o consentimento do cliente e receber o pagamento."}
+              style={{ ...btnGhost, width: "100%", borderColor: C.success, color: C.successFg, fontWeight: 600, marginBottom: 8, cursor: busyDecisao || !podeAprovar ? "default" : "pointer", opacity: busyDecisao || !podeAprovar ? 0.6 : 1 }}
+            >
+              Aprovar e receber
+            </button>
+          )}
           <button type="button" onClick={() => setModoRecusa(true)} disabled={busyDecisao} style={{ ...btnGhost, width: "100%", borderColor: C.dangerBd, color: C.dangerFg, marginBottom: 8 }}>
             Recusar orçamento
           </button>
@@ -233,5 +275,6 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
         </div>
       )}
     </div>
+    </>
   );
 }

@@ -1,0 +1,94 @@
+
+> omni-gestao-pro@0.1.0 typecheck
+> node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js --noEmit
+
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  16 passed (16)
+      Tests  511 passed (511)
+   Start at  23:33:24
+   Duration  2.36s (transform 5.57s, setup 0ms, import 7.88s, tests 784ms, environment 4ms)
+
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  1 passed (1)
+      Tests  20 passed | 315 skipped (335)
+   Start at  23:33:27
+   Duration  1.43s (transform 708ms, setup 0ms, import 1.14s, tests 33ms, environment 0ms)
+
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  7 passed (7)
+      Tests  169 passed (169)
+   Start at  23:33:30
+   Duration  25.43s (transform 2.45s, setup 0ms, import 4.34s, tests 15.04s, environment 4.85s)
+
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  4 passed (4)
+      Tests  76 passed (76)
+   Start at  23:33:57
+   Duration  6.45s (transform 1.77s, setup 0ms, import 2.49s, tests 2.61s, environment 758ms)
+
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  2 passed (2)
+      Tests  52 passed (52)
+   Start at  23:34:05
+   Duration  11.30s (transform 1.07s, setup 0ms, import 1.80s, tests 7.68s, environment 1.47s)
+
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  2 passed (2)
+      Tests  20 passed (20)
+   Start at  23:34:17
+   Duration  3.38s (transform 555ms, setup 0ms, import 1.09s, tests 3.44s, environment 1.34s)
+
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+   Start at  23:34:22
+   Duration  3.88s (transform 427ms, setup 0ms, import 699ms, tests 2.31s, environment 642ms)
+
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  23:34:27
+   Duration  3.51s (transform 1.00s, setup 0ms, import 1.60s, tests 1.02s, environment 657ms)
+
+
+Running 11 tests using 1 worker
+
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (2.0s)
+  ok 2 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:169:5 › C+E — rascunho sem pagamento: conferir → aprovar expressamente → receber com forma escolhida; uma cobrança, sem iniciar serviço nem entregar (1.3m)
+  ok 3 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:221:5 › C — aprovação recusada no servidor (o orçamento mudou depois da conferência): o motivo aparece no sheet e nada é cobrado (50.1s)
+  ok 4 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:243:5 › D — rascunho + título liquidado: formalização administrativa com motivo e declaração; preço, título, caixa e status preservados (43.4s)
+  ok 5 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:298:5 › E — orçamento aprovado sem pagamento: o sheet abre sem forma; confirmar exige a escolha; dividir não herda forma (32.4s)
+  ok 6 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:332:5 › B — pagamento registrado sem orçamento real: 'Gerar orçamento' orienta e nada é materializado (24.9s)
+  ok 7 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:354:5 › A — PDV de Serviço V3: rascunho sem pagamento mostra a recusa comercial e não deixa receber; nada é gravado (1.3s)
+  ok 8 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — imediato: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original (1.2m)
+  ok 9 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:379:7 › R7 — misto: commit com resposta perdida sobrevive a fechar/reabrir e refresh; verificar repete a identidade original (1.1m)
+  ok 10 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:439:7 › R8 — recusa imediata real preserva motivo, navega para comercial e permite nova confirmação após resolução (1.1m)
+  ok 11 [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts:439:7 › R8 — recusa imediata real preserva motivo, navega para financeiro e permite nova confirmação após resolução (1.1m)
+
+  Slow test file: [chromium] › e2e\specs\ops-v4-financeiro-retirada-garantia-002.spec.ts (8.3m)
+  Consider running tests from slow files in parallel, see https://playwright.dev/docs/test-parallel.
+  11 passed (8.4m)

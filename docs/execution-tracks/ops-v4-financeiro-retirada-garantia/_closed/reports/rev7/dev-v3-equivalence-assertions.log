@@ -1,0 +1,373 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+ ❯ test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx (14 tests | 2 failed) 5482ms
+     × resposta perdida no recebimento comum: reenviar o MESMO recebimento reaproveita a operacaoId 1137ms
+     × recebimento comum incerto: reenviar o MESMO conteúdo em split reaproveita a chave; saldo visto vai junto e é relido 1126ms
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 18 passed (20)
+   Start at  15:48:20
+   Duration  8.34s (transform 966ms, setup 0ms, import 2.14s, tests 8.29s, environment 3.02s)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx > PDV de Serviço V3 — recebimento misto (montado) > resposta perdida no recebimento comum: reenviar o MESMO recebimento reaproveita a operacaoId
+AssertionError: expected false to be true // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"min-w-0"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4 sm:gap-3"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap items-center gap-2"[39m
+            [36m>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"truncate text-[18px] font-bold tracking-tight text-[var(--ops-v3-ink)] sm:text-[21px]"[39m
+              [36m>[39m
+                [0mPDV de serviço[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-0.5 text-[12.5px] text-[var(--ops-v3-muted)] sm:text-sm"[39m
+            [36m>[39m
+              [0mRecebimento da OS no balcão, com formas e parciais.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm border-success/30 bg-success/5 text-foreground"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-wallet h-4 w-4 text-success"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span>[39m
+              [0mCaixa [0m
+              [36m<strong>[39m
+                [0maberto[0m
+              [36m</strong>[39m
+              [0m · Caixa QA[0m
+              [0m — recebimento liberado.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid gap-4 lg:grid-cols-[1fr_340px]"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-xl border border-border bg-card p-4 shadow-sm"[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mclass[39m=[32m"block"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"mb-1 block text-xs font-medium text-muted-foreground"[39m
+                  [36m>[39m
+                    [0mOrdem de serviço[0m
+                  [36m</span>[39m
+                  [36m<select[39m
+                    [33mclass[39m=[32m"w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"[39m
+                  [36m>[39m
+                    [36m<option[39m
+                      [33mvalue[39m=[32m""[39m
+                    [36m>[39m
+                      [0mSelecione uma OS com valor…[0m
+                    [36m</option>[39m
+                    [36m<option[39m
+                      [33mvalue[39m=[32m"os-a"[39m
+                    [36m>[39m
+                      [0mOS-A[0m
+                      [0m · [0m
+                      [0mCliente OS-A[0m
+                      [0m · [0m
+                      [0mR$ 400,00[0m
+                    [36m</option>[39m
+                  [36m</select>[39m
+                [36m</label>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-xl border border-border bg-card p-4 shadow-sm"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex flex-wrap items-center justify-between gap-2"[39m
+                [36m>[39m
+                  [36m<h3[39m
+                    [33mclass[39m=[32m"text-sm font-semibold text-foreground"[39m
+                  [36m>[39m
+                    [0mOS-A[0m
+                    [0m · [0m
+                    [0mCliente OS-A[0m
+                  [36m</h3>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-px text-[11px] font-semibold border-[var(--ops-v3-success-bd)] bg-[var(--ops-v3-success-bg)] text-[var(--ops-v3-success-fg)]"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"h-1 w-1 rounded-full bg-current"[39m
+                    [36m/>[39m
+                    [0mPronta[0m
+                  [36m</span>[39m
+                [36m</div>[39m
+                [36m<dl[39m
+                  [33mclass[39m=[32m"mt-3 grid gap-3 sm:grid-cols-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"min-w-0"[39m
+                  [36m>[39m
+                    [36m<dt[39m
+                      [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+                    [36m>[39m
+                      [0mEquipamento[0m
+                    [36m</dt>[39m
+                    [36m<dd[39m
+                      [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+                    [36m>[39m
+                      [0mSamsung A54[0m
+                    [36m</dd>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"min-w-0"[39m
+                  [36m>[39m
+                    [36m<dt[39m
+                      [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+                    [36m>[39m
+                      [0mTotal da OS[0m
+                    [36m</dt>[39m
+                    [36m<dd[39m
+                      [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+                    [36m>[39m
+                      [0mR$ 400,00[0m
+                    [36m</dd>[39m
+                 ...
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx:318:97
+    316|     fireEvent.click(screen.getByRole("button", { name: /Quitar OS/ }));
+    317|     await screen.findByTestId("pendencia-recebimento");
+    318|     await waitFor(() => expect(desabilitado(screen.getByRole("button",…
+       |                                                                                                 ^
+    319|     fireEvent.click(within(screen.getByTestId("pendencia-recebimento")…
+    320|     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTime…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx > PDV de Serviço V3 — recebimento misto (montado) > recebimento comum incerto: reenviar o MESMO conteúdo em split reaproveita a chave; saldo visto vai junto e é relido
+AssertionError: expected false to be true // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"min-w-0"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4 sm:gap-3"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap items-center gap-2"[39m
+            [36m>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"truncate text-[18px] font-bold tracking-tight text-[var(--ops-v3-ink)] sm:text-[21px]"[39m
+              [36m>[39m
+                [0mPDV de serviço[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-0.5 text-[12.5px] text-[var(--ops-v3-muted)] sm:text-sm"[39m
+            [36m>[39m
+              [0mRecebimento da OS no balcão, com formas e parciais.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm border-success/30 bg-success/5 text-foreground"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-wallet h-4 w-4 text-success"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span>[39m
+              [0mCaixa [0m
+              [36m<strong>[39m
+                [0maberto[0m
+              [36m</strong>[39m
+              [0m · Caixa QA[0m
+              [0m — recebimento liberado.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid gap-4 lg:grid-cols-[1fr_340px]"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"space-y-4"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-xl border border-border bg-card p-4 shadow-sm"[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mclass[39m=[32m"block"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"mb-1 block text-xs font-medium text-muted-foreground"[39m
+                  [36m>[39m
+                    [0mOrdem de serviço[0m
+                  [36m</span>[39m
+                  [36m<select[39m
+                    [33mclass[39m=[32m"w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"[39m
+                  [36m>[39m
+                    [36m<option[39m
+                      [33mvalue[39m=[32m""[39m
+                    [36m>[39m
+                      [0mSelecione uma OS com valor…[0m
+                    [36m</option>[39m
+                    [36m<option[39m
+                      [33mvalue[39m=[32m"os-a"[39m
+                    [36m>[39m
+                      [0mOS-A[0m
+                      [0m · [0m
+                      [0mCliente OS-A[0m
+                      [0m · [0m
+                      [0mR$ 400,00[0m
+                    [36m</option>[39m
+                  [36m</select>[39m
+                [36m</label>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"rounded-xl border border-border bg-card p-4 shadow-sm"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex flex-wrap items-center justify-between gap-2"[39m
+                [36m>[39m
+                  [36m<h3[39m
+                    [33mclass[39m=[32m"text-sm font-semibold text-foreground"[39m
+                  [36m>[39m
+                    [0mOS-A[0m
+                    [0m · [0m
+                    [0mCliente OS-A[0m
+                  [36m</h3>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-px text-[11px] font-semibold border-[var(--ops-v3-success-bd)] bg-[var(--ops-v3-success-bg)] text-[var(--ops-v3-success-fg)]"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"h-1 w-1 rounded-full bg-current"[39m
+                    [36m/>[39m
+                    [0mPronta[0m
+                  [36m</span>[39m
+                [36m</div>[39m
+                [36m<dl[39m
+                  [33mclass[39m=[32m"mt-3 grid gap-3 sm:grid-cols-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"min-w-0"[39m
+                  [36m>[39m
+                    [36m<dt[39m
+                      [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+                    [36m>[39m
+                      [0mEquipamento[0m
+                    [36m</dt>[39m
+                    [36m<dd[39m
+                      [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+                    [36m>[39m
+                      [0mSamsung A54[0m
+                    [36m</dd>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"min-w-0"[39m
+                  [36m>[39m
+                    [36m<dt[39m
+                      [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+                    [36m>[39m
+                      [0mTotal da OS[0m
+                    [36m</dt>[39m
+                    [36m<dd[39m
+                      [33mclass[39m=[32m"truncate text-sm text-foreground"[39m
+                    [36m>[39m
+                      [0mR$ 400,00[0m
+                    [36m</dd>[39m
+                 ...
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/ops-v3-recebimento-misto/pdv-servico-misto.test.tsx:453:99
+    451|     fireEvent.change(screen.getByLabelText("Forma da linha 1"), { targ…
+    452|     fireEvent.change(screen.getByLabelText("Valor da linha 1"), { targ…
+    453|     await waitFor(() => expect(desabilitado(screen.getByRole("button",…
+       |                                                                                                   ^
+    454|     fireEvent.click(within(screen.getByTestId("pendencia-recebimento")…
+    455|     await waitFor(() => expect(mocks.receberOSV3).toHaveBeenCalledTime…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

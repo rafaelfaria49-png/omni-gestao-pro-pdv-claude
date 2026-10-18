@@ -105,6 +105,8 @@ export type ClientIdentityReviewDecision = {
 }
 
 export type ClientWriteOptions = {
+  /** Server adapter only: preserve metadata not exposed by the HUB editor. */
+  tagsMode?: "editor"
   reviewDecision?: ClientIdentityReviewDecision
 }
 

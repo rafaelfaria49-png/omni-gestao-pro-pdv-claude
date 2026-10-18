@@ -1,0 +1,25 @@
+{
+  "sha": "98ef7172a915713ad177207112f6aff3db9801a1",
+  "cwd": "C:/Projetos/omni-gestao-ops-v4-frg-002-base",
+  "executable": "C:\\Program Files\\nodejs\\node.exe",
+  "command": [
+    "scripts/vercel-build.mjs"
+  ],
+  "shell": false,
+  "start": "2026-10-11T03:00:24.929Z",
+  "end": "2026-10-11T03:01:23.219Z",
+  "exitCode": 0,
+  "target": {
+    "db": "ops_v4_frg_qa_002",
+    "host": "127.0.0.1/32",
+    "port": 45708
+  },
+  "sourceHashes": {
+    "lib/operacoes-v3/elegibilidade-comercial.ts": null,
+    "lib/operacoes-v3/pdv-servico-actions.ts": "e6813fd8e4fa1ca924347a962128eace82a3d8faf9498e3604fe88410a45b795",
+    "components/operacoes-v3/hooks/use-pdv-servico-v3.ts": "9c6da6729e72bab97fbed34021d9e7eac648358b415bf994c9136e5f3aebdd12",
+    "components/operacoes-v3/pages/PdvServicoV3.tsx": "6a821cefa10b62f29212d13b1bcaf304d5895d5f302abfaace43d988c856449d",
+    "components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx": "7393d691745ae5f3b0c38e21aea6db7a51971a42e7d32a78f25363f0ea0182aa"
+  },
+  "expectedRed": false
+}

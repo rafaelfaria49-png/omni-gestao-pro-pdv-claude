@@ -1,0 +1,19 @@
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/ops-v4-fluxo-curto-007/retorno.pg.test.ts > OPS-V4-FLUXO-CURTO-007 — PostgreSQL real > T56c outro PROCESSO (outra sessão PostgreSQL) segurando a original: a action espera e respeita a reserva dele
+AssertionError: expected [Function] to throw error including 'Outra abertura de retorno está em pro…' but got 'A abertura deste retorno foi interrom…'
+
+Expected: "Outra abertura de retorno está em processamento"
+Received: "A abertura deste retorno foi interrompida antes do vínculo; o atendimento OS-2026-00002 foi marcado como descartado. Abra o retorno novamente."
+
+ ❯ test/ops-v4-fluxo-curto-007/retorno.pg.test.ts:400:24
+    398|     liberar();
+    399|     await externo;
+    400|     await expect(nossa).rejects.toThrow("Outra abertura de retorno est…
+       |                        ^
+    401|     expect(await filhasDe(loja, original)).toHaveLength(0);
+    402|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

@@ -87,6 +87,12 @@ describe("importação sobre OS existente — patch intencional", () => {
       observacoes: "x",
     });
   });
+  it("patch genérico preserva snapshots e coberturas auditadas sem perder dados de recepção", () => {
+    const current = { termosGarantiaV3: [{ versao: 1 }], aberturaV3: { garantiaPrevista: { modelo: "tela" }, garantiasServicosV3: [{ linhaId: "a", prazoDias: 90 }], recepcao: { origem: "balcao" } } };
+    const patch = semCamposFinanceirosDoServidorV3({ termosGarantiaV3: [], aberturaV3: { garantiasServicosV3: [], garantiaPrevista: { modelo: "personalizado" }, condicaoAparelho: "QA" } }, current);
+    expect(patch).not.toHaveProperty("termosGarantiaV3");
+    expect(patch.aberturaV3).toMatchObject({ garantiaPrevista: current.aberturaV3.garantiaPrevista, garantiasServicosV3: current.aberturaV3.garantiasServicosV3, recepcao: current.aberturaV3.recepcao, condicaoAparelho: "QA" });
+  });
 });
 
 describe("paridade TS × .mjs dos scripts de manutenção", () => {

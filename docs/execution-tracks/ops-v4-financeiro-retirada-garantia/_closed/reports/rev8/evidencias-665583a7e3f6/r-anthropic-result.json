@@ -1,0 +1,138 @@
+{
+  "familyRequested": "anthropic",
+  "executorRequested": "claude-code",
+  "modelRequested": "opus",
+  "sessionId": "1ae5fc8e-ca83-4d47-84dd-cfbd4f3df5dc",
+  "sha": "665583a7e3f6f1b9552b4c56b3d6a3dd97299167",
+  "packet": "pacote-rev8-665583a7e3f6",
+  "manifestSHA256": "05d1499b2544ff38589222d5bb1a88f937afbb1bb39160b01a99ce8d36a5c61c",
+  "zipSHA256": "1552742edf104c00005a402c9a291aa3c0bef2258922878eaef161957ffdabc3",
+  "exe": "C:/Users/rafae/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+  "args": [
+    "--print",
+    "--model",
+    "opus",
+    "--effort",
+    "high",
+    "--safe-mode",
+    "--tools",
+    "Read,Glob,Grep,Bash",
+    "--allowedTools",
+    "Read",
+    "Glob",
+    "Grep",
+    "Bash(node C:/Projetos/omni-gestao-ops-v4-frg-002/docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/verify-rev8-packet.mjs C:/Projetos/omni-gestao-ops-v4-frg-002/docs/execution-tracks/ops-v4-financeiro-retirada-garantia/review-rev8/packet-seal.json)",
+    "--permission-mode",
+    "dontAsk",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "{\"mcpServers\":{}}",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--session-id",
+    "1ae5fc8e-ca83-4d47-84dd-cfbd4f3df5dc"
+  ],
+  "start": "2026-10-11T03:06:34.913Z",
+  "promptSHA256": "b847de3e2cd878618c70423477404bc1d47eaae6787473a6cc4c65404e6ea557",
+  "mode": "Nova sessão; Read/Glob/Grep; Bash limitado ao verificador somente leitura; sem MCP/Write/Edit; sem execução de testes/writers",
+  "end": "2026-10-11T03:12:22.303Z",
+  "exitCode": 1,
+  "modelObserved": "claude-opus-5-5",
+  "events": 459,
+  "toolCalls": 120,
+  "result": {
+    "duration_api_ms": 338334,
+    "stop_reason": "stop_sequence",
+    "session_id": "1ae5fc8e-ca83-4d47-84dd-cfbd4f3df5dc",
+    "total_cost_usd": 11.892525400000002,
+    "usage": {
+      "input_tokens": 132,
+      "cache_creation_input_tokens": 793202,
+      "cache_read_input_tokens": 24641107,
+      "output_tokens": 30908,
+      "output_tokens_details": {
+        "thinking_tokens": 9653
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 793202,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "global",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 345,
+          "cache_read_input_tokens": 787512,
+          "cache_creation_input_tokens": 10020,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 10020
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard",
+      "fallback_credit": null
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 132,
+        "outputTokens": 30908,
+        "cacheReadInputTokens": 24641107,
+        "cacheCreationInputTokens": 793202,
+        "webSearchRequests": 0,
+        "costUSD": 11.892525400000002,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 9653,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [],
+    "terminal_reason": "api_error",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "is_error": true,
+    "num_turns": 121,
+    "subtype": "success",
+    "api_error_status": 429,
+    "result": "You've hit your weekly limit · resets Oct 15, 11am (America/Sao_Paulo)",
+    "type": "result",
+    "duration_ms": 345642,
+    "uuid": "57f207b0-4ce9-4830-a71c-09d5a9acfba1",
+    "queued_turn_count": 0,
+    "result_index": 0
+  }
+}

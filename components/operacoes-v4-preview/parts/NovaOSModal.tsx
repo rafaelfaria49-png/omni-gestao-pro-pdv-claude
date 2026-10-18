@@ -7,6 +7,7 @@
 import { useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { C } from "../tokens";
+import { GARANTIA_CATALOGO_V3, garantiaCatalogoV3, sugerirGarantiaPorDescricaoV3 } from "@/lib/operacoes-v3/garantia-textos";
 import type { V4Vals } from "../use-v4-preview";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { criarOSEnterpriseV3, criarOSServicoAutorizadoV3 } from "@/lib/operacoes-v3/nova-os-actions";
@@ -138,7 +139,7 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
       ...prev.map((l) => {
         if (l.confirmada) return l;
         const erro = erroLinhaServicoV4(l);
-        return erro ? { ...l, erro } : { ...l, confirmada: true, erro: null };
+        return erro ? { ...l, erro } : { ...l, garantiaModeloId: l.garantiaModeloId || (l.garantia === 0 ? "sem_garantia" : sugerirGarantiaPorDescricaoV3(l.nome) ?? "personalizado"), confirmada: true, erro: null };
       }),
       novaLinhaServicoV4(chave),
     ]);
@@ -352,7 +353,7 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
                       prev.map((l) => {
                         if (l.key !== linha.key) return l;
                         const erro = erroLinhaServicoV4(l);
-                        return erro ? { ...l, erro } : { ...l, confirmada: true, erro: null };
+                        return erro ? { ...l, erro } : { ...l, garantiaModeloId: l.garantiaModeloId || (l.garantia === 0 ? "sem_garantia" : sugerirGarantiaPorDescricaoV3(l.nome) ?? "personalizado"), confirmada: true, erro: null };
                       }),
                     )
                   }
@@ -488,6 +489,7 @@ function LinhaServicoEditor({
   onConfirmar: () => void;
   onRemover: () => void;
 }) {
+  const modelo = linha.garantiaModeloId || (linha.garantia === 0 ? "sem_garantia" : sugerirGarantiaPorDescricaoV3(linha.nome) ?? "personalizado");
   return (
     <div
       style={{ border: `1px solid ${C.primaryBd}`, background: C.primaryBg, borderRadius: 10, padding: "10px 11px" }}
@@ -561,6 +563,17 @@ function LinhaServicoEditor({
           <button type="button" onClick={onRemover} aria-label={`Remover serviço ${linha.nome || "sem nome"}`} style={miniGhost}>Remover</button>
         </div>
       </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 8, marginTop: 8 }}>
+        <label style={atendLabel}>Modelo do termo a confirmar
+          <select aria-label="Modelo do termo a confirmar" value={modelo} style={atendInput} onChange={(e) => onPatch({ garantiaModeloId: e.target.value, garantia: garantiaCatalogoV3(e.target.value).prazoDiasPadrao })}>
+            {GARANTIA_CATALOGO_V3.map((m) => <option key={m.id} value={m.id}>{m.titulo}</option>)}
+          </select>
+        </label>
+        <label style={atendLabel}>Motivo se alterar o padrão
+          <input aria-label="Motivo se alterar o padrão" style={atendInput} value={linha.garantiaMotivo ?? ""} onChange={(e) => onPatch({ garantiaMotivo: e.target.value })} />
+        </label>
+      </div>
+      <p style={{ fontSize: 11, color: C.subtle, marginBottom: 0 }}>Confira o modelo e o prazo antes de confirmar o serviço. A descrição apenas sugere o modelo.</p>
       {linha.erro ? (
         <div role="alert" style={{ fontSize: 11.5, color: C.dangerFg, marginTop: 6 }}>{linha.erro}</div>
       ) : null}

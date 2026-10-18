@@ -1,0 +1,100 @@
+{
+  "base": true,
+  "results": [
+    {
+      "name": "preview-full",
+      "group": "frg",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "preview-full",
+        "--group=frg",
+        "--frozen",
+        "--base",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "components/operacoes-v4-preview/preview-honesty.test.ts"
+      ],
+      "exitCode": 1
+    },
+    {
+      "name": "fluxo007-full",
+      "group": "fluxo007",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo007-full",
+        "--group=fluxo007",
+        "--frozen",
+        "--base",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-007/vitest.config.ts"
+      ],
+      "exitCode": 1
+    },
+    {
+      "name": "T56c-1",
+      "group": "fluxo007",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "T56c-1",
+        "--group=fluxo007",
+        "--frozen",
+        "--base",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-007/vitest.config.ts",
+        "-t",
+        "T56c"
+      ],
+      "exitCode": 1
+    },
+    {
+      "name": "T56c-2",
+      "group": "fluxo007",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "T56c-2",
+        "--group=fluxo007",
+        "--frozen",
+        "--base",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-007/vitest.config.ts",
+        "-t",
+        "T56c"
+      ],
+      "exitCode": 1
+    },
+    {
+      "name": "T56c-3",
+      "group": "fluxo007",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "T56c-3",
+        "--group=fluxo007",
+        "--frozen",
+        "--base",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-007/vitest.config.ts",
+        "-t",
+        "T56c"
+      ],
+      "exitCode": 1
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  avaliarRecebimentoV4,
   buildReceberOSInputV4,
   linhasValidasRecebimentoV4,
   parseValorRecebimentoV4,
@@ -141,5 +142,24 @@ describe("formulário de recebimento V4 — contrato V3", () => {
       intencao: "parcial",
     });
     expect(pagamento).not.toHaveProperty("vencimento");
+  });
+});
+
+describe("GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item E) — V4 sem forma pré-selecionada", () => {
+  const base = { saldo: 300, intencao: "quitacao" as const, vencimento: "", caixaAberto: true, aPrazoExistente: false, hoje: "2026-10-09" };
+
+  it("linha sem forma bloqueia a confirmação; escolhida a forma, o mesmo rascunho é válido", () => {
+    const sem = avaliarRecebimentoV4({ ...base, linhas: [{ forma: "", valorStr: "300" }] });
+    expect(sem.ok).toBe(false);
+    expect(sem.erros).toContain("Linha 1: escolha a forma de pagamento.");
+    expect(sem.pagamentosAgora).toEqual([]);
+    const com = avaliarRecebimentoV4({ ...base, linhas: [{ forma: "pix", valorStr: "300" }] });
+    expect(com).toMatchObject({ ok: true, pagamentosAgora: [{ forma: "pix", valor: 300 }] });
+  });
+
+  it("split com uma linha sem forma não recebe as demais em silêncio", () => {
+    const r = avaliarRecebimentoV4({ ...base, intencao: "parcial", linhas: [{ forma: "pix", valorStr: "100" }, { forma: "", valorStr: "200" }] });
+    expect(r.ok).toBe(false);
+    expect(r.erros).toContain("Linha 2: escolha a forma de pagamento.");
   });
 });

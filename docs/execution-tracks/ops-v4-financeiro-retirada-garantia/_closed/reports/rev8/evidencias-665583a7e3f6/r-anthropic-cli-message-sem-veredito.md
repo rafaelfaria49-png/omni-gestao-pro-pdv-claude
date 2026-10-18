@@ -1,0 +1,1 @@
+You've hit your weekly limit · resets Oct 15, 11am (America/Sao_Paulo)

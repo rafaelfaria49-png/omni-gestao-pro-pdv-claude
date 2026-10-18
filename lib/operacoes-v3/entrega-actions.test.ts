@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => {
   const tx = {
+    store: { findUnique: vi.fn(async () => ({ name: "Empresa sintética" })) },
+    storeSettings: { findUnique: vi.fn(async () => null) },
     ordemServico: { findFirst: mocks.osFindFirst, update: mocks.osUpdate },
     contaReceberTitulo: { findUnique: mocks.tituloFindUnique },
   };

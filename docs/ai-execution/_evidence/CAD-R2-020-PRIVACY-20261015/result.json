@@ -1,0 +1,57 @@
+{
+  "goal": "CAD-R2-020",
+  "date": "2026-10-15",
+  "status": "IMPLEMENTED_VALIDATED",
+  "release": "PR_REVIEW_NO_PRODUCTION_DEPLOY",
+  "base": "466c397e4ff44a1f82c93c8ba92057d07136d67f",
+  "pr276": {
+    "headReviewed": "b7d55b532025a00bdf55a911d3767f4c5ac2c583",
+    "files": 33,
+    "documentationOnly": true,
+    "secretsOrCustomerPiiFound": false,
+    "blockingInconsistencies": 0,
+    "merged": true,
+    "mergeSha": "466c397e4ff44a1f82c93c8ba92057d07136d67f"
+  },
+  "validation": {
+    "testFiles": 59,
+    "passed": 906,
+    "failed": 0,
+    "skipped": 20,
+    "skippedIntegrations": [
+      {
+        "file": "lib/cadastros/client-document-unique-concurrency.integration.test.ts",
+        "tests": 4
+      },
+      {
+        "file": "lib/cadastros/produtos-listagem-sql.integration.test.ts",
+        "tests": 16
+      }
+    ],
+    "typecheckExit": 0,
+    "lintErrors": 0,
+    "lintWarnings": 5,
+    "lintWarningsInUnchangedPdvLines": true,
+    "finalSupplementalLint": "PASS_NO_WARNINGS",
+    "buildExit": 0,
+    "migrationGuard": "MIGRATION_SKIPPED",
+    "smoke": "PASS_LOCAL_BUILD",
+    "diffCheck": "PASS",
+    "selfReviewR5": "PASS"
+  },
+  "production": {
+    "databaseAccess": false,
+    "backfillExecutions": 0,
+    "migrationsExecuted": 0,
+    "schemaChanged": false,
+    "uniqueChanged": false,
+    "dataErased": false,
+    "whatsappMessagesSent": 0,
+    "externalServicesProvisioned": 0
+  },
+  "aep": {
+    "active": false,
+    "reason": "Opt-in marker absent; ENTRYPOINT read; no track state modified"
+  },
+  "governance": "Pending decisions documented; automatic export/erasure fail closed"
+}

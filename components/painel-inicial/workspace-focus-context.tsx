@@ -80,7 +80,7 @@ export function WorkspaceFocusProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       dispatchOverlay({ type: "close-last" });
     };
     document.addEventListener("keydown", onKeyDown);

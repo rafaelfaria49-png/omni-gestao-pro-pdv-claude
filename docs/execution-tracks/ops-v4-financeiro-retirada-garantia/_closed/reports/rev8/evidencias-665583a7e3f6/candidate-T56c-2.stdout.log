@@ -1,0 +1,11 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002
+
+ ❯ test/ops-v4-fluxo-curto-007/retorno.pg.test.ts (13 tests | 1 failed | 12 skipped) 424ms
+     × T56c outro PROCESSO (outra sessão PostgreSQL) segurando a original: a action espera e respeita a reserva dele 418ms
+
+ Test Files  1 failed | 1 skipped (2)
+      Tests  1 failed | 66 skipped (67)
+   Start at  23:33:17
+   Duration  5.31s (transform 2.18s, setup 0ms, import 3.26s, tests 424ms, environment 1.23s)
+

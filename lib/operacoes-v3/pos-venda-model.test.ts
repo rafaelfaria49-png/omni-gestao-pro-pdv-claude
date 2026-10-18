@@ -107,6 +107,19 @@ describe("garantia — situação", () => {
     expect(lerGarantiaV3(os({}), NOW).situacao).toBe("nenhuma");
   });
 
+  it("G003: linha legada sem condição não vira exclusão de cobertura", () => {
+    const g = lerGarantiaV3(os({
+      orcamento: { status: "aprovado", servicos: [{ id: "livre", descricao: "Serviço legado" }], pecas: [] },
+      ...entregueEm(NOW.toISOString()),
+    }), NOW);
+    expect(g).toMatchObject({ temGarantia: false, situacao: "nenhuma", semCobertura: false, prazoDias: 0 });
+    expect(g.coberturas).toMatchObject([{ linhaId: "livre", modeloId: "nao_definida", situacao: "nenhuma" }]);
+    const explicita = lerGarantiaV3(os({
+      orcamento: { status: "aprovado", servicos: [{ id: "zero", descricao: "Sem cobertura explícita", garantiaModeloId: "sem_garantia", prazoGarantiaDias: 0 }], pecas: [] },
+    }), NOW);
+    expect(explicita).toMatchObject({ temGarantia: true, situacao: "sem_garantia", semCobertura: true });
+  });
+
   it("R9: entrega só pelo dia — a garantia vale o último dia inteiro (a âncora 12:00 não a vence às 16:00)", () => {
     // Entrega em 01/01/2026 só pelo dia (âncora 12:00 na loja = 15:00Z), 90 dias.
     const soDia = { entregaV3: { entregueEm: "2026-01-01T15:00:00.000Z", entregueEmMeta: { precisao: "dia", dia: "2026-01-01" } } };

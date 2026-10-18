@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import type { ComponentProps, ReactNode } from "react";
 import { C } from "../../tokens";
 
 export function AtendimentoModalShell({
@@ -12,6 +13,7 @@ export function AtendimentoModalShell({
   erro,
   footer,
   children,
+  dialogProps,
 }: {
   titulo: string;
   subtitulo: string;
@@ -21,14 +23,18 @@ export function AtendimentoModalShell({
   erro?: string | null;
   footer: ReactNode;
   children: ReactNode;
+  dialogProps?: ComponentProps<typeof DialogPrimitive.Content>;
 }) {
+  // A correção opta pelo modal Radix sem alterar os demais consumidores do shell.
+  const Janela = dialogProps ? DialogPrimitive.Content : "div";
+  const Titulo = dialogProps ? DialogPrimitive.Title : "div";
   return (
     <div
       role="presentation"
       style={{
-        position: "absolute",
+        position: dialogProps ? "fixed" : "absolute",
         inset: 0,
-        zIndex: 70,
+        zIndex: dialogProps ? 50 : 70,
         background: "rgba(17,19,26,.42)",
         display: "flex",
         alignItems: "center",
@@ -36,10 +42,12 @@ export function AtendimentoModalShell({
         padding: 20,
       }}
     >
-      <div
+      <Janela
+        {...dialogProps}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="atend-shell-titulo"
+        {...(dialogProps ? {} : { "aria-labelledby": "atend-shell-titulo" })}
+        aria-describedby={undefined}
         style={{
           width,
           maxWidth: "100%",
@@ -66,9 +74,9 @@ export function AtendimentoModalShell({
           }}
         >
           <div style={{ minWidth: 0 }}>
-            <div id="atend-shell-titulo" style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", color: C.ink }}>
+            <Titulo {...(dialogProps ? {} : { id: "atend-shell-titulo" })} style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", color: C.ink }}>
               {titulo}
-            </div>
+            </Titulo>
             <div style={{ marginTop: 4, fontSize: 12.5, color: C.subtle, lineHeight: 1.45 }}>{subtitulo}</div>
           </div>
           <button
@@ -127,7 +135,7 @@ export function AtendimentoModalShell({
         >
           {footer}
         </div>
-      </div>
+      </Janela>
     </div>
   );
 }

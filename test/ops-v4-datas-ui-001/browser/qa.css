@@ -1,0 +1,19 @@
+:root { --background:hsl(210 20% 98%); --foreground:oklch(.145 0 0); --card:#fff; --primary:hsl(0 84% 50%); --primary-foreground:#fff; --muted:hsl(210 20% 98%); --muted-foreground:oklch(.55 0 0); --border:oklch(.9 0 0); --input:oklch(.9 0 0); --ring:hsl(0 84% 50%); --success:oklch(.62 .17 150); --warning:oklch(.74 .16 78); --destructive:oklch(.62 .22 25); }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--background); color:var(--foreground); font-family:Inter,system-ui,sans-serif; }
+#root { height:100dvh; display:flex; flex-direction:column; position:relative; overflow:hidden; }
+button,input,textarea,select { font:inherit; }
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
+.qa-header { display:flex; flex:none; align-items:center; gap:16px; padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card); font-size:12px; flex-wrap:wrap; }
+.qa-header span { color:var(--muted-foreground); }
+.qa-header label { margin-left:auto; display:flex; align-items:center; gap:6px; }
+main { flex:1; min-height:0; width:100%; max-width:1150px; margin:auto; overflow:auto; }
+@media(max-width:600px) { .qa-header { padding:12px 14px; gap:8px; } .qa-header label { margin-left:0; } }
+
+/* Posicionamento essencial do Dialog/Command no harness sem pipeline Tailwind. */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+[data-slot="dialog-overlay"] { position:fixed; inset:0; z-index:50; background:#0006; }
+[data-slot="dialog-content"] { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:50; width:min(512px,calc(100% - 32px)); background:white; border:1px solid var(--border); border-radius:12px; padding:16px; }
+[data-slot="command-input"] { width:100%; padding:10px; }
+[data-slot="command-item"] { padding:8px; }
+[data-slot="dialog-close"] { position:absolute; right:8px; top:8px; }

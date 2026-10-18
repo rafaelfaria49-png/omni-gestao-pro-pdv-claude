@@ -142,10 +142,10 @@ describe("G01–G03 — garantia da Nova OS", () => {
       ],
     }), FIXED);
     expect(draft.garantia).toMatchObject({ modelo: "sem_garantia", prazoDias: 0 });
-    expect(draft.itens[0]?.garantiaDias).toBeUndefined();
+    expect(draft.itens[0]?.garantiaDias).toBe(0);
   });
 
-  it("snapshot geral usa primeiro serviço válido com garantia; linhas preservam seus prazos", () => {
+  it("snapshot geral não escolhe um serviço quando há vários; linhas preservam todos os prazos", () => {
     const draft = buildNovaOSDraftFromFormV4(form({
       tipoEntrada: "servico_autorizado",
       servicosAutorizados: [
@@ -154,8 +154,8 @@ describe("G01–G03 — garantia da Nova OS", () => {
         { descricao: "Troca de bateria", valor: 200, custo: 60, garantiaDias: 60 },
       ],
     }), FIXED);
-    expect(draft.garantia).toMatchObject({ modelo: "tela", prazoDias: 90 });
-    expect(draft.itens.map((item) => item.garantiaDias)).toEqual([undefined, 90, 60]);
+    expect(draft.garantia).toMatchObject({ modelo: "sem_garantia", prazoDias: 0 });
+    expect(draft.itens.map((item) => item.garantiaDias)).toEqual([0, 90, 60]);
   });
 });
 

@@ -1,0 +1,178 @@
+diff --git a/lib/operacoes-v3/pdv-servico-actions.ts b/lib/operacoes-v3/pdv-servico-actions.ts
+index 95c8ec8..7120ffd 100644
+--- a/lib/operacoes-v3/pdv-servico-actions.ts
++++ b/lib/operacoes-v3/pdv-servico-actions.ts
+@@ -105,7 +105,7 @@ import {
+   type RecusaComercialMistaV3,
+   type ResultadoRecebimentoMistoV3,
+ } from "./recebimento-misto-service";
+-import { avaliarElegibilidadeComercialV3, RecebimentoInelegivelErroV3 } from "./elegibilidade-comercial";
++import { avaliarElegibilidadeComercialV3, RecebimentoInelegivelErroV3, type RecusaComercialV3 } from "./elegibilidade-comercial";
+ 
+ type OSPayloadFull = OrdemServico & Record<string, unknown>;
+ 
+@@ -432,7 +432,13 @@ function normalizarLinhasV3(input: ReceberOSInputV3): SplitLinhaV3[] {
+   return [];
+ }
+ 
+-export type RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE"; operacaoId: string; requestFingerprint: string; mensagem: string };
++type MotivoComercialConfirmacaoV3 = Pick<RecusaComercialV3, "codigo" | "destino">;
++function lerMotivoComercialConfirmacaoV3(value: unknown): MotivoComercialConfirmacaoV3 | undefined {
++  if (!isRecordV3(value) || typeof value.codigo !== "string" || (value.destino !== "comercial" && value.destino !== "financeiro")) return undefined;
++  const codigos: readonly string[] = ["APROVACAO_COMERCIAL_PENDENTE", "ORCAMENTO_RECUSADO", "ORCAMENTO_EXPIRADO", "PRECO_AUSENTE", "VALORES_DIVERGENTES"];
++  return codigos.includes(value.codigo) ? { codigo: value.codigo as MotivoComercialConfirmacaoV3["codigo"], destino: value.destino } : undefined;
++}
++export type RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE"; operacaoId: string; requestFingerprint: string; mensagem: string; comercial?: MotivoComercialConfirmacaoV3 };
+ export type ResultadoConfirmacaoImediataV3 =
+   | { estado: "CONFIRMADO"; resultado: ReceberOSResultV3; prova: ProvaConfirmacaoFinanceiraV3 }
+   | RecusaConfirmacaoImediataV3
+@@ -527,8 +533,12 @@ async function executarRecebimentoImediatoOSV3(storeId: string, osId: string, in
+     const anterior = recusas.find((r) => isRecordV3(r) && r.operacaoId === operacaoId);
+     if (isRecordV3(anterior)) {
+       if (anterior.requestFingerprint !== fingerprintCompleto) throw new Error("Esta confirmação já foi usada com outro conteúdo.");
+-      const recusa = { estado: "RECUSADO_DEFINITIVAMENTE" as const, operacaoId, requestFingerprint: fingerprintCompleto, mensagem: String(anterior.mensagem) };
+-      if (!input.confirmacaoClienteV3) throw new Error(recusa.mensagem);
++      const comercial = lerMotivoComercialConfirmacaoV3(anterior.comercial);
++      const recusa: RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE", operacaoId, requestFingerprint: fingerprintCompleto, mensagem: String(anterior.mensagem), ...(comercial ? { comercial } : {}) };
++      if (!input.confirmacaoClienteV3) {
++        if (comercial) throw new RecebimentoInelegivelErroV3({ elegivel: false, ...comercial, mensagem: recusa.mensagem });
++        throw new Error(recusa.mensagem);
++      }
+       return recusa;
+     }
+     await conferirPendenciaFinanceiraV3(tx, sid, id, operacaoId, "imediato");
+@@ -697,7 +707,7 @@ async function executarRecebimentoImediatoOSV3(storeId: string, osId: string, in
+       await tx.$executeRaw`ROLLBACK TO SAVEPOINT ops_v3_imediato_confirmacao`;
+       if (sessaoId) await travarSessaoCaixa(tx, sid, sessaoId);
+       const { rowId, payload } = await lerOSTravadaV3(tx, sid, id);
+-      const recusa: RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE", operacaoId, requestFingerprint: fingerprintCompleto, mensagem: e.message };
++      const recusa: RecusaConfirmacaoImediataV3 = { estado: "RECUSADO_DEFINITIVAMENTE", operacaoId, requestFingerprint: fingerprintCompleto, mensagem: e.message, ...(e instanceof RecebimentoInelegivelErroV3 ? { comercial: { codigo: e.codigo, destino: e.destino } } : {}) };
+       const anteriores = Array.isArray(payload.recebimentoImediatoRecusasV3) ? payload.recebimentoImediatoRecusasV3 : [];
+       const next = { ...payload, recebimentoImediatoRecusasV3: [...anteriores.filter((r: unknown) => !isRecordV3(r) || r.operacaoId !== operacaoId), { ...recusa, at: dataHora }] };
+       await tx.ordemServico.update({ where: { id: rowId }, data: { payload: next as unknown as Prisma.InputJsonValue } });
+diff --git a/components/operacoes-v3/hooks/use-pdv-servico-v3.ts b/components/operacoes-v3/hooks/use-pdv-servico-v3.ts
+index 2540828..b12572e 100644
+--- a/components/operacoes-v3/hooks/use-pdv-servico-v3.ts
++++ b/components/operacoes-v3/hooks/use-pdv-servico-v3.ts
+@@ -1,6 +1,8 @@
+ "use client";
+ 
+ import { useCallback, useEffect, useRef, useState } from "react";
++import type { RecusaComercialV3 } from "@/lib/operacoes-v3/elegibilidade-comercial";
++type MotivoComercialRecebimentoV3 = Pick<RecusaComercialV3, "codigo" | "destino">;
+ import {
+   estornarRecebimentoOSV3, lerPagamentoOSV3, receberOSV3, registrarRecebimentoMistoOSV3,
+   type CaixaSessaoV3, type EstornarRecebimentoInputV3, type ReceberOSInputV3,
+@@ -16,6 +18,7 @@ import {
+ export interface PdvServicoState {
+   pagamento: PagamentoV3 | null; sessao: CaixaSessaoV3 | null; loading: boolean;
+   recebendo: boolean; estornando: boolean; error: string | null;
++  recusaComercial?: MotivoComercialRecebimentoV3 | null;
+   ultimoRecibo: ComprovanteReciboV3 | null; reload: () => void;
+   receber: (input: ReceberOSInputV3) => Promise<boolean>;
+   estornar: (input: EstornarRecebimentoInputV3) => Promise<boolean>; limparRecibo: () => void;
+@@ -98,6 +101,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
+   const [recebendo, setRecebendo] = useState(false), [registrandoMisto, setRegistrandoMisto] = useState(false);
+   const [estornando, setEstornando] = useState(false);
+   const [error, setError] = useState<string | null>(null), [errorKey, setErrorKey] = useState<string | null>(null);
++  const [recusaComercial, setRecusaComercial] = useState<MotivoComercialRecebimentoV3 | null>(null);
+   const [ultimoRecibo, setUltimoRecibo] = useState<ComprovanteReciboV3 | null>(null), [reciboKey, setReciboKey] = useState<string | null>(null);
+   const [loadedKey, setLoadedKey] = useState<string | null>(null), [nonce, setNonce] = useState(0);
+   const [aPrazo, setAPrazo] = useState<APrazoV3 | null>(null);
+@@ -112,8 +116,8 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
+     setPendencias((prev) => { const next = { ...prev }; if (local.pendencia) next[key] = local.pendencia; else delete next[key]; return next; });
+     if (local.bloqueada) setBloqueios((prev) => ({ ...prev, [key]: true }));
+   }, []);
+-  const erro = useCallback((key: string, mensagem = MENSAGEM_CONFIRMACAO_PENDENTE_V3) => {
+-    if (activeKeyRef.current === key) { setErrorKey(key); setError(mensagem); }
++  const erro = useCallback((key: string, mensagem = MENSAGEM_CONFIRMACAO_PENDENTE_V3, comercial: MotivoComercialRecebimentoV3 | null = null) => {
++    if (activeKeyRef.current === key) { setErrorKey(key); setError(mensagem); setRecusaComercial(comercial); }
+   }, []);
+   const assimilar = useCallback((s: string, o: string, res: Awaited<ReturnType<typeof lerPagamentoOSV3>>) => {
+     const key = JSON.stringify([s, o]);
+@@ -173,7 +177,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
+       if (p.tipo === "imediato") {
+         const resposta = await receberOSV3(p.storeId, p.osId, { ...p.input, confirmacaoClienteV3: true });
+         if ("estado" in resposta && resposta.estado === "RECUSADO_DEFINITIVAMENTE" && resposta.operacaoId === p.operacaoId) {
+-          remover(p); sincronizar(p.storeId, p.osId); erro(p.key, resposta.mensagem); return { confirmado: false };
++          remover(p); sincronizar(p.storeId, p.osId); erro(p.key, resposta.mensagem, resposta.comercial ?? null); return { confirmado: false };
+         }
+         if ("estado" in resposta && resposta.estado === "INCERTO") {
+           if (resposta.pendencia) persistir(resposta.pendencia);
+@@ -193,7 +197,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
+       if (!res.ok) {
+         if (res.pendencia) persistir(res.pendencia);
+         if (res.naoRegistrada) { remover(p); sincronizar(p.storeId, p.osId); }
+-        erro(p.key, res.naoRegistrada ? res.mensagem : MENSAGEM_CONFIRMACAO_PENDENTE_V3);
++        erro(p.key, res.naoRegistrada ? res.mensagem : MENSAGEM_CONFIRMACAO_PENDENTE_V3, res.naoRegistrada ? res.comercial ?? null : null);
+         return { confirmado: false, misto: res.naoRegistrada ? { status: "recusado", code: res.code, mensagem: res.mensagem, saldoAtual: res.saldoAtual } : { status: "incerto", mensagem: MENSAGEM_CONFIRMACAO_PENDENTE_V3 } };
+       }
+       await reconhecer(res.prova);
+@@ -253,7 +257,7 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
+   const limparRecibo = useCallback(() => setUltimoRecibo(null), []);
+   const leitura = projetarLeituraAtualPdvServicoV3({ targetKey, loadedKey, errorKey, pagamento, sessao, loading, error });
+   const p = targetKey ? pendencias[targetKey] ?? null : null;
+-  return { ...leitura, recebendo, registrandoMisto, estornando, ultimoRecibo: targetKey && reciboKey === targetKey ? ultimoRecibo : null,
++  return { ...leitura, recusaComercial: targetKey && errorKey === targetKey ? recusaComercial : null, recebendo, registrandoMisto, estornando, ultimoRecibo: targetKey && reciboKey === targetKey ? ultimoRecibo : null,
+     aPrazo: targetKey && loadedKey === targetKey ? aPrazo : null, reload, receber, registrarMisto, estornar, limparRecibo,
+     pendenciaConfirmacao: p, pendenciaMisto: p?.tipo === "misto" ? p : null, pendenciaReceber: p?.tipo === "imediato" ? p : null,
+     confirmacaoBloqueada: !!p || !!(targetKey && bloqueios[targetKey]), verificarConfirmacao,
+diff --git a/components/operacoes-v3/pages/PdvServicoV3.tsx b/components/operacoes-v3/pages/PdvServicoV3.tsx
+index f8d1791..3824471 100644
+--- a/components/operacoes-v3/pages/PdvServicoV3.tsx
++++ b/components/operacoes-v3/pages/PdvServicoV3.tsx
+@@ -104,6 +104,7 @@ export function PdvServicoV3() {
+     recebendo,
+     estornando,
+     error,
++    recusaComercial: recusaRecebimento,
+     ultimoRecibo,
+     reload,
+     receber,
+@@ -188,6 +189,7 @@ export function PdvServicoV3() {
+       })
+     : null;
+   const recusaComercial =
++    recusaRecebimento ? { ...recusaRecebimento, mensagem: error ?? "Recebimento recusado." } :
+     elegibilidade &&
+     !elegibilidade.elegivel &&
+     (elegibilidade.codigo === "APROVACAO_COMERCIAL_PENDENTE" || elegibilidade.codigo === "ORCAMENTO_RECUSADO" || elegibilidade.codigo === "ORCAMENTO_EXPIRADO")
+diff --git a/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx b/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx
+index df90071..a45f6f3 100644
+--- a/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx
++++ b/components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx
+@@ -205,6 +205,12 @@ function ReceberPagamentoFormV4({ v, somenteSheet }: { v: V4Vals; somenteSheet:
+   if ((pendencia || pdv.confirmacaoBloqueada) && (!projection || projection.expectedTotal == null || v.financial.loading || v.financial.error || pdv.loading)) return <div style={box} role="alert">{MENSAGEM_CONFIRMACAO_PENDENTE_V3}{pendencia && pdv.verificarConfirmacao ? <button type="button" style={btnPrimary} disabled={busy} onClick={() => void pdv.verificarConfirmacao?.()}>Verificar mesma confirmação</button> : <p>Solicite conferência a um operador autorizado.</p>}</div>;
+   if (pdv.confirmacaoBloqueada && !pendencia) return <div style={box} role="alert">{MENSAGEM_CONFIRMACAO_PENDENTE_V3} Solicite conferência a um operador autorizado.</div>;
+   if (somenteSheet && (!formAberto || v.financial.loading || v.financial.error || !projection || projection.expectedTotal == null || pdv.loading)) return null;
++  if (!pendencia && pdv.recusaComercial) return <div style={box} role="alert" data-testid="recusa-comercial-recebimento">
++    <p>{pdv.error ?? "Recebimento recusado. Confira o motivo comercial."}</p>
++    <button type="button" style={btnGhost} onClick={() => { cancelar(); if (pdv.recusaComercial?.destino === "comercial") v.goOrcamento(); else v.goFinanceiro(); }}>
++      {pdv.recusaComercial.destino === "comercial" ? "Conferir orçamento →" : "Conferir cobrança →"}
++    </button>
++  </div>;
+   if (v.financial.loading) return <div style={box}>Carregando projeção financeira…</div>;
+   if (v.financial.error || !projection || projection.expectedTotal == null) return <div style={box}>Recebimento bloqueado: situação financeira indisponível ou incompleta.</div>;
+   const pagamento = { total: projection.expectedTotal, recebido: projection.receivedTotal ?? 0, saldo };
+diff --git a/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts b/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts
+index 5c39d7f..a03e610 100644
+--- a/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts
++++ b/test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts
+@@ -314,6 +314,17 @@ describe("B1 · recusa server-side com motivo e destino; caminhos legítimos pre
+         saldoAPrazo: { valor: 320, vencimento: VENC }, saldoEsperado: 420,
+       });
+       expect(misto).toMatchObject({ ok: false, code: "comercial_nao_elegivel", naoRegistrada: true, mensagem: expect.stringMatching(/^Recebimento recusado: /), comercial: { codigo, destino } });
++      const financeiroAntes = await fotoFinanceira(sid, osId);
++      const original = { linhas: [{ forma: "pix" as const, valor: 100 }], sessaoId: caixa, operacaoId: gerarOperacaoIdV3(), confirmacaoClienteV3: true as const };
++      const recusada = await receberOSV3(sid, osId, original);
++      expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE", operacaoId: original.operacaoId, comercial: { codigo, destino } });
++      expect(await fotoFinanceira(sid, osId)).toBe(financeiroAntes);
++      const aposRecusa = await foto(sid, osId);
++      expect(await receberOSV3(sid, osId, original)).toEqual(recusada);
++      expect(await foto(sid, osId)).toBe(aposRecusa);
++      const { confirmacaoClienteV3: _optIn, ...legado } = original;
++      await expect(receberOSV3(sid, osId, legado)).rejects.toMatchObject({ codigo, destino });
++      expect(await foto(sid, osId)).toBe(aposRecusa);
+       const depois = await efeitos(sid, osId);
+       expect(depois.titulos).toEqual([]);
+       expect(depois.caixa).toEqual([]);

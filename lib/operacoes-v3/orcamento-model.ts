@@ -57,6 +57,7 @@ export type PecaV3 = PecaUsada & {
   selecionadaV3?: boolean;
 };
 export type ServicoV3 = Servico & {
+  garantiaModeloId?: string;
   kindV3?: OrcamentoLinhaKindV3;
   custoV3?: number;
   grupoId?: string;
@@ -293,25 +294,11 @@ export function validarSelecaoCompletaV3(orc: Pick<OrcamentoV3, "pecas" | "servi
   return null;
 }
 
-/**
- * Garantia resultante da aprovação: entre as linhas SELECIONADAS que
- * informam `varianteV3.garantiaDias`, usa a MENOR (conservador — a OS não
- * promete mais do que a peça/variante mais frágil cobre). `null` quando
- * nenhuma variante selecionada informa garantia (não sobrescreve o que já
- * houver em `garantiaPrevista`).
- */
-export function garantiaResultanteAprovacaoV3(
-  orc: Pick<OrcamentoV3, "pecas" | "servicos">,
-): { prazoDias: number; rotulo: string } | null {
-  const pecas = Array.isArray(orc.pecas) ? orc.pecas : [];
-  const servicos = Array.isArray(orc.servicos) ? orc.servicos : [];
-  const candidatas = [...pecas, ...servicos].filter(
-    (l): l is (PecaV3 | ServicoV3) & { varianteV3: VarianteV3 & { garantiaDias: number } } =>
-      l.selecionadaV3 === true && typeof l.varianteV3?.garantiaDias === "number",
-  );
-  if (candidatas.length === 0) return null;
-  const menor = candidatas.reduce((min, l) => (l.varianteV3.garantiaDias < min.varianteV3.garantiaDias ? l : min));
-  return { prazoDias: menor.varianteV3.garantiaDias, rotulo: menor.varianteV3.rotulo || "" };
+/** Compatibilidade singular: prazos diferentes não são achatados para o menor. */
+export function garantiaResultanteAprovacaoV3(orc: Pick<OrcamentoV3, "pecas" | "servicos">): { prazoDias: number; rotulo: string } | null {
+  const candidatas = [...(orc.pecas ?? []), ...(orc.servicos ?? [])].filter((l) => l.selecionadaV3 === true && typeof l.varianteV3?.garantiaDias === "number");
+  if (!candidatas.length || candidatas.some((l) => l.varianteV3!.garantiaDias !== candidatas[0].varianteV3!.garantiaDias)) return null;
+  return { prazoDias: candidatas[0].varianteV3!.garantiaDias!, rotulo: candidatas[0].varianteV3!.rotulo || "" };
 }
 
 // ----------------------------------------------------------------------------

@@ -14,14 +14,14 @@ import { NextRequest } from "next/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // ── Bordas mockadas ─────────────────────────────────────────────────────────
-vi.mock("@/auth", () => ({ auth: async () => ({ user: { email: "op@teste.local" } }) }))
-vi.mock("@/lib/api-auth", () => ({ getVerifiedSubscriptionFromCookies: async () => null }))
+vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: "op-1", email: "op@teste.local", role: "ADMIN" } }) }))
+vi.mock("@/lib/api-auth", () => ({ getVerifiedSubscriptionFromCookies: async () => ({ ok: true, status: "ativa", vencimento: "2099-12-31" }) }))
 vi.mock("@/lib/trusted-time", () => ({ getTrustedTimeMs: async () => Date.now() }))
 vi.mock("@/lib/subscription-seal", () => ({ isVencimentoExpired: () => false }))
 vi.mock("@/lib/store-id-from-request", () => ({
   storeIdFromAssistecRequestForWrite: () => "loja-2",
 }))
-vi.mock("@/lib/prisma", () => ({ prisma: {}, withPrismaSafe: async (_f: unknown, fb: unknown) => fb }))
+vi.mock("@/lib/prisma", () => ({ prisma: { logsAuditoria: { create: async () => ({ id: "audit-1" }) } }, withPrismaSafe: async (_f: unknown, fb: unknown) => fb }))
 
 /** Uma "planilha" por domínio — o parser real não é exercido aqui. */
 const planilhasFalsas = [

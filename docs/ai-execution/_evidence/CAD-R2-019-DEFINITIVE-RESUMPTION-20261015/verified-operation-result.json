@@ -1,0 +1,60 @@
+{
+  "observedAt": "2026-10-15T13:56:24.583Z",
+  "goal": "CAD-R2-019",
+  "result": "PASS",
+  "database": "omnigestao_prod",
+  "datasourceFingerprint": "c4f2567332c8f613",
+  "documentKeysFilled": 49,
+  "rerunWritten": 0,
+  "documents": {
+    "columnPresent": true,
+    "total": 275,
+    "strong": 51,
+    "weakOrEmpty": 224,
+    "notNull": 51,
+    "mismatchedKeys": 0,
+    "sameStoreStrongDuplicates": 0,
+    "crossStoreReuse": 18
+  },
+  "uniqueActive": true,
+  "migrationsBefore": {
+    "observedAt": "2026-10-15T13:52:06.540Z",
+    "command": "prisma migrate status",
+    "readOnly": true,
+    "result": "PASS",
+    "exitCode": 0,
+    "localMigrations": 22,
+    "reportedMigrations": 22,
+    "datasourceFingerprint": "c4f2567332c8f613",
+    "migrationsExecuted": false
+  },
+  "migrationsAfter": {
+    "observedAt": "2026-10-15T13:52:11.586Z",
+    "command": "prisma migrate status",
+    "readOnly": true,
+    "result": "PASS",
+    "exitCode": 0,
+    "localMigrations": 22,
+    "reportedMigrations": 22,
+    "datasourceFingerprint": "c4f2567332c8f613",
+    "migrationsExecuted": false
+  },
+  "dataIntegrity": {
+    "missingClients": 0,
+    "changedProtectedClients": 0,
+    "addedClients": 0,
+    "countDecreases": [],
+    "clientIdsUnchanged": true,
+    "protectedClientDataUnchanged": true,
+    "operationalCountsUnchanged": true,
+    "databaseDataLoss": "NO"
+  },
+  "preflightAfter": "PASS",
+  "regressions": "PASS",
+  "productionSmoke": "PASS",
+  "status": "VERIFIED_READY_FOR_CLOSEOUT",
+  "credentialsWritten": false,
+  "credentialsPrinted": false,
+  "regressionPassedTests": 172,
+  "productionBuildId": "4a85dd95202b"
+}
