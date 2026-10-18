@@ -121,3 +121,11 @@ Proposta selecionada, ainda **NÃO AUTORIZADA**: **17,97 GiB lógicos**, pelos o
 - CURRENT_STATUS, CHANGELOG e MASTER_CONTEXT não alterados: não houve mudança funcional, arquitetural global ou entrega de runtime.
 
 Próximo gate: `HUMAN_MERGE_PLAN_AND_DISK_DECISION`, com resolução formal adicional do impedimento de retomada AEP antes de editar o serviço.
+
+## Publicação e avanço concorrente da main
+
+Plano publicado na [PR #283](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/283), exclusivamente documental, para main, sem merge. Base de criação preservada: `976ebaa294e09441ce0c5be7bbe5776a568f4013`.
+
+Na conferência posterior à publicação, main avançou para `d6bdaa023f44a2ad3a7650c68979810934636069` pelo merge da PR #282 (Cadastros Cliente), externo a esta sessão. Comparação remota: sete commits, 21 arquivos, nenhum dos quatro documentos deste plano, nenhum arquivo Pessoas ou da CLI AEP. Não foi incorporado esse avanço nem WIP de outra sessão. O GitHub informou `mergeable=MERGEABLE`, `mergeStateStatus=UNSTABLE`; isso não significa aprovação dos checks remotos nem autorização de merge.
+
+Branch documental e worktree de execução limpas após o primeiro commit/push; PR #273 continua OPEN/DRAFT no SHA de referência, e o hash do marcador ativo continua idêntico ao registrado acima. A atualização deste relatório documenta somente a consulta remota, sem rebase, merge ou mudanças da sessão Pessoas. `verify --all` e `git diff --check` passaram; ledger, fechados e derivados não possuem delta de conteúdo.
