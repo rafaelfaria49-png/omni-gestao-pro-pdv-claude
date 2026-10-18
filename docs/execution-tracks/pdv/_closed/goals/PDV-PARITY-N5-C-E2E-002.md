@@ -4,7 +4,7 @@
   "id": "PDV-PARITY-N5-C-E2E-002",
   "track": "pdv",
   "title": "N5-C — cobertura automatizada mínima e matriz final do PDV Core",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "branch": "goal/pdv-parity-n5-c-e2e-002",
@@ -24,9 +24,16 @@
   "familia_executor": "openai",
   "revisao_independente": true,
   "reversibilidade": "alta — somente testes, fixtures isoladas e documentos; nenhum writer produtivo",
-  "depends_on": ["PDV-PARITY-N5-B2-PIN-KEYMAP-001"],
+  "depends_on": [
+    "PDV-PARITY-N5-B2-PIN-KEYMAP-001"
+  ],
   "stop_after_goal": true,
-  "autorizacoes": { "commit": true, "push": true, "branch_only": "goal/pdv-parity-n5-c-e2e-002", "merge": false }
+  "autorizacoes": {
+    "commit": true,
+    "push": true,
+    "branch_only": "goal/pdv-parity-n5-c-e2e-002",
+    "merge": false
+  }
 }
 -->
 
