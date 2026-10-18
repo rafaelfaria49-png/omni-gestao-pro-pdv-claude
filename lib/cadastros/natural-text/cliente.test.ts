@@ -28,6 +28,17 @@ describe("Cliente: deterministic text, synthetic data only", () => {
     expect(r.campos.documento.estado).toBe("ambiguo")
     expect(r.campos.telefone.estado).toBe("ambiguo")
   })
+  it("marks conflicting explicit state evidence as ambiguous", () => {
+    expect(interpretarTextoCliente("cidade Itaí/SP, UF RJ").campos.uf).toMatchObject({ valor: null, estado: "ambiguo" })
+  })
+  it("keeps label words inside names and addresses without fabricating fields", () => {
+    const r = interpretarTextoCliente("nome: Lia Cidade Silva, endereço: Rua Cidade de Lisboa, 10, telefone: 14999998888")
+    expect(r.campos.nome.valor).toBe("Lia Cidade Silva")
+    expect(r.campos.endereco.valor).toBe("Rua Cidade de Lisboa, 10")
+    expect(r.campos.cidade).toEqual({ valor: null, estado: "ausente" })
+    expect(interpretarTextoCliente("nome: Empresa Telefone Teste").campos.nome.valor).toBe("Empresa Telefone Teste")
+    expect(interpretarTextoCliente("Cidadezinha Teste").campos.nome.valor).toBe("Cidadezinha Teste")
+  })
   it("only accepts explicitly supplied city/state, email and address", () => {
     const r = interpretarTextoCliente("Nome: Loja Teste, email: TESTE@example.invalid, cidade: Itaí/SP, endereço: Rua de Teste, 0")
     expect(r.campos.email.valor).toBe("teste@example.invalid")
@@ -53,6 +64,7 @@ describe("Cliente: deterministic text, synthetic data only", () => {
   })
   it("derives PJ only from an explicit valid CNPJ", () => {
     expect(aplicarSugestaoCliente(interpretarTextoCliente("CNPJ 11222333000181"), values()).tipo).toBe("PJ")
+    expect(aplicarSugestaoCliente(interpretarTextoCliente("CNPJ 11222333000181"), values(), { preservarTipo: true }).tipo).toBe("PF")
   })
   it("validates human edits, name required and optional identity fields", () => {
     expect(validateClientEditor(values())).toHaveProperty("nome")

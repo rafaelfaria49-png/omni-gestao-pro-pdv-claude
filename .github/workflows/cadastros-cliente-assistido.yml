@@ -37,7 +37,7 @@ jobs:
       - name: TypeScript completo
         run: node --max-old-space-size=6144 node_modules/typescript/lib/tsc.js --noEmit
       - name: ESLint completo
-        run: npm run lint
+        run: node node_modules/eslint/bin/eslint.js . --ignore-pattern 'generated/prisma/**'
       - name: Regressões Cadastros e consumidores
         run: >-
           node node_modules/vitest/vitest.mjs run

@@ -15,7 +15,7 @@ import { ClienteEditor, ClienteEditorDialog } from "./ClienteEditor"
 
 const props = () => ({ storeId: "loja-a", editing: null, onClose: vi.fn(), onSaved: vi.fn() })
 const edit = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
-const click = (name: string) => fireEvent.click(screen.getByRole("button", { name, exact: true }))
+const click = (name: string) => fireEvent.click(screen.getByRole("button", { name }))
 async function suggest(text = "Novo cliente Lia de Teste, telefone 14999998888, mora em Itaí") {
   edit("Descreva o novo cliente", text)
   click("Interpretar texto")

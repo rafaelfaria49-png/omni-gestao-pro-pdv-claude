@@ -91,4 +91,10 @@ describe("Cliente actions with real access gate, identity and ClientWriteService
     expect(r).toMatchObject({ ok: false, code: "IDENTITY_REVIEW_REQUIRED" })
     expect(JSON.stringify(r)).not.toContain("52998224725")
   })
+  it("preserves canonical legacy-edit rules without requiring repair of historical identity fields", async () => {
+    h.rows = [row({ document: "LEGACY-SYNTHETIC", phone: "123" })]
+    const r = await salvarClienteRevisado("loja-a", "synthetic-existing", { ...input(), documento: "LEGACY-SYNTHETIC", telefone: "123" }, true)
+    expect(r).toMatchObject({ ok: true })
+    expect(h.update).toHaveBeenCalledOnce()
+  })
 })

@@ -13,7 +13,8 @@ const LABELS: Record<string, ClientTextField> = {
   cidade: "cidade", "mora em": "cidade", "reside em": "cidade",
   endereço: "endereco", endereco: "endereco", uf: "uf", estado: "uf",
 }
-const MARKER = /(?<![\p{L}\p{N}])(?:nome completo|razão social|razao social|novo cliente|nova cliente|mora em|reside em|nome|cliente|telefone|celular|whatsapp|fone|cpf|cnpj|documento|e-mail|email|cidade|endereço|endereco|uf|estado)\s*(?:[:=]\s*)?/giu
+// Labels start a field; label words inside names and addresses remain ordinary data.
+const MARKER = /(?:^|(?<=[,;\n]))\s*(?:nome completo|razão social|razao social|novo cliente|nova cliente|mora em|reside em|nome|cliente|telefone|celular|whatsapp|fone|cpf|cnpj|documento|e-mail|email|cidade|endereço|endereco|uf|estado)(?=\s|[:=]|$)\s*(?:[:=]\s*)?/giu
 const INSTRUCTION = /(?:ignore|ignorar|apague|delete|execute|system|instruções|instrucoes|https?:|<script|salve automaticamente)/i
 
 export function validClientPhone(raw: string): boolean {
@@ -41,11 +42,16 @@ export function interpretarTextoCliente(texto: unknown): ClientTextSuggestion {
   }
   for (let i = 0; i < found.length; i++) {
     const match = found[i]
-    const label = match[0].replace(/[\s:=]+$/g, "").toLowerCase()
+    const label = match[0].replace(/[\s:=]+$/g, "").trim().toLowerCase()
     const field = LABELS[label]
     const value = text.slice(match.index! + match[0].length, found[i + 1]?.index ?? text.length)
     // Commas delimit prose, except within an explicitly labelled address.
-    add(field, field === "endereco" ? value : value.split(/[,;\n]/)[0], label)
+    const raw = field === "endereco" ? value : value.split(/[,;\n]/)[0]
+    const cityState = field === "cidade" ? raw.trim().replace(/[.!?]+$/, "").match(/^(.+?)\s*\/\s*([a-z]{2})$/i) : null
+    if (cityState && UFS.has(cityState[2].toUpperCase())) {
+      add("cidade", cityState[1], label)
+      add("uf", cityState[2], label)
+    } else add(field, raw, label)
   }
   const prefix = text.slice(0, found[0]?.index ?? text.length).split(/[,;\n]/)[0].trim()
   if (prefix && !candidates.has("nome") && /^[\p{L}][\p{L}\s'.&-]*$/u.test(prefix) && !INSTRUCTION.test(prefix)) add("nome", prefix)
@@ -73,11 +79,6 @@ export function interpretarTextoCliente(texto: unknown): ClientTextSuggestion {
     }
     if (field === "email") { valid = validClientEmail(raw) && raw.length <= 254; if (valid) value = normalizeClientEmail(raw) }
     if (field === "cidade") {
-      const cityState = raw.match(/^(.+?)\s*\/\s*([a-z]{2})$/i)
-      if (cityState && UFS.has(cityState[2].toUpperCase())) {
-        value = cityState[1].trim()
-        if (!candidates.has("uf")) result.campos.uf = { valor: cityState[2].toUpperCase(), estado: "extraido" }
-      }
       valid = value.length <= 120 && /^[\p{L}][\p{L}\s'.-]*$/u.test(value) && !INSTRUCTION.test(value)
     }
     if (field === "endereco") valid = valid && raw.length <= 240 && !INSTRUCTION.test(raw) && !/[<>{}]/.test(raw)
@@ -106,12 +107,12 @@ export function validateClientEditor(values: ClientEditorValues): Partial<Record
 }
 
 /** Same fill-empty-only policy as Produto 016, with the separate Cliente schema. */
-export function aplicarSugestaoCliente(suggestion: ClientTextSuggestion, current: ClientEditorValues): ClientEditorValues {
+export function aplicarSugestaoCliente(suggestion: ClientTextSuggestion, current: ClientEditorValues, opts?: { preservarTipo?: boolean }): ClientEditorValues {
   const next = { ...current }
   for (const field of CLIENT_TEXT_FIELDS) {
     const proposed = suggestion.campos[field]
     if (!current[field].trim() && proposed.estado === "extraido" && proposed.valor !== null) next[field] = proposed.valor
   }
-  if (!current.documento && next.documento) next.tipo = normalizeDocumentDigits(next.documento).length === 14 ? "PJ" : "PF"
+  if (!opts?.preservarTipo && !current.documento && next.documento) next.tipo = normalizeDocumentDigits(next.documento).length === 14 ? "PJ" : "PF"
   return next
 }

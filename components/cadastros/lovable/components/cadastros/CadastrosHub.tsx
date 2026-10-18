@@ -569,6 +569,7 @@ function ClientesPanel({
   const m = useToggle();
   const [editing, setEditing] = useState<ClienteDTO | null>(null);
   const [rows, setRows] = useState<ClienteDTO[]>([]);
+  const [, startSaving] = useTransition();
   const [filterQuery, setFilterQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);

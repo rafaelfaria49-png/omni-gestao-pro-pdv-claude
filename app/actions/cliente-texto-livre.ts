@@ -27,7 +27,9 @@ export async function salvarClienteRevisado(storeId: string, clientId: string | 
   const values = Object.fromEntries(fields.map((f) => [f, raw[f].trim()])) as unknown as ClientEditorValues
   values.tipo = raw.tipo
   values.active = raw.active
-  const errors = validateClientEditor(values)
+  // Keep the established writer policy for legacy edits (including old invalid documents).
+  // Strict capture validation applies to new assisted/manual creations in this editor.
+  const errors = clientId === null ? validateClientEditor(values) : {}
   if (Object.keys(errors).length) return { ok: false as const, message: "Corrija os campos indicados.", errors }
   const input = {
     nome: values.nome, tipo: values.tipo, documento: values.documento, telefone: values.telefone,

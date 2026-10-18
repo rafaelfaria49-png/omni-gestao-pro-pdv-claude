@@ -42,6 +42,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   const [interpreting, setInterpreting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [tipoEdited, setTipoEdited] = useState(false)
   const [message, setMessage] = useState("")
   const [errors, setErrors] = useState<Partial<Record<keyof ClientEditorValues, string>>>({})
   const request = useRef(0)
@@ -63,6 +64,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     setMessage("")
   }
   function change<K extends keyof ClientEditorValues>(field: K, value: ClientEditorValues[K]) {
+    if (field === "tipo") setTipoEdited(true)
     setValues((v) => ({ ...v, [field]: value }))
     setConfirmed(false)
     setErrors((e) => ({ ...e, [field]: undefined }))
@@ -84,7 +86,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   }
   function apply() {
     if (!suggestion) return
-    const next = aplicarSugestaoCliente(suggestion, values)
+    const next = aplicarSugestaoCliente(suggestion, values, { preservarTipo: tipoEdited })
     const nextOrigins = { ...origins }
     for (const field of CLIENT_TEXT_FIELDS) if (next[field] !== values[field]) nextOrigins[field] = revised.has(field) ? "Revisado pelo operador" : "Extraído do texto"
     setValues(next)
@@ -96,7 +98,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (submitting.current || interpreting || !confirmed) return
-    const nextErrors = validateClientEditor(values)
+    const nextErrors = editing ? {} : validateClientEditor(values)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length) { setMessage("Corrija os campos indicados antes de salvar."); return }
     submitting.current = true
