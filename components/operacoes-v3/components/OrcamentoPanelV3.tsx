@@ -189,8 +189,9 @@ export function OrcamentoPanelV3({
     else if (actions.error) notificar(actions.error);
   };
   const enviar = async () => {
-    const ok = await actions.enviar();
-    notificar(ok ? "Orçamento enviado." : actions.error ?? "Falha ao enviar.");
+    if (!window.confirm("Você declara que já enviou manualmente este orçamento ao cliente? Este registro não confirma entrega ou leitura.")) return;
+    const ok = await actions.enviar(true);
+    notificar(ok ? "Envio informado pelo operador." : actions.error ?? "Falha ao registrar envio.");
   };
   const aprovar = async () => {
     const ok = await actions.aprovar();
@@ -449,7 +450,7 @@ export function OrcamentoPanelV3({
             <span className="mx-1 h-5 w-px bg-border" aria-hidden />
             <ButtonV3 variant="outline" disabled={busy || dirty} onClick={enviar}>
               {actions.pending === "enviar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {orc.status === "enviado" ? "Reenviar" : "Enviar"}
+              Registrar envio manual
             </ButtonV3>
             <ButtonV3
               variant="outline"

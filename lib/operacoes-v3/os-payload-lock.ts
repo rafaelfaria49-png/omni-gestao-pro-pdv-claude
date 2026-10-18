@@ -48,6 +48,32 @@ export const CAMPOS_FINANCEIROS_SERVIDOR_V3 = ["pagamentoV3", "aPrazoV3", "receb
 
 export function semCamposFinanceirosDoServidorV3<T extends object>(patch: T, current?: object): T {
   const limpo = { ...patch } as Record<string, unknown>;
+  // Envios são escritos somente pelas actions de confirmação. Patches genéricos
+  // (inclusive intenções legadas V2) não fabricam status, recibos ou eventos.
+  const anterior = current as { orcamento?: Record<string, unknown>; comercialV4?: Record<string, unknown>; timeline?: Array<{ id?: string }> } | undefined;
+  if (limpo.orcamento && typeof limpo.orcamento === "object") {
+    const entrada = { ...limpo.orcamento } as Record<string, unknown>;
+    if (entrada.status === "enviado" && anterior?.orcamento?.status !== "enviado") {
+      throw new Error("Use a confirmação explícita de envio manual ou o aceite da API oficial para registrar enviado.");
+    }
+    for (const campo of ["compartilhamentosV3", "enviadoEm"]) {
+      if (anterior?.orcamento && Object.prototype.hasOwnProperty.call(anterior.orcamento, campo)) entrada[campo] = anterior.orcamento[campo];
+      else delete entrada[campo];
+    }
+    limpo.orcamento = entrada;
+  }
+  if (limpo.comercialV4 && typeof limpo.comercialV4 === "object") {
+    const comercial = limpo.comercialV4 as Record<string, unknown>;
+    if (comercial.statusComercial === "enviado" && anterior?.comercialV4?.statusComercial !== "enviado") {
+      throw new Error("Status enviado exige declaração manual ou aceite da API oficial.");
+    }
+  }
+  if (Array.isArray(limpo.timeline)) {
+    const ids = new Set((anterior?.timeline ?? []).map((e) => e.id));
+    if (limpo.timeline.some((e: { id?: string; tipo?: string; metadata?: { evento?: string } }) =>
+      !ids.has(e.id) && (e.tipo === "orcamento_enviado" || ["orcamento_envio_confirmado", "orcamento_compartilhamento_iniciado"].includes(e.metadata?.evento ?? "")),
+    )) throw new Error("Eventos de envio exigem a confirmação auditada do orçamento.");
+  }
   for (const campo of CAMPOS_FINANCEIROS_SERVIDOR_V3) delete limpo[campo];
   // Termos e coberturas só são escritos pelas actions auditadas de garantia.
   delete limpo.termosGarantiaV3;

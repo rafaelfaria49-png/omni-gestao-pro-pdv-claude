@@ -4,13 +4,13 @@
  */
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { C, fmt } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { criarOrcamentoRapidoV3 } from "@/lib/operacoes-v3/orcamento-rapido-actions";
-import { enviarOrcamentoPorCanalV3 } from "@/lib/operacoes-v3/orcamento-envio-actions";
-import { marcarOrcamentoPreOsV3, atualizarStatusComercialV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
+import { prepararCompartilhamentoOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-envio-actions";
+import { marcarOrcamentoPreOsV3, type MarcarPreOsInputV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
 import { MAX_LINHAS_POR_GRUPO_V3 } from "@/lib/operacoes-v3/orcamento-model";
 import {
   adicionarItemFixoV4,
@@ -67,6 +67,10 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
   const [precificacaoTela, setPrecificacaoTela] = useState(false);
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const emCurso = useRef(false);
+  const montado = useRef(true);
+  useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
+  const criado = useRef<{ osId: string; carimbo: MarcarPreOsInputV3 } | null>(null);
   const [abertos, setAbertos] = useState({ cliente: true, aparelho: true, diagnostico: false, proposta: true, condicoes: false });
   const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
   const refsDatas = {
@@ -87,7 +91,8 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
   const diasProposta = form.datas.dataProposta.dia && form.datas.dataProposta.dia < hoje ? diasEntreCivisV3(form.datas.dataProposta.dia, hoje) : 0;
   const vencida = validadeVencidaV3(form.datas.validoAteDia);
 
-  const persistir = async (enviar: boolean) => {
+  const persistir = async (preparar: boolean) => {
+    if (emCurso.current) return;
     setErro(null);
     if (!sid) {
       setErro("Selecione uma loja ativa para criar o orçamento.");
@@ -108,10 +113,10 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
       return;
     }
     const validadeDias = Math.max(0, diasEntreCivisV3(form.datas.dataProposta.dia, form.datas.validoAteDia));
+    emCurso.current = true;
     setBusy(true);
     try {
-      const resultado = await criarOrcamentoRapidoV3(sid, buildOrcamentoRapidoInputFromFormV4(form, datas.datas));
-      await marcarOrcamentoPreOsV3(sid, resultado.osId, {
+      const carimbo: MarcarPreOsInputV3 = {
         origemAtendimento: form.origemAtendimento,
         validadeDias,
         prazoEstimado: form.prazoEstimado,
@@ -123,18 +128,22 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
           observacaoTecnica: form.observacaoTecnica || undefined,
         },
         aparelho: { tipo: form.equipamentoTipo, imei: form.aparelhoImei, cor: form.aparelhoCor },
-        statusComercial: enviar ? "enviado" : "rascunho",
-      });
-      if (enviar) {
-        await enviarOrcamentoPorCanalV3(sid, resultado.osId, form.origemAtendimento === "whatsapp" ? "whatsapp" : "impresso");
-        await atualizarStatusComercialV3(sid, resultado.osId, "enviado").catch(() => undefined);
+        statusComercial: "rascunho",
+      };
+      if (!criado.current) {
+        const resultado = await criarOrcamentoRapidoV3(sid, buildOrcamentoRapidoInputFromFormV4(form, datas.datas));
+        criado.current = { osId: resultado.osId, carimbo };
       }
-      v.onOrcamentoRapidoCriado(resultado.osId);
+      await marcarOrcamentoPreOsV3(sid, criado.current.osId, criado.current.carimbo);
+      if (preparar) await prepararCompartilhamentoOrcamentoV3(sid, criado.current.osId, form.origemAtendimento === "whatsapp" ? "whatsapp" : "impresso");
+      if (montado.current) v.onOrcamentoRapidoCriado(criado.current.osId);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível criar o orçamento.");
+      const detalhe = e instanceof Error ? e.message : "Não foi possível concluir o orçamento.";
+      setErro(criado.current ? `Orçamento já criado em rascunho. Tente novamente para concluir a preparação. ${detalhe}` : detalhe);
       const novamente = resolverDatasOrcamentoFormV3(form.datas);
       if (novamente.erros.length > 0) setErrosDatas(Object.fromEntries(novamente.erros.map((x) => [x.campo, x.mensagem])));
     } finally {
+      emCurso.current = false;
       setBusy(false);
     }
   };
@@ -168,7 +177,7 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
             <button type="button" onClick={() => void persistir(false)} disabled={!podeSalvar} style={btnGhost}>Salvar rascunho</button>
             <button type="button" onClick={() => void persistir(false)} disabled={!podeSalvar} style={btnGhost}>Criar sem enviar</button>
             <button type="button" onClick={() => void persistir(true)} disabled={!podeSalvar} style={btnPrimary}>
-              {busy ? "Salvando…" : "Criar e enviar orçamento"}
+              {busy ? "Salvando…" : "Criar e preparar compartilhamento"}
             </button>
           </div>
         </>

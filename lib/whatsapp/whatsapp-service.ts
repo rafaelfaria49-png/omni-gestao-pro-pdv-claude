@@ -181,7 +181,7 @@ export async function findOrCreateOpenConversation(storeId: string, contactId: s
   })
 }
 
-export async function addMessage(storeId: string, conversationId: string, msg: MessageInput) {
+export async function addMessage(storeId: string, conversationId: string, msg: MessageInput, contextoOrcamentoOficial?: { osId: string; tentativaId: string }) {
   const conv = await prisma.whatsAppConversation.findFirst({
     where: { id: conversationId, storeId },
   })
@@ -189,6 +189,16 @@ export async function addMessage(storeId: string, conversationId: string, msg: M
 
   const body = (msg.body ?? "").trim()
   if (!body) throw new Error("Mensagem vazia")
+
+  let payload = msg.payload
+  if (msg.direction === "outbound" && payload && typeof payload === "object" && !Array.isArray(payload)) {
+    // POST /messages e registros internos comuns aceitam payload livre. Esse payload
+    // nunca pode forjar o vínculo usado para recuperar um aceite oficial do orçamento.
+    const protegido = { ...payload } as Record<string, Prisma.InputJsonValue>
+    delete protegido.orcamentoV3
+    if (contextoOrcamentoOficial) protegido.orcamentoV3 = contextoOrcamentoOficial
+    payload = protegido
+  }
 
   const created = await prisma.$transaction(async (tx) => {
     const m = await tx.whatsAppMessage.create({
@@ -199,7 +209,7 @@ export async function addMessage(storeId: string, conversationId: string, msg: M
         body,
         messageType: (msg.messageType ?? "text").trim() || "text",
         externalMessageId: (msg.externalMessageId ?? "").trim(),
-        payload: msg.payload === undefined ? undefined : msg.payload,
+        payload: payload === undefined ? undefined : payload,
       },
     })
 
@@ -623,7 +633,19 @@ async function requireStoreCloudCreds(storeId: string) {
   return creds
 }
 
-export async function sendCloudApiTextAndRecord(storeId: string, conversationId: string, text: string) {
+export type CloudApiTextReceipt = { wamid: string; conversaId: string; aceitoEm: string };
+export class CloudApiTextAcceptedError extends Error {
+  constructor(public readonly receipt: CloudApiTextReceipt, public readonly messageId?: string) {
+    super("A API aceitou o envio, mas o registro local precisa ser conferido. Não reenvie a mensagem.");
+  }
+}
+
+/** Hooks internos permitem reservar a tentativa e salvar o recibo antes de outras escritas. */
+export async function sendCloudApiTextAndRecord(storeId: string, conversationId: string, text: string, lifecycle?: {
+  beforeSend: () => Promise<unknown>;
+  onAccepted: (receipt: CloudApiTextReceipt) => Promise<unknown>;
+  orcamento?: { osId: string; tentativaId: string };
+}) {
   const trimmed = text.trim()
   if (!trimmed) throw new Error("message vazio")
 
@@ -635,16 +657,23 @@ export async function sendCloudApiTextAndRecord(storeId: string, conversationId:
 
   const to = assertValidWhatsAppRecipientDigits(conv.contact.phoneDigits)
   const creds = await requireStoreCloudCreds(storeId)
+  await lifecycle?.beforeSend()
   const res = await cloudSendText(creds, to, trimmed)
   const wamid = firstOutboundWamid(res)
-  const m = await addMessage(storeId, conversationId, {
+  if (!wamid) throw new Error("API sem identificador de aceite. Confira o WhatsApp antes de reenviar.")
+  const receipt: CloudApiTextReceipt = { wamid, conversaId: conversationId, aceitoEm: new Date().toISOString() }
+  let falhaEvidencia = false
+  try { await lifecycle?.onAccepted(receipt) } catch { falhaEvidencia = true }
+  let m: Awaited<ReturnType<typeof addMessage>>
+  try { m = await addMessage(storeId, conversationId, {
     direction: "outbound",
     body: trimmed,
     messageType: "text",
     externalMessageId: wamid,
-    payload: { cloud: { kind: "text", wamid: wamid || undefined } } as Prisma.InputJsonValue,
-  })
-  return { message: m, wamid }
+    payload: { cloud: { kind: "text", wamid, aceitoEm: receipt.aceitoEm } } as Prisma.InputJsonValue,
+  }, lifecycle?.orcamento) } catch { throw new CloudApiTextAcceptedError(receipt) }
+  if (falhaEvidencia) throw new CloudApiTextAcceptedError(receipt, m.id)
+  return { message: m, wamid, receipt }
 }
 
 export async function sendCloudApiTemplateAndRecord(

@@ -288,8 +288,8 @@ describe("orçamento V3 — GOAL OPS-V4-ORC-RAPIDO-024 — constante única + wi
   // `orcamento-actions.ts` não é importável diretamente aqui (usa o alias fino
   // `@/api/os`, que o vitest.config.ts não resolve — só `@` → raiz). A leitura
   // de texto abaixo não executa o módulo, só confirma a fiação no source real.
-  it("orcamento-actions.ts importa VALIDADE_PADRAO_DIAS de orcamento-model.ts (sem duplicar a constante)", () => {
-    const src = readFileSync(join(__dirname, "orcamento-actions.ts"), "utf8");
+  it("o serviço de confirmação importa VALIDADE_PADRAO_DIAS de orcamento-model.ts (sem duplicar a constante)", () => {
+    const src = readFileSync(join(__dirname, "orcamento-envio-service.ts"), "utf8");
     expect(src).toContain("VALIDADE_PADRAO_DIAS");
     expect(src).not.toMatch(/const\s+VALIDADE_PADRAO_DIAS\s*=/);
   });

@@ -1,0 +1,290 @@
+{
+  "goal": "OPS-V4-ORCAMENTO-ENVIO-REAL-STATUS-001",
+  "base": "ae2be066f4f72e7a2a789c3aa145389218766773",
+  "core": {
+    "passed": 281,
+    "files": 13,
+    "failed": 0
+  },
+  "ui": [
+    {
+      "failed": 0,
+      "report": "ui-verified.json",
+      "files": 3,
+      "passed": 15
+    },
+    {
+      "failed": 0,
+      "report": "rafacell-ui.json",
+      "files": 1,
+      "passed": 6
+    },
+    {
+      "failed": 0,
+      "report": "datas-ui.json",
+      "files": 3,
+      "passed": 30
+    }
+  ],
+  "transport": {
+    "passed": 52,
+    "files": 5,
+    "failed": 0,
+    "note": "Contém testes que também integram o recorte central; não somar como contagem exclusiva."
+  },
+  "regression": {
+    "filesPassed": 99,
+    "unexpectedFailures": 0,
+    "filesFailed": 4,
+    "failures": [
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato mantém estado de múltiplas linhas (array), não forma única",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-NOVA-OS-AUTOFILL-ISOLATION-009 — Nova OS sem autofill do navegador todo campo de input/textarea do modal Nova OS declara autoComplete explícito",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite EntregaStage renderiza o form real (v.salvarGarantia) com o catálogo/prazo padrão da V3",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite botão de salvar tem busy-lock e fica desabilitado sem mudança (evita duplo clique / salvar sem editar)",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite copy honesta sobre quando a garantia passa a valer",
+        "file": "components/operacoes-v4-preview/preview-honesty.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 recebimento imediato continua no contrato receberOSV3 via hook, sem optimistic de valor",
+        "file": "components/operacoes-v4-preview/recebimento-transversal.test.ts"
+      },
+      {
+        "class": "reproduzido_na_base",
+        "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 19–35. submit usa receberOSV3 via hook, sem optimistic e com reload só no sucesso",
+        "file": "components/operacoes-v4-preview/recebimento-transversal.test.ts"
+      },
+      {
+        "class": "postgres_indisponivel",
+        "name": "A — B altera identificação/prova para Y; A salva checklist com estado anterior Y preservada + checklist A persistido + timeline correta + desconhecidos preservados (PG real)",
+        "file": "lib/operacoes-v3/workspace-actions.test.ts"
+      },
+      {
+        "class": "postgres_indisponivel",
+        "name": "B — corrida sobreposta: B grava entre SELECT e UPDATE de A A não clobbera: espera B, relê o LATEST e aplica só o checklist (PG real, duas conexões)",
+        "file": "lib/operacoes-v3/workspace-actions.test.ts"
+      },
+      {
+        "class": "postgres_indisponivel",
+        "name": "C — checklist normal sem concorrência continua funcionando igual persiste checklist + evento + atualizadoEm preservando o resto (PG real)",
+        "file": "lib/operacoes-v3/workspace-actions.test.ts"
+      }
+    ],
+    "failed": 19,
+    "passed": 2058,
+    "blockedSuite": "lib/operacoes-v4/entrada-readback.integration.test.ts: BLOQUEIO_EXPLICITO_PG"
+  },
+  "eslint": {
+    "changedSourceFiles": 21,
+    "globalWarnings": 115.0,
+    "changedExitCode": 0,
+    "globalErrors": 105.0,
+    "errorFiles": [
+      {
+        "errors": 1,
+        "unchangedFromBase": true,
+        "path": "components/pdv-github-original/claude-export/app.jsx"
+      },
+      {
+        "errors": 22,
+        "unchangedFromBase": true,
+        "path": "components/pdv-github-original/claude-export/modals.jsx"
+      },
+      {
+        "errors": 39,
+        "unchangedFromBase": true,
+        "path": "components/pdv-github-original/claude-export/modals2.jsx"
+      },
+      {
+        "errors": 40,
+        "unchangedFromBase": true,
+        "path": "components/pdv-github-original/claude-export/pdv.jsx"
+      },
+      {
+        "errors": 3,
+        "unchangedFromBase": true,
+        "path": "components/pdv-github-original/components/studio/components/bom-dia-modal.tsx"
+      }
+    ]
+  },
+  "build": {
+    "exitCode": 0,
+    "events": [
+      "MIGRATION_SKIPPED",
+      "✓ Compiled successfully in 5.5min",
+      "✓ Generating static pages using 11 workers (102/102) in 44s"
+    ],
+    "fontMocks": false,
+    "migration": "MIGRATION_SKIPPED"
+  },
+  "sourceFiles": [
+    {
+      "sha256": "5015b38a6dd3894a2832d78d16bf41116a038be4eca270bfef03929a4485acd2",
+      "path": "components/operacoes-v3/components/OrcamentoPanelV3.tsx"
+    },
+    {
+      "sha256": "05444d90e131638e292ee535073ababa3baa410d9da320f8de9ab4d6355f72f5",
+      "path": "components/operacoes-v3/hooks/use-orcamento-v3.ts"
+    },
+    {
+      "sha256": "0ace674d011673ba7223386c99c07e01017774685ecccafef6b9ccf350ad82cd",
+      "path": "components/operacoes-v4-preview/parts/OrcamentoRapidoModal.tsx"
+    },
+    {
+      "sha256": "7c1b34023fe4ec041705a1ef7cd40e275290a7a397a401a91704af2e50ddb7aa",
+      "path": "components/operacoes-v4-preview/parts/stages/OrcamentoEnvioCluster.tsx"
+    },
+    {
+      "sha256": "4f6d82a96e674f69d38c7e2a1baa89415caa5880449e340bc70c9f0c4684e428",
+      "path": "components/operacoes-v4-preview/preview-honesty.test.ts"
+    },
+    {
+      "sha256": "d96b69aede260b2a12efb82ec3591ebe6da06cb9a910a30739e19e37b5c7013c",
+      "path": "components/operacoes-v4-preview/use-v4-preview.ts"
+    },
+    {
+      "sha256": "34ccd5a78c1dbcfd3979bb4bfca51438aa8efe49962de6dff939e82da3c013bf",
+      "path": "lib/operacoes-v3/comercial-pre-os-actions.ts"
+    },
+    {
+      "sha256": "dbae89edf8e1fdf2810e506340f95c82b33d6166618219808a50520a62c0c3db",
+      "path": "lib/operacoes-v3/orcamento-actions.ts"
+    },
+    {
+      "sha256": "4f58c9e1a19f8542c8c35e08f7b21886e25b268d5b8105361b42e22dfaf01115",
+      "path": "lib/operacoes-v3/orcamento-envio-actions.test.ts"
+    },
+    {
+      "sha256": "a74f85028c46e0ad87fb006c16d0a62a931755b57eb17207168faed82261bbf9",
+      "path": "lib/operacoes-v3/orcamento-envio-actions.ts"
+    },
+    {
+      "sha256": "ae5f16a18befd3ddd694b4750e5d5f09baf1262c95c42a5db1bb9dae95c63b34",
+      "path": "lib/operacoes-v3/orcamento-envio-model.ts"
+    },
+    {
+      "sha256": "1a0540fe2151581417485f71db7bfe5a5847e1bf4ea172e64e4b5361b0bb0be7",
+      "path": "lib/operacoes-v3/orcamento-envio-patch.test.ts"
+    },
+    {
+      "sha256": "4f6b9469aec27112b2cd6172ef6a050a4877c75b09d98dc45c7b51c38d05a372",
+      "path": "lib/operacoes-v3/orcamento-envio-service.ts"
+    },
+    {
+      "sha256": "37b7bffcbc16e380bc90fb6001b2e71cfbc28d9be92a28c112d1894d517cca89",
+      "path": "lib/operacoes-v3/orcamento-model.test.ts"
+    },
+    {
+      "sha256": "89ed9ebb94a9d1aea761a025b2986a2ef1f2836df7016cbe2f896cac10688a85",
+      "path": "lib/operacoes-v3/orcamento-model.ts"
+    },
+    {
+      "sha256": "560c3750a64952766c71a92a528e8b00b75f946fbbe26ebb2f1392298c9a189d",
+      "path": "lib/operacoes-v3/os-payload-lock.ts"
+    },
+    {
+      "sha256": "8e5eba0b6b04ae4e885b9420b4c57032fe9bf321a835f38a9c5628b6bb4d34bb",
+      "path": "lib/whatsapp/whatsapp-service.ts"
+    },
+    {
+      "sha256": "87ec14bddc387f53fdb52cac5483e60b8fc821d3cf9af61e709cc20beadf03c2",
+      "path": "test/ops-v4-orcamento-envio-real-status-001/compartilhamento-ui.test.tsx"
+    },
+    {
+      "sha256": "97bc350e6a5f2911b27f226c4a68f051290b495ca5d085380ddcca1588034ff0",
+      "path": "test/ops-v4-orcamento-envio-real-status-001/confirmacao-v3-ui.test.tsx"
+    },
+    {
+      "sha256": "7c8bc8e92036b73464f02369ee83a7076dfdc6f486d209c76f8e7b3f0fb8f5df",
+      "path": "test/ops-v4-orcamento-envio-real-status-001/criacao-ui.test.tsx"
+    },
+    {
+      "sha256": "28396283d928370656a4daa62420ded9c583769c47071585b7462ea6ce691c49",
+      "path": "test/ops-v4-orcamento-envio-real-status-001/vitest.config.ts"
+    }
+  ],
+  "commands": [
+    "npx vitest run lib/operacoes-v3 lib/operacoes-v4 components/operacoes-v4-preview --maxWorkers=2 --reporter=json",
+    "npx vitest run --config test/ops-v4-orcamento-envio-real-status-001/vitest.config.ts --maxWorkers=1",
+    "npx vitest run --config test/ops-v4-rafacell-precificacao-001/vitest.config.ts --maxWorkers=1",
+    "npx vitest run --config test/ops-datas-retroativas-001/vitest.config.ts --maxWorkers=1 --no-file-parallelism",
+    "npx vitest run lib/operacoes-v3/orcamento-envio-actions.test.ts lib/operacoes-v3/orcamento-envio-patch.test.ts lib/whatsapp/store-credentials.test.ts lib/whatsapp/whatsapp-service-routing.test.ts lib/whatsapp-legacy-quarantine.test.ts --maxWorkers=1 --no-file-parallelism --testTimeout=30000",
+    "npm run typecheck",
+    "npx eslint [21 caminhos explícitos de sourceFiles]",
+    "npx eslint . --ignore-pattern generated/** --ignore-pattern import/**",
+    "npm run build (VERCEL_ENV=development; MIGRATION_AUTHORITY_ENABLED=false)"
+  ],
+  "logsLocal": "import/ops-envio-validation/ (gitignored; logs completos preservados na worktree)",
+  "typecheck": {
+    "exitCode": 0,
+    "command": "npm run typecheck",
+    "log": "import/ops-envio-validation/typecheck-verified.log"
+  },
+  "diffCheck": {
+    "exitCode": 0,
+    "schemaOrDependencyChanges": false
+  }
+}
