@@ -28,6 +28,8 @@ const TEST_URL = process.env.CAD_R2_019_TEST_DATABASE_URL ?? ""
 
 const CPF_A = "529.982.247-25"
 const CPF_A_DIGITS = "52998224725"
+const CPF_B = "390.533.447-05"
+const CPF_B_DIGITS = "39053344705"
 
 const PRINCIPAL: CadastrosAuditPrincipal = {
   userId: "user-1",
@@ -84,7 +86,8 @@ describe.skipIf(!TEST_URL)("CAD-R2-019 — concorrência real (PostgreSQL descar
     const fails = [r1, r2].filter((r) => !r.ok)
     // Sob corrida real, pelo menos a unicidade por lookup bloqueia uma; se
     // ambas passarem do lookup, o banco (P2002) fecha — nunca duas linhas.
-    expect(oks.length + fails.length).toBe(2)
+    expect(oks).toHaveLength(1)
+    expect(fails).toHaveLength(1)
     const count = await realDb.cliente.count({
       where: { storeId: storeA, documentKey: CPF_A_DIGITS },
     })
@@ -106,13 +109,15 @@ describe.skipIf(!TEST_URL)("CAD-R2-019 — concorrência real (PostgreSQL descar
     const c2 = await createClient(ctx(storeA), { nome: "C2" }, undefined, { db: dbA })
     if (!c1.ok || !c2.ok) throw new Error("setup falhou")
     const [r1, r2] = await Promise.all([
-      updateClient(ctx(storeA), c1.id, { documento: CPF_A }, undefined, { db: dbA }),
-      updateClient(ctx(storeA), c2.id, { documento: CPF_A_DIGITS }, undefined, { db: dbA }),
+      updateClient(ctx(storeA), c1.id, { documento: CPF_B }, undefined, { db: dbA }),
+      updateClient(ctx(storeA), c2.id, { documento: CPF_B_DIGITS }, undefined, { db: dbA }),
     ])
     const oks = [r1, r2].filter((r) => r.ok)
-    expect(oks.length).toBeLessThanOrEqual(1)
+    // This key must be unused by the previous create test; otherwise both
+    // updates could be refused and an old row would produce a false PASS.
+    expect(oks).toHaveLength(1)
     const count = await realDb.cliente.count({
-      where: { storeId: storeA, documentKey: CPF_A_DIGITS },
+      where: { storeId: storeA, documentKey: CPF_B_DIGITS },
     })
     expect(count).toBe(1)
     for (const r of [r1, r2]) {

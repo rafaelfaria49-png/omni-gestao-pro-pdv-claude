@@ -28,7 +28,7 @@ beforeEach(() => {
   h.interpret.mockImplementation(async (_, text) => ({ ok: true, sugestao: interpretarTextoCliente(text) }))
   h.save.mockResolvedValue({ ok: true, id: "synthetic" })
 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); window.history.replaceState(null, "", "/"); vi.unstubAllGlobals() })
 
 describe("HUB real client editor: human review and temporary capture", () => {
   it("reviews/corrects, applies, then saves only after explicit confirmation", async () => {
@@ -105,15 +105,61 @@ describe("HUB real client editor: human review and temporary capture", () => {
     expect(h.save).toHaveBeenCalledOnce()
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false)
   })
-  it("keeps microphone gated even with an available/blocked speech engine; requests no permission", () => {
-    const speech = vi.fn(), microphone = vi.fn()
+  it("ignores query/storage flags and both speech engines, requesting no microphone permission", () => {
+    const speech = vi.fn(), prefixedSpeech = vi.fn(), microphone = vi.fn(), permission = vi.fn(), devices = vi.fn()
     vi.stubGlobal("SpeechRecognition", speech)
-    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: microphone } })
+    vi.stubGlobal("webkitSpeechRecognition", prefixedSpeech)
+    vi.stubGlobal("navigator", Object.assign(Object.create(navigator), {
+      mediaDevices: { getUserMedia: microphone, enumerateDevices: devices }, permissions: { query: permission },
+    }))
+    window.history.replaceState(null, "", "/?voice=true&captureSource=voice&approved=true")
+    localStorage.setItem("CLIENT_VOICE_PRIVACY_GATE", JSON.stringify({ enabled: true }))
+    sessionStorage.setItem("voiceEnabled", "true")
     render(React.createElement(ClienteEditor, props()))
     click("Voz indisponível")
     expect(screen.getByRole("button", { name: "Voz indisponível" }).hasAttribute("disabled")).toBe(true)
-    expect(speech).not.toHaveBeenCalled(); expect(microphone).not.toHaveBeenCalled()
+    expect(speech).not.toHaveBeenCalled(); expect(prefixedSpeech).not.toHaveBeenCalled()
+    expect(microphone).not.toHaveBeenCalled(); expect(permission).not.toHaveBeenCalled(); expect(devices).not.toHaveBeenCalled()
+    expect(h.interpret).not.toHaveBeenCalled(); expect(h.save).not.toHaveBeenCalled()
     expect(screen.getByText(/pode enviar áudio a serviços externos/)).toBeTruthy()
+  })
+  it("drops late success after closing/reopening the actual dialog", async () => {
+    let resolve!: (value: Interpretation) => void
+    h.interpret.mockImplementation(() => new Promise((r) => { resolve = r }))
+    const p = props(); const view = render(React.createElement(ClienteEditorDialog, { ...p, open: true }))
+    edit("Descreva o novo cliente", "Nome: Sintética Encerrada"); click("Interpretar texto")
+    view.rerender(React.createElement(ClienteEditorDialog, { ...p, open: false }))
+    view.rerender(React.createElement(ClienteEditorDialog, { ...p, open: true }))
+    edit("Nome *", "Manual preservado")
+    await act(async () => resolve({ ok: true, sugestao: interpretarTextoCliente("Nome: Sintética Encerrada") }))
+    expect(screen.queryByLabelText("Sugestão: Nome")).toBeNull()
+    expect((screen.getByLabelText("Descreva o novo cliente") as HTMLTextAreaElement).value).toBe("")
+    expect((screen.getByLabelText("Nome *") as HTMLInputElement).value).toBe("Manual preservado")
+    expect(h.save).not.toHaveBeenCalled()
+  })
+  it("ignores a rejected request after store switch and preserves new manual fields", async () => {
+    let reject!: (reason: Error) => void
+    h.interpret.mockImplementation(() => new Promise((_, r) => { reject = r }))
+    const p = props(); const view = render(React.createElement(ClienteEditorDialog, { ...p, open: true }))
+    edit("Descreva o novo cliente", "Sintética loja anterior"); click("Interpretar texto")
+    view.rerender(React.createElement(ClienteEditorDialog, { ...p, storeId: "loja-b", open: true }))
+    edit("Nome *", "Manual da loja B")
+    await act(async () => reject(new Error("SYNTHETIC-RAW-ERROR-DO-NOT-DISPLAY")))
+    expect(screen.queryByText(/SYNTHETIC-RAW-ERROR|Não foi possível interpretar/)).toBeNull()
+    expect((screen.getByLabelText("Nome *") as HTMLInputElement).value).toBe("Manual da loja B")
+    expect(h.save).not.toHaveBeenCalled()
+  })
+  it("shows a constant error without exposing the raw rejection or losing manual fields", async () => {
+    h.interpret.mockRejectedValueOnce(new Error("SYNTHETIC-RAW-ERROR-DO-NOT-DISPLAY"))
+    render(React.createElement(ClienteEditor, props()))
+    edit("Nome *", "Manual de Teste")
+    edit("Descreva o novo cliente", "Descrição sintética"); click("Interpretar texto")
+    await screen.findByText("Não foi possível interpretar. Verifique o acesso à loja e tente novamente.")
+    expect(screen.queryByText(/SYNTHETIC-RAW-ERROR/)).toBeNull()
+    expect((screen.getByLabelText("Nome *") as HTMLInputElement).value).toBe("Manual de Teste")
+    click("Descartar sugestões")
+    expect((screen.getByLabelText("Descreva o novo cliente") as HTMLTextAreaElement).value).toBe("")
+    expect(h.save).not.toHaveBeenCalled()
   })
   it("uses an accessible dialog and clears fields after close/reopen", async () => {
     const p = props(); const view = render(React.createElement(ClienteEditorDialog, { ...p, open: true }))

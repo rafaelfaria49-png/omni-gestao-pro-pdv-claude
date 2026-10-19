@@ -1,6 +1,43 @@
-# CAD-R2-021 — Cliente por texto e voz
+# CAD-R2-021 — relatório único de texto, voz e prontidão de governança
 
-Entrega parcial em validação. Texto implementado; voz bloqueada por revisão administrativa/jurídica de processamento. Não declarar o GOAL encerrado nem habilitar o microfone com base em testes técnicos.
+## Continuação — 19/10/2026
+
+`CAD_R2_021_STATUS=PARTIAL_BLOCKED`. `TEXT_CAPTURE=PUBLISHED_PRESERVED`. `VOICE_CAPTURE=DISABLED`. `VOICE_PRIVACY_GATE=BLOCKED`. `LEGAL_APPROVAL=PENDING`. Testes, revisão, CI, merge ou deployment não substituem a decisão administrativa/jurídica.
+
+### Autoridade, base e isolamento
+
+Comando humano: continuação autônoma de Voice Privacy & Governance Readiness do GOAL existente, sem habilitação de voz. Base remota conferida após fetch: `9eb59d08f06af881adc7d2e11a167ef24c5a1fee`. Branch isolada: `codex/cad-r2-021-voice-governance-readiness`; nenhuma modificação na worktree principal. `.aep-active` ausente na principal e na nova worktree; AEP opt-in inativo. Nenhum state/LEDGER/REGISTRY editado. PRs paralelas inventariadas e preservadas.
+
+### Reconciliação com a entrega publicada
+
+A [PR #282](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/282) foi merged, head `bf16f06c519496450b531f891f261d9a909df575`, merge `d6bdaa023f44a2ad3a7650c68979810934636069`. O [CI anterior](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/39143910374) aprovou TypeScript, lint de fontes ativas, 994 testes/20 skips, build sem migrations e smoke responsivo. O prefixo de build `d6bdaa023f44` foi observado no smoke somente GET da publicação anterior. Esses números são históricos, não resultados presumidos desta continuação. A main atual inclui alterações posteriores de outras frentes.
+
+O texto já publicado não foi reimplementado. Os parágrafos abaixo de “Histórico da PR #282” registram sua evolução e suas falhas intermediárias; referências antigas a validação/merge pendentes não descrevem o estado atual dessa PR.
+
+### Auditoria e proteções desta continuação
+
+- Leitura direta de gate, lifecycle, Action, editor, tipos, parser, testes e dependências. Gate constante `false`, agora congelado em runtime; sem env, query, local/sessionStorage ou configuração externa para ativá-lo.
+- UI sem import do adapter de fala, construção de reconhecedor, enumeração de dispositivos ou solicitação de microfone. Testes ampliados para os dois nomes de SpeechRecognition, query/storage adulterados, APIs de permissão e descarte de respostas tardias/erros após fechamento e troca de loja.
+- Action direta autentica/autoriza antes de responder e recusa origem não literal `text` antes do parser; matriz ampliada de tipos/valores adulterados, sem rede, escrita, auditoria ou log de conteúdo. O discriminador não certifica a origem física de uma string fornecida pelo chamador; ferramentas externas de ditado não são ativadas pela aplicação.
+- Texto/sugestão efêmeros e DTO de escrita revisado preservados; ClientWriteService continua sendo a fronteira canônica, com identidade, deduplicação, UNIQUE e isolamento de loja.
+- Smoke Chromium instrumentado para falhar se o editor consultar motores de fala, permissões ou microfone. Probe de compatibilidade separado do produto consulta apenas metadados de pt-BR em localhost com microfone negado; não instala pacotes nem inicia áudio.
+- PostgreSQL local indisponível (Docker sem daemon). CI preparado com serviço PostgreSQL descartável, credenciais sintéticas e guard de URL exata/loopback antes de qualquer operação. `db push` somente materializa o schema inalterado nesse serviço; não executa migrations nem backfill. O teste de update concorrente foi fortalecido: documento novo e exatamente um sucesso, evitando PASS com duas recusas sobre documento previamente ocupado.
+
+### Pacote preparado para análise humana
+
+- [VOICE-GOVERNANCE.md](VOICE-GOVERNANCE.md): finalidades separadas, hipóteses sem fundamento selecionado, matriz de agentes, retenção/minimização por camada, riscos de atendente/cliente/terceiros/sensíveis, minutas de transparência, diligência de transferência, matriz de decisão e suspensão. **Todos os campos de aprovação permanecem PENDENTES.** Não há parecer, assinatura ou aceite fictício.
+- [VOICE-ARCHITECTURE.md](VOICE-ARCHITECTURE.md): alternativas local/externa/manual, API/pacotes pt-BR, compatibilidade documental, Permissions-Policy, estados de erro e proibição de fallback remoto. Google Cloud Speech-to-Text V1 e Azure Speech avaliados apenas como candidatos; contratos, contas e países efetivamente contratados não validados. Não se declara retenção zero de fornecedores.
+- Próximo ato humano indispensável: administração e assessoria jurídica identificarem responsáveis reais e documentarem finalidade/base, tecnologia/escopo, destinatários/países, retenção, avisos, condições e suspensão. Homologação dos terminais e qualidade de reconhecimento ainda dependerá de autorização apropriada; nenhuma captura de áudio real foi executada.
+
+### Validação e publicação desta continuação
+
+Validação inicial: 48 testes de Action/gate/guard passaram; o worker jsdom não iniciou por timeout no host com pressão de memória. Essa execução não é PASS integral. ESLint dos dez arquivos de código alterados passou sem erros/warnings; sintaxe dos scripts e `git diff --check` passaram. TypeScript completo, lint de fontes ativas, regressões, UI, 20 integrações PostgreSQL, build e smoke são gates do CI limpo. Resultados finais, commit, PR, revisão, merge/deploy e limpeza serão registrados após conferência. Nenhum PASS futuro é presumido.
+
+`PRODUCTION_DB_WRITES_BY_AGENT=0`. `MIGRATIONS_EXECUTED=NO`. `CAD_R2_022_STARTED=NO`. `WIP_PRESERVED=YES`.
+
+## Histórico da PR #282
+
+Registro histórico da implementação e revisão anterior. Texto publicado; voz continuou bloqueada. Não declarar o GOAL encerrado nem habilitar o microfone com base em testes técnicos.
 
 ## Escopo e autoridade
 
