@@ -11,6 +11,7 @@ import { reaisParaCentavosV4, sugerirPrecoTelaCentavos } from "./precificacao-te
 import { marcarSelecaoVarianteV4 } from "./orcamento-selecao";
 import { montarOrcamentoClienteViewV4 } from "./orcamento-cliente-view";
 import { montarMensagemOrcamentoV4 } from "./orcamento-mensagem";
+import { adaptOrcamento } from "@/components/operacoes-v4-preview/os-adapter";
 
 function proposta(custos = [60, 230]): OrcamentoRapidoFormV4 {
   const form = {
@@ -70,6 +71,33 @@ describe("telas → contratos canônicos V3/V4", () => {
     const trocada = marcarSelecaoVarianteV4(escolhida, "g", base.servicos[2].id);
     expect(computeTotaisV3({ ...trocada, desconto: 0 })).toMatchObject({ total: 260, custo: 65, lucro: 195 });
     expect(base.servicos.every((s) => s.selecionadaV3 === undefined)).toBe(true);
+  });
+
+  it("resumo aprovado soma somente o custo da alternativa escolhida e as duas cortesias", () => {
+    const input = buildOrcamentoRapidoInputFromFormV4(proposta());
+    const base = { pecas: [], servicos: montarServicosOrcamentoRapidoV3(input, "g") };
+    const resumo = (selecionada: ReturnType<typeof marcarSelecaoVarianteV4>) => {
+      const total = computeTotaisV3({ ...selecionada, desconto: 0 }).total;
+      return adaptOrcamento({ orcamento: { ...selecionada, status: "aprovado", total } } as unknown as OrdemServico);
+    };
+    const primeira = marcarSelecaoVarianteV4(base, "g", base.servicos[2].id);
+    expect(resumo(primeira).custoTotal?.replace(/\s/g, "")).toBe("R$65,00");
+    expect(resumo(primeira).lucroTotal?.replace(/\s/g, "")).toBe("R$195,00");
+    const segunda = marcarSelecaoVarianteV4(primeira, "g", base.servicos[3].id);
+    expect(resumo(segunda).custoTotal?.replace(/\s/g, "")).toBe("R$235,00");
+    expect(resumo(segunda).lucroTotal?.replace(/\s/g, "")).toBe("R$225,00");
+  });
+
+  it("resumo não inventa lucro antes da escolha nem quando o custo escolhido é desconhecido", () => {
+    const input = buildOrcamentoRapidoInputFromFormV4(proposta());
+    const base = { pecas: [], servicos: montarServicosOrcamentoRapidoV3(input, "g") };
+    const resumo = (linhas: ReturnType<typeof marcarSelecaoVarianteV4>) => adaptOrcamento({ orcamento: { ...linhas, status: "rascunho", total: 260 } } as unknown as OrdemServico);
+    expect(resumo(base)).toMatchObject({ custoTotal: null, lucroTotal: null });
+    delete base.servicos[3].custoV3;
+    const conhecida = marcarSelecaoVarianteV4(base, "g", base.servicos[2].id);
+    expect(resumo(conhecida).custoTotal?.replace(/\s/g, "")).toBe("R$65,00");
+    const desconhecida = marcarSelecaoVarianteV4(conhecida, "g", base.servicos[3].id);
+    expect(resumo(desconhecida)).toMatchObject({ custoTotal: null, lucroTotal: null });
   });
 
   it("custo ausente em uma alternativa não vira zero nem invalida a outra", () => {
