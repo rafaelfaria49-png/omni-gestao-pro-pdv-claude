@@ -35,7 +35,23 @@ Validação local: 48 testes de Action/gate/guard passaram; o worker jsdom inici
 
 A [PR #286](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/286) foi aberta com commit inicial `2c486c0d9e3f29337a8e17c68f5fc578565408a2`. As 20 integrações passaram em PostgreSQL descartável no primeiro CI, sem escrita produtiva. A revisão automatizada apontou que `Promise.all` sozinho não comprova colisão UNIQUE. Corrigido para usar duas conexões reais, barreira imediatamente antes de create/update (após os lookups), confirmação de dois backend PIDs e observação obrigatória de exatamente um P2002 real, além do resultado de domínio seguro. A nova execução deve validar esse cenário mais forte.
 
-TypeScript completo, lint de fontes ativas, regressões, UI, 20 integrações PostgreSQL, build e smoke são gates do CI limpo. Resultados finais, revisão, merge/deploy e limpeza serão registrados após conferência. Nenhum PASS futuro é presumido.
+O [primeiro CI completo](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/39193697563), head `2c486c0d9e3f29337a8e17c68f5fc578565408a2`, passou TypeScript, lint de fontes ativas (0 erros/91 warnings históricos), regressões, build com `MIGRATION_SKIPPED`, smoke em 1440/390/320 e probe sem áudio. No smoke, zero chamadas às APIs de voz/microfone/permissões, zero rede externa, zero storage, zero page errors e sem overflow. I/O de save simulado; editor/parser reais. Não se declara save autenticado produtivo testado.
+
+No [CI da correção](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/39194301274), head `b8d4300aa71c83a5084336b1106f47288a651e8e`, as 20 integrações passaram novamente, agora exigindo a corrida real e P2002. A suíte sem banco pode exibir os 20 opt-in como skips; o job PostgreSQL separado os executa efetivamente. O workflow passa a produzir também `voice-regression.json` para contagem exata das regressões no head final, sem depender da apresentação dos logs.
+
+Compatibilidade observada no primeiro runner: Chromium 136.0.7103.25 expõe reconhecimento genérico, mas não API local nem consulta de pacote; `ptBR=NOT_CHECKABLE`. Não existe demonstração de suporte local pt-BR nos terminais atuais da operação. Arquitetura local continua não homologada, mesmo com o pacote documental pronto.
+
+### Self-review R5 da continuação
+
+1. **Autoridade e escopo:** comando humano autoriza preparação/publicação técnica; não autoriza voz. AEP inativo; 14 caminhos específicos, sem áreas protegidas nem controle manual de state/LEDGER/REGISTRY.
+2. **Privacidade:** gate imutável, UI sem engine/permissão, Action com recusa antes do parser, nenhuma integração externa. Minutas não publicadas como aceites; retenção externa/infraestrutura separada da efemeridade comprovada na aplicação.
+3. **Contexto e lifecycle:** testes de loja/sessão reais no servidor, campos de autoridade ignorados, respostas tardias de sucesso/erro descartadas na UI; preservação do manual e confirmação explícita.
+4. **Integridade:** writer e identidade canônicos preservados. Corrida sintética com duas conexões/transações reais, barreira após lookup, UNIQUE e mapeamento P2002 comprovados no serviço PostgreSQL descartável; nenhum backfill ou migration.
+5. **Evidência e release:** limitações locais registradas, CI e fontes oficiais vinculados; revisão automatizada e gates no head a integrar são obrigatórios antes do merge. Deployment canônico e smoke final só leitura, sem alterações de secrets ou da autoridade de migrations.
+
+### Recibo final de publicação
+
+O resultado único pós-execução, com SHA final, commits, CI/revisão, merge, deployment/smoke e limpeza da worktree, será registrado no corpo da [PR #286](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/286) e no relatório final entregue ao solicitante. Este arquivo preserva as evidências verificadas antes de sua própria publicação; não presume aprovação futura. Os artefatos `voice-regression.json`, `postgres-integration.json`, `postgres-isolation.json`, `browser-smoke.json` e `voice-compatibility.json` pertencem ao CI do head respectivo.
 
 `PRODUCTION_DB_WRITES_BY_AGENT=0`. `MIGRATIONS_EXECUTED=NO`. `CAD_R2_022_STARTED=NO`. `WIP_PRESERVED=YES`.
 

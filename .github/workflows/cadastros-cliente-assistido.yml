@@ -53,6 +53,8 @@ jobs:
           app/api/import/advanced lib/importador-avancado lib/auth/proxy-session-gate.test.ts
           components/cadastros/lovable/components/cadastros/ClienteEditor.test.ts
           lib/contas-receber-cliente-match.test.ts --maxWorkers=2
+          --reporter=default --reporter=json
+          --outputFile=docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/voice-regression.json
       - name: Build completo sem migrations
         run: npm run build
       - run: npx playwright install --with-deps chromium

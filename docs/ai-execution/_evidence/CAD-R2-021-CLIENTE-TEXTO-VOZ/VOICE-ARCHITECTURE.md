@@ -28,6 +28,8 @@ Uma futura homologação deverá registrar SO, navegador/versão, hardware, pol�
 
 Mesmo um resultado `available` não demonstra reconhecimento correto de nomes/endereços/CPFs, ausência de tráfego interno do navegador ou capacidade dos navegadores dos atendentes. Não foi autorizada nem executada captura real de áudio. Homologação operacional pt-BR permanece **PENDENTE**, sem promessa de processamento local no produto atual.
 
+Resultado efetivo do primeiro CI (19/10/2026 03:20:29 UTC): Playwright Chromium **136.0.7103.25**, contexto seguro, reconhecimento genérico exposto, porém `processLocally`, `available` e `install` ausentes; `ptBR=NOT_CHECKABLE`. Zero requisições externas de página, motor não construído, áudio não iniciado e nenhum pacote instalado. Esse navegador de teste é anterior ao Chrome 139 que anunciou a API local; não se extrapola sua ausência para versões atuais nem se presume suporte na frota dos atendentes. A evidência demonstra justamente por que detecção genérica é insuficiente. O probe é repetido no CI do head final; o JSON do artefato é a observação canônica desse runner.
+
 ### Erros e lifecycle exigidos para a futura liberação
 
 | Evento/condição | Comportamento exigido, sem fallback remoto |
