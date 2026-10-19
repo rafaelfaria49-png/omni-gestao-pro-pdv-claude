@@ -1,3 +1,96 @@
+# PDV Core N5-C — REV2: cobertura incompleta, novo blocker
+
+Atualização: 2026-10-19. Base: `9eb59d08f06af881adc7d2e11a167ef24c5a1fee`.
+O PR #285 foi confirmado MERGED. `git merge --no-edit origin/main` integrou a
+main por fast-forward, sem reset; `af12ed3d0159f97bb125a62a0466362f4a89af8b`
+continua ancestral. O registro histórico abaixo permanece preservado.
+
+**Não há fechamento técnico aprovado.** A correção local da Assistência e os
+cinco arquivos técnicos estão como candidato NÃO COMMITADO na worktree do GOAL.
+O teste real de retry do Clássico comprovou um contrato essencial ausente fora
+da allowlist REV2: após CONFIRMED, `sale_finalized` continua com zero eventos.
+Não foi alterado `pdv-classic.tsx`, nem motor, backend, auth ou schema.
+
+## Matriz vigente REV2 — 20 combinações
+
+TESTED exige prova comportamental de browser desta sessão. Um teste de
+componente, uma inspeção estática ou um caso não executado não promove célula.
+PARTIAL preserva apenas a prova parcial/histórica identificada. BLOCKED aponta
+impedimento concreto. UNSUPPORTED_BY_DESIGN exige ausência intencional.
+
+| Cenário F-08 | classic | assistencia | supermercado | venda-completa |
+| --- | --- | --- | --- | --- |
+| A. Split e múltiplos pagamentos | TESTED — P-A | PARTIAL — H-A; browser não executado | PARTIAL — H-A; browser não executado | PARTIAL — H-A; browser não executado |
+| B. Vale/crédito e saldo | TESTED — P-B | PARTIAL — H-B; browser não executado | PARTIAL — H-B; browser não executado | PARTIAL — H-B; browser não executado |
+| C. À Prazo, entrada e parcelas | TESTED — P-C | PARTIAL — H-C; browser não executado | PARTIAL — H-C; browser não executado | PARTIAL — H-C; browser não executado |
+| D. PENDING/retry com identidade estável | PARTIAL — P-D: identidade/efeitos provados, teste falha na auditoria | PARTIAL — U; browser não executado | PARTIAL — H-D; browser não executado | PARTIAL — H-D; browser não executado |
+| E. sale_finalized após CONFIRMED, inclusive retry sem duplicar | BLOCKED — P-D/E: esperado 1, observado 0 no retry confirmado | PARTIAL — U: 5 testes de componente PASS, E2E não executado | PARTIAL — H-E; browser não executado | PARTIAL — H-E; browser não executado |
+
+`TESTED_COUNT=3` · `PARTIAL_COUNT=16` · `BLOCKED_COUNT=1` ·
+`UNSUPPORTED_BY_DESIGN_COUNT=0`.
+
+F12 permanece ausente por desenho da Venda Completa; o spec usa o botão de
+finalização nessa superfície. Essa diferença de atalho não torna os cinco
+cenários financeiros UNSUPPORTED_BY_DESIGN. Next/Black seguem fora da matriz.
+
+## Referências verificáveis REV2
+
+- **P-A/P-B/P-C**: `e2e/specs/pdv-core-n5.spec.ts`, casos `classic > A split`,
+  `classic > B vale/crédito` e `classic > C À Prazo`. PASS em duas execuções
+  (uma focada e a canônica). O comando canônico selecionou 20 casos e terminou
+  com 3 PASS, 1 falha de interação no driver e 16 NOT_RUN. Nenhum NOT_RUN é PASS.
+- **P-A**: interação real pelo F12, PIX 40 + dinheiro 60, total 100;
+  breakdown emitido pelo motor, confirmação e um log observados.
+- **P-B**: seleção real de cliente; crédito 150 → 50 observado no estado real do
+  motor cliente; atribuição de documento/cliente e readback do transporte
+  sintético. Não comprova saldo persistido em banco.
+- **P-C**: modal real, entrada 25 + saldo 75, três parcelas, primeiro vencimento
+  10/12/2026; helper produtivo gera três títulos locais de 25. Não comprova
+  readback dos títulos em banco.
+- **P-D/E**: após corrigir exclusivamente o driver, execução focada
+  `npx playwright test --config e2e/pdv-core.playwright.config.ts --grep 'classic.*D PENDING'`.
+  Falha funcional em `expect(audits()).toHaveLength(1)`: recebido `[]`.
+  Antes da falha passaram as asserções de zero eventos no PENDING, caixa sem
+  entrada, bloqueio de reconfirmação, dois POSTs com a mesma `clientSaleId`,
+  uma venda confirmada, um `venda_finalizada` e reenvio repetido sem novo POST.
+  O teste completo não é PASS; D permanece PARTIAL e E é BLOCKED.
+- **U**: `lib/pdv/parity-assistencia-finalize-audit.component.test.ts`, 5/5 PASS
+  na execução final de 19/10, 00:15:25. Monta Assistência, PaymentModal e
+  OperationsProvider reais; intercepta fetch. Prova dados enviados, FAILED,
+  PENDING, retry real, remount e chamadas concorrentes sem duplicação.
+- **H-A..H-E**: inventário histórico A..E abaixo, com casos, SHAs e limites.
+  R4/B2 e provas servidor não foram reexecutados nem convertidos em PASS atual.
+
+O servidor dedicado compila os componentes em memória, escuta exclusivamente em
+`127.0.0.1:4179`, não carrega `.env`, não inicia Next e não expõe writer/proxy.
+Playwright intercepta requests de negócio antes de qualquer writer; origem
+externa, loja não sintética e rota desconhecida são recusadas. Banco não foi
+acessado. O driver sintético aciona o `retrySyncSale` real; não homologa o botão
+de Histórico de Vendas, Auth.js, impressão física ou o layout com CSS produtivo.
+
+## Parada REV2
+
+`COVERAGE_BLOCKED_CLASSIC_RETRY_AUDIT`: a correção requer nova decisão humana
+de escopo, pois `components/dashboard/vendas/pdv-classic.tsx` não pertence à
+allowlist. Não se substituiu o retry por reconfirmação do carrinho nem se
+fabricou um evento na fixture. As outras superfícies não foram promovidas por
+analogia; nenhuma nova cobertura foi executada após identificar o blocker.
+
+O typecheck canônico também falhou por ausência de `generated/prisma`, com
+erros em cadeia; não é PASS. Detalhes e validações estão na evidência própria.
+Sem commit técnico aprovado, R, close DONE, push ou PR.
+
+```text
+ENVIRONMENT_ISOLATED=YES_SYNTHETIC_IO
+N5_B1_CLOSEOUT=BLOCKED
+PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED
+NEXT_STEP=RESOLVER_GATE_COM_EVIDENCIA
+```
+
+---
+
+## Histórico REV1 preservado (não representa a cobertura REV2)
+
 # PDV Core N5-C — matriz final 002 (bloqueada)
 
 GOAL: `PDV-PARITY-N5-C-E2E-002` · trilha `pdv` · 2026-10-18.

@@ -17,15 +17,18 @@
     "docs/pdv/PDV_CORE_N5_FINAL_MATRIX_002.md",
     "docs/ai-execution/_evidence/PDV-PARITY-N5-C-E2E-002.md",
     "components/dashboard/vendas/pdv-assistencia-enterprise.tsx",
-    "lib/pdv/parity-assistencia-finalize-audit.component.test.ts"
+    "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
+    "components/dashboard/vendas/pdv-classic.tsx",
+    "lib/pdv/parity-classic-finalize-audit.component.test.ts",
+    "generated/prisma/**"
   ],
   "gates_liberados": [],
   "read_budget": 50,
-  "plan_ref": "PDV-N5-C-REV2-UNBLOCK-PLAN-003",
-  "plan_rev": 2,
+  "plan_ref": "PDV-N5-C-REV3-RETRY-AUDIT-PLAN-004",
+  "plan_rev": 3,
   "familia_executor": "openai",
   "revisao_independente": true,
-  "reversibilidade": "alta: correcao local de auditoria Assistencia, teste real de componente, E2E isolados e documentos; sem motor/backend",
+  "reversibilidade": "alta: auditoria local Assistencia e Classic, testes reais de componentes, E2E isolados, Prisma gerado local ignorado e documentos; sem motor/backend",
   "depends_on": [
     "PDV-PARITY-N5-B2-PIN-KEYMAP-001"
   ],
@@ -59,7 +62,7 @@ Commit/push autorizados somente na branch acima e allowlist. Merge é humano.
 Nenhum gate de dados/auth/CI/deploy liberado; ausência de ambiente isolado
 ou necessidade de caminho adicional exige parar, sem improvisar produção.
 
-## Reabertura rev2 e limite da autorização
+## Histórico da reabertura rev2 (preservado; limites atualizados pela rev3)
 
 O bloqueio original permanece integralmente no commit
 `af12ed3d0159f97bb125a62a0466362f4a89af8b`, no ledger append-only e nos documentos
@@ -67,9 +70,11 @@ originais de evidência/matriz. Motivo: `COVERAGE_BLOCKED_AUDIT_ASSISTENCIA`.
 A reabertura move este mesmo GOAL de `_closed/goals/` para `goals/`, com
 `status=READY` e `plan_rev=2`; não cria GOAL sucessor nem evento READY no ledger.
 READY é estado de planejamento, não correção executada nem cobertura TESTED.
-O histórico continua com 0 TESTED, 19 PARTIAL e 1 BLOCKED até nova prova.
+Naquela reabertura, o histórico era 0 TESTED, 19 PARTIAL e 1 BLOCKED.
+A evidência rev2 posterior mantém 3 TESTED, 16 PARTIAL e 1 BLOCKED; esta rev3
+não altera essas contagens nem substitui a matriz preservada.
 
-Esta entrega de planejamento ocorre exclusivamente na branch
+A entrega de planejamento rev2 ocorreu exclusivamente na branch
 `plan/pdv-n5-c-rev2-audit-assistencia`, worktree dedicada
 `C:/Projetos/omni-gestao/.worktrees/plan-pdv-n5-c-rev2-audit-assistencia`,
 criada do commit BLOCKED validado. Commit/push e um PR contra main autorizados
@@ -109,7 +114,7 @@ PENDING/retry e audit-log. Reutilizar provas existentes, identificando contrato,
 arquivo/caso, SHA, resultado e limite. Não duplicar testes do mesmo contrato.
 Criar somente os E2E/fixtures que faltam para ligar interações reais das quatro
 superfícies ao contrato já provado. C é C3/ALTO pelo contrato entre bordas e
-motor e inclui na rev2 somente a correção local de auditoria descrita acima.
+motor e inclui na rev2 somente a correção local de auditoria descrita acima e na seção rev3 abaixo.
 
 Referências iniciais read-only (reavaliar na main após B2):
 
@@ -169,7 +174,8 @@ homologação operacional, Auth.js ou smoke de produção. Falta de ambiente seg
   própria. Declarar cobertura técnica mínima completa somente quando as cinco
   linhas nas quatro superfícies tiverem prova suficiente; registrar lacuna real
   e parar se a allowlist não permitir resolvê-la. Código produtivo limitado à
-  correção de auditoria Assistência autorizada nesta rev2 após merge humano.
+  correção de auditoria Assistência preservada e à correção local Classic
+  delimitada na rev3, após merge humano.
 - Registrar riscos operacionais não homologados: acesso autenticado, loja/terminal,
   oito combinações do smoke B1, operação física/hardware/ambiente real quando
   aplicável. `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` e
@@ -180,6 +186,104 @@ homologação operacional, Auth.js ou smoke de produção. Falta de ambiente seg
   `humano`, conforme `executors.json`), revisando SHA/diff, allowlist, cobertura,
   isolamento e evidências. Registrar família, identidade, SHA e veredito;
   segunda instância OpenAI não cumpre R. Sem R favorável, não encerrar DONE.
+
+
+## Reabertura rev3 — causa demonstrada e fronteira exata
+
+Autorização humana: `PDV-N5-C-REV3-RETRY-AUDIT-PLAN-004`, 19/10/2026.
+`PLAN_REV=3`, `STATUS=READY`. Mesmo GOAL; sem evento READY no ledger.
+Os dois BLOCKED anteriores permanecem append-only, inclusive o commit
+`bc9fab7cf853f3b03759b84bcf7a63b11869c3a6` e o bloqueio original
+`af12ed3d0159f97bb125a62a0466362f4a89af8b`. Evidência e matriz anteriores
+permanecem como resultados históricos, sem promoção de qualquer célula.
+
+Planejamento somente na branch `plan/pdv-n5-c-rev3-retry-audit`, worktree
+`C:/Projetos/omni-gestao/.worktrees/plan-pdv-n5-c-rev3-retry-audit`,
+criada do BLOCKED validado e integrada por merge normal com origin/main
+`a6777234bcc336fef64ecb7491d5705bdd404b39`. Commit/push e PR contra main
+autorizados apenas para governança nesta branch, sem merge. Sem implementação,
+geração Prisma, E2E, open/close de execução ou DONE nesta sessão de planejamento.
+Após merge humano e novo comando, retomar na branch/worktree de implementação
+já declaradas nos metadados, integrando o plano por merge normal e preservando
+integralmente o WIP da Assistência, E2E e fixtures. Não usar stash/reset/checkout
+na worktree original. Se o merge não preservar esse WIP, parar e reconciliar
+com o humano; não descartar nem substituir os arquivos por cópias antigas.
+
+**Classe: APPLICATION_AUDIT_GAP.** No E2E existente Classic D, a expectativa
+é um `sale_finalized` via `appendAuditLog` após retry CONFIRMED. O resultado
+registrado foi zero logs e um `venda_finalizada`. A fixture não substitui o
+handler Classic, retrySyncSale ou auditoria; apenas intercepta I/O. Não é troca
+de nomes nem fixture defeituosa. Não afrouxar a asserção para obter PASS.
+
+`sale_finalized` é auditoria local com envio best-effort à API de auditoria.
+`venda_finalizada` no browser é notificação local de UI, deduplicada por
+identidade no motor; a automação definitiva do mesmo nome nasce server-side
+no create-vs-replay da persistência. Esses três papéis não são equivalentes.
+O harness não prova automação/persistência server-side real.
+
+O Classic emite auditoria na confirmação direta, retorna antes desse emissor
+em PENDING, e o retry confirma no motor sem reentrar no handler. O componente
+já observa `sales`; portanto a correção pode acompanhar a identidade pendente
+e sua confirmação real, usando o contrato existente, sem modificar o motor.
+Os paths novos de código são exclusivamente:
+
+- `components/dashboard/vendas/pdv-classic.tsx`.
+- `lib/pdv/parity-classic-finalize-audit.component.test.ts`.
+
+Escopo futuro: registrar somente vendas iniciadas por esse Classic; zero log
+em FAILED/PENDING; confirmação direta e PENDING→retry→CONFIRMED devem emitir
+exatamente um `sale_finalized` da mesma identidade/loja, com saleId canônico,
+total e breakdown reais da venda enviada/confirmada. Não reconstruir do
+carrinho editado nem auditar vendas históricas indiscriminadamente. Deduplicar
+o caminho direto e a observação de confirmação; repetir retry, render ou
+restauração não pode duplicar a mesma auditoria local. Preservar fluxo de
+pagamento, carrinho, guard de pendência, impressão e demais efeitos atuais.
+Não criar garantia transacional de auditoria entre abas/servidor ou além da
+retenção do log local. Se isso ou qualquer mudança em operations-store, motor,
+persistência ou auditoria compartilhada for necessário, PARAR e reportar
+`NEXT_STEP=AUTORIZACAO_HUMANA_CONTRATO_AUDITORIA`, sem ampliar caminhos.
+
+O novo teste deve montar componente/PaymentModal/OperationsProvider reais,
+isolando somente transportes e providers periféricos: confirmação direta,
+FAILED, PENDING sem evento definitivo, retry confirmado com a mesma
+clientSaleId, total/breakdown do snapshot enviado mesmo com draft alterado,
+e repetição/remount sem duplicação. Não substituir o handler, finalização ou
+retry reais. Manter o E2E existente e suas asserções distintas para auditoria
+e notificação; eventual espera assíncrona só pode sincronizar o efeito real.
+Validação futura focada: `npx vitest run lib/pdv/parity-classic-finalize-audit.component.test.ts lib/pdv/parity-assistencia-finalize-audit.component.test.ts`,
+os cinco cenários F-08 nas quatro superfícies e `npm run typecheck`.
+Sem evidência correspondente, nenhuma das 20 células recebe TESTED.
+Se outra superfície falhar fora da allowlist, registrar e parar.
+
+### Prisma local para o typecheck futuro
+
+O schema já declara `output = "../generated/prisma"`; lib/prisma.ts importa
+esse destino. Ele é gitignored e não vem do checkout. A worktree original
+não tem generated/prisma; sua node_modules é junction para a raiz, sem geração
+local. Postinstall declara prisma generate, mas a reutilização das dependências
+não o executou nessa worktree; a sessão anterior não gerou por falta de escopo.
+É ausência de artefato local, não necessidade de mudar schema/package/scripts.
+
+Acrescentar `generated/prisma/**` somente para geração local ignorada, nunca
+staging/commit. Antes de gerar, verificar caminho absoluto, ancestrais e destino:
+nenhum pode redirecionar para outra sessão por junction/symlink/reparse point.
+Não sobrescrever diretório compartilhado nem alterar a junction node_modules.
+Usar o CLI Prisma já instalado, com schema explícito dessa worktree e sem
+instalar dependências ou rodar postinstall compartilhado: `node node_modules/prisma/build/index.js generate --schema prisma/schema.prisma`.
+Antes do CLI, verificar ausência de .env na raiz/prisma e demais arquivos de
+env que ele carregaria automaticamente; se existirem credenciais, parar sem
+mover/apagar arquivos do usuário. Desabilitar autoinstall com
+`PRISMA_GENERATE_SKIP_AUTOINSTALL=1`, sem escrita nas dependências compartilhadas.
+Não carregar .env produtivo; se o CLI exigir URLs na validação, fornecer somente
+URLs descartáveis loopback em processo, nunca conectar. Sem migration, db push,
+seed, introspecção ou conexão ao banco. Preservar schema, package.json, lockfiles
+e scripts. Destino compartilhado ou necessidade de escrevê-lo implica parada.
+Gerar só na retomada autorizada, depois rodar typecheck e registrar o resultado
+real; não presumir que a geração resolve outros diagnósticos.
+
+Os cinco F-08, ambiente E2E isolado, R independente por outra família e os
+estados `N5_B1_CLOSEOUT=BLOCKED` e `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`
+continuam obrigatórios. Esta rev3 não libera gates de dados/auth/CI/deploy.
 
 ## Encerramento
 
