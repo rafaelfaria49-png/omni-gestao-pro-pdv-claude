@@ -15,18 +15,27 @@
     "e2e/fixtures/pdv-core.ts",
     "e2e/specs/pdv-core-n5.spec.ts",
     "docs/pdv/PDV_CORE_N5_FINAL_MATRIX_002.md",
-    "docs/ai-execution/_evidence/PDV-PARITY-N5-C-E2E-002.md"
+    "docs/ai-execution/_evidence/PDV-PARITY-N5-C-E2E-002.md",
+    "components/dashboard/vendas/pdv-assistencia-enterprise.tsx",
+    "lib/pdv/parity-assistencia-finalize-audit.component.test.ts"
   ],
   "gates_liberados": [],
   "read_budget": 50,
-  "plan_ref": "PDV-N5-FINAL-HANDOFF-B2-C-001",
-  "plan_rev": 1,
+  "plan_ref": "PDV-N5-C-REV2-UNBLOCK-PLAN-003",
+  "plan_rev": 2,
   "familia_executor": "openai",
   "revisao_independente": true,
-  "reversibilidade": "alta — somente testes, fixtures isoladas e documentos; nenhum writer produtivo",
-  "depends_on": ["PDV-PARITY-N5-B2-PIN-KEYMAP-001"],
+  "reversibilidade": "alta: correcao local de auditoria Assistencia, teste real de componente, E2E isolados e documentos; sem motor/backend",
+  "depends_on": [
+    "PDV-PARITY-N5-B2-PIN-KEYMAP-001"
+  ],
   "stop_after_goal": true,
-  "autorizacoes": { "commit": true, "push": true, "branch_only": "goal/pdv-parity-n5-c-e2e-002", "merge": false }
+  "autorizacoes": {
+    "commit": true,
+    "push": true,
+    "branch_only": "goal/pdv-parity-n5-c-e2e-002",
+    "merge": false
+  }
 }
 -->
 
@@ -38,14 +47,59 @@ Sucessor de `PDV-PARITY-N5-B2-PIN-KEYMAP-001` na trilha existente `pdv`.
 READY é estado de planejamento; `depends_on` documenta a dependência e não é
 um gate automático do AEP. Antes de executar, confirmar B2 DONE no ledger,
 R favorável e merge da entrega B2 em `origin/main`. Novo comando humano e
-sessão própria são necessários. Criar branch/worktree declaradas a partir
-da main atualizada, rodar `status pdv` e `open pdv`; ler este GOAL.
+sessão própria são necessários. Na retomada, integrar o planejamento mergeado
+e a main atualizada na branch/worktree de implementação declaradas, preservando
+o commit BLOCKED; rodar `status pdv` e `open pdv` e ler este GOAL.
 Não iniciar C na entrega de planejamento nem na sessão de B2.
 
-Planejado por autorização humana `PDV-N5-FINAL-HANDOFF-B2-C-001`, 14/10/2026.
+Planejamento original: `PDV-N5-FINAL-HANDOFF-B2-C-001`, 14/10/2026.
+Replanejado por autorização humana `PDV-N5-C-REV2-UNBLOCK-PLAN-003`, 18/10/2026,
+revisão 2, pelo ritual de planejamento do AEP §§2–3.
 Commit/push autorizados somente na branch acima e allowlist. Merge é humano.
 Nenhum gate de dados/auth/CI/deploy liberado; ausência de ambiente isolado
 ou necessidade de caminho adicional exige parar, sem improvisar produção.
+
+## Reabertura rev2 e limite da autorização
+
+O bloqueio original permanece integralmente no commit
+`af12ed3d0159f97bb125a62a0466362f4a89af8b`, no ledger append-only e nos documentos
+originais de evidência/matriz. Motivo: `COVERAGE_BLOCKED_AUDIT_ASSISTENCIA`.
+A reabertura move este mesmo GOAL de `_closed/goals/` para `goals/`, com
+`status=READY` e `plan_rev=2`; não cria GOAL sucessor nem evento READY no ledger.
+READY é estado de planejamento, não correção executada nem cobertura TESTED.
+O histórico continua com 0 TESTED, 19 PARTIAL e 1 BLOCKED até nova prova.
+
+Esta entrega de planejamento ocorre exclusivamente na branch
+`plan/pdv-n5-c-rev2-audit-assistencia`, worktree dedicada
+`C:/Projetos/omni-gestao/.worktrees/plan-pdv-n5-c-rev2-audit-assistencia`,
+criada do commit BLOCKED validado. Commit/push e um PR contra main autorizados
+somente para bloqueio original + plano rev2. Sem código produtivo, implementação,
+E2E, `open`/`close` AEP ou merge nesta entrega. A implementação só poderá
+começar após merge humano deste planejamento e retomada em sessão própria.
+
+## Correção local autorizada após merge humano
+
+Os cinco paths anteriores de E2E/documentação são preservados. A allowlist
+acrescenta somente o componente Assistência e seu teste de componente acima.
+Nenhum outro componente, backend, motor compartilhado, schema, Auth.js, API de
+auditoria, financeiro, configuração global ou dependência poderá ser modificado.
+Nenhum gate de dados/auth/CI/deploy é liberado por esta revisão.
+
+- Emitir `sale_finalized` pelo padrão `appendAuditLog` já existente, somente
+  depois de `finalizeSaleTransaction` retornar `CONFIRMED` na Assistência.
+- Nunca emitir em `FAILED` ou `PENDING`; retry que confirma deve emitir uma
+  única vez, sem duplicar evento para a mesma confirmação.
+- Usar `saleId`, total e pagamentos reais retornados pela finalização confirmada,
+  sem reconstruir valores do carrinho ou de respostas fabricadas pelo teste.
+- Preservar carrinho, retry, impressão, efeitos pós-venda e financeiro vigentes.
+- Provar pelo componente/handler real no arquivo
+  `lib/pdv/parity-assistencia-finalize-audit.component.test.ts`: CONFIRMED com
+  payload real do resultado, FAILED e PENDING sem evento, PENDING→retry→CONFIRMED
+  e repetição da mesma confirmação sem duplicação. Pode isolar transportes,
+  mas não substituir o handler sob teste nem usar só inspeção estática.
+- Validação futura focada: `npx vitest run lib/pdv/parity-assistencia-finalize-audit.component.test.ts`,
+  seguida dos E2E previstos e `npm run typecheck`, com SHA/comandos/resultados
+  registrados. A correção local não substitui os cinco cenários F-08.
 
 ## Objetivo e inventário antes de criar testes
 
@@ -55,7 +109,7 @@ PENDING/retry e audit-log. Reutilizar provas existentes, identificando contrato,
 arquivo/caso, SHA, resultado e limite. Não duplicar testes do mesmo contrato.
 Criar somente os E2E/fixtures que faltam para ligar interações reais das quatro
 superfícies ao contrato já provado. C é C3/ALTO pelo contrato entre bordas e
-motor, apesar de sua escrita ser exclusivamente testes/documentos.
+motor e inclui na rev2 somente a correção local de auditoria descrita acima.
 
 Referências iniciais read-only (reavaliar na main após B2):
 
@@ -114,7 +168,8 @@ homologação operacional, Auth.js ou smoke de produção. Falta de ambiente seg
 - Consolidar resultado em `docs/pdv/PDV_CORE_N5_FINAL_MATRIX_002.md` e evidência
   própria. Declarar cobertura técnica mínima completa somente quando as cinco
   linhas nas quatro superfícies tiverem prova suficiente; registrar lacuna real
-  e parar se a allowlist não permitir resolvê-la. Não corrigir código produtivo C.
+  e parar se a allowlist não permitir resolvê-la. Código produtivo limitado à
+  correção de auditoria Assistência autorizada nesta rev2 após merge humano.
 - Registrar riscos operacionais não homologados: acesso autenticado, loja/terminal,
   oito combinações do smoke B1, operação física/hardware/ambiente real quando
   aplicável. `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` e
