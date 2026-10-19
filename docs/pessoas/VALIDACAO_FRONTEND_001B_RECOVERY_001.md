@@ -575,3 +575,16 @@ NEXT_ACTION=AUTHORIZE_SCOPED_CLEANUP_THEN_REQUIRED_VALIDATION
 ```
 
 Sem close/DONE, merge da PR #273, ativação produtiva, dados reais ou GOAL 002. CURRENT_STATUS/CHANGELOG/memória e derivados AEP não foram editados; esta retomada permanece restrita ao corretivo e às evidências permitidas.
+
+
+## Limpeza autorizada e novo typecheck — 18/10/2026
+
+O usuário autorizou exclusivamente os dois diretórios .next solicitados. Ambos foram reconferidos imediatamente antes da remoção: caminhos absolutos iguais aos autorizados, sem reparse points nos ancestrais/descendentes e sem consumidores visíveis. Remoção por Remove-Item -LiteralPath, sem outros arquivos excluídos. Aumento líquido físico medido no C: **4.334.067.712 bytes (4,036 GiB)**; livre ao fim: **15.016.374.272 bytes (13,985 GiB)**. Variação concorrente do volume explica a diferença para a soma das medições individuais. Detalhes: [DISK_CLEANUP_AUTHORIZED_2026-10-18.json](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/DISK_CLEANUP_AUTHORIZED_2026-10-18.json).
+
+Nova execução oficial sobre `c16165b1e361684944c81a8d4ff408f7c6fedf33`: npm ci e Prisma generate concluídos; reserva após instalação **13.421.813.760 bytes (12,500 GiB), PASS**, com mínimo de 12 GiB preservado. Chromium 136.0.7103.25 / Playwright 1.52.0 do lockfile: launch → página vazia → close PASS.
+
+O typecheck canônico foi executado e saiu com código **2**: `frontend.contract.test.ts(655,54)`, TS2322, fixture `documentoId: "doc-stage"` incompatível com o tipo template UUID inferido do backend. O runner saiu com código **1**. Vitest/integração, lint, build/PWA e E2E não iniciaram. Sem skipped/todo contados ficticiamente. O ajuste desta rodada troca apenas os dois usos da mesma fixture por UUID sintético válido; as asserções e o comportamento de cancelamento/retry permanecem.
+
+Cleanup oficial PASS; workspace `omni-pessoas-test-Is6eAx` ausente em verificação separada e porta 55439 livre. Espaço após cleanup: **14.992.912.384 bytes (13,963 GiB)**. A sessão continua na tentativa 1/3, com abertura e histórico preservados; close ainda não executado. É necessária nova execução sobre a fixture corrigida antes de atribuir PASS ao TypeScript ou às etapas seguintes.
+
+Evidência: [RETRY_AFTER_CLEANUP_2026-10-18.json](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/RETRY_AFTER_CLEANUP_2026-10-18.json); saída integral em `runner-after-cleanup-2026-10-18.log`, no mesmo diretório.

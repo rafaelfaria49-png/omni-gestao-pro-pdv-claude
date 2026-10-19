@@ -1,0 +1,37 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-18",
+  "timezone": "America/Sao_Paulo",
+  "authorization": "Human reply: Autorizar somente esses dois diretórios",
+  "scope": "Only the two literal .next directories below; no other deletion",
+  "preDeletionChecks": [
+    "Resolved absolute path equals authorized literal",
+    "Target basename .next",
+    "No reparse points in target or ancestors",
+    "No reparse points in descendants",
+    "No visible matching runtime process consumers; rechecked immediately before each deletion"
+  ],
+  "deletions": [
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005/.next",
+      "beforeFreeBytes": 10677297152,
+      "afterFreeBytes": 12493877248,
+      "observedPhysicalDeltaBytes": 1816580096,
+      "absentAfterDeletion": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007/.next",
+      "beforeFreeBytes": 12481560576,
+      "afterFreeBytes": 15016374272,
+      "observedPhysicalDeltaBytes": 2534813696,
+      "absentAfterDeletion": true
+    }
+  ],
+  "overallObservedPhysicalDeltaBytes": 4334067712,
+  "finalFreeBytes": 15016374272,
+  "finalFreeGiB": 13.985,
+  "measurement": "Physical free bytes of C: via Get-PSDrive before/after each native Remove-Item -LiteralPath; concurrent volume activity explains differences between the summed per-directory deltas and overall delta",
+  "runnerMinimumBytes": 12884901888,
+  "minimumUnchanged": true,
+  "prefer16GiBIsNotNewGate": true
+}

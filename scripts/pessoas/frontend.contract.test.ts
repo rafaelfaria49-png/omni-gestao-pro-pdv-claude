@@ -605,7 +605,7 @@ describe("Recovery R2 final: etapas pendentes e confirmação inconclusiva", () 
   function documentActions(): DocumentActions {
     return {
       listar: vi.fn().mockResolvedValue({ ok: true, data: [] }),
-      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { documentoId: "doc-stage", uploadIntent: "intent-stage",
+      criarIntent: vi.fn().mockResolvedValue({ ok: true, data: { documentoId: "11111111-1111-4111-8111-111111111111", uploadIntent: "intent-stage",
         signedUrl: "https://storage.example.invalid/stage", headersObrigatorios: { "If-None-Match": "*" }, expiresInSec: 300 } }),
       confirmar: vi.fn().mockResolvedValue({ ok: true, data: {} }), download: vi.fn(),
     }
@@ -652,7 +652,7 @@ describe("Recovery R2 final: etapas pendentes e confirmação inconclusiva", () 
     const file = await selectFile()
     await waitFor(() => expect(actions.criarIntent).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByText("Cancelar"))
-    await act(async () => finish({ ok: true, data: { documentoId: "doc-stage", uploadIntent: "intent-stage",
+    await act(async () => finish({ ok: true, data: { documentoId: "11111111-1111-4111-8111-111111111111", uploadIntent: "intent-stage",
       signedUrl: "https://storage.example.invalid/stage", headersObrigatorios: { "If-None-Match": "*" }, expiresInSec: 300 } }))
     expect(put).not.toHaveBeenCalled()
     const retryPut = screen.getByText("Repetir envio de bytes") as HTMLButtonElement
