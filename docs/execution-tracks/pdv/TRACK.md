@@ -64,3 +64,26 @@ Não edite nenhum dos dois à mão: `node scripts/track.mjs verify` detecta a di
   isso não declara execução. Ao esvaziar o plano, `completion_when_empty` segue PAUSED.
 - Smoke produtivo permanece BLOCKED; não repetir smoke/R4/build/Docker nem
   corrigir Auth.js. Fechamento técnico do Core separado de N6/N7 e Fiscal completo.
+
+## Replanejamento N5-C rev2 — 18/10/2026
+
+- Autorização humana: `PDV-N5-C-REV2-UNBLOCK-PLAN-003`. Mesmo GOAL
+  [PDV-PARITY-N5-C-E2E-002](goals/PDV-PARITY-N5-C-E2E-002.md), READY, plan_rev 2.
+- Main remota confirmada no pré-flight: `180a2f2ab450cc2686b5087dc09b1a0ee58b5f72`.
+  A ref main local estava em `c5728f0d001bf13cd89a48ee5b1793bddd42129a`; não foi alterada.
+- Branch N5-C validada em `af12ed3d0159f97bb125a62a0466362f4a89af8b`.
+  Único commit acima da main remota: matriz, evidência e ratificação AEP do
+  bloqueio; nenhum código produtivo. Preservado integralmente como ancestral
+  da branch de planejamento `plan/pdv-n5-c-rev2-audit-assistencia`, em worktree própria.
+- Evento BLOCKED de `2026-10-18T23:26:54.741Z` preservado literalmente no ledger,
+  sem remoção, reescrita ou evento READY. Reabertura pelo AEP §§2–3, seguida de
+  `registry` e `verify --all`; não por `close`.
+- Os cinco caminhos E2E/docs originais permanecem; acrescentados somente
+  `components/dashboard/vendas/pdv-assistencia-enterprise.tsx` e
+  `lib/pdv/parity-assistencia-finalize-audit.component.test.ts`.
+- Após merge humano: correção local CONFIRMED-only, payload real e sem duplicação;
+  prova de componente/handler real e cinco cenários F-08 em ambiente isolado.
+  R por outra família permanece obrigatória; não promover PARTIAL sem prova.
+- Matriz e evidência originais do bloqueio permanecem históricas nesta entrega.
+  Sem implementação, E2E, close, merge ou investigação de WIPs de outras sessões.
+  Próximo passo: `HUMANO_MERGEAR_N5_C_REV2`.

@@ -63,7 +63,25 @@ try {
     const errors = [], externalRequests = []
     page.on("pageerror", (error) => errors.push(error.message))
     page.on("request", (req) => { if (!req.url().startsWith(origin)) externalRequests.push(req.url()) })
-    await page.goto(origin)
+    // Fail the real browser smoke if rendering or clicking the blocked control
+    // even consults speech engines, permission APIs or microphone devices.
+    await page.addInitScript(() => {
+      window.__voiceAttempts = { speech: 0, microphone: 0, permissions: 0, devices: 0 }
+      for (const name of ["SpeechRecognition", "webkitSpeechRecognition"]) {
+        Object.defineProperty(window, name, { configurable: true, get() {
+          window.__voiceAttempts.speech++
+          throw new Error("Blocked client path consulted speech recognition")
+        } })
+      }
+      Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {
+        getUserMedia() { window.__voiceAttempts.microphone++; throw new Error("Microphone forbidden") },
+        enumerateDevices() { window.__voiceAttempts.devices++; throw new Error("Device enumeration forbidden") },
+      } })
+      Object.defineProperty(navigator, "permissions", { configurable: true, value: {
+        query() { window.__voiceAttempts.permissions++; throw new Error("Permission query forbidden") },
+      } })
+    })
+    await page.goto(`${origin}/?voice=true&captureSource=voice&approved=true`)
     await page.getByRole("dialog", { name: "Novo cliente", exact: true }).waitFor()
     assert.equal(await page.getByRole("button", { name: "Voz indisponível" }).isDisabled(), true)
     await page.getByLabel("Descreva o novo cliente").fill("Novo cliente Lia de Teste, telefone 14999998888, mora em Itaí")
@@ -97,8 +115,9 @@ try {
     await page.getByRole("button", { name: "Cancelar", exact: true }).click()
     assert.equal(await page.evaluate(() => window.__saves.length), 1)
     assert.deepEqual(await page.evaluate(() => [localStorage.length, sessionStorage.length]), [0, 0])
+    assert.deepEqual(await page.evaluate(() => window.__voiceAttempts), { speech: 0, microphone: 0, permissions: 0, devices: 0 })
     assert.deepEqual(externalRequests, []); assert.deepEqual(errors, [])
-    results.push({ viewport, review: "PASS", save: "SIMULATED_IO_ONLY", staleStoreResponse: "PASS", cancelWithoutWrite: "PASS", overflow: false, externalRequests: 0, storageEntries: 0, pageErrors: 0 })
+    results.push({ viewport, review: "PASS", save: "SIMULATED_IO_ONLY", staleStoreResponse: "PASS", cancelWithoutWrite: "PASS", voiceApiAttempts: 0, forgedQueryIgnored: true, overflow: false, externalRequests: 0, storageEntries: 0, pageErrors: 0 })
     await page.close()
   }
   await writeFile(path.join(evidence, "browser-smoke.json"), JSON.stringify({ scope: "Actual editor/parser; Action I/O simulated; production DB writes 0", results }, null, 2) + "\n")

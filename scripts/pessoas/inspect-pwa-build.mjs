@@ -10,7 +10,58 @@ const ORIGEM = "https://pessoas.example.invalid"
 const pessoa = (url) => /^\/(api|dashboard)\/pessoas(?:\/|$)/.test(url.pathname)
 const plain = (value) => JSON.parse(JSON.stringify(value))
 
-function coletarRotas(source, publicDir) {
+async function verificarCachePrivado(publicDir) {
+  const file = path.join(publicDir, "client-privacy-cache.js")
+  assert.ok(fs.statSync(file).isFile(), "script de privacidade ausente")
+  const remover = [
+    "/api/clientes", "/api/clientes/123?_rsc=synthetic", "/api/clients",
+    "/api/import/clientes", "/api/ops/import/clientes", "/dashboard/clientes",
+    "/dashboard/cadastros-v2?_rsc=synthetic",
+  ].map((url) => new URL(url, ORIGEM).href)
+  const preservar = [
+    "/api/pessoas", "/api/pessoas/documentos?categoria=contrato",
+    "/dashboard/pessoas", "/dashboard/pessoas/funcionarios?_rsc=synthetic",
+    "/api/version", "/dashboard/estoque", "/api/clientes-extra",
+    "https://outra.example.invalid/api/clientes",
+  ].map((url) => new URL(url, ORIGEM).href)
+  const stores = new Map(["pages", "apis", "historical-cache"].map((name) => [name, new Set([...remover, ...preservar])]))
+  const listeners = [], pending = []
+  const context = vm.createContext({
+    URL,
+    self: {
+      location: new URL(ORIGEM + "/sw.js"),
+      addEventListener(type, listener) {
+        assert.equal(type, "activate", "script de privacidade registra evento inesperado")
+        assert.equal(typeof listener, "function")
+        listeners.push(listener)
+      },
+    },
+    caches: {
+      keys: async () => [...stores.keys()],
+      open: async (name) => {
+        assert.ok(stores.has(name), "script de privacidade criou cache inesperado")
+        const entries = stores.get(name)
+        return {
+          keys: async () => [...entries].map((url) => new Request(url)),
+          delete: async (request) => entries.delete(request.url),
+        }
+      },
+    },
+  })
+  vm.runInContext(fs.readFileSync(file, "utf8"), context, { timeout: 10_000, filename: file })
+  assert.equal(listeners.length, 1, "script de privacidade deve registrar um listener activate")
+  context.activate = listeners[0]
+  context.event = { waitUntil(promise) { pending.push(Promise.resolve(promise)) } }
+  vm.runInContext("activate(event)", context, { timeout: 10_000 })
+  assert.equal(pending.length, 1, "ativação deve aguardar a limpeza com waitUntil")
+  await Promise.all(pending)
+  for (const [name, entries] of stores) {
+    for (const url of remover) assert.ok(!entries.has(url), "cache histórico Clientes preservado: " + name + " " + url)
+    assert.deepEqual([...entries], preservar, "ativação afetou Pessoas/outros módulos: " + name)
+  }
+}
+
+export async function coletarRotas(source, publicDir) {
   const routes = [], manifest = [], dependencies = []
   const workbox = {}
   for (const kind of ["NetworkOnly", "NetworkFirst", "CacheFirst", "StaleWhileRevalidate", "ExpirationPlugin", "RangeRequestsPlugin", "CacheableResponsePlugin"]) {
@@ -30,10 +81,17 @@ function coletarRotas(source, publicDir) {
     factory(workbox)
   }
   const self = { define, skipWaiting() {}, addEventListener() {}, location: new URL(ORIGEM + "/sw.js") }
+  let privacyImported = false
   vm.runInNewContext(source, {
     self, define, URL, location: self.location,
-    importScripts(...urls) { assert.equal(urls.length, 0, "SW importa script inesperado") },
+    importScripts(...urls) {
+      if (urls.length === 0) return
+      assert.deepEqual(urls, ["/client-privacy-cache.js"], "SW importa script inesperado")
+      assert.equal(privacyImported, false, "SW importa script de privacidade duplicado")
+      privacyImported = true
+    },
   }, { timeout: 10_000 })
+  if (privacyImported) await verificarCachePrivado(publicDir)
   assert.ok(routes.length > 0 && manifest.length > 0, "SW vazio/sem manifesto")
   return { routes, manifest, dependencies }
 }
@@ -126,7 +184,7 @@ export async function inspectPwaBuild(ws, log = () => {}) {
   assert.equal(version, locked, "pacote instalado diverge do lockfile")
   const { runtimeCaching: defaults } = await import(pathToFileURL(path.join(pkgDir, "dist/index.js")).href)
   const sw = fs.readFileSync(path.join(publicDir, "sw.js"), "utf8")
-  const { routes, manifest, dependencies } = coletarRotas(sw, publicDir)
+  const { routes, manifest, dependencies } = await coletarRotas(sw, publicDir)
   assert.ok(manifest.every((entry) => !pessoa(new URL(typeof entry === "string" ? entry : entry.url, ORIGEM))), "Pessoas presente no precache")
   const networkOnly = routes.filter((r) => r.handler.kind === "NetworkOnly")
   assert.equal(networkOnly.length, 1, "exclusão NetworkOnly ausente/duplicada")

@@ -8,11 +8,11 @@
   "bootstrap_commit": "2b223705a3a2d6982a50b2fbb1d025cedc8541d5",
   "counters": {
     "goals_done": 4,
-    "goals_blocked": 0,
+    "goals_blocked": 1,
     "goals_imported": 1,
-    "ledger_lines": 4
+    "ledger_lines": 6
   },
-  "last_goal": "PDV-PARITY-N5-B2-PIN-KEYMAP-001",
-  "last_result": "DONE",
-  "last_ratified_at": "2026-10-18T14:46:31.267Z"
+  "last_goal": "PDV-PARITY-N5-C-E2E-002",
+  "last_result": "BLOCKED",
+  "last_ratified_at": "2026-10-19T03:19:51.885Z"
 }

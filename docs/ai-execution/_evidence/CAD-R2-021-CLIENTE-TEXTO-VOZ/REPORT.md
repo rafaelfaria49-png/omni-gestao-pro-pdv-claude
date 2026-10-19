@@ -1,6 +1,63 @@
-# CAD-R2-021 — Cliente por texto e voz
+# CAD-R2-021 — relatório único de texto, voz e prontidão de governança
 
-Entrega parcial em validação. Texto implementado; voz bloqueada por revisão administrativa/jurídica de processamento. Não declarar o GOAL encerrado nem habilitar o microfone com base em testes técnicos.
+## Continuação — 19/10/2026
+
+`CAD_R2_021_STATUS=PARTIAL_BLOCKED`. `TEXT_CAPTURE=PUBLISHED_PRESERVED`. `VOICE_CAPTURE=DISABLED`. `VOICE_PRIVACY_GATE=BLOCKED`. `LEGAL_APPROVAL=PENDING`. Testes, revisão, CI, merge ou deployment não substituem a decisão administrativa/jurídica.
+
+### Autoridade, base e isolamento
+
+Comando humano: continuação autônoma de Voice Privacy & Governance Readiness do GOAL existente, sem habilitação de voz. Base remota conferida após fetch: `9eb59d08f06af881adc7d2e11a167ef24c5a1fee`. Branch isolada: `codex/cad-r2-021-voice-governance-readiness`; nenhuma modificação na worktree principal. `.aep-active` ausente na principal e na nova worktree; AEP opt-in inativo. Nenhum state/LEDGER/REGISTRY editado. PRs paralelas inventariadas e preservadas.
+
+### Reconciliação com a entrega publicada
+
+A [PR #282](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/282) foi merged, head `bf16f06c519496450b531f891f261d9a909df575`, merge `d6bdaa023f44a2ad3a7650c68979810934636069`. O [CI anterior](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/39143910374) aprovou TypeScript, lint de fontes ativas, 994 testes/20 skips, build sem migrations e smoke responsivo. O prefixo de build `d6bdaa023f44` foi observado no smoke somente GET da publicação anterior. Esses números são históricos, não resultados presumidos desta continuação. A main atual inclui alterações posteriores de outras frentes.
+
+O texto já publicado não foi reimplementado. Os parágrafos abaixo de “Histórico da PR #282” registram sua evolução e suas falhas intermediárias; referências antigas a validação/merge pendentes não descrevem o estado atual dessa PR.
+
+### Auditoria e proteções desta continuação
+
+- Leitura direta de gate, lifecycle, Action, editor, tipos, parser, testes e dependências. Gate constante `false`, agora congelado em runtime; sem env, query, local/sessionStorage ou configuração externa para ativá-lo.
+- UI sem import do adapter de fala, construção de reconhecedor, enumeração de dispositivos ou solicitação de microfone. Testes ampliados para os dois nomes de SpeechRecognition, query/storage adulterados, APIs de permissão e descarte de respostas tardias/erros após fechamento e troca de loja.
+- Action direta autentica/autoriza antes de responder e recusa origem não literal `text` antes do parser; matriz ampliada de tipos/valores adulterados, sem rede, escrita, auditoria ou log de conteúdo. O discriminador não certifica a origem física de uma string fornecida pelo chamador; ferramentas externas de ditado não são ativadas pela aplicação.
+- Texto/sugestão efêmeros e DTO de escrita revisado preservados; ClientWriteService continua sendo a fronteira canônica, com identidade, deduplicação, UNIQUE e isolamento de loja.
+- Smoke Chromium instrumentado para falhar se o editor consultar motores de fala, permissões ou microfone. Probe de compatibilidade separado do produto consulta apenas metadados de pt-BR em localhost com microfone negado; não instala pacotes nem inicia áudio.
+- PostgreSQL local indisponível (Docker sem daemon). CI preparado com serviço PostgreSQL descartável, credenciais sintéticas e guard de URL exata/loopback antes de qualquer operação. `db push` somente materializa o schema inalterado nesse serviço; não executa migrations nem backfill. O teste de update concorrente foi fortalecido: documento novo e exatamente um sucesso, evitando PASS com duas recusas sobre documento previamente ocupado.
+
+### Pacote preparado para análise humana
+
+- [VOICE-GOVERNANCE.md](VOICE-GOVERNANCE.md): finalidades separadas, hipóteses sem fundamento selecionado, matriz de agentes, retenção/minimização por camada, riscos de atendente/cliente/terceiros/sensíveis, minutas de transparência, diligência de transferência, matriz de decisão e suspensão. **Todos os campos de aprovação permanecem PENDENTES.** Não há parecer, assinatura ou aceite fictício.
+- [VOICE-ARCHITECTURE.md](VOICE-ARCHITECTURE.md): alternativas local/externa/manual, API/pacotes pt-BR, compatibilidade documental, Permissions-Policy, estados de erro e proibição de fallback remoto. Google Cloud Speech-to-Text V1 e Azure Speech avaliados apenas como candidatos; contratos, contas e países efetivamente contratados não validados. Não se declara retenção zero de fornecedores.
+- Próximo ato humano indispensável: administração e assessoria jurídica identificarem responsáveis reais e documentarem finalidade/base, tecnologia/escopo, destinatários/países, retenção, avisos, condições e suspensão. Homologação dos terminais e qualidade de reconhecimento ainda dependerá de autorização apropriada; nenhuma captura de áudio real foi executada.
+
+### Validação e publicação desta continuação
+
+Validação local: 48 testes de Action/gate/guard passaram; o worker jsdom inicialmente não iniciou por timeout no host com pressão de memória. A repetição isolada aprovou os 13 testes de UI: 61 testes focados PASS. ESLint dos dez arquivos de código alterados passou sem erros/warnings; sintaxe dos scripts e `git diff --check` passaram.
+
+A [PR #286](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/286) foi aberta com commit inicial `2c486c0d9e3f29337a8e17c68f5fc578565408a2`. As 20 integrações passaram em PostgreSQL descartável no primeiro CI, sem escrita produtiva. A revisão automatizada apontou que `Promise.all` sozinho não comprova colisão UNIQUE. Corrigido para usar duas conexões reais, barreira imediatamente antes de create/update (após os lookups), confirmação de dois backend PIDs e observação obrigatória de exatamente um P2002 real, além do resultado de domínio seguro. A nova execução deve validar esse cenário mais forte.
+
+O [primeiro CI completo](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/39193697563), head `2c486c0d9e3f29337a8e17c68f5fc578565408a2`, passou TypeScript, lint de fontes ativas (0 erros/91 warnings históricos), regressões, build com `MIGRATION_SKIPPED`, smoke em 1440/390/320 e probe sem áudio. No smoke, zero chamadas às APIs de voz/microfone/permissões, zero rede externa, zero storage, zero page errors e sem overflow. I/O de save simulado; editor/parser reais. Não se declara save autenticado produtivo testado.
+
+No [CI da correção](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/39194301274), head `b8d4300aa71c83a5084336b1106f47288a651e8e`, as 20 integrações passaram novamente, agora exigindo a corrida real e P2002. A suíte sem banco pode exibir os 20 opt-in como skips; o job PostgreSQL separado os executa efetivamente. O workflow passa a produzir também `voice-regression.json` para contagem exata das regressões no head final, sem depender da apresentação dos logs.
+
+Compatibilidade observada no primeiro runner: Chromium 136.0.7103.25 expõe reconhecimento genérico, mas não API local nem consulta de pacote; `ptBR=NOT_CHECKABLE`. Não existe demonstração de suporte local pt-BR nos terminais atuais da operação. Arquitetura local continua não homologada, mesmo com o pacote documental pronto.
+
+### Self-review R5 da continuação
+
+1. **Autoridade e escopo:** comando humano autoriza preparação/publicação técnica; não autoriza voz. AEP inativo; 14 caminhos específicos, sem áreas protegidas nem controle manual de state/LEDGER/REGISTRY.
+2. **Privacidade:** gate imutável, UI sem engine/permissão, Action com recusa antes do parser, nenhuma integração externa. Minutas não publicadas como aceites; retenção externa/infraestrutura separada da efemeridade comprovada na aplicação.
+3. **Contexto e lifecycle:** testes de loja/sessão reais no servidor, campos de autoridade ignorados, respostas tardias de sucesso/erro descartadas na UI; preservação do manual e confirmação explícita.
+4. **Integridade:** writer e identidade canônicos preservados. Corrida sintética com duas conexões/transações reais, barreira após lookup, UNIQUE e mapeamento P2002 comprovados no serviço PostgreSQL descartável; nenhum backfill ou migration.
+5. **Evidência e release:** limitações locais registradas, CI e fontes oficiais vinculados; revisão automatizada e gates no head a integrar são obrigatórios antes do merge. Deployment canônico e smoke final só leitura, sem alterações de secrets ou da autoridade de migrations.
+
+### Recibo final de publicação
+
+O resultado único pós-execução, com SHA final, commits, CI/revisão, merge, deployment/smoke e limpeza da worktree, será registrado no corpo da [PR #286](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/286) e no relatório final entregue ao solicitante. Este arquivo preserva as evidências verificadas antes de sua própria publicação; não presume aprovação futura. Os artefatos `voice-regression.json`, `postgres-integration.json`, `postgres-isolation.json`, `browser-smoke.json` e `voice-compatibility.json` pertencem ao CI do head respectivo.
+
+`PRODUCTION_DB_WRITES_BY_AGENT=0`. `MIGRATIONS_EXECUTED=NO`. `CAD_R2_022_STARTED=NO`. `WIP_PRESERVED=YES`.
+
+## Histórico da PR #282
+
+Registro histórico da implementação e revisão anterior. Texto publicado; voz continuou bloqueada. Não declarar o GOAL encerrado nem habilitar o microfone com base em testes técnicos.
 
 ## Escopo e autoridade
 
