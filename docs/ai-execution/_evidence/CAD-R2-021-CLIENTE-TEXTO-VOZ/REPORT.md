@@ -2,7 +2,7 @@
 
 ## Implementação da voz local de Clientes — 19/10/2026
 
-`GOAL=CAD-R2-021`. `VOICE_IMPLEMENTATION=IMPLEMENTED_LOCAL_ONLY` (estado funcional em dispositivo: ver "Captura real"). `TEXT_CAPTURE=PRESERVED`. `HUMAN_REVIEW=REQUIRED`. `CLIENT_WRITE_SERVICE=REUSED`. `VOICE_AUDIO_STORAGE=NONE_IN_APPLICATION`. `REMOTE_FALLBACK=DISABLED`. `OTHER_MODULES=UNCHANGED`. `SCHEMA_MIGRATIONS=UNCHANGED`. `WIP_PRESERVED=YES`.
+`GOAL=CAD-R2-021`. `VOICE_IMPLEMENTATION=IMPLEMENTED_LOCAL_ONLY`. `REAL_DEVICE_RECOGNITION=NOT_DEMONSTRATED_ON_THIS_HOST` (ver "Captura real"). `TEXT_CAPTURE=PRESERVED`. `HUMAN_REVIEW=REQUIRED`. `CLIENT_WRITE_SERVICE=REUSED`. `VOICE_AUDIO_STORAGE=NONE_IN_APPLICATION`. `REMOTE_FALLBACK=DISABLED`. `OTHER_MODULES=UNCHANGED`. `SCHEMA_MIGRATIONS=UNCHANGED`. `WIP_PRESERVED=YES`.
 
 ### Autoridade e base
 
@@ -22,9 +22,22 @@ Simulados (motor sintético `__fixtures__/fake-local-speech.ts`, sem áudio): un
 
 Smoke Chromium do editor real (motor SIMULADO injetado, I/O das Actions simulado) em 1440×1000, 390×844 e 320×740: instalação explícita, início local pt-BR, transcrição ao vivo, parar → texto editável, interpretação com origem `voice`, revisão, aplicação, confirmação, save simulado, cancelamento com evento tardio, troca de loja abortando o motor, motor genérico recusado e caminho por texto. Zero chamadas a microfone/permissões pela aplicação, zero rede externa, zero storage, zero page errors, sem overflow. Capturas `voice-listening-*.png` e `review-*.png`.
 
+Local (head `1942ecc`): `npm run typecheck` exit 0; ESLint dos arquivos alterados sem erros/warnings; `git diff --check` OK; Vitest no recorte do CI 1112 PASS/20 skipped; `npm run build` com `MIGRATION_SKIPPED` e "Compiled successfully"; smoke PASS com CSS do build e com CSS compilado da fonte. [CI 39272217919](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/39272217919) no mesmo head: TypeScript, lint (0 erros/91 warnings históricos), 1112 PASS/20 skipped, build sem migrations, smoke PASS (motor simulado), sonda `ptBR=NOT_CHECKABLE` no Chromium 136 do runner (produto → só texto) e 20/20 integrações PostgreSQL descartáveis reais; previews Vercel concluídos.
+
 ### Captura real
 
-`scripts/cadastros/real-voice-capture-local.mjs` (fora do CI) dirige o editor real no Chrome instalado, com fala **sintética** pt-BR gerada localmente (SAPI) entrando por dispositivo de áudio falso e a rede do navegador bloqueada por proxy morto durante o reconhecimento. Estado nesta máquina antes de qualquer instalação: Chrome 155.0.8059.80 com API local, `available(pt-BR, local) = downloadable` → `real-voice-capture.json` = `NOT_RUN_LOCAL_PACK_UNAVAILABLE`. A captura exige que o Chrome baixe o modelo pt-BR (ação separada, sujeita a autorização). Até uma captura real passar, não se declara voz funcional em dispositivo.
+`scripts/cadastros/real-voice-capture-local.mjs` (fora do CI) dirige o editor real no Chrome instalado, com fala **sintética** pt-BR gerada localmente (SAPI, voz "Microsoft Maria", frase fictícia) entrando por dispositivo de áudio falso e a rede do navegador bloqueada por proxy morto durante o reconhecimento. Perfil Chrome descartável no scratchpad da sessão.
+
+`REAL_DEVICE_RECOGNITION=NOT_DEMONSTRATED_ON_THIS_HOST` (impedimento de ambiente; ver diagnóstico). Sequência observada em Chrome 155.0.8059.80 / Windows 11 (8 GB):
+
+1. Antes: API local presente; `available(pt-BR, local) = downloadable`.
+2. Download autorizado pelo responsável (19/10/2026), pelo botão do próprio editor: motor SODA 1.2.12 (35 MB) + pacote pt-BR 1.3071.0 (69 MB). Durante diagnósticos com rede liberada, o Chrome baixou também, por conta própria, o pacote en-US (194 MB) — total ≈298 MB, acima da estimativa de ~100 MB informada ao responsável. Tudo no perfil descartável.
+3. Após reiniciar o Chrome, `available` volta a `downloadable` com os arquivos presentes; o clique em "Instalar voz local pt-BR" com a rede bloqueada (`ERR_PROXY_CONNECTION_FAILED`) os reativa em 11 ms → `available`. Texto do botão ajustado para explicar isso.
+4. Ditado pelo editor real, offline: motor iniciado com `processLocally: true` e `lang: "pt-BR"`; o áudio sintético chega (`audiostart`, `soundstart`, `speechstart`; envelope de fala confirmado gravando o microfone falso), mas nenhum resultado é devolvido em 24 s; o editor encerra com "Nenhuma fala reconhecida…", formulário preservado, nada interpretado nem salvo, zero rede externa da página, zero storage, zero page errors (`real-voice-capture.json`, `result: FAIL`).
+5. Isolamento: a API crua, fora do produto, falha igual em pt-BR e en-US, headless e com janela, com microfone padrão e com `start(track)`. `SODA.dll` está carregada no `SpeechRecognitionService`, sem bloqueio de integridade de código.
+6. Diagnóstico: durante o ditado o serviço de fala consome ~1 núcleo com working set preso em ~70 MB e ~45 mil falhas de página/s (≈900 mil em 18 s), enquanto a RAM livre do host oscila entre 58 e 776 MB e o Chrome registra descarte de páginas por pressão de memória. Forte indício de thrashing: o modelo não permanece residente. Não é um defeito do código do OmniGestão (o caminho cru falha igual), mas também não é prova de que o motor funcionaria em outro terminal.
+
+Conclusão: implementação e integração com o motor local estão verificadas até o ponto em que o motor recebe o áudio em modo local; **reconhecimento real em dispositivo não foi demonstrado**. Próximo ato: repetir `node scripts/cadastros/real-voice-capture-local.mjs --profile <dir>` num terminal com RAM livre (ou nesta máquina com aplicativos fechados). No produto, a falha nesse cenário é segura: após parar, carência de 5 s, mensagem constante e texto preservado.
 
 ## Continuação — 19/10/2026
 

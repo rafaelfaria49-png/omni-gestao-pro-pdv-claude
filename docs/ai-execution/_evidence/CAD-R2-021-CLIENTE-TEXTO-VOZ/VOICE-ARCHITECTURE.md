@@ -24,6 +24,8 @@ Escolhida a **alternativa A (local estrita)**. A **B (remota) continua não apro
 
 Chrome 155.0.8059.80, Windows 11: API local presente (`processLocally`, `available`, `install`); `available(pt-BR, local)` = **downloadable** (pacote não instalado no perfil). Edge 155: não iniciou via Playwright neste host; sem conclusão sobre Edge. Playwright Chromium 136 (CI): sem API local → no produto, somente texto. Cada terminal é verificado em runtime; não há lista fixa de navegadores homologados.
 
+Após o download autorizado (SODA 1.2.12 + pt-BR 1.3071.0), o Chrome 155 volta a responder `downloadable` a cada reinício até `install()` ser chamado de novo; offline, o clique só reativa os arquivos locais (11 ms). Nesta máquina (8 GB, RAM livre < 800 MB) o motor local recebeu a fala sintética em modo local, mas não devolveu texto: thrashing de memória no `SpeechRecognitionService` (detalhes em REPORT.md, "Captura real"). Terminais com pouca RAM livre podem ter o mesmo comportamento; o produto termina com "Nenhuma fala reconhecida" e mantém o texto. Requisito operacional sugerido para homologação: repetir o roteiro real em cada tipo de terminal.
+
 ### Modo remoto — documentado, não ativado
 
 Remoto seria o reconhecimento do navegador sem `processLocally` (no Chrome, serviço do Google; no Edge, da Microsoft) ou um fornecedor contratado (seção B). Exposição: áudio, idioma, metadados técnicos e transcrição. Não existe código desse caminho em Clientes. Condições para um GOAL próprio: fornecedor e modalidade escolhidos; finalidade; países, suboperadores e acessos de suporte; retenção, treinamento e exclusão comprovados; DPA e mecanismo de transferência LGPD; avisos a atendentes e clientes; aprovação administrativa/jurídica registrada. Até lá, `remoteFallback: false`.

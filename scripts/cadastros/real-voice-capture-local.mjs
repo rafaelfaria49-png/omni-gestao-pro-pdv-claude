@@ -79,22 +79,20 @@ const supportOf = (page) => page.evaluate(async () => {
 })
 
 try {
-  // Phase 1 (network allowed): availability and, only if authorized, the explicit pack install.
-  let ctx = await launch(false)
-  let page = await ctx.newPage()
-  await page.goto(server.origin)
-  report.browser = await page.evaluate(async () => (await navigator.userAgentData?.getHighEntropyValues(["fullVersionList"]))?.fullVersionList?.map((b) => `${b.brand} ${b.version}`).join(", ") ?? navigator.userAgent)
-  report.availabilityBefore = await supportOf(page)
-  if (report.availabilityBefore === "downloadable" && flag("--allow-install")) {
-    await page.getByRole("button", { name: "Instalar voz local pt-BR" }).click()
-    await page.getByRole("button", { name: "Ditar por voz" }).waitFor({ timeout: 10 * 60_000 })
-    report.installPerformed = true
-  }
-  report.availabilityAfterInstallPhase = await supportOf(page)
-  await ctx.close()
-  if (report.availabilityAfterInstallPhase !== "available") {
-    report.result = "NOT_RUN_LOCAL_PACK_UNAVAILABLE"
-    throw Object.assign(new Error(`pt-BR on-device pack is ${report.availabilityAfterInstallPhase}`), { expected: true })
+  // Phase 1 (network allowed) runs ONLY with --allow-install: the explicit pack download.
+  let ctx, page
+  if (flag("--allow-install")) {
+    ctx = await launch(false)
+    page = await ctx.newPage()
+    await page.goto(server.origin)
+    report.availabilityBeforeInstall = await supportOf(page)
+    if (report.availabilityBeforeInstall === "downloadable") {
+      await page.getByRole("button", { name: "Instalar voz local pt-BR" }).click()
+      await page.getByRole("button", { name: "Ditar por voz" }).waitFor({ timeout: 10 * 60_000 })
+      report.installPerformed = true
+    }
+    report.availabilityAfterInstall = await supportOf(page)
+    await ctx.close()
   }
 
   // Phase 2 (browser network blocked): real dictation through the editor.
@@ -110,6 +108,21 @@ try {
   page.on("pageerror", (e) => pageErrors.push(e.message))
   await page.addInitScript(observeEngine)
   await page.goto(server.origin)
+  report.browser = await page.evaluate(async () => (await navigator.userAgentData?.getHighEntropyValues(["fullVersionList"]))?.fullVersionList?.map((b) => `${b.brand} ${b.version}`).join(", ") ?? navigator.userAgent)
+  report.availabilityOffline = await supportOf(page)
+  // Chrome 155 reports an already-present pack as "downloadable" after a restart until install()
+  // runs again; offline it can only activate local files (nothing can be downloaded).
+  const activate = page.getByRole("button", { name: "Instalar voz local pt-BR" })
+  if (await activate.isVisible().catch(() => false)) {
+    await activate.click()
+    report.offlineActivationClicked = true
+  }
+  await page.getByRole("button", { name: "Ditar por voz" }).waitFor({ timeout: 30_000 }).catch(() => {})
+  report.availabilityOfflineAfterActivation = await supportOf(page)
+  if (report.availabilityOfflineAfterActivation !== "available") {
+    report.result = "NOT_RUN_LOCAL_PACK_UNAVAILABLE"
+    throw Object.assign(new Error(`pt-BR on-device pack is ${report.availabilityOfflineAfterActivation}`), { expected: true })
+  }
   await page.getByRole("button", { name: "Ditar por voz" }).click()
   const startedAt = Date.now()
   await page.waitForTimeout(Math.ceil(wavSeconds * 1000) + 1500)
@@ -127,7 +140,6 @@ try {
     report.suggestion = {}
     for (const label of ["Nome", "Telefone / WhatsApp", "CPF / CNPJ", "Cidade"]) report.suggestion[label] = await page.getByLabel(`Sugestão: ${label}`, { exact: true }).inputValue()
   }
-  await page.screenshot({ path: path.join(evidence, "real-voice-capture.png"), fullPage: true })
   report.externalPageRequests = external.length
   report.storageEntries = await page.evaluate(() => localStorage.length + sessionStorage.length)
   report.consoleMentionsTranscript = consoleTexts.some((t) => /Lia|Itaí|9999/.test(t))
