@@ -1,3 +1,186 @@
+# PDV-PARITY-N5-C-E2E-002 — REV2, novo blocker comprovado
+
+Data: 2026-10-19. Executor: Codex; família `openai`.
+Branch/worktree: `goal/pdv-parity-n5-c-e2e-002`,
+`C:/Projetos/omni-gestao/.worktrees/pdv-n5-c-e2e-002`.
+Main/base: `9eb59d08f06af881adc7d2e11a167ef24c5a1fee`.
+Tentativa AEP REV2: 1/3. Resultado técnico: **BLOCKED**.
+
+## Retomada canônica
+
+- ENTRYPOINT, CLAUDE.md e governança lidos. Worktree inicialmente limpa;
+  `.aep-active` ausente. Checkout principal e WIPs externos preservados.
+- `git fetch origin main`: PASS após liberar escrita de FETCH_HEAD.
+  GitHub confirmou PR #285 MERGED, merge `9eb59d08f06af881adc7d2e11a167ef24c5a1fee`.
+- `git merge --no-edit origin/main`: fast-forward de `af12ed3` para `9eb59d0`,
+  sem reset. `git merge-base --is-ancestor af12ed3d0159f97bb125a62a0466362f4a89af8b HEAD`: exit 0.
+- `node scripts/track.mjs status pdv`, seguido de `open pdv`: PASS.
+  GOAL 002 READY, plan_rev=2, sete caminhos, zero gates, base correta.
+  Somente o GOAL indicado pelo open foi lido.
+
+## Candidato local da Assistência — sem commit técnico
+
+`pdv-assistencia-enterprise.tsx` passa a guardar o payload enviado ao motor.
+Após o guard FAILED/PENDING, usa `result.saleId`/`clientSaleId` e total/breakdown
+desse payload. Nenhum total/pagamento foi inventado no tipo de retorno do motor.
+Como Reenviar não chama novamente o handler do modal, a resolução canônica da
+identidade PENDING nas `sales` reais do motor é observada para emitir o mesmo
+log com o snapshot da venda confirmada, sem reconstruir valores do carrinho.
+Deduplicação local usa identidade/loja e a entrada já existente no log local.
+Não cria garantia transacional de auditoria entre abas/servidor ou além da
+retenção do log local; não há mudança na API de auditoria.
+
+O contrato de retorno do modal, guard PENDING, reenvio, limpeza, impressão,
+cache financeiro e pós-venda permanecem. O teste monta componente, modal e
+OperationsProvider reais; fetch e providers periféricos são sintéticos.
+Não substitui `handlePaymentConfirm`, `finalizeSaleTransaction` ou `retrySyncSale`.
+
+Cinco casos finais PASS:
+
+1. CONFIRMED: identidade canônica e total 190; dinheiro 10, PIX 20, débito 30,
+   crédito 40, prazo 50 e vale 40; log usa exatamente esses valores.
+2. FAILED: breakdown inválido rejeitado pelo motor; zero log, carrinho preservado;
+   nova tentativa consciente é aceita.
+3. PENDING: zero log; reconfirmação bloqueada; retry real envia mesma identidade,
+   confirma uma venda e emite um log; repetir retry não cria POST/evento novo.
+4. Remount com carrinho alterado: log usa os 190 da venda enviada, não preço 999
+   do draft; outro restore não duplica a entrada local.
+5. Duas chamadas reais concorrentes: motor compartilha a confirmação e log sai uma vez.
+
+## Blocker funcional fora da allowlist
+
+`COVERAGE_BLOCKED_CLASSIC_RETRY_AUDIT`.
+
+Comando reproduzível no candidato preservado:
+
+```powershell
+npx playwright test --config e2e/pdv-core.playwright.config.ts --grep 'classic.*D PENDING'
+```
+
+Resultado: 1 FAILED, exit 1, em `e2e/specs/pdv-core-n5.spec.ts:159`:
+
+```text
+expect(audits()).toHaveLength(1)
+Expected length: 1
+Received length: 0
+Received array: []
+```
+
+Passaram antes dessa asserção: zero evento final no PENDING, caixa sem entrada,
+modal impedido de reconfirmar, dois POSTs com a mesma clientSaleId, uma venda
+CONFIRMED, um `venda_finalizada`, segundo Reenviar sem POST nem evento adicionais.
+O teste completo continua FAILED. `venda_finalizada` não substitui `sale_finalized`.
+O transporte apenas confirma identidade: não injeta auditoria nem chama o
+handler de pagamento para simular o retry.
+
+No código real, Classic retorna no ramo `result.pending`; o único emissor
+`sale_finalized` desse componente fica no ramo de confirmação imediata.
+`retrySyncSale` confirma no OperationsProvider, sem retornar àquele handler.
+`components/dashboard/vendas/pdv-classic.tsx` e o motor compartilhado estão
+fora da allowlist REV2. Não foram corrigidos. Não foi ampliado o GOAL.
+
+## Ambiente e limites
+
+Config dedicada seleciona somente o spec N5, sem globalSetup/login produtivo.
+Servidor próprio via esbuild em memória, bind `127.0.0.1:4179`, reutilização
+desativada, sem Next, `.env`, banco, proxy de rede ou writer de negócio.
+Bundle recusa imports de Prisma/server writers não explicitamente isolados.
+Playwright intercepta requests de bootstrap, caixa, crédito, venda, audit,
+retry e enriquecimento. Origem externa, loja não sintética e rota desconhecida
+são recusadas; asserções finais verificam zero requests inesperados/page errors.
+Fixtures usam somente loja `n5-c-synthetic`, cliente/produto/operador sintéticos.
+
+Quatro componentes e PaymentModal reais estão no bundle. Motor cliente,
+identidade, confirmação, retry, audit local e helper de parcelas são reais.
+O driver de Reenviar é sintético e chama `retrySyncSale` real por evento DOM;
+não homologa o Histórico de Vendas. Subárvores periféricas de troca, impressão,
+recebimento e seleção de acessórios são isoladas e não contam como cobertura.
+CSS mínimo serve ao harness; não é auditoria visual do produto.
+
+Provas servidor H-A..H-E são as do inventário histórico preservado na matriz,
+com seus SHAs/limites. Não foram repetidas as suítes N5-B1/R4, build, Docker,
+smoke autenticado, migrations ou seeds. Nenhum banco/endpoint produtivo foi acessado.
+
+## Validações e resultados
+
+| Comando | Resultado observado |
+| --- | --- |
+| `npx vitest run lib/pdv/parity-assistencia-finalize-audit.component.test.ts` | PASS final: 1 arquivo, 5 testes; 19/10 00:15:25, 46,23s |
+| `npx playwright test --config e2e/pdv-core.playwright.config.ts` | 20 selecionados; 3 PASS (Classic A/B/C), 1 falha de clique do driver, 16 NOT_RUN; exit 1 |
+| Playwright focado Classic D, após corrigir o driver | FAILED funcional: auditoria esperada 1, observada 0; exit 1 |
+| `npm run typecheck` | FAIL: `generated/prisma` ausente e erros em cadeia; não PASS |
+| ESLint focado nos cinco paths `.ts`/`.tsx` do GOAL | PASS final, exit 0 |
+| `git diff --check` | PASS antes da ratificação do bloqueio |
+| `node scripts/track.mjs verify --all` | PASS: 11 trilhas, ledger/state/REGISTRY/GATES coerentes; repetir após block |
+| R / `close pdv` / push / PR | Não executados: aceite funcional não satisfeito |
+
+Tentativas anteriores de infraestrutura, sem cobertura contabilizada: EPERM no
+cache temporário do sandbox, import do bundler no jsdom, cwd/module format do
+servidor e seletor de cliente/stacking do driver. Foram corrigidas somente na
+infra autorizada; o último retry falhou na asserção de negócio, não no driver.
+O primeiro lint encontrou `children` como prop no teste (corrigido); outra
+execução não resolveu um módulo Babel, mas a execução final passou.
+
+A worktree tinha somente cache `.vite` em node_modules. Os lockfiles da raiz e
+da worktree foram conferidos idênticos; cache preservado em temporário e criada
+junction ignorada para as dependências já instaladas, sem mudar package/lock.
+O typecheck então executou e terminou com 241 arquivos com diagnósticos. Além
+da ausência de Prisma, havia um erro novo na fixture À Prazo do teste; foram
+completados `primeiroVencimento`/`intervalDias`. Vitest e lint finais passaram.
+O typecheck global não foi reexecutado após a parada; não se afirma tipos verdes.
+Não se gerou Prisma nem se alteraram paths produtivos fora da allowlist para contornar o gate.
+
+## Matriz, preservação e ratificação
+
+Matriz REV2: **3 TESTED, 16 PARTIAL, 1 BLOCKED, 0 UNSUPPORTED_BY_DESIGN**.
+São 20 células explícitas. TESTED apenas Classic A/B/C, com limite de I/O
+sintético. Classic D é PARTIAL porque o teste completo falha; Classic E é
+BLOCKED pela prova de retry. Assistência tem prova de componente, não E2E.
+As outras superfícies permanecem PARTIAL; 16 NOT_RUN nunca contam como PASS.
+
+Os documentos REV1 foram preservados integralmente abaixo e no commit original.
+Código/testes ficam sem staging/commit na worktree: não há candidato técnico
+aprovado. Somente matriz/evidência do blocker são commitadas como documentação,
+e `node scripts/track.mjs block pdv --by=gate --reason=...` ratifica o estado
+por meio do próprio protocolo. Ledger/state/REGISTRY/GOAL não são editados à mão.
+Não se executa `close`, não se marca DONE, não se solicita R sobre SHA inexistente,
+não se faz push nem merge. Nova decisão humana de escopo é necessária.
+
+Fingerprints dos cinco arquivos técnicos locais (conteúdo, não SHAs de commit):
+
+| Caminho | `git hash-object <path>` |
+| --- | --- |
+| `components/dashboard/vendas/pdv-assistencia-enterprise.tsx` | `b74eccd202a9a1eef0a12cd26393ffa26a112fbd` |
+| `lib/pdv/parity-assistencia-finalize-audit.component.test.ts` | `5114c9adc813bd6879e136310563b04a42da2556` |
+| `e2e/pdv-core.playwright.config.ts` | `cb8a7652f45fbffe48a7b7bcc708b01091597ad7` |
+| `e2e/fixtures/pdv-core.ts` | `5bc8b515c058111d2c0decbf58a5f9adcb8c7718` |
+| `e2e/specs/pdv-core-n5.spec.ts` | `ec67ad61774164d09e92d0d6518cddec6e42e1b8` |
+
+```text
+TECHNICAL_COMMIT=NONE
+BLOCKED_HISTORY_PRESERVED=YES
+ENVIRONMENT_ISOLATED=YES_SYNTHETIC_IO
+N5_B1_CLOSEOUT=BLOCKED
+PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED
+R_EXECUTOR=NONE
+R_FAMILY=NONE
+R_VERDICT=NOT_REQUESTED_ACCEPTANCE_FAILED
+AEP_CLOSE_COMMIT=NONE
+GOAL_STATUS=BLOCKED
+PUSH_BRANCH=NOT_PUSHED
+PR_NUMBER=NONE
+PR_URL=NONE
+BLOCKERS=COVERAGE_BLOCKED_CLASSIC_RETRY_AUDIT;TYPECHECK_GENERATED_PRISMA_MISSING
+NEXT_STEP=RESOLVER_GATE_COM_EVIDENCIA
+```
+
+CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT não alterados: fora da allowlist e sem
+entrega técnica aprovada. Nenhum N6, N7 ou outro GOAL foi iniciado.
+
+---
+
+## Histórico REV1 preservado
+
 # PDV-PARITY-N5-C-E2E-002 — evidência de bloqueio
 
 Data: 2026-10-18. Executor: Codex; família `openai`.
