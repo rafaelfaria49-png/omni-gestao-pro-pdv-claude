@@ -11,7 +11,7 @@ Semáforo: 🟢 rodando · 🟡 esperando humano · 🔴 bloqueado ou check falh
 | ops-v4-datas-ui-promocao | 🟡 amarelo | PAUSED | ALTO | — | — | 1 | 0 | 2026-10-16T04:32:24.804Z |
 | ops-v4-financeiro-retirada-garantia | 🟡 amarelo | PAUSED | ALTO | — | — | 3 | 0 | 2026-10-16T08:01:15.999Z |
 | ops-v4-fluxo-curto | 🟡 amarelo | PAUSED | ALTO | — | — | 7 | 0 | 2026-10-09T06:14:58.471Z |
-| pdv | 🟢 verde | RUNNING | ALTO | PDV-PARITY-N5-C-E2E-002 | — | 4 | 1 | 2026-10-18T23:26:54.741Z |
+| pdv | 🔴 vermelho | BLOCKED | ALTO | — | — | 4 | 1 | 2026-10-19T03:19:51.885Z |
 | pdv-parity-suite-n5-a-foundation-001 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-16T14:36:01.262Z |
 | pdv-parity-suite-n5-b1-core-gaps-001 | 🔴 vermelho | BLOCKED | ALTO | — | — | 3 | 1 | 2026-10-13T21:35:17.451Z |
 | pdv-scan-inline-feedback-autofocus-006 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-17T13:01:23.513Z |
