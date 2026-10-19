@@ -534,3 +534,44 @@ NEXT_ACTION=HUMAN_PLANNING_FOR_SERVICE_ALLOWLIST_AND_AT_LEAST_12_GIB_PER_VOLUME
 ```
 
 Ponto de parada: **AUTORREVISÃO CONCLUÍDA; CORREÇÃO DOCUMENTAL FORA DA ALLOWLIST E VALIDAÇÃO OFICIAL IMPEDIDA POR DISCO.** Sem DONE, merge, produção ou GOAL 002.
+
+
+## Retomada P2-01 após merge AEP — 18/10/2026
+
+A PR #284 foi confirmada mergeada pelo humano `rafaelfaria49-png` em `180a2f2ab450cc2686b5087dc09b1a0ee58b5f72`. A branch da PR #273 foi atualizada pelo Update Branch oficial do GitHub, exigindo o HEAD esperado `5eac8be5820f0d9a9ef0374e52bf1603112f78ca`. O merge remoto `1c3ce6b57fdc8d3eeeb19fd414d713eb3c524527` foi incorporado localmente somente por fast-forward. Sem rebase, force push, reset, cherry-pick ou transporte de WIPs.
+
+O refresh oficial passou em dry-run e aplicação. A revisão 6 está idêntica em HEAD, origin/main e base comum (blob `9f3ee05b4d920b81ccccbd6c7d431d2cd95d63fa`). Somente `lib/pessoas/documentos/service.ts` foi acrescentado à allowlist. Tentativa 1/3, `opened_at=2026-10-12T23:27:06.181Z`, `attempts_log=[]`, gates e demais campos anteriores foram preservados. O hash anterior do marcador é `ca76b04e214e25c20ff54fc2fbcaf9bb3f1c8eebc8e2cae4b9d68c65744f077f`; a proveniência foi registrada pela CLI. Nenhum open ou edição manual do marcador foi realizado. Item 8 preservado e verify --all PASS.
+
+**Correção funcional commitada e publicada:** `d3e19a4aa4ce4f79aa39d57402d361e194b754b6`. O helper refCanonica valida Store pela mesma gramática 1–100 de exigirAtor e mantém empregador/documento em 8–100, com namespace inalterado. Nenhuma outra regra documental, schema, auth, Prisma, adapter R2 ou serviço foi alterado.
+
+**Validação focada executada:** 24 asserções PASS sobre o helper real, extraído e executado com o parser TypeScript nativo do Node 24; sintaxe do arquivo de integração também validada. Isso é diagnóstico focado sem banco/storage/rede, não execução Vitest nem homologação documental. Foram acrescentados 20 casos de integração PostgreSQL em frontend.integration.test.ts, ainda não executados: loja-1/loja-2/QA longo, limites 1/100, IDs inválidos, namespace, intent/complete/list/download, replay e isolamento nas duas direções com membership/grants válidos.
+
+**Runner oficial:** executado no HEAD funcional acima, exit **5**, por reserva após instalação. Node 24.14.1, npm 11.11.0 e binários PostgreSQL 17.10. Havia `13067345920` bytes livres antes da instalação; npm ci e Prisma generate concluíram no workspace externo sanitizado, mas restaram `11607539712` bytes (**10,810 GiB**), abaixo dos `12884901888` bytes (**12 GiB**) obrigatórios. O runner interrompeu antes de typecheck, Chromium, Vitest/integração, lint, build/PWA e E2E. Nenhuma dessas etapas recebe PASS. Reserva e política preservadas.
+
+**Cleanup PASS:** o runner removeu somente seu workspace `C:/Users/rafae/AppData/Local/Temp/omni-pessoas-test-KKkU2j`, incluindo dependências/cache e relatórios transitórios; ausência do diretório confirmada separadamente. Porta 55439 livre, conferida pelo runner. Após cleanup: `13141671936` bytes livres (**12,239 GiB**). Esse retorno acima de 12 GiB não resolve a insuficiência comprovada após instalação.
+
+**Autorrevisão Codex:** revisão estática da correção/regressões e incorporação governada da main, reaproveitando a autorrevisão integral anterior sem nova auditoria geral. Sem novos achados estáticos P0/P1/P2; aceite técnico final e condição da dispensa continuam **PENDENTES**, pois a bateria obrigatória não executou. `INDEPENDENT_REVIEW=WAIVED_BY_HUMAN_DECISION`; autorrevisão não representa revisão independente. Nenhum GLM solicitado. Smokes QA reais de 15–16/10 reaproveitados com seus SHAs e limites anteriores; não repetidos nem apresentados como validação do HEAD novo.
+
+**Único impedimento desta retomada:** capacidade de disco suficiente para preservar a reserva após instalar/buildar. Foi solicitada autorização limitada a `C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005/.next` (1.816.226.473 bytes lógicos) e `C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007/.next` (2.526.388.504 bytes lógicos). Sem reparse points ou consumidores visíveis na inspeção; reconferir imediatamente antes de eventual limpeza autorizada. Tamanho lógico não garante recuperação física. Nenhuma exclusão adicional realizada. A preferência de 16 GiB não foi criada como gate novo.
+
+Evidência estruturada: [P2_01_RECOVERY_2026-10-18.json](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/P2_01_RECOVERY_2026-10-18.json).
+
+```text
+P2_01=IMPLEMENTED_FOCUSED_HELPER_PASS_POSTGRES_PENDING
+OFFICIAL_RUNNER=FAIL_POST_INSTALL_DISK_PREFLIGHT_EXIT_5
+TYPECHECK=NOT_RUN
+LINT=NOT_RUN
+BUILD=NOT_RUN
+E2E=NOT_RUN
+VERIFY_ALL=PASS
+CLEANUP=PASS
+SELF_REVIEW=CODEX_STATIC_NO_NEW_FINDINGS_TECHNICAL_ACCEPTANCE_PENDING
+WAIVER_CONDITION_SATISFIED=NO
+AEP_CLOSE=NOT_RUN
+AEP_SESSION=ORIGINAL_ATTEMPT_1_OF_3_PRESERVED
+PR_273=OPEN_DRAFT
+MERGE_READINESS=BLOCKED
+NEXT_ACTION=AUTHORIZE_SCOPED_CLEANUP_THEN_REQUIRED_VALIDATION
+```
+
+Sem close/DONE, merge da PR #273, ativação produtiva, dados reais ou GOAL 002. CURRENT_STATUS/CHANGELOG/memória e derivados AEP não foram editados; esta retomada permanece restrita ao corretivo e às evidências permitidas.
