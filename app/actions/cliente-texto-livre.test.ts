@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Session } from "next-auth"
 
 const h = vi.hoisted(() => ({
@@ -27,6 +27,8 @@ vi.mock("@/lib/prisma", () => ({ prisma: {
 
 import { interpretarClienteTextoLivre, salvarClienteRevisado } from "./cliente-texto-livre"
 import type { ClientEditorValues } from "@/lib/cadastros/natural-text/cliente"
+import * as clientText from "@/lib/cadastros/natural-text/cliente"
+import { CLIENT_VOICE_PRIVACY_GATE } from "@/lib/cadastros/voice-capture/cliente"
 const input = (): ClientEditorValues => ({ nome: "Lia de Teste", telefone: "14999998888", documento: "", email: "", cidade: "Itaí", endereco: "", uf: "", tipo: "PF", tags: "", observacoes: "", active: true })
 function session(role = "ADMIN", allowedStoreIds = ["loja-a"]): Session {
   return { user: { id: "actor-canonical", email: "operator@example.invalid", role, storeAccess: "restricted", allowedStoreIds }, expires: "2099-01-01" } as Session
@@ -35,6 +37,7 @@ function row(overrides: Record<string, unknown> = {}) {
   return { id: "synthetic-existing", storeId: "loja-a", name: "Lia de Teste", phone: "14999998888", email: null, kind: "PF", document: "", documentKey: null, tags: { private: "preserve", address: { zip: "private" } }, city: "", active: true, totalSpent: 42, lastPurchaseAt: null, ...overrides }
 }
 beforeEach(() => { vi.clearAllMocks(); h.session = session(); h.rows = []; h.create.mockResolvedValue({ id: "synthetic-new" }); vi.stubGlobal("fetch", vi.fn(() => { throw new Error("External transfer forbidden") })) })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe("Cliente actions with real access gate, identity and ClientWriteService", () => {
   it("interprets without database writes, network, logs or cache", async () => {
@@ -51,9 +54,29 @@ describe("Cliente actions with real access gate, identity and ClientWriteService
     await expect(salvarClienteRevisado("loja-a", null, input(), true)).rejects.toThrow()
     expect(h.create).not.toHaveBeenCalled(); expect(h.query).not.toHaveBeenCalled()
   })
-  it("rejects voice and forged capture sources server-side", async () => {
-    for (const source of ["voice", "whisper", { enabled: true }]) expect(await interpretarClienteTextoLivre("loja-a", "Lia", source)).toMatchObject({ ok: false })
+  it.each([
+    "voice", "audio", "local", "whisper", "TEXT", "Text", " text", "text ", "", null,
+    true, false, 0, 1, [], ["text"], { enabled: true }, { captureSource: "text", approved: true },
+  ])("direct Action refuses non-text source %j before parsing or any side effect", async (source) => {
+    const parser = vi.spyOn(clientText, "interpretarTextoCliente")
+    const log = vi.spyOn(console, "log"), error = vi.spyOn(console, "error")
+    const result = await interpretarClienteTextoLivre("loja-a", "SYNTHETIC-RAW-CAPTURE-DO-NOT-LOG", source)
+    expect(result).toEqual({ ok: false, message: CLIENT_VOICE_PRIVACY_GATE.message })
+    expect(parser).not.toHaveBeenCalled()
+    expect(h.query).not.toHaveBeenCalled(); expect(h.create).not.toHaveBeenCalled()
+    expect(h.update).not.toHaveBeenCalled(); expect(h.audit).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
+    expect(log).not.toHaveBeenCalled(); expect(error).not.toHaveBeenCalled()
+  })
+  it("authorizes store access even for a blocked direct voice request", async () => {
+    h.session = session("VENDEDOR", ["loja-b"])
+    await expect(interpretarClienteTextoLivre("loja-a", "synthetic", "voice")).rejects.toThrow()
+    expect(h.query).not.toHaveBeenCalled(); expect(h.create).not.toHaveBeenCalled()
+  })
+  it("preserves manual text interpretation with explicit or default text source", async () => {
+    expect(await interpretarClienteTextoLivre("loja-a", "Nome: Lia de Teste", "text")).toMatchObject({ ok: true })
+    expect(await interpretarClienteTextoLivre("loja-a", "Nome: Lia de Teste")).toMatchObject({ ok: true })
+    expect(h.create).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled()
   })
   it("requires explicit confirmation and validates corrected values before writing", async () => {
     expect(await salvarClienteRevisado("loja-a", null, input(), false)).toMatchObject({ ok: false })

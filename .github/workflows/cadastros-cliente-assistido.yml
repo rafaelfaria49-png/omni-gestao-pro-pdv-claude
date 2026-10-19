@@ -7,6 +7,7 @@ on:
       - "components/cadastros/**"
       - "lib/cadastros/**"
       - "scripts/cadastros/**"
+      - "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/**"
       - ".github/workflows/cadastros-cliente-assistido.yml"
   workflow_dispatch:
 
@@ -52,13 +53,52 @@ jobs:
           app/api/import/advanced lib/importador-avancado lib/auth/proxy-session-gate.test.ts
           components/cadastros/lovable/components/cadastros/ClienteEditor.test.ts
           lib/contas-receber-cliente-match.test.ts --maxWorkers=2
+          --reporter=default --reporter=json
+          --outputFile=docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/voice-regression.json
       - name: Build completo sem migrations
         run: npm run build
       - run: npx playwright install --with-deps chromium
       - name: Smoke responsivo com I/O isolado
         run: node scripts/cadastros/smoke-cliente-texto.mjs
+      - name: Evidência de compatibilidade de voz sem captura
+        run: node scripts/cadastros/audit-voice-compatibility.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: cliente-assistido-evidence
           path: docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cad_r2_021
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: cad_r2_021_isolated
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cad_r2_021 -d cad_r2_021_isolated"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://cad_r2_021:isolated_ci_only@127.0.0.1:5432/cad_r2_021_isolated
+      DIRECT_URL: postgresql://cad_r2_021:isolated_ci_only@127.0.0.1:5432/cad_r2_021_isolated
+      CAD_R2_021_DISPOSABLE_DB: "true"
+      MIGRATION_AUTHORITY_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: PostgreSQL descartável e 20 integrações reais
+        run: node scripts/cadastros/run-isolated-postgres.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cliente-postgres-evidence
+          path: docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/postgres-*.json
