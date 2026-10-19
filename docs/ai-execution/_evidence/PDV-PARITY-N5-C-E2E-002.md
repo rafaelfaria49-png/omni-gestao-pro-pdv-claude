@@ -307,3 +307,86 @@ Worktree preservada com a evidência; limpeza depende de integração/validaçã
 posteriores. CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT não alterados: fora da
 allowlist e nenhuma feature implementada. Riscos de smoke autenticado,
 loja/terminal e hardware continuam abertos nos registros anteriores.
+
+
+---
+
+## Diagnóstico focado REV3 — 19/10/2026, GOVERNANCE_ONLY
+
+Autorização: PDV-N5-C-REV3-RETRY-AUDIT-PLAN-004. Nenhum código implementado,
+nenhum E2E/teste técnico executado, nenhum Prisma gerado nesta sessão.
+Main confirmada após fetch: a6777234bcc336fef64ecb7491d5705bdd404b39.
+BLOCKED local: bc9fab7cf853f3b03759b84bcf7a63b11869c3a6. Rev2 (PR #285,
+commit de plano 4f7a110) é ancestral de origin/main. Ambos os eventos BLOCKED
+permanecem byte a byte no ledger; o segundo é levado a main por este PR.
+
+Os cinco fingerprints do WIP acima foram reconferidos e coincidem. A worktree
+original não recebeu stash, reset, checkout, merge nem edição técnica.
+Branch de plano criada do BLOCKED, merge normal de origin/main: 7aac8bb.
+open pdv na original recusou por inexistir READY; não abriu marcador.
+O rito humano de planejamento AEP §§2–3 permite reabrir o mesmo GOAL, sem close
+de execução. Registry/verify reconciliam exclusivamente o plano e as projeções.
+
+### Causa e contrato
+
+APPLICATION_AUDIT_GAP localizado no Classic. Inspeção estática corrobora a
+falha runtime registrada na rev2, sem reexecução nesta sessão:
+
+- e2e/specs/pdv-core-n5.spec.ts:81,159: auditoria filtra sale_finalized;
+  o caso D já exige separadamente um venda_finalizada e um log de auditoria.
+- e2e/fixtures/pdv-core.ts:53–67,121–126: backend confirma clientSaleId,
+  captura POST de auditoria e driver chama retrySyncSale real; não injeta log.
+- pdv-classic.tsx:2187–2243: finalização real; FAILED retorna; PENDING registra
+  identidade e retorna antes dos efeitos definitivos.
+- pdv-classic.tsx:2286–2290: único sale_finalized da finalização está no
+  caminho direto CONFIRMED. Não há observador de confirmação que o emita
+  após retry. O componente já recebe sales na linha 276.
+- operations-store.tsx:1507–1533,1653–1688: retry busca a venda pendente
+  pela mesma clientSaleId/id e chama persistPendingSale; confirmação atualiza
+  sales e emite notificação UI uma vez, sem voltar ao handler Classic.
+- audit-log.ts:66–83: appendAuditLog adiciona log local e envia pelo audit-sync
+  à API. audit-sync.ts:3–21 é best-effort, não autoridade transacional.
+- operations-store.tsx:1357–1387 e automation-engine.ts:190–207 distinguem
+  notificação UI de automação definitiva. sale-automation-dispatch.ts:1–27
+  documenta create-vs-replay server-side; sem alteração desses caminhos.
+
+O retry observado antes do bloqueio preservou identidade em dois POSTs, uma
+venda confirmada e um evento UI; repetir Reenviar não acrescentou POST/evento.
+Auditoria esperada: sale_finalized=1; real: sale_finalized=0. PENDING: ambos
+zero. Confirmação direta: chamada de auditoria presente no código (Classic
+A/B/C passaram historicamente). Não há novo PASS declarado nesta sessão.
+TEST_ASSERTION_INCORRECT e FIXTURE_DEFECT não explicam a ausência: a fixture
+conserva os emissores reais e captura auditoria em canal próprio; o contrato
+F-08 exige esse canal. venda_finalizada não o substitui.
+
+Fronteira: somente Classic + teste comportamental específico, observando a
+identidade própria nas sales confirmadas e usando snapshot real. Nenhuma
+mudança compartilhada é necessária para o contrato local demonstrado.
+Exigência futura de garantia durável/cross-tab exige autorização específica
+para o contrato compartilhado; não está incluída nesta rev3.
+
+### Prisma e preservação das provas
+
+Schema linhas 1–4 já aponta ../generated/prisma; .gitignore:20–21 o exclui;
+lib/prisma.ts:1 importa esse destino. generated e generated/prisma ausentes
+na original; node_modules é junction para C:/Projetos/omni-gestao/node_modules.
+package.json tem postinstall=prisma generate. Reutilizar node_modules não
+gera o artefato ignorado por worktree. Geração futura restrita ao destino
+local verificado, sem .env produtivo, banco, migrations ou mudança de schema,
+package/scripts. Não foi tentada nesta sessão.
+
+Allowlist adicional rev3: components/dashboard/vendas/pdv-classic.tsx;
+lib/pdv/parity-classic-finalize-audit.component.test.ts; generated/prisma/**
+(artefato ignorado, sem commit). Os sete paths rev2 são preservados.
+Matriz permanece integralmente 3 TESTED / 16 PARTIAL / 1 BLOCKED, baseada
+somente nas execuções rev2 registradas. Cinco F-08 e vinte combinações
+continuam exigidos; R independente ainda pendente.
+N5_B1_CLOSEOUT=BLOCKED; PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED.
+Plano READY não resolve o gap técnico nem comprova tipos verdes.
+NEXT_STEP=HUMANO_MERGEAR_N5_C_REV3.
+
+Validação de governança REV3: registry PASS; verify --all PASS (11 trilhas);
+git diff --check PASS. Typecheck/build não aplicáveis à entrega somente
+documental; E2E e geração Prisma reservados à retomada. Nenhuma promoção
+de cobertura. CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT sem alteração, pois
+não há nova entrega funcional. WIP e matriz preservados.
