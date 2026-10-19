@@ -1,0 +1,342 @@
+{
+  "goal": "OPS-V4-ORCAMENTO-RESERVA-P1-004",
+  "before": {
+    "report": "pg-before-ready",
+    "total": 10,
+    "passed": 9,
+    "failed": 1,
+    "pending": 0,
+    "success": false,
+    "cases": [
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell preparações e confirmações manuais simultâneas serializam sem duplicar prova/timeline",
+        "status": "passed",
+        "durationMs": 424.9746000000014
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell duas chamadas API concorrentes reservam uma vez e liberam a trava antes do transporte",
+        "status": "passed",
+        "durationMs": 144.64020000000164
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell falha do histórico após aceite preserva commit e replay não repete o transporte",
+        "status": "passed",
+        "durationMs": 79.89899999999761
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell rollback real da confirmação mantém reserva e recupera recibo oficial sem reenviar",
+        "status": "passed",
+        "durationMs": 83.89949999999953
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell resultado incerto mantém reserva durável e impede tentativa nova ou retry automático",
+        "status": "passed",
+        "durationMs": 27.543499999999767
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch genérico nulo não pode apagar a reserva de um transporte com resultado incerto",
+        "status": "failed",
+        "durationMs": 96.11380000000281,
+        "failures": [
+          "AssertionError: OBSERVADO_PG={\"bloqueado\":false,\"reserva\":null,\"transportes\":2}: expected { bloqueado: false, …(2) } to deeply equal { bloqueado: true, …(2) }\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts:189:68\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+        ]
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell edição real durante o POST preserva proposta atual e guarda aceite da versão anterior",
+        "status": "passed",
+        "durationMs": 42.29439999999886
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell falha de cache e reenvio explícito preservam validade e primeiro envio",
+        "status": "passed",
+        "durationMs": 35.050999999999476
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell OS e recibos de outra loja não são lidos nem confirmados",
+        "status": "passed",
+        "durationMs": 12.29569999999876
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell aprovação e conversão posteriores preservam identidade e prova de envio",
+        "status": "passed",
+        "durationMs": 54.41639999999825
+      }
+    ],
+    "rawSha256": "2b0e3cef805044ad7e991ac8eee91c80efeb8d6b8074bc4d23ae8bfeeff790a8",
+    "run": {
+      "label": "pg-before-ready",
+      "kind": "vitest",
+      "args": [
+        "run",
+        "--config",
+        "test/ops-v4-rafacell-prepublish-003/vitest.config.ts"
+      ],
+      "startedAt": "2026-10-19T00:37:25.933Z",
+      "endedAt": "2026-10-19T00:37:48.428Z",
+      "exit": 1
+    }
+  },
+  "after": {
+    "report": "pg-verified",
+    "total": 37,
+    "passed": 37,
+    "failed": 0,
+    "pending": 0,
+    "success": true,
+    "cases": [
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell preparações e confirmações manuais simultâneas serializam sem duplicar prova/timeline",
+        "status": "passed",
+        "durationMs": 150.68150000000014
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell duas chamadas API concorrentes reservam uma vez e liberam a trava antes do transporte",
+        "status": "passed",
+        "durationMs": 221.13480000000027
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell falha do histórico após aceite preserva commit e replay não repete o transporte",
+        "status": "passed",
+        "durationMs": 86.95960000000014
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell rollback real da confirmação mantém reserva e recupera recibo oficial sem reenviar",
+        "status": "passed",
+        "durationMs": 77.13450000000012
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell resultado incerto mantém reserva durável e impede tentativa nova ou retry automático",
+        "status": "passed",
+        "durationMs": 38.3741
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch genérico nulo não pode apagar a reserva de um transporte com resultado incerto",
+        "status": "passed",
+        "durationMs": 49.558100000000195
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita null sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 50.86250000000018
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita false sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 43.029399999999896
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita número sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 45.515699999999924
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita string sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 41.852200000000266
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita array vazio sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 43.89690000000019
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita array de propostas sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 53.935399999999845
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita objeto vazio sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 39.69459999999981
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita substituição parcial sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 32.13409999999976
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita metadados removidos sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 50.946300000000065
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita metadados esvaziados sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 31.009599999999864
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita reserva liberada sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 30.016799999999876
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita confirmação manual fabricada sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 20.838700000000244
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita aceite API fabricado sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 21.296900000000278
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita identidade substituída sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 22.910499999999956
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell reserva incerta rejeita proposta truncada com metadados sem gravação parcial ou segundo transporte",
+        "status": "passed",
+        "durationMs": 25.248099999999795
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch antigo durante o transporte não rebaixa a reserva; edições de OS continuam permitidas",
+        "status": "passed",
+        "durationMs": 39.18419999999969
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell protege evidência manual e permite novo envio autorizado",
+        "status": "passed",
+        "durationMs": 32.713300000000345
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell protege evidência api e permite novo envio autorizado",
+        "status": "passed",
+        "durationMs": 77.6801000000005
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch raiz null falha explicitamente sem alterar a OS",
+        "status": "passed",
+        "durationMs": 7.337199999999939
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch raiz false falha explicitamente sem alterar a OS",
+        "status": "passed",
+        "durationMs": 7.035700000000361
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch raiz 42 falha explicitamente sem alterar a OS",
+        "status": "passed",
+        "durationMs": 7.023000000000138
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch raiz 'inválido' falha explicitamente sem alterar a OS",
+        "status": "passed",
+        "durationMs": 11.046200000000681
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch raiz [] falha explicitamente sem alterar a OS",
+        "status": "passed",
+        "durationMs": 13.552700000000186
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell preserva edição de orçamento sem reserva e de registro antigo sem evidência",
+        "status": "passed",
+        "durationMs": 36.30540000000019
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch com metadados intactos permite edição legítima e mantém a reserva incerta",
+        "status": "passed",
+        "durationMs": 30.411699999999655
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell sem permissão não altera reserva nem envia; outra loja não pode aplicar patch",
+        "status": "passed",
+        "durationMs": 10.928899999999885
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell patch sem reserva anterior rejeita evidência fabricada antes de qualquer gravação",
+        "status": "passed",
+        "durationMs": 6.949300000000221
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell edição real durante o POST preserva proposta atual e guarda aceite da versão anterior",
+        "status": "passed",
+        "durationMs": 34.917199999999866
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell falha de cache e reenvio explícito preservam validade e primeiro envio",
+        "status": "passed",
+        "durationMs": 25.796299999999974
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell OS e recibos de outra loja não são lidos nem confirmados",
+        "status": "passed",
+        "durationMs": 15.349299999999857
+      },
+      {
+        "name": "aceite real PostgreSQL — orçamento RafaCell aprovação e conversão posteriores preservam identidade e prova de envio",
+        "status": "passed",
+        "durationMs": 49.516599999999926
+      }
+    ],
+    "rawSha256": "ddac47e461def0bd402f512564effce06ab541ecdc8096f8f849f8c514eb6f8f",
+    "run": {
+      "label": "pg-verified",
+      "kind": "vitest",
+      "args": [
+        "run",
+        "--config",
+        "test/ops-v4-rafacell-prepublish-003/vitest.config.ts",
+        "--reporter=verbose"
+      ],
+      "startedAt": "2026-10-19T00:52:32.801Z",
+      "endedAt": "2026-10-19T00:52:38.432Z",
+      "exit": 0
+    }
+  },
+  "observedBefore": {
+    "bloqueado": false,
+    "reserva": null,
+    "transportes": 2
+  },
+  "observedAfter": {
+    "bloqueado": true,
+    "reserva": "api_em_andamento",
+    "transportes": 1
+  },
+  "original10": [
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell preparações e confirmações manuais simultâneas serializam sem duplicar prova/timeline",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell duas chamadas API concorrentes reservam uma vez e liberam a trava antes do transporte",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell falha do histórico após aceite preserva commit e replay não repete o transporte",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell rollback real da confirmação mantém reserva e recupera recibo oficial sem reenviar",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell resultado incerto mantém reserva durável e impede tentativa nova ou retry automático",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell patch genérico nulo não pode apagar a reserva de um transporte com resultado incerto",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell edição real durante o POST preserva proposta atual e guarda aceite da versão anterior",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell falha de cache e reenvio explícito preservam validade e primeiro envio",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell OS e recibos de outra loja não são lidos nem confirmados",
+      "status": "passed"
+    },
+    {
+      "name": "aceite real PostgreSQL — orçamento RafaCell aprovação e conversão posteriores preservam identidade e prova de envio",
+      "status": "passed"
+    }
+  ],
+  "externalTransport": "mock de sendTextMessage; nenhuma mensagem real",
+  "database": "PostgreSQL real, Prisma e transações reais; sessão/cache/credenciais/transporte são seams"
+}

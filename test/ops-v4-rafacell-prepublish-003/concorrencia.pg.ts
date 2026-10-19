@@ -7,9 +7,9 @@ import { lerComercialV4 } from "@/lib/operacoes-v4/orcamento-pre-os";
 import { diaNaLojaV3 } from "@/lib/operacoes-v3/datas-operacionais-model";
 
 // Banco e transações reais. Apenas identidade/cache/credenciais/transporte externo são seams.
-const transport = vi.hoisted(() => ({ send: vi.fn(), cacheFails: false }));
+const transport = vi.hoisted(() => ({ send: vi.fn(), cacheFails: false, permitido: true }));
 vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: "qa-prepub003", name: "Operador QA" } }) }));
-vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: async () => ({ ok: true }) }));
+vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: async () => transport.permitido ? { ok: true } : { ok: false, error: "Sem permissão QA" } }));
 vi.mock("next/cache", () => ({ revalidatePath: () => { if (transport.cacheFails) throw new Error("cache indisponível"); } }));
 vi.mock("@/lib/whatsapp/store-credentials", () => ({ resolveStoreWhatsAppCredentials: async () => ({ phoneNumberId: "qa-sem-numero-real", accessToken: "qa-sem-token-real" }) }));
 vi.mock("@/lib/whatsapp", () => ({
@@ -47,6 +47,7 @@ const ler = async () => {
 const preparar = () => prepararCompartilhamentoOrcamentoV3(sid, osId, "whatsapp");
 const confirmar = (id: string, modo: "manual" | "api" | "recuperar_api" = "manual") => enviarOrcamentoPorCanalV3(sid, osId, "whatsapp", { tentativaId: id, confirmado: true, modo });
 const eventos = (payload: OrdemServico) => payload.timeline?.filter(e => e.tipo === "orcamento_enviado") ?? [];
+const patchOrcamento = (orcamento: unknown) => ({ orcamento } as unknown as Parameters<typeof updateOSPayload>[2]);
 
 async function removerFalhas() {
   await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${triggerName} ON ordens_servico`);
@@ -74,6 +75,7 @@ beforeAll(async () => {
   await prisma.whatsAppConversation.create({ data: { storeId: sid, contactId: contact.id } });
 });
 beforeEach(async () => {
+  transport.permitido = true;
   transport.cacheFails = false;
   transport.send.mockReset().mockImplementation(async () => ({ messages: [{ id: `wamid.qa.${randomUUID()}` }] }));
   osId = randomUUID();
@@ -86,7 +88,7 @@ beforeEach(async () => {
   };
   await prisma.ordemServico.create({ data: { id: osId, storeId: sid, valorTotal: 300, payload: payload as unknown as Prisma.InputJsonValue } });
 });
-afterEach(async () => { transport.cacheFails = false; await removerFalhas(); });
+afterEach(async () => { transport.cacheFails = false; transport.permitido = true; await removerFalhas(); });
 afterAll(async () => {
   await removerFalhas();
   await prisma.ordemServico.deleteMany({ where: { storeId: { in: [sid, outraLoja] } } });
@@ -151,6 +153,8 @@ describe("aceite real PostgreSQL — orçamento RafaCell", () => {
     expect(atual.orc.status).toBe("rascunho");
     expect(eventos(atual.payload)).toHaveLength(0);
     expect(atual.orc.compartilhamentosV3?.[0].estado).toBe("api_em_andamento");
+    await expect(updateOSPayload(sid, osId, patchOrcamento(null))).rejects.toThrow(/reserva ou evidência de envio protegida/);
+    expect((await ler()).row).toEqual(atual.row);
     await removerFalhas();
     expect((await confirmar(p.tentativaId, "recuperar_api")).ok).toBe(true);
     atual = await ler();
@@ -180,13 +184,143 @@ describe("aceite real PostgreSQL — orçamento RafaCell", () => {
     let bloqueado = false;
     try { await updateOSPayload(sid, osId, patch); } catch { bloqueado = true; }
     const reserva = (await ler()).orc?.compartilhamentosV3?.[0]?.estado ?? null;
-    if (!bloqueado) {
+    if (bloqueado) {
+      const antes = await ler();
+      await expect(updateOSPayload(sid, osId, patchOrcamento({}))).rejects.toThrow(/reserva ou evidência de envio protegida/);
+      expect((await ler()).row).toEqual(antes.row);
+      expect((await confirmar(p.tentativaId, "api")).pendente).toBe(true);
+      await expect(preparar()).rejects.toThrow(/sem resultado confirmado/);
+    } else {
       // Reposição por caller legado de uma proposta válida após a limpeza indevida.
       await updateOSPayload(sid, osId, { orcamento: original } as unknown as Parameters<typeof updateOSPayload>[2]);
       await confirmar((await preparar()).tentativaId, "api");
     }
     const observado = { bloqueado, reserva, transportes: transport.send.mock.calls.length };
+    console.info(`OBSERVADO_PG=${JSON.stringify(observado)}`);
     expect(observado, `OBSERVADO_PG=${JSON.stringify(observado)}`).toEqual({ bloqueado: true, reserva: "api_em_andamento", transportes: 1 });
+  });
+
+  const substituicoes: Array<[string, (orc: OrcamentoV3) => unknown]> = [
+    ["null", () => null], ["false", () => false], ["número", () => 0], ["string", () => "inválido"],
+    ["array vazio", () => []], ["array de propostas", orc => [orc]], ["objeto vazio", () => ({})],
+    ["substituição parcial", () => ({ total: 999 })],
+    ["metadados removidos", orc => { const { compartilhamentosV3: removido, ...resto } = orc; void removido; return resto; }],
+    ["metadados esvaziados", orc => ({ ...orc, compartilhamentosV3: [] })],
+    ["reserva liberada", orc => ({ ...orc, compartilhamentosV3: orc.compartilhamentosV3?.map(e => ({ ...e, estado: "preparado" })) })],
+    ["confirmação manual fabricada", orc => ({ ...orc, compartilhamentosV3: orc.compartilhamentosV3?.map(e => ({ ...e, estado: "informado_operador", natureza: "declaracao_manual", confirmadoPor: { id: "forjado" }, confirmadoEm: new Date().toISOString() })) })],
+    ["aceite API fabricado", orc => ({ ...orc, compartilhamentosV3: orc.compartilhamentosV3?.map(e => ({ ...e, estado: "aceito_api", natureza: "aceite_api_oficial", api: { wamid: "forjado" } })) })],
+    ["identidade substituída", orc => ({ ...orc, id: randomUUID() })],
+    ["proposta truncada com metadados", orc => ({ id: orc.id, compartilhamentosV3: orc.compartilhamentosV3 })],
+  ];
+  it.each(substituicoes)("reserva incerta rejeita %s sem gravação parcial ou segundo transporte", async (_nome, substituir) => {
+    const p = await preparar();
+    transport.send.mockRejectedValueOnce(new Error("resultado de rede incerto"));
+    expect((await confirmar(p.tentativaId, "api")).pendente).toBe(true);
+    const antes = await ler();
+    expect(antes.orc.compartilhamentosV3?.[0].estado).toBe("api_em_andamento");
+    const patch = { ...patchOrcamento(substituir(structuredClone(antes.orc))), tags: ["não deve gravar"] };
+    await expect(updateOSPayload(sid, osId, patch)).rejects.toThrow(/reserva ou evidência de envio protegida/);
+    expect((await ler()).row).toEqual(antes.row);
+    await expect(preparar()).rejects.toThrow(/sem resultado confirmado/);
+    expect((await confirmar(p.tentativaId, "api")).pendente).toBe(true);
+    expect((await confirmar(p.tentativaId, "recuperar_api")).pendente).toBe(true);
+    expect(transport.send).toHaveBeenCalledTimes(1);
+    expect(eventos((await ler()).payload)).toHaveLength(0);
+  });
+
+  it("patch antigo durante o transporte não rebaixa a reserva; edições de OS continuam permitidas", async () => {
+    const p = await preparar();
+    const antigo = (await ler()).orc;
+    const gate = barreiraTransporte();
+    const primeiro = confirmar(p.tentativaId, "api");
+    await gate.entrada;
+    try {
+      const antes = await ler();
+      await expect(updateOSPayload(sid, osId, patchOrcamento(antigo))).rejects.toThrow(/protegida/);
+      expect((await ler()).row).toEqual(antes.row);
+      await updateOSPayload(sid, osId, { tags: ["Edição legítima durante transporte"] });
+      expect((await ler()).orc).toEqual(antes.orc);
+      await expect(preparar()).rejects.toThrow(/sem resultado confirmado/);
+    } finally { gate.liberar(); }
+    expect((await primeiro).aceitoApi).toBe(true);
+    expect(transport.send).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["manual", "api"] as const)("protege evidência %s e permite novo envio autorizado", async (modo) => {
+    const p = await preparar();
+    expect((await confirmar(p.tentativaId, modo)).ok).toBe(true);
+    const antes = await ler();
+    await expect(updateOSPayload(sid, osId, patchOrcamento(null))).rejects.toThrow(/protegida/);
+    const adulterado = structuredClone(antes.orc);
+    delete adulterado.enviadoEm;
+    await expect(updateOSPayload(sid, osId, patchOrcamento(adulterado))).rejects.toThrow(/protegida/);
+    expect((await ler()).row).toEqual(antes.row);
+    await confirmar(p.tentativaId, modo);
+    expect(eventos((await ler()).payload)).toHaveLength(1);
+    const novo = await preparar();
+    expect(novo.tentativaId).not.toBe(p.tentativaId);
+    expect((await confirmar(novo.tentativaId, modo)).reenvio).toBe(true);
+    const depois = await ler();
+    expect(depois.orc.compartilhamentosV3).toHaveLength(2);
+    expect(depois.orc.compartilhamentosV3?.[0]).toEqual(antes.orc.compartilhamentosV3?.[0]);
+    expect(depois.orc.enviadoEm).toBe(antes.orc.enviadoEm);
+    expect(depois.orc.validoAte).toBe(antes.orc.validoAte);
+    expect(transport.send).toHaveBeenCalledTimes(modo === "api" ? 2 : 0);
+  });
+
+  it.each([null, false, 42, "inválido", []].map(patch => ({ patch })))("patch raiz $patch falha explicitamente sem alterar a OS", async ({ patch }) => {
+    await preparar();
+    const antes = await ler();
+    await expect(updateOSPayload(sid, osId, patch as unknown as Parameters<typeof updateOSPayload>[2])).rejects.toThrow(/Patch da OS deve ser um objeto/);
+    expect((await ler()).row).toEqual(antes.row);
+  });
+
+  it("preserva edição de orçamento sem reserva e de registro antigo sem evidência", async () => {
+    const antes = await ler();
+    await updateOSPayload(sid, osId, { orcamento: { ...antes.orc, total: 320 }, tags: ["Edição permitida"] });
+    expect((await ler()).orc.total).toBe(320);
+    // Fixture legada, sem reserva/recibo: o boundary não cria evidência retroativa.
+    const legado = { ...(await ler()).payload, orcamento: { ...(await ler()).orc, status: "enviado" } };
+    await prisma.ordemServico.update({ where: { id: osId, storeId: sid }, data: { payload: legado as unknown as Prisma.InputJsonValue } });
+    await updateOSPayload(sid, osId, patchOrcamento({ ...legado.orcamento, total: 330 }));
+    expect((await ler()).orc.total).toBe(330);
+    expect((await ler()).orc.compartilhamentosV3).toBeUndefined();
+    await updateOSPayload(sid, osId, patchOrcamento(null));
+    expect((await ler()).orc).toBeNull();
+    expect(transport.send).not.toHaveBeenCalled();
+  });
+
+  it("patch com metadados intactos permite edição legítima e mantém a reserva incerta", async () => {
+    const p = await preparar();
+    transport.send.mockRejectedValueOnce(new Error("resultado incerto"));
+    await confirmar(p.tentativaId, "api");
+    const antes = await ler();
+    await updateOSPayload(sid, osId, patchOrcamento({ ...antes.orc, total: 350 }));
+    const depois = await ler();
+    expect(depois.orc.total).toBe(350);
+    expect(depois.orc.compartilhamentosV3).toEqual(antes.orc.compartilhamentosV3);
+    await expect(preparar()).rejects.toThrow(/sem resultado confirmado/);
+    expect((await confirmar(p.tentativaId, "api")).pendente).toBe(true);
+    expect(transport.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("sem permissão não altera reserva nem envia; outra loja não pode aplicar patch", async () => {
+    const p = await preparar();
+    const antes = await ler();
+    await expect(updateOSPayload(outraLoja, osId, patchOrcamento(null))).rejects.toThrow(/OS não encontrada/);
+    transport.permitido = false;
+    await expect(updateOSPayload(sid, osId, patchOrcamento(null))).rejects.toThrow(/permissão/);
+    await expect(confirmar(p.tentativaId, "api")).rejects.toThrow(/permissão/);
+    expect((await ler()).row).toEqual(antes.row);
+    expect(transport.send).not.toHaveBeenCalled();
+  });
+
+  it("patch sem reserva anterior rejeita evidência fabricada antes de qualquer gravação", async () => {
+    const antes = await ler();
+    const falso = { ...antes.orc, compartilhamentosV3: [{ id: "forjado", estado: "aceito_api", api: { wamid: "forjado" } }] };
+    await expect(updateOSPayload(sid, osId, { ...patchOrcamento(falso), tags: ["não gravar"] })).rejects.toThrow(/ações auditadas/);
+    expect((await ler()).row).toEqual(antes.row);
+    expect(transport.send).not.toHaveBeenCalled();
   });
 
   it("edição real durante o POST preserva proposta atual e guarda aceite da versão anterior", async () => {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-18
+
+### Operações — Proteção da reserva de envio do orçamento (P1-004)
+
+- Patches genéricos passam a rejeitar remoção, substituição inválida ou falsificação de reservas e evidências de envio, conferindo o orçamento persistido sob a trava da OS.
+- Edições legítimas, confirmação auditada, recuperação por recibo e reenvio autorizado continuam disponíveis. Aceite local em PostgreSQL descartável; publicação pendente de aprovação humana.
+
 ## 2026-09-19
 
 ### PDV — Ciclo de vida da tentativa após confirmação
