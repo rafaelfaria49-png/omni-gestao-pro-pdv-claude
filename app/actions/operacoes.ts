@@ -480,7 +480,7 @@ async function aplicarPatchOSPayloadSobTrava(
 
       const next = mergePayload<OperacoesOSPayload>({
         current: current as unknown as OperacoesOSPayload,
-        patch: mesclarTimelineDoPatch(current, semCamposFinanceirosDoServidorV3(patch)),
+        patch: mesclarTimelineDoPatch(current, semCamposFinanceirosDoServidorV3(patch, current)),
         storeId,
         osId,
         effectiveOperacao,

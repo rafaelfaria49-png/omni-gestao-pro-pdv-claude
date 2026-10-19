@@ -37,7 +37,6 @@ import {
   lerDataOperacionalV3,
   lerDatasOSV3,
   previsaoVencidaV3,
-  rotuloEntradaV3,
   type CampoDataOperacionalV3,
 } from "@/lib/operacoes-v3/datas-operacionais-model";
 import { DataOperacionalCampoV3 } from "@/components/operacoes-v3/components/DataOperacionalCampoV3";
@@ -137,6 +136,57 @@ export function EntradaSections(props: Props) {
   }
 }
 
+/** Datas persistidas, visíveis em toda a Entrada; nunca derivadas do rascunho. */
+export function DatasAtendimentoSection({ v, rascunhoSujo, busy }: { v: V4Vals; rascunhoSujo: boolean; busy: boolean }) {
+  const pronta = v.cargaEntradaEstabelecida && !v.detailLoading && !v.detailError && !!v.realOS && v.realOS.id === v.selectedOsId;
+  const datas = pronta ? lerDatasOSV3(v.realOS) : null;
+  const bloqueio = !pronta
+    ? "Aguarde o carregamento completo da OS para consultar e corrigir as datas."
+    : busy
+      ? "Aguarde o salvamento da Entrada antes de corrigir datas."
+      : rascunhoSujo
+        ? "Salve ou descarte as alterações da Entrada antes de corrigir datas. Seu rascunho está preservado."
+        : "";
+  const linhas = datas ? [
+    { rotulo: "Entrada real do aparelho", data: datas.entrada, ausente: "Não registrada" },
+    { rotulo: "Previsão de entrega", data: datas.previsao, ausente: "Não informada" },
+    { rotulo: "Entrega efetiva", data: datas.entrega, ausente: "Não registrada" },
+    { rotulo: "Cadastro da OS no sistema", data: lerDataOperacionalV3(datas.cadastroEm), ausente: "Não registrado" },
+  ] : [];
+
+  return (
+    <section className={cn(styles.group, styles.datesGroup)} aria-labelledby="entrada-datas-titulo">
+      <h3 className={styles.groupTitle} id="entrada-datas-titulo">Datas do atendimento</h3>
+      <button
+        type="button"
+        className={cn(styles.button, styles.datesButton)}
+        onClick={v.openCorrigirDatas}
+        disabled={!!bloqueio}
+        aria-haspopup="dialog"
+        aria-describedby={bloqueio ? "entrada-datas-aviso entrada-datas-bloqueio" : "entrada-datas-aviso"}
+      >
+        Corrigir datas
+      </button>
+      <p className={styles.groupHint}>Entrada física e cadastro são registros diferentes. {FUSO_LOJA_LABEL_V4}.</p>
+      {datas ? (
+        <dl className={styles.datesGrid}>
+          {linhas.map(({ rotulo, data, ausente }) => (
+            <div key={rotulo} className={styles.snapshotRow}>
+              <dt>{rotulo}</dt>
+              <dd>{data ? <time dateTime={data.precisao === "dia" ? data.dia : data.iso}>{formatarDataOperacionalV3(data)}</time> : ausente}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {datas && !datas.entrega ? (
+        <p className={styles.groupHint}>Entrega ainda não registrada. Corrija a entrada real, se necessário, e informe a data efetiva na etapa Entrega.</p>
+      ) : null}
+      <p id="entrada-datas-aviso" className={styles.datesNotice}>A correção de datas operacionais não altera automaticamente pagamento, Caixa ou fechamento financeiro.</p>
+      {bloqueio ? <p id="entrada-datas-bloqueio" className={styles.groupHint} role="status">{bloqueio}</p> : null}
+    </section>
+  );
+}
+
 function ConferenciaSnapshot({ v }: { v: V4Vals }) {
   const identidade = resolverIdentidadeAparelhoV4(v.realOS);
   const abertura = lerAberturaRecepcionV4(v.realOS);
@@ -162,9 +212,6 @@ function ConferenciaSnapshot({ v }: { v: V4Vals }) {
     ["Recebido por", abertura.recebidoPor],
     ["Prioridade", basicos.prioridade],
     ["Localização", basicos.localFisico],
-    [rotuloEntradaV3(datas.entradaOuCadastro), datas.semEntradaFisica ? "Aparelho não está na loja" : formatarDataOperacionalV3(datas.entradaOuCadastro)],
-    // T09: datas no fuso da loja — mesmo dia/horário em qualquer navegador.
-    ["Previsão de entrega", formatarDataOperacionalV3(datas.previsao)],
     ["Prazo interno", prazoInterno],
   ].filter(([, value]) => value && value !== NI);
 

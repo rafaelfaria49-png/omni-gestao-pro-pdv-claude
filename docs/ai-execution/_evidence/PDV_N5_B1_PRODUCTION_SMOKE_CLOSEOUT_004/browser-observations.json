@@ -1,0 +1,48 @@
+{
+  "observedAtUtc": "2026-10-13T20:16:04.541Z",
+  "pro": {
+    "url": "https://omni-gestao-pro.vercel.app/dashboard/vendas",
+    "mode": "PASSIVE_OBSERVATION_ONLY",
+    "authenticatedContext": "EXISTING_CONTEXT_OBSERVED_NOT_REVALIDATED",
+    "activeStore": "MATRIZ_UI_ONLY",
+    "terminal": "OPEN_REGISTER_DISPLAYED_AVAILABILITY_NOT_VALIDATED",
+    "cart": "EMPTY_UI",
+    "clientVersion": "UNKNOWN_UPDATE_BANNER_PRESENT",
+    "paymentControls": "Dinheiro/PIX/Debito/Credito/A_prazo/Multiplo_DISABLED_EMPTY_CART",
+    "errors": []
+  },
+  "legacy": {
+    "url": "https://omni-gestao-pi.vercel.app/dashboard",
+    "authenticatedSession": "NOT_VALIDATED_AUTH_CONFIGURATION_ERRORS",
+    "activeStore": "NOT_VALIDATED_ONBOARDING_VISIBLE",
+    "terminal": "NOT_OBSERVED",
+    "errors": [
+      {
+        "level": "error",
+        "timestamp": "2026-10-13T20:08:29.886Z",
+        "url": "https://omni-gestao-pi.vercel.app/_next/static/chunks/54921-98226747472ee819.js",
+        "message": "X: There was a problem with the server configuration. Check the server logs for more information.. Read more at https://errors.authjs.dev#autherror\n    at V (https://omni-gestao-pi.vercel.app/_next/static/chunks/54921-98226747472ee819.js:1:2542)\n    at async Y (https://omni-gestao-pi.vercel.app/_next/static/chunks/54921-98226747472ee819.js:1:4028)\n    at async B._getSession (https://omni-gestao-pi.vercel.app/_next/static/chunks/54921-98226747472ee819.js:1:5174)"
+      },
+      {
+        "level": "error",
+        "timestamp": "2026-10-13T20:08:30.112Z",
+        "url": "https://omni-gestao-pi.vercel.app/_next/static/chunks/54921-98226747472ee819.js",
+        "message": "X: There was a problem with the server configuration. Check the server logs for more information.. Read more at https://errors.authjs.dev#autherror\n    at V (https://omni-gestao-pi.vercel.app/_next/static/chunks/54921-98226747472ee819.js:1:2542)\n    at async Y (https://omni-gestao-pi.vercel.app/_next/static/chunks/54921-98226747472ee819.js:1:4028)\n    at async B._getSession (https://omni-gestao-pi.vercel.app/_next/static/chunks/54921-98226747472ee819.js:1:5174)"
+      }
+    ]
+  },
+  "sessionEndpointAttempt": {
+    "url": "https://omni-gestao-pi.vercel.app/api/auth/session",
+    "result": "BROWSER_NAVIGATION_ERR_BLOCKED_BY_CLIENT_NOT_APPLICATION_VERDICT"
+  },
+  "safety": {
+    "businessControlsClicked": 0,
+    "credentialsRequested": 0,
+    "authModified": false,
+    "storeSettingsModified": false,
+    "terminalTakenOver": false,
+    "pendingProductionEndToEnd": "NOT_EXECUTED_BY_DESIGN"
+  },
+  "captureMethod": "Actual screenshot bytes; pro cropped during capture to omit identity/operator; legacy has empty onboarding fields; no generated/modified pixels",
+  "screenshotLimit": "Separate update-banner crop timed out; banner observed by AX and full screenshot only, no persisted image claim"
+}

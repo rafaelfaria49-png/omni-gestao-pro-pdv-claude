@@ -382,8 +382,11 @@ describe("OPS-V4-FLUXO-CURTO-007 — PostgreSQL real", () => {
     const original = await novaOS(loja);
     let liberar!: () => void;
     const liberado = new Promise<void>((r) => { liberar = r; });
+    let avisarTrava!: () => void;
+    const travada = new Promise<void>((r) => { avisarTrava = r; });
     const externo = outroProcesso.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "ordens_servico" WHERE "id" = ${original} FOR UPDATE`;
+      avisarTrava();
       await liberado;
       const atual = (await tx.ordemServico.findUniqueOrThrow({ where: { id: original } })).payload as Payload;
       const expira = new Date(Date.now() + 10 * 60_000).toISOString();
@@ -392,7 +395,7 @@ describe("OPS-V4-FLUXO-CURTO-007 — PostgreSQL real", () => {
         data: { payload: { ...atual, retornosV3: [{ id: "ret-externo", osOriginalId: original, motivo: "Do outro processo", criadoEm: new Date().toISOString(), status: "aberto", operacaoId: "op-externo-0001", reserva: { token: "tk-ext", expiraEm: expira } }] } },
       });
     }, { timeout: 20_000 });
-    await new Promise((r) => setTimeout(r, 0));
+    await travada; // barreira real: o outro processo já adquiriu FOR UPDATE
     const nossa = abrirRetornoV3(loja, original, { motivo: "Nosso", operacaoId: `op-t56c-${SUFIXO}` });
     await esperarBloqueioNoBanco();
     liberar();

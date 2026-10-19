@@ -49,6 +49,16 @@ import {
 } from "./payment-model";
 import { travarLinhaOSV3 } from "./os-payload-lock";
 import {
+  avaliarElegibilidadeComercialV3,
+  type CodigoInelegibilidadeComercialV3,
+  type DestinoInelegibilidadeComercialV3,
+} from "./elegibilidade-comercial";
+import {
+  CAMPO_CONFIRMACAO_PENDENTE_V3,
+  MENSAGEM_CONFIRMACAO_PENDENTE_V3,
+  lerPendenciaConfirmacaoV3,
+  conteudoConfirmacaoImediataV3,
+  type PendenciaConfirmacaoFinanceiraV3,
   assinaturaRecebimentoMistoLegadaV1,
   assinaturaRecebimentoMistoV3,
   conteudoRecebimentoCanonicoLegadoV1,
@@ -89,16 +99,25 @@ export interface ResultadoRecebimentoMistoV3 {
 }
 
 /** Recusa da confirmação. LANÇADA para abortar a transação inteira. */
+/** Motivo comercial estruturado da regra única (GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002). */
+export interface RecusaComercialMistaV3 {
+  codigo: CodigoInelegibilidadeComercialV3;
+  destino: DestinoInelegibilidadeComercialV3;
+}
+
 export class RecebimentoMistoErroV3 extends Error {
   readonly code: RecebimentoMistoErroCodigoV3;
   /** Saldo real do ledger, quando a recusa depende dele (conflito recuperável). */
   readonly saldoAtual?: number;
+  /** `comercial_nao_elegivel`: código e destino da regra única (onde o operador resolve). */
+  readonly comercial?: RecusaComercialMistaV3;
 
-  constructor(code: RecebimentoMistoErroCodigoV3, message: string, saldoAtual?: number) {
+  constructor(code: RecebimentoMistoErroCodigoV3, message: string, saldoAtual?: number, comercial?: RecusaComercialMistaV3) {
     super(message);
     this.name = "RecebimentoMistoErroV3";
     this.code = code;
     this.saldoAtual = saldoAtual;
+    this.comercial = comercial;
   }
 }
 
@@ -322,6 +341,7 @@ export interface RecusaMistaV3 {
   code: RecebimentoMistoErroCodigoV3;
   mensagem: string;
   saldoAtual?: number;
+  comercial?: RecusaComercialMistaV3;
 }
 
 export type DecisaoRecebimentoMistoV3 =
@@ -346,7 +366,9 @@ function recusasGravadas(payload: unknown): RecusaTerminalGravadaV3[] {
 }
 
 function recusaDe(r: RecusaMistaV3): RecusaMistaV3 {
-  return r.saldoAtual === undefined ? { code: r.code, mensagem: r.mensagem } : { code: r.code, mensagem: r.mensagem, saldoAtual: r.saldoAtual };
+  const base: RecusaMistaV3 = r.saldoAtual === undefined ? { code: r.code, mensagem: r.mensagem } : { code: r.code, mensagem: r.mensagem, saldoAtual: r.saldoAtual };
+  const c = r.comercial;
+  return c && typeof c.codigo === "string" && typeof c.destino === "string" ? { ...base, comercial: { codigo: c.codigo, destino: c.destino } } : base;
 }
 
 /** Grava a recusa como o resultado TERMINAL da chave, no payload da OS travada. */
@@ -387,7 +409,6 @@ export async function decidirRecebimentoMistoOSV3(
   await travarParaDecidir(tx, ctx, n);
   const replay = await replayDaOperacao(tx, ctx, n);
   if (replay) return { tipo: "gravada", resultado: replay };
-
   const requestFingerprint = fingerprintRecebimentoMistoV3({ storeId, osId }, n);
   const os = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
   const anterior = recusasGravadas(os?.payload).find((r) => r.operacaoId === n.operacaoId);
@@ -400,6 +421,7 @@ export async function decidirRecebimentoMistoOSV3(
     }
     return { tipo: "recusada", recusa: recusaDe(anterior) };
   }
+  await conferirPendenciaFinanceiraV3(tx, storeId, osId, n.operacaoId, "misto");
   if (recusaPrevia) return { tipo: "recusada", recusa: await gravarRecusaTerminal(tx, ctx, n, requestFingerprint, recusaPrevia) };
 
   await tx.$executeRaw`SAVEPOINT ops_v3_misto_execucao`;
@@ -409,9 +431,38 @@ export async function decidirRecebimentoMistoOSV3(
     // Erro inesperado: aborta a transação inteira (resultado incerto para a tela).
     if (!isRecebimentoMistoErroV3(e)) throw e;
     await tx.$executeRaw`ROLLBACK TO SAVEPOINT ops_v3_misto_execucao`;
-    const recusa: RecusaMistaV3 = { code: e.code, mensagem: e.message, saldoAtual: e.saldoAtual };
+    const recusa: RecusaMistaV3 = { code: e.code, mensagem: e.message, saldoAtual: e.saldoAtual, comercial: e.comercial };
     return { tipo: "recusada", recusa: await gravarRecusaTerminal(tx, ctx, n, requestFingerprint, recusa) };
   }
+}
+
+
+/** A recusa desta tentativa NÃO resolve a confirmação original de outra identidade. */
+export class ConfirmacaoFinanceiraPendenteErroV3 extends Error {
+  constructor(readonly pendencia: PendenciaConfirmacaoFinanceiraV3) {
+    super(MENSAGEM_CONFIRMACAO_PENDENTE_V3); this.name = "ConfirmacaoFinanceiraPendenteErroV3";
+  }
+}
+export function fingerprintConfirmacaoImediataV3(storeId: string, osId: string, input: import("./pdv-servico-actions").ReceberOSInputV3): string {
+  return createHash("sha256").update(JSON.stringify([storeId, osId, conteudoConfirmacaoImediataV3(input)])).digest("hex");
+}
+/** Chamado sob a consultiva por OS antes de qualquer operação financeira nova. */
+export async function conferirPendenciaFinanceiraV3(tx: RecebimentoMistoTxV3, storeId: string, osId: string, operacaoId: string, tipo: "imediato" | "misto" | "outro"): Promise<void> {
+  const row = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const payload = isRecord(row?.payload) ? row.payload : {};
+  const camposRecusa = tipo === "imediato" ? ["recebimentoMistoRecusasV3"] : tipo === "misto" ? ["recebimentoImediatoRecusasV3"] : ["recebimentoMistoRecusasV3", "recebimentoImediatoRecusasV3"];
+  if (operacaoId && camposRecusa.some((campo) => Array.isArray(payload[campo]) && (payload[campo] as unknown[]).some((r) => isRecord(r) && r.operacaoId === operacaoId))) throw new Error("Esta confirmação já foi usada com outro conteúdo.");
+  const raw = payload[CAMPO_CONFIRMACAO_PENDENTE_V3];
+  const p = lerPendenciaConfirmacaoV3(raw, storeId, osId);
+  if (raw != null && !p) throw new Error(MENSAGEM_CONFIRMACAO_PENDENTE_V3);
+  if (p && (p.operacaoId !== operacaoId || p.tipo !== tipo)) throw new ConfirmacaoFinanceiraPendenteErroV3(p);
+}
+/** Mesmo commit da baixa: sem resposta/refresh/outro operador continua havendo uma pendência autoritativa. */
+export async function gravarPendenciaFinanceiraV3(tx: RecebimentoMistoTxV3, p: PendenciaConfirmacaoFinanceiraV3, requestFingerprint: string): Promise<void> {
+  const row = await tx.ordemServico.findFirst({ where: { id: p.osId, storeId: p.storeId }, select: { id: true, payload: true } });
+  if (!row || !isRecord(row.payload)) throw new Error("Não foi possível preservar a confirmação financeira.");
+  const payload = { ...row.payload, [CAMPO_CONFIRMACAO_PENDENTE_V3]: { ...p, requestFingerprint } };
+  await tx.ordemServico.update({ where: { id: row.id }, data: { payload: payload as unknown as Prisma.InputJsonValue } });
 }
 
 // ─── execução ─────────────────────────────────────────────────────────────────
@@ -429,6 +480,7 @@ export async function executarRecebimentoMistoOSV3(
   // da sessão: repetir uma confirmação já gravada continua válido com o caixa fechado.
   const replay = await replayDaOperacao(tx, ctx, n);
   if (replay) return replay;
+  await conferirPendenciaFinanceiraV3(tx, ctx.storeId, ctx.osId, n.operacaoId, "misto");
   return executarSobATrava(tx, ctx, n, fingerprintRecebimentoMistoV3({ storeId: ctx.storeId, osId: ctx.osId }, n));
 }
 
@@ -464,6 +516,22 @@ async function executarSobATrava(
   const payload = osRow.payload as unknown as OSPayloadFull;
   if (statusV3FromOS(payload) === "cancelada") {
     throw new RecebimentoMistoErroV3("os_cancelada", "OS cancelada não recebe pagamento nem formalização a prazo.");
+  }
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item A): pagamento imediato e saldo a prazo
+  // presumem preço comercialmente elegível — mesma reconciliação da entrega. Depois do replay e
+  // antes de qualquer escrita; a recusa é terminal para esta chave, como as demais.
+  const elegibilidade = avaliarElegibilidadeComercialV3({
+    storeId,
+    osId,
+    payload,
+    prismaValorTotal: Number(osRow.valorTotal ?? 0),
+    agora: Date.parse(ctx.agora),
+  });
+  if (!elegibilidade.elegivel) {
+    throw new RecebimentoMistoErroV3("comercial_nao_elegivel", elegibilidade.mensagem, undefined, {
+      codigo: elegibilidade.codigo,
+      destino: elegibilidade.destino,
+    });
   }
   const totalCobravel = totalCobravelV3({
     ...payload,

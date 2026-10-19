@@ -13,10 +13,10 @@ import { RoadmapPreviewDialog } from "@/components/ui/roadmap-preview-dialog";
 import { ProductAIModal, QualityScore, InteligenciaCadastros } from "./produto-ia";
 import { MovimentacaoEstoqueModal, HistoricoEstoqueGeralModal } from "./MovimentacaoEstoqueModal";
 import { getEstoqueResumo, type EstoqueResumo } from "@/app/actions/estoque";
+import { ClienteEditorDialog } from "./ClienteEditor";
 import { ImportacaoHub } from "./ImportacaoHub";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import {
-  createCliente,
   getCadastrosDashboardStats,
   listCategorias,
   listEquipamentosModelos,
@@ -160,6 +160,7 @@ export function CadastrosHub() {
         )}
         {tab === "clientes" && (
           <ClientesPanel
+            key={storeId}
             storeId={storeId}
             autoOpen={autoOpenNew === "clientes"}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
@@ -540,7 +541,7 @@ function Toolbar({
             if (!open) setActiveRoadmap(null);
           }}
           title="Exportação Multi-Formato"
-          description="Exporte relatórios de cadastros completos em formatos Excel (XLSX), CSV e JSON com controle de colunas e permissões de segurança."
+          description="Exportação geral ainda indisponível. Solicitações de dados pessoais dependem de autorização e revisão de finalidade."
           phase="desenvolvimento"
           icon={Download}
           features={[
@@ -553,26 +554,6 @@ function Toolbar({
       )}
     </>
   );
-}
-
-/* ───── helpers de máscara de documento ───── */
-function maskCPF(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 11);
-  return d
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-}
-function maskCNPJ(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 14);
-  return d
-    .replace(/(\d{2})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1/$2")
-    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
-}
-function applyDocMask(v: string, tipo: "PF" | "PJ"): string {
-  return tipo === "PF" ? maskCPF(v) : maskCNPJ(v);
 }
 
 /* ───── CLIENTES ───── */
@@ -588,22 +569,10 @@ function ClientesPanel({
   const m = useToggle();
   const [editing, setEditing] = useState<ClienteDTO | null>(null);
   const [rows, setRows] = useState<ClienteDTO[]>([]);
+  const [, startSaving] = useTransition();
   const [filterQuery, setFilterQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [saving, startSaving] = useTransition();
-  const [tipoSelecionado, setTipoSelecionado] = useState<"PF" | "PJ">("PF");
-  const [docValue, setDocValue] = useState("");
-  const nomeRef = useRef<HTMLInputElement | null>(null);
-  const telRef = useRef<HTMLInputElement | null>(null);
-  const emailRef = useRef<HTMLInputElement | null>(null);
-  const enderecoRef = useRef<HTMLInputElement | null>(null);
-  const cidadeRef = useRef<HTMLInputElement | null>(null);
-  const ufRef = useRef<HTMLInputElement | null>(null);
-  const tagsRef = useRef<HTMLInputElement | null>(null);
-  const observacoesRef = useRef<HTMLTextAreaElement | null>(null);
-  const statusRef = useRef<HTMLSelectElement | null>(null);
-
   // Estados de filtros avançados
   const [showFilters, setShowFilters] = useState(false);
   const [tipoFilter, setTipoFilter] = useState("todos");
@@ -648,19 +617,6 @@ function ClientesPanel({
   useEffect(() => {
     void refresh();
   }, [refresh]);
-
-  // Sincroniza tipo e documento com o cliente editado ao abrir/fechar o modal
-  useEffect(() => {
-    if (m.open) {
-      const tipo = editing?.tipo ?? "PF";
-      setTipoSelecionado(tipo);
-      const rawDoc = editing?.documento === "—" ? "" : (editing?.documento ?? "");
-      setDocValue(applyDocMask(rawDoc, tipo));
-    } else {
-      setTipoSelecionado("PF");
-      setDocValue("");
-    }
-  }, [m.open, editing]);
 
   // Reseta seleção em lote ao mudar filtros ou busca
   useEffect(() => {
@@ -792,31 +748,7 @@ function ClientesPanel({
   };
 
   const handleBulkDelete = async () => {
-    if (selectedClientIds.size === 0) return;
-    setBulkChecking(true);
-    setBulkModalOpen(true);
-    setBulkConfirmText("");
-    setBulkActionSelected("inactivate");
-    try {
-      const res = await fetch("/api/clientes/bulk-check-dependencies", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-assistec-loja-id": storeId,
-        },
-        body: JSON.stringify({
-          ids: Array.from(selectedClientIds),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao verificar dependências");
-      setBulkCheckResults(data.results || []);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao verificar vínculos");
-      setBulkModalOpen(false);
-    } finally {
-      setBulkChecking(false);
-    }
+    toast.info("Exclusão depende de revisão de identidade, finalidade e retenção. Use Inativar para suspender o cadastro.");
   };
 
   const executeBulkAction = async () => {
@@ -1103,150 +1035,13 @@ function ClientesPanel({
         </Card>
       )}
 
-      <Modal
+      <ClienteEditorDialog
         open={m.open}
-        onClose={() => {
-          setEditing(null);
-          m.close();
-        }}
-        title={editing ? "Editar cliente" : "Novo cliente"}
-        subtitle="Cadastro completo com consentimento LGPD."
-        size="lg"
-      >
-        <div className="grid grid-cols-2 gap-4" key={m.open ? "open" : "closed"}>
-          <Field label="Nome" span={2}>
-            <Input ref={nomeRef} defaultValue={editing?.nome ?? ""} placeholder="Nome completo ou razão social" />
-          </Field>
-          <Field label="Tipo">
-            <Select
-              value={tipoSelecionado}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                setTipoSelecionado(e.target.value as "PF" | "PJ");
-                setDocValue("");
-              }}
-            >
-              <option value="PF">PF — Pessoa Física</option>
-              <option value="PJ">PJ — Pessoa Jurídica</option>
-            </Select>
-          </Field>
-          <Field label={tipoSelecionado === "PF" ? "CPF" : "CNPJ"}>
-            <Input
-              value={docValue}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setDocValue(applyDocMask(e.target.value, tipoSelecionado))
-              }
-              placeholder={tipoSelecionado === "PF" ? "000.000.000-00" : "00.000.000/0000-00"}
-            />
-          </Field>
-          <Field label="Telefone / WhatsApp"><Input ref={telRef} defaultValue={editing?.telefone === "—" ? "" : editing?.telefone ?? ""} placeholder="(11) 9 0000-0000" /></Field>
-          <Field label="Email"><Input ref={emailRef} defaultValue={editing?.email ?? ""} placeholder="email@exemplo.com" /></Field>
-          <Field label="Endereço" span={2}><Input ref={enderecoRef} defaultValue={editing?.endereco ?? ""} placeholder="Rua, número, bairro" /></Field>
-          <Field label="Cidade"><Input ref={cidadeRef} defaultValue={editing?.cidade === "—" ? "" : editing?.cidade ?? ""} placeholder="São Paulo/SP" /></Field>
-          <Field label="UF"><Input ref={ufRef} defaultValue={editing?.uf ?? ""} placeholder="SP" /></Field>
-          <Field label="Tags" span={2}><Input ref={tagsRef} defaultValue={editing?.tags?.join(", ") ?? ""} placeholder="VIP, Recorrente, B2B…" /></Field>
-          <Field label="Observações" span={2}><Textarea ref={observacoesRef} rows={3} defaultValue={editing?.observacoes ?? ""} placeholder="Notas internas" /></Field>
-          <Field label="Status">
-            <Select ref={statusRef} defaultValue={editing?.status ?? "Ativo"}>
-              <option>Ativo</option>
-              <option>Inativo</option>
-            </Select>
-          </Field>
-          <Field label="Consentimento LGPD" span={2}>
-            <label className="flex items-center gap-2.5 rounded-lg border border-border bg-background p-3 text-sm text-foreground cursor-pointer select-none">
-              <Checkbox id="lgpd-consent" />
-              <span className="text-xs text-muted-foreground">Cliente autoriza uso dos dados conforme política de privacidade.</span>
-            </label>
-          </Field>
-        </div>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={() => {
-              setEditing(null);
-              m.close();
-            }}
-            className="rounded-lg border border-border px-4 py-2 text-sm"
-          >
-            Cancelar
-          </button>
-          <button
-            disabled={saving}
-            onClick={() => {
-              startSaving(async () => {
-                try {
-                  const tagsInput = (tagsRef.current?.value ?? "").trim();
-                  const labels = tagsInput ? tagsInput.split(",").map((s) => s.trim()).filter(Boolean) : [];
-                  const endereco = (enderecoRef.current?.value ?? "").trim();
-                  const uf = (ufRef.current?.value ?? "").trim();
-                  const observacoes = (observacoesRef.current?.value ?? "").trim();
-
-                  const basePayload = {
-                    nome: (nomeRef.current?.value ?? "").trim(),
-                    tipo: tipoSelecionado,
-                    documento: docValue.trim(),
-                    telefone: (telRef.current?.value ?? "").trim(),
-                    email: (emailRef.current?.value ?? "").trim(),
-                    cidade: (cidadeRef.current?.value ?? "").trim(),
-                    active: (statusRef.current?.value ?? "Ativo") !== "Inativo",
-                  };
-
-                  if (editing) {
-                    // Preserva chaves não exibidas (rg, financial, importer's gcCodigo etc.)
-                    // mesclando sobre o tagsRaw do registro. Salvar sem alterar não pode
-                    // apagar dados que o modal nem mostra.
-                    const previous: Record<string, unknown> =
-                      editing.tagsRaw && typeof editing.tagsRaw === "object" && !Array.isArray(editing.tagsRaw)
-                        ? { ...(editing.tagsRaw as Record<string, unknown>) }
-                        : {};
-                    const prevAddress =
-                      previous.address && typeof previous.address === "object" && !Array.isArray(previous.address)
-                        ? { ...(previous.address as Record<string, unknown>) }
-                        : {};
-                    const prevOperational =
-                      previous.operational && typeof previous.operational === "object" && !Array.isArray(previous.operational)
-                        ? { ...(previous.operational as Record<string, unknown>) }
-                        : {};
-                    const mergedTags: Record<string, unknown> = {
-                      ...previous,
-                      labels,
-                      address: { ...prevAddress, street: endereco, state: uf },
-                      operational: { ...prevOperational, notes: observacoes },
-                    };
-
-                    await updateCliente(storeId, editing.id, {
-                      ...basePayload,
-                      tags: mergedTags,
-                    });
-                  } else {
-                    // Criação manual: schema enxuto. Só persiste endereço/uf/observações
-                    // quando o operador realmente preencheu — evita gravar objeto vazio.
-                    const tagsForCreate =
-                      endereco || uf || observacoes
-                        ? {
-                            labels,
-                            address: { street: endereco, state: uf },
-                            operational: { notes: observacoes },
-                          }
-                        : labels;
-                    await createCliente(storeId, {
-                      ...basePayload,
-                      tags: tagsForCreate,
-                    });
-                  }
-                  await refresh();
-                  setEditing(null);
-                  m.close();
-                  window.alert("Salvo com sucesso");
-                } catch (e) {
-                  window.alert(e instanceof Error ? e.message : "Não foi possível salvar cliente");
-                }
-              });
-            }}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-          >
-            {saving ? "Salvando…" : "Salvar cliente"}
-          </button>
-        </div>
-      </Modal>
+        storeId={storeId}
+        editing={editing}
+        onClose={() => { setEditing(null); m.close(); }}
+        onSaved={async () => { await refresh(); setEditing(null); m.close(); toast.success("Cliente salvo"); }}
+      />
     </div>
   );
 }

@@ -1,0 +1,15 @@
+AEP/1.0-R2 · verify --all
+  [OK]   contador — state.json bate com o estado derivado; ledger append-only.
+  [OK]   fiscal — state.json bate com o estado derivado; ledger append-only.
+  [OK]   ops-v4-financeiro-retirada-garantia — state.json bate com o estado derivado; ledger append-only.
+  [OK]   ops-v4-fluxo-curto — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv-parity-suite-n5-a-foundation-001 — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv-parity-suite-n5-b1-core-gaps-001 — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv-scan-inline-feedback-autofocus-006 — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pdv-scan-unregistered-action-settings-007 — state.json bate com o estado derivado; ledger append-only.
+  [OK]   pessoas — state.json bate com o estado derivado; ledger append-only.
+  [OK]   REGISTRY.md idêntico ao gerado.
+  [OK]   GATES.md idêntico ao gerado a partir de protocol.json.
+
+verify: sem divergências.

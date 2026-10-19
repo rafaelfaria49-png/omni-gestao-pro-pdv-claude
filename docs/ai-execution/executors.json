@@ -44,6 +44,12 @@
       "familia": "meta",
       "classes": ["C1", "C2", "C3"],
       "verificado": false
+    },
+    {
+      "slug": "zcode",
+      "familia": "zai",
+      "classes": ["C1"],
+      "verificado": false
     }
   ]
 }

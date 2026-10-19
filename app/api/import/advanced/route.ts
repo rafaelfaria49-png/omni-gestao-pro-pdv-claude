@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
+import { NextRequest } from "next/server"
 import {
   cadastrosAuditLogFields,
   cadastrosAuditPrincipalFromSession,
@@ -19,7 +20,7 @@ export const maxDuration = 120
 // ── GET: capabilities ────────────────────────────────────────────────────────
 
 export async function GET() {
-  return NextResponse.json({
+  return clientPrivateJson({
     versao: "1.0",
     formatos: ["xlsx", "xls", "csv", "tsv", "zip"],
     dominios: [
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
   if (!gate.ok) return gate.response
   const principal = cadastrosAuditPrincipalFromSession(gate.session)
   if (!principal) {
-    return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    return clientPrivateJson({ error: "Não autorizado" }, { status: 401 })
   }
   const audit = cadastrosAuditLogFields(principal)
   const storeId = gate.storeId
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
   try {
     formData = await req.formData()
   } catch {
-    return NextResponse.json({ error: "FormData inválido" }, { status: 400 })
+    return clientPrivateJson({ error: "FormData inválido" }, { status: 400 })
   }
 
   const modoQuery = req.nextUrl.searchParams.get("modo")
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
   // inteira era descartada em silêncio e tudo que fosse detectado era importado.
   const selecao = lerSelecaoDominiosDoFormData(formData)
   if (!selecao.ok) {
-    return NextResponse.json(
+    return clientPrivateJson(
       { error: "Domínio de importação desconhecido", dominios: selecao.invalidos },
       { status: 400 },
     )
@@ -120,10 +121,10 @@ export async function POST(req: NextRequest) {
   // ── Fase 1: coleta arquivos ──────────────────────────────────────────────
   const arquivosRaw = formData.getAll("arquivos[]") as File[]
   if (arquivosRaw.length === 0) {
-    return NextResponse.json({ error: "Nenhum arquivo enviado" }, { status: 400 })
+    return clientPrivateJson({ error: "Nenhum arquivo enviado" }, { status: 400 })
   }
   if (arquivosRaw.length > 20) {
-    return NextResponse.json({ error: "Máximo de 20 arquivos por importação" }, { status: 400 })
+    return clientPrivateJson({ error: "Máximo de 20 arquivos por importação" }, { status: 400 })
   }
 
   const arquivos: Array<{ buffer: Buffer; nome: string }> = []
@@ -139,8 +140,8 @@ export async function POST(req: NextRequest) {
   try {
     sep = await separarSmart(arquivos)
   } catch (e) {
-    return NextResponse.json(
-      { error: "Falha ao analisar arquivos Smart Genius", detalhe: e instanceof Error ? e.message : String(e) },
+    return clientPrivateJson(
+      { error: "Falha ao analisar arquivos Smart Genius" },
       { status: 422 }
     )
   }
@@ -156,14 +157,14 @@ export async function POST(req: NextRequest) {
   try {
     planilhas = await parsearArquivos(sep.restantes)
   } catch (e) {
-    return NextResponse.json(
-      { error: "Falha ao parsear arquivos", detalhe: e instanceof Error ? e.message : String(e) },
+    return clientPrivateJson(
+      { error: "Falha ao parsear arquivos" },
       { status: 422 }
     )
   }
 
   if (planilhas.length === 0 && !temSmart) {
-    return NextResponse.json({ error: "Nenhuma planilha válida encontrada nos arquivos enviados" }, { status: 422 })
+    return clientPrivateJson({ error: "Nenhuma planilha válida encontrada nos arquivos enviados" }, { status: 422 })
   }
 
   // ── Fase 3: detect + merge ───────────────────────────────────────────────
@@ -222,12 +223,11 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.error(
           "[api/import/advanced] falha ao planejar preview de produtos:",
-          e instanceof Error ? e.message : String(e),
         )
       }
     }
 
-    return NextResponse.json({
+    return clientPrivateJson({
       batchId,
       storeId,
       modo: "preview",
@@ -245,8 +245,8 @@ export async function POST(req: NextRequest) {
   try {
     resultado = await persistirImportacao(storeId, grupos, batchId, contextoProdutos, principal)
   } catch (e) {
-    return NextResponse.json(
-      { error: "Falha ao persistir importação", detalhe: e instanceof Error ? e.message : String(e) },
+    return clientPrivateJson(
+      { error: "Falha ao persistir importação" },
       { status: 500 }
     )
   }
@@ -266,8 +266,8 @@ export async function POST(req: NextRequest) {
           : sep
       smartAgg = await persistirSmartSeparado(storeId, sepFiltrada, principal)
     } catch (e) {
-      return NextResponse.json(
-        { error: "Falha ao persistir importação Smart Genius", detalhe: e instanceof Error ? e.message : String(e) },
+      return clientPrivateJson(
+        { error: "Falha ao persistir importação Smart Genius" },
         { status: 500 }
       )
     }
@@ -334,7 +334,7 @@ export async function POST(req: NextRequest) {
             erros: totaisFinais.erros,
           },
           porDominio,
-          arquivos: deteccao.map((d) => ({ arquivo: d.arquivo, dominio: d.dominio, confianca: d.confianca, totalLinhas: d.totalLinhas })),
+          arquivos: deteccao.map((d) => ({ dominio: d.dominio, confianca: d.confianca, totalLinhas: d.totalLinhas })),
           // Contexto do lote de produtos: permite ao Histórico mostrar fornecedor/NF-e
           // e abrir a conferência do batch.
           ...(resultado.resumoProdutos.length > 0
@@ -352,10 +352,10 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (e) {
-    console.error("[api/import/advanced] falha ao registrar auditoria:", e instanceof Error ? e.message : String(e))
+    console.error("[api/import/advanced] falha ao registrar auditoria:")
   }
 
-  return NextResponse.json({
+  return clientPrivateJson({
     batchId,
     storeId,
     modo: "importar",
@@ -364,7 +364,7 @@ export async function POST(req: NextRequest) {
     planilhasDetectadas: deteccao,
     totais: totaisFinais,
     porDominio,
-    errosDetalhados,
+    errosDetalhados: errosDetalhados.map((e, index) => ({ dominio: e.dominio, chave: `linha-${index + 1}`, detalhe: "Não foi possível importar a linha. Revise os dados e as regras de identidade." })),
     // Alimenta o CTA "Revisar produtos desta importação" (Parte 9).
     resumoProdutos: resultado.resumoProdutos,
   })

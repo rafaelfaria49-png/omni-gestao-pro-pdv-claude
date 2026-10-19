@@ -1,0 +1,83 @@
+{
+  "schema": "pdv-n5b1-production-smoke-closeout-004/deployment-evidence-v1",
+  "executor": "codex",
+  "family": "openai",
+  "mainBase": "66b3044d3888b9b6ee276c4f49c380a80fd2b736",
+  "publishedBase": "ea0d3a5cdc48da714108f607c8dcc977204e1de9",
+  "branch": "goal/pdv-n5b1-production-smoke-closeout-004",
+  "worktree": "C:/Projetos/omni-gestao-pdv-n5b1-production-smoke-004",
+  "preflight": {
+    "aepOpen": "PASS",
+    "attempt": "1/3",
+    "eligibleReadyGoals": [
+      "PDV-PARITY-N5-B1-PRODUCTION-SMOKE-CLOSEOUT-004"
+    ],
+    "doneGoals": [
+      "PDV-PARITY-N5-B1-CORE-GAPS-001",
+      "PDV-PARITY-N5-B1-PENDING-IDENTITY-002",
+      "PDV-PARITY-N5-B1-CURRENT-MAIN-CORRECTION-003"
+    ],
+    "matchingActiveWorktrees": [
+      "C:/Projetos/omni-gestao-pdv-n5b1-production-smoke-004"
+    ],
+    "otherWorktrees": "No checkout/stash/reset/staging performed; existing WIPs preserved"
+  },
+  "pullRequests": [
+    {
+      "number": 248,
+      "state": "MERGED",
+      "mergeCommit": "9b0a0e81f4030c1d3df2592d48021d8206f229af",
+      "mergedAtUtc": "2026-10-11T14:26:26Z",
+      "source": "gh pr view 248 --json number,state,mergedAt,mergeCommit,url"
+    },
+    {
+      "number": 267,
+      "state": "MERGED",
+      "mergeCommit": "ea0d3a5cdc48da714108f607c8dcc977204e1de9",
+      "mergedAtUtc": "2026-10-13T17:42:10Z",
+      "source": "gh pr view 267 --json number,state,mergedAt,mergeCommit,url"
+    }
+  ],
+  "deployments": [
+    {
+      "project": "omni-gestao-pro",
+      "role": "CANONICAL",
+      "alias": "https://omni-gestao-pro.vercel.app",
+      "id": "dpl_3EBwZWF9HKinnMhcqwwpdBUFRrAA",
+      "url": "https://omni-gestao-nxu7kcx2e-rafaelfaria49-4373s-projects.vercel.app",
+      "state": "READY",
+      "target": "production",
+      "sha": "66b3044d3888b9b6ee276c4f49c380a80fd2b736",
+      "ref": "main",
+      "observedAtUtc": "2026-10-13T20:08:04.7174093Z",
+      "observedAtSaoPaulo": "2026-10-13T17:08:04.7174093-03:00",
+      "aliasIncluded": true,
+      "gitSourceShaMatches": true,
+      "pr248AncestorExit": 0,
+      "pr267AncestorExit": 0
+    },
+    {
+      "project": "omni-gestao",
+      "role": "ACTIVE_LEGACY",
+      "alias": "https://omni-gestao-pi.vercel.app",
+      "id": "dpl_qbf9TdT2h66L3drxxiWDFo9EYA12",
+      "url": "https://omni-gestao-4cpu2bgtr-rafaelfaria49-4373s-projects.vercel.app",
+      "state": "READY",
+      "target": "production",
+      "sha": "66b3044d3888b9b6ee276c4f49c380a80fd2b736",
+      "ref": "main",
+      "observedAtUtc": "2026-10-13T20:08:04.7181743Z",
+      "observedAtSaoPaulo": "2026-10-13T17:08:04.7181743-03:00",
+      "aliasIncluded": true,
+      "gitSourceShaMatches": true,
+      "pr248AncestorExit": 0,
+      "pr267AncestorExit": 0
+    }
+  ],
+  "source": {
+    "aliasResolution": "vercel inspect <official-alias> --format=json --non-interactive; read-only, selected fields",
+    "identityAndSha": "vercel api /v13/deployments/<observed-id> --method GET --raw; selected non-sensitive metadata only",
+    "ancestry": "git merge-base --is-ancestor <PR248-or-PR267-merge> 66b3044d3888b9b6ee276c4f49c380a80fd2b736",
+    "limitation": "READY is not version proof. CLI inspect summary omitted SHA; full SHA came from deployment API metadata. Ancestry is a Git inference, not a runtime browser test. Loaded canonical client version not established: update banner visible."
+  }
+}

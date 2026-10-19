@@ -28,10 +28,10 @@ describe("salvarGarantiaOSV3 — persistência normalizada no servidor", () => {
   it.each([
     ["sem_garantia", 90, 0],
     ["oxidacao", 90, 0],
-    ["tela", 0, 90],
+    ["tela", undefined, 90],
     ["tela", 45, 45],
   ])("%s + %i persiste prazo %i na OS da loja selecionada", async (modeloId, entrada, esperado) => {
-    const salvo = await salvarGarantiaOSV3("loja-qa", "os-002", { modeloId, prazoDias: entrada });
+    const salvo = await salvarGarantiaOSV3("loja-qa", "os-002", { modeloId, prazoDias: entrada, motivo: "Extensão sintética autorizada" });
     // Releitura do payload MAIS RECENTE sob a trava, sempre escopada pela loja.
     expect(db.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "os-002", storeId: "loja-qa" } }));
     const update = db.update.mock.calls[0]?.[0];
@@ -40,6 +40,11 @@ describe("salvarGarantiaOSV3 — persistência normalizada no servidor", () => {
     expect(update?.data.payload.aberturaV3.origem).toBe("balcao");
     expect(update?.data.payload.timeline).toHaveLength(1);
     expect((salvo as unknown as { aberturaV3: { garantiaPrevista: { prazoDias: number } } }).aberturaV3.garantiaPrevista.prazoDias).toBe(esperado);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN])("recusa prazo inválido %s antes de gravar", async (prazoDias) => {
+    await expect(salvarGarantiaOSV3("loja-qa", "os-002", { modeloId: "tela", prazoDias })).rejects.toThrow("inteiro positivo");
+    expect(db.update).not.toHaveBeenCalled();
   });
 
   it("não grava quando a OS não pertence à loja ativa", async () => {

@@ -1,0 +1,16 @@
+import fs from "node:fs";
+import { spawn } from "node:child_process";
+import net from "node:net";
+import dotenv from "dotenv";
+const env = { ...process.env, ...dotenv.parse(fs.readFileSync(".env")), NODE_ENV: "production", NEXTAUTH_URL: "http://127.0.0.1:3071", AUTH_URL: "http://127.0.0.1:3071", VERCEL_ENV: "development" };
+const u = new URL(env.DATABASE_URL);
+if (u.hostname !== "127.0.0.1" || !u.pathname.startsWith("/ops_v4_frg_qa") || env.DATABASE_URL !== env.DIRECT_URL || !env.PLAYWRIGHT_E2E_EMAIL?.endsWith(".test")) throw Error("QA_ONLY");
+const probe = net.createServer();
+await new Promise((resolve, reject) => { probe.once("error", reject); probe.listen(3071, "127.0.0.1", resolve); });
+await new Promise(resolve => probe.close(resolve));
+const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3071", "-H", "127.0.0.1"], { env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+console.log("QA_PID=" + child.pid);
+for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => process.stdout.write(chunk));
+process.stdin.on("data", chunk => { if (String(chunk).trim() === "stop") child.kill(); });
+process.on("SIGINT", () => child.kill()); process.on("SIGTERM", () => child.kill());
+child.on("exit", code => { process.exit(code ?? 0); });

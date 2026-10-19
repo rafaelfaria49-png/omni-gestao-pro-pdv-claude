@@ -17,7 +17,8 @@ const PRISMA_CONNECT_WAIT_MS = Math.min(
  */
 function createPrismaClient(): PrismaClient {
   return new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    // Prisma error events can embed customer values and SQL parameters.
+    log: [],
   })
 }
 
@@ -49,8 +50,7 @@ export async function withPrismaSafe<T>(
   try {
     return await op(prisma)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[prisma:safe]", msg)
+    console.error("[prisma:safe] operation_failed")
     return fallback
   }
 }

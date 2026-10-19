@@ -1,0 +1,11 @@
+{
+  "observedAt": "2026-10-15T13:49:57.757Z",
+  "command": "prisma migrate status",
+  "readOnly": true,
+  "result": "PASS",
+  "exitCode": 0,
+  "localMigrations": 22,
+  "reportedMigrations": 22,
+  "datasourceFingerprint": "c4f2567332c8f613",
+  "migrationsExecuted": false
+}

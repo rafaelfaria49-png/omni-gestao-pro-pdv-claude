@@ -1,0 +1,452 @@
+validate	ESLint completo	﻿2026-10-18T15:25:17.4151228Z ##[group]Run node node_modules/eslint/bin/eslint.js . --ignore-pattern 'generated/prisma/**'
+validate	ESLint completo	2026-10-18T15:25:17.4151932Z ^[[36;1mnode node_modules/eslint/bin/eslint.js . --ignore-pattern 'generated/prisma/**'^[[0m
+validate	ESLint completo	2026-10-18T15:25:17.4215691Z shell: /usr/bin/bash -e {0}
+validate	ESLint completo	2026-10-18T15:25:17.4215946Z env:
+validate	ESLint completo	2026-10-18T15:25:17.4216417Z   DATABASE_URL: ***127.0.0.1:1/isolated?connect_timeout=1
+validate	ESLint completo	2026-10-18T15:25:17.4216898Z   DIRECT_URL: ***127.0.0.1:1/isolated?connect_timeout=1
+validate	ESLint completo	2026-10-18T15:25:17.4217298Z   AUTH_SECRET: isolated-ci-fixture-with-no-production-authority
+validate	ESLint completo	2026-10-18T15:25:17.4217663Z   AUTH_TRUST_HOST: true
+validate	ESLint completo	2026-10-18T15:25:17.4217906Z   NEXTAUTH_URL: http://127.0.0.1:3000
+validate	ESLint completo	2026-10-18T15:25:17.4218164Z   VERCEL: 0
+validate	ESLint completo	2026-10-18T15:25:17.4218354Z   VERCEL_ENV: development
+validate	ESLint completo	2026-10-18T15:25:17.4218594Z   MIGRATION_AUTHORITY_ENABLED: false
+validate	ESLint completo	2026-10-18T15:25:17.4218871Z   NODE_OPTIONS: --max-old-space-size=6144
+validate	ESLint completo	2026-10-18T15:25:17.4219138Z ##[endgroup]
+validate	ESLint completo	2026-10-18T15:27:18.1150189Z
+validate	ESLint completo	2026-10-18T15:27:18.1151344Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/app/actions/operacoes.ts
+validate	ESLint completo	2026-10-18T15:27:18.1153240Z   1433:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1154036Z
+validate	ESLint completo	2026-10-18T15:27:18.1155414Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/app/dashboard/clientes/ClientesPageClient.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1182561Z ##[warning]  341:6  warning  React Hook useEffect has a missing dependency: 'toast'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1190020Z
+validate	ESLint completo	2026-10-18T15:27:18.1190685Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/app/dashboard/marketing-ia/components/PhonePreview.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1193805Z ##[warning]   62:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1198169Z ##[warning]  117:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1201854Z ##[warning]  141:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1203378Z
+validate	ESLint completo	2026-10-18T15:27:18.1203973Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/app/dashboard/marketing-ia/components/PostGeneratorTab.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1207038Z ##[warning]  240:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1208981Z
+validate	ESLint completo	2026-10-18T15:27:18.1209624Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/app/dashboard/marketing-ia/components/studio/bom-dia-modal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1233149Z ##[warning]  204:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1235229Z
+validate	ESLint completo	2026-10-18T15:27:18.1236211Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/cadastros/lovable/components/cadastros/ConferenciaLoteProdutos.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1239020Z ##[warning]  111:9  warning  The 'produtos' logical expression could make the dependencies of useMemo Hook (at line 115) change on every render. To fix this, wrap the initialization of 'produtos' in its own useMemo() Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1240354Z
+validate	ESLint completo	2026-10-18T15:27:18.1241061Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/cadastros/lovable/components/cadastros/MovimentacaoEstoqueModal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1243684Z ##[warning]  125:6  warning  React Hook useEffect has a missing dependency: 'produto'. Either include it or remove the dependency array. If 'setNovoSaldo' needs the current value of 'produto', you can also switch to useReducer instead of useState and read 'produto' in the reducer  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1245501Z
+validate	ESLint completo	2026-10-18T15:27:18.1246049Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/cadastros/lovable/routes/__root.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1247718Z ##[warning]  56:7  warning  Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element  @next/next/no-head-element
+validate	ESLint completo	2026-10-18T15:27:18.1248774Z
+validate	ESLint completo	2026-10-18T15:27:18.1249436Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/configuracoes-v3/features/settings/sections/GeralSection.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1251223Z ##[warning]  155:6  warning  React Hook useEffect has a missing dependency: 'toast'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1252248Z
+validate	ESLint completo	2026-10-18T15:27:18.1252903Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/configuracoes-v3/features/settings/sections/PdvSection.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1255931Z ##[warning]  308:7   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1259780Z ##[warning]  798:27  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1261394Z
+validate	ESLint completo	2026-10-18T15:27:18.1261960Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/clientes/cadastro-clientes.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1265106Z ##[warning]  381:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1266971Z
+validate	ESLint completo	2026-10-18T15:27:18.1267705Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/configuracoes/backup-importador/importador-dados-externos.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1269648Z ##[warning]  1832:6  warning  React Hook useMemo has an unnecessary dependency: 'correcaoPreviewRevision'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1270765Z
+validate	ESLint completo	2026-10-18T15:27:18.1271374Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/configuracoes/configuracoes-sistema.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1272934Z ##[warning]  273:6  warning  React Hook useEffect has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1273959Z
+validate	ESLint completo	2026-10-18T15:27:18.1275063Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/configuracoes/gestao-unidades-saas.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1276699Z ##[warning]  197:6  warning  React Hook useEffect has a missing dependency: 'selected'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1277784Z
+validate	ESLint completo	2026-10-18T15:27:18.1278379Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/estoque/inventario-conciliacao.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1280654Z ##[warning]  250:9  warning  The 'naoEncontrados' logical expression could make the dependencies of useMemo Hook (at line 262) change on every render. To fix this, wrap the initialization of 'naoEncontrados' in its own useMemo() Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1282017Z
+validate	ESLint completo	2026-10-18T15:27:18.1282573Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/financeiro/contas-receber.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1284137Z ##[warning]  735:6  warning  React Hook useEffect has a missing dependency: 'baixaConta'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1285486Z
+validate	ESLint completo	2026-10-18T15:27:18.1286002Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/os/ordens-servico.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1288774Z ##[warning]  1470:27  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1292528Z ##[warning]  1719:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1294218Z
+validate	ESLint completo	2026-10-18T15:27:18.1295018Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/vendas/payment-modal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1297331Z ##[warning]  371:9  warning  The 'formasPagamento' logical expression could make the dependencies of useMemo Hook (at line 381) change on every render. To fix this, wrap the initialization of 'formasPagamento' in its own useMemo() Hook      react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1300520Z ##[warning]  371:9  warning  The 'formasPagamento' logical expression could make the dependencies of useCallback Hook (at line 386) change on every render. To fix this, wrap the initialization of 'formasPagamento' in its own useMemo() Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1301988Z
+validate	ESLint completo	2026-10-18T15:27:18.1302496Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/vendas/pdv-classic.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1303550Z    725:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+validate	ESLint completo	2026-10-18T15:27:18.1306046Z ##[warning]   785:9  warning  The 'addToCart' function makes the dependencies of useCallback Hook (at line 1037) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1308925Z ##[warning]   785:9  warning  The 'addToCart' function makes the dependencies of useCallback Hook (at line 1053) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1311488Z ##[warning]  1199:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array                                                                                react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1313930Z ##[warning]  1515:5  warning  React Hook useCallback has an unnecessary dependency: 'cart.length'. Either exclude it or remove the dependency array                                                                     react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1315672Z
+validate	ESLint completo	2026-10-18T15:27:18.1316263Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/vendas/pdv-recebimento-modal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1318046Z ##[warning]  526:5  warning  React Hook useCallback has missing dependencies: 'matchOpts' and 'selectedCliente'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1319169Z
+validate	ESLint completo	2026-10-18T15:27:18.1319709Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/vendas/pdv-supermercado.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1321323Z ##[warning]  346:6  warning  React Hook useEffect has a missing dependency: 'postSalePrintOpen'. Either include it or remove the dependency array             react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1323537Z ##[warning]  514:5  warning  React Hook useCallback has a missing dependency: 'accessoryModelColorEnabled'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1326044Z ##[warning]  631:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array                       react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1327181Z
+validate	ESLint completo	2026-10-18T15:27:18.1327797Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/vendas/pdv-venda-completa-enterprise.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1329323Z ##[warning]  253:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1330835Z   309:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+validate	ESLint completo	2026-10-18T15:27:18.1331282Z
+validate	ESLint completo	2026-10-18T15:27:18.1331863Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/dashboard/vendas/venda-completa-enterprise.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1333358Z ##[warning]  352:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1335107Z   425:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+validate	ESLint completo	2026-10-18T15:27:18.1335553Z
+validate	ESLint completo	2026-10-18T15:27:18.1336170Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/financeiro/lovable/context/FinanceiroRealContext.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1338043Z ##[warning]  812:6  warning  React Hook useCallback has a missing dependency: 'emptyRelatorios'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1339145Z
+validate	ESLint completo	2026-10-18T15:27:18.1339682Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/financeiro/lovable/routes/__root.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1341335Z ##[warning]  57:7  warning  Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element  @next/next/no-head-element
+validate	ESLint completo	2026-10-18T15:27:18.1342562Z
+validate	ESLint completo	2026-10-18T15:27:18.1343058Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/ia-mestre/ChatMessage.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1346074Z ##[warning]  154:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1347700Z
+validate	ESLint completo	2026-10-18T15:27:18.1348259Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/ia-mestre/views/ConfiguracoesIaView.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1351096Z ##[warning]  281:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1352864Z
+validate	ESLint completo	2026-10-18T15:27:18.1353403Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/master-console/EmployeeFormSheet.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1355303Z ##[warning]  39:11  warning  The attribute aria-disabled is not supported by the role form. This role is implicit on the element form  jsx-a11y/role-supports-aria-props
+validate	ESLint completo	2026-10-18T15:27:18.1356414Z
+validate	ESLint completo	2026-10-18T15:27:18.1357059Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/operacoes/lovable/components/operacoes/AnexosPanel.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1360083Z ##[warning]  215:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1361769Z
+validate	ESLint completo	2026-10-18T15:27:18.1362458Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/operacoes/lovable/components/operacoes/ChecklistTecnicoPanel.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1364190Z ##[warning]  24:70  warning  React Hook useMemo has unnecessary dependencies: 'os.atualizadoEm' and 'os.id'. Either exclude them or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1365587Z
+validate	ESLint completo	2026-10-18T15:27:18.1366256Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/operacoes/lovable/components/operacoes/PortalClienteModal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1369030Z ##[warning]  82:58  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1370604Z
+validate	ESLint completo	2026-10-18T15:27:18.1371173Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/painel-inicial/workspace-focus-context.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1372781Z ##[warning]  64:6  warning  React Hook useEffect has a missing dependency: 'overlayState'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1373806Z
+validate	ESLint completo	2026-10-18T15:27:18.1374438Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/app/api/ops/inventory/import/route.ts
+validate	ESLint completo	2026-10-18T15:27:18.1375699Z   87:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1376076Z
+validate	ESLint completo	2026-10-18T15:27:18.1376751Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/app/dashboard/cadastros-v2/CadastrosV2Client.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1377797Z   62:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1378724Z   64:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1379470Z   75:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1380206Z   77:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1380564Z
+validate	ESLint completo	2026-10-18T15:27:18.1381285Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/app/dashboard/marketing-ia/components/PhonePreview.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1384480Z ##[warning]   62:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1388767Z ##[warning]  117:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1392496Z ##[warning]  141:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1394068Z
+validate	ESLint completo	2026-10-18T15:27:18.1395126Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/app/dashboard/marketing-ia/components/PostGeneratorTab.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1398017Z ##[warning]  165:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1399624Z
+validate	ESLint completo	2026-10-18T15:27:18.1400378Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/app/dashboard/marketing-ia/components/studio/bom-dia-modal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1403303Z ##[warning]  204:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1405164Z
+validate	ESLint completo	2026-10-18T15:27:18.1405756Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/claude-export/app.jsx
+validate	ESLint completo	2026-10-18T15:27:18.1407619Z ##[error]  3:14  error  'PDV' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1408566Z
+validate	ESLint completo	2026-10-18T15:27:18.1409171Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/claude-export/modals.jsx
+validate	ESLint completo	2026-10-18T15:27:18.1410153Z ##[error]   34:80  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1411224Z ##[error]   77:31  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1412298Z ##[error]  123:20  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1413360Z ##[error]  132:10  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1414409Z ##[error]  271:20  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1415808Z ##[error]  324:43  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1416925Z ##[error]  331:47  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1418231Z ##[error]  335:43  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1419331Z ##[error]  351:24  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1420414Z ##[error]  391:10  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1421494Z ##[error]  411:10  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1422568Z ##[error]  430:12  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1423642Z ##[error]  455:20  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1425013Z ##[error]  458:20  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1426204Z ##[error]  538:14  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1427298Z ##[error]  564:18  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1428378Z ##[error]  568:79  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1429650Z ##[error]  583:43  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1430755Z ##[error]  614:18  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1431837Z ##[error]  623:12  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1432910Z ##[error]  646:10  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1433985Z ##[error]  651:30  error  'Icon' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1435113Z
+validate	ESLint completo	2026-10-18T15:27:18.1435764Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/claude-export/modals2.jsx
+validate	ESLint completo	2026-10-18T15:27:18.1436781Z ##[error]   78:6   error  'ModalShell' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1438007Z ##[error]   85:16  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1439179Z ##[error]   99:16  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1440334Z ##[error]  108:12  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1441506Z ##[error]  111:12  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1442639Z ##[error]  135:18  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1443780Z ##[error]  142:16  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1445629Z ##[error]  170:35  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1446920Z ##[error]  222:98  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1448070Z ##[error]  228:98  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1449265Z ##[error]  250:20  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1450363Z ##[error]  253:20  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1451477Z ##[error]  261:16  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1452598Z ##[error]  301:6   error  'ModalShell' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1453714Z ##[error]  309:32  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1455117Z ##[error]  313:32  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1456311Z ##[error]  321:12  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1457544Z ##[error]  324:12  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1458677Z ##[error]  341:12  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1459807Z ##[error]  350:34  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1460984Z ##[error]  396:6   error  'ModalShell' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1462093Z ##[error]  401:14  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1463202Z ##[error]  406:14  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1464324Z ##[error]  427:58  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1466195Z ##[error]  428:58  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1467388Z ##[error]  438:38  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1468525Z ##[error]  483:24  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1469657Z ##[error]  485:26  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1470789Z ##[error]  486:26  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1471935Z ##[error]  519:6   error  'ModalShell' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1473066Z ##[error]  521:10  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1474180Z ##[error]  569:22  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1475669Z ##[error]  604:6   error  'ModalShell' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1477035Z ##[error]  616:14  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1478199Z ##[error]  633:14  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1479324Z ##[error]  640:12  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1480455Z ##[error]  649:16  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1481583Z ##[error]  658:16  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1482704Z ##[error]  693:12  error  'Icon' is not defined        react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1483473Z
+validate	ESLint completo	2026-10-18T15:27:18.1484040Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/claude-export/pdv.jsx
+validate	ESLint completo	2026-10-18T15:27:18.1485292Z ##[error]   404:12  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1486558Z ##[error]   412:12  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1487782Z ##[error]   421:12  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1488975Z ##[error]   425:12  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1490140Z ##[error]   431:12  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1491307Z ##[error]   438:14  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1492469Z ##[error]   446:14  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1493617Z ##[error]   451:14  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1495038Z ##[error]   470:14  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1496295Z ##[error]   475:14  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1497468Z ##[error]   486:39  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1498634Z ##[error]   515:44  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1499803Z ##[error]   532:16  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1500966Z ##[error]   547:51  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1502116Z ##[error]   607:28  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1503275Z ##[error]   653:18  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1504424Z ##[error]   658:18  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1505934Z ##[error]   663:18  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1507110Z ##[error]   694:83  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1508397Z ##[error]   696:18  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1509792Z ##[error]   701:18  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1510986Z ##[error]   747:18  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1512365Z ##[error]   757:18  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1513533Z ##[error]   784:18  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1514977Z ##[error]   793:16  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1516245Z ##[error]   861:12  error  'Icon' is not defined              react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1517435Z ##[error]   867:10  error  'SearchModal' is not defined       react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1518617Z ##[error]   877:12  error  'QtyModal' is not defined          react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1519801Z ##[error]   885:10  error  'CustomerModal' is not defined     react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1520990Z ##[error]   892:10  error  'DiscountModal' is not defined     react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1522449Z ##[error]   900:10  error  'CpfNotaModal' is not defined      react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1523636Z ##[error]   907:10  error  'CancelModal' is not defined       react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1525114Z ##[error]   918:10  error  'SuspendModal' is not defined      react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1526382Z ##[error]   928:10  error  'PaymentModal' is not defined      react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1527576Z ##[error]   940:10  error  'ReturnModal' is not defined       react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1528776Z ##[error]   955:10  error  'LoyaltyModal' is not defined      react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1530037Z ##[error]   964:10  error  'CashOpsModal' is not defined      react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1531221Z ##[error]   973:10  error  'CashCloseModal' is not defined    react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1532415Z ##[error]   991:10  error  'TurnHistoryModal' is not defined  react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1533616Z ##[error]  1010:11  error  'SuccessModal' is not defined      react/jsx-no-undef
+validate	ESLint completo	2026-10-18T15:27:18.1534416Z
+validate	ESLint completo	2026-10-18T15:27:18.1535370Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/cadastros/lovable/routes/__root.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1537334Z ##[warning]  56:7  warning  Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element  @next/next/no-head-element
+validate	ESLint completo	2026-10-18T15:27:18.1538501Z
+validate	ESLint completo	2026-10-18T15:27:18.1539318Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/configuracoes-v3/features/settings/sections/GeralSection.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1541307Z ##[warning]  156:6  warning  React Hook useEffect has a missing dependency: 'toast'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1542420Z
+validate	ESLint completo	2026-10-18T15:27:18.1543136Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/clientes/cadastro-clientes.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1546324Z ##[warning]  381:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1548028Z
+validate	ESLint completo	2026-10-18T15:27:18.1548892Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/configuracoes/backup-importador/importador-dados-externos.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1550932Z ##[warning]  1734:6  warning  React Hook useMemo has an unnecessary dependency: 'correcaoPreviewRevision'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1552135Z
+validate	ESLint completo	2026-10-18T15:27:18.1552889Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/configuracoes/configuracoes-sistema.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1555068Z ##[warning]  274:6  warning  React Hook useEffect has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1556258Z
+validate	ESLint completo	2026-10-18T15:27:18.1556999Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/configuracoes/gestao-unidades-saas.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1558635Z ##[warning]  125:6  warning  React Hook useEffect has a missing dependency: 'selected'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1559745Z
+validate	ESLint completo	2026-10-18T15:27:18.1560386Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/estoque/servicos.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1563212Z ##[warning]  204:35  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1565375Z
+validate	ESLint completo	2026-10-18T15:27:18.1566091Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/financeiro/contas-receber.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1567825Z ##[warning]  724:6  warning  React Hook useEffect has a missing dependency: 'baixaConta'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1568961Z
+validate	ESLint completo	2026-10-18T15:27:18.1569558Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/header.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1572257Z ##[warning]  125:11  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1573920Z
+validate	ESLint completo	2026-10-18T15:27:18.1574531Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/mobile-nav.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1576489Z ##[warning]  152:6  warning  React Hook useMemo has an unnecessary dependency: 'config.assinatura.plano'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1577691Z
+validate	ESLint completo	2026-10-18T15:27:18.1578343Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/os/ordens-servico.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1581155Z ##[warning]  1492:27  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1585209Z ##[warning]  1741:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1586911Z
+validate	ESLint completo	2026-10-18T15:27:18.1587654Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/vendas/pdv-assistencia-enterprise.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1588826Z   222:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+validate	ESLint completo	2026-10-18T15:27:18.1589265Z
+validate	ESLint completo	2026-10-18T15:27:18.1589910Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/vendas/pdv-classic.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1592258Z ##[warning]  542:9  warning  The 'addToCart' function makes the dependencies of useCallback Hook (at line 608) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1593627Z
+validate	ESLint completo	2026-10-18T15:27:18.1594310Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/vendas/pdv-supermercado.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1596245Z ##[warning]  220:6  warning  React Hook useMemo has a missing dependency: 'products'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1597391Z
+validate	ESLint completo	2026-10-18T15:27:18.1598094Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/dashboard/vendas/vendas-arquivo-geral.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1599920Z ##[warning]  123:6  warning  React Hook useMemo has an unnecessary dependency: 'contasVersion'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1601072Z
+validate	ESLint completo	2026-10-18T15:27:18.1601693Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/ia-mestre/ChatMessage.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1604484Z ##[warning]  138:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1606476Z
+validate	ESLint completo	2026-10-18T15:27:18.1607243Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/operacoes/lovable/components/operacoes/AnexosPanel.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1610405Z ##[warning]  100:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1612087Z
+validate	ESLint completo	2026-10-18T15:27:18.1612877Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/operacoes/lovable/components/operacoes/PortalClienteModal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1615960Z ##[warning]  82:58  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1617631Z
+validate	ESLint completo	2026-10-18T15:27:18.1618297Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/studio/components/bom-dia-modal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1619320Z   134:5   error    Error: Calling setState from useMemo may trigger an infinite loop
+validate	ESLint completo	2026-10-18T15:27:18.1619645Z
+validate	ESLint completo	2026-10-18T15:27:18.1620921Z Each time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).
+validate	ESLint completo	2026-10-18T15:27:18.1621965Z
+validate	ESLint completo	2026-10-18T15:27:18.1622680Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/studio/components/bom-dia-modal.tsx:134:5
+validate	ESLint completo	2026-10-18T15:27:18.1623458Z   132 |   // Reset when template changes
+validate	ESLint completo	2026-10-18T15:27:18.1623744Z   133 |   useMemo(() => {
+validate	ESLint completo	2026-10-18T15:27:18.1624041Z > 134 |     setMessage(tpl.caption);
+validate	ESLint completo	2026-10-18T15:27:18.1624377Z       |     ^^^^^^^^^^ Found setState() within useMemo()
+validate	ESLint completo	2026-10-18T15:27:18.1625039Z   135 |     setActiveTake(0);
+validate	ESLint completo	2026-10-18T15:27:18.1625550Z   136 |     setTakeMedia([null, null, null]);
+validate	ESLint completo	2026-10-18T15:27:18.1626020Z   137 |   }, [template, tpl.caption]);            react-hooks/set-state-in-render
+validate	ESLint completo	2026-10-18T15:27:18.1626723Z   135:5   error    Error: Calling setState from useMemo may trigger an infinite loop
+validate	ESLint completo	2026-10-18T15:27:18.1627045Z
+validate	ESLint completo	2026-10-18T15:27:18.1628307Z Each time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).
+validate	ESLint completo	2026-10-18T15:27:18.1629351Z
+validate	ESLint completo	2026-10-18T15:27:18.1630054Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/studio/components/bom-dia-modal.tsx:135:5
+validate	ESLint completo	2026-10-18T15:27:18.1630780Z   133 |   useMemo(() => {
+validate	ESLint completo	2026-10-18T15:27:18.1631212Z   134 |     setMessage(tpl.caption);
+validate	ESLint completo	2026-10-18T15:27:18.1631532Z > 135 |     setActiveTake(0);
+validate	ESLint completo	2026-10-18T15:27:18.1631857Z       |     ^^^^^^^^^^^^^ Found setState() within useMemo()
+validate	ESLint completo	2026-10-18T15:27:18.1632233Z   136 |     setTakeMedia([null, null, null]);
+validate	ESLint completo	2026-10-18T15:27:18.1632561Z   137 |   }, [template, tpl.caption]);
+validate	ESLint completo	2026-10-18T15:27:18.1632933Z   138 |                                          react-hooks/set-state-in-render
+validate	ESLint completo	2026-10-18T15:27:18.1633574Z   136:5   error    Error: Calling setState from useMemo may trigger an infinite loop
+validate	ESLint completo	2026-10-18T15:27:18.1633893Z
+validate	ESLint completo	2026-10-18T15:27:18.1635481Z Each time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).
+validate	ESLint completo	2026-10-18T15:27:18.1636533Z
+validate	ESLint completo	2026-10-18T15:27:18.1637240Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/studio/components/bom-dia-modal.tsx:136:5
+validate	ESLint completo	2026-10-18T15:27:18.1638007Z   134 |     setMessage(tpl.caption);
+validate	ESLint completo	2026-10-18T15:27:18.1638280Z   135 |     setActiveTake(0);
+validate	ESLint completo	2026-10-18T15:27:18.1638599Z > 136 |     setTakeMedia([null, null, null]);
+validate	ESLint completo	2026-10-18T15:27:18.1638956Z       |     ^^^^^^^^^^^^ Found setState() within useMemo()
+validate	ESLint completo	2026-10-18T15:27:18.1639289Z   137 |   }, [template, tpl.caption]);
+validate	ESLint completo	2026-10-18T15:27:18.1639549Z   138 |
+validate	ESLint completo	2026-10-18T15:27:18.1640001Z   139 |   const completedTakes = takeMedia.filter(Boolean).length;  react-hooks/set-state-in-render
+validate	ESLint completo	2026-10-18T15:27:18.1643635Z ##[warning]  137:6   warning  React Hook useMemo has an unnecessary dependency: 'template'. Either exclude it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1649926Z ##[warning]  252:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1652458Z
+validate	ESLint completo	2026-10-18T15:27:18.1653084Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/tabs/CalendarTab.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1655394Z ##[warning]  28:9  warning  The 'now' object construction makes the dependencies of useMemo Hook (at line 43) change on every render. To fix this, wrap the initialization of 'now' in its own useMemo() Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1656737Z
+validate	ESLint completo	2026-10-18T15:27:18.1657420Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/components/vendas-hub/lovable/routeTree.gen.ts
+validate	ESLint completo	2026-10-18T15:27:18.1658500Z   1:1  warning  Unused eslint-disable directive (no problems were reported)
+validate	ESLint completo	2026-10-18T15:27:18.1658823Z
+validate	ESLint completo	2026-10-18T15:27:18.1659375Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/lib/config-empresa.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1661085Z ##[warning]  419:6  warning  React Hook useEffect has a missing dependency: 'config.assinatura'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1663284Z ##[warning]  574:5  warning  React Hook useCallback has a missing dependency: 'config.empresa'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1664427Z
+validate	ESLint completo	2026-10-18T15:27:18.1665331Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/lib/loja-ativa.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1666974Z ##[warning]  253:6  warning  React Hook useCallback has an unnecessary dependency: 'lojas'. Either exclude it or remove the dependency array            react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1669243Z ##[warning]  296:6  warning  React Hook useMemo has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array               react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1671448Z ##[warning]  311:5  warning  React Hook useMemo has an unnecessary dependency: 'lojaSelecionada?.id'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1672593Z
+validate	ESLint completo	2026-10-18T15:27:18.1673159Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/lib/pdv-operator-id.ts
+validate	ESLint completo	2026-10-18T15:27:18.1674218Z   6:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1674888Z
+validate	ESLint completo	2026-10-18T15:27:18.1675486Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-github-original/lib/perfil-loja-provider.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1677098Z ##[warning]  90:6  warning  React Hook useCallback has an unnecessary dependency: 'lojaHeader'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1678254Z
+validate	ESLint completo	2026-10-18T15:27:18.1678744Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/pdv-next/PdvBlackEdition.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1680259Z ##[warning]  216:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1681388Z
+validate	ESLint completo	2026-10-18T15:27:18.1681922Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/studio/components/bom-dia-modal.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1684890Z ##[warning]  252:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1686769Z
+validate	ESLint completo	2026-10-18T15:27:18.1687228Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/tabs/CalendarTab.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1689173Z ##[warning]  28:9  warning  The 'now' object construction makes the dependencies of useMemo Hook (at line 43) change on every render. To fix this, wrap the initialization of 'now' in its own useMemo() Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1690476Z
+validate	ESLint completo	2026-10-18T15:27:18.1690993Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/vendas-hub/lovable/routeTree.gen.ts
+validate	ESLint completo	2026-10-18T15:27:18.1691805Z   1:1  warning  Unused eslint-disable directive (no problems were reported)
+validate	ESLint completo	2026-10-18T15:27:18.1692109Z
+validate	ESLint completo	2026-10-18T15:27:18.1692586Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/components/whatsapp/WhatsAppInbox.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1695617Z ##[warning]  170:7  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+validate	ESLint completo	2026-10-18T15:27:18.1697342Z
+validate	ESLint completo	2026-10-18T15:27:18.1697762Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/config-empresa.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1700164Z ##[warning]  577:5  warning  React Hook useCallback has a missing dependency: 'config.empresa'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1702234Z
+validate	ESLint completo	2026-10-18T15:27:18.1703105Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/estoque/deposito-core.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1705076Z   51:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1705903Z
+validate	ESLint completo	2026-10-18T15:27:18.1706751Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/importador-avancado/parser.ts
+validate	ESLint completo	2026-10-18T15:27:18.1708688Z   119:7  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1710552Z   132:9  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1711409Z
+validate	ESLint completo	2026-10-18T15:27:18.1712152Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/loja-ativa.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1715342Z ##[warning]  319:6  warning  React Hook useCallback has an unnecessary dependency: 'lojas'. Either exclude it or remove the dependency array            react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1719513Z ##[warning]  378:6  warning  React Hook useMemo has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array               react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1723524Z ##[warning]  395:5  warning  React Hook useMemo has an unnecessary dependency: 'lojaSelecionada?.id'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1725777Z
+validate	ESLint completo	2026-10-18T15:27:18.1726706Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/multi-loja-no-hardcoded-fallback.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1728196Z   136:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1728873Z
+validate	ESLint completo	2026-10-18T15:27:18.1729667Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/operacoes-v3/event-publisher.ts
+validate	ESLint completo	2026-10-18T15:27:18.1731080Z   109:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1732501Z   118:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1733616Z   134:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1734986Z   154:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+validate	ESLint completo	2026-10-18T15:27:18.1735742Z
+validate	ESLint completo	2026-10-18T15:27:18.1736589Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/ops-upsert-venda-aprazo.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1738214Z   21:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1738936Z
+validate	ESLint completo	2026-10-18T15:27:18.1739831Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/ops-upsert-venda-caixa-original-fechado.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1741168Z   50:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1741662Z
+validate	ESLint completo	2026-10-18T15:27:18.1742168Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/ops-upsert-venda-colisao-loja.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1743157Z   59:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1743788Z
+validate	ESLint completo	2026-10-18T15:27:18.1744275Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/ops-upsert-venda-fractional.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1745578Z   47:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1746027Z
+validate	ESLint completo	2026-10-18T15:27:18.1746536Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/ops-upsert-venda-pix-aprazo-resync.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1747537Z   60:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1747974Z
+validate	ESLint completo	2026-10-18T15:27:18.1748474Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/ops-upsert-venda-replay-conflict.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1749476Z   77:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1749930Z
+validate	ESLint completo	2026-10-18T15:27:18.1750384Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/ops-upsert-venda-vale.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1751342Z   21:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1751785Z
+validate	ESLint completo	2026-10-18T15:27:18.1752209Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/ops-upsert-venda.test.ts
+validate	ESLint completo	2026-10-18T15:27:18.1753136Z   48:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1753575Z
+validate	ESLint completo	2026-10-18T15:27:18.1753970Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/pdv-operator-id.ts
+validate	ESLint completo	2026-10-18T15:27:18.1755043Z   6:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+validate	ESLint completo	2026-10-18T15:27:18.1755483Z
+validate	ESLint completo	2026-10-18T15:27:18.1755929Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/pdv/use-pdv-capabilities.ts
+validate	ESLint completo	2026-10-18T15:27:18.1757551Z ##[warning]  30:5  warning  React Hook useMemo has an unnecessary dependency: 'storeId'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1758764Z
+validate	ESLint completo	2026-10-18T15:27:18.1759314Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/lib/perfil-loja-provider.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1761945Z ##[warning]  96:6  warning  React Hook useCallback has an unnecessary dependency: 'lojaHeader'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1763561Z
+validate	ESLint completo	2026-10-18T15:27:18.1764327Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/test/ops-v4-datas-ui-001/browser/fixture.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1767039Z ##[warning]  25:3  warning  React Hook useEffect contains a call to 'setVisivel'. Without a list of dependencies, this can lead to an infinite chain of updates. To fix this, pass [v] as a second argument to the useEffect Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1768693Z
+validate	ESLint completo	2026-10-18T15:27:18.1769241Z /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/test/ops-v4-datas-ui-001/entrada-datas.test.tsx
+validate	ESLint completo	2026-10-18T15:27:18.1771322Z ##[warning]  235:3  warning  React Hook useEffect contains a call to 'setLegitima'. Without a list of dependencies, this can lead to an infinite chain of updates. To fix this, pass [v] as a second argument to the useEffect Hook  react-hooks/exhaustive-deps
+validate	ESLint completo	2026-10-18T15:27:18.1773431Z
+validate	ESLint completo	2026-10-18T15:27:18.1774056Z ✖ 220 problems (105 errors, 115 warnings)
+validate	ESLint completo	2026-10-18T15:27:18.1774872Z   0 errors and 30 warnings potentially fixable with the `--fix` option.
+validate	ESLint completo	2026-10-18T15:27:18.1775303Z
+validate	ESLint completo	2026-10-18T15:27:18.4173045Z ##[error]Process completed with exit code 1.

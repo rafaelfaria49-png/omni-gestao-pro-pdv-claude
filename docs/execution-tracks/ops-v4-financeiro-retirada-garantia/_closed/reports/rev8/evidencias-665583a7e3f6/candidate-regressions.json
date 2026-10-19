@@ -1,0 +1,265 @@
+{
+  "base": false,
+  "results": [
+    {
+      "name": "fluxo001",
+      "group": "fluxo006",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo001",
+        "--group=fluxo006",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "lib/operacoes-v4/entrada-readback.test.ts",
+        "lib/operacoes-v4/entrada-readback.integration.test.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "fluxo002-mounted",
+      "group": "fluxo006",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo002-mounted",
+        "--group=fluxo006",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-002/vitest.config.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "fluxo002-pg",
+      "group": "fluxo006",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo002-pg",
+        "--group=fluxo006",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-financeiro-retirada-garantia-002/vitest-fluxo002-pg.config.mjs"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "fluxo003",
+      "group": "fluxo006",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo003",
+        "--group=fluxo006",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-003/vitest.config.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "fluxo004",
+      "group": "fluxo006",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo004",
+        "--group=fluxo006",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-004/vitest.config.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "fluxo005",
+      "group": "fluxo006",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo005",
+        "--group=fluxo006",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-005/vitest.config.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "fluxo006",
+      "group": "fluxo006",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo006",
+        "--group=fluxo006",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-006/vitest.config.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "fluxo007-full",
+      "group": "fluxo007",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "fluxo007-full",
+        "--group=fluxo007",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-007/vitest.config.ts"
+      ],
+      "exitCode": 1
+    },
+    {
+      "name": "T56c-1",
+      "group": "fluxo007",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "T56c-1",
+        "--group=fluxo007",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-007/vitest.config.ts",
+        "-t",
+        "T56c"
+      ],
+      "exitCode": 1
+    },
+    {
+      "name": "T56c-2",
+      "group": "fluxo007",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "T56c-2",
+        "--group=fluxo007",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-007/vitest.config.ts",
+        "-t",
+        "T56c"
+      ],
+      "exitCode": 1
+    },
+    {
+      "name": "T56c-3",
+      "group": "fluxo007",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "T56c-3",
+        "--group=fluxo007",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-fluxo-curto-007/vitest.config.ts",
+        "-t",
+        "T56c"
+      ],
+      "exitCode": 1
+    },
+    {
+      "name": "v3-misto-pg",
+      "group": "misto",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "v3-misto-pg",
+        "--group=misto",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v3-recebimento-misto/vitest.pg.config.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "v4-misto-pg",
+      "group": "misto",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "v4-misto-pg",
+        "--group=misto",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-v4-recebimento-misto/vitest.pg.config.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "datas-pg",
+      "group": "datas",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "datas-pg",
+        "--group=datas",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "test/ops-datas-retroativas-001/vitest.pg.config.ts"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "preview-full",
+      "group": "frg",
+      "command": [
+        "test/ops-v4-financeiro-retirada-garantia-002/qa-rev8.mjs",
+        "run",
+        "preview-full",
+        "--group=frg",
+        "--frozen",
+        "--",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "components/operacoes-v4-preview/preview-honesty.test.ts"
+      ],
+      "exitCode": 1
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "sha": "7fab1d12ccb447dec318a7045b11c34cf21d8269",
+  "cwd": "C:\\Projetos\\omni-gestao-ops-v4-frg-002",
+  "executable": "C:\\Program Files\\nodejs\\node.exe",
+  "command": [
+    "scripts/vercel-build.mjs"
+  ],
+  "shell": false,
+  "start": "2026-10-11T02:16:34.538Z",
+  "end": "2026-10-11T02:17:02.999Z",
+  "exitCode": 1,
+  "target": {
+    "db": "ops_v4_frg_qa_002",
+    "host": "127.0.0.1/32",
+    "port": 45708
+  },
+  "sourceHashes": {
+    "lib/operacoes-v3/elegibilidade-comercial.ts": "65c4af647eb85f0662e0707f078d65561d8c67ca1d6500e2fe3752c8279d011d",
+    "lib/operacoes-v3/pdv-servico-actions.ts": "7a7f6cd0490797995cbeb116dd0b2360ce53555a00554e3c8d1ffbf56ec7675f",
+    "components/operacoes-v3/hooks/use-pdv-servico-v3.ts": "bdaab93fcf8db75f0dc23c3f17233af677ca8c6a7a44951fb4a216d280a99c51",
+    "components/operacoes-v3/pages/PdvServicoV3.tsx": "11cf7b47819d8f3b46adca07f275a3dd0542b52a1ed162ac290b0770bd0949b0",
+    "components/operacoes-v4-preview/parts/ReceberPagamentoV4.tsx": "e02653d5ebf8bc6fb8ee6ffd61d346e852a0edec7dface3b6ff3dc972f98bc2a"
+  },
+  "expectedRed": false
+}

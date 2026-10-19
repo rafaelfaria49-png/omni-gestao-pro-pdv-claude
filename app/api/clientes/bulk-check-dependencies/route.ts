@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server"
+import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -10,49 +9,50 @@ export const revalidate = 0
 const MAX_IDS = 200
 
 export async function POST(req: Request) {
-  const gate = await requireAdmin()
-  if (!gate.ok) return gate.res
+  const gate = await requireCadastrosHubApi(req, "write", "admin")
+  if (!gate.ok) return gate.response
 
   let body: { ids?: string[] }
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
+    return clientPrivateJson({ error: "JSON inválido" }, { status: 400 })
   }
 
   const ids = body.ids
   if (!Array.isArray(ids)) {
-    return NextResponse.json({ error: "ids deve ser um array" }, { status: 400 })
+    return clientPrivateJson({ error: "ids deve ser um array" }, { status: 400 })
   }
-  const storeId = storeIdFromAssistecRequestForWrite(req)
+  const storeId = gate.storeId
   if (!storeId) {
-    return NextResponse.json({ error: "Loja não selecionada" }, { status: 400 })
+    return clientPrivateJson({ error: "Loja não selecionada" }, { status: 400 })
   }
 
   const normalizedIds = Array.from(new Set(ids.filter((x) => typeof x === "string").map((s) => s.trim()).filter(Boolean)))
   if (normalizedIds.length === 0) {
-    return NextResponse.json({ error: "Nenhum id válido fornecido" }, { status: 400 })
+    return clientPrivateJson({ error: "Nenhum id válido fornecido" }, { status: 400 })
   }
   if (normalizedIds.length > MAX_IDS) {
-    return NextResponse.json({ error: `Máximo de ${MAX_IDS} itens por lote` }, { status: 400 })
+    return clientPrivateJson({ error: `Máximo de ${MAX_IDS} itens por lote` }, { status: 400 })
   }
 
+  try {
   // 4 queries totais, independente do número de IDs (elimina N+1)
   const [clientes, osLinks, vendasLinks, transLinks] = await Promise.all([
     prisma.cliente.findMany({
       where: { id: { in: normalizedIds }, storeId },
-      select: { id: true, name: true, document: true },
+      select: { id: true, name: true },
     }),
     prisma.ordemServico.findMany({
-      where: { clienteId: { in: normalizedIds } },
+      where: { clienteId: { in: normalizedIds }, storeId },
       select: { clienteId: true },
     }),
     prisma.venda.findMany({
-      where: { clienteId: { in: normalizedIds } },
+      where: { clienteId: { in: normalizedIds }, storeId },
       select: { clienteId: true },
     }),
     prisma.financialTransaction.findMany({
-      where: { clienteId: { in: normalizedIds } },
+      where: { clienteId: { in: normalizedIds }, storeId },
       select: { clienteId: true },
     }),
   ])
@@ -95,11 +95,14 @@ export async function POST(req: Request) {
       id,
       exists: true,
       name: cli.name,
-      document: cli.document,
       isLinked,
       reasons,
     }
   })
 
-  return NextResponse.json({ results })
+  return clientPrivateJson({ results })
+  } catch {
+    console.error("[clientes/dependencies] operation_failed")
+    return clientPrivateJson({ error: "Falha ao verificar vínculos" }, { status: 503 })
+  }
 }

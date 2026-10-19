@@ -48,7 +48,7 @@ async function withDbRetry<T>(label: string, fn: () => Promise<T>, attempts = 6)
         /timeout|ECONNRESET|ENOTFOUND|connection/i.test(msg)
       if (transient && i < attempts - 1) {
         const ms = 800 * (i + 1)
-        console.warn(`[clientes-import] ${label} — retry ${i + 1}/${attempts} em ${ms}ms:`, msg.slice(0, 200))
+        console.warn(`[clientes-import] ${label} — retry ${i + 1}/${attempts} em ${ms}ms:`)
         await new Promise((r) => setTimeout(r, ms))
         continue
       }
@@ -60,8 +60,9 @@ async function withDbRetry<T>(label: string, fn: () => Promise<T>, attempts = 6)
 
 export async function listClientesForLoja(storeId: string): Promise<ClienteListItem[]> {
   const sid = storeId.trim()
+  if (!sid) return []
   const rows = await withDbRetry("findMany", () =>
-    prisma.cliente.findMany({ where: { storeId: sid }, orderBy: { updatedAt: "desc" } })
+    prisma.cliente.findMany({ where: { storeId: sid }, select: { id: true, name: true, phone: true, email: true }, take: 500, orderBy: { updatedAt: "desc" } })
   )
 
   return rows.map((r) => ({

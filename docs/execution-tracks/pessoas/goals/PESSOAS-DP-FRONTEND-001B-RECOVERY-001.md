@@ -32,6 +32,7 @@
     "lib/navigation/dashboard-nav-items.ts",
     "lib/pessoas/adapters/cadastro-ui.ts",
     "lib/pessoas/cadastro.ts",
+    "lib/pessoas/documentos/service.ts",
     "lib/pessoas/historico-privacidade.test.ts",
     "lib/pessoas/readers/disponibilidade.ts",
     "scripts/pessoas/frontend.contract.test.ts",
@@ -55,25 +56,52 @@
   "gates_liberados": [],
   "read_budget": 85,
   "plan_ref": "OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15",
-  "plan_rev": 5,
+  "plan_rev": 6,
   "familia_executor": "openai",
   "revisao_independente": true,
+  "dispensa_humana_revisao": {
+    "INDEPENDENT_REVIEW": "WAIVED_BY_HUMAN_DECISION",
+    "SELF_REVIEW": "CODEX",
+    "HUMAN_MERGE_AUTHORIZATION": "PENDING",
+    "data": "2026-10-18",
+    "escopo": "Exclusivamente a PR #273 e este GOAL; nenhuma dispensa global de R.",
+    "condicao": "Autorrevisao integral Codex sem achados bloqueantes remanescentes; todas as verificacoes tecnicas e gates continuam obrigatorios.",
+    "condicao_satisfeita": false,
+    "motivo": "P2-01 ainda aberto; nao presumir aceite ou ratificacao. Nenhuma nova revisao externa deve ser solicitada.",
+    "evidencia": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/blob/5eac8be5820f0d9a9ef0374e52bf1603112f78ca/docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/FECHAMENTO_TECNICO_CODEX_2026-10-18.md"
+  },
   "reversibilidade": "git revert do transporte e das correções locais; preservar histórico cadastral, versões, documentos e auditoria já persistidos. Não há alteração de schema/auth/configuração produtiva.",
   "gate_humano": {
     "requerido": true,
     "pendente": true,
-    "motivo": "Merge humano do planejamento e autorização de execução em nova sessão. Aceite exige revisão R GLM 5.3 e preview/R2 isolado com autorização separada ainda pendente. Produção e PESSOAS_DP_ENABLED produtivo não autorizados."
+    "motivo": "Merge humano do plano revisao 6, retomada AEP compativel e validacao tecnica efetiva pendentes. Dispensa externa condicional exclusiva da PR #273 registrada, sem autorrevisao como R. Producao e PESSOAS_DP_ENABLED produtivo nao autorizados."
   }
 }
 -->
 
 # PESSOAS-DP-FRONTEND-001B-RECOVERY-001
 
+## Revisão 6 — ampliação formal P2-01 e condição de retomada — 18/10/2026
+
+Autorização humana direta desta missão: preparar a revisão documental em `plan/pessoas-001b-scope-006`, a partir da main corrente, acrescentando **exatamente um caminho** à allowlist vigente: `lib/pessoas/documentos/service.ts`. Preservar este mesmo GOAL, sua branch/worktree de execução e a PR #273, cujo HEAD de referência é `5eac8be5820f0d9a9ef0374e52bf1603112f78ca`.
+
+**Uso futuro exclusivo desse serviço:** corrigir P2-01 em `refCanonica`, validando `storeId` segundo a gramática de `exigirAtor` (1–100 caracteres permitidos), sem relaxar as validações de `empregadorId` e `documentoId` nem mudar o namespace. A validação atual de oito caracteres rejeita os IDs válidos de seis caracteres `loja-1` e `loja-2`, impedindo upload-intent e afetando os usos do helper em complete/download. Não modificar outra regra, operação documental ou serviço.
+
+**Regressão prevista:** `scripts/pessoas/frontend.integration.test.ts`, já incluído na allowlist anterior. Usar Store sintética curta para comprovar o fluxo documental e as recusas de escopo, sem dados/recursos produtivos. Não acrescentar outro path de teste, schema, auth, migrations, adapter R2 ou API documental. `test_command`, reserva mínima de 12 GiB por volume, classe C3, risco ALTO e gates vazios permanecem.
+
+**Decisão humana de revisão:** a revisão externa adicional foi dispensada em 18/10/2026 exclusivamente para a PR #273, condicionada à autorrevisão completa Codex sem achados bloqueantes. Registrar `INDEPENDENT_REVIEW=WAIVED_BY_HUMAN_DECISION`, `SELF_REVIEW=CODEX` e `HUMAN_MERGE_AUTHORIZATION=PENDING`. A exigência padrão `revisao_independente=true` continua visível como histórico/política de C3/ALTO; a exceção humana específica está registrada no META e nesta seção. Não representar autorrevisão como R, não solicitar novo GLM, não inferir condição satisfeita enquanto P2-01 ou requisito técnico obrigatório permanecer pendente. As referências à exigência GLM nas seções da revisão 5 abaixo ficam subordinadas a esta decisão específica; não são autorização para pedir outra revisão.
+
+**Retomada ainda impedida pela CLI vigente:** o item 8 de `check` exige que o GOAL não esteja no delta `base_commit..HEAD` da execução. A incorporação futura do plano deve ocorrer por fluxo Git explicitamente autorizado pelo humano e produzir base comum contendo a revisão 6, com blob do GOAL igual nessa base e na execução; copiar apenas o arquivo do GOAL não satisfaz esse requisito. Esta missão não incorpora o plano na branch de execução e não executa merge/rebase.
+
+Além disso, `cmdOpen` usa `existing || {...}` e só atualiza `active.base_commit` quando o marcador já existe; a allowlist do marcador permanece antiga. `registry` não sincroniza `.aep-active`, e `check`/hook usam o snapshot antigo. Portanto **merge do plano + novo open não é estratégia suficiente nem comprovadamente compatível**. Os mecanismos existentes não oferecem atualização oficial da allowlist preservando a sessão aberta/tentativas. Não editar, remover ou recriar o marcador, não reiniciar tentativas, não usar block/close para simular retomada e não modificar a CLI nesta revisão. Antes de tocar o novo caminho, resolver esse impedimento por decisão humana/rito AEP específico que preserve os campos de sessão e o histórico; G-AEP-CORE não é liberado por este plano.
+
+Somente planejamento e diagnóstico de metadados nesta missão. Nenhuma exclusão, limpeza, movimentação, compressão, mudança da worktree de execução, produto, teste, build, Docker, produção ou GOAL 002. O planejamento pode chegar à main apenas por merge humano; ele não equivale a liberação automática do corretivo. Evidência: `docs/ai-execution/_evidence/PESSOAS-001B-SCOPE-006/PLAN_AND_DISK_2026-10-18.md`.
+
 ## Missão, autorização e base
 
 Concluir o frontend Pessoas já desenvolvido, reutilizando as telas, componentes, actions/APIs 001A e o hardening P2. Recuperar seletivamente o código funcional sobre a main corrente, corrigir a tipagem conhecida e completar testes/validação visual. Não reconstruir as telas nem criar outro backend ou motor trabalhista.
 
-Este é o único GOAL READY, classe C3, risco ALTO, plan_rev 5, por autorização humana específica desta missão de recuperação. O sucessor representa recuperação aprovada após esgotamento das tentativas do original; não é tentativa 4 nem reabertura disfarçada.
+Este é o único GOAL READY, classe C3, risco ALTO, plan_rev 6. A revisão 5 de recuperação e sua proveniência permanecem documentadas abaixo; a revisão 6 acrescenta somente o recorte P2-01 e a decisão humana específica acima. O sucessor representa recuperação aprovada após esgotamento das tentativas do original; não é tentativa 4 nem reabertura disfarçada.
 
 - Planejamento: plan/pessoas-001b-recovery-001 → main; somente documentação, derivados CLI, commit/push/PR autorizados. Merge humano.
 - Base confirmada por fetch em 12/10/2026: origin/main **857e24dfd81d2471d1a5cf448495e66d52a5073c**.
@@ -183,18 +211,19 @@ viewCadastro, editCadastro, editContrato, viewRemuneracao, viewDocumento e manag
 
 ## Allowlist exata e exclusões
 
-A lista do META é a única superfície de escrita da execução futura, limitada também pelos usos documentados aqui. A gramática AEP rejeita colchetes mesmo em paths literais; por isso o único prefixo de produto, app/dashboard/pessoas/funcionarios/**, cobre exclusivamente as três páginas existentes de lista/novo/[id] enumeradas no manifesto. Não autoriza novas páginas/arquivos sob esse prefixo; necessidade adicional exige replanejamento. Os outros 28 paths de produto são individuais, sem autorização genérica para app/, components/, lib/pessoas/ ou scripts/pessoas/.
+A lista do META é a única superfície de escrita da execução futura, limitada também pelos usos documentados aqui. A gramática AEP rejeita colchetes mesmo em paths literais; por isso o único prefixo de produto, app/dashboard/pessoas/funcionarios/**, cobre exclusivamente as três páginas existentes de lista/novo/[id] enumeradas no manifesto. Não autoriza novas páginas/arquivos sob esse prefixo; necessidade adicional exige replanejamento. Os outros 29 paths de produto são individuais (28 do transporte original e o serviço P2-01 da revisão 6), sem autorização genérica para app/, components/, lib/pessoas/ ou scripts/pessoas/.
 
 | Grupo do META | Limite |
 | --- | --- |
 | Oito arquivos de app/dashboard/pessoas e nove de components/dashboard/pessoas | Transportar e finalizar as telas/formulários/estados existentes. Novas rotas ou componentes fora desses arquivos exigem replanejamento. |
 | Endpoint, reader, adapter e três arquivos de navegação | Disponibilidade composta dos guards, conversões puras e inserção/filtro DP; nenhum redesenho global. |
 | cadastro.ts e historico-privacidade.test.ts | Exclusivamente preservar o fix salarial de leitura e sua regressão. |
+| lib/pessoas/documentos/service.ts — exceção da revisão 6 | Exclusivamente P2-01 em refCanonica: storeId conforme exigirAtor, preservando validações de empregadorId/documentoId e namespace. Regressão no frontend.integration.test.ts já permitido; retomada depende da compatibilidade AEP descrita acima. |
 | Seis arquivos scripts/pessoas enumerados | Recuperar runner/suítes e corrigir tipagem, preflight, ordem de typecheck, cobertura pendente e destino de evidências. Preservar modos oficial 001A e hardening P2 e seus guards. |
 | Relatório novo e subtree de evidências desta recuperação | Provas sintéticas saneadas, HEAD/base/contagens/etapas/infraestrutura/cleanup e revisões; nunca credenciais ou PII real. |
 | GOAL atual/fechado, três relatórios a1/a2/a3, LEDGER/state/REGISTRY/GATES | Somente ciclo oficial de ratificação CLI. Nenhuma edição manual de derivados/ledger nem mudança de GOAL/relatório histórico de 001A/P2/001B. O ledger só recebe novos eventos reais deste sucessor durante sua execução. |
 
-Fora da allowlist: actions/APIs documentais 001A, scope/admin/domain/commands/serviços, schema/migrations/seeds de ambiente, auth/proxy, AppShell/Topbar/provider de Store/tokens/globals, next.config.mjs/PWA, package.json/lockfile/.env*, CI e core AEP. Sem novo backend, motor/fechamento de folha, holerites próprios, férias/13º/rescisão/eSocial, pagamentos, integrações Financeiro/Contador, P3s residuais ou GOAL 002. Necessidade de path/gate adicional exige replanejamento humano antes de escrever.
+Fora da allowlist: actions/APIs documentais 001A, scope/admin/domain/commands e demais serviços (única exceção: lib/pessoas/documentos/service.ts no recorte P2-01 da revisão 6), schema/migrations/seeds de ambiente, auth/proxy, AppShell/Topbar/provider de Store/tokens/globals, next.config.mjs/PWA, package.json/lockfile/.env*, CI e core AEP. Sem novo backend, motor/fechamento de folha, holerites próprios, férias/13º/rescisão/eSocial, pagamentos, integrações Financeiro/Contador, P3s residuais ou GOAL 002. Necessidade de path/gate adicional exige replanejamento humano antes de escrever.
 
 ## Runner obrigatório, preflight e evidências
 

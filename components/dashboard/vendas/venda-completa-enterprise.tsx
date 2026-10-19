@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { consumePdvShortcut, hasPdvShortcutOverlay, isPdvRepeatedOrHandled } from "@/lib/pdv-keymap"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { configPadrao } from "@/lib/config-empresa"
@@ -430,10 +431,24 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Deixa qualquer combo Alt+_ passar (ex.: Alt+L → Alta Legibilidade global),
       // mesmo padrão do Supermercado/Assistência — atalho global nunca é engolido.
-      if (e.altKey) return
-      // Toda flag de modal entra no guard — evita atalho disparar com diálogo aberto.
+      if (isPdvRepeatedOrHandled(e) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || isSaleFinalizeBusy(isProcessingRef)) return
+      if (e.key === "Escape" && helpOpen) { consumePdvShortcut(e); setHelpOpen(false); return }
+      if (e.key === "End" && helpOpen) { consumePdvShortcut(e); setHelpOpen(false); return }
       const anyModalOpen =
         isPaymentOpen || cupomOpen || helpOpen || showItemAvulsoModal || showVendaEsperaModal || accessoryProduct !== null
+      if (hasPdvShortcutOverlay(anyModalOpen)) return
+      if (e.key === "Escape" && (showClienteDropdown || showProductDropdown)) {
+        consumePdvShortcut(e)
+        setShowClienteDropdown(false)
+        setShowProductDropdown(false)
+        setClienteQuery("")
+        setProductQuery("")
+        scanFeedback.dismiss()
+        return
+      }
+      const dropdownVisible = (showClienteDropdown && (clienteResultados.length > 0 || clienteLoading)) ||
+        (showProductDropdown && (filteredProducts.length > 0 || (productQuery.trim() && products.length > 0)))
+      if (dropdownVisible) return
       switch (e.key) {
         case "F1":
           e.preventDefault()
@@ -472,7 +487,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           break
         case "F7":
           e.preventDefault()
-          if (heldSalesEnabled && !isPaymentOpen && !cupomOpen && !helpOpen) {
+          if (heldSalesEnabled && !anyModalOpen) {
             setShowVendaEsperaModal(true)
           }
           break
@@ -484,6 +499,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           if (helpOpen) { e.preventDefault(); setHelpOpen(false) }
           break
       }
+      if (e.defaultPrevented) consumePdvShortcut(e)
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
@@ -2035,6 +2051,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
             </div>
           </div>
           <div className="border-t border-border px-5 py-2.5">
+            <p className="text-[11px] text-muted-foreground">F4, F5, F8, F9, F10 e F12: sem atalho nesta superfície. Pagamento múltiplo fica no modal. Escape também fecha as sugestões de entrada.</p>
             <p className="text-[11px] text-muted-foreground">
               Operador: <span className="font-medium text-foreground">{operatorLabel}</span>
             </p>

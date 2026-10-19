@@ -1,0 +1,56 @@
+{
+  "functionalSHA": "d5570e829057863a9f670823bb3367b527efb391",
+  "revision": 8,
+  "attempt": 2,
+  "status": "AGUARDANDO_R_INDEPENDENTE",
+  "manifestSHA256": "db892bd42610d5c2c80b62d9575d0fff50ba022e88a7b708afef258c571f5d26",
+  "zipSHA256": "e3fcfa4478f4124a68da6124f974ce6ac3b500fc7bac788fe33cecf854d9cc3c",
+  "files": [
+    {
+      "path": "INTEGRIDADE-PACOTE-N2-A2.json",
+      "bytes": 370,
+      "sha256": "f8f5e3968485aff624a9bd5ce4e26db334d1491918c4ae2f6a2e2c099cdf3723"
+    },
+    {
+      "path": "MANIFEST-PACOTE-N2-A2.json",
+      "bytes": 118070,
+      "sha256": "db892bd42610d5c2c80b62d9575d0fff50ba022e88a7b708afef258c571f5d26"
+    },
+    {
+      "path": "MATRIZ-N2-A2.json",
+      "bytes": 21627,
+      "sha256": "e21a7a820f83de711461d1e725557fe9f698f6506a37786839070968b9c2bc89"
+    },
+    {
+      "path": "PEDIDO-R-COMPLETA.md",
+      "bytes": 4458,
+      "sha256": "1696ae072688b80bc9b88c4a2849c2f7b7841101c2b41e424360d72806deb14d"
+    },
+    {
+      "path": "PRESERVACAO-CANDIDATOS.json",
+      "bytes": 1565,
+      "sha256": "aae720b0d46cac2034f312166988272e2cf8d77933d0885d21ccd628a32c64a5"
+    },
+    {
+      "path": "RELATORIO-N2-A2.md",
+      "bytes": 10564,
+      "sha256": "07acb0cd138b3aab9d24a7c144a5fb3e70ca41a63dcec471e30670536bfab962"
+    },
+    {
+      "path": "VERIFICADOR-SOMENTE-LEITURA.mjs.txt",
+      "bytes": 1784,
+      "sha256": "e479c67cb3e9d7afb261dbdbbd384af217ea7a6fb998b2a0cd03d795ea4ac7db"
+    },
+    {
+      "path": "packet-seal.json",
+      "bytes": 352,
+      "sha256": "f46c7ee8ecfdcca25b2d72e94e0a46e49e78f224134f57952de2e030856d4c0d"
+    },
+    {
+      "path": "pacote-rev8-n2-a2-d5570e829057.zip",
+      "bytes": 3568191,
+      "sha256": "e3fcfa4478f4124a68da6124f974ce6ac3b500fc7bac788fe33cecf854d9cc3c"
+    }
+  ],
+  "at": "2026-10-11T18:09:33.005Z"
+}

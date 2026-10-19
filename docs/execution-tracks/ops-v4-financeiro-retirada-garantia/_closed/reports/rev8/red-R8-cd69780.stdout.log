@@ -1,0 +1,31 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-ops-v4-frg-002-rev8-red
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts (68 tests | 10 failed | 50 skipped) 1767ms
+     × rascunho: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 412ms
+     × enviado válido: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 97ms
+     × enviado vencido: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 85ms
+     × rascunho vencido continua pendente: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 74ms
+     × recusado: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 59ms
+     × expirado persistido: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 50ms
+     × zeros sem preço: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 44ms
+     × coluna divergente: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 43ms
+     × payload inválido: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 56ms
+     × declarado difere das linhas: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro 49ms
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx (23 tests | 10 failed) 2042ms
+     × APROVACAO_COMERCIAL_PENDENTE → comercial preservado, sem manter pendência financeira 137ms
+     × ORCAMENTO_RECUSADO → comercial preservado, sem manter pendência financeira 68ms
+     × ORCAMENTO_EXPIRADO → comercial preservado, sem manter pendência financeira 68ms
+     × PRECO_AUSENTE → comercial preservado, sem manter pendência financeira 83ms
+     × VALORES_DIVERGENTES → financeiro preservado, sem manter pendência financeira 89ms
+     × resposta tardia em A-B-A não reaparece como recusa atual 216ms
+     × sucesso posterior limpa o motivo anterior 67ms
+     × recusa não comercial posterior limpa o motivo anterior 67ms
+     × Connection closed. posterior limpa o motivo anterior 82ms
+     × reload posterior limpa o motivo anterior 83ms
+
+ Test Files  2 failed (2)
+      Tests  20 failed | 21 passed | 50 skipped (91)
+   Start at  22:15:14
+   Duration  52.67s (transform 4.15s, setup 0ms, import 13.41s, tests 3.81s, environment 31.49s)
+

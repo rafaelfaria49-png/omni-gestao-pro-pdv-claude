@@ -1,0 +1,402 @@
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 20 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > APROVACAO_COMERCIAL_PENDENTE → comercial preservado, sem manter pendência financeira
+AssertionError: expected undefined to deeply equal { …(2) }
+
+- Expected:
+{
+  "codigo": "APROVACAO_COMERCIAL_PENDENTE",
+  "destino": "comercial",
+}
+
++ Received:
+undefined
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx:21:46
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > ORCAMENTO_RECUSADO → comercial preservado, sem manter pendência financeira
+AssertionError: expected undefined to deeply equal { codigo: 'ORCAMENTO_RECUSADO', …(1) }
+
+- Expected:
+{
+  "codigo": "ORCAMENTO_RECUSADO",
+  "destino": "comercial",
+}
+
++ Received:
+undefined
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx:21:46
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > ORCAMENTO_EXPIRADO → comercial preservado, sem manter pendência financeira
+AssertionError: expected undefined to deeply equal { codigo: 'ORCAMENTO_EXPIRADO', …(1) }
+
+- Expected:
+{
+  "codigo": "ORCAMENTO_EXPIRADO",
+  "destino": "comercial",
+}
+
++ Received:
+undefined
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx:21:46
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > PRECO_AUSENTE → comercial preservado, sem manter pendência financeira
+AssertionError: expected undefined to deeply equal { codigo: 'PRECO_AUSENTE', …(1) }
+
+- Expected:
+{
+  "codigo": "PRECO_AUSENTE",
+  "destino": "comercial",
+}
+
++ Received:
+undefined
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx:21:46
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > VALORES_DIVERGENTES → financeiro preservado, sem manter pendência financeira
+AssertionError: expected undefined to deeply equal { codigo: 'VALORES_DIVERGENTES', …(1) }
+
+- Expected:
+{
+  "codigo": "VALORES_DIVERGENTES",
+  "destino": "financeiro",
+}
+
++ Received:
+undefined
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx:21:46
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > resposta tardia em A-B-A não reaparece como recusa atual
+AssertionError: expected 'Recusa comercial original' to be null
+
+- Expected:
+null
+
++ Received:
+"Recusa comercial original"
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx:43:97
+     41|     if (campo === "A-B-A") { r.rerender({ s: "loja-a", o: "os-a" }); a…
+     42|     await act(async () => { c.resolver(terminal(m.receber.mock.calls[0…
+     43|     expect(r.result.current.recusaComercial ?? null).toBeNull(); expec…
+       |                                                                                                 ^
+     44|   });
+     45|   it.each(["sucesso", "recusa não comercial", "Connection closed.", "r…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > sucesso posterior limpa o motivo anterior
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > recusa não comercial posterior limpa o motivo anterior
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > Connection closed. posterior limpa o motivo anterior
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx > R8 · hook vincula motivo à recusa e ao contexto > reload posterior limpa o motivo anterior
+AssertionError: expected undefined to deeply equal { codigo: 'VALORES_DIVERGENTES', …(1) }
+
+- Expected:
+{
+  "codigo": "VALORES_DIVERGENTES",
+  "destino": "financeiro",
+}
+
++ Received:
+undefined
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/motivo-recusa.test.tsx:46:139
+     44|   });
+     45|   it.each(["sucesso", "recusa não comercial", "Connection closed.", "r…
+     46|     const r = await montar(); await act(async () => { await r.result.c…
+       |                                                                                                                                           ^
+     47|     if (caso === "reload") { act(() => r.result.current.reload()); awa…
+     48|     else {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > rascunho: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "APROVACAO_COMERCIAL_PENDENTE",
+-     "destino": "comercial",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "b95e8f1d-8b63-4f1e-8ca9-c66e4abf33ac",
+    "requestFingerprint": "b1cb8efb67fef1613d01dda9e879a35a2cdbd23682a1cec854a197df84fec7e9",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > enviado válido: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "APROVACAO_COMERCIAL_PENDENTE",
+-     "destino": "comercial",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "0f3e0528-2a96-4930-9ec8-406dd201b9ed",
+    "requestFingerprint": "9f208ad6e7eed6b359a1c5112a6d574736e77cd69a44f0f2445421a69b6fef44",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > enviado vencido: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "ORCAMENTO_EXPIRADO",
+-     "destino": "comercial",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "32c3bf6b-cd4c-4872-a4ce-6dcc6dd61ce0",
+    "requestFingerprint": "8997288d4a7844031d66cba7792bc9f78e9e4161f9b7fa41072aabc91e0cbd48",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > rascunho vencido continua pendente: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "APROVACAO_COMERCIAL_PENDENTE",
+-     "destino": "comercial",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "aa0a808a-6ed8-417d-92bd-96e0a5012170",
+    "requestFingerprint": "fa6176bd5e8b458c25de81f209a469edd42a13e5130bd71f7e952320a540aeac",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > recusado: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "ORCAMENTO_RECUSADO",
+-     "destino": "comercial",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "2517eb64-4354-4459-aa2c-607fd7d48b8e",
+    "requestFingerprint": "0edfcd45bb8c2a4709e66f51aca6943736f4c56f8279cc548a0de4de4f2f4777",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > expirado persistido: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "ORCAMENTO_EXPIRADO",
+-     "destino": "comercial",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "f54cd780-1021-4e76-af94-2f9a989e138d",
+    "requestFingerprint": "7af8e47e158b58e835f6f99d753ad1702c37abf8a3ba37ffd5ba89aff81bcdfd",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > zeros sem preço: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "PRECO_AUSENTE",
+-     "destino": "comercial",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "a42ec7be-c834-4b4b-8335-6332b9f5b215",
+    "requestFingerprint": "95d26b15df89b5d6e5298ae44ccd6da7a383bdbe09b874f34fb2854add381ea4",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > coluna divergente: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "VALORES_DIVERGENTES",
+-     "destino": "financeiro",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "66259929-f83a-4167-87f3-6ca7efabcda8",
+    "requestFingerprint": "26d9adb137a66ddcd6e978545f810cb93b99d4d3eb34ce79ba16d96d806cbede",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > payload inválido: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "VALORES_DIVERGENTES",
+-     "destino": "financeiro",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "35be62d8-2094-4ce1-9aa9-7d720ae6bf7b",
+    "requestFingerprint": "32fc922d77b02f088e6356840857e1f35c23b0eec2ae74890d23ced808490fed",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/20]⎯
+
+ FAIL  test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts > R8 · motivo comercial inicial, durável, replay e legado > declarado difere das linhas: preserva o motivo original mesmo após mudança comercial, sem segunda recusa ou dinheiro
+AssertionError: expected { …(4) } to match object { …(4) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comercial": {
+-     "codigo": "VALORES_DIVERGENTES",
+-     "destino": "financeiro",
+-   },
+    "estado": "RECUSADO_DEFINITIVAMENTE",
+    "operacaoId": "df8522c2-74c6-4769-9a68-342eb2a63ed7",
+    "requestFingerprint": "02e3eb9920e1f82048469831d1b6fbf216030ba19f62af0c3699daa2cf7872b2",
+  }
+
+ ❯ test/ops-v4-financeiro-retirada-garantia-002/recebimento-elegivel.pg.test.ts:968:22
+    966|     const original = { linhas: [{ forma: "pix" as const, valor: 100 }]…
+    967|     const recusada = await receberOSV3(sid, osId, original);
+    968|     expect(recusada).toMatchObject({ estado: "RECUSADO_DEFINITIVAMENTE…
+       |                      ^
+    969|     const registros = (await lerPayload(osId)).recebimentoImediatoRecu…
+    970|     expect(registros).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/20]⎯
+

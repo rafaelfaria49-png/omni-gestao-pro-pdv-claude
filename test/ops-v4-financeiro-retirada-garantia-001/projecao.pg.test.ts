@@ -95,13 +95,37 @@ async function estadoBruto(storeId: string, osId: string) {
   return JSON.stringify({ os, titulos, caixa, movimentos, estoque });
 }
 
+/**
+ * GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item A): o writer atual recusa receber sobre
+ * rascunho. O caso legado é semeado como nasceu (OS-2026-00025): pagamento pelo writer real
+ * sobre preço aprovado e, depois, um rascunho materializado por cima — o mesmo estado final.
+ */
+async function voltarOrcamentoParaRascunho(osId: string): Promise<void> {
+  const row = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId }, select: { payload: true } });
+  const payload = row.payload as Record<string, unknown>;
+  const { respondidoEm: _respondidoEm, ...orcamento } = payload.orcamento as Record<string, unknown>;
+  await prisma.ordemServico.update({
+    where: { id: osId },
+    data: { payload: { ...payload, orcamento: { ...orcamento, status: "rascunho" } } as unknown as Prisma.InputJsonValue },
+  });
+}
+
 describe("OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-001 — PostgreSQL descartável", () => {
-  it("A1: writer atual recebe sobre rascunho; a leitura mostra fatos + pendência comercial; a entrega segue bloqueada no servidor; ler não escreve", async () => {
+  it("A1: legado rascunho + título liquidado (writer atual recusa receber sobre rascunho); a leitura mostra fatos + pendência comercial; a entrega segue bloqueada no servidor; ler não escreve", async () => {
     const sid = await novaLoja();
-    const osId = await novaOS(sid, "rascunho");
     const sessaoId = await abrirCaixa(sid);
+    // O writer atual recusa recebimento NOVO sobre rascunho, com motivo e destino, sem efeito.
+    const emRascunho = await novaOS(sid, "rascunho");
+    const antesRecusa = await estadoBruto(sid, emRascunho);
+    await expect(
+      receberOSV3(sid, emRascunho, { linhas: [{ forma: "dinheiro", valor: 420 }], sessaoId, operacaoId: gerarOperacaoIdV3() }),
+    ).rejects.toMatchObject({ codigo: "APROVACAO_COMERCIAL_PENDENTE", destino: "comercial" });
+    expect(await estadoBruto(sid, emRascunho)).toBe(antesRecusa);
+
+    const osId = await novaOS(sid, "aprovado");
     const operacaoId = gerarOperacaoIdV3();
     await receberOSV3(sid, osId, { linhas: [{ forma: "dinheiro", valor: 420 }], sessaoId, operacaoId });
+    await voltarOrcamentoParaRascunho(osId);
 
     const antes = await estadoBruto(sid, osId);
     const p = await lerProjecaoFinanceiraOSV4(sid, osId);

@@ -81,7 +81,7 @@ vi.mock("@/lib/cliente-phone-match", () => ({
 
 import { GET as listClientes, POST as createClienteAdmin } from "./route"
 import { GET as getCliente, PATCH as patchCliente } from "./[id]/route"
-import { GET as matchByPhone } from "./match-by-phone/route"
+import { POST as matchByPhone } from "./match-by-phone/route"
 import { POST as quickCreate } from "./quick/route"
 
 function makeSession(opts: {
@@ -111,7 +111,7 @@ function sessionAtiva(opts?: Parameters<typeof makeSession>[0]) {
 
 function listReq(storeId?: string) {
   const url = storeId
-    ? `https://app.local/api/clientes?q=ana`
+    ? `https://app.local/api/clientes`
     : `https://app.local/api/clientes`
   const headers = new Headers()
   if (storeId) headers.set(ASSISTEC_LOJA_HEADER, storeId)
@@ -194,10 +194,11 @@ describe("GET /api/clientes/[id]", () => {
   })
 })
 
-describe("GET /api/clientes/match-by-phone", () => {
+describe("POST /api/clientes/match-by-phone", () => {
   it("sem sessão → 401", async () => {
     const res = await matchByPhone(
-      new Request("https://app.local/api/clientes/match-by-phone?phone=11999990000", {
+      new Request("https://app.local/api/clientes/match-by-phone", {
+        method: "POST", body: JSON.stringify({ phone: "11999990000" }),
         headers: { [ASSISTEC_LOJA_HEADER]: "loja-a" },
       }),
     )
@@ -208,7 +209,8 @@ describe("GET /api/clientes/match-by-phone", () => {
   it("própria loja → chama matcher com store autorizado", async () => {
     sessionAtiva({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
     const res = await matchByPhone(
-      new Request("https://app.local/api/clientes/match-by-phone?phone=11999990000", {
+      new Request("https://app.local/api/clientes/match-by-phone", {
+        method: "POST", body: JSON.stringify({ phone: "11999990000" }),
         headers: { [ASSISTEC_LOJA_HEADER]: "loja-a" },
       }),
     )

@@ -1,0 +1,52 @@
+
+Running 6 tests using 1 worker
+
+(node:11000) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11000) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (2.3s)
+(node:7256) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7256) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+QA_DATAS_NOVA_OS: os=cmv2qm3ot0004h2gsqepfubpv entrada=2026-10-07 previsao=2026-10-12
+  ok 2 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:140:5 › V4 Nova OS: entrada anterior com horário e previsão combinada; o cadastro fica com o servidor (3.8s)
+QA_DATAS_ORCAMENTO: os=cmv2qm6qj000bh2gs7v1zk2ko proposta=2026-10-05 validoAte=2026-10-12
+  ok 3 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:204:5 › V4 Orçamento: proposta de dias atrás, validade coerente e nenhuma entrada fictícia (3.8s)
+QA_DATAS_ATENDIMENTO: os=cmv2qm9cq000ih2gs1zvzi3fe servico=2026-10-08 caixa_at=2026-10-10T18:38:23.559Z
+  ok 4 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:259:5 › V4 Atendimento rápido: serviço de dias atrás; o recebimento é agora, no caixa atual (3.0s)
+  x  5 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:312:5 › V4 Entrega de dias atrás pelo caminho canônico; depois Corrigir datas desloca a garantia sem refazer nada (4.3s)
+(node:20908) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20908) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+QA_DATAS_V3: os=qa-datas-v3-mv2qmeh3 entrada 2026-09-30 -> 2026-09-28
+  ok 6 [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:440:5 › V3 (paridade): OS entregue mostra as datas efetivas no workspace; Corrigir datas da V3 grava só a entrada (4.3s)
+
+
+  1) [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:312:5 › V4 Entrega de dias atrás pelo caminho canônico; depois Corrigir datas desloca a garantia sem refazer nada 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m"Entrega real em 07/10/2026: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?"[39m
+    Received: [31m"Entrega real em 07/10/2026[7m, retirada por Cliente QA Entrega mv2qm9yd[27m: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?"[39m
+
+      367 |     await capturar(page, campo.locator("xpath=ancestor::div[.//button[normalize-space()='Confirmar entrega real']][1]"), "entrega-data");
+      368 |     const aviso = await confirmarNativo(page, () => page.getByRole("button", { name: "Confirmar entrega real" }).click());
+    > 369 |     expect(aviso).toBe(`Entrega real em ${br(entrega)}: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?`);
+          |                   ^
+      370 |     // "Confirmando…" também tira o rótulo do botão: espera o fim real da ação no servidor.
+      371 |     await expect(page.getByRole("button", { name: /^(Confirmar entrega real|Confirmando…)$/ })).toHaveCount(0, { timeout: 60_000 });
+      372 |     const lerOS = async () => (await prisma.ordemServico.findUniqueOrThrow({ where: { id: os.id } })).payload as Json;
+        at C:\Projetos\omni-gestao-ops-v4-frg-002\e2e\specs\ops-datas-retroativas-001.spec.ts:369:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\specs-ops-datas-retroativa-5ce14-a-garantia-sem-refazer-nada-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\specs-ops-datas-retroativa-5ce14-a-garantia-sem-refazer-nada-chromium\error-context.md
+
+  1 failed
+    [chromium] › e2e\specs\ops-datas-retroativas-001.spec.ts:312:5 › V4 Entrega de dias atrás pelo caminho canônico; depois Corrigir datas desloca a garantia sem refazer nada 
+  5 passed (25.3s)

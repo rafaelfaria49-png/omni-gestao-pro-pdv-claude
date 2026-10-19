@@ -1,0 +1,89 @@
+{
+  "environment": "LOCAL_BUILD_DUMMY_DATASOURCE",
+  "productionAccess": false,
+  "results": [
+    {
+      "method": "GET",
+      "path": "/api/clientes",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/clients",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/clientes/search",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/clientes/match-by-phone",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/clientes/duplicates",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/clientes/privacy-request",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/clientes/importar",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/import/clientes",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/clientes/bulk-delete",
+      "status": 401,
+      "noInputEcho": true,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/privacy",
+      "status": 200,
+      "noBlanketConsent": true,
+      "explicitPending": true,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/client-privacy-cache.js",
+      "status": 200,
+      "pass": true
+    }
+  ],
+  "pwa": {
+    "clientRule": true,
+    "cleanupImported": true,
+    "navigationGuard": true
+  },
+  "result": "PASS"
+}

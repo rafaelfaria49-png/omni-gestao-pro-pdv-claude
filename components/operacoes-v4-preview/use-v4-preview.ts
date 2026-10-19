@@ -31,6 +31,7 @@ import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes
 import { useLojaAtiva, registrarGuardaTrocaLojaV4 } from "@/lib/loja-ativa";
 import { useGuardaRascunhos, saidaEtapaExigeGuardaV4, type GuardaRascunhosV4 } from "./use-entrada-draft-guard";
 import type { RascunhoEntradaV4 } from "./parts/stages/EntradaWorkspace";
+import { useEntradaOcupadaV4, type OcupacaoEntradaV4 } from "./use-entrada-ocupada";
 import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
 // Actions REAIS reaproveitadas da V3 (sem criar backend novo) — slices OPS-V4-ORCAMENTO-REAL-002 / -ENTRADA-RECEPCAO-REAL-003.
@@ -40,8 +41,14 @@ import {
   salvarOrcamentoV3,
   corrigirOrcamentoV3,
   aprovarOrcamentoV3,
+  aprovarOrcamentoParaReceberV3,
+  conferirEscopoAprovacaoV3,
   recusarOrcamentoV3,
+  conferirFormalizacaoAprovacaoV3,
+  formalizarAprovacaoPendenteV3,
 } from "@/lib/operacoes-v3/orcamento-actions";
+import type { ConferenciaFormalizacaoResultV3, FormalizacaoAprovacaoResultV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-actions";
+import type { ConferenciaEscopoAprovacaoResultV3, EntradaFormalizacaoV3 } from "@/lib/operacoes-v3/formalizacao-aprovacao-model";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
 import {
   adicionarObservacaoInternaV3,
@@ -130,7 +137,7 @@ import {
 import { montarMensagemAtualizacaoOSV4 } from "@/lib/operacoes-v4/documento-mensagem";
 import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
 import type { EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
-import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operacoes-v3/garantia-actions";
+import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3, reemitirTermoGarantiaLegadoV3, type SalvarGarantiaInputV3 } from "@/lib/operacoes-v3/garantia-actions";
 import { lerEntregaV3, lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { abrirRetornoV3, buscarOrigensRetornoV3, finalizarRetornoV3, lerOrigemRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 import {
@@ -158,7 +165,14 @@ import {
   montarHistoricoHeaderV4,
 } from "@/lib/operacoes-v4/os-header-transversal";
 import { montarResumoFinanceiroOSV4 } from "@/lib/operacoes-v4/financeiro-v4";
-import { derivarSituacaoAtendimentoV4, pagamentoComPendenciaComercialV4, pagamentoEmConferenciaV4 } from "@/lib/operacoes-v4/situacao-atendimento-v4";
+import {
+  derivarSituacaoAtendimentoV4,
+  orientacaoGerarOrcamentoV4,
+  pagamentoComPendenciaComercialV4,
+  pagamentoEmConferenciaV4,
+  podeOferecerAprovarEReceberV4,
+  podeOferecerFormalizacaoV4,
+} from "@/lib/operacoes-v4/situacao-atendimento-v4";
 import { derivarRetiradaFinanceiraV4, servicoDaRetiradaV4 } from "@/lib/operacoes-v4/retirada-fluxo-v4";
 import { lerReciboDaProjecaoV4, type LeituraReciboV4 } from "@/lib/operacoes-v4/recibo-persistido-v4";
 import { buildGarantiasPortfolioV4 } from "@/lib/operacoes-v4/posvenda-v4";
@@ -232,6 +246,8 @@ export interface V4DataCtx {
   /** R04: guarda de rascunhos da Entrada (memória da sessão, por loja+OS).
    *  Opcional por compatibilidade (ausente = saídas imediatas, sem guarda). */
   rascunhos?: GuardaRascunhosV4<RascunhoEntradaV4>;
+  /** Estado vivo por loja+OS, compartilhado pelo acesso visível e pelo menu. */
+  ocupacaoEntrada?: Pick<OcupacaoEntradaV4, "ocupada">;
   reloadOrdens: () => void;
   /** Recarrega o detalhe da OS selecionada após uma escrita. */
   reloadDetail: () => void;
@@ -323,10 +339,11 @@ export interface V4DataCtx {
   adicionarFotoSaida: (input: AdicionarFotoSaidaInputV3) => Promise<boolean>;
   removerFotoSaida: (fotoId: string) => Promise<boolean>;
   /** Registra na timeline que um documento foi impresso (best-effort). */
-  registrarImpressaoDoc: (tipo: DocumentoTipoV3) => void;
+  registrarImpressaoDoc: (tipo: DocumentoTipoV3, versao?: number) => void;
+  reemitirTermoGarantia?: (input: { motivo: string; esperado: string }) => Promise<boolean>;
   // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
   /** Define/edita a garantia prevista da OS (reuso de `salvarGarantiaOSV3`). */
-  salvarGarantia: (input: { modeloId: string; prazoDias?: number }) => Promise<boolean>;
+  salvarGarantia: (input: SalvarGarantiaInputV3) => Promise<boolean>;
   /**
    * Abre o retorno da OS SELECIONADA (motor V3, operação nova). Mantido por
    * compatibilidade; a V4 usa o fluxo Retorno / Garantia (`abrirRetornoDaOrigem`).
@@ -364,7 +381,7 @@ export interface V4DataCtx {
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
   // recarregar lista+detalhe da V4 depois do sucesso.
-  pdvServico: PdvServicoState & Partial<Pick<PdvServicoV3Completo, "registrarMisto" | "registrandoMisto" | "pendenciaMisto" | "aPrazo">>;
+  pdvServico: PdvServicoState & Partial<Pick<PdvServicoV3Completo, "registrarMisto" | "registrandoMisto" | "pendenciaMisto" | "pendenciaReceber" | "pendenciaConfirmacao" | "confirmacaoBloqueada" | "verificarConfirmacao" | "aPrazo">>;
   // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
   // Action SEPARADA de `receberOSV3`/`pdvServico.receber` — formaliza o saldo
   // aberto como Conta a Receber PENDENTE (vencimento), sem receber dinheiro.
@@ -403,6 +420,18 @@ export interface V4DataCtx {
   // lê `orcamentoRapidoPrefill` quando abre.
   orcamentoRapidoPrefill: OrcamentoRapidoFormV4 | null;
   definirOrcamentoRapidoPrefill: (values: OrcamentoRapidoFormV4 | null) => void;
+  // ---- GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 ----
+  // Opcionais por compatibilidade com fixtures legados (ausente = ação indisponível).
+  /** Recebimento aberto em modo "Aprovar e receber" (loja+OS) — estado da sessão, fora do V4State. */
+  aprovacaoNoRecebimento?: AprovacaoNoRecebimentoV4 | null;
+  definirAprovacaoNoRecebimento?: (valor: AprovacaoNoRecebimentoV4 | null) => void;
+  /** Escopo do orçamento lido no servidor (linhas efetivas, total, assinatura) para o consentimento. */
+  conferirEscopoAprovacao?: () => Promise<ConferenciaEscopoAprovacaoUiV4>;
+  /** Aprova o escopo CONSENTIDO pela action própria e, só com sucesso e no MESMO alvo, chama `receber`. */
+  aprovarEReceber?: (receber: () => Promise<RecebimentoAposAprovacaoV4>, esperado: { conteudo: string }) => Promise<ResultadoAprovarEReceberV4>;
+  /** "Formalizar aprovação pendente": conferência (leitura) e formalização (escrita). */
+  conferirFormalizacao?: () => Promise<ConferenciaFormalizacaoUiV4>;
+  formalizarAprovacao?: (input: EntradaFormalizacaoV3) => Promise<FormalizacaoAprovacaoUiV4>;
 }
 
 /** Resultado honesto de `enviarOrcamentoPorCanal` para a UI decidir o que mostrar. */
@@ -411,6 +440,33 @@ export interface EnviarOrcamentoPorCanalUiResultV4 {
   reenvio?: boolean;
   avisoRegistro?: boolean;
 }
+
+/** GOAL 002 (item C): o painel de recebimento desta loja+OS está em "Aprovar e receber". */
+export interface AprovacaoNoRecebimentoV4 {
+  chave: string;
+  /** `aprovado_pagamento_pendente` = aprovação gravada e recebimento ainda não confirmado. */
+  estado: "conferir" | "aprovado_pagamento_pendente";
+}
+
+export type RecebimentoAposAprovacaoV4 = { ok: true } | { ok: false; mensagem: string | null };
+
+export type ResultadoAprovarEReceberV4 =
+  | { status: "recebido" }
+  | { status: "aprovacao_recusada"; mensagem: string }
+  /** Aprovação gravada (sem rollback fictício); o pagamento não foi confirmado. */
+  | { status: "aprovado_pagamento_nao_confirmado"; mensagem: string | null }
+  /** Resposta tardia: o operador já está em outra OS/loja — nada mais acontece aqui. */
+  | { status: "fora_do_alvo" };
+
+/** `foraDoAlvo` = resposta de outra OS/loja: a tela ignora. */
+export type ConferenciaEscopoAprovacaoUiV4 = ConferenciaEscopoAprovacaoResultV3 | { ok: false; mensagem: string; foraDoAlvo: true };
+
+export type ConferenciaFormalizacaoUiV4 = ConferenciaFormalizacaoResultV3 | { ok: false; code: "fora_do_alvo" | "falha_leitura"; mensagem: string };
+
+export type FormalizacaoAprovacaoUiV4 =
+  | FormalizacaoAprovacaoResultV3
+  /** `incerto` = resposta perdida: reenviar a MESMA confirmação (mesma chave) para conferir. */
+  | { ok: false; code: "fora_do_alvo" | "incerto"; mensagem: string };
 
 /**
  * GOAL OPS-V4-RIGHT-RAIL-DEDUP-001: preferência aberto/fechado da lateral
@@ -508,6 +564,30 @@ export function buildVals(
   // seleção = fechada nesta — nunca mostra/age sobre a OS errada.
   const chaveSuperficies = JSON.stringify([ctx.lojaAtivaId ?? null, st.selectedOsId]);
   const noAlvoSuperficies = !!st.selectedOsId && st.alvoSuperficies === chaveSuperficies;
+  const cargaDatasEstabelecida =
+    !!ctx.lojaAtivaId && !!st.selectedOsId && ctx.detailCarregada === true &&
+    !ctx.detailLoading && !ctx.detailError && !!realOS &&
+    realOS.id === st.selectedOsId && realOS.storeId === ctx.lojaAtivaId;
+  const entradaComRascunhoDatas = ctx.entradaComRascunho === true ||
+    ctx.rascunhos?.sujo((ctx.lojaAtivaId ?? "") + "::" + (st.selectedOsId ?? "")) === true;
+  const entradaOcupada = ctx.ocupacaoEntrada?.ocupada(ctx.lojaAtivaId, st.selectedOsId) === true;
+  const openCorrigirDatas = () => {
+    if (!cargaDatasEstabelecida) {
+      notify("Aguarde o carregamento completo da OS antes de corrigir datas.");
+      return;
+    }
+    // Consulta viva: também recusa comandos capturados antes do render que
+    // publica o busy (registro explícito pode não produzir rascunho sujo).
+    if (ctx.ocupacaoEntrada?.ocupada(ctx.lojaAtivaId, st.selectedOsId)) {
+      notify("Aguarde o salvamento da Entrada antes de corrigir datas.");
+      return;
+    }
+    if (entradaComRascunhoDatas) {
+      notify("Salve ou descarte as alterações da Entrada antes de corrigir datas.");
+      return;
+    }
+    update({ corrigirDatas: true, alvoCorrecaoDatas: chaveSuperficies, menu: null });
+  };
   const financialStatusLabel = financialProjection
     ? FINANCIAL_STATUS_LABEL[financialProjection.financialStatus]
     : ctx.financialProjection.loading
@@ -745,7 +825,7 @@ export function buildVals(
   if (status === "aguardando_peca")
     moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => go("execucao") });
   // Correção auditada de datas (só datas — nunca refaz entrega, cobrança ou estoque).
-  if (realOS) moreItems.push({ icon: "📅", label: "Corrigir datas", color: C.body, onClick: () => update({ corrigirDatas: true }) });
+  if (realOS) moreItems.push({ icon: "📅", label: "Corrigir datas", color: C.body, onClick: openCorrigirDatas });
   if (status !== "entregue" && status !== "cancelada")
     moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => update({ cancelamentoOS: true }) });
 
@@ -870,6 +950,30 @@ export function buildVals(
     caixaAberto: pdvCaixaAberto,
     podeReceber: financialProjection?.canReceive === true && pdvCaixaAberto,
     indisponivel: !financialProjection || financialProjection.financialStatus === "UNKNOWN" || financialProjection.financialStatus === "INCONSISTENT",
+  };
+
+  // ---- GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 ----
+  // (C) "Aprovar e receber": oferecido com aprovação pendente SEM pagamento registrado e
+  // orçamento que a action de aprovar aceitaria; o modo vale só para a loja+OS em que foi
+  // aberto. (D) "Formalizar aprovação pendente": pendência comercial com pagamento
+  // verificado e vigente. As duas só decidem a OFERTA — o servidor revalida tudo.
+  const modoAprovacao = ctx.aprovacaoNoRecebimento?.chave === chaveSuperficies ? ctx.aprovacaoNoRecebimento : null;
+  const aprovacaoReceber = {
+    disponivel: !!ctx.aprovarEReceber && orcamentoPodeDecidir && podeOferecerAprovarEReceberV4(situacaoAtendimento),
+    ativo: !!modoAprovacao && st.receberPagamento && noAlvoSuperficies,
+    estado: modoAprovacao?.estado ?? null,
+    abrir: () => {
+      ctx.definirAprovacaoNoRecebimento?.({ chave: chaveSuperficies, estado: "conferir" });
+      update({ stage: "financeiro", receberPagamento: true, alvoSuperficies: chaveSuperficies, module: "workspace", view: "cockpit", menu: null });
+    },
+    marcarAprovado: () => ctx.definirAprovacaoNoRecebimento?.({ chave: chaveSuperficies, estado: "aprovado_pagamento_pendente" }),
+    conferir: ctx.conferirEscopoAprovacao ?? null,
+    executar: ctx.aprovarEReceber ?? null,
+  };
+  const formalizacao = {
+    disponivel: !!ctx.conferirFormalizacao && !!ctx.formalizarAprovacao && podeOferecerFormalizacaoV4(situacaoAtendimento),
+    conferir: ctx.conferirFormalizacao ?? null,
+    formalizar: ctx.formalizarAprovacao ?? null,
   };
 
   // ---- Estorno de recebimento (slice OPS-V4-RECEBIMENTO-ESTORNO-016) ----
@@ -1423,7 +1527,11 @@ export function buildVals(
     // GOAL OPS-V4-FLUXO-CURTO-006: o MESMO sheet (ReceberPagamentoV4 + hook V3),
     // aberto sem sair da etapa Entrega — pagar nunca entrega sozinho.
     openReceberPagamentoAqui: () => update({ receberPagamento: true, alvoSuperficies: chaveSuperficies, menu: null }),
-    closeReceberPagamento: () => update({ receberPagamento: false }),
+    closeReceberPagamento: () => {
+      update({ receberPagamento: false });
+      // GOAL 002 (item C): fechar o sheet encerra o modo "Aprovar e receber" desta OS.
+      ctx.definirAprovacaoNoRecebimento?.(null);
+    },
     receberPagamentoOpen: st.receberPagamento && noAlvoSuperficies,
     // GOAL OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002: usado pelo alerta "OS sem cobrança"
     // da Entrega — leva o operador a lançar o orçamento antes de entregar (só navega).
@@ -1574,11 +1682,15 @@ export function buildVals(
     },
     cancelamentoOSOpen: st.cancelamentoOS,
     // ---- Corrigir datas (GOAL OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001) ----
-    corrigirDatasOpen: !!st.corrigirDatas && !!ctx.realOS,
-    openCorrigirDatas: () => update({ corrigirDatas: true }),
-    closeCorrigirDatas: () => update({ corrigirDatas: false }),
+    // Exige carga completa ao abrir; refresh da mesma OS preserva a janela
+    // e a baseline CAS já capturada pelo editor auditado.
+    corrigirDatasOpen:
+      !!st.corrigirDatas && st.alvoCorrecaoDatas === chaveSuperficies &&
+      realOS?.id === st.selectedOsId && realOS?.storeId === ctx.lojaAtivaId && !entradaComRascunhoDatas,
+    openCorrigirDatas,
+    closeCorrigirDatas: () => update({ corrigirDatas: false, alvoCorrecaoDatas: null }),
     onDatasCorrigidas: () => {
-      update({ corrigirDatas: false });
+      update({ corrigirDatas: false, alvoCorrecaoDatas: null });
       ctx.reloadOrdens();
       ctx.reloadDetail();
       notify("Datas corrigidas.");
@@ -1647,6 +1759,7 @@ export function buildVals(
     // `salvarGarantia` reusa `salvarGarantiaOSV3` (mesmo contrato da V3, mesmo
     // campo `aberturaV3.garantiaPrevista`); consumido pelo form do EntregaStage.
     salvarGarantia: ctx.salvarGarantia,
+    reemitirTermoGarantia: ctx.reemitirTermoGarantia,
     abrirRetorno: ctx.abrirRetorno,
     finalizarRetorno: ctx.finalizarRetorno,
     abrirOsVinculada: ctx.abrirOsVinculada,
@@ -1658,6 +1771,11 @@ export function buildVals(
     pdvServico: ctx.pdvServico,
     recebimentoContextKey: chaveSuperficies,
     recebimento,
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item C): conferir → aprovar expressamente
+    // → receber, no MESMO sheet de recebimento. Cada passo confere sua permissão no servidor.
+    aprovacaoReceber,
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item D): ação administrativa excepcional.
+    formalizacao,
     estorno,
     // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
     // Action separada: nunca recebe dinheiro nem movimenta caixa.
@@ -1669,7 +1787,16 @@ export function buildVals(
     // Pós-venda também é operacional via actions V3; WhatsApp/PDV residual
     // permanece read-only quando não há contrato seguro conectado.
     salvarDiagnostico: ctx.salvarDiagnostico,
-    gerarOrcamento: ctx.gerarOrcamento,
+    // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (item B): com pagamento registrado, orienta
+    // antes (a recusa do servidor não traz a mensagem em produção); o servidor segue decidindo.
+    gerarOrcamento: async () => {
+      const orientacao = orientacaoGerarOrcamentoV4(situacaoAtendimento);
+      if (orientacao) {
+        notify(orientacao);
+        return false;
+      }
+      return ctx.gerarOrcamento();
+    },
     salvarOrcamento: ctx.salvarOrcamento,
     // GOAL OPS-V4-ORCAMENTO-REABRIR-MOTOR-003: handler de correção avançada — o
     // OrcamentoStage em modo revisão chama isto (nunca o salvar comum, que o
@@ -1714,6 +1841,7 @@ export function buildVals(
     // R04: guarda de rascunhos da Entrada (memória da sessão, por loja+OS).
     // Sempre presente no hook real; fixtures legados podem omitir no ctx.
     rascunhos: ctx.rascunhos ?? null,
+    entradaOcupada,
     clearSelection: () => update({ selectedOsId: null, focus: false, left: true }),
     // lista real para o seletor
     ordens: ctx.ordens,
@@ -1927,6 +2055,7 @@ export function useV4Preview(): V4Vals {
   // V4); ponte opt-in para a troca de loja (lib/loja-ativa) com limpeza ao
   // desmontar e ao perder a loja.
   const rascunhos = useGuardaRascunhos<RascunhoEntradaV4>();
+  const ocupacaoEntrada = useEntradaOcupadaV4();
   useEffect(() => {
     registrarGuardaTrocaLojaV4({
       temRascunhoSujo: () => rascunhos.temSujo(),
@@ -1980,6 +2109,7 @@ export function useV4Preview(): V4Vals {
     limparRecibo: limparReciboPdvV3,
     receber: receberPdvV3,
     registrarMisto: registrarMistoPdvV3,
+    verificarConfirmacao: verificarPdvV3,
     reload: reloadPdvV3,
     estornar: estornarPdvV3,
   } = pdvServicoV3;
@@ -1996,6 +2126,13 @@ export function useV4Preview(): V4Vals {
       prev.alvoSuperficies == null || prev.alvoSuperficies === chaveSuperficiesSelecao
         ? prev
         : { ...prev, receberPagamento: false, recibo: false, estornoRecebimento: false, docPrint: null, alvoSuperficies: null },
+    );
+  }, [chaveSuperficiesSelecao]);
+  useEffect(() => {
+    setSt((prev) =>
+      prev.alvoCorrecaoDatas == null || prev.alvoCorrecaoDatas === chaveSuperficiesSelecao
+        ? prev
+        : { ...prev, corrigirDatas: false, alvoCorrecaoDatas: null },
     );
   }, [chaveSuperficiesSelecao]);
 
@@ -2057,6 +2194,20 @@ export function useV4Preview(): V4Vals {
   useEffect(() => {
     lojaRef.current = lojaAtivaId;
   }, [lojaAtivaId]);
+  // GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002: alvo = loja + OS + gerações da seleção e da loja.
+  // Sair e voltar (A→B→A) muda a geração: a continuação de uma visita anterior nunca roda.
+  const lojaGenRef = useRef(0);
+  useEffect(() => {
+    lojaGenRef.current += 1;
+  }, [lojaAtivaId]);
+  const capturarAlvoAtualV4 = useCallback(() => {
+    const alvo = { lojaId: lojaRef.current, osId: selectedRef.current, selecao: selecaoGenRef.current, loja: lojaGenRef.current };
+    return () =>
+      lojaRef.current === alvo.lojaId &&
+      selectedRef.current === alvo.osId &&
+      selecaoGenRef.current === alvo.selecao &&
+      lojaGenRef.current === alvo.loja;
+  }, []);
   // R03: geração de escrita por alvo (loja+OS). Capturada no disparo e
   // conferida no pós-await junto com loja+OS: seleção mudada (A→B), retorno
   // (A→B→A) ou escrita mais nova superando a anterior nunca sofrem
@@ -2229,7 +2380,9 @@ export function useV4Preview(): V4Vals {
       if (recarregar) reloadOrdens();
       if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return { status: "em_andamento" } as const;
       if (recarregar) {
-        if (resultado.status === "recusado") void reloadPdvV3();
+        // A recusa comercial terminal orienta esta visita; reload do hook apagaria
+        // seu motivo original. Detalhe e projeção continuam relendo a autoridade.
+        if (resultado.status === "recusado" && resultado.code !== "comercial_nao_elegivel") void reloadPdvV3();
         reloadDetail();
         reloadFinancial();
       }
@@ -2237,9 +2390,17 @@ export function useV4Preview(): V4Vals {
     },
     [registrarMistoPdvV3, reloadPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
   );
+  const verificarConfirmacaoV4 = useCallback(async () => {
+    const alvo = { lojaId: lojaRef.current, osId: selectedRef.current };
+    const ok = await verificarPdvV3?.();
+    if (ok) reloadOrdens();
+    if (lojaRef.current !== alvo.lojaId || selectedRef.current !== alvo.osId) return false;
+    reloadPdvV3(); reloadDetail(); reloadFinancial();
+    return !!ok;
+  }, [verificarPdvV3, reloadOrdens, reloadPdvV3, reloadDetail, reloadFinancial]);
   const pdvServico = useMemo<PdvServicoV3Completo>(
-    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, registrarMisto: registrarMistoV4, estornar: estornarRecebimentoV4 }),
-    [pdvServicoV3, receberPagamentoV4, registrarMistoV4, estornarRecebimentoV4],
+    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, registrarMisto: registrarMistoV4, verificarConfirmacao: verificarConfirmacaoV4, estornar: estornarRecebimentoV4 }),
+    [pdvServicoV3, receberPagamentoV4, registrarMistoV4, verificarConfirmacaoV4, estornarRecebimentoV4],
   );
 
   const salvarDiagnostico = useCallback(
@@ -2268,6 +2429,103 @@ export function useV4Preview(): V4Vals {
   const aprovarOrcamento = useCallback(
     () => runWrite((sid, osId) => aprovarOrcamentoV3(sid, osId), "Orçamento aprovado.", () => update({ status: "aprovado" })),
     [runWrite, update],
+  );
+
+  // ---- GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 ----
+  // (C) "Aprovar e receber": a aprovação usa a action própria (permissão dela; recusa
+  // DEVOLVIDA, legível em produção) e, só com sucesso e com a MESMA loja+OS selecionada, o
+  // recebimento roda pelo hook (permissão, chave de idempotência, replay e CAS dele). Aprovado +
+  // pagamento falho fica assim — sem rollback fictício. Resposta tardia de outra OS/loja só
+  // atualiza a lista.
+  const [aprovacaoNoRecebimento, setAprovacaoNoRecebimento] = useState<AprovacaoNoRecebimentoV4 | null>(null);
+  // Trocar de loja/OS encerra o modo da seleção anterior (nunca reaparece ao voltar a ela).
+  useEffect(() => {
+    setAprovacaoNoRecebimento((modo) => (modo && modo.chave !== chaveSuperficiesSelecao ? null : modo));
+  }, [chaveSuperficiesSelecao]);
+  const aprovarEReceber = useCallback(
+    async (receber: () => Promise<RecebimentoAposAprovacaoV4>, esperado: { conteudo: string }): Promise<ResultadoAprovarEReceberV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      const osId = (selectedOsId ?? "").trim();
+      if (!sid || !osId) return { status: "aprovacao_recusada", mensagem: "Selecione uma OS na loja ativa para concluir a ação." };
+      const noAlvo = capturarAlvoAtualV4();
+      let aprovacao: { ok: true } | { ok: false; mensagem: string };
+      try {
+        aprovacao = await aprovarOrcamentoParaReceberV3(sid, osId, esperado);
+      } catch {
+        // Sem resposta: a aprovação pode ou não ter sido gravada — relê e NÃO recebe.
+        aprovacao = {
+          ok: false,
+          mensagem: "Sem resposta do servidor: não foi possível confirmar a aprovação. A OS foi relida — se o orçamento já aparece aprovado, feche e use o recebimento normal; senão, tente de novo.",
+        };
+      }
+      reloadOrdens();
+      if (!noAlvo()) return { status: "fora_do_alvo" };
+      reloadDetail();
+      reloadFinancial();
+      if (!aprovacao.ok) return { status: "aprovacao_recusada", mensagem: aprovacao.mensagem };
+      const recebido = await receber();
+      return recebido.ok ? { status: "recebido" } : { status: "aprovado_pagamento_nao_confirmado", mensagem: recebido.mensagem };
+    },
+    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, capturarAlvoAtualV4],
+  );
+  // (C) Escopo conferido no servidor ao abrir o "Aprovar e receber": o consentimento é dado sobre ele.
+  const conferirEscopoAprovacao = useCallback(async (): Promise<ConferenciaEscopoAprovacaoUiV4> => {
+    const sid = (lojaAtivaId ?? "").trim();
+    const osId = (selectedOsId ?? "").trim();
+    if (!sid || !osId) return { ok: false, mensagem: "Selecione uma OS na loja ativa para conferir o orçamento.", foraDoAlvo: true };
+    const noAlvo = capturarAlvoAtualV4();
+    try {
+      const r = await conferirEscopoAprovacaoV3(sid, osId);
+      return noAlvo() ? r : { ok: false, mensagem: "A OS selecionada mudou.", foraDoAlvo: true };
+    } catch {
+      return noAlvo()
+        ? { ok: false, mensagem: "Não foi possível conferir o orçamento agora. Tente de novo." }
+        : { ok: false, mensagem: "A OS selecionada mudou.", foraDoAlvo: true };
+    }
+  }, [lojaAtivaId, selectedOsId, capturarAlvoAtualV4]);
+  // (D) "Formalizar aprovação pendente": conferência e escrita no servidor; aqui só o alvo.
+  const conferirFormalizacao = useCallback(async (): Promise<ConferenciaFormalizacaoUiV4> => {
+    const sid = (lojaAtivaId ?? "").trim();
+    const osId = (selectedOsId ?? "").trim();
+    if (!sid || !osId) return { ok: false, code: "fora_do_alvo", mensagem: "Selecione uma OS na loja ativa para concluir a ação." };
+    const noAlvo = capturarAlvoAtualV4();
+    try {
+      const r = await conferirFormalizacaoAprovacaoV3(sid, osId);
+      return noAlvo() ? r : { ok: false, code: "fora_do_alvo", mensagem: "A OS selecionada mudou." };
+    } catch {
+      return noAlvo()
+        ? { ok: false, code: "falha_leitura", mensagem: "Não foi possível conferir a OS agora. Tente de novo." }
+        : { ok: false, code: "fora_do_alvo", mensagem: "A OS selecionada mudou." };
+    }
+  }, [lojaAtivaId, selectedOsId, capturarAlvoAtualV4]);
+  const formalizarAprovacao = useCallback(
+    async (input: EntradaFormalizacaoV3): Promise<FormalizacaoAprovacaoUiV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      const osId = (selectedOsId ?? "").trim();
+      if (!sid || !osId) return { ok: false, code: "fora_do_alvo", mensagem: "Selecione uma OS na loja ativa para concluir a ação." };
+      const noAlvo = capturarAlvoAtualV4();
+      try {
+        const r = await formalizarAprovacaoPendenteV3(sid, osId, input);
+        reloadOrdens();
+        if (!noAlvo()) return { ok: false, code: "fora_do_alvo", mensagem: "A OS selecionada mudou." };
+        reloadDetail();
+        reloadFinancial();
+        // O orçamento aprovado sai do editor (e o cartão some com ele): o toast é o retorno que fica.
+        if (r.ok) notify(r.jaRegistrado ? "Esta formalização já estava registrada — nada foi gravado de novo." : "Aprovação formalizada. Registro auditável gravado.");
+        return r;
+      } catch {
+        reloadOrdens();
+        if (!noAlvo()) return { ok: false, code: "fora_do_alvo", mensagem: "A OS selecionada mudou." };
+        reloadDetail();
+        reloadFinancial();
+        return {
+          ok: false,
+          code: "incerto",
+          mensagem: "Não foi possível confirmar se a formalização foi gravada. Reenvie a MESMA confirmação para verificar — não haverá registro em dobro.",
+        };
+      }
+    },
+    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify, capturarAlvoAtualV4],
   );
   const recusarOrcamento = useCallback(
     (input: RecusarOrcamentoV3Input) => runWrite((sid, osId) => recusarOrcamentoV3(sid, osId, input), "Orçamento recusado."),
@@ -2428,11 +2686,11 @@ export function useV4Preview(): V4Vals {
   // ANEXOS-012): best-effort, mesma action usada pelo `onPrinted` da V3
   // (`PrintPreviewV3`) — registra na timeline, nunca bloqueia a impressão.
   const registrarImpressaoDoc = useCallback(
-    (tipo: DocumentoTipoV3) => {
+    (tipo: DocumentoTipoV3, versao?: number) => {
       const sid = (lojaAtivaId ?? "").trim();
       const osId = (selectedOsId ?? "").trim();
       if (!sid || !osId) return;
-      void registrarImpressaoDocumentoV3(sid, osId, tipo).catch(() => {});
+      void registrarImpressaoDocumentoV3(sid, osId, tipo, versao).catch(() => {});
     },
     [lojaAtivaId, selectedOsId],
   );
@@ -2442,8 +2700,13 @@ export function useV4Preview(): V4Vals {
   // `GarantiaOSV3.tsx`), gravando no mesmo `payload.aberturaV3.garantiaPrevista`.
   // Paridade com a V3: só modelo + prazo (sem termoCustom nesta etapa).
   const salvarGarantia = useCallback(
-    (input: { modeloId: string; prazoDias?: number }) =>
+    (input: SalvarGarantiaInputV3) =>
       runWrite((sid, osId) => salvarGarantiaOSV3(sid, osId, input), "Garantia salva."),
+    [runWrite],
+  );
+
+  const reemitirTermoGarantia = useCallback(
+    (input: { motivo: string; esperado: string }) => runWrite((sid, osId) => reemitirTermoGarantiaLegadoV3(sid, osId, input), "Termo legado reemitido."),
     [runWrite],
   );
 
@@ -2650,26 +2913,34 @@ export function useV4Preview(): V4Vals {
   );
 
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
+  const runEntradaWrite = useCallback(async (
+    fn: (sid: string, osId: string) => Promise<unknown>,
+    mensagem: string,
+  ) => {
+    const finalizar = ocupacaoEntrada.iniciar(lojaAtivaId, selectedOsId);
+    try { return await runWrite(fn, mensagem); }
+    finally { finalizar(); }
+  }, [ocupacaoEntrada, lojaAtivaId, selectedOsId, runWrite]);
   // (salvarAcessorios vive após `realOS` — usa a seleção atual como baseline.)
   const salvarChecklist = useCallback(
     (itens: ChecklistEntradaItemV3[]) =>
-      runWrite((sid, osId) => salvarChecklistEntradaV3(sid, osId, itens), "Checklist salvo."),
-    [runWrite],
+      runEntradaWrite((sid, osId) => salvarChecklistEntradaV3(sid, osId, itens), "Checklist salvo."),
+    [runEntradaWrite],
   );
   const adicionarFotoEntrada = useCallback(
     (input: AdicionarFotoEntradaInputV3) =>
-      runWrite((sid, osId) => adicionarFotoEntradaV3(sid, osId, input), "Foto da entrada adicionada."),
-    [runWrite],
+      runEntradaWrite((sid, osId) => adicionarFotoEntradaV3(sid, osId, input), "Foto da entrada adicionada."),
+    [runEntradaWrite],
   );
   const removerFotoEntrada = useCallback(
     (fotoId: string) =>
-      runWrite((sid, osId) => removerFotoEntradaV3(sid, osId, fotoId), "Foto da entrada removida."),
-    [runWrite],
+      runEntradaWrite((sid, osId) => removerFotoEntradaV3(sid, osId, fotoId), "Foto da entrada removida."),
+    [runEntradaWrite],
   );
   const salvarAssinaturaCliente = useCallback(
     (dataUrl: string) =>
-      runWrite((sid, osId) => salvarAssinaturaClienteV3(sid, osId, dataUrl), "Assinatura da entrada salva."),
-    [runWrite],
+      runEntradaWrite((sid, osId) => salvarAssinaturaClienteV3(sid, osId, dataUrl), "Assinatura da entrada salva."),
+    [runEntradaWrite],
   );
 
   // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
@@ -2693,12 +2964,12 @@ export function useV4Preview(): V4Vals {
       const seed = seedEntradaEditor(realOS).acessorios;
       const explicito = opcoes?.registrarSemAlteracao === true;
       if (!explicito && !fatiaTocada(acessorios, seed)) return Promise.resolve(true);
-      return runWrite(
+      return runEntradaWrite(
         (sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios, seed),
         explicito ? "Acessórios registrados." : "Acessórios salvos.",
       );
     },
-    [runWrite, realOS],
+    [runEntradaWrite, realOS],
   );
 
   // R02: somente tocados viajam, sempre com baseline (input × semente do
@@ -2711,7 +2982,7 @@ export function useV4Preview(): V4Vals {
       const t = patchTocadoIdentificacao(input, seed);
       if (Object.keys(t.valores).length === 0 && t.limpar.length === 0) return Promise.resolve(true);
       const esperados = Object.keys(t.esperados).length > 0 ? t.esperados : undefined;
-      return runWrite(
+      return runEntradaWrite(
         (sid, osId) =>
           salvarIdentificacaoV3(
             sid,
@@ -2723,7 +2994,7 @@ export function useV4Preview(): V4Vals {
         "Identificação salva.",
       );
     },
-    [runWrite, realOS],
+    [runEntradaWrite, realOS],
   );
   // OPS-V4-FLUXO-CURTO-004: `confirmarEstadoFisico` registra o estado exibido
   // (inclusive "tudo íntegro", igual à semente) com baseline — só assim o
@@ -2758,12 +3029,12 @@ export function useV4Preview(): V4Vals {
         avarias: incluir.includes("avarias") ? input.avarias : [],
         credenciais: { ...t.valores },
       };
-      return runWrite(
+      return runEntradaWrite(
         (sid, osId) => salvarProvaEntradaV3(sid, osId, inputEnxuto, limparCred, esp, incluir),
         confirmarEstado ? "Estado físico registrado." : "Prova de entrada salva.",
       );
     },
-    [runWrite, realOS],
+    [runEntradaWrite, realOS],
   );
 
   // T01 + R03: detalhe da seleção atual confirmado (loja+OS, sem loading nem
@@ -2792,9 +3063,9 @@ export function useV4Preview(): V4Vals {
       const base = toDadosBasicosInput(seedDadosBasicos(realOS));
       const esperados = intencaoDadosBasicos(input, base) as EsperadosDadosBasicosV3;
       if (Object.keys(esperados).length === 0) return Promise.resolve(true);
-      return runWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input, esperados), "Dados básicos salvos.");
+      return runEntradaWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input, esperados), "Dados básicos salvos.");
     },
-    [runWrite, realOS],
+    [runEntradaWrite, realOS],
   );
 
   const atribuirTecnico = useCallback(
@@ -2964,6 +3235,7 @@ export function useV4Preview(): V4Vals {
       ordensError,
       lojaAtivaId,
       rascunhos,
+      ocupacaoEntrada,
       reloadOrdens,
       reloadDetail,
       realOS,
@@ -2997,6 +3269,7 @@ export function useV4Preview(): V4Vals {
       removerFotoSaida,
       registrarImpressaoDoc,
       salvarGarantia,
+      reemitirTermoGarantia,
       abrirRetorno,
       finalizarRetorno,
       abrirOsVinculada,
@@ -3036,6 +3309,12 @@ export function useV4Preview(): V4Vals {
       selecionarVarianteOrcamento,
       cancelamentoMotivoPrefill,
       definirCancelamentoMotivoPrefill,
+      aprovacaoNoRecebimento,
+      definirAprovacaoNoRecebimento: setAprovacaoNoRecebimento,
+      aprovarEReceber,
+      conferirEscopoAprovacao,
+      conferirFormalizacao,
+      formalizarAprovacao,
     }),
     [
       ordens,
@@ -3044,6 +3323,7 @@ export function useV4Preview(): V4Vals {
       ordensError,
       lojaAtivaId,
       rascunhos,
+      ocupacaoEntrada,
       reloadOrdens,
       reloadDetail,
       realOS,
@@ -3077,6 +3357,7 @@ export function useV4Preview(): V4Vals {
       removerFotoSaida,
       registrarImpressaoDoc,
       salvarGarantia,
+      reemitirTermoGarantia,
       abrirRetorno,
       finalizarRetorno,
       abrirOsVinculada,
@@ -3116,6 +3397,11 @@ export function useV4Preview(): V4Vals {
       selecionarVarianteOrcamento,
       cancelamentoMotivoPrefill,
       definirCancelamentoMotivoPrefill,
+      aprovacaoNoRecebimento,
+      aprovarEReceber,
+      conferirEscopoAprovacao,
+      conferirFormalizacao,
+      formalizarAprovacao,
     ],
   );
 

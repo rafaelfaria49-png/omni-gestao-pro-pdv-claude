@@ -1,0 +1,285 @@
+{
+  "sha": "d5570e829057863a9f670823bb3367b527efb391",
+  "revision": 8,
+  "attempt": 2,
+  "integratedMain": "1fd90905e05656444576cf83c9df6c46919a917a",
+  "previousFunctionalSHA": "665583a7e3f6f1b9552b4c56b3d6a3dd97299167",
+  "aepCheck": {
+    "sha": "d5570e829057863a9f670823bb3367b527efb391",
+    "exitCode": 0
+  },
+  "ratified": {
+    "sha": "d5570e829057863a9f670823bb3367b527efb391",
+    "exitCode": 0,
+    "legs": [
+      {
+        "passed": 511,
+        "filtered": 0
+      },
+      {
+        "passed": 20,
+        "filtered": 315
+      },
+      {
+        "passed": 205,
+        "filtered": 0
+      },
+      {
+        "passed": 76,
+        "filtered": 0
+      },
+      {
+        "passed": 52,
+        "filtered": 0
+      },
+      {
+        "passed": 20,
+        "filtered": 0
+      },
+      {
+        "passed": 29,
+        "filtered": 0
+      },
+      {
+        "passed": 10,
+        "filtered": 0
+      }
+    ],
+    "vitestPassed": 923,
+    "playwrightPassed": 14,
+    "retries": 0,
+    "workers": 1
+  },
+  "regressions": [
+    {
+      "label": "datas-pg",
+      "passed": 34,
+      "failed": 0,
+      "filtered": 0,
+      "failures": []
+    },
+    {
+      "label": "fluxo003",
+      "passed": 4,
+      "failed": 0,
+      "filtered": 0,
+      "failures": []
+    },
+    {
+      "label": "fluxo005",
+      "passed": 47,
+      "failed": 0,
+      "filtered": 0,
+      "failures": []
+    },
+    {
+      "label": "fluxo007-full",
+      "passed": 67,
+      "failed": 0,
+      "filtered": 0,
+      "failures": []
+    },
+    {
+      "label": "main-pdv-paridade",
+      "passed": 34,
+      "failed": 0,
+      "filtered": 0,
+      "failures": []
+    },
+    {
+      "label": "preview-full",
+      "passed": 325,
+      "failed": 10,
+      "filtered": 0,
+      "failures": [
+        {
+          "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only > não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+          "fullName": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+          "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'receberOSV3'\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:1606:21\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+          "fullName": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+          "message": "AssertionError: expected -1 to be greater than -1\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:1986:93\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)",
+          "fullName": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)",
+          "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'validarSplitV3'\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:1993:18\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) > no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+          "fullName": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+          "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /if \\(ok\\) \\{[\\s\\S]*?v\\.openRecibo\\(\\)/\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:2008:18\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > mantém estado de múltiplas linhas (array), não forma única",
+          "fullName": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato mantém estado de múltiplas linhas (array), não forma única",
+          "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /useState<LinhaDraft\\[\\]>/\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:2055:18\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+          "fullName": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+          "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /algumaLinhaInvalida\\s*=\\s*linhas\\.som…/\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:2067:18\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+          "fullName": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+          "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'somaSplitV3(linhasValidas)'\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:2072:18\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+          "fullName": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+          "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /arr\\.length > 1 \\? arr\\.filter\\(\\(_, …/\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:2078:18\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato > veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+          "fullName": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+          "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'validarSplitV3(linhasValidas, pagamen…'\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:2088:18\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+        },
+        {
+          "name": "GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real > \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+          "fullName": "GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+          "message": "AssertionError: expected undefined to match object { docPrint: 'termo_garantia', …(1) }\n    at Proxy.<anonymous> (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/expect/dist/index.js:1283:10)\n    at Proxy.<anonymous> (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/chai/index.js:1700:25)\n    at C:/Projetos/omni-gestao-ops-v4-frg-002/components/operacoes-v4-preview/preview-honesty.test.ts:2168:28\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao-ops-v4-frg-002/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20"
+        }
+      ]
+    },
+    {
+      "label": "v3-misto-pg",
+      "passed": 109,
+      "failed": 0,
+      "filtered": 0,
+      "failures": []
+    },
+    {
+      "label": "v4-misto-pg",
+      "passed": 1,
+      "failed": 0,
+      "filtered": 0,
+      "failures": []
+    }
+  ],
+  "e2eRegressions": [
+    {
+      "label": "e2e-frg001-final",
+      "sha": "d5570e829057863a9f670823bb3367b527efb391",
+      "exitCode": 0,
+      "passed": 6,
+      "failed": 0,
+      "didNotRun": 0,
+      "historicalSignature": null
+    },
+    {
+      "label": "e2e-fluxo006-final",
+      "sha": "d5570e829057863a9f670823bb3367b527efb391",
+      "exitCode": 0,
+      "passed": 16,
+      "failed": 0,
+      "didNotRun": 0,
+      "historicalSignature": null
+    },
+    {
+      "label": "e2e-misto-final",
+      "sha": "d5570e829057863a9f670823bb3367b527efb391",
+      "exitCode": 1,
+      "passed": 5,
+      "failed": 1,
+      "didNotRun": 0,
+      "historicalSignature": "Recebido nesta operação"
+    },
+    {
+      "label": "e2e-datas-final",
+      "sha": "d5570e829057863a9f670823bb3367b527efb391",
+      "exitCode": 1,
+      "passed": 5,
+      "failed": 1,
+      "didNotRun": 0,
+      "historicalSignature": "retirada por Cliente QA Entrega"
+    }
+  ],
+  "historicalObservations": {
+    "T56c": "Falhou historicamente na baseline/candidato; execução atual integral67/67, sem correção desse código ou inferência sobre todos os interleavings.",
+    "preview": "Mesmas10 falhas nominais; baseline321/10, candidato anterior325/10, candidato novo325/10.",
+    "e2e": [
+      {
+        "group": "misto",
+        "base": {
+          "failed": 1,
+          "passed": 5
+        },
+        "candidate": {
+          "failed": 1,
+          "passed": 5
+        },
+        "sameAssertion": true,
+        "signature": "Recebido nesta operação",
+        "baseRun": "base-e2e-misto",
+        "candidateRun": "candidate-e2e-misto"
+      },
+      {
+        "group": "datas",
+        "base": {
+          "failed": 1,
+          "passed": 5
+        },
+        "candidate": {
+          "failed": 1,
+          "passed": 5
+        },
+        "sameAssertion": true,
+        "signature": "retirada por Cliente QA Entrega",
+        "baseRun": "base-e2e-datas",
+        "candidateRun": "candidate-e2e-datas"
+      }
+    ]
+  },
+  "build": {
+    "executedOn": "50d5d55ee886b74694b35e86f28b0627fd4d6842",
+    "exitCode": 0,
+    "reusedFor": "d5570e829057863a9f670823bb3367b527efb391",
+    "onlyDelta": "especificação E2E",
+    "productionInputsIdentical": true,
+    "migrationSkipped": true
+  },
+  "T56cGitComparisons": [
+    {
+      "path": "lib/operacoes-v3/retorno-actions.ts",
+      "base": "2ab0dca30368e9c5a6fb7d7868b2108e35771fac41edb98ee142553176615dfc",
+      "current": "2ab0dca30368e9c5a6fb7d7868b2108e35771fac41edb98ee142553176615dfc",
+      "equal": true
+    },
+    {
+      "path": "lib/operacoes-v3/os-payload-lock.ts",
+      "base": "faa1d50acfcde9b4d32ac8154b6e6e0638956ef89aa82d4107fd757c2056b5dc",
+      "current": "faa1d50acfcde9b4d32ac8154b6e6e0638956ef89aa82d4107fd757c2056b5dc",
+      "equal": true
+    },
+    {
+      "path": "lib/operacoes-v3/nova-os-actions.ts",
+      "base": "4128e417772b7036677fbaace1c70cd77e380b30376841fa52e97c51e61c7f7b",
+      "current": "4128e417772b7036677fbaace1c70cd77e380b30376841fa52e97c51e61c7f7b",
+      "equal": true
+    },
+    {
+      "path": "test/ops-v4-fluxo-curto-007/retorno.pg.test.ts",
+      "base": "c9b7c0c7f2755e90693fbaf2c20e14d51302952f9887f6eedc894bede064b6ea",
+      "current": "c9b7c0c7f2755e90693fbaf2c20e14d51302952f9887f6eedc894bede064b6ea",
+      "equal": true
+    }
+  ],
+  "serverDeltaAgainstPrevious": "EMPTY",
+  "oldPacketZipIntegrity": "PASS",
+  "activeAttemptsLog": [
+    {
+      "n": 1,
+      "at": "2026-10-11T16:18:04.017Z",
+      "reason": "N2 confirmado como P2 do contrato A: recusa mista descarta comercial={codigo,destino} no hook; PRECO_AUSENTE e VALORES_DIVERGENTES ficam sem destino em V3/V4. Corretivo autorizado pelo proprietário na revisão 8, mesmo GOAL e allowlist."
+    }
+  ],
+  "R_STATUS": "AGUARDANDO_R_INDEPENDENTE",
+  "AEP_CLOSE": "PENDENTE",
+  "MERGE": "PENDENTE",
+  "PUBLICACAO": "PENDENTE",
+  "PROD_SMOKE": "OWNER_PENDING_AUTH",
+  "generatedAt": "2026-10-11T18:06:41.440Z"
+}

@@ -196,7 +196,7 @@ function buildGroup(args: {
   }
 
   return {
-    key: args.key,
+    key: `${args.kind}:${slice.map((row) => row.id).join(":")}`,
     kind: args.kind,
     outcome,
     reasons,

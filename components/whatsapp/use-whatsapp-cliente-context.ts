@@ -167,8 +167,8 @@ export async function fetchPhoneLinkCandidates(
   candidates: PhoneMatchCandidate[]
 }> {
   const res = await fetch(
-    `/api/clientes/match-by-phone?phone=${encodeURIComponent(phoneDigits)}`,
-    { headers: apiHeaders, cache: "no-store" }
+    "/api/clientes/match-by-phone",
+    { method: "POST", body: JSON.stringify({ phone: phoneDigits }), headers: { ...apiHeaders, "Content-Type": "application/json" }, cache: "no-store" }
   )
   const data = (await res.json()) as MatchByPhoneResponse
 

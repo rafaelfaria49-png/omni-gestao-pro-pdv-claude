@@ -7,12 +7,13 @@ Semáforo: 🟢 rodando · 🟡 esperando humano · 🔴 bloqueado ou check falh
 | Trilha | Semáforo | Status | Risco | GOAL atual | Próximo | DONE | BLOCKED | Última ratificação |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | contador | 🟡 amarelo | PAUSED | MEDIO | — | — | 17 | 0 | 2026-08-20T20:16:31.782Z |
-| fiscal | 🟢 verde | RUNNING | ALTO | FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025 | — | 8 | 2 | 2026-10-07T19:36:47.716Z |
-| ops-v4-financeiro-retirada-garantia | 🟢 verde | RUNNING | ALTO | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 | OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003 | 1 | 1 | 2026-10-10T19:54:38.905Z |
+| fiscal | 🟢 verde | RUNNING | ALTO | FISCAL-025B-OFFLINE-ARCHIVE-FOUNDATION-001 | FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025 | 8 | 2 | 2026-10-07T19:36:47.716Z |
+| ops-v4-datas-ui-promocao | 🟡 amarelo | PAUSED | ALTO | — | — | 1 | 0 | 2026-10-16T04:32:24.804Z |
+| ops-v4-financeiro-retirada-garantia | 🟡 amarelo | PAUSED | ALTO | — | — | 3 | 0 | 2026-10-16T08:01:15.999Z |
 | ops-v4-fluxo-curto | 🟡 amarelo | PAUSED | ALTO | — | — | 7 | 0 | 2026-10-09T06:14:58.471Z |
-| pdv | 🟡 amarelo | PAUSED | ALTO | — | — | 3 | 0 | 2026-08-29T21:00:50.288Z |
+| pdv | 🟢 verde | RUNNING | ALTO | PDV-PARITY-N5-C-E2E-002 | — | 4 | 0 | 2026-10-18T14:46:31.267Z |
 | pdv-parity-suite-n5-a-foundation-001 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-16T14:36:01.262Z |
-| pdv-parity-suite-n5-b1-core-gaps-001 | 🟡 amarelo | PAUSED | ALTO | — | — | 3 | 0 | 2026-10-01T21:23:18.789Z |
+| pdv-parity-suite-n5-b1-core-gaps-001 | 🔴 vermelho | BLOCKED | ALTO | — | — | 3 | 1 | 2026-10-13T21:35:17.451Z |
 | pdv-scan-inline-feedback-autofocus-006 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-17T13:01:23.513Z |
 | pdv-scan-unregistered-action-settings-007 | 🟡 amarelo | PAUSED | MEDIO | — | — | 1 | 0 | 2026-09-17T22:15:44.863Z |
 | pessoas | 🟢 verde | RUNNING | ALTO | PESSOAS-DP-FRONTEND-001B-RECOVERY-001 | — | 2 | 1 | 2026-10-11T17:26:59.867Z |

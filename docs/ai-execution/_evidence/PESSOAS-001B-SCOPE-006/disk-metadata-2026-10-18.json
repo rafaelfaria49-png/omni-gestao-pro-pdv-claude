@@ -1,0 +1,321 @@
+{
+  "date": "2026-10-18",
+  "snapshot": "2026-10-18T13:40:26.8955869-03:00",
+  "method": "Metadata only, no elevation. Completed targeted robocopy /L /E /XJ /BYTES /NFL /NDL /R:0 /W:0 /NP /NJH summaries. /L lists only. Exit 1 denotes items listed; completed summaries have zero failed entries. No destination created. File content not opened. Symlinks/junctions excluded.",
+  "coverage": "Targeted inventory, not a census of C:. Broad incomplete scans discarded; no total claimed for C:/Projetos or .codex.",
+  "sizeCaveat": "Logical bytes, not allocated or guaranteed reclaimable bytes. Hardlinks, sparse/compressed files, links skipped, active consumers and concurrent writes affect actual reclaim.",
+  "volumes": [
+    {
+      "path": "C:/",
+      "ready": true,
+      "freeBytes": 1989705728,
+      "totalBytes": 510909214720,
+      "requiredFreeBytes": 12884901888
+    },
+    {
+      "path": "G:/",
+      "ready": false
+    }
+  ],
+  "projectDisjointLowerBoundBytes": 47127216451,
+  "rows": [
+    {
+      "path": "C:/Projetos/omni-gestao/.next",
+      "logicalBytes": 2919711989,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-datas-retroativas-001/.next",
+      "logicalBytes": 1858086997,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-recebimento-misto-p1-hardening-001/.next",
+      "logicalBytes": 1816306896,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v3-recebimento-misto-001/.next",
+      "logicalBytes": 1810415947,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-datas-ui-001/.next",
+      "logicalBytes": 1172194955,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-datas-ui-promocao-001/.next",
+      "logicalBytes": 1592583887,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-001/.next",
+      "logicalBytes": 1869221583,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-002/.next",
+      "logicalBytes": 2094719403,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-003/.next",
+      "logicalBytes": 3030788694,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-004/.next",
+      "logicalBytes": 1612371483,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005/.next",
+      "logicalBytes": 1816226473,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-006/.next",
+      "logicalBytes": 1813767713,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007/.next",
+      "logicalBytes": 2526388504,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-001/.next",
+      "logicalBytes": 1804569563,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-002/.next",
+      "logicalBytes": 1881234311,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-002-base/.next",
+      "logicalBytes": 1788667200,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-frg-003/.next",
+      "logicalBytes": 1769755540,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-recebimento-misto-paridade-001/.next",
+      "logicalBytes": 1746752511,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n3/.next",
+      "logicalBytes": 2919711989,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-auth-002/node_modules",
+      "logicalBytes": 846634668,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-cad-r2-002-rest-ownership/node_modules",
+      "logicalBytes": 996308748,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Users/rafae/AppData/Local/npm-cache",
+      "logicalBytes": 3896990624,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Users/rafae/AppData/Local/Temp",
+      "logicalBytes": 3030618308,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Users/rafae/.cache",
+      "logicalBytes": 2933832513,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n5b1-core-gaps/.next",
+      "logicalBytes": 1688223083,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n5b1-core-gaps-r2/.next",
+      "logicalBytes": 1707780327,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n5b1-current-main-correction-r4/.next",
+      "logicalBytes": 2079411984,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n1/node_modules",
+      "logicalBytes": 969073136,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-auth-002",
+      "logicalBytes": 897895968,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n3",
+      "logicalBytes": 8395357029,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-003",
+      "logicalBytes": 3124550145,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Users/rafae/AppData/Local/Docker",
+      "logicalBytes": 32804967523,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Users/rafae/AppData/Local/Programs",
+      "logicalBytes": 10925085168,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Users/rafae/AppData/Local/ms-playwright",
+      "logicalBytes": 2560738864,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Users/rafae/AppData/Local/ms-playwright-go",
+      "logicalBytes": 101274916,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    },
+    {
+      "path": "C:/Projetos/omni-gestao/node_modules",
+      "logicalBytes": 996308867,
+      "robocopyExit": 1,
+      "failedEntries": 0,
+      "mayContainActiveWork": true
+    }
+  ],
+  "temporaryDirectoryPrefixCounts": {
+    "omni": 4060,
+    "playwright": 96,
+    "codex": 14,
+    "claude": 1,
+    "opencode": 1
+  },
+  "potentialDisjointBytes": 47215881656,
+  "guaranteedRecoverableBytes": 0,
+  "proposedOnlyNotAuthorized": [
+    {
+      "path": "C:/Projetos/omni-gestao-ops-datas-retroativas-001/.next",
+      "logicalBytes": 1858086997
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-recebimento-misto-p1-hardening-001/.next",
+      "logicalBytes": 1816306896
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v3-recebimento-misto-001/.next",
+      "logicalBytes": 1810415947
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-001/.next",
+      "logicalBytes": 1869221583
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-002/.next",
+      "logicalBytes": 2094719403
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-003/.next",
+      "logicalBytes": 3030788694
+    },
+    {
+      "path": "C:/Projetos/omni-gestao-pdv-n3/.next",
+      "logicalBytes": 2919711989
+    },
+    {
+      "path": "C:/Users/rafae/AppData/Local/npm-cache",
+      "logicalBytes": 3896990624
+    }
+  ],
+  "proposalLogicalBytes": 19296242133,
+  "deletedFiles": 0,
+  "productCodeChanged": false
+}

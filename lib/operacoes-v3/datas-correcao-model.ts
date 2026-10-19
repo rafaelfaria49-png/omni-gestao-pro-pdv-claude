@@ -40,6 +40,7 @@ import {
   type DataOperacionalMetaV3,
 } from "./datas-operacionais-model";
 import { lerGarantiaV3, lerRetornosV3 } from "./pos-venda-model";
+import { assinaturaGarantiasServicosV3, gravarCoberturasGarantiaV3, lerCoberturasGarantiaV3 } from "./garantia-servicos-model";
 import type { OrdemServico } from "@/types/os";
 
 // Valor "visto" para a trava otimista (regra única no módulo de datas).
@@ -191,6 +192,8 @@ export interface DiffCampoDataV3 {
 
 export interface ImpactoGarantiaV3 {
   temImpacto: boolean;
+  garantiaAssinatura?: string;
+  coberturasServicos?: Array<{ linhaId: string; descricao?: string; inicioAntes?: string; vencimentoAntes?: string; inicioDepois?: string; vencimentoDepois?: string }>;
   inicioAntes?: string;
   vencimentoAntes?: string;
   inicioDepois?: string;
@@ -221,6 +224,8 @@ export function assinaturaImpactoGarantiaV3(g: Omit<ImpactoGarantiaV3, "assinatu
     g.payloadDeslocado,
     g.encerradasIntocadas,
     linhas,
+    g.coberturasServicos ?? [],
+    g.garantiaAssinatura ?? "",
   ]);
 }
 
@@ -439,6 +444,13 @@ export function planejarCorrecaoDatasV3(
     if (g2 && g2Ancorada) {
       next.garantia = { ...g2, inicioEm: iso, ...(txt(g2.fimEm) ? { fimEm: deslocarIso(txt(g2.fimEm), deltaMs) } : {}) };
       garantia.payloadDeslocado = true;
+      // Reemissão explícita de uma garantia legada ancorada nesta entrega.
+      const coberturasLegadas = lerCoberturasGarantiaV3(base);
+      if (coberturasLegadas.some((c) => c.inicioOriginal && Date.parse(c.inicioOriginal) === Date.parse(antes.iso))) {
+        Object.assign(next, gravarCoberturasGarantiaV3(next, coberturasLegadas.map((c) => c.inicioOriginal && Date.parse(c.inicioOriginal) === Date.parse(antes.iso)
+          ? { ...c, inicioOriginal: iso, ...(c.vencimentoOriginal ? { vencimentoOriginal: deslocarIso(c.vencimentoOriginal, deltaMs) } : {}) }
+          : c)));
+      }
     }
     for (const linha of ctx.garantias ?? []) {
       if (Date.parse(linha.dataInicio) !== Date.parse(antes.iso)) continue;
@@ -464,7 +476,13 @@ export function planejarCorrecaoDatasV3(
       garantia.inicioDepois = g3Depois.inicio;
       garantia.vencimentoDepois = g3Depois.vencimento;
     }
+    if (g3Antes.coberturas?.length) garantia.coberturasServicos = g3Antes.coberturas.map((c) => {
+      const depois = g3Depois.coberturas?.find((d) => d.linhaId === c.linhaId);
+      return { linhaId: c.linhaId, descricao: c.descricao, inicioAntes: c.inicio, vencimentoAntes: c.vencimento, inicioDepois: depois?.inicio, vencimentoDepois: depois?.vencimento };
+    });
+    if (g3Antes.coberturas?.length) garantia.garantiaAssinatura = assinaturaGarantiasServicosV3(base);
     garantia.temImpacto =
+      !!garantia.coberturasServicos?.some((c) => c.inicioAntes !== c.inicioDepois || c.vencimentoAntes !== c.vencimentoDepois) ||
       garantia.payloadDeslocado ||
       garantia.linhas.length > 0 ||
       (!!garantia.inicioAntes && (garantia.inicioAntes !== garantia.inicioDepois || garantia.vencimentoAntes !== garantia.vencimentoDepois));
@@ -492,6 +510,7 @@ export function planejarCorrecaoDatasV3(
     if (g3Antes.temGarantia && !g3Antes.semCobertura) {
       coberturas.push({ fimAntes: g3Antes.vencimento, fimDepois: g3Depois.vencimento, diaAntes: !!g3Antes.porDia, diaDepois: !!g3Depois.porDia });
     }
+    for (const c of garantia.coberturasServicos ?? []) coberturas.push({ fimAntes: c.vencimentoAntes, fimDepois: c.vencimentoDepois, diaAntes: porDiaAntes, diaDepois: porDiaDepois });
     if (garantia.payloadDeslocado) {
       coberturas.push({ fimAntes: txt(obj(base.garantia)?.fimEm) || undefined, fimDepois: txt(obj(next.garantia)?.fimEm) || undefined, diaAntes: porDiaAntes, diaDepois: porDiaDepois });
     }
@@ -529,6 +548,9 @@ export function planejarCorrecaoDatasV3(
         inicioIso: g3Depois.inicio,
         fimIso: g3Depois.vencimento,
       });
+    }
+    for (const c of garantia.coberturasServicos ?? []) {
+      if (c.inicioAntes && c.vencimentoAntes && c.inicioDepois && c.vencimentoDepois) janelas.push({ antes: [limite(c.inicioAntes, "inicio", porDiaAntes), limite(c.vencimentoAntes, "fim", porDiaAntes)], depois: [limite(c.inicioDepois, "inicio", porDiaDepois), limite(c.vencimentoDepois, "fim", porDiaDepois)], inicioIso: c.inicioDepois, fimIso: c.vencimentoDepois });
     }
     for (const l of garantia.linhas) {
       janelas.push({

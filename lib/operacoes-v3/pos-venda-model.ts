@@ -13,6 +13,8 @@
 import type { OrdemServico } from "@/types/os";
 import { garantiaCatalogoV3, normalizarGarantiaPrevistaV3 } from "./garantia-textos";
 import { diaNaLojaV3, fimDoDiaLojaIsoV3, lerDatasOSV3 } from "./datas-operacionais-model";
+import { condicaoUnicaGarantiaV3, lerCoberturasGarantiaV3, modeloGarantiaConhecidoV3, termoCoberturaServicoV3, type CoberturaServicoViewV3 } from "./garantia-servicos-model";
+import { datasCoberturaGarantiaV3 } from "./garantia-termos-model";
 
 const DIA_MS = 86400000;
 
@@ -122,6 +124,8 @@ export const GARANTIA_SITUACAO_META_V3: Record<GarantiaSituacaoV3, { label: stri
 };
 
 export interface GarantiaV3View {
+  coberturas?: CoberturaServicoViewV3[];
+  condicoesDistintas?: boolean;
   temGarantia: boolean;
   modeloId: string;
   label: string;
@@ -147,6 +151,21 @@ function garantiaPrevistaDe(os: OrdemServico | null | undefined): { modelo?: str
 }
 
 export function lerGarantiaV3(os: OrdemServico | null | undefined, now: Date = new Date()): GarantiaV3View {
+  const salvas = lerCoberturasGarantiaV3(os);
+  if (salvas.length) {
+    const coberturas: CoberturaServicoViewV3[] = salvas.map((c) => {
+      const datas = datasCoberturaGarantiaV3(os, c);
+      return { ...c, ...datas, termo: termoCoberturaServicoV3(c), situacao: c.modeloId === "nao_definida" ? "nenhuma" : c.prazoDias === 0 ? "sem_garantia" : !datas.inicio ? "prevista" : Date.parse(datas.vencimento ?? "") >= now.getTime() ? "ativa" : "vencida" };
+    });
+    const unica = condicaoUnicaGarantiaV3(salvas);
+    const primeira = coberturas[0];
+    const situacao: GarantiaSituacaoV3 = coberturas.some((c) => c.situacao === "ativa") ? "ativa" : coberturas.some((c) => c.situacao === "prevista") ? "prevista" : coberturas.some((c) => c.situacao === "vencida") ? "vencida" : coberturas.some((c) => c.situacao === "sem_garantia") ? "sem_garantia" : "nenhuma";
+    return {
+      temGarantia: coberturas.some((c) => c.modeloId !== "nao_definida"), modeloId: unica?.modeloId ?? "por_servico", label: situacao === "nenhuma" ? "Garantia não definida" : unica ? primeira.termo.titulo : "Condições por serviço — consulte cada cobertura", prazoDias: unica?.prazoDias ?? 0,
+      semCobertura: coberturas.every((c) => c.situacao === "sem_garantia"), situacao, coberturas, condicoesDistintas: !unica,
+      ...(unica ? { inicio: primeira.inicio, vencimento: primeira.vencimento, ...(primeira.porDia ? { porDia: true } : {}), ...(primeira.vencimento ? { diasRestantes: Math.ceil((Date.parse(primeira.vencimento) - now.getTime()) / DIA_MS) } : {}) } : {}),
+    };
+  }
   const gp = garantiaPrevistaDe(os);
   const g2 = os?.garantia;
   const g2Inicio = s((g2 as { inicioEm?: unknown } | undefined)?.inicioEm) || undefined;
@@ -154,9 +173,9 @@ export function lerGarantiaV3(os: OrdemServico | null | undefined, now: Date = n
 
   const modeloId = s(gp?.modelo) || "personalizado";
   const cat = garantiaCatalogoV3(modeloId);
-  const label = s(gp?.label) || cat.titulo;
+  const label = s(gp?.label) || (modeloGarantiaConhecidoV3(modeloId) ? cat.titulo : "Condição legada não identificada");
   const prazoDias = gp
-    ? normalizarGarantiaPrevistaV3({ modeloId, prazoDias: gp.prazoDias }).prazoDias
+    ? modeloGarantiaConhecidoV3(modeloId) ? normalizarGarantiaPrevistaV3({ modeloId, prazoDias: gp.prazoDias }).prazoDias : numOr(gp.prazoDias, 0)
     : numOr(g2?.prazoDias, numOr(g2op?.prazoDias, cat.prazoDiasPadrao));
 
   const definida = !!gp || !!g2?.fimEm || !!g2?.ativa || !!g2op || !!g2Inicio;

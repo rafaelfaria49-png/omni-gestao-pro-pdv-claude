@@ -80,8 +80,10 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
+        // Uma correção modal (livre ou salvando) mantém o teclado na janela ativa.
+        if (document.querySelector("[data-og-v4-corrigir-datas]")) return;
         setSearchOpen((open) => !open);
       }
     };

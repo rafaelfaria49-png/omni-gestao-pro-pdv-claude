@@ -1,0 +1,8 @@
+C:\Projetos\omni-gestao-ops-v4-frg-002\docs\execution-tracks\ops-v4-financeiro-retirada-garantia\review-rev8\audit-review-coverage.mjs:7
+const requirements=new Map(required.map(r=>[norm(path.join(packet,r.path)),{...r,covered:new Set(),reads:[]}])));
+                                                                                                               ^
+
+SyntaxError: Unexpected token ')'
+    at checkSyntax (node:internal/main/check_syntax:72:5)
+
+Node.js v24.14.1

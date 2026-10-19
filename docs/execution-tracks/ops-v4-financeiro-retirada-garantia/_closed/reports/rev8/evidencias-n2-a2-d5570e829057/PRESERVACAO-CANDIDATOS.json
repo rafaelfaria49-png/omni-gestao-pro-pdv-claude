@@ -1,0 +1,29 @@
+{
+  "sha": "d5570e829057863a9f670823bb3367b527efb391",
+  "revision": 8,
+  "attempt": 2,
+  "base": "1fd90905e05656444576cf83c9df6c46919a917a",
+  "productDelta": [
+    "components/operacoes-v3/hooks/use-pdv-servico-v3.ts",
+    "components/operacoes-v4-preview/use-v4-preview.ts"
+  ],
+  "serverDelta": "EMPTY",
+  "oldPacket": {
+    "status": "PASS",
+    "sha": "665583a7e3f6f1b9552b4c56b3d6a3dd97299167",
+    "files": 320,
+    "bytes": 4231094,
+    "gitBindings": 50,
+    "manifestSHA256": "05d1499b2544ff38589222d5bb1a88f937afbb1bb39160b01a99ce8d36a5c61c",
+    "zipSHA256": "1552742edf104c00005a402c9a291aa3c0bef2258922878eaef161957ffdabc3"
+  },
+  "oldArchiveFiles": 178,
+  "oldArchiveIntegrity": "PASS",
+  "rev7ZipSHA256": "eaaf37ce8ca9442d056e76a6f22d68d79159b102398869a66c3d99f076210349",
+  "mainCheckout": {
+    "head": "5ae661d730af827006fd10c389ddbdd4f18edc51",
+    "status": "M docs/execution-tracks/fiscal/state.json\n M docs/execution-tracks/ops-v4-fluxo-curto/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json\n M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json\n M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json\n M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json\n?? docs/ai-execution/_evidence/CAD-R2-019-CANONICAL-BACKFILL-CLOSEOUT-001/\n?? docs/ai-execution/_evidence/PROD-DATASOURCE-AUTHORITY-RECONCILIATION-002/",
+    "note": "Somente leitura nesta retomada; nenhum arquivo alterado pelo executor."
+  },
+  "at": "2026-10-11T17:35:02.089Z"
+}

@@ -31,6 +31,9 @@ describe("rotas públicas (sem sessão)", () => {
     "/favicon.ico",
     "/manifest.webmanifest",
     "/sw.js",
+    "/privacy",
+    "/privacy/",
+    "/client-privacy-cache.js",
     "/icon-192.png",
     "/logo.svg",
   ])("%s é público", (p) => {
@@ -146,3 +149,5 @@ describe("ausência de lockout e de dependência do selo", () => {
     expect(entrar("/login", false)).toEqual({ kind: "allow" })
   })
 })
+
+it.each(["/privacy/internal", "/privacy-admin", "/client-privacy-cache.js/private", "/dashboard/clientes"])("CAD-R2-020 does not make %s public", path => { expect(isPublicPath(path)).toBe(false); expect(entrar(path, false).kind).toBe("redirect-login") })

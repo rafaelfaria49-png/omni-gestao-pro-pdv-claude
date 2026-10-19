@@ -3,7 +3,7 @@
   "aep": "1.0-R2",
   "track": "ops-v4-financeiro-retirada-garantia",
   "title": "Operações V4 — financeiro, retirada e garantia",
-  "plan_rev": 8,
+  "plan_rev": 10,
   "risk_tier": "ALTO",
   "completion_when_empty": "PAUSED"
 }
@@ -36,6 +36,25 @@ assinatura, garantia, estoque).
 
 Revisão 8: decisão humana CODEX — GOAL 002 / REVISÃO 8 de 10/10/2026,
 restrita ao P2-1 da R Anthropic em cd69780; ver decisão vigente abaixo.
+
+## Decisão humana — autoria e família do GOAL 003 (15/10/2026)
+
+No comando "CODEX — FINALIZAR E PUBLICAR OPERAÇÕES V4", o proprietário
+autorizou excepcionalmente Codex/OpenAI como executor real C4/ALTO do
+GOAL 003 e determinou a correção documental de `familia_executor` para
+`openai`. A implementação experimental preservada no SHA
+`fd42b06648ad2abb217bdd7fb5f3bc7b9dec3030`, branch
+`codex/experiment-ops-v4-garantias`, tem autoria Codex/OpenAI. A família
+Anthropic antes declarada no GOAL não correspondia ao executor real.
+
+Esta decisão regulariza a declaração e autoriza a adoção e execução
+oficial por Codex/OpenAI, sem abrir o 003 antes do 002 DONE e integrado em
+main. Claude Code real/Anthropic permanece exclusivamente revisor
+independente do SHA final de cada candidato. Não há aprovação ou parecer
+presumido. A alteração é exclusivamente documental: preserva C4, ALTO,
+plan_rev 8, testes, ledger, tentativas, pré-condições e R obrigatória, sem
+modificar `executors.json` nem ampliar gates. Sua integração ocorre por PR
+documental e merge normal, somente com as verificações aprovadas.
 
 ## Revisões do plano
 
@@ -389,3 +408,55 @@ automático. Só depois check/R: close separado, PR #262, checks, merge
 normal e deployments conferidos. Sem nova autorização de desbloqueio
 além desta revisão. GOAL001 DONE; GOAL003 READY plan_rev 8 com a mesma
 família/dependência, não iniciar; 008 e datas/Caixa retroativo fora.
+
+## Revisão 9 — escopo pré-open do 003 (16/10/2026)
+
+Depois do 002 DONE e integrado pelo merge normal #262
+(`c4f4bb6c187ad1637623299a1a80470f63080e6d`), ratificam-se os 17
+consumidores e testes existentes do experimento de Garantias que faltavam
+na allowlist do 003; são relacionados explicitamente em seus metadados.
+A autorização de execução continua sendo a dos comandos do proprietário
+para reaproveitar a implementação aprovada e concluir a sequência
+#262 → #271 → #272; não se declara novo aceite humano específico nem R.
+A exigência pré-open do próprio GOAL determina plan_rev novo; TRACK e
+003 READY passam a rev 9. Seu read_budget passa a 75. Classes, risco,
+família real, test_command, gates, ledger, tentativas, pré-condições,
+histórico e revisão independente permanecem intactos. Nenhum código,
+`executors.json`, estado derivado ou GOAL encerrado é alterado.
+
+## Decisão humana rev 10 — exceção restrita ao escopo ativo (16/10/2026)
+
+O proprietário respondeu literalmente **"Autorizar essa exceção delimitada"**
+à pergunta que especificava os dois caminhos abaixo, o PR documental, a
+atualização somente da allowlist de .aep-active após ratificação, a preservação
+do contador e das falhas, ledger, C4/ALTO e revisão Anthropic obrigatória,
+sem bloquear/reabrir o GOAL ou reiniciar tentativas. O aceite é da exceção
+de escopo; não representa aprovação fictícia de testes ou revisão independente.
+
+- test/ops-v4-fluxo-curto-007/retorno.test.tsx: adaptar o ponto de Enter da
+  fixture à restauração legítima do foco no launcher, preservando verificações
+  de foco à frente, isolamento do fundo, Tab/Shift+Tab e os dois Escapes.
+- test/ops-v4-fluxo-curto-007/retorno.pg.test.ts: T56c usa uma Promise como
+  barreira sinalizada imediatamente após FOR UPDATE na sessão externa,
+  preservando observação de espera por pg_stat_activity, recusa e zero filhas.
+
+As duas falhas de teste foram reproduzidas na base da main e no candidato.
+O patch preparado tem SHA-256
+47d4ba31c870d4b7787a7de576a8236808c4efc18c62e61542b5fd2da04cccee.
+Nenhuma asserção, cenário, guard de banco ou comando de teste é removido.
+Nenhum contrato funcional, família, C4/ALTO, gate, orçamento, dependência,
+estado, ledger ou executor é modificado; não se reabre outro GOAL.
+
+O aceite autoriza excepcionalmente estes dois caminhos durante a execução,
+em relação à regra geral "nunca ampliar allowlist no meio". Rito autorizado:
+verify/verify --all e checks aprovados → merge normal do PR documental #280 →
+merge normal da main na branch funcional → atualizar somente as duas entradas
+da allowlist ativa conforme os metadados ratificados, preservando tentativa
+2/3, attempts_log, opened_at e todos os outros campos → status/open oficial.
+O open da CLI apenas atualiza a base por merge-base, sem reiniciar o contador.
+Não se edita à mão base_commit, state.json, LEDGER.jsonl, REGISTRY.md ou
+executors.json. A falha real da tentativa 1 permanece registrada.
+
+Depois: aplicar o patch, check obrigatório, R Anthropic real do SHA final
+com APPROVE/P0=P1=P2=0, close AEP separado e merge normal do #272. Nenhum
+parecer, fechamento ou publicação é presumido por esta autorização.

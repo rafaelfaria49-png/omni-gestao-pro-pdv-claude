@@ -77,7 +77,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useOperationsStore } from "@/lib/operations-store"
-import { PDV_KEYMAP } from "@/lib/pdv-keymap"
+import { PDV_KEYMAP, consumePdvShortcut, hasPdvShortcutOverlay, isPdvRepeatedOrHandled, isPdvTyping } from "@/lib/pdv-keymap"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { writePdvClassicLayout } from "@/lib/pdv-classic-layout"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
@@ -625,7 +625,7 @@ export function PdvClassic({
       try {
         const headers: Record<string, string> = {}
         if (lojaKey) headers[ASSISTEC_LOJA_HEADER] = lojaKey
-        const res = await fetch(`/api/clientes?q=${encodeURIComponent(q)}`, { headers, cache: "no-store" })
+        const res = await fetch("/api/clientes/search", { method: "POST", body: JSON.stringify({ q }), headers: { ...headers, "Content-Type": "application/json" }, cache: "no-store" })
         const data = (await res.json().catch(() => null)) as { clientes?: ApiClienteResult[] } | null
         const list = data?.clientes ?? []
         const matched = list.find((c) => (c.phone ?? "").replace(/\D/g, "") === q)
@@ -1325,32 +1325,16 @@ export function PdvClassic({
     accessoryProduct !== null ||
     showKeyboardHelp ||
     showOperationsMenu ||
+    showItemAvulsoModal ||
+    vendaEsperaOpen ||
+    aPrazoClientePickerOpen ||
+    showDevolucaoModal ||
     postSalePrintOpen
 
   useEffect(() => {
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (shellModalBlocking) return
-      // Texto no campo de bipe: Esc limpa o campo primeiro — não remove item do carrinho.
-      if (e.key === "Escape" && shellBipeRef.current?.value.trim()) {
-        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
-        e.preventDefault()
-        setBipeCode("")
-        scanFeedback.dismiss()
-        queueMicrotask(() => shellBipeRef.current?.focus())
-        return
-      }
-      if (e.key === "Escape" && cart.length > 0) {
-        e.preventDefault()
-        setCart((prev) => {
-          const next = prev.slice(0, -1)
-          const last = next[next.length - 1]
-          queueMicrotask(() => setSelectedCartLineId(last ? last.lineId : null))
-          return next
-        })
-        queueMicrotask(() => shellBipeRef.current?.focus())
-        return
-      }
+      if (isPdvRepeatedOrHandled(e) || hasPdvShortcutOverlay(shellModalBlocking)) return
       if ((e.key === "ArrowDown" || e.key === "ArrowUp") && cart.length > 0) {
         const active = document.activeElement
         if (active !== shellBipeRef.current) return
@@ -1519,15 +1503,12 @@ export function PdvClassic({
     const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F12", "End"])
     let ctrlDown = false
     const down = (e: globalThis.KeyboardEvent) => {
-      if (shellModalBlocking) return
+      if (isPdvRepeatedOrHandled(e) || hasPdvShortcutOverlay(shellModalBlocking || showCustomerDropdown || bipeSuggestions.length > 0)) return
+      if (e.key === "Control") { ctrlDown = true; return }
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) { ctrlDown = false; return }
       if (e.key === "Delete" && cart.length > 0) {
-        const active = document.activeElement
-        const inInput =
-          active instanceof HTMLInputElement ||
-          active instanceof HTMLTextAreaElement ||
-          active instanceof HTMLSelectElement
-        if (!inInput) {
-          e.preventDefault()
+        if (!isPdvTyping(e)) {
+          consumePdvShortcut(e)
           if (selectedCartLineId) {
             setCart((prev) => prev.filter((i) => i.lineId !== selectedCartLineId))
             setSelectedCartLineId(null)
@@ -1547,25 +1528,24 @@ export function PdvClassic({
       }
       // Esc fora de campo de texto (sem modal): limpa a busca/aviso e devolve o foco ao bipe.
       if (e.key === "Escape") {
-        const active = document.activeElement
-        const emCampo =
-          active instanceof HTMLInputElement ||
-          active instanceof HTMLTextAreaElement ||
-          active instanceof HTMLSelectElement
-        if (!emCampo && !document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+        if (isPdvTyping(e)) return
+        consumePdvShortcut(e)
+        if (isModoRapido && !shellBipeRef.current?.value.trim() && cart.length > 0) {
+          setCart((prev) => prev.slice(0, -1))
+          setSelectedCartLineId(null)
+        } else {
           setBipeCode("")
           scanFeedback.dismiss()
-          focusShellBipe()
         }
+        focusShellBipe()
         return
       }
-      if (e.key === "Control") ctrlDown = true
-      else ctrlDown = false
+      ctrlDown = false
       // INSERT — Item Avulso (venda de balcão sem cadastro). Antes só existia no
       // handler `default` (desativado no shell omni-smart) → era "feature fantasma".
       // Agora vive no keymap operacional do Clássico, igual a Assistência/Supermercado.
       if (e.key === "Insert") {
-        e.preventDefault()
+        consumePdvShortcut(e)
         // GOAL 007 (modos B/C): Insert abre o Item Avulso com o último código não
         // cadastrado como contexto — seguro apenas se o bipe segue vazio (nada digitado
         // depois do miss). Modo A abre limpo, como sempre. Leitura via ref: live, sem
@@ -1577,11 +1557,11 @@ export function PdvClassic({
         return
       }
       if (!fnKeys.has(e.key)) return
-      e.preventDefault()
+      consumePdvShortcut(e)
       openShellShortcut(e.key)
     }
     const up = (e: globalThis.KeyboardEvent) => {
-      if (shellModalBlocking) return
+      if (hasPdvShortcutOverlay(shellModalBlocking) || isPdvRepeatedOrHandled(e)) { ctrlDown = false; return }
       if (e.key === "Control" && ctrlDown) {
         e.preventDefault()
         openShellShortcut("CTRL")
@@ -1594,7 +1574,7 @@ export function PdvClassic({
       window.removeEventListener("keydown", down)
       window.removeEventListener("keyup", up)
     }
-  }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
+  }, [openShellShortcut, shellModalBlocking, showCustomerDropdown, bipeSuggestions.length, isModoRapido, cart, selectedCartLineId, focusShellBipe, scanFeedback, scanUnregisteredPolicy, openItemAvulso])
 
   // Autofocus operacional (GOAL 006): ao entrar/retornar ao PDV o Código/Bipe já está focado —
   // o leitor bipa sem clique no mouse. Uma leitura do guard por efeito (nada de interval/loop
@@ -2442,7 +2422,7 @@ export function PdvClassic({
               <Keyboard className="h-5 w-5 text-primary" />
               Atalhos de Teclado — PDV Clássico
             </DialogTitle>
-            <p className="mt-0.5 text-xs text-muted-foreground">Pressione <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">F1</kbd> ou <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">End</kbd> a qualquer momento para abrir esta ajuda.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Pressione <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">End</kbd> sem outro modal aberto para abrir esta ajuda. F1 abre o pagamento.</p>
           </div>
           <div className="grid grid-cols-1 gap-1 p-4 sm:grid-cols-2">
             {/* Atalhos a partir do keymap-base compartilhado (fonte única). */}

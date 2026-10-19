@@ -119,6 +119,9 @@ export interface NovaOSItemV3 {
   baixaEstoque: boolean;
   /** Garantia em dias (apenas serviços). */
   garantiaDias?: number;
+  garantiaModeloId?: string;
+  garantiaMotivo?: string;
+  garantiaTermo?: string;
   /** Snapshot textual do prazo/tempo estimado do serviço (ex.: "2 horas").
    *  Apenas informativo — NUNCA vira SLA (o SLA vem de `recepcao.previsaoEntrega`).
    *  Ausente em drafts/payloads legados. */
@@ -277,6 +280,7 @@ export interface ServicoCatalogoLinhaV3 {
   custoInterno: number;
   valorVenda: number;
   prazoGarantiaDias: number;
+  garantiaModeloId?: string;
   termoGarantia: string;
   /** Classificação da linha (cobrado | brinde | interno) — mesmo nome usado no payload histórico. */
   kindV3: OrcamentoLinhaKindV3;
@@ -313,7 +317,8 @@ export function mapItensParaServicosCatalogoV3(
         custoInterno: Math.max(0, it.custoUnitario) * qtd,
         valorVenda: it.kind === "cobrado" ? Math.max(0, it.valorUnitario) * qtd : 0,
         prazoGarantiaDias: Math.max(0, Math.trunc(it.garantiaDias ?? garantiaFallbackDias ?? 0)),
-        termoGarantia: "",
+        termoGarantia: it.garantiaTermo?.trim() || "",
+        ...(it.garantiaModeloId ? { garantiaModeloId: it.garantiaModeloId } : {}),
         kindV3: it.kind,
         ...(prazoTexto ? { prazoTexto } : {}),
         ...(catalogoServicoId ? { catalogoServicoId } : {}),

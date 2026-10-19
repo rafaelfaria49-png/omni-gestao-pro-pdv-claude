@@ -1,4 +1,7 @@
 "use server";
+import { clientEditorTags, canReadClientRegister, CLIENT_LOOKUP_SELECT, CLIENT_REGISTER_SELECT } from "@/lib/cadastros/client-privacy";
+import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions";
+
 
 import { Prisma, StatusOrdemServico } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
@@ -912,13 +915,6 @@ function extractClienteObservacoes(value: unknown): string {
   return String(operational?.notes ?? obj.observacoes ?? "").trim();
 }
 
-function safeTagsRaw(value: unknown): Record<string, unknown> | string[] | null {
-  if (!value) return null;
-  if (Array.isArray(value)) return value.map((x) => String(x)).filter(Boolean);
-  if (typeof value === "object") return value as Record<string, unknown>;
-  return null;
-}
-
 function fmtDateISO(d: Date | null | undefined): string {
   if (!d) return "—";
   // yyyy-mm-dd para UI mock
@@ -926,9 +922,15 @@ function fmtDateISO(d: Date | null | undefined): string {
 }
 
 export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
-  storeId = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
+  const gate = await requireCadastrosActionAccess(storeId, "shared");
+  storeId = gate.storeId;
   try {
+    if (!canReadClientRegister(gate.session)) {
+      const rows = await prisma.cliente.findMany({ where: { storeId }, select: CLIENT_LOOKUP_SELECT, take: 50 });
+      return rows.map((c) => ({ id: c.id, nome: c.name, tipo: c.kind === "PJ" ? "PJ" : "PF", telefone: c.phone ?? "", email: "", documento: c.document ?? "", cidade: "", uf: "", endereco: "", observacoes: "", totalGasto: 0, ultimaCompra: "", tags: [], tagsRaw: null, status: c.active ? "Ativo" : "Inativo" }));
+    }
     const rows = await prisma.cliente.findMany({
+      select: CLIENT_REGISTER_SELECT,
       where: { storeId },
       orderBy: { updatedAt: "desc" },
       take: 500,
@@ -994,17 +996,19 @@ export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
       totalGasto: totalPorCliente.get(c.id) ?? Number(c.totalSpent ?? 0),
       ultimaCompra: fmtDateISO(c.lastPurchaseAt),
       tags: extractClienteLabels(c.tags),
-      tagsRaw: safeTagsRaw(c.tags),
+      tagsRaw: clientEditorTags(c.tags),
       status: c.active ? "Ativo" : "Inativo",
     }));
   } catch (err) {
-    console.error("[listClientes] erro ao buscar clientes:", err instanceof Error ? err.message : String(err));
+    console.error("[listClientes] operation_failed");
     return [];
   }
 }
 
+class ClientActionError extends Error {}
+
 function mapClientWriteFailureToActionError(result: Extract<ClientWriteResult, { ok: false }>): Error {
-  return new Error(clientWriteImportMessage(result));
+  return new ClientActionError(clientWriteImportMessage(result));
 }
 
 export async function createCliente(
@@ -1041,8 +1045,8 @@ export async function createCliente(
     revalidatePath("/dashboard/cadastros-v2");
     return { id: result.id };
   } catch (err) {
-    console.error("[createCliente] erro ao criar cliente:", err instanceof Error ? err.message : String(err));
-    throw err instanceof Error ? err : new Error("Falha ao criar cliente. Tente novamente.");
+    console.error("[createCliente] operation_failed");
+    throw err instanceof ClientActionError ? err : new Error("Falha ao criar cliente. Tente novamente.");
   }
 }
 
@@ -1079,12 +1083,12 @@ export async function updateCliente(
     if (patch.tags !== undefined) input.tags = patch.tags;
     if (patch.active !== undefined) input.active = patch.active;
 
-    const result = await updateClient({ storeId: gate.storeId, principal }, id, input);
+    const result = await updateClient({ storeId: gate.storeId, principal }, id, input, { tagsMode: "editor" });
     if (!result.ok) throw mapClientWriteFailureToActionError(result);
     revalidatePath("/dashboard/cadastros-v2");
   } catch (err) {
-    console.error("[updateCliente] erro ao atualizar cliente:", err instanceof Error ? err.message : String(err));
-    throw err instanceof Error ? err : new Error("Falha ao atualizar cliente. Tente novamente.");
+    console.error("[updateCliente] operation_failed");
+    throw err instanceof ClientActionError ? err : new Error("Falha ao atualizar cliente. Tente novamente.");
   }
 }
 
@@ -2158,6 +2162,7 @@ function parseImportacaoMetadata(raw: string | null): Record<string, unknown> {
 
 export async function listImportacoesAuditoria(limit = 50): Promise<ImportacaoAuditoriaDTO[]> {
   const { session } = await requireCadastrosActionSession("hub");
+  if (!getEnterprisePermissions(session.user.role).auditoria) throw new Error("Sem permissão para auditoria.");
   try {
     const take = Math.min(Math.max(1, limit), 200);
     const rows = await prisma.logsAuditoria.findMany({
@@ -2197,7 +2202,7 @@ export async function listImportacoesAuditoria(limit = 50): Promise<ImportacaoAu
         status: isErro ? "erro" : totais && totais.erros > 0 ? "erro" : "ok",
         usuario: r.userLabel || "—",
         dataIso: r.createdAt.toISOString(),
-        resumo: (r.detail ?? "").slice(0, 240),
+        resumo: isErro ? "Importação com falhas. Consulte o lote autorizado." : "Importação registrada.",
         batchId: typeof meta.batchId === "string" ? (meta.batchId as string) : null,
         totais,
         duracaoMs: typeof meta.duracaoMs === "number" ? (meta.duracaoMs as number) : null,
@@ -2205,13 +2210,14 @@ export async function listImportacoesAuditoria(limit = 50): Promise<ImportacaoAu
       };
     });
   } catch (err) {
-    console.error("[listImportacoesAuditoria]", err instanceof Error ? err.message : String(err));
+    console.error("[listImportacoesAuditoria] operation_failed");
     return [];
   }
 }
 
 export async function listLogsAuditoriaCadastros(): Promise<AuditoriaItemDTO[]> {
   const { session } = await requireCadastrosActionSession("hub");
+  if (!getEnterprisePermissions(session.user.role).auditoria) throw new Error("Sem permissão para auditoria.");
   const rows = await prisma.logsAuditoria.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
@@ -2227,11 +2233,11 @@ export async function listLogsAuditoriaCadastros(): Promise<AuditoriaItemDTO[]> 
     return {
       id: r.id,
       acao: r.action,
-      entidade: (meta.entidade as string) || r.detail.slice(0, 60),
+      entidade: r.action.startsWith("cliente.") ? "Cliente" : "Cadastro",
       usuario: r.userLabel,
       data: r.createdAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-      antes: (meta.antes as string) || "",
-      depois: (meta.depois as string) || r.detail.slice(0, 120),
+      antes: "",
+      depois: "Operação registrada; conteúdo pessoal omitido.",
       ip: r.source,
     }
   })
