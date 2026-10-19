@@ -618,3 +618,12 @@ O runner oficial saiu com **1** por PWA/lint. A repetição de build prevista pe
 Autorrevisão Codex da correção/integração e dos ajustes mínimos: sem novos achados estáticos P0/P1/P2 de produto; **aceite técnico bloqueado**, com revalidação do último diff pendente. INDEPENDENT_REVIEW=WAIVED_BY_HUMAN_DECISION, SELF_REVIEW=CODEX e HUMAN_MERGE_AUTHORIZATION=PENDING. Condição da dispensa ainda não satisfeita; não se trata de revisão independente. Smokes QA reais de 15–16/10 reaproveitados com seus limites, sem repetição.
 
 AEP mantém tentativa **1/3**, opened_at **2026-10-12T23:27:06.181Z**, attempts_log vazio e proveniência do refresh. Item 8 preservado, verify --all PASS; GOAL, ledger, state, REGISTRY e GATES não foram editados manualmente. Close não executado porque os gates não passaram. PR #273 permanece draft; sem merge, ativação produtiva, dados reais, Docker ou GOAL 002. CURRENT_STATUS/CHANGELOG/memória global não foram alterados nesta missão restrita.
+
+
+## Sincronização final e bloqueio de infraestrutura — 19/10/2026
+
+PR #273 atualizada pelo GitHub Update Branch com expected_head_sha e merge, seguida de fast-forward para 8648954a4c9d8fddc73b46697d167b1a33f5cf5d, integrando a PR #287 e main 13700862405a89da3c7d16702318735a88348133. O open oficial atualizou somente base_commit; tentativa 1/3, allowlist e histórico/proveniência preservados. Inspetor: 25/25 PASS, zero skipped/todo; verify --all e diff --check PASS. Os dois ajustes de lint foram confirmados no diff, mas não revalidados pelo lint canônico.
+
+O close oficial executou o runner e abortou exclusivamente no item 10: exit 5 por reserva de disco abaixo de 12 GiB em C:, antes da instalação. Item 8 PASS. Nenhum DONE ratificado, sessão intacta. Typecheck/integração/lint/builds/PWA completo/E2E ON/OFF/visual do HEAD integrado permanecem não executados. Cleanup confirmado e porta 55439 livre. Nenhum workspace temporário próprio remanescente; D: indisponível e G: sem espaço. Resultados antigos permanecem históricos. PR segue draft, sem merge/produção.
+
+Medidas, autorrevisão e próxima ação: [CLOSE_BLOCKED_DISK_2026-10-19.md](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/CLOSE_BLOCKED_DISK_2026-10-19.md) e [JSON](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/CLOSE_BLOCKED_DISK_2026-10-19.json).

@@ -1,0 +1,114 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-19",
+  "timezone": "America/Sao_Paulo",
+  "main": "13700862405a89da3c7d16702318735a88348133",
+  "evaluatedHead": "8648954a4c9d8fddc73b46697d167b1a33f5cf5d",
+  "branch": "goal/pessoas-001b-recovery-001",
+  "pr": 273,
+  "sync": {
+    "mechanism": "GitHub REST PUT /pulls/273/update-branch (merge)",
+    "expected_head_sha": "580a956299b41ca4d40814d097ded7b08a13e9fc",
+    "worktree": "git merge --ff-only origin/goal/pessoas-001b-recovery-001",
+    "pr287Integrated": true
+  },
+  "session": {
+    "attempt": 1,
+    "maxAttempts": 3,
+    "openedAt": "2026-10-12T23:27:06.181Z",
+    "attemptsLog": [],
+    "refreshRecords": 1,
+    "baseCommit": "13700862405a89da3c7d16702318735a88348133",
+    "preservation": "Compared before/after official open: only base_commit changed; no manual edits"
+  },
+  "validations": {
+    "inspectorTests": {
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "nodeCheck": [
+      "scripts/pessoas/inspect-pwa-build.mjs",
+      "scripts/pessoas/run-frontend-tests.mjs"
+    ],
+    "lintCorrections": "Both changes confirmed in diff dab8ce7..580a956; no current canonical lint run",
+    "verifyAll": "PASS",
+    "diffCheck": "PASS",
+    "typecheck": "NOT_RUN_DISK_PREFLIGHT",
+    "integration": "NOT_RUN_DISK_PREFLIGHT",
+    "lint": "NOT_RUN_DISK_PREFLIGHT",
+    "build": "NOT_RUN_DISK_PREFLIGHT",
+    "pwaBuildInspection": "NOT_RUN_DISK_PREFLIGHT",
+    "e2eOn": "NOT_RUN_DISK_PREFLIGHT",
+    "e2eOff": "NOT_RUN_DISK_PREFLIGHT",
+    "visualAccessibility": "NOT_REVALIDATED_CURRENT_HEAD"
+  },
+  "canonicalRunner": {
+    "invocation": "node scripts/pessoas/run-frontend-tests.mjs (inside official close check)",
+    "exit": 5,
+    "stage": "before dependency installation",
+    "error": "reserva insuficiente no volume C:\\:3255495063; não iniciar a próxima etapa",
+    "dependencyInstallationStarted": false,
+    "databaseStarted": false
+  },
+  "close": {
+    "command": "node scripts/track.mjs close pessoas",
+    "exit": 1,
+    "result": "ABORTED_CHECK_ITEM_10",
+    "failedItems": [
+      10
+    ],
+    "item8": "PASS",
+    "otherMandatoryItems": "PASS",
+    "informationalItem12": "No next eligible GOAL",
+    "versionedFilesWrittenByClose": false,
+    "sessionPreserved": true
+  },
+  "disk": {
+    "volume": "C:",
+    "freeBytes": 7508463616,
+    "freeGiB": 6.992801666259766,
+    "minimumBytes": 12884901888,
+    "shortfallBytes": 5376438272,
+    "temporaryRoot": "C:\\Users\\rafae\\AppData\\Local\\Temp",
+    "alternatives": {
+      "D": "unavailable",
+      "G": "0 bytes available"
+    },
+    "ownRunnerWorkspaceResidue": false,
+    "cleanupOfUnrelatedFiles": false
+  },
+  "cleanup": {
+    "officialRunner": "finally reached before reported failure",
+    "independentCheck": "No omni-pessoas-test-* in temporary root; port 55439 bind/close PASS",
+    "status": "PASS"
+  },
+  "priorEvidence": {
+    "head": "dab8ce719142f334250c69afe5ed6b6a8cd76e10",
+    "typecheck": "PASS_HISTORICAL",
+    "tests": "162/162_HISTORICAL",
+    "firstBuild": "PASS_HISTORICAL_MIGRATION_SKIPPED",
+    "qaSmokes": "15-16 October evidence retained; not repeated and not promoted to current HEAD"
+  },
+  "review": {
+    "INDEPENDENT_REVIEW": "WAIVED_BY_HUMAN_DECISION",
+    "SELF_REVIEW": "CODEX",
+    "HUMAN_MERGE_AUTHORIZATION": "PENDING",
+    "scope": "Synchronization, PWA regression tests, lint correction diff, service namespace/storeId validation and salary history redaction inspected",
+    "findings": "No new static blocking finding in reviewed changes; complete technical acceptance remains blocked and no absence of all P0/P1/P2 is certified",
+    "waiverConditionSatisfied": false
+  },
+  "outcome": "BLOCKED_ENVIRONMENT_DISK",
+  "nextAction": "Restore at least 12 GiB free on every checked volume, with installation/build headroom; rerun close on a clean immutable HEAD. Keep session and attempts intact.",
+  "limits": {
+    "production": false,
+    "realEmployeeData": false,
+    "databaseAccess": false,
+    "docker": false,
+    "goal002": false,
+    "merge273": false,
+    "manualGovernanceWrites": false,
+    "externalReviewRequested": false
+  }
+}
