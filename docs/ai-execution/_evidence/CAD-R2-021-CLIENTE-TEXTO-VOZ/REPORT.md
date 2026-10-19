@@ -31,7 +31,11 @@ O texto já publicado não foi reimplementado. Os parágrafos abaixo de “Hist�
 
 ### Validação e publicação desta continuação
 
-Validação inicial: 48 testes de Action/gate/guard passaram; o worker jsdom não iniciou por timeout no host com pressão de memória. Essa execução não é PASS integral. ESLint dos dez arquivos de código alterados passou sem erros/warnings; sintaxe dos scripts e `git diff --check` passaram. TypeScript completo, lint de fontes ativas, regressões, UI, 20 integrações PostgreSQL, build e smoke são gates do CI limpo. Resultados finais, commit, PR, revisão, merge/deploy e limpeza serão registrados após conferência. Nenhum PASS futuro é presumido.
+Validação local: 48 testes de Action/gate/guard passaram; o worker jsdom inicialmente não iniciou por timeout no host com pressão de memória. A repetição isolada aprovou os 13 testes de UI: 61 testes focados PASS. ESLint dos dez arquivos de código alterados passou sem erros/warnings; sintaxe dos scripts e `git diff --check` passaram.
+
+A [PR #286](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/286) foi aberta com commit inicial `2c486c0d9e3f29337a8e17c68f5fc578565408a2`. As 20 integrações passaram em PostgreSQL descartável no primeiro CI, sem escrita produtiva. A revisão automatizada apontou que `Promise.all` sozinho não comprova colisão UNIQUE. Corrigido para usar duas conexões reais, barreira imediatamente antes de create/update (após os lookups), confirmação de dois backend PIDs e observação obrigatória de exatamente um P2002 real, além do resultado de domínio seguro. A nova execução deve validar esse cenário mais forte.
+
+TypeScript completo, lint de fontes ativas, regressões, UI, 20 integrações PostgreSQL, build e smoke são gates do CI limpo. Resultados finais, revisão, merge/deploy e limpeza serão registrados após conferência. Nenhum PASS futuro é presumido.
 
 `PRODUCTION_DB_WRITES_BY_AGENT=0`. `MIGRATIONS_EXECUTED=NO`. `CAD_R2_022_STARTED=NO`. `WIP_PRESERVED=YES`.
 

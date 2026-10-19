@@ -22,6 +22,7 @@ import {
   createClient,
   updateClient,
   type ClientWriteDb,
+  type ClientWriteTx,
 } from "@/lib/cadastros/client-write-service"
 
 const TEST_URL = process.env.CAD_R2_019_TEST_DATABASE_URL ?? ""
@@ -40,6 +41,7 @@ const PRINCIPAL: CadastrosAuditPrincipal = {
 
 describe.skipIf(!TEST_URL)("CAD-R2-019 — concorrência real (PostgreSQL descartável)", () => {
   const db = new PrismaClient({ datasourceUrl: TEST_URL })
+  const secondConnection = new PrismaClient({ datasourceUrl: TEST_URL })
   const realDb = db as unknown as ClientWriteDb & {
     cliente: {
       create(args: unknown): Promise<{ id: string }>
@@ -55,6 +57,58 @@ describe.skipIf(!TEST_URL)("CAD-R2-019 — concorrência real (PostgreSQL descar
 
   function ctx(storeId: string): ClientWriteContext {
     return { storeId, principal: PRINCIPAL }
+  }
+
+  /** Real queries/writes on independent connections; only scheduling is controlled. */
+  function raceAtWrite(method: "create" | "update") {
+    let arrivals = 0, uniqueErrors = 0
+    let release!: () => void
+    const ready = new Promise<void>((resolve) => { release = resolve })
+    const backendPids = new Set<number>()
+    async function beforeWrite() {
+      arrivals++
+      if (arrivals === 2) release()
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([ready, new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Both lookups must finish before either write")), 5000)
+        })])
+      } finally { clearTimeout(timer) }
+    }
+    async function write<T>(operation: "create" | "update", perform: () => Promise<T>) {
+      if (operation === method) await beforeWrite()
+      try { return await perform() }
+      catch (error) {
+        if ((error as { code?: string })?.code === "P2002") uniqueErrors++
+        throw error
+      }
+    }
+    function on(connection: PrismaClient): ClientWriteDb {
+      return {
+        cliente: { findFirst: (args) => connection.cliente.findFirst(args) as ReturnType<ClientWriteTx["cliente"]["findFirst"]> },
+        $transaction: (fn) => connection.$transaction(async (tx) => {
+          const [backend] = await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`
+          backendPids.add(backend.pid)
+          return fn({
+            cliente: {
+              findMany: (args) => tx.cliente.findMany(args),
+              findFirst: (args) => tx.cliente.findFirst(args) as ReturnType<ClientWriteTx["cliente"]["findFirst"]>,
+              create: (args) => write("create", () => tx.cliente.create(args)),
+              update: (args) => write("update", () => tx.cliente.update(args)),
+            },
+            logsAuditoria: { create: (args) => tx.logsAuditoria.create(args) },
+          })
+        }, { timeout: 15000 }),
+      }
+    }
+    return {
+      first: on(db), second: on(secondConnection),
+      assertCollision: () => {
+        expect(arrivals).toBe(2)
+        expect(backendPids.size).toBe(2)
+        expect(uniqueErrors).toBe(1)
+      },
+    }
   }
 
   beforeAll(async () => {
@@ -74,14 +128,16 @@ describe.skipIf(!TEST_URL)("CAD-R2-019 — concorrência real (PostgreSQL descar
     await realDb.cliente.deleteMany({ where: { storeId: { in: [storeA, storeB] } } }).catch(() => {})
     await realDb.store.deleteMany({ where: { id: { in: [storeA, storeB] } } }).catch(() => {})
     await db.$disconnect()
+    await secondConnection.$disconnect()
   })
 
   it("create concorrente mesma store/documento: só uma persiste (409, sem PII)", async () => {
-    const dbA = { ...realDb } as unknown as ClientWriteDb
+    const race = raceAtWrite("create")
     const [r1, r2] = await Promise.all([
-      createClient(ctx(storeA), { nome: "Ana 1", documento: CPF_A }, undefined, { db: dbA }),
-      createClient(ctx(storeA), { nome: "Ana 2", documento: CPF_A_DIGITS }, undefined, { db: dbA }),
+      createClient(ctx(storeA), { nome: "Ana 1", documento: CPF_A }, undefined, { db: race.first }),
+      createClient(ctx(storeA), { nome: "Ana 2", documento: CPF_A_DIGITS }, undefined, { db: race.second }),
     ])
+    race.assertCollision()
     const oks = [r1, r2].filter((r) => r.ok)
     const fails = [r1, r2].filter((r) => !r.ok)
     // Sob corrida real, pelo menos a unicidade por lookup bloqueia uma; se
@@ -108,10 +164,12 @@ describe.skipIf(!TEST_URL)("CAD-R2-019 — concorrência real (PostgreSQL descar
     const c1 = await createClient(ctx(storeA), { nome: "C1" }, undefined, { db: dbA })
     const c2 = await createClient(ctx(storeA), { nome: "C2" }, undefined, { db: dbA })
     if (!c1.ok || !c2.ok) throw new Error("setup falhou")
+    const race = raceAtWrite("update")
     const [r1, r2] = await Promise.all([
-      updateClient(ctx(storeA), c1.id, { documento: CPF_B }, undefined, { db: dbA }),
-      updateClient(ctx(storeA), c2.id, { documento: CPF_B_DIGITS }, undefined, { db: dbA }),
+      updateClient(ctx(storeA), c1.id, { documento: CPF_B }, undefined, { db: race.first }),
+      updateClient(ctx(storeA), c2.id, { documento: CPF_B_DIGITS }, undefined, { db: race.second }),
     ])
+    race.assertCollision()
     const oks = [r1, r2].filter((r) => r.ok)
     // This key must be unused by the previous create test; otherwise both
     // updates could be refused and an old row would produce a false PASS.
