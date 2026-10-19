@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { webcrypto } from "node:crypto"
-import { createElement, type ReactNode } from "react"
+import { cloneElement, createElement, type ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
 const identity = vi.hoisted(() => ({ store: "A", user: "user-A", expanded: false, realContext: false, status: "authenticated" as "authenticated" | "unauthenticated", capacidades: ["viewCadastro", "viewDocumento", "editCadastro"] }))
@@ -320,7 +320,7 @@ describe("Recovery R2 final: contexto e retomada documental em memória", () => 
     ] })
     const tree = (provider = false) => {
       const children = createElement(FichaFuncionario, { id: "link-synthetic", actions, documentActions })
-      return provider ? createElement(PessoasProvider, { children, listarEmpregadoresAction, listarFuncionariosAction: vi.fn() }) : children
+      return provider ? cloneElement(createElement(PessoasProvider, null, children), { listarEmpregadoresAction, listarFuncionariosAction: vi.fn() }) : children
     }
     return { documentActions, actions, tree }
   }

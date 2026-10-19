@@ -77,7 +77,7 @@ export function Documentos({ id, actions, disabled = false, onPendingChange, acq
   }, [state])
   useEffect(() => {
     if (interativo && reloadOnResume.current) { reloadOnResume.current = false; resource.reload() }
-  }, [interativo, resource.reload])
+  }, [interativo, resource])
   function transition(next: UploadState) { uploadState.current = next; setState(next) }
   function refreshList() {
     if (autorizado.current) resource.reload()
