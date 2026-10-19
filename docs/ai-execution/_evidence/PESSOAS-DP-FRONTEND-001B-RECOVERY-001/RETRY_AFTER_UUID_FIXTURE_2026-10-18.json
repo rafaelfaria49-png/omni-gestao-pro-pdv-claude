@@ -1,0 +1,59 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-18",
+  "headTested": "290641dff4fc6ce773ad6c66a446c081e1dbffee",
+  "runnerLog": "runner-after-uuid-fixture-2026-10-18.log",
+  "runnerExit": 1,
+  "typecheck": "PASS",
+  "chromium": "PASS",
+  "spaceAfterInstallBytes": 13434957824,
+  "minimumBytes": 12884901888,
+  "database": {
+    "invariants": {
+      "check": 10,
+      "index": 7,
+      "trigger": 10,
+      "function": 4
+    },
+    "drift": "ZERO"
+  },
+  "vitest": {
+    "total": 162,
+    "passed": 142,
+    "failedAssertions": 0,
+    "failedSuites": 1,
+    "notExecutedAfterBeforeAllFailure": 20,
+    "todo": 0,
+    "overall": "FAIL_SUITE_SETUP",
+    "libraryTestsPassed": 98,
+    "frontendContractTestsPassed": 39,
+    "previousFrontendIntegrationTestsPassed": 5,
+    "newP201CasesPassed": 0
+  },
+  "failure": {
+    "file": "scripts/pessoas/frontend.integration.test.ts",
+    "line": 133,
+    "code": "CAMPO_INVALIDO",
+    "cause": "The two synthetic inscricao values used full 36-character UUIDs; criarEmpregador accepts at most 32",
+    "correction": "Remove hyphens from the two synthetic UUID inscriptions, yielding 32 characters; keep all 20 cases and production validation unchanged"
+  },
+  "lint": "NOT_RUN",
+  "build": "NOT_RUN",
+  "e2e": "NOT_RUN",
+  "skipsAccepted": false,
+  "cleanup": {
+    "status": "PASS",
+    "workspace": "C:/Users/rafae/AppData/Local/Temp/omni-pessoas-test-vsmuDA",
+    "workspaceAbsent": true,
+    "port55439": "FREE"
+  },
+  "afterCleanupFreeBytes": 14969081856,
+  "afterCleanupFreeGiB": 13.941,
+  "aep": {
+    "attempt": 1,
+    "openedAt": "2026-10-12T23:27:06.181Z",
+    "attemptsLog": [],
+    "close": "NOT_RUN"
+  },
+  "technicalAcceptance": "PENDING_RERUN_WITH_VALID_FIXTURE"
+}

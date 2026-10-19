@@ -130,8 +130,8 @@ describe.sequential("P2-01: documentos com IDs de Store de 1 a 100 caracteres", 
     await prisma.store.createMany({ data: stores.map(id => ({ id, name: "Store sintetica documental" })) })
     actor.storeId = stores[0]
     actor.userId = (await prisma.adminUser.create({ data: { email: randomUUID() + "@example.invalid", password: "unused-synthetic", role: "ADMIN", lojaId: actor.storeId } })).id
-    employer = data(await actions.setupEmpregador({ comandoId: randomUUID(), nome: "Empregador documental sintetico", inscricao: randomUUID(), tipoInscricao: "CNPJ", validFrom: "2020-01-01", motivo: "fixture P2-01",
-      estabelecimento: { nome: "Sede sintetica", inscricao: randomUUID(), tipoInscricao: "CNPJ" } })).id
+    employer = data(await actions.setupEmpregador({ comandoId: randomUUID(), nome: "Empregador documental sintetico", inscricao: randomUUID().replaceAll("-", ""), tipoInscricao: "CNPJ", validFrom: "2020-01-01", motivo: "fixture P2-01",
+      estabelecimento: { nome: "Sede sintetica", inscricao: randomUUID().replaceAll("-", ""), tipoInscricao: "CNPJ" } })).id
     const estabelecimentoId = data(await actions.obterEmpregador(employer)).estabelecimentos[0].id
     for (const storeId of stores.slice(1)) {
       await prisma.adminUserStore.create({ data: { adminUserId: actor.userId, storeId } })

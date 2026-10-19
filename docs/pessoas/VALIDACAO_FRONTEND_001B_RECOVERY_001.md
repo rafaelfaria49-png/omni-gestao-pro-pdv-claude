@@ -588,3 +588,16 @@ O typecheck canônico foi executado e saiu com código **2**: `frontend.contract
 Cleanup oficial PASS; workspace `omni-pessoas-test-Is6eAx` ausente em verificação separada e porta 55439 livre. Espaço após cleanup: **14.992.912.384 bytes (13,963 GiB)**. A sessão continua na tentativa 1/3, com abertura e histórico preservados; close ainda não executado. É necessária nova execução sobre a fixture corrigida antes de atribuir PASS ao TypeScript ou às etapas seguintes.
 
 Evidência: [RETRY_AFTER_CLEANUP_2026-10-18.json](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/RETRY_AFTER_CLEANUP_2026-10-18.json); saída integral em `runner-after-cleanup-2026-10-18.log`, no mesmo diretório.
+
+
+## TypeScript aprovado e correção da inscrição sintética — 18/10/2026
+
+Runner oficial no HEAD `290641dff4fc6ce773ad6c66a446c081e1dbffee`: **TypeScript PASS**, Chromium PASS, reserva após instalação de **13.434.957.824 bytes**, invariantes 001A conferidos (10 CHECKs, sete índices, dez triggers e quatro funções), drift zero.
+
+Vitest coletou 162 casos: **142 passaram** (98 de lib/pessoas, 39 do contrato frontend e cinco da integração frontend anterior), **20 não executaram**, zero todo e uma suíte falhou no beforeAll. A fixture P2-01 que adicionei usava dois UUIDs completos de 36 caracteres em inscricao; o contrato real permite até 32. O bootstrap retornou CAMPO_INVALIDO na linha 133, antes dos novos casos. O runner saiu com **1** e recusou o resultado com casos não executados. Isso não representa aprovação da regressão P2-01.
+
+Correção restrita aos dados de teste: remover os hífens dos dois UUIDs de inscrição, produzindo 32 caracteres. Validações de produção e todos os 20 casos permanecem. Foram conferidos também os demais limites de campos e os contratos de vinculação/funcionário usados no setup da nova suíte.
+
+Lint, build/PWA e E2E não iniciaram nesta execução. Cleanup oficial PASS, workspace `omni-pessoas-test-vsmuDA` ausente em verificação separada e porta 55439 livre. Livre após cleanup: **14.969.081.856 bytes (13,941 GiB)**. Nenhuma exclusão adicional; AEP permanece na tentativa 1/3, sem close. Nova bateria necessária no HEAD com a fixture válida.
+
+Detalhes e contagens: [RETRY_AFTER_UUID_FIXTURE_2026-10-18.json](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/RETRY_AFTER_UUID_FIXTURE_2026-10-18.json). Saída integral: `runner-after-uuid-fixture-2026-10-18.log`, no mesmo diretório.

@@ -1,0 +1,78 @@
+[pessoas-test] HEAD 290641dff4fc6ce773ad6c66a446c081e1dbffee · base 180a2f2ab450cc2686b5087dc09b1a0ee58b5f72 (merge-base origin/main)
+[pessoas-test] migrations novas no HEAD: (nenhuma)
+[pessoas-test] workspace externo: C:\Users\rafae\AppData\Local\Temp\omni-pessoas-test-vsmuDA
+[pessoas-test] reserva antes da instalação: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-vsmuDA\\ws","freeBytes":14816980992,"minimumBytes":12884901888}
+[pessoas-test] preflight frontend: {"node":"v24.14.1","npm":"11.11.0","os":{"platform":"win32","release":"10.0.26200","arch":"x64"},"workspace":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-vsmuDA\\ws","cache":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-vsmuDA\\npm-cache","evidence":"C:\\Projetos\\omni-gestao-pessoas-001b-recovery-001\\docs\\ai-execution\\_evidence\\PESSOAS-DP-FRONTEND-001B-RECOVERY-001","postgresql":{"initdb":"initdb (PostgreSQL) 17.10","pg_ctl":"pg_ctl (PostgreSQL) 17.10","psql":"psql (PostgreSQL) 17.10","postgres":"postgres (PostgreSQL) 17.10"},"space":[{"stage":"antes da instalação","volumes":[{"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-vsmuDA\\ws","freeBytes":14816980992,"minimumBytes":12884901888}]}]}
+[pessoas-test] npm ci (lockfile) + prisma generate no workspace externo…
+[pessoas-test] reserva após instalação: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-vsmuDA\\ws","freeBytes":13434957824,"minimumBytes":12884901888}
+[pessoas-test] reserva reserva medida: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-vsmuDA\\ws","freeBytes":13434957824,"minimumBytes":12884901888}
+[pessoas-test] Chromium: {"playwright":"1.52.0","chromium":"136.0.7103.25","executable":"C:\\Users\\rafae\\AppData\\Local\\ms-playwright\\chromium-1169\\chrome-win\\chrome.exe"}
+[pessoas-test] npm run typecheck antes das suítes completas/build/E2E…
+[pessoas-test] next-pwa instalado pelo npm ci: 10.2.9
+[pessoas-test] invariantes 001A conferidos: {"check":10,"index":7,"trigger":10,"function":4}
+[pessoas-test] drift migration × schema.prisma: nenhum
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.4 [39m[90mC:/Users/rafae/AppData/Local/Temp/omni-pessoas-test-vsmuDA/ws[39m
+
+ [32m✓[39m scripts/pessoas/frontend.contract.test.ts [2m([22m[2m39 tests[22m[2m)[22m[33m 2839[2mms[22m[39m
+     [33m[2m✓[22m[39m aplica o mesmo estado DP nos três modos e desabilita prefetch [33m 328[2mms[22m[39m
+ [32m✓[39m lib/pessoas/integration.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 1315[2mms[22m[39m
+ [32m✓[39m lib/pessoas/hardening.integration.test.ts [2m([22m[2m46 tests[22m[2m)[22m[33m 915[2mms[22m[39m
+ [31m❯[39m scripts/pessoas/frontend.integration.test.ts [2m([22m[2m25 tests[22m[2m | [22m[33m20 skipped[39m[2m)[22m[33m 388[2mms[22m[39m
+     [32m✓[39m disponibilidade permite bootstrap sem grant e endpoint é no-store[32m 142[2mms[22m[39m
+     [32m✓[39m wrapper impede criação na Store efetiva B quando o formulário espera A, mesmo com empregador e grants em ambas[32m 89[2mms[22m[39m
+     [32m✓[39m rascunho persiste, replay é único e payload diferente conflita[32m 51[2mms[22m[39m
+     [32m✓[39m versiona, preserva histórico e rejeita conflito sem sobrescrever[32m 51[2mms[22m[39m
+     [32m✓[39m Store alheia e revogação fecham o acesso[32m 7[2mms[22m[39m
+     [2m[90m↓[39m[22m intent, complete, list e download preservam o namespace em loja-1
+     [2m[90m↓[39m[22m intent, complete, list e download preservam o namespace em loja-2
+     [2m[90m↓[39m[22m intent, complete, list e download preservam o namespace em qa-pessoas-documentos-f6427d39-da9d-4e25-8056-713e4736b1b3
+     [2m[90m↓[39m[22m intent, complete, list e download preservam o namespace em s
+     [2m[90m↓[39m[22m intent, complete, list e download preservam o namespace em ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss
+     [2m[90m↓[39m[22m nega cruzamento loja-1/loja-2 mesmo com membership e grants validos nas duas
+     [2m[90m↓[39m[22m nega Store invalida "" antes de acessar storage
+     [2m[90m↓[39m[22m nega Store invalida "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss" antes de acessar storage
+     [2m[90m↓[39m[22m nega Store invalida "loja/1" antes de acessar storage
+     [2m[90m↓[39m[22m nega Store invalida "loja\\1" antes de acessar storage
+     [2m[90m↓[39m[22m nega Store invalida "loja.1" antes de acessar storage
+     [2m[90m↓[39m[22m nega Store invalida "loja 1" antes de acessar storage
+     [2m[90m↓[39m[22m nega Store invalida "loja-\n1" antes de acessar storage
+     [2m[90m↓[39m[22m preserva recusas de empregador/documento invalido ""
+     [2m[90m↓[39m[22m preserva recusas de empregador/documento invalido "curto-1"
+     [2m[90m↓[39m[22m preserva recusas de empregador/documento invalido "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss"
+     [2m[90m↓[39m[22m preserva recusas de empregador/documento invalido "entidade/123"
+     [2m[90m↓[39m[22m preserva recusas de empregador/documento invalido "entidade\\123"
+     [2m[90m↓[39m[22m preserva recusas de empregador/documento invalido "entidade..123"
+     [2m[90m↓[39m[22m recusa namespace e empregador adulterados sem gravar outro documento
+ [32m✓[39m lib/pessoas/flag-off.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m lib/pessoas/domain.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m lib/pessoas/historico-privacidade.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m lib/pessoas/documentos/download-url.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m lib/pessoas/documentos/intent.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m lib/pessoas/runner-safety.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  scripts/pessoas/frontend.integration.test.ts > P2-01: documentos com IDs de Store de 1 a 100 caracteres
+Error: CAMPO_INVALIDO
+ ❯ data scripts/pessoas/frontend.integration.test.ts:33:25
+     31| import { GET } from "@/app/api/pessoas/disponibilidade/route"
+     32| function data<T>(result: { ok: true; data: T } | { ok: false; code: st…
+     33|   if (!result.ok) throw new Error(result.code)
+       |                         ^
+     34|   return result.data
+     35| }
+ ❯ scripts/pessoas/frontend.integration.test.ts:133:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m9 passed[39m[22m[90m (10)[39m
+[2m      Tests [22m [1m[32m142 passed[39m[22m[2m | [22m[33m20 skipped[39m[90m (162)[39m
+[2m   Start at [22m 23:24:05
+[2m   Duration [22m 64.27s[2m (transform 1.32s, setup 0ms, import 11.31s, tests 5.52s, environment 45.56s)[22m
+
+JSON report written to C:/Users/rafae/AppData/Local/Temp/omni-pessoas-test-vsmuDA/vitest.json
+[pessoas-test] vitest: 142 passaram · 0 falharam · 20 pulados · 0 todo
+[pessoas-test] CLEANUP PASS · cluster/workspace/node_modules/.next/SW/relatórios removidos · porta 55439 livre
+[pessoas-test] FALHA: testes pulados/todo/não executados — PASS oco recusado
