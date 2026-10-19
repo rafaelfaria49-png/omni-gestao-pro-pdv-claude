@@ -1,5 +1,18 @@
 # CAD-R2-021 — pacote para análise administrativa e jurídica
 
+## Decisão registrada — 19/10/2026
+
+O responsável pelo OmniGestão Pro autorizou expressamente o desenvolvimento e o desbloqueio técnico da voz no cadastro de Clientes. Alcance: **produto e desenvolvimento**. Não é parecer jurídico, consentimento dos titulares nem autorização para transmitir áudio de clientes a fornecedores externos não avaliados.
+
+Como a decisão foi aplicada no código:
+
+- Somente processamento no próprio dispositivo (`processLocally`), pt-BR, verificado em cada terminal; sem fallback remoto; sem armazenamento de áudio ou transcrição na aplicação; revisão humana e confirmação explícita antes de qualquer gravação.
+- Processamento remoto: **não aprovado**, sem integração. As linhas de fornecedor, suboperadores e transferência abaixo continuam **PENDENTES**.
+- Continuam **PENDENTES** e não são decididos por este registro: hipótese legal específica da voz, avisos ao atendente e ao cliente (minutas abaixo), procedimento operacional (ambiente, terceiros, menores), retenção do cadastro (020) e canal de direitos. Recomendação técnica: publicar o aviso ao atendente/cliente antes do uso em loja.
+- Suspensão: `CLIENT_VOICE_POLICY.enabled = false` em novo deploy desliga a interface e a origem `voice` na Action.
+
+As seções seguintes são a minuta original; os campos de aprovação permanecem como estavam.
+
 **MINUTA — TODAS AS APROVAÇÕES PENDENTES.** Preparação em 19/10/2026, para encaminhamento humano. Não é parecer, termo aprovado, designação de encarregado ou autorização de processamento. Não foi enviada comunicação a terceiros pelo agente.
 
 ## 1. Objeto e distinção de finalidades

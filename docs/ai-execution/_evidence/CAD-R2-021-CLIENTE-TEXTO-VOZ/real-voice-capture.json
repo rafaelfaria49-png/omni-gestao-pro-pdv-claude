@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-10-19T14:35:45.952Z",
+  "os": "Windows_NT 10.0.26200",
+  "synthetic": true,
+  "phrase": "Novo cliente Lia de Teste. Telefone 1 4 9 9 9 9 9 8 8 8 8. Mora em Itaí.",
+  "ttsVoice": "Microsoft Maria Desktop",
+  "wavSeconds": 17,
+  "installAllowed": false,
+  "browser": "Google Chrome 155.0.8059.80, Chromium 155.0.8059.80, Not(A:Brand 24.0.0.0",
+  "availabilityBefore": "downloadable",
+  "availabilityAfterInstallPhase": "downloadable",
+  "result": "NOT_RUN_LOCAL_PACK_UNAVAILABLE",
+  "limitations": [
+    "Synthetic TTS speech via fake audio device; not a human voice, accent, noise or a physical microphone.",
+    "One Chrome build on this host; other devices/browsers need their own availability check (the app re-checks on every terminal).",
+    "Browser-internal behaviour is observed through the spec contract (processLocally) plus the blocked-network condition, not by inspecting Chrome internals."
+  ]
+}

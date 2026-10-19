@@ -1,5 +1,31 @@
 # CAD-R2-021 — relatório único de texto, voz e prontidão de governança
 
+## Implementação da voz local de Clientes — 19/10/2026
+
+`GOAL=CAD-R2-021`. `VOICE_IMPLEMENTATION=IMPLEMENTED_LOCAL_ONLY` (estado funcional em dispositivo: ver "Captura real"). `TEXT_CAPTURE=PRESERVED`. `HUMAN_REVIEW=REQUIRED`. `CLIENT_WRITE_SERVICE=REUSED`. `VOICE_AUDIO_STORAGE=NONE_IN_APPLICATION`. `REMOTE_FALLBACK=DISABLED`. `OTHER_MODULES=UNCHANGED`. `SCHEMA_MIGRATIONS=UNCHANGED`. `WIP_PRESERVED=YES`.
+
+### Autoridade e base
+
+Decisão do responsável pelo produto: desenvolver e desbloquear tecnicamente a voz de Clientes, sem novo GOAL, preservando #282 e #286. Não é parecer jurídico, consentimento de titulares nem aprovação de fornecedor externo; processamento remoto continua sem aprovação (VOICE-GOVERNANCE.md, "Decisão registrada"). Base conferida após fetch: `a6777234bcc336fef64ecb7491d5705bdd404b39`. Worktree isolada `.worktrees/cad-r2-021-voz`, branch `claude/cad-r2-021-voz-clientes-funcional`. Worktree principal e seu WIP intocados. `.aep-active` ausente; não existe trilha AEP de Cadastros; nenhum state/LEDGER/REGISTRY editado.
+
+### O que mudou
+
+- **Política** (`lib/cadastros/voice-capture/cliente.ts`): `CLIENT_VOICE_PRIVACY_GATE` (bloqueio permanente) substituído por `CLIENT_VOICE_POLICY` congelado — local estrito, sem fallback remoto, pt-BR, 30 s, 2000 caracteres, sem áudio armazenado, sem autosave. Mensagens próprias de Clientes sobre a máquina compartilhada `reduceVoiceCapture`, com descarte do trecho temporário em todo término sem sucesso. Formatação visível da transcrição (pontuação falada, separação dos rótulos que o parser conhece) e junção em linha própria.
+- **Adapter local** (`lib/cadastros/voice-capture/local.ts`): verificação por metadados (`available({langs:["pt-BR"], processLocally:true})`, contexto seguro, API on-device completa), instalação explícita do pacote, sessão com `processLocally = true` antes de `start()`, recusa de instância que não confirma o modo local, parar/cancelar/descartar, limites de duração e caracteres, carência de `end`. Reconhecimento genérico nunca é aceito.
+- **Editor** (`ClienteEditor.tsx`): "Ditar por voz" / "Instalar voz local pt-BR" / "Verificar voz local" / "Voz indisponível" conforme o terminal; "Parar ditado", "Cancelar ditado", indicador "Ouvindo · m:ss de 0:30"; transcrição ao vivo somente leitura e, ao concluir, texto editável; "Interpretar texto" e "Salvar cliente" bloqueados durante a escuta; fechar, trocar loja, descartar, ocultar aba e `pagehide` encerram o motor e invalidam callbacks. Rótulo de origem "Extraído da transcrição por voz" na revisão.
+- **Action** (`cliente-texto-livre.ts`): depois de autenticar/autorizar a loja, aceita só os literais `text`/`voice`; qualquer outra origem é recusada antes do parser com mensagem constante. A origem não muda parser, sugestão nem `salvarClienteRevisado` → ClientWriteService.
+- **Sem mudança**: adapter/máquina/tipos de voz de Produto (`browser.ts`, `session.ts`, `types.ts`, `detect.ts`, `index.ts`), `produto-ia.tsx`, Prisma/schema/migrations, auth/proxy, `next.config.mjs` e os demais HUBs.
+
+### Testes
+
+Simulados (motor sintético `__fixtures__/fake-local-speech.ts`, sem áudio): unidade do adapter, política, Action e UI cobrindo início, parada, cancelamento, permissões negadas, `audio-capture`/`no-speech`, compatibilidade pt-BR (available/downloadable/downloading/unavailable/política/timeout/contexto inseguro/API genérica), `processLocally` obrigatório e sem fallback, eventos tardios após cancelar/fechar/trocar loja, aba oculta/`pagehide`, limites, revisão humana, duplicidade e isolamento por loja na Action, ausência de logs/storage/URL. Duas mutações (remover `processLocally`; remover o encerramento no unmount/ocultação) derrubaram 18 e 4 testes, respectivamente; arquivos restaurados byte a byte.
+
+Smoke Chromium do editor real (motor SIMULADO injetado, I/O das Actions simulado) em 1440×1000, 390×844 e 320×740: instalação explícita, início local pt-BR, transcrição ao vivo, parar → texto editável, interpretação com origem `voice`, revisão, aplicação, confirmação, save simulado, cancelamento com evento tardio, troca de loja abortando o motor, motor genérico recusado e caminho por texto. Zero chamadas a microfone/permissões pela aplicação, zero rede externa, zero storage, zero page errors, sem overflow. Capturas `voice-listening-*.png` e `review-*.png`.
+
+### Captura real
+
+`scripts/cadastros/real-voice-capture-local.mjs` (fora do CI) dirige o editor real no Chrome instalado, com fala **sintética** pt-BR gerada localmente (SAPI) entrando por dispositivo de áudio falso e a rede do navegador bloqueada por proxy morto durante o reconhecimento. Estado nesta máquina antes de qualquer instalação: Chrome 155.0.8059.80 com API local, `available(pt-BR, local) = downloadable` → `real-voice-capture.json` = `NOT_RUN_LOCAL_PACK_UNAVAILABLE`. A captura exige que o Chrome baixe o modelo pt-BR (ação separada, sujeita a autorização). Até uma captura real passar, não se declara voz funcional em dispositivo.
+
 ## Continuação — 19/10/2026
 
 `CAD_R2_021_STATUS=PARTIAL_BLOCKED`. `TEXT_CAPTURE=PUBLISHED_PRESERVED`. `VOICE_CAPTURE=DISABLED`. `VOICE_PRIVACY_GATE=BLOCKED`. `LEGAL_APPROVAL=PENDING`. Testes, revisão, CI, merge ou deployment não substituem a decisão administrativa/jurídica.

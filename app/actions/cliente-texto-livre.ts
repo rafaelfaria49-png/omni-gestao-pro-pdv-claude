@@ -6,13 +6,17 @@ import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-au
 import { createClient, updateClient } from "@/lib/cadastros/client-write-service"
 import { prisma } from "@/lib/prisma"
 import { interpretarTextoCliente, validateClientEditor, type ClientEditorValues } from "@/lib/cadastros/natural-text/cliente"
-import { CLIENT_TEXT_FIELDS, CLIENT_VOICE_PRIVACY_GATE, type ClientTextSuggestion } from "@/lib/cadastros/natural-text/cliente-types"
+import { CLIENT_TEXT_FIELDS, type ClientTextSuggestion } from "@/lib/cadastros/natural-text/cliente-types"
+import { CLIENT_CAPTURE_SOURCE_INVALID_MESSAGE, isClientCaptureSource } from "@/lib/cadastros/voice-capture/cliente"
 
 export async function interpretarClienteTextoLivre(storeId: string, text: unknown, captureSource: unknown = "text"): Promise<
   { ok: true; sugestao: ClientTextSuggestion } | { ok: false; message: string }
 > {
   await requireCadastrosActionAccess(storeId, "hub")
-  if (captureSource !== "text") return { ok: false, message: CLIENT_VOICE_PRIVACY_GATE.message }
+  // Only the literals "text"/"voice" are accepted, as a label. The server does not
+  // receive audio and cannot attest a string's physical origin: the source neither
+  // authorizes anything nor changes the parser, the suggestion or the writer contract.
+  if (!isClientCaptureSource(captureSource)) return { ok: false, message: CLIENT_CAPTURE_SOURCE_INVALID_MESSAGE }
   try { return { ok: true, sugestao: interpretarTextoCliente(text) } }
   catch { return { ok: false, message: "Descreva o cliente em até 2000 caracteres." } }
 }
