@@ -50,7 +50,7 @@ const EMPTY_TRANSCRIPT = "Nenhuma fala reconhecida. Tente de novo ou digite — 
 export const CLIENT_VOICE_SUPPORT_MESSAGES: Record<"checking" | "disabled" | "downloadable" | "downloading" | Extract<LocalVoiceSupport, { status: "unavailable" }>["reason"], string> = {
   checking: "Verificando se este navegador reconhece pt-BR no próprio dispositivo…",
   disabled: "Voz desativada pela política do OmniGestão. Continue por texto.",
-  downloadable: "O navegador oferece reconhecimento local pt-BR, mas o pacote de idioma não está ativo. A instalação baixa só o modelo de voz do navegador (se já estiver no dispositivo, apenas o reativa); nenhum áudio é enviado.",
+  downloadable: "O navegador oferece reconhecimento local pt-BR, mas o pacote de idioma não está ativo. A instalação baixa só o modelo de voz do navegador, que pode passar de 100 MB (se já estiver no dispositivo, apenas o reativa); nenhum áudio é enviado.",
   downloading: "O navegador está baixando o pacote local pt-BR. Verifique novamente em instantes.",
   ssr: STATUS_MESSAGES.unavailable,
   "insecure-context": "Voz local exige conexão segura (HTTPS). Continue por texto.",
