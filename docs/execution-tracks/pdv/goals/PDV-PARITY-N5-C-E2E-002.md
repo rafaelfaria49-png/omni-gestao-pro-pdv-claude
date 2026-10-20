@@ -4,7 +4,7 @@
   "id": "PDV-PARITY-N5-C-E2E-002",
   "track": "pdv",
   "title": "N5-C — cobertura automatizada mínima e matriz final do PDV Core",
-  "status": "BLOCKED",
+  "status": "READY",
   "class": "C3",
   "risk_tier": "ALTO",
   "branch": "goal/pdv-parity-n5-c-e2e-002",
@@ -20,15 +20,19 @@
     "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
     "components/dashboard/vendas/pdv-classic.tsx",
     "lib/pdv/parity-classic-finalize-audit.component.test.ts",
-    "generated/prisma/**"
+    "generated/prisma/**",
+    "components/dashboard/vendas/pdv-supermercado.tsx",
+    "lib/pdv/parity-supermercado-finalize-audit.component.test.ts",
+    "components/dashboard/vendas/venda-completa-enterprise.tsx",
+    "lib/pdv/parity-venda-completa-finalize-audit.component.test.ts"
   ],
   "gates_liberados": [],
   "read_budget": 50,
-  "plan_ref": "PDV-N5-C-REV3-RETRY-AUDIT-PLAN-004",
-  "plan_rev": 3,
+  "plan_ref": "PDV-N5-C-REV4-FINAL-RETRY-AUDIT-PLAN-005",
+  "plan_rev": 4,
   "familia_executor": "openai",
   "revisao_independente": true,
-  "reversibilidade": "alta: auditoria local Assistencia e Classic, testes reais de componentes, E2E isolados, Prisma gerado local ignorado e documentos; sem motor/backend",
+  "reversibilidade": "alta: auditoria local nas quatro superficies, testes reais de componentes, E2E isolados, Prisma gerado local ignorado e documentos; sem motor/backend",
   "depends_on": [
     "PDV-PARITY-N5-B2-PIN-KEYMAP-001"
   ],
@@ -62,7 +66,7 @@ Commit/push autorizados somente na branch acima e allowlist. Merge é humano.
 Nenhum gate de dados/auth/CI/deploy liberado; ausência de ambiente isolado
 ou necessidade de caminho adicional exige parar, sem improvisar produção.
 
-## Histórico da reabertura rev2 (preservado; limites atualizados pela rev3)
+## Histórico da reabertura rev2 (preservado; limites atualizados pela rev4)
 
 O bloqueio original permanece integralmente no commit
 `af12ed3d0159f97bb125a62a0466362f4a89af8b`, no ledger append-only e nos documentos
@@ -71,7 +75,7 @@ A reabertura move este mesmo GOAL de `_closed/goals/` para `goals/`, com
 `status=READY` e `plan_rev=2`; não cria GOAL sucessor nem evento READY no ledger.
 READY é estado de planejamento, não correção executada nem cobertura TESTED.
 Naquela reabertura, o histórico era 0 TESTED, 19 PARTIAL e 1 BLOCKED.
-A evidência rev2 posterior mantém 3 TESTED, 16 PARTIAL e 1 BLOCKED; esta rev3
+A evidência rev2 posterior mantém 3 TESTED, 16 PARTIAL e 1 BLOCKED; esta rev4
 não altera essas contagens nem substitui a matriz preservada.
 
 A entrega de planejamento rev2 ocorreu exclusivamente na branch
@@ -82,10 +86,10 @@ somente para bloqueio original + plano rev2. Sem código produtivo, implementaç
 E2E, `open`/`close` AEP ou merge nesta entrega. A implementação só poderá
 começar após merge humano deste planejamento e retomada em sessão própria.
 
-## Correção local autorizada após merge humano
+## Contrato original rev2 (ampliado pelas rev3 e rev4 após merge humano)
 
-Os cinco paths anteriores de E2E/documentação são preservados. A allowlist
-acrescenta somente o componente Assistência e seu teste de componente acima.
+Os cinco paths anteriores de E2E/documentação são preservados. Na rev2, a allowlist
+acrescentou somente o componente Assistência e seu teste de componente acima.
 Nenhum outro componente, backend, motor compartilhado, schema, Auth.js, API de
 auditoria, financeiro, configuração global ou dependência poderá ser modificado.
 Nenhum gate de dados/auth/CI/deploy é liberado por esta revisão.
@@ -114,7 +118,7 @@ PENDING/retry e audit-log. Reutilizar provas existentes, identificando contrato,
 arquivo/caso, SHA, resultado e limite. Não duplicar testes do mesmo contrato.
 Criar somente os E2E/fixtures que faltam para ligar interações reais das quatro
 superfícies ao contrato já provado. C é C3/ALTO pelo contrato entre bordas e
-motor e inclui na rev2 somente a correção local de auditoria descrita acima e na seção rev3 abaixo.
+motor e inclui as correções locais de auditoria delimitadas nas rev2, rev3 e rev4.
 
 Referências iniciais read-only (reavaliar na main após B2):
 
@@ -173,9 +177,9 @@ homologação operacional, Auth.js ou smoke de produção. Falta de ambiente seg
 - Consolidar resultado em `docs/pdv/PDV_CORE_N5_FINAL_MATRIX_002.md` e evidência
   própria. Declarar cobertura técnica mínima completa somente quando as cinco
   linhas nas quatro superfícies tiverem prova suficiente; registrar lacuna real
-  e parar se a allowlist não permitir resolvê-la. Código produtivo limitado à
-  correção de auditoria Assistência preservada e à correção local Classic
-  delimitada na rev3, após merge humano.
+  e parar se a allowlist não permitir resolvê-la. Código produtivo limitado às
+  correções de auditoria Assistência e Classic preservadas e às correções locais
+  Supermercado e Venda Completa delimitadas na rev4, após merge humano.
 - Registrar riscos operacionais não homologados: acesso autenticado, loja/terminal,
   oito combinações do smoke B1, operação física/hardware/ambiente real quando
   aplicável. `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` e
@@ -188,7 +192,7 @@ homologação operacional, Auth.js ou smoke de produção. Falta de ambiente seg
   segunda instância OpenAI não cumpre R. Sem R favorável, não encerrar DONE.
 
 
-## Reabertura rev3 — causa demonstrada e fronteira exata
+## Histórico da reabertura rev3 — causa demonstrada e fronteira daquela revisão
 
 Autorização humana: `PDV-N5-C-REV3-RETRY-AUDIT-PLAN-004`, 19/10/2026.
 `PLAN_REV=3`, `STATUS=READY`. Mesmo GOAL; sem evento READY no ledger.
@@ -285,7 +289,117 @@ Os cinco F-08, ambiente E2E isolado, R independente por outra família e os
 estados `N5_B1_CLOSEOUT=BLOCKED` e `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`
 continuam obrigatórios. Esta rev3 não libera gates de dados/auth/CI/deploy.
 
-## Encerramento
+## Reabertura rev4 — auditoria das superfícies restantes
+
+Autorização humana: `PDV-N5-C-REV4-FINAL-RETRY-AUDIT-PLAN-005`, 20/10/2026.
+`PLAN_REV=4`, `STATUS=READY`, no mesmo `PDV-PARITY-N5-C-E2E-002`. O ritual de
+planejamento AEP §§2–3 move o GOAL fechado de volta a `goals/` e regenera os
+derivados por `registry`; READY não produz evento no ledger. Esta seção atualiza
+os limites históricos das rev2/rev3; as demais exigências continuam vigentes.
+
+Pré-flight: `origin/main=13700862405a89da3c7d16702318735a88348133`, ancestral do
+BLOCKED rev3 `0ca9eb1a28d254822db60f69cdcd6be868424101`. Seu pai documental
+`d0ef175f2438f1c302431f81dbe5530968c5a658` contém somente matriz e evidência.
+Os três BLOCKED de 18/10, 19/10 e 20/10 UTC permanecem literalmente no ledger,
+sem remoção, reescrita, compactação ou nova classificação. Matriz/evidências
+REV1–REV3 permanecem integrais: E2E rev3 **13 PASS, 1 FAIL, 6 NOT_RUN** e matriz
+**13 TESTED, 6 PARTIAL, 1 BLOCKED**; replanejar não promove cobertura.
+
+Esta entrega usa somente `plan/pdv-n5-c-rev4-retry-audit`, em
+`C:/Projetos/omni-gestao/.worktrees/plan-pdv-n5-c-rev4-retry-audit`, criada do
+BLOCKED rev3 validado. `git merge --no-edit origin/main` é seguro e retorna
+Already up to date porque main já é ancestral. Commit/push e um único PR contra
+main autorizados somente nessa branch de planejamento. Não executar implementação,
+E2E, geração Prisma, `open`/`close` de execução, merge do PR ou DONE nesta entrega.
+Relatório e fingerprints: `_closed/reports/PDV-N5-C-REV4-FINAL-RETRY-AUDIT-PLAN-005.md`.
+
+### Fronteira adicional e verificação read-only da Venda Completa
+
+Todos os dez padrões da allowlist rev3 permanecem, inclusive `generated/prisma/**`
+apenas local e ignorado. As únicas quatro inclusões são:
+
+- `components/dashboard/vendas/pdv-supermercado.tsx`.
+- `lib/pdv/parity-supermercado-finalize-audit.component.test.ts`.
+- `components/dashboard/vendas/venda-completa-enterprise.tsx`.
+- `lib/pdv/parity-venda-completa-finalize-audit.component.test.ts`.
+
+Supermercado: falha E2E comprovada na rev3, caso D, `sale_finalized=0` após retry
+CONFIRMED; `venda_finalizada=1` não satisfaz esse contrato de auditoria.
+
+Venda Completa: inspeção read-only na base acima confirmou exposição equivalente.
+`venda-completa-enterprise.tsx:960` chama `finalizeSaleTransaction`; o guard em
+989–1016 registra a identidade PENDING no draft e retorna antes do único
+`action: "sale_finalized"`, linha 1056, no handler direto. Os usos de `sales` nos
+guards 803/876 protegem a identidade; os efeitos 365–449 restauram/salvam draft
+e foco/teclado, sem emissor de auditoria de retry. `lib/operations-store.tsx:1681`
+delega `retrySyncSale` ao retry compartilhado; a confirmação em 1518–1528 atualiza
+`sales` e emite `venda_finalizada`, sem reentrar no handler de pagamento nem emitir
+`sale_finalized`. Blob da Venda Completa: `d70fdd07ea2b69c7a8c74fcd4d41a81896a4e1c7`.
+É confirmação estática da exposição de contrato, **sem falha E2E comprovada**:
+os cinco casos da Venda Completa continuam NOT_RUN/PARTIAL até execução própria.
+
+### Contrato obrigatório da implementação futura
+
+Nas superfícies autorizadas, preservar as correções e provas já registradas do
+Classic e da Assistência e estender o mesmo contrato local ao Supermercado e à
+Venda Completa, sem alterar motor compartilhado ou API/helper de auditoria:
+
+- CONFIRMED direto emite exatamente um `sale_finalized`; FAILED e PENDING emitem
+  zero; PENDING seguido de retry CONFIRMED emite exatamente um.
+- A mesma `clientSaleId` acompanha tentativa e retry. O evento pertence à loja e
+  à venda original iniciada naquela superfície; nunca auditar outra origem,
+  outra loja ou vendas históricas indiscriminadamente.
+- Usar `saleId` canônico, total e breakdown do snapshot real confirmado,
+  obtido pelo contrato existente e associado à identidade original. Alterar o
+  draft/carrinho enquanto pendente não altera os valores auditados. Não reconstruir
+  auditoria do carrinho atual nem de dados inventados pela fixture.
+- Deduplicar confirmação direta e observação do retry. Render, remount/restauração
+  e retry repetido não duplicam a mesma auditoria local. Manter o limite honesto
+  da retenção do log local; não prometer deduplicação transacional entre abas ou
+  servidor. `sale_finalized` e `venda_finalizada` mantêm papéis distintos.
+- Preservar guards de pendência, carrinho, pagamento, cupom, impressão, rascunho,
+  enriquecimento existente e efeitos pós-venda/financeiro. Correção de auditoria
+  não autoriza reexecutar esses efeitos nem refatorar outros fluxos.
+
+Os novos testes devem montar componente, PaymentModal e OperationsProvider reais,
+isolando somente transportes/providers periféricos. Cobrir CONFIRMED, FAILED,
+PENDING, retry confirmado com identidade estável, payload canônico/loja/snapshot
+com draft alterado e repetições de render/remount/retry sem duplicação. Não
+substituir handlers, finalização ou retry reais nem relaxar asserções para PASS.
+Se o contrato exigir mudar `lib/operations-store.tsx`, motor, persistência ou API
+de auditoria, parar e reportar `NEXT_STEP=AUTORIZACAO_HUMANA_CONTRATO_AUDITORIA`.
+Nenhum gate de dados/auth/CI/deploy é liberado por esta rev4.
+
+### Retomada, cobertura e aceite
+
+Após merge humano e novo comando, retomar exclusivamente na branch/worktree de
+implementação declaradas nos metadados. Preservar os sete WIPs, seus fingerprints
+e os commits BLOCKED; conferir hashes antes/depois de integrar o plano por merge
+normal. Não usar stash/reset/checkout, descartar ou reconstruir o WIP da sessão
+anterior. Conflito que ameace preservação exige parar para decisão humana.
+
+Corrigir o caso D Supermercado e executar os seis casos ainda NOT_RUN: Supermercado
+E e Venda Completa A..E. Manter os cinco cenários F-08 e as 20 combinações, incluindo
+regressão Classic/Assistência. Validação focada futura:
+
+```text
+npx vitest run lib/pdv/parity-classic-finalize-audit.component.test.ts lib/pdv/parity-assistencia-finalize-audit.component.test.ts lib/pdv/parity-supermercado-finalize-audit.component.test.ts lib/pdv/parity-venda-completa-finalize-audit.component.test.ts
+npx playwright test --config e2e/pdv-core.playwright.config.ts
+npm run typecheck
+```
+
+Ambiente isolado obrigatório, interceptação fail-closed e nenhuma escrita
+produtiva. Fixtures não comprovam persistência/automação server-side. Matriz e
+evidência finais exigem SHA, comando, caso, contagens e limites; nenhuma célula
+PARTIAL/BLOCKED pode virar TESTED sem prova, nenhum NOT_RUN pode contar como PASS.
+R independente por `anthropic` ou `humano` permanece obrigatória para implementação,
+testes e matriz final, com identidade/família/SHA/veredito registrado; sem R
+favorável não há close DONE. Uma segunda instância OpenAI não satisfaz R.
+`N5_B1_CLOSEOUT=BLOCKED` e `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` permanecem;
+nenhum N6/N7, Fiscal, Auth.js, smoke produtivo ou novo GOAL funcional é autorizado.
+Próximo passo desta entrega: `HUMANO_MERGEAR_N5_C_REV4` e parar.
+
+## Encerramento da implementação futura
 
 Staging por caminhos explícitos, commit `goal(pdv-002): ...`. Após testes e R,
 usar `check pdv`/`close pdv`; apenas o script escreve o estado/ledger/registry.
