@@ -6,7 +6,8 @@
  * - Installed Chrome (Playwright channel "chrome") with the on-device Web Speech API.
  * - `--profile`: disposable Chrome profile. The pt-BR on-device pack must already be there, or
  *   `--allow-install` lets Chrome download the speech model from the browser vendor (explicit,
- *   separate authorization; no audio or form data is sent by that download).
+ *   separate authorization; no audio or form data is sent by that download). Keep the path short
+ *   (≤ ~90 characters): model files sit ~160 characters below it and Windows MAX_PATH is 260.
  * - `--wav`: synthetic speech. Without it, on Windows, a pt-BR SAPI voice synthesizes the phrase locally.
  * - Recognition runs with the browser network blocked by a dead proxy (loopback still served): a
  *   transcript under that condition shows the audio was processed on the device.
@@ -14,7 +15,7 @@
  */
 import { chromium } from "@playwright/test"
 import { execFileSync } from "node:child_process"
-import { mkdir, stat, writeFile } from "node:fs/promises"
+import { mkdir, readdir, stat, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { applicationCss, buildClienteEditorBundle, serveHarness } from "./cliente-editor-harness.mjs"
@@ -28,6 +29,12 @@ const root = process.cwd()
 const evidence = path.join(root, "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ")
 await mkdir(evidence, { recursive: true })
 await mkdir(profile, { recursive: true })
+/** Longest absolute path among installed speech models (0 when none yet). */
+async function longestModelPath() {
+  const packs = path.resolve(profile, "SODALanguagePacks")
+  const files = await readdir(packs, { recursive: true }).catch(() => [])
+  return files.reduce((max, f) => Math.max(max, path.join(packs, f).length), 0)
+}
 
 async function synthesize() {
   if (arg("--wav")) return { wav: path.resolve(arg("--wav")), voice: "provided-wav" }
@@ -78,9 +85,10 @@ const supportOf = (page) => page.evaluate(async () => {
   return typeof C?.available === "function" ? await C.available({ langs: ["pt-BR"], processLocally: true }) : "NO_LOCAL_API"
 })
 
+let ctx
 try {
   // Phase 1 (network allowed) runs ONLY with --allow-install: the explicit pack download.
-  let ctx, page
+  let page
   if (flag("--allow-install")) {
     ctx = await launch(false)
     page = await ctx.newPage()
@@ -93,6 +101,13 @@ try {
     }
     report.availabilityAfterInstall = await supportOf(page)
     await ctx.close()
+  }
+
+  // A model path over MAX_PATH kept the engine from ever ending in the first attempts.
+  report.longestModelPath = await longestModelPath()
+  if (report.longestModelPath > 259) {
+    report.result = "NOT_RUN_PROFILE_PATH_TOO_LONG"
+    throw Object.assign(new Error("Speech model paths exceed 259 characters; use a shorter --profile"), { expected: true })
   }
 
   // Phase 2 (browser network blocked): real dictation through the editor.
@@ -150,8 +165,10 @@ try {
     ? "PASS_REAL_LOCAL_RECOGNITION_SYNTHETIC_SPEECH" : "FAIL"
 } catch (error) {
   report.result ??= "ERROR"
-  if (!error.expected) report.error = String(error).slice(0, 300)
+  if (!error.expected) report.error = String(error).replace(/\u001b\[[0-9;]*m/g, "").slice(0, 1200)
 } finally {
+  // An error path must not leave a browser holding the disposable profile.
+  await ctx?.close().catch(() => {})
   await server.close()
   report.limitations = [
     "Synthetic TTS speech via fake audio device; not a human voice, accent, noise or a physical microphone.",
