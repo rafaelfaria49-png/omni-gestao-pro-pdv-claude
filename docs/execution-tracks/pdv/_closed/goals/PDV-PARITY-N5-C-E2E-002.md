@@ -4,7 +4,7 @@
   "id": "PDV-PARITY-N5-C-E2E-002",
   "track": "pdv",
   "title": "N5-C — cobertura automatizada mínima e matriz final do PDV Core",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "branch": "goal/pdv-parity-n5-c-e2e-002",
