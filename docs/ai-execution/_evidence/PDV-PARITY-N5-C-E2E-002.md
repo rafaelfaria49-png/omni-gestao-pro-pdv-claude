@@ -1,3 +1,203 @@
+# PDV-PARITY-N5-C-E2E-002 — REV3 EXECUTION: BLOCKED no retry Supermercado
+
+Data local: 19/10/2026. Executor: Codex, família `openai`.
+Branch: `goal/pdv-parity-n5-c-e2e-002`.
+Worktree: `C:/Projetos/omni-gestao/.worktrees/pdv-n5-c-e2e-002`.
+Main/base: `13700862405a89da3c7d16702318735a88348133`.
+PR #288 confirmada MERGED, merge nessa base, 19/10/2026 15:42:52 -03:00.
+GOAL `plan_rev=3`, inicialmente READY; AEP aberto na tentativa 1/3, dez padrões
+na allowlist e zero gates. Resultado final: **COVERAGE_BLOCKED_SUPERMERCADO_RETRY_AUDIT**.
+
+## Retomada, origem e preservação
+
+- `status pdv` inicial confirmou os dois eventos BLOCKED, sem `.aep-active`.
+  `open pdv` inicial recusou corretamente enquanto a worktree ainda estava
+  na revisão antiga. Nenhum marcador ou plano foi fabricado para contornar.
+- `git fetch origin main` e `gh pr view 288 --json ...` confirmaram o merge.
+  `git merge --no-edit origin/main` fez fast-forward de `bc9fab7` para a base
+  acima. O diff de integração não sobrepunha os cinco arquivos de WIP.
+- Os cinco `git hash-object` registrados na REV2 coincidiram integralmente
+  na retomada e após a integração. Nenhum stash, reset, checkout, descarte,
+  troca de dependências ou recriação do WIP. Os dois BLOCKED anteriores
+  continuam ancestrais e suas linhas do ledger permanecem byte a byte.
+- Após integrar: `status pdv` → RUNNING/GOAL 002; `open pdv` → base correta,
+  revisão 3 e allowlist publicada. Somente código/documentos autorizados
+  foram escritos; Prisma é artefato local ignorado. Nenhum trabalho externo
+  ou checkout principal foi modificado por esta execução.
+
+## Implementação local testada, ainda sem commit técnico
+
+Assistência: preserva o emissor, o dedupe e o retry existentes no WIP. A
+confirmação direta também observa a identidade própria em `sales` e usa o
+registro efetivamente confirmado, sem reconstruir total/pagamentos do draft.
+FAILED/PENDING não emitem evento definitivo; retry confirmado emite um.
+
+Classic: registra somente identidades cujo handler real teve resultado ok.
+O marcador local por loja permite reencontrar essas identidades após remount;
+o observador aguarda `syncPending === false` e lê id/total/breakdown de `sales`.
+A mesma passagem atende confirmação direta e retry, com dedupe pelo prefixo
+id canônico/loja no log retido. Marcadores concluídos são retirados. Vendas
+históricas/de outra origem não são auditadas. Preservados guard de pendência,
+fluxo de venda e efeitos pós-venda. Sem garantia nova entre abas/servidor ou
+além da retenção local, sem alteração do motor/operations-store/audit-log.
+
+Novo teste Classic (7 casos) monta PdvClassic, PaymentModal e OperationsProvider
+reais; apenas providers periféricos e fetch são sintéticos. Cobre confirmação,
+FAILED, PENDING, retry real com identidade estável, snapshot com draft alterado,
+remount/restauração repetida, concorrência do handler, origem/loja e resposta
+em voo. O teste Assistência original continua com seus 5 casos, sem substituição
+de handler, finalização ou retry. São 12/12 PASS no comando focado final.
+
+Config/fixture E2E preservadas. No spec foi corrigida somente a tecla de
+seleção de cliente no Supermercado (F10 oficial; F2 = dinheiro). Asserções
+continuam exigindo separadamente `sale_finalized` e `venda_finalizada`.
+
+## Falha runtime que exige parar
+
+Comando final: `npx playwright test --config e2e/pdv-core.playwright.config.ts`.
+Resultado: **13 PASS, 1 FAIL, 6 NOT_RUN**, 20 casos selecionados, um worker,
+retries=0, maxFailures=1, duração 1,1 min. Não há 20 PASS.
+
+Caso: `supermercado > D PENDING/retry — Reenviar conserva identidade e aplica confirmação uma vez`.
+Falha em `e2e/specs/pdv-core-n5.spec.ts:160`:
+
+```text
+expect(audits()).toHaveLength(1)
+Expected length: 1
+Received length: 0
+Received array: []
+```
+
+Antes da falha passaram: PENDING com zero auditoria/notificação definitiva,
+caixa sem entrada, dois POSTs com a mesma clientSaleId, uma venda confirmada,
+um evento UI `venda_finalizada`, retry repetido sem novo POST/evento. Portanto
+notificação não substitui auditoria e o retry não recriou o carrinho/venda.
+Classic A..E e Assistência A..E passaram; Supermercado A..C passaram.
+Supermercado E e Venda Completa A..E não executados pela parada automática.
+Matriz vigente: **13 TESTED / 6 PARTIAL / 1 BLOCKED / 0 UNSUPPORTED_BY_DESIGN**.
+D Supermercado é PARTIAL; E Supermercado é BLOCKED porque inclui retry.
+
+Inspeção focada: `pdv-supermercado.tsx:1767-1790` retorna em PENDING; a única
+emissão `sale_finalized` está em `1823-1827`, no caminho direto. O componente
+recebe `sales` mas não tem emissor de auditoria na confirmação via retry.
+A fixture apenas intercepta os transportes; não substitui handler/motor/retry
+nem injeta eventos. O defeito é APPLICATION_AUDIT_GAP em caminho produtivo
+fora da allowlist REV3. Nenhuma correção nessa superfície foi aplicada.
+Venda Completa não recebeu execução posterior nem diagnóstico runtime presumido.
+
+## Isolamento e Prisma
+
+Servidor novo em 127.0.0.1:4179 com reuseExistingServer=false, bundle em memória,
+sem Next, carregador .env, proxy, backend real ou writer. CSP/origem local e
+interceptação de bootstrap/caixa/persistência/auditoria/ledger/retry; rota,
+origem ou loja inesperada falham. Todos os casos executados encerraram sem
+requests inesperados e sem pageerror. IDs sintéticos de loja, caixa, cliente,
+produto e operador. Nenhum banco, credencial, venda, estoque ou pagamento
+produtivo foi acessado. Nenhum DB foi necessário.
+
+Prisma: todos os ancestrais absolutos de generated/prisma verificados sem
+junction/symlink/reparse point; destino ausente antes da geração, local depois.
+node_modules continua sendo a junction preexistente, sem alterações. Raiz e
+prisma sem .env carregável; somente .env.example presente. Sem prisma.config
+extra carregado. Em PowerShell, no processo:
+
+```powershell
+$env:PRISMA_GENERATE_SKIP_AUTOINSTALL = '1'
+$env:DATABASE_URL = 'postgresql://synthetic:synthetic@127.0.0.1:1/n5_c_isolated'
+$env:DIRECT_URL = $env:DATABASE_URL
+node node_modules/prisma/build/index.js generate --schema prisma/schema.prisma
+```
+
+PASS: Prisma Client v6.19.3 gerado em ./generated/prisma (1,71 s). Nenhuma
+conexão, instalação, schema, lockfile, postinstall compartilhado ou migration.
+`git check-ignore generated/prisma/client.d.ts` confirma ignorado; nenhum
+artefato gerado foi staged/commitado. R4, build, Docker e smoke não executados,
+conforme o GOAL; não eram necessários para testar estes handlers e este bundle.
+
+## Validações e tentativas auxiliares
+
+- Primeiro Vitest em sandbox: EPERM no rename do cache temporário, zero testes.
+  A execução liberada chegou aos componentes: Assistência 5 PASS; Classic
+  precisou do provider periférico de tema. Após completar esse boundary,
+  comando focado final: **2 arquivos / 12 testes PASS**.
+- E2E inicial: 10 PASS, timeout no driver Supermercado ao procurar cliente via
+  F2, 9 NOT_RUN. O keymap real já define F10; corrigida somente a fixture de
+  interação. O E2E final acima comprova o novo blocker com asserção intacta.
+- ESLint focado dos sete arquivos TS/TSX: zero erros, cinco warnings preexistentes
+  no Classic (deps de hooks/disable sem uso). Nenhum warning desse conjunto
+  pertence ao novo observador de auditoria.
+- `git diff --check`: PASS antes do registro documental.
+- `node scripts/track.mjs verify --all`: PASS, 11 trilhas e REGISTRY/GATES íntegros,
+  antes do bloqueio. Resultado pós-bloqueio será conferido pelo mesmo comando.
+- `npm run typecheck`: PASS, exit 0, após geração local; sem diagnósticos.
+
+## Fingerprints para retomada
+
+Preservação original comprovada antes de editar. A tabela relaciona o conteúdo
+herdado com o WIP atual, sem pretender que seja um SHA de commit:
+
+| Caminho | Original REV2 | WIP REV3 (`git hash-object`) |
+| --- | --- | --- |
+| components/dashboard/vendas/pdv-assistencia-enterprise.tsx | b74eccd202a9a1eef0a12cd26393ffa26a112fbd | be3f4c98bafe290ba5cb50bd771565c100bc1bfd |
+| lib/pdv/parity-assistencia-finalize-audit.component.test.ts | 5114c9adc813bd6879e136310563b04a42da2556 | 5114c9adc813bd6879e136310563b04a42da2556 |
+| e2e/pdv-core.playwright.config.ts | cb8a7652f45fbffe48a7b7bcc708b01091597ad7 | cb8a7652f45fbffe48a7b7bcc708b01091597ad7 |
+| e2e/fixtures/pdv-core.ts | 5bc8b515c058111d2c0decbf58a5f9adcb8c7718 | 5bc8b515c058111d2c0decbf58a5f9adcb8c7718 |
+| e2e/specs/pdv-core-n5.spec.ts | ec67ad61774164d09e92d0d6518cddec6e42e1b8 | e265ff1aab7b0f47fb11064bcccff35814fcbdae |
+| components/dashboard/vendas/pdv-classic.tsx | novo na REV3 | b51c93794aa80b7b15705346ac5cc1a297222e62 |
+| lib/pdv/parity-classic-finalize-audit.component.test.ts | novo na REV3 | 56eb42dec353db49f3272ed4215df8478620dfac |
+
+## Entrega bloqueada
+
+Somente matriz/evidência terão commit documental. Os sete arquivos técnicos
+permanecem não commitados na mesma worktree. Não há candidato com todas as
+provas verdes; revisão R não foi solicitada sobre código não commitado.
+Claude Code está instalado, mas disponibilidade de revisão não é o bloqueio
+vigente: o aceite técnico falhou antes da etapa R. Sem close DONE/push/PR.
+`block pdv --by=gate` registra o terceiro evento BLOCKED, preservando os dois
+anteriores e a revisão 3. Somente o AEP modifica ledger/state/REGISTRY/GOAL.
+
+```text
+MAIN_BASE=13700862405a89da3c7d16702318735a88348133
+REV3_STATUS=BLOCKED_SUPERMERCADO_RETRY_AUDIT
+BLOCKED_HISTORY_PRESERVED=YES
+WIP_PRESERVED=YES_SEVEN_TECHNICAL_PATHS
+ASSISTENCIA_AUDIT=PASS_COMPONENT_AND_E2E
+CLASSIC_DIRECT_AUDIT=PASS
+CLASSIC_RETRY_AUDIT=PASS
+SALE_FINALIZED_DUPLICATES=ZERO_CLASSIC_ASSISTENCIA
+PRISMA_LOCAL=GENERATED_SAFE_IGNORED
+COMPONENT_TESTS=12_PASS
+E2E_TESTS=13_PASS_1_FAIL_6_NOT_RUN
+MATRIX_TESTED=13
+MATRIX_PARTIAL=6
+MATRIX_BLOCKED=1
+ENVIRONMENT_ISOLATED=YES_SYNTHETIC_IO
+TYPECHECK=PASS
+ESLINT=PASS_ZERO_ERRORS_FIVE_PREEXISTING_WARNINGS
+VERIFY_ALL=PASS_BEFORE_BLOCK
+TECHNICAL_COMMIT=NONE
+R_EXECUTOR=NONE
+R_FAMILY=NONE
+R_VERDICT=NOT_SUBMITTED_ACCEPTANCE_FAILED
+AEP_CLOSE_COMMIT=NONE
+GOAL_STATUS=BLOCKED
+PUSH_BRANCH=NOT_PUSHED
+PR_NUMBER=NONE
+PR_URL=NONE
+BLOCKERS=COVERAGE_BLOCKED_SUPERMERCADO_RETRY_AUDIT_OUTSIDE_REV3_ALLOWLIST
+NEXT_STEP=RESOLVER_GATE_N5_C
+```
+
+CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT permanecem sem alteração: fora da
+allowlist e nenhuma entrega técnica ratificada. `N5_B1_CLOSEOUT=BLOCKED` e
+`PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` preservados. Nenhum N6/N7, outra frente
+ou novo GOAL iniciado. O desbloqueio exige decisão humana de escopo; este GOAL
+encerra em BLOCKED, com WIP preservado para uma nova sessão autorizada.
+
+---
+
+## Histórico REV2 preservado
+
 # PDV-PARITY-N5-C-E2E-002 — REV2, novo blocker comprovado
 
 Data: 2026-10-19. Executor: Codex; família `openai`.

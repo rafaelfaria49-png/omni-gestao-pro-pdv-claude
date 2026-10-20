@@ -87,3 +87,30 @@ Não edite nenhum dos dois à mão: `node scripts/track.mjs verify` detecta a di
 - Matriz e evidência originais do bloqueio permanecem históricas nesta entrega.
   Sem implementação, E2E, close, merge ou investigação de WIPs de outras sessões.
   Próximo passo: `HUMANO_MERGEAR_N5_C_REV2`.
+
+## Replanejamento N5-C rev4 — 20/10/2026
+
+- Autorização humana: `PDV-N5-C-REV4-FINAL-RETRY-AUDIT-PLAN-005`. Reabre o mesmo
+  [PDV-PARITY-N5-C-E2E-002](goals/PDV-PARITY-N5-C-E2E-002.md), READY, plan_rev 4,
+  pelo ritual de planejamento AEP §§2–3; sem novo GOAL funcional ou evento READY.
+- `origin/main=13700862405a89da3c7d16702318735a88348133`, ancestral do BLOCKED
+  rev3 `0ca9eb1a28d254822db60f69cdcd6be868424101`, cujo pai documental é
+  `d0ef175f2438f1c302431f81dbe5530968c5a658`. Os três eventos BLOCKED permanecem
+  byte a byte no ledger; os dois commits locais entram por ancestralidade.
+- Planejamento isolado na branch `plan/pdv-n5-c-rev4-retry-audit`, worktree
+  `C:/Projetos/omni-gestao/.worktrees/plan-pdv-n5-c-rev4-retry-audit`, criada
+  do BLOCKED validado. Merge normal com origin/main: Already up to date.
+- Preservados os dez padrões rev3. Acrescentados somente Supermercado,
+  Venda Completa e seus dois testes locais de auditoria, conforme GOAL rev4.
+  Venda Completa tem exposição equivalente confirmada por inspeção read-only,
+  sem execução ou falha E2E declarada. Nenhuma mudança no motor/API de auditoria.
+- Matriz/evidências REV1–REV3 integrais: rev3 13 PASS, 1 FAIL, 6 NOT_RUN e
+  13 TESTED, 6 PARTIAL, 1 BLOCKED. Os sete WIPs de implementação e fingerprints
+  permanecem intactos e não são incorporados ao planejamento.
+- Retomada futura corrige Supermercado D, executa os seis NOT_RUN e mantém
+  cinco F-08/20 combinações, regressão Classic/Assistência, ambiente isolado,
+  zero escrita produtiva e R independente para implementação/testes/matriz.
+- [Relatório e fingerprints](_closed/reports/PDV-N5-C-REV4-FINAL-RETRY-AUDIT-PLAN-005.md).
+  Commit/push somente da branch de planejamento e um PR contra main.
+  Sem implementação, open/close de execução, merge ou DONE nesta entrega.
+  Próximo passo: `HUMANO_MERGEAR_N5_C_REV4`. Parar.

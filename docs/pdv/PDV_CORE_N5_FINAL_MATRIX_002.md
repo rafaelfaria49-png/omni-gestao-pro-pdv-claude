@@ -1,3 +1,94 @@
+# PDV Core N5-C — REV3: auditorias locais validadas, blocker no Supermercado
+
+Execução: 19/10/2026, Codex (`openai`). Main/base ratificada:
+`13700862405a89da3c7d16702318735a88348133`, PR #288 MERGED.
+Resultado vigente: **BLOCKED — COVERAGE_BLOCKED_SUPERMERCADO_RETRY_AUDIT**.
+Os resultados REV1/REV2 e seus bloqueios abaixo permanecem históricos.
+
+## Matriz vigente REV3 — vinte combinações
+
+| Cenário F-08 | classic | assistencia | supermercado | venda-completa |
+| --- | --- | --- | --- | --- |
+| A. Split e múltiplos pagamentos | TESTED — R3-C-A | TESTED — R3-A-A | TESTED — R3-S-A | PARTIAL — H-A; REV3 não executado |
+| B. Vale/crédito e saldo | TESTED — R3-C-B | TESTED — R3-A-B | TESTED — R3-S-B | PARTIAL — H-B; REV3 não executado |
+| C. À Prazo, entrada e parcelas | TESTED — R3-C-C | TESTED — R3-A-C | TESTED — R3-S-C | PARTIAL — H-C; REV3 não executado |
+| D. PENDING/retry com identidade estável | TESTED — R3-C-D | TESTED — R3-A-D | PARTIAL — R3-S-D: identidade/efeitos PASS; falha na auditoria | PARTIAL — H-D; REV3 não executado |
+| E. sale_finalized após CONFIRMED, inclusive retry sem duplicar | TESTED — R3-C-D/E, U3-C | TESTED — R3-A-D/E, U3-A | BLOCKED — R3-S-D: retry confirmado emite zero auditorias | PARTIAL — H-E; REV3 não executado |
+
+`TESTED_COUNT=13` · `PARTIAL_COUNT=6` · `BLOCKED_COUNT=1` ·
+`UNSUPPORTED_BY_DESIGN_COUNT=0`.
+
+## Evidências REV3 e limites
+
+- **R3-C/R3-A/R3-S**, sufixos A..E: casos com os nomes das superfícies
+  `classic`, `assistencia`, `supermercado` em
+  `e2e/specs/pdv-core-n5.spec.ts`. Comando final:
+  `npx playwright test --config e2e/pdv-core.playwright.config.ts`.
+  Resultado: **13 PASS, 1 FAIL, 6 NOT_RUN**, zero skip intencional, um worker,
+  `maxFailures=1`. A falha é `supermercado > D PENDING/retry`, linha 160:
+  `expect(audits()).toHaveLength(1)` recebeu `[]`.
+- A conserva PIX 40 + dinheiro 60, soma 100 e confirmação; B exercita cliente,
+  atribuição de vale, saldo local 150 → 50 e readback sintético; C exercita
+  entrada 25, saldo 75, três títulos locais de 25 e vencimento configurado.
+- D observa zero auditoria/notificação definitiva/entrada de caixa em PENDING,
+  dois POSTs com a mesma `clientSaleId`, uma venda CONFIRMED, um
+  `venda_finalizada` e retry repetido sem novo POST. No Supermercado essas
+  asserções passaram, mas faltou `sale_finalized`: o caso completo é FAIL.
+- E pausa a resposta de persistência: zero auditoria antes da confirmação e
+  exatamente uma depois, com identidade e valores efetivos. Classic/Assistência
+  também passam o retry de D. Supermercado E e os cinco casos Venda Completa
+  são NOT_RUN pela parada no primeiro blocker, sem promoção por analogia.
+- **U3-C**: `lib/pdv/parity-classic-finalize-audit.component.test.ts`, 7 PASS.
+  **U3-A**: `lib/pdv/parity-assistencia-finalize-audit.component.test.ts`, 5 PASS.
+  Montam componentes, PaymentModal e OperationsProvider reais. CONFIRMED,
+  FAILED, PENDING, retry, snapshot/draft alterado, remount e deduplicação são
+  comportamentais; o Classic também recusa auditar vendas de outra origem.
+- H-A..H-E continuam sendo somente as provas históricas descritas abaixo.
+  Nenhuma prova R4, backend ou persistência real foi duplicada ou promovida.
+
+O WIP original foi preservado na integração da main; seus cinco fingerprints
+coincidiram antes e depois. A Assistência reaproveita a correção existente e
+passa a ler o snapshot confirmado em `sales`. O Classic acompanha somente
+identidades originadas no componente, com marcador local por loja para
+remount, usa o snapshot confirmado e deduplica pelo log local retido.
+Não há garantia transacional cross-tab/servidor nem além da retenção do log.
+
+O driver foi alinhado ao keymap oficial: Supermercado usa F10 para cliente,
+F2 continua dinheiro; Venda Completa entra pelo botão de finalização.
+Nenhuma asserção de auditoria foi removida, substituída por notificação ou
+relaxada. Config/fixture originais preservados byte a byte.
+
+## Bloqueio e fronteira
+
+`components/dashboard/vendas/pdv-supermercado.tsx:1767` retorna em PENDING;
+a única emissão `sale_finalized`, linha 1823, está no handler direto.
+O retry real confirma pelo motor sem reentrar nesse handler. A fixture
+intercepta I/O e captura a auditoria real, sem fabricar o evento.
+É um novo APPLICATION_AUDIT_GAP fora da allowlist REV3. Reabertura humana
+com escopo explícito é necessária. Venda Completa não foi executada após
+esse bloqueio e não tem defeito runtime declarado nesta execução.
+
+`ENVIRONMENT_ISOLATED=YES_SYNTHETIC_IO`: servidor exclusivo loopback, sem Next,
+.env, conexão ao banco ou writer real; interceptação fail-closed de todas as
+rotas de negócio e origens externas; zero requests inesperados nos casos.
+Isso não homologa Auth.js, persistência/automação server-side, hardware,
+impressão física ou o botão do Histórico de Vendas. O retry usa driver sintético
+que chama `retrySyncSale` real. Provas servidor são as referências históricas.
+
+Prisma gerado somente em `generated/prisma` local ignorado após verificar
+ancestrais sem reparse point e ausência de .env carregável; URLs loopback
+inertes em processo e autoinstall desabilitado. Nenhum schema, dependência,
+migration, motor ou backend foi alterado. Validações detalhadas na evidência.
+
+`N5_B1_CLOSEOUT=BLOCKED` · `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`.
+Sem provas verdes completas, não há commit técnico, revisão R, close DONE,
+push ou PR. Os sete arquivos técnicos permanecem como WIP na mesma worktree.
+`NEXT_STEP=RESOLVER_GATE_N5_C`.
+
+---
+
+## Histórico REV2 preservado (não representa a cobertura REV3)
+
 # PDV Core N5-C — REV2: cobertura incompleta, novo blocker
 
 Atualização: 2026-10-19. Base: `9eb59d08f06af881adc7d2e11a167ef24c5a1fee`.
