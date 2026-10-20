@@ -112,7 +112,7 @@ import {
   waitForStableWeightKg,
   peekLastWeightKg,
 } from "@/services/hardware-bridge"
-import { appendAuditLog } from "@/lib/audit-log"
+import { appendAuditLog, getAuditLogs } from "@/lib/audit-log"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { formatEntradaRapidaResumo, mergeEntradaRapida } from "@/lib/os-entrada-checklist"
 import {
@@ -151,7 +151,7 @@ import {
   findUnresolvedSaleLines,
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
-import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE, type PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
 import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
 import {
   resolveWeightUnitPrice,
@@ -283,6 +283,55 @@ export function PdvClassic({
   // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
   const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
   if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  // Só identidades originadas aqui podem produzir esta auditoria. O marcador
+  // local permite observar a confirmação por Reenviar também após remount.
+  const [finalizeAuditScope, setFinalizeAuditScope] = useState<{
+    storeId: string
+    identities: PendingSaleIdentity[]
+  } | null>(null)
+  useEffect(() => {
+    let identities: PendingSaleIdentity[] = []
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(`omnigestao:pdv-classic-finalize-audit:${lojaKey}`) ?? "[]")
+      if (Array.isArray(saved)) identities = saved.filter((row): row is PendingSaleIdentity =>
+        row && typeof row.id === "string" && (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
+      )
+    } catch { /* sem marcador local restaurável */ }
+    setFinalizeAuditScope({ storeId: lojaKey, identities })
+  }, [lojaKey])
+  const trackFinalizeAudit = (identity: PendingSaleIdentity) => {
+    setFinalizeAuditScope((previous) => {
+      const identities = previous?.storeId === lojaKey ? previous.identities : []
+      const key = identity.clientSaleId ?? identity.id
+      if (identities.some((row) => (row.clientSaleId ?? row.id) === key)) return previous
+      return { storeId: lojaKey, identities: [...identities, identity] }
+    })
+  }
+  useEffect(() => {
+    if (finalizeAuditScope?.storeId !== lojaKey) return
+    const remaining = finalizeAuditScope.identities.filter((identity) => {
+      const sale = sales.find((row) => row.syncPending === false &&
+        (identity.clientSaleId ? row.clientSaleId === identity.clientSaleId : row.id === identity.id))
+      if (!sale) return true
+      const prefix = `Venda ${sale.id} | Loja ${lojaKey} | Total `
+      if (!getAuditLogs().some((entry) => entry.action === "sale_finalized" && entry.detail.startsWith(prefix))) {
+        const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+        const p = sale.paymentBreakdown
+        appendAuditLog({
+          action: "sale_finalized",
+          userLabel: `${empresaDocumentos.nomeFantasia?.trim() || "Loja"} (sessão local)`,
+          detail: `${prefix}${money(sale.total)} | Din ${money(p.dinheiro)} Pix ${money(p.pix)} Déb ${money(p.cartaoDebito)} Créd ${money(p.cartaoCredito)} Carnê ${money(p.carne)} Prazo ${money(p.aPrazo)} Vale ${money(p.creditoVale)}`,
+        })
+      }
+      return false
+    })
+    try {
+      localStorage.setItem(`omnigestao:pdv-classic-finalize-audit:${lojaKey}`, JSON.stringify(remaining))
+    } catch { /* auditoria local continua em memória nesta montagem */ }
+    if (remaining.length !== finalizeAuditScope.identities.length) {
+      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? { storeId: lojaKey, identities: remaining } : previous)
+    }
+  }, [finalizeAuditScope, sales, lojaKey, empresaDocumentos.nomeFantasia])
   // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
   const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
   const [searchTerm, setSearchTerm] = useState("")
@@ -2216,6 +2265,7 @@ export function PdvClassic({
             toast({ title: "Falha transacional", description: result.reason })
             return false
           }
+          trackFinalizeAudit({ id: result.saleId, clientSaleId: result.clientSaleId })
           // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
           // sem impressão, sem cupom, sem auditoria de venda concluída, sem
           // fila de produtos, sem marcar total da última venda, sem limpar o
@@ -2283,11 +2333,6 @@ export function PdvClassic({
               aPrazoConfig,
             })
           }
-          appendAuditLog({
-            action: "sale_finalized",
-            userLabel: auditUser(),
-            detail: `${result.pending ? "Venda PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda "}${displaySaleNumber(result.saleId, result.pending)} Total ${formatBrlAudit(total)} | Din ${formatBrlAudit(dinheiro)} Pix ${formatBrlAudit(pix)} Déb ${formatBrlAudit(cartaoDebito)} Créd ${formatBrlAudit(cartaoCredito)} Carnê ${formatBrlAudit(carne)} Prazo ${formatBrlAudit(aPrazo)} Vale ${formatBrlAudit(creditoVale)}`,
-          })
           if (subtotal > 0 && discountTotal > 0) {
             const pct = (discountTotal / subtotal) * 100
             if (pct >= AUDIT_DISCOUNT_ALERT_PCT) {

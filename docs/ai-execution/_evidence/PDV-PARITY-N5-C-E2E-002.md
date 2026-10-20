@@ -1,3 +1,143 @@
+# PDV-PARITY-N5-C-E2E-002 — REV4 EXECUTION: candidato técnico validado
+
+Data: 20/10/2026 (America/Sao_Paulo). Executor: Codex, família `openai`.
+Branch: `goal/pdv-parity-n5-c-e2e-002`.
+Worktree: `C:/Projetos/omni-gestao/.worktrees/pdv-n5-c-e2e-002`.
+MAIN_BASE=`16c496ad2ffe56fc6a89de237b204842494b8cbb`.
+
+## Retomada e preservação comprovadas
+
+PR #291 confirmada MERGED pelo conector GitHub, merge SHA igual à main acima.
+HEAD inicial `0ca9eb1a28d254822db60f69cdcd6be868424101`; sete caminhos WIP e
+.aep-active ausente. O relatório
+`docs/execution-tracks/pdv/_closed/reports/PDV-N5-C-REV4-FINAL-RETRY-AUDIT-PLAN-005.md`
+forneceu os fingerprints Git/SHA-256: todos os sete coincidiram antes e depois
+de `git fetch origin main` e `git merge --ff-only origin/main`.
+Nenhum caminho WIP se sobrepunha ao diff da integração. Sem stash/reset/checkout,
+substituição de WIP ou reescrita de histórico. Branch e worktree declaradas mantidas.
+
+O BLOCKED rev3 e os dois anteriores continuam ancestrais. O ledger antes/depois
+da integração manteve blob `6a148504ea2f4955d17d6849f7d5bb0c464ff5af`, sete linhas,
+três eventos BLOCKED literais do GOAL. `status pdv` e depois `open pdv` canônicos
+confirmaram READY/rev4, base correta, tentativa 1/3, 14 padrões e zero gates.
+Somente o GOAL quente publicado foi usado como autorização de execução.
+
+Classic/Assistência, seus testes, fixture e config permanecem idênticos aos
+fingerprints herdados. O único WIP que recebeu evolução é o spec: seleção real
+do cliente Venda Completa, espera da resposta de busca/refoco após Item Avulso
+e seletor que reconhece “Confirmar valor exato” antes de digitar o dinheiro.
+Asserções financeiras e distinção sale_finalized/venda_finalizada preservadas.
+
+## Correção delimitada e testes comportamentais
+
+Supermercado e Venda Completa registram somente identidades retornadas com
+result.ok pelo próprio handler. Marcador local por loja permite observar o
+retry mesmo após remount. O observador exige syncPending=false e associa a
+clientSaleId original (fallback id legado), lendo saleId canônico, total e
+breakdown de sales. Não reconstrói do carrinho/draft alterado nem percorre
+vendas históricas indiscriminadamente. Um emissor atende confirmação direta
+e retry; a leitura do log local retido deduplica venda/loja.
+
+FAILED/PENDING não emitem auditoria definitiva. Guards, pagamento, carrinho,
+draft/pendingIdentity, cupom, enriquecimento, impressão e demais efeitos
+existentes foram preservados. O retry não reexecuta enriquecimento/impressão.
+O teste Venda Completa verifica enriquecimento uma vez na confirmação direta
+e zero enquanto pendente/depois do retry. O contrato original de concorrência
+dessa superfície (segunda chamada recusada) foi preservado.
+
+Novos testes montam as superfícies, PaymentModal e OperationsProvider reais.
+Transportes e providers/subárvores periféricos são sintéticos; handler,
+finalização, retry e audit-log não são substituídos. CONFIRMED direto,
+FAILED, PENDING, retry, identidade estável, valores enviados, loja/canonical id,
+snapshot após mudar draft, render/remount, marcador repetido, concorrência,
+origem alheia e resposta em voo são exercitados.
+
+Antes da correção, os testes reais comprovaram sale_finalized=0 após retry
+nas duas superfícies e duplicação em duas chamadas concorrentes Supermercado.
+Falhas adicionais de formato/loja foram cobertas. A expectativa de concorrência
+Venda Completa foi alinhada ao guard existente, sem mudar esse comportamento.
+Após a correção: quatro arquivos, 26/26 PASS, incluindo 12 provas herdadas intactas.
+
+## Execuções E2E e validações
+
+| Comando/prova | Resultado efetivamente executado |
+| --- | --- |
+| Vitest focado das quatro auditorias, comando do GOAL rev4 | PASS — 4 arquivos, 26 testes; execução final 17,47 s |
+| E2E retomada Supermercado/Venda Completa | Supermercado A..E PASS; Venda Completa A parou no driver sem cliente; demais NOT_RUN nessa tentativa |
+| E2E Venda Completa após sincronizar driver | PASS — A..E, 5 testes, 34,5 s |
+| npx playwright test --config e2e/pdv-core.playwright.config.ts | PASS — 20/20, zero skips/retries, um worker, 1,3 min |
+| npm run typecheck | PASS — exit 0 no conteúdo final, Prisma local existente |
+| ESLint focado dos 11 TS/TSX autorizados | PASS — 0 erros; 9 warnings preexistentes |
+| Baseline ESLint via lintText(git show HEAD:path) | Classic 5; Supermercado 2; Venda Completa 2; zero erros |
+| git diff --check | PASS |
+| node scripts/track.mjs verify --all | PASS — 11 trilhas, REGISTRY e GATES íntegros |
+
+O primeiro Vitest restrito terminou com EPERM no rename do cache, zero testes;
+a execução liberada chegou aos casos reais. Playwright restrito não iniciou
+casos e foi interrompido; execução liberada usou a mesma configuração isolada.
+Tentativas de driver Venda Completa revelaram cliente ausente, fechamento do
+dropdown pelo autofoco e texto inicial diferente do botão de dinheiro. Foram
+corrigidas apenas as interações do spec; não houve skip, resposta fabricada
+de confirmação nem relaxamento de asserção. Falhas/NOT_RUN intermediários não
+foram contados como PASS. A suíte canônica verde posterior executou as 20 células.
+
+## Isolamento e limites
+
+Harness original preservado: servidor novo em 127.0.0.1:4179,
+reuseExistingServer=false, bundle em memória, sem Next, .env, Prisma runtime,
+proxy ou writer de negócio. CSP/origem local e interceptação de todos os
+transportes de bootstrap/caixa/persistência/audit/ledger/retry. Origem,
+rota ou loja inesperada falham; resultado verde terminou sem pageerror e
+sem requests inesperados. IDs exclusivamente sintéticos. Zero conexão/escrita
+produtiva, migration ou seed. Nenhum dado real de negócio foi processado.
+
+generated/prisma/client.d.ts já existia, local e gitignored; não foi regenerado,
+staged ou commitado. node_modules continua com a junction preexistente.
+Sem alteração de schema, motor, API de auditoria, dependências ou ambiente.
+Build, Docker e R4 não foram necessários nem executados. Persistência e
+automação server-side, Auth.js e operação/hardware/impressão física não são
+homologados pelo harness. As provas servidor históricas da matriz são reutilizadas.
+
+Dedupe é local, limitado à retenção do log e disponibilidade do armazenamento;
+não há garantia transacional entre abas/servidor ou além dessa retenção.
+
+## Conteúdo técnico executado — fingerprints antes do commit
+
+A futura seção R registra o SHA exato que contém estes blobs. Não são SHAs de commit.
+
+| Caminho | git hash-object | SHA-256 físico |
+| --- | --- | --- |
+| components/dashboard/vendas/pdv-classic.tsx | b51c93794aa80b7b15705346ac5cc1a297222e62 | B18F478454349D24C5F0B239AFEF0CF90342B5F62B6F56AF9ABD0B0F8B150730 |
+| components/dashboard/vendas/pdv-assistencia-enterprise.tsx | be3f4c98bafe290ba5cb50bd771565c100bc1bfd | 7EB6515B95937F2E834022A01194CEE641B6B51F8061D963239126140D0BA78B |
+| components/dashboard/vendas/pdv-supermercado.tsx | 93c6d1ce76e67c00879624a56bd70bb5b2c2eb02 | 3443E6C911E09220C5AFE03B18B10CD7CCC95CBDC23A83E24C7F47D2BD0E250F |
+| components/dashboard/vendas/venda-completa-enterprise.tsx | acc81d6ecaaa9e57ab84f1eeda6b80baa10501ef | 87184455D5EAA5FA6C64ED348ACFBFD93D38788B8A5921874BE0DC62349B89C9 |
+| lib/pdv/parity-classic-finalize-audit.component.test.ts | 56eb42dec353db49f3272ed4215df8478620dfac | B17489EAA3B43E2FE1A84E8DF89C1819029CE90913F8277204F4EFF0378396FE |
+| lib/pdv/parity-assistencia-finalize-audit.component.test.ts | 5114c9adc813bd6879e136310563b04a42da2556 | 92D5B5450825D8D2285401BF7D27F25D1A37C4687CFEDE98FB4186759E1F749F |
+| lib/pdv/parity-supermercado-finalize-audit.component.test.ts | dfe071e1a028be43788b2b20d881f7967305222b | 2F08AEFF9FFF40D1EAA6453F06FFECBAFBC1CDD55B095672D1C6397D1BC7A018 |
+| lib/pdv/parity-venda-completa-finalize-audit.component.test.ts | cc571e75ae03ae5640342c600db8bfd77d68a8d1 | 38D1A3A9A2093255CE7CE6D88333E540F164F780CDB45C1C9511CCA40B89F4FA |
+| e2e/pdv-core.playwright.config.ts | cb8a7652f45fbffe48a7b7bcc708b01091597ad7 | 3FBB0979A314B742C54EE91A1927738C07DD9A71B5187D1E396175419720D6C3 |
+| e2e/fixtures/pdv-core.ts | 5bc8b515c058111d2c0decbf58a5f9adcb8c7718 | 56E33A5C656A3834C4A25A4978296E0E6BB2A94AFEDA6548499F6F02DFF2BB9B |
+| e2e/specs/pdv-core-n5.spec.ts | 6ad130478d915da28284091b0cb3ed9a7d2e39e4 | 5FC6480508F9F42249ECFBE6FD8C314D265065C8F783ECFEC26661C8646B46A6 |
+
+## Resultado do candidato e entrega condicionada
+
+Matriz vigente: **20 TESTED / 0 PARTIAL / 0 BLOCKED / 0 UNSUPPORTED_BY_DESIGN**,
+com referência de teste por célula. Duplicatas sale_finalized observadas: zero
+no resultado verde das quatro superfícies. As três revisões bloqueadas abaixo
+permanecem históricas; uma ratificação DONE futura não apaga esses eventos.
+
+`N5_B1_CLOSEOUT=BLOCKED` e `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` mantidos.
+CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT não alterados: fora da allowlist;
+não há promoção de maturidade produtiva. Somente 13 arquivos versionáveis
+autorizados compõem o candidato. R deve avaliar código, cobertura, isolamento,
+identidade, deduplicação e matriz sobre o SHA técnico exato; não é auto-revisão.
+Neste registro pré-commit: R=PENDING, AEP=OPEN. Sem R favorável não há close DONE.
+Nenhum N6/N7, Fiscal, Auth.js ou outra frente iniciado.
+
+---
+
+## Histórico REV3 preservado integralmente
+
 # PDV-PARITY-N5-C-E2E-002 — REV3 EXECUTION: BLOCKED no retry Supermercado
 
 Data local: 19/10/2026. Executor: Codex, família `openai`.

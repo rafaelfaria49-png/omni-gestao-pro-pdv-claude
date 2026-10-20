@@ -1,3 +1,74 @@
+# PDV Core N5-C — REV4: vinte combinações TESTED em ambiente isolado
+
+Execução: 20/10/2026, Codex (`openai`). Main/base:
+`16c496ad2ffe56fc6a89de237b204842494b8cbb`, PR #291 MERGED, GOAL READY/rev4.
+A cobertura técnica executada está completa; R independente ainda pendente
+neste candidato. Isto não homologa produção. Histórico REV1–REV3 integral abaixo.
+
+## Matriz vigente REV4 — vinte combinações
+
+| Cenário F-08 | classic | assistencia | supermercado | venda-completa |
+| --- | --- | --- | --- | --- |
+| A. Split e múltiplos pagamentos | TESTED — E4-C-A | TESTED — E4-A-A | TESTED — E4-S-A | TESTED — E4-V-A |
+| B. Vale/crédito e saldo | TESTED — E4-C-B | TESTED — E4-A-B | TESTED — E4-S-B | TESTED — E4-V-B |
+| C. À Prazo, entrada e parcelas | TESTED — E4-C-C | TESTED — E4-A-C | TESTED — E4-S-C | TESTED — E4-V-C |
+| D. PENDING/retry com identidade estável | TESTED — E4-C-D | TESTED — E4-A-D | TESTED — E4-S-D | TESTED — E4-V-D |
+| E. sale_finalized após CONFIRMED, inclusive retry sem duplicar | TESTED — E4-C-D/E, U4-C | TESTED — E4-A-D/E, U4-A | TESTED — E4-S-D/E, U4-S | TESTED — E4-V-D/E, U4-V |
+
+`TESTED_COUNT=20` · `PARTIAL_COUNT=0` · `BLOCKED_COUNT=0` ·
+`UNSUPPORTED_BY_DESIGN_COUNT=0`. Nenhum NOT_RUN/skip contado como PASS.
+
+## Provas executadas e limites REV4
+
+- E4-C/A/S/V correspondem a `classic`/`assistencia`/`supermercado`/`venda-completa`
+  em `e2e/specs/pdv-core-n5.spec.ts`. Sufixos A..E são os cinco testes do spec
+  (linhas 94, 111, 129, 147 e 171 neste candidato).
+  `npx playwright test --config e2e/pdv-core.playwright.config.ts`:
+  **20 PASS**, exit 0, 1,3 min, um worker, retries=0, zero skips.
+- A: PIX 40 + dinheiro 60, soma 100, snapshot do POST igual ao estado confirmado,
+  identidade canônica e uma auditoria. B: titular real selecionado na UI, saldo
+  cliente 150 → 50, crédito atribuído e readback do transporte sintético.
+  C: entrada 25 + À Prazo 75, três títulos locais de 25 e vencimento configurado.
+- D: PENDING sem auditoria/notificação definitiva/entrada de caixa; dois POSTs
+  da mesma clientSaleId, uma venda confirmada, um venda_finalizada e um
+  sale_finalized; reenvio repetido sem outro POST/evento. E: resposta pausada,
+  zero auditorias em voo e uma após confirmação com saleId/total reais.
+- U4-C/A/S/V são os quatro arquivos
+  `lib/pdv/parity-{classic,assistencia,supermercado,venda-completa}-finalize-audit.component.test.ts`:
+  **7 + 5 + 7 + 7 = 26 PASS**, quatro arquivos, 17,47 s, exit 0.
+  Componentes, PaymentModal, OperationsProvider, finalização, retry e audit reais;
+  somente transportes/providers periféricos isolados. Novos testes Supermercado
+  e Venda Completa provam FAILED/PENDING sem evento, confirmação direta,
+  identidade/loja/snapshot efetivos, draft alterado, concorrência, render/remount,
+  marcador restaurado e ausência de auditoria para vendas de outra origem.
+- Sete WIPs conferidos por Git/SHA-256 antes/depois do fast-forward: 7/7 iguais
+  ao relatório rev4. Seis continuam byte a byte iguais após implementação.
+  O spec preserva os contratos e acrescenta somente seleção real de cliente na
+  Venda Completa, sincronização do foco/busca e reconhecimento do botão inicial
+  “Confirmar valor exato”. Nenhuma asserção foi removida ou relaxada.
+- O código local acompanha apenas identidades iniciadas em cada superfície e
+  lê o registro com syncPending=false. Confirmação direta/retry usam o mesmo
+  emissor, deduplicado pelo log local retido. Sem garantia entre abas/servidor,
+  além da retenção do log, ou quando armazenamento local não está disponível.
+- Servidor exclusivo 127.0.0.1:4179, reuseExistingServer=false, sem Next/.env/DB;
+  bundle em memória, CSP e interceptação fail-closed, zero pageerror/requests
+  inesperados no resultado verde. Retry é chamado por driver sintético.
+  Não prova persistência/automação server-side, Auth.js, botão de Histórico,
+  hardware ou impressão física. Provas servidor históricas H-A..H-E abaixo
+  são reaproveitadas, sem nova execução R4 ou promoção de garantias.
+- Conteúdo executado identificado pelos blobs Git e SHA-256 na
+  `docs/ai-execution/_evidence/PDV-PARITY-N5-C-E2E-002.md`; o parecer R
+  posterior registra o SHA exato do commit técnico e não altera estas provas.
+
+`N5_B1_CLOSEOUT=BLOCKED` · `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`.
+Typecheck PASS; ESLint zero erros e nove warnings preexistentes (base: 5/2/2);
+diff --check PASS e verify --all PASS. Sem build/Docker/migration/writer real.
+Encerramento AEP e publicação dependem do parecer R favorável sobre o SHA exato.
+
+---
+
+## Histórico REV3 preservado (não representa a cobertura REV4)
+
 # PDV Core N5-C — REV3: auditorias locais validadas, blocker no Supermercado
 
 Execução: 19/10/2026, Codex (`openai`). Main/base ratificada:

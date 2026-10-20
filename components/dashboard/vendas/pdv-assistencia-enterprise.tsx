@@ -89,7 +89,7 @@ import {
   defaultFormasPagamento,
 } from "@/lib/pdv-formas-pagamento"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { appendAuditLog } from "@/lib/audit-log"
+import { appendAuditLog, getAuditLogs } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { PaymentModal, type PaymentMethod, type PaymentMethodType } from "./payment-modal"
@@ -1159,6 +1159,44 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
   const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
   if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  const finalizedAuditIdsRef = useRef(new Set<string>())
+  const [finalizeAuditIdentity, setFinalizeAuditIdentity] = useState<(PendingSaleIdentity & { storeId: string }) | null>(null)
+  const auditConfirmedSale = useCallback((sale: {
+    saleId: string
+    clientSaleId?: string
+    total: number
+    paymentBreakdown: Parameters<typeof finalizeSaleTransaction>[0]["paymentBreakdown"]
+  }) => {
+    const key = `${storeIdKey}:${sale.clientSaleId ?? sale.saleId}`
+    if (finalizedAuditIdsRef.current.has(key)) return
+    finalizedAuditIdsRef.current.add(key)
+    const prefix = `Venda ${sale.saleId} | Loja ${storeIdKey} | Total `
+    if (getAuditLogs().some((entry) => entry.action === "sale_finalized" && entry.detail.startsWith(prefix))) return
+    const p = sale.paymentBreakdown
+    appendAuditLog({
+      action: "sale_finalized",
+      userLabel: cashierId.slice(0, 8),
+      detail: `${prefix}${brl(sale.total)} | Din ${brl(p?.dinheiro ?? 0)} Pix ${brl(p?.pix ?? 0)} Déb ${brl(p?.cartaoDebito ?? 0)} Créd ${brl(p?.cartaoCredito ?? 0)} Carnê ${brl(p?.carne ?? 0)} Prazo ${brl(p?.aPrazo ?? 0)} Vale ${brl(p?.creditoVale ?? 0)}`,
+    })
+  }, [cashierId, storeIdKey])
+  // Reenviar confirma no operations-store, sem voltar ao modal. O registro
+  // confirmado conserva os valores enviados; o carrinho pode ter mudado.
+  useEffect(() => {
+    const identity = finalizeAuditIdentity?.storeId === storeIdKey
+      ? finalizeAuditIdentity
+      : pendingSaleIdentityRef.current?.getIdentity()
+    if (!identity) return
+    const confirmed = sales.find((sale) =>
+      sale.syncPending === false &&
+      (identity.clientSaleId ? sale.clientSaleId === identity.clientSaleId : sale.id === identity.id),
+    )
+    if (confirmed) auditConfirmedSale({
+      saleId: confirmed.id,
+      clientSaleId: confirmed.clientSaleId,
+      total: confirmed.total,
+      paymentBreakdown: confirmed.paymentBreakdown,
+    })
+  }, [sales, auditConfirmedSale, finalizeAuditIdentity, storeIdKey])
   // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
   const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
   const [trocasOpen, setTrocasOpen] = useState(false)
@@ -2036,7 +2074,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     const _hadItems = cart.length > 0
 
-    const result = await finalizeSaleTransaction({
+    const finalizeInput: Parameters<typeof finalizeSaleTransaction>[0] = {
       lines: cart.map((l) => ({
         inventoryId: l.inventoryId,
         quantity: l.qty,
@@ -2078,12 +2116,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       aPrazoConfig,
       pixQrKind: meta?.pixQrKind,
       cashTendered: meta?.cashTendered,
-    })
+    }
+    const result = await finalizeSaleTransaction(finalizeInput)
 
     if (!result.ok) {
       toast({ title: "Falha ao finalizar", description: result.reason, variant: "destructive" })
       return false
     }
+    setFinalizeAuditIdentity({ id: result.saleId, clientSaleId: result.clientSaleId, storeId: storeIdKey })
 
     // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo — sem
     // impressão, sem cupom, sem fila de produtos, sem limpar carrinho nem a
