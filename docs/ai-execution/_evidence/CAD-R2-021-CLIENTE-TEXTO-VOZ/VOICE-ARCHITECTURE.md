@@ -1,6 +1,36 @@
 # CAD-R2-021 — alternativas de voz e evidência de compatibilidade
 
-Consulta documental: 19/10/2026. Estado: **análise técnica, sem seleção de fornecedor e sem autorização para captura**. O caminho de Clientes continua sem motor de reconhecimento. Este documento não altera o CAD-R2-017 de Produto.
+## Implementação — 19/10/2026 (desbloqueio autorizado pelo responsável do produto)
+
+Escolhida a **alternativa A (local estrita)**. A **B (remota) continua não aprovada e sem caminho de código**, nem como fallback. A **C (texto)** está preservada. A autorização é de produto/desenvolvimento, não parecer jurídico nem aprovação de fornecedor (ver VOICE-GOVERNANCE.md).
+
+| Ponto | Implementação |
+| --- | --- |
+| Política | `CLIENT_VOICE_POLICY` congelada em runtime (`lib/cadastros/voice-capture/cliente.ts`): `processing: "local-only"`, `remoteFallback: false`, pt-BR, 30 s, 2000 caracteres, `storesAudio: false`, `autoSave: false`. Decisão de código, sem env/query/storage. Suspender = `enabled: false` (desliga UI e a origem `voice` na Action). |
+| Disponibilidade | `lib/cadastros/voice-capture/local.ts`: exige contexto seguro e a API on-device completa (`processLocally` no protótipo + `available()`); consulta somente `available({langs:["pt-BR"], processLocally:true})`, timeout 5 s, sem construir motor nem pedir microfone. `SpeechRecognition` genérico sem essas peças = indisponível. |
+| Respostas | `available` → "Ditar por voz"; `downloadable` → botão explícito "Instalar voz local pt-BR" (`install()` chamado no clique; baixa só o modelo do navegador); `downloading` → "Verificar voz local"; `unavailable`, `NotAllowedError` (política), outra rejeição, timeout, contexto inseguro ou API ausente → somente texto, com motivo exibido. |
+| Início | Só após clique. Instância nova; `processLocally = true` antes de `start()`; se a instância não confirmar `processLocally === true`, não inicia e marca indisponível. `lang = "pt-BR"`, contínuo, resultados parciais. |
+| Sessão | Parar (stop → finais → `end`), Cancelar (abort; eventos tardios descartados), parada automática em 30 s ou 2000 caracteres, carência de 5 s para `end` após parar/erro (senão abort), indicador "Ouvindo · m:ss de 0:30". |
+| Ciclo de vida | Fechar o diálogo, Cancelar, trocar de loja (remount por `key`), Descartar, aba oculta (`visibilitychange`) e `pagehide` encerram o motor; serial por sessão e por consulta invalida callbacks antigos. |
+| Erros | `not-allowed`/`service-not-allowed` → microfone bloqueado; `audio-capture`; `no-speech`; `language-not-supported` (pacote ausente → reconsulta); demais → mensagem constante. Todo término sem sucesso descarta o trecho temporário. |
+| Transcrição | Só em estado React do editor. Ao concluir, vira texto editável no campo "Descreva o novo cliente", em linha própria, preservando o que foi digitado. Formatação visível: pontuação falada ("vírgula", "ponto e vírgula", "dois pontos", "arroba"/"ponto") e vírgula antes dos rótulos que o parser já conhece. Não extrai campos. |
+| Interpretação | Mesmo `interpretarClienteTextoLivre` → `interpretarTextoCliente` (determinístico). A Action autentica/autoriza a loja e só então aceita os literais `text`/`voice`; a origem é rótulo, não autoriza nada e não altera parser, sugestão nem escrita. |
+| Persistência | Inalterada: revisão campo a campo, confirmação explícita, `salvarClienteRevisado` → ClientWriteService (identidade, deduplicação, UNIQUE, isolamento de loja). Áudio, transcrição bruta e origem não entram no DTO. |
+| Produto | `browser.ts`, `session.ts`, `types.ts`, `detect.ts`, `index.ts` e `produto-ia.tsx` sem alteração. Clientes reusa `reduceVoiceCapture`, os tipos de evento/snapshot e o contrato `VoiceBrowserSession`. |
+
+`Permissions-Policy` do app já é `microphone=(self)`; `on-device-speech-recognition` tem allowlist padrão `self`. Nenhuma configuração alterada.
+
+### Compatibilidade observada nesta máquina (19/10/2026)
+
+Chrome 155.0.8059.80, Windows 11: API local presente (`processLocally`, `available`, `install`); `available(pt-BR, local)` = **downloadable** (pacote não instalado no perfil). Edge 155: não iniciou via Playwright neste host; sem conclusão sobre Edge. Playwright Chromium 136 (CI): sem API local → no produto, somente texto. Cada terminal é verificado em runtime; não há lista fixa de navegadores homologados.
+
+Após o download autorizado (SODA 1.2.12 + pt-BR 1.3071.0), o Chrome 155 volta a responder `downloadable` a cada reinício até `install()` ser chamado de novo; offline, o clique só reativa os arquivos locais (11 ms). Nesta máquina o motor local recebeu a fala sintética em modo local, offline, mas não devolveu texto; causa não determinada (pressão de memória e motor sob automação/áudio falso seguem como hipóteses; detalhes em REPORT.md, "Captura real"). Caminhos do modelo acima de 260 caracteres impedem o motor de terminar: perfis reais ficam perto de 220, mas nomes de usuário Windows longos se aproximam do limite. Em qualquer falha o produto termina com "Nenhuma fala reconhecida" e mantém o texto. Requisito operacional sugerido para homologação: repetir o roteiro real em cada tipo de terminal.
+
+### Modo remoto — documentado, não ativado
+
+Remoto seria o reconhecimento do navegador sem `processLocally` (no Chrome, serviço do Google; no Edge, da Microsoft) ou um fornecedor contratado (seção B). Exposição: áudio, idioma, metadados técnicos e transcrição. Não existe código desse caminho em Clientes. Condições para um GOAL próprio: fornecedor e modalidade escolhidos; finalidade; países, suboperadores e acessos de suporte; retenção, treinamento e exclusão comprovados; DPA e mecanismo de transferência LGPD; avisos a atendentes e clientes; aprovação administrativa/jurídica registrada. Até lá, `remoteFallback: false`.
+
+As seções seguintes registram a análise anterior à implementação; onde divergirem, vale a seção acima.
 
 ## Comparação para decisão
 

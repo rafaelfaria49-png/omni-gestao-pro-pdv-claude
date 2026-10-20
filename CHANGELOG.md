@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-19
+
+### Cadastros — Voz no cadastro de Clientes, somente local (CAD-R2-021)
+
+- Em **Novo cliente**, "Ditar por voz" aparece só quando o navegador confirma reconhecimento pt-BR no próprio dispositivo (`processLocally`). Reconhecimento que pode ser remoto nunca é usado e não há fallback; sem suporte, o cadastro continua por texto.
+- Pacote de idioma ausente exige clique em "Instalar voz local pt-BR". Parar/cancelar, limite de 30 s e indicador de escuta; fechar, trocar de loja, descartar ou sair encerram o microfone.
+- A transcrição vira texto editável → mesmo interpretador determinístico → revisão → confirmação → ClientWriteService. Nada é salvo automaticamente; áudio e transcrição não são gravados. Voz de Produto, schema e migrations sem mudança.
+- Reconhecimento real em dispositivo ainda não demonstrado: no host de testes o motor local iniciou offline e recebeu a fala, mas não devolveu texto (causa não determinada); ver evidências do CAD-R2-021.
+
 ## 2026-09-19
 
 ### PDV — Ciclo de vida da tentativa após confirmação

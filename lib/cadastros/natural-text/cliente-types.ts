@@ -12,6 +12,3 @@ export const CLIENT_TEXT_LABELS: Record<ClientTextField, string> = {
   cidade: "Cidade", endereco: "Endereço", uf: "UF",
 }
 export const CLIENT_TEXT_LIMIT = 2000
-
-/** No approval evidence for browser speech processing exists. No caller can enable this gate. */
-export { CLIENT_VOICE_PRIVACY_GATE } from "../voice-capture/cliente"

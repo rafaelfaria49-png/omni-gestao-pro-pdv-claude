@@ -28,7 +28,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {
 import { interpretarClienteTextoLivre, salvarClienteRevisado } from "./cliente-texto-livre"
 import type { ClientEditorValues } from "@/lib/cadastros/natural-text/cliente"
 import * as clientText from "@/lib/cadastros/natural-text/cliente"
-import { CLIENT_VOICE_PRIVACY_GATE } from "@/lib/cadastros/voice-capture/cliente"
+import { CLIENT_CAPTURE_SOURCE_INVALID_MESSAGE } from "@/lib/cadastros/voice-capture/cliente"
 const input = (): ClientEditorValues => ({ nome: "Lia de Teste", telefone: "14999998888", documento: "", email: "", cidade: "Itaí", endereco: "", uf: "", tipo: "PF", tags: "", observacoes: "", active: true })
 function session(role = "ADMIN", allowedStoreIds = ["loja-a"]): Session {
   return { user: { id: "actor-canonical", email: "operator@example.invalid", role, storeAccess: "restricted", allowedStoreIds }, expires: "2099-01-01" } as Session
@@ -55,23 +55,37 @@ describe("Cliente actions with real access gate, identity and ClientWriteService
     expect(h.create).not.toHaveBeenCalled(); expect(h.query).not.toHaveBeenCalled()
   })
   it.each([
-    "voice", "audio", "local", "whisper", "TEXT", "Text", " text", "text ", "", null,
-    true, false, 0, 1, [], ["text"], { enabled: true }, { captureSource: "text", approved: true },
-  ])("direct Action refuses non-text source %j before parsing or any side effect", async (source) => {
+    "audio", "local", "remote", "whisper", "TEXT", "Text", "Voice", "VOICE", " text", "text ", " voice", "", null,
+    true, false, 0, 1, [], ["text"], ["voice"], { enabled: true }, { captureSource: "voice", approved: true },
+  ])("direct Action refuses unknown source %j before parsing or any side effect", async (source) => {
     const parser = vi.spyOn(clientText, "interpretarTextoCliente")
     const log = vi.spyOn(console, "log"), error = vi.spyOn(console, "error")
     const result = await interpretarClienteTextoLivre("loja-a", "SYNTHETIC-RAW-CAPTURE-DO-NOT-LOG", source)
-    expect(result).toEqual({ ok: false, message: CLIENT_VOICE_PRIVACY_GATE.message })
+    expect(result).toEqual({ ok: false, message: CLIENT_CAPTURE_SOURCE_INVALID_MESSAGE })
+    expect(JSON.stringify(result)).not.toContain("SYNTHETIC-RAW-CAPTURE")
     expect(parser).not.toHaveBeenCalled()
     expect(h.query).not.toHaveBeenCalled(); expect(h.create).not.toHaveBeenCalled()
     expect(h.update).not.toHaveBeenCalled(); expect(h.audit).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
     expect(log).not.toHaveBeenCalled(); expect(error).not.toHaveBeenCalled()
   })
-  it("authorizes store access even for a blocked direct voice request", async () => {
-    h.session = session("VENDEDOR", ["loja-b"])
-    await expect(interpretarClienteTextoLivre("loja-a", "synthetic", "voice")).rejects.toThrow()
+  it.each([null, session("UNKNOWN"), session("CONTADOR"), session("VENDEDOR", ["loja-b"])])("voice source is no proof of authorization: unauthorized callers are rejected before parsing", async (s) => {
+    h.session = s
+    const parser = vi.spyOn(clientText, "interpretarTextoCliente")
+    await expect(interpretarClienteTextoLivre("loja-a", "Nome: Sintética", "voice")).rejects.toThrow()
+    expect(parser).not.toHaveBeenCalled()
     expect(h.query).not.toHaveBeenCalled(); expect(h.create).not.toHaveBeenCalled()
+  })
+  it("voice transcript uses the same deterministic parser and suggestion as text, without writes, network or logs", async () => {
+    const log = vi.spyOn(console, "log"), error = vi.spyOn(console, "error"), info = vi.spyOn(console, "info")
+    const text = "Novo cliente Lia de Teste, telefone 14999998888, mora em Itaí"
+    const viaVoice = await interpretarClienteTextoLivre("loja-a", text, "voice")
+    expect(viaVoice).toEqual(await interpretarClienteTextoLivre("loja-a", text, "text"))
+    expect(viaVoice).toMatchObject({ ok: true, sugestao: { source: "local-deterministico" } })
+    expect(JSON.stringify(viaVoice)).not.toMatch(/voice|captureSource|transcri/i)
+    expect(h.create).not.toHaveBeenCalled(); expect(h.update).not.toHaveBeenCalled(); expect(h.audit).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(log).not.toHaveBeenCalled(); expect(error).not.toHaveBeenCalled(); expect(info).not.toHaveBeenCalled()
   })
   it("preserves manual text interpretation with explicit or default text source", async () => {
     expect(await interpretarClienteTextoLivre("loja-a", "Nome: Lia de Teste", "text")).toMatchObject({ ok: true })
@@ -84,11 +98,12 @@ describe("Cliente actions with real access gate, identity and ClientWriteService
     expect(h.create).not.toHaveBeenCalled()
   })
   it("saves reviewed fields with canonical store, author and documentKey, discarding extra payload", async () => {
-    const payload = { ...input(), documento: "52998224725", transcript: "do not persist", storeId: "loja-b", principal: "spoof", totalSpent: 999, tagsRaw: { private: "spoof" } }
+    const payload = { ...input(), documento: "52998224725", transcript: "do not persist", captureSource: "voice", audio: "c3ludGhldGlj", storeId: "loja-b", principal: "spoof", totalSpent: 999, tagsRaw: { private: "spoof" } }
     expect(await salvarClienteRevisado("loja-a", null, payload, true)).toEqual({ ok: true, id: "synthetic-new" })
     const data = (h.create.mock.calls[0][0] as { data: Record<string, unknown> }).data
     expect(data).toMatchObject({ storeId: "loja-a", documentKey: "52998224725", totalSpent: 0 })
-    expect(JSON.stringify(data)).not.toMatch(/transcript|do not persist|spoof/)
+    expect(JSON.stringify(data)).not.toMatch(/transcript|do not persist|spoof|voice|captureSource|c3ludGhldGlj/)
+    expect(JSON.stringify(h.audit.mock.calls)).not.toMatch(/transcript|do not persist|voice|c3ludGhldGlj/)
     expect(h.audit).toHaveBeenCalledOnce()
     expect(fetch).not.toHaveBeenCalled()
   })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { aplicarSugestaoCliente, interpretarTextoCliente, validateClientEditor, type ClientEditorValues } from "./cliente"
-import { CLIENT_TEXT_FIELDS, CLIENT_VOICE_PRIVACY_GATE } from "./cliente-types"
+import { CLIENT_TEXT_FIELDS } from "./cliente-types"
+import { CLIENT_VOICE_POLICY } from "../voice-capture/cliente"
 
 const values = (): ClientEditorValues => ({ nome: "", telefone: "", documento: "", email: "", cidade: "", endereco: "", uf: "", tipo: "PF", tags: "", observacoes: "", active: true })
 
@@ -79,6 +80,6 @@ describe("Cliente: deterministic text, synthetic data only", () => {
     expect(validateClientEditor({ ...values(), nome: "Lia de Teste" })).toEqual({})
     expect(validateClientEditor({ ...values(), nome: "Lia", telefone: "123", documento: "11111111111", email: "no", uf: "XX" })).toHaveProperty("documento")
     expect(validateClientEditor({ ...values(), nome: "Lia", telefone: "149999988880" })).toHaveProperty("telefone")
-    expect(CLIENT_VOICE_PRIVACY_GATE.enabled).toBe(false)
+    expect(CLIENT_VOICE_POLICY).toMatchObject({ processing: "local-only", remoteFallback: false, autoSave: false })
   })
 })

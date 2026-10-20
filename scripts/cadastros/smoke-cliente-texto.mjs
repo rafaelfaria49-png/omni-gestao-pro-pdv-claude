@@ -1,59 +1,56 @@
 /** Browser smoke of the actual HUB editor. Only Action I/O is simulated.
- * Requires npm run build for the actual application CSS. No auth bypass or DB.
+ * Uses the build CSS (`npm run build`); `SMOKE_CSS_FROM_SOURCE=1` compiles app/globals.css instead.
+ * No auth bypass or DB. Voice runs against a SIMULATED local engine injected in the page:
+ * it proves the UI lifecycle and privacy contract, not real recognition (see real-voice-capture-local.mjs).
  */
-import { build } from "esbuild"
 import { chromium, expect } from "@playwright/test"
-import { createServer } from "node:http"
-import { readFile, readdir, mkdir, writeFile } from "node:fs/promises"
+import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import assert from "node:assert/strict"
+import { applicationCss, buildClienteEditorBundle, serveHarness } from "./cliente-editor-harness.mjs"
 
 const root = process.cwd()
 const evidence = path.join(root, "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ")
 await mkdir(evidence, { recursive: true })
-const bundle = await build({
-  stdin: { resolveDir: root, loader: "tsx", contents: `
-    import React,{useState} from 'react'; import {createRoot} from 'react-dom/client';
-    import {ClienteEditorDialog} from '@/components/cadastros/lovable/components/cadastros/ClienteEditor';
-    window.__saves=[]; window.__interpretations=0; window.__delayMs=0;
-    function App(){const [open,setOpen]=useState(true);const [store,setStore]=useState('loja-a');
-      window.__switchStore=()=>setStore('loja-b');
-      return <main className="p-6"><h1>Smoke isolado do editor real de Clientes</h1>
-        <button onClick={()=>setOpen(true)}>Novo cliente isolado</button>
-        <ClienteEditorDialog key={store} open={open} storeId={store} editing={null}
-          onClose={()=>setOpen(false)} onSaved={()=>setOpen(false)}/></main>}
-    createRoot(document.getElementById('root')).render(<App/>);` },
-  bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
-  define: { "process.env.NODE_ENV": '"production"' },
-  plugins: [{ name: "isolated-actions", setup(api) {
-    api.onResolve({ filter: /^@\/app\/actions\/cliente-texto-livre$/ }, () => ({ path: "actions", namespace: "isolated" }))
-    api.onLoad({ filter: /.*/, namespace: "isolated" }, () => ({ resolveDir: root, contents: `
-      import {interpretarTextoCliente} from '@/lib/cadastros/natural-text/cliente';
-      export async function interpretarClienteTextoLivre(store,text,source){
-        if(source!=='text')throw new Error('Voice forbidden');
-        await new Promise(r=>setTimeout(r,window.__delayMs));
-        window.__interpretations++;return {ok:true,sugestao:interpretarTextoCliente(text)};
-      }
-      export async function salvarClienteRevisado(store,id,values,confirmed){
-        if(!confirmed)throw new Error('Review required');
-        window.__saves.push({store,id,values,confirmed});return {ok:true,id:'synthetic'};
-      }` }))
-  } }],
-})
-const cssDir = path.join(root, ".next/static/css")
-const css = (await Promise.all((await readdir(cssDir)).filter((f) => f.endsWith(".css")).map((f) => readFile(path.join(cssDir, f), "utf8")))).join("\n")
-const server = createServer((req, res) => {
-  res.setHeader("Cache-Control", "no-store")
-  if (req.url === "/bundle.js") { res.setHeader("Content-Type", "text/javascript"); res.end(bundle.outputFiles[0].text) }
-  else if (req.url === "/style.css") { res.setHeader("Content-Type", "text/css"); res.end(css) }
-  else {
-    res.setHeader("Content-Type", "text/html; charset=utf-8")
-    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'")
-    res.end('<!doctype html><html lang="pt-BR"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/style.css"><title>Cliente isolated smoke</title></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>')
+const server = await serveHarness({ js: await buildClienteEditorBundle(root), css: await applicationCss(root) })
+const { origin } = server
+
+/** Page-side instrumentation: any microphone/permission/storage touch is counted. */
+function instrument(engine) {
+  window.__voiceAttempts = { constructed: 0, started: 0, microphone: 0, permissions: 0, devices: 0, available: [], install: [] }
+  Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {
+    getUserMedia() { window.__voiceAttempts.microphone++; throw new Error("Microphone forbidden in smoke") },
+    enumerateDevices() { window.__voiceAttempts.devices++; throw new Error("Device enumeration forbidden") },
+  } })
+  Object.defineProperty(navigator, "permissions", { configurable: true, value: {
+    query() { window.__voiceAttempts.permissions++; throw new Error("Permission query forbidden") },
+  } })
+  const attempts = window.__voiceAttempts
+  if (engine === "generic") {
+    // Generic recognition may be remote: the client path must never construct it.
+    class Generic { constructor() { attempts.constructed++ } start() { attempts.started++ } stop() {} abort() {} }
+    window.SpeechRecognition = Generic
+    window.webkitSpeechRecognition = Generic
+    return
   }
-})
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))
-const origin = `http://127.0.0.1:${server.address().port}`
+  // SIMULATED on-device engine: no audio, events are driven by the smoke runner.
+  class Local {
+    #local = false
+    constructor() { attempts.constructed++; window.__rec = this; this.aborted = false; this.stopped = false }
+    get processLocally() { return this.#local }
+    set processLocally(v) { this.#local = v }
+    start() { attempts.started++; this.startedLocal = this.#local; this.startedLang = this.lang }
+    stop() { this.stopped = true }
+    abort() { this.aborted = true }
+    static available(o) { attempts.available.push(o); return Promise.resolve(window.__availability ?? "available") }
+    static install(o) { attempts.install.push(o); window.__availability = "available"; return Promise.resolve(true) }
+  }
+  window.__availability = "downloadable"
+  window.__say = (text, isFinal) => window.__rec.onresult?.({ resultIndex: 0, results: { length: 1, 0: { length: 1, isFinal, 0: { transcript: text } } } })
+  window.__end = () => window.__rec.onend?.()
+  window.SpeechRecognition = Local
+}
+
 let browser
 const results = []
 try {
@@ -63,32 +60,32 @@ try {
     const errors = [], externalRequests = []
     page.on("pageerror", (error) => errors.push(error.message))
     page.on("request", (req) => { if (!req.url().startsWith(origin)) externalRequests.push(req.url()) })
-    // Fail the real browser smoke if rendering or clicking the blocked control
-    // even consults speech engines, permission APIs or microphone devices.
-    await page.addInitScript(() => {
-      window.__voiceAttempts = { speech: 0, microphone: 0, permissions: 0, devices: 0 }
-      for (const name of ["SpeechRecognition", "webkitSpeechRecognition"]) {
-        Object.defineProperty(window, name, { configurable: true, get() {
-          window.__voiceAttempts.speech++
-          throw new Error("Blocked client path consulted speech recognition")
-        } })
-      }
-      Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {
-        getUserMedia() { window.__voiceAttempts.microphone++; throw new Error("Microphone forbidden") },
-        enumerateDevices() { window.__voiceAttempts.devices++; throw new Error("Device enumeration forbidden") },
-      } })
-      Object.defineProperty(navigator, "permissions", { configurable: true, value: {
-        query() { window.__voiceAttempts.permissions++; throw new Error("Permission query forbidden") },
-      } })
-    })
-    await page.goto(`${origin}/?voice=true&captureSource=voice&approved=true`)
+    await page.addInitScript(instrument, "local")
+    await page.goto(`${origin}/?voice=true&captureSource=voice&approved=true&processLocally=false`)
     await page.getByRole("dialog", { name: "Novo cliente", exact: true }).waitFor()
-    assert.equal(await page.getByRole("button", { name: "Voz indisponível" }).isDisabled(), true)
-    await page.getByLabel("Descreva o novo cliente").fill("Novo cliente Lia de Teste, telefone 14999998888, mora em Itaí")
+    // Explicit pack install, then dictation (simulated engine).
+    await page.getByRole("button", { name: "Instalar voz local pt-BR" }).click()
+    await page.getByRole("button", { name: "Ditar por voz" }).click()
+    const config = await page.evaluate(() => ({ local: window.__rec.startedLocal, lang: window.__rec.startedLang }))
+    assert.deepEqual(config, { local: true, lang: "pt-BR" })
+    await page.evaluate(() => window.__say("novo cliente Lia", false))
+    await expect.poll(() => page.getByLabel("Descreva o novo cliente").inputValue()).toBe("novo cliente Lia")
+    assert.equal(await page.getByRole("button", { name: "Interpretar texto", exact: true }).isDisabled(), true)
+    assert.equal(await page.getByText(/Ouvindo · 0:0\d de 0:30/).isVisible(), true)
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
+    await page.getByLabel("Descreva o novo cliente").scrollIntoViewIfNeeded()
+    await page.screenshot({ path: path.join(evidence, `voice-listening-${viewport.width}.png`), fullPage: true })
+    await page.evaluate(() => window.__say("novo cliente Lia de Teste telefone 14 99999 8888 mora em Itaí", true))
+    await page.getByRole("button", { name: "Parar ditado" }).click()
+    assert.equal(await page.evaluate(() => window.__rec.stopped), true)
+    await page.evaluate(() => window.__end())
+    await expect.poll(() => page.getByLabel("Descreva o novo cliente").inputValue()).toBe("novo cliente Lia de Teste, telefone 14 99999 8888, mora em Itaí")
+    assert.equal(await page.evaluate(() => window.__interpretations.length + window.__saves.length), 0)
     await page.getByRole("button", { name: "Interpretar texto", exact: true }).click()
     await page.getByLabel("Sugestão: Nome", { exact: true }).waitFor()
     assert.equal(await page.getByLabel("Sugestão: Nome", { exact: true }).inputValue(), "Lia de Teste")
     assert.equal(await page.getByLabel("Sugestão: CPF / CNPJ", { exact: true }).inputValue(), "")
+    assert.deepEqual(await page.evaluate(() => window.__interpretations), [{ store: "loja-a", source: "voice" }])
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
     await page.screenshot({ path: path.join(evidence, `review-${viewport.width}.png`), fullPage: true })
     await page.getByLabel("Sugestão: Nome", { exact: true }).fill("Lia Corrigida de Teste")
@@ -102,27 +99,72 @@ try {
     await page.getByRole("checkbox").check()
     await page.getByRole("button", { name: "Salvar cliente" }).click()
     await expect.poll(() => page.evaluate(() => window.__saves.length)).toBe(1)
-    assert.equal(await page.evaluate(() => JSON.stringify(window.__saves).includes("Novo cliente")), false)
+    assert.equal(await page.evaluate(() => /novo cliente|voice|transcri/i.test(JSON.stringify(window.__saves))), false)
+    // Reopen: cancel a dictation, then a late engine event must not reach the editor.
     await page.getByRole("button", { name: "Novo cliente isolado" }).click()
     assert.equal(await page.getByLabel("Descreva o novo cliente").inputValue(), "")
+    await page.getByRole("button", { name: "Ditar por voz" }).click()
+    await page.evaluate(() => window.__say("SYNTHETIC-CANCELLED", true))
+    await page.getByRole("button", { name: "Cancelar ditado" }).click()
+    assert.equal(await page.evaluate(() => { const r = window.__rec; r.onresult?.({ resultIndex: 0, results: { length: 1, 0: { length: 1, isFinal: true, 0: { transcript: "SYNTHETIC-LATE" } } } }); return r.aborted }), true)
+    assert.equal(await page.getByLabel("Descreva o novo cliente").inputValue(), "")
+    // Store switch during dictation aborts the engine; the new store's editor starts clean.
+    await page.getByRole("button", { name: "Ditar por voz" }).click()
+    await page.evaluate(() => window.__say("SYNTHETIC-LOJA-A", true))
+    const oldRec = await page.evaluateHandle(() => window.__rec)
+    await page.evaluate(() => window.__switchStore())
+    assert.equal(await oldRec.evaluate((r) => r.aborted), true)
+    await page.getByRole("button", { name: "Ditar por voz" }).waitFor()
+    assert.equal(await page.getByLabel("Descreva o novo cliente").inputValue(), "")
+    assert.equal(await page.getByText(/SYNTHETIC-/).count(), 0)
+    // Text path and stale interpretation after store switch remain covered.
     await page.evaluate(() => { window.__delayMs = 300 })
     await page.getByLabel("Descreva o novo cliente").fill("Lia Antiga de Teste")
     await page.getByRole("button", { name: "Interpretar texto", exact: true }).click()
-    await page.evaluate(() => window.__switchStore())
-    await expect.poll(() => page.evaluate(() => window.__interpretations)).toBe(2)
-    assert.equal(await page.getByLabel("Descreva o novo cliente").inputValue(), "")
-    assert.equal(await page.getByLabel("Sugestão: Nome", { exact: true }).count(), 0)
     await page.getByRole("button", { name: "Cancelar", exact: true }).click()
+    await expect.poll(() => page.evaluate(() => window.__interpretations.length)).toBe(2)
     assert.equal(await page.evaluate(() => window.__saves.length), 1)
+    const attempts = await page.evaluate(() => window.__voiceAttempts)
+    assert.deepEqual([attempts.microphone, attempts.permissions, attempts.devices], [0, 0, 0])
+    assert.deepEqual(attempts.install, [{ langs: ["pt-BR"], processLocally: true }])
+    assert.ok(attempts.available.every((o) => o.processLocally === true && o.langs.join() === "pt-BR"))
     assert.deepEqual(await page.evaluate(() => [localStorage.length, sessionStorage.length]), [0, 0])
-    assert.deepEqual(await page.evaluate(() => window.__voiceAttempts), { speech: 0, microphone: 0, permissions: 0, devices: 0 })
     assert.deepEqual(externalRequests, []); assert.deepEqual(errors, [])
-    results.push({ viewport, review: "PASS", save: "SIMULATED_IO_ONLY", staleStoreResponse: "PASS", cancelWithoutWrite: "PASS", voiceApiAttempts: 0, forgedQueryIgnored: true, overflow: false, externalRequests: 0, storageEntries: 0, pageErrors: 0 })
     await page.close()
+
+    // Generic (possibly remote) engine only: voice stays off and is never constructed.
+    const generic = await browser.newPage({ viewport })
+    const genericErrors = []
+    generic.on("pageerror", (error) => genericErrors.push(error.message))
+    await generic.addInitScript(instrument, "generic")
+    await generic.goto(origin)
+    await generic.getByRole("dialog", { name: "Novo cliente", exact: true }).waitFor()
+    assert.equal(await generic.getByRole("button", { name: "Voz indisponível" }).isDisabled(), true)
+    assert.equal(await generic.getByText(/pode enviar o áudio a serviços externos/).isVisible(), true)
+    await generic.getByLabel("Descreva o novo cliente").fill("Nome: Lia de Teste")
+    await generic.getByRole("button", { name: "Interpretar texto", exact: true }).click()
+    await generic.getByLabel("Sugestão: Nome", { exact: true }).waitFor()
+    const genericAttempts = await generic.evaluate(() => window.__voiceAttempts)
+    assert.deepEqual([genericAttempts.constructed, genericAttempts.started, genericAttempts.microphone], [0, 0, 0])
+    assert.deepEqual(await generic.evaluate(() => window.__interpretations), [{ store: "loja-a", source: "text" }])
+    assert.deepEqual(genericErrors, [])
+    await generic.close()
+
+    results.push({
+      viewport, engine: "SIMULATED_LOCAL", installExplicit: "PASS", startLocalPtBR: "PASS", liveTranscript: "PASS", stopToEditableTranscript: "PASS",
+      interpretSource: "voice", review: "PASS", save: "SIMULATED_IO_ONLY", cancelDiscardsLateEvents: "PASS", storeSwitchAbortsEngine: "PASS",
+      genericEngineRefused: "PASS", microphoneOrPermissionApiByApp: 0, forgedQueryIgnored: true, overflow: false,
+      externalRequests: 0, storageEntries: 0, pageErrors: 0,
+    })
   }
-  await writeFile(path.join(evidence, "browser-smoke.json"), JSON.stringify({ scope: "Actual editor/parser; Action I/O simulated; production DB writes 0", results }, null, 2) + "\n")
-  console.log(JSON.stringify({ browserSmoke: "PASS", viewports: results.length, externalRequests: 0, productionDbWrites: 0 }))
+  await writeFile(path.join(evidence, "browser-smoke.json"), JSON.stringify({
+    scope: "Actual editor/parser in Chromium; speech engine SIMULATED (no audio); Action I/O simulated; production DB writes 0",
+    realRecognition: "NOT_COVERED_HERE",
+    browser: `Playwright Chromium ${browser.version()}`,
+    results,
+  }, null, 2) + "\n")
+  console.log(JSON.stringify({ browserSmoke: "PASS", viewports: results.length, engine: "SIMULATED_LOCAL", externalRequests: 0, productionDbWrites: 0 }))
 } finally {
   await browser?.close()
-  await new Promise((resolve) => server.close(resolve))
+  await server.close()
 }

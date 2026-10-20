@@ -1,5 +1,7 @@
 /** Metadata-only probe; never construct/start speech, request mic or install packs. */
 import { chromium } from "@playwright/test"
+/** What the client editor does for each on-device answer (CAD-R2-021 local-only policy). */
+const ptBRBehaviour = (ptBR) => ptBR === "available" ? "DICTATION_OFFERED" : ptBR === "downloadable" ? "EXPLICIT_INSTALL_OFFERED" : "TEXT_ONLY"
 import { createServer } from "node:http"
 import { mkdir, writeFile } from "node:fs/promises"
 
@@ -46,11 +48,11 @@ try {
   await writeFile(`${evidence}/voice-compatibility.json`, JSON.stringify({
     checkedAt: new Date().toISOString(), browser: `Playwright Chromium ${browser.version()}`, ...result,
     blockedPageRequests, microphonePolicy: "denied", engineConstructed: false, audioCaptureStarted: false,
-    languagePacksInstalledByAgent: false, productIntegration: false,
-    recognitionAccuracy: "NOT_TESTED_NO_AUDIO_AUTHORIZED", deploymentReadiness: "BLOCKED_LEGAL_AND_DEVICE_VALIDATION",
-    limitation: "Metadata availability is not proof of usable pt-BR recognition on operator devices or of browser-internal traffic/retention.",
+    languagePacksInstalledByAgent: false, productIntegration: "LOCAL_ONLY_PROCESS_LOCALLY_PT_BR",
+    productBehaviour: ptBRBehaviour(result.ptBR), recognitionAccuracy: "NOT_TESTED_BY_THIS_PROBE",
+    limitation: "Metadata availability is not proof of usable pt-BR recognition on operator devices; real recognition is a separate device validation (real-voice-capture-local.mjs).",
   }, null, 2) + "\n")
-  console.log(JSON.stringify({ voiceCompatibilityProbe: "RECORDED_WITHOUT_CAPTURE", ptBR: result.ptBR, voiceEnabled: false }))
+  console.log(JSON.stringify({ voiceCompatibilityProbe: "RECORDED_WITHOUT_CAPTURE", ptBR: result.ptBR, productBehaviour: ptBRBehaviour(result.ptBR) }))
 } finally {
   await browser?.close()
   await new Promise((resolve) => server.close(resolve))

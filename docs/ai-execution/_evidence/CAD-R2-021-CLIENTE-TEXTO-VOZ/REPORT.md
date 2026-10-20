@@ -1,5 +1,47 @@
 # CAD-R2-021 — relatório único de texto, voz e prontidão de governança
 
+## Implementação da voz local de Clientes — 19/10/2026
+
+`GOAL=CAD-R2-021`. `VOICE_IMPLEMENTATION=IMPLEMENTED_LOCAL_ONLY`. `REAL_DEVICE_RECOGNITION=NOT_DEMONSTRATED_ON_THIS_HOST` (ver "Captura real"). `TEXT_CAPTURE=PRESERVED`. `HUMAN_REVIEW=REQUIRED`. `CLIENT_WRITE_SERVICE=REUSED`. `VOICE_AUDIO_STORAGE=NONE_IN_APPLICATION`. `REMOTE_FALLBACK=DISABLED`. `OTHER_MODULES=UNCHANGED`. `SCHEMA_MIGRATIONS=UNCHANGED`. `WIP_PRESERVED=YES`.
+
+### Autoridade e base
+
+Decisão do responsável pelo produto: desenvolver e desbloquear tecnicamente a voz de Clientes, sem novo GOAL, preservando #282 e #286. Não é parecer jurídico, consentimento de titulares nem aprovação de fornecedor externo; processamento remoto continua sem aprovação (VOICE-GOVERNANCE.md, "Decisão registrada"). Base conferida após fetch: `a6777234bcc336fef64ecb7491d5705bdd404b39`. Worktree isolada `.worktrees/cad-r2-021-voz`, branch `claude/cad-r2-021-voz-clientes-funcional`. Worktree principal e seu WIP intocados. `.aep-active` ausente; não existe trilha AEP de Cadastros; nenhum state/LEDGER/REGISTRY editado.
+
+### O que mudou
+
+- **Política** (`lib/cadastros/voice-capture/cliente.ts`): `CLIENT_VOICE_PRIVACY_GATE` (bloqueio permanente) substituído por `CLIENT_VOICE_POLICY` congelado — local estrito, sem fallback remoto, pt-BR, 30 s, 2000 caracteres, sem áudio armazenado, sem autosave. Mensagens próprias de Clientes sobre a máquina compartilhada `reduceVoiceCapture`, com descarte do trecho temporário em todo término sem sucesso. Formatação visível da transcrição (pontuação falada, separação dos rótulos que o parser conhece) e junção em linha própria.
+- **Adapter local** (`lib/cadastros/voice-capture/local.ts`): verificação por metadados (`available({langs:["pt-BR"], processLocally:true})`, contexto seguro, API on-device completa), instalação explícita do pacote, sessão com `processLocally = true` antes de `start()`, recusa de instância que não confirma o modo local, parar/cancelar/descartar, limites de duração e caracteres, carência de `end`. Reconhecimento genérico nunca é aceito.
+- **Editor** (`ClienteEditor.tsx`): "Ditar por voz" / "Instalar voz local pt-BR" / "Verificar voz local" / "Voz indisponível" conforme o terminal; "Parar ditado", "Cancelar ditado", indicador "Ouvindo · m:ss de 0:30"; transcrição ao vivo somente leitura e, ao concluir, texto editável; "Interpretar texto" e "Salvar cliente" bloqueados durante a escuta; fechar, trocar loja, descartar, ocultar aba e `pagehide` encerram o motor e invalidam callbacks. Rótulo de origem "Extraído da transcrição por voz" na revisão.
+- **Action** (`cliente-texto-livre.ts`): depois de autenticar/autorizar a loja, aceita só os literais `text`/`voice`; qualquer outra origem é recusada antes do parser com mensagem constante. A origem não muda parser, sugestão nem `salvarClienteRevisado` → ClientWriteService.
+- **Sem mudança**: adapter/máquina/tipos de voz de Produto (`browser.ts`, `session.ts`, `types.ts`, `detect.ts`, `index.ts`), `produto-ia.tsx`, Prisma/schema/migrations, auth/proxy, `next.config.mjs` e os demais HUBs.
+
+### Testes
+
+Simulados (motor sintético `__fixtures__/fake-local-speech.ts`, sem áudio): unidade do adapter, política, Action e UI cobrindo início, parada, cancelamento, permissões negadas, `audio-capture`/`no-speech`, compatibilidade pt-BR (available/downloadable/downloading/unavailable/política/timeout/contexto inseguro/API genérica), `processLocally` obrigatório e sem fallback, eventos tardios após cancelar/fechar/trocar loja, aba oculta/`pagehide`, limites, revisão humana, duplicidade e isolamento por loja na Action, ausência de logs/storage/URL. Duas mutações (remover `processLocally`; remover o encerramento no unmount/ocultação) derrubaram 18 e 4 testes, respectivamente; arquivos restaurados byte a byte.
+
+Smoke Chromium do editor real (motor SIMULADO injetado, I/O das Actions simulado) em 1440×1000, 390×844 e 320×740: instalação explícita, início local pt-BR, transcrição ao vivo, parar → texto editável, interpretação com origem `voice`, revisão, aplicação, confirmação, save simulado, cancelamento com evento tardio, troca de loja abortando o motor, motor genérico recusado e caminho por texto. Zero chamadas a microfone/permissões pela aplicação, zero rede externa, zero storage, zero page errors, sem overflow. Capturas `voice-listening-*.png` e `review-*.png`.
+
+Local (head `1942ecc`): `npm run typecheck` exit 0; ESLint dos arquivos alterados sem erros/warnings; `git diff --check` OK; Vitest no recorte do CI 1112 PASS/20 skipped; `npm run build` com `MIGRATION_SKIPPED` e "Compiled successfully"; smoke PASS com CSS do build e com CSS compilado da fonte. [CI 39272217919](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/39272217919) no mesmo head: TypeScript, lint (0 erros/91 warnings históricos), 1112 PASS/20 skipped, build sem migrations, smoke PASS (motor simulado), sonda `ptBR=NOT_CHECKABLE` no Chromium 136 do runner (produto → só texto) e 20/20 integrações PostgreSQL descartáveis reais; previews Vercel concluídos.
+
+### Captura real
+
+`scripts/cadastros/real-voice-capture-local.mjs` (fora do CI) dirige o editor real no Chrome instalado, com fala **sintética** pt-BR gerada localmente (SAPI, voz "Microsoft Maria", frase fictícia) entrando por dispositivo de áudio falso e a rede do navegador bloqueada por proxy morto durante o reconhecimento. Perfil Chrome descartável no scratchpad da sessão.
+
+`REAL_DEVICE_RECOGNITION=NOT_DEMONSTRATED_ON_THIS_HOST` (impedimento de ambiente, causa não determinada; ver diagnóstico). Sequência observada em Chrome 155.0.8059.80 / Windows 11 (8 GB):
+
+1. Antes: API local presente; `available(pt-BR, local) = downloadable`.
+2. Download autorizado pelo responsável (19/10/2026), pelo botão do próprio editor: motor SODA 1.2.12 (35 MB) + pacote pt-BR 1.3071.0 (69 MB). Durante diagnósticos com rede liberada, o Chrome baixou também, por conta própria, o pacote en-US (194 MB) — total ≈298 MB, acima da estimativa de ~100 MB informada ao responsável. Tudo no perfil descartável.
+3. Após reiniciar o Chrome, `available` volta a `downloadable` com os arquivos presentes; o clique em "Instalar voz local pt-BR" com a rede bloqueada (`ERR_PROXY_CONNECTION_FAILED`) os reativa em 11 ms → `available`. Texto do botão ajustado para explicar isso.
+4. Ditado pelo editor real, offline: motor iniciado com `processLocally: true` e `lang: "pt-BR"`; o áudio sintético chega (`audiostart`, `soundstart`, `speechstart`; envelope de fala confirmado gravando o microfone falso), mas nenhum resultado é devolvido em 24 s; o editor encerra com "Nenhuma fala reconhecida…", formulário preservado, nada interpretado nem salvo, zero rede externa da página, zero storage, zero page errors (`real-voice-capture.json`, `result: FAIL`).
+5. Isolamento: a API crua, fora do produto, falha igual em pt-BR e en-US, headless e com janela, com microfone padrão e com `start(track)`. `SODA.dll` está carregada no `SpeechRecognitionService`, sem bloqueio de integridade de código.
+6. Primeira leitura (19/10): durante o ditado o serviço de fala consome >1 núcleo com working set preso em ~70 MB e ~45 mil falhas de página/s, com RAM livre entre 58 e 776 MB e descarte de páginas pelo Chrome. Hipótese inicial: thrashing por falta de RAM.
+7. Repetição autorizada (20/10), com aplicativos fechados pelo responsável (RAM livre 370–720 MB; ChatGPT e Codex ainda abertos): mesmo padrão de CPU/falhas de página e nenhum texto. Isso **enfraquece** a hipótese de RAM.
+8. Achado: o perfil descartável no scratchpad colocava 6 arquivos do modelo pt-BR acima de 260 caracteres (máx. 278; limite MAX_PATH do Windows). Com o mesmo perfil acessado por uma junção de caminho curto (máx. 187), o Chrome passa a registrar os caminhos curtos e o motor **termina limpo** 3 s após parar (antes nunca terminava) — mas continua sem devolver texto, em pt-BR e en-US, headless e com janela, na API crua e pelo editor (`real-voice-capture.json`, `longestModelPath: 187`, `result: FAIL`). O roteiro agora recusa perfis com caminho de modelo acima de 259 (`NOT_RUN_PROFILE_PATH_TOO_LONG`).
+9. Causa restante **não determinada**. Hipóteses abertas: o motor do Chrome sob automação/dispositivo de áudio falso não entrega resultados; pressão de memória residual. Não é defeito do código do OmniGestão (a API crua falha igual), e nada aqui prova que o motor funcionaria — ou falharia — num terminal comum. Em perfis reais do Chrome (`%LOCALAPPDATA%GoogleChromeUser Data`, ~60 caracteres) o modelo fica perto de 220 caracteres; nomes de usuário Windows muito longos podem se aproximar do limite.
+
+Conclusão: implementação e integração com o motor local estão verificadas até o ponto em que o motor recebe o áudio em modo local, offline; **reconhecimento real em dispositivo não foi demonstrado**. Próximo ato: validar num terminal da operação com microfone real e fala de teste (ou num navegador do responsável), com o pacote pt-BR instalado pelo próprio botão do editor. No produto, a falha nesse cenário é segura: após parar, carência de 5 s, mensagem constante e texto preservado.
+
 ## Continuação — 19/10/2026
 
 `CAD_R2_021_STATUS=PARTIAL_BLOCKED`. `TEXT_CAPTURE=PUBLISHED_PRESERVED`. `VOICE_CAPTURE=DISABLED`. `VOICE_PRIVACY_GATE=BLOCKED`. `LEGAL_APPROVAL=PENDING`. Testes, revisão, CI, merge ou deployment não substituem a decisão administrativa/jurídica.
