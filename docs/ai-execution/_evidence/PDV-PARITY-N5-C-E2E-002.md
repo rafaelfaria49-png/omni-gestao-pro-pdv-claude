@@ -1,3 +1,159 @@
+# PDV-PARITY-N5-C-E2E-002 — REV4 BLOCKED após R independente
+
+Data: 20/10/2026. Main/base:
+`16c496ad2ffe56fc6a89de237b204842494b8cbb`.
+TECHNICAL_COMMIT=`cdda74979e6008e5391a9defe6af1efdca6b7e4e`.
+O candidato de 13 arquivos está preservado, sem alteração produtiva após R.
+Os sete WIPs foram incorporados sem descarte; os hashes e o histórico abaixo
+continuam íntegros. Os 20 PASS E2E / 26 PASS focados são resultados reais,
+mas a validação ampliada do mesmo contrato **falhou**. Não há aceite completo.
+
+## Revisão independente no SHA exato
+
+- Executor: Claude Code 2.1.288, Opus 5.5, modelo `claude-opus-5-5`.
+- Família: `anthropic`; provider `firstParty`, autenticação claude.ai.
+- Session ID: `8117e84d-119e-4ae6-9924-70e82056e208`.
+- REVIEWED_SHA=`cdda74979e6008e5391a9defe6af1efdca6b7e4e`.
+- R_VERDICT=`REQUEST_CHANGES`.
+- Processo exit 0, is_error=false, terminal_reason=completed; nenhuma negativa
+  de ferramenta. Ferramentas somente de leitura, zero subagentes iniciados.
+  Não foi uma segunda instância OpenAI nem auto-revisão.
+- Antes de R, `node scripts/track.mjs check pdv` no SHA exato passou:
+  itens 1..11 PASS, item 12 informativo sem próximo GOAL; E2E canônico exit 0,
+  árvore limpa, todos os 13 paths na allowlist, nenhum gate, histórico preservado
+  e upstream sem mudanças no escopo. A aprovação mecânica não substituiu R.
+
+## Comprovação executada dos P1
+
+Comando no SHA técnico, após R e sem editar os testes:
+
+```text
+npx vitest run lib/pdv-pending-post-sale-effects.static.test.ts lib/pdv/current-main-correction.component.test.ts
+Test Files  2 failed (2)
+Tests       17 failed | 28 passed (45)
+Start       19:06:54 (America/Sao_Paulo)
+Duration    13.78s
+Exit        1
+```
+
+- `lib/pdv-pending-post-sale-effects.static.test.ts`: 11 casos, 3 FAIL / 8 PASS.
+  Classic, Supermercado e Venda Completa falham em `CONFIRMED preserva sale_finalized`,
+  asserção na linha 180. O teste exige o token no trecho posterior ao guard;
+  a implementação move a emissão para o observador de sales confirmado.
+- `lib/pdv/current-main-correction.component.test.ts`: 34 casos, 14 FAIL / 20 PASS.
+  Nove casos Assistência e cinco Venda Completa falham com:
+  `[vitest] No "getAuditLogs" export is defined on the "@/lib/audit-log" mock`.
+  O mock herdado tem appendAuditLog; a implementação passou a usar getAuditLogs.
+  Inclui proteção PENDING/resolução, resposta antiga, confirmação direta e
+  restauração de identidade. Trata-se de incompatibilidade comprovada com a
+  suíte herdada, não de falha presumida pelo revisor.
+- Ambos os arquivos estão **fora da allowlist rev4**; não foram editados.
+  Não se adicionou string artificial para satisfazer o teste estático, fallback
+  específico de mock, skip, relaxamento ou supressão de erro. Nenhuma correção
+  produtiva foi tentada depois de comprovar o blocker fora do escopo.
+
+R P2 (Assistência confirma enquanto desmontada) permanece **achado por inspeção**.
+Não foi executado um teste específico desse caminho e ele não é declarado FAIL
+runtime comprovado. Precisa de teste/correção na retomada; as cinco provas
+históricas Assistência e seus hashes continuam preservados. A célula E
+Assistência agora é PARTIAL por insuficiência de prova diante desse achado.
+Matriz final: **19 TESTED / 1 PARTIAL / 0 BLOCKED**; bloqueio global de aceite
+por R/compatibilidade fora da allowlist. Os 20 E2E executados continuam PASS.
+
+## Encerramento bloqueado e próxima decisão
+
+BLOCKER=`R_REQUEST_CHANGES_INHERITED_AUDIT_TESTS_OUTSIDE_REV4_ALLOWLIST`.
+R está disponível e pediu alterações; a exceção de publicação quando R está
+indisponível não se aplica. Sem R favorável, não há close DONE, push ou PR.
+Registrar este parecer/evidência em commit documental autorizado e usar
+`node scripts/track.mjs block pdv --by=gate --reason=...`; somente o script
+altera GOAL/ledger/state/registry. O novo BLOCKED não reescreve os três anteriores.
+
+Typecheck, ESLint (nove warnings preexistentes), diff --check e verify --all
+passaram antes deste registro. A verificação canônica será repetida depois do
+bloqueio. Nenhuma conexão/escrita em produção, migration, build ou Docker.
+Prisma gerado local/ignorado, sem regeneração; nenhuma mudança de dependências.
+CURRENT_STATUS/CHANGELOG/MASTER_CONTEXT permanecem fora do escopo e intactos.
+
+`N5_B1_CLOSEOUT=BLOCKED` · `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`.
+`GOAL_STATUS=BLOCKED` (ratificação canônica subsequente).
+`NEXT_STEP=RESOLVER_GATE_N5_C`. Parar nesta frente; nenhum N6/N7 iniciado.
+
+## Parecer R integral (fonte: saída do processo Claude Code)
+
+R_EXECUTOR=Claude Code (Opus 5.5, `claude-opus-5-5`)
+R_FAMILY=anthropic
+REVIEWED_SHA=cdda74979e6008e5391a9defe6af1efdca6b7e4e
+R_VERDICT=REQUEST_CHANGES
+
+O código de auditoria funciona nos caminhos que os 26 testes novos cobrem. Mesmo assim, não aprovo por dois motivos: a mudança quebra testes antigos fora da allowlist, que a validação focada não executou, e a Assistência perde a auditoria num caminho real de retry.
+
+## Achados acionáveis
+
+**P1 — teste estático antigo passa a falhar em Classic, Supermercado e Venda Completa**
+- Teste: `lib/pdv-pending-post-sale-effects.static.test.ts:83`, `:98`, `:129`. Ele exige o texto `sale_finalized` no código que vem depois do bloco `if (result.pending) {`.
+- O diff tirou o emissor desse trecho e o levou para um `useEffect` declarado antes do handler:
+  - Classic: guard em `pdv-classic.tsx:2276`, `sale_finalized` só em 317/321.
+  - Supermercado: guard em `pdv-supermercado.tsx:1817`, `sale_finalized` só em 261/265.
+  - Venda Completa: guard em `venda-completa-enterprise.tsx:1039`, `sale_finalized` só em 311/315.
+- O teste recorta o arquivo de forma fixa, então as três verificações de CONFIRMED falham. Isso vale para esses três casos; não afirmo nada sobre o caso Black, que a memória do projeto aponta como já quebrado na main.
+- O arquivo está fora da allowlist e o GOAL proíbe reescrever testes herdados. A evidência diz "guards preservados", mas este guard estático foi quebrado.
+
+**P1 — mock antigo sem `getAuditLogs` passa a quebrar com a venda confirmada**
+- `lib/pdv/current-main-correction.component.test.ts:56` mocka `@/lib/audit-log` apenas com `appendAuditLog`.
+- Nos casos que trocam `runtime.sales` para `resolved()`, com a mesma `clientSaleId` e `syncPending:false` (por exemplo 251–266, 285–295 e o hold/resume "resolved" em 297–316):
+  - Assistência chama `getAuditLogs()` em `pdv-assistencia-enterprise.tsx:1174`.
+  - Venda Completa chama `getAuditLogs()` em `venda-completa-enterprise.tsx:311`.
+- Com esse mock, o vitest lança erro de export ausente dentro do efeito React. A falha é quase certa pela análise do código, mas eu não executei o teste.
+- Corrigir provavelmente exige editar um arquivo fora da allowlist. Se for o caso, o executor deve parar e pedir autorização humana, sem contornar.
+- Observação: `parity-pin-keymap.component.test.ts:61` usa `sales: []` e não chega a chamar `getAuditLogs`.
+
+**P2 — Assistência não audita quando o retry confirma com a tela desmontada**
+- Em `pdv-assistencia-enterprise.tsx:1183-1199`, o efeito só reexecuta quando mudam `sales`, `finalizeAuditIdentity` ou `storeIdKey`. A identidade restaurada é gravada num ref pelo efeito de restore (1293–1321), que vem declarado depois. Mudar um ref não dispara o efeito de novo.
+- Diferente das outras três telas, a Assistência não grava marcador local.
+- O caminho é realista:
+  - O provider é global (`app/dashboard/layout.tsx` → `app-ops-providers.tsx`).
+  - O `flushPendingSales` reenvia a cada 30 s (`lib/operations-store.tsx:2357`).
+  - O Reenviar oficial fica em outra rota, `/dashboard/vendas-arquivo-geral`.
+- Se a venda confirma enquanto o operador está fora da Assistência, a volta não gera `sale_finalized`. O evento só sai se `sales` mudar depois, e se perde quando o carrinho é limpo (`clear()` em 2276/3217), quando o TTL do carrinho vence, ou quando uma venda nova sobrescreve `finalizeAuditIdentity`.
+- O teste "resolução após remount" só cobre o retry feito depois do remount.
+- Isso viola "PENDING → retry CONFIRMED emite exatamente um" junto com "remount/restauração".
+
+**P3 (não bloqueiam sozinhos)**
+- Classic, Supermercado e Venda Completa (`pdv-supermercado.tsx:255-274` e equivalentes): identidades que nunca confirmam (quarentena, conflito permanente) ficam no marcador para sempre, sem limpeza.
+- `trackFinalizeAudit` usa o `lojaKey`/`storeId` capturado antes do `await`. Se a loja mudar com a finalização em andamento, o estado volta para a loja antiga e o próximo `track` pode sobrescrever no localStorage o marcador restaurado da loja nova (`pdv-supermercado.tsx:248-255`). É um caso de borda.
+- O texto da auditoria da Venda Completa perdeu o nome do cliente e o resumo rotulado dos pagamentos que existiam na base. Não achei código que leia esse texto (só o filtro de `app/logs-sistema`), mas a evidência não registra essa mudança de formato.
+
+## Pontos conferidos que estão corretos
+- Os 13 caminhos do diff estão dentro da allowlist.
+- FAILED e PENDING retornam antes do track/emissão, então ninguém audita antes da hora.
+- A ligação com a venda é pela `clientSaleId` original, e os valores vêm do registro confirmado (`syncPending:false`). O carrinho alterado depois não muda o que é auditado.
+- A deduplicação usa o prefixo `Venda {id} | Loja {loja} | Total` no log local, que guarda 500 entradas, e o limite está declarado honestamente.
+- Vendas de outra origem não são auditadas, e marcadores de outra loja são ignorados.
+- O `auditMeta` do motor só carrega campos e não emite log, então não há auditoria duplicada na Assistência.
+- O `userLabel` do Classic é equivalente ao `auditUser()` anterior.
+- O guard de concorrência da Venda Completa (`[true,false]`) foi preservado, e o retry não reexecuta enriquecimento nem impressão.
+- O harness E2E recusa requisições não previstas (fail-closed): origem e loja verificadas, CSP e servidor dedicado. A matriz deixa explícito o que não está provado: servidor, Auth.js e hardware.
+- `N5_B1_CLOSEOUT=BLOCKED` e `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` continuam preservados.
+
+## Honestidade da evidência e da matriz
+Os 20 TESTED são coerentes com os testes descritos. Porém a evidência apresenta a validação como completa sem ter rodado as suítes antigas que conferem estas mesmas superfícies. Há também a lacuna de remount da Assistência.
+
+## Para corrigir
+1. Rodar `lib/pdv-pending-post-sale-effects.static.test.ts` e `lib/pdv/current-main-correction.component.test.ts` neste SHA e registrar o resultado.
+2. Se a correção exigir editar esses arquivos, parar e pedir autorização humana para ampliar a allowlist (`NEXT_STEP=AUTORIZACAO_HUMANA_CONTRATO_AUDITORIA` ou um replanejamento).
+3. Dar à Assistência o mesmo marcador persistido por loja das outras três telas e cobrir em teste o caso "confirmou com a tela desmontada → remount".
+
+## Limitações desta revisão
+- Só usei leitura: Read/Grep e comandos Git de leitura. Não executei vitest, Playwright, typecheck, ESLint nem `track.mjs`.
+- As falhas P1 vêm da leitura do código e não foram executadas. A do teste estático é certa; a do mock é quase certa.
+- Não conferi os hashes SHA-256 dos WIPs, a igualdade byte a byte do ledger, o estado do PR #291 nem as execuções que o executor relatou.
+- Não tive acesso a produção, nem precisei.
+
+---
+
+## Histórico REV4 pré-R preservado integralmente
+
 # PDV-PARITY-N5-C-E2E-002 — REV4 EXECUTION: candidato técnico validado
 
 Data: 20/10/2026 (America/Sao_Paulo). Executor: Codex, família `openai`.

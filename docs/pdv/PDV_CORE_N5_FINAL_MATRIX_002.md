@@ -1,3 +1,62 @@
+# PDV Core N5-C — REV4: BLOCKED após revisão R e regressões herdadas
+
+Atualização: 20/10/2026. SHA técnico revisado e executado:
+`cdda74979e6008e5391a9defe6af1efdca6b7e4e`.
+R: Claude Code 2.1.288 / Opus 5.5 (`claude-opus-5-5`),
+família `anthropic`, provider firstParty, **REQUEST_CHANGES**.
+Parecer integral e execução confirmatória estão na evidência do GOAL.
+
+Os 20 E2E e 26 testes focados passaram, mas não autorizam fechamento.
+A execução adicional solicitada por R comprovou **17 FAIL / 28 PASS** em dois
+testes herdados fora da allowlist. O conjunto de validações não está verde.
+Não houve close DONE, push ou PR.
+
+## Matriz vigente após R — vinte combinações
+
+| Cenário F-08 | classic | assistencia | supermercado | venda-completa |
+| --- | --- | --- | --- | --- |
+| A. Split e múltiplos pagamentos | TESTED — E4-C-A | TESTED — E4-A-A | TESTED — E4-S-A | TESTED — E4-V-A |
+| B. Vale/crédito e saldo | TESTED — E4-C-B | TESTED — E4-A-B | TESTED — E4-S-B | TESTED — E4-V-B |
+| C. À Prazo, entrada e parcelas | TESTED — E4-C-C | TESTED — E4-A-C | TESTED — E4-S-C | TESTED — E4-V-C |
+| D. PENDING/retry com identidade estável | TESTED — E4-C-D | TESTED — E4-A-D (montado) | TESTED — E4-S-D | TESTED — E4-V-D |
+| E. sale_finalized após CONFIRMED, inclusive retry/remount | TESTED — E4-C-D/E, U4-C | PARTIAL — E4-A-D/E, U4-A passam; R P2: retry confirma fora da montagem sem prova específica | TESTED — E4-S-D/E, U4-S | TESTED — E4-V-D/E, U4-V |
+
+`TESTED_COUNT=19` · `PARTIAL_COUNT=1` · `BLOCKED_COUNT=0` ·
+`UNSUPPORTED_BY_DESIGN_COUNT=0`.
+O BLOCKED é do aceite global/allowlist, não uma falha fabricada nos 20 casos E2E.
+A célula E Assistência é rebaixada por suficiência de cobertura após R: a lacuna
+de remount é achado de inspeção, sem falha runtime específica executada.
+Os 20 PASS efetivos continuam preservados no histórico imediatamente abaixo.
+
+## Blocker comprovado fora da allowlist
+
+Comando no SHA técnico, sem alterar os testes:
+`npx vitest run lib/pdv-pending-post-sale-effects.static.test.ts lib/pdv/current-main-correction.component.test.ts`.
+
+- Estático: 11 casos, 3 FAIL / 8 PASS. Classic, Supermercado e Venda Completa
+  falham em `CONFIRMED preserva sale_finalized` (linha 180), pois o emissor
+  passou ao observador e o teste exige texto no trecho depois do guard PENDING.
+- Componente herdado: 34 casos, 14 FAIL / 20 PASS. O mock de audit-log exporta
+  apenas appendAuditLog; o efeito real pede getAuditLogs e Vitest lança
+  `No "getAuditLogs" export is defined on the "@/lib/audit-log" mock`.
+- Esses dois arquivos não constam da allowlist rev4. Não foram editados,
+  substituídos ou enfraquecidos. Nenhum comentário/marcador artificial nem
+  tratamento especial de mock foi adicionado ao código para contornar as falhas.
+- R também identificou a Assistência sem marcador persistente independente do
+  draft, perdendo observação quando a confirmação ocorre antes do remount.
+  Esse achado precisa de prova/correção posterior; não se inventou PASS/FAIL
+  comportamental desse caminho nem se ampliou o escopo após o blocker real.
+
+`N5_B1_CLOSEOUT=BLOCKED` · `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`.
+Candidato técnico, sete WIPs incorporados e históricos permanecem preservados.
+O AEP deve registrar BLOCKED canonicamente; retomada requer decisão humana
+sobre contrato de testes/allowlist e os achados R.
+`NEXT_STEP=RESOLVER_GATE_N5_C`. Nenhuma outra frente iniciada.
+
+---
+
+## Histórico REV4 pré-R preservado (20 PASS E2E; não é aceite final)
+
 # PDV Core N5-C — REV4: vinte combinações TESTED em ambiente isolado
 
 Execução: 20/10/2026, Codex (`openai`). Main/base:
