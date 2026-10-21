@@ -1,0 +1,725 @@
+{
+  "authorization": "PDV-N5-C-REV5-REGRESSION-REOPEN-006",
+  "mainCurrentSha": "a874342f5366427f8f7cfebc96a9c14c8efe39ad",
+  "reviewedSha": "cdda74979e6008e5391a9defe6af1efdca6b7e4e",
+  "rVerdict": "REQUEST_CHANGES",
+  "node": "v24.14.1",
+  "vitest": "4.1.4",
+  "counts": {
+    "baseline": 0,
+    "regressions": 3,
+    "fixtureEnvironment": 14,
+    "inconclusive": 0
+  },
+  "reports": {
+    "base": {
+      "sha": "16c496ad2ffe56fc6a89de237b204842494b8cbb",
+      "passed": 45,
+      "failed": 0,
+      "pending": 0,
+      "exitCode": 0,
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:/Projetos/omni-gestao/node_modules/vitest/vitest.mjs",
+        "run",
+        "lib/pdv-pending-post-sale-effects.static.test.ts",
+        "lib/pdv/current-main-correction.component.test.ts",
+        "--root",
+        "C:\\Projetos\\omni-gestao\\.worktrees\\pdv-n5-c-rev5-base-diagnostic",
+        "--config",
+        "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\21\\01a15c4e-4445-7152-93fe-1191d53aa632\\base.config.mjs",
+        "--configLoader",
+        "runner",
+        "--no-cache",
+        "--no-file-parallelism"
+      ],
+      "reportSha256": "9ccd5134be326c85227855b1572b142f6587bd8943dac5f7bb1d691b5e78b5cd",
+      "cases": [
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/pdv-classic.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/pdv-supermercado.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/pdv-assistencia-enterprise.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/venda-completa-enterprise.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/trocas-devolucao.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos Black/Next continua correto: pending antes do cupom definitivo",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) módulo de dispatch não usa nenhuma primitiva volátil como autoridade",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) browser não posta venda_finalizada (só notificação local de UI)",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) rota handle-event responde venda_finalizada de browser sem despachar",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) rotas venda-persist V1/V2 despacham somente no create durável",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) subscribers locais de UI continuam existindo (sem quebra)",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount registering PENDING writes the real cache immediately, without editing the cart or advancing 500ms",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount PENDING → runtime cache → unmount/remount blocks opening and direct confirmation, with ZERO second finalize/identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount a pending debounce cannot overwrite the immediately persisted identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount legacy cache without pendingIdentity preserves customer, discount and normalized lines",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount switching the mounted Assistência to another store resets its draft before any cache write",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount legacy percent discounts and the existing 12h TTL remain valid",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa click: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa F1: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa click: an old resolved sales snapshot cannot release a newly pending identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa F1: an old resolved sales snapshot cannot release a newly pending identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: direct confirmation resolves using current sales, without opening/clicking first",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: an already open modal uses current sales for a resumed identity — pending",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: an already open modal uses current sales for a resumed identity — resolved",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: an already open modal uses current sales for a resumed identity — missing",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: partial/missing original sale stays fail-closed in both opening and confirmation: []",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: partial/missing original sale stays fail-closed in both opening and confirmation: [{\"id\":\"other\",\"clientSaleId\":\"other\",\"syncPending\":false}]",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: production hold/resume preserves PENDING and store/terminal isolation",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: legacy hold resumes with no pending identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: Store B cannot release or inherit Store A cache identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia click: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia F1: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia F10: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia F12: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia click: an old resolved sales snapshot cannot release a newly pending identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia F1: an old resolved sales snapshot cannot release a newly pending identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: direct confirmation resolves using current sales, without opening/clicking first",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: an already open modal uses current sales for a resumed identity — pending",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: an already open modal uses current sales for a resumed identity — resolved",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: an already open modal uses current sales for a resumed identity — missing",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: partial/missing original sale stays fail-closed in both opening and confirmation: []",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: partial/missing original sale stays fail-closed in both opening and confirmation: [{\"id\":\"other\",\"clientSaleId\":\"other\",\"syncPending\":false}]",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: production hold/resume preserves PENDING and store/terminal isolation",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: legacy hold resumes with no pending identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: Store B cannot release or inherit Store A cache identity",
+          "status": "passed"
+        }
+      ]
+    },
+    "candidate": {
+      "sha": "cdda74979e6008e5391a9defe6af1efdca6b7e4e",
+      "passed": 28,
+      "failed": 17,
+      "pending": 0,
+      "exitCode": 1,
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:/Projetos/omni-gestao/node_modules/vitest/vitest.mjs",
+        "run",
+        "lib/pdv-pending-post-sale-effects.static.test.ts",
+        "lib/pdv/current-main-correction.component.test.ts",
+        "--root",
+        "C:\\Projetos\\omni-gestao\\.worktrees\\pdv-n5-c-rev5-candidate-diagnostic",
+        "--config",
+        "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\21\\01a15c4e-4445-7152-93fe-1191d53aa632\\candidate.config.mjs",
+        "--configLoader",
+        "runner",
+        "--no-cache",
+        "--no-file-parallelism"
+      ],
+      "reportSha256": "70708cc4323af826cb6d5368215c178f5e37eaa7551a9a72af654802db68dfdb",
+      "cases": [
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/pdv-classic.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/pdv-supermercado.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/pdv-assistencia-enterprise.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/venda-completa-enterprise.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/trocas-devolucao.tsx: guard único, gap limpo e bloco pending sem efeitos",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos Black/Next continua correto: pending antes do cupom definitivo",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) módulo de dispatch não usa nenhuma primitiva volátil como autoridade",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) browser não posta venda_finalizada (só notificação local de UI)",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) rota handle-event responde venda_finalizada de browser sem despachar",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) rotas venda-persist V1/V2 despacham somente no create durável",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+          "test": "CORREÇÃO-01 — fiação do dispatch server-side (sem dedupe volátil) subscribers locais de UI continuam existindo (sem quebra)",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount registering PENDING writes the real cache immediately, without editing the cart or advancing 500ms",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount PENDING → runtime cache → unmount/remount blocks opening and direct confirmation, with ZERO second finalize/identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount a pending debounce cannot overwrite the immediately persisted identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount legacy cache without pendingIdentity preserves customer, discount and normalized lines",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount switching the mounted Assistência to another store resets its draft before any cache write",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "R4 Assistência — production cache and remount legacy percent discounts and the existing 12h TTL remain valid",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa click: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa F1: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa click: an old resolved sales snapshot cannot release a newly pending identity",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa F1: an old resolved sales snapshot cannot release a newly pending identity",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: direct confirmation resolves using current sales, without opening/clicking first",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: an already open modal uses current sales for a resumed identity — pending",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: an already open modal uses current sales for a resumed identity — resolved",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: an already open modal uses current sales for a resumed identity — missing",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: partial/missing original sale stays fail-closed in both opening and confirmation: []",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: partial/missing original sale stays fail-closed in both opening and confirmation: [{\"id\":\"other\",\"clientSaleId\":\"other\",\"syncPending\":false}]",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: production hold/resume preserves PENDING and store/terminal isolation",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: legacy hold resumes with no pending identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "venda-completa: Store B cannot release or inherit Store A cache identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia click: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia F1: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia F10: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia F12: PENDING blocks; changing only sales.syncPending releases the same cart",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia click: an old resolved sales snapshot cannot release a newly pending identity",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia F1: an old resolved sales snapshot cannot release a newly pending identity",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: direct confirmation resolves using current sales, without opening/clicking first",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: an already open modal uses current sales for a resumed identity — pending",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: an already open modal uses current sales for a resumed identity — resolved",
+          "status": "failed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: an already open modal uses current sales for a resumed identity — missing",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: partial/missing original sale stays fail-closed in both opening and confirmation: []",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: partial/missing original sale stays fail-closed in both opening and confirmation: [{\"id\":\"other\",\"clientSaleId\":\"other\",\"syncPending\":false}]",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: production hold/resume preserves PENDING and store/terminal isolation",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: legacy hold resumes with no pending identity",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/current-main-correction.component.test.ts",
+          "test": "assistencia: Store B cannot release or inherit Store A cache identity",
+          "status": "passed"
+        }
+      ]
+    },
+    "remount": {
+      "sha": "cdda74979e6008e5391a9defe6af1efdca6b7e4e",
+      "passed": 5,
+      "failed": 1,
+      "pending": 0,
+      "exitCode": 1,
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:/Projetos/omni-gestao/node_modules/vitest/vitest.mjs",
+        "run",
+        "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
+        "--root",
+        "C:\\Projetos\\omni-gestao\\.worktrees\\pdv-n5-c-rev5-candidate-diagnostic",
+        "--config",
+        "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\21\\01a15c4e-4445-7152-93fe-1191d53aa632\\remount.config.mjs",
+        "--configLoader",
+        "runner",
+        "--no-cache",
+        "--no-file-parallelism"
+      ],
+      "reportSha256": "32ab49d84284b752f2f18c89e20db24d249b626cabe18476939741af67f0b7fb",
+      "cases": [
+        {
+          "file": "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
+          "test": "N5-C Assistência — motor, handler e log reais CONFIRMED emite uma vez com saleId do motor e todos os valores enviados",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
+          "test": "N5-C Assistência — motor, handler e log reais FAILED do motor não audita nem limpa o carrinho; tentativa consciente continua possível",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
+          "test": "N5-C Assistência — motor, handler e log reais PENDING não audita; bloqueia reconfirmação; Reenviar confirma a identidade original uma vez",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
+          "test": "N5-C Assistência — motor, handler e log reais resolução após remount usa o payload pendente, e repetir o restore não duplica o log",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
+          "test": "N5-C Assistência — motor, handler e log reais duas chamadas concorrentes do handler compartilham a confirmação sem duplicar auditoria",
+          "status": "passed"
+        },
+        {
+          "file": "lib/pdv/parity-assistencia-finalize-audit.component.test.ts",
+          "test": "N5-C Assistência — motor, handler e log reais REV5 diagnóstico: retry confirma com Assistência desmontada e remount audita o snapshot uma vez",
+          "status": "failed"
+        }
+      ]
+    }
+  },
+  "failures": [
+    {
+      "id": 1,
+      "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+      "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/pdv-classic.tsx: guard único, gap limpo e bloco pending sem efeitos",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "REGRESSAO_CANDIDATO_COMPATIBILIDADE_ESTATICA",
+      "error": "AssertionError: components/dashboard/vendas/pdv-classic.tsx CONFIRMED preserva sale_finalized: expected '\\r\\n          _printInput.numeroVenda…' to contain 'sale_finalized'"
+    },
+    {
+      "id": 2,
+      "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+      "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/pdv-supermercado.tsx: guard único, gap limpo e bloco pending sem efeitos",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "REGRESSAO_CANDIDATO_COMPATIBILIDADE_ESTATICA",
+      "error": "AssertionError: components/dashboard/vendas/pdv-supermercado.tsx CONFIRMED preserva sale_finalized: expected '\\r\\n          _printInput.numeroVenda…' to contain 'sale_finalized'"
+    },
+    {
+      "id": 3,
+      "file": "lib/pdv-pending-post-sale-effects.static.test.ts",
+      "test": "CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos components/dashboard/vendas/venda-completa-enterprise.tsx: guard único, gap limpo e bloco pending sem efeitos",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "REGRESSAO_CANDIDATO_COMPATIBILIDADE_ESTATICA",
+      "error": "AssertionError: components/dashboard/vendas/venda-completa-enterprise.tsx CONFIRMED preserva sale_finalized: expected '\\r\\n\\r\\n      // Fila \"Produtos a cad…' to contain 'sale_finalized'"
+    },
+    {
+      "id": 4,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "R4 Assistência — production cache and remount switching the mounted Assistência to another store resets its draft before any cache write",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 5,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "venda-completa click: PENDING blocks; changing only sales.syncPending releases the same cart",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 6,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "venda-completa F1: PENDING blocks; changing only sales.syncPending releases the same cart",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 7,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "venda-completa click: an old resolved sales snapshot cannot release a newly pending identity",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 8,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "venda-completa F1: an old resolved sales snapshot cannot release a newly pending identity",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 9,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "venda-completa: direct confirmation resolves using current sales, without opening/clicking first",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 10,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "assistencia click: PENDING blocks; changing only sales.syncPending releases the same cart",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 11,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "assistencia F1: PENDING blocks; changing only sales.syncPending releases the same cart",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 12,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "assistencia F10: PENDING blocks; changing only sales.syncPending releases the same cart",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 13,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "assistencia F12: PENDING blocks; changing only sales.syncPending releases the same cart",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 14,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "assistencia click: an old resolved sales snapshot cannot release a newly pending identity",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 15,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "assistencia F1: an old resolved sales snapshot cannot release a newly pending identity",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 16,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "assistencia: direct confirmation resolves using current sales, without opening/clicking first",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "id": 17,
+      "file": "lib/pdv/current-main-correction.component.test.ts",
+      "test": "assistencia: an already open modal uses current sales for a resumed identity — resolved",
+      "baseStatus": "passed",
+      "candidateStatus": "failed",
+      "classification": "FIXTURE_MOCK_INCOMPLETO",
+      "error": "Error: [vitest] No \"getAuditLogs\" export is defined on the \"@/lib/audit-log\" mock. Did you forget to return it from \"vi.mock\"?"
+    }
+  ]
+}

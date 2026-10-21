@@ -114,3 +114,27 @@ Não edite nenhum dos dois à mão: `node scripts/track.mjs verify` detecta a di
   Commit/push somente da branch de planejamento e um PR contra main.
   Sem implementação, open/close de execução, merge ou DONE nesta entrega.
   Próximo passo: `HUMANO_MERGEAR_N5_C_REV4`. Parar.
+
+## Replanejamento N5-C rev5 — 20/10/2026
+
+- Autorização humana `PDV-N5-C-REV5-REGRESSION-REOPEN-006`; mesmo
+  [PDV-PARITY-N5-C-E2E-002](goals/PDV-PARITY-N5-C-E2E-002.md), READY, plan_rev 5.
+- Branch/worktree `plan/pdv-n5-c-rev5-regression-closeout`, criada diretamente de
+  `origin/main=a874342f5366427f8f7cfebc96a9c14c8efe39ad`, sem cherry-pick ou
+  ancestralidade de `cdda749`/`01b9c0e`. Somente documentos, provas e ledger AEP.
+- Quatro eventos BLOCKED preservados literalmente; a main de origem tem sete
+  linhas, prefixo exato das oito do ledger transportado. Nenhum evento READY.
+- Base isolada `16c496a`: 45 PASS. Candidato isolado `cdda749`: 28 PASS/17 FAIL.
+  Classificação: zero baseline, três regressões de compatibilidade estática,
+  14 fixtures/mocks, zero inconclusivas. A lista individual consta nas provas.
+- Achado de remount Assistência comprovado com provider/handler/retry/auditoria
+  reais: cinco testes históricos PASS e diagnóstico adicional FAIL, evento
+  esperado um/observado zero após confirmar com a tela desmontada.
+- Preservados os 14 padrões rev4; duas inclusões exatas para corrigir os testes
+  herdados sem retirar casos/asserts. Nenhuma correção implementada nesta entrega.
+- Matriz/evidência rev4 transportadas integralmente: 20/20 E2E históricos,
+  19 TESTED/1 PARTIAL; exigidos nova validação e novo R sobre o SHA corrigido.
+- [Relatório e preservação](_closed/reports/PDV-N5-C-REV5-REGRESSION-REOPEN-006.md).
+  Commit/push somente da branch de planejamento; PR documental para merge humano.
+  Sem open/close de execução, código produtivo, implementação rev5 ou merge.
+  Próximo passo: `HUMANO_MERGEAR_N5_C_REV5`. Parar.

@@ -2,13 +2,14 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import {
-  CLIENT_VOICE_INITIAL, CLIENT_VOICE_POLICY, formatarTranscricaoCliente, isClientCaptureSource, juntarTranscricaoCliente, reduceClientVoiceCapture,
+  CLIENT_VOICE_DIAGNOSTIC_TEXT, CLIENT_VOICE_INITIAL, CLIENT_VOICE_POLICY, clientVoiceStage, formatarTranscricaoCliente, isClientCaptureSource,
+  juntarTranscricaoCliente, reduceClientVoiceCapture, type ClientVoiceSnapshot,
 } from "./cliente"
 import { reduceVoiceCapture, VOICE_CAPTURE_INITIAL } from "./session"
-import type { VoiceCaptureEvent, VoiceCaptureSnapshot } from "./types"
+import type { VoiceCaptureEvent } from "./types"
 import { interpretarTextoCliente } from "../natural-text/cliente"
 
-const run = (events: VoiceCaptureEvent[], from: VoiceCaptureSnapshot = CLIENT_VOICE_INITIAL) => events.reduce(reduceClientVoiceCapture, from)
+const run = (events: VoiceCaptureEvent[], from: ClientVoiceSnapshot = CLIENT_VOICE_INITIAL) => events.reduce(reduceClientVoiceCapture, from)
 const ready = run([{ type: "capability", available: true }])
 
 describe("client voice policy", () => {
@@ -33,7 +34,7 @@ describe("client lifecycle over the shared capture machine", () => {
     expect(CLIENT_VOICE_INITIAL.status).toBe("unavailable")
     expect(reduceClientVoiceCapture(CLIENT_VOICE_INITIAL, { type: "start" }).status).toBe("unavailable")
     expect(ready).toMatchObject({ status: "ready", sessionTranscript: "", interim: "" })
-    expect(ready.message).toMatch(/Ditar por voz/)
+    expect(ready.message).toMatch(/microfone do campo/)
   })
   it("listening → stop → end produces a temporary transcript only on success", () => {
     const listening = run([{ type: "start" }, { type: "interim", text: "Novo" }], ready)
@@ -45,7 +46,8 @@ describe("client lifecycle over the shared capture machine", () => {
   it.each([
     [{ type: "cancel" }, "cancelled", /cancelado/],
     [{ type: "error", code: "not-allowed" }, "permission-denied", /Microfone bloqueado/],
-    [{ type: "error", code: "service-not-allowed" }, "permission-denied", /Microfone bloqueado/],
+    // With processLocally this is the spec's "local engine unavailable", not a microphone block.
+    [{ type: "error", code: "service-not-allowed" }, "permission-denied", /recusou o reconhecimento local/],
     [{ type: "error", code: "audio-capture" }, "error", /Microfone indisponível/],
     [{ type: "error", code: "no-speech" }, "error", /Nenhuma fala detectada/],
     [{ type: "error", code: "language-not-supported" }, "error", /pt-BR indisponível/],
@@ -64,6 +66,54 @@ describe("client lifecycle over the shared capture machine", () => {
   })
   it("reuses the shared machine unchanged for Produto", () => {
     expect(reduceVoiceCapture(VOICE_CAPTURE_INITIAL, { type: "start" }).message).toMatch(/produto/)
+    // Produto still drops interim at stop: the client keeps its own copy instead of changing session.ts.
+    const stopped = reduceVoiceCapture(reduceVoiceCapture(VOICE_CAPTURE_INITIAL, { type: "start" }), { type: "interim", text: "x" })
+    expect(reduceVoiceCapture(stopped, { type: "stop-requested" }).interim).toBe("")
+  })
+})
+
+describe("provisional text is kept for an explicit, reviewable recovery", () => {
+  it("interim only, then stop and end: no confirmed text, provisional kept and announced", () => {
+    const done = run([{ type: "start" }, { type: "interim", text: "novo cliente Lia" }, { type: "stop-requested" }, { type: "end" }], ready)
+    expect(done).toMatchObject({ status: "error", sessionTranscript: "", provisional: "novo cliente Lia" })
+    expect(done.message).toMatch(/trecho provisório/)
+  })
+  it("provisional arriving after stop still updates the copy", () => {
+    const done = run([{ type: "start" }, { type: "interim", text: "novo" }, { type: "stop-requested" }, { type: "interim", text: "novo cliente Lia" }, { type: "end" }], ready)
+    expect(done.provisional).toBe("novo cliente Lia")
+  })
+  it("final text supersedes provisional, and a provisional tail after the final is kept apart", () => {
+    const finalOnly = run([{ type: "start" }, { type: "interim", text: "Lia" }, { type: "final-chunk", text: "Lia de Teste" }, { type: "stop-requested" }, { type: "end" }], ready)
+    expect(finalOnly).toMatchObject({ status: "completed", sessionTranscript: "Lia de Teste", provisional: "" })
+    const tail = run([{ type: "start" }, { type: "final-chunk", text: "Lia de Teste" }, { type: "interim", text: "telefone" }, { type: "stop-requested" }, { type: "end" }], ready)
+    expect(tail).toMatchObject({ status: "completed", sessionTranscript: "Lia de Teste", provisional: "telefone" })
+    expect(tail.message).toMatch(/provisório/)
+  })
+  it.each([
+    [{ type: "cancel" }], [{ type: "error", code: "not-allowed" }], [{ type: "error", code: "service-not-allowed" }], [{ type: "reset" }], [{ type: "start" }],
+  ] as const)("%j discards the provisional copy", (event) => {
+    const listening = run([{ type: "start" }, { type: "interim", text: "SYNTHETIC" }], ready)
+    expect(reduceClientVoiceCapture(listening, event).provisional).toBe("")
+  })
+  it("keeps provisional text when the engine fails after hearing speech", () => {
+    const failed = run([{ type: "start" }, { type: "interim", text: "Lia" }, { type: "error", code: "network" }, { type: "end" }], ready)
+    expect(failed).toMatchObject({ status: "error", sessionTranscript: "", provisional: "Lia" })
+  })
+})
+
+describe("honest listening stage and diagnostic wording", () => {
+  const diag = (steps: Record<string, number>, results = 0) => ({ source: "editor", quality: "command", steps, counts: { results, interim: results, final: 0, nomatch: 0 }, error: null, endReason: null, durationMs: 0 }) as const
+  it("'Ouvindo' is never shown without evidence: each stage needs its event", () => {
+    expect(clientVoiceStage(null)).toBe("Iniciando o microfone…")
+    expect(clientVoiceStage(diag({ audiostart: 10 }))).toMatch(/aguardando som/)
+    expect(clientVoiceStage(diag({ audiostart: 10, soundstart: 20 }))).toBe("Som detectado")
+    expect(clientVoiceStage(diag({ audiostart: 10, soundstart: 20, speechstart: 30 }))).toMatch(/Fala detectada/)
+    expect(clientVoiceStage(diag({ audiostart: 10, soundstart: 20, speechstart: 30 }, 1))).toBe("Recebendo texto")
+  })
+  it("has wording for every diagnostic code", () => {
+    for (const code of ["MIC_NOT_STARTED", "NO_AUDIO", "NO_SPEECH", "NO_RESULTS", "INTERIM_ONLY", "FINAL_RECEIVED", "ENGINE_FAILURE", "CANCELLED"] as const) {
+      expect(CLIENT_VOICE_DIAGNOSTIC_TEXT[code]).toBeTruthy()
+    }
   })
 })
 
@@ -98,7 +148,7 @@ describe("visible transcript formatting for the canonical parser", () => {
 
 describe("static privacy boundary of the client voice path", () => {
   const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1")
-  for (const file of ["local.ts", "cliente.ts"]) {
+  for (const file of ["local.ts", "cliente.ts", "diagnostic.ts"]) {
     it(`${file}: no network, storage, logs, recording, database or product interpreter`, () => {
       const src = strip(readFileSync(resolve(__dirname, file), "utf8"))
       expect(src).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/)
