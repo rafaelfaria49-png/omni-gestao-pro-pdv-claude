@@ -93,6 +93,16 @@ describe("compartilhamento V4 — gestos sem envio e declaração separada", () 
     fireEvent.click(screen.getByRole("button", { name: "Recuperar registro da API" }));
     await waitFor(() => expect(v.enviarOrcamentoPorCanal).toHaveBeenCalledWith("whatsapp", { tentativaId: "t-pendente", confirmado: true, modo: "recuperar_api" }));
   });
+  it("recupera a reserva pendente anterior a outra preparação e ignora a tentativa local", async () => {
+    const v = vals();
+    const pending = { id: "t-api-antiga", canal: "whatsapp", estado: "api_em_andamento" };
+    v.orcamentoEnvio = { estado: "api_sem_confirmacao", rotulo: "API em conferência", entregaConfirmada: false,
+      ultimo: { id: "t-presencial", canal: "presencial", estado: "preparado" }, pendente: pending } as any;
+    montar(v);
+    expect((screen.getByRole("button", { name: "Preparar compartilhamento" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Recuperar registro da API" }));
+    await waitFor(() => expect(v.enviarOrcamentoPorCanal).toHaveBeenCalledWith("whatsapp", { tentativaId: "t-api-antiga", confirmado: true, modo: "recuperar_api" }));
+  });
   it("recibo retornado após falha permanece disponível depois de remontar, isolado por loja/OS", async () => {
     const v = vals(); vi.mocked(v.enviarOrcamentoPorCanal).mockResolvedValue({ ok: false, aceitoApi: true, pendente: true, wamid: "wamid.recuperavel" });
     const { unmount } = montar(v); await preparar();

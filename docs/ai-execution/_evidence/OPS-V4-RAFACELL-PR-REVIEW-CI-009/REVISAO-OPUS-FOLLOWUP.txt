@@ -1,0 +1,200 @@
+# Revisão adversarial — follow-up do Draft PR #290 (Ops V4 RafaCell)
+
+## Escopo
+
+- A análise é estática e cobre só o diff de follow-up, os arquivos atuais e o CI fornecidos. Não executei testes, build, banco nem WhatsApp. Os testes de runtime ficam com o outro revisor.
+- Tratei como decisões do time, sem reabrir:
+  - a reserva durável continua fechando por falha (fail-closed);
+  - não haverá reconciliação automática;
+  - a ativação remota da API continua NOGO sem recibo oficial.
+- Continuam fora do material e, por isso, aparecem como **risco a confirmar**:
+  - `mesclarTimelineDoPatch`, `os-adapter.ts:348`, `use-v4-preview.ts`;
+  - `vercel-build.mjs`, `vitest.config.ts` do pg, `package.json` e o schema Prisma;
+  - os demais chamadores V2.
+
+---
+
+## 1. Verificação das correções
+
+| Item | Situação | Observação |
+|---|---|---|
+| P2-1 (reserva sem saída) | **Reclassificado: decisão aceita** | Deixa de ser defeito do PR e vira condição de NOGO para ativar a API. Há um ponto novo na seção 2 (R-1). |
+| P2-2 (V2 "Enviar orçamento") | **Corrigido, com ressalvas** | O botão não chama mais `applyHubAcao`. O servidor continua fechando por falha. Ressalvas em R-4 e no risco 3. |
+| P3-1 (recuperação some) | **Corrigido** | `pendente` passou a ser exposto no resumo (`orcamento-envio-model.ts:51-53`) e é priorizado na UI (`OrcamentoEnvioCluster.tsx:39-42`). O servidor recupera por `tentativaId`, sem depender de `ultimo`. |
+| P3-2 (evento sem `id`) | **Corrigido para o caso relatado** | `os-payload-lock.ts:93-98`. Há um caso residual com `id` conhecido (risco 1). |
+| P3-3 (`TypeError`) | **Corrigido** | Timeline: `os-payload-lock.ts:95`. `tentativaId`: `orcamento-envio-actions.ts:31` e `orcamento-envio-service.ts:152`. |
+| P3-4 (contrato do Hub) | **Corrigido** | Sem `lifecycle`, o fluxo volta a ser POST → `addMessage` → `{ message, wamid }`, aceita `wamid` vazio e repassa o erro bruto (`whatsapp-service.ts:663-670`). É o mesmo padrão de template e mídia. O contrato de transporte compartilhado foi preservado. |
+| P3-5 (edição após criação parcial) | **Corrigido** | Há `fieldset disabled`, os botões alternativos ficam ocultos e a intenção `preparar` fica travada no primeiro clique. Resta um nit (R-5). |
+| P3-6 (`vencido`/`expirado`) | **Corrigido** | `orcamento-actions.ts:225-227`. Há um risco residual na renovação da validade (risco 4). |
+| P3-7 (fonte do telefone) | **Corrigido, com risco residual** | O servidor usa `telefone \|\| whatsapp`. A precedência do adapter não foi verificada (risco 2). |
+| P3-8 (payload completo devolvido) | **Não tratado** | Continua P3 de minimização (R-6). |
+| P3-9 (evento sem mudança de status) | **Corrigido** | A emissão agora depende de `statusAlterado` (`orcamento-envio-service.ts:146`). Nit de nome em R-7. |
+| P3-10 (custo fracionado) | **Corrigido** | `orcamento-rapido-form.ts:321-322`. A outra alternativa não é afetada, porque o filtro é por `s.id`. |
+| P3-11 (testes frágeis) | **Parcial** | As asserções vazias foram corrigidas. O `afterAll` sem limpeza de `whatsAppContact`, `Conversation` e `Message` continua (R-3). |
+
+---
+
+## 2. Defeitos remanescentes confirmados (produto)
+
+### R-1 · P3 — Declaração manual de outra tentativa é aceita enquanto há reserva de API pendente
+
+**Arquivo:** `lib/operacoes-v3/orcamento-envio-service.ts:110-111`
+
+**Causa:** `prepararCompartilhamentoV3` (`:70`) e `reservarEnvioApiV3` (`:89`) recusam a operação quando existe qualquer entrada `api_em_andamento`. `concluirEnvioOrcamentoV3` sem `api` só confere o estado da **própria** tentativa.
+
+**Reprodução pela UI, com aba desatualizada:**
+1. Na aba B, prepare `T2` (presencial).
+2. Na aba A, envie `T1` pela API e provoque um resultado incerto.
+3. Sem recarregar, a aba B ainda mostra "Confirmar envio manual" para `T2`. O servidor aceita.
+
+**Resultado:** o orçamento vira `enviado` com `T1` ainda pendente. Isso não libera a reserva nem gera novo transporte, mas contradiz a mensagem "Confira o WhatsApp antes de reenviar". Também mostra que a política fail-closed não está aplicada de forma uniforme.
+
+**Correção mínima:** em `concluirEnvioOrcamentoV3`, quando `!api`, lançar erro se `envios.some(e => e.estado === "api_em_andamento" && e.id !== tentativaId)`. Se o time preferir permitir esse caso, deve documentar a decisão e criar um teste que a fixe. O teste pg novo (`concorrencia.pg.ts:109-118`) cobre `preparar`, mas não cobre esta confirmação.
+
+### R-2 · P1 condicional (CI) — ver seção 4, C-1
+
+### R-3 · P3 condicional — `afterAll` do teste PostgreSQL continua sem limpar o WhatsApp
+
+**Arquivo:** `test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts:93-98`
+
+**Problema:** `whatsAppContact`, `whatsAppConversation` e `whatsAppMessage` não são removidos antes de `store.deleteMany`. Se a FK para `Store` usar o padrão do Prisma (`Restrict` em relação obrigatória), o hook falha.
+
+**Impacto:** o step `postgres` fica vermelho mesmo com todos os testes verdes. Pela condição do workflow (C-2), isso também **impede a comparação base × HEAD**.
+
+### R-4 · P3 — O redirecionamento V2 leva à raiz da V3, não ao fluxo da OS
+
+**Arquivo:** `OperacaoOsAcaoBar.tsx:130`
+
+`window.location.assign("/dashboard/operacoes-v3")` cumpre o fechamento por falha, mas o operador precisa localizar a OS sozinho.
+
+**Correção sugerida:** criar um deep-link com `osId` (e, se houver, `?aba=orcamento`).
+
+Não há teste cobrindo que o botão **não** chama `applyHubAcao`.
+
+### R-5 · Nit — A nova tentativa no modal ainda passa por validações de um formulário travado
+
+**Arquivo:** `OrcamentoRapidoModal.tsx:103-115`, executadas antes de `:134`
+
+Com `criado.current` definido, a revalidação de datas e do formulário é desnecessária, porque o carimbo e a preparação não usam esses dados. Se `resolverDatasOrcamentoFormV3` passar a falhar com a passagem do tempo, o operador fica preso, já que o `fieldset` impede a correção. A probabilidade é baixa, mas o atalho é trivial: pular as validações quando `criado.current` existir.
+
+### R-6 · P3 — P3-8 permanece
+
+As actions ainda devolvem `os` completo. Pontos: `orcamento-envio-service.ts:73,76,108,144` e `orcamento-envio-actions.ts:46,58,80`. É minimização de dados, sem vazamento para o cliente final.
+
+### R-7 · Nit — Nome `statusAlterado`
+
+**Arquivo:** `orcamento-envio-service.ts:125,144`
+
+`mudaStatus` também é verdadeiro no reenvio `enviado→enviado`. O comportamento está correto (o evento sai com `reenvio: true`), mas o nome engana. Sugestão: `deveEmitir` ou `aplicouEnvio`.
+
+---
+
+## 3. Riscos a confirmar
+
+1. **Timeline com `id` conhecido** (`os-payload-lock.ts:96-98`). Um patch `{ id: <id de uma observação existente>, tipo: "orcamento_enviado" }` passa pela guarda. Se `mesclarTimelineDoPatch` der precedência ao conteúdo do patch na deduplicação por `id`, é possível reescrever um evento existente como envio. O impacto é só na trilha de auditoria: `temEvidenciaEnvioOrcamentoV3` não lê a timeline. **Correção:** para `id` conhecido, exigir `isDeepStrictEqual` com o evento atual sempre que patch ou atual forem eventos de envio.
+2. **Precedência do telefone** (`os-adapter.ts:348`). Se o adapter usar `whatsapp || telefone` e os dois números diferirem, "Abrir WhatsApp" aponta para um número e a API envia para outro.
+3. **Outros pontos de entrada V2.** É preciso confirmar se outra superfície (detalhe, kanban, intent `enviar_ao_cliente` em `operacoes.ts:980-990`) ainda dispara envio. O servidor fecha por falha, mas o botão quebraria.
+4. **`vencido` aderente** (`orcamento-actions.ts:226`). Se "Corrigir datas" renovar `validoAte` passando por `montarGravacao` sem mudar o status do orçamento, a pré-OS continua `vencido` mesmo com validade renovada.
+5. **Tipo de `V4Vals.orcamentoEnvio`.** O cluster lê `.pendente`. Se o tipo não for derivado de `ReturnType<typeof resumoEnvioOrcamentoV3>`, o typecheck falha. O teste de UI usa `as any`, o que não exclui o problema.
+6. **Itens ainda abertos da revisão original:** o nome da loja via `dadosEmpresaPrintV3(undefined)` (condição de NOGO para a API) e `variantes[i]` indefinido na prévia.
+
+---
+
+## 4. CI isolado (`.github/workflows/ops-v4-rafacell-contracts.yml` + `scripts/ops-v4-rafacell/`)
+
+### Pontos que se sustentam
+
+- **Permissões:** só `permissions: contents: read`. Não há `pull_request_target`, `secrets.*`, deploy, `vercel` CLI nem token persistido (`persist-credentials: false`). As actions estão fixadas por SHA; confirme que cada SHA corresponde à tag v4 declarada.
+- **Banco:** `assertDisposableDatabase` (`ci.mjs:12-25`) exige três URLs idênticas, `127.0.0.1`, nome `ops_v4_prepub003_<10 hex>`, usuário `rafacell_ci`, porta ≥1024 e apenas `schema=public`.
+  - Os casos negativos têm teste (`ci.test.mjs`).
+  - O schema precisa estar vazio antes do DDL (`:103-104`).
+  - Não há `migrate deploy`, seed nem reset.
+  - O guard próprio do teste pg (`concorrencia.pg.ts:21-27`) repete a verificação.
+- **Ambiente:** `isolatedEnv` (`ci.mjs:27-44`) só herda variáveis da whitelist. Banco desabilitado na porta 1, segredos sintéticos, `VERCEL=0` e `MIGRATION_AUTHORITY_ENABLED=false`. Arquivos `.env*` são recusados.
+- **WhatsApp real é impossível por três barreiras:**
+  1. o token da loja vem de variável de ambiente que não é herdada;
+  2. o transporte está mockado nos testes;
+  3. `fetch` e `http`/`https` estão bloqueados para fora do loopback.
+- **Build:** exige `MIGRATION_SKIPPED` e recusa `MIGRATION_RUN|SUCCEEDED` (`ci.mjs:159-163`).
+- **Cobertura:** focused, UI, PostgreSQL real descartável, `tsc` completo separado do build, lint com escopo e build, todos presentes.
+- **Regressão:** compara base e HEAD por `arquivo::fullName`. Falha de coleta (`failedSuites`) também fica vermelha. Como a base tem as 16 falhas, o check fica **realmente vermelho**, sem `continue-on-error`.
+
+### Defeitos
+
+**C-1 · P1 condicional (alta probabilidade) — o workflow provavelmente nunca dispara**
+- **Arquivo:** workflow `:4-5`, `branches: [main]`.
+- **Problema:** o branch principal do repositório é `master`. Se o PR #290 mira `master`, nenhum dos três jobs roda. Nesse caso não há check vermelho nem comparação, e a exigência do CI fica sem efeito.
+- **Correção:** `branches: [master]`, ou o branch-base real do PR.
+
+**C-2 · P2 — a comparação base × HEAD depende do sucesso do teste pg**
+- **Arquivo:** workflow `:150`, `if: … steps.postgres.outcome == 'success'`.
+- **Problema:** qualquer falha no pg pula a regressão (por exemplo R-3, ou um teste novo vermelho). O job fica vermelho sem a evidência comparativa exigida.
+- **Correção:** separar a materialização do schema dos testes pg, e condicionar a regressão só ao schema (ou a `!cancelled()`).
+
+**C-3 · P3 — a fórmula do vermelho é dominada pela base**
+- **Arquivo:** `ci.mjs:141`.
+- **Problema:** `baseline.exit || …` mantém o check vermelho mesmo quando o HEAD resolve todas as falhas históricas, então o check nunca diferencia "piorou" de "igual". Isso é aceitável enquanto existirem as 16 falhas.
+- **Sugestão:** derivar o vermelho de `head.exit || newFailures || failedSuites`. Tratar a base apenas como "baseline inválida" se faltar o relatório.
+
+**C-4 · P3 — "resolvidas" inclui testes apagados ou pulados**
+- **Arquivo:** `ci.mjs:90-92`.
+- **Problema:** uma falha histórica removida com `it.skip` ou exclusão aparece como resolvida. O mesmo vale para nomes duplicados no mesmo arquivo, que se colapsam no `Set`.
+- **Correção:** só contar como resolvida se a asserção existir com `status: passed` no HEAD. Relatar e falhar em quedas de `numTotalTests` e em aumento de skips no escopo.
+
+**C-5 · P3 — base e HEAD compartilham o mesmo banco, já usado pelo pg**
+- **Arquivo:** `ci.mjs:127`.
+- **Problema:** `OPS_V4_FLUXO_CURTO_TEST_DATABASE_URL` também aponta para ele. Qualquer teste do escopo que use o banco passa a depender da ordem de execução.
+- **Correção:** usar um banco descartável novo por execução, ou não expor a URL na regressão.
+
+**C-6 · P3 — o filtro de `paths` é estreito para checks de repositório inteiro**
+- **Arquivo:** workflow `:7-34`.
+- **Problema:** typecheck e build são globais, mas só rodam se os paths listados mudarem. Ficam de fora, por exemplo, `components/operacoes/lovable/api/**`, `components/operacoes/lovable/utils/**` e `lib/financeiro/**`, que são importados pelo código testado.
+- **Sugestão:** remover o filtro ou ampliá-lo.
+
+**C-7 · P3 — os temporários ficam dentro da pasta de evidências e entram no artifact**
+- **Arquivo:** `ci.mjs:58`, `mkdtempSync(path.join(evidence, …))`.
+- **Problema:** temporários de build e vitest vão para o upload, inflando o artifact.
+- **Correção:** criar o temporário fora de `evidence`. Confirmar também que `import/ops-v4-rafacell-ci/` está no `.gitignore`.
+
+**C-8 · P3 (endurecimento) — o bloqueio de rede tem lacunas**
+- **Arquivo:** `block-network.cjs`.
+- **Problema:** não cobre `net.connect`/`tls.connect`, `undici` importado diretamente nem `fetch` substituído pelo ambiente de teste. A mitigação real é a ausência de credenciais.
+- **Sugestão:** acrescentar `CHECKPOINT_DISABLE=1` e patches em `net` e `tls`.
+
+### Riscos de CI a confirmar
+
+- O build pode precisar de rede ou banco, por exemplo `next/font/google` ou páginas pré-renderizadas que consultam o banco. Com o bloqueio de rede e o banco desabilitado na porta 1, isso falharia. O resultado seria vermelho, não inseguro.
+- `generated/prisma` precisa existir depois do `npm ci` (via `postinstall`). Caso contrário, `postgres()` e o symlink da regressão falham.
+- O job `postgres-regression` tem `timeout-minutes: 25` para `db push` + pg + duas execuções completas com `maxWorkers=1`. Há risco de cancelamento por tempo.
+- Confirmar se as 16 falhas históricas estão de fato dentro de `lib/operacoes-v3`, `lib/operacoes-v4` e `components/operacoes-v4-preview`. Falhas fora desse escopo não seriam comparadas.
+
+---
+
+## 5. Falsos positivos e ajustes da primeira revisão
+
+- **P2-1 estava exagerado em um ponto.** "A declaração manual de qualquer nova tentativa fica impossível" não vale para tentativas **preparadas antes** da reserva: o servidor ainda as aceita (R-1). O restante do P2-1 deixa de ser defeito e vira decisão aceita, com ativação da API em NOGO.
+- **P3-11 (FK no `afterAll`) segue condicional.** Pode ser falso positivo se as FKs de WhatsApp para `Store` forem `Cascade` ou não existirem.
+- Não encontrei outros falsos positivos. P2-2, P3-1, P3-2, P3-3, P3-4, P3-6, P3-7, P3-9 e P3-10 se confirmaram pelo próprio teor das correções e dos testes novos.
+
+---
+
+## 6. Veredito
+
+**GO para fazer push como Draft.** O código novo não introduz P0 nem P1 de produto. O CI é seguro do ponto de vista de autoridade:
+- só leitura (`contents: read`);
+- sem segredos e sem deploy;
+- banco descartável com guard duplo;
+- transporte real impossível.
+
+Mantenha `deploymentEnabled=false`, os WIPs e as 16 falhas históricas visíveis. Não versione `import/ops-v4-rafacell-ci/`.
+
+**Antes de tratar o CI como evidência:**
+1. Corrigir **C-1** (o branch-base do trigger). Sem isso, o check não existe.
+2. Corrigir **C-2** e **R-3**, para que a comparação base × HEAD sempre rode.
+
+**NOGO mantido para merge e ativação da API em produção:**
+- ativação remota só com recibo oficial;
+- resolver ou documentar **R-1**;
+- verificar o nome da loja na mensagem;
+- confirmar os riscos 1 a 3;
+- tratar C-3 e C-4 para que "resolvida" signifique "passou".

@@ -29,6 +29,7 @@ exigirDescartavel();
 import { prisma } from "@/lib/prisma";
 import { PrismaClient } from "@/generated/prisma";
 import { prepararCompartilhamentoOrcamentoV3, enviarOrcamentoPorCanalV3 } from "@/lib/operacoes-v3/orcamento-envio-actions";
+import { resumoEnvioOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-envio-model";
 import { aprovarOrcamentoV3, salvarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
 import { converterOrcamentoEmOSV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
 import { updateOSPayload } from "@/app/actions/operacoes";
@@ -97,6 +98,27 @@ afterAll(async () => {
 });
 
 describe("aceite real PostgreSQL — orçamento RafaCell", () => {
+  it("evento legado sem id não permite confirmação forjada por patch genérico", async () => {
+    const antes = await ler();
+    const payload = { ...antes.payload, timeline: [{ tipo: "observacao", conteudo: "Legado" }] };
+    await prisma.ordemServico.update({ where: { id: osId }, data: { payload: payload as unknown as Prisma.InputJsonValue } });
+    await expect(updateOSPayload(sid, osId, { timeline: [{ tipo: "orcamento_enviado" }] } as unknown as Parameters<typeof updateOSPayload>[2])).rejects.toThrow(/confirmação auditada/);
+    expect((await ler()).payload.timeline).toEqual(payload.timeline);
+    expect((await ler()).orc.status).toBe("rascunho");
+  });
+  it("reserva de API anterior a outro canal continua recuperável depois da releitura real", async () => {
+    const p = await preparar();
+    await prepararCompartilhamentoOrcamentoV3(sid, osId, "presencial");
+    transport.send.mockRejectedValueOnce(new Error("resultado incerto"));
+    await confirmar(p.tentativaId, "api");
+    const atual = await ler();
+    expect(resumoEnvioOrcamentoV3(atual.orc)).toMatchObject({ estado: "api_sem_confirmacao", pendente: { id: p.tentativaId }, ultimo: { id: p.tentativaId } });
+    await expect(preparar()).rejects.toThrow(/sem resultado confirmado/);
+    const manual = atual.orc.compartilhamentosV3!.find((e) => e.canal === "presencial")!;
+    await expect(enviarOrcamentoPorCanalV3(sid, osId, "presencial", { tentativaId: manual.id, confirmado: true })).rejects.toThrow(/outro envio pela API pendente/);
+    expect((await ler()).orc.status).toBe("rascunho");
+    expect(transport.send).toHaveBeenCalledOnce();
+  });
   it("preparações e confirmações manuais simultâneas serializam sem duplicar prova/timeline", async () => {
     const [a, b] = await Promise.all([preparar(), preparar()]);
     expect(a.tentativaId).toBe(b.tentativaId);

@@ -105,10 +105,13 @@ export async function concluirEnvioOrcamentoV3(alvo: Alvo, tentativaId: string, 
     if (canal && tentativa.canal !== canal) throw new Error("Canal diferente do compartilhamento preparado.");
     if (tentativa.estado === "informado_operador" || tentativa.estado === "aceito_api") {
       if (api && tentativa.api?.wamid !== api.wamid) throw new Error("Evidência de API divergente para esta tentativa.");
-      return { payload: null, resultado: { os: payload, reenvio: !!tentativa.reenvio, repetido: true, versaoAlterada: false } };
+      return { payload: null, resultado: { os: payload, reenvio: !!tentativa.reenvio, repetido: true, versaoAlterada: false, statusAlterado: false } };
     }
     if (api && (!api.wamid || tentativa.estado !== "api_em_andamento")) throw new Error("Aceite da API sem tentativa reservada.");
     if (!api && tentativa.estado !== "preparado") throw new Error("Envio pela API pendente de conferência. Não registre outra tentativa.");
+    if (!api && envios.some((e) => e.estado === "api_em_andamento" && e.id !== tentativaId)) {
+      throw new Error("Há outro envio pela API pendente de conferência. Confira o WhatsApp antes de registrar outra tentativa.");
+    }
     const versaoAlterada = tentativa.conteudoHash !== conteudoHash(payload);
     if (!api) {
       orcamentoCompartilhavel(payload);
@@ -141,14 +144,14 @@ export async function concluirEnvioOrcamentoV3(alvo: Alvo, tentativaId: string, 
         ...(api ? { wamid: api.wamid, conversaId: api.conversaId, versaoAlterada } : {}),
       }, true)],
     } as OSPayloadV3;
-    return { payload: next, colunas: { valorTotal: orcamento.total, ...(statusV2 ? { status: operacaoStatusToPrismaStatus(statusV2) } : {}) }, resultado: { os: next, reenvio, repetido: false, versaoAlterada } };
+    return { payload: next, colunas: { valorTotal: orcamento.total, ...(statusV2 ? { status: operacaoStatusToPrismaStatus(statusV2) } : {}) }, resultado: { os: next, reenvio, repetido: false, versaoAlterada, statusAlterado: mudaStatus } };
   } });
-  if (!result.repetido && !result.versaoAlterada) emitirEventoOperacaoV3({ tipo: "os_orcamento_criado", os: result.os, storeId: alvo.sid, origem: "orcamento", metadata: { reenvio: result.reenvio, total: result.os.orcamento?.total, validoAte: result.os.orcamento?.validoAte, natureza: api ? "aceite_api_oficial" : "declaracao_manual" } });
+  if (result.statusAlterado) emitirEventoOperacaoV3({ tipo: "os_orcamento_criado", os: result.os, storeId: alvo.sid, origem: "orcamento", metadata: { reenvio: result.reenvio, total: result.os.orcamento?.total, validoAte: result.os.orcamento?.validoAte, natureza: api ? "aceite_api_oficial" : "declaracao_manual" } });
   return { ok: true as const, ...result, avisoRegistro: revalidarEnvioOrcamentoV3() };
 }
 
 export async function confirmarEnvioManualV3(storeId: string, osId: string, input?: ConfirmacaoEnvioManualV3, canal?: CanalEnvioOrcamentoV3) {
   const alvo = await autorizarEnvioOrcamentoV3(storeId, osId);
-  if (input?.confirmado !== true || !input.tentativaId?.trim()) throw new Error("Confirme explicitamente que o envio manual já foi realizado.");
+  if (input?.confirmado !== true || typeof input.tentativaId !== "string" || !input.tentativaId.trim()) throw new Error("Confirme explicitamente que o envio manual já foi realizado.");
   return concluirEnvioOrcamentoV3(alvo, input.tentativaId, undefined, canal);
 }

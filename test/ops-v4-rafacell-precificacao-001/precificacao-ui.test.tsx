@@ -4,11 +4,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { V4Vals } from "@/components/operacoes-v4-preview/use-v4-preview";
 import type { OrdemServico } from "@/types/os";
 
-const mocks = vi.hoisted(() => ({ loja: "unidade-a", criar: vi.fn(), marcar: vi.fn(), enviar: vi.fn() }));
+const mocks = vi.hoisted(() => ({ loja: "unidade-a", criar: vi.fn(), marcar: vi.fn(), preparar: vi.fn() }));
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: mocks.loja }) }));
 vi.mock("@/lib/operacoes-v3/orcamento-rapido-actions", () => ({ criarOrcamentoRapidoV3: mocks.criar }));
 vi.mock("@/lib/operacoes-v3/comercial-pre-os-actions", () => ({ marcarOrcamentoPreOsV3: mocks.marcar, atualizarStatusComercialV3: vi.fn() }));
-vi.mock("@/lib/operacoes-v3/orcamento-envio-actions", () => ({ enviarOrcamentoPorCanalV3: mocks.enviar }));
+vi.mock("@/lib/operacoes-v3/orcamento-envio-actions", () => ({ prepararCompartilhamentoOrcamentoV3: mocks.preparar }));
 vi.mock("@/components/operacoes-v4-preview/parts/atendimento/ClienteAtendimentoSection", () => ({ ClienteAtendimentoSection: () => null }));
 vi.mock("@/components/operacoes-v4-preview/parts/atendimento/AparelhoAtendimentoSection", () => ({ AparelhoAtendimentoSection: () => null }));
 vi.mock("@/components/operacoes-v4-preview/parts/atendimento/ServicoCatalogLookup", () => ({ ServicoCatalogLookup: () => null }));
@@ -57,7 +57,7 @@ describe("Orçamento Rápido V4 — sugestão revisável e local", () => {
     fireEvent.change(screen.getByLabelText("Custo interno da opção 1"), { target: { value: "80" } });
     expect((screen.getByLabelText("Venda da opção 1") as HTMLInputElement).value).toBe("310.29");
     expect(mocks.criar).not.toHaveBeenCalled();
-    expect(mocks.enviar).not.toHaveBeenCalled();
+    expect(mocks.preparar).not.toHaveBeenCalled();
   });
 
   it("trocar o custo invalida uma sugestão pendente; custo ausente não gera preço nem resultado fictício", () => {
@@ -93,7 +93,7 @@ describe("Orçamento Rápido V4 — sugestão revisável e local", () => {
     expect(input.grupo.variantes.map((v: { valor: number }) => v.valor)).toEqual([260, 700]);
     expect(JSON.stringify(input)).not.toMatch(/selecionada|precificacaoTela|reserva|maoDeObra/);
     expect(mocks.marcar.mock.calls[0][2].statusComercial).toBe("rascunho");
-    expect(mocks.enviar).not.toHaveBeenCalled();
+    expect(mocks.preparar).not.toHaveBeenCalled();
   });
 
   it("trocar de loja limpa ativação, custos, preços, cortesias e prefill anterior", () => {

@@ -132,6 +132,12 @@ describe("telas → contratos canônicos V3/V4", () => {
     form.variantes[0].valor = 60.005;
     expect(previaResultadosAlternativasV4(form)[0].resultadoBrutoCentavos).toBeNull();
   });
+  it("custo com fração de centavo é inválido e não é rotulado como ausente", () => {
+    const form = proposta();
+    form.variantes[0].custoV3 = 3.505;
+    expect(previaResultadosAlternativasV4(form)[0]).toMatchObject({ resultadoBrutoCentavos: null, motivo: expect.stringContaining("Revise os valores") });
+    expect(previaResultadosAlternativasV4(form)[1].resultadoBrutoCentavos).not.toBeNull();
+  });
 
   it("projeção e mensagem ao cliente não recebem nenhum dado interno", () => {
     const form = proposta();

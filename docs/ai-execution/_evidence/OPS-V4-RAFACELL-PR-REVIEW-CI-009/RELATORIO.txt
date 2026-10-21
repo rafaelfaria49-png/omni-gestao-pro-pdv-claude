@@ -1,0 +1,166 @@
+GOAL OPS-V4-RAFACELL-PR-REVIEW-CI-009
+Revisão independente e CI seguro do Draft PR #290
+
+Escopo e governança
+
+HEAD recebido: d204446d5fe5e9716c7f0018313e65954e4aff3e.
+Branch: codex/ops-v4-rafacell-qa-isolado-007.
+Worktree reutilizada: .worktrees/ops-v4-rafacell-precificacao-001.
+ENTRYPOINT.md, AGENTS.md e o protocolo foram lidos. Não existe .aep-active
+nesta worktree, e este GOAL não está registrado em uma trilha AEP. O protocolo
+é opt-in; nenhuma sessão de outra trilha foi aberta nem ratificada. A criação
+do CI foi expressamente autorizada pelo usuário. Nenhum state/ledger/registry
+foi editado. Os seis commits originais são preservados; somente commits novos.
+
+Os 52 arquivos originais do PR foram inventariados. A revisão funcional cobre
+actions, hooks, componentes, modelo comercial, cálculo em centavos, isolamento
+de loja/permissões, reserva antes do transporte, recuperação/idempotência,
+patches JSONB genéricos, custos internos, mensagem ao cliente e conversão em OS.
+Os relatórios/evidências antigos são históricos, não autorizações de deploy.
+
+Main inicial conferida por fetch: 16c496ad2ffe56fc6a89de237b204842494b8cbb.
+Main avançou concorrentemente para a874342f5366427f8f7cfebc96a9c14c8efe39ad.
+O avanço novo é Cadastros/voz e documentação; nenhum código de Operações mudou.
+O conflito no CHANGELOG foi eliminado conservando integralmente as entradas
+da main e da RafaCell, sem merge, rebase ou inclusão de código de outro módulo.
+
+Revisão independente real
+
+Claude Code 2.1.288 autenticado, alias opus, modelo retornado claude-opus-5-5.
+Duas análises estáticas independentes foram concluídas, com ferramentas,
+MCPs, escrita e execução desativados. A primeira recebeu o diff original e
+os arquivos funcionais/contratos; a segunda recebeu as correções e o CI.
+Textos integrais em REVISAO-OPUS-INICIAL.txt e REVISAO-OPUS-FOLLOWUP.txt.
+O revisor não executou testes nem acessou banco/WhatsApp. O executor principal
+conferiu os achados, corrigiu os confirmados e executou as validações locais.
+As correções finais do comparador e da confirmação manual foram verificadas
+por testes após o follow-up; não se atribui ao Opus execução ou aprovação runtime.
+
+Achados confirmados e corrigidos
+
+P2 — Patch podia fabricar evento de envio sem id se a timeline legada também
+tivesse evento sem id. IDs vazios/ausentes não identificam eventos conhecidos;
+timeline malformada e tentativaId não-string recebem erro de domínio.
+Regressões de unidade e PostgreSQL real comprovam rejeição sem escrita.
+
+P2 — A ação de envio da V2 ainda acionava um contrato que passa a exigir prova.
+O botão passa a encaminhar para a confirmação manual explícita da V3. Nenhum
+patch legado ganhou permissão para fabricar enviado. A V3 não tem deep link
+de OS neste fluxo; o operador localiza a OS na lista oficial.
+
+P3 — Reserva de API anterior a uma preparação de outro canal sumia da recuperação.
+O resumo/UI priorizam qualquer reserva pendente. A confirmação manual de outra
+tentativa previamente preparada também é recusada sob trava enquanto a API
+estiver incerta, inclusive em aba desatualizada. Nenhum transporte é repetido.
+
+P3 — O contrato comum de sendCloudApiTextAndRecord havia mudado para o Hub.
+O comportamento legado é preservado quando não existe lifecycle de orçamento;
+reserva/recuperação/erro de aceite ficam no contrato auditado de orçamento.
+
+P3 — Após criação parcial, edições podiam ser descartadas num retry. O formulário
+fica bloqueado, a intenção original é preservada e a conclusão reusa a mesma OS.
+
+P3 — Espelho comercial podia perder vencido ou receber expirado inválido.
+Preserva vencido numa edição sem transição e mapeia expirado para vencido.
+
+P3 — A API não usava o fallback cliente.whatsapp já usado pela UI; foi alinhado.
+O aceite posterior à aprovação não publica outra transição comercial.
+Custo com fração de centavo é classificado como inválido, e a UI de precificação
+agora observa a action de preparação efetivamente importada.
+
+CI — Materialização do schema, teste PG e comparação são etapas separadas.
+Falha de teste PG não pula a comparação se o schema foi materializado.
+O comparador verifica conexão/schema antes da coleta, identifica nominalmente
+as 16 falhas históricas, distingue falhas inesperadas da base e regressões novas,
+e só chama uma falha de resolvida se a mesma assertiva passou no HEAD. Skip ou
+remoção de falha histórica não é resolução; perda de contagem/aumento de skips
+também mantém o gate vermelho. Renomes/substituições de testes antes aprovados
+são expostos para revisão: o PR substitui contratos antigos que declaravam envio
+sem evidência por testes de preparação/declaração/aceite real.
+
+Hipóteses independentes descartadas ou delimitadas
+
+- O follow-up sugeriu master como base: falso. O pedido humano, Git e PR #290
+  confirmam main; o filtro correto continua branches: [main].
+- A hipótese de FK Restrict no afterAll é falsa: Store/contact/conversation/message
+  possuem onDelete: Cascade no schema vigente; os 39 testes PG passaram.
+- mesclarTimelineDoPatch conserva os eventos atuais e ignora IDs já conhecidos;
+  não dá precedência ao conteúdo do patch para reescrever um evento existente.
+- A precedência telefone || whatsapp do servidor agora coincide com os-adapter.
+- Nome fallback da mensagem é Assistência Técnica, não a marca de outra loja.
+  Identidade comercial específica da loja ainda deve ser validada na homologação.
+- Os testes reais de entrada/checklist usam fixtures com IDs de execução distintos
+  no mesmo PostgreSQL descartável, executadas sequencialmente. Não existe banco real.
+- Devolver o payload completo ao operador autenticado continua uma oportunidade
+  de minimização (P3); o operador já lê a OS. A projeção enviada ao cliente exclui
+  custos, observação interna e metadados de API. Nenhum vazamento ao destinatário
+  foi encontrado nos testes de projeção/mensagem.
+
+Achados preexistentes separados das regressões
+
+P1 (estático, preexistente): criarVendaDeOSAction confia em campos da OS recebida
+do cliente para criar Venda. Requer revisão própria de persistência/PDV; não foi
+alterado nem explorado neste GOAL.
+P2 (preexistente): patches genéricos de aprovado/convertido podem contornar
+guardas comerciais fora da proteção nova de envio. Não se ampliou este GOAL
+para redesenhar aprovação, conversão ou outros módulos.
+P3 (preexistente): criação rápida não garante idempotência se a resposta da
+primeira criação se perder; este PR cobre retry após a criação ser conhecida.
+
+Validação local válida das fontes adicionais, antes do push
+
+- Guardas do runner: 3/3.
+- Contratos focados: 347/347.
+- UI envio/criação: 17/17; UI RafaCell: 6/6.
+- PostgreSQL 17 exclusivo em loopback: 39/39; schema vigente materializado
+  somente em banco novo, sem migrations/seeds/reset ou conexão produtiva.
+- ESLint focado TS/TSX e scripts Node: zero erros; um aviso preexistente em
+  app/actions/operacoes.ts, mantido explícito.
+- Regressão sobre main a874342: 2006/2022; 16 falhas conhecidas.
+- Regressão sobre fontes da branch: 2115/2131; as mesmas 16, zero novas.
+- TypeScript/build do código final: devem ser confirmados no CI do SHA publicado.
+  Execuções locais amplas sofreram interrupção/falta de memória e queda do cluster;
+  esses resultados inválidos não foram classificados como regressões nem aprovações.
+  O cluster foi restabelecido e PG/regressão foram repetidos com sucesso nos números
+  acima. O typecheck antigo no d204446 não prova as fontes adicionais.
+
+Configuração do CI
+
+.github/workflows/ops-v4-rafacell-contracts.yml usa pull_request para main,
+inclusive Draft, com paths dos contratos e dependências pertinentes. Actions
+fixadas por SHAs conferidos contra os repositórios oficiais; contents: read,
+persist-credentials: false, nenhum secrets.*, environment produtivo, deployment,
+pull_request_target, banco externo ou WhatsApp real. Node 24, PostgreSQL 17 efêmero.
+URLs idênticas, usuário/nome exclusivos, loopback, banco vazio antes do DDL,
+env sintético e ausência de .env são exigidos. Processos não herdam credenciais
+do perfil local. HTTP externo é bloqueado e o transporte dos testes é mockado.
+Build exige MIGRATION_SKIPPED, rejeita MIGRATION_RUN/SUCCEEDED, e TypeScript é
+checado separadamente porque o Next ignora erros de tipo na configuração atual.
+Temporários ficam fora dos artifacts; relatórios/logs sanitizados são retidos 14 dias.
+
+As 16 falhas históricas NÃO são skip, xfail, continue-on-error ou allow-failure.
+O check de regressão fica realmente vermelho enquanto o HEAD as apresentar.
+O SHA/run/resultado remoto deve ser lido no GitHub Actions e na entrega final;
+este documento não antecipa um CI verde.
+
+Vercel e preservação
+
+vercel.json não é alterado: git.deploymentEnabled da branch exata permanece false.
+Os projetos omni-gestao-pro e omni-gestao foram consultados somente por GET:
+root do repositório, Production main, zero deploy hooks, zero deployments da
+branch/SHA consultado. A mesma conferência é obrigatória imediatamente antes
+do push do commit final. O projeto legado não foi modificado.
+Os 7 WIPs rastreados da raiz permanecem idênticos em bytes; HEAD, índice e 5
+stashes da raiz permanecem iguais. Worktrees existentes não foram movidas,
+resetadas, limpas ou removidas. Houve avanço concorrente em outra frente,
+registrado nos snapshots; isso não é atribuído a esta execução.
+
+Veredito
+
+GO para push adicional nesta branch e manutenção do Draft PR com CI isolado.
+NOGO para homologação remota/ativação da API, Production, merge ou deploy.
+Reserva sem recibo permanece bloqueada deliberadamente: timeout, retry, patch,
+ou chave nova não autorizam outro transporte. Não se criou liberação automática.
+As 16 falhas históricas e a configuração/identidade do ambiente remoto continuam
+pendentes. Nenhum merge, auto-merge, deploy, WhatsApp real, banco produtivo,
+alteração de projeto Vercel legado, Hermes ou OmniCore foi realizado.

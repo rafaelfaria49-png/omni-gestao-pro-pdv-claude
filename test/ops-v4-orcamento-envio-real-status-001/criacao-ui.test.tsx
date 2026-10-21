@@ -40,9 +40,19 @@ describe("criação comercial V4 sempre em rascunho", () => {
     const criado = montar(); const botao = screen.getByRole("button", { name: "Criar e preparar compartilhamento" });
     fireEvent.click(botao); fireEvent.click(botao);
     await screen.findByText(/Orçamento já criado em rascunho/);
+    expect(screen.getByLabelText("Venda da opção 1").matches(":disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Concluir orçamento já criado" })).toBeTruthy();
     expect(mocks.criar).toHaveBeenCalledOnce(); expect(criado).not.toHaveBeenCalled();
     fireEvent.click(botao); await waitFor(() => expect(criado).toHaveBeenCalledWith("os-a"));
     expect(mocks.criar).toHaveBeenCalledOnce(); expect(mocks.marcar).toHaveBeenCalledTimes(2);
+  });
+  it("conclusão após salvar rascunho não acrescenta preparação que não foi solicitada", async () => {
+    mocks.marcar.mockRejectedValueOnce(new Error("falha de carimbo"));
+    const criado = montar(); fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await screen.findByText(/Orçamento já criado em rascunho/);
+    fireEvent.click(screen.getByRole("button", { name: "Concluir orçamento já criado" }));
+    await waitFor(() => expect(criado).toHaveBeenCalledWith("os-a"));
+    expect(mocks.criar).toHaveBeenCalledOnce(); expect(mocks.preparar).not.toHaveBeenCalled();
   });
   it("resposta de um formulário já descartado não seleciona a OS antiga na loja atual", async () => {
     let terminar!: (r: { osId: string }) => void;

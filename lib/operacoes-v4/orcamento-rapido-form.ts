@@ -318,7 +318,8 @@ export function previaResultadosAlternativasV4(form: OrcamentoRapidoFormV4): Res
     const simulacao = marcarSelecaoVarianteV4({ pecas: [], servicos: linhasCentavos }, grupoId, variantes[i].id);
     const consideradas = simulacao.servicos.filter((s) => !s.grupoId || s.selecionadaV3);
     const custoAusente = consideradas.some((s) => s.custoV3 == null);
-    const valorInvalido = linhas.some((s) => (!s.grupoId || s.id === variantes[i].id) && reaisParaCentavosV4(s.valor) == null);
+    const valorInvalido = linhas.some((s) => (!s.grupoId || s.id === variantes[i].id) &&
+      (reaisParaCentavosV4(s.valor) == null || (s.custoV3 != null && s.custoV3 !== 0 && reaisParaCentavosV4(s.custoV3) == null)));
     const totais = computeTotaisV3({ ...simulacao, desconto: 0 });
     const resultado = totais.total - totais.custo;
     const valido = !valorInvalido && Number.isSafeInteger(totais.total) && Number.isSafeInteger(totais.custo) && Number.isSafeInteger(resultado);

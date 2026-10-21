@@ -7,6 +7,16 @@ const reserva = { id: "tentativa-qa", estado: "api_em_andamento", conteudoHash: 
 const protegido = { orcamento: { ...proposta, compartilhamentosV3: [reserva] } };
 
 describe("orçamento — patches genéricos/intenções legadas não contornam confirmação", () => {
+  it("evento legado sem id não autoriza forjar uma confirmação sem id", () => {
+    const atual = { timeline: [{ tipo: "observacao", conteudo: "Legado" }] };
+    expect(() => semCamposFinanceirosDoServidorV3({ timeline: [{ tipo: "orcamento_enviado" }] }, atual)).toThrow(/confirmação auditada/);
+    expect(() => semCamposFinanceirosDoServidorV3({ timeline: [{ metadata: { evento: "orcamento_envio_confirmado" } }] }, atual)).toThrow(/confirmação auditada/);
+  });
+  it("timeline malformada falha com erro de domínio e tolera histórico legado inválido", () => {
+    expect(() => semCamposFinanceirosDoServidorV3({ timeline: [null] }, { timeline: null })).toThrow(/Timeline inválida/);
+    expect(() => semCamposFinanceirosDoServidorV3({ timeline: [{ tipo: "orcamento_enviado" }] }, { timeline: [null] })).toThrow(/confirmação auditada/);
+    expect(semCamposFinanceirosDoServidorV3({ timeline: [{ id: "novo", tipo: "observacao" }] }, { timeline: "legado" })).toBeTruthy();
+  });
   it("bloqueia fabricar enviado via patch de orçamento, comercial ou timeline", () => {
     expect(() => semCamposFinanceirosDoServidorV3({ orcamento: { status: "enviado" } }, { orcamento: { status: "rascunho" } })).toThrow(/confirmação explícita/);
     expect(() => semCamposFinanceirosDoServidorV3({ comercialV4: { statusComercial: "enviado" } })).toThrow(/exige/);

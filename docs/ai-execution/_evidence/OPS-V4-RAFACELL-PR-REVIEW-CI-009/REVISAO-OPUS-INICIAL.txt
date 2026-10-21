@@ -1,0 +1,220 @@
+# Revisão adversarial independente — Draft PR #290 (Ops V4 RafaCell)
+
+**HEAD** `d204446` · **BASE** `a677723`
+
+## Escopo e limitações
+
+- A revisão foi estática. Analisei somente o diff e os arquivos atuais que vieram na mensagem. Não executei testes, build, banco nem WhatsApp, e não considerei relatórios anteriores nem alegações de testes passando.
+- Os seguintes arquivos não foram fornecidos, e as conclusões que dependem deles aparecem como **risco a confirmar**:
+  - `mergePayload`, `hydrateOSRows`, `montarServicosOrcamentoRapidoV3`, `conteudoOrcamentoV3`, `dadosEmpresaPrintV3`, `statusOSAposEnviarOrcamento`;
+  - `cloudSendText`, que define o formato do erro HTTP;
+  - os demais chamadores de `semCamposFinanceirosDoServidorV3`, `atualizarStatusComercialV3` e `marcarOrcamentoPreOsV3`;
+  - os writers de `whatsAppMessage` fora de `addMessage`.
+- Mantenho as restrições combinadas: as 16 falhas históricas de asserção, `deploymentEnabled=false` na branch e os WIPs. Não recomendo merge nem deploy.
+
+## Pontos verificados que se sustentam
+
+- **Reserva antes do transporte.** `reservarEnvioApiV3` faz commit da passagem `preparado→api_em_andamento` sob `FOR UPDATE` dentro de `beforeSend`. Isso acontece depois da validação de credenciais e do destinatário e antes de `cloudSendText` (`whatsapp-service.ts:659-661`). Nenhuma trava de linha fica aberta durante o POST.
+  - Em cliques concorrentes, a segunda reserva falha sob a trava, então há no máximo um transporte.
+  - O hash e a mensagem são conferidos de novo sob a trava, o que fecha o TOCTOU entre a leitura fora da trava e o envio.
+- **Idempotência.** A confirmação repetida da mesma tentativa é no-op (`orcamento-envio-service.ts:106-108`). O reenvio preserva `enviadoEm` e `validoAte`.
+- **Recuperação.** Exige uma linha `outbound` com vínculo gravado só pelo transporte oficial. `addMessage` remove `orcamentoV3` de payloads livres (`whatsapp-service.ts:194-201`). A consulta é filtrada por `storeId`, e `osId` é conferido.
+- **Isolamento entre lojas.** Todas as leituras e escritas usam `alvo.sid`. A conversa é buscada com `storeId` e `contact.storeId`, e `sendCloudApiTextAndRecord` revalida a loja.
+- **Custos fora da mensagem ao cliente.** A mensagem nasce apenas de `montarOrcamentoClienteViewV4`, que funciona como whitelist. O `resultado bruto` existe só no cliente e não é persistido.
+- **Patch genérico.** Não consegue fabricar `enviado` no orçamento nem no `comercialV4`. Não consegue apagar, liberar ou forjar `compartilhamentosV3`/`enviadoEm` protegidos. Patches `null`, de array ou truncados são recusados antes do merge, e `current` vem relido sob a trava.
+
+---
+
+## Achados introduzidos pelo PR
+
+### P2-1 — Reserva `api_em_andamento` sem saída: a OS fica bloqueada para sempre
+
+**Arquivos e linhas:**
+- `lib/operacoes-v3/orcamento-envio-actions.ts:55-57`, `:60`, `:91-92`
+- `orcamento-envio-service.ts:70`, `:89`, `:111`
+- `lib/operacoes-v3/os-payload-lock.ts:64-69`
+
+**Reprodução:**
+1. Prepare uma tentativa por WhatsApp.
+2. Clique em "Enviar pela API oficial".
+3. Provoque qualquer um destes casos depois do commit da reserva:
+   - timeout ou erro HTTP da Meta, **inclusive uma rejeição definitiva 4xx** (token inválido, número sem WhatsApp);
+   - `messages: []`;
+   - perda da resposta do commit da própria reserva, quando `reservado` continua `false` e o erro é relançado;
+   - falha conjunta de `concluirEnvio` e `addMessage`.
+
+**Resultado:**
+- "Recuperar registro da API" responde sempre "Ainda não há recibo".
+- `preparar` lança "Há um envio pela API sem resultado confirmado".
+- O "Registrar envio manual" da V3 falha porque passa por `preparar`.
+- A declaração manual de qualquer nova tentativa fica impossível.
+- `updateOSPayload` não consegue liberar a reserva.
+- Só uma intervenção direta no banco resolve.
+
+**Impacto:**
+- A OS nunca mais chega a "enviado" nem registra compartilhamento.
+- Rejeições definitivas (4xx) são tratadas como "incertas", o que trava casos em que é **certo** que nada foi enviado.
+- A aprovação a partir de `rascunho` continua possível, então não há impacto financeiro direto.
+
+**Correção mínima:**
+1. Classificar o erro do transporte. Erro HTTP com corpo de erro da Meta deve levar ao estado terminal `api_recusada`, gravado sob a trava, que libera novas tentativas. Timeout, 5xx e conexão interrompida continuam como incertos.
+2. Criar uma action auditada "Resolver reserva da API", exigindo `hubs.whatsapp` e uma declaração explícita com duas opções:
+   - "conferi no WhatsApp: foi enviado", que vira `informado_operador` com natureza distinta, por exemplo `conferencia_manual_api`;
+   - "conferi: não foi enviado", que vira um estado terminal.
+
+   As duas opções devem gravar evento na timeline e nunca fazer transporte automático.
+
+### P2-2 — Fluxos legados V2/Hub de "enviar orçamento" passam a falhar sempre (condicional)
+
+**Arquivos e linhas:**
+- `app/actions/operacoes.ts:703-729` (`applyOperacaoHubAcao` → `enviar_orcamento`) e `:980-990` (`enviar_ao_cliente`)
+- A rejeição acontece em `os-payload-lock.ts:74-76` (status `enviado` novo) e `:92-97` (evento `orcamento_enviado` novo)
+
+**Reprodução:** no Hub/Lovable V2, acione "Enviar orçamento" com um orçamento em `rascunho`. O erro é sempre "Use a confirmação explícita…". A V2 não tem nenhum caminho de preparação ou declaração.
+
+**Impacto:** se a V2 ainda estiver acessível a operadores, a funcionalidade regride. Fechar por falha é correto do ponto de vista da honestidade, mas o botão continua visível e quebra.
+
+**Correção mínima:** ocultar ou desabilitar a ação na V2 com orientação para a V3/V4, ou encaminhar a V2 para `prepararCompartilhamentoV3` + `confirmarEnvioManualV3`. Confirmar se a V2 ainda é alcançável em produção.
+
+### P3-1 — O botão de recuperação some quando a reserva pendente não é a última entrada
+
+**Arquivo:** `components/operacoes-v4-preview/parts/stages/OrcamentoEnvioCluster.tsx:38-40`
+
+**Reprodução:**
+1. Prepare `T1` (whatsapp).
+2. Prepare `T2` (presencial), que é anexada depois de `T1`.
+3. Envie `T1` pela API e provoque um resultado incerto.
+4. Recarregue a página.
+
+Como `ultimo` passa a ser `T2` (`preparado`), `pendenteApi` vale `false`. "Recuperar registro da API" não aparece e "Preparar" fica habilitado, mas o servidor recusa.
+
+**Correção:** calcular `pendenteApi` e a tentativa de recuperação procurando **qualquer** entrada `api_em_andamento` em `ultimo` ou no resumo, por exemplo expondo `pendente` em `resumoEnvioOrcamentoV3`.
+
+### P3-2 — A guarda da timeline é contornável por eventos sem `id`
+
+**Arquivo:** `lib/operacoes-v3/os-payload-lock.ts:93-96`
+
+Se a timeline atual tiver algum evento legado sem `id`, `ids` passa a conter `undefined`. Nesse caso, um patch com `{ tipo: "orcamento_enviado" }` sem `id` passa pela guarda, e `mesclarTimelineDoPatch` (`app/actions/operacoes.ts:407-410`) o anexa usando a chave `json:`.
+
+**Impacto:** permite forjar trilha de auditoria. Não afeta `temEvidenciaEnvioOrcamentoV3`.
+
+**Correção:** considerar "conhecido" só quando `typeof e?.id === "string" && ids.has(e.id)` e ignorar `undefined` ao montar `ids`.
+
+### P3-3 — Payload malformado gera `TypeError` em vez de erro de domínio
+
+- `os-payload-lock.ts:93-95`: com `timeline: [null]`, `e.id` lança. Com `current.timeline` não-array, `.map` lança. Antes, `mesclarTimelineDoPatch` tratava `null`.
+- `orcamento-envio-actions.ts:31` e `orcamento-envio-service.ts:152`: com `tentativaId` não-string, `.trim()` lança.
+
+**Impacto:** continua fechando por falha, mas com erro 500 opaco.
+
+**Correção:** fazer as checagens de tipo antes de acessar as propriedades.
+
+### P3-4 — Mudança de contrato em `sendCloudApiTextAndRecord` para outros chamadores (Hub)
+
+**Arquivo:** `lib/whatsapp/whatsapp-service.ts:663`, `:674`
+
+- Sem `wamid`, a função agora lança erro depois de um POST que pode ter sido aceito. Antes, o histórico era gravado.
+- Falha em `addMessage` agora vira `CloudApiTextAcceptedError`.
+
+**Impacto:** o Hub mostra erro e pode induzir o operador a reenviar.
+
+**Correção:** aplicar as novas regras só quando `lifecycle` estiver presente, ou ajustar o Hub para tratar `CloudApiTextAcceptedError` como aceite.
+
+### P3-5 — Nova tentativa no modal descarta silenciosamente edições feitas após criação parcial
+
+**Arquivo:** `components/operacoes-v4-preview/parts/OrcamentoRapidoModal.tsx:133-138`, `:142`
+
+**Reprodução:**
+1. A criação dá certo, mas `marcarOrcamentoPreOsV3` falha.
+2. O operador edita preços ou observações no formulário, que continua editável.
+3. O operador clica de novo.
+
+O carimbo antigo (`criado.current.carimbo`) é reaplicado e as linhas não são regravadas. A mensagem diz apenas "Tente novamente para concluir".
+
+**Correção:** quando `criado.current` existir, bloquear a edição do formulário e mostrar um CTA único "Concluir", ou avisar que as edições exigem a aba Orçamento.
+
+### P3-6 — Espelhamento do status comercial em `montarGravacao`
+
+**Arquivo:** `lib/operacoes-v3/orcamento-actions.ts:223-226`
+
+- `statusComercial = next.orcamento.status` sobrescreve `vencido` (marcado via `atualizarStatusComercialV3`) em qualquer `salvar` ou `corrigir`.
+- `OrcamentoStatus` inclui `"expirado"`, que não é um `StatusComercialOrcamentoV4`. Com esse valor, `lerComercialV4` devolve `null` (`orcamento-pre-os.ts:49-54`). A pré-OS perde a classificação e passa a ser tratada como OS ativa na fila e na bancada. O caso é raro, porque exige `expirado` persistido, por exemplo via `corrigirOrcamentoV3`.
+
+**Correção:** mapear `expirado→vencido` e preservar `vencido` quando o status do orçamento não mudou.
+
+### P3-7 — Habilitação da API no cliente diverge do servidor
+
+- Cliente: `OrcamentoEnvioCluster.tsx:37` usa `v.os.telefone`, que cai para `cliente.whatsapp` (`os-adapter.ts:348`).
+- Servidor: `orcamento-envio-actions.ts:64` usa só `cliente.telefone`.
+
+**Impacto:** um cliente que tem só o campo WhatsApp vê o botão habilitado, e o servidor recusa.
+
+**Correção:** usar a mesma fonte nos dois lados.
+
+### P3-8 — Ações devolvem o payload completo da OS
+
+**Arquivos:**
+- `orcamento-envio-service.ts:76` e `:144` (`os: next`)
+- `orcamento-envio-actions.ts:46`, `:58`, `:80`
+
+O payload inclui custos, `observacaoInterna`, senha do aparelho e `conversaId`.
+
+**Impacto:** o destinatário é um operador autenticado, e `getOrdem` já expõe esses dados, então **não** há vazamento para o cliente final. É uma questão de minimização de dados.
+
+**Correção:** devolver só `tentativaId`, `mensagem` e as flags de resultado. O hook já relê o detalhe.
+
+### P3-9 — Evento de envio emitido sem mudança de status (condicional)
+
+**Arquivo:** `orcamento-envio-service.ts:125`, `:146`
+
+Se o orçamento for aprovado ou recusado durante o transporte e `conteudoOrcamentoV3` não incluir o status, o aceite grava `orcamento_enviado` depois da aprovação e emite `os_orcamento_criado` mesmo com `mudaStatus=false`.
+
+**Correção:** emitir o evento só quando `mudaStatus` for verdadeiro.
+
+### P3-10 — Prévia rotula valor inválido como "custo não informado"
+
+**Arquivo:** `lib/operacoes-v4/orcamento-rapido-form.ts:314`, `:320-329`
+
+Um custo com mais de 2 casas decimais, por exemplo `3.505`, vira `undefined` e aparece como "Custo não informado", em vez de "Revise os valores".
+
+### P3-11 — Testes frágeis
+
+- `test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts:92-97`: não remove `whatsAppContact`, `Conversation` e `Message`. A exclusão da `store` pode violar FK no `afterAll`.
+- `test/ops-v4-rafacell-precificacao-001/precificacao-ui.test.tsx:11,60,96`: as asserções sobre `enviar` são vazias, porque o modal não importa mais `enviarOrcamentoPorCanalV3`. Devem verificar `prepararCompartilhamentoOrcamentoV3`.
+
+---
+
+## Riscos a confirmar (não promovidos a achados)
+
+1. **Nome da loja na mensagem.** `dadosEmpresaPrintV3(undefined)`, chamado em `orcamento-envio-actions.ts:61` e `orcamento-envio-service.ts:91`, pode cair num nome de fallback global. Isso agora seria enviado automaticamente pelo número oficial da loja ao cliente real. Se o fallback não for da loja certa, há falha de isolamento de marca entre lojas.
+2. **Outros chamadores de `atualizarStatusComercialV3` e `marcarOrcamentoPreOsV3`.** Chamadores com `"aprovado"` ou `"recusado"` **antes** de aprovar ou recusar o orçamento agora falham (`comercial-pre-os-actions.ts:123-128`).
+3. **Outros chamadores de `semCamposFinanceirosDoServidorV3` sem `current`.** Passam a rejeitar `orcamento.status="enviado"` e `enviadoEm`.
+4. **Intenções V2 de aprovar ou recusar.** Usam o orçamento **hidratado** (`operacoes.ts:927-947`). Se a hidratação reconstruir o orçamento sem `compartilhamentosV3`, essas intenções passam a falhar em orçamentos protegidos.
+5. **Prévia das alternativas.** `previaResultadosAlternativasV4` (`orcamento-rapido-form.ts:318`) quebra em `variantes[i].id` se `montarServicosOrcamentoRapidoV3` filtrar variantes vazias. O formulário inicial tem duas variantes sem rótulo e calcula a prévia a cada render.
+
+---
+
+## Achados preexistentes (fora do diff, mas no perímetro pedido)
+
+- **P1 (preexistente) — `criarVendaDeOSAction(os)` confia num objeto OS enviado pelo cliente** (`app/actions/operacoes.ts:1411-1510`). Os campos `total`, itens, `storeId`, `origemRefId` e `clienteId` vêm do navegador. Um operador com permissão consegue criar uma Venda com valor arbitrário. **Correção:** receber `storeId` e `osId`, reler a OS sob a trava e derivar total e itens no servidor.
+- **P2 (preexistente) — `updateOSPayload` contorna as guardas comerciais da V3.** Um patch genérico ainda grava:
+  - `comercialV4.statusComercial` como `"aprovado"` ou `"convertido"`;
+  - `orcamento.status="aprovado"` com linhas arbitrárias.
+
+  Com isso, escapam a validade vencida, a seleção completa e a conversão que exige a entrada real. O PR só protege `enviado`. **Correção:** estender a guarda a `aprovado`, `convertido` e `orcamento.status`.
+- **P3 (preexistente) — `criarOrcamentoRapidoV3` não é idempotente.** Se a resposta se perder, uma nova tentativa duplica a OS.
+- **P3 (preexistente) — `adaptOrcamento` usa `lineSum` sem considerar kind e grupos** (`os-adapter.ts:1145-1148`) quando `orcamento.total ≤ 0`. Isso distorce o lucro.
+
+---
+
+## Recomendação
+
+Não encontrei P0 nem P1 introduzidos. As garantias centrais se sustentam no código: reserva durável antes do I/O, no máximo um transporte, recuperação apenas por recibo oficial, isolamento entre lojas e patch genérico sem forjar evidência.
+
+- **GO** para manter o PR como Draft e continuar o QA isolado, preservando `deploymentEnabled=false`, os WIPs e as 16 falhas históricas.
+- **NOGO** para merge ou ativação do envio pela API oficial em produção até que:
+  1. **P2-1** seja corrigido (classificar 4xx como terminal e criar a resolução auditada da reserva), ou o botão "Enviar pela API oficial" seja desabilitado;
+  2. **P2-2** seja confirmado e tratado, caso a V2 ainda esteja acessível;
+  3. o risco 1, nome da loja na mensagem enviada pela API, seja verificado.
+
+Os P1 e P2 preexistentes devem entrar no backlog, mas não bloqueiam este PR.

@@ -36,8 +36,10 @@ function SessaoCompartilhamento({ v }: { v: V4Vals }) {
   const semItens = !view.itensFixosVisiveis.length && !view.grupos.length;
   const linkWa = montarLinkWaV4(v.os.telefone && v.os.telefone !== NI ? v.os.telefone : undefined, mensagem);
   const ultimo = v.orcamentoEnvio?.ultimo;
-  const tentativa = preparado ?? (ultimo && (ultimo.estado === "preparado" || ultimo.estado === "api_em_andamento") ? { id: ultimo.id, canal: ultimo.canal } : null);
-  const pendenteApi = ultimo?.estado === "api_em_andamento" || resultado?.pendente;
+  const pendente = v.orcamentoEnvio?.pendente ?? (ultimo?.estado === "api_em_andamento" ? ultimo : undefined);
+  const tentativa = pendente ? { id: pendente.id, canal: pendente.canal }
+    : preparado ?? (ultimo?.estado === "preparado" ? { id: ultimo.id, canal: ultimo.canal } : null);
+  const pendenteApi = !!pendente || resultado?.pendente;
 
   const preparar = async () => {
     if (emCurso.current) return;

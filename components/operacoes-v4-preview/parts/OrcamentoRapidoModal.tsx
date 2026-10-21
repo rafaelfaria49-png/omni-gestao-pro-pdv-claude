@@ -71,6 +71,7 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
   const montado = useRef(true);
   useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
   const criado = useRef<{ osId: string; carimbo: MarcarPreOsInputV3 } | null>(null);
+  const [criacaoParcial, setCriacaoParcial] = useState<{ preparar: boolean } | null>(null);
   const [abertos, setAbertos] = useState({ cliente: true, aparelho: true, diagnostico: false, proposta: true, condicoes: false });
   const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
   const refsDatas = {
@@ -133,13 +134,14 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
       if (!criado.current) {
         const resultado = await criarOrcamentoRapidoV3(sid, buildOrcamentoRapidoInputFromFormV4(form, datas.datas));
         criado.current = { osId: resultado.osId, carimbo };
+        setCriacaoParcial({ preparar });
       }
       await marcarOrcamentoPreOsV3(sid, criado.current.osId, criado.current.carimbo);
       if (preparar) await prepararCompartilhamentoOrcamentoV3(sid, criado.current.osId, form.origemAtendimento === "whatsapp" ? "whatsapp" : "impresso");
       if (montado.current) v.onOrcamentoRapidoCriado(criado.current.osId);
     } catch (e) {
       const detalhe = e instanceof Error ? e.message : "Não foi possível concluir o orçamento.";
-      setErro(criado.current ? `Orçamento já criado em rascunho. Tente novamente para concluir a preparação. ${detalhe}` : detalhe);
+      setErro(criado.current ? `Orçamento já criado em rascunho. Conclua o registro; para editar a proposta, abra depois a aba Orçamento. ${detalhe}` : detalhe);
       const novamente = resolverDatasOrcamentoFormV3(form.datas);
       if (novamente.erros.length > 0) setErrosDatas(Object.fromEntries(novamente.erros.map((x) => [x.campo, x.mensagem])));
     } finally {
@@ -174,15 +176,16 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
           </span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button type="button" onClick={v.closeOrcamentoRapido} disabled={busy} style={btnGhost}>Cancelar</button>
-            <button type="button" onClick={() => void persistir(false)} disabled={!podeSalvar} style={btnGhost}>Salvar rascunho</button>
-            <button type="button" onClick={() => void persistir(false)} disabled={!podeSalvar} style={btnGhost}>Criar sem enviar</button>
-            <button type="button" onClick={() => void persistir(true)} disabled={!podeSalvar} style={btnPrimary}>
-              {busy ? "Salvando…" : "Criar e preparar compartilhamento"}
+            <button type="button" onClick={() => void persistir(false)} hidden={!!criacaoParcial} disabled={!podeSalvar || !!criacaoParcial} style={btnGhost}>Salvar rascunho</button>
+            <button type="button" onClick={() => void persistir(false)} hidden={!!criacaoParcial} disabled={!podeSalvar || !!criacaoParcial} style={btnGhost}>Criar sem enviar</button>
+            <button type="button" onClick={() => void persistir(criacaoParcial?.preparar ?? true)} disabled={!podeSalvar} style={btnPrimary}>
+              {busy ? "Salvando…" : criacaoParcial ? "Concluir orçamento já criado" : "Criar e preparar compartilhamento"}
             </button>
           </div>
         </>
       }
     >
+      <fieldset disabled={busy || !!criacaoParcial} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <section aria-labelledby="orc-datas-titulo" style={atendBlocoDatas}>
         <h3 id="orc-datas-titulo" style={atendBlocoDatasTitulo}>Datas e prazos</h3>
         <div style={atendGradeDatas}>
@@ -416,6 +419,7 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
           </div>
         </div>
       </AtendimentoAccordionSection>
+      </fieldset>
     </AtendimentoModalShell>
   );
 }

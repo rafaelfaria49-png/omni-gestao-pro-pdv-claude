@@ -6,9 +6,10 @@ const db = vi.hoisted(() => ({
   payload: {} as Record<string, any>, messages: [] as Record<string, any>[], writes: 0,
   failConfirm: 0, failHistory: false, failCache: false, permission: true, apiPermission: true,
   authenticated: true, emptyReceipt: false, transportError: false, credentialError: false,
-  queue: Promise.resolve() as Promise<unknown>, transport: vi.fn(),
+  queue: Promise.resolve() as Promise<unknown>, transport: vi.fn(), publicar: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => { if (db.failCache) throw new Error("cache indisponível"); } }));
+vi.mock("./event-publisher", () => ({ emitirEventoOperacaoV3: db.publicar }));
 vi.mock("@/auth", () => ({ auth: async () => db.authenticated ? { user: { id: "operador-1", name: "Ana Operadora" } } : null }));
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: async (sid: string, check: (p: unknown) => boolean) => {
   const p = structuredClone(getEnterprisePermissions("admin"));
@@ -67,8 +68,8 @@ vi.mock("@/lib/prisma", () => {
 import { enviarOrcamentoPorCanalV3, prepararCompartilhamentoOrcamentoV3 } from "./orcamento-envio-actions";
 import { resumoEnvioOrcamentoV3 } from "./orcamento-envio-model";
 import type { OrcamentoV3 } from "./orcamento-model";
-import { addMessage } from "@/lib/whatsapp/whatsapp-service";
-import { aprovarOrcamentoV3, enviarOrcamentoV3, registrarEnvioOrcamento, salvarOrcamentoV3 } from "./orcamento-actions";
+import { addMessage, CloudApiTextAcceptedError, sendCloudApiTextAndRecord } from "@/lib/whatsapp/whatsapp-service";
+import { aprovarOrcamentoV3, corrigirOrcamentoV3, enviarOrcamentoV3, registrarEnvioOrcamento, salvarOrcamentoV3 } from "./orcamento-actions";
 import { atualizarStatusComercialV3, marcarOrcamentoPreOsV3, converterOrcamentoEmOSV3 } from "./comercial-pre-os-actions";
 
 beforeEach(() => {
@@ -79,6 +80,7 @@ beforeEach(() => {
   };
   Object.assign(db, { writes: 0, failConfirm: 0, failHistory: false, failCache: false, permission: true, apiPermission: true, authenticated: true, emptyReceipt: false, transportError: false, credentialError: false, messages: [], queue: Promise.resolve() });
   db.transport.mockReset();
+  db.publicar.mockReset();
 });
 const preparar = (canal = "whatsapp" as const) => prepararCompartilhamentoOrcamentoV3("unidade-a", "os-a", canal);
 const confirmar = (tentativaId: string, modo: "manual" | "api" | "recuperar_api" = "manual") => enviarOrcamentoPorCanalV3("unidade-a", "os-a", "whatsapp", { tentativaId, confirmado: true, modo });
@@ -154,6 +156,37 @@ describe("orçamento — preparação e confirmação honesta", () => {
 });
 
 describe("API oficial — transporte mockado, aceite verificável e recuperação", () => {
+  it("resumo prioriza reserva pendente mesmo quando há preparação posterior de outro canal", async () => {
+    const p = await preparar();
+    await prepararCompartilhamentoOrcamentoV3("unidade-a", "os-a", "presencial");
+    db.transportError = true;
+    await confirmar(p.tentativaId, "api");
+    expect(resumoEnvioOrcamentoV3(orc())).toMatchObject({ estado: "api_sem_confirmacao", ultimo: { id: p.tentativaId }, pendente: { id: p.tentativaId } });
+    await expect(preparar()).rejects.toThrow(/sem resultado confirmado/);
+    const manual = orc().compartilhamentosV3!.find((e) => e.canal === "presencial")!;
+    await expect(enviarOrcamentoPorCanalV3("unidade-a", "os-a", "presencial", { tentativaId: manual.id, confirmado: true })).rejects.toThrow(/outro envio pela API pendente/);
+    expect(db.transport).toHaveBeenCalledOnce();
+  });
+  it("API usa WhatsApp do cliente quando o telefone está ausente, como a UI", async () => {
+    db.payload.cliente.whatsapp = db.payload.cliente.telefone;
+    delete db.payload.cliente.telefone;
+    const p = await preparar();
+    expect(await confirmar(p.tentativaId, "api")).toMatchObject({ ok: true, aceitoApi: true });
+  });
+  it("aceite recebido depois da aprovação preserva a decisão e não publica nova transição", async () => {
+    const p = await preparar();
+    db.transport.mockImplementation(() => { db.payload.orcamento.status = "aprovado"; db.payload.comercialV4.statusComercial = "aprovado"; });
+    expect(await confirmar(p.tentativaId, "api")).toMatchObject({ ok: true, aceitoApi: true });
+    expect(orc().status).toBe("aprovado");
+    expect(db.payload.comercialV4.statusComercial).toBe("aprovado");
+    expect(db.publicar).not.toHaveBeenCalled();
+  });
+  it("envio comum do Hub preserva o contrato legado sem exigir recibo de orçamento", async () => {
+    db.emptyReceipt = true;
+    expect(await sendCloudApiTextAndRecord("unidade-a", "conversa-a", "Mensagem comum")).toMatchObject({ wamid: "", message: { body: "Mensagem comum" } });
+    db.failHistory = true;
+    await expect(sendCloudApiTextAndRecord("unidade-a", "conversa-a", "Mensagem comum")).rejects.not.toBeInstanceOf(CloudApiTextAcceptedError);
+  });
   it("só marca enviado após wamid e reserva antes de transportar; nunca confirma entrega", async () => {
     const p = await preparar();
     db.transport.mockImplementation(() => { expect(orc().status).toBe("rascunho"); expect(orc().compartilhamentosV3?.[0].estado).toBe("api_em_andamento"); });
@@ -227,6 +260,10 @@ describe("API oficial — transporte mockado, aceite verificável e recuperaçã
 });
 
 describe("loja ativa e permissões", () => {
+  it.each([null, 42, {}, []])("tentativaId inválido %s não escreve nem gera TypeError", async (tentativaId) => {
+    await expect(enviarOrcamentoPorCanalV3("unidade-a", "os-a", "whatsapp", { tentativaId, confirmado: true } as any)).rejects.toThrow(/explicitamente/);
+    expect(db.writes).toBe(0);
+  });
   it("loja ausente, loja sem acesso, OS de outra loja e sessão ausente não escrevem", async () => {
     await expect(prepararCompartilhamentoOrcamentoV3("", "os-a", "whatsapp")).rejects.toThrow(/unidade ativa/);
     await expect(prepararCompartilhamentoOrcamentoV3("unidade-b", "os-a", "whatsapp")).rejects.toThrow(/permissão/);
@@ -250,6 +287,16 @@ describe("loja ativa e permissões", () => {
 });
 
 describe("contratos V3/V4 e conversão", () => {
+  it("edição preserva vencido e correção mapeia expirado sem perder a classificação pré-OS", async () => {
+    db.payload.comercialV4.statusComercial = "vencido";
+    const input = { servicos: orc().servicos, pecas: [], desconto: 0 };
+    await salvarOrcamentoV3("unidade-a", "os-a", input);
+    expect(db.payload.comercialV4.statusComercial).toBe("vencido");
+    db.payload.status = "aprovado";
+    db.payload.orcamento.status = "expirado";
+    await corrigirOrcamentoV3("unidade-a", "os-a", input);
+    expect(db.payload.comercialV4.statusComercial).toBe("vencido");
+  });
   it("actions antigas sem declaração e carimbos/status enviados sem prova falham fechados", async () => {
     await expect(enviarOrcamentoV3("unidade-a", "os-a")).rejects.toThrow(/explicitamente/);
     await expect(registrarEnvioOrcamento("unidade-a", "os-a", "whatsapp")).rejects.toThrow(/explicitamente/);

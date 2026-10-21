@@ -222,7 +222,10 @@ function montarGravacao(
   if (next.versoes) nextPayload.orcamentoVersoesV3 = next.versoes;
   const comercial = lerComercialV4(payload);
   if (comercial?.tipo === "orcamento_pre_os" && comercial.statusComercial !== "convertido") {
-    nextPayload.comercialV4 = { ...comercial, statusComercial: next.orcamento.status };
+    const statusComercial = next.orcamento.status === "expirado" ? "vencido"
+      : comercial.statusComercial === "vencido" && next.orcamento.status === payload.orcamento?.status ? "vencido"
+      : next.orcamento.status;
+    nextPayload.comercialV4 = { ...comercial, statusComercial };
   }
 
   const colunas: Omit<Prisma.OrdemServicoUpdateInput, "payload"> = {};

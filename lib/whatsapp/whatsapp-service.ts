@@ -660,6 +660,14 @@ export async function sendCloudApiTextAndRecord(storeId: string, conversationId:
   await lifecycle?.beforeSend()
   const res = await cloudSendText(creds, to, trimmed)
   const wamid = firstOutboundWamid(res)
+  if (!lifecycle) {
+    // Preserve the Hub contract. Reservation/receipt recovery belongs to the audited budget flow.
+    const message = await addMessage(storeId, conversationId, {
+      direction: "outbound", body: trimmed, messageType: "text", externalMessageId: wamid,
+      payload: { cloud: { kind: "text", wamid: wamid || undefined } } as Prisma.InputJsonValue,
+    })
+    return { message, wamid }
+  }
   if (!wamid) throw new Error("API sem identificador de aceite. Confira o WhatsApp antes de reenviar.")
   const receipt: CloudApiTextReceipt = { wamid, conversaId: conversationId, aceitoEm: new Date().toISOString() }
   let falhaEvidencia = false

@@ -28,7 +28,7 @@ export async function prepararCompartilhamentoOrcamentoV3(storeId: string, osId:
 
 /** A chamada antiga, sem declaração explícita, agora falha fechada. Nunca significa transporte. */
 export async function enviarOrcamentoPorCanalV3(storeId: string, osId: string, canal: CanalEnvioOrcamentoV3, input?: EntradaEnvioOrcamentoV3): Promise<EnviarOrcamentoPorCanalResultV3> {
-  if (!input || input.confirmado !== true || !input.tentativaId?.trim()) {
+  if (!input || input.confirmado !== true || typeof input.tentativaId !== "string" || !input.tentativaId.trim()) {
     throw new Error("Confirme explicitamente o envio manual ou solicite o envio pela API oficial.");
   }
   if (input.modo !== undefined && !["manual", "api", "recuperar_api"].includes(input.modo)) throw new Error("Natureza de envio inválida.");
@@ -61,7 +61,7 @@ export async function enviarOrcamentoPorCanalV3(storeId: string, osId: string, c
   const view = montarOrcamentoClienteViewV4(os!);
   if (!view) throw new Error("Orçamento sem projeção para o cliente.");
   const texto = montarMensagemOrcamentoV4(view);
-  const link = montarLinkWaV4(os!.cliente?.telefone, texto);
+  const link = montarLinkWaV4(os!.cliente?.telefone || os!.cliente?.whatsapp, texto);
   if (!link.valido) throw new Error(link.motivo);
   const telefone = new URL(link.url).pathname.slice(1);
   const conversa = await prisma.whatsAppConversation.findFirst({

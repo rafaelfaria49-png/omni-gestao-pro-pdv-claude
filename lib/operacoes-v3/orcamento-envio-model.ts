@@ -48,12 +48,14 @@ export function temEvidenciaEnvioOrcamentoV3(orc: OrcamentoV3): boolean {
 
 /** Leitura interna: nenhum destes metadados entra na projeção destinada ao cliente. */
 export function resumoEnvioOrcamentoV3(orc: OrcamentoV3 | null | undefined) {
-  const ultimo = orc ? compartilhamentosOrcamentoV3(orc).at(-1) : undefined;
+  const envios = orc ? compartilhamentosOrcamentoV3(orc) : [];
+  const pendente = envios.find((e) => e.estado === "api_em_andamento");
+  const ultimo = pendente ?? envios.at(-1);
   const estado: EstadoEnvioOrcamentoV3 = !ultimo
     ? orc?.status === "enviado" ? "legado_sem_evidencia" : "rascunho"
     : ultimo.estado === "informado_operador" ? "envio_informado_operador"
     : ultimo.estado === "aceito_api" ? "aceito_api"
     : ultimo.estado === "api_em_andamento" ? "api_sem_confirmacao" : "compartilhamento_iniciado";
   const rotulo = ultimo?.versaoAlterada ? "API aceitou uma versão anterior — proposta atual preservada" : ROTULO_ENVIO_ORCAMENTO_V3[estado];
-  return { estado, rotulo, ultimo, entregaConfirmada: false as const };
+  return { estado, rotulo, ultimo, pendente, entregaConfirmada: false as const };
 }

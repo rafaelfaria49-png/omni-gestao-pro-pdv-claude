@@ -90,9 +90,11 @@ export function semCamposFinanceirosDoServidorV3<T extends object>(patch: T, cur
     }
   }
   if (Array.isArray(limpo.timeline)) {
-    const ids = new Set((anterior?.timeline ?? []).map((e) => e.id));
+    const timeline = Array.isArray(anterior?.timeline) ? anterior.timeline : [];
+    const ids = new Set(timeline.filter((e) => e && typeof e.id === "string" && e.id).map((e) => e.id));
+    if (limpo.timeline.some((e) => !e || typeof e !== "object" || Array.isArray(e))) throw new Error("Timeline inválida no patch da OS.");
     if (limpo.timeline.some((e: { id?: string; tipo?: string; metadata?: { evento?: string } }) =>
-      !ids.has(e.id) && (e.tipo === "orcamento_enviado" || ["orcamento_envio_confirmado", "orcamento_compartilhamento_iniciado"].includes(e.metadata?.evento ?? "")),
+      !(typeof e.id === "string" && e.id && ids.has(e.id)) && (e.tipo === "orcamento_enviado" || ["orcamento_envio_confirmado", "orcamento_compartilhamento_iniciado"].includes(e.metadata?.evento ?? "")),
     )) throw new Error("Eventos de envio exigem a confirmação auditada do orçamento.");
   }
   for (const campo of CAMPOS_FINANCEIROS_SERVIDOR_V3) delete limpo[campo];
