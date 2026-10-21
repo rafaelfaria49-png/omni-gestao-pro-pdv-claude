@@ -98,6 +98,8 @@ exemplos de serviços/fornecedores e placeholders foram auditados.
 Se a seção não é renderizada, o formulário omite `accessoryConfig`,
 `catalogoAparelhos` e `atributos.modeloCompativel`. O writer preserva o metadata
 existente pelo merge canônico. Ocultar aplicação ou recurso não remove os vínculos.
+`cadastroRecursos` envia somente as aplicações tocadas e ainda disponíveis.
+Grade ocultada durante a edição também é omitida, sem reenviar false ou defaults.
 
 ## Handoff verificável ao PDV Clássico
 

@@ -91,6 +91,26 @@ describe("Cadastros adaptados por recursos e produto", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "É um acessório para aparelhos" }))
     expect(screen.getByText("Configuração de capinhas e películas")).toBeTruthy()
   })
+  it("alterar uma aplicação omite a aplicação que não foi tocada", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "variedades" }, overrides: { "catalog.deviceCompatibility": true, "pdv.accessoryModelColor": true } }
+    product({ nome: "Misto" })
+    fireEvent.click(screen.getByRole("checkbox", { name: "Possui compatibilidade com aparelhos" }))
+    fireEvent.click(screen.getByRole("button", { name: "Salvar produto" }))
+    await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
+    expect((h.upsert.mock.calls[0][1] as any).metadata.cadastroRecursos).toEqual({ compatibilidade: true })
+  })
+  it("grade alterada antes de ocultar o recurso não reenvia false ao salvar campos comuns", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "variedades" }, overrides: { "catalog.variants": true, "catalog.weight": true } }
+    const props = { open: true, onClose: vi.fn(), storeId: "loja-a", productId: "existing", initial: { nome: "Misto", metadata: { comercial: { version: 1, modoVenda: "unidade", unidade: "UN", basePreco: "UN", gradePlanejada: true } } } }
+    const ui = render(React.createElement(ProductAIModal, props))
+    fireEvent.click(screen.getByRole("checkbox", { name: /Planejar grade/ }))
+    h.capabilities = { ...h.capabilities, overrides: { "catalog.variants": false, "catalog.weight": true } }
+    ui.rerender(React.createElement(ProductAIModal, props))
+    expect(screen.queryByRole("checkbox", { name: /Planejar grade/ })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Salvar produto" }))
+    await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
+    expect((h.upsert.mock.calls[0][1] as any).metadata).not.toHaveProperty("comercial")
+  })
   it("categorias não expõem linhas de equipamentos quando assistência está desabilitada", async () => {
     render(React.createElement(CadastrosHub))
     fireEvent.click(screen.getByRole("button", { name: "Categorias / Marcas" }))

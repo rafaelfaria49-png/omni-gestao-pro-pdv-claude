@@ -414,7 +414,7 @@ export function ProductAIModal({
   const allowWeight = storeReady && !invalidCommercial && business.resource("catalog.weight").enabled;
   const allowVariants = storeReady && !invalidCommercial && business.resource("catalog.variants").enabled;
   const [applies, setApplies] = useState(() => productSpecificApplicability(initial?.metadata));
-  const [applicabilityTouched, setApplicabilityTouched] = useState(false);
+  const [applicabilityTouched, setApplicabilityTouched] = useState({ compatibilidade: false, acessorios: false });
   const [commercial, setCommercial] = useState<ProductCommercialV1>(() => productCommercialFromMetadata(initial?.metadata));
   const [commercialTouched, setCommercialTouched] = useState(false);
   const showCompatibility = allowCompatibility && applies.compatibilidade;
@@ -493,7 +493,7 @@ export function ProductAIModal({
     setCestDisplay(initial?.cest ?? "");
     const metadata = metadataRecord(initial?.metadata);
     setApplies(productSpecificApplicability(metadata));
-    setApplicabilityTouched(false);
+    setApplicabilityTouched({ compatibilidade: false, acessorios: false });
     setCommercial(productCommercialFromMetadata(metadata));
     setCommercialTouched(false);
     setAcessoriosValue(produtoAcessoriosFormFromMetadata(metadata));
@@ -1415,8 +1415,8 @@ export function ProductAIModal({
             </div>}
             {(allowCompatibility || allowAccessories) && <fieldset className="col-span-full space-y-3 rounded-lg border border-border p-4">
               <legend className="px-1 text-sm font-medium">Recursos aplicáveis a este produto</legend>
-              {allowCompatibility && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.compatibilidade} onChange={(event) => { setApplies((current) => ({ ...current, compatibilidade: event.target.checked })); setApplicabilityTouched(true); }} />Possui compatibilidade com aparelhos</label>}
-              {allowAccessories && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.acessorios} onChange={(event) => { setApplies((current) => ({ ...current, acessorios: event.target.checked })); setApplicabilityTouched(true); }} />É um acessório para aparelhos</label>}
+              {allowCompatibility && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.compatibilidade} onChange={(event) => { setApplies((current) => ({ ...current, compatibilidade: event.target.checked })); setApplicabilityTouched((current) => ({ ...current, compatibilidade: true })); }} />Possui compatibilidade com aparelhos</label>}
+              {allowAccessories && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.acessorios} onChange={(event) => { setApplies((current) => ({ ...current, acessorios: event.target.checked })); setApplicabilityTouched((current) => ({ ...current, acessorios: true })); }} />É um acessório para aparelhos</label>}
             </fieldset>}
             {/* CATALOGO-APARELHOS-UI-CADASTROSV2-002 — compatibilidade de aparelhos (reuso). */}
             {showCompatibility && <div className="col-span-full">
@@ -1615,6 +1615,12 @@ export function ProductAIModal({
                         aplicacao: barcodeSuggestionApplication,
                       })
                     : null;
+                  const applicabilityPatch = {
+                    ...(allowCompatibility && applicabilityTouched.compatibilidade ? { compatibilidade: applies.compatibilidade } : {}),
+                    ...(allowAccessories && applicabilityTouched.acessorios ? { acessorios: applies.acessorios } : {}),
+                  };
+                  const commercialPatch = { ...commercial };
+                  if (!allowVariants) delete commercialPatch.gradePlanejada;
                   const result = await upsertProduto(storeId, {
                     id: productId,
                     nome: (nomeRef.current?.value ?? "").trim(),
@@ -1637,11 +1643,9 @@ export function ProductAIModal({
                         source,
                       },
                       ...(showCompatibility && catalogoAparelhos ? { catalogoAparelhos } : {}),
-                      ...(commercialTouched ? { comercial: commercial } : {}),
-                      ...(applicabilityTouched ? { cadastroRecursos: {
-                        ...(allowCompatibility ? { compatibilidade: applies.compatibilidade } : {}),
-                        ...(allowAccessories ? { acessorios: applies.acessorios } : {}),
-                      } } : {}),
+                      // Em edição, somente grade é mutável; recurso oculto omite o namespace.
+                      ...(commercialTouched && (!productId || allowVariants) ? { comercial: commercialPatch } : {}),
+                      ...(Object.keys(applicabilityPatch).length ? { cadastroRecursos: applicabilityPatch } : {}),
                       atributos: {
                         descricao: descricao.trim(),
                         tags: normalizeProdutoTags(tags),
