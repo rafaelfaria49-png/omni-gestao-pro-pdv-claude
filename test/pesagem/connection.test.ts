@@ -1,0 +1,198 @@
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { ScaleConnection, transportForOpenPort, transportForStream } from "../../services/pesagem"
+import { fixture, flush, frame, simulatedStream } from "./helpers"
+
+afterEach(() => vi.useRealTimers())
+
+describe("transporte simulado e lifecycle de recursos", () => {
+  it("conecta, recebe fragmentos/múltiplas mensagens e libera leitor antes da porta", async () => {
+    const source = simulatedStream()
+    const f = fixture()
+    const close = vi.fn(async () => { expect(source.stream.locked).toBe(false); await source.close() })
+    const port = { readable: source.stream, close }
+    const c = new ScaleConnection(f.session, transportForOpenPort(port), 1000)
+    const done = c.run()
+    expect(c.run()).toBe(done)
+    source.send("SIM|ST|NET|350|"); await flush()
+    expect(f.session.snapshot().status).toBe("incomplete")
+    source.send("g\n" + frame("0.351", "ST")); await flush()
+    expect(f.session.measurementCandidate()).toMatchObject({ sequence: 2, packetSequence: 2, mass: { kilograms: "0.351" } })
+    await c.stop()
+    expect((await done).status).toBe("cancelled")
+    expect(source.stats()).toEqual({ cancellations: 1, closes: 1, locked: false })
+    await c.stop()
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(["disconnected", "read_error"] as const)("%s remove peso e encerra o loop", async (reason) => {
+    const source = simulatedStream()
+    const f = fixture()
+    const c = new ScaleConnection(f.session, transportForStream(source.stream, source.close), 1000)
+    const done = c.run()
+    source.send(frame("0.350", "ST")); await flush()
+    if (reason === "disconnected") source.disconnect(); else source.fail()
+    const final = await done
+    expect(final).toMatchObject({ status: reason, reading: null, usable: false })
+    expect(source.stats()).toMatchObject({ closes: 1, locked: false })
+  })
+
+  it("timeout sem novos dados cancela read pendente e não oferece último peso", async () => {
+    vi.useFakeTimers()
+    const source = simulatedStream()
+    const f = fixture()
+    const c = new ScaleConnection(f.session, transportForStream(source.stream, source.close), 250)
+    const done = c.run()
+    source.send(frame("0.350", "ST")); await flush()
+    expect(f.session.snapshot().usable).toBe(true)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(await done).toMatchObject({ status: "timeout", reading: null, usable: false })
+    expect(source.stats()).toEqual({ cancellations: 1, closes: 1, locked: false })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("pacotes vazios não estendem timeout", async () => {
+    vi.useFakeTimers()
+    const source = simulatedStream()
+    const f = fixture()
+    const c = new ScaleConnection(f.session, transportForStream(source.stream, source.close), 100)
+    const done = c.run()
+    await vi.advanceTimersByTimeAsync(80)
+    source.send(""); await flush()
+    await vi.advanceTimersByTimeAsync(20)
+    expect((await done).status).toBe("timeout")
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("recebimento real renova o timeout de inatividade", async () => {
+    vi.useFakeTimers()
+    const source = simulatedStream()
+    const f = fixture()
+    const c = new ScaleConnection(f.session, transportForStream(source.stream, source.close), 100)
+    const done = c.run()
+    await vi.advanceTimersByTimeAsync(80)
+    source.send(frame("0.350", "ST")); await flush()
+    await vi.advanceTimersByTimeAsync(80)
+    expect(f.session.snapshot().status).toBe("ready")
+    await vi.advanceTimersByTimeAsync(20)
+    expect((await done).status).toBe("timeout")
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("rejeição de cancel não impede releaseLock nem fechamento", async () => {
+    vi.useFakeTimers()
+    const stream = new ReadableStream<Uint8Array>({ cancel() { throw new Error("cancel_failed") } })
+    const close = vi.fn(async () => { expect(stream.locked).toBe(false) })
+    const f = fixture()
+    const c = new ScaleConnection(f.session, transportForStream(stream, close), 1000)
+    const done = c.run(); await c.stop()
+    expect(await done).toMatchObject({ status: "cancelled", reading: null, detail: "reader_cancel_failed; resources_released" })
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("AbortSignal e troca de contexto cancelam imediatamente sem loop órfão", async () => {
+    vi.useFakeTimers()
+    for (const reason of ["cancelled", "context_changed"] as const) {
+      const source = simulatedStream()
+      const f = fixture(reason)
+      const abort = new AbortController()
+      const c = new ScaleConnection(f.session, transportForStream(source.stream, source.close), 1000)
+      const done = c.run(abort.signal)
+      source.send(frame("0.350", "ST")); await flush()
+      if (reason === "cancelled") abort.abort(); else await c.stop(reason)
+      expect(f.session.measurementCandidate()).toBeNull()
+      expect((await done).status).toBe(reason)
+      expect(source.stats()).toEqual({ cancellations: 1, closes: 1, locked: false })
+    }
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("cancelamento prévio não adquire recurso nem solicita porta", async () => {
+    const acquire = vi.fn(() => { throw new Error("must_not_acquire") })
+    const f = fixture()
+    const abort = new AbortController(); abort.abort()
+    const c = new ScaleConnection(f.session, { resource: {}, acquire }, 1000)
+    expect((await c.run(abort.signal)).status).toBe("cancelled")
+    expect(acquire).not.toHaveBeenCalled()
+    const beforeRun = new ScaleConnection(fixture().session, { resource: {}, acquire }, 1000)
+    await beforeRun.stop()
+    expect((await beforeRun.run()).status).toBe("cancelled")
+    expect(acquire).not.toHaveBeenCalled()
+  })
+
+  it("reserva a mesma porta mesmo quando há dois adaptadores distintos", async () => {
+    const source = simulatedStream()
+    const port = { readable: source.stream, close: vi.fn(source.close) }
+    const first = new ScaleConnection(fixture("one").session, transportForOpenPort(port), 1000)
+    const second = new ScaleConnection(fixture("two").session, transportForOpenPort(port), 1000)
+    const done = first.run()
+    expect((await second.run()).status).toBe("port_in_use")
+    expect(port.close).not.toHaveBeenCalled()
+    expect(source.stream.locked).toBe(true)
+    await first.stop(); await done
+    expect(port.close).toHaveBeenCalledTimes(1)
+  })
+
+  it("sessões em streams distintos são isoladas e reconexão começa sem peso", async () => {
+    const a = simulatedStream(), b = simulatedStream()
+    const fa = fixture("a"), fb = fixture("b")
+    const ca = new ScaleConnection(fa.session, transportForStream(a.stream, a.close), 1000)
+    const cb = new ScaleConnection(fb.session, transportForStream(b.stream, b.close), 1000)
+    const da = ca.run(), db = cb.run()
+    a.send(frame("0.350", "ST")); b.send(frame("1.250", "ST")); await flush()
+    expect(fa.session.measurementCandidate()?.mass.kilograms).toBe("0.350")
+    expect(fb.session.measurementCandidate()?.mass.kilograms).toBe("1.250")
+    await ca.stop()
+    expect(fb.session.snapshot().usable).toBe(true)
+    await cb.stop(); await Promise.all([da, db])
+    const reconnected = fixture("reconnected")
+    reconnected.session.markConnected()
+    expect(reconnected.session.measurementCandidate()).toBeNull()
+  })
+
+  it("falha de acquire não fecha recurso que não foi adquirido", async () => {
+    const close = vi.fn(async () => {})
+    const c = new ScaleConnection(fixture().session, transportForOpenPort({ readable: null, close }), 1000)
+    expect((await c.run()).status).toBe("connection_error")
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  it("porta com leitor externo permanece sob controle do seu dono", async () => {
+    const source = simulatedStream()
+    const reader = source.stream.getReader()
+    const close = vi.fn(source.close)
+    const c = new ScaleConnection(fixture().session, transportForOpenPort({ readable: source.stream, close }), 1000)
+    expect((await c.run()).status).toBe("connection_error")
+    expect(close).not.toHaveBeenCalled()
+    expect(source.stream.locked).toBe(true)
+    await reader.cancel(); reader.releaseLock()
+  })
+
+  it("a mesma sessão não pode controlar dois loops ou recursos", async () => {
+    const a = simulatedStream(), b = simulatedStream()
+    const f = fixture()
+    const first = new ScaleConnection(f.session, transportForStream(a.stream, a.close), 1000)
+    const second = new ScaleConnection(f.session, transportForStream(b.stream, b.close), 1000)
+    const done = first.run()
+    await expect(second.run()).rejects.toThrow("session_is_single_use")
+    a.send(frame("0.350", "ST")); await flush()
+    expect(f.session.snapshot().usable).toBe(true)
+    expect(b.stats()).toEqual({ cancellations: 0, closes: 0, locked: false })
+    await first.stop(); await done
+  })
+
+  it("falha ao fechar mantém reserva e permite retry explícito", async () => {
+    const source = simulatedStream()
+    let fail = true
+    const close = vi.fn(async () => { if (fail) throw new Error("close_failed") })
+    const port = { readable: source.stream, close }
+    const c = new ScaleConnection(fixture("one").session, transportForOpenPort(port), 1000)
+    const done = c.run(); await c.stop()
+    expect((await done).status).toBe("cleanup_error")
+    const competitor = new ScaleConnection(fixture("two").session, transportForOpenPort(port), 1000)
+    expect((await competitor.run()).status).toBe("port_in_use")
+    fail = false; await c.retryClose()
+    expect(close).toHaveBeenCalledTimes(2)
+    expect(source.stream.locked).toBe(false)
+  })
+})

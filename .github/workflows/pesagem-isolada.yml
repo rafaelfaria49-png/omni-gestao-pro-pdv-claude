@@ -1,0 +1,42 @@
+name: Núcleo de pesagem isolado
+
+on:
+  pull_request:
+    paths:
+      - "lib/pesagem/**"
+      - "services/pesagem/**"
+      - "test/pesagem/**"
+      - "docs/padaria/pesagem/**"
+      - ".github/workflows/pesagem-isolada.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated?connect_timeout=1
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated?connect_timeout=1
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Dependências e cliente Prisma sem conexão com banco
+        run: npm ci --no-audit --no-fund
+      - name: Testes de medição, sessão e transporte simulado
+        run: node node_modules/vitest/vitest.mjs run --config test/pesagem/vitest.config.mts
+      - name: Bancada isolada com todos os estados
+        run: node node_modules/tsx/dist/cli.mjs test/pesagem/harness.ts all
+      - name: TypeScript do núcleo e testes
+        run: node node_modules/typescript/lib/tsc.js --project test/pesagem/tsconfig.json --noEmit
+      - name: TypeScript do repositório
+        run: node node_modules/typescript/lib/tsc.js --noEmit --incremental false
+      - name: ESLint do escopo
+        run: node node_modules/eslint/bin/eslint.js lib/pesagem services/pesagem test/pesagem --no-cache
