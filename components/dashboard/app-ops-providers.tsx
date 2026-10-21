@@ -24,16 +24,16 @@ export function AppOpsProviders({ children }: { children: ReactNode }) {
   return (
     <ConfigEmpresaProvider>
       <LojaAtivaProvider>
-        <PerfilLojaProvider>
-          <StoreSettingsProvider>
+        <StoreSettingsProvider>
+          <PerfilLojaProvider>
             <StoreAppearanceSync />
             <FinanceiroProvider>
               <OperationsWithStorageKey>
                 <CaixaProvider>{children}</CaixaProvider>
               </OperationsWithStorageKey>
             </FinanceiroProvider>
-          </StoreSettingsProvider>
-        </PerfilLojaProvider>
+          </PerfilLojaProvider>
+        </StoreSettingsProvider>
       </LojaAtivaProvider>
     </ConfigEmpresaProvider>
   )

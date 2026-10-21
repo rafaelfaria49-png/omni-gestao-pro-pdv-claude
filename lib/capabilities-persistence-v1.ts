@@ -12,7 +12,9 @@
  *   são de autoridade do servidor e sua presença em qualquer nível do payload resulta em HTTP 400.
  */
 
-export const KNOWN_CAPABILITY_KEYS_V1 = [
+import { isBusinessBranch, type StoreBusinessV1 } from "@/lib/store-business-capabilities"
+
+export const KNOWN_PDV_CAPABILITY_KEYS_V1 = [
   "pdv.tables",
   "sales.paymentMethods",
   "pdv.filmLookup",
@@ -25,6 +27,15 @@ export const KNOWN_CAPABILITY_KEYS_V1 = [
   "pdv.multiplePayments",
   "pdv.customerSearch",
 ] as const
+
+export const CATALOG_CAPABILITY_KEYS_V1 = [
+  "service.technical",
+  "catalog.deviceCompatibility",
+  "catalog.weight",
+  "catalog.variants",
+] as const
+
+export const KNOWN_CAPABILITY_KEYS_V1 = [...KNOWN_PDV_CAPABILITY_KEYS_V1, ...CATALOG_CAPABILITY_KEYS_V1] as const
 
 export type KnownCapabilityKeyV1 = (typeof KNOWN_CAPABILITY_KEYS_V1)[number]
 
@@ -51,6 +62,7 @@ export type CapabilityOverrideValue =
 export type StoreCapabilitiesV1 = {
   version: 1
   overrides?: Partial<Record<KnownCapabilityKeyV1, CapabilityOverrideValue>>
+  business?: StoreBusinessV1
 }
 
 export type CapabilitiesValidationResult =
@@ -116,12 +128,29 @@ export function validateCapabilitiesPayload(payload: unknown): CapabilitiesValid
   }
 
   // Validar chaves diretas no objeto raiz de capabilities (além de 'version' e 'overrides')
-  const allowedRootKeys = new Set(["version", "overrides"])
+  const allowedRootKeys = new Set(["version", "overrides", "business"])
   for (const rootKey of Object.keys(payload)) {
     if (!allowedRootKeys.has(rootKey)) {
       return {
         ok: false,
         error: `Chave não permitida na raiz de capabilities: "${rootKey}". Use a estrutura { version: 1, overrides: { ... } }.`,
+      }
+    }
+  }
+
+  if (payload.business !== undefined) {
+    const business = payload.business
+    if (!isObject(business) || Object.keys(business).some((key) => !["primaryBranch", "presentation"].includes(key))) {
+      return { ok: false, error: "Configuração de ramo inválida." }
+    }
+    if (business.primaryBranch !== undefined && !isBusinessBranch(business.primaryBranch)) {
+      return { ok: false, error: "Ramo principal desconhecido." }
+    }
+    if (business.presentation !== undefined) {
+      if (!isObject(business.presentation) || Object.entries(business.presentation).some(([key, value]) =>
+        !["productExample", "categoryExample", "brandExample"].includes(key) ||
+        typeof value !== "string" || value.length > 160)) {
+        return { ok: false, error: "Padrões de apresentação inválidos (máximo de 160 caracteres)." }
       }
     }
   }
@@ -159,6 +188,9 @@ export function validateCapabilitiesPayload(payload: unknown): CapabilitiesValid
       }
 
       if (isObject(val)) {
+        if (val.enabled !== undefined && typeof val.enabled !== "boolean") {
+          return { ok: false, error: `enabled de "${key}" deve ser boolean.` }
+        }
         const overrideAuthKey = findReservedAuthorityKey(val)
         if (overrideAuthKey) {
           return {
@@ -174,6 +206,7 @@ export function validateCapabilitiesPayload(payload: unknown): CapabilitiesValid
     ok: true,
     data: {
       version: 1,
+      ...(payload.business !== undefined ? { business: payload.business as StoreBusinessV1 } : {}),
       overrides: overrides as Partial<Record<KnownCapabilityKeyV1, CapabilityOverrideValue>> | undefined,
     },
   }

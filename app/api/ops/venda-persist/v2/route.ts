@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
@@ -201,6 +202,9 @@ export async function POST(req: Request) {
     }
     // Quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005): mesmo contrato
     // fail-closed da rota V1 — falha de negócio (409), nunca 500.
+    if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) {
+      return jsonError(e.message, e.code, 409)
+    }
     if (e instanceof FractionalQuantityError) {
       console.warn("[ops/venda-persist/v2] quantidade-fracionada", JSON.stringify({ lojaId }))
       return jsonError(e.message, e.code, 409)

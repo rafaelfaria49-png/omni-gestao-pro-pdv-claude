@@ -195,6 +195,26 @@ beforeEach(() => {
 })
 
 describe("os-estoque via boundary (CAD-R2-009)", () => {
+  it.each([
+    { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } },
+    { vendaPorPeso: true },
+    { comercial: null },
+  ])("não consome produto por peso ou inválido como peça unitária: %j", async (metadata) => {
+    h.addProduto({ stock: 5, metadata })
+    h.addOS("os-1", osPayload([{ id: "peca-1", produtoId: "p1", nome: "Peça", quantidade: 1 }]))
+    const result = await consumeEstoqueFromOS({ storeId: h.STORE, osId: "os-1" })
+    expect(result).toMatchObject({ ok: false, status: "error" })
+    expect(h.produtos[0]!.stock).toBe(5)
+    expect(h.movs).toHaveLength(0)
+    expect(h.osItems).toHaveLength(0)
+  })
+  it("revisão da OS também bloqueia novo consumo por peso", async () => {
+    h.addProduto({ stock: 5, metadata: { vendaPorPeso: true } })
+    h.addOS("os-1", { ...osPayload([{ id: "peca-1", produtoId: "p1", nome: "Peça", quantidade: 1 }]), estoqueConsumido: true })
+    expect(await applyEstoqueDelta({ storeId: h.STORE, osId: "os-1", revisaoKey: "r1" })).toMatchObject({ ok: false, status: "error" })
+    expect(h.produtos[0]!.stock).toBe(5)
+    expect(h.movs).toHaveLength(0)
+  })
   it("23. peça física baixa stock + depósito + ledger `saida`; retry é already_consumed", async () => {
     h.addProduto({ stock: 5 })
     h.addOS("os-1", osPayload([{ id: "peca-1", produtoId: "p1", nome: "Tela", quantidade: 2 }]))

@@ -63,6 +63,8 @@ import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
 import { getProdutoFiscal } from "@/lib/produto-fiscal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useStoreBusiness } from "@/lib/use-store-business";
+import { hasInvalidProductCommercial, productCommercialFromMetadata, productSpecificApplicability, type ProductCommercialV1 } from "@/lib/cadastros/product-commercial-contract";
 
 function metadataRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -404,6 +406,19 @@ export function ProductAIModal({
   }>;
   productId?: string;
 }) {
+  const business = useStoreBusiness();
+  const storeReady = business.ready && business.storeId === storeId;
+  const invalidCommercial = hasInvalidProductCommercial(initial?.metadata);
+  const allowCompatibility = storeReady && business.resource("catalog.deviceCompatibility").operational;
+  const allowAccessories = storeReady && business.resource("pdv.accessoryModelColor").operational;
+  const allowWeight = storeReady && !invalidCommercial && business.resource("catalog.weight").enabled;
+  const allowVariants = storeReady && !invalidCommercial && business.resource("catalog.variants").enabled;
+  const [applies, setApplies] = useState(() => productSpecificApplicability(initial?.metadata));
+  const [applicabilityTouched, setApplicabilityTouched] = useState({ compatibilidade: false, acessorios: false });
+  const [commercial, setCommercial] = useState<ProductCommercialV1>(() => productCommercialFromMetadata(initial?.metadata));
+  const [commercialTouched, setCommercialTouched] = useState(false);
+  const showCompatibility = allowCompatibility && applies.compatibilidade;
+  const showAccessories = allowAccessories && applies.acessorios;
   const [source, setSource] = useState<Source>("manual");
   const [running, setRunning] = useState(false);
   const [step, setStep] = useState(0);
@@ -477,6 +492,10 @@ export function ProductAIModal({
     setNcmDisplay(initial?.ncm ?? "");
     setCestDisplay(initial?.cest ?? "");
     const metadata = metadataRecord(initial?.metadata);
+    setApplies(productSpecificApplicability(metadata));
+    setApplicabilityTouched({ compatibilidade: false, acessorios: false });
+    setCommercial(productCommercialFromMetadata(metadata));
+    setCommercialTouched(false);
     setAcessoriosValue(produtoAcessoriosFormFromMetadata(metadata));
     const atributos = metadataRecord(metadata?.atributos);
     setModeloCompativel(typeof atributos?.modeloCompativel === "string" ? atributos.modeloCompativel : "");
@@ -539,7 +558,7 @@ export function ProductAIModal({
   // parte de vazio; se o fetch falhar, mantém vazio e NÃO envia nada no save (a chave é
   // omitida), então o metadata salvo é preservado — nunca apaga por rede instável.
   useEffect(() => {
-    if (!open) return;
+    if (!open || !showCompatibility) return;
     setCatalogoValue(emptyCompatibilidade());
     if (!productId) return; // criação: nada a reidratar
     let cancelled = false;
@@ -572,7 +591,7 @@ export function ProductAIModal({
     return () => {
       cancelled = true;
     };
-  }, [open, productId, storeId]);
+  }, [open, productId, storeId, showCompatibility]);
 
   // Carrega dicionário (CategoriaCadastro/MarcaCadastro) + valores legados em uso ao abrir.
   useEffect(() => {
@@ -1008,7 +1027,7 @@ export function ProductAIModal({
                       rows={3}
                       maxLength={2000}
                       readOnly={ouvindo}
-                      placeholder="Ex.: Película 3D para iPhone 15, custa 4 reais e vendo por 25"
+                      placeholder="Ex.: Biscoito de chocolate, custa 4 reais e vendo por 8"
                       title="Descreva o produto em linguagem natural — a IA sugere o preenchimento para revisão"
                     />
                     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
@@ -1084,7 +1103,7 @@ export function ProductAIModal({
             </div>
           ) : (
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
-            {source === "manual" && <Input placeholder="Ex.: Tela iPhone 11 Original" />}
+            {source === "manual" && <Input placeholder={business.presentation.productExample} />}
             {source === "link" && <Input placeholder="https://produto.mercadolivre.com.br/…" />}
             {source === "barcode" && (
               <Input
@@ -1302,12 +1321,12 @@ export function ProductAIModal({
         {/* FORM (preenchido pela IA) */}
         <div>
           <SectionTitle title="Ficha do produto" subtitle={filled ? "Campos preenchidos automaticamente — revise se quiser." : "Preenchimento manual ou via IA acima."} />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
             <Field label="Nome" span={2}>
               <Input
                 ref={nomeRef}
                 defaultValue={initial?.nome ?? ""}
-                placeholder="Nome do produto"
+                placeholder={business.presentation.productExample}
                 className="font-medium"
               />
             </Field>
@@ -1319,7 +1338,7 @@ export function ProductAIModal({
                 onChange={setCategoria}
                 options={categoriaOpts}
                 onCreate={createCategoria}
-                placeholder="Selecione ou crie (ex.: Telas)"
+                placeholder={business.presentation.categoryExample}
                 loading={optsLoading}
               />
             </Field>
@@ -1329,11 +1348,11 @@ export function ProductAIModal({
                 onChange={setMarca}
                 options={marcaOpts}
                 onCreate={createMarca}
-                placeholder="Selecione ou crie (ex.: Apple)"
+                placeholder={business.presentation.brandExample}
                 loading={optsLoading}
               />
             </Field>
-            <Field label="Modelo compatível"><Input value={modeloCompativel} onChange={(event) => setModeloCompativel(event.target.value)} placeholder="Ex.: iPhone 11" /></Field>
+            {showCompatibility && <Field label="Modelo compatível"><Input aria-label="Modelo compatível" value={modeloCompativel} onChange={(event) => setModeloCompativel(event.target.value)} placeholder="Nome ou referência do aparelho" /></Field>}
             <Field label="Fornecedor"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} placeholder="Nome do fornecedor" /></Field>
             {/* Estoque (Parte 13): em EDIÇÃO é somente leitura — saldo só muda por
                 movimentação auditada (MovimentacaoEstoque). Na CRIAÇÃO continua
@@ -1370,8 +1389,37 @@ export function ProductAIModal({
               </Field>
             )}
             <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} placeholder="90" /></Field>
+            {invalidCommercial && <p role="alert" className="col-span-full text-sm text-destructive">Declaração comercial inválida. Venda bloqueada. Os dados existentes serão preservados; cadastre outro produto para definir unidade e preço sem reinterpretar saldos.</p>}
+            {!invalidCommercial && (allowWeight || allowVariants || commercial.modoVenda === "peso") && <div className="col-span-full space-y-3 rounded-lg border border-border p-4">
+              <p className="text-sm font-medium">Unidade e forma de venda</p>
+              <label className="block space-y-1 text-sm">Forma de venda
+                <select aria-label="Forma de venda" value={commercial.modoVenda} disabled={!!productId || !allowWeight}
+                  onChange={(event) => { const weight = event.target.value === "peso"; setCommercial((current) => ({ ...current, modoVenda: weight ? "peso" : "unidade", unidade: weight ? "KG" : "UN", basePreco: weight ? "KG" : "UN" })); setCommercialTouched(true); }}
+                  className="ml-2 rounded border border-input bg-background px-2 py-2">
+                  <option value="unidade">Por unidade (UN)</option><option value="peso">Por peso — preparação</option>
+                </select>
+              </label>
+              {commercial.modoVenda === "peso" && <>
+                <label className="block text-sm">Unidade comercial e base do preço
+                  <select aria-label="Unidade comercial e base do preço" value={commercial.unidade} disabled={!!productId || !allowWeight}
+                    onChange={(event) => { const unit = event.target.value as "KG" | "G"; setCommercial((current) => ({ ...current, unidade: unit, basePreco: unit })); setCommercialTouched(true); }} className="ml-2 rounded border border-input bg-background px-2 py-2">
+                    <option value="KG">Quilograma (KG)</option><option value="G">Grama (G)</option>
+                  </select>
+                </label>
+                <p role="status" className="text-sm text-amber-700 dark:text-amber-300">Preparação: preço e custo por {commercial.basePreco}. Venda bloqueada até a integração de quantidade e estoque. Saldos existentes não serão convertidos.</p>
+              </>}
+              {allowVariants && <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" checked={commercial.gradePlanejada ?? false} onChange={(event) => { setCommercial((current) => ({ ...current, gradePlanejada: event.target.checked })); setCommercialTouched(true); }} />
+                Planejar grade para este produto — estoque e venda por variação ainda indisponíveis.
+              </label>}
+            </div>}
+            {(allowCompatibility || allowAccessories) && <fieldset className="col-span-full space-y-3 rounded-lg border border-border p-4">
+              <legend className="px-1 text-sm font-medium">Recursos aplicáveis a este produto</legend>
+              {allowCompatibility && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.compatibilidade} onChange={(event) => { setApplies((current) => ({ ...current, compatibilidade: event.target.checked })); setApplicabilityTouched((current) => ({ ...current, compatibilidade: true })); }} />Possui compatibilidade com aparelhos</label>}
+              {allowAccessories && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.acessorios} onChange={(event) => { setApplies((current) => ({ ...current, acessorios: event.target.checked })); setApplicabilityTouched((current) => ({ ...current, acessorios: true })); }} />É um acessório para aparelhos</label>}
+            </fieldset>}
             {/* CATALOGO-APARELHOS-UI-CADASTROSV2-002 — compatibilidade de aparelhos (reuso). */}
-            <div className="col-span-2">
+            {showCompatibility && <div className="col-span-full">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Compatibilidade com aparelhos</p>
               <div className="rounded-xl border border-border bg-muted/20 p-4">
                 <p className="mb-4 text-xs text-muted-foreground">
@@ -1383,13 +1431,13 @@ export function ProductAIModal({
                   lojaHeader={storeId}
                 />
               </div>
-            </div>
-            <div className="col-span-2">
+            </div>}
+            {showAccessories && <div className="col-span-full">
               <ProdutoAcessoriosConfig value={acessoriosValue} onChange={setAcessoriosValue} />
-            </div>
-            <div className="col-span-2">
+            </div>}
+            <div className="col-span-full">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Precificação</p>
-              <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4">
+              <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:grid-cols-3">
                 <Field label="Custo (R$)"><Input ref={custoRef} defaultValue={initial?.custo !== undefined ? String(initial.custo) : ""} placeholder="0,00" /></Field>
                 <Field label="Preço venda (R$)"><Input ref={precoRef} defaultValue={initial?.preco !== undefined ? String(initial.preco) : ""} placeholder="0,00" /></Field>
                 <Field label="Margem"><Input readOnly defaultValue="" placeholder="Auto" className="bg-muted/40 text-muted-foreground cursor-default" /></Field>
@@ -1438,7 +1486,7 @@ export function ProductAIModal({
                 </p>
               </div>
             </Field>
-            <Field label="Tags" span={2}><Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="Separadas por vírgula — Ex.: apple, tela, original" /></Field>
+            <Field label="Tags" span={2}><Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="Separadas por vírgula — Ex.: artesanal, presente, promoção" /></Field>
             <Field label="Descrição" span={2}>
               <Textarea value={descricao} onChange={(event) => setDescricao(event.target.value)} rows={3} placeholder="Descrição comercial (opcional)" />
             </Field>
@@ -1487,15 +1535,15 @@ export function ProductAIModal({
         </Card>
 
         {/* RELACIONAMENTOS */}
-        <Card className="p-5">
+        {business.resource("service.technical").operational && <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <Layers className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold text-foreground">Relacionamentos inteligentes</h3>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Sugestões de equipamentos, peças relacionadas e checklists serão plugadas na fase de IA — nada aqui altera o banco ainda.
+            Sugestões de equipamentos, peças relacionadas e checklists ainda indisponíveis.
           </p>
-        </Card>
+        </Card>}
 
         {/* MARKETPLACE — apenas rótulo Fase 1; integrações reais ficam no módulo Marketplace */}
         <Card className="p-5 opacity-80">
@@ -1511,7 +1559,7 @@ export function ProductAIModal({
             Salvar rascunho
           </button>
           <button
-            disabled={saving}
+            disabled={saving || !storeReady}
             onClick={() => {
               startSaving(async () => {
                 try {
@@ -1567,6 +1615,12 @@ export function ProductAIModal({
                         aplicacao: barcodeSuggestionApplication,
                       })
                     : null;
+                  const applicabilityPatch = {
+                    ...(allowCompatibility && applicabilityTouched.compatibilidade ? { compatibilidade: applies.compatibilidade } : {}),
+                    ...(allowAccessories && applicabilityTouched.acessorios ? { acessorios: applies.acessorios } : {}),
+                  };
+                  const commercialPatch = { ...commercial };
+                  if (!allowVariants) delete commercialPatch.gradePlanejada;
                   const result = await upsertProduto(storeId, {
                     id: productId,
                     nome: (nomeRef.current?.value ?? "").trim(),
@@ -1579,8 +1633,8 @@ export function ProductAIModal({
                     custo: Number.isFinite(custo) ? custo : 0,
                     preco: Number.isFinite(preco) ? preco : 0,
                     garantia: Number.isFinite(garantia) ? garantia : 0,
-                    active: true,
-                    accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue),
+                    ...(!productId ? { active: true } : {}),
+                    ...(showAccessories ? { accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue) } : {}),
                     metadata: {
                       // CAD-R2-017: nao gravar audio, blob, prompt nem transcricao.
                       cadastroIa: {
@@ -1588,11 +1642,14 @@ export function ProductAIModal({
                         savedAt: new Date().toISOString(),
                         source,
                       },
-                      ...(catalogoAparelhos ? { catalogoAparelhos } : {}),
+                      ...(showCompatibility && catalogoAparelhos ? { catalogoAparelhos } : {}),
+                      // Em edição, somente grade é mutável; recurso oculto omite o namespace.
+                      ...(commercialTouched && (!productId || allowVariants) ? { comercial: commercialPatch } : {}),
+                      ...(Object.keys(applicabilityPatch).length ? { cadastroRecursos: applicabilityPatch } : {}),
                       atributos: {
                         descricao: descricao.trim(),
                         tags: normalizeProdutoTags(tags),
-                        modeloCompativel: modeloCompativel.trim(),
+                        ...(showCompatibility ? { modeloCompativel: modeloCompativel.trim() } : {}),
                       },
                       // Identidade fiscal canônica: manda NCM/CEST como o operador
                       // revisou (venham do Cosmos, do importador ou digitados) em

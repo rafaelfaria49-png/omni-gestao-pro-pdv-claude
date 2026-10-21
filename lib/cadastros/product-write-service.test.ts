@@ -116,7 +116,7 @@ function prismaKnownError(code: "P2002" | "P2025"): unknown {
   })
 }
 
-function makeFakeDb(seed: FakeRow[] = []) {
+function makeFakeDb(seed: FakeRow[] = [], settingsByStore: Record<string, unknown> = {}) {
   const rows = new Map<string, FakeRow>(seed.map((r) => [r.id, { ...r }]))
   const audits: AuditRow[] = []
   const calls: string[] = []
@@ -162,6 +162,12 @@ function makeFakeDb(seed: FakeRow[] = []) {
   }
 
   const tx = {
+    storeSettings: {
+      findUnique: async ({ where }: { where: { storeId: string } }) => {
+        calls.push(`tx.storeSettings.findUnique:${where.storeId}`)
+        return settingsByStore[where.storeId] ?? null
+      },
+    },
     produto: {
       findFirst: async (args: Prisma.ProdutoFindFirstArgs): Promise<FakeRow | null> => {
         calls.push("tx.produto.findFirst")
@@ -320,11 +326,21 @@ function makeFakeDb(seed: FakeRow[] = []) {
 
   // Fake estrutural: cobre ProductWriteTx (inclui StockLedgerTx). Cast via
   // unknown porque os membros usam args Prisma concretos (runtime equivalente).
+  let lockTail = Promise.resolve()
   const db = {
     produto,
     $transaction: async <T>(fn: (t: typeof tx) => Promise<T>): Promise<T> => {
       calls.push("$transaction")
-      return fn(tx)
+      let unlock: (() => void) | undefined
+      const lockedTx = { ...tx, $queryRaw: async (query?: TemplateStringsArray): Promise<unknown[]> => {
+        if (query?.join("").includes("FOR UPDATE") && !unlock) {
+          const previous = lockTail
+          lockTail = new Promise<void>((resolve) => { unlock = resolve })
+          await previous
+        }
+        return tx.$queryRaw()
+      } }
+      try { return await fn(lockedTx) } finally { unlock?.() }
     },
   } as unknown as ProductWriteDb
 
@@ -354,6 +370,96 @@ function ctx(storeId = "loja-a", principal: CadastrosAuditPrincipal | null = PRI
 function auditMeta(audits: AuditRow[], index = 0): Record<string, unknown> {
   return JSON.parse(audits[index].metadata) as Record<string, unknown>
 }
+
+describe("Ramos combináveis — escrita comercial e preservação", () => {
+  const weight = { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" }
+  const unit = { version: 1, modoVenda: "unidade", unidade: "UN", basePreco: "UN" }
+  const settings = (branch: string, overrides: Record<string, boolean>) => ({ printerConfig: { capabilities: { version: 1, business: { primaryBranch: branch }, overrides } } })
+
+  it("patches concorrentes preservam chaves omitidas de metadata", async () => {
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", metadata: { comercial: weight, atributos: { modeloCompativel: "Histórico" } } })])
+    const results = await Promise.all([
+      updateProduct(ctx(), "p1", { metadata: { atributos: { descricao: "Nova" } } }, { db: fake.db }),
+      updateProduct(ctx(), "p1", { metadata: { atributos: { tags: ["manual"] } } }, { db: fake.db }),
+    ])
+    expect(results.every((result) => result.ok)).toBe(true)
+    expect(fake.rows.get("p1")?.metadata).toEqual({ comercial: weight, atributos: { modeloCompativel: "Histórico", descricao: "Nova", tags: ["manual"] } })
+  })
+
+  it("cria e relê produto por peso em variedades, sem saldo paralelo", async () => {
+    const fake = makeFakeDb([], { "loja-a": settings("variedades", { "catalog.weight": true }) })
+    const result = await createProduct(ctx(), { nome: "Grãos", preco: 20, metadata: { comercial: weight } }, { db: fake.db })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(fake.rows.get(result.id)?.metadata?.comercial).toEqual(weight)
+    expect(fake.rows.get(result.id)?.stock).toBe(0)
+    expect(fake.movs.size).toBe(0)
+    expect(fake.calls).toContain("tx.storeSettings.findUnique:loja-a")
+  })
+  it("rejeita recurso não habilitado na loja, mesmo com override do caller", async () => {
+    const fake = makeFakeDb([], { "loja-b": settings("padaria", {}) })
+    const result = await createProduct(ctx(), { nome: "X", storeId: "loja-b", capabilities: { "catalog.weight": true }, metadata: { comercial: weight } }, { db: fake.db })
+    expect(result).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(fake.rows.size).toBe(0)
+    expect(fake.calls).not.toContain("tx.storeSettings.findUnique:loja-b")
+  })
+  it("prepara grade em variedades sem estoque por variação fictício", async () => {
+    const fake = makeFakeDb([], { "loja-a": settings("variedades", { "catalog.variants": true }) })
+    const result = await createProduct(ctx(), { nome: "Camiseta", metadata: { comercial: { ...unit, gradePlanejada: true } } }, { db: fake.db })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(fake.rows.get(result.id)?.metadata?.comercial).toEqual({ ...unit, gradePlanejada: true })
+    expect(fake.movs.size).toBe(0)
+  })
+  it("não aceita saldo inicial de peso nem unidades inconsistentes", async () => {
+    const fake = makeFakeDb()
+    expect(await createProduct(ctx(), { nome: "X", estoque: 10, metadata: { comercial: weight } }, { db: fake.db })).toMatchObject({ ok: false, field: "estoque" })
+    expect(await createProduct(ctx(), { nome: "X", metadata: { comercial: { ...weight, basePreco: "UN" } } }, { db: fake.db })).toMatchObject({ ok: false, field: "metadata" })
+    expect(fake.rows.size).toBe(0)
+  })
+  it("declaração legada de peso também exige recurso da loja e saldo inicial zero", async () => {
+    const fake = makeFakeDb()
+    expect(await createProduct(ctx(), { nome: "X", estoque: 10, metadata: { vendaPorPeso: true } }, { db: fake.db })).toMatchObject({ ok: false, field: "estoque" })
+    expect(await createProduct(ctx(), { nome: "X", metadata: { vendaPorPeso: true } }, { db: fake.db })).toMatchObject({ ok: false, field: "metadata" })
+    expect(fake.rows.size).toBe(0)
+  })
+  it("declaração inválida existente é preservada por edição comum e não pode ser apagada ou rebaixada", async () => {
+    const comercial = { version: 1, modoVenda: "unidade", unidade: "KG", basePreco: "KG" }
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", metadata: { comercial } })])
+    expect(await updateProduct(ctx(), "p1", { nome: "Revisado" }, { db: fake.db })).toMatchObject({ ok: true })
+    expect(await updateProduct(ctx(), "p1", { metadata: { comercial: unit } }, { db: fake.db })).toMatchObject({ ok: false, field: "metadata" })
+    expect(await updateProduct(ctx(), "p1", { metadata: null }, { db: fake.db, clearMetadata: true })).toMatchObject({ ok: false, field: "metadata" })
+    expect(fake.rows.get("p1")?.metadata?.comercial).toEqual(comercial)
+  })
+  it("salvar campos comuns preserva acessórios, aparelhos, fiscal, peso e saldo", async () => {
+    const metadata = { comercial: weight, acessorios: { version: 1, tipo: "capinha", exigeCor: true, exigeModelo: true, usaCoresPadrao: true }, catalogoAparelhos: { version: 1, deviceModelKeys: ["m1"] }, atributos: { modeloCompativel: "M1", descricao: "Antiga" }, fiscal: { ncm: "12345678" } }
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", stock: 7, metadata })])
+    const result = await updateProduct(ctx(), "p1", { nome: "Novo", metadata: { atributos: { descricao: "Nova" } } }, { db: fake.db })
+    expect(result.ok).toBe(true)
+    expect(fake.rows.get("p1")?.metadata).toEqual({ ...metadata, atributos: { modeloCompativel: "M1", descricao: "Nova" } })
+    expect(fake.rows.get("p1")?.stock).toBe(7)
+    expect(fake.movs.size).toBe(0)
+  })
+  it("proíbe reinterpretar peso/unidade ou limpar a declaração por PATCH REST", async () => {
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", stock: 7, metadata: { comercial: weight } })])
+    expect(await updateProduct(ctx(), "p1", { metadata: { comercial: unit } }, { db: fake.db })).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(await updateProduct(ctx(), "p1", { metadata: null }, { db: fake.db, clearMetadata: true })).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(fake.rows.get("p1")?.metadata?.comercial).toEqual(weight)
+    expect(fake.rows.get("p1")?.stock).toBe(7)
+  })
+  it.each([{ vendaPorPeso: true }, { atributos: { vendaPorPeso: true } }])("flags legadas não podem reinterpretar produto unitário existente: %j", async (metadata) => {
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", stock: 7, metadata: { comercial: unit } })], { "loja-a": settings("padaria", {}) })
+    expect(await updateProduct(ctx(), "p1", { metadata }, { db: fake.db })).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(fake.rows.get("p1")?.metadata).toEqual({ comercial: unit })
+    expect(fake.rows.get("p1")?.stock).toBe(7)
+    expect(fake.movs.size).toBe(0)
+  })
+  it("também preserva uma declaração legada de peso", async () => {
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", metadata: { vendaPorPeso: true } })])
+    expect(await updateProduct(ctx(), "p1", { metadata: { vendaPorPeso: false } }, { db: fake.db })).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(fake.rows.get("p1")?.metadata?.vendaPorPeso).toBe(true)
+  })
+})
 
 // ─── 1–2. Create/update válidos ─────────────────────────────────────────────
 

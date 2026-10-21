@@ -84,6 +84,18 @@ beforeEach(() => {
 })
 
 describe("GET /api/stores/[id]/settings — autorização", () => {
+  it("ramo e recursos recusam escrita cross-store sem tocar persistência", async () => {
+    h.auth.mockResolvedValue(sessao({ storeAccess: "restricted", allowedStoreIds: ["loja-b"] }))
+    const response = await PUT(putReq({ printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } } }), ctx("loja-a"))
+    expect(response.status).toBe(403)
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+  it.each([null, { version: 1, business: { primaryBranch: "inventado" } }, { version: 1, business: { available: true } }])("validação de ramo/capabilities rejeita %j antes da transação", async (capabilities) => {
+    h.auth.mockResolvedValue(sessao())
+    const response = await PUT(putReq({ printerConfig: { capabilities } }), ctx("loja-a"))
+    expect(response.status).toBe(400)
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
   it("sem autenticação → 401 sem ler StoreSettings", async () => {
     h.auth.mockResolvedValue(null)
 

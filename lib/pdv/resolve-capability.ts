@@ -26,6 +26,7 @@ import {
   isCapabilitySupportedOnSurface,
 } from "@/lib/pdv/capability-support-matrix"
 import type { PdvSurfaceId } from "@/lib/pdv/surface-ids"
+import { resolveBusinessResource } from "@/lib/store-business-capabilities"
 
 const BLOCKED_SET = new Set<string>(BLOCKED_CAPABILITY_KEYS_V1)
 
@@ -108,7 +109,12 @@ export function overridesFromStoreCapabilities(
   capabilities: StoreCapabilitiesV1 | null | undefined,
 ): CapabilityOverridesV1 {
   if (!capabilities || capabilities.version !== 1) return {}
-  return capabilities.overrides ?? {}
+  const overrides = { ...capabilities.overrides }
+  // Mesmo recurso e mesma preferência em Cadastro/PDV; suporte por superfície segue soberano.
+  if (capabilities.business?.primaryBranch && parseOverrideEnabled(overrides["pdv.accessoryModelColor"]) === undefined) {
+    overrides["pdv.accessoryModelColor"] = resolveBusinessResource(capabilities, "pdv.accessoryModelColor").requested
+  }
+  return overrides
 }
 
 export function buildCapabilitiesSnapshot(input: {

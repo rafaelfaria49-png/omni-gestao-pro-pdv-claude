@@ -171,14 +171,30 @@ export function mergePrinterConfigServerSide(
     const merged: Record<string, unknown> = { ...existing }
 
     for (const [key, val] of Object.entries(incoming)) {
+      // Somente o patch dedicado do editor de recursos altera capabilities.
+      // Tema/atalhos legados reenviam snapshots completos, possivelmente antigos.
+      if (key === "capabilities" && Object.keys(incoming).some((name) => name !== "capabilities")) continue
       if (key === "pdvParams" && isRecord(val) && isRecord(existing.pdvParams)) {
         merged.pdvParams = { ...existing.pdvParams, ...val }
       } else if (key === "capabilities" && isRecord(val) && isRecord(existing.capabilities)) {
         const existingOverrides = isRecord(existing.capabilities.overrides) ? existing.capabilities.overrides : {}
         const incomingOverrides = isRecord(val.overrides) ? val.overrides : {}
         merged.capabilities = {
+          ...existing.capabilities,
+          ...val,
           version: 1,
           overrides: { ...existingOverrides, ...incomingOverrides },
+          ...(isRecord(val.business) ? {
+            business: {
+              ...(isRecord(existing.capabilities.business) ? existing.capabilities.business : {}),
+              ...val.business,
+              presentation: {
+                ...(isRecord(existing.capabilities.business) && isRecord(existing.capabilities.business.presentation)
+                  ? existing.capabilities.business.presentation : {}),
+                ...(isRecord(val.business.presentation) ? val.business.presentation : {}),
+              },
+            },
+          } : {}),
         }
       } else {
         merged[key] = val

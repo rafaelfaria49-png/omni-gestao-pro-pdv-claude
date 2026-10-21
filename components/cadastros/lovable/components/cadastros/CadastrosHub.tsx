@@ -16,6 +16,9 @@ import { getEstoqueResumo, type EstoqueResumo } from "@/app/actions/estoque";
 import { ClienteEditorDialog } from "./ClienteEditor";
 import { ImportacaoHub } from "./ImportacaoHub";
 import { useLojaAtiva } from "@/lib/loja-ativa";
+import { useStoreBusiness } from "@/lib/use-store-business";
+import { BUSINESS_BRANCHES, BUSINESS_SETTINGS_HREF } from "@/lib/store-business-capabilities";
+import Link from "next/link";
 import {
   getCadastrosDashboardStats,
   listCategorias,
@@ -82,7 +85,12 @@ export function CadastrosHub() {
   const [autoOpenNew, setAutoOpenNew] = useState<string | null>(null);
   const novo = useToggle();
   const { lojaAtivaId } = useLojaAtiva();
-  const storeId = (lojaAtivaId ?? "").trim();  return (
+  const storeId = (lojaAtivaId ?? "").trim();
+  const business = useStoreBusiness();
+  const technical = business.resource("service.technical").operational;
+  const visibleTab = (id: string) => technical || (id !== "tecnicos" && id !== "equipamentos");
+  const selectedTab = visibleTab(tab) ? tab : "dashboard";
+  return (
     <div className="w-full min-w-0 max-w-full bg-background text-foreground transition-smooth">
       {/* HEADER INTEGRADO */}
       <header className="border-b border-border/60 bg-background pb-3">
@@ -94,6 +102,10 @@ export function CadastrosHub() {
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               Clientes, produtos, serviços, fornecedores e base operacional centralizada
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {business.ready ? `Cadastros: ${BUSINESS_BRANCHES[business.branch]}` : "Carregando configuração da unidade…"}
+              {business.canConfigure && <Link className="ml-2 text-primary underline underline-offset-2" href={BUSINESS_SETTINGS_HREF}>Configurar ramo e recursos</Link>}
             </p>
           </div>
 
@@ -119,9 +131,9 @@ export function CadastrosHub() {
 
         {/* TABS HORIZONTAIS DISCRETAS */}
         <nav className="mt-4 flex items-center gap-1 overflow-x-auto pb-1 scroll-elegant">
-          {TABS.map((t) => {
+          {TABS.filter((t) => visibleTab(t.id)).map((t) => {
             const Icon = t.icon;
-            const active = tab === t.id;
+            const active = selectedTab === t.id;
             return (
               <button
                 key={t.id}
@@ -146,7 +158,7 @@ export function CadastrosHub() {
 
       {/* CONTENT */}
       <main className="w-full min-w-0 pt-5">
-        {tab === "dashboard" && (
+        {selectedTab === "dashboard" && (
           <DashboardPanel
             onAction={(targetTab, openNew) => {
               setTab(targetTab);
@@ -168,6 +180,7 @@ export function CadastrosHub() {
         )}
         {tab === "produtos" && (
           <ProdutosPanel
+            key={storeId}
             storeId={storeId}
             autoOpen={autoOpenNew === "produtos"}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
@@ -187,14 +200,14 @@ export function CadastrosHub() {
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {tab === "tecnicos" && (
+        {tab === "tecnicos" && technical && (
           <TecnicosPanel
             storeId={storeId}
             autoOpen={autoOpenNew === "tecnicos"}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {tab === "equipamentos" && (
+        {tab === "equipamentos" && technical && (
           <EquipamentosPanel
             storeId={storeId}
             autoOpen={autoOpenNew === "equipamentos"}
@@ -210,12 +223,12 @@ export function CadastrosHub() {
         <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
           {[
             { l: "Cliente", i: Users, tab: "clientes" as TabId, desc: "PF ou PJ" },
-            { l: "Produto", i: Package, tab: "produtos" as TabId, desc: "Peças e mercadorias" },
+            { l: "Produto", i: Package, tab: "produtos" as TabId, desc: "Mercadorias" },
             { l: "Serviço", i: Wrench, tab: "servicos" as TabId, desc: "Mão de obra" },
             { l: "Fornecedor", i: Truck, tab: "fornecedores" as TabId, desc: "Empresa ou autônomo" },
             { l: "Técnico", i: HardHat, tab: "tecnicos" as TabId, desc: "Membro da equipe" },
             { l: "Equipamento", i: Smartphone, tab: "equipamentos" as TabId, desc: "Modelo para OS" },
-          ].map((x) => (
+          ].filter((x) => visibleTab(x.tab)).map((x) => (
             <button
               key={x.l}
               onClick={() => {
@@ -244,6 +257,8 @@ export function CadastrosHub() {
 
 /* ───── DASHBOARD ───── */
 function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: boolean) => void }) {
+  const business = useStoreBusiness();
+  const technical = business.resource("service.technical").operational;
   const quick = [
     { l: "Novo cliente", i: Users, tab: "clientes" as TabId, autoOpen: true },
     { l: "Novo produto", i: Package, tab: "produtos" as TabId, autoOpen: true },
@@ -287,7 +302,7 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
       {err && <div className="text-sm text-destructive">{err}</div>}
       {/* KPIs */}
       <div className="grid min-w-0 grid-cols-2 gap-4 md:grid-cols-4">
-        {(stats?.kpis ?? []).map((k) => {
+        {(stats?.kpis ?? []).filter((k) => technical || !["HardHat", "Smartphone"].includes(k.icon)).map((k) => {
           const Icon = ICONS[k.icon] ?? Package;
           const negative = k.delta.startsWith("-");
           const mapIconToTab = (icon: string): TabId | null => {
@@ -327,7 +342,7 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
       <div>
         <SectionTitle title="Cards rápidos" subtitle="Operações mais usadas em um clique." />
         <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
-          {quick.map((q) => (
+          {quick.filter((q) => technical || q.tab !== "tecnicos").map((q) => (
             <button
               key={q.l}
               onClick={() => onAction(q.tab, q.autoOpen)}
@@ -348,7 +363,7 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
         <Card className="p-6 lg:col-span-2">
           <SectionTitle title="Saúde dos cadastros" subtitle="Indicadores de completude por entidade." />
           <div className="space-y-4">
-            {(stats?.saude ?? []).map((s) => (
+            {(stats?.saude ?? []).filter((s) => technical || !/técnic|equipamento/i.test(s.label)).map((s) => (
               <div key={s.label}>
                 <div className="mb-1.5 flex items-center justify-between text-sm">
                   <span className="text-foreground">{s.label}</span>
@@ -431,12 +446,13 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
 }
 
 function VinculosSistema() {
+  const technical = useStoreBusiness().resource("service.technical").operational;
   const flows = [
-    { l: "Cliente → OS → Garantia → WhatsApp", c: "info" as const },
+    { l: "Cliente → Venda → Garantia", c: "info" as const },
     { l: "Produto → Estoque → PDV → Financeiro", c: "primary" as const },
-    { l: "Serviço → OS → Garantia → Marketing IA", c: "success" as const },
+    ...(technical ? [{ l: "Serviço → OS → Garantia", c: "success" as const }] : []),
     { l: "Fornecedor → Produto → Compra → Custo", c: "warning" as const },
-    { l: "Modelo → Peça compatível → Diagnóstico IA", c: "info" as const },
+    ...(technical ? [{ l: "Modelo → Peça compatível → Diagnóstico IA", c: "info" as const }] : []),
   ];
   return (
     <Card className="p-6">
@@ -2420,11 +2436,11 @@ function ServicosPanel({
         open={m.open}
         onClose={closeServiceModal}
         title={editing ? "Editar serviço" : "Novo serviço"}
-        subtitle="Dados operacionais usados em OS, atalhos e vendas do PDV."
+        subtitle="Dados operacionais usados no catálogo de serviços e nas vendas."
         size="lg"
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" key={m.open ? "open" : "closed"}>
-          <Field label="Nome" span={2}><Input ref={nomeRef} defaultValue={editing?.nome ?? ""} placeholder="Troca de tela" /></Field>
+          <Field label="Nome" span={2}><Input ref={nomeRef} defaultValue={editing?.nome ?? ""} placeholder="Nome do serviço" /></Field>
           <Field label="Categoria">
             <div className="space-y-2">
               <Select
@@ -2527,7 +2543,7 @@ function ServicosPanel({
                 document.getElementById("save-inline-service-category")?.click();
               }
             }}
-            placeholder="Software e Dados"
+            placeholder="Categoria do serviço"
             aria-invalid={Boolean(categoryCreateError)}
           />
         </Field>
@@ -2755,7 +2771,7 @@ function FornecedoresPanel({
           <Field label="WhatsApp"><Input ref={whatsappRef} defaultValue={editing?.whatsapp === "—" ? "" : editing?.whatsapp ?? ""} /></Field>
           <Field label="Email"><Input ref={emailRef} defaultValue={editing?.email === "—" ? "" : editing?.email ?? ""} /></Field>
           <Field label="Endereço" span={2}><Input ref={enderecoRef} defaultValue={editing?.endereco ?? ""} /></Field>
-          <Field label="Produtos fornecidos" span={2}><Input ref={produtosRef} defaultValue={editing?.produtos ?? ""} placeholder="Telas, baterias…" /></Field>
+          <Field label="Produtos fornecidos" span={2}><Input ref={produtosRef} defaultValue={editing?.produtos ?? ""} placeholder="Mercadorias e insumos…" /></Field>
           <Field label="Prazo médio"><Input ref={prazoRef} defaultValue={editing?.prazo === "—" ? "" : editing?.prazo ?? ""} placeholder="5 dias" /></Field>
           <Field label="Condição de pagamento"><Input ref={pagamentoRef} defaultValue={editing?.pagamento === "—" ? "" : editing?.pagamento ?? ""} placeholder="30/60" /></Field>
           <Field label="Status"><Select ref={statusRef} defaultValue={editing?.status ?? "Ativo"}><option>Ativo</option><option>Inativo</option></Select></Field>
@@ -3279,6 +3295,7 @@ function EquipamentosPanel({
 
 /* ───── CATEGORIAS ───── */
 function CategoriasPanel({ storeId }: { storeId: string }) {
+  const technical = useStoreBusiness().resource("service.technical").operational;
   const m = useToggle();
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -3344,7 +3361,7 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
     <div className="grid w-full min-w-0 gap-6 md:grid-cols-2">
       {loading && <div className="text-sm text-muted-foreground">Carregando categorias…</div>}
       {err && <div className="text-sm text-destructive">{err}</div>}
-      {groups.map((g) => (
+      {groups.filter((g) => technical || g.catType !== "equipamento").map((g) => (
         <Card key={g.l} className="p-6">
           <SectionTitle
             title={g.l}
@@ -3436,7 +3453,7 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
               <Select ref={typeRef} defaultValue={modalTypeDefault}>
                 <option value="produto">produto</option>
                 <option value="servico">servico</option>
-                <option value="equipamento">equipamento</option>
+                {technical && <option value="equipamento">equipamento</option>}
                 <option value="geral">geral</option>
               </Select>
             </Field>

@@ -23,6 +23,7 @@ import {
   type ClientWriteResult,
 } from "@/lib/cadastros/client-write-contract";
 import { applyStockMutation } from "@/lib/estoque/stock-ledger-service";
+import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract";
 import type { ExistingProdutoLite } from "@/lib/produtos/duplicate-product";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
 import {
@@ -1544,6 +1545,16 @@ export async function upsertProduto(
     if (!created.ok) return mapProductWriteFailure(created);
     revalidatePath("/dashboard/cadastros-v2");
     return { ok: true, id: created.id };
+  }
+
+  // Recusar intenção operacional incompatível antes de salvar campos comuns.
+  if (hasEstoque) {
+    try {
+      const current = await prisma.produto.findFirst({ where: { id: productId, storeId: sid }, select: { stock: true, metadata: true } });
+      if (current && current.stock !== requestedStock) assertProductCommercialSaleSupported(current.metadata);
+    } catch (error) {
+      return { ok: false, type: "VALIDATION_ERROR", message: error instanceof Error ? error.message : "Não foi possível validar o saldo deste produto." };
+    }
   }
 
   // UPDATE — strip de `estoque`/`stock`: o service bloqueia PATCH de saldo

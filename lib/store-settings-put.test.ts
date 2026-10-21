@@ -145,6 +145,30 @@ function createConcurrentHarness(initial: StoreSettingsRow | null) {
 }
 
 describe("persistStoreSettingsPut — lock + re-read na mesma transação", () => {
+  it.each(["appearance", "pdvParams", "impressao"])("snapshot antigo de %s preserva ramo, apresentação e overrides atuais", async (namespace) => {
+    const stale = { version: 1, business: { primaryBranch: "assistencia", presentation: { productExample: "Antigo" } }, overrides: { "catalog.weight": true } }
+    const current = { version: 1, business: { primaryBranch: "padaria", presentation: { productExample: "Atual" } }, overrides: { "catalog.weight": false } }
+    const h = createConcurrentHarness({ storeId: "loja-a", printerConfig: { capabilities: current } })
+    h.setExpectedStarters(1)
+    await persistStoreSettingsPut(h.db, "loja-a", { printerConfig: { capabilities: stale, [namespace]: { novo: true } } })
+    expect(h.row?.printerConfig).toEqual({ capabilities: current, [namespace]: { novo: true } })
+  })
+  it("ramo, preferência e apresentação concorrentes preservam os namespaces", async () => {
+    const h = createConcurrentHarness({ storeId: "loja-a", printerConfig: {
+      pdvMainLayout: "classic", impressao: { mode: "local" }, capabilities: {
+        version: 1, business: { primaryBranch: "assistencia", presentation: { productExample: "Personalizado" } },
+        overrides: { "pdv.accessoryModelColor": true },
+      },
+    } })
+    const results = await Promise.all([
+      persistStoreSettingsPut(h.db, "loja-a", { printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } } }),
+      persistStoreSettingsPut(h.db, "loja-a", { printerConfig: { capabilities: { version: 1, overrides: { "catalog.weight": false }, business: { presentation: { categoryExample: "Setor" } } } } }),
+    ])
+    const final = results[1].settings.printerConfig as { pdvMainLayout: string; capabilities: { business: unknown; overrides: unknown } }
+    expect(final.pdvMainLayout).toBe("classic")
+    expect(final.capabilities.business).toEqual({ primaryBranch: "padaria", presentation: { productExample: "Personalizado", categoryExample: "Setor" } })
+    expect(final.capabilities.overrides).toEqual({ "pdv.accessoryModelColor": true, "catalog.weight": false })
+  })
   it("SQL usa pg_advisory_xact_lock(hashtext) com chave por loja", async () => {
     const h = createConcurrentHarness({ storeId: "loja-a", printerConfig: {} })
     h.setExpectedStarters(1)

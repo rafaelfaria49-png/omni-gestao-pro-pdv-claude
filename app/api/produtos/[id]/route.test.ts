@@ -113,10 +113,19 @@ beforeEach(() => {
   h.applyStockMutation.mockResolvedValue({ ok: true, movimentacaoId: "mov-1" })
   h.applyStockMutationTx.mockResolvedValue({ ok: true, movimentacaoId: "mov-1" })
   h.findFirst.mockResolvedValue(ROW())
-  h.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn({}))
+  h.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn({ produto: { findFirst: h.findFirst } }))
 })
 
 describe("PATCH /api/produtos/[id] — boundary canônico (CAD-R2-007)", () => {
+  it.each([{ stock: 8 }, { price: 100, stock: 8 }])("peso bloqueia ajuste REST antes de qualquer escrita: %j", async (body) => {
+    h.findFirst.mockResolvedValue(ROW({ metadata: { vendaPorPeso: true } }))
+    const { res, json } = await runPatch("seed-1", body)
+    expect(res.status).toBe(409)
+    expect(json).toMatchObject({ code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+    expect(h.updateProductTx).not.toHaveBeenCalled()
+    expect(h.applyStockMutation).not.toHaveBeenCalled()
+    expect(h.applyStockMutationTx).not.toHaveBeenCalled()
+  })
   it("cadastral usa ProductWriteService (sem ledger)", async () => {
     const { res, json } = await runPatch("seed-1", { name: "Novo nome", price: 29.9 })
     expect(res.status).toBe(200)

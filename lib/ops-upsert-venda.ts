@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import type { PixQrKind } from "@/lib/fiscal/payment/pix-qr-kind"
 import { buildFiscalPaymentHandoff, resolveCashTenderedEvidence, type FiscalPaymentHandoff } from "@/lib/vendas/fiscal-payment-handoff"
@@ -978,9 +979,12 @@ export async function upsertVendaInTransaction(
           storeId: lojaId,
           OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }],
         },
-        select: { id: true, stock: true, precoCusto: true, sku: true, name: true },
+        select: { id: true, stock: true, precoCusto: true, sku: true, name: true, metadata: true },
       })
       if (produto) {
+        // Metadado do servidor, independente do ramo atual ou do carrinho stale.
+        // Lançar aborta a transação; não muda o contrato inteiro de quantidade/estoque.
+        assertProductCommercialSaleSupported(produto.metadata)
         resolvedProductMap.set(rawInvId, {
           dbId: produto.id,
           stock: produto.stock,

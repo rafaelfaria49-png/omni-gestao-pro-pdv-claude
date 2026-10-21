@@ -46,6 +46,8 @@ export type StoreSettingsContextType = {
   /** ID da unidade ativa; vazio quando nenhuma loja está selecionada (sem fallback silencioso). */
   storeId: string
   hydrated: boolean
+  /** Leitura válida confirmada para a loja atual; falha concluída não equivale a configuração carregada. */
+  loaded: boolean
   settings: StoreSettingsApi | null
   blob: StoreSettingsBlob
   pdvParams: StorePdvParams
@@ -159,6 +161,8 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   const storeId = useMemo(() => lojaAtivaId?.trim() ?? "", [lojaAtivaId])
   const [hydrated, setHydrated] = useState(false)
   const [settings, setSettings] = useState<StoreSettingsApi | null>(null)
+  const [loadedStoreId, setLoadedStoreId] = useState<string | null>(null)
+  const [settledStoreId, setSettledStoreId] = useState<string | null>(null)
 
   // Registro de backfill já tentado nesta sessão para cada loja (evita loops e repetições)
   const backfillAttemptedStoresRef = useRef<Set<string>>(new Set())
@@ -170,6 +174,8 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     if (!storeId) {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(null)
+        setLoadedStoreId(null)
+        setSettledStoreId(storeId)
         setHydrated(true)
       })
       return
@@ -183,19 +189,24 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
         cache: "no-store",
         headers: { [ASSISTEC_LOJA_HEADER]: storeId },
       })
-      const j = (await r.json().catch(() => null)) as { settings?: StoreSettingsApi | null } | null
+      const j = (await r.json().catch(() => null)) as { settings?: (StoreSettingsApi & { storeId?: unknown }) | null } | null
+      const loaded = r.ok && j !== null && Object.hasOwn(j, "settings") &&
+        (j.settings === null || (typeof j.settings === "object" && j.settings?.storeId === storeId))
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
-        setSettings(j?.settings ?? null)
+        setSettings(loaded ? j.settings ?? null : null)
+        setLoadedStoreId(loaded ? storeId : null)
       })
       // P0 PDV-RAFACELL-LOAD-CRASH: observabilidade do mount (só status/contagens).
-      markPdvMountStep("settings", storeId, r.ok, { code: r.ok ? undefined : `HTTP_${r.status}` })
+      markPdvMountStep("settings", storeId, loaded, { code: loaded ? undefined : r.ok ? "invalid_response" : `HTTP_${r.status}` })
     } catch {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(null)
+        setLoadedStoreId(null)
       })
       markPdvMountStep("settings", storeId, false, { code: "fetch_failed" })
     } finally {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+        setSettledStoreId(storeId)
         setHydrated(true)
       })
     }
@@ -206,13 +217,16 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     epochGateRef.current.onStoreChange(storeId)
     setSettings(null)
     setHydrated(false)
+    setLoadedStoreId(null)
+    setSettledStoreId(null)
   }, [storeId])
 
   useEffect(() => {
     void refresh()
   }, [refresh, storesRefreshNonce])
 
-  const blob = useMemo(() => parseBlob(settings?.printerConfig), [settings?.printerConfig])
+  const liveSettings = loadedStoreId === storeId ? settings : null
+  const blob = useMemo(() => parseBlob(liveSettings?.printerConfig), [liveSettings?.printerConfig])
   const resolvedShortcuts = useMemo(
     () =>
       resolvePdvShortcutsServerFirst(
@@ -226,12 +240,12 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     [blob.pdvParams, resolvedShortcuts.value],
   )
   const impressaoConfig = useMemo(
-    () => parseImpressaoFromPrinterConfig(settings?.printerConfig),
-    [settings?.printerConfig],
+    () => parseImpressaoFromPrinterConfig(liveSettings?.printerConfig),
+    [liveSettings?.printerConfig],
   )
   const appearance = useMemo(
-    () => parseAppearanceFromPrinterConfig(settings?.printerConfig),
-    [settings?.printerConfig],
+    () => parseAppearanceFromPrinterConfig(liveSettings?.printerConfig),
+    [liveSettings?.printerConfig],
   )
   const termosGarantia = useMemo(() => mergeTermosGarantia(blob.termosGarantia), [blob.termosGarantia])
   const getGarantiaById = useCallback(
@@ -257,7 +271,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
 
   // ── Backfill controlado e idempotente (executa uma única vez se elegível) ──────
   useEffect(() => {
-    if (!hydrated || !storeId) return
+    if (!hydrated || !storeId || loadedStoreId !== storeId) return
     if (backfillAttemptedStoresRef.current.has(storeId)) return
 
     const needsMainLayoutBackfill = resolvedMainLayout.isEligibleForBackfill
@@ -312,6 +326,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       })
   }, [
     hydrated,
+    loadedStoreId,
     storeId,
     resolvedMainLayout.isEligibleForBackfill,
     resolvedMainLayout.value,
@@ -347,8 +362,9 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<StoreSettingsContextType>(
     () => ({
       storeId,
-      hydrated,
-      settings,
+      hydrated: hydrated && settledStoreId === storeId,
+      loaded: hydrated && loadedStoreId === storeId,
+      settings: liveSettings,
       blob,
       pdvParams,
       impressaoConfig,
@@ -365,7 +381,9 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     [
       storeId,
       hydrated,
-      settings,
+      settledStoreId,
+      loadedStoreId,
+      liveSettings,
       blob,
       pdvParams,
       impressaoConfig,
@@ -390,6 +408,7 @@ export function useStoreSettings(): StoreSettingsContextType {
     return {
       storeId: "",
       hydrated: false,
+      loaded: false,
       settings: null,
       blob: {},
       pdvParams: base,
