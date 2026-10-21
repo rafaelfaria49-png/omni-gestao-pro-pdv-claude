@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { checkLocalVoiceSupport, installLocalVoicePack, localVoicePreflight, startLocalVoiceCapture } from "./local"
 import { createFakeLocalSpeech, createGenericSpeech } from "./__fixtures__/fake-local-speech"
+import { classifyVoiceDiagnostic, type VoiceDiagnostic } from "./diagnostic"
 import type { VoiceCaptureEvent } from "./types"
 
 // SIMULATED engine only: these tests prove the adapter contract, not recognition quality.
@@ -33,10 +34,29 @@ describe("pt-BR local compatibility (metadata only)", () => {
   })
   it.each(["available", "downloadable", "downloading"] as const)("maps %s, querying only pt-BR with processLocally and without constructing the engine", async (availability) => {
     const fake = createFakeLocalSpeech({ availability })
-    expect(await checkLocalVoiceSupport(win(fake.Ctor), query)).toEqual({ status: availability })
-    expect(fake.calls.available).toEqual([{ langs: ["pt-BR"], processLocally: true }])
+    expect(await checkLocalVoiceSupport(win(fake.Ctor), query)).toEqual({ status: availability, quality: "default" })
+    expect(fake.calls.available).toContainEqual({ langs: ["pt-BR"], processLocally: true })
+    for (const call of fake.calls.available) expect(call).toMatchObject({ langs: ["pt-BR"], processLocally: true })
     expect(fake.instances).toHaveLength(0)
     expect(fake.calls.install).toHaveLength(0)
+  })
+  it("Chrome 155 pt-BR shape: knows `quality`, dictation unavailable → keeps the local command level", async () => {
+    const fake = createFakeLocalSpeech({ availability: "downloadable", qualities: { dictation: "unavailable" } })
+    expect(await checkLocalVoiceSupport(win(fake.Ctor), query)).toEqual({ status: "downloadable", quality: "command" })
+    expect(fake.calls.available).toContainEqual({ langs: ["pt-BR"], processLocally: true, quality: "dictation" })
+    expect(await installLocalVoicePack(win(fake.Ctor), "pt-BR", "command")).toBe(true)
+    expect(fake.calls.install).toEqual([{ langs: ["pt-BR"], processLocally: true, quality: "command" }])
+  })
+  it.each([
+    [{ availability: "available", qualities: { dictation: "available" } }, { status: "available", quality: "dictation" }],
+    [{ availability: "available", qualities: { dictation: "downloadable" } }, { status: "available", quality: "command" }],
+    [{ availability: "downloadable", qualities: { dictation: "downloadable" } }, { status: "downloadable", quality: "dictation" }],
+    [{ availability: "unavailable", qualities: { dictation: "unavailable" } }, { status: "unavailable", reason: "language-unavailable" }],
+  ] as const)("dictation only when declared local: %j → %j", async (options, expected) => {
+    const fake = createFakeLocalSpeech(options)
+    expect(await checkLocalVoiceSupport(win(fake.Ctor), query)).toEqual(expected)
+    for (const call of fake.calls.available) expect(call).toMatchObject({ processLocally: true })
+    expect(fake.instances).toHaveLength(0)
   })
   it.each([
     ["unavailable", "language-unavailable"],
@@ -54,7 +74,7 @@ describe("explicit language pack install", () => {
     const fake = createFakeLocalSpeech({ availability: "downloadable", afterInstall: "available" })
     expect(await installLocalVoicePack(win(fake.Ctor), "pt-BR")).toBe(true)
     expect(fake.calls.install).toEqual([{ langs: ["pt-BR"], processLocally: true }])
-    expect(await checkLocalVoiceSupport(win(fake.Ctor), query)).toEqual({ status: "available" })
+    expect(await checkLocalVoiceSupport(win(fake.Ctor), query)).toEqual({ status: "available", quality: "default" })
     expect(await installLocalVoicePack(win(createFakeLocalSpeech({ installResult: false }).Ctor), "pt-BR")).toBe(false)
     expect(await installLocalVoicePack(win(fake.Ctor, false), "pt-BR")).toBe(false)
     expect(fake.instances).toHaveLength(0)
@@ -65,7 +85,7 @@ describe("local capture session", () => {
   it("sets processLocally=true and pt-BR before start and forwards shared machine events", () => {
     const { rec, events, session } = capture()
     expect(session.ok).toBe(true)
-    expect(rec.configAtStart).toEqual({ processLocally: true, lang: "pt-BR", continuous: true, interimResults: true })
+    expect(rec.configAtStart).toMatchObject({ processLocally: true, lang: "pt-BR", continuous: true, interimResults: true, quality: "command" })
     rec.result("Novo cliente Lia", false)
     rec.result("Novo cliente Lia de Teste", true)
     expect(events).toEqual([{ type: "interim", text: "Novo cliente Lia" }, { type: "final-chunk", text: "Novo cliente Lia de Teste" }])
@@ -144,5 +164,72 @@ describe("local capture session", () => {
     expect(session).toEqual({ ok: false, reason: "start-failed" })
     fake.instances[0].result("late", true)
     expect(events).toEqual([])
+  })
+  it("applies dictation quality only when declared, staying local", () => {
+    const dictation = capture(createFakeLocalSpeech({ qualities: { dictation: "available" } }), { quality: "dictation" })
+    expect(dictation.rec.configAtStart).toMatchObject({ processLocally: true, quality: "dictation" })
+    const command = capture(createFakeLocalSpeech({ qualities: { dictation: "unavailable" } }), { quality: "command" })
+    expect(command.rec.configAtStart).toMatchObject({ processLocally: true, quality: "command" })
+  })
+  it("forwards provisional text that arrives after stop (it used to be dropped)", () => {
+    const { rec, events, session } = capture()
+    if (!session.ok) throw new Error("expected session")
+    session.stop()
+    rec.result("trecho provisório tardio", false)
+    rec.end()
+    expect(events).toEqual([{ type: "stop-requested" }, { type: "interim", text: "trecho provisório tardio" }, { type: "end" }])
+  })
+  it("emits the final part before the provisional tail of the same event", () => {
+    const { rec, events } = capture()
+    rec.mixed("Nome Lia de Teste", "telefone quatorze")
+    expect(events).toEqual([{ type: "final-chunk", text: "Nome Lia de Teste" }, { type: "interim", text: "telefone quatorze" }])
+  })
+})
+
+describe("sanitized diagnostic of the editor session", () => {
+  const withDiag = (extra: Partial<Parameters<typeof startLocalVoiceCapture>[0]> = {}) => {
+    const snapshots: VoiceDiagnostic[] = []
+    return { snapshots, ...capture(undefined, { onDiagnostic: (d) => snapshots.push(d), ...extra }) }
+  }
+  it("records audio/sound/speech steps, result counts and the end, never text", () => {
+    const { rec, snapshots, session } = withDiag()
+    if (!session.ok) throw new Error("expected session")
+    rec.audio("audiostart", "soundstart", "speechstart")
+    rec.result("SYNTHETIC-PII Lia 52998224725", false)
+    rec.mixed("SYNTHETIC-FINAL", "SYNTHETIC-TAIL")
+    session.stop()
+    rec.end()
+    const last = snapshots[snapshots.length - 1]
+    expect(Object.keys(last.steps)).toEqual(expect.arrayContaining(["audiostart", "soundstart", "speechstart", "first-interim", "first-final", "stop-requested", "end"]))
+    expect(last.counts).toEqual({ results: 2, interim: 2, final: 1, nomatch: 0 })
+    expect(last).toMatchObject({ source: "editor", endReason: "engine-end", error: null })
+    expect(classifyVoiceDiagnostic(last)).toBe("FINAL_RECEIVED")
+    expect(JSON.stringify(snapshots)).not.toMatch(/SYNTHETIC|Lia|52998224725/)
+  })
+  it("speech detected without any result, and an engine that never ends", () => {
+    vi.useFakeTimers()
+    const { rec, snapshots, session } = withDiag({ endGraceMs: 1000 })
+    if (!session.ok) throw new Error("expected session")
+    rec.audio("audiostart", "soundstart", "speechstart")
+    session.stop()
+    vi.advanceTimersByTime(1000)
+    const last = snapshots[snapshots.length - 1]
+    expect(last.endReason).toBe("grace-timeout")
+    expect(classifyVoiceDiagnostic(last)).toBe("ENGINE_FAILURE")
+    expect(rec.aborted).toBe(true)
+  })
+  it("cancel and start failure are classified without inventing results", () => {
+    const cancelled = withDiag()
+    if (!cancelled.session.ok) throw new Error("expected session")
+    cancelled.session.cancel()
+    expect(classifyVoiceDiagnostic(cancelled.snapshots[cancelled.snapshots.length - 1])).toBe("CANCELLED")
+    const failed: VoiceDiagnostic[] = []
+    capture(createFakeLocalSpeech({ startThrows: true }), { onDiagnostic: (d) => failed.push(d) })
+    expect(classifyVoiceDiagnostic(failed[failed.length - 1])).toBe("MIC_NOT_STARTED")
+  })
+  it("sanitizes an unexpected engine error string", () => {
+    const { rec, snapshots } = withDiag()
+    rec.error("SYNTHETIC free text from engine")
+    expect(snapshots[snapshots.length - 1].error).toBe("unknown")
   })
 })

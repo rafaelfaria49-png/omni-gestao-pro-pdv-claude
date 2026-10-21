@@ -1,5 +1,6 @@
 import { reduceVoiceCapture, VOICE_CAPTURE_INITIAL } from "./session"
 import type { LocalVoiceSupport } from "./local"
+import type { VoiceDiagnostic, VoiceDiagnosticCode } from "./diagnostic"
 import type { VoiceCaptureEvent, VoiceCaptureSnapshot, VoiceCaptureStatus } from "./types"
 
 /**
@@ -18,6 +19,10 @@ export const CLIENT_VOICE_POLICY = Object.freeze({
   maxDurationMs: 30_000,
   maxChars: 2000,
   availabilityTimeoutMs: 5000,
+  /** Espera pelo `end` do motor depois de parar ou de um erro. */
+  endGraceMs: 5000,
+  /** Escuta do teste mínimo do navegador (diagnóstico, sem texto guardado). */
+  probeListenMs: 8000,
   storesAudio: false,
   autoSave: false,
 } as const)
@@ -31,8 +36,8 @@ export function isClientCaptureSource(raw: unknown): raw is ClientCaptureSource 
 export const CLIENT_CAPTURE_SOURCE_INVALID_MESSAGE = "Origem de captura inválida. Descreva o cliente por texto."
 
 const STATUS_MESSAGES: Record<VoiceCaptureStatus, string> = {
-  ready: "Voz local pronta. O microfone só liga quando você tocar em Ditar por voz.",
-  listening: "Ouvindo… dite nome, telefone, CPF/CNPJ, email, cidade e endereço. Toque em Parar ditado ao terminar.",
+  ready: "Voz local pronta. O microfone só liga quando você tocar no microfone do campo.",
+  listening: "Dite nome, telefone, CPF/CNPJ, email, cidade e endereço. Toque em Parar ditado ao terminar.",
   transcribing: "Finalizando a transcrição no dispositivo…",
   completed: "Transcrição pronta no campo acima. Corrija se precisar e toque em Interpretar texto.",
   "permission-denied": "Microfone bloqueado pelo navegador. O cadastro continua disponível por texto.",
@@ -44,8 +49,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   "no-speech": "Nenhuma fala detectada. Tente de novo ou digite — o cadastro atual foi preservado.",
   "audio-capture": "Microfone indisponível ou ocupado. O cadastro continua disponível por texto.",
   "language-not-supported": "Pacote local pt-BR indisponível neste dispositivo. Continue por texto.",
+  // With processLocally the spec reports a missing local engine as service-not-allowed:
+  // this is not a microphone permission problem.
+  "service-not-allowed": "O navegador recusou o reconhecimento local neste momento. O cadastro continua disponível por texto.",
 }
 const EMPTY_TRANSCRIPT = "Nenhuma fala reconhecida. Tente de novo ou digite — o cadastro atual foi preservado."
+const PROVISIONAL_ONLY = "O navegador não confirmou o texto. Há um trecho provisório abaixo: use-o só se estiver correto."
+const COMPLETED_WITH_PROVISIONAL = "Transcrição pronta no campo. Um trecho final ficou provisório (não confirmado pelo navegador)."
 
 export const CLIENT_VOICE_SUPPORT_MESSAGES: Record<"checking" | "disabled" | "downloadable" | "downloading" | Extract<LocalVoiceSupport, { status: "unavailable" }>["reason"], string> = {
   checking: "Verificando se este navegador reconhece pt-BR no próprio dispositivo…",
@@ -62,33 +72,76 @@ export const CLIENT_VOICE_SUPPORT_MESSAGES: Record<"checking" | "disabled" | "do
   "query-failed": "Não foi possível verificar o reconhecimento local. Continue por texto.",
 }
 
+/**
+ * Snapshot de Clientes: a máquina compartilhada + o último texto provisório.
+ * `session.ts` (também usado por Produto) descarta o provisório ao parar; aqui
+ * ele fica guardado só para recuperação explícita e revisável — nunca vira
+ * dado cadastral sozinho.
+ */
+export type ClientVoiceSnapshot = VoiceCaptureSnapshot & { provisional: string }
+
 /** Estado inicial de Clientes: nada é capturável antes da verificação local. */
-export const CLIENT_VOICE_INITIAL: VoiceCaptureSnapshot = Object.freeze({
+export const CLIENT_VOICE_INITIAL: ClientVoiceSnapshot = Object.freeze({
   ...reduceVoiceCapture(VOICE_CAPTURE_INITIAL, { type: "capability", available: false }),
   message: CLIENT_VOICE_SUPPORT_MESSAGES.checking,
+  provisional: "",
 })
 
 const DISCARDS_TRANSCRIPT: ReadonlySet<VoiceCaptureStatus> = new Set(["error", "cancelled", "permission-denied", "unavailable"])
+const ACTIVE: ReadonlySet<VoiceCaptureStatus> = new Set(["listening", "transcribing"])
+
+function nextProvisional(prev: ClientVoiceSnapshot, event: VoiceCaptureEvent): string {
+  if (event.type === "start" || event.type === "reset" || event.type === "cancel" || event.type === "capability") return ""
+  if (event.type === "error" && (event.code === "not-allowed" || event.code === "service-not-allowed")) return ""
+  // Final text supersedes what was provisional until then.
+  if (event.type === "final-chunk") return ""
+  if (event.type === "interim" && ACTIVE.has(prev.status)) return event.text.replace(/\s+/g, " ").trim().slice(0, CLIENT_VOICE_POLICY.maxChars)
+  return prev.provisional
+}
 
 /**
- * Máquina compartilhada (`session.ts`) com duas regras de Clientes: mensagens
- * próprias e descarte do trecho temporário em qualquer término sem sucesso.
+ * Máquina compartilhada (`session.ts`) com regras de Clientes: mensagens
+ * próprias, descarte do trecho confirmado em término sem sucesso e retenção
+ * do provisório (exceto cancelamento ou recusa do navegador).
  */
-export function reduceClientVoiceCapture(prev: VoiceCaptureSnapshot, event: VoiceCaptureEvent): VoiceCaptureSnapshot {
-  const next = reduceVoiceCapture(prev, event)
-  if (next === prev) return prev
-  const changed = next.status !== prev.status || event.type === "error"
+export function reduceClientVoiceCapture(prev: ClientVoiceSnapshot, event: VoiceCaptureEvent): ClientVoiceSnapshot {
+  const shared = reduceVoiceCapture(prev, event)
+  const provisional = nextProvisional(prev, event)
+  if (shared === prev && provisional === prev.provisional) return prev
+  const changed = shared.status !== prev.status || event.type === "error"
   let message = prev.message
   if (changed) {
-    message = STATUS_MESSAGES[next.status]
+    message = STATUS_MESSAGES[shared.status]
     if (event.type === "error") message = ERROR_MESSAGES[event.code] ?? message
-    if (event.type === "end" && next.status === "error") message = EMPTY_TRANSCRIPT
+    if (event.type === "end" && shared.status === "error") message = provisional ? PROVISIONAL_ONLY : EMPTY_TRANSCRIPT
+    if (event.type === "end" && shared.status === "completed" && provisional) message = COMPLETED_WITH_PROVISIONAL
   }
   return {
-    ...next,
-    ...(DISCARDS_TRANSCRIPT.has(next.status) ? { sessionTranscript: "", interim: "" } : {}),
+    ...shared,
+    ...(DISCARDS_TRANSCRIPT.has(shared.status) ? { sessionTranscript: "", interim: "" } : {}),
+    provisional: shared.status === "permission-denied" || shared.status === "cancelled" ? "" : provisional,
     message,
   }
+}
+
+/** Texto honesto da etapa durante a escuta: "Ouvindo" sozinho não prova áudio nem texto. */
+export function clientVoiceStage(d: VoiceDiagnostic | null): string {
+  if (!d || d.steps.audiostart === undefined) return "Iniciando o microfone…"
+  if (d.counts.results > 0) return "Recebendo texto"
+  if (d.steps.speechstart !== undefined) return "Fala detectada — aguardando o texto"
+  if (d.steps.soundstart !== undefined) return "Som detectado"
+  return "Microfone ativo — aguardando som"
+}
+
+export const CLIENT_VOICE_DIAGNOSTIC_TEXT: Record<VoiceDiagnosticCode, string> = {
+  MIC_NOT_STARTED: "o microfone não chegou a iniciar (permissão, dispositivo ocupado ou falha ao iniciar).",
+  NO_AUDIO: "o microfone iniciou, mas o navegador não recebeu som.",
+  NO_SPEECH: "houve som, mas o navegador não detectou fala.",
+  NO_RESULTS: "o navegador detectou fala, mas o reconhecedor local não devolveu nenhum texto.",
+  INTERIM_ONLY: "o reconhecedor devolveu só texto provisório, sem confirmação final.",
+  FINAL_RECEIVED: "o reconhecedor devolveu texto confirmado.",
+  ENGINE_FAILURE: "o reconhecedor local falhou ou não respondeu a tempo.",
+  CANCELLED: "captura cancelada antes do fim (botão, fechamento ou aba oculta).",
 }
 
 // Rótulos do parser de Cliente que, ditos no meio da frase, iniciam outro campo.

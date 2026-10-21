@@ -17,6 +17,7 @@ import type {
   SpeechRecognitionInstance,
 } from "@/lib/web-speech-recognition"
 import type { VoiceBrowserStartResult } from "./browser"
+import { createVoiceDiagnosticRecorder, type VoiceDiagnostic, type VoiceQuality } from "./diagnostic"
 import type { VoiceCaptureEvent } from "./types"
 
 export type LocalVoiceUnavailableReason =
@@ -29,18 +30,27 @@ export type LocalVoiceUnavailableReason =
   | "timeout"
   | "query-failed"
 
+/**
+ * `quality` (spec: command < dictation < conversation) só existe nas opções de
+ * `available()`/`install()`. "default" = navegador sem esse membro (padrão do motor).
+ */
 export type LocalVoiceSupport =
-  | { status: "available" }
-  | { status: "downloadable" }
-  | { status: "downloading" }
+  | { status: "available"; quality: VoiceQuality }
+  | { status: "downloadable"; quality: VoiceQuality }
+  | { status: "downloading"; quality: VoiceQuality }
   | { status: "unavailable"; reason: LocalVoiceUnavailableReason }
 
-type LocalOptions = { langs: string[]; processLocally: true }
-type LocalRecognition = SpeechRecognitionInstance & { processLocally?: boolean }
+type LocalOptions = { langs: string[]; processLocally: true; quality?: "command" | "dictation" | string }
+type AudioStep = "audiostart" | "soundstart" | "speechstart" | "speechend" | "soundend" | "audioend"
+type LocalRecognition = SpeechRecognitionInstance & { processLocally?: boolean; quality?: string; onnomatch?: (() => void) | null }
+  & Partial<Record<`on${AudioStep}`, (() => void) | null>>
 type LocalSpeechCtor = (new () => LocalRecognition) & {
   available: (options: LocalOptions) => Promise<unknown>
   install?: (options: LocalOptions) => Promise<unknown>
 }
+const AUDIO_STEPS: readonly AudioStep[] = ["audiostart", "soundstart", "speechstart", "speechend", "soundend", "audioend"]
+const optionsFor = (lang: string, quality: VoiceQuality): LocalOptions =>
+  quality === "default" ? { langs: [lang], processLocally: true } : { langs: [lang], processLocally: true, quality }
 type SpeechWindowLike = { isSecureContext?: boolean; SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }
 
 /** Construtor com API local completa, ou null. Getter adulterado conta como ausente. */
@@ -74,21 +84,36 @@ export async function checkLocalVoiceSupport(
   const refused = localVoicePreflight(win)
   if (refused) return refused
   const ctor = localSpeechCtor(win as SpeechWindowLike) as LocalSpeechCtor
-  let timer: ReturnType<typeof setTimeout> | undefined
+  const timers: ReturnType<typeof setTimeout>[] = []
+  const query = (options: LocalOptions) => Promise.race([
+    ctor.available(options),
+    new Promise<"TIMEOUT">((resolve) => { timers.push(setTimeout(() => resolve("TIMEOUT"), opts.timeoutMs)) }),
+  ])
+  // A browser that knows the `quality` enum rejects an unknown value with TypeError;
+  // one that does not simply ignores the member. Metadata only, no download.
+  const qualityKnown = query({ langs: [opts.lang], processLocally: true, quality: "__unsupported__" })
+    .then(() => false, (error) => (error as { name?: unknown } | null)?.name === "TypeError")
   try {
-    const result = await Promise.race([
-      ctor.available({ langs: [opts.lang], processLocally: true }),
-      new Promise<"TIMEOUT">((resolve) => { timer = setTimeout(() => resolve("TIMEOUT"), opts.timeoutMs) }),
-    ])
-    if (result === "available" || result === "downloadable" || result === "downloading") return { status: result }
-    if (result === "unavailable") return { status: "unavailable", reason: "language-unavailable" }
-    if (result === "TIMEOUT") return { status: "unavailable", reason: "timeout" }
-    return { status: "unavailable", reason: "query-failed" }
+    const [knowsQuality, base] = await Promise.all([qualityKnown, query({ langs: [opts.lang], processLocally: true })])
+    const mapped = (result: unknown, quality: VoiceQuality): LocalVoiceSupport => {
+      if (result === "available" || result === "downloadable" || result === "downloading") return { status: result, quality }
+      if (result === "unavailable") return { status: "unavailable", reason: "language-unavailable" }
+      if (result === "TIMEOUT") return { status: "unavailable", reason: "timeout" }
+      return { status: "unavailable", reason: "query-failed" }
+    }
+    if (!knowsQuality) return mapped(base, "default")
+    // Dictation only when the browser declares it for this language; otherwise the
+    // spec default ("command") keeps working exactly as before. Never remote.
+    const dictation = await query(optionsFor(opts.lang, "dictation")).catch(() => "unavailable")
+    if (dictation === "available") return { status: "available", quality: "dictation" }
+    if (base === "available") return { status: "available", quality: "command" }
+    if (dictation === "downloadable" || dictation === "downloading") return { status: dictation, quality: "dictation" }
+    return mapped(base, "command")
   } catch (error) {
     const name = (error as { name?: unknown } | null)?.name
     return { status: "unavailable", reason: name === "NotAllowedError" ? "policy-blocked" : "query-failed" }
   } finally {
-    clearTimeout(timer)
+    timers.forEach(clearTimeout)
   }
 }
 
@@ -97,12 +122,12 @@ export async function checkLocalVoiceSupport(
  * operador: chamar de forma síncrona dentro do clique (ativação do usuário).
  * Baixa apenas o modelo do fornecedor do navegador; nenhum áudio é enviado.
  */
-export function installLocalVoicePack(win: SpeechWindowLike | null | undefined, lang: string): Promise<boolean> {
+export function installLocalVoicePack(win: SpeechWindowLike | null | undefined, lang: string, quality: VoiceQuality = "default"): Promise<boolean> {
   if (!win || win.isSecureContext !== true) return Promise.resolve(false)
   const ctor = localSpeechCtor(win)
   if (typeof ctor === "string" || typeof ctor.install !== "function") return Promise.resolve(false)
   try {
-    return ctor.install({ langs: [lang], processLocally: true }).then((ok) => ok === true, () => false)
+    return ctor.install(optionsFor(lang, quality)).then((ok) => ok === true, () => false)
   } catch {
     return Promise.resolve(false)
   }
@@ -130,6 +155,10 @@ export function startLocalVoiceCapture(opts: {
   /** Tempo máximo entre o pedido de parada e o `end` do motor. */
   endGraceMs?: number
   onAutoStop?: (reason: "duration" | "chars") => void
+  /** Qualidade declarada disponível por `checkLocalVoiceSupport`. */
+  quality?: VoiceQuality
+  /** Diagnóstico sanitizado a cada etapa (tempos, contagens, código de erro). */
+  onDiagnostic?: (snapshot: VoiceDiagnostic) => void
 }): VoiceBrowserStartResult {
   if (!opts.win || opts.win.isSecureContext !== true) return { ok: false, reason: "unavailable" }
   const ctor = localSpeechCtor(opts.win)
@@ -148,6 +177,9 @@ export function startLocalVoiceCapture(opts: {
   rec.continuous = true
   rec.interimResults = true
   rec.maxAlternatives = 1
+  // Chrome also exposes `quality` on the instance; a refusal keeps the local default.
+  if (opts.quality === "dictation" && "quality" in rec) { try { rec.quality = "dictation" } catch { /* padrão local */ } }
+  const diag = createVoiceDiagnosticRecorder("editor", rec.quality === "dictation" ? "dictation" : opts.quality ?? "default", opts.onDiagnostic)
 
   let finished = false
   let stopping = false
@@ -161,47 +193,68 @@ export function startLocalVoiceCapture(opts: {
     rec.onresult = null
     rec.onerror = null
     rec.onend = null
+    rec.onnomatch = null
+    for (const step of AUDIO_STEPS) rec[`on${step}`] = null
   }
   const abortEngine = () => {
     try { rec.abort() } catch { /* motor já encerrado */ }
   }
-  const finishWithEnd = () => {
+  const finishWithEnd = (reason: "engine-end" | "grace-timeout") => {
     if (finished) return
     finished = true
     detach()
+    diag.end(reason)
     opts.emit({ type: "end" })
+  }
+  const startGrace = () => {
+    clearTimeout(graceTimer)
+    // Motor que não devolve `end` não pode deixar o microfone aberto.
+    graceTimer = setTimeout(() => { abortEngine(); finishWithEnd("grace-timeout") }, opts.endGraceMs ?? 5000)
   }
   const requestStop = () => {
     if (finished || stopping) return
     stopping = true
     clearTimeout(durationTimer)
+    diag.step("stop-requested")
     opts.emit({ type: "stop-requested" })
     try { rec.stop() } catch { abortEngine() }
-    // Motor que não devolve `end` não pode deixar o microfone aberto.
-    graceTimer = setTimeout(() => { abortEngine(); finishWithEnd() }, opts.endGraceMs ?? 5000)
+    startGrace()
   }
 
+  for (const step of AUDIO_STEPS) rec[`on${step}`] = () => diag.step(step)
+  rec.onnomatch = () => diag.nomatch()
   rec.onresult = (ev: Event) => {
     const e = ev as SpeechRecognitionEventLike
-    const interim = coletar(e, false).trim()
-    if (interim && !stopping) opts.emit({ type: "interim", text: interim })
+    let interimParts = 0, finalParts = 0
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i]?.isFinal) finalParts++
+      else if (e.results[i]) interimParts++
+    }
+    diag.result(interimParts, finalParts)
+    // Finals first: the provisional tail of the same event must survive them.
     const finals = coletar(e, true).trim()
-    if (!finals) return
-    opts.emit({ type: "final-chunk", text: finals })
-    finalChars += finals.length + 1
-    if (finalChars >= opts.maxChars) {
+    if (finals) {
+      opts.emit({ type: "final-chunk", text: finals })
+      finalChars += finals.length + 1
+    }
+    // Provisional text after stop is still forwarded: the caller keeps it for an
+    // explicit, reviewable recovery instead of silently losing it.
+    const interim = coletar(e, false).trim()
+    if (interim) opts.emit({ type: "interim", text: interim })
+    if (finals && finalChars >= opts.maxChars) {
       opts.onAutoStop?.("chars")
       requestStop()
     }
   }
   rec.onerror = (ev: Event) => {
     if (finished) return
-    opts.emit({ type: "error", code: (ev as SpeechRecognitionErrorEventLike).error ?? "unknown" })
+    const code = (ev as SpeechRecognitionErrorEventLike).error ?? "unknown"
+    diag.error(code)
+    opts.emit({ type: "error", code })
     clearTimeout(durationTimer)
-    clearTimeout(graceTimer)
-    graceTimer = setTimeout(() => { abortEngine(); finishWithEnd() }, opts.endGraceMs ?? 5000)
+    startGrace()
   }
-  rec.onend = finishWithEnd
+  rec.onend = () => finishWithEnd("engine-end")
 
   try {
     rec.start()
@@ -209,6 +262,7 @@ export function startLocalVoiceCapture(opts: {
     finished = true
     detach()
     abortEngine()
+    diag.end("start-failed")
     return { ok: false, reason: "start-failed" }
   }
   durationTimer = setTimeout(() => {
@@ -223,6 +277,7 @@ export function startLocalVoiceCapture(opts: {
       if (finished) return
       finished = true
       detach()
+      diag.end("cancelled")
       opts.emit({ type: "cancel" })
       abortEngine()
     },

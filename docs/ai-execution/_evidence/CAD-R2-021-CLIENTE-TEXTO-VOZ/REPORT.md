@@ -1,5 +1,54 @@
 # CAD-R2-021 — relatório único de texto, voz e prontidão de governança
 
+## Correção: microfone no campo e diagnóstico da transcrição — 20/10/2026
+
+`GOAL=CAD-R2-021`. `INLINE_MICROPHONE=PASS` (Chromium real, geometria medida; motor simulado). `LOCAL_VOICE_DIAGNOSTIC=IMPLEMENTED` — comprovado neste host: o motor local do Chrome 155 detecta fala e não devolve resultado (dependência do navegador, não do React); terminal da loja ainda não medido. `REAL_SPEECH_TO_TEXT=NOT_TESTED`. `REMOTE_FALLBACK=DISABLED`. `HUMAN_REVIEW=PRESERVED`. `OTHER_MODULES=UNCHANGED`. `WIP_PRESERVED=YES`.
+
+Continuação corretiva, sem GOAL novo, sobre a main `16c496ad2ffe56fc6a89de237b204842494b8cbb`. Worktree isolada `.worktrees/cad-r2-021-voz-inline`, branch `claude/cad-r2-021-voz-inline-diagnostico`; AEP inativo; WIP da worktree principal intocado.
+
+### Sintoma relatado
+
+No computador da loja, Chrome instalou o pacote e iniciou a escuta, mas o campo ficou vazio e, ao parar, apareceu "Nenhuma fala reconhecida". O gravador do Windows captou a voz. Pedido de UX: microfone dentro da caixa "Descreva o novo cliente".
+
+### Causas encontradas no código (corrigidas)
+
+1. **Provisório perdido ao parar.** `session.ts` (compartilhado com Produto) zera `interim` em `stop-requested`, e o adapter local ignorava provisório recebido depois de parar. Se o navegador só tivesse produzido provisório, o texto sumia e restava "Nenhuma fala reconhecida". Agora o adapter repassa o provisório tardio e Clientes guarda uma cópia (`provisional`) para recuperação **explícita** ("Usar trecho provisório"/"Descartar trecho"); ela só entra no campo de descrição editável e nunca é interpretada ou salva sozinha. Produto e `session.ts` sem mudança.
+2. **Ordem final × provisório no mesmo evento.** O adapter emitia o provisório antes do final, e o final apagava a cauda provisória. Agora o final sai primeiro.
+3. **`service-not-allowed` exibido como "Microfone bloqueado".** Pela especificação, com `processLocally` é o motor local indisponível. Mensagem própria e reconsulta da disponibilidade (sem remoto).
+4. **"Ouvindo" sem prova.** A faixa de captura mostra a etapa comprovada por evento: "Iniciando o microfone…" → "Microfone ativo — aguardando som" (`audiostart`) → "Som detectado" (`soundstart`) → "Fala detectada — aguardando o texto" (`speechstart`) → "Recebendo texto" (primeiro `result`).
+
+### O que não é corrigível no React
+
+Neste host (Chrome 155.0.8059.80, Windows 11), com fala sintética e rede do navegador bloqueada, tanto o editor quanto a API crua, fora do produto, recebem `audiostart`/`soundstart`/`speechstart` e **zero** `result` (detalhes em "Captura real", 19–20/10). No novo classificador isso é `NO_RESULTS` (ou `ENGINE_FAILURE` quando o caminho do modelo passava de 260 caracteres). O sintoma da loja é compatível, mas só a medição no próprio terminal o confirma.
+
+### `quality` (`dictation`) — avaliação técnica
+
+- Especificação atual: `SpeechRecognitionOptions.quality` (`command`, padrão; `dictation`; `conversation`) em `available()`/`install()`.
+- Chrome 155 (sonda só de metadados): conhece o enum (valor inválido → `TypeError`) e expõe `quality` na instância. Para **pt-BR: `command` = downloadable; `dictation` = unavailable; `conversation` = unavailable**. Logo, `dictation` **não** está disponível para pt-BR neste Chrome e não é solução.
+- Implementado sem degradar o modo local: `checkLocalVoiceSupport` detecta o enum e só escolhe `dictation` quando o navegador a declara disponível (ou instalável) para pt-BR; caso contrário mantém `command`/padrão exatamente como antes. `install()` e a instância recebem a mesma qualidade.
+
+### Diagnóstico sanitizado
+
+`lib/cadastros/voice-capture/diagnostic.ts`: só deslocamentos em ms, contagens (`results`, `interim`, `final`, `nomatch`), código de erro de lista fechada e motivo de término. Nada de áudio, texto, nome, CPF ou telefone; nada em log, storage, URL ou rede — só na tela. Classificador: `MIC_NOT_STARTED`, `NO_AUDIO`, `NO_SPEECH`, `NO_RESULTS`, `INTERIM_ONLY`, `FINAL_RECEIVED`, `ENGINE_FAILURE` (erro ou motor sem `end`), além de `CANCELLED`. No editor: linha "Diagnóstico do ditado" após falha e, em "Diagnóstico da voz", os detalhes técnicos e o botão **"Testar o navegador (8 s)"** — chamada mínima à API nativa (`processLocally`, pt-BR), independente do adapter, no mesmo navegador. Se editor e teste mínimo falharem igual, a dependência é do navegador.
+
+### Interface
+
+Microfone (ícone, 44 px, nome acessível "Ditar por voz") dentro do campo, canto inferior direito; `pr-16` reserva a coluna. Durante a captura, a faixa interna mostra indicador pulsante, etapa, tempo e "Parar ditado"/"Cancelar ditado" (44 px); o texto confirmado aparece no próprio campo (somente leitura) e o provisório numa linha "Provisório · ainda não confirmado". Ao terminar, o texto confirmado vira editável na mesma posição, preservando o que foi digitado. Instalar/verificar/indisponível usam o mesmo botão interno. Sequência mantida: microfone → texto editável → Interpretar texto → sugestões → revisão humana → Salvar cliente. Sem microfones por campo.
+
+### Testes
+
+Simulados (motor sintético, sem áudio): adapter (`quality`, provisório após parar, ordem final/provisório, diagnóstico por etapa, timeout, cancelamento, erro saneado), política (retenção/descartes do provisório, etapas, textos), teste mínimo nativo (recusas, contagens sem texto, `NO_RESULTS`, timeout, cancelamento, `dictation`), UI (posição/acessibilidade, etapas, provisório rotulado e não mesclado, recuperação explícita, cauda provisória, diagnóstico visível, teste do navegador, fechamento durante o teste, `dictation` só quando declarada, e as regressões anteriores de parada, cancelamento, erros, troca de loja, aba oculta, fechamento). Mutação: desligar a retenção do provisório derruba 7 testes; arquivo restaurado byte a byte. Smoke Chromium 1440/390/320 com geometria real: microfone e controles dentro do campo, alvos ≥ 44 px, texto fora da coluna do microfone, etapa legível em 320 px, provisório visível e não mesclado.
+
+Regressão local no recorte do CI: 1164 PASS/20 skipped. ESLint dos arquivos alterados: 0 erros/0 warnings (2 warnings preexistentes em `ConferenciaLoteProdutos.tsx`/`MovimentacaoEstoqueModal.tsx`, intocados). `npm run typecheck`: exit 0. `npm run build` local: `MIGRATION_SKIPPED` e "Compiled successfully", mas terminou em `ENOSPC` (disco C: com 0 GB livres no host); o `.next` gerado foi apagado e o build completo fica a cargo do CI.
+
+### Teste manual único necessário (aceite real)
+
+No computador da loja, depois do deploy: Chrome → Cadastros → Clientes → **Novo cliente**.
+1. Toque no microfone dentro do campo e diga devagar: "Nome Lia de Teste, telefone 14 99999 8888"; toque em **Parar ditado**.
+2. **PASS** se o texto aparecer no campo e puder ser editado. Se não aparecer, abra **Diagnóstico da voz**, anote a linha "Último ditado", toque em **Testar o navegador (8 s)**, fale uma frase curta e anote o resultado.
+
+As duas linhas dizem em que etapa parou (microfone, som, fala, reconhecedor, provisório, final ou motor). Use apenas dados de teste.
+
 ## Implementação da voz local de Clientes — 19/10/2026
 
 `GOAL=CAD-R2-021`. `VOICE_IMPLEMENTATION=IMPLEMENTED_LOCAL_ONLY`. `REAL_DEVICE_RECOGNITION=NOT_DEMONSTRATED_ON_THIS_HOST` (ver "Captura real"). `TEXT_CAPTURE=PRESERVED`. `HUMAN_REVIEW=REQUIRED`. `CLIENT_WRITE_SERVICE=REUSED`. `VOICE_AUDIO_STORAGE=NONE_IN_APPLICATION`. `REMOTE_FALLBACK=DISABLED`. `OTHER_MODULES=UNCHANGED`. `SCHEMA_MIGRATIONS=UNCHANGED`. `WIP_PRESERVED=YES`.

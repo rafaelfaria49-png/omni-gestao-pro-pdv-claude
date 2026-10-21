@@ -47,6 +47,7 @@ function instrument(engine) {
   }
   window.__availability = "downloadable"
   window.__say = (text, isFinal) => window.__rec.onresult?.({ resultIndex: 0, results: { length: 1, 0: { length: 1, isFinal, 0: { transcript: text } } } })
+  window.__audio = (...steps) => steps.forEach((step) => window.__rec[`on${step}`]?.())
   window.__end = () => window.__rec.onend?.()
   window.SpeechRecognition = Local
 }
@@ -65,13 +66,38 @@ try {
     await page.getByRole("dialog", { name: "Novo cliente", exact: true }).waitFor()
     // Explicit pack install, then dictation (simulated engine).
     await page.getByRole("button", { name: "Instalar voz local pt-BR" }).click()
-    await page.getByRole("button", { name: "Ditar por voz" }).click()
+    // Microphone inside the description field: real layout, not a class-name check.
+    const field = page.getByLabel("Descreva o novo cliente")
+    const mic = page.getByRole("button", { name: "Ditar por voz" })
+    await mic.waitFor()
+    const inside = (outer, inner, tol = 1) => inner.x >= outer.x - tol && inner.y >= outer.y - tol && inner.x + inner.width <= outer.x + outer.width + tol && inner.y + inner.height <= outer.y + outer.height + tol
+    const fieldBox = await field.boundingBox(), micBox = await mic.boundingBox()
+    const padRight = await field.evaluate((el) => parseFloat(getComputedStyle(el).paddingRight))
+    assert.equal(inside(fieldBox, micBox), true, "microphone must sit inside the description field")
+    assert.ok(micBox.width >= 44 && micBox.height >= 44, "microphone touch target >= 44px")
+    assert.ok(fieldBox.x + fieldBox.width - padRight <= micBox.x + 1, "text area must not run under the microphone")
+    await mic.click()
     const config = await page.evaluate(() => ({ local: window.__rec.startedLocal, lang: window.__rec.startedLang }))
     assert.deepEqual(config, { local: true, lang: "pt-BR" })
+    assert.equal(await page.getByText("Iniciando o microfone…").isVisible(), true)
+    await page.evaluate(() => window.__audio("audiostart", "soundstart", "speechstart"))
+    await page.getByText(/Fala detectada — aguardando o texto/).waitFor()
     await page.evaluate(() => window.__say("novo cliente Lia", false))
-    await expect.poll(() => page.getByLabel("Descreva o novo cliente").inputValue()).toBe("novo cliente Lia")
+    await page.getByText("Provisório · ainda não confirmado").waitFor()
+    assert.equal(await page.getByText("novo cliente Lia", { exact: true }).isVisible(), true, "provisional text itself stays visible")
+    assert.equal(await field.inputValue(), "", "provisional text is not merged into the field")
+    assert.equal(await page.getByText("Recebendo texto").isVisible(), true)
+    const stageBox = await page.getByText("Recebendo texto").boundingBox()
+    assert.ok(stageBox.width >= 60, "listening stage keeps readable width on narrow screens")
+    assert.equal(await page.getByText(/^0:0\d\/0:30$/).isVisible(), true)
+    const controls = page.getByRole("group", { name: "Controles do ditado" })
+    const activeFieldBox = await field.boundingBox()
+    assert.equal(inside(activeFieldBox, await controls.boundingBox()), true, "dictation controls must sit inside the field")
+    for (const name of ["Parar ditado", "Cancelar ditado"]) {
+      const box = await page.getByRole("button", { name }).boundingBox()
+      assert.ok(box.width >= 44 && box.height >= 44, `${name} touch target >= 44px`)
+    }
     assert.equal(await page.getByRole("button", { name: "Interpretar texto", exact: true }).isDisabled(), true)
-    assert.equal(await page.getByText(/Ouvindo · 0:0\d de 0:30/).isVisible(), true)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
     await page.getByLabel("Descreva o novo cliente").scrollIntoViewIfNeeded()
     await page.screenshot({ path: path.join(evidence, `voice-listening-${viewport.width}.png`), fullPage: true })
@@ -151,7 +177,7 @@ try {
     await generic.close()
 
     results.push({
-      viewport, engine: "SIMULATED_LOCAL", installExplicit: "PASS", startLocalPtBR: "PASS", liveTranscript: "PASS", stopToEditableTranscript: "PASS",
+      viewport, engine: "SIMULATED_LOCAL", inlineMicrophone: "PASS", touchTargets44px: "PASS", stagesRequireEvents: "PASS", provisionalLabelledNotMerged: "PASS", installExplicit: "PASS", startLocalPtBR: "PASS", stopToEditableTranscript: "PASS",
       interpretSource: "voice", review: "PASS", save: "SIMULATED_IO_ONLY", cancelDiscardsLateEvents: "PASS", storeSwitchAbortsEngine: "PASS",
       genericEngineRefused: "PASS", microphoneOrPermissionApiByApp: 0, forgedQueryIgnored: true, overflow: false,
       externalRequests: 0, storageEntries: 0, pageErrors: 0,

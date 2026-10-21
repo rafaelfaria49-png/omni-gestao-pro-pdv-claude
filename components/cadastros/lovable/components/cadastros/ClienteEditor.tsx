@@ -9,19 +9,30 @@ import { aplicarSugestaoCliente, validateClientEditor, type ClientEditorValues }
 import { CLIENT_TEXT_FIELDS, CLIENT_TEXT_LABELS, CLIENT_TEXT_LIMIT, type ClientTextField, type ClientTextSuggestion } from "@/lib/cadastros/natural-text/cliente-types"
 import { Input, Select, Textarea } from "./ui-kit"
 import {
-  CLIENT_VOICE_INITIAL, CLIENT_VOICE_POLICY, CLIENT_VOICE_SUPPORT_MESSAGES, formatarTranscricaoCliente, juntarTranscricaoCliente,
-  reduceClientVoiceCapture, type ClientCaptureSource,
+  CLIENT_VOICE_DIAGNOSTIC_TEXT, CLIENT_VOICE_INITIAL, CLIENT_VOICE_POLICY, CLIENT_VOICE_SUPPORT_MESSAGES, clientVoiceStage, formatarTranscricaoCliente,
+  juntarTranscricaoCliente, reduceClientVoiceCapture, type ClientCaptureSource, type ClientVoiceSnapshot,
 } from "@/lib/cadastros/voice-capture/cliente"
 import { checkLocalVoiceSupport, installLocalVoicePack, localVoicePreflight, startLocalVoiceCapture, type LocalVoiceSupport } from "@/lib/cadastros/voice-capture/local"
+import { classifyVoiceDiagnostic, runNativeLocalProbe, type VoiceDiagnostic } from "@/lib/cadastros/voice-capture/diagnostic"
 import type { VoiceBrowserSession } from "@/lib/cadastros/voice-capture/browser"
-import type { VoiceCaptureEvent, VoiceCaptureSnapshot } from "@/lib/cadastros/voice-capture/types"
+import type { VoiceCaptureEvent } from "@/lib/cadastros/voice-capture/types"
 
 type Props = { storeId: string; editing: ClienteDTO | null; onClose: () => void; onSaved: () => void | Promise<void> }
 type VoiceSupport = LocalVoiceSupport | { status: "checking" } | { status: "disabled" }
 const empty = (value?: string) => value === "—" ? "" : value ?? ""
 const button = "min-h-10 rounded-lg border border-border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+// 44 px touch target for the controls that live inside the description field.
+const fieldButton = "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
 const seconds = (ms: number) => `0:${String(Math.min(59, Math.floor(ms / 1000))).padStart(2, "0")}`
 const supportQuery = { lang: CLIENT_VOICE_POLICY.lang, timeoutMs: CLIENT_VOICE_POLICY.availabilityTimeoutMs }
+const ms = (value: number | undefined) => value === undefined ? "—" : `${value} ms`
+const END_LABEL = { "engine-end": "encerrado pelo navegador", "grace-timeout": "sem resposta do motor", cancelled: "cancelado", "start-failed": "falha ao iniciar" } as const
+/** Etapas, contagens e tempos apenas — nenhum texto ou áudio. */
+function diagnosticDetails(d: VoiceDiagnostic) {
+  return `qualidade ${d.quality} · microfone ${ms(d.steps.audiostart)} · som ${ms(d.steps.soundstart)} · fala ${ms(d.steps.speechstart)} · `
+    + `resultados ${d.counts.results} (provisórios ${d.counts.interim}, finais ${d.counts.final}) · erro ${d.error ?? "nenhum"} · `
+    + `${d.endReason ? END_LABEL[d.endReason] : "em andamento"} em ${d.durationMs} ms`
+}
 
 export function ClienteEditorDialog({ open, ...props }: Props & { open: boolean }) {
   const descriptionId = useId()
@@ -58,7 +69,11 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   const mounted = useRef(false)
   const submitting = useRef(false)
   // Voice: local-only engine, temporary transcript in this mount only.
-  const [voice, setVoice] = useState<VoiceCaptureSnapshot>(CLIENT_VOICE_INITIAL)
+  const [voice, setVoice] = useState<ClientVoiceSnapshot>(CLIENT_VOICE_INITIAL)
+  const [diag, setDiag] = useState<VoiceDiagnostic | null>(null)
+  const [probe, setProbe] = useState<{ running: boolean; result: VoiceDiagnostic | null }>({ running: false, result: null })
+  const probeHandle = useRef<{ cancel: () => void } | null>(null)
+  const probeSerial = useRef(0)
   const [support, setSupport] = useState<VoiceSupport>(() => CLIENT_VOICE_POLICY.enabled ? { status: "checking" } : { status: "disabled" })
   const [installing, setInstalling] = useState(false)
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -70,20 +85,25 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   const voiceStartedAt = useRef(0)
   const textBeforeVoice = useRef("")
   const voiceActive = voice.status === "listening" || voice.status === "transcribing"
+  // While listening the field shows only text the browser confirmed; provisional text
+  // is shown apart, labelled as such, and never merged without an explicit click.
   const displayedText = voiceActive
-    ? juntarTranscricaoCliente(textBeforeVoice.current, [voice.sessionTranscript, voice.interim].filter(Boolean).join(" "), CLIENT_TEXT_LIMIT)
+    ? juntarTranscricaoCliente(textBeforeVoice.current, voice.sessionTranscript, CLIENT_TEXT_LIMIT)
     : text
+  const diagCode = diag?.endReason ? classifyVoiceDiagnostic(diag) : null
   const voiceMessage = support.status === "available" ? voice.message
     : support.status === "unavailable" ? CLIENT_VOICE_SUPPORT_MESSAGES[support.reason] : CLIENT_VOICE_SUPPORT_MESSAGES[support.status]
   const extractedLabel = source === "voice" ? "Extraído da transcrição por voz" : "Extraído do texto"
   useEffect(() => {
     const lifecycle = mounted, pending = request, session = voiceSession, sessions = voiceSerial, supports = supportSerial
+    const probing = probeHandle, probes = probeSerial
     lifecycle.current = true
     return () => {
       lifecycle.current = false; pending.current++
       // Close, store switch, cancel and navigation unmount the editor: stop the engine silently.
-      sessions.current++; supports.current++
+      sessions.current++; supports.current++; probes.current++
       session.current?.dispose(); session.current = null
+      probing.current?.cancel(); probing.current = null
     }
   }, [])
   useEffect(() => {
@@ -99,12 +119,13 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   }, [editing])
   useEffect(() => {
     // Hidden tab or leaving the page never keeps the microphone open.
-    const session = voiceSession
+    const session = voiceSession, probing = probeHandle
     const onHide = (event: Event) => {
       if (event.type === "visibilitychange" && document.visibilityState !== "hidden") return
       const active = session.current
       session.current = null
       active?.cancel()
+      probing.current?.cancel()
     }
     document.addEventListener("visibilitychange", onHide)
     window.addEventListener("pagehide", onHide)
@@ -140,7 +161,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     active?.cancel()
   }
   function startVoice() {
-    if (support.status !== "available" || voiceSession.current || voiceActive || interpreting || saving) return
+    if (support.status !== "available" || voiceSession.current || voiceActive || probe.running || interpreting || saving) return
     const serial = ++voiceSerial.current
     request.current++
     setInterpreting(false)
@@ -149,18 +170,22 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     setMessage("")
     setAutoStopped(false)
     setElapsedMs(0)
+    setDiag(null)
     textBeforeVoice.current = text
     voiceStartedAt.current = Date.now()
+    const current = () => mounted.current && serial === voiceSerial.current
     const emit = (event: VoiceCaptureEvent) => {
-      if (!mounted.current || serial !== voiceSerial.current) return
+      if (!current()) return
       setVoice((v) => reduceClientVoiceCapture(v, event))
-      if (event.type === "error" && event.code === "language-not-supported") refreshSupport()
+      // A missing local pack surfaces as one of these errors: re-check, never go remote.
+      if (event.type === "error" && (event.code === "language-not-supported" || event.code === "service-not-allowed")) refreshSupport()
     }
     emit({ type: "start" })
     const session = startLocalVoiceCapture({
-      win: window, emit, lang: CLIENT_VOICE_POLICY.lang,
-      maxDurationMs: CLIENT_VOICE_POLICY.maxDurationMs, maxChars: CLIENT_VOICE_POLICY.maxChars,
-      onAutoStop: () => { if (mounted.current && serial === voiceSerial.current) setAutoStopped(true) },
+      win: window, emit, lang: CLIENT_VOICE_POLICY.lang, quality: support.quality,
+      maxDurationMs: CLIENT_VOICE_POLICY.maxDurationMs, maxChars: CLIENT_VOICE_POLICY.maxChars, endGraceMs: CLIENT_VOICE_POLICY.endGraceMs,
+      onAutoStop: () => { if (current()) setAutoStopped(true) },
+      onDiagnostic: (snapshot) => { if (current()) setDiag(snapshot) },
     })
     if (!session.ok) {
       if (session.reason === "unavailable") {
@@ -177,11 +202,40 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     if (support.status !== "downloadable" || installing) return
     setInstalling(true)
     // Called synchronously inside the click: browsers require user activation.
-    void installLocalVoicePack(window, CLIENT_VOICE_POLICY.lang).then((ok) => {
+    void installLocalVoicePack(window, CLIENT_VOICE_POLICY.lang, support.quality).then((ok) => {
       if (!mounted.current) return
       setInstalling(false)
       if (!ok) setMessage("O navegador não instalou o pacote local pt-BR. Continue por texto.")
       refreshSupport()
+    })
+  }
+  /** Explicit, reviewable recovery: provisional text only enters the editable description. */
+  function applyProvisional() {
+    if (voiceActive || !voice.provisional) return
+    request.current++
+    setSuggestion(null)
+    setText((current) => juntarTranscricaoCliente(current, formatarTranscricaoCliente(voice.provisional), CLIENT_TEXT_LIMIT))
+    setSource("voice")
+    setVoice((v) => ({ ...v, provisional: "", message: "Trecho provisório levado ao campo. Revise antes de interpretar." }))
+  }
+  function dropProvisional() {
+    setVoice((v) => ({ ...v, provisional: "" }))
+  }
+  /** Minimal native call in the same browser, independent of the editor adapter. */
+  function runBrowserProbe() {
+    if (support.status !== "available" || probe.running || voiceActive || voiceSession.current || saving) return
+    const serial = ++probeSerial.current
+    const handle = runNativeLocalProbe({
+      win: window, lang: CLIENT_VOICE_POLICY.lang, quality: support.quality,
+      listenMs: CLIENT_VOICE_POLICY.probeListenMs, endGraceMs: CLIENT_VOICE_POLICY.endGraceMs,
+    })
+    if (!handle) { setMessage("O teste mínimo não está disponível neste navegador."); return }
+    probeHandle.current = handle
+    setProbe({ running: true, result: null })
+    void handle.done.then((result) => {
+      if (!mounted.current || serial !== probeSerial.current) return
+      probeHandle.current = null
+      setProbe({ running: false, result })
     })
   }
 
@@ -194,6 +248,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     setText("")
     setSource("text")
     setAutoStopped(false)
+    setDiag(null)
     setRevised(new Set())
     setMessage("")
   }
@@ -260,34 +315,69 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     {!editing && <section aria-label="Cadastro assistido por texto ou voz" className="space-y-3 rounded-lg border border-border bg-muted/30 p-3 sm:p-4">
       <div className="flex items-center gap-2 text-sm font-semibold"><WandSparkles aria-hidden="true" className="h-4 w-4 text-primary" />Preencher por descrição</div>
       <label htmlFor={`${id}-text`} className="block text-sm">Descreva o novo cliente</label>
-      <Textarea id={`${id}-text`} value={displayedText} maxLength={CLIENT_TEXT_LIMIT} rows={3} disabled={saving} readOnly={voiceActive} placeholder="Novo cliente…, telefone…, mora em…; Endereço:…; Cidade:…" aria-describedby={`${id}-capture-help`}
-        onChange={(e) => {
-          if (voiceActive) return
-          request.current++; setInterpreting(false); setSuggestion(null); setText(e.target.value); setMessage("")
-          if (!e.target.value.trim()) setSource("text")
-        }} />
+      {/* The microphone lives inside the description field; it only feeds this text. */}
+      <div className="relative min-w-0" data-voice-field={voice.status}>
+        <Textarea id={`${id}-text`} value={displayedText} maxLength={CLIENT_TEXT_LIMIT} rows={4} disabled={saving} readOnly={voiceActive}
+          placeholder="Novo cliente…, telefone…, mora em…; Endereço:…; Cidade:…" aria-describedby={`${id}-capture-help ${id}-voice-status`}
+          className={`pr-16 ${voiceActive ? (voice.provisional ? "pb-28" : "pb-20") : ""}`}
+          onChange={(e) => {
+            if (voiceActive) return
+            request.current++; setInterpreting(false); setSuggestion(null); setText(e.target.value); setMessage("")
+            if (!e.target.value.trim()) setSource("text")
+          }} />
+        {voiceActive ? <div role="group" aria-label="Controles do ditado" className="absolute inset-x-2 bottom-2 min-w-0 space-y-1 rounded-md border border-border bg-background/95 p-1.5">
+          {voice.provisional && <div className="min-w-0 px-1" title="Texto provisório, ainda não confirmado pelo navegador">
+            <p className="text-[11px] font-medium text-muted-foreground">Provisório · ainda não confirmado</p>
+            <p className="min-w-0 truncate text-xs italic text-foreground">{voice.provisional}</p>
+          </div>}
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span aria-hidden="true" className="ml-1 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-destructive" />
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate text-xs font-medium" aria-live="polite">{voice.status === "listening" ? clientVoiceStage(diag) : "Finalizando no dispositivo…"}</span>
+              <span className="block text-[11px] tabular-nums text-muted-foreground" aria-hidden="true">{seconds(elapsedMs)}/{seconds(CLIENT_VOICE_POLICY.maxDurationMs)}</span>
+            </span>
+            <button type="button" className={fieldButton} aria-label="Parar ditado" title="Parar ditado" disabled={voice.status !== "listening"} onClick={() => voiceSession.current?.stop()}><Square aria-hidden="true" className="h-4 w-4" /></button>
+            <button type="button" className={fieldButton} aria-label="Cancelar ditado" title="Cancelar ditado" onClick={cancelVoice}><X aria-hidden="true" className="h-4 w-4" /></button>
+          </div>
+        </div> : <div className="absolute bottom-2 right-2">
+          {support.status === "downloadable" ? <button type="button" className={fieldButton} aria-label={installing ? "Instalando voz local…" : "Instalar voz local pt-BR"} title="Instalar voz local pt-BR" disabled={installing || saving} onClick={installVoice} aria-describedby={`${id}-voice-status`}>
+            {installing ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Download aria-hidden="true" className="h-4 w-4" />}
+          </button> : support.status === "downloading" ? <button type="button" className={fieldButton} aria-label="Verificar voz local" title="Verificar voz local" disabled={saving} onClick={refreshSupport} aria-describedby={`${id}-voice-status`}>
+            <RefreshCw aria-hidden="true" className="h-4 w-4" />
+          </button> : <button type="button" className={`${fieldButton} ${support.status === "available" ? "border-primary text-primary" : ""}`}
+            aria-label={support.status === "checking" ? "Verificando voz local…" : support.status === "available" ? "Ditar por voz" : "Voz indisponível"}
+            title={support.status === "available" ? "Ditar por voz (reconhecimento no dispositivo)" : "Voz indisponível"}
+            disabled={support.status !== "available" || interpreting || saving || probe.running} onClick={startVoice} data-voice-status={voice.status} aria-describedby={`${id}-voice-status`}>
+            {support.status === "checking" ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : support.status === "available" ? <Mic aria-hidden="true" className="h-5 w-5" /> : <MicOff aria-hidden="true" className="h-4 w-4" />}
+          </button>}
+        </div>}
+      </div>
       <p id={`${id}-capture-help`} className="text-xs text-muted-foreground">Extração determinística, sem enviar o texto a provedores externos de IA. A sugestão é temporária e não salva o cadastro.</p>
+      {!voiceActive && voice.provisional && <div className="min-w-0 space-y-2 rounded-md border border-border bg-background p-2 text-xs" role="group" aria-label="Trecho provisório">
+        <p className="min-w-0 break-words"><span className="font-medium">Trecho provisório, não confirmado pelo navegador:</span> <span className="italic">{voice.provisional}</span></p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={button} disabled={saving} onClick={applyProvisional}>Usar trecho provisório</button>
+          <button type="button" className={button} disabled={saving} onClick={dropProvisional}>Descartar trecho</button>
+        </div>
+      </div>}
       <div className="flex flex-wrap gap-2">
         <button type="button" className={button} disabled={!text.trim() || interpreting || saving || voiceActive} onClick={() => void interpret()}>{interpreting ? "Interpretando…" : "Interpretar texto"}</button>
-        {voiceActive ? <>
-          <button type="button" className={button} disabled={voice.status !== "listening"} onClick={() => voiceSession.current?.stop()}><Square aria-hidden="true" className="mr-1 inline h-4 w-4" />Parar ditado</button>
-          <button type="button" className={button} onClick={cancelVoice}><X aria-hidden="true" className="mr-1 inline h-4 w-4" />Cancelar ditado</button>
-        </> : support.status === "downloadable" ? <button type="button" className={button} disabled={installing || saving} onClick={installVoice} aria-describedby={`${id}-voice-status`}>
-          {installing ? <Loader2 aria-hidden="true" className="mr-1 inline h-4 w-4 animate-spin" /> : <Download aria-hidden="true" className="mr-1 inline h-4 w-4" />}{installing ? "Instalando voz local…" : "Instalar voz local pt-BR"}
-        </button> : support.status === "downloading" ? <button type="button" className={button} disabled={saving} onClick={refreshSupport} aria-describedby={`${id}-voice-status`}>
-          <RefreshCw aria-hidden="true" className="mr-1 inline h-4 w-4" />Verificar voz local
-        </button> : <button type="button" className={button} disabled={support.status !== "available" || interpreting || saving} onClick={startVoice} data-voice-status={voice.status} aria-describedby={`${id}-voice-status`}>
-          {support.status === "checking" ? <Loader2 aria-hidden="true" className="mr-1 inline h-4 w-4 animate-spin" /> : support.status === "available" ? <Mic aria-hidden="true" className="mr-1 inline h-4 w-4" /> : <MicOff aria-hidden="true" className="mr-1 inline h-4 w-4" />}
-          {support.status === "checking" ? "Verificando voz local…" : support.status === "available" ? "Ditar por voz" : "Voz indisponível"}
-        </button>}
         {(text || suggestion || interpreting) && !voiceActive && <button type="button" className={button} disabled={saving} onClick={discard}>Descartar sugestões</button>}
       </div>
-      {voiceActive && <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
-        <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-destructive" />
-        {voice.status === "listening" ? "Ouvindo" : "Finalizando"} · {seconds(elapsedMs)} de {seconds(CLIENT_VOICE_POLICY.maxDurationMs)}
-      </p>}
       <p id={`${id}-voice-status`} aria-live="polite" className="text-xs text-muted-foreground">{voiceMessage}{autoStopped && voice.status === "completed" ? " Limite do ditado atingido." : ""}</p>
+      {!voiceActive && diagCode && diagCode !== "FINAL_RECEIVED" && diagCode !== "CANCELLED" && <p className="text-xs">Diagnóstico do ditado: {CLIENT_VOICE_DIAGNOSTIC_TEXT[diagCode]}</p>}
       {(support.status === "available" || support.status === "downloadable") && <p className="text-xs text-muted-foreground">Voz processada no próprio dispositivo (pt-BR), sem envio de áudio. O OmniGestão não grava áudio nem transcrição; cada ditado dura até {CLIENT_VOICE_POLICY.maxDurationMs / 1000} s e só vira cadastro depois da sua revisão e confirmação.</p>}
+      {support.status === "available" && <details className="min-w-0 text-xs text-muted-foreground">
+        <summary className="cursor-pointer select-none">Diagnóstico da voz</summary>
+        <div className="mt-2 min-w-0 space-y-2">
+          <p>Mostra só etapas, contagens e tempos. Nenhum áudio ou texto é guardado, registrado ou enviado.</p>
+          {diag?.endReason && <p className="break-words">Último ditado: {diagnosticDetails(diag)}</p>}
+          <button type="button" className={button} disabled={probe.running || voiceActive || saving} onClick={runBrowserProbe}>
+            {probe.running ? "Testando o navegador… fale uma frase curta" : `Testar o navegador (${CLIENT_VOICE_POLICY.probeListenMs / 1000} s)`}
+          </button>
+          {probe.result && <p className="break-words text-foreground">Teste mínimo do navegador: {CLIENT_VOICE_DIAGNOSTIC_TEXT[classifyVoiceDiagnostic(probe.result)]} ({diagnosticDetails(probe.result)})</p>}
+        </div>
+      </details>}
       {suggestion && <div className="space-y-3 border-t border-border pt-3" aria-label="Revisar sugestões">
         <p className="text-sm font-medium">Revise ou corrija cada sugestão</p>
         <p className="text-xs text-muted-foreground">Campos já preenchidos no formulário serão preservados. Campos ambíguos só serão aplicados se você os corrigir.</p>
