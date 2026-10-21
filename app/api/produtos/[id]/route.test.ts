@@ -126,6 +126,14 @@ describe("PATCH /api/produtos/[id] — boundary canônico (CAD-R2-007)", () => {
     expect(h.applyStockMutation).not.toHaveBeenCalled()
     expect(h.applyStockMutationTx).not.toHaveBeenCalled()
   })
+  it.each([{ stock: 2 }, { price: 100, stock: 2 }])("peso com o mesmo saldo é no-op coerente com o cadastro, sem 409: %j", async (body) => {
+    h.findFirst.mockResolvedValue(ROW({ stock: 2, metadata: { vendaPorPeso: true } }))
+    h.applyStockMutation.mockResolvedValue({ ok: false, code: "VALIDATION", message: "Saldo já é o informado.", estoqueAntes: 2 })
+    h.applyStockMutationTx.mockResolvedValue({ ok: false, code: "VALIDATION", message: "Saldo já é o informado.", estoqueAntes: 2 })
+    const { res, json } = await runPatch("seed-1", body)
+    expect(res.status).toBe(200)
+    expect(json.ok).toBe(true)
+  })
   it("cadastral usa ProductWriteService (sem ledger)", async () => {
     const { res, json } = await runPatch("seed-1", { name: "Novo nome", price: 29.9 })
     expect(res.status).toBe(200)

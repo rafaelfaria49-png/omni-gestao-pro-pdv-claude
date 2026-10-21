@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { validateCapabilitiesPayload, type StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
-import { businessPresentation, resolveBusinessResource, type BusinessBranch } from "@/lib/store-business-capabilities"
+import { businessPresentation, configuredBusinessBranch, resolveBusinessResource, type BusinessBranch } from "@/lib/store-business-capabilities"
 import { mergePrinterConfigServerSide } from "@/lib/pdv-settings-server-first"
 import { overridesFromStoreCapabilities, resolveCapability } from "@/lib/pdv/resolve-capability"
 import { assertProductCommercialSaleSupported, productCommercialCatalogProjection, productSpecificApplicability, validateProductCommercial } from "@/lib/cadastros/product-commercial-contract"
@@ -32,6 +32,15 @@ describe("Ramos combináveis, contrato canônico V1", () => {
     expect(resolveBusinessResource(null, "service.technical", "ASSISTENCIA").operational).toBe(true)
     expect(resolveBusinessResource(null, "pdv.accessoryModelColor", "VARIEDADES").operational).toBe(true)
     expect(resolveBusinessResource(null, "catalog.weight").enabled).toBe(false)
+  })
+  it("ramo desconhecido gravado fora do contrato cai no legado sem derrubar leitores", () => {
+    const outOfBand = { version: 1, business: { primaryBranch: "inventado" }, overrides: { "catalog.weight": true } } as unknown as StoreCapabilitiesV1
+    expect(() => resolveBusinessResource(outOfBand, "service.technical", "ASSISTENCIA")).not.toThrow()
+    expect(resolveBusinessResource(outOfBand, "service.technical", "ASSISTENCIA")).toMatchObject({ requested: true, source: "legacy" })
+    expect(resolveBusinessResource(outOfBand, "catalog.weight")).toMatchObject({ requested: true, source: "explicit", operational: false })
+    expect(configuredBusinessBranch(outOfBand)).toBeUndefined()
+    expect(overridesFromStoreCapabilities(outOfBand)).toEqual({ "catalog.weight": true })
+    expect(businessPresentation(outOfBand).productExample).toBe("Ex.: Nome da mercadoria")
   })
   it("preset e patch preservam overrides, exemplos, layout e namespaces", () => {
     const prior = { pdvMainLayout: "classic", impressao: { mode: "local" }, capabilities: {

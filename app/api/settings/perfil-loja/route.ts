@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { type PerfilLojaId } from "@/lib/perfil-loja-types"
 import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 import { requireStoreAccess } from "@/lib/auth/guard-enterprise"
-import { legacyBusinessBranch, resolveBusinessResource } from "@/lib/store-business-capabilities"
+import { configuredBusinessBranch, legacyBusinessBranch, resolveBusinessResource } from "@/lib/store-business-capabilities"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 
 export const runtime = "nodejs"
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     const settings = await prisma.storeSettings.findUnique({ where: { storeId: lojaId } })
     const blob = settings?.printerConfig as { capabilities?: StoreCapabilitiesV1 } | null
     const capabilities = blob?.capabilities
-    const branch = capabilities?.business?.primaryBranch ?? legacyBusinessBranch(store.profile)
+    const branch = configuredBusinessBranch(capabilities) ?? legacyBusinessBranch(store.profile)
     const perfilLoja: PerfilLojaId = branch === "assistencia" ? "assistencia" : branch === "supermercado" ? "supermercado" : "variedades"
     return NextResponse.json({ perfilLoja, lojaId, mostraTecnicoLaudoOs: resolveBusinessResource(capabilities, "service.technical", store.profile).operational })
   } catch {

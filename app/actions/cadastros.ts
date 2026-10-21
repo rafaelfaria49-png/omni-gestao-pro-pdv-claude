@@ -1549,11 +1549,19 @@ export async function upsertProduto(
 
   // Recusar intenção operacional incompatível antes de salvar campos comuns.
   if (hasEstoque) {
+    let current: { stock: number | null; metadata: unknown } | null;
     try {
-      const current = await prisma.produto.findFirst({ where: { id: productId, storeId: sid }, select: { stock: true, metadata: true } });
-      if (current && current.stock !== requestedStock) assertProductCommercialSaleSupported(current.metadata);
-    } catch (error) {
-      return { ok: false, type: "VALIDATION_ERROR", message: error instanceof Error ? error.message : "Não foi possível validar o saldo deste produto." };
+      current = await prisma.produto.findFirst({ where: { id: productId, storeId: sid }, select: { stock: true, metadata: true } });
+    } catch {
+      // Erro de banco/driver não é validação e não chega ao operador.
+      return { ok: false, type: "SAVE_ERROR", message: "Não foi possível validar o saldo deste produto. Tente novamente." };
+    }
+    if (current && current.stock !== requestedStock) {
+      try {
+        assertProductCommercialSaleSupported(current.metadata);
+      } catch (error) {
+        return { ok: false, type: "VALIDATION_ERROR", message: error instanceof Error ? error.message : "Não foi possível validar o saldo deste produto." };
+      }
     }
   }
 
