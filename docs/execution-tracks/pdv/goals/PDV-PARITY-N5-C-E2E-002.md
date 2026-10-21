@@ -24,15 +24,17 @@
     "components/dashboard/vendas/pdv-supermercado.tsx",
     "lib/pdv/parity-supermercado-finalize-audit.component.test.ts",
     "components/dashboard/vendas/venda-completa-enterprise.tsx",
-    "lib/pdv/parity-venda-completa-finalize-audit.component.test.ts"
+    "lib/pdv/parity-venda-completa-finalize-audit.component.test.ts",
+    "lib/pdv-pending-post-sale-effects.static.test.ts",
+    "lib/pdv/current-main-correction.component.test.ts"
   ],
   "gates_liberados": [],
   "read_budget": 50,
-  "plan_ref": "PDV-N5-C-REV4-FINAL-RETRY-AUDIT-PLAN-005",
-  "plan_rev": 4,
+  "plan_ref": "PDV-N5-C-REV5-REGRESSION-REOPEN-006",
+  "plan_rev": 5,
   "familia_executor": "openai",
   "revisao_independente": true,
-  "reversibilidade": "alta: auditoria local nas quatro superficies, testes reais de componentes, E2E isolados, Prisma gerado local ignorado e documentos; sem motor/backend",
+  "reversibilidade": "alta: auditoria local, remount Assistencia, compatibilidade de dois testes herdados, componentes reais, E2E isolados e documentos; sem motor/backend",
   "depends_on": [
     "PDV-PARITY-N5-B2-PIN-KEYMAP-001"
   ],
@@ -398,6 +400,170 @@ favorável não há close DONE. Uma segunda instância OpenAI não satisfaz R.
 `N5_B1_CLOSEOUT=BLOCKED` e `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` permanecem;
 nenhum N6/N7, Fiscal, Auth.js, smoke produtivo ou novo GOAL funcional é autorizado.
 Próximo passo desta entrega: `HUMANO_MERGEAR_N5_C_REV4` e parar.
+
+## Reabertura rev5 — regressões herdadas e confirmação fora da montagem
+
+Autorização humana: `PDV-N5-C-REV5-REGRESSION-REOPEN-006`, 20/10/2026.
+Mesmo `PDV-PARITY-N5-C-E2E-002`, `STATUS=READY`, `PLAN_REV=5`. Esta seção
+substitui as instruções de retomada/aceite anteriores; os registros rev1–rev4
+permanecem históricos. READY reabre o planejamento e não ratifica implementação.
+O quarto BLOCKED de `2026-10-20T22:09:52.691Z` e os três anteriores permanecem
+literais no ledger, sem edição, remoção, compactação ou evento READY.
+
+Relatório: `_closed/reports/PDV-N5-C-REV5-REGRESSION-REOPEN-006.md`.
+Provas individuais e reprodução: `docs/ai-execution/_evidence/PDV-N5-C-REV5-REGRESSION-REOPEN-006/`.
+O parecer Anthropic integral sobre `cdda74979e6008e5391a9defe6af1efdca6b7e4e`,
+`R_VERDICT=REQUEST_CHANGES`, permanece na evidência histórica do GOAL.
+
+### Fronteira desta entrega documental
+
+Branch `plan/pdv-n5-c-rev5-regression-closeout`, worktree dedicada
+`C:/Projetos/omni-gestao/.worktrees/plan-pdv-n5-c-rev5-regression-closeout`,
+criada diretamente de `origin/main=a874342f5366427f8f7cfebc96a9c14c8efe39ad`.
+Main observada da rev4: `16c496ad2ffe56fc6a89de237b204842494b8cbb`.
+Sem cherry-pick, merge ou ancestralidade dos commits técnicos locais
+`cdda74979e6008e5391a9defe6af1efdca6b7e4e` e
+`01b9c0e94dc3867744b54764ee2d36620e10769d` neste PR.
+Foram transportados somente a evidência/matriz documentais e o ledger
+produzido pelo AEP. Derivados são regenerados exclusivamente por `registry`.
+
+Os dois checkouts detached de diagnóstico mantêm a base exata e o candidato
+separados. Somente o teste comportamental da Assistência recebeu uma extensão
+RED no checkout descartável; nenhum código produtivo foi alterado, nenhum dos
+dois testes herdados foi editado. Essa extensão é evidência, não implementação
+rev5 nem teste adicionado ao PR. Worktree original e demais WIPs preservados.
+Não abrir/fechar execução AEP nesta branch documental; aplicar AEP §§2–3.
+Commit/push e PR contra main autorizados somente na branch de planejamento.
+Sem merge do PR ou início da implementação nesta sessão.
+
+### Classificação demonstrada das 17 falhas
+
+Mesmos dois arquivos, configuração canônica importada, dependências, Node
+`v24.14.1` e Vitest `4.1.4`, sem cache ou env produtivo:
+
+- Base `16c496a`: **45 PASS / 0 FAIL / 0 skip**, exit 0.
+- Candidato `cdda749`: **28 PASS / 17 FAIL / 0 skip**, exit 1.
+- Base e main corrente têm diff vazio nos arquivos PDV diagnosticados.
+- **0 baseline; 3 regressões de compatibilidade estática introduzidas pelo
+  candidato; 14 problemas de fixture/mock; 0 inconclusivas.** As 17 são novas
+  relativamente à base. As categorias são exclusivas; os 14 problemas de mock
+  também foram expostos pelo candidato, não por instalação/infraestrutura.
+
+As três falhas em `lib/pdv-pending-post-sale-effects.static.test.ts:180` são
+Classic, Supermercado e Venda Completa: a auditoria foi movida para um observador
+de venda confirmada declarado antes do handler; o recorte textual posterior ao
+guard deixa de conter `sale_finalized`. Isso comprova quebra do contrato do teste
+estático, sem comprovar perda funcional de auditoria nessas três superfícies.
+
+Os 14 casos de `lib/pdv/current-main-correction.component.test.ts` param no mock
+da linha 56, que só exporta `appendAuditLog`, diante do novo consumo de
+`getAuditLogs`. São nove Assistência e cinco Venda Completa; todos passam na base.
+Os fixtures `resolved()` também fornecem só identidade/syncPending, não uma
+venda completa para auditoria. Não presumir que acrescentar um export basta:
+as asserções comportamentais deverão ser reexecutadas com fixtures completas.
+
+### Duas inclusões exatas, justificadas pelo contrato
+
+Preservar, na mesma ordem, os **14 padrões rev4**. Acrescentar somente:
+
+- `lib/pdv-pending-post-sale-effects.static.test.ts`.
+- `lib/pdv/current-main-correction.component.test.ts`.
+
+Na execução futura, adaptar a fiação estática ao observador CONFIRMED real,
+mantendo todos os 11 casos, as negativas de FAILED/PENDING, guards e efeitos
+pós-venda. A prova positiva deve acompanhar identidade própria, condição de
+confirmação e emissor real, corroborada pelos testes comportamentais das quatro
+superfícies. Procurar o token no arquivo inteiro, acrescentar strings artificiais
+ou retirar asserts não satisfaz o contrato.
+
+No teste de componente herdado, manter todos os 34 casos e suas asserções de
+cache, TTL, loja, identidade, snapshots antigos, hold/resume e bloqueio de
+reconfirmação. Completar o transporte de auditoria/mock e os dados confirmados
+com valores coerentes de venda real; manter audit-log real sempre que viável,
+isolando seu transporte. Não substituir o comportamento sob teste para obter PASS.
+Nenhum teste removido, skip, supressão de erro ou assert afrouxado é autorizado.
+
+### Assistência: reprodução e corretivo mínimo futuro
+
+Achado R P2 agora comprovado comportamentalmente: **cinco testes existentes
+PASS e um diagnóstico novo FAIL**, esperado `sale_finalized=1`, observado `0`.
+A venda PENDING conserva a clientSaleId em dois POSTs; o retry real confirma
+uma única `VDA-N5C-1`, total 190, enquanto somente a tela está desmontada.
+O `OperationsProvider` real permanece montado, como no layout da aplicação.
+Retornar à Assistência com draft alterado não emite a auditoria esperada.
+As verificações de deduplicação depois do primeiro assert falho são NOT_REACHED,
+não PASS. Esse defeito funcional é adicional às 17 falhas herdadas.
+
+Causa em `pdv-assistencia-enterprise.tsx:1163–1199,1293–1321`: identidade de
+auditoria em state volátil; fallback em ref restaurado depois do observador;
+alterar ref não agenda o efeito novamente se `sales` já estiver confirmado.
+Limpar/expirar o carrinho também pode apagar a única proveniência restaurável.
+
+Correção permitida somente em
+`components/dashboard/vendas/pdv-assistencia-enterprise.tsx` e
+`lib/pdv/parity-assistencia-finalize-audit.component.test.ts`, já autorizados:
+
+- Persistir as identidades próprias a auditar em marcador local separado do
+  carrinho e da sua validade, por loja, no padrão já usado nas outras três
+  superfícies; restaurar em state reativo. Chave proposta:
+  `omnigestao:pdv-assistencia-finalize-audit:${storeIdKey}`.
+- Registrar id/clientSaleId retornados pelo handler real após `result.ok`,
+  inclusive PENDING, antes de perder a montagem; nunca marcar FAILED nem
+  identidade histórica/alheia. Preservar a loja de origem durante await/troca
+  de loja e não sobrescrever o marcador de outra loja com estado antigo.
+- Observar só as identidades da loja ativa, com correspondência original e
+  `syncPending === false`. Ler saleId canônico, total e breakdown da venda
+  confirmada em `sales`; nunca do draft atual, toast ou resposta fabricada.
+- Unificar a deduplicação dos caminhos direto/retry/remount pelo log local
+  retido, uma vez por venda/loja; retirar marcador atendido sem repetir impressão,
+  limpeza, enriquecimento, estoque, financeiro ou outros efeitos de finalização.
+- FAILED/PENDING continuam sem evento definitivo. Preservar os cinco testes
+  existentes e acrescentar o diagnóstico: provider global mantido, confirmação
+  ausente da tela, retorno, draft diferente, snapshot/loja corretos e repetições
+  de remount/retry sem duplicação. Cobrir também perda/TTL do cache de carrinho,
+  loja alheia e resposta em voo sem atribuição à loja errada.
+
+Não mudar `lib/operations-store.tsx`, motor, backend, persistência, API/helper
+de auditoria, auth, schema, dependências ou configurações globais. Limite honesto:
+deduplicação local dentro da retenção de 500 entradas; sem garantia transacional
+cross-tab/servidor. Necessidade real de código fora desses paths exige parar e
+registrar bloqueio para decisão humana, sem expandir a allowlist por conta própria.
+
+### Retomada e aceite rev5
+
+Somente após merge humano do plano e novo comando, retomar o mesmo GOAL na
+branch/worktree de implementação já declaradas. Conferir o fingerprint completo
+documentado, preservar `cdda749`, `a21e9a6` e `01b9c0e` e integrar o plano/main por
+merge normal, sem stash/reset/descarte dos WIPs ou substituição por arquivos
+anteriores. Conflito que ameace preservação é decisão humana. Rodar `status pdv`
+e depois `open pdv`; usar apenas este GOAL rev5 READY como contrato vigente.
+
+Corrigir remount e compatibilidades diagnosticadas, preservar Classic,
+Supermercado e Venda Completa, incluindo guards, valores, loja, concorrência,
+pagamento, impressão, enriquecimento e demais efeitos já aprovados parcialmente.
+Validação futura obrigatória, no SHA corrigido e em ambiente isolado:
+
+```text
+npx vitest run lib/pdv-pending-post-sale-effects.static.test.ts lib/pdv/current-main-correction.component.test.ts
+npx vitest run lib/pdv/parity-classic-finalize-audit.component.test.ts lib/pdv/parity-assistencia-finalize-audit.component.test.ts lib/pdv/parity-supermercado-finalize-audit.component.test.ts lib/pdv/parity-venda-completa-finalize-audit.component.test.ts
+npx playwright test --config e2e/pdv-core.playwright.config.ts
+npm run typecheck
+```
+
+Manter os 20 E2E, cinco F-08 nas quatro superfícies e a matriz honesta. **20/20
+E2E rev4 é evidência histórica, não aceite automático rev5.** A matriz histórica
+19 TESTED / 1 PARTIAL não muda no planejamento; a futura revisão registra prova
+nova com SHA/caso/comando/resultado/limite, sem promover células por inferência.
+As suites herdadas precisam ficar verdes com suas asserções preservadas; se
+revelarem regressão produtiva real, corrigir somente dentro da allowlist ou parar.
+
+Nova decisão R por `anthropic` ou `humano`, família distinta de `openai`, sobre
+o SHA final corrigido, incluindo os dois blockers e implementação/testes/matriz.
+O REQUEST_CHANGES rev4 permanece histórico e não conta como nova aprovação.
+Sem R favorável, sem DONE. `N5_B1_CLOSEOUT=BLOCKED` e
+`PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED` permanecem. Nenhum gate adicional
+de dados/auth/CI/deploy, smoke produtivo, N6/N7 ou novo GOAL é autorizado.
+Próximo passo desta entrega: `HUMANO_MERGEAR_N5_C_REV5`. Parar.
 
 ## Encerramento da implementação futura
 
