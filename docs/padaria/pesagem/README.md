@@ -24,11 +24,16 @@ três casas à precisão de origem. Vírgula é separador decimal, nunca de milh
 Não há inferência de unidade, casas implícitas, preço, etiqueta ou protocolo.
 Peso negativo é representável como medição, mas não gera candidato utilizável.
 Zero também é medição válida e fica bloqueado como candidato físico.
+`value` e `kilograms` permanecem strings; consumidores não devem passá-los por
+`Number`, `parseFloat` ou quantidades produtivas sem um contrato exato separado.
+A sessão valida a coerência da massa de protocolos injetados, copia seus campos
+canônicos e congela a cópia. Um objeto mutável do parser não altera snapshots.
 
 `WeightReading` contém `sessionId`, `contextId`, `sequence`, `packetSequence`,
 `receivedAt` (milissegundos do relógio injetado, por padrão `Date.now()`),
 `protocolId`, `simulated`, `mass`, `basis` e `stability`.
-O relógio precisa ser finito e não regressivo; regressão invalida a sessão.
+O relógio precisa ser finito e não regressivo; regressão, valor inválido ou
+exceção encerram a sessão com `clock_error` e removem o candidato.
 
 `basis` é `net`, `gross` ou `unknown`. Apenas líquido positivo pode produzir
 candidato; o núcleo **não subtrai tara**. ASCII simples começa com base
@@ -41,8 +46,13 @@ do manual/configuração do equipamento. Não interpreta a linha estruturada
 `snapshot()` entrega estado imutável; `measurementCandidate(afterSequence?)`
 entrega apenas líquido positivo, estável e vigente, com sequência maior que a
 informada. Isso indica aptidão física, **não autorização de venda**.
-Consumidores precisam revalidar o snapshot no momento do uso e comparar a dupla
-`sessionId`/`sequence`. Um snapshot guardado é apenas registro histórico.
+Consumidores precisam chamar `measurementCandidate` novamente no momento do uso,
+conferir `sessionId` e `contextId` com a operação atual e exigir uma `sequence`
+posterior à última consumida nessa sessão. A consulta verifica a idade no relógio
+da sessão: ela precisa ser menor que `validForMs`. Após qualquer espera assíncrona,
+troca de produto/loja/terminal ou reconexão, repetir a validação inteira antes do
+uso. Um snapshot guardado é apenas registro histórico, inclusive se `usable`
+era verdadeiro quando foi criado. Nenhuma dessas verificações autoriza venda.
 
 | Estados | Significado |
 | --- | --- |
@@ -72,23 +82,49 @@ novas quando o equipamento de fato os envia novamente.
 
 Validade vence em `idade >= validForMs`. Pacote vazio não renova a leitura nem
 o timeout. Mensagem parcial retira o candidato imediatamente, preservando a
-janela apenas até completar a mensagem ou vencer. Erros retiram o candidato
+janela apenas até completar a mensagem ou vencer. O fragmento tem idade própria,
+contada desde seus primeiros bytes conhecidos; em `idade >= validForMs` é
+descartado até LF. Um sufixo ou terminador tardio não renova esse fragmento.
+Erros retiram o candidato
 e reiniciam a janela. LF e CRLF, fragmentos e várias mensagens são suportados;
-ASCII estrito e limite padrão de 256 bytes por linha. Uma linha corrompida ou
+ASCII estrito, CR apenas em CRLF e limite padrão de 256 bytes por linha. Uma linha corrompida ou
 excessiva é descartada até LF, sem reinterpretar seu sufixo como peso.
 
-`ScaleConnection.run(signal?)` é idempotente e retorna uma Promise do estado
-final, resolvida após cleanup. `stop()` cancela; `stop("context_changed")`
+`ScaleConnection.run(signal?)` é idempotente, inclusive durante aquisição
+reentrante, e retorna uma Promise do estado final após a tentativa limitada de
+cleanup. Só a connection dona pode alterar a sessão; `stop` de uma concorrente
+cujo `run` foi rejeitado não afeta o dono. `stop()` cancela; `stop("context_changed")`
 encerra ao mudar produto, loja, terminal ou operação. Após isso, criar outra
 `WeightSession` com **sessionId único** e o novo `contextId`; nunca reutilizar
 a instância. `WeightSession.markConnected/receive/end` são a interface de
 baixo nível para testes ou outro controlador; não manipulam transporte.
 
-O controlador mantém uma reserva por objeto de recurso, cancela o leitor,
-aguarda o loop, libera o lock e fecha o recurso nessa ordem. Portas já ocupadas
-não são fechadas pela sessão concorrente. Falha de `close` produz
-`cleanup_error`, conserva a reserva e admite `retryClose()` explícito.
-Nenhum temporizador fica ativo após a Promise de execução terminar.
+O controlador reserva a sessão e as identidades do recurso. O adaptador de porta
+reserva também seu stream: outro adaptador não pode assumi-lo durante cleanup
+incompleto. Transportes custom devem informar identidades estáveis em `resource`
+e, quando houver aliases, `resources`.
+
+Stop/abort/timeout retiram o candidato imediatamente e interrompem a espera de
+`read`, mesmo que o driver nunca responda. O loop cessa, o controlador solicita
+cancelamento, libera o lock e fecha o recurso nessa ordem. O quarto argumento de
+`ScaleConnection` é `cleanupTimeoutMs` (padrão 1000 ms), prazo de cada espera de
+cancelamento ou fechamento. `read` continua sujeito ao timeout de inatividade
+(terceiro argumento). Falha de release/close ou prazo excedido produz
+`cleanup_error` com `resources_retained` em `detail` e preserva a reserva. Resolver
+`run` ou `stop` nesse estado **não comprova liberação**. Uma rejeição de cancel com
+release e close confirmados conserva a causa terminal e informa
+`reader_cancel_failed; resources_released` em `detail`.
+
+`retryClose()` faz outra tentativa limitada e precisa ser seguido de nova consulta
+ao estado. Antes de `run`, é no-op, inclusive se uma execução começar na mesma
+passagem assíncrona. Reutiliza cancel/close ainda pendentes; não dispara um segundo close
+simultâneo. Após uma rejeição concluída de close, permite nova chamada. Sucesso
+posterior informa `cleanup_recovered; resources_released`, mantendo o erro
+histórico e sem reativar a sessão. Uma Promise de driver que nunca conclui não
+pode ser forçada a liberar hardware pelo JavaScript; a reserva continua retida.
+Rejeições/resultados tardios são observados sem recriar leituras ou mudar a
+sessão encerrada. Nenhum temporizador ou listener do controlador fica ativo após
+a Promise de execução terminar; cada read também remove seu listener de aborto.
 
 ## Consumo futuro, sem ligação produtiva nesta entrega
 
@@ -122,6 +158,15 @@ esta entrega não copia nem importa esses tipos. Mapeamento explícito:
 unidade comercial `G` ↔ medição `g`, `KG` ↔ `kg`; `UN` não é massa.
 `modoVenda=peso`, `basePreco` e capabilities continuam no contrato comercial;
 não são propriedades nem decisões do núcleo físico.
+
+Referência reconferida nesta revisão: PR #295, head
+`1909c49f35ac3a07744eac23f8838c2493204877`. Sua projeção comercial declara
+`precisaoQuantidade`: **KG = 3 casas; G e UN = 0**. A medição admite **9 casas na
+origem** (até **12 casas em kg quando a origem é g**), portanto pode exceder essa
+precisão. Por exemplo, `350.000000001 g` permanece `0.350000000001 kg`; não cabe
+automaticamente na quantidade comercial G ou KG. Esta fronteira exige decisão
+comercial/transacional futura: aqui não há arredondamento, truncamento, conversão
+de preço/estoque nem cópia de `ProductCommercialV1`.
 
 A frente PDV deve ligar a API ao Clássico após reconciliar N5-C. Venda por peso
 e acesso à balança permanecem recursos separados, sujeitos a contexto e

@@ -26,6 +26,7 @@ export function explicitUnitAsciiProtocol(basis: WeightBasis = "unknown"): Weigh
     id: "explicit-unit-ascii-v1",
     simulated: false,
     parse(line: string): ParsedWeight {
+      if (!/^[\x20-\x7e\t]*$/.test(line)) return { kind: "invalid", detail: "expected_ascii_line" }
       const match = /^([+-]?\d+(?:[.,]\d+)?)\s*([a-zA-Z]*)$/.exec(line.trim())
       if (!match) return { kind: "invalid", detail: "expected_explicit_mass" }
       return measurement(match[1], match[2].toLowerCase(), basis)

@@ -1,5 +1,10 @@
 # Entrega de pesagem — 21/10/2026
 
+> Histórico da entrega inicial abaixo. A revisão corretiva da mesma PR #294,
+> reproduções, severidades e validação posterior estão em
+> [REVISAO_PR_294.md](REVISAO_PR_294.md). O README descreve a API corrigida;
+> o corpo da PR registra o head final, revisão independente e CI desse head.
+
 **Núcleo de pesagem isolado; ainda não ligado à venda produtiva.**
 
 Branch: `codex/pesagem-core-isolado`.

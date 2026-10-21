@@ -13,6 +13,14 @@ export class AsciiLineFramer {
 
   get pending(): boolean { return this.buffer.length > 0 }
 
+  /** Fragmento vencido também é descartado até LF; seu sufixo nunca vira outra linha. */
+  discardPending(): void {
+    if (this.pending) {
+      this.buffer = ""
+      this.discarding = true
+    }
+  }
+
   push(bytes: Uint8Array): Frame[] {
     const frames: Frame[] = []
     for (const byte of bytes) {
@@ -20,7 +28,11 @@ export class AsciiLineFramer {
         if (!this.discarding) frames.push({ kind: "line", line: this.buffer.replace(/\r$/, "") })
         this.reset()
       } else if (!this.discarding) {
-        if (byte > 127 || (byte < 32 && byte !== 13 && byte !== 9)) {
+        if (this.buffer.endsWith("\r")) {
+          frames.push({ kind: "invalid", detail: "unexpected_carriage_return" })
+          this.buffer = ""
+          this.discarding = true
+        } else if (byte > 127 || (byte < 32 && byte !== 13 && byte !== 9)) {
           frames.push({ kind: "invalid", detail: "non_ascii_or_control_byte" })
           this.buffer = ""
           this.discarding = true

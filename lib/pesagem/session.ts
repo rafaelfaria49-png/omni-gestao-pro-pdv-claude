@@ -60,6 +60,7 @@ export class WeightSession {
   private packetSequence = 0
   private sequence = 0
   private lastClock = -Infinity
+  private incompleteSince: number | null = null
   private active = false
   private ended = false
 
@@ -99,6 +100,7 @@ export class WeightSession {
     this.ended = true
     this.invalidate(reason, detail)
     this.framer.reset()
+    this.incompleteSince = null
   }
 
   private invalidate(status: WeightStatus, detail: string | null = null, clearSamples = true): void {
@@ -109,12 +111,22 @@ export class WeightSession {
   }
 
   private now(): number | null {
-    const now = this.clock()
+    let now: number
+    try { now = this.clock() }
+    catch {
+      this.end("clock_error", "clock_threw")
+      return null
+    }
     if (!Number.isFinite(now) || now < 0 || now < this.lastClock) {
       this.end("clock_error")
       return null
     }
     this.lastClock = now
+    if (this.incompleteSince !== null && now - this.incompleteSince >= this.policy.validForMs) {
+      this.framer.discardPending()
+      this.incompleteSince = null
+      this.invalidate("stale", "incomplete_frame_expired")
+    }
     if (this.reading && now - this.reading.receivedAt >= this.policy.validForMs) this.invalidate("stale")
     if (this.samples.length && now - this.samples[this.samples.length - 1].receivedAt >= this.policy.validForMs) {
       this.samples = []
@@ -142,7 +154,10 @@ export class WeightSession {
       }
     }
     // Uma nova mensagem parcial retira a aptidão da anterior imediatamente.
-    if (this.framer.pending) this.invalidate("incomplete", null, false)
+    if (this.framer.pending) {
+      if (this.incompleteSince === null || packet.bytes.includes(10)) this.incompleteSince = now
+      this.invalidate("incomplete", null, false)
+    } else this.incompleteSince = null
     return { accepted: true, snapshot: this.snapshot() }
   }
 
@@ -155,14 +170,30 @@ export class WeightSession {
       this.invalidate(parsed.kind, parsed.detail)
       return
     }
-    const sign = compareDecimal(parsed.mass.kilograms, "0")
+    let mass: Mass
+    try {
+      const result = parseMass(parsed.mass.value, parsed.mass.unit)
+      if (!result.ok || result.mass.value !== parsed.mass.value ||
+          result.mass.kilograms !== parsed.mass.kilograms || result.mass.decimalPlaces !== parsed.mass.decimalPlaces ||
+          !["net", "gross", "unknown"].includes(parsed.basis) ||
+          (parsed.stable !== undefined && typeof parsed.stable !== "boolean")) {
+        this.invalidate("invalid", "invalid_protocol_measurement")
+        return
+      }
+      // Copia canônica congelada: o protocolo conserva a posse de seus próprios objetos.
+      mass = result.mass
+    } catch {
+      this.invalidate("invalid", "invalid_protocol_measurement")
+      return
+    }
+    const sign = compareDecimal(mass.kilograms, "0")
     const eligibleMass = sign > 0 && parsed.basis === "net"
     let stable = parsed.stable === true
     let count = 1
     if (parsed.stable !== undefined || !eligibleMass) this.samples = []
     else {
       this.samples = this.samples.filter((sample) => now - sample.receivedAt <= this.policy.windowMs)
-      this.samples.push({ kilograms: parsed.mass.kilograms, receivedAt: now })
+      this.samples.push({ kilograms: mass.kilograms, receivedAt: now })
       this.samples = this.samples.slice(-this.policy.maximumSamples)
       count = this.samples.length
       stable = count >= this.policy.minimumSamples &&
@@ -173,7 +204,7 @@ export class WeightSession {
       sessionId: this.sessionId, contextId: this.contextId, sequence: this.sequence,
       packetSequence: this.packetSequence, receivedAt: now,
       protocolId: this.protocol.id, simulated: this.protocol.simulated,
-      mass: parsed.mass, basis: parsed.basis,
+      mass, basis: parsed.basis,
       stability: Object.freeze({ stable, source: parsed.stable === undefined ? "estimated" : "protocol", samples: count }),
     })
     this.detail = null

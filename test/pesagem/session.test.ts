@@ -115,7 +115,8 @@ describe("estabilidade, identidade, validade e aptidão física", () => {
     f.session.markConnected()
     f.send(frame()); f.advance(100); f.send(frame()); f.send("SIM|NA|")
     f.advance(1000)
-    expect(f.send("NET|0.350|kg\n").snapshot.reading?.stability.samples).toBe(1)
+    expect(f.send("NET|0.350|kg\n").snapshot).toMatchObject({ status: "stale", reading: null, usable: false })
+    expect(f.send(frame()).snapshot.reading?.stability.samples).toBe(1)
   })
 
   it.each([
@@ -191,5 +192,102 @@ describe("estabilidade, identidade, validade e aptidão física", () => {
     session.receive({ sessionId: "x", packetSequence: 1, bytes: encode(frame("0.350", "ST")) })
     expect(session.snapshot().usable).toBe(true)
     expect(Object.isFrozen(session.snapshot().reading?.mass)).toBe(true)
+  })
+
+  it("descarta fragmento vencido no limite sem interpretar seu sufixo como leitura nova", () => {
+    const f = fixture()
+    f.session.markConnected()
+    f.send("SIM|ST|NET|350|g")
+    f.advance(1000)
+    expect(f.send("\n").snapshot).toMatchObject({ status: "stale", reading: null, usable: false })
+    f.send("SIM|ST|NET|350|")
+    f.advance(1000)
+    expect(f.session.snapshot().status).toBe("stale")
+    expect(f.send("g\n").snapshot.usable).toBe(false)
+    expect(f.send(frame("351", "ST", "NET", "g")).snapshot.status).toBe("ready")
+  })
+
+  it("a idade de cada novo fragmento começa após o delimitador anterior", () => {
+    const f = fixture()
+    f.session.markConnected()
+    f.send("SIM|ST|NET|350|")
+    f.advance(900)
+    f.send("g\nSIM|ST|NET|351|")
+    f.advance(900)
+    expect(f.send("g\n").snapshot).toMatchObject({ status: "ready", reading: { mass: { kilograms: "0.351" } } })
+  })
+
+  it.each([NaN, Infinity, -1])("relógio inválido %s encerra e remove o candidato", (invalid) => {
+    let now = 1000
+    const session = new WeightSession({ sessionId: "a", contextId: "c", protocol: simulatedWeightProtocol, policy, clock: () => now })
+    session.markConnected()
+    session.receive({ sessionId: "a", packetSequence: 1, bytes: encode(frame("350", "ST", "NET", "g")) })
+    now = invalid
+    expect(session.snapshot()).toMatchObject({ status: "clock_error", reading: null, usable: false })
+    expect(session.isEnded).toBe(true)
+  })
+
+  it("exceção do relógio encerra a sessão em vez de conservar uma leitura pronta", () => {
+    let fail = false
+    const session = new WeightSession({ sessionId: "a", contextId: "c", protocol: simulatedWeightProtocol, policy,
+      clock() { if (fail) throw new Error("clock_failure"); return 1000 } })
+    session.markConnected()
+    session.receive({ sessionId: "a", packetSequence: 1, bytes: encode(frame("350", "ST", "NET", "g")) })
+    fail = true
+    expect(session.snapshot()).toMatchObject({ status: "clock_error", reading: null, usable: false })
+    expect(session.isActive).toBe(false)
+    expect(session.measurementCandidate()).toBeNull()
+  })
+
+  it("snapshot copia e congela massa do protocolo sem congelar o objeto do chamador", () => {
+    const mass = { value: "350", unit: "g" as const, decimalPlaces: 0, kilograms: "0.350" }
+    const f = fixture("a", { id: "custom", simulated: true,
+      parse: () => ({ kind: "measurement", mass, basis: "net", stable: true }) })
+    f.session.markConnected()
+    const historical = f.send("custom\n").snapshot
+    expect(Object.isFrozen(historical.reading?.mass)).toBe(true)
+    expect(Object.isFrozen(mass)).toBe(false)
+    mass.value = "1234"; mass.kilograms = "1.234"
+    expect(historical.reading?.mass.kilograms).toBe("0.350")
+    expect(f.session.measurementCandidate()).toMatchObject({ sequence: 1, mass: { kilograms: "0.350" } })
+  })
+
+  it("rejeita massa divergente ou precisão já perdida por um protocolo custom", () => {
+    const f = fixture("a", { id: "rounded", simulated: true, parse: () => ({ kind: "measurement", basis: "net", stable: true,
+      mass: { value: "9007199254740993", unit: "kg", decimalPlaces: 0, kilograms: "9007199254740992" } }) })
+    f.session.markConnected()
+    expect(f.send("custom\n").snapshot).toMatchObject({ status: "invalid", reading: null, usable: false })
+  })
+
+  it.each([["0.351000000", "ready"], ["0.351000001", "unstable"]])("limite inclusivo da tolerância exata em %s", (value, expected) => {
+    const f = fixture()
+    f.session.markConnected()
+    f.send(frame("0.350")); f.advance(100)
+    f.send(frame("0.350")); f.advance(100)
+    expect(f.send(frame(value)).snapshot.status).toBe(expected)
+  })
+
+  it("janela é inclusiva e mensagens iguais recebidas novamente contam", () => {
+    const f = fixture()
+    f.session.markConnected()
+    f.send(frame()); f.advance(250); f.send(frame()); f.advance(250)
+    expect(f.send(frame()).snapshot).toMatchObject({ status: "ready", reading: { stability: { samples: 3 } } })
+    f.advance(1)
+    expect(f.send(frame()).snapshot.reading?.stability.samples).toBe(3)
+  })
+
+  it("sequências inválidas, repetidas ou fora de ordem não criam amostra nem renovam idade", () => {
+    const f = fixture()
+    f.session.markConnected()
+    f.session.receive({ sessionId: "session-a", packetSequence: 5, bytes: encode(frame("350", "ST", "NET", "g")) })
+    const original = f.session.measurementCandidate()!
+    for (const packetSequence of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, 5, 4]) {
+      f.advance(100)
+      expect(f.session.receive({ sessionId: "session-a", packetSequence, bytes: encode(frame("999", "ST")) }).accepted).toBe(false)
+      expect(f.session.measurementCandidate()).toEqual(original)
+    }
+    f.advance(200)
+    expect(f.session.measurementCandidate()).toBeNull()
+    expect(f.session.snapshot().status).toBe("stale")
   })
 })

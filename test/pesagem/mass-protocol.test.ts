@@ -19,8 +19,18 @@ describe("medição exata e protocolos documentados", () => {
     expect(parseMass(value, "kg")).toEqual({ ok: false, code: "precision_exceeded" })
   })
 
-  it.each(["1e3", "NaN", "Infinity", "1,000.00", "1.", "", "1 2"]) ("rejeita número ambíguo: %s", (value) => {
+  it.each(["1e3", "NaN", "Infinity", "1,000.00", "1.", "", "1 2", "350\n", "350\r\n"]) ("rejeita número ambíguo: %s", (value) => {
     expect(parseMass(value, "kg")).toEqual({ ok: false, code: "invalid_number" })
+  })
+
+  it("preserva limites e casas além da precisão comercial sem converter para number", () => {
+    expect(parseMass("999999999999999999999999", "kg")).toMatchObject({ ok: true,
+      mass: { value: "999999999999999999999999", kilograms: "999999999999999999999999" } })
+    expect(parseMass("9007199254740993.000000001", "g")).toEqual({ ok: false, code: "precision_exceeded" })
+    expect(parseMass("9007199254740993.00000001", "g")).toMatchObject({ ok: true,
+      mass: { kilograms: "9007199254740.99300000001", decimalPlaces: 8 } })
+    expect(parseMass("0.350000001", "kg")).toMatchObject({ ok: true, mass: { kilograms: "0.350000001" } })
+    expect(parseMass("350.000000001", "g")).toMatchObject({ ok: true, mass: { kilograms: "0.350000000001" } })
   })
 
   it("não presume unidade, decimal implícito ou protocolo", () => {
@@ -61,6 +71,24 @@ describe("medição exata e protocolos documentados", () => {
     ])
     expect(framer.push(new Uint8Array([255, ...encode("350 g\n")]))).toEqual([
       { kind: "invalid", detail: "non_ascii_or_control_byte" },
+    ])
+  })
+
+  it("CR fora do par CRLF corrompe a linha inteira sem aceitar sufixo válido", () => {
+    const framer = new AsciiLineFramer()
+    expect(framer.push(encode("350\rkg\n350 g\n"))).toEqual([
+      { kind: "invalid", detail: "unexpected_carriage_return" }, { kind: "line", line: "350 g" },
+    ])
+    const parser = explicitUnitAsciiProtocol("net")
+    for (const line of ["350\rkg", "\r350 g", "350 g\r", "350 g\n", "350\u00a0g"]) {
+      expect(parser.parse(line)).toMatchObject({ kind: "invalid" })
+    }
+  })
+
+  it("aceita o limite exato da linha e rejeita um byte além dele", () => {
+    const framer = new AsciiLineFramer(5)
+    expect(framer.push(encode("350 g\n3500 g\n"))).toEqual([
+      { kind: "line", line: "350 g" }, { kind: "invalid", detail: "line_too_long" },
     ])
   })
 })
