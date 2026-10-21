@@ -111,7 +111,8 @@ export function field(scope: Locator, label: string): Locator {
 
 export async function openNewProduct(page: Page): Promise<Locator> {
   // Botão "Novo" da barra da listagem de Produtos (o do cabeçalho abre o seletor de tipo).
-  await page.getByRole("button", { name: "Novo", exact: true }).click()
+  const toolbar = page.getByPlaceholder("Buscar em produtos…").locator("xpath=ancestor::div[contains(@class,'mb-4')][1]")
+  await toolbar.getByRole("button", { name: "Novo", exact: true }).click()
   const modal = productModal(page)
   await expect(modal).toBeVisible()
   return modal

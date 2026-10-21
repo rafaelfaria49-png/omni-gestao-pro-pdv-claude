@@ -2,6 +2,7 @@
 
 import { CadastrosHub } from "./components/cadastros/CadastrosHub";
 import { ThemeProvider } from "./components/theme-provider";
+import { Toaster } from "./components/ui/sonner";
 
 /**
  * Wrapper isolado do Cadastros HUB Lovable.
@@ -15,6 +16,8 @@ export function CadastrosHubIsolated() {
     <div className="w-full min-w-0 max-w-full">
       <ThemeProvider>
         <CadastrosHub />
+        {/* O HUB confirma gravações e falhas via `sonner`; sem este Toaster nenhuma mensagem aparece. */}
+        <Toaster position="top-center" />
       </ThemeProvider>
     </div>
   );
