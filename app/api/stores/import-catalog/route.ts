@@ -32,7 +32,7 @@ export const revalidate = 0
 export async function POST(req: Request) {
   const actorStore = storeIdFromAssistecRequestForRead(req)
   // Item em processamento: ambas as lojas já foram autorizadas quando é preenchido.
-  let item: { sku: string; unidade: "origem" | "destino" } | null = null
+  const processing: { item: { sku: string; unidade: "origem" | "destino" } | null } = { item: null }
   try {
     const gate = await requireAdmin()
     if (!gate.ok) return gate.res
@@ -115,9 +115,9 @@ export async function POST(req: Request) {
           produtosIgnoradosSemSku += 1
           continue
         }
-        item = { sku, unidade: "origem" }
+        processing.item = { sku, unidade: "origem" }
         assertProductCommercialSaleSupported(p.metadata)
-        item = { sku, unidade: "destino" }
+        processing.item = { sku, unidade: "destino" }
         const targetStock = Math.max(0, Math.floor(Number(p.stock ?? 0) || 0))
         const existing = await tx.produto.findFirst({
           where: { storeId: toStoreId, sku },
@@ -208,7 +208,8 @@ export async function POST(req: Request) {
       produtosAtualizados,
     })
   } catch (e) {
-    const local = item ? ` Produto ${item.sku} (unidade de ${item.unidade}).` : ""
+    const { item } = processing
+    const local = item ?` Produto ${item.sku} (unidade de ${item.unidade}).` : ""
     if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) {
       return NextResponse.json({ ok: false, error: `${e.message}${local}`, code: e.code, ...(item ? { item } : {}) }, { status: 409 })
     }
