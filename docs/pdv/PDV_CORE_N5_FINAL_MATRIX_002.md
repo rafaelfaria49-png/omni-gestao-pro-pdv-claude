@@ -1,3 +1,28 @@
+# PDV Core N5-C — REV5: matriz aprovada por R independente
+
+Parecer comunicado pelo responsável humano em 21/10/2026 no pedido
+`CODEX_CLOSE_AEP_N5_C_REV5`, sobre o SHA exato
+`8d19a8bea9518c6f865dc69c67b28085bbdde6bb`:
+`R_EXECUTOR=Claude Code / Claude Opus 5.5`, `R_FAMILY=anthropic`,
+`IMPLEMENTATION_FAMILY=openai`, `INDEPENDENCE_VALID=YES`, `R_VERDICT=APPROVE`.
+O registro é feito pelo Codex; não constitui uma revisão R feita pelo Codex.
+Proveniência, reprodução do remount e limites:
+`docs/ai-execution/_evidence/PDV-PARITY-N5-C-E2E-002.md`.
+
+A matriz rev5 preservada abaixo mantém **20 TESTED / 0 PARTIAL / 0 BLOCKED**,
+cinco F-08 nas quatro superfícies. Parecer informado: **76/76 PASS**
+(45 herdados + 31 componentes), **20/20 E2E**, sem skips. Nenhum código ou
+asserção é modificado neste fechamento. DONE depende dos gates e do `close`
+canônico; a ratificação oficial deve constar do ledger/relatório AEP.
+Persistência e automação server-side, hardware e operação autenticada real
+continuam fora desta prova sintética. Retenção do log local: 500 entradas;
+sem storage, deduplicação restrita à montagem.
+`N5_B1_CLOSEOUT=BLOCKED` · `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`.
+
+---
+
+## Matriz e provas rev5 anteriores ao parecer, preservadas integralmente
+
 # PDV Core N5-C — REV5: candidato técnico, validação completa e nova R pendente
 
 Execução: 21/10/2026 (America/Sao_Paulo). GOAL `PDV-PARITY-N5-C-E2E-002`.

@@ -1,3 +1,78 @@
+# PDV-PARITY-N5-C-E2E-002 — REV5: parecer R APPROVE no SHA exato
+
+Registro: 21/10/2026 (America/Sao_Paulo), GOAL de fechamento humano
+`CODEX_CLOSE_AEP_N5_C_REV5`. O responsável humano comunicou nesta conversa
+o parecer independente favorável e autorizou seu registro, o fechamento AEP
+condicionado aos gates, push exclusivo da branch e PR contra `main`, sem merge.
+
+```text
+REVIEWED_SHA=8d19a8bea9518c6f865dc69c67b28085bbdde6bb
+R_VERDICT=APPROVE
+R_EXECUTOR=Claude Code / Claude Opus 5.5
+R_FAMILY=anthropic
+IMPLEMENTATION_FAMILY=openai
+INDEPENDENCE_VALID=YES
+R_REPORTED_RESULTS=76/76 PASS
+HERDADOS=45/45 PASS (11 estaticos + 34 comportamentais)
+COMPONENTES=31/31 PASS
+E2E=20/20 PASS
+MATRIX_TESTED=20
+MATRIX_PARTIAL=0
+MATRIX_BLOCKED=0
+N5_B1_CLOSEOUT=BLOCKED
+PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+Proveniência: identidade, família e veredito R acima foram fornecidos pelo
+responsável humano no pedido de fechamento. Codex (`openai`) registra esse
+parecer externo e reexecuta os checks; não é o revisor R e não se declara humano.
+O `INVALID_REVIEW` anterior do Codex permanece inválido como R e não é usado
+como aprovação. O REQUEST_CHANGES Anthropic da rev4 permanece histórico abaixo.
+
+## Reprodução do remount e contratos aprovados
+
+Os casos em `lib/pdv/parity-assistencia-finalize-audit.component.test.ts`
+mantêm o `OperationsProvider` real, iniciam PENDING, desmontam somente a tela
+e confirmam pelo retry real com a mesma `clientSaleId` nos dois POSTs. Antes
+da volta, a venda é `VDA-N5C-1`, total 190, `syncPending=false`, sem auditoria
+definitiva emitida pela tela ausente. Com o cache alterado, expirado ou ausente,
+o remount emite exatamente um `sale_finalized` com loja, identidade, total e
+breakdown do snapshot confirmado. Novos remounts/renders/retries mantêm um
+evento, uma venda e o estado de negócio. Loja alheia e resposta em voo após
+troca de loja preservam os marcadores de origem e destino; FAILED/PENDING
+continuam sem auditoria definitiva. São dez casos da Assistência, incluindo
+os cinco novos de remount/isolamento, dentro dos 31 componentes aprovados.
+
+Os dois herdados preservam os 11 e 34 casos e seus contratos de identidade,
+cache/TTL, loja, hold/resume, snapshots e bloqueio de reconfirmação. A matriz
+rev5 abaixo referenciada contém os cinco F-08 (split, vale, À Prazo,
+PENDING/retry, audit-log) nas quatro superfícies, com 20 TESTED e zero skips
+no conjunto aprovado. Comandos, provas e resultados do candidato estão no
+registro rev5 preservado a seguir e em `docs/pdv/PDV_CORE_N5_FINAL_MATRIX_002.md`.
+
+## Limites preservados e condição de fechamento
+
+I/O sintético fail-closed em loopback, sem servidor Next, `.env`, DB/API ou
+autenticação de produção. As fixtures não homologam persistência/automação
+server-side, hardware, operação física nem acesso autenticado real. A
+deduplicação local permanece limitada às 500 entradas retidas; sem storage,
+a memória cobre apenas aquela montagem. Os oito cenários do smoke B1 e os
+dois estados operacionais BLOCKED acima continuam pendentes.
+
+Nenhum blocker técnico pendente foi comunicado no parecer R APPROVE. Os quatro
+eventos BLOCKED do ledger são históricos append-only e devem permanecer
+literais. Este commit documental não altera implementação nem marca DONE.
+Após ele, reexecutar ESLint focado, typecheck, 76 regressões, 20 E2E,
+`verify --all` e `check pdv`; somente com PASS executar `close pdv` e verificar
+novamente ledger, state, relatório, diff documental e árvore limpa. Apenas
+o script AEP poderá acrescentar o DONE deste GOAL e gerar o commit oficial.
+
+---
+
+## Registro rev5 anterior ao recebimento do parecer, preservado integralmente
+
 # PDV-PARITY-N5-C-E2E-002 — REV5: candidato técnico validado, R pendente
 
 Data: 21/10/2026 (America/Sao_Paulo). Executor: Codex, família `openai`.
