@@ -19,21 +19,25 @@ nenhum novo GOAL, state, ledger ou registry foi criado ou alterado.
 | R3 / P2 | `lib/store-settings-provider.tsx`: GET falha e há atalhos locais elegíveis | Provider fazia PUT de backfill após HTTP 500 | Backfill exige leitura confirmada da loja. JSON/envelope inválido ou resposta de outra loja não hidrata configuração | `lib/store-settings-business.component.test.ts` |
 | R4 / P2 | Mesmo provider: primeira renderização após troca A → B | Impressora e tema de A ainda apareciam no contexto de B | Impressão e aparência usam o mesmo snapshot validado da loja que capabilities | Teste captura primeira renderização de B antes dos efeitos |
 | R5 / P2 | `app/api/settings/perfil-loja/route.ts`: acesso autorizado a id inexistente | HTTP 200 com perfil de assistência inventado | HTTP 404, sem perfil e sem ler settings | `app/api/settings/perfil-loja/route.test.ts` |
+| R6 / P1 | `lib/cadastros/product-write-service.ts`: PATCH de produto unitário com `vendaPorPeso: true` na raiz ou em `atributos` | Writer aceitava e passava a interpretar unidade/saldo como peso, sem enviar `comercial` | Validar modo e unidade no metadata final mesclado, incluindo flags legadas; recusar sem mudar dados | Dois casos do writer e dois casos PostgreSQL com snapshot integral |
 
 Reprodução antes das correções: 7 falhas em 34 testes (declarações inválidas,
 backfill, primeira renderização e loja inexistente); teste adicional de concorrência
 falhou mostrando a chave `descricao` perdida. Os mesmos cenários passam corrigidos.
 Os testes novos de resposta HTTP 200 inválida/outra loja ampliam o tratamento de R3.
+Na releitura do SHA corretivo `1909c49f35ac3a07744eac23f8838c2493204877`, dois
+testes adicionais reproduziram R6 (`ok: true` em vez de VALIDATION). A validação
+foi ampliada ao resultado mesclado e os mesmos casos foram adicionados ao banco real.
 
 R1 também cobre declarações legadas de peso na criação: exigem preferência da loja
 provada e saldo inicial zero. Nenhuma capacidade operacional nova foi habilitada.
 
 ## Validação e limites
 
-- Suíte focada de Ramos, Cadastros, contratos, autorização e vendas: 279 testes em
+- Suíte focada de Ramos, Cadastros, contratos, autorização e vendas: 281 testes em
   18 arquivos, sem skips. Não representa toda a suíte do repositório.
-- Regressão ampla de Cadastros/consumidores: 1.186 aprovados em 67 arquivos;
-  29 pulados em três arquivos de integração por ausência de banco local.
+- Regressão ampla de Cadastros/consumidores: 1.188 aprovados em 67 arquivos;
+  31 pulados em três arquivos de integração por ausência de banco local.
   Os conjuntos focado e amplo têm sobreposição e não devem ser somados.
 - Lint dos arquivos alterados: sem erros; três avisos preexistentes (dependências
   de efeitos em Geral/Unidades e diretiva não utilizada em teste legado).
@@ -42,10 +46,11 @@ provada e saldo inicial zero. Nenhuma capacidade operacional nova foi habilitada
   tipografia, layout e labels. Aviso de declaração inválida coberto pelo componente.
 - TypeScript completo e build sem migrations são gates da CI do head final.
   Build local não executado por menos de 1 GB livre; nenhum artefato alheio apagado.
-- Novo job PostgreSQL descartável executa nove integrações reais: V1/V2 com produto
+- Novo job PostgreSQL descartável executa onze integrações reais: V1/V2 com produto
   unitário seguido de peso, declaração inválida, rollback integral (inclusive
   numeração V2), unitários, replay confirmado após mudança posterior de metadata,
-  preservação ao reabrir, patches em duas conexões e configuração concorrente.
+  preservação ao reabrir, bloqueio de reinterpretação por flags legadas, patches em
+  duas conexões e configuração concorrente.
   Somente autenticação/automação/gate V2 são fixtures; handlers, writers, Prisma,
   transações e banco são reais. O guard exige CI GitHub, loopback e URL exata do
   serviço descartável já usado pela suíte existente. Materializa schema inalterado

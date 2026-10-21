@@ -115,6 +115,11 @@ describe.skipIf(!url)("PR #295 — roundtrip, concorrência e rollback reais", (
     expect(after).toMatchObject({ stock: before.stock, price: before.price, warrantyDays: 90,
       metadata: { comercial: unit, fiscal: { ncm: "12345678" }, atributos: { modeloCompativel: "Histórico", descricao: "Nova" } } })
   })
+  it.each([{ vendaPorPeso: true }, { atributos: { vendaPorPeso: true } }])("flag legada não reinterpreta produto unitário nem seu saldo: %j", async (metadata) => {
+    const before = await snapshot()
+    expect(await updateProduct(context(), unitId, { metadata }, { db: productDb() })).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(await snapshot()).toEqual(before)
+  })
   it("patches de produto em duas conexões preservam chaves omitidas sob lock real", async () => {
     const written = deferred(), proceed = deferred(), observed = deferred()
     const pids = new Set<number>()

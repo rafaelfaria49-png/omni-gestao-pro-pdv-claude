@@ -447,6 +447,13 @@ describe("Ramos combináveis — escrita comercial e preservação", () => {
     expect(fake.rows.get("p1")?.metadata?.comercial).toEqual(weight)
     expect(fake.rows.get("p1")?.stock).toBe(7)
   })
+  it.each([{ vendaPorPeso: true }, { atributos: { vendaPorPeso: true } }])("flags legadas não podem reinterpretar produto unitário existente: %j", async (metadata) => {
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", stock: 7, metadata: { comercial: unit } })], { "loja-a": settings("padaria", {}) })
+    expect(await updateProduct(ctx(), "p1", { metadata }, { db: fake.db })).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(fake.rows.get("p1")?.metadata).toEqual({ comercial: unit })
+    expect(fake.rows.get("p1")?.stock).toBe(7)
+    expect(fake.movs.size).toBe(0)
+  })
   it("também preserva uma declaração legada de peso", async () => {
     const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", metadata: { vendaPorPeso: true } })])
     expect(await updateProduct(ctx(), "p1", { metadata: { vendaPorPeso: false } }, { db: fake.db })).toMatchObject({ ok: false, code: "VALIDATION" })

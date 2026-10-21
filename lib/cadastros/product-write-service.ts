@@ -435,6 +435,12 @@ function resolveMetadata(
   if (!opts.isCreate && isProductWeightDeclared(existingMetadata) && !isProductWeightDeclared(next)) {
     return { ok: false, error: productWriteInvalid("A declaração de peso existente deve ser preservada.", "metadata") }
   }
+  // Flags legadas também participam da semântica comercial. Validar o resultado
+  // mesclado impede trocar UN por KG sem enviar o namespace `comercial`.
+  const nextCommercial = productCommercialFromMetadata(next)
+  if (!opts.isCreate && (nextCommercial.modoVenda !== oldCommercial.modoVenda || nextCommercial.unidade !== oldCommercial.unidade)) {
+    return { ok: false, error: productWriteInvalid("Não é possível reinterpretar a unidade de um produto existente. Cadastre outro produto; saldos e histórico devem ser preservados.", "metadata") }
+  }
   return { ok: true, metadata: next, clear: false }
 }
 
