@@ -26,6 +26,14 @@ Chrome 155.0.8059.80, Windows 11: API local presente (`processLocally`, `availab
 
 Após o download autorizado (SODA 1.2.12 + pt-BR 1.3071.0), o Chrome 155 volta a responder `downloadable` a cada reinício até `install()` ser chamado de novo; offline, o clique só reativa os arquivos locais (11 ms). Nesta máquina o motor local recebeu a fala sintética em modo local, offline, mas não devolveu texto; causa não determinada (pressão de memória e motor sob automação/áudio falso seguem como hipóteses; detalhes em REPORT.md, "Captura real"). Caminhos do modelo acima de 260 caracteres impedem o motor de terminar: perfis reais ficam perto de 220, mas nomes de usuário Windows longos se aproximam do limite. Em qualquer falha o produto termina com "Nenhuma fala reconhecida" e mantém o texto. Requisito operacional sugerido para homologação: repetir o roteiro real em cada tipo de terminal.
 
+### Correção de 20/10/2026 — `quality`, provisório e diagnóstico
+
+- `quality` (spec: `command` padrão, `dictation`, `conversation`) é membro de `SpeechRecognitionOptions`. Chrome 155 valida o enum e expõe `quality` na instância; para pt-BR responde `command`=downloadable, `dictation`=unavailable, `conversation`=unavailable. O adapter usa `dictation` só quando declarada disponível/instalável; senão o nível padrão local, como antes.
+- Com `processLocally=true`, motor local indisponível chega como erro `service-not-allowed` (spec): tratado como indisponibilidade local, nunca como permissão de microfone, e reconsulta `available()` sem fallback.
+- Etapas observáveis: `audiostart`, `soundstart`, `speechstart`, `speechend`, `soundend`, `audioend`, `result` (provisório/final), `nomatch`, `error`, `end`. A interface só afirma a etapa que o evento comprovou; o diagnóstico guarda apenas tempos, contagens e códigos.
+- Provisório depois de `stop()` é repassado; Clientes o retém para recuperação explícita. `session.ts`/Produto inalterados.
+- `start(MediaStreamTrack)` existe na spec; não usado (o produto mantém o microfone padrão do navegador).
+
 ### Modo remoto — documentado, não ativado
 
 Remoto seria o reconhecimento do navegador sem `processLocally` (no Chrome, serviço do Google; no Edge, da Microsoft) ou um fornecedor contratado (seção B). Exposição: áudio, idioma, metadados técnicos e transcrição. Não existe código desse caminho em Clientes. Condições para um GOAL próprio: fornecedor e modalidade escolhidos; finalidade; países, suboperadores e acessos de suporte; retenção, treinamento e exclusão comprovados; DPA e mecanismo de transferência LGPD; avisos a atendentes e clientes; aprovação administrativa/jurídica registrada. Até lá, `remoteFallback: false`.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-20
+
+### Cadastros — Microfone dentro do campo e diagnóstico da voz de Clientes (CAD-R2-021)
+
+- O microfone fica dentro da caixa "Descreva o novo cliente". Durante o ditado, a própria caixa mostra a etapa comprovada pelo navegador (microfone, som, fala, texto), o tempo e os botões Parar/Cancelar.
+- Texto que o navegador só deixou provisório não se perde mais ao parar: aparece rotulado como não confirmado e só entra no campo com "Usar trecho provisório". Nada é interpretado ou salvo sozinho.
+- "Diagnóstico da voz" mostra em que etapa o ditado parou e oferece um teste mínimo do próprio navegador, sem guardar áudio ou texto.
+- "Recusa do reconhecimento local" deixou de aparecer como "Microfone bloqueado". A qualidade `dictation` é usada só quando o navegador a declara local para pt-BR (no Chrome 155 não está disponível).
+- Reconhecimento real em dispositivo segue não demonstrado.
+
 ## 2026-10-19
 
 ### Cadastros — Voz no cadastro de Clientes, somente local (CAD-R2-021)
