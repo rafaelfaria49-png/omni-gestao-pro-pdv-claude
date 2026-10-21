@@ -106,6 +106,12 @@ export function inspectCoverage(base, head) {
   };
 }
 
+export function resolveComparisonBase(value, revParse) {
+  const sha = value === 'origin/main' ? revParse('refs/remotes/origin/main') : value;
+  if (!/^[a-f0-9]{40}$/.test(sha ?? '')) throw new Error('RAFACELL_CI_REQUIRES_EXPLICIT_BASE_SHA');
+  return sha;
+}
+
 async function materializeSchema() {
   const database = assertDisposableDatabase(process.env);
   const env = isolatedEnv(database);
@@ -141,8 +147,8 @@ async function postgres() {
 async function regression(baseSha) {
   const database = assertDisposableDatabase(process.env);
   await assertDatabaseReady(database);
-  if (!/^[a-f0-9]{40}$/.test(baseSha ?? '')) throw new Error('RAFACELL_CI_REQUIRES_EXPLICIT_BASE_SHA');
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
+  baseSha = resolveComparisonBase(baseSha, ref => git('rev-parse', ref).trim());
   summary(`Base da comparação: ${baseSha}; HEAD: ${git('rev-parse', 'HEAD').trim()}.`);
   // Reuse dependencies only when both contracts are identical; otherwise fail visibly.
   for (const file of ['prisma/schema.prisma', 'package-lock.json', 'package.json']) {

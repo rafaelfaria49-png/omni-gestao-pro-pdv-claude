@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertDisposableDatabase, compareFailures, inspectCoverage } from './ci.mjs';
+import { assertDisposableDatabase, compareFailures, inspectCoverage, resolveComparisonBase } from './ci.mjs';
 import { publicFontAllowed } from './block-network.cjs';
 
 const url = 'postgresql://rafacell_ci:synthetic@127.0.0.1:5432/ops_v4_prepub003_c100900001?schema=public';
@@ -47,4 +47,13 @@ test('only credential-free public font GETs are permitted, and only in the build
   assert.equal(publicFontAllowed(css, 'POST', {}, true), false);
   assert.equal(publicFontAllowed(css, 'GET', { Authorization: 'synthetic' }, true), false);
   assert.equal(publicFontAllowed(font, 'GET', { Cookie: 'synthetic' }, true), false);
+});
+test('comparison resolves fetched main, without trusting an outdated PR event base', () => {
+  const current = 'a874342f5366427f8f7cfebc96a9c14c8efe39ad';
+  const refs = [];
+  assert.equal(resolveComparisonBase('origin/main', ref => { refs.push(ref); return current; }), current);
+  assert.deepEqual(refs, ['refs/remotes/origin/main']);
+  assert.equal(resolveComparisonBase(current, () => { throw new Error('must not resolve explicit SHA'); }), current);
+  for (const invalid of [undefined, 'main', 'origin/other', 'invalid-sha']) assert.throws(() => resolveComparisonBase(invalid, () => current), /EXPLICIT_BASE_SHA/);
+  assert.throws(() => resolveComparisonBase('origin/main', () => ''), /EXPLICIT_BASE_SHA/);
 });

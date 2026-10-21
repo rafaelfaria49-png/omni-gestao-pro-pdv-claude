@@ -111,7 +111,7 @@ primeira criação se perder; este PR cobre retry após a criação ser conhecid
 
 Validação local válida das fontes adicionais, antes do push
 
-- Guardas do runner: 4/4, incluindo allowlist restrita de fontes públicas.
+- Guardas do runner: 5/5, incluindo fontes públicas e resolução da main buscada.
 - Contratos focados: 347/347.
 - UI envio/criação: 17/17; UI RafaCell: 6/6.
 - PostgreSQL 17 exclusivo em loopback: 39/39; schema vigente materializado
@@ -152,6 +152,10 @@ este documento não antecipa um CI verde. O primeiro run 39535972441 confirmou
 zero novas. O build desse run falhou pelo bloqueio das fontes públicas; a
 allowlist restrita acima corrige a infraestrutura sem modificar o layout ou
 mockar o código de produção. O resultado final deve ser conferido no novo run.
+O segundo run 39536625278 passou também TypeScript, lint e build, mantendo
+somente as 16 históricas. Seu evento ainda informava base 1370086; por isso
+o comparador final resolve refs/remotes/origin/main do checkout completo,
+registra o SHA concreto e não trata a base antiga do evento como main atual.
 
 Vercel e preservação
 
