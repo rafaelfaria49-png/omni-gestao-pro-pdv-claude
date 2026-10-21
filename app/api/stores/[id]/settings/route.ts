@@ -43,6 +43,11 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       mascotPromptBase: string
     }>
 
+    // A persistência decide o modo por `!!body.backfill`; só booleano evita divergir da validação abaixo.
+    if (body.backfill !== undefined && typeof body.backfill !== "boolean") {
+      return NextResponse.json({ ok: false, error: "Campo backfill inválido." }, { status: 400 })
+    }
+
     // ── Validação rigorosa de Capabilities V1 ──────────────────────────────
     // Snapshot com seções irmãs não altera capabilities (ver merge): não validar o que não será aplicado.
     if (body.printerConfig && typeof body.printerConfig === "object" && !Array.isArray(body.printerConfig)) {

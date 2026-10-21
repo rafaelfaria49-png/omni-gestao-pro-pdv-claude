@@ -198,10 +198,14 @@ test("Produto por peso: somente preparação, preservado ao reabrir e editar", a
     await modal.getByRole("combobox", { name: "Forma de venda" }).selectOption("peso")
     await field(modal, "Estoque inicial").fill("5")
     await field(modal, "Preço venda (R$)").fill("30,00")
+    const save = page.waitForResponse((res) => res.request().method() === "POST" && !!res.request().headers()["next-action"] &&
+      (res.request().postData() ?? "").includes("Granola sintética com saldo"))
     await modal.getByRole("button", { name: "Salvar produto", exact: true }).click()
+    expect((await save).ok()).toBe(true)
+    // Recusa de domínio do ProductWriteService, não falha genérica nem requisição pendente.
+    await expect(page.getByText("Produto por peso em preparação deve iniciar sem saldo; não há estoque fracionado operacional.").first()).toBeVisible()
     await expect(field(modal, "Nome")).toHaveValue("Granola sintética com saldo")
     await expect(page.getByText("Produto salvo com sucesso.")).toHaveCount(0)
-    await page.waitForTimeout(1_500)
     expect(await (await readDb()).produto.count({ where: { storeId: A, name: "Granola sintética com saldo" } })).toBe(0)
     await modal.getByRole("button", { name: "Cancelar" }).click()
   })

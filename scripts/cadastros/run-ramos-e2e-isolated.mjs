@@ -7,10 +7,11 @@
  */
 import { spawn, spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import bcrypt from "bcryptjs"
 import { assertIsolatedCadastrosDatabase } from "./isolated-postgres-guard.mjs"
+import { assertFreshDisposableDatabase } from "./disposable-db-preflight.mjs"
 
 const EXPECTED_DB = "cad_r2_021_isolated"
 const EXPECTED_ROLE = "cad_r2_021"
@@ -23,24 +24,15 @@ function run(args, env = process.env) {
   if (result.error || result.status !== 0) throw new Error("RAMOS_E2E_STEP_FAILED")
 }
 
-/** Identidade positiva lida do próprio servidor, além das variáveis do guard. */
-async function assertDisposableIdentity(db) {
-  const [row] = await db.$queryRawUnsafe(
-    "SELECT current_database() AS db, current_user AS role, (now() - pg_postmaster_start_time()) < interval '3 hours' AS fresh",
-  )
-  if (row?.db !== EXPECTED_DB || row?.role !== EXPECTED_ROLE || row?.fresh !== true) {
-    throw new Error("RAMOS_E2E_DATABASE_IDENTITY_MISMATCH")
-  }
-}
-
-// Materializa o schema inalterado no banco vazio deste job (sem migrations).
-run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"])
 const { PrismaClient } = await import("../../generated/prisma/index.js")
 const db = new PrismaClient({ datasourceUrl: database })
 const secret = () => randomBytes(18).toString("base64url")
 const passwords = { admin: secret(), operador: secret(), caixa: secret() }
 try {
-  await assertDisposableIdentity(db)
+  // Identidade e vacuidade por catálogo ANTES do primeiro comando de escrita (DDL incluído).
+  await assertFreshDisposableDatabase(db, { database: EXPECTED_DB, role: EXPECTED_ROLE })
+  // Materializa o schema inalterado no banco vazio deste job (sem migrations).
+  run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"])
   if (await db.store.count() || await db.produto.count() || await db.adminUser.count() || await db.storeSettings.count()) {
     throw new Error("RAMOS_E2E_DATABASE_MUST_BE_EMPTY")
   }
@@ -105,8 +97,18 @@ try {
   status = "PASS"
 } finally {
   server.kill("SIGTERM")
+  // Rede de segurança: nenhuma senha sintética sai nos artifacts, mesmo de uma falha.
+  let credentialRedactions = 0
+  for (const name of await readdir(evidence, { recursive: true })) {
+    if (!/\.(json|md|txt|log)$/.test(name)) continue
+    const file = path.join(evidence, name)
+    const text = await readFile(file, "utf8")
+    let clean = text
+    for (const value of Object.values(passwords)) clean = clean.split(value).join("[REDACTED]")
+    if (clean !== text) { credentialRedactions += 1; await writeFile(file, clean) }
+  }
   await writeFile(path.join(evidence, "isolation.json"), JSON.stringify({
-    status, app: "next start (build de produção) em 127.0.0.1", database: "PostgreSQL descartável do job, identidade conferida",
+    status, credentialRedactions, app: "next start (build de produção) em 127.0.0.1", database: "PostgreSQL descartável do job, identidade conferida",
     auth: "NextAuth Credentials real; usuários sintéticos com senha aleatória por execução (não registrada)",
     schemaChanged: false, schemaMaterialization: "prisma db push em banco vazio", migrationsExecuted: false, productionWrites: 0,
   }, null, 2) + "\n")

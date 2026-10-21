@@ -102,9 +102,8 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const idempotencyKey = restPatchIdempotencyKey(req, productId)
 
     if (hasStock) {
-      // Mesmo saldo = sem intenção de movimentar (paridade com upsertProduto).
-      const current = await prisma.produto.findFirst({ where: { id: productId, storeId }, select: { stock: true, metadata: true } })
-      if (current && current.stock !== targetStock) assertProductCommercialSaleSupported(current.metadata)
+      const current = await prisma.produto.findFirst({ where: { id: productId, storeId }, select: { metadata: true } })
+      if (current) assertProductCommercialSaleSupported(current.metadata)
     }
 
     // ── STOCK-ONLY: somente ledger, sem updateProduct vazio ──────────────
@@ -165,8 +164,8 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     await prismaEnsureConnected()
     try {
       await prisma.$transaction(async (tx) => {
-        const current = await tx.produto.findFirst({ where: { id: productId, storeId }, select: { stock: true, metadata: true } })
-        if (current && current.stock !== targetStock) assertProductCommercialSaleSupported(current.metadata)
+        const current = await tx.produto.findFirst({ where: { id: productId, storeId }, select: { metadata: true } })
+        if (current) assertProductCommercialSaleSupported(current.metadata)
         const cad = await updateProductTx(
           tx as unknown as ProductWriteTx,
           writeContext,

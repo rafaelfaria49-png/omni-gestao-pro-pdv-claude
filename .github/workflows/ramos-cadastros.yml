@@ -29,6 +29,7 @@ on:
       - "scripts/cadastros/smoke-ramos.mjs"
       - "scripts/cadastros/run-ramos-isolated-postgres.mjs"
       - "scripts/cadastros/run-ramos-e2e-isolated.mjs"
+      - "scripts/cadastros/disposable-db-preflight*"
       - "e2e/cadastros-ramos/**"
       - "e2e/cadastros-ramos.playwright.config.ts"
       - ".github/workflows/ramos-cadastros.yml"
@@ -76,6 +77,7 @@ jobs:
           app/api/produtos/[id]/route.test.ts app/api/stores/import-catalog/route.canonical-014.test.ts
           app/actions/cadastros.product-interactive.test.ts app/actions/estoque.access.test.ts
           lib/operacoes/adapters/os-estoque.test.ts
+          scripts/cadastros/disposable-db-preflight.test.ts
           --maxWorkers=2
       - name: Lint dos contratos e interfaces
         run: >-
@@ -94,7 +96,7 @@ jobs:
           components/configuracoes-v3/features/settings/sections/AparenciaSection.tsx
           app/api/stores/[id]/settings/route.ts app/api/settings/perfil-loja/route.ts
           lib/pdv/resolve-capability.ts lib/perfil-loja-provider.tsx
-          scripts/cadastros/run-ramos-e2e-isolated.mjs e2e/cadastros-ramos e2e/cadastros-ramos.playwright.config.ts
+          scripts/cadastros/run-ramos-e2e-isolated.mjs scripts/cadastros/disposable-db-preflight.mjs e2e/cadastros-ramos e2e/cadastros-ramos.playwright.config.ts
       - name: TypeScript completo
         run: npm run typecheck
       - name: Build isolado sem migrations

@@ -10,11 +10,13 @@ AEP opt-in inativo na worktree; nenhum state, ledger ou registry alterado.
 
 - Build de produção (`npm run build`, `MIGRATION_SKIPPED`) servido por `next start`
   em `127.0.0.1`, contra o PostgreSQL descartável do próprio job.
-- Banco: guard de variáveis existente + identidade positiva lida do servidor
-  (`current_database`, `current_user`, postmaster recém-iniciado) e banco vazio
-  antes das fixtures. Schema inalterado materializado com `db push`; sem migrations.
+- Banco: guard de variáveis existente + identidade positiva e vacuidade lidas do
+  servidor por catálogo (`current_database`, `current_user`, postmaster
+  recém-iniciado, zero tabelas) **antes** do primeiro comando de escrita, inclusive
+  o DDL. Schema inalterado materializado com `db push`; sem migrations.
 - Usuários e lojas sintéticos (`*.invalid`), senha aleatória por execução, hash
-  bcrypt como no `seed-admin`; senhas nunca vão para log, trace ou artifact.
+  bcrypt como no `seed-admin`. A senha não passa por `fill()` (não entra no call
+  log), trace fica desligado e o runner redige qualquer ocorrência nos artifacts.
 - Login NextAuth Credentials real pela tela `/login`. Sem rota de bypass, cookie
   forjado, usuário mágico ou mudança de autorização no código publicável.
 - Caminho de sucesso sem mocks: configuração, Server Actions, ProductWriteService,
@@ -45,7 +47,8 @@ na loja da cliente.
 | N1 #295 | PUT de settings validava capabilities que o merge descartaria (snapshot com seções irmãs), recusando patch legítimo. Valida só o patch dedicado (e backfill); merge e validação usam o mesmo predicado `isDedicatedCapabilitiesPatch` | `stores/[id]/settings/route.test` |
 | N3 #295 + settings | Erro de banco virava `VALIDATION_ERROR` com mensagem crua em `upsertProduto`; GET/PUT de settings devolviam `e.message`. Agora `SAVE_ERROR`/500 com mensagem genérica | `cadastros.product-interactive.test`, `settings/route.test` |
 | N4 #295 | Importação de catálogo abortava sem identificar o item. 409/500 informam SKU e unidade (origem/destino) — só após autorizar as duas lojas — e 500 não expõe detalhes internos | `import-catalog/route.canonical-014.test` |
-| N2 #295 | REST PATCH com o mesmo saldo recusava produto por peso (o cadastro aceitava). Guard só quando o saldo muda | `produtos/[id]/route.test` |
+| Revisão independente | PUT de settings aceitava `backfill` não booleano: a validação exigia `=== true` e a persistência usava `!!backfill`, deixando passar capabilities inválidas. Agora só booleano | `settings/route.test` |
+| Revisão independente | `upsertProduto` pré-checava o saldo antes do cadastral e relia depois: devolução concorrente entre as leituras levava produto por peso ao ajuste de saldo. A releitura reconfirma a declaração antes do ledger | `cadastros.product-interactive.test` |
 
 Cada regressão nova falhou antes da correção correspondente. Validação de
 autoridade e contrato preservada; nenhum payload inválido passou a ser aceito.
@@ -54,6 +57,10 @@ autoridade e contrato preservada; nenhum payload inválido passou a ser aceito.
 
 - P3-3 (#295): guard de peso também atinge `/api/ops/sync-legacy-vendas` — motor de venda.
 - P3-4 (#295): comentário do 409 de peso em `venda-persist` — rota de venda/PDV.
+- N2 (#295): REST PATCH com o mesmo saldo continua recusando produto por peso
+  (409, fail-closed). A tentativa de igualar ao cadastro foi revertida: sem checagem
+  sob o lock do StockLedger (fora do escopo), divergência de depósito ou devolução
+  concorrente poderia movimentar saldo.
 - Server Actions de Cadastros chamadas antes de a loja ativa resolver registram
   `Loja não selecionada` no log do servidor (sem efeito visível na jornada).
 - Loja legada exibe o ramo derivado do perfil como selecionado; para gravar o mesmo

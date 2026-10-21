@@ -64,7 +64,12 @@ export async function login(page: Page, user: { email: string; password: () => s
   guardOnboarding(page)
   await page.goto("/login")
   await page.getByLabel("Email").fill(user.email)
-  await page.getByRole("textbox", { name: "Senha" }).fill(user.password())
+  // `fill()` registraria o valor no call log de uma falha; aqui ele só trafega como argumento.
+  await page.getByRole("textbox", { name: "Senha" }).evaluate((input, value) => {
+    const element = input as HTMLInputElement
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(element, value)
+    element.dispatchEvent(new Event("input", { bubbles: true }))
+  }, user.password())
   await Promise.all([page.waitForURL(/\/dashboard(\/|\?|$)/), page.getByRole("button", { name: "Entrar" }).click()])
 }
 

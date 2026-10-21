@@ -460,6 +460,22 @@ describe("PUT /api/stores/[id]/settings — Capabilities V1", () => {
     expect(merged.pdvParams).toEqual({ atalhosRapidos: [{ id: "a1" }] })
   })
 
+  it.each(["true", "false", 1, null])("backfill não booleano (%j) é recusado antes de qualquer escrita", async (backfill) => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    const forged = { version: 1, business: { primaryBranch: "inventado" }, overrides: { "pdv.scale": true, "catalog.weight": { available: true } } }
+    const res = await PUT(putReq({ backfill, printerConfig: { capabilities: forged, pdvMainLayout: "classic" } }), ctx("loja-a"))
+    expect(res.status).toBe(400)
+    expect(h.findUnique).not.toHaveBeenCalled()
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("backfill booleano com capabilities inválidas e seção irmã continua validado", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    const res = await PUT(putReq({ backfill: true, printerConfig: { capabilities: { version: 1, overrides: { "pdv.scale": true } }, pdvMainLayout: "classic" } }), ctx("loja-a"))
+    expect(res.status).toBe(400)
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
   it("patch dedicado de capabilities continua validado", async () => {
     h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
     const res = await PUT(putReq({ printerConfig: { capabilities: { version: 1, overrides: { "catalog.weight": { enabled: "sim" } } } } }), ctx("loja-a"))

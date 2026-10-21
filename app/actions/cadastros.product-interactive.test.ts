@@ -124,6 +124,15 @@ describe("CAD-R2-006 — upsertProduto no boundary canônico", () => {
     expect(h.updateProduct).not.toHaveBeenCalled()
     expect(h.applyStockMutation).not.toHaveBeenCalled()
   })
+  it("saldo de produto por peso alterado entre a pré-checagem e o ajuste não chega ao ledger", async () => {
+    sessionVendedor()
+    const metadata = { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } }
+    // Pré-checagem vê o mesmo saldo pedido; devolução concorrente muda o saldo antes da releitura.
+    h.stockFindFirst.mockResolvedValueOnce({ stock: 2, metadata } as never).mockResolvedValueOnce({ stock: 3, metadata } as never)
+    const result = await upsertProduto("loja-a", { id: "p-1", nome: "Granola", estoque: 2 })
+    expect(result).toMatchObject({ ok: false, type: "VALIDATION_ERROR" })
+    expect(h.applyStockMutation).not.toHaveBeenCalled()
+  })
   it("falha de banco ao validar saldo é SAVE_ERROR genérico, sem mensagem interna e sem escrita", async () => {
     sessionVendedor()
     h.stockFindFirst.mockRejectedValue(new Error("Invalid `prisma.produto.findFirst()` invocation: Can't reach database server at db.internal:5432"))
