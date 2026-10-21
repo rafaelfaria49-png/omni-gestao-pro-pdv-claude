@@ -132,6 +132,14 @@ describe("Cadastros adaptados por recursos e produto", () => {
     expect((screen.getByRole("combobox", { name: "Forma de venda" }) as HTMLSelectElement).disabled).toBe(true)
     expect(screen.getByText(/Venda bloqueada até a integração/)).toBeTruthy()
   })
+  it("declaração comercial inválida avisa e não envia unidade padrão ao salvar", async () => {
+    product({ nome: "Histórico", metadata: { comercial: { version: 1, modoVenda: "unidade", unidade: "KG", basePreco: "KG" } } })
+    expect(screen.getByRole("alert").textContent).toMatch(/Declaração comercial inválida.*Venda bloqueada/)
+    expect(screen.queryByRole("combobox", { name: "Forma de venda" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Salvar produto" }))
+    await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
+    expect((h.upsert.mock.calls[0][1] as any).metadata).not.toHaveProperty("comercial")
+  })
   it("variedades prepara peso sem exigir ramo padaria", async () => {
     h.capabilities = { version: 1, business: { primaryBranch: "variedades" }, overrides: { "catalog.weight": true } }
     product()

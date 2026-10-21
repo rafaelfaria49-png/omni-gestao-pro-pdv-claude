@@ -184,13 +184,15 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
         cache: "no-store",
         headers: { [ASSISTEC_LOJA_HEADER]: storeId },
       })
-      const j = (await r.json().catch(() => null)) as { settings?: StoreSettingsApi | null } | null
+      const j = (await r.json().catch(() => null)) as { settings?: (StoreSettingsApi & { storeId?: unknown }) | null } | null
+      const loaded = r.ok && j !== null && Object.hasOwn(j, "settings") &&
+        (j.settings === null || (typeof j.settings === "object" && j.settings?.storeId === storeId))
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
-        setSettings(j?.settings ?? null)
-        setLoadedStoreId(r.ok ? storeId : null)
+        setSettings(loaded ? j.settings ?? null : null)
+        setLoadedStoreId(loaded ? storeId : null)
       })
       // P0 PDV-RAFACELL-LOAD-CRASH: observabilidade do mount (só status/contagens).
-      markPdvMountStep("settings", storeId, r.ok, { code: r.ok ? undefined : `HTTP_${r.status}` })
+      markPdvMountStep("settings", storeId, loaded, { code: loaded ? undefined : r.ok ? "invalid_response" : `HTTP_${r.status}` })
     } catch {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(null)
@@ -231,12 +233,12 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     [blob.pdvParams, resolvedShortcuts.value],
   )
   const impressaoConfig = useMemo(
-    () => parseImpressaoFromPrinterConfig(settings?.printerConfig),
-    [settings?.printerConfig],
+    () => parseImpressaoFromPrinterConfig(liveSettings?.printerConfig),
+    [liveSettings?.printerConfig],
   )
   const appearance = useMemo(
-    () => parseAppearanceFromPrinterConfig(settings?.printerConfig),
-    [settings?.printerConfig],
+    () => parseAppearanceFromPrinterConfig(liveSettings?.printerConfig),
+    [liveSettings?.printerConfig],
   )
   const termosGarantia = useMemo(() => mergeTermosGarantia(blob.termosGarantia), [blob.termosGarantia])
   const getGarantiaById = useCallback(
@@ -262,7 +264,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
 
   // ── Backfill controlado e idempotente (executa uma única vez se elegível) ──────
   useEffect(() => {
-    if (!hydrated || !storeId) return
+    if (!hydrated || !storeId || loadedStoreId !== storeId) return
     if (backfillAttemptedStoresRef.current.has(storeId)) return
 
     const needsMainLayoutBackfill = resolvedMainLayout.isEligibleForBackfill
@@ -317,6 +319,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       })
   }, [
     hydrated,
+    loadedStoreId,
     storeId,
     resolvedMainLayout.isEligibleForBackfill,
     resolvedMainLayout.value,

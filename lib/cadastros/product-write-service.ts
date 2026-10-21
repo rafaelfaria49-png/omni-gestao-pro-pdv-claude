@@ -46,7 +46,7 @@ import "server-only"
 
 import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
-import { isProductWeightDeclared, productCommercialFromMetadata, validateProductCommercial } from "@/lib/cadastros/product-commercial-contract"
+import { hasInvalidProductCommercial, isProductWeightDeclared, productCommercialFromMetadata, validateProductCommercial } from "@/lib/cadastros/product-commercial-contract"
 import { resolveBusinessResource } from "@/lib/store-business-capabilities"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 import { cadastrosAuditLogFields } from "@/lib/cadastros/cadastros-audit-principal"
@@ -381,6 +381,10 @@ function resolveMetadata(
     return { ok: false, error: productWriteInvalid("Unidade, modo de venda ou base de preço inválidos.", "metadata") }
   }
   const oldCommercial = productCommercialFromMetadata(existingMetadata)
+  if (!opts.isCreate && hasInvalidProductCommercial(existingMetadata) &&
+      (incoming && Object.hasOwn(incoming, "comercial") || opts.clearMetadata && rawMetadata === null)) {
+    return { ok: false, error: productWriteInvalid("Declaração comercial existente inválida. Preserve os dados e cadastre outro produto sem reinterpretar unidade ou saldo.", "metadata") }
+  }
   if (!opts.isCreate && incoming?.comercial) {
     const nextCommercial = productCommercialFromMetadata(incoming)
     if (nextCommercial.modoVenda !== oldCommercial.modoVenda || nextCommercial.unidade !== oldCommercial.unidade) {
@@ -438,7 +442,7 @@ function resolveMetadata(
 async function validateCommercialResource(
   tx: ProductWriteTx, storeId: string, input: ProductWriteInput, initialStock = 0, existingMetadata?: unknown,
 ): Promise<ProductWriteResult | null> {
-  if (!isRecord(input.metadata) || !Object.hasOwn(input.metadata, "comercial")) return null
+  if (!isRecord(input.metadata)) return null
   const commercial = productCommercialFromMetadata(input.metadata)
   if (commercial.modoVenda === "peso" && initialStock !== 0) {
     return productWriteInvalid("Produto por peso em preparação deve iniciar sem saldo; não há estoque fracionado operacional.", "estoque")
@@ -691,6 +695,9 @@ export async function updateProductTx(
       findUnique(args: Prisma.ProdutoFindUniqueArgs): Promise<{ id: string; storeId: string } | null>
     }
   }
+  // Releitura sob o mesmo lock de linha usado pelo ledger: dois patches de
+  // cadastro não podem substituir metadata a partir de snapshots concorrentes.
+  await tx.$queryRaw`SELECT "id" FROM "estoque_produtos" WHERE "id" = ${pid} AND "storeId" = ${ctx.storeId} FOR UPDATE`
   const existing = await reader.produto.findFirst({
     where: { id: pid, storeId: ctx.storeId },
     select: { id: true, name: true, metadata: true },

@@ -43,6 +43,13 @@ describe("Adapter legado do ramo — mesma fonte e mesmo isolamento", () => {
     expect(result.status).toBe(500)
     expect(await result.json()).not.toHaveProperty("perfilLoja")
   })
+  it("loja inexistente não recebe um perfil de assistência inventado", async () => {
+    h.store.mockResolvedValue(null)
+    const result = await GET(req())
+    expect(result.status).toBe(404)
+    expect(await result.json()).not.toHaveProperty("perfilLoja")
+    expect(h.settings).not.toHaveBeenCalled()
+  })
   it("adapter não é outro editor de configuração", async () => {
     expect((await PUT(req())).status).toBe(405)
   })

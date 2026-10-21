@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { FractionalQuantityError } from "@/lib/ops-upsert-venda"
-import { ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
+import { ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 
 const STORE = "loja-1"
 
@@ -127,6 +127,12 @@ describe("POST /api/ops/venda-persist/v2", () => {
     const res = await POST(req({ clientSaleId: "cs_attempt_aaaaaa", sale: { total: 100, lines: [{ inventoryId: "SKU-1", name: "Produto", quantity: 1, unitPrice: 100 }] } }))
     expect(res.status).toBe(409)
     await expect(res.json()).resolves.toMatchObject({ code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+  })
+  it("declaração comercial inválida retorna erro explícito 409", async () => {
+    h.persist.mockRejectedValue(new ProductCommercialInvalidError())
+    const res = await POST(req({ clientSaleId: "cs_attempt_aaaaaa", sale: { total: 100, lines: [{ inventoryId: "SKU-1", name: "Produto", quantity: 1, unitPrice: 100 }] } }))
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ code: "PRODUTO_COMERCIAL_INVALIDO" })
   })
 
   it("quantidade fracionada vira 409 FRACTIONAL_QUANTITY_UNSUPPORTED (nunca 500)", async () => {

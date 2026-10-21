@@ -1,0 +1,72 @@
+# Revisão e correções da PR #295
+
+Base consultada novamente: `8aed9e1d7c7891fd1e6f53b60da53679be0f1117`.
+Head de entrada: `b08621372de80bdded80feb21ae470144ddb3487`.
+Revisão dos 34 arquivos originais e dos consumidores de configuração/produto/venda.
+As correções e as novas provas de integração ampliam o diff; o corpo da PR registra
+o SHA final revisado e os checks correspondentes.
+
+Proveniência: revisão do próprio executor Codex neste chat, **não independente**.
+Não havia revisão externa submetida no preflight. AEP opt-in inativo na worktree;
+nenhum novo GOAL, state, ledger ou registry foi criado ou alterado.
+
+## Achados comprovados e correções
+
+| ID / severidade | Arquivo / cenário | Observado antes | Esperado e correção | Regressão |
+| --- | --- | --- | --- | --- |
+| R1 / P1 | `lib/cadastros/product-commercial-contract.ts`: `comercial` com unidade KG e modo unidade, versão desconhecida, modo inválido ou null | Guard não lançava; projeção marcava venda unitária operacional | Presença inválida é explícita e bloqueia venda; erro de domínio 409 em V1/V2. UI avisa e não reenvia defaults. Writer preserva o namespace existente e recusa CLEAR/reinterpretação | `lib/store-business-capabilities.test.ts`, rotas V1/V2, testes de componente e writer |
+| R2 / P1 | `lib/cadastros/product-write-service.ts`: dois patches parciais concorrentes de atributos | Descrição do primeiro patch desaparecia no segundo, que havia lido snapshot antigo | Lock da linha por id + loja antes da releitura e merge. Dados omitidos são conservados | `patches concorrentes preservam chaves omitidas de metadata`; duas conexões PostgreSQL na integração |
+| R3 / P2 | `lib/store-settings-provider.tsx`: GET falha e há atalhos locais elegíveis | Provider fazia PUT de backfill após HTTP 500 | Backfill exige leitura confirmada da loja. JSON/envelope inválido ou resposta de outra loja não hidrata configuração | `lib/store-settings-business.component.test.ts` |
+| R4 / P2 | Mesmo provider: primeira renderização após troca A → B | Impressora e tema de A ainda apareciam no contexto de B | Impressão e aparência usam o mesmo snapshot validado da loja que capabilities | Teste captura primeira renderização de B antes dos efeitos |
+| R5 / P2 | `app/api/settings/perfil-loja/route.ts`: acesso autorizado a id inexistente | HTTP 200 com perfil de assistência inventado | HTTP 404, sem perfil e sem ler settings | `app/api/settings/perfil-loja/route.test.ts` |
+
+Reprodução antes das correções: 7 falhas em 34 testes (declarações inválidas,
+backfill, primeira renderização e loja inexistente); teste adicional de concorrência
+falhou mostrando a chave `descricao` perdida. Os mesmos cenários passam corrigidos.
+Os testes novos de resposta HTTP 200 inválida/outra loja ampliam o tratamento de R3.
+
+R1 também cobre declarações legadas de peso na criação: exigem preferência da loja
+provada e saldo inicial zero. Nenhuma capacidade operacional nova foi habilitada.
+
+## Validação e limites
+
+- Suíte focada de Ramos, Cadastros, contratos, autorização e vendas: 279 testes em
+  18 arquivos, sem skips. Não representa toda a suíte do repositório.
+- Regressão ampla de Cadastros/consumidores: 1.186 aprovados em 67 arquivos;
+  29 pulados em três arquivos de integração por ausência de banco local.
+  Os conjuntos focado e amplo têm sobreposição e não devem ser somados.
+- Lint dos arquivos alterados: sem erros; três avisos preexistentes (dependências
+  de efeitos em Geral/Unidades e diretiva não utilizada em teste legado).
+- Smoke Chromium com componentes/CSS reais, I/O/contexto sintéticos: 1440, 390 e
+  320 px; sem overflow, erros de página ou requests externos. Mantidos tokens,
+  tipografia, layout e labels. Aviso de declaração inválida coberto pelo componente.
+- TypeScript completo e build sem migrations são gates da CI do head final.
+  Build local não executado por menos de 1 GB livre; nenhum artefato alheio apagado.
+- Novo job PostgreSQL descartável executa nove integrações reais: V1/V2 com produto
+  unitário seguido de peso, declaração inválida, rollback integral (inclusive
+  numeração V2), unitários, replay confirmado após mudança posterior de metadata,
+  preservação ao reabrir, patches em duas conexões e configuração concorrente.
+  Somente autenticação/automação/gate V2 são fixtures; handlers, writers, Prisma,
+  transações e banco são reais. O guard exige CI GitHub, loopback e URL exata do
+  serviço descartável já usado pela suíte existente. Materializa schema inalterado
+  no banco vazio com `db push`; não executa migrations, seed, backfill nem produção.
+- A suíte PostgreSQL existente de Cadastros permanece separada e intacta.
+  Relatórios ficam nos artifacts de cada job; resultados finais no corpo da PR.
+
+## Compatibilidade e preservação
+
+Fonte canônica permanece `StoreSettings.printerConfig.capabilities`, versão 1.
+Não há novo registro de flags, layout, plano, autoridade, estoque ou preço.
+Overrides explícitos (inclusive false), apresentação e patches concorrentes
+continuam respeitados. O descriptor comercial mantém versão e campos; recebe
+somente classificação explícita de invalidade na projeção e erro seguro de venda.
+
+N5-C: nenhum dos 16 padrões reservados alterado. Classic, demais superfícies,
+generated Prisma versionado, StockLedger e contrato de quantidade preservados.
+Pesagem: nenhum arquivo de `lib/pesagem`, `services/pesagem`, `test/pesagem`,
+workflow e handoff da frente de pesagem modificado. Voz: nenhum arquivo reservado
+de captura/ação/runner da frente alterado. Worktrees e WIPs alheios preservados.
+
+Peso e grade continuam preparação; balança, venda fracionada, estoque por variação
+e homologação de equipamentos não foram entregues por este PR.
+Sem force push, bypass, merge, alteração de secrets ou deploy produtivo.

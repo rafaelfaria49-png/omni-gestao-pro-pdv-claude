@@ -21,6 +21,7 @@ on:
       - "components/dashboard/app-ops-providers.tsx"
       - "components/dashboard/configuracoes/gestao-unidades-saas.tsx"
       - "scripts/cadastros/smoke-ramos.mjs"
+      - "scripts/cadastros/run-ramos-isolated-postgres.mjs"
       - ".github/workflows/ramos-cadastros.yml"
   workflow_dispatch:
 
@@ -86,3 +87,38 @@ jobs:
         with:
           name: ramos-cadastros-smoke
           path: test-results/ramos/
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cad_r2_021
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: cad_r2_021_isolated
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cad_r2_021 -d cad_r2_021_isolated"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://cad_r2_021:isolated_ci_only@127.0.0.1:5432/cad_r2_021_isolated
+      DIRECT_URL: postgresql://cad_r2_021:isolated_ci_only@127.0.0.1:5432/cad_r2_021_isolated
+      CAD_R2_021_DISPOSABLE_DB: "true"
+      MIGRATION_AUTHORITY_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Rollback, replay e concorrência em PostgreSQL real
+        run: node scripts/cadastros/run-ramos-isolated-postgres.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ramos-postgres-evidence
+          path: test-results/ramos/postgres-*.json

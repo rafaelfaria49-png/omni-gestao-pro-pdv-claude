@@ -326,11 +326,21 @@ function makeFakeDb(seed: FakeRow[] = [], settingsByStore: Record<string, unknow
 
   // Fake estrutural: cobre ProductWriteTx (inclui StockLedgerTx). Cast via
   // unknown porque os membros usam args Prisma concretos (runtime equivalente).
+  let lockTail = Promise.resolve()
   const db = {
     produto,
     $transaction: async <T>(fn: (t: typeof tx) => Promise<T>): Promise<T> => {
       calls.push("$transaction")
-      return fn(tx)
+      let unlock: (() => void) | undefined
+      const lockedTx = { ...tx, $queryRaw: async (query?: TemplateStringsArray): Promise<unknown[]> => {
+        if (query?.join("").includes("FOR UPDATE") && !unlock) {
+          const previous = lockTail
+          lockTail = new Promise<void>((resolve) => { unlock = resolve })
+          await previous
+        }
+        return tx.$queryRaw()
+      } }
+      try { return await fn(lockedTx) } finally { unlock?.() }
     },
   } as unknown as ProductWriteDb
 
@@ -366,6 +376,16 @@ describe("Ramos combináveis — escrita comercial e preservação", () => {
   const unit = { version: 1, modoVenda: "unidade", unidade: "UN", basePreco: "UN" }
   const settings = (branch: string, overrides: Record<string, boolean>) => ({ printerConfig: { capabilities: { version: 1, business: { primaryBranch: branch }, overrides } } })
 
+  it("patches concorrentes preservam chaves omitidas de metadata", async () => {
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", metadata: { comercial: weight, atributos: { modeloCompativel: "Histórico" } } })])
+    const results = await Promise.all([
+      updateProduct(ctx(), "p1", { metadata: { atributos: { descricao: "Nova" } } }, { db: fake.db }),
+      updateProduct(ctx(), "p1", { metadata: { atributos: { tags: ["manual"] } } }, { db: fake.db }),
+    ])
+    expect(results.every((result) => result.ok)).toBe(true)
+    expect(fake.rows.get("p1")?.metadata).toEqual({ comercial: weight, atributos: { modeloCompativel: "Histórico", descricao: "Nova", tags: ["manual"] } })
+  })
+
   it("cria e relê produto por peso em variedades, sem saldo paralelo", async () => {
     const fake = makeFakeDb([], { "loja-a": settings("variedades", { "catalog.weight": true }) })
     const result = await createProduct(ctx(), { nome: "Grãos", preco: 20, metadata: { comercial: weight } }, { db: fake.db })
@@ -396,6 +416,20 @@ describe("Ramos combináveis — escrita comercial e preservação", () => {
     expect(await createProduct(ctx(), { nome: "X", estoque: 10, metadata: { comercial: weight } }, { db: fake.db })).toMatchObject({ ok: false, field: "estoque" })
     expect(await createProduct(ctx(), { nome: "X", metadata: { comercial: { ...weight, basePreco: "UN" } } }, { db: fake.db })).toMatchObject({ ok: false, field: "metadata" })
     expect(fake.rows.size).toBe(0)
+  })
+  it("declaração legada de peso também exige recurso da loja e saldo inicial zero", async () => {
+    const fake = makeFakeDb()
+    expect(await createProduct(ctx(), { nome: "X", estoque: 10, metadata: { vendaPorPeso: true } }, { db: fake.db })).toMatchObject({ ok: false, field: "estoque" })
+    expect(await createProduct(ctx(), { nome: "X", metadata: { vendaPorPeso: true } }, { db: fake.db })).toMatchObject({ ok: false, field: "metadata" })
+    expect(fake.rows.size).toBe(0)
+  })
+  it("declaração inválida existente é preservada por edição comum e não pode ser apagada ou rebaixada", async () => {
+    const comercial = { version: 1, modoVenda: "unidade", unidade: "KG", basePreco: "KG" }
+    const fake = makeFakeDb([seedRow({ id: "p1", storeId: "loja-a", metadata: { comercial } })])
+    expect(await updateProduct(ctx(), "p1", { nome: "Revisado" }, { db: fake.db })).toMatchObject({ ok: true })
+    expect(await updateProduct(ctx(), "p1", { metadata: { comercial: unit } }, { db: fake.db })).toMatchObject({ ok: false, field: "metadata" })
+    expect(await updateProduct(ctx(), "p1", { metadata: null }, { db: fake.db, clearMetadata: true })).toMatchObject({ ok: false, field: "metadata" })
+    expect(fake.rows.get("p1")?.metadata?.comercial).toEqual(comercial)
   })
   it("salvar campos comuns preserva acessórios, aparelhos, fiscal, peso e saldo", async () => {
     const metadata = { comercial: weight, acessorios: { version: 1, tipo: "capinha", exigeCor: true, exigeModelo: true, usaCoresPadrao: true }, catalogoAparelhos: { version: 1, deviceModelKeys: ["m1"] }, atributos: { modeloCompativel: "M1", descricao: "Antiga" }, fiscal: { ncm: "12345678" } }

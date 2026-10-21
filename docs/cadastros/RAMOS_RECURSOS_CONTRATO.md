@@ -107,7 +107,7 @@ Contratos versionados e Git blob SHA-1 (conteúdo normalizado pelo Git):
 | --- | --- | --- |
 | `lib/capabilities-persistence-v1.ts` | 1 | `7182aacff91a1dfb2d64d92542ff9e55f784fe27` |
 | `lib/store-business-capabilities.ts` | envelope 1 | `c6a7a4fb8b260315d7e899ca197fdb8ea13604d4` |
-| `lib/cadastros/product-commercial-contract.ts` | 1 | `18c5bdeefe66f523282d21b1fa3faa5962b8446c` |
+| `lib/cadastros/product-commercial-contract.ts` | 1 | `82d3b3cf20ed22ee07e2d2a613853d1476605a49` |
 
 Declaração comercial: `Produto.metadata.comercial` com `version: 1`, `modoVenda`
 (`unidade`/`peso`), `unidade` (`UN`/`KG`/`G`) e `basePreco` na mesma unidade.
@@ -119,6 +119,12 @@ ao trocar ramo. `gradePlanejada` é intenção descritiva, sem saldo por combina
 peso não operacional, estoque fracionado não operacional e grade não operacional.
 Sem declaração, o produto legado continua por unidade. Declarações legadas de
 peso também falham fechadas; ocultação nunca as transforma em unidade.
+Uma declaração `comercial` presente e inválida não equivale a ausência: a
+projeção informa `declaracaoComercialInvalida: true`, com `vendaOperacional: false`.
+V1/V2 retornam `409 PRODUTO_COMERCIAL_INVALIDO` quando não há declaração conhecida
+de peso (que mantém seu erro próprio). A UI avisa e omite esse namespace no save.
+Editar campos comuns o preserva; CLEAR ou substituição por uma unidade padrão
+não são permitidos. Não há normalização de saldo, unidade ou preço.
 
 O writer não permite reinterpretar a unidade de produto já existente nem apagar
 a declaração de peso por CLEAR de metadata. Novo produto por peso inicia sem
@@ -131,6 +137,9 @@ de quantidade/StockLedger. Não retirar bloqueios atuais nem reinterpretar saldo
 A proteção adicionada à resolução server-side do produto rejeita peso mesmo
 quando o carrinho envia quantidade inteira; V1/V2 retornam
 `409 PRODUTO_POR_PESO_NAO_OPERACIONAL`. Não altera retry, finalização ou efeitos.
+O writer de cadastro também relê o produto sob `FOR UPDATE` com id + loja, antes
+do merge de metadata. Patches concorrentes não substituem chaves omitidas a partir
+de um snapshot antigo. Usa a mesma linha que o ledger já trava, sem alterar o ledger.
 
 Aceite operacional FUTURO: `0,350 kg × R$ 20,00/kg = R$ 7,00`; estoque
 `10,000 kg → 9,650 kg`; repetição sem baixa duplicada; cancelamento e devolução
@@ -138,6 +147,10 @@ recompõem a mesma grandeza. Esses cenários transacionais por peso ainda não f
 entregues nem declarados aprovados. Marca/modelo e homologação da balança pendem.
 
 ## Verificação desta implementação
+
+As contagens abaixo registram a implementação inicial. A revisão corretiva da
+PR #295, suas reproduções e a validação posterior estão em
+[`REVISAO_PR_295.md`](REVISAO_PR_295.md); o head final e a CI ficam no corpo da PR.
 
 - Matriz combinada local: 263 testes, 18 arquivos, todos PASS, sem skips.
   Inclui contrato, permissões, isolamento, GET stale após troca de loja, nova sessão,

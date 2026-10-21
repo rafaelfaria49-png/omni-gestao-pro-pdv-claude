@@ -3,7 +3,7 @@ import React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 
-const h = vi.hoisted(() => ({ store: "loja-a" }))
+const h = vi.hoisted(() => ({ store: "loja-a", renders: [] as Array<{ storeId: string; host: string; theme?: string }> }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: h.store, storesRefreshNonce: 0, lojaAtivaRaw: { storeProfile: "ASSISTENCIA" } }) }))
 vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ hubs: { cadastros: true }, admin: { configuracoes: true } }) }))
 vi.mock("@/lib/pdv-mount-diagnostics", () => ({ markPdvMountStep: vi.fn() }))
@@ -12,18 +12,54 @@ import { useStoreBusiness } from "@/lib/use-store-business"
 
 function Probe() {
   const business = useStoreBusiness()
+  h.renders.push({ storeId: business.storeId, host: business.impressaoConfig.impressoraHost, theme: business.appearance.studioTheme })
   return React.createElement("div", null,
     React.createElement("output", null, business.ready ? business.branch : "loading"),
     React.createElement("button", { onClick: () => void business.refresh() }, "Recarregar"))
 }
 const tree = () => React.createElement(StoreSettingsProvider, null, React.createElement(Probe))
-const response = (branch: string) => new Response(JSON.stringify({ settings: { printerConfig: {
+const response = (branch: string, storeId = "loja-a") => new Response(JSON.stringify({ settings: { storeId, printerConfig: {
   pdvMainLayout: "classic", pdvParams: { pdvClassicLayout: "lovable", atalhosRapidos: [] },
   capabilities: { version: 1, business: { primaryBranch: branch } },
 } } }), { status: 200, headers: { "Content-Type": "application/json" } })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); localStorage.clear(); h.renders.length = 0; vi.unstubAllGlobals() })
 
 describe("Provider real — configuração por loja, sem cache cruzado", () => {
+  it("falha de GET não autoriza backfill de valores locais", async () => {
+    h.store = "loja-a"
+    localStorage.setItem("omnigestao:pdv-shortcuts:loja-a", JSON.stringify([{ id: "local", nome: "Local" }]))
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ error: "indisponível" }), { status: 500 }))
+    vi.stubGlobal("fetch", fetcher)
+    render(tree())
+    await act(async () => {})
+    expect(screen.getByRole("status").textContent).toBe("loading")
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+  it.each(["json-inválido", "envelope-ausente", "outra-loja"])("resposta 200 com %s não inventa configuração legada ou backfill", async (kind) => {
+    h.store = "loja-a"
+    localStorage.setItem("omnigestao:pdv-shortcuts:loja-a", JSON.stringify([{ id: "local", nome: "Local" }]))
+    const fetcher = vi.fn(async () => kind === "json-inválido" ? new Response("<html>indisponível</html>")
+      : kind === "envelope-ausente" ? new Response("{}") : response("assistencia", "loja-b"))
+    vi.stubGlobal("fetch", fetcher)
+    render(tree())
+    await act(async () => {})
+    expect(screen.getByRole("status").textContent).toBe("loading")
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+  it("impressão e aparência também deixam de expor a loja anterior na primeira renderização", async () => {
+    h.store = "loja-a"
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.includes("loja-a")
+      ? new Response(JSON.stringify({ settings: { storeId: "loja-a", printerConfig: {
+        pdvMainLayout: "classic", pdvParams: { pdvClassicLayout: "lovable", atalhosRapidos: [] },
+        impressao: { impressoraHost: "impressora-a" }, appearance: { studioTheme: "midnight" },
+      } } })) : new Promise<Response>(() => {})))
+    const ui = render(tree())
+    await act(async () => {})
+    expect(h.renders.at(-1)?.host).toBe("impressora-a")
+    h.store = "loja-b"
+    ui.rerender(tree())
+    expect(h.renders.find((item) => item.storeId === "loja-b")).toEqual({ storeId: "loja-b", host: "", theme: undefined })
+  })
   it("troca de loja descarta GET antigo, incluindo a primeira renderização", async () => {
     h.store = "loja-a"
     const pending: Array<{ url: string; resolve: (response: Response) => void }> = []
@@ -37,7 +73,7 @@ describe("Provider real — configuração por loja, sem cache cruzado", () => {
     ui.rerender(tree())
     expect(screen.getByRole("status").textContent).toBe("loading")
     expect(pending[2].url).toContain("loja-b")
-    await act(async () => pending[2].resolve(response("padaria")))
+    await act(async () => pending[2].resolve(response("padaria", "loja-b")))
     expect(screen.getByRole("status").textContent).toBe("padaria")
     await act(async () => pending[1].resolve(response("moda")))
     expect(screen.getByRole("status").textContent).toBe("padaria")

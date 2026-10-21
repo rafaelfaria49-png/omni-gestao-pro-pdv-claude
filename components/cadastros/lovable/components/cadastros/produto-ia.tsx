@@ -64,7 +64,7 @@ import { getProdutoFiscal } from "@/lib/produto-fiscal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useStoreBusiness } from "@/lib/use-store-business";
-import { productCommercialFromMetadata, productSpecificApplicability, type ProductCommercialV1 } from "@/lib/cadastros/product-commercial-contract";
+import { hasInvalidProductCommercial, productCommercialFromMetadata, productSpecificApplicability, type ProductCommercialV1 } from "@/lib/cadastros/product-commercial-contract";
 
 function metadataRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -408,10 +408,11 @@ export function ProductAIModal({
 }) {
   const business = useStoreBusiness();
   const storeReady = business.ready && business.storeId === storeId;
+  const invalidCommercial = hasInvalidProductCommercial(initial?.metadata);
   const allowCompatibility = storeReady && business.resource("catalog.deviceCompatibility").operational;
   const allowAccessories = storeReady && business.resource("pdv.accessoryModelColor").operational;
-  const allowWeight = storeReady && business.resource("catalog.weight").enabled;
-  const allowVariants = storeReady && business.resource("catalog.variants").enabled;
+  const allowWeight = storeReady && !invalidCommercial && business.resource("catalog.weight").enabled;
+  const allowVariants = storeReady && !invalidCommercial && business.resource("catalog.variants").enabled;
   const [applies, setApplies] = useState(() => productSpecificApplicability(initial?.metadata));
   const [applicabilityTouched, setApplicabilityTouched] = useState(false);
   const [commercial, setCommercial] = useState<ProductCommercialV1>(() => productCommercialFromMetadata(initial?.metadata));
@@ -1388,7 +1389,8 @@ export function ProductAIModal({
               </Field>
             )}
             <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} placeholder="90" /></Field>
-            {(allowWeight || allowVariants || commercial.modoVenda === "peso") && <div className="col-span-full space-y-3 rounded-lg border border-border p-4">
+            {invalidCommercial && <p role="alert" className="col-span-full text-sm text-destructive">Declaração comercial inválida. Venda bloqueada. Os dados existentes serão preservados; cadastre outro produto para definir unidade e preço sem reinterpretar saldos.</p>}
+            {!invalidCommercial && (allowWeight || allowVariants || commercial.modoVenda === "peso") && <div className="col-span-full space-y-3 rounded-lg border border-border p-4">
               <p className="text-sm font-medium">Unidade e forma de venda</p>
               <label className="block space-y-1 text-sm">Forma de venda
                 <select aria-label="Forma de venda" value={commercial.modoVenda} disabled={!!productId || !allowWeight}

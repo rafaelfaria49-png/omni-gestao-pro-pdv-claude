@@ -38,6 +38,12 @@ export function isProductWeightDeclared(metadata: unknown): boolean {
   return productCommercialFromMetadata(metadata).modoVenda === "peso"
 }
 
+/** Ausência é legado unitário; uma declaração presente e inválida exige revisão. */
+export function hasInvalidProductCommercial(metadata: unknown): boolean {
+  const base = record(metadata)
+  return Object.hasOwn(base, "comercial") && !validateProductCommercial(base.comercial)
+}
+
 /** Handoff puro para o catálogo futuro do PDV; não sinaliza suporte inexistente. */
 export function productCommercialCatalogProjection(metadata: unknown, price: number) {
   const commercial = productCommercialFromMetadata(metadata)
@@ -46,7 +52,8 @@ export function productCommercialCatalogProjection(metadata: unknown, price: num
     precoNaBase: price,
     precisaoQuantidade: commercial.unidade === "KG" ? 3 : 0,
     vendaPorPeso: commercial.modoVenda === "peso",
-    vendaOperacional: commercial.modoVenda === "unidade",
+    declaracaoComercialInvalida: hasInvalidProductCommercial(metadata),
+    vendaOperacional: commercial.modoVenda === "unidade" && !hasInvalidProductCommercial(metadata),
     estoqueFracionadoOperacional: false as const,
     gradeOperacional: false as const,
   }
@@ -73,6 +80,15 @@ export class ProductWeightNotOperationalError extends Error {
   }
 }
 
+export class ProductCommercialInvalidError extends Error {
+  readonly code = "PRODUTO_COMERCIAL_INVALIDO"
+  constructor() {
+    super("Declaração comercial inválida: revise modo de venda, unidade e base do preço. Venda bloqueada; nenhum saldo ou preço foi convertido.")
+    this.name = "ProductCommercialInvalidError"
+  }
+}
+
 export function assertProductCommercialSaleSupported(metadata: unknown): void {
   if (isProductWeightDeclared(metadata)) throw new ProductWeightNotOperationalError()
+  if (hasInvalidProductCommercial(metadata)) throw new ProductCommercialInvalidError()
 }

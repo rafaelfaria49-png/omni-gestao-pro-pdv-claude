@@ -81,4 +81,13 @@ describe("Ramos combináveis, contrato canônico V1", () => {
     expect(() => assertProductCommercialSaleSupported({ vendaPorPeso: true, comercial: { version: 1, modoVenda: "unidade", unidade: "UN", basePreco: "UN" } })).toThrow()
     expect(() => assertProductCommercialSaleSupported({})).not.toThrow()
   })
+  it.each([
+    { version: 1, modoVenda: "unidade", unidade: "KG", basePreco: "KG" },
+    { version: 2, modoVenda: "unidade", unidade: "UN", basePreco: "UN" },
+    { version: 1, modoVenda: "fracionado", unidade: "G", basePreco: "G" },
+    null,
+  ])("declaração comercial inválida não se torna venda operacional por unidade: %j", (comercial) => {
+    expect(() => assertProductCommercialSaleSupported({ comercial })).toThrow(/comercial inválida/i)
+    expect(productCommercialCatalogProjection({ comercial }, 20).vendaOperacional).toBe(false)
+  })
 })

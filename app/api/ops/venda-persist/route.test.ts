@@ -29,7 +29,7 @@ vi.mock("@/lib/auth/session-operator", () => ({
 
 import { POST } from "./route"
 import { FractionalQuantityError, StockLedgerBusinessError, VendaCreateUniqueConflictError } from "@/lib/ops-upsert-venda"
-import { ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
+import { ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 
 function requestSale(total = 100) {
   return {
@@ -172,6 +172,12 @@ describe("POST /api/ops/venda-persist — recuperação concorrente P2002", () =
 })
 
 describe("POST /api/ops/venda-persist — quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005)", () => {
+  it("declaração comercial inválida retorna erro explícito 409", async () => {
+    h.transaction.mockRejectedValue(new ProductCommercialInvalidError())
+    const response = await POST(req({ sale: fractionalSale(1) }))
+    expect(response.status).toBe(409)
+    expect((await response.json()).code).toBe("PRODUTO_COMERCIAL_INVALIDO")
+  })
   it("produto por peso com quantidade inteira retorna falha de negócio 409", async () => {
     h.transaction.mockRejectedValue(new ProductWeightNotOperationalError())
     const response = await POST(req({ sale: fractionalSale(1) }))
