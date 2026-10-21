@@ -1,18 +1,13 @@
 import { expect, test } from "@playwright/test"
 import {
   STORES, USERS, capabilitiesOf, closeDb, field, login, openCadastrosProdutos, openGeral, openNewProduct,
-  productModal, readDb, rowOf, searchProduct, switchStore,
+  productModal, readDb, rowOf, saveProductAndConfirm, searchProduct, switchStore,
 } from "./support"
 
 test.afterAll(closeDb)
 
 const metadataOf = async (id: string) => (await (await readDb()).produto.findUniqueOrThrow({ where: { id } })).metadata as Record<string, any>
 
-async function saveAndConfirm(page: import("@playwright/test").Page) {
-  await productModal(page).getByRole("button", { name: "Salvar produto", exact: true }).click()
-  await expect(page.getByText("Produto salvo com sucesso.").first()).toBeVisible()
-  await expect(productModal(page)).toHaveCount(0)
-}
 
 test("Variedades: peso e grade combinados sem mudar ramo nem ativar aparelhos", async ({ page }) => {
   const B = STORES.variedades
@@ -42,7 +37,7 @@ test("Variedades: peso e grade combinados sem mudar ramo nem ativar aparelhos", 
   await field(modal, "Nome").fill("Camiseta sintética grade")
   await modal.getByText(/Planejar grade para este produto/).click()
   await field(modal, "Preço venda (R$)").fill("49,90")
-  await saveAndConfirm(page)
+  await saveProductAndConfirm(page)
   const product = await (await readDb()).produto.findFirstOrThrow({ where: { storeId: B, name: "Camiseta sintética grade" } })
   expect((product.metadata as Record<string, any>).comercial).toEqual({ version: 1, modoVenda: "unidade", unidade: "UN", basePreco: "UN", gradePlanejada: true })
   expect(product.stock).toBe(0)
@@ -70,7 +65,7 @@ test("Campos ocultos: editar campo comum preserva vínculos, overrides false, ga
     await rowOf(page, "Capa sintética legado B").getByRole("button", { name: /Editar/ }).click()
     const modal = productModal(page)
     await field(modal, "Preço venda (R$)").fill("32,50")
-    await saveAndConfirm(page)
+    await saveProductAndConfirm(page)
     const after = await (await readDb()).produto.findUniqueOrThrow({ where: { id: "e2e-b-legado" } })
     const prev = before.metadata as Record<string, any>
     const next = after.metadata as Record<string, any>
@@ -106,7 +101,7 @@ test("Assistência legada: recursos pertinentes e vínculos preservados sem grav
   const modal = productModal(page)
   await expect(modal.getByLabel("Modelo compatível")).toHaveValue("Modelo Sintético X")
   await field(modal, "Nome").fill("Capa sintética legado C revisada")
-  await saveAndConfirm(page)
+  await saveProductAndConfirm(page)
   const after = await (await readDb()).produto.findUniqueOrThrow({ where: { id: "e2e-c-legado" } })
   const prev = before.metadata as Record<string, any>
   const next = after.metadata as Record<string, any>
@@ -143,7 +138,7 @@ test("Acessórios: compatibilidade e acessórios sem assistência técnica", asy
     const modal = productModal(page)
     await expect(modal.getByRole("checkbox", { name: "Possui compatibilidade com aparelhos" })).toBeChecked()
     await modal.getByRole("checkbox", { name: "É um acessório para aparelhos" }).check()
-    await saveAndConfirm(page)
+    await saveProductAndConfirm(page)
     const after = await metadataOf("e2e-d-legado")
     expect(after.cadastroRecursos).toEqual({ acessorios: true })
     expect(after.atributos).toMatchObject({ modeloCompativel: before.atributos.modeloCompativel })
@@ -157,7 +152,7 @@ test("Acessórios: compatibilidade e acessórios sem assistência técnica", asy
     await modal.getByRole("checkbox", { name: "É um acessório para aparelhos" }).check()
     await modal.getByLabel("Modelo compatível").fill("Modelo Sintético D1")
     await field(modal, "Preço venda (R$)").fill("15,00")
-    await saveAndConfirm(page)
+    await saveProductAndConfirm(page)
     const created = await (await readDb()).produto.findFirstOrThrow({ where: { storeId: D, name: "Capinha sintética D" } })
     const metadata = created.metadata as Record<string, any>
     expect(metadata.cadastroRecursos).toEqual({ compatibilidade: true, acessorios: true })

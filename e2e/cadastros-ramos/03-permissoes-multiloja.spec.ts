@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import {
   STORES, USERS, capabilitiesOf, closeDb, field, login, openCadastrosProdutos, openGeral, openNewProduct,
-  productModal, readDb, rowOf, searchProduct, switchStore,
+  productModal, readDb, rowOf, saveProductAndConfirm, searchProduct, switchStore,
 } from "./support"
 
 test.afterAll(closeDb)
@@ -50,8 +50,7 @@ test("Operador sem Configurações não altera ramo; cadastro e loja continuam v
     const modal = await openNewProduct(page)
     await field(modal, "Nome").fill("Brinquedo sintético do operador")
     await field(modal, "Preço venda (R$)").fill("12,00")
-    await modal.getByRole("button", { name: "Salvar produto", exact: true }).click()
-    await expect(page.getByText("Produto salvo com sucesso.").first()).toBeVisible()
+    await saveProductAndConfirm(page)
     expect(await (await readDb()).produto.count({ where: { storeId: B, name: "Brinquedo sintético do operador" } })).toBe(1)
   })
 })

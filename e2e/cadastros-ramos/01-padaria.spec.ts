@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test"
 import {
   STORES, USERS, capabilitiesOf, closeDb, evidence, field, login, logoutViaSeguranca, openCadastrosProdutos,
-  openGeral, openNewProduct, productModal, readDb, rowOf, searchProduct,
+  openGeral, openNewProduct, productModal, readDb, rowOf, saveProductAndConfirm, searchProduct,
 } from "./support"
 
 const A = STORES.padaria
@@ -121,8 +121,7 @@ test("Padaria: ramo, cadastro, edição e nova sessão com persistência real", 
     await expect(field(modal, "Preço venda (R$)")).toHaveValue("1,20")
     expect((await catalogCounts(A)).produtos).toBe(0)
     await outage.restore()
-    await modal.getByRole("button", { name: "Salvar produto", exact: true }).click()
-    await expect(page.getByText("Produto salvo com sucesso.").first()).toBeVisible()
+    await saveProductAndConfirm(page)
     await expect(productModal(page)).toHaveCount(0)
     const saved = await (await readDb()).produto.findFirstOrThrow({ where: { storeId: A, sku: "E2E-PAO-001" } })
     expect(saved).toMatchObject({ name: "Pão sintético E2E", category: "Pães sintéticos", supplierName: "Moinho Sintético", price: 1.2, precoCusto: 0.5, stock: 0 })
@@ -148,6 +147,7 @@ test("Padaria: ramo, cadastro, edição e nova sessão com persistência real", 
     const modal = await openNewProduct(page)
     await field(modal, "Nome").fill("Bolo sintético dupla submissão")
     await field(modal, "Preço venda (R$)").fill("25,00")
+    await expect(page.getByText("Produto salvo com sucesso.")).toHaveCount(0)
     await modal.getByRole("button", { name: "Salvar produto", exact: true }).dblclick()
     await expect(page.getByText("Produto salvo com sucesso.").first()).toBeVisible()
     await page.waitForTimeout(2_000)
@@ -166,8 +166,7 @@ test("Padaria: ramo, cadastro, edição e nova sessão com persistência real", 
     await expect(field(modal, "Preço venda (R$)")).toHaveValue("1.2")
     const before = await (await readDb()).produto.findFirstOrThrow({ where: { storeId: A, sku: "E2E-PAO-001" } })
     await field(modal, "Preço venda (R$)").fill("1,35")
-    await modal.getByRole("button", { name: "Salvar produto", exact: true }).click()
-    await expect(page.getByText("Produto salvo com sucesso.").first()).toBeVisible()
+    await saveProductAndConfirm(page)
     const after = await (await readDb()).produto.findFirstOrThrow({ where: { storeId: A, sku: "E2E-PAO-001" } })
     expect(after.id).toBe(before.id)
     expect(after).toMatchObject({ price: 1.35, precoCusto: 0.5, stock: 0, name: "Pão sintético E2E", category: "Pães sintéticos" })
@@ -217,8 +216,7 @@ test("Produto por peso: somente preparação, preservado ao reabrir e editar", a
     await expect(field(modal, "Estoque inicial")).toHaveValue("0")
     await field(modal, "Custo (R$)").fill("9,00")
     await field(modal, "Preço venda (R$)").fill("18,90")
-    await modal.getByRole("button", { name: "Salvar produto", exact: true }).click()
-    await expect(page.getByText("Produto salvo com sucesso.").first()).toBeVisible()
+    await saveProductAndConfirm(page)
     const saved = await (await readDb()).produto.findFirstOrThrow({ where: { storeId: A, sku: "E2E-KG-001" } })
     expect(saved).toMatchObject({ price: 18.9, precoCusto: 9, stock: 0 })
     expect((saved.metadata as Record<string, any>).comercial).toEqual({ version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" })
@@ -233,8 +231,7 @@ test("Produto por peso: somente preparação, preservado ao reabrir e editar", a
     await expect(modal.getByRole("combobox", { name: "Unidade comercial e base do preço" })).toBeDisabled()
     await expect(modal.getByText(/Venda bloqueada até a integração/)).toBeVisible()
     await field(modal, "Nome").fill("Pão de queijo sintético kg (editado)")
-    await modal.getByRole("button", { name: "Salvar produto", exact: true }).click()
-    await expect(page.getByText("Produto salvo com sucesso.").first()).toBeVisible()
+    await saveProductAndConfirm(page)
     const saved = await (await readDb()).produto.findFirstOrThrow({ where: { storeId: A, sku: "E2E-KG-001" } })
     expect(saved).toMatchObject({ name: "Pão de queijo sintético kg (editado)", price: 18.9, precoCusto: 9, stock: 0 })
     expect((saved.metadata as Record<string, any>).comercial).toEqual({ version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" })

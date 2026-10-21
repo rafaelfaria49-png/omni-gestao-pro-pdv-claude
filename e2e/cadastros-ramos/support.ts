@@ -130,3 +130,12 @@ export function rowOf(page: Page, name: string): Locator {
 export async function noHorizontalOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
 }
+
+/** Salva e espera a confirmação DESTE save: nenhum toast antigo pode valer como sucesso. */
+export async function saveProductAndConfirm(page: Page) {
+  const success = page.getByText("Produto salvo com sucesso.")
+  await expect(success).toHaveCount(0)
+  await productModal(page).getByRole("button", { name: "Salvar produto", exact: true }).click()
+  await expect(success.first()).toBeVisible()
+  await expect(productModal(page)).toHaveCount(0)
+}
