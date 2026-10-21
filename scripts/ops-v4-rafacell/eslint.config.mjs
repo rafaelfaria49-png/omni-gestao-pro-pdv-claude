@@ -4,7 +4,7 @@ export default [{
   languageOptions: {
     ecmaVersion: 'latest',
     sourceType: 'module',
-    globals: { console: 'readonly', process: 'readonly', URL: 'readonly', globalThis: 'readonly' },
+    globals: { console: 'readonly', process: 'readonly', URL: 'readonly', Headers: 'readonly', globalThis: 'readonly' },
   },
   rules: {
     'constructor-super': 'error', 'no-unreachable': 'error', 'no-unexpected-multiline': 'error',
@@ -12,5 +12,5 @@ export default [{
   },
 }, {
   files: ['**/*.cjs'],
-  languageOptions: { sourceType: 'commonjs', globals: { require: 'readonly' } },
+  languageOptions: { sourceType: 'commonjs', globals: { require: 'readonly', module: 'readonly' } },
 }];

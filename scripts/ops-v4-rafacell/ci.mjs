@@ -208,7 +208,7 @@ export async function main(mode, arg) {
   }
   if (mode === 'typecheck') return run('typecheck', ['node_modules/typescript/lib/tsc.js', '--noEmit', '--incremental', 'false']);
   if (mode === 'build') {
-    const exit = run('build', ['scripts/vercel-build.mjs']);
+    const exit = run('build', ['scripts/vercel-build.mjs'], { env: { ...isolatedEnv(), OPS_V4_RAFACELL_PUBLIC_FONTS: '1' } });
     const log = fs.readFileSync(path.join(evidence, 'build.log'), 'utf8');
     if (!log.includes('MIGRATION_SKIPPED') || /MIGRATION_(RUN|SUCCEEDED)/.test(log)) throw new Error('RAFACELL_CI_BUILD_MIGRATION_GUARD_FAILED');
     return exit;

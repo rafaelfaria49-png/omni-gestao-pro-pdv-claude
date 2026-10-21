@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertDisposableDatabase, compareFailures, inspectCoverage } from './ci.mjs';
+import { publicFontAllowed } from './block-network.cjs';
 
 const url = 'postgresql://rafacell_ci:synthetic@127.0.0.1:5432/ops_v4_prepub003_c100900001?schema=public';
 const env = { OPS_V4_RAFACELL_DISPOSABLE: '1', DATABASE_URL: url, DIRECT_URL: url, OPS_V4_PREPUBLISH_TEST_DATABASE_URL: url };
@@ -33,4 +34,17 @@ test('a skipped or removed historical assertion is never reported as resolved', 
     resolved: [{ file: old.file, name: old.name }], removedOrSkipped: [],
   });
   assert.deepEqual(inspectCoverage([old], [{ ...old, status: 'passed' }, old]), { resolved: [], removedOrSkipped: [] });
+});
+test('only credential-free public font GETs are permitted, and only in the build', () => {
+  const css = new URL('https://fonts.googleapis.com/css2?family=Inter');
+  const font = new URL('https://fonts.gstatic.com/s/inter/public.woff2');
+  assert.equal(publicFontAllowed(css, 'GET', {}, true), true);
+  assert.equal(publicFontAllowed(font, 'GET', {}, true), true);
+  assert.equal(publicFontAllowed(css, 'GET', {}, false), false);
+  for (const bad of ['https://graph.facebook.com/messages', 'https://fonts.googleapis.com.evil.test/css2', 'http://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/not-a-font', 'https://user:password@fonts.googleapis.com/css2']) {
+    assert.equal(publicFontAllowed(new URL(bad), 'GET', {}, true), false);
+  }
+  assert.equal(publicFontAllowed(css, 'POST', {}, true), false);
+  assert.equal(publicFontAllowed(css, 'GET', { Authorization: 'synthetic' }, true), false);
+  assert.equal(publicFontAllowed(font, 'GET', { Cookie: 'synthetic' }, true), false);
 });

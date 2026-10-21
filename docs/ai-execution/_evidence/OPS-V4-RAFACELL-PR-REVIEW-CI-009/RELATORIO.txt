@@ -111,7 +111,7 @@ primeira criação se perder; este PR cobre retry após a criação ser conhecid
 
 Validação local válida das fontes adicionais, antes do push
 
-- Guardas do runner: 3/3.
+- Guardas do runner: 4/4, incluindo allowlist restrita de fontes públicas.
 - Contratos focados: 347/347.
 - UI envio/criação: 17/17; UI RafaCell: 6/6.
 - PostgreSQL 17 exclusivo em loopback: 39/39; schema vigente materializado
@@ -136,6 +136,10 @@ pull_request_target, banco externo ou WhatsApp real. Node 24, PostgreSQL 17 efê
 URLs idênticas, usuário/nome exclusivos, loopback, banco vazio antes do DDL,
 env sintético e ausência de .env são exigidos. Processos não herdam credenciais
 do perfil local. HTTP externo é bloqueado e o transporte dos testes é mockado.
+Somente no build, GET HTTPS sem Authorization/Cookie aos endpoints públicos
+fonts.googleapis.com/css[2] e fonts.gstatic.com/s/ é permitido: o primeiro CI
+mostrou que o next/font existente depende desses downloads. Não há liberação
+de rede para WhatsApp, aplicação remota, credenciais ou banco externo.
 Build exige MIGRATION_SKIPPED, rejeita MIGRATION_RUN/SUCCEEDED, e TypeScript é
 checado separadamente porque o Next ignora erros de tipo na configuração atual.
 Temporários ficam fora dos artifacts; relatórios/logs sanitizados são retidos 14 dias.
@@ -143,7 +147,11 @@ Temporários ficam fora dos artifacts; relatórios/logs sanitizados são retidos
 As 16 falhas históricas NÃO são skip, xfail, continue-on-error ou allow-failure.
 O check de regressão fica realmente vermelho enquanto o HEAD as apresentar.
 O SHA/run/resultado remoto deve ser lido no GitHub Actions e na entrega final;
-este documento não antecipa um CI verde.
+este documento não antecipa um CI verde. O primeiro run 39535972441 confirmou
+347 focados, 23 UI, 39 PG, TypeScript/lint aprovados e as mesmas 16 históricas,
+zero novas. O build desse run falhou pelo bloqueio das fontes públicas; a
+allowlist restrita acima corrige a infraestrutura sem modificar o layout ou
+mockar o código de produção. O resultado final deve ser conferido no novo run.
 
 Vercel e preservação
 
