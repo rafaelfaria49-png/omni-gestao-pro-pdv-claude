@@ -16,6 +16,12 @@ on:
       - "app/api/stores/**/settings/**"
       - "app/api/settings/perfil-loja/**"
       - "app/api/ops/venda-persist/**"
+      - "app/api/vendas/**/corrigir-itens/**"
+      - "app/api/produtos/**"
+      - "app/api/stores/import-catalog/**"
+      - "app/actions/cadastros*"
+      - "app/actions/estoque*"
+      - "lib/operacoes/adapters/os-estoque*"
       - "components/cadastros/**"
       - "components/configuracoes-v3/**"
       - "components/dashboard/app-ops-providers.tsx"
@@ -63,6 +69,10 @@ jobs:
           app/api/stores/[id]/settings/route.test.ts
           app/api/settings/perfil-loja/route.test.ts
           app/api/ops/venda-persist/route.test.ts app/api/ops/venda-persist/v2/route.test.ts
+          app/api/vendas/[id]/corrigir-itens/route.business.test.ts
+          app/api/produtos/[id]/route.test.ts app/api/stores/import-catalog/route.canonical-014.test.ts
+          app/actions/cadastros.product-interactive.test.ts app/actions/estoque.access.test.ts
+          lib/operacoes/adapters/os-estoque.test.ts
           --maxWorkers=2
       - name: Lint dos contratos e interfaces
         run: >-
@@ -75,6 +85,10 @@ jobs:
           components/cadastros/lovable/components/cadastros/produto-ia.tsx
           components/cadastros/lovable/components/cadastros/CadastrosHub.tsx
           scripts/cadastros/smoke-ramos.mjs
+          app/actions/cadastros.ts app/actions/estoque.ts
+          app/api/produtos/[id]/route.ts app/api/stores/import-catalog/route.ts
+          app/api/vendas/[id]/corrigir-itens/route.ts lib/operacoes/adapters/os-estoque.ts
+          components/configuracoes-v3/features/settings/sections/AparenciaSection.tsx
       - name: TypeScript completo
         run: npm run typecheck
       - name: Build isolado sem migrations

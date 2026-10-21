@@ -7,8 +7,9 @@ const h = vi.hoisted(() => ({ store: "loja-a", renders: [] as Array<{ storeId: s
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: h.store, storesRefreshNonce: 0, lojaAtivaRaw: { storeProfile: "ASSISTENCIA" } }) }))
 vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ hubs: { cadastros: true }, admin: { configuracoes: true } }) }))
 vi.mock("@/lib/pdv-mount-diagnostics", () => ({ markPdvMountStep: vi.fn() }))
-import { StoreSettingsProvider } from "@/lib/store-settings-provider"
+import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider"
 import { useStoreBusiness } from "@/lib/use-store-business"
+import { PerfilLojaProvider, usePerfilLoja } from "@/lib/perfil-loja-provider"
 
 function Probe() {
   const business = useStoreBusiness()
@@ -16,6 +17,18 @@ function Probe() {
   return React.createElement("div", null,
     React.createElement("output", null, business.ready ? business.branch : "loading"),
     React.createElement("button", { onClick: () => void business.refresh() }, "Recarregar"))
+}
+function AvailabilityProbe() {
+  const settings = useStoreSettings()
+  const business = useStoreBusiness()
+  return React.createElement("pre", { "data-testid": "availability" }, JSON.stringify({
+    hydrated: settings.hydrated, loaded: settings.loaded,
+    ready: business.ready, capabilities: settings.capabilities,
+  }))
+}
+function LegacyAssistanceProbe() {
+  const profile = usePerfilLoja()
+  return React.createElement("pre", { "data-testid": "legacy-assistance" }, JSON.stringify(profile))
 }
 const tree = () => React.createElement(StoreSettingsProvider, null, React.createElement(Probe))
 const response = (branch: string, storeId = "loja-a") => new Response(JSON.stringify({ settings: { storeId, printerConfig: {
@@ -25,6 +38,28 @@ const response = (branch: string, storeId = "loja-a") => new Response(JSON.strin
 afterEach(() => { cleanup(); localStorage.clear(); h.renders.length = 0; vi.unstubAllGlobals() })
 
 describe("Provider real — configuração por loja, sem cache cruzado", () => {
+  it("falha concluída conserva apresentação da assistência do perfil comprovado da mesma loja", async () => {
+    h.store = "loja-a"
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })))
+    render(React.createElement(StoreSettingsProvider, null, React.createElement(PerfilLojaProvider, null, React.createElement(LegacyAssistanceProbe))))
+    await act(async () => {})
+    expect(JSON.parse(screen.getByTestId("legacy-assistance").textContent!)).toMatchObject({ perfilHydrated: true, mostraTecnicoLaudoOs: true })
+  })
+  it.each(["http", "json", "rede"])("falha %s conclui a tentativa do PDV sem habilitar recursos nem backfill", async (kind) => {
+    h.store = "loja-a"
+    localStorage.setItem("omnigestao:pdv-shortcuts:loja-a", JSON.stringify([{ id: "local", nome: "Local" }]))
+    const fetcher = vi.fn(async () => {
+      if (kind === "rede") throw new Error("offline")
+      return kind === "json" ? new Response("<html>indisponível</html>") : new Response("{}", { status: 500 })
+    })
+    vi.stubGlobal("fetch", fetcher)
+    render(React.createElement(StoreSettingsProvider, null, React.createElement(AvailabilityProbe)))
+    await act(async () => {})
+    expect(JSON.parse(screen.getByTestId("availability").textContent!)).toEqual({
+      hydrated: true, loaded: false, ready: false, capabilities: null,
+    })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
   it("falha de GET não autoriza backfill de valores locais", async () => {
     h.store = "loja-a"
     localStorage.setItem("omnigestao:pdv-shortcuts:loja-a", JSON.stringify([{ id: "local", nome: "Local" }]))

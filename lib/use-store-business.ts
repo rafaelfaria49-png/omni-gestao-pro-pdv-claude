@@ -12,7 +12,7 @@ export function useStoreBusiness() {
   const settings = useStoreSettings()
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva()
   const permissions = useEnterprisePermissions()
-  const ready = settings.hydrated && settings.storeId === lojaAtivaId
+  const ready = settings.loaded && settings.storeId === lojaAtivaId
   const capabilities = ready ? settings.capabilities : null
   const profile = lojaAtivaRaw?.storeProfile
   return {

@@ -37,6 +37,7 @@ import { FRACTIONAL_QUANTITY_CODE } from "@/lib/vendas/sale-quantity-contract"
 import { composeCorrectedSalePayloadLines } from "@/lib/vendas/preserve-sale-line-payload"
 import { buildIdempotencyKey } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
+import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -202,8 +203,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Pré-checagem anti-negativo (read-only) para todas as BAIXAS.
     for (const [produtoId, info] of deltaByProduto) {
       if (info.delta <= 0) continue
-      const p = await prisma.produto.findUnique({ where: { id: produtoId }, select: { stock: true, name: true } })
+      const p = await prisma.produto.findFirst({ where: { id: produtoId, storeId }, select: { stock: true, name: true, metadata: true } })
       if (!p) continue
+      assertProductCommercialSaleSupported(p.metadata)
       if (p.stock < info.delta) {
         return NextResponse.json(
           {
@@ -234,6 +236,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const ledgerOperator = session?.user ? getOperatorLabelFromSession(session).trim() || null : null
       for (const [produtoId, info] of deltaByProduto) {
         if (info.delta === 0) continue
+        if (info.delta > 0) {
+          const product = await tx.produto.findFirst({ where: { id: produtoId, storeId }, select: { metadata: true } })
+          if (product) assertProductCommercialSaleSupported(product.metadata)
+        }
         const r = await applyStockMutationTx(
           tx as unknown as StockLedgerTx,
           { storeId, principal: null, source: "vendas-corrigir-itens", operatorLabel: ledgerOperator },
@@ -365,6 +371,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       estoqueNaoResolvido: naoResolvidos,
     })
   } catch (e) {
+    if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) {
+      return NextResponse.json({ ok: false, error: e.message, code: e.code }, { status: 409 })
+    }
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[vendas/corrigir-itens]", msg)
     if (msg.startsWith("estoque_insuficiente_concorrente")) {

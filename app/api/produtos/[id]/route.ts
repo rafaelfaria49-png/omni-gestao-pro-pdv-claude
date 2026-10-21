@@ -11,6 +11,7 @@ import {
 import type { ProductWriteInput, ProductWriteResult } from "@/lib/cadastros/product-write-contract"
 import { applyStockMutation, applyStockMutationTx } from "@/lib/estoque/stock-ledger-service"
 import type { StockLedgerResult } from "@/lib/estoque/stock-ledger-contract"
+import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 import {
   PRODUTO_REST_SELECT,
   mapProductWriteFailureToResponse,
@@ -100,6 +101,11 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const stockContext = { storeId, principal, source: PRODUCT_WRITE_AUDIT_SOURCE }
     const idempotencyKey = restPatchIdempotencyKey(req, productId)
 
+    if (hasStock) {
+      const current = await prisma.produto.findFirst({ where: { id: productId, storeId }, select: { metadata: true } })
+      if (current) assertProductCommercialSaleSupported(current.metadata)
+    }
+
     // ── STOCK-ONLY: somente ledger, sem updateProduct vazio ──────────────
     if (hasStock && !hasCadastralKeys) {
       const ledger = await applyStockMutation(
@@ -158,6 +164,8 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     await prismaEnsureConnected()
     try {
       await prisma.$transaction(async (tx) => {
+        const current = await tx.produto.findFirst({ where: { id: productId, storeId }, select: { metadata: true } })
+        if (current) assertProductCommercialSaleSupported(current.metadata)
         const cad = await updateProductTx(
           tx as unknown as ProductWriteTx,
           writeContext,
@@ -206,6 +214,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     if (!mixed) return json({ error: "Produto não encontrado" }, { status: 404 })
     return json({ ok: true, produto: mixed })
   } catch (e) {
+    if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) return json({ ok: false, error: e.message, code: e.code }, { status: 409 })
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[api/produtos PATCH]", msg)
     return json(

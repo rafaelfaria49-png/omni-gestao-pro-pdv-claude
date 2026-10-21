@@ -33,7 +33,7 @@ function toStudioTheme(id: ThemeId): StudioThemeMode {
 export function AparenciaSection() {
   const { theme, setTheme } = useTheme();
   const { lojaAtivaId } = useLojaAtiva();
-  const { appearance, settings, save, hydrated } = useStoreSettings();
+  const { appearance, save, hydrated } = useStoreSettings();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
 
@@ -54,11 +54,7 @@ export function AparenciaSection() {
       }
       setSaving(true);
       try {
-        const base =
-          settings?.printerConfig && typeof settings.printerConfig === "object"
-            ? { ...(settings.printerConfig as Record<string, unknown>) }
-            : {};
-        const printerConfig = mergeAppearanceIntoPrinterConfig(base, {
+        const printerConfig = mergeAppearanceIntoPrinterConfig({}, {
           studioTheme: toStudioTheme(next),
         });
         await save({ printerConfig });
@@ -74,7 +70,7 @@ export function AparenciaSection() {
         setSaving(false);
       }
     },
-    [lojaAtivaId, save, setTheme, settings?.printerConfig, toast],
+    [lojaAtivaId, save, setTheme, toast],
   );
 
   return (

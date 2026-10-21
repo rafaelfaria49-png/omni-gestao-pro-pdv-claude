@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
       sku: string | null
       stock: number
       precoCusto: number | null
+      metadata?: unknown
     } | null> => null,
   ),
   produtoUpdate: vi.fn(async () => ({})),
@@ -96,6 +97,17 @@ beforeEach(() => {
   h.produtoFindFirst.mockResolvedValue(null)
   h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 1 }])
   h.movimentacaoFindFirst.mockResolvedValue(null)
+})
+
+it.each(["entrada", "ajuste"])("%s manual de produto por peso é rejeitado sem mudar saldo, custo ou ledger", async (kind) => {
+  sessionAtiva("VENDEDOR", ["loja-a"])
+  h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "Pesável", sku: "PESO", stock: 1, precoCusto: 5, metadata: { vendaPorPeso: true } })
+  const result = await (kind === "entrada" ? registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 2 })
+    : registrarAjusteEstoque("loja-a", { produtoId: "p1", novoSaldo: 3, motivo: "Contagem" }))
+  expect(result).toMatchObject({ ok: false, code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+  expect(h.produtoUpdate).not.toHaveBeenCalled()
+  expect(h.movimentacaoCreate).not.toHaveBeenCalled()
+  expect(h.produtoDepositoUpsert).not.toHaveBeenCalled()
 })
 
 describe("estoque actions — só boundary", () => {

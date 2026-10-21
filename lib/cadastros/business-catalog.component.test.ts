@@ -9,11 +9,14 @@ const h = vi.hoisted(() => ({
   capabilities: { version: 1, business: { primaryBranch: "padaria" } } as StoreCapabilitiesV1,
   canConfigure: true,
   permitted: true,
+  ready: true,
+  hydrated: true,
+  refresh: vi.fn(async () => {}),
   save: vi.fn(async (_patch: unknown) => {}),
   upsert: vi.fn(async (_id: string, _input: unknown) => ({ ok: true, id: "p-new" })),
 }))
 vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
-  storeId: "loja-a", ready: true, hydrated: true, capabilities: h.capabilities,
+  storeId: "loja-a", ready: h.ready, hydrated: h.hydrated, capabilities: h.capabilities, refresh: h.refresh,
   branch: h.capabilities.business?.primaryBranch ?? "assistencia", configured: true,
   canConfigure: h.canConfigure, presentation: businessPresentation(h.capabilities), save: h.save,
   resource: (key: Parameters<typeof resolveBusinessResource>[1]) => resolveBusinessResource(h.capabilities, key, undefined, h.permitted),
@@ -53,6 +56,9 @@ beforeEach(() => {
   h.capabilities = { version: 1, business: { primaryBranch: "padaria" } }
   h.permitted = true
   h.canConfigure = true
+  h.ready = true
+  h.hydrated = true
+  h.refresh.mockClear()
   h.upsert.mockClear()
   h.save.mockClear()
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })))
@@ -172,6 +178,21 @@ describe("Cadastros adaptados por recursos e produto", () => {
 })
 
 describe("Editor oficial de configuração", () => {
+  it("falha concluída exibe erro e permite recarregar sem oferecer edição", async () => {
+    h.ready = false
+    render(React.createElement(BusinessResourcesCard))
+    expect(screen.getByRole("alert").textContent).toContain("Não foi possível carregar")
+    expect(screen.queryByRole("combobox", { name: "Ramo principal" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }))
+    await waitFor(() => expect(h.refresh).toHaveBeenCalledOnce())
+    expect(h.save).not.toHaveBeenCalled()
+  })
+  it("tentativa em andamento continua como carregamento", () => {
+    h.ready = false; h.hydrated = false
+    render(React.createElement(BusinessResourcesCard))
+    expect(screen.getByRole("status").textContent).toContain("Carregando")
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
   it("mudar preset envia só o ramo e preserva escolhas explícitas", async () => {
     h.capabilities = { version: 1, business: { primaryBranch: "assistencia" }, overrides: { "pdv.accessoryModelColor": true } }
     render(React.createElement(BusinessResourcesCard))

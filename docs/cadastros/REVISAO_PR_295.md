@@ -78,3 +78,33 @@ de captura/ação/runner da frente alterado. Worktrees e WIPs alheios preservado
 Peso e grade continuam preparação; balança, venda fracionada, estoque por variação
 e homologação de equipamentos não foram entregues por este PR.
 Sem force push, bypass, merge, alteração de secrets ou deploy produtivo.
+
+## Revisão independente e segunda correção
+
+Em 2026-10-21, Claude Code 2.1.288, modelo `claude-opus-5-5`, sessão nova
+`df7bee57-64b6-4cf7-91e0-877ab135c8f2`, revisou integralmente os 37 arquivos
+no head `b2df14d18e8c7584b7377b3be1fc34b284e7e727`. Confirmou R1–R7 e
+executou 283 testes focados e 78 de consumidores em conjuntos separados.
+Seu parecer técnico foi CHANGES_REQUESTED, publicado como COMMENT na
+[PR #295](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/295#pullrequestreview-5605188730),
+sem aprovação formal ou humana.
+
+| ID / severidade | Reprodução pelo Codex antes da correção | Correção escrita pelo Codex |
+| --- | --- | --- |
+| RI1 / P1 | Três casos de HTTP 500, JSON inválido e rede deixavam o PDV esperando hidratação | Separar tentativa concluída (`hydrated`, escopada por loja) de leitura confirmada (`loaded`). Recursos e backfill exigem `loaded`; PDV usa seu fallback existente. Editor exibe erro com recarga; assistência legada da mesma loja conserva apresentação |
+| RI2 / P2 | Três snapshots antigos de aparência, atalhos ou impressão restauravam ramo/apresentação e override true sobre false atual | Somente patch dedicado de `printerConfig.capabilities` altera esse namespace. Blobs com seções irmãs preservam capabilities sob o lock existente. Aparência envia só sua seção; arquivos reservados do PDV preservados |
+| RI3 / P2 | Nove casos de OS, delta, ajuste cadastral e correção de venda aceitavam peso/declaração inválida como unidade | Reutilizar guard comercial nas novas baixas de correção/OS, ajustes/entradas manuais, REST e importação entre lojas (origem e destino). Rejeitar antes do cadastral quando há intenção de saldo incompatível; conservar transações e compensações históricas |
+
+Os nove testes de RI3 e os seis de RI1/RI2 falharam antes dos respectivos fixes.
+Asserções existentes preservadas; o fake transacional REST recebeu a leitura de
+Produto agora usada pelo adapter, conservando suas expectativas de atomicidade.
+Foco ampliado local: 358 aprovados em 24 arquivos. Novas provas PostgreSQL cobrem
+rollback de OS com unitário seguido de peso, rascunho/itens/payload, correção de
+venda, cinco entradas de saldo, snapshot antigo, estorno e devolução históricos.
+Usam exclusivamente o serviço descartável autorizado da CI. Auth/PIN são fixtures;
+handlers, writers, locks, plano financeiro, StockLedger e PostgreSQL são reais.
+
+As quatro sugestões P3 permanecem registradas no parecer inicial; não são tratadas
+como bloqueios nem capacidades entregues. As correções acima são do Codex e exigem
+outro contexto novo do Claude Code sobre o novo head. Contagens finais e CI do SHA
+exato ficam no parecer final da PR.

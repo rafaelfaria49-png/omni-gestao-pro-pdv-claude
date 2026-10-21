@@ -14,6 +14,10 @@ import { useToast } from "@/components/configuracoes-v3/hooks/use-toast"
 
 export function BusinessResourcesCard() {
   const business = useStoreBusiness()
+  if (!business.ready && business.hydrated) return <div role="alert" className="space-y-2 text-sm">
+    <p>Não foi possível carregar ramo e recursos desta unidade.</p>
+    <Button type="button" variant="outline" onClick={() => void business.refresh()}>Tentar novamente</Button>
+  </div>
   if (!business.ready) return <p role="status">Carregando ramo e recursos da unidade…</p>
   return <BusinessResourcesForm key={business.storeId} />
 }

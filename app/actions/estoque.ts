@@ -21,6 +21,7 @@ import {
   STOCK_DRIFT_REASON,
 } from "@/lib/estoque/stock-drift-reconcile";
 import { DEPOSITO_PRINCIPAL_CODIGO } from "@/lib/estoque/deposito-core";
+import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract";
 
 /**
  * Movimentação de estoque (livro-razão) — CAD-R2-009.
@@ -208,6 +209,8 @@ export async function registrarEntradaEstoque(
 
   try {
     const out = await prisma.$transaction(async (tx) => {
+      const product = await tx.produto.findFirst({ where: { id: input.produtoId, storeId: sid }, select: { metadata: true } });
+      if (product) assertProductCommercialSaleSupported(product.metadata);
       const r = await applyStockMutationTx(
         tx as unknown as StockLedgerTx,
         { storeId: sid, principal, source: "estoque-actions" },
@@ -237,6 +240,7 @@ export async function registrarEntradaEstoque(
     if (out.ok) revalidatePath("/dashboard/cadastros-v2");
     return out;
   } catch (e) {
+    if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) return { ok: false, reason: e.message, code: e.code };
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar entrada" };
   }
 }
@@ -280,6 +284,8 @@ export async function registrarAjusteEstoque(
 
   try {
     const out = await prisma.$transaction(async (tx) => {
+      const product = await tx.produto.findFirst({ where: { id: input.produtoId, storeId: sid }, select: { metadata: true } });
+      if (product) assertProductCommercialSaleSupported(product.metadata);
       const r = await applyStockMutationTx(
         tx as unknown as StockLedgerTx,
         { storeId: sid, principal, source: "estoque-actions" },
@@ -305,6 +311,7 @@ export async function registrarAjusteEstoque(
     if (out.ok) revalidatePath("/dashboard/cadastros-v2");
     return out;
   } catch (e) {
+    if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) return { ok: false, reason: e.message, code: e.code };
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar ajuste" };
   }
 }

@@ -175,3 +175,23 @@ PR #295, suas reproduções e a validação posterior estão em
 Revisão do executor: conferidos autoridade de loja/permissão, limites de suporte,
 omissão dos campos ocultos, impossibilidade de rebaixar peso para unidade e
 preservação dos fontes reservados. Não substitui eventual revisão humana de merge.
+
+## Correções após a primeira revisão independente
+
+O parecer Claude Code no head `b2df14d` está registrado na PR e descrito em
+`REVISAO_PR_295.md`. As correções seguintes foram escritas pelo Codex e serão
+conferidas por outro contexto independente antes do parecer final.
+
+- `hydrated` indica tentativa concluída para a loja atual, inclusive falha;
+  `loaded` indica resposta válida confirmada. Recursos e backfill exigem `loaded`.
+  O PDV mantém o fallback existente e o editor oferece recarga após erro.
+- A escrita de recursos é um patch dedicado `{ printerConfig: { capabilities } }`.
+  Quando `printerConfig` também contém tema, atalhos, impressão ou outra seção,
+  capabilities desse snapshot é ignorado: preserva-se o valor atual sob o lock.
+  Não cria outra fonte de dados nem permite reverter preferências por um blob antigo.
+- Peso ou declaração inválida bloqueiam novas baixas unitárias também na correção
+  de itens e no consumo/delta da OS. Entradas/ajustes de saldo via cadastro, REST,
+  ações manuais e importação entre lojas são rejeitados para esses produtos.
+  Importação confere origem e destino para não converter unidade/base de preço.
+  Devoluções, estornos e replays de vendas confirmadas conservam os efeitos existentes.
+  Nenhum cálculo ou fonte do StockLedger, quantidade, N5-C ou PR #294 é alterado.

@@ -14,6 +14,7 @@ import {
 } from "@/lib/cadastros/product-write-service"
 import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx } from "@/lib/estoque/stock-ledger-service"
+import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -81,7 +82,7 @@ export async function POST(req: Request) {
       }),
       prisma.produto.findMany({
         where: { storeId: fromStoreId },
-        select: { sku: true, name: true, stock: true, precoCusto: true, price: true, category: true },
+        select: { sku: true, name: true, stock: true, precoCusto: true, price: true, category: true, metadata: true },
       }),
     ])
 
@@ -112,10 +113,11 @@ export async function POST(req: Request) {
           produtosIgnoradosSemSku += 1
           continue
         }
+        assertProductCommercialSaleSupported(p.metadata)
         const targetStock = Math.max(0, Math.floor(Number(p.stock ?? 0) || 0))
         const existing = await tx.produto.findFirst({
           where: { storeId: toStoreId, sku },
-          select: { id: true, stock: true },
+          select: { id: true, stock: true, metadata: true },
         })
         if (!existing) {
           // Novo: cadastral + estoque inicial via ledger `cadastro` (mesma tx).
@@ -133,6 +135,7 @@ export async function POST(req: Request) {
           produtosCriados += 1
           continue
         }
+        assertProductCommercialSaleSupported(existing.metadata)
         if (mode === "merge") {
           // merge: atualiza dados básicos (mas não apaga nada); preserva estoque.
           const updated = await updateProductTx(
@@ -201,6 +204,7 @@ export async function POST(req: Request) {
       produtosAtualizados,
     })
   } catch (e) {
+    if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) return NextResponse.json({ ok: false, error: e.message, code: e.code }, { status: 409 })
     const msg = e instanceof Error ? e.message : "Falha ao importar"
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }

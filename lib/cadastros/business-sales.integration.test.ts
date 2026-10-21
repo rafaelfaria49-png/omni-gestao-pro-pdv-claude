@@ -13,8 +13,18 @@ vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: "fixture", role: "AD
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({ apiGuardEnterpriseOrOps: async () => null }))
 vi.mock("@/lib/automation/automation-engine", () => ({ handleEvent: vi.fn() }))
 vi.mock("@/lib/vendas/sale-numbering-runtime-gate", () => ({ resolveSaleNumberingWriter: () => ({ writer: "v2", reason: "flag" }) }))
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
+vi.mock("@/lib/vendas/guard-correcao-venda", () => ({ requireCorrecaoVendaAuth: async () => ({ ok: true, session: null }) }))
+vi.mock("@/lib/auth/verify-supervisor-pin", () => ({ authenticateSupervisorPin: async () => ({ name: "Supervisor CI" }) }))
+vi.mock("@/lib/cadastros/cadastros-action-access", () => ({ requireCadastrosActionAccess: async (storeId: string) => ({ storeId, session: null }) }))
+vi.mock("@/lib/cadastros/hub-api-gate", () => ({ requireCadastrosHubApi: async (req: Request) => ({ ok: true, storeId: req.headers.get("x-assistec-loja-id"), session: null }) }))
 import { POST as postV1 } from "@/app/api/ops/venda-persist/route"
 import { POST as postV2 } from "@/app/api/ops/venda-persist/v2/route"
+import { POST as correctItems } from "@/app/api/vendas/[id]/corrigir-itens/route"
+import { PATCH as patchProduct } from "@/app/api/produtos/[id]/route"
+import { upsertProduto } from "@/app/actions/cadastros"
+import { registrarEntradaEstoque, registrarAjusteEstoque } from "@/app/actions/estoque"
+import { consumeEstoqueFromOS, applyEstoqueDelta, restoreEstoqueFromOS } from "@/lib/operacoes/adapters/os-estoque"
 
 const url = process.env.RAMOS_TEST_DATABASE_URL
 if (url && assertIsolatedCadastrosDatabase(process.env) !== url) throw new Error("ISOLATED_DATABASE_REQUIRED")
@@ -74,8 +84,76 @@ describe.skipIf(!url)("PR #295 — roundtrip, concorrência e rollback reais", (
       produtos: await db.produto.findMany({ where: { storeId }, orderBy: { id: "asc" }, select: { id: true, stock: true, price: true, precoCusto: true, metadata: true } }),
       saldos: await db.produtoDeposito.findMany({ where: { storeId }, orderBy: { produtoId: "asc" } }),
       series: await db.serieVenda.findMany({ where: { storeId } }),
+      ordens: await db.ordemServico.findMany({ where: { storeId }, orderBy: { id: "asc" } }),
+      pecas: await db.ordemServicoItem.findMany({ where: { ordemServico: { storeId } }, orderBy: { id: "asc" } }),
     }
   }
+
+  it.each(["cadastro", "REST-stock", "REST-misto", "entrada", "ajuste"])("%s: peso não recebe saldo unitário, sem escrita cadastral parcial", async (kind) => {
+    const product = await db.produto.findFirstOrThrow({ where: { storeId, sku: "WEIGHT" } })
+    const before = await snapshot()
+    if (kind.startsWith("REST")) {
+      const req = new Request("http://localhost/api/produtos/fixture", { method: "PATCH", headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId }, body: JSON.stringify({ stock: 5, ...(kind === "REST-misto" ? { name: "Não salvar", price: 99 } : {}) }) })
+      const result = await patchProduct(req, { params: Promise.resolve({ id: product.id }) })
+      expect(result.status).toBe(409)
+      expect(await result.json()).toMatchObject({ code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+    } else if (kind === "cadastro") {
+      expect(await upsertProduto(storeId, { id: product.id, nome: "Não salvar", estoque: 5 })).toMatchObject({ ok: false, type: "VALIDATION_ERROR" })
+    } else {
+      const result = kind === "entrada" ? await registrarEntradaEstoque(storeId, { produtoId: product.id, quantidade: 5 })
+        : await registrarAjusteEstoque(storeId, { produtoId: product.id, novoSaldo: 5, motivo: "CI" })
+      expect(result).toMatchObject({ ok: false, code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+    }
+    expect(await snapshot()).toEqual(before)
+  })
+  async function correct(payload: SalePayload, lines: unknown[]) {
+    const req = new Request("http://localhost/api/vendas/fixture/corrigir-itens", { method: "POST", headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId }, body: JSON.stringify({ motivo: "CI", supervisorPin: "fixture", expectedTotal: payload.total, itens: lines }) })
+    return correctItems(req, { params: Promise.resolve({ id: payload.id! }) })
+  }
+  it.each(["WEIGHT", "BAD"])("correção de venda rejeita nova baixa de %s sem efeitos parciais", async (sku) => {
+    const payload = sale()
+    payload.lines = [payload.lines![0]]; payload.total = 20; payload.paymentBreakdown = { dinheiro: 20 }
+    expect((await post("v1", payload)).status).toBe(200)
+    const before = await snapshot()
+    const result = await correct(payload, [{ inventoryId: unitId, nome: "Unitário", quantidade: 2, precoUnitario: 10 }, { inventoryId: sku, nome: "Incompatível", quantidade: 1, precoUnitario: 10 }])
+    expect(result.status).toBe(409)
+    expect(await result.json()).toMatchObject({ code: sku === "WEIGHT" ? "PRODUTO_POR_PESO_NAO_OPERACIONAL" : "PRODUTO_COMERCIAL_INVALIDO" })
+    expect(await snapshot()).toEqual(before)
+  })
+  it.each(["consumo", "delta"])("OS %s: item unitário seguido de peso reverte saldo, ledger, rascunho e payload", async (kind) => {
+    const weightProduct = await db.produto.findFirstOrThrow({ where: { storeId, sku: "WEIGHT" } })
+    const osId = randomUUID()
+    const payload = { id: osId, storeId, status: "aberta", estoqueConsumido: kind === "delta", pecas: [
+      { id: unitId, produtoId: unitId, nome: "Unitário", quantidade: 3 },
+      { id: weightProduct.id, produtoId: weightProduct.id, nome: "Peso", quantidade: 1 },
+    ] }
+    await db.ordemServico.create({ data: { id: osId, storeId, payload } })
+    await db.ordemServicoItem.create({ data: { ordemServicoId: osId, produtoId: unitId, quantidade: 2, precoUnitario: 10 } })
+    const before = await snapshot()
+    const result = kind === "consumo" ? await consumeEstoqueFromOS({ storeId, osId }) : await applyEstoqueDelta({ storeId, osId, revisaoKey: "CI" })
+    expect(result).toMatchObject({ ok: false, status: "error", error: expect.stringContaining("Produto por peso") })
+    expect(await snapshot()).toEqual(before)
+  })
+  it("estorno histórico da OS continua compensando após declaração posterior de peso", async () => {
+    const osId = randomUUID()
+    await db.ordemServico.create({ data: { id: osId, storeId, payload: { id: osId, storeId, status: "aberta", pecas: [{ id: unitId, produtoId: unitId, nome: "Unitário", quantidade: 2 }] } } })
+    expect(await consumeEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true, status: "consumed" })
+    await db.produto.update({ where: { id: unitId }, data: { metadata: { comercial: weight } } })
+    expect(await restoreEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true, status: "restored" })
+    expect((await db.produto.findUniqueOrThrow({ where: { id: unitId } })).stock).toBe(10)
+    const before = await snapshot()
+    expect(await restoreEstoqueFromOS({ storeId, osId })).toMatchObject({ ok: true })
+    expect(await snapshot()).toEqual(before)
+  })
+  it("correção que devolve estoque histórico não bloqueia por metadata posterior", async () => {
+    const payload = sale()
+    payload.lines = [payload.lines![0]]; payload.total = 20; payload.paymentBreakdown = { dinheiro: 20 }
+    expect((await post("v1", payload)).status).toBe(200)
+    await db.produto.update({ where: { id: unitId }, data: { metadata: { comercial: weight } } })
+    const result = await correct(payload, [{ inventoryId: unitId, nome: "Unitário", quantidade: 1, precoUnitario: 10 }])
+    expect(result.status).toBe(200)
+    expect((await db.produto.findUniqueOrThrow({ where: { id: unitId } })).stock).toBe(9)
+  })
 
   it.each(["v1", "v2"] as const)("%s: item unitário seguido de peso rejeita e reverte venda, itens, pagamento, títulos, estoque e numeração", async (version) => {
     await persistStoreSettingsPut(db as unknown as StoreSettingsPutDb, storeId, { printerConfig: { capabilities: { version: 1, business: { primaryBranch: "variedades" }, overrides: { "catalog.weight": false } } } })
@@ -158,5 +236,11 @@ describe.skipIf(!url)("PR #295 — roundtrip, concorrência e rollback reais", (
       pdvMainLayout: "classic", capabilities: { business: { primaryBranch: "padaria", presentation: { productExample: "Meu produto" } }, overrides: { "catalog.weight": false, "catalog.variants": true } },
     })
     expect((await snapshot()).produtos).toEqual(products)
+  })
+  it("blob antigo de tema/atalhos não desfaz configuração confirmada de recursos", async () => {
+    const stale = (await db.storeSettings.findUniqueOrThrow({ where: { storeId } })).printerConfig as Prisma.JsonObject
+    await persistStoreSettingsPut(db as unknown as StoreSettingsPutDb, storeId, { printerConfig: { capabilities: { version: 1, business: { primaryBranch: "variedades", presentation: { productExample: "Atual" } }, overrides: { "catalog.weight": false } } } })
+    await persistStoreSettingsPut(second as unknown as StoreSettingsPutDb, storeId, { printerConfig: { ...stale, appearance: { studioTheme: "midnight" } } })
+    expect((await db.storeSettings.findUniqueOrThrow({ where: { storeId } })).printerConfig).toMatchObject({ appearance: { studioTheme: "midnight" }, capabilities: { business: { primaryBranch: "variedades", presentation: { productExample: "Atual" } }, overrides: { "catalog.weight": false } } })
   })
 })

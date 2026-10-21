@@ -46,6 +46,8 @@ export type StoreSettingsContextType = {
   /** ID da unidade ativa; vazio quando nenhuma loja está selecionada (sem fallback silencioso). */
   storeId: string
   hydrated: boolean
+  /** Leitura válida confirmada para a loja atual; falha concluída não equivale a configuração carregada. */
+  loaded: boolean
   settings: StoreSettingsApi | null
   blob: StoreSettingsBlob
   pdvParams: StorePdvParams
@@ -160,6 +162,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false)
   const [settings, setSettings] = useState<StoreSettingsApi | null>(null)
   const [loadedStoreId, setLoadedStoreId] = useState<string | null>(null)
+  const [settledStoreId, setSettledStoreId] = useState<string | null>(null)
 
   // Registro de backfill já tentado nesta sessão para cada loja (evita loops e repetições)
   const backfillAttemptedStoresRef = useRef<Set<string>>(new Set())
@@ -171,6 +174,8 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     if (!storeId) {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(null)
+        setLoadedStoreId(null)
+        setSettledStoreId(storeId)
         setHydrated(true)
       })
       return
@@ -201,6 +206,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       markPdvMountStep("settings", storeId, false, { code: "fetch_failed" })
     } finally {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+        setSettledStoreId(storeId)
         setHydrated(true)
       })
     }
@@ -212,6 +218,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     setSettings(null)
     setHydrated(false)
     setLoadedStoreId(null)
+    setSettledStoreId(null)
   }, [storeId])
 
   useEffect(() => {
@@ -355,7 +362,8 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<StoreSettingsContextType>(
     () => ({
       storeId,
-      hydrated: hydrated && loadedStoreId === storeId,
+      hydrated: hydrated && settledStoreId === storeId,
+      loaded: hydrated && loadedStoreId === storeId,
       settings: liveSettings,
       blob,
       pdvParams,
@@ -373,6 +381,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     [
       storeId,
       hydrated,
+      settledStoreId,
       loadedStoreId,
       liveSettings,
       blob,
@@ -399,6 +408,7 @@ export function useStoreSettings(): StoreSettingsContextType {
     return {
       storeId: "",
       hydrated: false,
+      loaded: false,
       settings: null,
       blob: {},
       pdvParams: base,

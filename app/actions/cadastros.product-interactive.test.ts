@@ -116,6 +116,14 @@ beforeEach(() => {
 })
 
 describe("CAD-R2-006 — upsertProduto no boundary canônico", () => {
+  it.each([{ vendaPorPeso: true }, { comercial: null }])("ajuste em produto por peso/inválido rejeita antes do cadastral e do ledger: %j", async (metadata) => {
+    sessionVendedor()
+    h.stockFindFirst.mockResolvedValue({ stock: 0, metadata } as never)
+    const result = await upsertProduto("loja-a", { id: "p-1", nome: "Não alterar", estoque: 10 })
+    expect(result).toMatchObject({ ok: false, type: "VALIDATION_ERROR" })
+    expect(h.updateProduct).not.toHaveBeenCalled()
+    expect(h.applyStockMutation).not.toHaveBeenCalled()
+  })
   it("1. criação chama createProduct (com estoque inicial) e retorna contrato legado", async () => {
     sessionVendedor()
     const r = await upsertProduto("loja-a", { nome: "Cabo", estoque: 5, preco: 10 })

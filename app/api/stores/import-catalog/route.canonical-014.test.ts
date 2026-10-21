@@ -110,6 +110,17 @@ const SRC = (over: Record<string, unknown> = {}) => ({
 })
 
 describe("POST /api/stores/import-catalog — canonical", () => {
+  it.each(["origem", "destino"])("importação não converte produto por peso da %s em unidade", async (side) => {
+    const metadata = { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } }
+    h.prodsFindMany.mockResolvedValue([SRC(side === "origem" ? { metadata } : {})])
+    h.destFindFirst.mockResolvedValue(side === "destino" ? { id: "dest-1", stock: 0, metadata } : null)
+    const res = await POST(req({ fromStoreId: "loja-a", toStoreId: "loja-b", mode: "overwrite" }))
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+    expect(h.createProductTx).not.toHaveBeenCalled()
+    expect(h.updateProductTx).not.toHaveBeenCalled()
+    expect(h.applyStockMutationTx).not.toHaveBeenCalled()
+  })
   it("merge existente: cadastral sem ledger (estoque preservado)", async () => {
     h.prodsFindMany.mockResolvedValue([SRC({ stock: 10 })])
     h.destFindFirst.mockResolvedValue({ id: "dest-1", stock: 3 })

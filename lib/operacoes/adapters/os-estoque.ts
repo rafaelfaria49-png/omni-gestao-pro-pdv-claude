@@ -6,6 +6,7 @@ import { selectEstoquePecaSource } from "@/lib/operacoes/services/orcamento-buil
 import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract";
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service";
 import { lerOSTravadaV3 } from "@/lib/operacoes-v3/os-payload-lock";
+import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract";
 
 export type EstoqueMovimentoPayload = {
   id: string;
@@ -219,9 +220,10 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
         // para compor o OrdemServicoItem, como antes.
         const catalog = await tx.produto.findFirst({
           where: { id: it.produtoId, storeId: params.storeId },
-          select: { id: true, name: true, price: true },
+          select: { id: true, name: true, price: true, metadata: true },
         });
         if (!catalog) throw new Error(`Produto não encontrado: ${it.produtoId}`);
+        assertProductCommercialSaleSupported(catalog.metadata);
         const r = await applyStockMutationTx(
           tx as unknown as StockLedgerTx,
           ledgerContext(params.storeId, params.operador),
@@ -479,9 +481,10 @@ export async function applyEstoqueDelta(params: {
         if (d.tipo === "consumo") {
           const catalog = await tx.produto.findFirst({
             where: { id: d.produtoId, storeId: params.storeId },
-            select: { id: true, price: true, name: true },
+            select: { id: true, price: true, name: true, metadata: true },
           });
           if (!catalog) throw new Error(`Produto não encontrado: ${d.produtoId}`);
+          assertProductCommercialSaleSupported(catalog.metadata);
           const r = await applyStockMutationTx(
             tx as unknown as StockLedgerTx,
             ledgerContext(params.storeId, params.operador),
