@@ -1,0 +1,731 @@
+{
+  "goal": "OPS-V4-RAFACELL-PREPUBLISH-003",
+  "capturedAt": "2026-10-18T20:20:18.577Z",
+  "verdict": "NOGO",
+  "main": "17510806bdfe736f6bc8a19ec732b7fd035de69b",
+  "originalBase": "976ebaa294e09441ce0c5be7bbe5776a568f4013",
+  "commits": [
+    {
+      "original": "ae2be066f4f72e7a2a789c3aa145389218766773",
+      "integrated": "45da37db9bf0b52280d20a2b6d7c3cb1d5b863d0",
+      "patchId": "2cb7f2a846675e1e1d46355c6ca13402183b393c"
+    },
+    {
+      "original": "93888a2c7277854d254fc970b2c5af8cf38061b0",
+      "integrated": "58422f0d8f1a762aefb49ae6e3eba3c8d255c67a",
+      "patchId": "c1cea8febe7fd85b89e7da52b20ab5950c4b3168"
+    }
+  ],
+  "originalRefs": {
+    "pricing": "ae2be066f4f72e7a2a789c3aa145389218766773",
+    "sending": "93888a2c7277854d254fc970b2c5af8cf38061b0"
+  },
+  "originalChain": "93888a2c7277854d254fc970b2c5af8cf38061b0 ae2be066f4f72e7a2a789c3aa145389218766773",
+  "conflicts": [],
+  "mainChangedPaths": [
+    ".github/workflows/cadastros-cliente-assistido.yml",
+    "app/actions/cliente-texto-livre.test.ts",
+    "app/actions/cliente-texto-livre.ts",
+    "components/cadastros/lovable/components/cadastros/CadastrosHub.tsx",
+    "components/cadastros/lovable/components/cadastros/ClienteEditor.test.ts",
+    "components/cadastros/lovable/components/cadastros/ClienteEditor.tsx",
+    "components/dashboard/vendas/pdv-assistencia-enterprise.tsx",
+    "components/dashboard/vendas/pdv-classic.tsx",
+    "components/dashboard/vendas/pdv-supermercado.tsx",
+    "components/dashboard/vendas/venda-completa-enterprise.tsx",
+    "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/REPORT.md",
+    "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/browser-smoke.json",
+    "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/ci-lint-66812da.log",
+    "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/regression.json",
+    "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/review-1440.png",
+    "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/review-320.png",
+    "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/review-390.png",
+    "docs/ai-execution/_evidence/CAD-R2-021-CLIENTE-TEXTO-VOZ/typecheck.log",
+    "docs/ai-execution/_evidence/PDV-PARITY-N5-B2-PIN-KEYMAP-001.md",
+    "docs/ai-execution/_evidence/PESSOAS-001B-SCOPE-006/PLAN_AND_DISK_2026-10-18.md",
+    "docs/ai-execution/_evidence/PESSOAS-001B-SCOPE-006/disk-metadata-2026-10-18.json",
+    "docs/execution-tracks/REGISTRY.md",
+    "docs/execution-tracks/pdv/LEDGER.jsonl",
+    "docs/execution-tracks/pdv/_closed/goals/PDV-PARITY-N5-B2-PIN-KEYMAP-001.md",
+    "docs/execution-tracks/pdv/_closed/reports/PDV-PARITY-N5-B2-PIN-KEYMAP-001-a1.md",
+    "docs/execution-tracks/pdv/state.json",
+    "docs/execution-tracks/pessoas/TRACK.md",
+    "docs/execution-tracks/pessoas/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-001.md",
+    "docs/pdv/PDV_N5_B2_PIN_KEYMAP_001.md",
+    "lib/cadastros/client-identity/writers-inventory.ts",
+    "lib/cadastros/natural-text/cliente-types.ts",
+    "lib/cadastros/natural-text/cliente.test.ts",
+    "lib/cadastros/natural-text/cliente.ts",
+    "lib/cadastros/voice-capture/cliente.test.ts",
+    "lib/cadastros/voice-capture/cliente.ts",
+    "lib/pdv-keymap.ts",
+    "lib/pdv/parity-keymap.test.ts",
+    "lib/pdv/parity-keymap.ts",
+    "lib/pdv/parity-pin-keymap.component.test.ts",
+    "scripts/cadastros/smoke-cliente-texto.mjs"
+  ],
+  "overlappingPaths": [],
+  "integratedFiles": [
+    {
+      "status": "M",
+      "path": "components/operacoes-v3/components/OrcamentoPanelV3.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/operacoes-v3/hooks/use-orcamento-v3.ts"
+    },
+    {
+      "status": "M",
+      "path": "components/operacoes-v4-preview/parts/OrcamentoRapidoModal.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/operacoes-v4-preview/parts/atendimento/CommercialOptionEditor.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/operacoes-v4-preview/parts/stages/OrcamentoEnvioCluster.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/operacoes-v4-preview/preview-honesty.test.ts"
+    },
+    {
+      "status": "M",
+      "path": "components/operacoes-v4-preview/use-v4-preview.ts"
+    },
+    {
+      "status": "A",
+      "path": "docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-ENVIO-REAL-STATUS-001/RELATORIO.txt"
+    },
+    {
+      "status": "A",
+      "path": "docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-ENVIO-REAL-STATUS-001/baseline-tests.json"
+    },
+    {
+      "status": "A",
+      "path": "docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-ENVIO-REAL-STATUS-001/preflight.json"
+    },
+    {
+      "status": "A",
+      "path": "docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-ENVIO-REAL-STATUS-001/remote-main.json"
+    },
+    {
+      "status": "A",
+      "path": "docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-ENVIO-REAL-STATUS-001/validation.json"
+    },
+    {
+      "status": "A",
+      "path": "docs/ai-execution/_evidence/OPS-V4-RAFACELL-PRECIFICACAO-001/RELATORIO.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/ai/CURRENT_STATUS.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/changelog/CHANGELOG.md"
+    },
+    {
+      "status": "M",
+      "path": "lib/operacoes-v3/comercial-pre-os-actions.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/operacoes-v3/orcamento-actions.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/operacoes-v3/orcamento-envio-actions.test.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/operacoes-v3/orcamento-envio-actions.ts"
+    },
+    {
+      "status": "A",
+      "path": "lib/operacoes-v3/orcamento-envio-model.ts"
+    },
+    {
+      "status": "A",
+      "path": "lib/operacoes-v3/orcamento-envio-patch.test.ts"
+    },
+    {
+      "status": "A",
+      "path": "lib/operacoes-v3/orcamento-envio-service.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/operacoes-v3/orcamento-model.test.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/operacoes-v3/orcamento-model.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/operacoes-v3/os-payload-lock.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/operacoes-v4/orcamento-rapido-form.ts"
+    },
+    {
+      "status": "A",
+      "path": "lib/operacoes-v4/precificacao-telas-contract.test.ts"
+    },
+    {
+      "status": "A",
+      "path": "lib/operacoes-v4/precificacao-telas.test.ts"
+    },
+    {
+      "status": "A",
+      "path": "lib/operacoes-v4/precificacao-telas.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/whatsapp/whatsapp-service.ts"
+    },
+    {
+      "status": "A",
+      "path": "test/ops-v4-orcamento-envio-real-status-001/compartilhamento-ui.test.tsx"
+    },
+    {
+      "status": "A",
+      "path": "test/ops-v4-orcamento-envio-real-status-001/confirmacao-v3-ui.test.tsx"
+    },
+    {
+      "status": "A",
+      "path": "test/ops-v4-orcamento-envio-real-status-001/criacao-ui.test.tsx"
+    },
+    {
+      "status": "A",
+      "path": "test/ops-v4-orcamento-envio-real-status-001/vitest.config.ts"
+    },
+    {
+      "status": "A",
+      "path": "test/ops-v4-rafacell-precificacao-001/precificacao-ui.test.tsx"
+    },
+    {
+      "status": "A",
+      "path": "test/ops-v4-rafacell-precificacao-001/vitest.config.ts"
+    }
+  ],
+  "originalTopicFilesDifferAfterIntegration": [],
+  "sourceHashes": [
+    {
+      "path": "components/operacoes-v3/components/OrcamentoPanelV3.tsx",
+      "sha256": "5015b38a6dd3894a2832d78d16bf41116a038be4eca270bfef03929a4485acd2"
+    },
+    {
+      "path": "components/operacoes-v3/hooks/use-orcamento-v3.ts",
+      "sha256": "05444d90e131638e292ee535073ababa3baa410d9da320f8de9ab4d6355f72f5"
+    },
+    {
+      "path": "components/operacoes-v4-preview/parts/OrcamentoRapidoModal.tsx",
+      "sha256": "0ace674d011673ba7223386c99c07e01017774685ecccafef6b9ccf350ad82cd"
+    },
+    {
+      "path": "components/operacoes-v4-preview/parts/atendimento/CommercialOptionEditor.tsx",
+      "sha256": "e9afaf03456429a76dfd5098b56b1b08457fe25aaf209c173ae8e125bba279dd"
+    },
+    {
+      "path": "components/operacoes-v4-preview/parts/stages/OrcamentoEnvioCluster.tsx",
+      "sha256": "f5e33f2b3a79949aa499e69fd71592dd50d87917a5c80fc714f7e92a64dc9e70"
+    },
+    {
+      "path": "components/operacoes-v4-preview/preview-honesty.test.ts",
+      "sha256": "4f6d82a96e674f69d38c7e2a1baa89415caa5880449e340bc70c9f0c4684e428"
+    },
+    {
+      "path": "components/operacoes-v4-preview/use-v4-preview.ts",
+      "sha256": "d96b69aede260b2a12efb82ec3591ebe6da06cb9a910a30739e19e37b5c7013c"
+    },
+    {
+      "path": "lib/operacoes-v3/comercial-pre-os-actions.ts",
+      "sha256": "34ccd5a78c1dbcfd3979bb4bfca51438aa8efe49962de6dff939e82da3c013bf"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-actions.ts",
+      "sha256": "dbae89edf8e1fdf2810e506340f95c82b33d6166618219808a50520a62c0c3db"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-envio-actions.test.ts",
+      "sha256": "1e39e636a63d3c6d29436a120085a4049bfbc6f4adcae0a63d461b9697b38d26"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-envio-actions.ts",
+      "sha256": "bb5b3afe34b3a79762b37565ab058630254d96fb178b039c45c7b099fbcfd661"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-envio-model.ts",
+      "sha256": "44f62590991cde5d40c982f1d763740d5a30372fe3c580d45ec0b5787d523cc1"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-envio-patch.test.ts",
+      "sha256": "471d4feb7b38da81a92c5c8f92d651d152d54603c868080ed0a9b2158dce63ff"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-envio-service.ts",
+      "sha256": "36065b021453fd50c70b87b5256589a6f6747be0c6c48d23da3bcdd569997f5a"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-model.test.ts",
+      "sha256": "37b7bffcbc16e380bc90fb6001b2e71cfbc28d9be92a28c112d1894d517cca89"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-model.ts",
+      "sha256": "89ed9ebb94a9d1aea761a025b2986a2ef1f2836df7016cbe2f896cac10688a85"
+    },
+    {
+      "path": "lib/operacoes-v3/os-payload-lock.ts",
+      "sha256": "560c3750a64952766c71a92a528e8b00b75f946fbbe26ebb2f1392298c9a189d"
+    },
+    {
+      "path": "lib/operacoes-v4/orcamento-rapido-form.ts",
+      "sha256": "9c396331a007fc0bf13102999a8b695dab198ab78a73ae48af4efcc4cd345cf8"
+    },
+    {
+      "path": "lib/operacoes-v4/precificacao-telas-contract.test.ts",
+      "sha256": "db59d45502bb6b1cdb9cce765c888a1413e7384c314b6b4e89adb834aa42642c"
+    },
+    {
+      "path": "lib/operacoes-v4/precificacao-telas.test.ts",
+      "sha256": "0f972d5146156dad9a67e719b4bdd301ff991c8ddcd80815c6b4ce7d6ce4e6e6"
+    },
+    {
+      "path": "lib/operacoes-v4/precificacao-telas.ts",
+      "sha256": "0b18532dba16bb26169a6fd0c928c6cd31a22c58bac9ab43514bf173e1d2a3f1"
+    },
+    {
+      "path": "lib/whatsapp/whatsapp-service.ts",
+      "sha256": "8e5eba0b6b04ae4e885b9420b4c57032fe9bf321a835f38a9c5628b6bb4d34bb"
+    },
+    {
+      "path": "test/ops-v4-orcamento-envio-real-status-001/compartilhamento-ui.test.tsx",
+      "sha256": "de3b8f65a663e84ad135a595268c629a2b908fcacb6abf9a5ccfd6d3db754921"
+    },
+    {
+      "path": "test/ops-v4-orcamento-envio-real-status-001/confirmacao-v3-ui.test.tsx",
+      "sha256": "3de11c1aff68702ac00141b2faebe44a3c01474c60dd1a14f84113308a33b97a"
+    },
+    {
+      "path": "test/ops-v4-orcamento-envio-real-status-001/criacao-ui.test.tsx",
+      "sha256": "7520b44f3c8e90a9050c105105ef3835f008825c923e002f95a7b8e857367055"
+    },
+    {
+      "path": "test/ops-v4-orcamento-envio-real-status-001/vitest.config.ts",
+      "sha256": "0d02d8e6fd25f42ca154c01db25865fa9e35a064a10def08c6b19bf1872e9845"
+    },
+    {
+      "path": "test/ops-v4-rafacell-precificacao-001/precificacao-ui.test.tsx",
+      "sha256": "066572104daf643251fdf74808f2ffacad9e1595e52004b9e1e1fc23033d12ec"
+    },
+    {
+      "path": "test/ops-v4-rafacell-precificacao-001/vitest.config.ts",
+      "sha256": "c266fff3d54bf4b2e5115a851547c447199c1cab5a1dcf5ff0d7494e0f664070"
+    },
+    {
+      "path": "test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts",
+      "sha256": "93508c83917791ab204f7b70db872d97c6871dbb792132beb499e857cb52f021"
+    },
+    {
+      "path": "test/ops-v4-rafacell-prepublish-003/vitest.config.ts",
+      "sha256": "40c601064a542e556fa5a1fa89dc44e04c37f065d8e4780e774013c8dcc41193"
+    }
+  ],
+  "focused": {
+    "report": "focused-tests.json",
+    "total": 303,
+    "passed": 303,
+    "failed": 0,
+    "files": 16,
+    "fileFailures": []
+  },
+  "ui": [
+    {
+      "report": "ui-envio.json",
+      "total": 15,
+      "passed": 15,
+      "failed": 0,
+      "files": 3,
+      "fileFailures": []
+    },
+    {
+      "report": "ui-rafacell.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "files": 1,
+      "fileFailures": []
+    },
+    {
+      "report": "ui-datas.json",
+      "total": 30,
+      "passed": 30,
+      "failed": 0,
+      "files": 3,
+      "fileFailures": []
+    }
+  ],
+  "baseline": {
+    "main": "17510806bdfe736f6bc8a19ec732b7fd035de69b",
+    "report": "baseline-tests-verified.json",
+    "total": 343,
+    "passed": 327,
+    "failed": 16,
+    "files": 2,
+    "fileFailures": [
+      {
+        "path": "components/operacoes-v4-preview/preview-honesty.test.ts",
+        "message": "",
+        "failures": [
+          {
+            "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'receberOSV3'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:1606:21\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+            "message": "AssertionError: expected -1 to be greater than -1\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:1986:93\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'validarSplitV3'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:1993:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /if \\(ok\\) \\{[\\s\\S]*?v\\.openRecibo\\(\\)/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2008:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato mantém estado de múltiplas linhas (array), não forma única",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /useState<LinhaDraft\\[\\]>/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2055:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /algumaLinhaInvalida\\s*=\\s*linhas\\.som…/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2067:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'somaSplitV3(linhasValidas)'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2072:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /arr\\.length > 1 \\? arr\\.filter\\(\\(_, …/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2078:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'validarSplitV3(linhasValidas, pagamen…'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2088:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-NOVA-OS-AUTOFILL-ISOLATION-009 — Nova OS sem autofill do navegador todo campo de input/textarea do modal Nova OS declara autoComplete explícito",
+            "message": "AssertionError: campos sem autoComplete: <input aria-label=\"Motivo se alterar o padrão\" style={atendInput} value={linha.garantiaMotivo ?? \"\"} onChange={(e) => onPatch({ garantiaMotivo: e.target.value })} />: expected [ Array(1) ] to deeply equal []\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2127:88\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+            "message": "AssertionError: expected undefined to match object { docPrint: 'termo_garantia', …(1) }\n    at Proxy.<anonymous> (file:///C:/Projetos/omni-gestao/node_modules/@vitest/expect/dist/index.js:1283:10)\n    at Proxy.<anonymous> (file:///C:/Projetos/omni-gestao/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///C:/Projetos/omni-gestao/node_modules/chai/index.js:1700:25)\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2168:28\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20"
+          },
+          {
+            "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite EntregaStage renderiza o form real (v.salvarGarantia) com o catálogo/prazo padrão da V3",
+            "message": "AssertionError: expected '/**\\r\\n * Operações V4 Preview — etap…' to contain 'Salvar garantia'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2293:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite botão de salvar tem busy-lock e fica desabilitado sem mudança (evita duplo clique / salvar sem editar)",
+            "message": "AssertionError: expected '/**\\r\\n * Operações V4 Preview — etap…' to match /disabled=\\{busy \\|\\| !dirty\\}/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2298:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite copy honesta sobre quando a garantia passa a valer",
+            "message": "AssertionError: expected '/**\\r\\n * Operações V4 Preview — etap…' to contain 'A garantia fica prevista na OS e pass…'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2306:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          }
+        ]
+      },
+      {
+        "path": "components/operacoes-v4-preview/recebimento-transversal.test.ts",
+        "message": "",
+        "failures": [
+          {
+            "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 recebimento imediato continua no contrato receberOSV3 via hook, sem optimistic de valor",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'pdv.receber({'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/recebimento-transversal.test.ts:42:21\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 19–35. submit usa receberOSV3 via hook, sem optimistic e com reload só no sucesso",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /pdv\\.receber\\(\\{\\s*linhas:\\s*linhasVa…/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/recebimento-transversal.test.ts:71:21\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          }
+        ]
+      }
+    ],
+    "matchesOld16": true
+  },
+  "regression": {
+    "report": "regression.json",
+    "total": 2087,
+    "passed": 2071,
+    "failed": 16,
+    "files": 103,
+    "fileFailures": [
+      {
+        "path": "components/operacoes-v4-preview/preview-honesty.test.ts",
+        "message": "",
+        "failures": [
+          {
+            "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'receberOSV3'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:1610:21\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+            "message": "AssertionError: expected -1 to be greater than -1\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:1990:93\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'validarSplitV3'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:1997:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /if \\(ok\\) \\{[\\s\\S]*?v\\.openRecibo\\(\\)/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2012:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato mantém estado de múltiplas linhas (array), não forma única",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /useState<LinhaDraft\\[\\]>/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2059:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /algumaLinhaInvalida\\s*=\\s*linhas\\.som…/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2071:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'somaSplitV3(linhasValidas)'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2076:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /arr\\.length > 1 \\? arr\\.filter\\(\\(_, …/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2082:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'validarSplitV3(linhasValidas, pagamen…'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2092:18\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-NOVA-OS-AUTOFILL-ISOLATION-009 — Nova OS sem autofill do navegador todo campo de input/textarea do modal Nova OS declara autoComplete explícito",
+            "message": "AssertionError: campos sem autoComplete: <input aria-label=\"Motivo se alterar o padrão\" style={atendInput} value={linha.garantiaMotivo ?? \"\"} onChange={(e) => onPatch({ garantiaMotivo: e.target.value })} />: expected [ Array(1) ] to deeply equal []\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2131:88\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+            "message": "AssertionError: expected undefined to match object { docPrint: 'termo_garantia', …(1) }\n    at Proxy.<anonymous> (file:///C:/Projetos/omni-gestao/node_modules/@vitest/expect/dist/index.js:1283:10)\n    at Proxy.<anonymous> (file:///C:/Projetos/omni-gestao/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///C:/Projetos/omni-gestao/node_modules/chai/index.js:1700:25)\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2172:28\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20"
+          },
+          {
+            "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite EntregaStage renderiza o form real (v.salvarGarantia) com o catálogo/prazo padrão da V3",
+            "message": "AssertionError: expected '/**\\r\\n * Operações V4 Preview — etap…' to contain 'Salvar garantia'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2297:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite botão de salvar tem busy-lock e fica desabilitado sem mudança (evita duplo clique / salvar sem editar)",
+            "message": "AssertionError: expected '/**\\r\\n * Operações V4 Preview — etap…' to match /disabled=\\{busy \\|\\| !dirty\\}/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2302:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite copy honesta sobre quando a garantia passa a valer",
+            "message": "AssertionError: expected '/**\\r\\n * Operações V4 Preview — etap…' to contain 'A garantia fica prevista na OS e pass…'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/preview-honesty.test.ts:2310:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          }
+        ]
+      },
+      {
+        "path": "components/operacoes-v4-preview/recebimento-transversal.test.ts",
+        "message": "",
+        "failures": [
+          {
+            "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 recebimento imediato continua no contrato receberOSV3 via hook, sem optimistic de valor",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to contain 'pdv.receber({'\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/recebimento-transversal.test.ts:42:21\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          },
+          {
+            "name": "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 19–35. submit usa receberOSV3 via hook, sem optimistic e com reload só no sucesso",
+            "message": "AssertionError: expected '/** UI V4 sobre receber/registrarMist…' to match /pdv\\.receber\\(\\{\\s*linhas:\\s*linhasVa…/\n    at C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001/components/operacoes-v4-preview/recebimento-transversal.test.ts:71:21\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///C:/Projetos/omni-gestao/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+          }
+        ]
+      }
+    ],
+    "unexpectedFailures": [],
+    "missingBaselineFailures": [],
+    "realPgPreviouslyBlocked": {
+      "entradaReadback": 10,
+      "checklistConcurrency": 3,
+      "status": "PASS"
+    }
+  },
+  "postgresAcceptance": {
+    "total": 10,
+    "passed": 9,
+    "failed": 1,
+    "newFunctionalBlockers": 1,
+    "observed": {
+      "bloqueado": false,
+      "reserva": null,
+      "transportes": 2
+    },
+    "expected": {
+      "bloqueado": true,
+      "reserva": "api_em_andamento",
+      "transportes": 1
+    },
+    "newProductionCodeChanged": false,
+    "details": "postgres-acceptance.json"
+  },
+  "postgres": {
+    "createdAt": "2026-10-18T19:55:15.192Z",
+    "version": "postgres (PostgreSQL) 17.10",
+    "data": "C:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001\\import\\ops-v4-rafacell-prepublish-003\\postgres-data",
+    "port": 49930,
+    "database": "ops_v4_prepub003_66ca1eea97",
+    "listen": "127.0.0.1",
+    "tables": 109,
+    "schemaSha256": "ef68dd97b7a46c2f8ed6d6a8f9da7806ca97660ab02629a60960e0ba5db68297",
+    "repositorySchemaChanged": false,
+    "productionAccessed": false,
+    "existingServiceTouched": false,
+    "dockerTouched": false,
+    "stopped": {
+      "stoppedAt": "2026-10-18T20:17:13.873Z",
+      "data": "C:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001\\import\\ops-v4-rafacell-prepublish-003\\postgres-data",
+      "port": 49930,
+      "originalServiceUntouched": true
+    },
+    "preexistingService": {
+      "name": "postgresql-x64-17",
+      "initialPid": 4488,
+      "finalPid": 4488,
+      "finalState": "Running",
+      "connected": false,
+      "changed": false
+    },
+    "externalWhatsAppTransportMocked": true
+  },
+  "typecheck": {
+    "command": "npm run typecheck",
+    "exit": 0,
+    "log": "typecheck-release.log",
+    "rawSha256": "f8ce3d71d297afb588cb389d6732def9aaf545c05ba8d6c5090fd9668a1dedfe"
+  },
+  "lint": {
+    "focused": {
+      "report": "focused-eslint.json",
+      "rawReportSha256": "f18517e59e769b22dfbe6c97a0add4095d270c216b3f056b914c2457c482b0f7",
+      "files": 30,
+      "errors": 0,
+      "warnings": 0,
+      "filesWithErrors": [],
+      "normalizedMessagesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "finalAcceptanceFilesExit": 0,
+    "baseline": {
+      "report": "baseline-eslint.json",
+      "rawReportSha256": "f35be13627e335b480aaeb173e78e1dcc7a069dfa78420a9126ec8cc9bad4a90",
+      "files": 4423,
+      "errors": 105,
+      "warnings": 114,
+      "filesWithErrors": [
+        {
+          "path": "components/pdv-github-original/claude-export/app.jsx",
+          "errors": 1,
+          "warnings": 0
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "errors": 22,
+          "warnings": 0
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "errors": 39,
+          "warnings": 0
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "errors": 40,
+          "warnings": 0
+        },
+        {
+          "path": "components/pdv-github-original/components/studio/components/bom-dia-modal.tsx",
+          "errors": 3,
+          "warnings": 2
+        }
+      ],
+      "normalizedMessagesSha256": "1954b34aeff6d06b84cfec4d8aef61f6e9a9b42f6c35c4ab0f15a06b9a5b30ed"
+    },
+    "integrated": {
+      "report": "integrated-eslint.json",
+      "rawReportSha256": "96b612e3f18909c9558ec64c64e206bc1c1156b2638a3f8b4944d390d4754d26",
+      "files": 4437,
+      "errors": 105,
+      "warnings": 114,
+      "filesWithErrors": [
+        {
+          "path": "components/pdv-github-original/claude-export/app.jsx",
+          "errors": 1,
+          "warnings": 0
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "errors": 22,
+          "warnings": 0
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "errors": 39,
+          "warnings": 0
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "errors": 40,
+          "warnings": 0
+        },
+        {
+          "path": "components/pdv-github-original/components/studio/components/bom-dia-modal.tsx",
+          "errors": 3,
+          "warnings": 2
+        }
+      ],
+      "normalizedMessagesSha256": "1954b34aeff6d06b84cfec4d8aef61f6e9a9b42f6c35c4ab0f15a06b9a5b30ed"
+    },
+    "newMessages": []
+  },
+  "build": {
+    "command": "npm run build",
+    "exit": 0,
+    "migration": "MIGRATION_SKIPPED",
+    "compiled": true,
+    "staticPages": 102,
+    "typecheckRunSeparately": true,
+    "transportMocks": false,
+    "environment": {
+      "VERCEL_ENV": "development",
+      "MIGRATION_AUTHORITY_ENABLED": "false",
+      "database": "inactive loopback target, not production"
+    },
+    "log": "build.log",
+    "rawSha256": "ba0b115f770e6f9500c30909d782625efe50872366a79951f7d280109a258a7c"
+  },
+  "commands": {
+    "baseline": "npx vitest run components/operacoes-v4-preview/preview-honesty.test.ts components/operacoes-v4-preview/recebimento-transversal.test.ts --maxWorkers=1 --fileParallelism=false --testTimeout=30000 --reporter=json",
+    "regression": "npx vitest run lib/operacoes-v3 lib/operacoes-v4 components/operacoes-v4-preview --maxWorkers=2 --testTimeout=30000 --hookTimeout=30000 --reporter=json",
+    "postgresAcceptance": "npx vitest run --config test/ops-v4-rafacell-prepublish-003/vitest.config.ts --reporter=json",
+    "globalLint": "node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js . --ignore-pattern 'generated/**' --ignore-pattern 'import/**' --format json"
+  },
+  "prohibitedAreasChangedByIntegration": [],
+  "worktree": {
+    "path": "C:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001",
+    "branch": "codex/ops-v4-rafacell-prepublish-003",
+    "reused": true,
+    "createdByGoal": 0,
+    "removedByGoal": 0,
+    "archivedByGoal": 0
+  },
+  "publication": {
+    "pushed": false,
+    "remoteMerged": false,
+    "deployed": false,
+    "realWhatsAppMessages": 0,
+    "schemaFilesChanged": false,
+    "productionDatabaseAccess": false,
+    "needsHumanAuthorization": true
+  },
+  "intermediateAttempts": [
+    "Baseline initial filesystem scan timeout; rerun with 30s and unchanged assertions reproduced exactly the old 16 failures.",
+    "New PostgreSQL fixtures were corrected to existing status/date contracts before final acceptance.",
+    "An additional evidence run could not reach the disposable cluster and executed no cases; reopening the identified cluster without DDL and repeating produced the final 9 PASS / 1 functional FAIL."
+  ]
+}

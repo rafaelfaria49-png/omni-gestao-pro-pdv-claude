@@ -1,0 +1,141 @@
+OPS-V4-ORCAMENTO-ENVIO-REAL-STATUS-001
+OmniGestão Pro — implementação controlada — 18/10/2026
+
+RESULTADO
+Implementação concluída e validação focada aprovada. A validação global continua
+com impedimentos preexistentes, discriminados abaixo. Entrega exclusivamente local.
+
+BASE E PRÉ-FLIGHT
+Repositório canônico: C:/Projetos/omni-gestao.
+Worktree reutilizada, inicialmente limpa:
+C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001.
+Base exata: ae2be066f4f72e7a2a789c3aa145389218766773.
+Branch preservada: codex/ops-v4-rafacell-precificacao-001, no SHA acima.
+Branch da correção: codex/ops-v4-orcamento-envio-real-status-001.
+Nenhuma worktree Git foi criada. O inventário amplo de refs/worktrees e WIPs está
+em preflight.json. Worktrees ausentes foram apenas identificadas, sem limpeza.
+Não houve stash, reset, rebase, merge, push ou deploy.
+
+ENTRYPOINT.md e EXECUTION_PROTOCOL.md foram lidos. A worktree não tinha
+.aep-active; status/open informaram que a trilha deste GOAL não existe.
+O protocolo é opt-in: não foram criados state/ledger/GOAL nem executado close.
+
+origin/main inicial: 976ebaa294e09441ce0c5be7bbe5776a568f4013.
+A main avançou durante a execução para d6bdaa023f44a2ad3a7650c68979810934636069,
+confirmada no GitHub e depois na ref local. A base ae2be066 foi mantida.
+Nenhuma integração com a nova main foi feita. Evidência: remote-main.json.
+
+CAUSA RAIZ E CAMINHOS AUDITADOS
+1. OrcamentoRapidoModal.tsx carimbava statusComercial=enviado antes de chamar
+   a action de envio e antes de qualquer compartilhamento efetivo.
+2. OrcamentoEnvioCluster.tsx chamava a action que alterava status antes de abrir
+   WhatsApp; o caminho de cópia também registrava envio, mesmo se a cópia falhasse.
+3. orcamento-envio-actions.ts tratava mudança de estado como envio real.
+   Não havia transporte: chamar enviarOrcamentoV3 e registrarEnvioOrcamento
+   produzia status/timeline em duas gravações, com possível auditoria parcial.
+4. enviarOrcamentoV3 e registrarEnvioOrcamento aceitavam chamadas sem declaração
+   explícita do operador. O painel V3 também apresentava essa mutação como envio.
+5. comercial-pre-os-actions.ts permitia marcar enviado sem evidência e podia
+   aplicar um carimbo atrasado sobre um status de orçamento mais recente.
+6. Patches genéricos e intenções legadas em app/actions/operacoes.ts podiam
+   construir enviado/eventos de envio. A proteção comum de payload agora recusa
+   essas alegações e preserva os campos de evidência escritos pelo servidor.
+7. O transporte oficial existente enviava antes de persistir seu histórico;
+   uma falha posterior podia esconder o recibo. A orquestração agora reserva a
+   tentativa antes do transporte e salva o aceite antes das escritas secundárias.
+8. O endpoint de histórico WhatsApp aceita metadados livres. addMessage agora
+   remove o vínculo de orçamento de registros outbound comuns; somente o caller
+   interno do transporte oficial pode anexar o vínculo usado na recuperação.
+
+orcamento-mensagem.ts e orcamento-cliente-view.ts foram auditados e preservados:
+a mensagem continua derivada exclusivamente da projeção explícita para o cliente.
+Custos, resultados internos, observações internas e evidências técnicas não são
+repassados ao texto/documento do cliente.
+
+CONTRATOS E COMPORTAMENTO
+O enum comercial existente foi mantido. A extensão compartilhamentosV3 vive no
+orçamento JSONB e guarda tentativa, canal, hash do conteúdo, total da proposta,
+operador e instante. Não houve alteração de schema, migration ou dependência.
+
+- Criar salva rascunho. O botão principal é "Criar e preparar compartilhamento".
+  Uma falha posterior à criação conhecida reutiliza o registro já criado.
+  Duplo clique é travado e resposta de formulário descartado não seleciona outra OS.
+- Preparar registra compartilhamento iniciado; orçamento e comercial continuam
+  em rascunho, e a OS não avança. Não altera enviadoEm ou validade.
+- Pré-visualizar, copiar e abrir WhatsApp não registram envio confirmado.
+- A declaração manual exige tentativa preparada e confirmação explícita.
+  A natureza é declaracao_manual, com identidade, horário do registro e canal.
+  Esse horário representa o registro da declaração, sem inventar uma data histórica.
+- O modo API exige clique confirmado, permissão de editar OS e acesso ao WhatsApp,
+  conversa do cliente na loja correta e credenciais existentes da loja.
+  Reutiliza sendCloudApiTextAndRecord; não cria uma API de WhatsApp independente.
+- Aceite da API exige wamid retornado pelo transporte oficial. Não significa
+  entrega ou leitura. Nenhum caminho deste GOAL declara entrega confirmada.
+- Evidência, orçamento, status comercial, status/coluna da OS e timeline são
+  atualizados sob a trava da OS. Aprovação/recusa sincronizam o comercial.
+  Carimbo atrasado não pode regredir a classificação depois da confirmação.
+- A mesma tentativa é idempotente, inclusive com cliques concorrentes e resposta
+  perdida. Reenvio confirmado exige nova preparação e preserva enviadoEm/validade.
+- O hash impede confirmar manualmente uma proposta alterada. Um aceite de API
+  que chega após alteração guarda a evidência da versão anterior, sem marcar a
+  proposta atual como enviada e sem regredir aprovação/conversão.
+- A reserva api_em_andamento é durável antes do POST. Resultado incerto bloqueia
+  nova tentativa automática, inclusive com outra chave. Recuperação consulta o
+  histórico oficial com vínculo protegido, nunca um wamid fornecido pelo cliente.
+- Falha de cache não desfaz confirmação. Falha do histórico após aceite devolve
+  aviso e recibo; se a persistência da OS falhar, o histórico permite recuperação.
+  Se ambas as persistências falharem, o recibo retornado fica visível e é preservado
+  na sessão do navegador quando o armazenamento estiver disponível, separado
+  por loja/OS, apenas para conferência humana.
+  Essa cópia não é aceita como prova pelo servidor. A reserva impede duplicação.
+- Registros antigos sem evidência são identificados como legado sem comprovação.
+  Nenhuma evidência retroativa foi fabricada ou reclassificação em massa executada.
+
+As chamadas legadas de envio sem confirmação passam a falhar sem escrever.
+Validade, seleção de alternativa, aprovação e conversão do mesmo registro em OS
+continuam nos contratos existentes. Nenhum motor financeiro, fiscal ou de estoque
+foi alterado. Nenhuma mensagem real foi enviada durante esta execução.
+
+VALIDAÇÃO FINAL
+281 testes centrais em 13 arquivos: aprovados, incluindo precificação RafaCell,
+mensagem/projeção segura, declaração manual, API, falhas, idempotência, permissões,
+multi-loja, aprovação de alternativa e conversão em OS.
+51 testes montados: 15 do GOAL em V3/V4, 6 da UI RafaCell e 30 de datas: aprovados.
+Total dos recortes centrais e montados: 332 testes aprovados.
+52 testes no recorte adicional de transporte/credenciais/quarentena: aprovados.
+Esse recorte contém testes também contados nos 281; não somar como casos exclusivos.
+O scanner de quarentena precisou de timeout de 30s na CLI; suas assertivas foram
+preservadas. Fixtures e mocks de transporte foram usados somente nos testes.
+
+TypeScript: npm run typecheck, exit 0 (checagem explícita; o build pula tipos).
+ESLint dos 21 arquivos de código/teste alterados: exit 0.
+Build real: npm run build, exit 0; MIGRATION_SKIPPED; fontes reais, sem mocks.
+git diff --check: aprovado.
+
+IMPEDIMENTOS REMANESCENTES PARA APROVAÇÃO GLOBAL
+1. Regressão ampla V3/V4: 2.058 testes aprovados e 19 falhas. Dezesseis são as
+   mesmas reproduzidas em um snapshot exato de ae2be066 (327 passaram nesse
+   recorte da base); três exigem PostgreSQL descartável. Outra suíte de integração
+   é bloqueada na carga pelo mesmo requisito de PostgreSQL.
+   Não houve falha funcional nova nessa comparação. Detalhes: baseline-tests.json
+   e validation.json. As assertivas preexistentes de Financeiro/garantia/autofill
+   não foram removidas ou alteradas para produzir uma aprovação artificial.
+2. O PostgreSQL descartável não está disponível; o daemon Docker local também
+   está indisponível. A concorrência do novo fluxo foi testada com transações
+   serializadas em fixture; não é uma prova de concorrência em PostgreSQL real.
+3. ESLint global: 105 erros e 115 avisos. Os erros estão em cinco arquivos do PDV
+   original, todos idênticos à base, fora do escopo deste GOAL. Lista em validation.json.
+4. A main avançou. Uma integração futura requer revisão/autorização separada.
+5. Resultado de API sem recibo oficial recuperável permanece em conferência.
+   O sistema não presume falha nem libera reenvio automático; exige apuração humana
+   no canal. Declaração do operador, aceite de API e entrega continuam distintos.
+
+EVIDÊNCIAS
+preflight.json: inventário de branches, worktrees, HEADs e WIPs.
+remote-main.json: leitura da main remota.
+baseline-tests.json: falhas reproduzidas no commit de origem, sem nova worktree.
+validation.json: contagens, comandos, classificação das falhas e hashes dos fontes.
+Logs completos locais: import/ops-envio-validation/ (gitignored e preservado).
+
+Entrega por commit local separado de ae2be066. Sem push, merge, deploy ou envio
+de mensagens. Aprovação humana necessária antes de qualquer publicação.

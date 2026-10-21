@@ -40,6 +40,10 @@ vi.mock("@/lib/operacoes-v3/orcamento-actions", () => ({
 vi.mock("@/lib/operacoes-v3/status-actions", () => ({
   aplicarTransicaoStatusV3: vi.fn(async () => ({})),
 }))
+vi.mock("@/lib/operacoes-v3/orcamento-envio-actions", () => ({
+  enviarOrcamentoPorCanalV3: vi.fn(async () => ({ ok: false })),
+  prepararCompartilhamentoOrcamentoV3: vi.fn(async () => null),
+}))
 vi.mock("@/lib/operacoes-v3/prova-entrada-actions", () => ({
   salvarIdentificacaoV3: vi.fn(async () => ({})),
   salvarProvaEntradaV3: vi.fn(async () => ({})),
@@ -2542,8 +2546,10 @@ describe("GOAL OPS-V4-ORC-RAPIDO-024 — ⚡ Orçamento Rápido conecta ao contr
     expect(modal).toMatch(/busy/)
   })
 
-  it("GOAL 001 — o modal comercial pode enviar no create; continua proibido de aprovar/recusar e de abrir WhatsApp direto", () => {
-    expect(modal).toContain("enviarOrcamentoPorCanalV3")
+  it("o modal cria rascunho e só prepara compartilhamento, sem declarar envio", () => {
+    expect(modal).toContain("prepararCompartilhamentoOrcamentoV3")
+    expect(modal).not.toContain("enviarOrcamentoPorCanalV3")
+    expect(modal).toContain('statusComercial: "rascunho"')
     for (const proibido of ["wa.me", "aprovarOrcamentoV3", "recusarOrcamentoV3"]) {
       expect(modal, `referência fora de escopo encontrada no modal: ${proibido}`).not.toContain(proibido)
     }
@@ -2584,11 +2590,11 @@ describe("GOAL OPS-V4-ORC-ENVIO-WA-025 — envio por canal, mensagem e duplicar"
     expect(envioCluster).not.toContain("os.orcamento")
   })
 
-  it("window.open (WhatsApp) só aparece no painel PÓS-envio (dentro do bloco ultimoResultado), nunca dentro de handleEnviar (popup-safe: nunca encadeado depois de um await)", () => {
-    const idxHandle = envioCluster.indexOf("const handleEnviar")
-    const idxFimHandle = envioCluster.indexOf("const handleCopiarERegistrar")
-    const corpoHandle = envioCluster.slice(idxHandle, idxFimHandle)
-    expect(corpoHandle).not.toContain("window.open")
+  it("abrir WhatsApp é um gesto síncrono e nunca chama a confirmação de envio", () => {
+    const idxHandle = envioCluster.indexOf("const abrirWhatsApp")
+    const corpoHandle = envioCluster.slice(idxHandle, envioCluster.indexOf("return <div", idxHandle))
+    expect(corpoHandle).not.toContain("await")
+    expect(corpoHandle).not.toContain("enviarOrcamentoPorCanal")
     expect(envioCluster).toContain("window.open(linkWa.url")
   })
 
@@ -2640,9 +2646,9 @@ describe("GOAL OPS-V4-ORC-ENVIO-WA-025 — envio por canal, mensagem e duplicar"
   it("gating honesto por canal: sem itens desabilita o cluster; WhatsApp desabilita quando o telefone é inválido (demais canais continuam ativos)", () => {
     expect(envioCluster).toContain("semItens")
     expect(envioCluster).toMatch(/disabled=\{!linkWa\.valido\}/)
-    // "Copiar mensagem" e "Entregue em mãos" não dependem de linkWa.valido.
-    const idxCopiar = envioCluster.indexOf("handleCopiarERegistrar()} style")
-    const idxPresencial = envioCluster.indexOf('handleEnviar("presencial")')
+    // Cópia e confirmação presencial não dependem de telefone.
+    const idxCopiar = envioCluster.indexOf("onClick={() => void copiar()}")
+    const idxPresencial = envioCluster.indexOf('value="presencial"')
     expect(idxCopiar).toBeGreaterThan(-1)
     expect(idxPresencial).toBeGreaterThan(-1)
   })

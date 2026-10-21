@@ -18,6 +18,7 @@ import {
   salvarOrcamentoV3,
 } from "@/lib/operacoes-v3/orcamento-actions";
 import type { SalvarOrcamentoV3Input } from "@/lib/operacoes-v3/orcamento-model";
+import { prepararCompartilhamentoOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-envio-actions";
 
 export type OrcamentoAcaoV3 = "gerar" | "salvar" | "enviar" | "aprovar" | "recusar";
 
@@ -26,7 +27,7 @@ export interface OrcamentoV3Actions {
   error: string | null;
   gerar: () => Promise<boolean>;
   salvar: (input: SalvarOrcamentoV3Input) => Promise<boolean>;
-  enviar: () => Promise<boolean>;
+  enviar: (confirmado: true) => Promise<boolean>;
   aprovar: () => Promise<boolean>;
   recusar: (motivo?: string) => Promise<boolean>;
 }
@@ -65,7 +66,13 @@ export function useOrcamentoV3(
     (input: SalvarOrcamentoV3Input) => run("salvar", (sid, id) => salvarOrcamentoV3(sid, id, input)),
     [run],
   );
-  const enviar = useCallback(() => run("enviar", enviarOrcamentoV3), [run]);
+  const enviar = useCallback((confirmado: true) => {
+    if (confirmado !== true) return Promise.resolve(false);
+    return run("enviar", async (sid, id) => {
+    const preparado = await prepararCompartilhamentoOrcamentoV3(sid, id, "outro");
+    return enviarOrcamentoV3(sid, id, { tentativaId: preparado.tentativaId, confirmado: true });
+    });
+  }, [run]);
   const aprovar = useCallback(() => run("aprovar", aprovarOrcamentoV3), [run]);
   const recusar = useCallback(
     (motivo?: string) => run("recusar", (sid, id) => recusarOrcamentoV3(sid, id, motivo)),

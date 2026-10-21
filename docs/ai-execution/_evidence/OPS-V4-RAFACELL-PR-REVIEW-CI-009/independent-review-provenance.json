@@ -1,0 +1,24 @@
+[
+  {
+    "phase": "initial",
+    "model": [
+      "claude-opus-5-5"
+    ],
+    "numTurns": 1,
+    "durationMs": 343220,
+    "sha256": "ab95e7b515bcc9c41a516cf22c2993b3c177b9f18956f6aa046572d275e38e84",
+    "staticOnly": true,
+    "tools": []
+  },
+  {
+    "phase": "followup",
+    "model": [
+      "claude-opus-5-5"
+    ],
+    "numTurns": 1,
+    "durationMs": 340999,
+    "sha256": "06bb444efe0b264528a3a4988c44fb1514c6a9e34f5db1487e2fc12a31bef970",
+    "staticOnly": true,
+    "tools": []
+  }
+]

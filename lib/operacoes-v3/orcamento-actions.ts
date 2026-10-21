@@ -10,11 +10,11 @@
 //
 //   • gerarOrcamentoDaOS  — REUSO do @/api/os (materializa rascunho; seguro).
 //   • salvarOrcamentoV3   — edita itens/desconto/brindes + histórico de versão.
-//   • enviarOrcamentoV3   — rascunho/enviado → enviado (+ OS → aguardando_aprovacao).
+//   • enviarOrcamentoV3   — confirmação MANUAL explícita, atômica e idempotente.
 //   • aprovarOrcamentoV3  — → aprovado (+ OS → aprovado pela máquina). Sem financeiro.
 //   • recusarOrcamentoV3  — → recusado (+ timeline). Sem outros efeitos.
-//   • registrarEnvioOrcamento — auditoria best-effort do canal de envio (mesmo
-//     molde de `registrarImpressaoDocumentoV3`); NÃO muda status do orçamento.
+//   • registrarEnvioOrcamento — compatibilidade: mesma confirmação manual,
+//     exigindo tentativa/canal; nunca escreve uma alegação de envio sem declaração.
 // Toda decisão e gravação usa o payload MAIS RECENTE, relido sob a trava da linha
 // da OS (`os-payload-lock`) — nunca regrava um snapshot lido antes de um `await`.
 // ============================================================================
@@ -30,7 +30,6 @@ import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/uti
 import {
   projetarStatusV2,
   statusOSAposAprovarOrcamento,
-  statusOSAposEnviarOrcamento,
   statusV3FromOS,
   type OperacaoStatusV3,
 } from "./status-machine";
@@ -42,13 +41,11 @@ import { gerarOrcamentoDaOS as gerarOrcamentoDaOSImpl } from "@/components/opera
 import {
   computeTotaisV3,
 
-  montarEventoEnvioOrcamentoV3,
   montarEventoRecusaOrcamentoV3,
   recalcOrcamentoV3,
   validarGruposOrcamentoV3,
   validarSelecaoCompletaV3,
   validadeExpiradaV3,
-  VALIDADE_PADRAO_DIAS,
   type CanalEnvioOrcamentoV3,
   type OrcamentoV3,
   type OrcamentoVersaoV3,
@@ -58,6 +55,9 @@ import {
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { comPadroesGarantiaServicosV3 } from "./garantia-servicos-model";
 import { mutarPayloadOSV3 } from "./os-payload-lock";
+import { confirmarEnvioManualV3 } from "./orcamento-envio-service";
+import type { ConfirmacaoEnvioManualV3 } from "./orcamento-envio-model";
+import { lerComercialV4 } from "@/lib/operacoes-v4/orcamento-pre-os";
 import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
 import { uid as uidLovable } from "@/components/operacoes/lovable/api/_helpers";
 import { prisma } from "@/lib/prisma";
@@ -88,10 +88,8 @@ import {
   fimDoDiaLojaIsoV3,
   formatarDataOperacionalV3,
   formatarDiaDeIsoNaLojaV3,
-  hojeNaLojaV3,
   isoInstanteValidoV3,
   lerDatasOSV3,
-  somarDiasCivisV3,
 } from "./datas-operacionais-model";
 
 /** Conferência + materialização na mesma transação, com os limites dos writers de pagamento. */
@@ -222,6 +220,13 @@ function montarGravacao(
     atualizadoEm: nowIso(),
   };
   if (next.versoes) nextPayload.orcamentoVersoesV3 = next.versoes;
+  const comercial = lerComercialV4(payload);
+  if (comercial?.tipo === "orcamento_pre_os" && comercial.statusComercial !== "convertido") {
+    const statusComercial = next.orcamento.status === "expirado" ? "vencido"
+      : comercial.statusComercial === "vencido" && next.orcamento.status === payload.orcamento?.status ? "vencido"
+      : next.orcamento.status;
+    nextPayload.comercialV4 = { ...comercial, statusComercial };
+  }
 
   const colunas: Omit<Prisma.OrdemServicoUpdateInput, "payload"> = {};
   if (next.statusOS) {
@@ -396,43 +401,8 @@ export async function corrigirOrcamentoV3(storeId: string, osId: string, input: 
 // Enviar / Aprovar / Recusar
 // ----------------------------------------------------------------------------
 
-export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<OrdemServico> {
-  const { sid, id, session } = await autorizar(storeId, osId);
-  const { os, extra: { enviado, reenvio } } = await gravarSobTrava(sid, id, (payload) => {
-    const atual = orcamentoEditavel(payload);
-    assertStatus(atual, ["rascunho", "enviado"], "enviar");
-
-    const enviado = recalcOrcamentoV3({
-      ...atual,
-      status: "enviado",
-      // Evento REAL do envio (nunca a data retroativa da proposta).
-      enviadoEm: atual.enviadoEm ?? nowIso(),
-      // Validade já definida (na proposta ou num envio anterior) é preservada:
-      // reenviar nunca prorroga em silêncio. Sem validade, vale o padrão contado em
-      // DIAS CIVIS a partir de hoje, até o fim do dia na loja (como as telas leem).
-      validoAte: atual.validoAte ?? fimDoDiaLojaIsoV3(somarDiasCivisV3(hojeNaLojaV3(), VALIDADE_PADRAO_DIAS)),
-      atualizadoEm: nowIso(),
-  });
-  const reenvio = atual.status === "enviado";
-  return {
-    gravacao: {
-      orcamento: enviado,
-      statusOS: statusOSAposEnviarOrcamento(payload.status),
-      eventos: [makeEvento("orcamento_enviado", operadorLabel(session), reenvio ? "Orçamento reenviado ao cliente." : "Orçamento enviado ao cliente.")],
-    },
-    extra: { enviado, reenvio },
-  };
-  });
-
-  // Espinha de eventos (3C.0): orçamento materializado e enviado ao cliente.
-  emitirEventoOperacaoV3({
-    tipo: "os_orcamento_criado",
-    os,
-    storeId: sid,
-    origem: "orcamento",
-    metadata: { reenvio, total: computeTotaisV3(enviado).total, validoAte: enviado.validoAte },
-  });
-  return os;
+export async function enviarOrcamentoV3(storeId: string, osId: string, confirmacao?: ConfirmacaoEnvioManualV3): Promise<OrdemServico> {
+  return (await confirmarEnvioManualV3(storeId, osId, confirmacao)).os;
 }
 
 /**
@@ -618,36 +588,19 @@ export async function formalizarAprovacaoPendenteV3(
 }
 
 // ----------------------------------------------------------------------------
-// Registro de envio por canal (auditoria — não muda status do orçamento)
+// Registro de envio por canal (compatibilidade com a confirmação manual)
 // ----------------------------------------------------------------------------
 
 /**
- * Registra na timeline que o orçamento foi enviado ao cliente por um canal
- * específico (WhatsApp/impresso/presencial/outro). Best-effort, mesmo molde de
- * `registrarImpressaoDocumentoV3` (garantia-actions.ts): só grava evento +
- * timeline, NÃO altera `orcamento.status`/`validoAte` — complementa
- * `enviarOrcamentoV3` (que já muda status) para os casos em que o canal
- * precisa ficar auditado (reenvio por outro canal, envio manual/presencial).
+ * Confirma declaração manual pelo mesmo contrato atômico do orçamento.
+ * Repetir a mesma tentativa não duplica a timeline nem renova a validade.
  */
 export async function registrarEnvioOrcamento(
   storeId: string,
   osId: string,
   canal: CanalEnvioOrcamentoV3,
+  confirmacao?: ConfirmacaoEnvioManualV3,
 ): Promise<OrdemServico> {
-  const { sid, id, session } = await autorizar(storeId, osId);
-  const nextPayload = await mutarPayloadOSV3({
-    storeId: sid,
-    osId: id,
-    mutate: ({ payload }) => {
-      const atual = orcamentoEditavel(payload);
-      const totalSnapshot = computeTotaisV3(atual).total;
-      const evt = montarEventoEnvioOrcamentoV3(canal, totalSnapshot);
-      const evento = makeEvento(evt.tipo, operadorLabel(session), evt.conteudo, evt.metadata);
-      const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-      const proximo: OSPayloadFull = { ...payload, timeline: [...timeline, evento] };
-      return { payload: proximo, resultado: proximo };
-    },
-  });
-  revalidatePath("/dashboard/operacoes-v3");
-  return nextPayload as unknown as OrdemServico;
+  // Canal é verificado sob a trava; a auditoria nunca antecede a declaração manual.
+  return (await confirmarEnvioManualV3(storeId, osId, confirmacao, canal)).os;
 }

@@ -2,6 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "node scripts/vercel-build.mjs",
+  "git": {
+    "deploymentEnabled": {
+      "codex/ops-v4-rafacell-qa-isolado-007": false
+    }
+  },
 
   "headers": [
     {

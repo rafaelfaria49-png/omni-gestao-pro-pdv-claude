@@ -126,10 +126,11 @@ export function OperacaoOsAcaoBar({ os, onDone }: { os: OrdemServico; onDone?: (
           variant="secondary"
           disabled={busy || !podeEnviarOrc}
           className="gap-1.5"
-          onClick={() => void run({ kind: "enviar_orcamento" })}
+          title="O registro de envio exige declaração explícita no fluxo oficial da V3."
+          onClick={() => window.location.assign("/dashboard/operacoes-v3")}
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          Enviar orçamento
+          Registrar envio na V3
         </Button>
 
         <Button

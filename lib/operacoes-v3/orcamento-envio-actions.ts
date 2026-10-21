@@ -1,81 +1,94 @@
 "use server";
 
-// ============================================================================
-// Operações V3 — GOAL OPS-V4-ORC-ENVIO-WA-025 · action fina de orquestração
-// ----------------------------------------------------------------------------
-// `enviarOrcamentoPorCanalV3` decide, a partir do status REAL do orçamento,
-// qual das duas actions já existentes chamar — NENHUMA lógica de negócio nova:
-//   • PRIMEIRO envio (rascunho)  → `enviarOrcamentoV3` (muda status/validoAte/
-//     transição da OS) + `registrarEnvioOrcamento` (audita o canal).
-//   • REENVIO (já enviado)       → SÓ `registrarEnvioOrcamento` (canal). Nunca
-//     chama `enviarOrcamentoV3` de novo — `validoAte` não é tocado (revalidar
-//     é feature futura, fora de escopo deste GOAL).
-//   • aprovado/recusado/sem orçamento → erro claro, nada é escrito.
-//
-// Falha do REGISTRO (auditoria) depois de um primeiro envio bem-sucedido NÃO
-// é mascarada nem tratada como sucesso silencioso: retorna `avisoRegistro:true`
-// — o estado real (status mudou, e-mail/whatsapp já foi decidido pelo
-// operador) já aconteceu; só a auditoria do canal falhou.
-// ============================================================================
-
+import { prisma } from "@/lib/prisma";
 import type { OrdemServico } from "@/types/os";
-import { getOrdem } from "@/app/actions/ordens";
-import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
+import { CloudApiTextAcceptedError, sendCloudApiTextAndRecord } from "@/lib/whatsapp/whatsapp-service";
+import { montarLinkWaV4, montarMensagemOrcamentoV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
+import { montarOrcamentoClienteViewV4 } from "@/lib/operacoes-v4/orcamento-cliente-view";
 import { orcamentoRealV3, type CanalEnvioOrcamentoV3 } from "./orcamento-model";
-import { enviarOrcamentoV3, registrarEnvioOrcamento } from "./orcamento-actions";
+import { compartilhamentosOrcamentoV3, type ConfirmacaoEnvioManualV3 } from "./orcamento-envio-model";
+import { autorizarEnvioOrcamentoV3, confirmarEnvioManualV3, concluirEnvioOrcamentoV3, prepararCompartilhamentoV3, reservarEnvioApiV3 } from "./orcamento-envio-service";
 
 export interface EnviarOrcamentoPorCanalResultV3 {
-  ok: true;
-  /** true quando este envio era um REENVIO (orçamento já estava "enviado"). */
-  reenvio: boolean;
-  /** true quando o envio/reenvio aconteceu mas o registro do canal falhou (best-effort). */
-  avisoRegistro: boolean;
-  os: OrdemServico;
+  ok: boolean;
+  reenvio?: boolean;
+  avisoRegistro?: boolean;
+  aceitoApi?: boolean;
+  pendente?: boolean;
+  wamid?: string;
+  aviso?: string;
+  os?: OrdemServico;
+}
+export type EntradaEnvioOrcamentoV3 = ConfirmacaoEnvioManualV3 & { modo?: "manual" | "api" | "recuperar_api" };
+
+/** Preparação auditada: não altera status comercial, OS, enviadoEm ou validade. */
+export async function prepararCompartilhamentoOrcamentoV3(storeId: string, osId: string, canal: CanalEnvioOrcamentoV3) {
+  return prepararCompartilhamentoV3(storeId, osId, canal);
 }
 
-/**
- * Envia (ou reenvia) o orçamento por um canal, orquestrando as actions já
- * existentes conforme o status REAL do orçamento. Lança Error com mensagem
- * amigável para estados inválidos (aprovado/recusado/sem orçamento) ou falha
- * no PRIMEIRO envio (`enviarOrcamentoV3`) — nesses casos nada foi alterado.
- */
-export async function enviarOrcamentoPorCanalV3(
-  storeId: string,
-  osId: string,
-  canal: CanalEnvioOrcamentoV3,
-): Promise<EnviarOrcamentoPorCanalResultV3> {
-  const sid = (storeId ?? "").trim();
-  assertActiveStoreId(sid, "Operações V3");
-  const id = (osId ?? "").trim();
-  if (!id) throw new Error("OS não informada.");
-
-  const os = await getOrdem(sid, id, { readOnly: true });
-  if (!os) throw new Error("OS não encontrada.");
-
-  const orc = orcamentoRealV3(os);
-  if (!orc) throw new Error("Esta OS ainda não tem orçamento materializado. Gere o orçamento antes de enviar.");
-  if (orc.status === "aprovado" || orc.status === "recusado") {
-    throw new Error(`Não é possível enviar um orçamento com status "${orc.status}".`);
+/** A chamada antiga, sem declaração explícita, agora falha fechada. Nunca significa transporte. */
+export async function enviarOrcamentoPorCanalV3(storeId: string, osId: string, canal: CanalEnvioOrcamentoV3, input?: EntradaEnvioOrcamentoV3): Promise<EnviarOrcamentoPorCanalResultV3> {
+  if (!input || input.confirmado !== true || typeof input.tentativaId !== "string" || !input.tentativaId.trim()) {
+    throw new Error("Confirme explicitamente o envio manual ou solicite o envio pela API oficial.");
   }
-
-  const reenvio = orc.status === "enviado";
-
-  if (!reenvio) {
-    // Primeiro envio: muda status/validoAte/transição da OS. Se isto falhar,
-    // nada aconteceu — o erro sobe normal (sem envio, sem registro).
-    const osEnviada = await enviarOrcamentoV3(sid, id);
-    try {
-      const osFinal = await registrarEnvioOrcamento(sid, id, canal);
-      return { ok: true, reenvio: false, avisoRegistro: false, os: osFinal };
-    } catch {
-      // O envio real (status/validoAte) já aconteceu — só a auditoria do
-      // canal falhou. Sucesso honesto, com aviso (nunca mascarado).
-      return { ok: true, reenvio: false, avisoRegistro: true, os: osEnviada };
+  if (input.modo !== undefined && !["manual", "api", "recuperar_api"].includes(input.modo)) throw new Error("Natureza de envio inválida.");
+  const api = input.modo === "api" || input.modo === "recuperar_api";
+  const alvo = await autorizarEnvioOrcamentoV3(storeId, osId, api);
+  const row = await prisma.ordemServico.findFirst({ where: { id: alvo.id, storeId: alvo.sid }, select: { payload: true } });
+  const os = row?.payload as unknown as OrdemServico | undefined;
+  const orc = os && orcamentoRealV3(os);
+  if (!orc) throw new Error("Esta OS ainda não tem orçamento materializado.");
+  const tentativa = compartilhamentosOrcamentoV3(orc).find((e) => e.id === input.tentativaId);
+  if (!tentativa || tentativa.canal !== canal) throw new Error("Tentativa de compartilhamento não encontrada neste canal e loja.");
+  if (!api) return confirmarEnvioManualV3(alvo.sid, alvo.id, input);
+  if (canal !== "whatsapp") throw new Error("A API oficial está disponível apenas para WhatsApp.");
+  if (tentativa.estado === "aceito_api") {
+    return { ...await concluirEnvioOrcamentoV3(alvo, tentativa.id, tentativa.api), aceitoApi: true, wamid: tentativa.api?.wamid };
+  }
+  if (input.modo === "recuperar_api") {
+    // A evidência vem de uma linha escrita pelo transporte oficial; nunca de um wamid declarado pelo cliente.
+    const mensagem = await prisma.whatsAppMessage.findFirst({ where: {
+      storeId: alvo.sid, direction: "outbound",
+      payload: { path: ["orcamentoV3", "tentativaId"], equals: tentativa.id },
+    }, select: { externalMessageId: true, conversationId: true, payload: true } });
+    const p = mensagem?.payload as { cloud?: { wamid?: string; aceitoEm?: string }; orcamentoV3?: { osId?: string } } | null;
+    if (!mensagem?.externalMessageId || p?.cloud?.wamid !== mensagem.externalMessageId || p.orcamentoV3?.osId !== alvo.id || !p.cloud.aceitoEm) {
+      return { ok: false, pendente: true, aviso: "Ainda não há recibo oficial recuperável. Confira a conversa antes de qualquer novo envio." };
     }
+    return { ...await concluirEnvioOrcamentoV3(alvo, tentativa.id, { wamid: mensagem.externalMessageId, conversaId: mensagem.conversationId, aceitoEm: p.cloud.aceitoEm }), aceitoApi: true, wamid: mensagem.externalMessageId };
   }
-
-  // Reenvio: único efeito é o registro do canal. Se falhar, não há sucesso
-  // parcial para relatar — o erro sobe normal.
-  const osFinal = await registrarEnvioOrcamento(sid, id, canal);
-  return { ok: true, reenvio: true, avisoRegistro: false, os: osFinal };
+  if (tentativa.estado !== "preparado") return { ok: false, pendente: true, aviso: "Tentativa já iniciada. Confira ou recupere o registro; a mensagem não será enviada novamente." };
+  const view = montarOrcamentoClienteViewV4(os!);
+  if (!view) throw new Error("Orçamento sem projeção para o cliente.");
+  const texto = montarMensagemOrcamentoV4(view);
+  const link = montarLinkWaV4(os!.cliente?.telefone || os!.cliente?.whatsapp, texto);
+  if (!link.valido) throw new Error(link.motivo);
+  const telefone = new URL(link.url).pathname.slice(1);
+  const conversa = await prisma.whatsAppConversation.findFirst({
+    where: { storeId: alvo.sid, contact: { storeId: alvo.sid, phoneDigits: telefone } },
+    orderBy: { updatedAt: "desc" }, select: { id: true },
+  });
+  if (!conversa) throw new Error("Não há conversa deste cliente no WhatsApp da loja. Use o compartilhamento manual.");
+  let reservado = false;
+  let concluido: Awaited<ReturnType<typeof concluirEnvioOrcamentoV3>> | undefined;
+  try {
+    const res = await sendCloudApiTextAndRecord(alvo.sid, conversa.id, texto, {
+      orcamento: { osId: alvo.id, tentativaId: tentativa.id },
+      beforeSend: async () => { await reservarEnvioApiV3(alvo, tentativa.id, texto); reservado = true; },
+      onAccepted: async (receipt) => { concluido = await concluirEnvioOrcamentoV3(alvo, tentativa.id, receipt); },
+    });
+    return { ...concluido!, aceitoApi: true, wamid: res.wamid,
+      ...(concluido?.versaoAlterada ? { aviso: "API aceitou uma versão anterior. A proposta atual foi preservada; revise antes de compartilhar novamente." } : {}),
+    };
+  } catch (e) {
+    if (e instanceof CloudApiTextAcceptedError) {
+      if (!concluido) {
+        try { concluido = await concluirEnvioOrcamentoV3(alvo, tentativa.id, e.receipt); } catch { /* Recibo retornado; reserva durável impede retry do transporte. */ }
+      }
+      return { ...(concluido ?? { ok: false }), aceitoApi: true, pendente: !concluido, avisoRegistro: true, wamid: e.receipt.wamid,
+        aviso: concluido ? "API aceitou o envio. O histórico do WhatsApp precisa de conferência; não reenvie." : "API aceitou o envio. Guarde o identificador e recupere o registro; não reenvie." };
+    }
+    if (!reservado) throw e;
+    return { ok: false, pendente: true, aviso: "A tentativa pela API ficou sem resultado confirmado. Confira o WhatsApp e recupere o registro antes de reenviar." };
+  }
 }

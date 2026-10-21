@@ -67,6 +67,7 @@ export type ServicoV3 = Servico & {
 
 /** Orçamento na visão V3 (mesmo objeto persistido, com as linhas tipadas em V3). */
 export type OrcamentoV3 = Omit<Orcamento, "pecas" | "servicos"> & {
+  compartilhamentosV3?: import("./orcamento-envio-model").CompartilhamentoOrcamentoV3[];
   pecas: PecaV3[];
   servicos: ServicoV3[];
   /** Metadados dos grupos de escolha referenciados pelas linhas (rótulo + regra). */

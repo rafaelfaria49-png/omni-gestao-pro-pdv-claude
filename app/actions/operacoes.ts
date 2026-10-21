@@ -417,6 +417,7 @@ export async function updateOSPayload(
   transitionOpts?: OperacaoTransitionOptions,
 ): Promise<OperacoesOSPayload> {
   await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Patch da OS deve ser um objeto.");
   validatePatchIdentifiers({ storeId, osId, patch });
   return aplicarPatchOSPayloadSobTrava(storeId, osId, () => ({ patch, transitionOpts }));
 }
@@ -465,7 +466,8 @@ async function aplicarPatchOSPayloadSobTrava(
       if (!current) throw new Error("OS sem payload (incompatível)");
       const montado = await montar(current as unknown as OperacoesOSPayload, tx);
       if (!montado) return { payload: null, resultado: current as unknown as OperacoesOSPayload };
-      const { patch, transitionOpts } = montado;
+      const { patch: recebido, transitionOpts } = montado;
+      const patch = semCamposFinanceirosDoServidorV3(recebido, current);
       validatePatchIdentifiers({ storeId, osId, patch });
       const effectiveOperacao = computeEffectiveOperacaoStatus(patch);
 
@@ -480,7 +482,7 @@ async function aplicarPatchOSPayloadSobTrava(
 
       const next = mergePayload<OperacoesOSPayload>({
         current: current as unknown as OperacoesOSPayload,
-        patch: mesclarTimelineDoPatch(current, semCamposFinanceirosDoServidorV3(patch, current)),
+        patch: mesclarTimelineDoPatch(current, patch),
         storeId,
         osId,
         effectiveOperacao,

@@ -1,0 +1,182 @@
+OPS-V4-RAFACELL-PREPUBLISH-003
+OmniGestão Pro — integração local controlada e aceite — 18/10/2026
+
+VEREDITO: NOGO PARA PUBLICAÇÃO
+Os dois commits foram integrados localmente sem conflitos. O aceite encontrou
+um bloqueador funcional reproduzido em PostgreSQL real: o patch genérico
+orcamento=null apaga a reserva de uma tentativa de API com resultado incerto.
+Repor depois uma proposta válida permite outra tentativa e outro transporte.
+O teste de proteção permanece falhando; nenhuma assertiva foi removida.
+Não houve push, merge remoto, deploy ou mensagem real.
+
+BASE E COMMITS
+Main usada na integração: 17510806bdfe736f6bc8a19ec732b7fd035de69b.
+A main foi conferida no GitHub. Durante o pré-flight avançou de 8a192ace para
+17510806 (PR #281, PIN/keymap do PDV). A comparação foi refeita antes da integração.
+Base original: 976ebaa294e09441ce0c5be7bbe5776a568f4013.
+
+Originais preservados, com a cadeia exata:
+ae2be066f4f72e7a2a789c3aa145389218766773
+93888a2c7277854d254fc970b2c5af8cf38061b0 (filho direto de ae2be066).
+
+Reaplicação com cherry-pick -x, na mesma ordem:
+45da37db9bf0b52280d20a2b6d7c3cb1d5b863d0 — precificação RafaCell.
+58422f0d8f1a762aefb49ae6e3eba3c8d255c67a — confirmação honesta de envio.
+Branch temporária: codex/ops-v4-rafacell-prepublish-003.
+Os patch-ids de cada par original/integrado são idênticos:
+precificação: 2cb7f2a846675e1e1d46355c6ca13402183b393c.
+envio: c1cea8febe7fd85b89e7da52b20ab5950c4b3168.
+
+Não houve conflito, resolução manual, rebase, reset, stash ou merge local.
+As mudanças da main em Cadastros, documentação de Pessoas e PIN/keymap do PDV
+não sobrepõem os 36 arquivos dos dois commits. O manifesto completo de arquivos
+e hashes está em validation.json. Nenhum código de produção adicional foi
+alterado neste GOAL; foram acrescentados dois arquivos de teste de aceite e
+as evidências deste relatório.
+
+GOVERNANÇA E PRÉ-FLIGHT
+Lidos AGENTS.md, CLAUDE.md, ENTRYPOINT, índice/regras de governança, CURRENT_STATUS,
+roadmap de Operações, checklist de entrega e protocolos pertinentes.
+Sem .aep-active nesta worktree. status/open informaram trilha inexistente;
+nenhuma trilha/state/ledger/allowlist foi criada ou editada para contornar gates.
+CURRENT_STATUS e CHANGELOG receberam apenas as alterações do commit de origem;
+esta integração não muda o estado publicado do módulo. O aceite está neste dossiê.
+
+Repositório canônico: C:/Projetos/omni-gestao.
+Worktree reutilizada, inicialmente limpa:
+C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001.
+As duas branches de origem continuam nos SHAs originais acima.
+Inventário inicial completo: 431 branches, 112 worktrees, 18 registros ausentes,
+23 worktrees com alterações, zero status não lido após conferência ampliada.
+Nenhuma worktree foi criada, removida, limpa ou arquivada por este GOAL.
+Os sete WIPs rastreados do checkout canônico mantiveram os mesmos hashes.
+
+O inventário de encerramento registrou 432 branches e 110 worktrees, com os mesmos
+18 registros ausentes. Duas worktrees limpas do PDV saíram do inventário durante
+atividade concorrente: pdv-n5-b2-merge-pr281-001-verify e pdv-n5-b2-pin-keymap-001.
+Seus commits permanecem alcançáveis pela main/branch. Também houve avanço externo
+da branch fix/aep-pessoas-active-scope-refresh-001, sem incorporação nesta entrega.
+Os snapshots completos distinguem essas mudanças das ações deste GOAL.
+
+AUDITORIA DO FLUXO INTEGRADO
+- Criar orçamento salva rascunho. Criar e preparar compartilhamento conserva
+  o orçamento em rascunho e guarda a tentativa; falha posterior conhecida reusa
+  a OS criada. Copiar, pré-visualizar e abrir WhatsApp não confirmam envio.
+- Declaração manual exige confirmação explícita e tentativa preparada. Grava
+  operador, instante do registro, canal e natureza declaracao_manual.
+- API oficial exige permissão de editar OS e acesso ao WhatsApp, credencial e
+  conversa da mesma loja. Reutiliza o transporte oficial existente; nenhum
+  transporte autônomo ou nova API independente foi criado.
+- A reserva é gravada antes do POST, com transação curta. O HTTP ocorre fora da
+  trava. Dois pedidos concorrentes no fluxo dedicado fazem um transporte.
+- Aceite exige wamid do transporte oficial. Entrega e leitura não são inferidas.
+  Evidência, orçamento, comercial, coluna/status da OS e timeline são gravados
+  atomicamente. A coluna Prisma EmAnalise corresponde a aguardando_aprovacao.
+- Recuperação consulta recibo oficial protegido, com loja/OS/tentativa; não
+  aceita um wamid declarado pelo cliente como comprovação de API.
+- Falha de histórico após aceite não desfaz o envio. Falha de confirmação faz
+  rollback real; a reserva permanece e o recibo oficial permite recuperar sem
+  novo transporte. Resultado incerto bloqueia retry no fluxo dedicado.
+- Edição durante o POST preserva a proposta atual e registra o aceite da versão
+  anterior. Reenvio explícito preserva a primeira data de envio e a validade.
+- Aprovação e conversão posterior preservam identidade, validade e evidência.
+  Os contratos de alternativas e precificação RafaCell mantiveram suas regressões.
+- Mensagem e documento usam a projeção explícita para o cliente, sem custos,
+  margem, observações internas ou metadados técnicos de envio.
+
+NOVO BLOQUEADOR P1 — RESERVA APAGÁVEL NO PATCH GENÉRICO
+Entrada pública existente: app/actions/operacoes.ts, updateOSPayload.
+Boundary: lib/operacoes-v3/os-payload-lock.ts, semCamposFinanceirosDoServidorV3.
+O boundary só protege os campos de envio quando orcamento é um objeto truthy.
+Com orcamento=null, a proteção não é executada; mergePayload aplica o null.
+Assim, o registro de api_em_andamento e a evidência podem desaparecer.
+
+Reprodução no PostgreSQL descartável, com Prisma e Server Actions reais:
+1. Preparar e iniciar API; o transporte mockado lança resultado de rede incerto.
+2. Confirmar reserva api_em_andamento e orçamento em rascunho no banco.
+3. Chamar updateOSPayload com orcamento=null. A chamada é aceita.
+4. Repor uma proposta válida por patch, preparar e chamar API novamente.
+5. O transporte mockado é chamado duas vezes; a primeira reserva foi perdida.
+
+Teste de aceite: test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts.
+Esse caso não consta das 16 falhas da baseline. É um gap da correção original,
+descoberto neste aceite, sem relação com conflito ou mudança recente da main.
+Não se afirma que a UI normal emita esse patch: o servidor permite o caminho
+legado/malformado. A garantia de idempotência precisa resistir a esse caminho.
+O caso permanece vermelho e impede a recomendação de publicação.
+
+POSTGRESQL DESCARTÁVEL
+Docker foi apenas inspecionado: daemon indisponível, sem start/alteração.
+Encontrados binários PostgreSQL 17.10 em C:/Program Files/PostgreSQL/17/bin,
+fora do PATH. O serviço preexistente postgresql-x64-17 não foi conectado nem
+modificado. Seus metadados continuaram Running, PID 4488.
+Criado cluster exclusivo deste GOAL, em import/ops-v4-rafacell-prepublish-003,
+escutando apenas em 127.0.0.1:49930, com credencial aleatória e banco
+ops_v4_prepub003_66ca1eea97. Identidade do diretório/banco conferida antes de DDL.
+As 109 tabelas foram geradas do schema vigente em banco vazio; nenhum arquivo
+de schema/migration do repositório mudou. Nenhum banco de produção foi acessado.
+Fixtures, triggers de falha e dados de QA existiram somente nesse banco.
+Transporte externo, sessão e cache foram seams de teste; transações, locks,
+rollback, mensagens persistidas e recuperação usaram PostgreSQL real.
+Ao encerrar, somente esse cluster foi parado; dados e logs locais preservados.
+Credenciais e arquivos físicos do banco ficam no diretório local ignorado,
+fora do commit. Não há bloqueio de ambiente PostgreSQL neste aceite.
+
+RESULTADOS
+303 testes focados de orçamento, precificação, projeção, transporte e credenciais:
+aprovados (16 arquivos). Incluem permissões, isolamento por loja e custos.
+51 testes de interface: 15 envio V3/V4, 6 RafaCell, 30 datas: aprovados.
+Regressão V3/V4: 2071 aprovados, 16 falhas, 103 arquivos; exatamente as 16
+falhas reproduzidas na main atual. Nenhuma falha nova nesse recorte antigo.
+Integrações antes bloqueadas por PostgreSQL: agora aprovadas (10 readback e
+3 concorrência de checklist; os três casos unitários do mesmo arquivo também passam).
+Aceite PostgreSQL acrescentado: 9 aprovados e 1 bloqueador funcional acima.
+Não somar esses recortes como contagem de casos únicos: há sobreposição.
+
+TypeScript: aprovado pelo npm run typecheck, com heap canônico.
+ESLint dos 30 arquivos envolvidos: zero erros e zero avisos.
+ESLint global: 105 erros e 114 avisos, idênticos à baseline atual, sem mensagem
+nova. Os 105 erros estão nos mesmos cinco arquivos do PDV original, fora do escopo.
+Build: npm run build aprovado, exit 0; MIGRATION_SKIPPED, migrations desativadas
+e DATABASE_URL/DIRECT_URL apontando a um destino local inativo. Fontes reais,
+sem mocks de build. Checagem de tipos executada separadamente e aprovada.
+git diff --check: aprovado.
+
+As falhas preexistentes de recebimento, garantia e autofill não foram corrigidas
+ou ocultadas. O primeiro scan da baseline teve um timeout de leitura; a repetição
+com testTimeout de 30s, sem mudar assertivas, confirmou as mesmas 16 falhas.
+As primeiras fixtures novas foram alinhadas ao contrato existente de status
+Prisma e de entrada com metadata antes da validação final. Tentativas e logs
+intermediários continuam disponíveis no diretório local ignorado.
+Uma execução adicional de registro encontrou o cluster indisponível e não
+executou casos; o cluster exclusivo foi reaberto e identificado, sem DDL, e
+a repetição final confirmou 9 casos aprovados e o mesmo bloqueador. A mensagem
+de evidência final contém OBSERVADO_PG={"bloqueado":false,"reserva":null,"transportes":2}.
+
+PLANO APÓS AUTORIZAÇÃO HUMANA
+1. Corrigir em commit adicional o boundary de patch para impedir remoção ou
+   substituição inválida do orçamento que elimine reservas/evidências; cobrir null
+   e demais formas inválidas, com regressão do fluxo legado e PostgreSQL real.
+   A hipótese de correção é local, sem migration; qualquer dependência de schema
+   ou mudança arquitetural relevante requer novo aceite humano antes de executar.
+2. Repetir o aceite até o bloqueador novo passar e revisar os contratos legados.
+   Deliberar explicitamente sobre as 16 falhas e o lint global preexistentes.
+3. Com autorização de publicação, push da branch própria e PR revisável para main,
+   com proveniência dos dois commits e evidências; revalidar se main avançar.
+   Nenhum PR foi aberto por este GOAL.
+4. Preview em ambiente isolado com dados de QA, sem credenciais de envio real;
+   conferir criação, compartilhamento, declaração manual, seleção/aprovação,
+   conversão, troca de loja e proteção de custos. Teste API com mocks só nos testes.
+5. Merge remoto e Production somente após revisão/aceite e autorizações específicas.
+   Não há migration desta entrega. Planejar rollback por revert revisado do conjunto,
+   preservando as evidências já gravadas; não executar reset de produção.
+
+EVIDÊNCIAS E ENCERRAMENTO
+validation.json: comandos, resultados, comparação da baseline, hashes e manifesto.
+preflight.json: inventário completo anterior à integração.
+postflight.json: inventário completo e mudanças concorrentes observadas.
+postgres-acceptance.json: casos PostgreSQL e mensagem do bloqueador.
+Logs e relatórios brutos locais: import/ops-v4-rafacell-prepublish-003/.
+Worktree de integração será entregue preservada e limpa em commit local de aceite,
+mantendo o teste vermelho documentado. A limpeza se refere ao Git, não ao aceite.
+SEM PUSH. SEM MERGE REMOTO. SEM DEPLOY. AGUARDAR AUTORIZAÇÃO HUMANA.

@@ -18,7 +18,8 @@ import type { ComercialV4, StatusComercialOrcamentoV4 } from "@/lib/operacoes-v4
 import { lerComercialV4 } from "@/lib/operacoes-v4/orcamento-pre-os";
 import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
 import { chaveLockRecebimentoMistoV3, travarOS } from "./recebimento-misto-service";
-import { validadeExpiradaV3 } from "./orcamento-model";
+import { orcamentoRealV3, validadeExpiradaV3 } from "./orcamento-model";
+import { temEvidenciaEnvioOrcamentoV3 } from "./orcamento-envio-model";
 import {
   erroFatoFuturoV3,
   erroOrdemV3,
@@ -112,6 +113,18 @@ function exigirStatusComercialGravavelV3(statusComercial: unknown, payload: OSPa
   }
   if (!STATUS_COMERCIAL_GRAVAVEIS_V3.includes(statusComercial as StatusComercialOrcamentoV4)) {
     throw new Error("Status comercial inválido.");
+  }
+  if (statusComercial === "enviado") {
+    const orc = orcamentoRealV3(payload);
+    if (!orc || orc.status !== "enviado" || !temEvidenciaEnvioOrcamentoV3(orc)) {
+      throw new Error("Registre a declaração manual ou o aceite verificável da API antes de marcar como enviado.");
+    }
+  }
+  if (["rascunho", "aprovado", "recusado"].includes(String(statusComercial))) {
+    const orc = orcamentoRealV3(payload);
+    if ((orc && orc.status !== statusComercial) || (!orc && statusComercial !== "rascunho")) {
+      throw new Error("O status comercial deve acompanhar o orçamento vigente. Recarregue a proposta antes de alterar o registro.");
+    }
   }
   const validoAte = (payload.orcamento as { validoAte?: string } | undefined)?.validoAte;
   if (statusComercial === "aprovado" && validadeExpiradaV3(validoAte)) {

@@ -1,0 +1,169 @@
+name: Operacoes V4 RafaCell contracts
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/ops-v4-rafacell-contracts.yml'
+      - 'scripts/ops-v4-rafacell/**'
+      - 'app/actions/operacoes.ts'
+      - 'components/operacoes/lovable/components/operacoes/OperacaoOsAcaoBar.tsx'
+      - 'components/operacoes/lovable/api/**'
+      - 'components/operacoes/lovable/utils/**'
+      - 'components/operacoes-v3/**'
+      - 'components/operacoes-v4-preview/**'
+      - 'lib/operacoes-v3/**'
+      - 'lib/operacoes-v4/**'
+      - 'lib/operacoes/**'
+      - 'lib/whatsapp/**'
+      - 'lib/whatsapp*.ts'
+      - 'lib/auth/**'
+      - 'lib/financeiro/**'
+      - 'lib/phone-br.ts'
+      - 'auth.ts'
+      - 'auth.config.ts'
+      - 'proxy.ts'
+      - 'lib/prisma.ts'
+      - 'types/os.ts'
+      - 'test/ops-v4-orcamento-envio-real-status-001/**'
+      - 'test/ops-v4-rafacell-*/**'
+      - 'test/server-only.ts'
+      - 'prisma/schema.prisma'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.ts'
+      - 'tsconfig.json'
+      - 'eslint.config.*'
+      - 'next.config.*'
+      - 'vercel.json'
+      - 'scripts/vercel-build.mjs'
+      - 'scripts/migration-authority-guard.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rafacell-contracts-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DATABASE_URL: postgresql://disabled:disabled@127.0.0.1:1/rafacell_ci_disabled?connect_timeout=1
+  DIRECT_URL: postgresql://disabled:disabled@127.0.0.1:1/rafacell_ci_disabled?connect_timeout=1
+  VERCEL: '0'
+  VERCEL_ENV: development
+  MIGRATION_AUTHORITY_ENABLED: 'false'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  focused-ui:
+    name: Contratos focados e UI isolada
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Guardas do runner CI
+        run: node --test scripts/ops-v4-rafacell/ci.test.mjs
+      - name: Contratos RafaCell, envio, permissoes e custos
+        run: node scripts/ops-v4-rafacell/ci.mjs focused
+      - name: UI de envio e precificacao sem transporte real
+        if: '!cancelled()'
+        run: node scripts/ops-v4-rafacell/ci.mjs ui
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: rafacell-focused-ui
+          path: import/ops-v4-rafacell-ci/
+          retention-days: 14
+
+  quality-build:
+    name: TypeScript, lint focado e build sem migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript completo separado do build
+        run: node scripts/ops-v4-rafacell/ci.mjs typecheck
+      - name: ESLint focado
+        if: '!cancelled()'
+        run: node scripts/ops-v4-rafacell/ci.mjs lint
+      - name: Build local com MIGRATION_SKIPPED obrigatorio
+        if: '!cancelled()'
+        run: node scripts/ops-v4-rafacell/ci.mjs build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: rafacell-quality-build
+          path: import/ops-v4-rafacell-ci/
+          retention-days: 14
+
+  postgres-regression:
+    name: PostgreSQL descartavel e regressao historica explicita
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rafacell_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: ops_v4_prepub003_c100900001
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rafacell_ci -d ops_v4_prepub003_c100900001"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://rafacell_ci:synthetic_ci_only@127.0.0.1:5432/ops_v4_prepub003_c100900001?schema=public
+      DIRECT_URL: postgresql://rafacell_ci:synthetic_ci_only@127.0.0.1:5432/ops_v4_prepub003_c100900001?schema=public
+      OPS_V4_PREPUBLISH_TEST_DATABASE_URL: postgresql://rafacell_ci:synthetic_ci_only@127.0.0.1:5432/ops_v4_prepub003_c100900001?schema=public
+      OPS_V4_RAFACELL_DISPOSABLE: '1'
+      # Draft PR events may retain an older base SHA. checkout fetch-depth: 0
+      # provides the current origin/main snapshot without another credentialed fetch.
+      BASE_SHA: origin/main
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Materializar schema inalterado somente no banco vazio
+        id: schema
+        run: node scripts/ops-v4-rafacell/ci.mjs schema
+      - name: Testar concorrencia real no PostgreSQL descartavel
+        if: ${{ !cancelled() && steps.schema.outcome == 'success' }}
+        run: node scripts/ops-v4-rafacell/ci.mjs postgres
+      - name: Comparar base e HEAD mantendo as falhas historicas vermelhas
+        if: ${{ !cancelled() && steps.schema.outcome == 'success' }}
+        run: node scripts/ops-v4-rafacell/ci.mjs regression "$BASE_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: rafacell-postgres-regression
+          path: import/ops-v4-rafacell-ci/
+          retention-days: 14

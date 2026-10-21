@@ -61,7 +61,7 @@ import {
 } from "@/lib/operacoes-v4/posvenda-v4";
 // Reuso PURO (read-only) dos totais com faixa/grupo da V3 (GOAL OPS-V4-ORC-
 // MULTIOPCAO-MODEL-021): mesma função que a V3 usa para persistir o total.
-import { computeTotaisV3, pecaCusto, pecaValorCliente, servicoCusto, servicoValorCliente, type PecaV3, type ServicoV3 } from "@/lib/operacoes-v3/orcamento-model";
+import { computeTotaisV3, pecaValorCliente, servicoCusto, servicoValorCliente, type PecaV3, type ServicoV3 } from "@/lib/operacoes-v3/orcamento-model";
 
 export const NI = "Não informado";
 
@@ -1023,7 +1023,7 @@ export interface V4OrcamentoView {
   total: string;
   /** Soma de descontos de linha (R$); null quando 0. */
   desconto: string | null;
-  /** Agregado de custo — só quando TODAS as linhas têm custo real; senão null. */
+  /** Custo das linhas fixas e escolhidas; null com escolha pendente ou custo desconhecido. */
   custoTotal: string | null;
   /** Lucro = total − custoTotal; só quando custoTotal existir; senão null. */
   lucroTotal: string | null;
@@ -1147,18 +1147,19 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
     pecasRaw.reduce((a, p) => a + pecaLineTotal(p), 0);
   const totalNum = declaredTotal > 0 ? declaredTotal : lineSum;
 
-  // Custo/lucro agregado: SÓ quando todas as linhas têm custo real conhecido
-  // (Decisão 2 + GOAL OPS-V4-MULTI-SERVICOS-CONTRACT-002). Serviços com `custoV3`
-  // persistido entram na soma; qualquer linha sem custo (ex.: serviço de payload
-  // legado) suprime o agregado — nunca se afirma lucro preciso sobre UNKNOWN.
+  const totaisComFaixa = computeTotaisV3({
+    pecas: pecasRaw as PecaV3[],
+    servicos: servicosRaw as ServicoV3[],
+    desconto: typeof orc?.desconto === "number" ? orc.desconto : 0,
+  });
+  // O custo canônico inclui fixos e a alternativa escolhida, sem somar opções
+  // descartadas. Escolha pendente ou custo efetivo desconhecido suprime o agregado.
+  const participaDoCusto = (linha: PecaV3 | ServicoV3) => !(linha.grupoId ?? "").trim() || linha.selecionadaV3 === true;
   const todasComCusto =
-    hasLines &&
-    pecasRaw.every((p) => typeof p.custoUnitario === "number") &&
-    servicosRaw.every((s) => typeof (s as ServicoV3).custoV3 === "number");
-  const custoNum = todasComCusto
-    ? pecasRaw.reduce((a, p) => a + pecaCusto(p as PecaV3), 0) +
-      servicosRaw.reduce((a, s) => a + servicoCusto(s as ServicoV3), 0)
-    : null;
+    hasLines && !totaisComFaixa.faixa &&
+    pecasRaw.filter((p) => participaDoCusto(p as PecaV3)).every((p) => typeof p.custoUnitario === "number") &&
+    servicosRaw.filter((s) => participaDoCusto(s as ServicoV3)).every((s) => typeof (s as ServicoV3).custoV3 === "number");
+  const custoNum = todasComCusto ? totaisComFaixa.custo : null;
 
   const versoesCount = Array.isArray(os.orcamentoHistorico) ? os.orcamentoHistorico.length : 0;
 
@@ -1204,14 +1205,6 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
       faixaMin: fmt(Math.min(...valores)),
       faixaMax: fmt(Math.max(...valores)),
     };
-  });
-
-  // Faixa de total do orçamento inteiro (reusa `computeTotaisV3`, fonte única
-  // do cálculo de faixa — nenhuma lógica de min/max duplicada aqui).
-  const totaisComFaixa = computeTotaisV3({
-    pecas: pecasRaw as PecaV3[],
-    servicos: servicosRaw as ServicoV3[],
-    desconto: typeof orc?.desconto === "number" ? orc.desconto : 0,
   });
 
   return {

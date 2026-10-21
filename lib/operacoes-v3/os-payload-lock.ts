@@ -33,6 +33,7 @@
 // Módulo comum (sem "use server"): não é exposto como Server Action.
 // ============================================================================
 
+import { isDeepStrictEqual } from "node:util";
 import type { Prisma } from "@/generated/prisma";
 import type { OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
@@ -45,9 +46,57 @@ export type TxOSPayloadV3 = Prisma.TransactionClient;
  * gravam, sob a trava. Patch genérico vindo do cliente nunca os troca.
  */
 export const CAMPOS_FINANCEIROS_SERVIDOR_V3 = ["pagamentoV3", "aPrazoV3", "recebimentoMistoRecusasV3"] as const;
+const CAMPOS_ENVIO_ORCAMENTO_V3 = ["compartilhamentosV3", "enviadoEm"] as const;
 
 export function semCamposFinanceirosDoServidorV3<T extends object>(patch: T, current?: object): T {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Patch da OS deve ser um objeto.");
   const limpo = { ...patch } as Record<string, unknown>;
+  // Envios são escritos somente pelas actions de confirmação. Patches genéricos
+  // (inclusive intenções legadas V2) não fabricam status, recibos ou eventos.
+  const anterior = current as { orcamento?: Record<string, unknown>; comercialV4?: Record<string, unknown>; timeline?: Array<{ id?: string }> } | undefined;
+  const orcamentoAtual = anterior?.orcamento;
+  if (Object.prototype.hasOwnProperty.call(limpo, "orcamento")) {
+    const entrada = limpo.orcamento as Record<string, unknown> | null | undefined;
+    const objeto = !!entrada && typeof entrada === "object" && !Array.isArray(entrada);
+    // `current` é o payload relido sob FOR UPDATE. Até null/arrays e snapshots
+    // anteriores à reserva devem falhar antes do merge e de qualquer escrita.
+    const protegido = orcamentoAtual && CAMPOS_ENVIO_ORCAMENTO_V3.some((campo) => Object.prototype.hasOwnProperty.call(orcamentoAtual, campo));
+    if (protegido && (!objeto || entrada.id !== orcamentoAtual.id || entrada.sintetizado === true ||
+      typeof entrada.status !== "string" || typeof entrada.total !== "number" || !Number.isFinite(entrada.total) ||
+      !Array.isArray(entrada.servicos) || !Array.isArray(entrada.pecas) ||
+      CAMPOS_ENVIO_ORCAMENTO_V3.some((campo) => !isDeepStrictEqual(entrada[campo], orcamentoAtual[campo])))) {
+      throw new Error("Orçamento com reserva ou evidência de envio protegida. Use as ações auditadas do orçamento para alterar esses registros.");
+    }
+    if (entrada != null && !objeto) throw new Error("Orçamento inválido no patch da OS.");
+  }
+  if (limpo.orcamento && typeof limpo.orcamento === "object" && !Array.isArray(limpo.orcamento)) {
+    const entrada = { ...limpo.orcamento } as Record<string, unknown>;
+    if (entrada.status === "enviado" && anterior?.orcamento?.status !== "enviado") {
+      throw new Error("Use a confirmação explícita de envio manual ou o aceite da API oficial para registrar enviado.");
+    }
+    for (const campo of CAMPOS_ENVIO_ORCAMENTO_V3) {
+      if (Object.prototype.hasOwnProperty.call(entrada, campo) && !isDeepStrictEqual(entrada[campo], orcamentoAtual?.[campo])) {
+        throw new Error("Campos de envio protegidos exigem as ações auditadas do orçamento.");
+      }
+      if (orcamentoAtual && Object.prototype.hasOwnProperty.call(orcamentoAtual, campo)) entrada[campo] = orcamentoAtual[campo];
+      else delete entrada[campo];
+    }
+    limpo.orcamento = entrada;
+  }
+  if (limpo.comercialV4 && typeof limpo.comercialV4 === "object") {
+    const comercial = limpo.comercialV4 as Record<string, unknown>;
+    if (comercial.statusComercial === "enviado" && anterior?.comercialV4?.statusComercial !== "enviado") {
+      throw new Error("Status enviado exige declaração manual ou aceite da API oficial.");
+    }
+  }
+  if (Array.isArray(limpo.timeline)) {
+    const timeline = Array.isArray(anterior?.timeline) ? anterior.timeline : [];
+    const ids = new Set(timeline.filter((e) => e && typeof e.id === "string" && e.id).map((e) => e.id));
+    if (limpo.timeline.some((e) => !e || typeof e !== "object" || Array.isArray(e))) throw new Error("Timeline inválida no patch da OS.");
+    if (limpo.timeline.some((e: { id?: string; tipo?: string; metadata?: { evento?: string } }) =>
+      !(typeof e.id === "string" && e.id && ids.has(e.id)) && (e.tipo === "orcamento_enviado" || ["orcamento_envio_confirmado", "orcamento_compartilhamento_iniciado"].includes(e.metadata?.evento ?? "")),
+    )) throw new Error("Eventos de envio exigem a confirmação auditada do orçamento.");
+  }
   for (const campo of CAMPOS_FINANCEIROS_SERVIDOR_V3) delete limpo[campo];
   // Termos e coberturas só são escritos pelas actions auditadas de garantia.
   delete limpo.termosGarantiaV3;

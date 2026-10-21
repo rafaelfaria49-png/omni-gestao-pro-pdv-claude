@@ -1,0 +1,140 @@
+OPS-V4-ORCAMENTO-RESERVA-P1-004
+OmniGestão Pro — correção cirúrgica e aceite PostgreSQL — 18/10/2026
+
+GO técnico restrito à correção P1. O teste anteriormente vermelho passou.
+A reserva permanece íntegra e recuperável; patches genéricos não podem apagá-la,
+liberá-la ou fabricar confirmação. A publicação continua sujeita ao aceite humano.
+As 16 falhas antigas e os 105 erros globais de ESLint permanecem pendentes.
+
+Worktree reutilizada:
+C:/Projetos/omni-gestao/.worktrees/ops-v4-rafacell-precificacao-001
+Branch de entrega: codex/ops-v4-orcamento-reserva-p1-004.
+Filha direta de b6a3bb12c0537816355fff8959cad000a266f011.
+Branch de origem preservada: codex/ops-v4-rafacell-prepublish-003.
+Commits 45da37d, 58422f0 e b6a3bb1 confirmados na ancestralidade.
+SHA da entrega: registrado no encerramento e no postflight local após o commit,
+evitando uma referência circular ao SHA dentro do próprio commit.
+
+O pré-flight encontrou a worktree alvo limpa e os WIPs da raiz preservados.
+origin/main e a main remota foram conferidas em
+180a2f2ab450cc2686b5087dc09b1a0ee58b5f72, sem integração de alterações novas.
+Não houve reset, rebase, stash ou limpeza destrutiva. Nenhuma outra worktree foi
+editada. Os sete caminhos rastreados sinalizados no status da raiz mantiveram
+o mesmo estado. Somente ROADMAP_FINANCEIRO.md apresenta diff efetivo; seu hash
+SHA256 foi comparado e permanece idêntico. Os seis state.json não têm diff efetivo.
+AGENTS.md, CLAUDE.md, ENTRYPOINT, governança, estado, roadmap e checklist foram
+lidos. Sem .aep-active; status/open informaram trilha inexistente. Nenhuma trilha,
+GOAL adicional, allowlist, state, ledger ou gate foi criado ou alterado.
+
+A causa raiz era a condição truthy aplicada somente ao patch recebido:
+orcamento=null ignorava a proteção dos metadados e chegava ao merge da OS.
+Isso apagava api_em_andamento e permitia preparar outra tentativa e transportar
+novamente a mesma operação após um resultado incerto.
+
+O boundary agora identifica a presença da chave orcamento independentemente do
+seu valor e compara com o orçamento persistido relido sob SELECT FOR UPDATE.
+Reservas e evidências, inclusive tentativas preparadas, são campos do servidor.
+Uma substituição precisa conservar identidade, estrutura de proposta e todos
+os registros protegidos. Null, primitivas, arrays, objetos vazios, propostas
+truncadas, remoção de metadados, rebaixamento de estado e recibos forjados falham
+com erro explícito. A comparação profunda aceita chaves JSON em outra ordem.
+Sem reserva/evidência, edições e remoções legadas continuam disponíveis.
+Uma edição de OS ou uma proposta completa com os mesmos metadados permanece
+permitida. As ações oficiais continuam responsáveis pelas mudanças auditadas.
+
+A action genérica valida também o tipo do patch raiz. A proteção é aplicada
+antes do merge, das políticas e da sincronização financeira, na transação da OS.
+Patches recusados deixam payload, colunas, updatedAt e histórico inalterados.
+Não foi alterado o protocolo de hash, tentativa, idempotência, aceite ou
+recuperação; nenhuma mudança de schema, migration ou arquitetura foi necessária.
+
+PostgreSQL real antes da correção: 10 casos, 9 aprovados e 1 P1 reprovado.
+OBSERVADO_PG={"bloqueado":false,"reserva":null,"transportes":2}
+
+PostgreSQL real após a correção: 37 casos aprovados, zero falhas e zero skips.
+Os dez casos originais continuam presentes e aprovados, com 27 casos adicionais.
+OBSERVADO_PG={"bloqueado":true,"reserva":"api_em_andamento","transportes":1}
+
+O caso principal prepara a tentativa, inicia a API com resultado incerto,
+rejeita orcamento=null e objeto inválido, verifica a reserva persistida e tenta
+novamente a mesma operação. Não há segundo transporte ou evidência fabricada.
+Os casos adicionais verificam formas inválidas e campos aninhados, atomicidade,
+patch antigo durante o POST, permissões, outra loja, orçamento sem reserva,
+legado sem evidência e edição legítima com metadados intactos.
+O aceite cobre ainda duas chamadas concorrentes, confirmação manual, aceite
+oficial, rollback real, recuperação por recibo, reenvio explicitamente autorizado,
+preservação do primeiro envio/validade e aprovação/conversão posterior em OS.
+Dois transportes no caso de reenvio autorizado representam duas tentativas novas
+e explícitas; o replay da mesma tentativa continua com um único transporte.
+
+As transações, locks, rollback e persistência são PostgreSQL/Prisma reais.
+Somente identidade/permissão de teste, cache, credenciais e transporte externo
+são seams. A suíte focada existente também cobre autorização e roteamento por
+loja. Nenhum WhatsApp real foi enviado. Login e sessão reais no navegador não
+foram tratados como validados por esses seams.
+
+Cluster exclusivo deste GOAL: PostgreSQL 17.10, apenas em 127.0.0.1:59668,
+banco ops_v4_prepub003_ac06605ecb. O prefixo do banco mantém o guard do aceite
+PREPUBLISH-003; diretório, credencial e cluster são novos e exclusivos do P1-004.
+Dados em import/ops-v4-orcamento-reserva-p1-004/postgres-data.
+As 109 tabelas foram provisionadas do schema vigente em banco vazio, após
+conferir a identidade do diretório/porta, sem alterar schema ou migrations.
+O mesmo cluster foi reaberto sem DDL para a última conferência V3/V4.
+Ao término, apenas esse recurso descartável foi desligado; dados e logs foram
+preservados. O serviço preexistente postgresql-x64-17 continuou Running,
+PID 4488. Nenhum comando de controle foi dirigido a ele. Docker e bancos de
+produção não foram acessados ou modificados.
+
+Validação final:
+- PostgreSQL: 37/37; dez cenários originais aprovados; P1 vermelho agora verde.
+- Focados de orçamento, precificação, brindes, projeção pública e transporte:
+  333/333, incluindo os 30 novos casos de boundary. Custos não entram na visão
+  destinada ao cliente; a precificação RafaCell não foi alterada.
+- Interface de envio: 15/15; interface RafaCell: 6/6.
+- Regressão V3/V4: 2.101 aprovados, 16 falhas antigas, 103 arquivos.
+  Os nomes das 16 falhas coincidem com a baseline; zero falha nova ou omitida.
+- TypeScript: exit 0, tsc --noEmit com heap de 4 GB, sobre as fixtures finais.
+- ESLint focado: zero erros, um aviso preexistente de eslint-disable não usado
+  em app/actions/operacoes.ts; nenhum aviso novo.
+- ESLint global: 105 erros e 114 avisos, mesmos da baseline. Comparado o
+  multiconjunto de caminho, severidade, regra e mensagem; zero mensagem nova
+  ou omitida. A posição do aviso antigo muda pelas duas linhas inseridas.
+- Build: exit 0, compilação real e 102/102 páginas; MIGRATION_SKIPPED;
+  migrations desativadas, DATABASE_URL/DIRECT_URL em loopback inativo porta 1.
+  Checagem de tipos separada, pois a configuração existente pula tipos no build.
+- git diff --check: aprovado.
+Os recortes de testes têm sobreposição; não devem ser somados como casos únicos.
+
+Execuções intermediárias não foram ocultadas. Incluem provisionamento ainda
+incompleto, bloqueio de socket no sandbox, quatro erros de tipagem nas fixtures
+corrigidos com tags tipadas, coleta PG/UI incompleta durante o build e um
+ENOENT do ESLint concorrente à regeneração de public/sw.js. Uma repetição V3/V4
+começou com o cluster já desligado e teve 11 falhas de conexão adicionais;
+o mesmo cluster foi reaberto e a conferência final voltou às 16 falhas antigas.
+Os arrays de it.each foram envolvidos em objetos para testar arrays como
+valores, sem espalhá-los como argumentos. As validações finais executaram esses
+casos de fato. Assertivas não foram retiradas nem marcadas como expected-fail.
+Comandos, status, hashes e logs intermediários estão preservados em import/.
+
+Arquivos alterados/criados no commit:
+- app/actions/operacoes.ts
+- lib/operacoes-v3/os-payload-lock.ts
+- lib/operacoes-v3/orcamento-envio-patch.test.ts
+- test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts
+- CHANGELOG.md
+- docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-RESERVA-P1-004/RELATORIO.txt
+- docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-RESERVA-P1-004/validation.json
+- docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-RESERVA-P1-004/postgres-acceptance.json
+- docs/ai-execution/_evidence/OPS-V4-ORCAMENTO-RESERVA-P1-004/preservation.json
+
+CHANGELOG recebeu o fix funcional. CURRENT_STATUS, backlog e memória estratégica
+não foram alterados: não há feature nova, mudança arquitetural ou publicação.
+validation.json registra verificações e hashes; postgres-acceptance.json contém
+os casos e o antes/depois; preservation.json registra WIPs, branches e worktrees.
+Logs brutos, banco físico e credenciais descartáveis ficam somente no diretório
+local ignorado import/ops-v4-orcamento-reserva-p1-004, fora do commit.
+
+Pendências restantes: deliberar sobre as 16 falhas antigas e o lint global;
+aprovação humana para qualquer publicação. O P1 deste GOAL está corrigido.
+Sem push, PR, merge, deploy, migration, mensagem real ou outro GOAL.
+Encerrar após o commit local e aguardar aprovação humana.

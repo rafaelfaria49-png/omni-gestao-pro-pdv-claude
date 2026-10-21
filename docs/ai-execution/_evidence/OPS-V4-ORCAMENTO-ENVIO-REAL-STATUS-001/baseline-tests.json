@@ -1,0 +1,33 @@
+{
+  "baseCommit": "ae2be066f4f72e7a2a789c3aa145389218766773",
+  "passed": 327,
+  "failed": 16,
+  "failedTests": [
+    "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+    "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+    "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)",
+    "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+    "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato mantém estado de múltiplas linhas (array), não forma única",
+    "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+    "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+    "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+    "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+    "OPS-V4-NOVA-OS-AUTOFILL-ISOLATION-009 — Nova OS sem autofill do navegador todo campo de input/textarea do modal Nova OS declara autoComplete explícito",
+    "GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+    "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite EntregaStage renderiza o form real (v.salvarGarantia) com o catálogo/prazo padrão da V3",
+    "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite botão de salvar tem busy-lock e fica desabilitado sem mudança (evita duplo clique / salvar sem editar)",
+    "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite copy honesta sobre quando a garantia passa a valer",
+    "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 recebimento imediato continua no contrato receberOSV3 via hook, sem optimistic de valor",
+    "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 19–35. submit usa receberOSV3 via hook, sem optimistic e com reload só no sucesso"
+  ],
+  "failedSuites": [
+    {
+      "message": "",
+      "file": "preview-honesty.test.ts"
+    },
+    {
+      "message": "",
+      "file": "recebimento-transversal.test.ts"
+    }
+  ]
+}

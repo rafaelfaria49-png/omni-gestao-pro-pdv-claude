@@ -1,5 +1,16 @@
 # Changelog — OmniGestão Pro
 
+## 2026-10-18 — Proteção da reserva de envio do orçamento (P1-004)
+
+- Patches genéricos passam a rejeitar remoção, substituição inválida ou falsificação de reservas e evidências de envio, conferindo o orçamento persistido sob a trava da OS.
+- Edições legítimas, confirmação auditada, recuperação por recibo e reenvio autorizado continuam disponíveis. Aceite local em PostgreSQL descartável; publicação pendente de aprovação humana.
+
+## 2026-10-18 — Orçamento Rápido V4: sugestão opt-in para telas (local, não publicado)
+
+- Sugestão por alternativa em centavos, com revisão e aplicação explícita, preservando preço manual.
+- Capinha/película como cortesias fixas, custo uma vez por orçamento e R$ 0,00 ao cliente; resultado bruto interno por alternativa, sem custos no documento/mensagem do cliente.
+- Ativação temporária por proposta, descartada ao trocar de loja/reabrir. Publicação bloqueada pelo registro preexistente de envio antes do fato real, documentado em `OPS-V4-RAFACELL-PRECIFICACAO-001`.
+
 ## 2026-08-19 — Operações V4: documentos, assinatura, fotos e anexos
 
 - Termo de Garantia, Termo de Entrega, OS cliente, via interna, etiqueta e orçamento imprimem/reimprimem pelo motor V3 já existente.

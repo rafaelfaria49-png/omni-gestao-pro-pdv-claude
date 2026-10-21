@@ -1,0 +1,3897 @@
+{
+  "goal": "OPS-V4-ORCAMENTO-RESERVA-P1-004",
+  "capturedAt": "2026-10-19T01:01:58.397Z",
+  "verdict": "GO_TECNICO_RESTRITO_A_CORRECAO_P1",
+  "publication": {
+    "authorized": false,
+    "pushed": false,
+    "prCreated": false,
+    "merged": false,
+    "deployed": false,
+    "realWhatsAppMessages": 0
+  },
+  "base": "b6a3bb12c0537816355fff8959cad000a266f011",
+  "branch": "codex/ops-v4-orcamento-reserva-p1-004",
+  "sourceBranch": "codex/ops-v4-rafacell-prepublish-003",
+  "commitsPresent": [
+    "45da37db9bf0b52280d20a2b6d7c3cb1d5b863d0",
+    "58422f0d8f1a762aefb49ae6e3eba3c8d255c67a",
+    "b6a3bb12c0537816355fff8959cad000a266f011"
+  ],
+  "main": {
+    "local": "180a2f2ab450cc2686b5087dc09b1a0ee58b5f72",
+    "remoteVerified": "180a2f2ab450cc2686b5087dc09b1a0ee58b5f72",
+    "baseMain": "17510806bdfe736f6bc8a19ec732b7fd035de69b",
+    "integratedNewChanges": false
+  },
+  "aep": {
+    "active": false,
+    "statusOpen": "trilha inexistente; opt-in inativo; nenhum state, ledger ou gate alterado"
+  },
+  "sources": [
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "ee58ae81ccbbdcd1614be449750c692eafffecc2159239e7bbe6fde2cc9b9adf"
+    },
+    {
+      "path": "app/actions/operacoes.ts",
+      "sha256": "5f2919d755737b8f701e3dfd08ec99c215b1bd70f88e28d41ddc8bb977afe29a"
+    },
+    {
+      "path": "lib/operacoes-v3/os-payload-lock.ts",
+      "sha256": "af9f67a9e2ab72e785de92dd35a49aa0f55dd5ac123d16c5936da6324aeeaf49"
+    },
+    {
+      "path": "lib/operacoes-v3/orcamento-envio-patch.test.ts",
+      "sha256": "7f9c053acbf535f95f8f64b2b7ef0dfcf1c56589ff01f7bd07c3d5f82f7528dc"
+    },
+    {
+      "path": "test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts",
+      "sha256": "02dff4bcd708974f8dffbf950cda5a6f77a2996bbf90e9f5c37de37ea244806c"
+    }
+  ],
+  "postgres": {
+    "createdAt": "2026-10-19T00:37:02.727Z",
+    "version": "postgres (PostgreSQL) 17.10",
+    "data": "C:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001\\import\\ops-v4-orcamento-reserva-p1-004\\postgres-data",
+    "port": 59668,
+    "database": "ops_v4_prepub003_ac06605ecb",
+    "listen": "127.0.0.1",
+    "tables": 109,
+    "schemaSha256": "ef68dd97b7a46c2f8ed6d6a8f9da7806ca97660ab02629a60960e0ba5db68297",
+    "repositorySchemaChanged": false,
+    "productionAccessed": false,
+    "existingServiceTouched": false,
+    "dockerTouched": false,
+    "stopped": {
+      "stoppedAt": "2026-10-19T01:00:53.441Z",
+      "data": "C:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001\\import\\ops-v4-orcamento-reserva-p1-004\\postgres-data",
+      "port": 59668,
+      "originalServiceUntouched": true
+    },
+    "observedBefore": {
+      "bloqueado": false,
+      "reserva": null,
+      "transportes": 2
+    },
+    "observedAfter": {
+      "bloqueado": true,
+      "reserva": "api_em_andamento",
+      "transportes": 1
+    },
+    "original10Passed": 10,
+    "totalPassed": 37,
+    "details": "postgres-acceptance.json"
+  },
+  "focused": {
+    "report": "focused-final",
+    "total": 333,
+    "passed": 333,
+    "failed": 0,
+    "pending": 0,
+    "success": true,
+    "rawSha256": "e4ac5f6ffad9b84116b5919a4e3134127ff90e2407d9d63e92e9a15ffe0d1935",
+    "run": {
+      "label": "focused-final",
+      "kind": "vitest",
+      "args": [
+        "run",
+        "lib/operacoes-v3/orcamento-actions.test.ts",
+        "lib/operacoes-v3/orcamento-envio-actions.test.ts",
+        "lib/operacoes-v3/orcamento-envio-patch.test.ts",
+        "lib/operacoes-v3/orcamento-model.test.ts",
+        "lib/operacoes-v3/orcamento-rapido-actions.test.ts",
+        "lib/operacoes-v3/orcamento-rapido-model.test.ts",
+        "lib/operacoes-v4/orcamento-cliente-view.test.ts",
+        "lib/operacoes-v4/orcamento-form.test.ts",
+        "lib/operacoes-v4/orcamento-mensagem.test.ts",
+        "lib/operacoes-v4/orcamento-pre-os.test.ts",
+        "lib/operacoes-v4/orcamento-rapido-form.test.ts",
+        "lib/operacoes-v4/precificacao-telas-contract.test.ts",
+        "lib/operacoes-v4/precificacao-telas.test.ts",
+        "lib/whatsapp-legacy-quarantine.test.ts",
+        "lib/whatsapp/store-credentials.test.ts",
+        "lib/whatsapp/whatsapp-service-routing.test.ts",
+        "--maxWorkers=2",
+        "--testTimeout=30000"
+      ],
+      "startedAt": "2026-10-19T00:53:06.908Z",
+      "endedAt": "2026-10-19T00:53:12.958Z",
+      "exit": 0
+    }
+  },
+  "ui": [
+    {
+      "report": "ui-envio-final",
+      "total": 15,
+      "passed": 15,
+      "failed": 0,
+      "pending": 0,
+      "success": true,
+      "rawSha256": "e9647331ba6274347906315a9023f6a0f30b0a58e6b27a887a89a92a68ffd54e",
+      "run": {
+        "label": "ui-envio-final",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-orcamento-envio-real-status-001/vitest.config.ts",
+          "--maxWorkers=1",
+          "--reporter=verbose",
+          "--testTimeout=30000",
+          "--hookTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:52:42.166Z",
+        "endedAt": "2026-10-19T00:52:49.857Z",
+        "exit": 0
+      }
+    },
+    {
+      "report": "ui-rafacell-final",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "success": true,
+      "rawSha256": "16b4741f61f51a886053ff2802b97a22aacc26076b62e14dd2802cdcb193f29f",
+      "run": {
+        "label": "ui-rafacell-final",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-precificacao-001/vitest.config.ts",
+          "--maxWorkers=1",
+          "--reporter=verbose",
+          "--testTimeout=30000",
+          "--hookTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:53:07.619Z",
+        "endedAt": "2026-10-19T00:53:11.781Z",
+        "exit": 0
+      }
+    }
+  ],
+  "regression": {
+    "report": "regression-verified",
+    "total": 2117,
+    "passed": 2101,
+    "failed": 16,
+    "pending": 0,
+    "success": false,
+    "rawSha256": "edd7c58747147601ab5bd37f9019c91328e18281a3baf3a9e3729f67595eb8c7",
+    "run": {
+      "label": "regression-verified",
+      "kind": "vitest",
+      "args": [
+        "run",
+        "lib/operacoes-v3",
+        "lib/operacoes-v4",
+        "components/operacoes-v4-preview",
+        "--maxWorkers=2",
+        "--testTimeout=30000",
+        "--hookTimeout=30000"
+      ],
+      "startedAt": "2026-10-19T00:59:15.451Z",
+      "endedAt": "2026-10-19T00:59:38.591Z",
+      "exit": 1
+    },
+    "baselinePassed": 2071,
+    "baselineFailed": 16,
+    "failures": [
+      "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento operacional, não preview/read-only não classifica o Financeiro transversal como somente leitura depois do recebimento conectado",
+      "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)",
+      "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)",
+      "PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3) no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio",
+      "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato mantém estado de múltiplas linhas (array), não forma única",
+      "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas",
+      "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)",
+      "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)",
+      "OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)",
+      "OPS-V4-NOVA-OS-AUTOFILL-ISOLATION-009 — Nova OS sem autofill do navegador todo campo de input/textarea do modal Nova OS declara autoComplete explícito",
+      "GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real \"Termo de Garantia\" no menu Docs abre o modal real (docPrint) em vez do toast de preview",
+      "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite EntregaStage renderiza o form real (v.salvarGarantia) com o catálogo/prazo padrão da V3",
+      "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite botão de salvar tem busy-lock e fica desabilitado sem mudança (evita duplo clique / salvar sem editar)",
+      "GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite copy honesta sobre quando a garantia passa a valer",
+      "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 recebimento imediato continua no contrato receberOSV3 via hook, sem optimistic de valor",
+      "OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3 19–35. submit usa receberOSV3 via hook, sem optimistic e com reload só no sucesso"
+    ],
+    "addedFailures": [],
+    "missingFailures": []
+  },
+  "typecheck": {
+    "label": "typecheck-verified",
+    "kind": "typecheck",
+    "args": [
+      "--noEmit"
+    ],
+    "startedAt": "2026-10-19T00:53:32.908Z",
+    "endedAt": "2026-10-19T00:53:57.993Z",
+    "exit": 0
+  },
+  "build": {
+    "label": "build",
+    "kind": "build",
+    "args": [],
+    "startedAt": "2026-10-19T00:42:45.371Z",
+    "endedAt": "2026-10-19T00:51:34.864Z",
+    "exit": 0,
+    "compiled": true,
+    "generatedPages": 102,
+    "migration": "MIGRATION_SKIPPED",
+    "database": "loopback inativo porta 1",
+    "transportMocks": false,
+    "logSha256": "2cce7df54fb2081fe85dbfd4137dc038cd7e045e0d9cb9bf5e3e1d603c31ff6a"
+  },
+  "lint": {
+    "focused": {
+      "report": "focused-eslint-final",
+      "files": 4,
+      "errors": 0,
+      "warnings": 1,
+      "messages": [
+        {
+          "path": "app/actions/operacoes.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 1435,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              57643,
+              57705
+            ],
+            "text": " "
+          }
+        }
+      ],
+      "rawSha256": "54f42398025b396d4f5f70a7e1156680171e49443d0f05ad3cb5437931f8bad6"
+    },
+    "global": {
+      "report": "global-eslint-final",
+      "files": 4437,
+      "errors": 105,
+      "warnings": 114,
+      "messages": [
+        {
+          "path": "app/actions/operacoes.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 1435,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              57643,
+              57705
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "app/dashboard/clientes/ClientesPageClient.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'toast'. Either include it or remove the dependency array.",
+          "line": 341,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 341,
+          "endColumn": 11,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [cep, toast]",
+              "fix": {
+                "range": [
+                  11245,
+                  11250
+                ],
+                "text": "[cep, toast]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "app/dashboard/marketing-ia/components/PhonePreview.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 62,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 62,
+          "endColumn": 91
+        },
+        {
+          "path": "app/dashboard/marketing-ia/components/PhonePreview.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 117,
+          "column": 21,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 117,
+          "endColumn": 95
+        },
+        {
+          "path": "app/dashboard/marketing-ia/components/PhonePreview.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 141,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 141,
+          "endColumn": 97
+        },
+        {
+          "path": "app/dashboard/marketing-ia/components/PostGeneratorTab.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 240,
+          "column": 15,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 240,
+          "endColumn": 88
+        },
+        {
+          "path": "app/dashboard/marketing-ia/components/studio/bom-dia-modal.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 204,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 208,
+          "endColumn": 21
+        },
+        {
+          "path": "components/cadastros/lovable/components/cadastros/ConferenciaLoteProdutos.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'produtos' logical expression could make the dependencies of useMemo Hook (at line 115) change on every render. To fix this, wrap the initialization of 'produtos' in its own useMemo() Hook.",
+          "line": 111,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 111,
+          "endColumn": 40
+        },
+        {
+          "path": "components/cadastros/lovable/components/cadastros/MovimentacaoEstoqueModal.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'produto'. Either include it or remove the dependency array. If 'setNovoSaldo' needs the current value of 'produto', you can also switch to useReducer instead of useState and read 'produto' in the reducer.",
+          "line": 125,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 125,
+          "endColumn": 25,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [open, produto, produto.id]",
+              "fix": {
+                "range": [
+                  4543,
+                  4562
+                ],
+                "text": "[open, produto, produto.id]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/cadastros/lovable/routes/__root.tsx",
+          "ruleId": "@next/next/no-head-element",
+          "severity": 1,
+          "message": "Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element",
+          "line": 56,
+          "column": 7,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 56,
+          "endColumn": 13
+        },
+        {
+          "path": "components/configuracoes-v3/features/settings/sections/GeralSection.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'toast'. Either include it or remove the dependency array.",
+          "line": 155,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 155,
+          "endColumn": 34,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [lojaAtivaId, applySnapshot, toast]",
+              "fix": {
+                "range": [
+                  5136,
+                  5164
+                ],
+                "text": "[lojaAtivaId, applySnapshot, toast]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/configuracoes-v3/features/settings/sections/PdvSection.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 308,
+          "column": 7,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 313,
+          "endColumn": 9
+        },
+        {
+          "path": "components/configuracoes-v3/features/settings/sections/PdvSection.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 798,
+          "column": 27,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 813,
+          "endColumn": 29
+        },
+        {
+          "path": "components/dashboard/clientes/cadastro-clientes.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 381,
+          "column": 23,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 381,
+          "endColumn": 126
+        },
+        {
+          "path": "components/dashboard/configuracoes/backup-importador/importador-dados-externos.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has an unnecessary dependency: 'correcaoPreviewRevision'. Either exclude it or remove the dependency array.",
+          "line": 1832,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 1832,
+          "endColumn": 95,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [sheet, uiTab, produtosFluxo, correcaoMapping, correcaoCatalogo]",
+              "fix": {
+                "range": [
+                  66936,
+                  67025
+                ],
+                "text": "[sheet, uiTab, produtosFluxo, correcaoMapping, correcaoCatalogo]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/configuracoes/configuracoes-sistema.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array.",
+          "line": 273,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 273,
+          "endColumn": 14,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [config, lojaAtivaId]",
+              "fix": {
+                "range": [
+                  11741,
+                  11749
+                ],
+                "text": "[config, lojaAtivaId]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/configuracoes/gestao-unidades-saas.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'selected'. Either include it or remove the dependency array.",
+          "line": 197,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 197,
+          "endColumn": 20,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [selected, selected.id]",
+              "fix": {
+                "range": [
+                  6566,
+                  6580
+                ],
+                "text": "[selected, selected.id]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/estoque/inventario-conciliacao.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'naoEncontrados' logical expression could make the dependencies of useMemo Hook (at line 262) change on every render. To fix this, wrap the initialization of 'naoEncontrados' in its own useMemo() Hook.",
+          "line": 250,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 250,
+          "endColumn": 52
+        },
+        {
+          "path": "components/dashboard/financeiro/contas-receber.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'baixaConta'. Either include it or remove the dependency array.",
+          "line": 735,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 735,
+          "endColumn": 33,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [baixaOpen, baixaConta.id, baixaConta]",
+              "fix": {
+                "range": [
+                  30077,
+                  30104
+                ],
+                "text": "[baixaOpen, baixaConta.id, baixaConta]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/os/ordens-servico.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 1470,
+          "column": 27,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 1474,
+          "endColumn": 29
+        },
+        {
+          "path": "components/dashboard/os/ordens-servico.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 1719,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 1723,
+          "endColumn": 21
+        },
+        {
+          "path": "components/dashboard/vendas/payment-modal.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'formasPagamento' logical expression could make the dependencies of useMemo Hook (at line 381) change on every render. To fix this, wrap the initialization of 'formasPagamento' in its own useMemo() Hook.",
+          "line": 371,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 371,
+          "endColumn": 58
+        },
+        {
+          "path": "components/dashboard/vendas/payment-modal.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'formasPagamento' logical expression could make the dependencies of useCallback Hook (at line 386) change on every render. To fix this, wrap the initialization of 'formasPagamento' in its own useMemo() Hook.",
+          "line": 371,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 371,
+          "endColumn": 58
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-classic.tsx",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps').",
+          "line": 725,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              30969,
+              31024
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-classic.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'addToCart' function makes the dependencies of useCallback Hook (at line 1037) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook.",
+          "line": 785,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 841,
+          "endColumn": 4,
+          "suggestions": [
+            {
+              "desc": "Wrap the definition of 'addToCart' in its own useCallback() Hook.",
+              "fix": {
+                "range": [
+                  33002,
+                  35011
+                ],
+                "text": "useCallback((product: Product, presetQty?: number) => {\r\n    const baseQty = presetQty ?? 1\r\n    const controlledStock = hasControlledPdvStock(product.stock, product.category)\r\n    if (controlledStock && product.stock <= 0) {\r\n      toast({ title: \"Sem estoque\", description: `${product.name} está sem saldo no estoque.` })\r\n      return false\r\n    }\r\n    if (controlledStock && !product.vendaPorPeso && baseQty > product.stock) {\r\n      toast({\r\n        title: \"Sem estoque\",\r\n        description: `${product.name}: solicitado ${baseQty}, disponível ${product.stock}.`,\r\n        variant: \"destructive\",\r\n      })\r\n      return false\r\n    }\r\n    if (!product.vendaPorPeso && !validateAggregatedStockForProduct(product, baseQty)) {\r\n      return false\r\n    }\r\n    // Acessório configurado (modelo/cor): intercepta ANTES da mutação do carrinho.\r\n    // Atalhos/entradas sem `accessoryConfig` resolvem a config pelo catálogo real.\r\n    const accessoryConfig =\r\n      product.accessoryConfig ?? products.find((p) => p.id === product.id)?.accessoryConfig\r\n    if (\r\n      accessoryModelColorEnabled &&\r\n      !product.vendaPorPeso &&\r\n      accessoryConfigRequiresSelection(accessoryConfig)\r\n    ) {\r\n      accessoryQtyRef.current = baseQty\r\n      setAccessoryProduct({ ...product, accessoryConfig })\r\n      return true\r\n    }\r\n    if (product.atributos && product.atributos.length > 0) {\r\n      setAttrProduct(product)\r\n      const init: Record<string, string> = {}\r\n      for (const a of product.atributos) {\r\n        init[a.id] = a.opcoes[0] ?? \"\"\r\n      }\r\n      setAttrSelections(init)\r\n      setAttrDialogOpen(true)\r\n      return true\r\n    }\r\n    if (product.vendaPorPeso) {\r\n      setAttrSelections({})\r\n      setWeightProduct(product)\r\n      setWeightKgInput(\"\")\r\n      setWeightDialogOpen(true)\r\n      return true\r\n    }\r\n    pushCartLine({\r\n      inventoryId: product.id,\r\n      name: product.name,\r\n      price: product.price,\r\n      quantity: baseQty,\r\n    })\r\n    setSelectedProduct(product)\r\n    return true\r\n  })"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-classic.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'addToCart' function makes the dependencies of useCallback Hook (at line 1053) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook.",
+          "line": 785,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 841,
+          "endColumn": 4,
+          "suggestions": [
+            {
+              "desc": "Wrap the definition of 'addToCart' in its own useCallback() Hook.",
+              "fix": {
+                "range": [
+                  33002,
+                  35011
+                ],
+                "text": "useCallback((product: Product, presetQty?: number) => {\r\n    const baseQty = presetQty ?? 1\r\n    const controlledStock = hasControlledPdvStock(product.stock, product.category)\r\n    if (controlledStock && product.stock <= 0) {\r\n      toast({ title: \"Sem estoque\", description: `${product.name} está sem saldo no estoque.` })\r\n      return false\r\n    }\r\n    if (controlledStock && !product.vendaPorPeso && baseQty > product.stock) {\r\n      toast({\r\n        title: \"Sem estoque\",\r\n        description: `${product.name}: solicitado ${baseQty}, disponível ${product.stock}.`,\r\n        variant: \"destructive\",\r\n      })\r\n      return false\r\n    }\r\n    if (!product.vendaPorPeso && !validateAggregatedStockForProduct(product, baseQty)) {\r\n      return false\r\n    }\r\n    // Acessório configurado (modelo/cor): intercepta ANTES da mutação do carrinho.\r\n    // Atalhos/entradas sem `accessoryConfig` resolvem a config pelo catálogo real.\r\n    const accessoryConfig =\r\n      product.accessoryConfig ?? products.find((p) => p.id === product.id)?.accessoryConfig\r\n    if (\r\n      accessoryModelColorEnabled &&\r\n      !product.vendaPorPeso &&\r\n      accessoryConfigRequiresSelection(accessoryConfig)\r\n    ) {\r\n      accessoryQtyRef.current = baseQty\r\n      setAccessoryProduct({ ...product, accessoryConfig })\r\n      return true\r\n    }\r\n    if (product.atributos && product.atributos.length > 0) {\r\n      setAttrProduct(product)\r\n      const init: Record<string, string> = {}\r\n      for (const a of product.atributos) {\r\n        init[a.id] = a.opcoes[0] ?? \"\"\r\n      }\r\n      setAttrSelections(init)\r\n      setAttrDialogOpen(true)\r\n      return true\r\n    }\r\n    if (product.vendaPorPeso) {\r\n      setAttrSelections({})\r\n      setWeightProduct(product)\r\n      setWeightKgInput(\"\")\r\n      setWeightDialogOpen(true)\r\n      return true\r\n    }\r\n    pushCartLine({\r\n      inventoryId: product.id,\r\n      name: product.name,\r\n      price: product.price,\r\n      quantity: baseQty,\r\n    })\r\n    setSelectedProduct(product)\r\n    return true\r\n  })"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-classic.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array.",
+          "line": 1199,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 1199,
+          "endColumn": 107,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [subtotal, discountTotal, pdvParams]",
+              "fix": {
+                "range": [
+                  49172,
+                  49274
+                ],
+                "text": "[subtotal, discountTotal, pdvParams]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-classic.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has an unnecessary dependency: 'cart.length'. Either exclude it or remove the dependency array.",
+          "line": 1499,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 1499,
+          "endColumn": 159,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow, customerSearchEnabled, heldSalesEnabled]",
+              "fix": {
+                "range": [
+                  60237,
+                  60391
+                ],
+                "text": "[focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow, customerSearchEnabled, heldSalesEnabled]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-recebimento-modal.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has missing dependencies: 'matchOpts' and 'selectedCliente'. Either include them or remove the dependency array.",
+          "line": 526,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 526,
+          "endColumn": 119,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [podeImprimir, selectedCliente, matchOpts, reciboLojaNome, formaLabel, saldoDevedorClienteApos, impressaoConfig?.bobinaTamanho, toast]",
+              "fix": {
+                "range": [
+                  20245,
+                  20359
+                ],
+                "text": "[podeImprimir, selectedCliente, matchOpts, reciboLojaNome, formaLabel, saldoDevedorClienteApos, impressaoConfig?.bobinaTamanho, toast]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-supermercado.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has a missing dependency: 'accessoryModelColorEnabled'. Either include it or remove the dependency array.",
+          "line": 508,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 508,
+          "endColumn": 26,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [accessoryModelColorEnabled, pushCartLine, toast]",
+              "fix": {
+                "range": [
+                  21581,
+                  21602
+                ],
+                "text": "[accessoryModelColorEnabled, pushCartLine, toast]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-supermercado.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array.",
+          "line": 640,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 640,
+          "endColumn": 107,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [subtotal, discountTotal, pdvParams]",
+              "fix": {
+                "range": [
+                  26673,
+                  26775
+                ],
+                "text": "[subtotal, discountTotal, pdvParams]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-venda-completa-enterprise.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array.",
+          "line": 253,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 253,
+          "endColumn": 107,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [subtotal, discountReais, pdvParams]",
+              "fix": {
+                "range": [
+                  9319,
+                  9421
+                ],
+                "text": "[subtotal, discountReais, pdvParams]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/pdv-venda-completa-enterprise.tsx",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps').",
+          "line": 309,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              11892,
+              11947
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/dashboard/vendas/venda-completa-enterprise.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array.",
+          "line": 353,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 353,
+          "endColumn": 107,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [subtotal, discountReais, pdvParams]",
+              "fix": {
+                "range": [
+                  15497,
+                  15599
+                ],
+                "text": "[subtotal, discountReais, pdvParams]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/dashboard/vendas/venda-completa-enterprise.tsx",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps').",
+          "line": 426,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              18844,
+              18899
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/financeiro/lovable/context/FinanceiroRealContext.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has a missing dependency: 'emptyRelatorios'. Either include it or remove the dependency array.",
+          "line": 812,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 812,
+          "endColumn": 26,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [emptyRelatorios, filtrosFinanceiros]",
+              "fix": {
+                "range": [
+                  27601,
+                  27621
+                ],
+                "text": "[emptyRelatorios, filtrosFinanceiros]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/financeiro/lovable/routes/__root.tsx",
+          "ruleId": "@next/next/no-head-element",
+          "severity": 1,
+          "message": "Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element",
+          "line": 57,
+          "column": 7,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 57,
+          "endColumn": 13
+        },
+        {
+          "path": "components/ia-mestre/ChatMessage.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 154,
+          "column": 17,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 159,
+          "endColumn": 19
+        },
+        {
+          "path": "components/ia-mestre/views/ConfiguracoesIaView.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 281,
+          "column": 21,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 281,
+          "endColumn": 112
+        },
+        {
+          "path": "components/master-console/EmployeeFormSheet.tsx",
+          "ruleId": "jsx-a11y/role-supports-aria-props",
+          "severity": 1,
+          "message": "The attribute aria-disabled is not supported by the role form. This role is implicit on the element form.",
+          "line": 39,
+          "column": 11,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 39,
+          "endColumn": 84
+        },
+        {
+          "path": "components/operacoes/lovable/components/operacoes/AnexosPanel.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 215,
+          "column": 17,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 215,
+          "endColumn": 133
+        },
+        {
+          "path": "components/operacoes/lovable/components/operacoes/ChecklistTecnicoPanel.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has unnecessary dependencies: 'os.atualizadoEm' and 'os.id'. Either exclude them or remove the dependency array.",
+          "line": 24,
+          "column": 70,
+          "nodeType": "ArrayExpression",
+          "endLine": 24,
+          "endColumn": 115,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [os.checklistTecnico]",
+              "fix": {
+                "range": [
+                  921,
+                  966
+                ],
+                "text": "[os.checklistTecnico]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/operacoes/lovable/components/operacoes/PortalClienteModal.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 82,
+          "column": 58,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 82,
+          "endColumn": 129
+        },
+        {
+          "path": "components/painel-inicial/workspace-focus-context.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'overlayState'. Either include it or remove the dependency array.",
+          "line": 64,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 64,
+          "endColumn": 44,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [docksReady, overlayState, overlayState.dockedRails]",
+              "fix": {
+                "range": [
+                  2326,
+                  2364
+                ],
+                "text": "[docksReady, overlayState, overlayState.dockedRails]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/app/api/ops/inventory/import/route.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 87,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              2994,
+              3032
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/cadastros-v2/CadastrosV2Client.tsx",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 62,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              1732,
+              1770
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/cadastros-v2/CadastrosV2Client.tsx",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 64,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              1850,
+              1888
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/cadastros-v2/CadastrosV2Client.tsx",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 75,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              2169,
+              2207
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/cadastros-v2/CadastrosV2Client.tsx",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 77,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              2307,
+              2345
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/marketing-ia/components/PhonePreview.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 62,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 62,
+          "endColumn": 91
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/marketing-ia/components/PhonePreview.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 117,
+          "column": 21,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 117,
+          "endColumn": 95
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/marketing-ia/components/PhonePreview.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 141,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 141,
+          "endColumn": 97
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/marketing-ia/components/PostGeneratorTab.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 165,
+          "column": 15,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 165,
+          "endColumn": 88
+        },
+        {
+          "path": "components/pdv-github-original/app/dashboard/marketing-ia/components/studio/bom-dia-modal.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 204,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 208,
+          "endColumn": 21
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/app.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'PDV' is not defined.",
+          "line": 3,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 3,
+          "endColumn": 17
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 34,
+          "column": 80,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 34,
+          "endColumn": 84
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 77,
+          "column": 31,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 77,
+          "endColumn": 35
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 123,
+          "column": 20,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 123,
+          "endColumn": 24
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 132,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 132,
+          "endColumn": 14
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 271,
+          "column": 20,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 271,
+          "endColumn": 24
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 324,
+          "column": 43,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 324,
+          "endColumn": 47
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 331,
+          "column": 47,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 331,
+          "endColumn": 51
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 335,
+          "column": 43,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 335,
+          "endColumn": 47
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 351,
+          "column": 24,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 351,
+          "endColumn": 28
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 391,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 391,
+          "endColumn": 14
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 411,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 411,
+          "endColumn": 14
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 430,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 430,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 455,
+          "column": 20,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 455,
+          "endColumn": 24
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 458,
+          "column": 20,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 458,
+          "endColumn": 24
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 538,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 538,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 564,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 564,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 568,
+          "column": 79,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 568,
+          "endColumn": 83
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 583,
+          "column": 43,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 583,
+          "endColumn": 47
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 614,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 614,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 623,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 623,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 646,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 646,
+          "endColumn": 14
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 651,
+          "column": 30,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 651,
+          "endColumn": 34
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'ModalShell' is not defined.",
+          "line": 78,
+          "column": 6,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 78,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 85,
+          "column": 16,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 85,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 99,
+          "column": 16,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 99,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 108,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 108,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 111,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 111,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 135,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 135,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 142,
+          "column": 16,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 142,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 170,
+          "column": 35,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 170,
+          "endColumn": 39
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 222,
+          "column": 98,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 222,
+          "endColumn": 102
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 228,
+          "column": 98,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 228,
+          "endColumn": 102
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 250,
+          "column": 20,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 250,
+          "endColumn": 24
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 253,
+          "column": 20,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 253,
+          "endColumn": 24
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 261,
+          "column": 16,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 261,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'ModalShell' is not defined.",
+          "line": 301,
+          "column": 6,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 301,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 309,
+          "column": 32,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 309,
+          "endColumn": 36
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 313,
+          "column": 32,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 313,
+          "endColumn": 36
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 321,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 321,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 324,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 324,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 341,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 341,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 350,
+          "column": 34,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 350,
+          "endColumn": 38
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'ModalShell' is not defined.",
+          "line": 396,
+          "column": 6,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 396,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 401,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 401,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 406,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 406,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 427,
+          "column": 58,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 427,
+          "endColumn": 62
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 428,
+          "column": 58,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 428,
+          "endColumn": 62
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 438,
+          "column": 38,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 438,
+          "endColumn": 42
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 483,
+          "column": 24,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 483,
+          "endColumn": 28
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 485,
+          "column": 26,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 485,
+          "endColumn": 30
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 486,
+          "column": 26,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 486,
+          "endColumn": 30
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'ModalShell' is not defined.",
+          "line": 519,
+          "column": 6,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 519,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 521,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 521,
+          "endColumn": 14
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 569,
+          "column": 22,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 569,
+          "endColumn": 26
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'ModalShell' is not defined.",
+          "line": 604,
+          "column": 6,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 604,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 616,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 616,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 633,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 633,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 640,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 640,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 649,
+          "column": 16,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 649,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 658,
+          "column": 16,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 658,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/modals2.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 693,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 693,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 404,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 404,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 412,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 412,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 421,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 421,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 425,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 425,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 431,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 431,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 438,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 438,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 446,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 446,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 451,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 451,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 470,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 470,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 475,
+          "column": 14,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 475,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 486,
+          "column": 39,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 486,
+          "endColumn": 43
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 515,
+          "column": 44,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 515,
+          "endColumn": 48
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 532,
+          "column": 16,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 532,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 547,
+          "column": 51,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 547,
+          "endColumn": 55
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 607,
+          "column": 28,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 607,
+          "endColumn": 32
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 653,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 653,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 658,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 658,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 663,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 663,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 694,
+          "column": 83,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 694,
+          "endColumn": 87
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 696,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 696,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 701,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 701,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 747,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 747,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 757,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 757,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 784,
+          "column": 18,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 784,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 793,
+          "column": 16,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 793,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'Icon' is not defined.",
+          "line": 861,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 861,
+          "endColumn": 16
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'SearchModal' is not defined.",
+          "line": 867,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 867,
+          "endColumn": 21
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'QtyModal' is not defined.",
+          "line": 877,
+          "column": 12,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 877,
+          "endColumn": 20
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'CustomerModal' is not defined.",
+          "line": 885,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 885,
+          "endColumn": 23
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'DiscountModal' is not defined.",
+          "line": 892,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 892,
+          "endColumn": 23
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'CpfNotaModal' is not defined.",
+          "line": 900,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 900,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'CancelModal' is not defined.",
+          "line": 907,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 907,
+          "endColumn": 21
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'SuspendModal' is not defined.",
+          "line": 918,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 918,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'PaymentModal' is not defined.",
+          "line": 928,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 928,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'ReturnModal' is not defined.",
+          "line": 940,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 940,
+          "endColumn": 21
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'LoyaltyModal' is not defined.",
+          "line": 955,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 955,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'CashOpsModal' is not defined.",
+          "line": 964,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 964,
+          "endColumn": 22
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'CashCloseModal' is not defined.",
+          "line": 973,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 973,
+          "endColumn": 24
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'TurnHistoryModal' is not defined.",
+          "line": 991,
+          "column": 10,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 991,
+          "endColumn": 26
+        },
+        {
+          "path": "components/pdv-github-original/claude-export/pdv.jsx",
+          "ruleId": "react/jsx-no-undef",
+          "severity": 2,
+          "message": "'SuccessModal' is not defined.",
+          "line": 1010,
+          "column": 11,
+          "nodeType": "JSXIdentifier",
+          "messageId": "undefined",
+          "endLine": 1010,
+          "endColumn": 23
+        },
+        {
+          "path": "components/pdv-github-original/components/cadastros/lovable/routes/__root.tsx",
+          "ruleId": "@next/next/no-head-element",
+          "severity": 1,
+          "message": "Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element",
+          "line": 56,
+          "column": 7,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 56,
+          "endColumn": 13
+        },
+        {
+          "path": "components/pdv-github-original/components/configuracoes-v3/features/settings/sections/GeralSection.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'toast'. Either include it or remove the dependency array.",
+          "line": 156,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 156,
+          "endColumn": 34,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [lojaAtivaId, applySnapshot, toast]",
+              "fix": {
+                "range": [
+                  5107,
+                  5135
+                ],
+                "text": "[lojaAtivaId, applySnapshot, toast]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/clientes/cadastro-clientes.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 381,
+          "column": 23,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 381,
+          "endColumn": 126
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/configuracoes/backup-importador/importador-dados-externos.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has an unnecessary dependency: 'correcaoPreviewRevision'. Either exclude it or remove the dependency array.",
+          "line": 1734,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 1734,
+          "endColumn": 95,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [sheet, uiTab, produtosFluxo, correcaoMapping, correcaoCatalogo]",
+              "fix": {
+                "range": [
+                  62922,
+                  63011
+                ],
+                "text": "[sheet, uiTab, produtosFluxo, correcaoMapping, correcaoCatalogo]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/configuracoes/configuracoes-sistema.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array.",
+          "line": 274,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 274,
+          "endColumn": 14,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [config, lojaAtivaId]",
+              "fix": {
+                "range": [
+                  11826,
+                  11834
+                ],
+                "text": "[config, lojaAtivaId]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/configuracoes/gestao-unidades-saas.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'selected'. Either include it or remove the dependency array.",
+          "line": 125,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 125,
+          "endColumn": 20,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [selected, selected.id]",
+              "fix": {
+                "range": [
+                  4165,
+                  4179
+                ],
+                "text": "[selected, selected.id]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/estoque/servicos.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 204,
+          "column": 35,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 208,
+          "endColumn": 37
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/financeiro/contas-receber.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'baixaConta'. Either include it or remove the dependency array.",
+          "line": 724,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 724,
+          "endColumn": 33,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [baixaOpen, baixaConta.id, baixaConta]",
+              "fix": {
+                "range": [
+                  29586,
+                  29613
+                ],
+                "text": "[baixaOpen, baixaConta.id, baixaConta]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/header.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 125,
+          "column": 11,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 129,
+          "endColumn": 13
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/mobile-nav.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has an unnecessary dependency: 'config.assinatura.plano'. Either exclude it or remove the dependency array.",
+          "line": 152,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 152,
+          "endColumn": 85,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [pdvParams.moduloControleConsumo, isBronze, staffRole]",
+              "fix": {
+                "range": [
+                  5325,
+                  5404
+                ],
+                "text": "[pdvParams.moduloControleConsumo, isBronze, staffRole]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/os/ordens-servico.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 1492,
+          "column": 27,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 1496,
+          "endColumn": 29
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/os/ordens-servico.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 1741,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 1745,
+          "endColumn": 21
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/vendas/pdv-assistencia-enterprise.tsx",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps').",
+          "line": 222,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              6583,
+              6638
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/vendas/pdv-classic.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'addToCart' function makes the dependencies of useCallback Hook (at line 608) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook.",
+          "line": 542,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 580,
+          "endColumn": 4,
+          "suggestions": [
+            {
+              "desc": "Wrap the definition of 'addToCart' in its own useCallback() Hook.",
+              "fix": {
+                "range": [
+                  20843,
+                  22010
+                ],
+                "text": "useCallback((product: Product, presetQty?: number) => {\r\n    const baseQty = presetQty ?? 1\r\n    if (product.stock <= 0) {\r\n      toast({ title: \"Sem estoque\", description: `${product.name} está sem saldo no estoque.` })\r\n      return\r\n    }\r\n    if (!product.vendaPorPeso && baseQty > product.stock) {\r\n      toast({\r\n        title: \"Sem estoque\",\r\n        description: `${product.name}: solicitado ${baseQty}, disponível ${product.stock}.`,\r\n        variant: \"destructive\",\r\n      })\r\n      return\r\n    }\r\n    if (product.atributos && product.atributos.length > 0) {\r\n      setAttrProduct(product)\r\n      const init: Record<string, string> = {}\r\n      for (const a of product.atributos) {\r\n        init[a.id] = a.opcoes[0] ?? \"\"\r\n      }\r\n      setAttrSelections(init)\r\n      setAttrDialogOpen(true)\r\n      return\r\n    }\r\n    if (product.vendaPorPeso) {\r\n      setAttrSelections({})\r\n      setWeightProduct(product)\r\n      setWeightKgInput(\"\")\r\n      setWeightDialogOpen(true)\r\n      return\r\n    }\r\n    pushCartLine({\r\n      inventoryId: product.id,\r\n      name: product.name,\r\n      price: product.price,\r\n      quantity: baseQty,\r\n    })\r\n    setSelectedProduct(product)\r\n  })"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/vendas/pdv-supermercado.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has a missing dependency: 'products'. Either include it or remove the dependency array.",
+          "line": 220,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 220,
+          "endColumn": 43,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [inventory, pdvParams.atalhosRapidos, products]",
+              "fix": {
+                "range": [
+                  8572,
+                  8609
+                ],
+                "text": "[inventory, pdvParams.atalhosRapidos, products]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/dashboard/vendas/vendas-arquivo-geral.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has an unnecessary dependency: 'contasVersion'. Either exclude it or remove the dependency array.",
+          "line": 123,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 123,
+          "endColumn": 44,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [sales, busca, lojaKey]",
+              "fix": {
+                "range": [
+                  4158,
+                  4196
+                ],
+                "text": "[sales, busca, lojaKey]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/ia-mestre/ChatMessage.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 138,
+          "column": 15,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 138,
+          "endColumn": 159
+        },
+        {
+          "path": "components/pdv-github-original/components/operacoes/lovable/components/operacoes/AnexosPanel.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 100,
+          "column": 17,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 100,
+          "endColumn": 131
+        },
+        {
+          "path": "components/pdv-github-original/components/operacoes/lovable/components/operacoes/PortalClienteModal.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 82,
+          "column": 58,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 82,
+          "endColumn": 129
+        },
+        {
+          "path": "components/pdv-github-original/components/studio/components/bom-dia-modal.tsx",
+          "ruleId": "react-hooks/set-state-in-render",
+          "severity": 2,
+          "message": "Error: Calling setState from useMemo may trigger an infinite loop\n\nEach time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).\n\nC:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001\\components\\pdv-github-original\\components\\studio\\components\\bom-dia-modal.tsx:134:5\n  132 |   // Reset when template changes\n  133 |   useMemo(() => {\n> 134 |     setMessage(tpl.caption);\n      |     ^^^^^^^^^^ Found setState() within useMemo()\n  135 |     setActiveTake(0);\n  136 |     setTakeMedia([null, null, null]);\n  137 |   }, [template, tpl.caption]);",
+          "line": 134,
+          "column": 5,
+          "nodeType": null,
+          "endLine": 134,
+          "endColumn": 15
+        },
+        {
+          "path": "components/pdv-github-original/components/studio/components/bom-dia-modal.tsx",
+          "ruleId": "react-hooks/set-state-in-render",
+          "severity": 2,
+          "message": "Error: Calling setState from useMemo may trigger an infinite loop\n\nEach time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).\n\nC:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001\\components\\pdv-github-original\\components\\studio\\components\\bom-dia-modal.tsx:135:5\n  133 |   useMemo(() => {\n  134 |     setMessage(tpl.caption);\n> 135 |     setActiveTake(0);\n      |     ^^^^^^^^^^^^^ Found setState() within useMemo()\n  136 |     setTakeMedia([null, null, null]);\n  137 |   }, [template, tpl.caption]);\n  138 |",
+          "line": 135,
+          "column": 5,
+          "nodeType": null,
+          "endLine": 135,
+          "endColumn": 18
+        },
+        {
+          "path": "components/pdv-github-original/components/studio/components/bom-dia-modal.tsx",
+          "ruleId": "react-hooks/set-state-in-render",
+          "severity": 2,
+          "message": "Error: Calling setState from useMemo may trigger an infinite loop\n\nEach time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).\n\nC:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001\\components\\pdv-github-original\\components\\studio\\components\\bom-dia-modal.tsx:136:5\n  134 |     setMessage(tpl.caption);\n  135 |     setActiveTake(0);\n> 136 |     setTakeMedia([null, null, null]);\n      |     ^^^^^^^^^^^^ Found setState() within useMemo()\n  137 |   }, [template, tpl.caption]);\n  138 |\n  139 |   const completedTakes = takeMedia.filter(Boolean).length;",
+          "line": 136,
+          "column": 5,
+          "nodeType": null,
+          "endLine": 136,
+          "endColumn": 17
+        },
+        {
+          "path": "components/pdv-github-original/components/studio/components/bom-dia-modal.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has an unnecessary dependency: 'template'. Either exclude it or remove the dependency array.",
+          "line": 137,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 137,
+          "endColumn": 29,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [tpl.caption]",
+              "fix": {
+                "range": [
+                  4376,
+                  4399
+                ],
+                "text": "[tpl.caption]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/components/studio/components/bom-dia-modal.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 252,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 256,
+          "endColumn": 21
+        },
+        {
+          "path": "components/pdv-github-original/components/tabs/CalendarTab.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'now' object construction makes the dependencies of useMemo Hook (at line 43) change on every render. To fix this, wrap the initialization of 'now' in its own useMemo() Hook.",
+          "line": 28,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 28,
+          "endColumn": 25
+        },
+        {
+          "path": "components/pdv-github-original/components/vendas-hub/lovable/routeTree.gen.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported).",
+          "line": 1,
+          "column": 1,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              0,
+              20
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/pdv-github-original/lib/config-empresa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect has a missing dependency: 'config.assinatura'. Either include it or remove the dependency array.",
+          "line": 419,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 419,
+          "endColumn": 104,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [configPersistOk, config.assinatura.vencimento, config.assinatura.plano, config.assinatura.status, config.assinatura]",
+              "fix": {
+                "range": [
+                  15193,
+                  15291
+                ],
+                "text": "[configPersistOk, config.assinatura.vencimento, config.assinatura.plano, config.assinatura.status, config.assinatura]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/lib/config-empresa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has a missing dependency: 'config.empresa'. Either include it or remove the dependency array.",
+          "line": 574,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 574,
+          "endColumn": 76,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [config.empresa, config.termosGarantia.tituloGeral, config.termosGarantia.garantiaLegal, getGarantiaParaServico]",
+              "fix": {
+                "range": [
+                  20524,
+                  20595
+                ],
+                "text": "[config.empresa, config.termosGarantia.tituloGeral, config.termosGarantia.garantiaLegal, getGarantiaParaServico]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/lib/loja-ativa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has an unnecessary dependency: 'lojas'. Either exclude it or remove the dependency array.",
+          "line": 253,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 253,
+          "endColumn": 13,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: []",
+              "fix": {
+                "range": [
+                  9403,
+                  9410
+                ],
+                "text": "[]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/lib/loja-ativa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array.",
+          "line": 296,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 296,
+          "endColumn": 30,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [lojaSelecionada?.id, lojaAtivaId, lojas]",
+              "fix": {
+                "range": [
+                  10886,
+                  10910
+                ],
+                "text": "[lojaSelecionada?.id, lojaAtivaId, lojas]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/lib/loja-ativa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has an unnecessary dependency: 'lojaSelecionada?.id'. Either exclude it or remove the dependency array.",
+          "line": 311,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 322,
+          "endColumn": 6,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [lojas, setLojaAtivaId, refreshStoresList, storesRefreshNonce, lojaSelecionada, cadastroBasicoIncompleto, empresaDocumentos, getEnderecoDocumentos, opsStorageKey]",
+              "fix": {
+                "range": [
+                  11286,
+                  11547
+                ],
+                "text": "[lojas, setLojaAtivaId, refreshStoresList, storesRefreshNonce, lojaSelecionada, cadastroBasicoIncompleto, empresaDocumentos, getEnderecoDocumentos, opsStorageKey]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-github-original/lib/pdv-operator-id.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 6,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              123,
+              185
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/pdv-github-original/lib/perfil-loja-provider.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has an unnecessary dependency: 'lojaHeader'. Either exclude it or remove the dependency array.",
+          "line": 90,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 90,
+          "endColumn": 18,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: []",
+              "fix": {
+                "range": [
+                  3110,
+                  3122
+                ],
+                "text": "[]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/pdv-next/PdvBlackEdition.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array.",
+          "line": 216,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 216,
+          "endColumn": 107,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [subtotal, discountTotal, pdvParams]",
+              "fix": {
+                "range": [
+                  9087,
+                  9189
+                ],
+                "text": "[subtotal, discountTotal, pdvParams]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "components/studio/components/bom-dia-modal.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 252,
+          "column": 19,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 256,
+          "endColumn": 21
+        },
+        {
+          "path": "components/tabs/CalendarTab.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "The 'now' object construction makes the dependencies of useMemo Hook (at line 43) change on every render. To fix this, wrap the initialization of 'now' in its own useMemo() Hook.",
+          "line": 28,
+          "column": 9,
+          "nodeType": "VariableDeclarator",
+          "endLine": 28,
+          "endColumn": 25
+        },
+        {
+          "path": "components/vendas-hub/lovable/routeTree.gen.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported).",
+          "line": 1,
+          "column": 1,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              0,
+              20
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "components/whatsapp/WhatsAppInbox.tsx",
+          "ruleId": "@next/next/no-img-element",
+          "severity": 1,
+          "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+          "line": 170,
+          "column": 7,
+          "nodeType": "JSXOpeningElement",
+          "endLine": 174,
+          "endColumn": 9
+        },
+        {
+          "path": "lib/config-empresa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has a missing dependency: 'config.empresa'. Either include it or remove the dependency array.",
+          "line": 577,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 577,
+          "endColumn": 76,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [config.empresa, config.termosGarantia.tituloGeral, config.termosGarantia.garantiaLegal, getGarantiaParaServico]",
+              "fix": {
+                "range": [
+                  20913,
+                  20984
+                ],
+                "text": "[config.empresa, config.termosGarantia.tituloGeral, config.termosGarantia.garantiaLegal, getGarantiaParaServico]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "lib/estoque/deposito-core.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 51,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              1824,
+              1879
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/importador-avancado/parser.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 119,
+          "column": 7,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              4218,
+              4280
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/importador-avancado/parser.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 132,
+          "column": 9,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              4928,
+              4990
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/loja-ativa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has an unnecessary dependency: 'lojas'. Either exclude it or remove the dependency array.",
+          "line": 319,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 319,
+          "endColumn": 13,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: []",
+              "fix": {
+                "range": [
+                  12568,
+                  12575
+                ],
+                "text": "[]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "lib/loja-ativa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array.",
+          "line": 378,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 378,
+          "endColumn": 30,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [lojaSelecionada?.id, lojaAtivaId, lojas]",
+              "fix": {
+                "range": [
+                  14774,
+                  14798
+                ],
+                "text": "[lojaSelecionada?.id, lojaAtivaId, lojas]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "lib/loja-ativa.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has an unnecessary dependency: 'lojaSelecionada?.id'. Either exclude it or remove the dependency array.",
+          "line": 395,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 408,
+          "endColumn": 6,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [lojas, setLojaAtivaId, refreshStoresList, storesRefreshNonce, lojaSelecionada, lojaAtivaRemota, cadastroBasicoIncompleto, storesLoaded, empresaDocumentos, getEnderecoDocumentos, opsStorageKey]",
+              "fix": {
+                "range": [
+                  15219,
+                  15525
+                ],
+                "text": "[lojas, setLojaAtivaId, refreshStoresList, storesRefreshNonce, lojaSelecionada, lojaAtivaRemota, cadastroBasicoIncompleto, storesLoaded, empresaDocumentos, getEnderecoDocumentos, opsStorageKey]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "lib/multi-loja-no-hardcoded-fallback.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 136,
+          "column": 7,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              4649,
+              4687
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/operacoes-v3/event-publisher.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 109,
+          "column": 7,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              4340,
+              4378
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/operacoes-v3/event-publisher.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 118,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              4587,
+              4625
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/operacoes-v3/event-publisher.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 134,
+          "column": 7,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              5080,
+              5118
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/operacoes-v3/event-publisher.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+          "line": 154,
+          "column": 7,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              5800,
+              5838
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/ops-upsert-venda-aprazo.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 21,
+          "column": 1,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              889,
+              944
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/ops-upsert-venda-caixa-original-fechado.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 50,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              1935,
+              1990
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/ops-upsert-venda-colisao-loja.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 59,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              2541,
+              2596
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/ops-upsert-venda-fractional.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 47,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              1580,
+              1635
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/ops-upsert-venda-pix-aprazo-resync.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 60,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              2685,
+              2740
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/ops-upsert-venda-replay-conflict.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 77,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              2200,
+              2255
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/ops-upsert-venda-vale.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 21,
+          "column": 1,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              941,
+              996
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/ops-upsert-venda.test.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 48,
+          "column": 3,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              1793,
+              1848
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/pdv-operator-id.ts",
+          "ruleId": null,
+          "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+          "line": 6,
+          "column": 5,
+          "severity": 1,
+          "nodeType": null,
+          "fix": {
+            "range": [
+              123,
+              185
+            ],
+            "text": " "
+          }
+        },
+        {
+          "path": "lib/pdv/use-pdv-capabilities.ts",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useMemo has an unnecessary dependency: 'storeId'. Either exclude it or remove the dependency array.",
+          "line": 30,
+          "column": 5,
+          "nodeType": "ArrayExpression",
+          "endLine": 30,
+          "endColumn": 36,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: [surfaceId, overrides]",
+              "fix": {
+                "range": [
+                  1002,
+                  1033
+                ],
+                "text": "[surfaceId, overrides]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "lib/perfil-loja-provider.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useCallback has an unnecessary dependency: 'lojaHeader'. Either exclude it or remove the dependency array.",
+          "line": 96,
+          "column": 6,
+          "nodeType": "ArrayExpression",
+          "endLine": 96,
+          "endColumn": 18,
+          "suggestions": [
+            {
+              "desc": "Update the dependencies array to be: []",
+              "fix": {
+                "range": [
+                  3285,
+                  3297
+                ],
+                "text": "[]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "test/ops-v4-datas-ui-001/browser/fixture.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect contains a call to 'setVisivel'. Without a list of dependencies, this can lead to an infinite chain of updates. To fix this, pass [v] as a second argument to the useEffect Hook.",
+          "line": 25,
+          "column": 3,
+          "nodeType": "Identifier",
+          "endLine": 25,
+          "endColumn": 12,
+          "suggestions": [
+            {
+              "desc": "Add dependencies array: [v]",
+              "fix": {
+                "range": [
+                  1388,
+                  1388
+                ],
+                "text": ", [v]"
+              }
+            }
+          ]
+        },
+        {
+          "path": "test/ops-v4-datas-ui-001/entrada-datas.test.tsx",
+          "ruleId": "react-hooks/exhaustive-deps",
+          "severity": 1,
+          "message": "React Hook useEffect contains a call to 'setLegitima'. Without a list of dependencies, this can lead to an infinite chain of updates. To fix this, pass [v] as a second argument to the useEffect Hook.",
+          "line": 235,
+          "column": 3,
+          "nodeType": "Identifier",
+          "endLine": 235,
+          "endColumn": 12,
+          "suggestions": [
+            {
+              "desc": "Add dependencies array: [v]",
+              "fix": {
+                "range": [
+                  14780,
+                  14780
+                ],
+                "text": ", [v]"
+              }
+            }
+          ]
+        }
+      ],
+      "rawSha256": "f5baab0dc97a2df606acd8e6cd54a51d7b3b0ba1ca6537036f51bab618bca6fa"
+    },
+    "baseline": {
+      "files": 4437,
+      "errors": 105,
+      "warnings": 114,
+      "rawSha256": "96b612e3f18909c9558ec64c64e206bc1c1156b2638a3f8b4944d390d4754d26"
+    },
+    "newMessages": [],
+    "missingMessages": [],
+    "comparison": "multiconjunto de caminho, severidade, regra e mensagem; posições podem mudar pelas linhas inseridas"
+  },
+  "preservation": {
+    "rootWips": [
+      {
+        "path": "docs/roadmaps/ROADMAP_FINANCEIRO.md",
+        "sha256": "275C1C8EC8AD76DEE030A31F7D7D04C8C78094AD45A1F05F9E3B3DA437DCA6D9",
+        "currentSha256": "275C1C8EC8AD76DEE030A31F7D7D04C8C78094AD45A1F05F9E3B3DA437DCA6D9"
+      }
+    ],
+    "rootStatusBefore": [
+      " M docs/execution-tracks/fiscal/state.json",
+      " M docs/execution-tracks/ops-v4-fluxo-curto/state.json",
+      " M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json",
+      " M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json",
+      " M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json",
+      " M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json",
+      " M docs/roadmaps/ROADMAP_FINANCEIRO.md",
+      "?? .release/",
+      "?? .worktrees/",
+      "?? docs/ai-execution/_evidence/CAD-R2-019-CANONICAL-BACKFILL-CLOSEOUT-001/",
+      "?? docs/ai-execution/_evidence/OPS-V4-DATAS-UI-PROMOCAO-001/",
+      "?? docs/ai-execution/_evidence/PROD-DATASOURCE-AUTHORITY-RECONCILIATION-002/"
+    ],
+    "rootStatusAfter": [
+      " M docs/execution-tracks/fiscal/state.json",
+      " M docs/execution-tracks/ops-v4-fluxo-curto/state.json",
+      " M docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json",
+      " M docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json",
+      " M docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json",
+      " M docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json",
+      " M docs/roadmaps/ROADMAP_FINANCEIRO.md",
+      "?? .release/",
+      "?? .worktrees/",
+      "?? docs/ai-execution/_evidence/CAD-R2-019-CANONICAL-BACKFILL-CLOSEOUT-001/",
+      "?? docs/ai-execution/_evidence/OPS-V4-DATAS-UI-PROMOCAO-001/",
+      "?? docs/ai-execution/_evidence/PROD-DATASOURCE-AUTHORITY-RECONCILIATION-002/"
+    ],
+    "rootStatusUnchanged": true,
+    "rootWipHashScope": "diff efetivo: ROADMAP_FINANCEIRO.md; sete caminhos sinalizados no status, seis sem diff efetivo",
+    "changedOtherBranches": [],
+    "beforeBranchCount": 434,
+    "currentBranchCount": 435,
+    "originalBranchUnchanged": true,
+    "worktreeReused": "C:\\Projetos\\omni-gestao\\.worktrees\\ops-v4-rafacell-precificacao-001",
+    "otherWorktreesTouched": false,
+    "schemaChanged": false,
+    "migrationsCreated": false,
+    "authChanged": false,
+    "pricingChanged": false,
+    "newGoalStarted": false
+  },
+  "localLogs": {
+    "directory": "import/ops-v4-orcamento-reserva-p1-004",
+    "runs": [
+      {
+        "label": "pg-before",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-prepublish-003/vitest.config.ts"
+        ],
+        "startedAt": "2026-10-19T00:36:35.127Z",
+        "endedAt": "2026-10-19T00:36:49.062Z",
+        "exit": 1,
+        "logSha256": "252af6c24a6b1f40d779810f6eec7ee59ef43b3e79ef0db6337d1880f08582e2"
+      },
+      {
+        "label": "pg-before-ready",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-prepublish-003/vitest.config.ts"
+        ],
+        "startedAt": "2026-10-19T00:37:25.933Z",
+        "endedAt": "2026-10-19T00:37:48.428Z",
+        "exit": 1,
+        "logSha256": "bc9604782e3c571199035083bb9c5f65f34b4dfcf8415c23b83276877d3428af"
+      },
+      {
+        "label": "pg-after",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-prepublish-003/vitest.config.ts"
+        ],
+        "startedAt": "2026-10-19T00:40:24.172Z",
+        "endedAt": "2026-10-19T00:40:32.847Z",
+        "exit": 0,
+        "logSha256": "f358d25e516597a9a8e4c31e8324684a3416bbdde9da1305df304127fa1ff382"
+      },
+      {
+        "label": "pg-final",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-prepublish-003/vitest.config.ts"
+        ],
+        "startedAt": "2026-10-19T00:42:45.242Z",
+        "endedAt": "2026-10-19T00:43:15.616Z",
+        "exit": 0,
+        "logSha256": "477f98b62202d1f6d2cd348221f7ac78b75737f17e99b78982df36836864a817"
+      },
+      {
+        "label": "pg-proof",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-prepublish-003/vitest.config.ts",
+          "-t",
+          "patch genérico nulo",
+          "--reporter=verbose"
+        ],
+        "startedAt": "2026-10-19T00:45:21.621Z",
+        "endedAt": "2026-10-19T00:46:00.066Z",
+        "exit": 1,
+        "logSha256": "148fd7796f0f6bda6b4d6977a64a55c4f9f4391173a5988725745d4dd1be7aa7"
+      },
+      {
+        "label": "pg-verified",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-prepublish-003/vitest.config.ts",
+          "--reporter=verbose"
+        ],
+        "startedAt": "2026-10-19T00:52:32.801Z",
+        "endedAt": "2026-10-19T00:52:38.432Z",
+        "exit": 0,
+        "logSha256": "16921a1789dd73051d7186afec14546e7ef9e47ecc49bb9645d09d6a871a612f"
+      },
+      {
+        "label": "focused",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "lib/operacoes-v3/orcamento-actions.test.ts",
+          "lib/operacoes-v3/orcamento-envio-actions.test.ts",
+          "lib/operacoes-v3/orcamento-envio-patch.test.ts",
+          "lib/operacoes-v3/orcamento-model.test.ts",
+          "lib/operacoes-v3/orcamento-rapido-actions.test.ts",
+          "lib/operacoes-v3/orcamento-rapido-model.test.ts",
+          "lib/operacoes-v4/orcamento-cliente-view.test.ts",
+          "lib/operacoes-v4/orcamento-form.test.ts",
+          "lib/operacoes-v4/orcamento-mensagem.test.ts",
+          "lib/operacoes-v4/orcamento-pre-os.test.ts",
+          "lib/operacoes-v4/orcamento-rapido-form.test.ts",
+          "lib/operacoes-v4/precificacao-telas-contract.test.ts",
+          "lib/operacoes-v4/precificacao-telas.test.ts",
+          "lib/whatsapp-legacy-quarantine.test.ts",
+          "lib/whatsapp/store-credentials.test.ts",
+          "lib/whatsapp/whatsapp-service-routing.test.ts",
+          "--maxWorkers=2",
+          "--testTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:40:23.538Z",
+        "endedAt": "2026-10-19T00:40:34.218Z",
+        "exit": 0,
+        "logSha256": "612bd3fc088de1fd87b1e10fb0d2dc703b427abca7d908d2a00964e95fadc738"
+      },
+      {
+        "label": "focused-final",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "lib/operacoes-v3/orcamento-actions.test.ts",
+          "lib/operacoes-v3/orcamento-envio-actions.test.ts",
+          "lib/operacoes-v3/orcamento-envio-patch.test.ts",
+          "lib/operacoes-v3/orcamento-model.test.ts",
+          "lib/operacoes-v3/orcamento-rapido-actions.test.ts",
+          "lib/operacoes-v3/orcamento-rapido-model.test.ts",
+          "lib/operacoes-v4/orcamento-cliente-view.test.ts",
+          "lib/operacoes-v4/orcamento-form.test.ts",
+          "lib/operacoes-v4/orcamento-mensagem.test.ts",
+          "lib/operacoes-v4/orcamento-pre-os.test.ts",
+          "lib/operacoes-v4/orcamento-rapido-form.test.ts",
+          "lib/operacoes-v4/precificacao-telas-contract.test.ts",
+          "lib/operacoes-v4/precificacao-telas.test.ts",
+          "lib/whatsapp-legacy-quarantine.test.ts",
+          "lib/whatsapp/store-credentials.test.ts",
+          "lib/whatsapp/whatsapp-service-routing.test.ts",
+          "--maxWorkers=2",
+          "--testTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:53:06.908Z",
+        "endedAt": "2026-10-19T00:53:12.958Z",
+        "exit": 0,
+        "logSha256": "62108d37b68a5d1bc0a07ca0169b421d0edd3824f1a2e23835c9e5224bc8316d"
+      },
+      {
+        "label": "regression",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "lib/operacoes-v3",
+          "lib/operacoes-v4",
+          "components/operacoes-v4-preview",
+          "--maxWorkers=2",
+          "--testTimeout=30000",
+          "--hookTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:41:21.236Z",
+        "endedAt": "2026-10-19T00:41:50.119Z",
+        "exit": 1,
+        "logSha256": "2abbe242e2e2dc85c018eff2e8f7955c2e03f571dacd2a617938f55ce9f01b69"
+      },
+      {
+        "label": "regression-final",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "lib/operacoes-v3",
+          "lib/operacoes-v4",
+          "components/operacoes-v4-preview",
+          "--maxWorkers=2",
+          "--testTimeout=30000",
+          "--hookTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:57:33.956Z",
+        "endedAt": "2026-10-19T00:58:25.365Z",
+        "exit": 1,
+        "logSha256": "de0d61c9047320db0b025d8d8bc1f2d85c52885cce2c5693abb357d20c63151b"
+      },
+      {
+        "label": "regression-verified",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "lib/operacoes-v3",
+          "lib/operacoes-v4",
+          "components/operacoes-v4-preview",
+          "--maxWorkers=2",
+          "--testTimeout=30000",
+          "--hookTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:59:15.451Z",
+        "endedAt": "2026-10-19T00:59:38.591Z",
+        "exit": 1,
+        "logSha256": "598805b09a605ba06ec03f234a5a913cf0929f5abe0c7adb5de3a4d88f0f4d0a"
+      },
+      {
+        "label": "ui-envio",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-orcamento-envio-real-status-001/vitest.config.ts",
+          "--maxWorkers=1"
+        ],
+        "startedAt": "2026-10-19T00:45:21.619Z",
+        "endedAt": "2026-10-19T00:47:30.000Z",
+        "exit": 1,
+        "logSha256": "e85bc77d14988043e2080aaf276b5ce8734de03c253b4609fe69b9a38f0538be"
+      },
+      {
+        "label": "ui-envio-final",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-orcamento-envio-real-status-001/vitest.config.ts",
+          "--maxWorkers=1",
+          "--reporter=verbose",
+          "--testTimeout=30000",
+          "--hookTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:52:42.166Z",
+        "endedAt": "2026-10-19T00:52:49.857Z",
+        "exit": 0,
+        "logSha256": "7c21a40498aa9cd89d95d61c1735f29560e720b0e88942fa8e12d0661320e7f8"
+      },
+      {
+        "label": "ui-rafacell",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-precificacao-001/vitest.config.ts",
+          "--maxWorkers=1"
+        ],
+        "startedAt": "2026-10-19T00:45:21.631Z",
+        "endedAt": "2026-10-19T00:46:24.389Z",
+        "exit": 1,
+        "logSha256": "af10c770e12892be74132f74dcfaf01a96fb0eef809c16eca47999ca8b464b46"
+      },
+      {
+        "label": "ui-rafacell-final",
+        "kind": "vitest",
+        "args": [
+          "run",
+          "--config",
+          "test/ops-v4-rafacell-precificacao-001/vitest.config.ts",
+          "--maxWorkers=1",
+          "--reporter=verbose",
+          "--testTimeout=30000",
+          "--hookTimeout=30000"
+        ],
+        "startedAt": "2026-10-19T00:53:07.619Z",
+        "endedAt": "2026-10-19T00:53:11.781Z",
+        "exit": 0,
+        "logSha256": "d559e2e5479fd6791a87b84e03d444e521c3a97b7df9a0b72a2d930d1305d356"
+      },
+      {
+        "label": "typecheck",
+        "kind": "typecheck",
+        "args": [
+          "--noEmit"
+        ],
+        "startedAt": "2026-10-19T00:40:21.526Z",
+        "endedAt": "2026-10-19T00:41:28.823Z",
+        "exit": 2,
+        "logSha256": "55f5574baa4201ba2bab3437dd6dda580669f268dc89d47a9c3c5fdcbe064278"
+      },
+      {
+        "label": "typecheck-final",
+        "kind": "typecheck",
+        "args": [
+          "--noEmit"
+        ],
+        "startedAt": "2026-10-19T00:42:45.249Z",
+        "endedAt": "2026-10-19T00:44:21.491Z",
+        "exit": 0,
+        "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "typecheck-verified",
+        "kind": "typecheck",
+        "args": [
+          "--noEmit"
+        ],
+        "startedAt": "2026-10-19T00:53:32.908Z",
+        "endedAt": "2026-10-19T00:53:57.993Z",
+        "exit": 0,
+        "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "focused-eslint",
+        "kind": "eslint",
+        "args": [
+          "app/actions/operacoes.ts",
+          "lib/operacoes-v3/os-payload-lock.ts",
+          "lib/operacoes-v3/orcamento-envio-patch.test.ts",
+          "test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts"
+        ],
+        "startedAt": "2026-10-19T00:41:17.970Z",
+        "endedAt": "2026-10-19T00:42:37.796Z",
+        "exit": 0,
+        "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "focused-eslint-final",
+        "kind": "eslint",
+        "args": [
+          "app/actions/operacoes.ts",
+          "lib/operacoes-v3/os-payload-lock.ts",
+          "lib/operacoes-v3/orcamento-envio-patch.test.ts",
+          "test/ops-v4-rafacell-prepublish-003/concorrencia.pg.ts"
+        ],
+        "startedAt": "2026-10-19T00:53:33.392Z",
+        "endedAt": "2026-10-19T00:54:40.118Z",
+        "exit": 0,
+        "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "global-eslint",
+        "kind": "eslint",
+        "args": [
+          ".",
+          "--ignore-pattern",
+          "generated/**",
+          "--ignore-pattern",
+          "import/**"
+        ],
+        "startedAt": "2026-10-19T00:41:17.970Z",
+        "endedAt": "2026-10-19T00:50:13.189Z",
+        "exit": 2,
+        "logSha256": "9f17c1906c18a93de86d9d26d261e302c0cd3f78c6e765b6722c147aff5904c6"
+      },
+      {
+        "label": "global-eslint-final",
+        "kind": "eslint",
+        "args": [
+          ".",
+          "--ignore-pattern",
+          "generated/**",
+          "--ignore-pattern",
+          "import/**"
+        ],
+        "startedAt": "2026-10-19T00:53:33.729Z",
+        "endedAt": "2026-10-19T00:56:49.508Z",
+        "exit": 1,
+        "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "build",
+        "kind": "build",
+        "args": [],
+        "startedAt": "2026-10-19T00:42:45.371Z",
+        "endedAt": "2026-10-19T00:51:34.864Z",
+        "exit": 0,
+        "logSha256": "2cce7df54fb2081fe85dbfd4137dc038cd7e045e0d9cb9bf5e3e1d603c31ff6a"
+      }
+    ]
+  },
+  "intermediateRuns": [
+    "Provisionamento inicial no sandbox não podia abrir socket local; continuado com permissão ampliada somente para o cluster descartável deste GOAL.",
+    "Primeira coleta antes do término do provisionamento não executou casos por tabela inexistente; a repetição pronta reproduziu 9 PASS e o P1 vermelho, sem alterar assertivas.",
+    "Primeiro TypeScript apontou quatro fixtures usando string no lugar de ObservacaoTecnica[]; as escritas auxiliares passaram a usar tags tipadas. As validações finais passaram.",
+    "Durante o build, coleta adicional PG não alcançou o cluster e duas coletas UI encerraram sem completar os arquivos. Depois do build, as suítes completas passaram 37/37 PG, 15/15 envio e 6/6 RafaCell.",
+    "ESLint concorrente ao build falhou ENOENT no public/sw.js regenerado. Coleta final posterior ao build preserva exatamente 105 erros e 114 avisos da baseline.",
+    "Parametrização dos arrays corrigida para que it.each receba o array como valor, em vez de espalhá-lo em argumentos. Casos finais de arrays efetivamente executados e aprovados.",
+    "A repetição regression-final começou após desligar o cluster: 11 falhas adicionais de conexão/inicialização, somadas às 16 antigas. O mesmo cluster foi reaberto, sem DDL, e regression-verified confirmou novamente apenas as 16 falhas da baseline. As duas execuções estão preservadas."
+  ]
+}
