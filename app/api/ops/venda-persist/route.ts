@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
@@ -157,6 +158,9 @@ export async function POST(req: Request) {
     // negócio explícita (409), não erro de servidor. Nada foi gravado — o guard
     // roda antes de qualquer efeito na transação. O PDV mantém `syncPending` e
     // orienta o operador a informar quantidade inteira.
+    if (error instanceof ProductWeightNotOperationalError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
+    }
     if (error instanceof FractionalQuantityError) {
       console.warn(
         "[ops/venda-persist] quantidade-fracionada",

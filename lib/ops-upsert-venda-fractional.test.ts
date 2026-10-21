@@ -17,6 +17,7 @@ import {
   type SalePayload,
 } from "./ops-upsert-venda"
 import { FRACTIONAL_QUANTITY_CODE } from "./vendas/sale-quantity-contract"
+import { ProductWeightNotOperationalError } from "./cadastros/product-commercial-contract"
 import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 const STORE = "loja-1"
@@ -36,7 +37,7 @@ type FakeVenda = {
   status: string
 }
 
-function makeDb() {
+function makeDb(metadata?: Record<string, unknown>) {
   const vendas = new Map<string, FakeVenda>()
   const items: Array<Record<string, unknown>> = []
   const stock = { value: 10, updates: 0 }
@@ -93,11 +94,12 @@ function makeDb() {
     },
     produto: {
       findFirst: async ({ where }: any) => {
+        if (where.storeId !== STORE) return null
         const hit = (where.OR ?? []).some(
           (c: Record<string, string>) => c.id === "SKU-1" || c.sku === "SKU-1" || c.barcode === "SKU-1",
         )
         return hit
-          ? { id: "produto-1", stock: stock.value, precoCusto: 20, sku: "SKU-1", name: "Produto" }
+          ? { id: "produto-1", stock: stock.value, precoCusto: 20, sku: "SKU-1", name: "Produto", metadata }
           : null
       },
       findUnique: async () => ({ stock: stock.value, precoCusto: 20 }),
@@ -161,6 +163,21 @@ function sale(quantity: number, over: Partial<SalePayload> = {}): SalePayload {
     ...over,
   }
 }
+
+describe("Produto por peso — proteção independente da configuração da loja", () => {
+  it.each([
+    { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } },
+    { vendaPorPeso: true },
+  ])("rejeita quantidade inteira para produto declarado por peso: %j", async (metadata) => {
+    const db = makeDb(metadata)
+    // A proteção usa metadata do produto resolvido pela loja e SKU, não o payload.
+    await expect(upsertVendaInTransaction(db.makeTx(), STORE, sale(2), undefined, LIVE)).rejects.toBeInstanceOf(ProductWeightNotOperationalError)
+    expect(db.items).toHaveLength(0)
+    expect(db.stock.value).toBe(10)
+    expect(db.estoque).toHaveLength(0)
+    expect(db.financeiro).toHaveLength(0)
+  })
+})
 
 describe("upsertVendaInTransaction — quantidade fracionada fail-closed", () => {
   it("0.350 é bloqueado e NADA é persistido (venda, itens, estoque, financeiro)", async () => {

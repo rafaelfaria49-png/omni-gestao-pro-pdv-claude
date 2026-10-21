@@ -45,7 +45,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     // ── Validação rigorosa de Capabilities V1 ──────────────────────────────
     if (body.printerConfig && typeof body.printerConfig === "object" && !Array.isArray(body.printerConfig)) {
       const pConf = body.printerConfig as Record<string, unknown>
-      if (pConf.capabilities !== undefined && pConf.capabilities !== null) {
+      if (Object.hasOwn(pConf, "capabilities")) {
         const capsValidation = validateCapabilitiesPayload(pConf.capabilities)
         if (!capsValidation.ok) {
           return NextResponse.json({ ok: false, error: capsValidation.error }, { status: 400 })

@@ -1,0 +1,88 @@
+name: Ramos e Cadastros
+
+on:
+  pull_request:
+    paths:
+      - "lib/store-business*"
+      - "lib/use-store-business*"
+      - "lib/store-settings*"
+      - "lib/perfil-loja*"
+      - "lib/capabilities-persistence*"
+      - "lib/pdv-settings-server-first*"
+      - "lib/pdv/resolve-capability*"
+      - "lib/pdv/capability-support-matrix*"
+      - "lib/cadastros/**"
+      - "lib/ops-upsert-venda*"
+      - "app/api/stores/**/settings/**"
+      - "app/api/settings/perfil-loja/**"
+      - "app/api/ops/venda-persist/**"
+      - "components/cadastros/**"
+      - "components/configuracoes-v3/**"
+      - "components/dashboard/app-ops-providers.tsx"
+      - "components/dashboard/configuracoes/gestao-unidades-saas.tsx"
+      - "scripts/cadastros/smoke-ramos.mjs"
+      - ".github/workflows/ramos-cadastros.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated?connect_timeout=1
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated?connect_timeout=1
+      AUTH_SECRET: isolated-ramo-fixture-with-no-production-authority
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      VERCEL: "0"
+      VERCEL_ENV: development
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Contratos, isolamento, patch e regressões
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          lib/store-business-capabilities.test.ts lib/store-settings-business.component.test.ts
+          lib/store-settings-put.test.ts lib/store-settings-request-epoch.test.ts
+          lib/pdv-settings-server-first.test.ts lib/pdv/capability-runtime.test.ts
+          lib/cadastros/business-catalog.component.test.ts lib/cadastros/product-write-service.test.ts
+          lib/cadastros/product-rest-007.test.ts lib/cadastros/product-write-create-tx-014.test.ts
+          lib/cadastros/produto-upsert-metadata.test.ts
+          lib/ops-upsert-venda.test.ts lib/ops-upsert-venda-fractional.test.ts
+          lib/vendas/sale-quantity-contract.test.ts
+          app/api/stores/[id]/settings/route.test.ts
+          app/api/settings/perfil-loja/route.test.ts
+          app/api/ops/venda-persist/route.test.ts app/api/ops/venda-persist/v2/route.test.ts
+          --maxWorkers=2
+      - name: Lint dos contratos e interfaces
+        run: >-
+          node node_modules/eslint/bin/eslint.js
+          lib/store-business-capabilities.ts lib/use-store-business.ts
+          lib/cadastros/product-commercial-contract.ts lib/cadastros/product-write-service.ts
+          lib/capabilities-persistence-v1.ts lib/pdv-settings-server-first.ts
+          lib/store-settings-provider.tsx lib/perfil-loja-provider.tsx
+          components/configuracoes-v3/features/settings/components/BusinessResourcesCard.tsx
+          components/cadastros/lovable/components/cadastros/produto-ia.tsx
+          components/cadastros/lovable/components/cadastros/CadastrosHub.tsx
+          scripts/cadastros/smoke-ramos.mjs
+      - name: TypeScript completo
+        run: npm run typecheck
+      - name: Build isolado sem migrations
+        run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke dos componentes reais em desktop e celular
+        run: node scripts/cadastros/smoke-ramos.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ramos-cadastros-smoke
+          path: test-results/ramos/

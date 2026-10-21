@@ -6,7 +6,7 @@
  * quick-services fora da Assistência permanecem unsupported.
  */
 
-import { KNOWN_CAPABILITY_KEYS_V1 } from "@/lib/capabilities-persistence-v1"
+import { KNOWN_PDV_CAPABILITY_KEYS_V1 } from "@/lib/capabilities-persistence-v1"
 import type { CapabilityKey, CapabilitySupportRow } from "@/lib/pdv/capability-types"
 import type { OfficialPdvSurfaceId, PdvSurfaceId } from "@/lib/pdv/surface-ids"
 
@@ -127,7 +127,7 @@ export function canonicalDefaultEnabled(key: string, surfaceId: PdvSurfaceId): b
 
 export function assertMatrixCoversV1Allowlist(): void {
   const matrixKeys = new Set(PDV_CAPABILITY_SUPPORT_MATRIX.map((r) => r.key))
-  for (const key of KNOWN_CAPABILITY_KEYS_V1) {
+  for (const key of KNOWN_PDV_CAPABILITY_KEYS_V1) {
     if (!matrixKeys.has(key)) {
       throw new Error(`Support matrix N4 não cobre a key V1 "${key}".`)
     }

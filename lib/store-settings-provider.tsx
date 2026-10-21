@@ -159,6 +159,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   const storeId = useMemo(() => lojaAtivaId?.trim() ?? "", [lojaAtivaId])
   const [hydrated, setHydrated] = useState(false)
   const [settings, setSettings] = useState<StoreSettingsApi | null>(null)
+  const [loadedStoreId, setLoadedStoreId] = useState<string | null>(null)
 
   // Registro de backfill já tentado nesta sessão para cada loja (evita loops e repetições)
   const backfillAttemptedStoresRef = useRef<Set<string>>(new Set())
@@ -186,12 +187,14 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       const j = (await r.json().catch(() => null)) as { settings?: StoreSettingsApi | null } | null
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(j?.settings ?? null)
+        setLoadedStoreId(r.ok ? storeId : null)
       })
       // P0 PDV-RAFACELL-LOAD-CRASH: observabilidade do mount (só status/contagens).
       markPdvMountStep("settings", storeId, r.ok, { code: r.ok ? undefined : `HTTP_${r.status}` })
     } catch {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(null)
+        setLoadedStoreId(null)
       })
       markPdvMountStep("settings", storeId, false, { code: "fetch_failed" })
     } finally {
@@ -206,13 +209,15 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     epochGateRef.current.onStoreChange(storeId)
     setSettings(null)
     setHydrated(false)
+    setLoadedStoreId(null)
   }, [storeId])
 
   useEffect(() => {
     void refresh()
   }, [refresh, storesRefreshNonce])
 
-  const blob = useMemo(() => parseBlob(settings?.printerConfig), [settings?.printerConfig])
+  const liveSettings = loadedStoreId === storeId ? settings : null
+  const blob = useMemo(() => parseBlob(liveSettings?.printerConfig), [liveSettings?.printerConfig])
   const resolvedShortcuts = useMemo(
     () =>
       resolvePdvShortcutsServerFirst(
@@ -347,8 +352,8 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<StoreSettingsContextType>(
     () => ({
       storeId,
-      hydrated,
-      settings,
+      hydrated: hydrated && loadedStoreId === storeId,
+      settings: liveSettings,
       blob,
       pdvParams,
       impressaoConfig,
@@ -365,7 +370,8 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
     [
       storeId,
       hydrated,
-      settings,
+      loadedStoreId,
+      liveSettings,
       blob,
       pdvParams,
       impressaoConfig,

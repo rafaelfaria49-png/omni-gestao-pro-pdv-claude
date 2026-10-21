@@ -209,7 +209,6 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
           phone: draft.phone,
           logoUrl: draft.logoUrl,
           address: draft.address,
-          profile: draft.profile,
           subscriptionPlan: draft.subscriptionPlan,
         }),
       })
@@ -219,7 +218,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiptFooter: settings.receiptFooter, printerConfig: settings.printerConfig }),
+        body: JSON.stringify({ receiptFooter: settings.receiptFooter }),
       })
       if (!r2.ok) throw new Error("Falha ao salvar settings")
 
@@ -429,7 +428,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                     Ativa
                   </Badge>
                   <span className="text-xs text-muted-foreground">
-                    {profileLabel(s.profile)}
+                    Ramo em Configurações gerais
                   </span>
                   <span className="text-xs font-medium text-muted-foreground/90">
                     Plano:{" "}
@@ -558,17 +557,8 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                   <Input value={draft.logoUrl} onChange={(e) => setDraft({ ...draft, logoUrl: e.target.value })} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Perfil</Label>
-                  <Select value={draft.profile} onValueChange={(v) => setDraft({ ...draft, profile: v as StoreProfile })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ASSISTENCIA">Assistência</SelectItem>
-                      <SelectItem value="VARIEDADES">Variedades</SelectItem>
-                      <SelectItem value="SUPERMERCADO">Supermercado</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Ramo e recursos</Label>
+                  <p className="text-sm text-muted-foreground">Selecione a unidade ativa e edite em <a href="/dashboard/configuracoes?sec=geral#ramo-recursos" className="text-primary underline">Configurações gerais</a>.</p>
                 </div>
                 <div className="space-y-1">
                   <Label>Plano (SaaS)</Label>

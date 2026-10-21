@@ -46,6 +46,9 @@ import "server-only"
 
 import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
+import { isProductWeightDeclared, productCommercialFromMetadata, validateProductCommercial } from "@/lib/cadastros/product-commercial-contract"
+import { resolveBusinessResource } from "@/lib/store-business-capabilities"
+import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 import { cadastrosAuditLogFields } from "@/lib/cadastros/cadastros-audit-principal"
 import {
   mergeProdutoMetadataTwoLevels,
@@ -374,6 +377,19 @@ function resolveMetadata(
     return { ok: false, error: productWriteInvalid("metadata deve ser objeto JSON ou null.", "metadata") }
   }
   const incoming = isRecord(rawMetadata) ? rawMetadata : null
+  if (incoming && Object.hasOwn(incoming, "comercial") && !validateProductCommercial(incoming.comercial)) {
+    return { ok: false, error: productWriteInvalid("Unidade, modo de venda ou base de preço inválidos.", "metadata") }
+  }
+  const oldCommercial = productCommercialFromMetadata(existingMetadata)
+  if (!opts.isCreate && incoming?.comercial) {
+    const nextCommercial = productCommercialFromMetadata(incoming)
+    if (nextCommercial.modoVenda !== oldCommercial.modoVenda || nextCommercial.unidade !== oldCommercial.unidade) {
+      return { ok: false, error: productWriteInvalid("Não é possível reinterpretar a unidade de um produto existente. Cadastre outro produto; saldos e histórico devem ser preservados.", "metadata") }
+    }
+  }
+  if (!opts.isCreate && opts.clearMetadata && rawMetadata === null && isProductWeightDeclared(existingMetadata)) {
+    return { ok: false, error: productWriteInvalid("Não é possível remover a declaração de peso de um produto existente.", "metadata") }
+  }
   const explicitNull = rawMetadata === null
   const accessoryInput = produtoAcessoriosInputFromBody(input)
   const fiscalInput = fiscalInputFromBody(input)
@@ -412,7 +428,33 @@ function resolveMetadata(
   if (catalogoInput !== undefined) {
     next = { ...mergeCatalogoAparelhosIntoMetadata(next, catalogoInput) }
   }
+  if (!opts.isCreate && isProductWeightDeclared(existingMetadata) && !isProductWeightDeclared(next)) {
+    return { ok: false, error: productWriteInvalid("A declaração de peso existente deve ser preservada.", "metadata") }
+  }
   return { ok: true, metadata: next, clear: false }
+}
+
+/** Preferência é lida na loja provada pelo contexto, nunca no payload. */
+async function validateCommercialResource(
+  tx: ProductWriteTx, storeId: string, input: ProductWriteInput, initialStock = 0, existingMetadata?: unknown,
+): Promise<ProductWriteResult | null> {
+  if (!isRecord(input.metadata) || !Object.hasOwn(input.metadata, "comercial")) return null
+  const commercial = productCommercialFromMetadata(input.metadata)
+  if (commercial.modoVenda === "peso" && initialStock !== 0) {
+    return productWriteInvalid("Produto por peso em preparação deve iniciar sem saldo; não há estoque fracionado operacional.", "estoque")
+  }
+  const oldCommercial = productCommercialFromMetadata(existingMetadata)
+  const newWeight = commercial.modoVenda === "peso" && oldCommercial.modoVenda !== "peso"
+  const newVariants = commercial.gradePlanejada === true && oldCommercial.gradePlanejada !== true
+  if (!newWeight && !newVariants) return null
+  const reader = tx as unknown as { storeSettings: { findUnique(args: { where: { storeId: string } }): Promise<{ printerConfig?: unknown } | null> } }
+  const row = await reader.storeSettings.findUnique({ where: { storeId } })
+  const capabilities = (isRecord(row?.printerConfig) ? row.printerConfig.capabilities : null) as StoreCapabilitiesV1 | null
+  if ((newWeight && !resolveBusinessResource(capabilities, "catalog.weight").enabled) ||
+      (newVariants && !resolveBusinessResource(capabilities, "catalog.variants").enabled)) {
+    return productWriteInvalid("Habilite a preparação deste recurso nas Configurações da unidade.", "metadata")
+  }
+  return null
 }
 
 type DuplicateReader = {
@@ -515,6 +557,8 @@ export async function createProductTx(
 
   const meta = resolveMetadata(input ?? {}, null, { isCreate: true })
   if (!meta.ok) return meta.error
+  const resourceError = await validateCommercialResource(tx, ctx.storeId, input, patch.stock ?? 0)
+  if (resourceError) return resourceError
 
   const active = patch.active ?? true
   const initialStock = patch.stock ?? 0
@@ -675,6 +719,8 @@ export async function updateProductTx(
     clearMetadata: opts?.clearMetadata === true,
   })
   if (!meta.ok) return meta.error
+  const resourceError = await validateCommercialResource(tx, ctx.storeId, input, 0, existing.metadata)
+  if (resourceError) return resourceError
 
   const data: Prisma.ProdutoUpdateInput = {}
   if (patch.name !== undefined) data.name = patch.name

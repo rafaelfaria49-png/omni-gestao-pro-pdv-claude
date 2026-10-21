@@ -177,8 +177,21 @@ export function mergePrinterConfigServerSide(
         const existingOverrides = isRecord(existing.capabilities.overrides) ? existing.capabilities.overrides : {}
         const incomingOverrides = isRecord(val.overrides) ? val.overrides : {}
         merged.capabilities = {
+          ...existing.capabilities,
+          ...val,
           version: 1,
           overrides: { ...existingOverrides, ...incomingOverrides },
+          ...(isRecord(val.business) ? {
+            business: {
+              ...(isRecord(existing.capabilities.business) ? existing.capabilities.business : {}),
+              ...val.business,
+              presentation: {
+                ...(isRecord(existing.capabilities.business) && isRecord(existing.capabilities.business.presentation)
+                  ? existing.capabilities.business.presentation : {}),
+                ...(isRecord(val.business.presentation) ? val.business.presentation : {}),
+              },
+            },
+          } : {}),
         }
       } else {
         merged[key] = val
