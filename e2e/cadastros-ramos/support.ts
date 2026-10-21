@@ -70,10 +70,17 @@ export async function login(page: Page, user: { email: string; password: () => s
 
 export async function logoutViaSeguranca(page: Page) {
   await page.goto("/dashboard/configuracoes?sec=seguranca")
+  const signout = page.waitForResponse((res) => res.url().includes("/api/auth/signout") && res.request().method() === "POST")
   await page.getByRole("button", { name: "Encerrar sessão" }).click()
+  const response = await signout
   await page.waitForURL(/\/login/)
+  await page.waitForLoadState("load")
+  // Diagnóstico sem valores: somente status e nomes de cookies de sessão restantes.
+  const remaining = (await page.context().cookies()).filter((cookie) => /session-token/.test(cookie.name)).map((cookie) => cookie.name)
   const session = await page.request.get("/api/auth/session")
-  expect(await session.json().catch(() => null)).toBeFalsy()
+  const body = await session.json().catch(() => null)
+  expect({ signoutStatus: response.status(), remaining, url: new URL(page.url()).pathname, authenticated: !!body?.user })
+    .toEqual({ signoutStatus: expect.any(Number), remaining: [], url: "/login", authenticated: false })
 }
 
 /** Troca a unidade ativa pelo seletor oficial (Configurações → Lojas → Gerenciar). */
