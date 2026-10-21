@@ -1,5 +1,10 @@
 # Changelog — OmniGestão Pro
 
+## 2026-10-18 — Proteção da reserva de envio do orçamento (P1-004)
+
+- Patches genéricos passam a rejeitar remoção, substituição inválida ou falsificação de reservas e evidências de envio, conferindo o orçamento persistido sob a trava da OS.
+- Edições legítimas, confirmação auditada, recuperação por recibo e reenvio autorizado continuam disponíveis. Aceite local em PostgreSQL descartável; publicação pendente de aprovação humana.
+
 ## 2026-10-18 — Orçamento Rápido V4: sugestão opt-in para telas (local, não publicado)
 
 - Sugestão por alternativa em centavos, com revisão e aplicação explícita, preservando preço manual.

@@ -19,13 +19,6 @@
 - A transcrição vira texto editável → mesmo interpretador determinístico → revisão → confirmação → ClientWriteService. Nada é salvo automaticamente; áudio e transcrição não são gravados. Voz de Produto, schema e migrations sem mudança.
 - Reconhecimento real em dispositivo ainda não demonstrado: no host de testes o motor local iniciou offline e recebeu a fala, mas não devolveu texto (causa não determinada); ver evidências do CAD-R2-021.
 
-## 2026-10-18
-
-### Operações — Proteção da reserva de envio do orçamento (P1-004)
-
-- Patches genéricos passam a rejeitar remoção, substituição inválida ou falsificação de reservas e evidências de envio, conferindo o orçamento persistido sob a trava da OS.
-- Edições legítimas, confirmação auditada, recuperação por recibo e reenvio autorizado continuam disponíveis. Aceite local em PostgreSQL descartável; publicação pendente de aprovação humana.
-
 ## 2026-09-19
 
 ### PDV — Ciclo de vida da tentativa após confirmação

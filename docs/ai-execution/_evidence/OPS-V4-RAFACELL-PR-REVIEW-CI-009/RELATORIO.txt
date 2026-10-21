@@ -21,8 +21,10 @@ Os relatórios/evidências antigos são históricos, não autorizações de depl
 Main inicial conferida por fetch: 16c496ad2ffe56fc6a89de237b204842494b8cbb.
 Main avançou concorrentemente para a874342f5366427f8f7cfebc96a9c14c8efe39ad.
 O avanço novo é Cadastros/voz e documentação; nenhum código de Operações mudou.
-O conflito no CHANGELOG foi eliminado conservando integralmente as entradas
-da main e da RafaCell, sem merge, rebase ou inclusão de código de outro módulo.
+O conflito no CHANGELOG foi eliminado mantendo o arquivo público igual ao da
+main e conservando a anotação RafaCell em docs/changelog/CHANGELOG.md, que já
+era alterado pelo PR. Isso evita conflito entre inserções adjacentes sem merge,
+rebase ou inclusão de código de outro módulo.
 
 Revisão independente real
 
