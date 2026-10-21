@@ -202,6 +202,24 @@ describe("Editor oficial de configuração", () => {
     await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
     expect(h.save.mock.calls[0][0]).toEqual({ printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } } })
   })
+  it("alternar override em objeto troca só enabled e preserva as demais propriedades", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "variedades" }, overrides: { "catalog.weight": { enabled: true, nota: "balcão" } } }
+    render(React.createElement(BusinessResourcesCard))
+    fireEvent.click(screen.getByRole("checkbox", { name: /Produtos por peso/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }))
+    await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
+    expect(h.save.mock.calls[0][0]).toEqual({ printerConfig: { capabilities: { version: 1, business: {},
+      overrides: { "catalog.weight": { enabled: false, nota: "balcão" } } } } })
+  })
+  it("marcar e desmarcar a mesma caixa não grava escolha explícita nova", () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "padaria" } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Grade comercial/ })
+    fireEvent.click(box)
+    fireEvent.click(box)
+    expect(screen.getAllByText("Sugestão do ramo").length).toBe(5)
+    expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+  })
   it("exibe preparação com honestidade e desabilita edição sem permissão", () => {
     h.canConfigure = false
     render(React.createElement(BusinessResourcesCard))

@@ -4,6 +4,7 @@ import { requireEnterpriseWith, requireStoreAccess } from "@/lib/auth/guard-ente
 import { buildStoreSettingsAuditChanges } from "@/lib/config-audit/store-settings"
 import { recordConfigAuditChanges } from "@/lib/config-audit/record"
 import { validateCapabilitiesPayload } from "@/lib/capabilities-persistence-v1"
+import { isDedicatedCapabilitiesPatch } from "@/lib/pdv-settings-server-first"
 import { persistStoreSettingsPut, type StoreSettingsPutDb } from "@/lib/store-settings-put"
 import type { StoreSettingsPutPayload } from "@/lib/store-settings-types"
 
@@ -20,9 +21,9 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
   try {
     const settings = await prisma.storeSettings.findUnique({ where: { storeId: id } })
     return NextResponse.json({ settings })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha ao carregar settings"
-    return NextResponse.json({ settings: null, error: msg }, { status: 500 })
+  } catch {
+    // Mensagem do Prisma/driver pode conter host, query ou dados: nunca ao operador.
+    return NextResponse.json({ settings: null, error: "Falha ao carregar configurações da unidade." }, { status: 500 })
   }
 }
 
@@ -42,10 +43,16 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       mascotPromptBase: string
     }>
 
+    // A persistência decide o modo por `!!body.backfill`; só booleano evita divergir da validação abaixo.
+    if (body.backfill !== undefined && typeof body.backfill !== "boolean") {
+      return NextResponse.json({ ok: false, error: "Campo backfill inválido." }, { status: 400 })
+    }
+
     // ── Validação rigorosa de Capabilities V1 ──────────────────────────────
+    // Snapshot com seções irmãs não altera capabilities (ver merge): não validar o que não será aplicado.
     if (body.printerConfig && typeof body.printerConfig === "object" && !Array.isArray(body.printerConfig)) {
       const pConf = body.printerConfig as Record<string, unknown>
-      if (Object.hasOwn(pConf, "capabilities")) {
+      if (Object.hasOwn(pConf, "capabilities") && (body.backfill === true || isDedicatedCapabilitiesPatch(pConf))) {
         const capsValidation = validateCapabilitiesPayload(pConf.capabilities)
         if (!capsValidation.ok) {
           return NextResponse.json({ ok: false, error: capsValidation.error }, { status: 400 })
@@ -69,8 +76,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     }
 
     return NextResponse.json({ ok: true, settings })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha ao salvar settings"
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+  } catch {
+    return NextResponse.json({ ok: false, error: "Falha ao salvar configurações da unidade. Tente novamente." }, { status: 500 })
   }
 }

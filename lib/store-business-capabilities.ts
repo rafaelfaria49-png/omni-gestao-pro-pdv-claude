@@ -46,6 +46,12 @@ export function isBusinessBranch(value: unknown): value is BusinessBranch {
   return typeof value === "string" && Object.hasOwn(BUSINESS_BRANCHES, value)
 }
 
+/** Ramo gravado e conhecido. Valor fora do contrato equivale a loja sem ramo (legado). */
+export function configuredBusinessBranch(capabilities: StoreCapabilitiesV1 | null | undefined): BusinessBranch | undefined {
+  const branch = capabilities?.business?.primaryBranch
+  return isBusinessBranch(branch) ? branch : undefined
+}
+
 export function legacyBusinessBranch(profile?: string | null): BusinessBranch {
   if (profile === "VARIEDADES") return "variedades"
   if (profile === "SUPERMERCADO") return "supermercado"
@@ -64,7 +70,7 @@ export function resolveBusinessResource(
   legacyProfile?: string | null,
   permitted = true,
 ) {
-  const branch = capabilities?.business?.primaryBranch
+  const branch = configuredBusinessBranch(capabilities)
   const legacy = !branch
   const definition = BUSINESS_RESOURCES.find((item) => item.key === key)!
   const suggested = legacy
@@ -83,7 +89,7 @@ export function resolveBusinessResource(
 }
 
 export function businessPresentation(capabilities: StoreCapabilitiesV1 | null | undefined): Required<BusinessPresentation> {
-  const bakery = capabilities?.business?.primaryBranch === "padaria"
+  const bakery = configuredBusinessBranch(capabilities) === "padaria"
   return {
     productExample: bakery ? "Ex.: Pão francês" : "Ex.: Nome da mercadoria",
     categoryExample: bakery ? "Selecione ou crie (ex.: Pães)" : "Selecione ou crie uma categoria",

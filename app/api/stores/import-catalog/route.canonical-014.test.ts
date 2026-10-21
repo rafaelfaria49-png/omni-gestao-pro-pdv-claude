@@ -116,10 +116,22 @@ describe("POST /api/stores/import-catalog — canonical", () => {
     h.destFindFirst.mockResolvedValue(side === "destino" ? { id: "dest-1", stock: 0, metadata } : null)
     const res = await POST(req({ fromStoreId: "loja-a", toStoreId: "loja-b", mode: "overwrite" }))
     expect(res.status).toBe(409)
-    expect(await res.json()).toMatchObject({ code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+    const body = await res.json() as { error: string }
+    expect(body).toMatchObject({ code: "PRODUTO_POR_PESO_NAO_OPERACIONAL", item: { sku: "SKU-1", unidade: side } })
+    expect(body.error).toContain("SKU-1")
     expect(h.createProductTx).not.toHaveBeenCalled()
     expect(h.updateProductTx).not.toHaveBeenCalled()
     expect(h.applyStockMutationTx).not.toHaveBeenCalled()
+  })
+  it("falha interna identifica o SKU autorizado sem vazar mensagem do banco", async () => {
+    h.prodsFindMany.mockResolvedValue([SRC({ sku: "OK-1" }), SRC({ sku: "SKU-QUEBRA" })])
+    h.createProductTx.mockResolvedValueOnce({ ok: true, id: "novo-1", operacao: "create" } as never)
+    h.createProductTx.mockRejectedValueOnce(new Error("Invalid `tx.produto.create()` invocation: Unique constraint failed on db.internal:5432"))
+    const res = await POST(req({ fromStoreId: "loja-a", toStoreId: "loja-b", mode: "merge" }))
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body).toMatchObject({ ok: false, item: { sku: "SKU-QUEBRA", unidade: "destino" } })
+    expect(JSON.stringify(body)).not.toMatch(/prisma|invocation|5432|db\.internal|constraint/i)
   })
   it("merge existente: cadastral sem ledger (estoque preservado)", async () => {
     h.prodsFindMany.mockResolvedValue([SRC({ stock: 10 })])

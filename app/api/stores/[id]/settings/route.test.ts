@@ -447,6 +447,53 @@ describe("PUT /api/stores/[id]/settings — Capabilities V1", () => {
     expect(h.upsert).not.toHaveBeenCalled()
   })
 
+  it("snapshot antigo de capabilities junto de atalhos não recusa o patch legítimo e não é aplicado", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    const current = { version: 1, business: { primaryBranch: "padaria" }, overrides: { "catalog.weight": { enabled: true } } }
+    h.findUnique.mockResolvedValue({ storeId: "loja-a", printerConfig: { capabilities: current, pdvParams: { atalhosRapidos: [] } } })
+    h.upsert.mockResolvedValue({ storeId: "loja-a" })
+    const stale = { version: 1, business: { primaryBranch: "assistencia" }, overrides: { "catalog.weight": { enabled: "sim" } } }
+    const res = await PUT(putReq({ printerConfig: { capabilities: stale, pdvParams: { atalhosRapidos: [{ id: "a1" }] } } }), ctx("loja-a"))
+    expect(res.status).toBe(200)
+    const merged = ((h.upsert.mock.calls as unknown[][])[0][0] as { update: { printerConfig: Record<string, unknown> } }).update.printerConfig
+    expect(merged.capabilities).toEqual(current)
+    expect(merged.pdvParams).toEqual({ atalhosRapidos: [{ id: "a1" }] })
+  })
+
+  it.each(["true", "false", 1, null])("backfill não booleano (%j) é recusado antes de qualquer escrita", async (backfill) => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    const forged = { version: 1, business: { primaryBranch: "inventado" }, overrides: { "pdv.scale": true, "catalog.weight": { available: true } } }
+    const res = await PUT(putReq({ backfill, printerConfig: { capabilities: forged, pdvMainLayout: "classic" } }), ctx("loja-a"))
+    expect(res.status).toBe(400)
+    expect(h.findUnique).not.toHaveBeenCalled()
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("backfill booleano com capabilities inválidas e seção irmã continua validado", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    const res = await PUT(putReq({ backfill: true, printerConfig: { capabilities: { version: 1, overrides: { "pdv.scale": true } }, pdvMainLayout: "classic" } }), ctx("loja-a"))
+    expect(res.status).toBe(400)
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("patch dedicado de capabilities continua validado", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    const res = await PUT(putReq({ printerConfig: { capabilities: { version: 1, overrides: { "catalog.weight": { enabled: "sim" } } } } }), ctx("loja-a"))
+    expect(res.status).toBe(400)
+    expect(h.upsert).not.toHaveBeenCalled()
+  })
+
+  it("erro interno de banco não vaza ao operador", async () => {
+    h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
+    h.findUnique.mockRejectedValue(new Error("Invalid `prisma.storeSettings.findUnique()` invocation: connection to 10.0.0.7:5432 refused"))
+    const put = await PUT(putReq({ printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } } }), ctx("loja-a"))
+    const get = await GET(new Request("http://localhost/api/stores/loja-a/settings"), ctx("loja-a"))
+    for (const res of [put, get]) {
+      expect(res.status).toBe(500)
+      expect(JSON.stringify(await res.json())).not.toMatch(/prisma|5432|10\.0\.0\.7|invocation/i)
+    }
+  })
+
   it("merge não-destrutivo preserva campos irmãos e namespaces desconhecidos em printerConfig", async () => {
     h.auth.mockResolvedValue(sessao({ role: "ADMIN" }))
     const existing = {

@@ -37,6 +37,12 @@ describe("Adapter legado do ramo — mesma fonte e mesmo isolamento", () => {
   it("ausência de configuração preserva assistência existente", async () => {
     expect(await (await GET(req())).json()).toMatchObject({ perfilLoja: "assistencia", mostraTecnicoLaudoOs: true })
   })
+  it("ramo desconhecido fora do contrato usa o perfil legado em vez de 500", async () => {
+    h.settings.mockResolvedValue({ printerConfig: { capabilities: { version: 1, business: { primaryBranch: "inventado" } } } })
+    const result = await GET(req())
+    expect(result.status).toBe(200)
+    expect(await result.json()).toMatchObject({ perfilLoja: "assistencia", mostraTecnicoLaudoOs: true })
+  })
   it("falha de leitura não inventa loja ou perfil", async () => {
     h.settings.mockRejectedValueOnce(new Error("offline"))
     const result = await GET(req())

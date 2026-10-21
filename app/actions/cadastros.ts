@@ -1549,11 +1549,19 @@ export async function upsertProduto(
 
   // Recusar intenção operacional incompatível antes de salvar campos comuns.
   if (hasEstoque) {
+    let current: { stock: number | null; metadata: unknown } | null;
     try {
-      const current = await prisma.produto.findFirst({ where: { id: productId, storeId: sid }, select: { stock: true, metadata: true } });
-      if (current && current.stock !== requestedStock) assertProductCommercialSaleSupported(current.metadata);
-    } catch (error) {
-      return { ok: false, type: "VALIDATION_ERROR", message: error instanceof Error ? error.message : "Não foi possível validar o saldo deste produto." };
+      current = await prisma.produto.findFirst({ where: { id: productId, storeId: sid }, select: { stock: true, metadata: true } });
+    } catch {
+      // Erro de banco/driver não é validação e não chega ao operador.
+      return { ok: false, type: "SAVE_ERROR", message: "Não foi possível validar o saldo deste produto. Tente novamente." };
+    }
+    if (current && current.stock !== requestedStock) {
+      try {
+        assertProductCommercialSaleSupported(current.metadata);
+      } catch (error) {
+        return { ok: false, type: "VALIDATION_ERROR", message: error instanceof Error ? error.message : "Não foi possível validar o saldo deste produto." };
+      }
     }
   }
 
@@ -1583,18 +1591,27 @@ export async function upsertProduto(
   // saldo. Esta comparação impede ledger falso quando o caller reenvia o saldo
   // atual sem intenção de mudança. Mudança explícita real → ajuste canônico.
   let currentStock: number | null = null;
+  let currentMetadata: unknown = null;
   try {
     const row = await prisma.produto.findFirst({
       where: { id: productId, storeId: sid },
-      select: { stock: true },
+      select: { stock: true, metadata: true },
     });
     currentStock = row ? (row.stock ?? 0) : null;
+    currentMetadata = row?.metadata ?? null;
   } catch {
     currentStock = null;
   }
   if (currentStock === null || currentStock === requestedStock) {
     revalidatePath("/dashboard/cadastros-v2");
     return { ok: true, id: updated.id };
+  }
+  // O saldo pode ter mudado desde a pré-checagem (ex.: devolução concorrente):
+  // nenhuma movimentação de produto por peso/declaração inválida passa por aqui.
+  try {
+    assertProductCommercialSaleSupported(currentMetadata);
+  } catch (error) {
+    return { ok: false, type: "VALIDATION_ERROR", message: error instanceof Error ? error.message : "Não foi possível validar o saldo deste produto." };
   }
 
   const ledger = await applyStockMutation(

@@ -4,7 +4,7 @@ import { createContext, useContext, type ReactNode } from "react"
 import { PERFIL_LOJA_DEFAULT, type PerfilLojaId } from "@/lib/perfil-loja-types"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useStoreSettings } from "@/lib/store-settings-provider"
-import { legacyBusinessBranch, resolveBusinessResource } from "@/lib/store-business-capabilities"
+import { configuredBusinessBranch, legacyBusinessBranch, resolveBusinessResource } from "@/lib/store-business-capabilities"
 
 type PerfilLojaContextType = {
   perfilLoja: PerfilLojaId
@@ -23,7 +23,7 @@ export function PerfilLojaProvider({ children }: { children: ReactNode }) {
   const { lojaAtivaRaw } = useLojaAtiva()
   const { capabilities, hydrated } = useStoreSettings()
   const profile = lojaAtivaRaw?.storeProfile
-  const branch = capabilities?.business?.primaryBranch ?? legacyBusinessBranch(profile)
+  const branch = configuredBusinessBranch(capabilities) ?? legacyBusinessBranch(profile)
   const perfilLoja: PerfilLojaId = branch === "assistencia" ? "assistencia" : branch === "supermercado" ? "supermercado" : "variedades"
   return <PerfilLojaContext.Provider value={{
     perfilLoja, setPerfilLoja,

@@ -28,6 +28,10 @@ on:
       - "components/dashboard/configuracoes/gestao-unidades-saas.tsx"
       - "scripts/cadastros/smoke-ramos.mjs"
       - "scripts/cadastros/run-ramos-isolated-postgres.mjs"
+      - "scripts/cadastros/run-ramos-e2e-isolated.mjs"
+      - "scripts/cadastros/disposable-db-preflight*"
+      - "e2e/cadastros-ramos/**"
+      - "e2e/cadastros-ramos.playwright.config.ts"
       - ".github/workflows/ramos-cadastros.yml"
   workflow_dispatch:
 
@@ -73,6 +77,7 @@ jobs:
           app/api/produtos/[id]/route.test.ts app/api/stores/import-catalog/route.canonical-014.test.ts
           app/actions/cadastros.product-interactive.test.ts app/actions/estoque.access.test.ts
           lib/operacoes/adapters/os-estoque.test.ts
+          scripts/cadastros/disposable-db-preflight.test.ts
           --maxWorkers=2
       - name: Lint dos contratos e interfaces
         run: >-
@@ -89,6 +94,9 @@ jobs:
           app/api/produtos/[id]/route.ts app/api/stores/import-catalog/route.ts
           app/api/vendas/[id]/corrigir-itens/route.ts lib/operacoes/adapters/os-estoque.ts
           components/configuracoes-v3/features/settings/sections/AparenciaSection.tsx
+          app/api/stores/[id]/settings/route.ts app/api/settings/perfil-loja/route.ts
+          lib/pdv/resolve-capability.ts lib/perfil-loja-provider.tsx
+          scripts/cadastros/run-ramos-e2e-isolated.mjs scripts/cadastros/disposable-db-preflight.mjs e2e/cadastros-ramos e2e/cadastros-ramos.playwright.config.ts
       - name: TypeScript completo
         run: npm run typecheck
       - name: Build isolado sem migrations
@@ -136,3 +144,50 @@ jobs:
         with:
           name: ramos-postgres-evidence
           path: test-results/ramos/postgres-*.json
+
+  e2e-authenticated:
+    # App integrada (build de produção + next start) contra PostgreSQL descartável,
+    # login NextAuth real e usuários sintéticos. Sem credenciais produtivas.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cad_r2_021
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: cad_r2_021_isolated
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cad_r2_021 -d cad_r2_021_isolated"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://cad_r2_021:isolated_ci_only@127.0.0.1:5432/cad_r2_021_isolated
+      DIRECT_URL: postgresql://cad_r2_021:isolated_ci_only@127.0.0.1:5432/cad_r2_021_isolated
+      CAD_R2_021_DISPOSABLE_DB: "true"
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      VERCEL: "0"
+      VERCEL_ENV: development
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build de produção sem migrations
+        run: npm run build
+        env:
+          AUTH_SECRET: isolated-ramo-e2e-build-only
+          AUTH_TRUST_HOST: "true"
+          NEXTAUTH_URL: http://127.0.0.1:3000
+      - run: npx playwright install --with-deps chromium
+      - name: Jornadas autenticadas reais (Padaria, lojas mistas, permissões, multiloja)
+        run: node scripts/cadastros/run-ramos-e2e-isolated.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ramos-e2e-autenticado
+          path: test-results/cadastros-ramos-e2e/

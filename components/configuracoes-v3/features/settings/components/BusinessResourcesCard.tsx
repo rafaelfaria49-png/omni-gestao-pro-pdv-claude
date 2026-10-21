@@ -6,7 +6,7 @@ import {
   BUSINESS_BRANCHES, BUSINESS_RESOURCES, businessPresentation, resolveBusinessResource,
   type BusinessBranch, type BusinessPresentation, type BusinessResourceKey,
 } from "@/lib/store-business-capabilities"
-import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
+import type { CapabilityOverrideValue, StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 import { SettingsCard } from "./SettingsCard"
 import { Button } from "@/components/configuracoes-v3/components/ui/button"
 import { Input } from "@/components/configuracoes-v3/components/ui/input"
@@ -26,7 +26,7 @@ function BusinessResourcesForm() {
   const { branch, capabilities, canConfigure, ready, save, legacyProfile } = useStoreBusiness()
   const { toast } = useToast()
   const [selected, setSelected] = useState<BusinessBranch | null>(null)
-  const [overrides, setOverrides] = useState<Partial<Record<BusinessResourceKey, boolean>>>({})
+  const [overrides, setOverrides] = useState<Partial<Record<BusinessResourceKey, CapabilityOverrideValue>>>({})
   const [presentation, setPresentation] = useState<BusinessPresentation>({})
   const [saving, setSaving] = useState(false)
   const draft: StoreCapabilitiesV1 = {
@@ -41,6 +41,18 @@ function BusinessResourcesForm() {
   const examples = businessPresentation(draft)
   const disabled = !ready || !canConfigure || saving
   const dirty = selected !== null || Object.keys(overrides).length > 0 || Object.keys(presentation).length > 0
+
+  // Voltar ao estado salvo desfaz a escolha; override salvo em objeto troca só `enabled`.
+  function toggle(key: BusinessResourceKey, checked: boolean) {
+    setOverrides((current) => {
+      const rest = { ...current }
+      delete rest[key]
+      const saved = capabilities?.overrides?.[key]
+      const untouched = resolveBusinessResource({ ...draft, overrides: { ...capabilities?.overrides, ...rest } }, key, legacyProfile)
+      if (untouched.requested === checked) return rest
+      return { ...rest, [key]: typeof saved === "object" && saved !== null ? { ...saved, enabled: checked } : checked }
+    })
+  }
 
   async function submit() {
     setSaving(true)
@@ -79,7 +91,7 @@ function BusinessResourcesForm() {
             const state = resolveBusinessResource(draft, item.key, legacyProfile)
             return <label key={item.key} className="flex cursor-pointer items-start gap-3 py-3">
               <input type="checkbox" checked={state.requested} disabled={disabled}
-                onChange={(event) => setOverrides((current) => ({ ...current, [item.key]: event.target.checked }))}
+                onChange={(event) => toggle(item.key, event.target.checked)}
                 className="mt-1 h-4 w-4 shrink-0 accent-primary" />
               <span className="min-w-0 text-sm"><span className="font-medium">{item.label}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{state.source === "explicit" ? "Escolha explícita" : "Sugestão do ramo"}</span>

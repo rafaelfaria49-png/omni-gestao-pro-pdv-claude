@@ -152,6 +152,14 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
+ * Somente o patch dedicado do editor de recursos altera capabilities.
+ * Tema/atalhos legados reenviam snapshots completos, possivelmente antigos.
+ */
+export function isDedicatedCapabilitiesPatch(printerConfig: Record<string, unknown>): boolean {
+  return Object.keys(printerConfig).every((name) => name === "capabilities")
+}
+
+/**
  * Merge profundo de `printerConfig` para salvamento seguro.
  * Preserva campos irmãos pré-existentes e namespaces desconhecidos.
  *
@@ -171,9 +179,7 @@ export function mergePrinterConfigServerSide(
     const merged: Record<string, unknown> = { ...existing }
 
     for (const [key, val] of Object.entries(incoming)) {
-      // Somente o patch dedicado do editor de recursos altera capabilities.
-      // Tema/atalhos legados reenviam snapshots completos, possivelmente antigos.
-      if (key === "capabilities" && Object.keys(incoming).some((name) => name !== "capabilities")) continue
+      if (key === "capabilities" && !isDedicatedCapabilitiesPatch(incoming)) continue
       if (key === "pdvParams" && isRecord(val) && isRecord(existing.pdvParams)) {
         merged.pdvParams = { ...existing.pdvParams, ...val }
       } else if (key === "capabilities" && isRecord(val) && isRecord(existing.capabilities)) {
