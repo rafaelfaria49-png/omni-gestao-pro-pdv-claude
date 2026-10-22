@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const agenda = await listarAgenda(
       { storeId: escopo.storeId, userId: escopo.userId },
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     body = {}
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const obrigacao = await criarObrigacao(
       { storeId: escopo.storeId, userId: escopo.userId },

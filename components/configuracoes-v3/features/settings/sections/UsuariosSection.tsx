@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { useSession } from "next-auth/react";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
@@ -55,9 +56,10 @@ import {
   TableRow,
 } from "@/components/configuracoes-v3/components/ui/table";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
-import { getPermissionsFromSession } from "@/lib/auth/enterprise-permissions";
+import { isPlatformAuthority } from "@/lib/auth/access-policy";
 
 type AdminUserRow = {
+  accessScope: string | null;
   id: string;
   name: string;
   email: string;
@@ -123,10 +125,8 @@ function badgeVariantForRole(role: string): "default" | "secondary" | "outline" 
 export function UsuariosSection() {
   const { data: session, status } = useSession();
   const { toast } = useToast();
-  const canManage = useMemo(() => {
-    if (status !== "authenticated" || !session?.user) return false;
-    return getPermissionsFromSession(session).admin.configuracoes === true;
-  }, [session, status]);
+  const permissions = useEnterprisePermissions();
+  const canManage = status === "authenticated" && permissions?.admin.configuracoes === true;
 
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -482,7 +482,7 @@ export function UsuariosSection() {
                       <Badge variant={r.active ? "outline" : "secondary"}>{r.active ? "Ativo" : "Inativo"}</Badge>
                     </TableCell>
                     <TableCell className="max-w-[220px]">
-                      {r.role === "SUPER_ADMIN" || r.role === "ADMIN" ? (
+                      {isPlatformAuthority(r) ? (
                         <span className="text-xs text-muted-foreground">Todas as unidades</span>
                       ) : r.storeIds.length === 0 ? (
                         <span className="text-xs text-muted-foreground">{r.lojaId ? storeLabel(r.lojaId) : "—"}</span>

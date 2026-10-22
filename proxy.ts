@@ -115,14 +115,14 @@ export const proxy = auth(async (req) => {
   if (pathname.startsWith("/dashboard") && session?.user) {
     const sess = session as unknown as Session
     const storeCookie = req.cookies.get(ASSISTEC_ACTIVE_STORE_COOKIE)?.value
-    const denied = enterpriseDashboardRedirect(req.nextUrl.origin, pathname, sess, storeCookie)
-    if (denied) return NextResponse.redirect(denied)
     const storeDeny = enterpriseStoreCookieRedirect(req.nextUrl.origin, sess, storeCookie)
     if (storeDeny) {
       const res = NextResponse.redirect(storeDeny)
       res.cookies.delete(ASSISTEC_ACTIVE_STORE_COOKIE)
       return res
     }
+    const denied = enterpriseDashboardRedirect(req.nextUrl.origin, pathname, sess, storeCookie)
+    if (denied) return NextResponse.redirect(denied)
   }
 
   if (pathname === "/logs-sistema" || pathname.startsWith("/logs-sistema/")) {

@@ -38,6 +38,7 @@ const bundle = await build({
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [{ name: "ramos-isolated-io", setup(api) {
     const mocks = {
+      "@/lib/auth/use-enterprise-permissions": `export const useEnterprisePermissions=()=>({platformAuthority:true});`,
       "@/lib/use-store-business": `import React from 'react';export const HarnessContext=React.createContext(null);export const useStoreBusiness=()=>React.useContext(HarnessContext);`,
       "@/app/actions/cadastros": `export const listCategorias=async()=>[];export const listMarcas=async()=>[];
         export const listCategoriasMarcasUsadasEmProduto=async()=>({categorias:[],marcas:[]});

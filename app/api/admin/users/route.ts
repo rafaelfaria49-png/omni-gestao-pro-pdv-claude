@@ -9,6 +9,8 @@ import { assertActorMayAssignRole, canAccessAdminUsersApi, normalizeAllowedStore
 import { generateTemporaryPassword, newPasswordSchema } from "@/lib/auth/password-policy"
 import { adminUserSelect as userSelect } from "@/lib/auth/admin-user-select"
 import { canUseModule } from "@/lib/auth/enterprise-permissions"
+import { buildAdminUserCreateChanges, resolveAuditStoreIdForUser } from "@/lib/config-audit/admin-user"
+import { recordConfigAuditFromSession } from "@/lib/config-audit/record"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -63,6 +65,12 @@ export async function POST(req: Request) {
       accessScope: body.accessScope, lojaId: body.lojaId || ids[0] || null,
       mustChangePassword: true, adminUserStores: { create: ids.map((storeId) => ({ storeId })) },
     }, select: userSelect })
+    try {
+      await recordConfigAuditFromSession(req, session, {
+        storeId: resolveAuditStoreIdForUser(created.lojaId, ids), section: "usuarios",
+        changes: buildAdminUserCreateChanges({ ...created, storeIds: ids }),
+      })
+    } catch { /* auditoria preserva o contrato de save; nenhuma credencial é registrada */ }
     return NextResponse.json({ ok: true, user: { ...created, storeIds: ids }, temporaryPassword: body.password ? undefined : plain }, { status: 201, headers: { "Cache-Control": "no-store" } })
   } catch (e) {
     if (e instanceof Error && /permissão|Unidade/.test(e.message)) return error(e.message, 403)

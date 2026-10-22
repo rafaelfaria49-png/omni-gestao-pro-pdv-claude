@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
 
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const agenda = await listarAgenda(
       { storeId: escopo.storeId, userId: escopo.userId },

@@ -777,7 +777,7 @@ describe("GET /api/auth/admin — consumo da autorização", () => {
 
 describe("DELETE /api/auth/admin", () => {
   it("revoga limpando o cookie com maxAge 0", async () => {
-    const res = await DELETE()
+    const res = await DELETE(new Request("http://localhost/api/auth/admin", { method: "DELETE" }))
     expect(res.status).toBe(200)
     const raw = res.headers.get("set-cookie") ?? ""
     expect(raw).toContain(`${ADMIN_AUTHORIZATION_COOKIE}=`)

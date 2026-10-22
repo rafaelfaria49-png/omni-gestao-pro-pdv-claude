@@ -91,7 +91,7 @@ describe("CAD-R2-020 boundaries", () => {
   })
   it("rejects URL searches and legacy phone GET", async () => {
     expect((await list(req(undefined, "store-a", "clientes?q=private"))).status).toBe(400)
-    expect((await phoneGet()).status).toBe(405); expect(h.findMany).not.toHaveBeenCalled()
+    expect((await phoneGet(req())).status).toBe(405); expect(h.findMany).not.toHaveBeenCalled()
   })
   it.each([list, legacy])("exceptions are absent from response and logs even in development", async fn => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {})

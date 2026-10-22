@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   const body = await lerCorpoJson(req)
   if (temChaveProibida(body)) return respostaChaveProibida()
 
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
 
   try {
     const comp = competenciaOuErro(body.competencia)

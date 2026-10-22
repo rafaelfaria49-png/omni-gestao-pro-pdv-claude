@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
 
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
 
   return NextResponse.json(
     {
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
 
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
 
   try {
     const documento = await alterarStatusDocumento(

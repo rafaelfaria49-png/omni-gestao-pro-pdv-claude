@@ -42,7 +42,8 @@ try {
   run(["node_modules/prisma/build/index.js", "db", "execute", "--schema", "prisma/schema.prisma", "--file", "prisma/migrations/20261022120000_platform_pilot_access/migration.sql"])
   const oldUser = await db.adminUser.findUniqueOrThrow({ where: { id: "pilot-owner" } })
   const oldStore = await db.store.findUniqueOrThrow({ where: { id: "pilot-legacy" } })
-  if (oldUser.accessScope !== null || oldUser.sessionVersion !== 0 || oldUser.password !== legacyHash || oldStore.moduleAccess !== null) throw new Error("PILOT_LEGACY_MIGRATION_CHANGED_AUTHORITY")
+  const legacyChecks = { scopeNull: oldUser.accessScope === null, versionZero: oldUser.sessionVersion === 0, passwordPreserved: oldUser.password === legacyHash, modulesNull: oldStore.moduleAccess === null }
+  if (Object.values(legacyChecks).some((ok) => !ok)) throw new Error("PILOT_LEGACY_MIGRATION_CHANGED_AUTHORITY " + JSON.stringify(legacyChecks))
   await writeFile(path.join(out, "migration.json"), JSON.stringify({ applied: true, target: "fresh disposable CI PostgreSQL", legacyAuthorityPreserved: true, accountsReclassified: 0, passwordsChanged: 0, productionWrites: 0 }, null, 2))
   await db.store.createMany({ data: [
     { id: "pilot-a", name: "Padaria Piloto A" }, { id: "pilot-b", name: "Comércio Piloto B" },
@@ -66,6 +67,12 @@ try {
     { id: "pilot-client-a", storeId: "pilot-a", name: "Cliente Sintético A", phone: "11999990001", email: "private-a@pilot.invalid" },
     { id: "pilot-client-b", storeId: "pilot-b", name: "Cliente Sintético B", phone: "11999990002", email: "private-b@pilot.invalid" },
   ] })
+  await db.contaReceberTitulo.createMany({ data: [
+    { storeId: "pilot-a", cliente: "Financeiro Privado A", valor: 71, status: "pago", vencimento: "2026-10-22" },
+    { storeId: "pilot-b", cliente: "Financeiro Privado B", valor: 999123, status: "pago", vencimento: "2026-10-22" },
+  ] })
+  await db.carteiraFinanceira.create({ data: { id: "pilot-wallet-b", storeId: "pilot-b", nome: "Carteira Privada B" } })
+  await db.conciliacaoFinanceira.create({ data: { id: "pilot-reconciliation-b", storeId: "pilot-b", carteiraId: "pilot-wallet-b", dataReferencia: "2026-10-22", status: "conciliado", observacao: "Observação Privada B" } })
   await db.sessaoCaixa.create({ data: { id: "pilot-cash-b", storeId: "pilot-b", operador: "Operador Privado B", status: "ABERTA", saldoInicial: 0 } })
 } finally { await db.$disconnect() }
 

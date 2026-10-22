@@ -36,6 +36,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       token.role = current.role
       token.accessScope = current.accessScope
       token.platformAuthority = platform
+      token.billingAccess = Boolean(current.stripeCustomerId && current.stripeSubscriptionId)
       token.lojaId = current.lojaId
       token.storeAccess = platform ? "all" : "restricted"
       token.allowedStoreIdsJson = JSON.stringify(stores.map((s) => s.id))

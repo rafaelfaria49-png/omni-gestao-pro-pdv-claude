@@ -18,7 +18,7 @@ export const revalidate = 0
 
 function verifyWebhookSecret(request: Request): boolean {
   const secret = process.env.ASSISTEC_WHATSAPP_WEBHOOK_SECRET
-  if (!secret) return true
+  if (!secret?.trim()) return false
   const header =
     request.headers.get("x-webhook-token") ??
     request.headers.get("x-api-key") ??

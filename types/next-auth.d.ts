@@ -10,6 +10,7 @@ declare module "next-auth" {
       storeAccess: "all" | "restricted"
       allowedStoreIds?: string[]
       platformAuthority?: boolean
+      billingAccess?: boolean
       accessScope?: string | null
       mustChangePassword?: boolean
       sessionVersion?: number
@@ -34,6 +35,7 @@ declare module "next-auth/jwt" {
     /** JSON array de storeIds quando `storeAccess` === "restricted". */
     allowedStoreIdsJson?: string
     platformAuthority?: boolean
+    billingAccess?: boolean
     accessScope?: string | null
     mustChangePassword?: boolean
     sessionVersion?: number

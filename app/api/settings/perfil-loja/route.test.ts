@@ -10,7 +10,7 @@ import { GET, PUT } from "./route"
 const req = () => new Request("http://localhost/api/settings/perfil-loja", { headers: { "x-assistec-loja-id": "loja-a" } })
 beforeEach(() => {
   vi.clearAllMocks()
-  h.auth.mockResolvedValue({ user: { id: "u1", role: "ADMIN", storeAccess: "restricted", allowedStoreIds: ["loja-a"] } })
+  h.auth.mockResolvedValue({ user: { id: "u1", role: "ADMIN", storeModules: { "loja-a": ["service", "catalog", "pdv", "settings"] }, storeAccess: "restricted", allowedStoreIds: ["loja-a"] } })
   h.store.mockResolvedValue({ profile: "ASSISTENCIA" })
   h.settings.mockResolvedValue(null)
 })
@@ -21,7 +21,7 @@ describe("Adapter legado do ramo — mesma fonte e mesmo isolamento", () => {
     expect(h.store).not.toHaveBeenCalled()
   })
   it("sem acesso à loja não consulta configurações", async () => {
-    h.auth.mockResolvedValue({ user: { id: "u1", role: "ADMIN", storeAccess: "restricted", allowedStoreIds: ["loja-b"] } })
+    h.auth.mockResolvedValue({ user: { id: "u1", role: "ADMIN", storeModules: { "loja-a": ["service", "catalog", "pdv", "settings"] }, storeAccess: "restricted", allowedStoreIds: ["loja-b"] } })
     expect((await GET(req())).status).toBe(403)
     expect(h.settings).not.toHaveBeenCalled()
   })

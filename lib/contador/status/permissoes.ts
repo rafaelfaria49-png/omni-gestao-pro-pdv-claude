@@ -43,8 +43,8 @@ export type CapacidadesContador = Readonly<{
 }>
 
 /** Capacidades derivadas da sessão NextAuth. Fail-closed em sessão ausente. */
-export function resolverCapacidadesContador(session: Session | null): CapacidadesContador {
-  const p = getPermissionsFromSession(session)
+export function resolverCapacidadesContador(session: Session | null, storeId?: string): CapacidadesContador {
+  const p = getPermissionsFromSession(session, storeId)
   const acessaHub = session?.user ? p.hubs.contador === true : false
   // Só faz sentido operar dentro do HUB: sem acesso ao hub, nenhuma capacidade.
   const elevado = acessaHub && (p.admin.masterConsole === true || p.financeiro.edit === true)

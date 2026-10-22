@@ -3,6 +3,7 @@ import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { businessPresentation, resolveBusinessResource } from "@/lib/store-business-capabilities"
+import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 
 const h = vi.hoisted(() => ({
@@ -18,9 +19,11 @@ const h = vi.hoisted(() => ({
 vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
   storeId: "loja-a", ready: h.ready, hydrated: h.hydrated, capabilities: h.capabilities, refresh: h.refresh,
   branch: h.capabilities.business?.primaryBranch ?? "assistencia", configured: true,
+  permissions: { ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted } },
   canConfigure: h.canConfigure, presentation: businessPresentation(h.capabilities), save: h.save,
   resource: (key: Parameters<typeof resolveBusinessResource>[1]) => resolveBusinessResource(h.capabilities, key, undefined, h.permitted),
 }) }))
+vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: "loja-a" }) }))
 vi.mock("@/components/configuracoes-v3/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -72,7 +75,7 @@ function product(initial?: React.ComponentProps<typeof ProductAIModal>["initial"
 describe("Cadastros adaptados por recursos e produto", () => {
   it("padaria nova não renderiza aparelhos, exemplos de celulares ou técnicos", async () => {
     product()
-    expect(await screen.findAllByPlaceholderText("Ex.: Pão francês")).toHaveLength(2)
+    expect(await screen.findAllByPlaceholderText("Ex.: Pão francês")).toHaveLength(1)
     expect(document.body.textContent).not.toMatch(/capinhas|películas|equipamentos|compatibilidade com aparelhos/i)
     const placeholders = [...document.querySelectorAll("[placeholder]")].map((el) => el.getAttribute("placeholder")).join(" ")
     expect(placeholders).not.toMatch(/iphone|apple|celular|telas|película/i)

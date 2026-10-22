@@ -190,11 +190,10 @@ export async function registrarEntradaEstoque(
     idempotencyKey?: string;
   }
 ): Promise<EntradaEstoqueResult> {
-  await requireModuleAction(storeId, "stock")
-
   let sid: string;
   let principal: CadastrosAuditPrincipal | null;
   try {
+    await requireModuleAction(storeId, "stock");
     const gate = await requireCadastrosActionAccess(storeId, "shared");
     sid = gate.storeId;
     principal = cadastrosAuditPrincipalFromSession(gate.session);
@@ -268,11 +267,10 @@ export async function registrarAjusteEstoque(
     idempotencyKey?: string;
   }
 ): Promise<EntradaEstoqueResult> {
-  await requireModuleAction(storeId, "stock")
-
   let sid: string;
   let principal: CadastrosAuditPrincipal | null;
   try {
+    await requireModuleAction(storeId, "stock");
     const gate = await requireCadastrosActionAccess(storeId, "shared");
     sid = gate.storeId;
     principal = cadastrosAuditPrincipalFromSession(gate.session);

@@ -1246,10 +1246,6 @@ model CategoriaCadastro {
    */
   type      String   @default("geral") @map("type")
   active    Boolean  @default(true) @map("active")
-  /** NULL: compatibilidade de contas anteriores à migration; novas contas sempre STORE. */
-  accessScope String? @default("STORE")
-  mustChangePassword Boolean @default(false)
-  sessionVersion Int @default(0)
   createdAt DateTime @default(now()) @map("createdAt")
   updatedAt DateTime @updatedAt @map("updatedAt")
 
@@ -2222,6 +2218,10 @@ model AdminUser {
   lojaId    String?
   /** Conta ativa; inativos não autenticam no painel. */
   active    Boolean  @default(true) @map("active")
+  /** NULL: compatibilidade de contas anteriores à migration; novas contas sempre STORE. */
+  accessScope String? @default("STORE")
+  mustChangePassword Boolean @default(false)
+  sessionVersion Int @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

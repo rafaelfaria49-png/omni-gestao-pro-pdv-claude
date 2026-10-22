@@ -8,7 +8,7 @@ const publicExact = new Set([
   "auth/[...nextauth]", "auth/contador", "webhooks/stripe", "webhooks/whatsapp", "whatsapp/webhook",
   "meta-whatsapp-verify", "subscription/verify", "version", "debug/build-version", "debug/pdv-layouts-version",
 ])
-const manual = new Set(["admin/users", "admin/users/[id]", "account/password", "platform/provision", "platform/stores/[id]/access"])
+const manual = new Set(["admin/users", "admin/users/[id]", "account/password", "platform/provision", "platform/stores/[id]/access", "subscription/seal"])
 const inventory = []
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
 function accessFor(route, method) {
@@ -19,7 +19,7 @@ function accessFor(route, method) {
   if (route === "stores/[id]/settings") return method === "GET" ? "authenticated" : "settings"
   if (route.startsWith("stores/")) return "platform"
   if (route.startsWith("admin/")) return "platform"
-  if (route === "auth/admin") return "sharedPayment"
+  if (route === "auth/admin") return method === "DELETE" ? "own-server-policy" : "sharedPayment"
   if (/^billing\//.test(route)) return "billing"
   if (/^(credits|user\/credits)(\/|$)/.test(route)) return "ai"
   if (/^(marketing|ia-mestre|ai|whatsapp|marketplace)(\/|$)/.test(route)) return ({ marketing: "marketing", "ia-mestre": "ai", ai: "ai", whatsapp: "whatsapp", marketplace: "marketplace" })[route.split("/")[0]]
@@ -34,7 +34,8 @@ function accessFor(route, method) {
   if (route === "config-audit" || route === "audit/logs") return "platform"
   if (route === "audit/log") return "authenticated"
   if (route === "print/raw") return "platform" // Ponte TCP de ambiente interno.
-  if (route === "dashboard/elite" || route === "dashboard/resumo") return "home"
+  if (route === "dashboard/elite") return "platform"
+  if (route === "dashboard/resumo") return "home"
   if (route === "settings/perfil-loja") return method === "GET" ? "authenticated" : "settings"
   if (/^(clientes|clients)(\/|$)/.test(route)) return ["GET", "HEAD"].includes(method) || ["clientes/quick", "clientes/search", "clientes/match-by-phone"].includes(route) ? "sharedCatalog" : "catalog"
   if (/^produtos(\/|$)/.test(route)) return method === "GET" ? "sharedCatalog" : "catalog"
@@ -58,6 +59,9 @@ for (const file of walk(path.join(root, "app/api")).filter((f) => f.endsWith(pat
   const route = relative.slice("app/api/".length, -"/route.ts".length)
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
   const edits = []
+  if (route === "auth/[...nextauth]") for (const method of ["GET", "POST"]) inventory.push({ file: relative, method, access: "external-contract" })
+  if (route === "clients") inventory.push({ file: relative, method: "GET", access: "sharedCatalog", delegatesTo: "app/api/clientes/route.ts" })
+  if (route === "ops/import/clientes") inventory.push({ file: relative, method: "GET", access: "sharedCatalog", delegatesTo: "app/api/clientes/importar/route.ts" })
   let needsImport = false
   for (const node of ast.statements) {
     if (!ts.isFunctionDeclaration(node) || !node.name || !node.body || !node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue

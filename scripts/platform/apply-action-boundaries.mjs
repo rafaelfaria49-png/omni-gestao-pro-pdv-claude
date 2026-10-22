@@ -13,6 +13,7 @@ for (const [file, defaultModule] of Object.entries(modules)) {
     const params = node.parameters.map((p) => p.name.getText(ast))
     let module = defaultModule
     if (name === "listVendasHub") module = "sales"
+    if (name === "listClientes") module = "sharedCatalog"
     if (file === "terminais.ts" && name !== "listTerminais") module = "settings"
     if (["listTecnicos", "upsertTecnico", "listServicos", "upsertServico"].includes(name)) module = "service"
     if (["listEquipamentosModelos", "upsertEquipamentoModelo"].includes(name)) module = "deviceCatalog"

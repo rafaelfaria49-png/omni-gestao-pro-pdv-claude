@@ -17,6 +17,7 @@ export type EnterpriseRole =
 export type EnterprisePermissions = {
   modules?: Partial<Record<AccessModule, boolean>>
   platformAuthority?: boolean
+  billingAccess?: boolean
   /** Painel / workspace geral */
   workspace: { iaMestre: boolean; omniAgent: boolean }
   /** Hubs de negócio */
@@ -252,6 +253,7 @@ export function getPermissionsFromSession(session: Session | null, storeId?: str
     ...base,
     modules: Object.fromEntries((["home", "pdv", "sales", "cash", "catalog", "stock", "reports", "settings", "service", "deviceCatalog", "ai", "agent", "marketing", "marketplace", "accountant", "whatsapp", "finance", "fiscal", "experiments"] as AccessModule[]).map((m) => [m, allowed(m)])),
     platformAuthority: platform,
+    billingAccess: platform || (session?.user.billingAccess === true && !session.user.mustChangePassword),
     workspace: { iaMestre: base.workspace.iaMestre && allowed("ai"), omniAgent: base.workspace.omniAgent && allowed("agent") },
     hubs: {
       marketingIa: base.hubs.marketingIa && allowed("marketing"), whatsapp: base.hubs.whatsapp && allowed("whatsapp"),

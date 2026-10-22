@@ -58,7 +58,7 @@ export function FirstAccessWizard() {
     // Só avalia o onboarding após a hidratação remota das lojas terminar —
     // antes disso `cadastroBasicoIncompleto` pode oscilar (true→false) por causa
     // do delay do fetch /api/stores, causando flicker (modal abre e some).
-    if (!storesLoaded) {
+    if (!storesLoaded || !business.canConfigure) {
       setOpen(false)
       return
     }
@@ -69,7 +69,7 @@ export function FirstAccessWizard() {
     } else {
       setOpen(false)
     }
-  }, [cadastroBasicoIncompleto, storesLoaded, dismissKey, dismissed])
+  }, [cadastroBasicoIncompleto, storesLoaded, dismissKey, dismissed, business.canConfigure])
 
   useEffect(() => {
     // Prefill com dados remotos (se existirem) para evitar “wizard infinito” por falta de hidratação.

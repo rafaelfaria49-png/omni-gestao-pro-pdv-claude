@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     body = {}
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const r = await instanciarLoteMensal(
       { storeId: escopo.storeId, userId: escopo.userId },

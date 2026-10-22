@@ -219,7 +219,7 @@ export function CadastrosHub() {
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {selectedTab === "equipamentos" && technical && (
+        {selectedTab === "equipamentos" && visibleTab("equipamentos") && (
           <EquipamentosPanel
             storeId={storeId}
             autoOpen={autoOpenNew === "equipamentos"}

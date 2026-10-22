@@ -55,6 +55,12 @@ describe("política única de acesso piloto", () => {
     expect(canAccessSettingsSection(p, "ia")).toBe(false)
     expect(canAccessSettingsSection(p, "geral")).toBe(true)
   })
+  it("assinatura existente tem acesso ao contrato de cobrança sem liberá-lo ao piloto novo", () => {
+    expect(canAccessPage(getPermissionsFromSession(session()), "/meu-plano")).toBe(false)
+    const established = getPermissionsFromSession(session("ADMIN", { billingAccess: true }))
+    expect(canAccessPage(established, "/meu-plano")).toBe(true)
+    expect(canAccessPage(established, "/dashboard/billing")).toBe(true)
+  })
   it("sem sessão e durante troca obrigatória nada operacional é autorizado", () => {
     expect(canAccessPage(null, "/dashboard/vendas")).toBe(false)
     expect(canUseModule(session("ADMIN", { mustChangePassword: true }), "pdv", "a")).toBe(false)

@@ -8,6 +8,8 @@ import { isPlatformAuthority, isPlatformSession } from "@/lib/auth/access-policy
 import { newPasswordSchema } from "@/lib/auth/password-policy"
 import { adminUserSelect as userSelect } from "@/lib/auth/admin-user-select"
 import { canUseModule } from "@/lib/auth/enterprise-permissions"
+import { buildAdminUserPatchChanges, resolveAuditStoreIdForUser } from "@/lib/config-audit/admin-user"
+import { recordConfigAuditFromSession } from "@/lib/config-audit/record"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -55,6 +57,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         adminUserStores: { create: ids.map((storeId) => ({ storeId })) },
       }, select: userSelect })
     })
+    try {
+      await recordConfigAuditFromSession(req, session, {
+        storeId: resolveAuditStoreIdForUser(user.lojaId, ids), section: "usuarios",
+        changes: buildAdminUserPatchChanges(
+          { ...existing, storeIds: existing.adminUserStores.map((s) => s.storeId) },
+          { ...user, storeIds: ids }, b,
+        ),
+      })
+    } catch { /* auditoria não bloqueia o save; senha é somente o marcador "alterada" */ }
     return NextResponse.json({ ok: true, user: { ...user, storeIds: ids } })
   } catch (e) {
     if (e instanceof Error && /permissão|Unidade/.test(e.message)) return error(e.message, 403)

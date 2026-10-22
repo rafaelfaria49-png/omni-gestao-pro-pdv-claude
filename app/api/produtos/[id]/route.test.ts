@@ -1,3 +1,5 @@
+// Domain persistence contracts run under an explicitly authorized synthetic principal.
+vi.mock("@/lib/auth/module-access", () => ({ requireModuleApi: async () => null }))
 import { describe, it, expect, beforeEach, vi } from "vitest"
 
 // ============================================================================

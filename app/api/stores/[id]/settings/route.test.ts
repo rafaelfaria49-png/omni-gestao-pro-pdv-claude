@@ -54,6 +54,8 @@ function sessao(over: Record<string, unknown> = {}) {
       name: "U",
       role: "ADMIN",
       storeAccess: "all",
+      platformAuthority: (over.storeAccess ?? "all") === "all",
+      storeModules: Object.fromEntries(((over.allowedStoreIds as string[]) ?? []).map((id) => [id, ["home", "pdv", "sales", "cash", "catalog", "stock", "reports", "settings"]])),
       ...over,
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
@@ -103,7 +105,7 @@ describe("GET /api/stores/[id]/settings — autorização", () => {
     const body = (await res.json()) as { settings: unknown; error?: string }
 
     expect(res.status).toBe(401)
-    expect(body.settings).toBeNull()
+    expect(body.settings ?? null).toBeNull()
     expect(typeof body.error).toBe("string")
     expect(h.findUnique).not.toHaveBeenCalled()
   })
@@ -155,7 +157,7 @@ describe("GET /api/stores/[id]/settings — autorização", () => {
     const body = (await res.json()) as { settings: unknown; error?: string }
 
     expect(res.status).toBe(403)
-    expect(body.settings).toBeNull()
+    expect(body.settings ?? null).toBeNull()
     expect(typeof body.error).toBe("string")
     expect(h.findUnique).not.toHaveBeenCalled()
   })

@@ -145,7 +145,7 @@ export async function guardAdminExterno(): Promise<GuardAdminExterno> {
     resposta.headers.set("Cache-Control", CABECALHO_PRIVADO_EXTERNO["Cache-Control"])
     return Object.freeze({ ok: false as const, resposta })
   }
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   if (!capacidades.podeGerenciarAcessoExterno) {
     return Object.freeze({
       ok: false as const,

@@ -15,7 +15,8 @@ function denyHome(origin: string): URL {
  */
 export function enterpriseDashboardRedirect(origin: string, pathname: string, session: Session, storeId?: string): URL | null {
   const perms = getPermissionsFromSession(session, storeId)
-  if (!canAccessPage(perms, pathname)) return denyHome(origin)
+  if (!canAccessPage(perms, pathname)) return perms.modules?.home || perms.platformAuthority
+    ? denyHome(origin) : new URL("/conta/seguranca?access=denied", origin)
 
   const block = (cond: boolean) => cond
 

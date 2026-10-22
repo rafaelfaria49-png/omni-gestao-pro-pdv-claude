@@ -428,7 +428,7 @@
   {
     "file": "app/actions/cadastros.ts",
     "action": "listClientes",
-    "module": "catalog",
+    "module": "sharedCatalog",
     "store": "storeId"
   },
   {

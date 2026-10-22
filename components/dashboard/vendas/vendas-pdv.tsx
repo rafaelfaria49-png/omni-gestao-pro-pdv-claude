@@ -27,8 +27,8 @@ export function VendasPDV(props: VendasPDVProps) {
   }
 
   const authorizedLayout = permissions?.platformAuthority || permissions?.modules?.experiments
-    ? pdvMainLayout : permissions?.hubs.operacoes && pdvMainLayout === "assistencia" ? pdvMainLayout : "classic"
-  const entry = resolveSwitcherSurface(authorizedLayout, pdvClassicLayout)
+    ? pdvMainLayout : "classic"
+  const entry = resolveSwitcherSurface(authorizedLayout, permissions?.hubs.operacoes ? pdvClassicLayout : "lovable")
 
   if (entry.renderKey === "next-redirect") {
     return <LoadingState message="Redirecionando para o PDV Next…" />

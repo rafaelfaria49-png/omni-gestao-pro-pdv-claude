@@ -85,7 +85,7 @@ test("nega URL, API, payload comercial e promoção adulterados no servidor", as
   for (const route of ["/dashboard/ia-mestre", "/dashboard/omni-agent", "/dashboard/financeiro-v2", "/dashboard/configuracoes-v2", "/dashboard/pdv-next", "/dashboard/landing-preview"]) {
     const r = await actor.get(route, { maxRedirects: 0 }); expect([302, 303, 307, 308]).toContain(r.status())
   }
-  for (const route of ["/api/ia-mestre/conversations", "/api/marketplace/connections", "/api/contador/documentos?c=2026-10", "/api/catalogo/aparelhos/search?q=x", "/api/user/credits"]) expect((await actor.get(route, { headers: headers() })).status()).toBe(403)
+  for (const route of ["/api/ia-mestre/conversations", "/api/marketplace/connections", "/api/contador/documentos?c=2026-10", "/api/catalogo/aparelhos/search?q=x", "/api/user/credits", "/api/dashboard/elite"]) expect((await actor.get(route, { headers: headers() })).status()).toBe(403)
   expect((await actor.post("/api/billing/checkout", { data: { plan: "DIAMANTE" } })).status()).toBe(403)
   expect((await actor.put("/api/stores/pilot-a", { headers: headers(), data: { subscriptionPlan: "OURO", moduleAccess: { version: 1, modules: ["ai"] } } })).status()).toBe(403)
   expect((await actor.put("/api/stores/pilot-a/settings", { headers: headers(), data: { platformAuthority: true } })).status()).toBe(403)
@@ -117,6 +117,26 @@ test("caixa usa lookup e pagamentos compartilhados sem ganhar Cadastros completo
   const s = await (await actor.get("/api/auth/session")).json(); expect(s.user.role).toBe("CAIXA")
 })
 
+test("cadastro básico grava produto real e nega alteração cruzada do registro", async () => {
+  const a = await login("adminA"), b = await login("adminB", "pilot-b")
+  const created = await a.post("/api/produtos", { headers: headers(), data: { name: "Mercadoria Sintética Piloto", sku: "PILOT-UNIT-1", stock: 5, price: 12.5, precoCusto: 4 } })
+  expect(created.status()).toBe(201)
+  const row = await db.produto.findFirstOrThrow({ where: { storeId: "pilot-a", sku: "PILOT-UNIT-1" } })
+  expect({ name: row.name, stock: row.stock, price: row.price }).toEqual({ name: "Mercadoria Sintética Piloto", stock: 5, price: 12.5 })
+  const denied = await b.patch(`/api/produtos/${row.id}`, { headers: headers("pilot-b"), data: { name: "Nome adulterado" } })
+  expect([403, 404]).toContain(denied.status())
+  expect((await db.produto.findUniqueOrThrow({ where: { id: row.id } })).name).toBe("Mercadoria Sintética Piloto")
+})
+
+test("update da sessão não aceita claims administrativos enviados pelo navegador", async () => {
+  const actor = await login("adminA")
+  const csrf = await (await actor.get("/api/auth/csrf")).json()
+  await actor.post("/api/auth/session", { data: { csrfToken: csrf.csrfToken, data: { user: { role: "SUPER_ADMIN", platformAuthority: true, storeAccess: "all", allowedStoreIds: ["pilot-b"] } } } })
+  const session = await (await actor.get("/api/auth/session")).json()
+  expect({ role: session.user.role, platform: session.user.platformAuthority }).toEqual({ role: "ADMIN", platform: false })
+  expect((await actor.get("/api/stores/pilot-b/settings")).status()).toBe(403)
+})
+
 test("configurações básicas persistem e preferências de ramo não concedem módulos", async () => {
   const actor = await login("adminA")
   const r = await actor.put("/api/stores/pilot-a/settings", { headers: headers(), data: { contactEmail: "operacao-a@pilot.invalid", printerConfig: { capabilities: { version: 1, business: { primaryBranch: "assistencia" }, overrides: { "service.technical": true, "catalog.deviceCompatibility": true } } } } })
@@ -132,6 +152,8 @@ test("mudança e revogação da liberação valem para a mesma sessão, por loja
   try {
     await policy(owner, "pilot-a", [...BASIC_MODULE_ACCESS.modules, "service", "accountant"])
     expect((await actor.get("/api/ops/ordens?lojaId=pilot-a")).status()).toBe(200)
+    const caps = await (await actor.get("/api/contador/status", { headers: headers() })).json()
+    expect(caps.ok).toBe(true)
     const state = await actor.storageState(); state.cookies = state.cookies.map((c) => c.name === "assistec-active-store" ? { ...c, value: "pilot-b" } : c)
     const mixed = await request.newContext({ baseURL, storageState: state }); contexts.add(mixed)
     expect((await mixed.get("/api/contador/documentos?c=2026-10", { headers: headers("pilot-a") })).status()).toBe(403)
@@ -146,13 +168,16 @@ test("mudança e revogação da liberação valem para a mesma sessão, por loja
 
 test("Server Action real revalida loja/módulo mesmo chamada por página permitida", async () => {
   const manifest = JSON.parse(await readFile(".next/server/server-reference-manifest.json", "utf8"))
-  const entry = Object.entries(manifest.node as Record<string, { exportedName?: string; filename?: string }>).find(([, v]) => v.exportedName === "getCaixaSessaoAbertaV3" && v.filename?.includes("pdv-servico-actions"))
+  const entry = Object.entries(manifest.node as Record<string, { exportedName?: string; filename?: string; workers?: Record<string, unknown> }>).find(([, v]) => v.exportedName === "getCaixaSessaoAbertaV3" && v.filename?.includes("pdv-servico-actions"))
   expect(!!entry).toBe(true)
   const owner = await login("owner", "pilot-b"), basic = await login("adminA")
+  const worker = Object.keys(entry![1].workers || {}).find((w) => w.endsWith("/dashboard/vendas/page"))
+  expect(!!worker).toBe(true)
+  const actionPath = "/dashboard/vendas"
   const options = { headers: { "Next-Action": entry![0], "Content-Type": "text/plain;charset=UTF-8" }, data: JSON.stringify(["pilot-b"]) }
-  const allowed = await owner.post("/dashboard", options)
+  const allowed = await owner.post(actionPath, options)
   expect(allowed.status()).toBe(200); expect(await allowed.text()).toContain("Operador Privado B")
-  const denied = await basic.post("/dashboard", options)
+  const denied = await basic.post(actionPath, options)
   expect(denied.status()).toBeGreaterThanOrEqual(400); expect(await denied.text()).not.toContain("Operador Privado B")
 })
 
@@ -187,4 +212,74 @@ test("senha temporária exige troca própria e revoga sessões; desativação in
     expect(!!(await (await seller.get("/api/auth/session")).json())?.user).toBe(false)
     expect((await seller.get("/api/ops/vendas-list?lojaId=pilot-a")).status()).toBe(401)
   } finally { await manager.patch("/api/admin/users/pilot-seller", { data: { active: true } }) }
+})
+
+
+test("Financeiro concedido mantém analytics e mutações dentro da loja validada", async () => {
+  const owner = await login("owner"), actor = await login("adminA")
+  try {
+    await policy(owner, "pilot-a", [...BASIC_MODULE_ACCESS.modules, "finance"])
+    const analytics = await actor.get("/api/financeiro/analytics", { headers: headers() })
+    expect(analytics.status()).toBe(200)
+    const data = await analytics.json()
+    expect(data.resultadoLoja).toEqual([expect.objectContaining({ loja: "Padaria Piloto A", totalRecebido: 71 })])
+    expect(JSON.stringify(data)).not.toMatch(/999123|Comércio Piloto B|Financeiro Privado B/)
+    const changed = await actor.patch("/api/financeiro/conciliacao/pilot-reconciliation-b", { headers: headers(), data: { acao: "divergente", observacao: "Ataque sintético" } })
+    expect(changed.status()).toBe(404)
+    const untouched = await db.conciliacaoFinanceira.findUniqueOrThrow({ where: { id: "pilot-reconciliation-b" } })
+    expect({ status: untouched.status, observation: untouched.observacao }).toEqual({ status: "conciliado", observation: "Observação Privada B" })
+  } finally { await policy(owner, "pilot-a", BASIC_MODULE_ACCESS.modules) }
+})
+
+test("revogação total redireciona sem laço e preserva segurança da própria conta", async () => {
+  const owner = await login("owner"), actor = await login("adminA")
+  try {
+    await policy(owner, "pilot-a", [])
+    const r = await actor.get("/dashboard", { maxRedirects: 4 })
+    expect(r.status()).toBe(200)
+    expect(new URL(r.url()).pathname).toBe("/conta/seguranca")
+    expect((await actor.get("/api/ops/vendas-list?lojaId=pilot-a")).status()).toBe(403)
+  } finally { await policy(owner, "pilot-a", BASIC_MODULE_ACCESS.modules) }
+})
+
+
+test("CAIXA básico abre sessão, vende, registra pagamento, baixa estoque e fecha caixa", async ({ page }) => {
+  const admin = await login("adminA"), cashier = await login("cashier")
+  const created = await admin.post("/api/produtos", { headers: headers(), data: { name: "Mercadoria Venda Sintética", sku: "PILOT-SALE-1", stock: 5, price: 12.5, precoCusto: 4 } })
+  expect(created.status()).toBe(201)
+  const product = await db.produto.findFirstOrThrow({ where: { storeId: "pilot-a", sku: "PILOT-SALE-1" } })
+  const opening = await cashier.post("/api/ops/caixa/abrir", { headers: headers(), data: { saldoInicial: 10 } })
+  expect(opening.status()).toBe(200)
+  const { sessaoId } = await opening.json()
+  const sale = { id: "VDA-PILOT-" + randomBytes(6).toString("hex"), at: new Date().toISOString(), total: 25, sessaoId,
+    lines: [{ inventoryId: "PILOT-SALE-1", name: product.name, quantity: 2, unitPrice: 12.5, lineTotal: 25 }], paymentBreakdown: { dinheiro: 25 } }
+  const sold = await cashier.post("/api/ops/venda-persist", { headers: headers(), data: { sale } })
+  expect(sold.status()).toBe(200)
+  expect((await db.produto.findUniqueOrThrow({ where: { id: product.id } })).stock).toBe(3)
+  const persisted = await db.venda.findFirstOrThrow({ where: { storeId: "pilot-a", pedidoId: sale.id } })
+  expect(persisted.total).toBe(25)
+  const movements = await db.movimentacaoEstoque.count({ where: { produtoId: product.id } })
+  expect(movements).toBeGreaterThanOrEqual(2)
+  expect((await cashier.post("/api/ops/venda-persist", { headers: headers(), data: { sale } })).status()).toBe(200)
+  expect(await db.movimentacaoEstoque.count({ where: { produtoId: product.id } })).toBe(movements)
+  expect((await db.produto.findUniqueOrThrow({ where: { id: product.id } })).stock).toBe(3)
+  const close = await cashier.post("/api/ops/caixa/fechar", { headers: headers(), data: { sessaoId, saldoContado: 35 } })
+  expect(close.status()).toBe(200)
+  const closed = await db.sessaoCaixa.findUniqueOrThrow({ where: { id: sessaoId } })
+  expect(closed.status).toBe("FECHADA")
+  expect((closed.payload as { totalVendasServer: number }).totalVendasServer).toBe(25)
+  await setupPage(page, cashier); await page.goto("/dashboard/vendas")
+  await expect(page).toHaveURL(/\/dashboard\/vendas/)
+  await expect(page.getByRole("link", { name: "IA Mestre", exact: true })).toHaveCount(0)
+  await page.screenshot({ path: "test-results/platform-pilot/basic-pdv.png", fullPage: true })
+})
+
+test("formulário de login autentica credenciais reais do cliente básico", async ({ page }) => {
+  await page.goto("/login")
+  await page.getByLabel("Email", { exact: true }).fill("admina@pilot.invalid")
+  await page.getByLabel("Senha", { exact: true }).fill(password("adminA"))
+  await page.getByRole("button", { name: "Entrar", exact: true }).click()
+  await expect(page).toHaveURL(/\/dashboard/)
+  const session = await (await page.request.get("/api/auth/session")).json()
+  expect({ id: session.user.id, platform: session.user.platformAuthority }).toEqual({ id: "pilot-adminA", platform: false })
 })

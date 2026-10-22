@@ -14,9 +14,14 @@ export async function requirePlatformAction() {
   return session!
 }
 
-export async function requireModuleAction(storeId: string, module: AccessModule) {
+export async function requireModuleAction(storeId: string, module: AccessModule | "sharedCatalog") {
   const session = await auth()
-  if (!session?.user?.id || !canAccessStore(session, storeId) || !canUseModule(session, module, storeId)) {
+  if (!session?.user?.id) throw new Error("Não autenticado")
+  if (!canAccessStore(session, storeId)) throw new Error("Sem permissão para esta unidade")
+  const allowed = module === "sharedCatalog"
+    ? (["catalog", "pdv", "service"] as const).some((m) => canUseModule(session, m, storeId))
+    : canUseModule(session, module, storeId)
+  if (!allowed) {
     throw new Error("Sem permissão para este módulo ou unidade.")
   }
   return session

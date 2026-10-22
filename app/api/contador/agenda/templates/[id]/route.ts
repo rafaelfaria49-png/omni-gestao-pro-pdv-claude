@@ -37,7 +37,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
   const { id } = await ctx.params
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const template = await atualizarTemplate(
       { storeId: escopo.storeId, userId: escopo.userId },
@@ -62,7 +62,7 @@ export async function DELETE(req: Request, ctx: Ctx) {
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
   const { id } = await ctx.params
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const r = await removerTemplate(
       { storeId: escopo.storeId, userId: escopo.userId },

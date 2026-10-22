@@ -71,7 +71,7 @@ function buildVendasPorCategoria(
 }
 
 export async function GET(req: Request) {
-  const moduleDenied = await requireModuleApi(req, "home")
+  const moduleDenied = await requireModuleApi(req, "platform")
   if (moduleDenied) return moduleDenied
 
   const session = await auth()

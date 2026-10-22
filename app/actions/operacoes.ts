@@ -196,6 +196,9 @@ export async function createOS(
   await requireModuleAction(storeId, "service")
 
   await requireOperacaoAuth(storeId, (p) => p.operacoes.criarOs, "Sem permissão para criar OS.");
+  if (input.clienteId && !await prisma.cliente.findFirst({ where: { id: input.clienteId, storeId }, select: { id: true } })) {
+    throw new Error("Cliente não encontrado nesta unidade.");
+  }
   const codigo = await nextCodigo(storeId);
   const createdAtIso = nowIso();
   const payload: OperacoesOSPayload = {
@@ -211,6 +214,9 @@ export async function createOS(
   // Criação + payload definitivo na MESMA transação: nenhum outro writer vê (nem grava em)
   // a OS com o payload provisório `{}` antes desta gravação.
   const created = await prisma.$transaction(async (tx) => {
+    if (input.clienteId && !await tx.cliente.findFirst({ where: { id: input.clienteId, storeId }, select: { id: true } })) {
+      throw new Error("Cliente não encontrado nesta unidade.");
+    }
     const row = await tx.ordemServico.create({
       data: {
         storeId,

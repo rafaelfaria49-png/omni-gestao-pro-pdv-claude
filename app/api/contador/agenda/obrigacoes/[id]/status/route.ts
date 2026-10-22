@@ -40,7 +40,7 @@ export async function POST(req: Request, ctx: Ctx) {
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
   const { id } = await ctx.params
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const obrigacao = await alterarStatusObrigacao(
       { storeId: escopo.storeId, userId: escopo.userId },

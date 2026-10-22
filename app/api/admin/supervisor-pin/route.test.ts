@@ -30,7 +30,7 @@ vi.mock("@/lib/prisma", () => ({
 import { GET, POST } from "./route"
 
 function sessionAdmin() {
-  return { user: { id: "admin-1", name: "Admin", role: "ADMIN" } }
+  return { user: { id: "admin-1", name: "Admin", role: "ADMIN", platformAuthority: true } }
 }
 
 function postReq(body: unknown): Request {
@@ -55,7 +55,7 @@ afterEach(() => {
 describe("GET /api/admin/supervisor-pin", () => {
   it("sem sessão → 401 e nunca devolve PIN", async () => {
     h.auth.mockResolvedValue(null)
-    const res = await GET()
+    const res = await GET(new Request("http://localhost/api/admin/supervisor-pin"))
     expect(res.status).toBe(401)
     const body = await res.json()
     expect(JSON.stringify(body)).not.toContain(CURRENT)
@@ -69,7 +69,7 @@ describe("GET /api/admin/supervisor-pin", () => {
       pin: BLOCKED,
       pinHash: null,
     })
-    const res = await GET()
+    const res = await GET(new Request("http://localhost/api/admin/supervisor-pin"))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toEqual({ exists: true, isDefault: true, name: "Supervisora" })
@@ -86,7 +86,7 @@ describe("GET /api/admin/supervisor-pin", () => {
       pin: BLOCKED,
       pinHash,
     })
-    const body = await (await GET()).json()
+    const body = await (await GET(new Request("http://localhost/api/admin/supervisor-pin"))).json()
     expect(body.isDefault).toBe(false)
     expect(JSON.stringify(body)).not.toContain(CURRENT)
     expect(JSON.stringify(body)).not.toContain(BLOCKED)

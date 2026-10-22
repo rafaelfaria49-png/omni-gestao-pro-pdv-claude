@@ -50,9 +50,19 @@
     "access": "platform"
   },
   {
+    "file": "app/api/auth/[...nextauth]/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/auth/[...nextauth]/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
     "file": "app/api/auth/admin/route.ts",
     "method": "DELETE",
-    "access": "sharedPayment"
+    "access": "own-server-policy"
   },
   {
     "file": "app/api/auth/admin/route.ts",
@@ -203,6 +213,12 @@
     "file": "app/api/clientes/search/route.ts",
     "method": "POST",
     "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/clients/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog",
+    "delegatesTo": "app/api/clientes/route.ts"
   },
   {
     "file": "app/api/config-audit/route.ts",
@@ -542,7 +558,7 @@
   {
     "file": "app/api/dashboard/elite/route.ts",
     "method": "GET",
-    "access": "home"
+    "access": "platform"
   },
   {
     "file": "app/api/dashboard/resumo/route.ts",
@@ -1261,6 +1277,12 @@
   },
   {
     "file": "app/api/ops/import/clientes/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog",
+    "delegatesTo": "app/api/clientes/importar/route.ts"
+  },
+  {
+    "file": "app/api/ops/import/clientes/route.ts",
     "method": "POST",
     "access": "platform"
   },
@@ -1587,7 +1609,7 @@
   {
     "file": "app/api/subscription/seal/route.ts",
     "method": "POST",
-    "access": "platform"
+    "access": "own-server-policy"
   },
   {
     "file": "app/api/subscription/verify/route.ts",

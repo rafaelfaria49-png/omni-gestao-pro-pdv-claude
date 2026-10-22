@@ -46,13 +46,13 @@ import {
 } from "@/lib/subscription-seal"
 
 /**
- * `POST()` não declara parâmetro — o corpo é fisicamente inalcançável pela rota.
+ * `POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))` não declara parâmetro — o corpo é fisicamente inalcançável pela rota.
  * O cast permite enviar um corpo hostil mesmo assim e provar que ele é ignorado.
  */
 const postComCorpo = POST as unknown as (req?: Request) => Promise<Response>
 
 function sessao(role: string) {
-  return { user: { id: "admin-1", name: "Admin", email: "a@b.c", role } }
+  return { user: { id: "admin-1", name: "Admin", email: "a@b.c", role, platformAuthority: ["ADMIN", "SUPER_ADMIN"].includes(role) } }
 }
 
 function corpoHostil() {
@@ -96,7 +96,7 @@ describe("POST /api/subscription/seal — autorização", () => {
   it("sem sessão: 401, sem Set-Cookie e sem assinar nada", async () => {
     h.auth.mockResolvedValue(null)
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
 
     expect(res.status).toBe(401)
     expect(setCookieDe(res)).toBeNull()
@@ -107,7 +107,7 @@ describe("POST /api/subscription/seal — autorização", () => {
   it("sessão CAIXA: 403, sem Set-Cookie e sem assinar nada", async () => {
     h.auth.mockResolvedValue(sessao("CAIXA"))
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
 
     expect(res.status).toBe(403)
     expect(setCookieDe(res)).toBeNull()
@@ -119,7 +119,7 @@ describe("POST /api/subscription/seal — autorização", () => {
     async (role) => {
       h.auth.mockResolvedValue(sessao(role))
 
-      const res = await POST()
+      const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
 
       expect(res.status).toBe(403)
       expect(setCookieDe(res)).toBeNull()
@@ -131,7 +131,7 @@ describe("POST /api/subscription/seal — autorização", () => {
     h.auth.mockResolvedValue(sessao(role))
     h.findUnique.mockResolvedValue(assinaturaAtiva())
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
 
     expect(res.status).toBe(200)
     expect(setCookieDe(res)).toContain(`${SUBSCRIPTION_COOKIE_NAME}=`)
@@ -146,7 +146,7 @@ describe("POST /api/subscription/seal — origem dos dados", () => {
   it("plano, status e vencimento vêm do registo server-side", async () => {
     h.findUnique.mockResolvedValue(assinaturaAtiva())
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
     const cookie = setCookieDe(res) ?? ""
     const valor = decodeURIComponent(
       cookie.split(";")[0]!.slice(`${SUBSCRIPTION_COOKIE_NAME}=`.length),
@@ -189,7 +189,7 @@ describe("POST /api/subscription/seal — origem dos dados", () => {
   ])("assinatura %s: 403 e nenhum selo", async (_caso, registo) => {
     h.findUnique.mockResolvedValue(registo)
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
 
     expect(res.status).toBe(403)
     expect(setCookieDe(res)).toBeNull()
@@ -203,7 +203,7 @@ describe("POST /api/subscription/seal — origem dos dados", () => {
       currentPeriodEnd: new Date("2026-08-20T00:00:00.000Z"),
     })
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
 
     expect(res.status).toBe(200)
     expect(setCookieDe(res)).toContain(`${SUBSCRIPTION_COOKIE_NAME}=`)
@@ -216,7 +216,7 @@ describe("POST /api/subscription/seal — segredo ausente", () => {
     h.auth.mockResolvedValue(sessao("ADMIN"))
     h.findUnique.mockResolvedValue(assinaturaAtiva())
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
 
     expect(res.status).toBe(503)
     expect(setCookieDe(res)).toBeNull()
@@ -228,7 +228,7 @@ describe("POST /api/subscription/seal — segredo ausente", () => {
     h.auth.mockResolvedValue(sessao("ADMIN"))
     h.findUnique.mockResolvedValue(assinaturaAtiva())
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
 
     expect(res.status).toBe(503)
     expect(setCookieDe(res)).toBeNull()
@@ -238,7 +238,7 @@ describe("POST /api/subscription/seal — segredo ausente", () => {
     h.auth.mockResolvedValue(sessao("ADMIN"))
     h.findUnique.mockResolvedValue(assinaturaAtiva())
 
-    const res = await POST()
+    const res = await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))
     const texto = JSON.stringify(await res.json())
 
     expect(texto).not.toContain(TEST_SECRET)
@@ -250,7 +250,7 @@ describe("POST /api/subscription/seal — proteções do cookie", () => {
     h.auth.mockResolvedValue(sessao("ADMIN"))
     h.findUnique.mockResolvedValue(assinaturaAtiva())
 
-    const cookie = setCookieDe(await POST()) ?? ""
+    const cookie = setCookieDe(await POST(new Request("http://localhost/api/subscription/seal", { method: "POST" }))) ?? ""
 
     expect(cookie.toLowerCase()).toContain("httponly")
     expect(cookie.toLowerCase()).toContain("samesite=lax")

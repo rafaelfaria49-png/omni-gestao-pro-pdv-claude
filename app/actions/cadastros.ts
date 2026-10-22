@@ -952,7 +952,7 @@ function fmtDateISO(d: Date | null | undefined): string {
 }
 
 export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
-  await requireModuleAction(storeId, "catalog")
+  await requireModuleAction(storeId, "sharedCatalog")
 
   const gate = await requireCadastrosActionAccess(storeId, "shared");
   storeId = gate.storeId;

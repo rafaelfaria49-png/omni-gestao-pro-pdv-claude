@@ -64,7 +64,7 @@ export async function GET(req: Request) {
         orderBy: { updatedAt: "desc" },
         take: 500,
       }),
-      prisma.store.findMany({ select: { id: true, name: true } }),
+      prisma.store.findMany({ where: { id: storeId }, select: { id: true, name: true } }),
       prisma.movimentacaoFinanceira.findMany({
         where: { storeId, createdAt: { gte: fluxoDesde } },
         select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
@@ -191,10 +191,10 @@ export async function GET(req: Request) {
     const lojaGroups = await withPrismaSafe<GroupResult>(
       async (db) => {
         const [a, b, c, d] = await Promise.all([
-          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: { status: "pago" }, _sum: { valor: true } }),
-          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: { status: { notIn: ["pago", "cancelado"] } }, _sum: { valor: true } }),
-          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: { status: "pago" }, _sum: { valor: true } }),
-          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: { status: { notIn: ["pago", "cancelado"] } }, _sum: { valor: true } }),
+          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: { storeId, status: "pago" }, _sum: { valor: true } }),
+          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: { storeId, status: { notIn: ["pago", "cancelado"] } }, _sum: { valor: true } }),
+          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: { storeId, status: "pago" }, _sum: { valor: true } }),
+          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: { storeId, status: { notIn: ["pago", "cancelado"] } }, _sum: { valor: true } }),
         ])
         return [a as GroupByRow[], b as GroupByRow[], c as GroupByRow[], d as GroupByRow[]]
       },
@@ -235,8 +235,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ok: true, fluxoMensal, movimentacoes, receitasOrigem, despesasCategoria, resultadoLoja })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[financeiro/analytics]", msg)
-    return NextResponse.json({ ok: false, error: msg }, { status: 503 })
+    console.error("[financeiro/analytics] operation_failed")
+    return NextResponse.json({ ok: false, error: "Falha ao consultar o financeiro." }, { status: 503 })
   }
 }

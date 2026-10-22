@@ -404,9 +404,7 @@ export async function POST(request: Request) {
 
 /** Revogação explícita — sempre permitida, mesmo sem sessão (só apaga o cookie). */
 export async function DELETE(accessRequest: Request) {
-  const moduleDenied = await requireModuleApi(accessRequest, "sharedPayment")
-  if (moduleDenied) return moduleDenied
-
+  void accessRequest
   logPinAuthorizationEvent("pin_auth_revoked", { ipHash: await currentIpHash() })
   const res = NextResponse.json({ ok: true })
   res.cookies.set(buildPinAuthorizationClearCookieOptions())

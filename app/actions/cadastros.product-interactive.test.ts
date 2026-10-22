@@ -69,16 +69,18 @@ vi.mock("@/lib/prisma", () => ({
 import { upsertProduto } from "@/app/actions/cadastros"
 import { salvarProdutoIAMetadata } from "@/app/actions/produto-ia"
 
-function sessionVendedor(lojas = ["loja-a"]) {
+function sessionVendedor(lojas = ["loja-a"], role = "VENDEDOR") {
   h.getSessionEntitlement.mockResolvedValue({ ok: true })
   h.auth.mockResolvedValue({
     user: {
       id: "user-1",
       email: "u@x.com",
       name: "U",
-      role: "VENDEDOR",
+      role,
       storeAccess: "restricted",
       allowedStoreIds: lojas,
+      storeModules: Object.fromEntries(lojas.map((id) => [id, ["catalog", "stock", "ai"]])),
+      platformAuthority: false,
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session)
@@ -463,7 +465,7 @@ describe("CAD-R2-006 — upsertProduto no boundary canônico", () => {
 
 describe("CAD-R2-006 — IA sugere, humano revisa, service persiste", () => {
   it("21. apply de sugestão IA usa o service canônico (com proveniência server-derived)", async () => {
-    sessionVendedor()
+    sessionVendedor(["loja-a"], "ADMIN")
     const r = await salvarProdutoIAMetadata("loja-a", "p-1", {
       descricaoCurta: "Cabo USB-C 1m",
       palavrasChave: ["cabo", "usb-c"],
@@ -484,7 +486,7 @@ describe("CAD-R2-006 — IA sugere, humano revisa, service persiste", () => {
   })
 
   it("22. IA não tem primitive direta de Prisma Product", async () => {
-    sessionVendedor()
+    sessionVendedor(["loja-a"], "ADMIN")
     await salvarProdutoIAMetadata("loja-a", "p-1", { titulo: "x" } as never)
     expect(h.directUpdate).not.toHaveBeenCalled()
     expect(h.directCreate).not.toHaveBeenCalled()

@@ -34,13 +34,12 @@ function toYmdUtc(date: Date): string {
 }
 
 export async function POST(accessRequest: Request) {
-  const moduleDenied = await requireModuleApi(accessRequest, "platform")
-  if (moduleDenied) return moduleDenied
-
   // 1. Autorização canônica: sem sessão ⇒ 401; papel inadequado (CAIXA, VENDEDOR,
   //    TECNICO, GERENTE, OPERADOR) ⇒ 403. Nenhuma dessas respostas emite cookie.
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
+  const moduleDenied = await requireModuleApi(accessRequest, "billing")
+  if (moduleDenied) return moduleDenied
 
   // 2. Sem segredo configurado não se emite selo algum (fail-closed, sanitizado).
   const secret = getSubscriptionSecret()
