@@ -1057,7 +1057,7 @@ export async function createCliente(
     active?: boolean;
   }
 ): Promise<{ id: string }> {
-  await requireModuleAction(storeId, "catalog")
+  await requireModuleAction(storeId, "sharedCatalog")
 
   const gate = await requireCadastrosActionAccess(storeId, "shared");
   const principal = cadastrosAuditPrincipalFromSession(gate.session);
@@ -1134,7 +1134,7 @@ function produtoMetadataRecord(v: unknown): Record<string, unknown> | null {
 }
 
 export async function listProdutos(storeId: string, opts?: { q?: string }): Promise<ProdutoDTO[]> {
-  await requireModuleAction(storeId, "catalog")
+  await requireModuleAction(storeId, "sharedCatalog")
 
   storeId = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
   const q = opts?.q?.trim();
@@ -2064,10 +2064,9 @@ export async function deleteProduto(
   storeId: string,
   produtoId: string
 ): Promise<DeleteProdutoResult> {
-  await requireModuleAction(storeId, "catalog")
-
   let sid: string;
   try {
+    await requireModuleAction(storeId, "catalog")
     sid = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Não autorizado" };
@@ -2341,8 +2340,6 @@ export type LojaDTO = {
 }
 
 export async function listLojasCadastros(): Promise<LojaDTO[]> {
-  await requirePlatformAction()
-
   const { storeScope } = await requireCadastrosActionSession("shared");
   const rows = await prisma.store.findMany({
     where: storeScope === "all" ? undefined : { id: { in: storeScope } },

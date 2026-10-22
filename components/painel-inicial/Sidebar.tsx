@@ -208,7 +208,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
           <div className="font-display font-semibold text-[13px] text-sidebar-foreground tracking-tight truncate">
             OmniGestão Pro
           </div>
-          <div className="text-[10px] text-muted-foreground truncate">Matriz · Premium</div>
+          <div className="text-[10px] text-muted-foreground truncate">{perms?.platformAuthority ? "Administração da plataforma" : "Acesso da loja"}</div>
         </div>
         <button
           type="button"

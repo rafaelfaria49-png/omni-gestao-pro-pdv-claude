@@ -1,3 +1,4 @@
+import { legacyAccessFixture } from "@/lib/auth/test-access-fixture"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -34,6 +35,7 @@ function makeSession(opts: {
 }): Session {
   return {
     user: {
+      ...legacyAccessFixture({ role: opts.role ?? "VENDEDOR", storeAccess: opts.storeAccess ?? "restricted", allowedStoreIds: opts.allowedStoreIds ?? ["loja-a"] }),
       id: "user-1",
       email: "u@x.com",
       name: "U",
@@ -84,7 +86,7 @@ describe("requireCadastrosActionAccess", () => {
   })
 
   it("não-admin sem membership → rejeita", async () => {
-    sessionAtiva({ role: "GERENTE", storeAccess: "all" })
+    sessionAtiva({ role: "GERENTE", storeAccess: "all", allowedStoreIds: [] })
     await expect(requireCadastrosActionAccess("loja-a", "hub")).rejects.toThrow(
       CADASTROS_ACTION_STORE_FORBIDDEN,
     )

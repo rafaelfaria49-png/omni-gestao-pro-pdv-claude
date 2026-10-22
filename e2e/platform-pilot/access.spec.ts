@@ -52,7 +52,7 @@ test("responsável legado mantém autoridade, visão interna e configurações",
   expect({ scope: s.user.accessScope, platform: s.user.platformAuthority }).toEqual({ scope: null, platform: true })
   expect((await actor.get("/api/admin/users")).status()).toBe(200)
   await setupPage(page, actor); await page.goto("/dashboard")
-  await expect(page.getByRole("link", { name: "IA Mestre", exact: true }).first()).toBeVisible()
+  await expect(page.locator('a[href="/dashboard/ia-mestre"]').first()).toBeVisible()
   await expect(page.getByRole("link", { name: "Master Console", exact: true }).first()).toBeVisible()
   await page.goto("/dashboard/configuracoes?sec=geral")
   await expect(page.getByRole("button", { name: "Fiscal", exact: true }).first()).toBeVisible()
@@ -63,7 +63,7 @@ test("cliente básico: desktop, busca, cadastros e menu móvel usam o pacote lib
   const actor = await login("adminA")
   await setupPage(page, actor); await page.goto("/dashboard")
   await expect(page.getByRole("heading", { name: "Padaria Piloto A" })).toBeVisible()
-  for (const name of ["IA Mestre", "Omni Agent HUB", "Marketing IA", "WhatsApp HUB", "Master Console", "Gestão da Rede", "Catálogo de Aparelhos", "Operações HUB"]) await expect(page.getByRole("link", { name, exact: true })).toHaveCount(0)
+  for (const path of ["ia-mestre", "omni-agent", "marketing-ia", "whatsapp", "master-console", "unidades", "catalogo-aparelhos", "operacoes-v3"]) await expect(page.locator(`a[href="/dashboard/${path}"]`)).toHaveCount(0)
   await expect(page.getByRole("link", { name: "PDV Clássico", exact: true }).first()).toBeVisible()
   await page.screenshot({ path: "test-results/platform-pilot/basic-desktop.png", fullPage: true })
   await page.keyboard.press("Control+k")
@@ -168,7 +168,7 @@ test("mudança e revogação da liberação valem para a mesma sessão, por loja
 
 test("Server Action real revalida loja/módulo mesmo chamada por página permitida", async () => {
   const manifest = JSON.parse(await readFile(".next/server/server-reference-manifest.json", "utf8"))
-  const entry = Object.entries(manifest.node as Record<string, { exportedName?: string; filename?: string; workers?: Record<string, unknown> }>).find(([, v]) => v.exportedName === "getCaixaSessaoAbertaV3" && v.filename?.includes("pdv-servico-actions"))
+  const entry = Object.entries(manifest.node as Record<string, { exportedName?: string; filename?: string; workers?: Record<string, unknown> }>).find(([, v]) => v.exportedName === "listTerminais" && v.filename?.includes("actions/terminais"))
   expect(!!entry).toBe(true)
   const owner = await login("owner", "pilot-b"), basic = await login("adminA")
   const worker = Object.keys(entry![1].workers || {}).find((w) => w.endsWith("/dashboard/vendas/page"))
@@ -176,9 +176,9 @@ test("Server Action real revalida loja/módulo mesmo chamada por página permiti
   const actionPath = "/dashboard/vendas"
   const options = { headers: { "Next-Action": entry![0], "Content-Type": "text/plain;charset=UTF-8" }, data: JSON.stringify(["pilot-b"]) }
   const allowed = await owner.post(actionPath, options)
-  expect(allowed.status()).toBe(200); expect(await allowed.text()).toContain("Operador Privado B")
+  expect(allowed.status()).toBe(200); expect(await allowed.text()).toContain("Terminal Privado B")
   const denied = await basic.post(actionPath, options)
-  expect(denied.status()).toBeGreaterThanOrEqual(400); expect(await denied.text()).not.toContain("Operador Privado B")
+  expect(denied.status()).toBeGreaterThanOrEqual(400); expect(await denied.text()).not.toContain("Terminal Privado B")
 })
 
 test("provisionamento atômico cria ADMIN local com primeiro acesso obrigatório", async () => {
@@ -251,13 +251,19 @@ test("CAIXA básico abre sessão, vende, registra pagamento, baixa estoque e fec
   const opening = await cashier.post("/api/ops/caixa/abrir", { headers: headers(), data: { saldoInicial: 10 } })
   expect(opening.status()).toBe(200)
   const { sessaoId } = await opening.json()
-  const sale = { id: "VDA-PILOT-" + randomBytes(6).toString("hex"), at: new Date().toISOString(), total: 25, sessaoId,
+  const sale = { id: "VDA-PILOT-" + randomBytes(6).toString("hex"), at: new Date().toISOString(), total: 25, sessaoId, clienteId: "pilot-client-a",
     lines: [{ inventoryId: "PILOT-SALE-1", name: product.name, quantity: 2, unitPrice: 12.5, lineTotal: 25 }], paymentBreakdown: { dinheiro: 25 } }
   const sold = await cashier.post("/api/ops/venda-persist", { headers: headers(), data: { sale } })
   expect(sold.status()).toBe(200)
   expect((await db.produto.findUniqueOrThrow({ where: { id: product.id } })).stock).toBe(3)
   const persisted = await db.venda.findFirstOrThrow({ where: { storeId: "pilot-a", pedidoId: sale.id } })
   expect(persisted.total).toBe(25)
+  const detail = await cashier.get(`/api/vendas/${encodeURIComponent(sale.id)}?full=1`, { headers: headers() })
+  expect(detail.status()).toBe(200)
+  expect(JSON.stringify(await detail.json())).not.toContain("private-a@pilot.invalid")
+  const correction = await admin.post(`/api/vendas/${encodeURIComponent(sale.id)}/corrigir`, { headers: headers(), data: { motivo: "Validação sintética de isolamento", supervisorPin: password("supervisor"), novoClienteId: "pilot-client-b", novoClienteNome: "Cliente adulterado" } })
+  expect(correction.status()).toBe(404)
+  expect((await db.venda.findUniqueOrThrow({ where: { id: persisted.id } })).clienteId).toBe("pilot-client-a")
   const movements = await db.movimentacaoEstoque.count({ where: { produtoId: product.id } })
   expect(movements).toBeGreaterThanOrEqual(2)
   expect((await cashier.post("/api/ops/venda-persist", { headers: headers(), data: { sale } })).status()).toBe(200)

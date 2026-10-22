@@ -434,7 +434,7 @@
   {
     "file": "app/actions/cadastros.ts",
     "action": "createCliente",
-    "module": "catalog",
+    "module": "sharedCatalog",
     "store": "storeId"
   },
   {
@@ -446,7 +446,7 @@
   {
     "file": "app/actions/cadastros.ts",
     "action": "listProdutos",
-    "module": "catalog",
+    "module": "sharedCatalog",
     "store": "storeId"
   },
   {
@@ -518,8 +518,8 @@
   {
     "file": "app/actions/cadastros.ts",
     "action": "listLojasCadastros",
-    "module": "platform",
-    "store": "platform"
+    "module": "own-server-policy",
+    "store": "session memberships"
   },
   {
     "file": "app/actions/cadastros.ts",

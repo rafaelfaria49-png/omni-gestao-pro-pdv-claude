@@ -1,3 +1,4 @@
+import { legacyAccessFixture } from "@/lib/auth/test-access-fixture"
 /**
  * CAD-R2-004B — POST /api/import/advanced com o gate REAL (002/003).
  * Não exercita parser/persistência: o gate corre antes do FormData.
@@ -40,6 +41,7 @@ function makeSession(opts: {
 }): Session {
   return {
     user: {
+      ...legacyAccessFixture({ role: opts.role ?? "VENDEDOR", storeAccess: opts.storeAccess ?? "restricted", allowedStoreIds: opts.allowedStoreIds ?? ["loja-a"] }),
       id: opts.id ?? "user-1",
       email: "u@x.com",
       name: "U",

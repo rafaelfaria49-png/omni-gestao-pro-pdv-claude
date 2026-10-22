@@ -1,6 +1,6 @@
 /** NextAuth real + Next production + PostgreSQL fresco. Nenhum .env/provedor produtivo. */
 import { spawn, spawnSync } from "node:child_process"
-import { randomBytes } from "node:crypto"
+import { randomBytes, randomInt, createHmac } from "node:crypto"
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import bcrypt from "bcryptjs"
@@ -22,6 +22,8 @@ function run(args, env = process.env) {
 }
 const secret = () => "aA1!" + randomBytes(24).toString("hex")
 const passwords = Object.fromEntries(["owner", "adminA", "managerA", "adminB", "multi", "cashier", "seller", "temporary", "legacy"].map((k) => [k, secret()]))
+passwords.supervisor = String(randomInt(10_000_000, 100_000_000))
+const appSecret = secret()
 const { PrismaClient } = await import("../../generated/prisma/index.js")
 const db = new PrismaClient({ datasourceUrl: database })
 try {
@@ -73,12 +75,14 @@ try {
   ] })
   await db.carteiraFinanceira.create({ data: { id: "pilot-wallet-b", storeId: "pilot-b", nome: "Carteira Privada B" } })
   await db.conciliacaoFinanceira.create({ data: { id: "pilot-reconciliation-b", storeId: "pilot-b", carteiraId: "pilot-wallet-b", dataReferencia: "2026-10-22", status: "conciliado", observacao: "Observação Privada B" } })
+  await db.user.create({ data: { name: "Supervisor Sintético", role: "ADMIN", pin: "x:" + randomBytes(16).toString("hex"), pinHash: await bcrypt.hash(createHmac("sha256", appSecret).update(passwords.supervisor, "utf8").digest("hex"), 10) } })
+  await db.pdvTerminal.create({ data: { id: "pilot-terminal-b", storeId: "pilot-b", code: "PDV1", name: "Terminal Privado B", status: "ACTIVE" } })
   await db.sessaoCaixa.create({ data: { id: "pilot-cash-b", storeId: "pilot-b", operador: "Operador Privado B", status: "ABERTA", saldoInicial: 0 } })
 } finally { await db.$disconnect() }
 
 const origin = "http://127.0.0.1:3000"
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3000"], {
-  env: { ...process.env, NODE_ENV: "production", AUTH_SECRET: secret(), AUTH_TRUST_HOST: "true", NEXTAUTH_URL: origin, NEXT_TELEMETRY_DISABLED: "1" },
+  env: { ...process.env, NODE_ENV: "production", AUTH_SECRET: appSecret, AUTH_TRUST_HOST: "true", NEXTAUTH_URL: origin, NEXT_TELEMETRY_DISABLED: "1" },
   stdio: ["ignore", "inherit", "inherit"],
 })
 let status = "FAIL"

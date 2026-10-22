@@ -31,7 +31,7 @@ import * as clientText from "@/lib/cadastros/natural-text/cliente"
 import { CLIENT_CAPTURE_SOURCE_INVALID_MESSAGE } from "@/lib/cadastros/voice-capture/cliente"
 const input = (): ClientEditorValues => ({ nome: "Lia de Teste", telefone: "14999998888", documento: "", email: "", cidade: "Itaí", endereco: "", uf: "", tipo: "PF", tags: "", observacoes: "", active: true })
 function session(role = "ADMIN", allowedStoreIds = ["loja-a"]): Session {
-  return { user: { id: "actor-canonical", email: "operator@example.invalid", role, storeAccess: "restricted", allowedStoreIds }, expires: "2099-01-01" } as Session
+  return { user: { id: "actor-canonical", email: "operator@example.invalid", role, storeModules: Object.fromEntries(allowedStoreIds.map(id => [id, ["catalog"]])), storeAccess: "restricted", allowedStoreIds }, expires: "2099-01-01" } as Session
 }
 function row(overrides: Record<string, unknown> = {}) {
   return { id: "synthetic-existing", storeId: "loja-a", name: "Lia de Teste", phone: "14999998888", email: null, kind: "PF", document: "", documentKey: null, tags: { private: "preserve", address: { zip: "private" } }, city: "", active: true, totalSpent: 42, lastPurchaseAt: null, ...overrides }

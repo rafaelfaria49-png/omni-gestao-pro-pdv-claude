@@ -1,3 +1,4 @@
+import { legacyAccessFixture } from "@/lib/auth/test-access-fixture"
 import { describe, expect, it } from "vitest"
 import type { Session } from "next-auth"
 import {
@@ -16,6 +17,7 @@ function session(opts: {
 }): Session {
   return {
     user: {
+      ...legacyAccessFixture({ role: opts.role ?? "VENDEDOR", storeAccess: opts.storeAccess ?? "restricted", allowedStoreIds: opts.allowedStoreIds }),
       id: opts.id === undefined ? "user-1" : (opts.id as string),
       email: "u@x.com",
       name: "U",
@@ -72,9 +74,9 @@ describe("canAuthorizeCadastrosStore — fail-closed Cadastros REST", () => {
 describe("hasCadastrosHub / isCadastrosAdminPrincipal", () => {
   it("CAIXA não tem hubs.cadastros; VENDEDOR/TECNICO/ADMIN têm", () => {
     expect(hasCadastrosHub(session({ role: "CAIXA" }))).toBe(false)
-    expect(hasCadastrosHub(session({ role: "VENDEDOR" }))).toBe(true)
-    expect(hasCadastrosHub(session({ role: "TECNICO" }))).toBe(true)
-    expect(hasCadastrosHub(session({ role: "ADMIN" }))).toBe(true)
+    expect(hasCadastrosHub(session({ role: "VENDEDOR", allowedStoreIds: ["loja-a"] }))).toBe(true)
+    expect(hasCadastrosHub(session({ role: "TECNICO", allowedStoreIds: ["loja-a"] }))).toBe(true)
+    expect(hasCadastrosHub(session({ role: "ADMIN", allowedStoreIds: ["loja-a"] }))).toBe(true)
     expect(hasCadastrosHub(null)).toBe(false)
   })
 

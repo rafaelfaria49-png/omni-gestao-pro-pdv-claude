@@ -1,3 +1,4 @@
+import { legacyAccessFixture } from "@/lib/auth/test-access-fixture"
 /**
  * CAD-R2-002 — GET/POST /api/clientes* com o gate REAL.
  * Mock: auth, Prisma, matchClientesByPhone. Não mocka requireCadastrosHubApi.
@@ -91,6 +92,7 @@ function makeSession(opts: {
 }): Session {
   return {
     user: {
+      ...legacyAccessFixture({ role: opts.role ?? "VENDEDOR", storeAccess: opts.storeAccess ?? "restricted", allowedStoreIds: opts.allowedStoreIds ?? ["loja-a"] }),
       id: "user-1",
       email: "u@x.com",
       name: "U",

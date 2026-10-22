@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - run: node node_modules/vitest/vitest.mjs run lib/auth/pilot-access.test.ts lib/auth/enterprise-permissions.test.ts lib/auth/proxy-enterprise-dashboard.test.ts lib/auth/session-entitlement.test.ts --maxWorkers=1
+      - run: node node_modules/vitest/vitest.mjs run lib/auth/pilot-access.test.ts lib/auth/enterprise-permissions.test.ts lib/auth/proxy-enterprise-dashboard.test.ts lib/auth/session-entitlement.test.ts app/actions/operacoes.pilot-access.test.ts --maxWorkers=1
       - run: npm run typecheck
   authenticated:
     runs-on: ubuntu-latest

@@ -10,21 +10,25 @@ for (const [file, defaultModule] of Object.entries(modules)) {
   for (const node of ast.statements) {
     if (!ts.isFunctionDeclaration(node) || !node.name || !node.body || !node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue
     const name = node.name.text
+    if (name === "listLojasCadastros") {
+      inventory.push({ file: full, action: name, module: "own-server-policy", store: "session memberships" })
+      continue
+    }
     const params = node.parameters.map((p) => p.name.getText(ast))
-    let module = defaultModule
-    if (name === "listVendasHub") module = "sales"
-    if (name === "listClientes") module = "sharedCatalog"
-    if (file === "terminais.ts" && name !== "listTerminais") module = "settings"
-    if (["listTecnicos", "upsertTecnico", "listServicos", "upsertServico"].includes(name)) module = "service"
-    if (["listEquipamentosModelos", "upsertEquipamentoModelo"].includes(name)) module = "deviceCatalog"
-    if (name === "countMarketplaceListings") module = "marketplace"
+    let accessModule = defaultModule
+    if (name === "listVendasHub") accessModule = "sales"
+    if (["listClientes", "listProdutos", "createCliente"].includes(name)) accessModule = "sharedCatalog"
+    if (file === "terminais.ts" && name !== "listTerminais") accessModule = "settings"
+    if (["listTecnicos", "upsertTecnico", "listServicos", "upsertServico"].includes(name)) accessModule = "service"
+    if (["listEquipamentosModelos", "upsertEquipamentoModelo"].includes(name)) accessModule = "deviceCatalog"
+    if (name === "countMarketplaceListings") accessModule = "marketplace"
     let store = params.find((p) => ["storeId", "lojaId", "_storeId"].includes(p))
     if (!store && params[0] === "input") store = "input.storeId"
     if (!store && params[0] === "os") store = "os.storeId"
     if (!store && params[0] === "reqLike") store = "storeIdFromAssistecRequestForWrite(reqLike as unknown as Request) || \"\""
-    if (!store) module = "platform"
-    const call = module === "platform" ? "await requirePlatformAction()" : `await requireModuleAction(${store}, ${JSON.stringify(module)})`
-    inventory.push({ file: full, action: name, module, store: store || "platform" })
+    if (!store) accessModule = "platform"
+    const call = accessModule === "platform" ? "await requirePlatformAction()" : `await requireModuleAction(${store}, ${JSON.stringify(accessModule)})`
+    inventory.push({ file: full, action: name, module: accessModule, store: store || "platform" })
     if (!node.body.getText(ast).includes(call)) edits.push({ pos: node.body.getStart(ast) + 1, text: `\n  ${call}\n` })
   }
   for (const edit of edits.sort((a, b) => b.pos - a.pos)) source = source.slice(0, edit.pos) + edit.text + source.slice(edit.pos)

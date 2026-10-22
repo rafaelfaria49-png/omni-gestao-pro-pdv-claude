@@ -1453,6 +1453,13 @@ export async function criarVendaDeOSAction(os: OrdemServico): Promise<Venda> {
     (p) => p.hubs.vendas && p.operacoes.editarOs,
     "Sem permissão para criar venda a partir da OS.",
   );
+  // Resolve nome do cliente sem cair em ID quando o snapshot do payload não trouxe nome.
+  const clienteNomeOS = (os.cliente?.nome ?? "").trim()
+  const clienteIdOS = (os.clienteId ?? "").trim() || null
+  const clienteLocal = clienteIdOS ? await prisma.cliente.findFirst({ where: { id: clienteIdOS, storeId: os.storeId }, select: { name: true } }) : null
+  if (clienteIdOS && !clienteLocal) throw new Error("Cliente não encontrado nesta unidade.")
+  const clienteNomeFallback = clienteLocal?.name?.trim() ?? ""
+
   const year = new Date().getFullYear();
   const gate = resolveSaleNumberingWriter()
   const numberingV2 = gate.writer === SALE_WRITER_FLOW.V2
@@ -1460,14 +1467,6 @@ export async function criarVendaDeOSAction(os: OrdemServico): Promise<Venda> {
   const pedidoIdLegado = numberingV2
     ? null
     : `VND-${year}-${((await prisma.venda.count({ where: { storeId: os.storeId } })) + 1).toString().padStart(5, "0")}`
-  // Resolve nome do cliente sem cair em ID quando o snapshot do payload não trouxe nome.
-  const clienteNomeOS = (os.cliente?.nome ?? "").trim()
-  const clienteIdOS = (os.clienteId ?? "").trim() || null
-  const clienteNomeFallback = clienteIdOS
-    ? (await prisma.cliente
-        .findFirst({ where: { id: clienteIdOS, storeId: os.storeId }, select: { name: true } })
-        .catch(() => null))?.name?.trim() ?? ""
-    : ""
   const clienteNome = clienteNomeOS || clienteNomeFallback || "Cliente"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const payload: any = {

@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
   interpretar: vi.fn(async (texto: string) => ({ eco: texto })),
 }))
 
+// This adapter test already substitutes authorization; full access is tested by real NextAuth E2E.
+vi.mock("@/lib/auth/module-access", () => ({ requireModuleAction: async () => null }))
 vi.mock("@/lib/cadastros/cadastros-action-access", () => ({
   requireCadastrosActionAccess: h.acesso,
 }))

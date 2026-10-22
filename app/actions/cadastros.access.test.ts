@@ -1,3 +1,4 @@
+import { legacyAccessFixture } from "@/lib/auth/test-access-fixture"
 /**
  * CAD-R2-003 — Server Actions de Cadastros com o helper REAL.
  * Mock: auth/entitlement + Prisma. Não mocka requireCadastrosActionAccess.
@@ -131,6 +132,7 @@ function makeSession(opts: {
 }): Session {
   return {
     user: {
+      ...legacyAccessFixture({ role: opts.role ?? "VENDEDOR", storeAccess: opts.storeAccess ?? "restricted", allowedStoreIds: opts.allowedStoreIds ?? ["loja-a"] }),
       id: "user-1",
       email: "u@x.com",
       name: "U",
@@ -206,7 +208,7 @@ describe("createCliente / updateCliente", () => {
   it("CAIXA não atualiza cliente (hub)", async () => {
     sessionAtiva({ role: "CAIXA", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
     await expect(updateCliente("loja-a", "cli-1", { nome: "Ana" })).rejects.toThrow(
-      "Sem permissão para Cadastros.",
+      "Sem permissão para este módulo ou unidade.",
     )
   })
 
@@ -233,8 +235,8 @@ describe("deleteProduto / upsertProduto", () => {
     sessionAtiva({ role: "CAIXA", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
     const r = await deleteProduto("loja-a", "prod-1")
     expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.reason).toBe("Sem permissão para Cadastros.")
-    await expect(upsertProduto("loja-a", { nome: "Cabo" })).rejects.toThrow("Sem permissão para Cadastros.")
+    if (!r.ok) expect(r.reason).toBe("Sem permissão para este módulo ou unidade.")
+    await expect(upsertProduto("loja-a", { nome: "Cabo" })).rejects.toThrow("Sem permissão para este módulo ou unidade.")
   })
 
   it("IDOR: loja-A + id da loja-B → não muta", async () => {
@@ -338,7 +340,7 @@ describe("listLojasCadastros", () => {
   })
 
   it("não-admin sem membership → rejeita", async () => {
-    sessionAtiva({ role: "GERENTE", storeAccess: "all" })
+    sessionAtiva({ role: "GERENTE", storeAccess: "all", allowedStoreIds: [] })
     await expect(listLojasCadastros()).rejects.toThrow("Sem permissão para esta unidade")
   })
 })
