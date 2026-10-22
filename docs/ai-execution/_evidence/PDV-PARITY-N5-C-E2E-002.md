@@ -31,6 +31,48 @@ parecer externo e reexecuta os checks; não é o revisor R e não se declara hum
 O `INVALID_REVIEW` anterior do Codex permanece inválido como R e não é usado
 como aprovação. O REQUEST_CHANGES Anthropic da rev4 permanece histórico abaixo.
 
+## Reexecução aprovada em Node 24.x — 22/10/2026
+
+Retomada humana do mesmo GOAL, na mesma worktree e tentativa **2/3**,
+sem novo `open`, reinício ou alteração de código. HEAD de entrada:
+`e51c0d4fd8498614cceb331467ce0f0e7369cd18`; SHA técnico revisado preservado:
+`8d19a8bea9518c6f865dc69c67b28085bbdde6bb`. A diferença entre eles contém
+exclusivamente os dois documentos de evidência/matriz do parecer R.
+
+Runtime confirmado: **Node v24.19.0**, executável
+`C:/Users/rafae/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe`.
+Preservado o diretório temporário já aprovado
+`C:/Projetos/omni-gestao/.worktrees/pdv-n5-c-e2e-002/test-results/n5c-vitest-tmp`:
+`TEMP`, `TMP` e `TMPDIR` apontam para ele somente no processo de execução.
+Mantido `NODE_OPTIONS=--no-experimental-webstorage`, com a guarda
+`'localStorage' in globalThis` retornando `false`. PATH do processo prioriza
+o Node 24; nenhuma configuração global, dependência ou asserção foi alterada.
+O diagnóstico EPERM anterior não foi repetido.
+
+Comando executado com esse runtime e ambiente:
+
+```text
+node node_modules/vitest/vitest.mjs run lib/pdv-pending-post-sale-effects.static.test.ts lib/pdv/current-main-correction.component.test.ts lib/pdv/parity-classic-finalize-audit.component.test.ts lib/pdv/parity-assistencia-finalize-audit.component.test.ts lib/pdv/parity-supermercado-finalize-audit.component.test.ts lib/pdv/parity-venda-completa-finalize-audit.component.test.ts --maxWorkers=1 --no-file-parallelism --reporter=json --outputFile C:/Users/rafae/.codex/visualizations/2026/10/21/01a15f8e-23f4-7152-952b-d51fe767512a/n5-c-rev5-close-node24-vitest.json
+```
+
+Resultado: **76/76 PASS**, exit 0, seis arquivos, zero falhas/skips/TODOs.
+Herdados: 11 estáticos + 34 comportamentais = **45 PASS**. Componentes:
+Assistência 10, Classic 7, Supermercado 7, Venda Completa 7 = **31 PASS**,
+incluindo remount, snapshot confirmado, isolamento por loja e deduplicação.
+Relatório JSON acima, SHA-256
+`49bbfc61359a6e2ceedfe0e1868b48f8c22026e91ad6a587cdbc8e25cb40d597`.
+Log bruto adjacente: `n5-c-rev5-close-node24-vitest.log`.
+
+Árvore limpa antes/depois da execução; código revisado integralmente idêntico.
+Ledger mantém oito linhas e os quatro BLOCKED históricos, SHA-256 dos bytes
+locais `1b1c49dafd2ba9df7840e7bee1454ab5ff3a55c55baa5597776830ead23a945b`.
+Main atualizada por fetch: `15cbaac55e0473cc1ca27695c10b2fcf1e4f52a5`,
+sem commits novos na allowlist ou nos caminhos produtivos protegidos do PDV.
+Lint e typecheck aprovados na sessão anterior são preservados, sem repetição
+nem mudança técnica posterior. Próximas ações condicionadas: commit desta
+evidência, `verify --all`, `check pdv` e, somente com gates aprovados,
+`close pdv`; depois verificar DONE e publicar apenas a branch autorizada.
+
 ## Reprodução do remount e contratos aprovados
 
 Os casos em `lib/pdv/parity-assistencia-finalize-audit.component.test.ts`
