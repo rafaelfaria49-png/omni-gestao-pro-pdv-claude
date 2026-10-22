@@ -184,7 +184,7 @@ jobs:
           AUTH_TRUST_HOST: "true"
           NEXTAUTH_URL: http://127.0.0.1:3000
       - run: npx playwright install --with-deps chromium
-      - name: Jornadas autenticadas reais (Padaria, lojas mistas, permissões, multiloja)
+      - name: Jornadas autenticadas reais (Padaria, lojas mistas, permissões, multiloja, Clientes vCard)
         run: node scripts/cadastros/run-ramos-e2e-isolated.mjs
       - uses: actions/upload-artifact@v4
         if: always()
