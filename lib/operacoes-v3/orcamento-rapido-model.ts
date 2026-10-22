@@ -76,6 +76,7 @@ export interface OrcamentoRapidoVarianteInputV3 {
 }
 
 export interface OrcamentoRapidoGrupoInputV3 {
+  /** Uma opção materializa serviço simples; duas a quatro formam escolha_1. */
   rotulo: string;
   variantes: OrcamentoRapidoVarianteInputV3[];
 }
@@ -235,12 +236,12 @@ export function validarOrcamentoRapidoInputV3(input: OrcamentoRapidoInputV3): st
   if (!input.defeitoRelatado?.trim()) {
     return "Descreva o defeito relatado pelo cliente.";
   }
-  if (!input.grupo?.rotulo?.trim()) {
+  const variantes = Array.isArray(input.grupo?.variantes) ? input.grupo.variantes : [];
+  if (variantes.length > 1 && !input.grupo?.rotulo?.trim()) {
     return "Informe o rótulo do grupo de escolha.";
   }
-  const variantes = Array.isArray(input.grupo.variantes) ? input.grupo.variantes : [];
-  if (variantes.length < 2) {
-    return "O grupo de escolha precisa de pelo menos 2 opções.";
+  if (variantes.length < 1) {
+    return "Informe pelo menos uma opção de serviço.";
   }
   if (variantes.length > MAX_LINHAS_POR_GRUPO_V3) {
     return `O grupo de escolha aceita no máximo ${MAX_LINHAS_POR_GRUPO_V3} opções.`;
@@ -291,7 +292,8 @@ export function montarServicosOrcamentoRapidoV3(input: OrcamentoRapidoInputV3, g
       descricao: v.rotulo.trim(),
       valor: Math.max(0, Number(v.valor) || 0),
       kindV3: "cobrado" as const,
-      grupoId,
+      // Serviço único participa integralmente do total, sem fabricar escolha.
+      ...(input.grupo.variantes.length > 1 ? { grupoId } : {}),
       varianteV3,
       ...(custo > 0 ? { custoV3: custo } : {}),
     };

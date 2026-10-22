@@ -50,6 +50,9 @@ export function montarPrefillDuplicarOrcamentoV4(os: OrdemServico): OrcamentoRap
 
   const primeiroGrupoId = txt(orc.gruposV3?.[0]?.id);
   const primeiroGrupoRotulo = txt(orc.gruposV3?.[0]?.rotulo);
+  // Serviço único do fluxo rápido conserva os metadados da opção, sem grupo.
+  const candidatasUnicas = servicos.filter(s => !txt(s.grupoId) && s.kindV3 !== "interno" && s.kindV3 !== "brinde" && !!s.varianteV3);
+  const unica = !primeiroGrupoId && candidatasUnicas.length === 1 ? candidatasUnicas[0] : null;
 
   const itensFixos: OrcamentoRapidoItemFixoFormV4[] = [];
   for (const p of pecas) {
@@ -63,7 +66,7 @@ export function montarPrefillDuplicarOrcamentoV4(os: OrdemServico): OrcamentoRap
     });
   }
   for (const sv of servicos) {
-    if (txt(sv.grupoId) || sv.kindV3 === "interno") continue;
+    if (txt(sv.grupoId) || sv.kindV3 === "interno" || sv === unica) continue;
     itensFixos.push({
       ...novoItemFixoVazioV4(),
       descricao: txt(sv.descricao) || "Serviço",
@@ -100,9 +103,13 @@ export function montarPrefillDuplicarOrcamentoV4(os: OrdemServico): OrcamentoRap
       });
     }
   }
-  // Sempre pelo menos 2 variantes (mesmo piso do formulário vazio) — completa
-  // com slots vazios quando o orçamento original não tinha grupo/tinha só 1.
-  while (variantesRaw.length < 2) variantesRaw.push(novaVarianteVaziaV4());
+  if (unica) variantesRaw.push({
+    ...novaVarianteVaziaV4(), rotulo: txt(unica.varianteV3?.rotulo) || txt(unica.descricao),
+    valor: unica.valor, custoV3: unica.custoV3 ?? 0, garantiaDias: unica.varianteV3?.garantiaDias ?? 0,
+    descricaoCurta: txt(unica.varianteV3?.descricaoCurta), badge: txt(unica.varianteV3?.badge), prazoTexto: txt(unica.varianteV3?.prazoTexto),
+  });
+  // Orçamentos legados sem a opção estruturada conservam o prefill anterior.
+  while (variantesRaw.length < (unica ? 1 : 2)) variantesRaw.push(novaVarianteVaziaV4());
 
   const base = orcamentoRapidoFormVazioV4();
   return {

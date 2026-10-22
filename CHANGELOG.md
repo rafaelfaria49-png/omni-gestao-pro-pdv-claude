@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-22
+
+### Operações V4 — RafaCell com um serviço único (OPS-V4-RAFACELL-QA-BLOCKERS-011)
+
+- Orçamento Rápido aceita uma a quatro opções. Uma opção vira serviço sem grupo de escolha; duas a quatro mantêm seleção explícita. Zero opções continua inválido.
+- Duplicação, mensagem e documento preservam a garantia do serviço único. Custos internos e brindes continuam no motor canônico, sem cobrança financeira automática.
+
+
 ## 2026-10-20
 
 ### Cadastros — Microfone dentro do campo e diagnóstico da voz de Clientes (CAD-R2-021)

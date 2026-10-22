@@ -93,7 +93,7 @@ export function OrcamentoClienteDocV4({ doc }: { doc: OrcamentoClienteViewV4 }) 
             <tbody>
               {itensCobrados.map((item, i) => (
                 <tr key={i} className="border-b border-zinc-200">
-                  <td className="py-1">{item.descricao}</td>
+                  <td className="py-1">{item.descricao}{typeof item.garantiaDias === "number" ? <div className="text-[10px]">Garantia de {item.garantiaDias} dias</div> : null}</td>
                   <td className="py-1 text-center text-zinc-600">{item.quantidade}×</td>
                   <td className="py-1 text-right font-medium">{formatBRL(item.valorCliente)}</td>
                 </tr>

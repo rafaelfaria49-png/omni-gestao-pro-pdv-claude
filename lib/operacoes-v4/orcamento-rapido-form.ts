@@ -21,7 +21,7 @@ import { campoAgoraV3, campoHojeV3 } from "@/lib/operacoes-v3/datas-operacionais
 import { marcarSelecaoVarianteV4 } from "./orcamento-selecao";
 import { CORTESIAS_TELA_V4, reaisParaCentavosV4, type CortesiaTelaV4 } from "./precificacao-telas";
 
-const MIN_VARIANTES = 2;
+const MIN_VARIANTES = 1;
 
 function uid(prefix: string): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -159,7 +159,7 @@ export function adicionarVarianteV4(form: OrcamentoRapidoFormV4): OrcamentoRapid
   return { ...form, variantes: [...form.variantes, novaVarianteVaziaV4()] };
 }
 
-/** Remove uma variante pelo id (no-op quando já está no piso de 2). */
+/** Remove uma variante pelo id (preserva ao menos um serviço). */
 export function removerVarianteV4(form: OrcamentoRapidoFormV4, id: string): OrcamentoRapidoFormV4 {
   if (form.variantes.length <= MIN_VARIANTES) return form;
   return { ...form, variantes: form.variantes.filter((v) => v.id !== id) };
@@ -195,11 +195,11 @@ export function validarOrcamentoRapidoFormV4(form: OrcamentoRapidoFormV4): strin
   if (!form.defeitoRelatado.trim()) {
     return "Descreva o defeito relatado.";
   }
-  if (!form.grupoRotulo.trim()) {
+  if (form.variantes.length > 1 && !form.grupoRotulo.trim()) {
     return "Informe o rótulo do grupo de escolha.";
   }
   if (form.variantes.length < MIN_VARIANTES) {
-    return "O grupo de escolha precisa de pelo menos 2 opções.";
+    return "Informe pelo menos uma opção de serviço.";
   }
   if (form.variantes.length > MAX_LINHAS_POR_GRUPO_V3) {
     return `O grupo de escolha aceita no máximo ${MAX_LINHAS_POR_GRUPO_V3} opções.`;
@@ -313,9 +313,11 @@ export function previaResultadosAlternativasV4(form: OrcamentoRapidoFormV4): Res
     valor: reaisParaCentavosV4(s.valor) ?? 0,
     custoV3: s.custoV3 && s.custoV3 > 0 ? reaisParaCentavosV4(s.custoV3) ?? undefined : undefined,
   }));
-  const variantes = linhasCentavos.filter((s) => s.grupoId === grupoId);
+  const unica = form.variantes.length === 1;
+  const variantes = linhasCentavos.filter((s) => unica ? !!s.varianteV3 : s.grupoId === grupoId);
   return form.variantes.map((v, i) => {
-    const simulacao = marcarSelecaoVarianteV4({ pecas: [], servicos: linhasCentavos }, grupoId, variantes[i].id);
+    const simulacao = unica ? { pecas: [], servicos: linhasCentavos }
+      : marcarSelecaoVarianteV4({ pecas: [], servicos: linhasCentavos }, grupoId, variantes[i].id);
     const consideradas = simulacao.servicos.filter((s) => !s.grupoId || s.selecionadaV3);
     const custoAusente = consideradas.some((s) => s.custoV3 == null);
     const valorInvalido = linhas.some((s) => (!s.grupoId || s.id === variantes[i].id) &&

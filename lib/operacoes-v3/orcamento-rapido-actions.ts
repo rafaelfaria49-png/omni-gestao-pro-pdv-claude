@@ -120,7 +120,7 @@ export async function criarOrcamentoRapidoV3(storeId: string, input: OrcamentoRa
       servicos,
       pecas: [],
       desconto: 0,
-      gruposV3: [montarGrupoMetaOrcamentoRapidoV3(input, grupoId)],
+      gruposV3: input.grupo.variantes.length > 1 ? [montarGrupoMetaOrcamentoRapidoV3(input, grupoId)] : [],
       // Validade escolhida na proposta (definida uma única vez; nunca reiniciada).
       validoAte: datas.validoAte,
     });

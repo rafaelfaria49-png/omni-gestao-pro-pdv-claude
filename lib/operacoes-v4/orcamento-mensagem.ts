@@ -54,7 +54,10 @@ export function montarMensagemOrcamentoV4(view: OrcamentoClienteViewV4): string 
   if (view.grupos.length === 0) {
     if (itensCobrados.length > 0) {
       linhas.push("*Itens:*");
-      for (const it of itensCobrados) linhas.push(`• ${it.descricao} — R$ ${formatBRL(it.valorCliente)}`);
+      for (const it of itensCobrados) {
+        linhas.push(`• ${it.descricao} — R$ ${formatBRL(it.valorCliente)}`);
+        if (typeof it.garantiaDias === "number") linhas.push(`   Garantia de ${it.garantiaDias} dias`);
+      }
       linhas.push("");
     }
     if (itensCortesia.length > 0) {

@@ -350,15 +350,15 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
         ))}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 0 8px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.subtle, letterSpacing: ".04em", textTransform: "uppercase" }}>Grupo de escolha</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.subtle, letterSpacing: ".04em", textTransform: "uppercase" }}>{form.variantes.length > 1 ? "Grupo de escolha" : "Serviço único"}</div>
           <button type="button" onClick={() => setForm((f) => adicionarVarianteV4(f))} disabled={form.variantes.length >= MAX_LINHAS_POR_GRUPO_V3} style={chipBtn}>
             + opção ({form.variantes.length}/{MAX_LINHAS_POR_GRUPO_V3})
           </button>
         </div>
-        <div style={{ marginBottom: 8 }}>
+        {form.variantes.length > 1 && <div style={{ marginBottom: 8 }}>
           <div style={atendLabel}>Rótulo do grupo *</div>
           <input value={form.grupoRotulo} onChange={(e) => setForm((f) => ({ ...f, grupoRotulo: e.target.value }))} placeholder="ESCOLHA A TELA" style={atendInput} autoComplete="off" />
-        </div>
+        </div>}
         <div style={{ minWidth: 0, padding: 12, marginBottom: 10, border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 12, color: C.body }}>
           <label style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, cursor: "pointer" }}>
             <input type="checkbox" checked={precificacaoTela} disabled={busy || !sid} onChange={(e) => setPrecificacaoTela(e.target.checked)} aria-describedby="orc-regra-tela-ajuda" />
@@ -397,7 +397,7 @@ function OrcamentoRapidoModalContent({ v, sid, initialValues }: { v: V4Vals; sid
             resultadoBrutoCentavos={resultados[i].resultadoBrutoCentavos}
             motivoResultado={resultados[i].motivo}
             disabled={busy}
-            canRemove={form.variantes.length > 2}
+            canRemove={form.variantes.length > 1}
             onRemove={() => setForm((f) => removerVarianteV4(f, variante.id))}
             onChange={(next) => setForm((f) => ({ ...f, variantes: f.variantes.map((x) => (x.id === variante.id ? next : x)) }))}
           />

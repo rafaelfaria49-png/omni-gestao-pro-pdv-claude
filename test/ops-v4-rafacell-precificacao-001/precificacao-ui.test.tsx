@@ -44,6 +44,26 @@ function ativar() {
 }
 
 describe("Orçamento Rápido V4 — sugestão revisável e local", () => {
+  it("remove a segunda opção e salva serviço único com kit e garantia", async () => {
+    const form = formInicial();
+    Object.assign(form.variantes[0], { valor: 265, custoV3: 65, garantiaDias: 90 });
+    montar(form);
+    fireEvent.click(screen.getByRole("button", { name: "Remover opção 2" }));
+    expect(screen.queryByPlaceholderText("ESCOLHA A TELA")).toBeNull();
+    expect((screen.getByRole("button", { name: "Remover opção 1" }) as HTMLButtonElement).disabled).toBe(true);
+    ativar();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Capinha de cortesia/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Película de cortesia/ }));
+    expect(screen.getByText(/Resultado bruto estimado:.*195,00/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await waitFor(() => expect(mocks.criar).toHaveBeenCalledOnce());
+    const input = mocks.criar.mock.calls[0][1];
+    expect(input.grupo.variantes).toHaveLength(1);
+    const servicos = montarServicosOrcamentoRapidoV3(input, "g");
+    expect(servicos.every(s => !s.grupoId)).toBe(true);
+    expect(servicos.find(s => s.varianteV3)?.varianteV3?.garantiaDias).toBe(90);
+  });
+
   it("opt-in desligado; sugerir não altera preço manual; aplicação exige clique e continua editável", () => {
     montar();
     expect(screen.queryByRole("button", { name: "Sugerir preço" })).toBeNull();

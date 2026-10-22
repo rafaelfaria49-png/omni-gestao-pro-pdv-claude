@@ -66,6 +66,7 @@ export interface OrcamentoClienteItemFixoV4 {
   valorCliente: number;
   /** true quando a linha é cortesia (sem custo ao cliente, ainda assim visível). */
   cortesia?: boolean;
+  garantiaDias?: number;
 }
 
 export interface OrcamentoClienteVarianteV4 {
@@ -161,6 +162,7 @@ export function montarOrcamentoClienteViewV4(os: OrdemServico, empresa?: Empresa
       descricao: txt(sv.descricao) || "Serviço",
       quantidade: 1,
       valorCliente: servicoValorCliente(sv),
+      ...(typeof sv.varianteV3?.garantiaDias === "number" && sv.varianteV3.garantiaDias > 0 ? { garantiaDias: sv.varianteV3.garantiaDias } : {}),
       ...(kind === "brinde" ? { cortesia: true as const } : {}),
     });
   }

@@ -16,6 +16,18 @@ function mkOS(orcamento: Record<string, unknown> | undefined, over: Record<strin
 const ORCAMENTO_BASE = { id: "orc-1", status: "enviado" as const, desconto: 0, total: 0, criadoEm: "x" };
 
 describe("montarPrefillDuplicarOrcamentoV4 — gate honesto", () => {
+  it("duplica a opção única estruturada com garantia e kit, sem opções fictícias ou cliente copiado", () => {
+    const form = montarPrefillDuplicarOrcamentoV4(mkOS({ ...ORCAMENTO_BASE, gruposV3: [], pecas: [], servicos: [
+      { id: "s", descricao: "Tela", valor: 265, custoV3: 65, varianteV3: { rotulo: "Tela", garantiaDias: 90, prazoTexto: "1 dia" } },
+      { id: "c", descricao: "Capinha", valor: 0, custoV3: 3.5, kindV3: "brinde" },
+      { id: "p", descricao: "Película", valor: 0, custoV3: 1.5, kindV3: "brinde" },
+    ] }))!;
+    expect(form.variantes).toHaveLength(1);
+    expect(form.variantes[0]).toMatchObject({ rotulo: "Tela", valor: 265, custoV3: 65, garantiaDias: 90, prazoTexto: "1 dia" });
+    expect(form.itensFixos.map(i => i.descricao)).toEqual(["Capinha", "Película"]);
+    expect(form.clienteExistente).toBeNull();
+  });
+
   it("retorna null sem orçamento", () => {
     expect(montarPrefillDuplicarOrcamentoV4(mkOS(undefined))).toBeNull();
   });

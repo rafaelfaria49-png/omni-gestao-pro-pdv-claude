@@ -54,7 +54,7 @@ describe("orcamentoRapidoFormVazioV4", () => {
   });
 });
 
-describe("adicionarVarianteV4 / removerVarianteV4 — respeitam 2..4", () => {
+describe("adicionarVarianteV4 / removerVarianteV4 — respeitam 1..4", () => {
   it("adiciona até o limite de 4 e para (no-op depois)", () => {
     let f = orcamentoRapidoFormVazioV4();
     f = adicionarVarianteV4(f);
@@ -65,14 +65,14 @@ describe("adicionarVarianteV4 / removerVarianteV4 — respeitam 2..4", () => {
     expect(f5).toBe(f); // no-op real (mesma referência)
   });
 
-  it("remove até o piso de 2 e para (no-op depois)", () => {
+  it("remove até o piso de 1 e para (no-op depois)", () => {
     let f = orcamentoRapidoFormVazioV4();
     const idParaRemover = f.variantes[0]!.id;
     f = removerVarianteV4(f, idParaRemover);
-    expect(f.variantes).toHaveLength(2); // já estava no piso, no-op
+    expect(f.variantes).toHaveLength(1);
     const outroId = f.variantes[0]!.id;
     const f2 = removerVarianteV4(f, outroId);
-    expect(f2.variantes).toHaveLength(2);
+    expect(f2.variantes).toHaveLength(1);
     expect(f2).toBe(f);
   });
 

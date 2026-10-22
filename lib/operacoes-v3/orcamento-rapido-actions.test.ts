@@ -91,6 +91,18 @@ describe("criarOrcamentoRapidoV3 — sem o bloco de datas (GOAL OPS-DATAS-ENTRAD
 });
 
 describe("criarOrcamentoRapidoV3 — happy path", () => {
+  it("materializa uma opção como serviço sem criar grupo de escolha", async () => {
+    resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente fictício" });
+    await criarOrcamentoRapidoV3("loja-x", inputBase({ grupo: { rotulo: "", variantes: [{ rotulo: "Tela", valor: 265, custoV3: 65, garantiaDias: 90 }] } }));
+    const input = salvarOrcamentoMock.mock.calls[0]![2] as SalvarOrcamentoInputTest;
+    expect(input.gruposV3).toEqual([]);
+    expect(input.servicos).toHaveLength(1);
+    expect(input.servicos[0].grupoId).toBeUndefined();
+    expect(input.servicos[0].varianteV3?.garantiaDias).toBe(90);
+    expect(computeTotaisV3({ ...input, desconto: 0 })).toMatchObject({ total: 265, custo: 65 });
+    expect(aplicarTransicaoMock).not.toHaveBeenCalled();
+  });
+
   it("cria a OS e grava servicos+gruposV3 NUM ÚNICO write (contrato oficial, sem patch cru — GOAL 026)", async () => {
     resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente Teste", telefone: "11999990000" });
 

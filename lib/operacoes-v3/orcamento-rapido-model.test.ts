@@ -49,9 +49,9 @@ describe("validarOrcamentoRapidoInputV3", () => {
     );
   });
 
-  it("exige pelo menos 2 variantes", () => {
-    expect(validarOrcamentoRapidoInputV3(inputBase({ grupo: { rotulo: "G", variantes: [{ rotulo: "A", valor: 10 }] } }))).toBe(
-      "O grupo de escolha precisa de pelo menos 2 opções.",
+  it("recusa zero opções", () => {
+    expect(validarOrcamentoRapidoInputV3(inputBase({ grupo: { rotulo: "G", variantes: [] } }))).toBe(
+      "Informe pelo menos uma opção de serviço.",
     );
   });
 
