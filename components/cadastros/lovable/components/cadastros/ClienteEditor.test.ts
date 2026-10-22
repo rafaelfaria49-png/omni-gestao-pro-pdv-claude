@@ -29,7 +29,7 @@ beforeEach(() => {
   h.interpret.mockImplementation(async (_, text) => ({ ok: true, sugestao: interpretarTextoCliente(text) }))
   h.save.mockResolvedValue({ ok: true, id: "synthetic" })
 })
-afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); window.history.replaceState(null, "", "/"); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.useRealTimers(); localStorage.clear(); sessionStorage.clear(); window.history.replaceState(null, "", "/"); vi.unstubAllGlobals() })
 
 describe("HUB real client editor: human review and temporary capture", () => {
   it("reviews/corrects, applies, then saves only after explicit confirmation", async () => {
@@ -212,6 +212,9 @@ describe("HUB real client editor: local voice dictation", () => {
     const start = await screen.findByRole("button", { name: "Ditar por voz" })
     expect(fake.calls.available).toContainEqual({ langs: ["pt-BR"], processLocally: true })
     expect(fake.instances).toHaveLength(0); expect(microphone).not.toHaveBeenCalled()
+    // Eventos sintéticos não devem perder a sessão por latência do runner.
+    // Os timeouts do adapter têm cobertura temporal própria.
+    vi.useFakeTimers()
     fireEvent.click(start)
     const rec = fake.last()
     expect(rec.configAtStart).toMatchObject({ processLocally: true, lang: "pt-BR", continuous: true, interimResults: true })
@@ -234,6 +237,7 @@ describe("HUB real client editor: local voice dictation", () => {
     click("Parar ditado")
     expect(rec.stopped).toBe(true)
     act(() => rec.end())
+    vi.useRealTimers()
     await waitFor(() => expect(label().value).toBe("novo cliente Lia de Teste, telefone 14 99999 8888, mora em Itaí"))
     expect(label().readOnly).toBe(false)
     expect(screen.getByText(/Transcrição pronta/)).toBeTruthy()

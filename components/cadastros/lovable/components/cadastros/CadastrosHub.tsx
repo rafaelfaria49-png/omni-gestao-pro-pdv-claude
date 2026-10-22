@@ -84,8 +84,8 @@ function useCadastrosAvailability() {
   const p = business.permissions;
   return (id: string) => {
     if (["importacao", "auditoria"].includes(id)) return p?.platformAuthority === true;
+    if (id === "equipamentos") return business.resource("service.technical").operational && p?.modules?.deviceCatalog === true;
     if (["servicos", "tecnicos"].includes(id)) return business.resource("service.technical").operational;
-    if (id === "equipamentos") return business.resource("catalog.deviceCompatibility").operational;
     return true;
   };
 }

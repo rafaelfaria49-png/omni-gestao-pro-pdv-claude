@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   capabilities: { version: 1, business: { primaryBranch: "padaria" } } as StoreCapabilitiesV1,
   canConfigure: true,
   permitted: true,
+  deviceCatalog: true,
   ready: true,
   hydrated: true,
   refresh: vi.fn(async () => {}),
@@ -19,7 +20,7 @@ const h = vi.hoisted(() => ({
 vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
   storeId: "loja-a", ready: h.ready, hydrated: h.hydrated, capabilities: h.capabilities, refresh: h.refresh,
   branch: h.capabilities.business?.primaryBranch ?? "assistencia", configured: true,
-  permissions: { ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted } },
+  permissions: { ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted && h.deviceCatalog } },
   canConfigure: h.canConfigure, presentation: businessPresentation(h.capabilities), save: h.save,
   resource: (key: Parameters<typeof resolveBusinessResource>[1]) => resolveBusinessResource(h.capabilities, key, undefined, h.permitted),
 }) }))
@@ -58,6 +59,7 @@ import { BusinessResourcesCard } from "@/components/configuracoes-v3/features/se
 beforeEach(() => {
   h.capabilities = { version: 1, business: { primaryBranch: "padaria" } }
   h.permitted = true
+  h.deviceCatalog = true
   h.canConfigure = true
   h.ready = true
   h.hydrated = true
@@ -125,6 +127,21 @@ describe("Cadastros adaptados por recursos e produto", () => {
     fireEvent.click(screen.getByRole("button", { name: "Categorias / Marcas" }))
     expect(await screen.findByText("Categorias de produtos")).toBeTruthy()
     expect(screen.queryByText("Linhas de equipamentos")).toBeNull()
+  })
+  it("compatibilidade para acessórios não abre cadastros de equipamentos de assistência", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "acessorios" } }
+    render(React.createElement(CadastrosHub))
+    await screen.findByText("Cadastros: Acessórios para aparelhos")
+    expect(screen.queryByRole("button", { name: "Equipamentos", exact: true })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Técnicos", exact: true })).toBeNull()
+  })
+  it("assistência sem liberação de catálogo de aparelhos não oferece a aba Equipamentos", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    h.deviceCatalog = false
+    render(React.createElement(CadastrosHub))
+    await screen.findByText("Cadastros: Assistência técnica")
+    expect(screen.getByRole("button", { name: "Técnicos", exact: true })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Equipamentos", exact: true })).toBeNull()
   })
   it("edição com seções ocultas omite configurações e preserva o patch", async () => {
     product({ nome: "Mercadoria", garantia: 60, metadata: {

@@ -10,7 +10,9 @@ export function useEnterprisePermissions(): EnterprisePermissions | null {
   const { data: session, status } = useSession()
   const { lojaAtivaId } = useLojaAtiva()
   return useMemo(() => {
-    if (status !== "authenticated" || !session?.user?.role) return null
+    // update() mantém a sessão anterior enquanto relê o servidor. Não desmontar
+    // formulários autorizados durante esse intervalo; o resultado revogado fecha.
+    if (status === "unauthenticated" || !session?.user?.role) return null
     return getPermissionsFromSession(session, lojaAtivaId)
   }, [status, session, lojaAtivaId])
 }

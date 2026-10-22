@@ -10,7 +10,7 @@ export function WorkspaceAccessBoundary({ children }: { children: React.ReactNod
   const path = usePathname()
   const p = useEnterprisePermissions()
   if (status === "unauthenticated") return <div className="p-6"><p>Sua sessão foi encerrada.</p><Link className="underline" href="/login">Entrar novamente</Link></div>
-  if (status === "loading" || !p) return <p className="p-6" role="status">Verificando acesso…</p>
+  if (!p) return <p className="p-6" role="status">Verificando acesso…</p>
   if (!canAccessPage(p, path || "/dashboard")) return <div className="p-6"><p>Acesso indisponível para esta conta ou unidade.</p><Link className="underline" href="/dashboard">Voltar ao início</Link><br /><Link className="underline" href="/login">Entrar novamente</Link></div>
   return children
 }

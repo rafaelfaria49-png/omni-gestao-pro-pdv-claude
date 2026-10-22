@@ -93,7 +93,10 @@ export async function switchStore(page: Page, storeName: string) {
   await page.goto("/dashboard/configuracoes?sec=lojas")
   const card = page.locator("div[role=button]").filter({ hasText: storeName })
   await card.getByRole("button", { name: "Gerenciar" }).click()
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("assistec-pro-loja-ativa-v1"))).not.toBeNull()
+  const storeId = ({ "Padaria Sintética A": STORES.padaria, "Variedades Sintética B": STORES.variedades, "Assistência Sintética C": STORES.assistencia, "Acessórios Sintéticos D": STORES.acessorios } as Record<string, string>)[storeName]
+  if (!storeId) throw new Error("Unidade sintética desconhecida")
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("assistec-pro-loja-ativa-v1"))).toBe(storeId)
+  await expect.poll(() => page.context().cookies().then((cookies) => cookies.find((cookie) => cookie.name === "assistec-active-store")?.value)).toBe(storeId)
 }
 
 export async function openGeral(page: Page): Promise<Locator> {
