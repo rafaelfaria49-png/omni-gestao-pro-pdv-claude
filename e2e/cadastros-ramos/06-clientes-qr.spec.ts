@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page, type Request } from "@playwright/test"
 import { STORES, USERS, closeDb, evidence, login, logoutViaSeguranca, readDb, switchStore } from "./support"
-import { QR_PIX, QR_URL, pngFromGray, qrPng } from "../../lib/cadastros/vcard/__fixtures__/qr"
+import { QR_PIX, QR_URL, pngFromGray, qrPng, qrPngRow } from "../../lib/cadastros/vcard/__fixtures__/qr"
 
 /**
  * Contato por QR Code (imagem) no editor real de Clientes, sem mock do decodificador:
@@ -31,19 +31,21 @@ const NEVER_SENT = [IMAGE_NAME, "BEGIN:VCARD", SECRET_NOTE, "e2e-qr.invalid/perf
 const chooseImage = (page: Page, name: string, mimeType: string, buffer: Buffer) =>
   page.getByLabel("Escolher imagem de QR Code").setInputFiles({ name, mimeType, buffer })
 
+/** Corpo em UTF-8 para asserções de texto (nomes acentuados) e bytes crus para assinaturas de imagem. */
 function recordRequests(page: Page) {
-  const seen: Array<{ url: string; method: string; body: string; action: string | null }> = []
+  const seen: Array<{ url: string; method: string; body: string; raw: Buffer; action: string | null }> = []
   page.on("request", (req: Request) => {
-    const body = req.postDataBuffer()
-    seen.push({ url: req.url(), method: req.method(), body: body ? body.toString("latin1") : "", action: req.headers()["next-action"] ?? null })
+    const raw = req.postDataBuffer() ?? Buffer.alloc(0)
+    seen.push({ url: req.url(), method: req.method(), body: raw.toString("utf8"), raw, action: req.headers()["next-action"] ?? null })
   })
   return seen
 }
-function expectNothingLeaked(seen: Array<{ url: string; body: string }>) {
+const IMAGE_SIGNATURES = [Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from([0xff, 0xd8, 0xff]), Buffer.from("WEBPVP8")]
+function expectNothingLeaked(seen: Array<{ url: string; body: string; raw: Buffer }>) {
   // Nenhuma requisição a endereços do QR e nenhum byte da imagem ou do conteúdo bruto no corpo/URL.
   expect(seen.filter((r) => /e2e-qr\.invalid|exemplo\.invalid/.test(r.url)).map((r) => r.url)).toEqual([])
   for (const marker of NEVER_SENT) expect(seen.filter((r) => r.body.includes(marker) || r.url.includes(marker)).map((r) => r.url)).toEqual([])
-  expect(seen.filter((r) => r.body.includes("\x89PNG") || r.body.includes("JFIF") || r.body.includes("WEBPVP8")).map((r) => r.url)).toEqual([])
+  expect(seen.filter((r) => IMAGE_SIGNATURES.some((sig) => r.raw.includes(sig))).map((r) => r.url)).toEqual([])
 }
 async function expectStorageClean(page: Page) {
   const dump = await page.evaluate(async () => {
@@ -218,6 +220,12 @@ test("QR por imagem: JPEG e WebP reais, conteúdo incompatível, imagem grande e
     expect(new URL(page.url()).pathname).toBe("/dashboard/cadastros-v2")
   })
 
+  await test.step("Dois QRs diferentes na mesma imagem: recusa, sem escolher um deles", async () => {
+    await chooseImage(page, "dois-qr.png", "image/png", qrPngRow([vcard(NAME, "(14) 99600-1122", "formatos.qr@e2e-qr.invalid"), QR_URL], { scales: [6, 2], gap: 100 }))
+    await expect(alert).toHaveText("Há mais de um QR Code na imagem. Use uma imagem só com o QR Code do contato.")
+    await expect(dialog.getByLabel("Prévia: Nome")).toHaveCount(0)
+  })
+
   await test.step("Conteúdo, não extensão: vCard em texto com nome .png; imagem sem QR; corrompida; acima de 10 MiB", async () => {
     await chooseImage(page, "contato.png", "image/png", Buffer.from(vcard(NAME, "(14) 99600-1122", "x@e2e-qr.invalid")))
     await expect(alert).toHaveText("O arquivo não é uma imagem PNG, JPG ou WebP válida.")
@@ -238,7 +246,8 @@ test("QR por imagem: JPEG e WebP reais, conteúdo incompatível, imagem grande e
     await expect(dialog.getByLabel("Nome *")).toHaveValue("")
     await dialog.getByRole("button", { name: "Cancelar", exact: true }).click()
     expect(await clientsNamed(NAME)).toHaveLength(0)
-    expect(seen.filter((r) => r.action)).toHaveLength(0)
+    // O HUB usa Server Actions para as próprias leituras; nenhuma pode levar o contato (= tentativa de salvar).
+    expect(seen.filter((r) => r.action && (r.body.includes(NAME) || r.body.includes("formatos.qr"))).map((r) => r.url)).toEqual([])
     expectNothingLeaked(seen)
     await expectStorageClean(page)
   })

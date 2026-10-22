@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { QR_LIMITS, qrPayloadToVcard, type QrPayload } from "./qr"
 import { cameraErrorCode, decodeQrImage, startQrCamera } from "./qr-browser"
-import { QR_URL, QR_VCARD_30, qrPng, qrRgba } from "./__fixtures__/qr"
+import { QR_URL, QR_VCARD_30, qrPng, qrRgba, qrRgbaRow } from "./__fixtures__/qr"
 
 /** Câmera sintética: tracks com `stop` observável e evento `ended`. */
 function fakeStream() {
@@ -141,6 +141,20 @@ describe("câmera: leitura e encerramento", () => {
     expect(cam.track.stop).toHaveBeenCalledOnce()
   })
 
+  it("play() que nunca resolve: o prazo vale desde a track ligada e desliga a câmera", async () => {
+    const cam = fakeStream()
+    const video = fakeVideo()
+    video.play.mockImplementation(() => new Promise(() => undefined))
+    const { calls } = start(fakeWin(async () => cam.stream), async () => null, video)
+    await flush()
+    expect(calls.active).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(QR_LIMITS.maxCameraMs)
+    expect(calls.error).toHaveBeenCalledWith("CAMERA_TIMEOUT")
+    expect(cam.track.stop).toHaveBeenCalledOnce()
+    expect(video.srcObject).toBeNull()
+    expect(calls.active).not.toHaveBeenCalled()
+  })
+
   it("sem QR em 60 s: câmera desligada por tempo", async () => {
     const cam = fakeStream()
     const frames = vi.fn(async () => null)
@@ -235,6 +249,11 @@ describe("imagem: limites antes de decodificar, leitura local e liberação", ()
     const b = imageWin({ bitmap: { width: 9000, height: 9000 } })
     expect(await decodeQrImage(new Uint8Array(qrPng(QR_VCARD_30)), b.win)).toEqual({ ok: false, code: "IMAGE_DIMENSIONS" })
     expect(b.close).toHaveBeenCalledOnce()
+  })
+
+  it("dois QRs reais na mesma imagem (jsQR, sem detector nativo): recusa por vários QR", async () => {
+    const pixels = qrRgbaRow([QR_VCARD_30, QR_URL], { scales: [6, 2], gap: 100 })
+    expect(await decodeQrImage(new Uint8Array(qrPng(QR_VCARD_30)), imageWin({ pixels }).win)).toEqual({ ok: false, code: "MULTIPLE" })
   })
 
   it("arquivo corrompido e imagem sem QR", async () => {

@@ -88,3 +88,24 @@ export function qrPng(content: string | Uint8Array, options?: { scale?: number; 
   const { data, width, height } = qrRgba(content, options)
   return pngFromGray(width, height, (x, y) => data[(y * width + x) * 4])
 }
+
+/**
+ * Vários QRs na mesma imagem, em linha, com tamanhos (`scales`) e espaço (`gap`) próprios.
+ * Dois QRs do MESMO tamanho encostados confundem o jsQR (seis padrões de localização) e
+ * nenhum é lido; com tamanhos ou espaço diferentes ele lê UM deles, arbitrariamente.
+ */
+export function qrRgbaRow(contents: string[], { scales = contents.map(() => 4), gap = 80 }: { scales?: number[]; gap?: number } = {}) {
+  const parts = contents.map((c, i) => qrRgba(c, { scale: scales[i] }))
+  const width = parts.reduce((sum, p) => sum + p.width, 0) + gap * (parts.length - 1), height = Math.max(...parts.map((p) => p.height))
+  const data = new Uint8ClampedArray(width * height * 4).fill(255)
+  let left = 0
+  for (const part of parts) {
+    for (let y = 0; y < part.height; y++) data.set(part.data.subarray(y * part.width * 4, (y + 1) * part.width * 4), (y * width + left) * 4)
+    left += part.width + gap
+  }
+  return { data, width, height }
+}
+export function qrPngRow(contents: string[], options?: { scales?: number[]; gap?: number }): Buffer {
+  const { data, width, height } = qrRgbaRow(contents, options)
+  return pngFromGray(width, height, (x, y) => data[(y * width + x) * 4])
+}

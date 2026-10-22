@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest"
 import jsQRModule from "jsqr"
 import { VCARD_ERROR_MESSAGES } from "./parser"
 import {
-  QR_ERROR_MESSAGES, QR_LIMITS, classifyQrText, decodePixels, inspectImage, qrPayloadToVcard, scaledSize, type JsQrFn, type QrPayload,
+  QR_ERROR_MESSAGES, QR_LIMITS, classifyQrText, decodePixels, decodeSinglePixels, inspectImage, qrPayloadToVcard, scaledSize, type JsQrFn, type QrPayload,
 } from "./qr"
-import { QR_MECARD, QR_PIX, QR_TEXT, QR_URL, QR_VCARD_21, QR_VCARD_30, QR_VCARD_40, QR_WIFI, pngFromGray, qrPng, qrRgba } from "./__fixtures__/qr"
+import { QR_MECARD, QR_PIX, QR_TEXT, QR_URL, QR_VCARD_21, QR_VCARD_30, QR_VCARD_40, QR_WIFI, pngFromGray, qrPng, qrRgba, qrRgbaRow } from "./__fixtures__/qr"
 
 // O decodificador REAL (o mesmo que o app carrega sob demanda), sem mock do resultado.
 const mod = jsQRModule as unknown as JsQrFn | { default: JsQrFn }
@@ -75,6 +75,21 @@ describe("QR → decodificação local real → parser vCard canônico", () => {
     expect(qrPayloadToVcard({ source: "bytes", bytes: big, kanji: false, eci: [] })).toMatchObject({ ok: false, code: "PAYLOAD_TOO_LARGE" })
     expect(qrPayloadToVcard({ source: "text", text: "B".repeat(QR_LIMITS.maxPayloadBytes + 1) })).toMatchObject({ ok: false, code: "PAYLOAD_TOO_LARGE" })
     expect(qrPayloadToVcard({ source: "bytes", bytes: new Uint8Array(), kanji: false, eci: [] })).toMatchObject({ ok: false, code: "UNKNOWN" })
+  })
+
+  it("dois QRs diferentes na mesma imagem: recusa (nunca escolhe um deles); um só QR ou o mesmo repetido: aceito", () => {
+    // Sem a segunda leitura, o jsQR devolve UM deles (aqui, o link): a escolha arbitrária que a recusa evita.
+    const mixed = qrRgbaRow([QR_VCARD_30, QR_URL], { scales: [6, 2], gap: 100 })
+    expect(decodePixels(jsQR, mixed)).toMatchObject({ source: "bytes" })
+    expect(decodeSinglePixels(jsQR, mixed)).toEqual({ multiple: true })
+    expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_URL, QR_VCARD_30], { scales: [2, 6], gap: 100 }))).toEqual({ multiple: true })
+    expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_30, QR_VCARD_40], { scales: [4, 3], gap: 150 }))).toEqual({ multiple: true })
+    expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_30, QR_VCARD_30], { scales: [4, 3], gap: 150 }))).toMatchObject({ source: "bytes" })
+    // Dois do mesmo tamanho encostados: o jsQR não lê nenhum (vira "nenhum QR reconhecido").
+    expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_30, QR_URL], { gap: 0 }))).toBeNull()
+    const single = decodeSinglePixels(jsQR, qrRgba(QR_VCARD_30))
+    expect(single && "source" in single && contactsOf(single)[0].names).toEqual(["Lia Sintética do QR"])
+    expect(decodeSinglePixels(jsQR, { data: new Uint8ClampedArray(64 * 64 * 4).fill(255), width: 64, height: 64 })).toBeNull()
   })
 
   it("imagem sem QR: nada reconhecido", () => {
