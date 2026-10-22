@@ -77,19 +77,43 @@ describe("QR → decodificação local real → parser vCard canônico", () => {
     expect(qrPayloadToVcard({ source: "bytes", bytes: new Uint8Array(), kanji: false, eci: [] })).toMatchObject({ ok: false, code: "UNKNOWN" })
   })
 
-  it("dois QRs diferentes na mesma imagem: recusa (nunca escolhe um deles); um só QR ou o mesmo repetido: aceito", () => {
+  it("mais de um QR na mesma imagem (diferentes, cópias ou A, A e B): recusa, nunca escolhe um deles; um só QR: aceito", () => {
     // Sem a segunda leitura, o jsQR devolve UM deles (aqui, o link): a escolha arbitrária que a recusa evita.
     const mixed = qrRgbaRow([QR_VCARD_30, QR_URL], { scales: [6, 2], gap: 100 })
     expect(decodePixels(jsQR, mixed)).toMatchObject({ source: "bytes" })
     expect(decodeSinglePixels(jsQR, mixed)).toEqual({ multiple: true })
     expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_URL, QR_VCARD_30], { scales: [2, 6], gap: 100 }))).toEqual({ multiple: true })
     expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_30, QR_VCARD_40], { scales: [4, 3], gap: 150 }))).toEqual({ multiple: true })
-    expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_30, QR_VCARD_30], { scales: [4, 3], gap: 150 }))).toMatchObject({ source: "bytes" })
+    // Qualquer segundo QR é recusado, inclusive cópia idêntica: com A, A e B, aceitar A esconderia B (R2).
+    expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_30, QR_VCARD_30], { scales: [4, 3], gap: 150 }))).toEqual({ multiple: true })
+    expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_30, QR_VCARD_30, QR_URL], { scales: [5, 5, 2], gap: 120 }))).toEqual({ multiple: true })
+    expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_40, QR_URL, QR_VCARD_40], { scales: [4, 2, 4], gap: 120 }))).toEqual({ multiple: true })
+    // Claro sobre escuro: o fundo é detectado pela borda e a mesma busca vale.
+    const inverted = qrRgbaRow([QR_VCARD_30, QR_VCARD_30, QR_URL], { scales: [5, 5, 2], gap: 120 })
+    for (let i = 0; i < inverted.data.length; i += 4) inverted.data.fill(255 - inverted.data[i], i, i + 3)
+    expect(decodeSinglePixels(jsQR, inverted)).toEqual({ multiple: true })
     // Dois do mesmo tamanho encostados: o jsQR não lê nenhum (vira "nenhum QR reconhecido").
     expect(decodeSinglePixels(jsQR, qrRgbaRow([QR_VCARD_30, QR_URL], { gap: 0 }))).toBeNull()
     const single = decodeSinglePixels(jsQR, qrRgba(QR_VCARD_30))
     expect(single && "source" in single && contactsOf(single)[0].names).toEqual(["Lia Sintética do QR"])
     expect(decodeSinglePixels(jsQR, { data: new Uint8ClampedArray(64 * 64 * 4).fill(255), width: 64, height: 64 })).toBeNull()
+  })
+
+  it("um QR cercado de 'texto' (blocos escuros que não são QR) não vira falso 'vários QRs'; imagem grande em tempo limitado", () => {
+    const base = qrRgba(QR_VCARD_30, { scale: 6 })
+    const width = base.width + 900, height = base.height + 300
+    const data = new Uint8ClampedArray(width * height * 4).fill(255)
+    for (let y = 0; y < base.height; y++) data.set(base.data.subarray(y * base.width * 4, (y + 1) * base.width * 4), ((y + 150) * width + 450) * 4)
+    // "Linhas de texto" e barras ao redor, separadas por espaço em branco.
+    for (const [bx, by, bw, bh] of [[20, 20, 380, 18], [20, 60, 300, 18], [20, 300, 60, 60], [width - 400, 40, 360, 24], [width - 300, height - 120, 40, 90], [460, 20, 300, 30]]) {
+      for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) if ((x >> 3) % 2 === 0) data.fill(0, (y * width + x) * 4, (y * width + x) * 4 + 3)
+    }
+    const started = performance.now()
+    const single = decodeSinglePixels(jsQR, { data, width, height })
+    expect(single && "source" in single && contactsOf(single)[0].names).toEqual(["Lia Sintética do QR"])
+    const big = qrRgbaRow([QR_VCARD_30, QR_URL], { scales: [12, 6], gap: 400 })
+    expect(decodeSinglePixels(jsQR, big)).toEqual({ multiple: true })
+    expect(performance.now() - started).toBeLessThan(5000)
   })
 
   it("imagem sem QR: nada reconhecido", () => {

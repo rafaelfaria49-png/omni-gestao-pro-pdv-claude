@@ -160,10 +160,18 @@ export function decodePixels(jsQR: JsQrFn, pixels: Pixels, invert = true): QrPay
   return code ? toPayload(code) : null
 }
 
+/** Busca de um segundo QR: regiões separadas por faixas uniformes, com teto de leituras. */
+const SECOND_SEARCH = { maxRegions: 12, minRegionSide: 21, depth: 4 } as const
+type Rect = { x: number; y: number; w: number; h: number }
+
 /**
- * Um QR e só um: depois do primeiro, a área dele é coberta de branco e a imagem é lida
- * mais UMA vez (custo limitado a duas leituras). Outro QR com conteúdo diferente = recusa,
- * nunca escolha arbitrária de um deles.
+ * Um QR e só um. Depois do primeiro, a área dele é coberta com a cor do fundo e o
+ * restante é lido de novo: a imagem inteira e, como o jsQR se confunde com dois QRs do
+ * mesmo tamanho, cada região separada por faixas uniformes (a zona de silêncio que todo
+ * QR tem), por cortes XY recursivos, com teto de regiões. Qualquer outro QR = recusa,
+ * inclusive cópia idêntica: com A, A e B, aceitar A esconderia B (escolha arbitrária).
+ * Limite: QRs encostados sem faixa uniforme entre eles (ex.: foto com fundo) podem não ser
+ * achados; aí vale a revisão humana da prévia.
  */
 export function decodeSinglePixels(jsQR: JsQrFn, pixels: Pixels, invert = true): QrPayload | { multiple: true } | null {
   const options = { inversionAttempts: invert ? "attemptBoth" as const : "dontInvert" as const }
@@ -171,18 +179,68 @@ export function decodeSinglePixels(jsQR: JsQrFn, pixels: Pixels, invert = true):
   if (!first) return null
   const payload = toPayload(first)
   if (!first.location) return payload
+  const { width, height } = pixels
+  const dark = new Uint8Array(width * height)
+  for (let i = 0; i < dark.length; i++) dark[i] = pixels.data[i * 4] + pixels.data[i * 4 + 1] + pixels.data[i * 4 + 2] < 384 ? 1 : 0
+  // Fundo = classe predominante na borda (QR escuro em papel claro ou o inverso).
+  let border = 0, darkBorder = 0
+  for (let x = 0; x < width; x++) { darkBorder += dark[x] + dark[(height - 1) * width + x]; border += 2 }
+  for (let y = 0; y < height; y++) { darkBorder += dark[y * width] + dark[y * width + width - 1]; border += 2 }
+  const bg = darkBorder * 2 > border ? 1 : 0
   const corners = [first.location.topLeftCorner, first.location.topRightCorner, first.location.bottomLeftCorner, first.location.bottomRightCorner]
   const xs = corners.map((p) => p.x), ys = corners.map((p) => p.y)
   const pad = Math.ceil(Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) * 0.04) + 2
-  const x0 = Math.max(0, Math.floor(Math.min(...xs)) - pad), x1 = Math.min(pixels.width, Math.ceil(Math.max(...xs)) + pad)
-  const y0 = Math.max(0, Math.floor(Math.min(...ys)) - pad), y1 = Math.min(pixels.height, Math.ceil(Math.max(...ys)) + pad)
+  const x0 = Math.max(0, Math.floor(Math.min(...xs)) - pad), x1 = Math.min(width, Math.ceil(Math.max(...xs)) + pad)
+  const y0 = Math.max(0, Math.floor(Math.min(...ys)) - pad), y1 = Math.min(height, Math.ceil(Math.max(...ys)) + pad)
   const masked = new Uint8ClampedArray(pixels.data)
-  for (let y = y0; y < y1; y++) masked.fill(255, (y * pixels.width + x0) * 4, (y * pixels.width + x1) * 4)
-  const second = jsQR(masked, pixels.width, pixels.height, options)
-  if (second && !sameBytes(second.binaryData, first.binaryData)) return { multiple: true }
+  const fill = bg ? 0 : 255
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) { masked.fill(fill, (y * width + x) * 4, (y * width + x) * 4 + 3); dark[y * width + x] = bg }
+  }
+  if (jsQR(masked, width, height, options)) return { multiple: true }
+  for (const r of uniformCuts(dark, width, bg, { x: 0, y: 0, w: width, h: height }, SECOND_SEARCH.depth).slice(0, SECOND_SEARCH.maxRegions)) {
+    if (r.w === width && r.h === height) continue // a imagem inteira já foi lida
+    const crop = new Uint8ClampedArray(r.w * r.h * 4)
+    for (let y = 0; y < r.h; y++) crop.set(masked.subarray(((r.y + y) * width + r.x) * 4, ((r.y + y) * width + r.x + r.w) * 4), y * r.w * 4)
+    if (jsQR(crop, r.w, r.h, options)) return { multiple: true }
+  }
   return payload
 }
-const sameBytes = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i])
+
+/** Corte XY: separa por colunas e depois linhas inteiramente do fundo; ignora regiões pequenas demais para um QR. */
+function uniformCuts(dark: Uint8Array, width: number, bg: number, r: Rect, depth: number): Rect[] {
+  const split = (horizontal: boolean): Rect[] => {
+    const len = horizontal ? r.w : r.h, span = horizontal ? r.h : r.w
+    const parts: Rect[] = []
+    let start = -1
+    for (let i = 0; i <= len; i++) {
+      let uniform = i === len
+      if (!uniform) {
+        uniform = true
+        for (let j = 0; j < span && uniform; j++) {
+          const x = horizontal ? r.x + i : r.x + j, y = horizontal ? r.y + j : r.y + i
+          if (dark[y * width + x] !== bg) uniform = false
+        }
+      }
+      if (!uniform && start < 0) start = i
+      if (uniform && start >= 0) {
+        // Margem de 4 px ao redor: o jsQR precisa de um pouco de zona de silêncio.
+        const a = Math.max(0, start - 4), b = Math.min(len, i + 4)
+        parts.push(horizontal ? { x: r.x + a, y: r.y, w: b - a, h: r.h } : { x: r.x, y: r.y + a, w: r.w, h: b - a })
+        start = -1
+      }
+    }
+    return parts
+  }
+  const big = (p: Rect) => p.w >= SECOND_SEARCH.minRegionSide && p.h >= SECOND_SEARCH.minRegionSide
+  for (const horizontal of [true, false]) {
+    const parts = split(horizontal).filter(big)
+    if (parts.length > 1 || (parts.length === 1 && (parts[0].w < r.w - 8 || parts[0].h < r.h - 8))) {
+      return depth > 0 ? parts.flatMap((p) => uniformCuts(dark, width, bg, p, depth - 1)) : parts
+    }
+  }
+  return big(r) ? [r] : []
+}
 
 function toPayload(code: NonNullable<JsQrResult>): QrPayload {
   return {
