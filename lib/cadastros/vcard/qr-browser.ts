@@ -6,7 +6,7 @@
  * storage ou log. Ao parar, as tracks reais do MediaStream são encerradas e os
  * timers/loops cancelados.
  */
-import { QR_LIMITS, decodePixels, inspectImage, scaledSize, type JsQrFn, type QrErrorCode, type QrPayload } from "./qr"
+import { QR_LIMITS, decodeSinglePixels, inspectImage, scaledSize, type JsQrFn, type QrErrorCode, type QrPayload } from "./qr"
 
 let jsqr: Promise<JsQrFn> | null = null
 /** O decodificador só é baixado (do próprio app) quando o operador pede uma leitura. */
@@ -41,11 +41,11 @@ export function nativeQrDetector(win: Window): Promise<NativeDetector | null> {
 }
 
 type FrameResult = QrPayload | { multiple: true } | null
-/** Um quadro: jsQR sobre os bytes exatos; o nativo só tenta quando o jsQR não achou nada. */
+/** Um quadro: jsQR sobre os bytes exatos (e recusa de um segundo QR); o nativo só tenta quando o jsQR não achou nada. */
 async function readFrame(jsQR: JsQrFn, native: NativeDetector | null, canvas: HTMLCanvasElement, invert: boolean): Promise<FrameResult> {
   const ctx = canvas.getContext("2d", { willReadFrequently: true })
   if (!ctx) throw new Error("canvas")
-  const found = decodePixels(jsQR, ctx.getImageData(0, 0, canvas.width, canvas.height), invert)
+  const found = decodeSinglePixels(jsQR, ctx.getImageData(0, 0, canvas.width, canvas.height), invert)
   if (found || !native) return found
   const codes = await native.detect(canvas).catch(() => [])
   const values = [...new Set(codes.map((c) => c.rawValue).filter((v): v is string => typeof v === "string" && v.length > 0))]
@@ -164,6 +164,8 @@ export function startQrCamera(options: QrCameraOptions): QrCameraHandle {
     media.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } }).then(async (granted) => {
       if (stopped) { granted.getTracks().forEach((track) => track.stop()); return }
       stream = granted
+      // O prazo vale a partir da track ligada: um play() que nunca resolve não mantém a câmera acesa.
+      deadline = setTimeout(() => fail("CAMERA_TIMEOUT"), QR_LIMITS.maxCameraMs)
       for (const track of granted.getVideoTracks()) track.addEventListener("ended", () => fail("CAMERA_FAILED"))
       video.muted = true
       video.playsInline = true
@@ -171,7 +173,6 @@ export function startQrCamera(options: QrCameraOptions): QrCameraHandle {
       try { await video.play() } catch { return fail("CAMERA_FAILED") }
       if (stopped) return
       options.onActive()
-      deadline = setTimeout(() => fail("CAMERA_TIMEOUT"), QR_LIMITS.maxCameraMs)
       timer = setTimeout(scan, 0)
     }, (error) => fail(cameraErrorCode(error)))
   }

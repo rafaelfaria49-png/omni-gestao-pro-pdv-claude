@@ -146,13 +146,45 @@ export type QrPayload =
   | { source: "text"; text: string }
 
 type JsQrChunk = { type: string; assignmentNumber?: number }
-type JsQrResult = { binaryData: number[]; chunks: JsQrChunk[] } | null
+type JsQrPoint = { x: number; y: number }
+type JsQrResult = {
+  binaryData: number[]; chunks: JsQrChunk[]
+  location?: { topLeftCorner: JsQrPoint; topRightCorner: JsQrPoint; bottomLeftCorner: JsQrPoint; bottomRightCorner: JsQrPoint }
+} | null
 export type JsQrFn = (data: Uint8ClampedArray, width: number, height: number, options?: { inversionAttempts?: "dontInvert" | "onlyInvert" | "attemptBoth" | "invertFirst" }) => JsQrResult
+type Pixels = { data: Uint8ClampedArray; width: number; height: number }
 
-/** Decodifica pixels RGBA com o jsQR já carregado. */
-export function decodePixels(jsQR: JsQrFn, pixels: { data: Uint8ClampedArray; width: number; height: number }, invert = true): QrPayload | null {
+/** Decodifica pixels RGBA com o jsQR já carregado (um QR, o primeiro que ele achar). */
+export function decodePixels(jsQR: JsQrFn, pixels: Pixels, invert = true): QrPayload | null {
   const code = jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: invert ? "attemptBoth" : "dontInvert" })
-  if (!code) return null
+  return code ? toPayload(code) : null
+}
+
+/**
+ * Um QR e só um: depois do primeiro, a área dele é coberta de branco e a imagem é lida
+ * mais UMA vez (custo limitado a duas leituras). Outro QR com conteúdo diferente = recusa,
+ * nunca escolha arbitrária de um deles.
+ */
+export function decodeSinglePixels(jsQR: JsQrFn, pixels: Pixels, invert = true): QrPayload | { multiple: true } | null {
+  const options = { inversionAttempts: invert ? "attemptBoth" as const : "dontInvert" as const }
+  const first = jsQR(pixels.data, pixels.width, pixels.height, options)
+  if (!first) return null
+  const payload = toPayload(first)
+  if (!first.location) return payload
+  const corners = [first.location.topLeftCorner, first.location.topRightCorner, first.location.bottomLeftCorner, first.location.bottomRightCorner]
+  const xs = corners.map((p) => p.x), ys = corners.map((p) => p.y)
+  const pad = Math.ceil(Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) * 0.04) + 2
+  const x0 = Math.max(0, Math.floor(Math.min(...xs)) - pad), x1 = Math.min(pixels.width, Math.ceil(Math.max(...xs)) + pad)
+  const y0 = Math.max(0, Math.floor(Math.min(...ys)) - pad), y1 = Math.min(pixels.height, Math.ceil(Math.max(...ys)) + pad)
+  const masked = new Uint8ClampedArray(pixels.data)
+  for (let y = y0; y < y1; y++) masked.fill(255, (y * pixels.width + x0) * 4, (y * pixels.width + x1) * 4)
+  const second = jsQR(masked, pixels.width, pixels.height, options)
+  if (second && !sameBytes(second.binaryData, first.binaryData)) return { multiple: true }
+  return payload
+}
+const sameBytes = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i])
+
+function toPayload(code: NonNullable<JsQrResult>): QrPayload {
   return {
     source: "bytes",
     bytes: Uint8Array.from(code.binaryData),
