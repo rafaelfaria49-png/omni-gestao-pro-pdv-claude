@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-22
+
+### Cadastros — Contato por QR Code no cadastro de Clientes
+
+- Em **Clientes → Novo → Importar contato**, a nova área "QR Code do contato" lê um QR com vCard 3.0/4.0 pela câmera ("Ler QR Code com câmera", só por clique) ou por imagem PNG, JPG ou WebP ("Escolher imagem de QR Code"). O contato lido cai na mesma prévia do vCard: escolha de valores, divergências, "Aplicar aos campos vazios", revisão, confirmação e "Salvar cliente" pelo fluxo canônico. Nada é salvo automaticamente.
+- Decodificação só no navegador (jsQR local, carregado sob demanda; detector nativo do sistema quando existir). Imagem, quadros da câmera e conteúdo do QR não vão ao servidor, storage, URL nem log; links do QR nunca são abertos.
+- QR com link, PIX, Wi-Fi, MECARD, texto comum ou conteúdo desconhecido recebe recusa clara. Imagens acima de 10 MiB, de 10.000 px de lado ou 36 megapixels, ou que não sejam PNG/JPG/WebP pelo conteúdo, são recusadas.
+- A câmera desliga ao reconhecer o QR, ao cancelar, fechar, trocar de loja, ocultar a aba, sair da página, em erro e após 60 s. Sem câmera ou sem permissão, a mensagem indica imagem, `.vcf` ou texto colado.
+- O cabeçalho `Permissions-Policy` passou de `camera=()` (câmera bloqueada no site inteiro) para `camera=(self)`: câmera só na própria origem, por clique e com o pedido de permissão do navegador.
+- Câmera física ainda não homologada: os testes usam dispositivo sintético do navegador.
+
 ## 2026-10-21
 
 ### Cadastros — Importar contato (vCard) no cadastro de Clientes

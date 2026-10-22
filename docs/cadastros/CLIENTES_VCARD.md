@@ -66,7 +66,8 @@ apelido; etiqueta de endereço; identificadores/metadados; extensões desconheci
 - Estado transitório descartado ao cancelar, fechar o diálogo, trocar de loja (o
   editor remonta por loja), sair da tela, trocar de arquivo/texto e após aplicar.
   Leituras assíncronas antigas são invalidadas por número de série.
-- Nenhuma permissão de câmera, microfone ou agenda é solicitada.
+- Arquivo `.vcf` e texto colado não solicitam permissão de câmera, microfone ou agenda.
+  A câmera só é pedida pela leitura de QR Code, por clique (ver `CLIENTES_QR_CODE.md`).
 - O servidor continua validando os campos finais e o acesso à loja: a origem "vCard"
   é só apresentação e não é enviada (`captureSource` text/voice inalterado).
 
@@ -130,7 +131,7 @@ livre). Não foi corrigida aqui (fora do escopo).
 
 ## Limitações
 
-Não entregues por esta missão: QR/câmera, agenda online/do dispositivo, importação
+Não entregues por esta missão: QR/câmera (entregue depois — ver `CLIENTES_QR_CODE.md`), agenda online/do dispositivo, importação
 em lote, consulta de CNPJ, vCard 2.1, fotos/aniversário/notas. Homologação isolada
 com dados sintéticos não equivale a cadastro real na loja.
 
