@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "pdv",
-  "status": "RUNNING",
+  "status": "PAUSED",
   "risk_tier": "ALTO",
-  "current_goal": "PDV-PARITY-N5-C-E2E-002",
+  "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": "2b223705a3a2d6982a50b2fbb1d025cedc8541d5",
   "counters": {
-    "goals_done": 4,
-    "goals_blocked": 1,
+    "goals_done": 5,
+    "goals_blocked": 0,
     "goals_imported": 1,
-    "ledger_lines": 8
+    "ledger_lines": 9
   },
   "last_goal": "PDV-PARITY-N5-C-E2E-002",
-  "last_result": "BLOCKED",
-  "last_ratified_at": "2026-10-20T22:09:52.691Z"
+  "last_result": "DONE",
+  "last_ratified_at": "2026-10-22T12:58:44.237Z"
 }
