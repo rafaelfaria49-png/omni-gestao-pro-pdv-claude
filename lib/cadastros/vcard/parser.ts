@@ -182,7 +182,7 @@ function parseContentLine(raw: string): ContentLine | null {
     const eq = part.indexOf("=")
     // Parâmetro sem nome (`TEL;CELL:`) é estilo 2.1; tratado como TYPE.
     const key = (eq < 0 ? "TYPE" : part.slice(0, eq)).trim().toUpperCase()
-    const values = splitOutsideQuotes(eq < 0 ? part : part.slice(eq + 1), ",").map((v) => v.trim().replace(/^"(.*)"$/s, "$1"))
+    const values = splitOutsideQuotes(eq < 0 ? part : part.slice(eq + 1), ",").map((v) => v.trim().replace(/^"([\s\S]*)"$/, "$1"))
     params.set(key, [...(params.get(key) ?? []), ...values])
   }
   return { name, params, value: raw.slice(colon + 1) }
