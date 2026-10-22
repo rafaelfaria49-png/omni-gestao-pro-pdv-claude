@@ -40,7 +40,7 @@ export function nativeQrDetector(win: Window): Promise<NativeDetector | null> {
   return found
 }
 
-type FrameResult = QrPayload | { multiple: true } | null
+type FrameResult = QrPayload | { multiple: true } | { crowded: true } | null
 /** Um quadro: jsQR sobre os bytes exatos (e recusa de um segundo QR); o nativo só tenta quando o jsQR não achou nada. */
 async function readFrame(jsQR: JsQrFn, native: NativeDetector | null, canvas: HTMLCanvasElement, invert: boolean): Promise<FrameResult> {
   const ctx = canvas.getContext("2d", { willReadFrequently: true })
@@ -48,7 +48,8 @@ async function readFrame(jsQR: JsQrFn, native: NativeDetector | null, canvas: HT
   const found = decodeSinglePixels(jsQR, ctx.getImageData(0, 0, canvas.width, canvas.height), invert)
   if (found || !native) return found
   const codes = await native.detect(canvas).catch(() => [])
-  const values = [...new Set(codes.map((c) => c.rawValue).filter((v): v is string => typeof v === "string" && v.length > 0))]
+  // Conta ocorrências, não valores distintos: duas cópias do mesmo QR também são "mais de um".
+  const values = codes.map((c) => c.rawValue).filter((v): v is string => typeof v === "string" && v.length > 0)
   if (values.length > 1) return { multiple: true }
   return values.length ? { source: "text", text: values[0] } : null
 }
@@ -81,6 +82,7 @@ export async function decodeQrImage(bytes: Uint8Array, win: Window = window): Pr
     const found = await readFrame(jsQR, native, canvas, true)
     if (!found) return { ok: false, code: "NOT_FOUND" }
     if ("multiple" in found) return { ok: false, code: "MULTIPLE" }
+    if ("crowded" in found) return { ok: false, code: "CROWDED" }
     return { ok: true, payload: found }
   } finally { bitmap.close(); release(canvas) }
 }
@@ -151,6 +153,7 @@ export function startQrCamera(options: QrCameraOptions): QrCameraHandle {
     try { found = await frame(video, canvas) } catch { return fail("CAMERA_FAILED") }
     if (stopped) return
     if (found && "multiple" in found) return fail("MULTIPLE")
+    if (found && "crowded" in found) return fail("CROWDED")
     if (found) { stop(); options.onPayload(found); return }
     timer = setTimeout(scan, QR_LIMITS.cameraIntervalMs)
   }

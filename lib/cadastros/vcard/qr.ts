@@ -32,7 +32,7 @@ export type QrErrorCode =
   | "IMAGE_TOO_LARGE" | "IMAGE_FORMAT" | "IMAGE_DIMENSIONS" | "IMAGE_CORRUPT" | "NOT_FOUND" | "MULTIPLE"
   | "PAYLOAD_TOO_LARGE" | "ENCODING" | "LINK" | "PIX" | "WIFI" | "MECARD" | "TEXT" | "UNKNOWN"
   | "CAMERA_UNSUPPORTED" | "CAMERA_DENIED" | "CAMERA_NOT_FOUND" | "CAMERA_BUSY" | "CAMERA_FAILED" | "CAMERA_TIMEOUT" | "CAMERA_HIDDEN"
-  | "DECODER_UNAVAILABLE" | "IMAGE_READ"
+  | "DECODER_UNAVAILABLE" | "IMAGE_READ" | "CROWDED"
 
 const ALTERNATIVES = "Use “Escolher imagem de QR Code”, o arquivo .vcf ou cole o conteúdo do vCard."
 const INCOMPATIBLE = "Este QR Code não é um contato vCard 3.0 ou 4.0"
@@ -60,6 +60,7 @@ export const QR_ERROR_MESSAGES: Record<QrErrorCode, string> = {
   CAMERA_HIDDEN: "A câmera foi desligada porque a página saiu da tela. Tente novamente quando quiser.",
   DECODER_UNAVAILABLE: "Não foi possível carregar o leitor de QR Code deste aplicativo. Recarregue a página e tente de novo, ou importe o arquivo .vcf.",
   IMAGE_READ: "Não foi possível ler o arquivo da imagem. Selecione-o novamente.",
+  CROWDED: "A imagem tem elementos demais para conferir que há um único QR Code. Recorte a imagem (ou enquadre a câmera) só no QR Code do contato.",
 }
 
 export type QrReadResult = VcardParseResult | { ok: false; code: QrErrorCode; message: string }
@@ -161,19 +162,20 @@ export function decodePixels(jsQR: JsQrFn, pixels: Pixels, invert = true): QrPay
 }
 
 /** Busca de um segundo QR: regiões separadas por faixas uniformes, com teto de leituras. */
-const SECOND_SEARCH = { maxRegions: 12, minRegionSide: 21, depth: 4 } as const
+const SECOND_SEARCH = { maxRegions: 16, minRegionSide: 21, depth: 4 } as const
 type Rect = { x: number; y: number; w: number; h: number }
 
 /**
  * Um QR e só um. Depois do primeiro, a área dele é coberta com a cor do fundo e o
  * restante é lido de novo: a imagem inteira e, como o jsQR se confunde com dois QRs do
  * mesmo tamanho, cada região separada por faixas uniformes (a zona de silêncio que todo
- * QR tem), por cortes XY recursivos, com teto de regiões. Qualquer outro QR = recusa,
+ * QR tem), por cortes XY recursivos, com teto de regiões: passar do teto = recusa pedindo
+ * recorte (nunca aceitar sem ter conferido tudo). Qualquer outro QR = recusa,
  * inclusive cópia idêntica: com A, A e B, aceitar A esconderia B (escolha arbitrária).
  * Limite: QRs encostados sem faixa uniforme entre eles (ex.: foto com fundo) podem não ser
  * achados; aí vale a revisão humana da prévia.
  */
-export function decodeSinglePixels(jsQR: JsQrFn, pixels: Pixels, invert = true): QrPayload | { multiple: true } | null {
+export function decodeSinglePixels(jsQR: JsQrFn, pixels: Pixels, invert = true): QrPayload | { multiple: true } | { crowded: true } | null {
   const options = { inversionAttempts: invert ? "attemptBoth" as const : "dontInvert" as const }
   const first = jsQR(pixels.data, pixels.width, pixels.height, options)
   if (!first) return null
@@ -198,8 +200,10 @@ export function decodeSinglePixels(jsQR: JsQrFn, pixels: Pixels, invert = true):
     for (let x = x0; x < x1; x++) { masked.fill(fill, (y * width + x) * 4, (y * width + x) * 4 + 3); dark[y * width + x] = bg }
   }
   if (jsQR(masked, width, height, options)) return { multiple: true }
-  for (const r of uniformCuts(dark, width, bg, { x: 0, y: 0, w: width, h: height }, SECOND_SEARCH.depth).slice(0, SECOND_SEARCH.maxRegions)) {
-    if (r.w === width && r.h === height) continue // a imagem inteira já foi lida
+  const regions = uniformCuts(dark, width, bg, { x: 0, y: 0, w: width, h: height }, SECOND_SEARCH.depth).filter((r) => r.w !== width || r.h !== height)
+  // Sem orçamento para conferir todas as regiões: recusa pedindo recorte, nunca aceita no escuro.
+  if (regions.length > SECOND_SEARCH.maxRegions) return { crowded: true }
+  for (const r of regions) {
     const crop = new Uint8ClampedArray(r.w * r.h * 4)
     for (let y = 0; y < r.h; y++) crop.set(masked.subarray(((r.y + y) * width + r.x) * 4, ((r.y + y) * width + r.x + r.w) * 4), y * r.w * 4)
     if (jsQR(crop, r.w, r.h, options)) return { multiple: true }
@@ -257,7 +261,7 @@ const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/
 /** Esquemas sem "//" que abrem outro aplicativo; "Obs: ..." continua sendo texto comum. */
 const LINK_SCHEMES = /^(mailto|tel|sms|smsto|mms|geo|market|intent|otpauth|bitcoin|ethereum|whatsapp|tg|javascript|data|file|blob|about):/i
 
-type Kind = "VCARD" | Exclude<QrErrorCode, `IMAGE_${string}` | `CAMERA_${string}` | "NOT_FOUND" | "MULTIPLE" | "PAYLOAD_TOO_LARGE" | "ENCODING" | "DECODER_UNAVAILABLE" | "IMAGE_READ">
+type Kind = "VCARD" | Exclude<QrErrorCode, `IMAGE_${string}` | `CAMERA_${string}` | "NOT_FOUND" | "MULTIPLE" | "PAYLOAD_TOO_LARGE" | "ENCODING" | "DECODER_UNAVAILABLE" | "IMAGE_READ" | "CROWDED">
 /** Só a CATEGORIA do conteúdo; o conteúdo nunca é aberto, executado nem exibido. */
 export function classifyQrText(text: string): Kind {
   const t = text.replace(/^﻿/, "").trimStart()

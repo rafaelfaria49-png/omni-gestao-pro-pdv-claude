@@ -116,6 +116,20 @@ describe("QR → decodificação local real → parser vCard canônico", () => {
     expect(performance.now() - started).toBeLessThan(5000)
   })
 
+  it("regiões demais para conferir (blocos antes dos QRs restantes): recusa pedindo recorte, nunca aceita (R3)", () => {
+    const row = qrRgbaRow([QR_VCARD_30, QR_VCARD_30, QR_URL], { scales: [5, 5, 2], gap: 120 })
+    const top = 60, width = row.width, height = row.height + top
+    const data = new Uint8ClampedArray(width * height * 4).fill(255)
+    data.set(row.data, top * width * 4)
+    // 30 blocos escuros de 24 px, separados por faixas brancas, ACIMA dos QRs.
+    for (let k = 0; k < 30; k++) for (let y = 10; y < 34; y++) for (let x = 8 + k * 32; x < 32 + k * 32 && x < width; x++) data.fill(0, (y * width + x) * 4, (y * width + x) * 4 + 3)
+    const result = decodeSinglePixels(jsQR, { data, width, height })
+    expect(result && !("source" in result)).toBe(true)
+    expect(result).toEqual({ crowded: true })
+    expect(qrPayloadToVcard).toBeTypeOf("function")
+    expect(QR_ERROR_MESSAGES.CROWDED).toMatch(/Recorte a imagem/)
+  })
+
   it("imagem sem QR: nada reconhecido", () => {
     const noise = { data: new Uint8ClampedArray(200 * 200 * 4).map((_, i) => (i % 4 === 3 ? 255 : ((i * 2654435761) >>> 24) & 0xff)), width: 200, height: 200 }
     expect(decodePixels(jsQR, noise)).toBeNull()

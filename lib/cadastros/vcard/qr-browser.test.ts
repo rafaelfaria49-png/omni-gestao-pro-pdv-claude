@@ -261,6 +261,19 @@ describe("imagem: limites antes de decodificar, leitura local e liberação", ()
     expect(await decodeQrImage(new Uint8Array(qrPng(QR_VCARD_30)), imageWin().win)).toEqual({ ok: false, code: "NOT_FOUND" })
   })
 
+  it("detector nativo com duas cópias do mesmo QR: recusa (conta ocorrências, não valores) (R3)", async () => {
+    class Twins { static getSupportedFormats = async () => ["qr_code"]; detect = async () => [{ rawValue: QR_VCARD_30 }, { rawValue: QR_VCARD_30 }] }
+    expect(await decodeQrImage(new Uint8Array(qrPng(QR_VCARD_30)), imageWin({ native: Twins }).win)).toEqual({ ok: false, code: "MULTIPLE" })
+  })
+
+  it("câmera: quadro com regiões demais para conferir encerra com pedido de enquadrar só o QR", async () => {
+    const cam = fakeStream()
+    const { calls } = start(fakeWin(async () => cam.stream), async () => ({ crowded: true as const }))
+    await flush(); await new Promise((r) => setTimeout(r, 20)) // bloco com timers reais
+    expect(calls.error).toHaveBeenCalledWith("CROWDED")
+    expect(cam.track.stop).toHaveBeenCalled()
+  })
+
   it("detector nativo só entra quando o jsQR não acha; vários QR distintos = recusa", async () => {
     const detect = vi.fn(async () => [{ rawValue: QR_URL }])
     class One { static getSupportedFormats = async () => ["qr_code"]; detect = detect }
