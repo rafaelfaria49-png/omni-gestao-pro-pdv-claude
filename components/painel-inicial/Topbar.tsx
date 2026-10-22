@@ -4,14 +4,16 @@ import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package, PanelLeftOpen, LayoutDashboard, MessageSquare, Users, Banknote, Settings, BarChart3 } from "lucide-react";
+import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package, PanelLeftOpen } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
 import { LegibilityToggle } from "@/components/theme/LegibilityToggle";
 import { MobileNavSheet } from "@/components/painel-inicial/MobileNavSheet";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
-import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
+import { canAccessPage } from "@/lib/auth/page-access";
+import { administrationNavItems, hubsNavItems, workspaceNavItems } from "@/lib/navigation/dashboard-nav-items";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,8 +74,9 @@ const novoItems: NovoItem[] = [
 ];
 
 export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
-  const { credits, loading, error } = useUserCredits();
-  const { data: session, status } = useSession();
+  const perms = useEnterprisePermissions();
+  const { credits, loading, error } = useUserCredits(perms?.workspace.iaMestre === true);
+  const { data: session } = useSession();
   const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } = useSidebarCollapsed();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -110,13 +113,8 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
     return "Painel";
   }, [pathname]);
 
-  const perms = useMemo(() => {
-    if (status !== "authenticated" || !session?.user?.role) return null;
-    return getEnterprisePermissions(session.user.role);
-  }, [status, session?.user?.role]);
-
   const novoFiltered = useMemo(() => {
-    if (!perms) return novoItems;
+    if (!perms) return [];
     return novoItems.filter((i) => (i.visible ? i.visible(perms) : true));
   }, [perms]);
 
@@ -159,7 +157,7 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
           </button>
         ) : null}
         <nav className="hidden md:flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
-          <span className="hover:text-foreground cursor-pointer">Matriz</span>
+          <Link href="/dashboard">Início</Link>
           <span className="text-border">/</span>
           <span className="text-foreground font-medium">{breadcrumbLabel}</span>
         </nav>
@@ -172,7 +170,7 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
             <input
               type="text"
               readOnly
-              placeholder="Pesquisar OS, vendas ou produtos..."
+              placeholder="Buscar atividades e páginas..."
               title="Pesquisa rápida (Alt+K) — Command Menu"
               className="w-full h-8 pl-8 pr-12 rounded-md bg-panel border border-border text-[12.5px] cursor-pointer placeholder:text-muted-foreground outline-none hover:bg-muted/40 hover:border-border-hover transition-all focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
             />
@@ -186,7 +184,7 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
 
         <LegibilityToggle />
 
-        {!isPDV ? (
+        {!isPDV && perms?.workspace.iaMestre ? (
           <Link
             href="/dashboard/creditos"
             className={[
@@ -239,6 +237,7 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
           </DropdownMenu>
         ) : null}
 
+        <Link href="/conta/seguranca" className="text-xs underline">Minha conta</Link>
         <div className="flex items-center gap-2 pl-2 ml-1 border-l border-border">
           <Avatar className="h-7 w-7">
             <AvatarFallback className="bg-muted text-foreground text-[11px] font-semibold">{initials}</AvatarFallback>
@@ -254,134 +253,16 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
         <CommandInput placeholder="Digite para buscar rotas, cadastros e atalhos..." />
         <CommandList>
           <CommandEmpty>Nenhum comando encontrado.</CommandEmpty>
-          <CommandGroup heading="Ações Rápidas">
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/vendas");
-              }}
-              className="cursor-pointer"
-            >
-              <ShoppingCart className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Nova Venda</span>
-              <CommandShortcut>N V</CommandShortcut>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/operacoes-v3");
-              }}
-              className="cursor-pointer"
-            >
-              <Wrench className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Nova Ordem de Serviço (OS)</span>
-              <CommandShortcut>N O</CommandShortcut>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/cadastros-v2");
-              }}
-              className="cursor-pointer"
-            >
-              <UserPlus className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Novo Cliente</span>
-              <CommandShortcut>N C</CommandShortcut>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/cadastros-v2");
-              }}
-              className="cursor-pointer"
-            >
-              <Package className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Novo Produto</span>
-              <CommandShortcut>N P</CommandShortcut>
-            </CommandItem>
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup heading="Navegação Geral">
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard");
-              }}
-              className="cursor-pointer"
-            >
-              <LayoutDashboard className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Ir para Painel Geral</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/vendas-hub");
-              }}
-              className="cursor-pointer"
-            >
-              <ShoppingCart className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Ir para Vendas HUB</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/whatsapp");
-              }}
-              className="cursor-pointer"
-            >
-              <MessageSquare className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Ir para WhatsApp HUB</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/operacoes-v3");
-              }}
-              className="cursor-pointer"
-            >
-              <Wrench className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Ir para Central de Operações</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/cadastros-v2");
-              }}
-              className="cursor-pointer"
-            >
-              <Users className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Ir para Cadastros HUB</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/financeiro-v2");
-              }}
-              className="cursor-pointer"
-            >
-              <Banknote className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Ir para Financeiro HUB</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/configuracoes-v2");
-              }}
-              className="cursor-pointer"
-            >
-              <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Ir para Configurações</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setSearchOpen(false);
-                router.push("/dashboard/relatorios");
-              }}
-              className="cursor-pointer"
-            >
-              <BarChart3 className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Ir para Relatórios</span>
-            </CommandItem>
+          <CommandGroup heading="Rotas e ações disponíveis">
+            {[
+              ...novoFiltered.map((i) => ({ label: i.label, href: i.href, icon: i.icon, kbd: i.kbd })),
+              ...[...workspaceNavItems, ...hubsNavItems, ...administrationNavItems].map((i) => ({ label: i.label, href: i.to, icon: i.icon, kbd: "" })),
+            ].filter((i) => canAccessPage(perms, i.href)).map((item) => (
+              <CommandItem key={item.label} onSelect={() => { setSearchOpen(false); router.push(item.href); }} className="cursor-pointer">
+                <item.icon className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span>{item.label}</span>{item.kbd && <CommandShortcut>{item.kbd}</CommandShortcut>}
+              </CommandItem>
+            ))}
           </CommandGroup>
         </CommandList>
       </CommandDialog>

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
@@ -51,6 +52,9 @@ function rowToScalar(r: ContaPagarIncomingRow) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequestForWrite(req)
   if (!storeId) {
     return NextResponse.json(

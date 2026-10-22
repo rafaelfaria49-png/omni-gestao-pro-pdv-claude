@@ -1,3 +1,5 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
+import { isPlatformSession } from "@/lib/auth/access-policy"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
@@ -30,6 +32,9 @@ function parseSubscriptionPlan(raw: unknown): SubscriptionPlanInput | undefined 
 }
 
 export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(_, "authenticated")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await ctx.params
   const gate = await requireStoresSession()
   if (!gate.ok) return gate.res
@@ -50,6 +55,9 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
 }
 
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await ctx.params
   try {
     const gate = await requireAdmin()
@@ -129,6 +137,9 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "settings")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await ctx.params
   try {
     const gate = await requireAdmin()
@@ -147,6 +158,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       subscriptionPlan: SubscriptionPlanInput
     }>
 
+    if (!isPlatformSession(gate.session) && ["subscriptionPlan", "moduleAccess", "accessScope", "platformAuthority"].some((key) => Object.hasOwn(body, key))) {
+      return NextResponse.json({ ok: false, error: "Somente a plataforma altera liberação comercial." }, { status: 403 })
+    }
     const existing = await prisma.store.findUnique({ where: { id } })
     if (!existing) {
       return NextResponse.json({ ok: false, error: "Unidade não encontrada." }, { status: 404 })

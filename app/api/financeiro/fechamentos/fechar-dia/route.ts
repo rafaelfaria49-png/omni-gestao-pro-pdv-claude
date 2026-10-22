@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/financeiro/fechamentos/fechar-dia
  *
@@ -25,6 +26,9 @@ const schema = z.object({
 })
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   await prismaEnsureConnected()
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })

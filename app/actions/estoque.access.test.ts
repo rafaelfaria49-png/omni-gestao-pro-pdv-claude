@@ -77,6 +77,8 @@ function sessionAtiva(role: string, stores: string[] | "all") {
       email: "u@x.com",
       name: "U",
       role,
+      platformAuthority: stores === "all",
+      storeModules: Object.fromEntries((stores === "all" ? [] : stores).map((id) => [id, ["catalog", "stock"]])),
       storeAccess: stores === "all" ? "all" : "restricted",
       allowedStoreIds: stores === "all" ? undefined : stores,
     },

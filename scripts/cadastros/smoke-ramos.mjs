@@ -38,6 +38,7 @@ const bundle = await build({
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [{ name: "ramos-isolated-io", setup(api) {
     const mocks = {
+      "@/lib/auth/use-enterprise-permissions": `export const useEnterprisePermissions=()=>({platformAuthority:true,hubs:{operacoes:true},modules:{deviceCatalog:true}});`,
       "@/lib/use-store-business": `import React from 'react';export const HarnessContext=React.createContext(null);export const useStoreBusiness=()=>React.useContext(HarnessContext);`,
       "@/app/actions/cadastros": `export const listCategorias=async()=>[];export const listMarcas=async()=>[];
         export const listCategoriasMarcasUsadasEmProduto=async()=>({categorias:[],marcas:[]});
@@ -60,7 +61,7 @@ try {
   for (const width of [1440, 390, 320]) {
     const page = await browser.newPage({ viewport: { width, height: width === 1440 ? 1000 : 844 } })
     const errors = [], external = []
-    page.on("pageerror", (error) => errors.push(error.message))
+    page.on("pageerror", (error) => { errors.push(error.message); console.error("[ramos-smoke]", error.message) })
     page.on("request", (req) => { if (!req.url().startsWith(server.origin)) external.push(req.url()) })
     await page.goto(server.origin)
     await page.getByRole("combobox", { name: "Ramo principal" }).waitFor()

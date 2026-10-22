@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/contador-externo/acessos — vínculos contador↔loja da loja ativa
  * INTERNA (GOAL 014, §13). Todos os estados (a UI mostra o ciclo de vida),
@@ -20,6 +21,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return respostaChaveProibida()
 

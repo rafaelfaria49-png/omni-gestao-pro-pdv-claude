@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextRequest, NextResponse } from "next/server"
 import { analyzeProductImageFromDataUrl } from "@/lib/vision-product-openai"
 
@@ -5,6 +6,9 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "ai")
+  if (moduleDenied) return moduleDenied
+
   try {
     const body = (await req.json()) as { imageBase64?: string }
     const raw = body.imageBase64?.trim()

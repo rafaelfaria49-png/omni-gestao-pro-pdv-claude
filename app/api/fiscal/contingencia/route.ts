@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /** Entrada administrativa manual em contingência offline NFC-e (GOAL 020). */
 import { NextResponse } from "next/server"
 import { z } from "zod"
@@ -30,6 +31,9 @@ function errorResponse(error: string, status: number, code: string) {
 }
 
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(request)
   const auth = await requireFiscalAdmin(storeId)
   if (!auth.ok) return errorResponse(auth.error, auth.status, "fiscal_admin_required")

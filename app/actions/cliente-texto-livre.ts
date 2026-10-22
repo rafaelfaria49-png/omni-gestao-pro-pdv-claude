@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { revalidatePath } from "next/cache"
 import { requireCadastrosActionAccess } from "@/lib/cadastros/cadastros-action-access"
@@ -12,6 +13,8 @@ import { CLIENT_CAPTURE_SOURCE_INVALID_MESSAGE, isClientCaptureSource } from "@/
 export async function interpretarClienteTextoLivre(storeId: string, text: unknown, captureSource: unknown = "text"): Promise<
   { ok: true; sugestao: ClientTextSuggestion } | { ok: false; message: string }
 > {
+  await requireModuleAction(storeId, "catalog")
+
   await requireCadastrosActionAccess(storeId, "hub")
   // Only the literals "text"/"voice" are accepted, as a label. The server does not
   // receive audio and cannot attest a string's physical origin: the source neither
@@ -23,6 +26,8 @@ export async function interpretarClienteTextoLivre(storeId: string, text: unknow
 
 /** A separate, explicit human submit. No raw capture or provenance enters the writer. */
 export async function salvarClienteRevisado(storeId: string, clientId: string | null, raw: ClientEditorValues, confirmed: boolean) {
+  await requireModuleAction(storeId, "catalog")
+
   const gate = await requireCadastrosActionAccess(storeId, "hub")
   if (confirmed !== true) return { ok: false as const, message: "Revise e confirme os dados antes de salvar." }
   if (clientId !== null && (typeof clientId !== "string" || !clientId.trim())) return { ok: false as const, message: "Cliente não encontrado.", code: "NOT_FOUND" }

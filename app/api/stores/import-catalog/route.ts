@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { randomUUID } from "node:crypto"
 import { prisma } from "@/lib/prisma"
@@ -30,6 +31,9 @@ export const revalidate = 0
  * mode=merge (default): upsert por (toStoreId, sku) e cria categorias que não existem.
  */
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const actorStore = storeIdFromAssistecRequestForRead(req)
   // Item em processamento: ambas as lojas já foram autorizadas quando é preenchido.
   const processing: { item: { sku: string; unidade: "origem" | "destino" } | null } = { item: null }

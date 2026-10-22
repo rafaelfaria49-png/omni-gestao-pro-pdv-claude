@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { Socket } from "net"
 
@@ -53,6 +54,9 @@ function sanitizePrintPort(raw: unknown, fallback: number): number {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   let body: { data?: string; host?: string; port?: number }
   try {
     body = await req.json()

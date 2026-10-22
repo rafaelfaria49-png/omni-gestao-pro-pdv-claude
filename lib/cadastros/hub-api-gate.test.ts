@@ -1,3 +1,4 @@
+import { legacyAccessFixture } from "@/lib/auth/test-access-fixture"
 /**
  * CAD-R2-002 — gate REST de Cadastros.
  * Mocka só identidade (auth + AdminUser). canAuthorizeCadastrosStore e a matriz de papéis são reais.
@@ -38,6 +39,7 @@ function makeSession(opts: {
 }): Session {
   return {
     user: {
+      ...legacyAccessFixture({ role: opts.role ?? "ADMIN", storeAccess: opts.storeAccess ?? "all", allowedStoreIds: opts.allowedStoreIds }),
       id: opts.id ?? "user-1",
       email: "u@x.com",
       name: "U",

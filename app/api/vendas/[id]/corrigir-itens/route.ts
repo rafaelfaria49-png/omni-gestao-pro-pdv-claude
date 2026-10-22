@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/vendas/[id]/corrigir-itens  — Workspace de Correção, F2 (Produtos/Estoque)
  *
@@ -71,6 +72,9 @@ function compactBreakdown(pb: PaymentBreakdownFull): Partial<PaymentBreakdownFul
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "sales")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   const { id: rawId } = await params

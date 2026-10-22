@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/financeiro/relatorios/exportar
  *
@@ -299,6 +300,9 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   await prismaEnsureConnected()
   // F-02-anchor (SPRINT_MULTI_LOJA-S-002): a chamada via anchor-tag (`<a href>`) não envia
   // `x-assistec-loja-id`, mas o cliente passa `storeId` na query — resolvido por

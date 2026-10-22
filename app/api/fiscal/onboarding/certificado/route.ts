@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Onboarding fiscal — LEITURA do certificado A1 (GOAL-016B · itens 1–5).
  *
@@ -45,6 +46,9 @@ function jsonBloqueado(bloqueios: OnboardingBloqueio[], status: number) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)
@@ -139,6 +143,9 @@ export async function POST(req: Request) {
 
 /** Diagnóstico da rota (sem dados) — útil para a UI saber os limites aceitos. */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)

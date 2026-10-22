@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
@@ -55,6 +56,8 @@ export async function getOmniAgentTimeline(
   storeId: string,
   input: GetOmniAgentTimelineInput = {},
 ): Promise<OmniTimelinePage> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = assertStoreId(storeId)
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)

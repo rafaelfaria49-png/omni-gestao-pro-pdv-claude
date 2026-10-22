@@ -62,6 +62,7 @@ function adminSession(): Session {
       email: "admin@loja.com",
       name: "Admin Sessão",
       role: "ADMIN",
+      platformAuthority: true,
       storeAccess: "all",
       lojaId: null,
     },

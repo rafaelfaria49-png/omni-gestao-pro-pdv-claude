@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireCreditsUserIdForApi } from "@/lib/credits/api-auth"
@@ -16,6 +17,9 @@ const PACKAGES: Record<PackageId, { credits: number; amount: number }> = {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "ai")
+  if (moduleDenied) return moduleDenied
+
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
       {

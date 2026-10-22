@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/financeiro/auditoria/[entidade]/[entidadeId]
  *
@@ -24,6 +25,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ entidade: string; entidadeId: string }> },
 ) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   await prismaEnsureConnected()
   const { entidade, entidadeId } = await params
   const storeId = opsLojaIdFromRequest(req)

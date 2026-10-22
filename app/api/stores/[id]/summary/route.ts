@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/require-admin"
 import { countStoreOperationalLinks, denyIfNoStoreAccess } from "@/lib/stores-api-access"
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(_, "platform")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await ctx.params
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res

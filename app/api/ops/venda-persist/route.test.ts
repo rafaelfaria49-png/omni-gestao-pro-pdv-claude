@@ -6,7 +6,7 @@ const h = vi.hoisted(() => ({
   transaction: vi.fn(),
   findUnique: vi.fn(),
   ensureConnected: vi.fn(async () => undefined),
-  auth: vi.fn(async () => ({ user: { id: "user-1", name: "Operador" } })),
+  auth: vi.fn(async () => ({ user: { id: "user-1", name: "Operador", role: "ADMIN", platformAuthority: true } })),
 }))
 
 vi.mock("@/lib/prisma", () => ({

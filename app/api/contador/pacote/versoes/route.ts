@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Contador HUB · versões persistidas do pacote oficial (GOAL 012).
  *
@@ -22,13 +23,16 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return respostaChaveProibida()
 
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
 
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
 
   try {
     const comp = competenciaOuErro(url.searchParams.get("c") ?? "")

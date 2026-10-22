@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { auth } from "@/auth"
@@ -44,6 +45,9 @@ function jsonError(msg: string, status: number) {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   if (!canAccessConfigAudit(session)) {
     return jsonError("Acesso restrito a administradores de configuração.", 403)
@@ -111,6 +115,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   if (!canAccessConfigAudit(session)) {
     return jsonError("Não autorizado.", 403)

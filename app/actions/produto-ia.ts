@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 /**
  * Cadastro Inteligente de Produto — F1 UI · Server Actions do Assistente IA.
@@ -33,6 +34,8 @@ export async function salvarProdutoIAMetadata(
   productId: string,
   meta: ProdutoIAMetadata,
 ): Promise<{ ok: true }> {
+  await requireModuleAction(storeId, "ai")
+
   const gate = await requireCadastrosActionAccess(storeId, "hub");
   const sid = gate.storeId;
   const principal = cadastrosAuditPrincipalFromSession(gate.session);

@@ -1,8 +1,8 @@
-"use server"
+import "server-only"
 
 import type { Session } from "next-auth"
 import { auth } from "@/auth"
-import { getEnterprisePermissions, canAccessStore, type EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { getPermissionsFromSession, canAccessStore, type EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 
 /** Sessão com utilizador garantido (após `auth()` com sucesso). */
 export type AuthenticatedSession = Session & {
@@ -21,7 +21,8 @@ export async function requireEnterpriseSession(): Promise<EnterpriseGuardResult>
   if (!session?.user?.id) {
     return { ok: false, error: "Não autenticado", status: 401 }
   }
-  const permissions = getEnterprisePermissions(session.user.role)
+  if (session.user.mustChangePassword) return { ok: false, error: "Altere sua senha antes de continuar.", status: 403 }
+  const permissions = getPermissionsFromSession(session)
   return { ok: true, session: session as AuthenticatedSession, permissions }
 }
 
@@ -31,7 +32,7 @@ export async function requireStoreAccess(storeId: string | null | undefined): Pr
   if (!canAccessStore(base.session, storeId ?? null)) {
     return { ok: false, error: "Sem permissão para esta unidade", status: 403 }
   }
-  return base
+  return { ...base, permissions: getPermissionsFromSession(base.session, storeId) }
 }
 
 /** Ex.: cancelar venda, fechar período — combina loja + permissão booleana. */

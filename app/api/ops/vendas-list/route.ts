@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
@@ -13,6 +14,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sales")
+  if (moduleDenied) return moduleDenied
+
   // Autorização de loja (padrão da rota irmã `/api/ops/inventory`): sessão NextAuth →
   // resolução da loja → ACL da loja → assinatura. `storeId` de query/header/cookie é apenas
   // seleção, nunca autorização. Assinatura válida sem sessão/ACL não libera leitura (IDOR).

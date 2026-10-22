@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { prisma } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { clientPrivateJson as json } from "@/lib/cadastros/client-private-response"
@@ -5,6 +6,9 @@ import { cadastrosAuditLogFields, cadastrosAuditPrincipalFromSession } from "@/l
 export const dynamic = "force-dynamic"
 /** Internal referral only; never verifies a subject or fulfills a legal request. */
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   try {
     const gate = await requireCadastrosHubApi(req, "write", "admin")
     if (!gate.ok) return gate.response

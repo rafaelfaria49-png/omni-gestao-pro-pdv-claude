@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { withPrismaSafe } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "read", "shared")
   if (!gate.ok) return gate.response
   const lojaId = gate.storeId

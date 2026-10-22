@@ -8,6 +8,8 @@
  * - sem SKU: ignorado
  * - loja não autorizada: 403 fail-closed
  */
+// Domain persistence contracts run under an explicitly authorized synthetic principal.
+vi.mock("@/lib/auth/module-access", () => ({ requireModuleApi: async () => null }))
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Session } from "next-auth"
 
@@ -55,6 +57,7 @@ function adminSession(): Session {
       email: "a@x.com",
       name: "Admin",
       role: "ADMIN",
+      platformAuthority: true,
       storeAccess: "all",
       allowedStoreIds: [],
       lojaId: "loja-a",

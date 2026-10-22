@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/fiscal/certificado/selftest — prova A1 real → mTLS estritamente loopback.
  *
@@ -98,6 +99,9 @@ async function requestIsParameterless(req: Request, storeId: string): Promise<bo
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   // Primeira barreira: endpoint indistinguível de inexistente quando a janela operacional fecha.
   if (String(process.env[FEATURE_FLAG] ?? "").trim().toLowerCase() !== "true") {
     return response(404, { ok: false, codigo: "selftest_indisponivel" })

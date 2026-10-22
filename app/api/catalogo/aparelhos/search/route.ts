@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
@@ -18,6 +19,9 @@ export const revalidate = 0
 const MAX_LIMIT = 30
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "deviceCatalog")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
 

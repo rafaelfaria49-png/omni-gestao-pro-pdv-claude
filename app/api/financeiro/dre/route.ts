@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextRequest, NextResponse } from "next/server"
 import { getDREMensal } from "@/lib/financeiro/services/dre-service"
 import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
@@ -10,6 +11,9 @@ function err(msg: string, code: string, status = 400) {
 // ─── GET /api/financeiro/dre?mes=5&ano=2026 ───────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardFinanceiroViewOrOps(storeId)

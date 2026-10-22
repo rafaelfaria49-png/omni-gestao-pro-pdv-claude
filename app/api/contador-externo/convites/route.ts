@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * /api/contador-externo/convites — gestão INTERNA de convites (GOAL 014, §13).
  *
@@ -25,6 +26,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams, CHAVES_PROIBIDAS_INTERNO_CONVITE)) {
     return respostaChaveProibida()
@@ -57,6 +61,9 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return respostaChaveProibida()
 

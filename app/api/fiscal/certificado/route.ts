@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Certificado digital por loja — registro de METADADOS + referências seguras (GOAL_002).
  *
@@ -51,6 +52,9 @@ function parseDate(raw: string | undefined): Date | null {
  * Somente ADMIN, read-only, multi-loja. NUNCA retorna segredo — só metadados + flags de configuração.
  */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForRead(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)
@@ -96,6 +100,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)

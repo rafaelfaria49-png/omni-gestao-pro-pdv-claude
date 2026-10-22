@@ -183,7 +183,7 @@ export async function marcarDivergente(
   observacao?: string,
 ): Promise<ConciliacaoPublica> {
   const row = await prisma.conciliacaoFinanceira.update({
-    where: { id },
+    where: { id, storeId },
     data: { status: "divergente", observacao: observacao ?? null },
     select: CONCILIACAO_SELECT,
   })

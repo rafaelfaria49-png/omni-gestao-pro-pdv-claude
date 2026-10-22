@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/pdv/receber-conta
  *
@@ -105,6 +106,9 @@ function pickTituloRef(input: { tituloId?: string | number; localKey?: string })
 }
 
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   let json: unknown
   try {
     json = await request.json()
@@ -128,7 +132,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Unidade inconsistente (body vs header)." }, { status: 400 })
   }
 
-  const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId)
+  const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId, { pdvShared: true })
   if (denied) return denied
 
   const ref = pickTituloRef(parsed.data)

@@ -1,3 +1,4 @@
+import { MODULES } from "./access-policy"
 /**
  * Testes-baseline para o gate de loja ativa do proxy.
  *
@@ -35,8 +36,11 @@ function makeSession(opts: {
       email: "u@x.com",
       name: "U",
       role: opts.role ?? "ADMIN",
+      lojaId: "loja-a",
+      platformAuthority: (opts.role ?? "ADMIN") === "ADMIN" && opts.storeAccess !== "restricted",
+      storeModules: { "loja-a": [...MODULES] },
       storeAccess: opts.storeAccess ?? "all",
-      allowedStoreIds: opts.allowedStoreIds,
+      allowedStoreIds: Object.hasOwn(opts, "allowedStoreIds") ? opts.allowedStoreIds : ["loja-a"],
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session

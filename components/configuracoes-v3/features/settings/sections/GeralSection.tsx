@@ -1,4 +1,5 @@
 "use client";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 
 import { useCallback, useEffect, useState } from "react";
 import { Settings } from "lucide-react";
@@ -74,6 +75,7 @@ function emptyFormSnapshot(): FormSnapshot {
 }
 
 function GeralSectionContent() {
+  const permissions = useEnterprisePermissions();
   const { toast } = useToast();
   const { lojaAtivaId, refreshStoresList } = useLojaAtiva();
   const { refresh: refreshStoreSettings } = useStoreSettings();
@@ -290,7 +292,7 @@ function GeralSectionContent() {
 
       <BusinessResourcesCard />
 
-      <GoLiveChecklistRafaCell
+      {permissions?.platformAuthority && <GoLiveChecklistRafaCell
         empresa={{
           nomeFantasia,
           cnpj,
@@ -298,7 +300,7 @@ function GeralSectionContent() {
           email,
           whatsapp,
         }}
-      />
+      />}
 
       {noLoja ? (
         <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">

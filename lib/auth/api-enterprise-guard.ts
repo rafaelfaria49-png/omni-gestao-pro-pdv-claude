@@ -54,13 +54,13 @@ export async function apiGuardEnterpriseOrAdmin(
 
 export async function apiGuardFinanceiroViewOrOps(
   storeId: string,
-  opts?: { skipOpsInDev?: boolean },
+  opts?: { skipOpsInDev?: boolean; pdvShared?: boolean },
 ): Promise<NextResponse | null> {
   const session = await auth()
   if (session?.user?.id) {
     const g = await requireEnterpriseWith(
       storeId,
-      (p) => p.financeiro.view,
+      (p) => p.financeiro.view || (opts?.pdvShared === true && p.hubs.vendas),
       "Sem permissão para visualizar o financeiro.",
     )
     if (!g.ok) return deny(g.error, g.status, true)
@@ -74,12 +74,13 @@ export async function apiGuardFinanceiroViewOrOps(
 /** Rotas `contas-*` que no legado exigem assinatura ativa + admin cookie. */
 export async function apiGuardFinanceiroEditEnterpriseOrLegacy(
   storeId: string,
+  opts?: { pdvShared?: boolean },
 ): Promise<NextResponse | null> {
   const session = await auth()
   if (session?.user?.id) {
     const g = await requireEnterpriseWith(
       storeId,
-      (p) => p.financeiro.edit,
+      (p) => p.financeiro.edit || (opts?.pdvShared === true && p.pdv.abrirCaixa),
       "Sem permissão para alterar dados financeiros.",
     )
     if (!g.ok) return deny(g.error, g.status, true)

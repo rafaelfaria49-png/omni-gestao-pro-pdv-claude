@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/fiscal/notas/[id]/cancelar — cancelamento FISCAL de NFC-e autorizada.
  *
@@ -17,6 +18,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequestForWrite(req)
   if (!storeId) {
     return NextResponse.json(

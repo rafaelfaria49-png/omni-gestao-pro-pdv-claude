@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/contador/documentos/[id]/download
  *
@@ -20,6 +21,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(_req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
 

@@ -1,7 +1,7 @@
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 
-function activeStoreIdFromCookieHeader(cookieHeader: string | null): string | null {
+export function activeStoreIdFromCookieHeader(cookieHeader: string | null): string | null {
   if (!cookieHeader) return null
   const parts = cookieHeader.split(";")
   for (const p of parts) {

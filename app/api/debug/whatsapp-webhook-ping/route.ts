@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Simulador de payload Meta WhatsApp — rota de diagnóstico.
  *
@@ -70,6 +71,9 @@ function buildHmacSignature(payload: unknown, appSecret: string): string {
 // ── GET: diagnóstico sem escrita ──────────────────────────────────────────────
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   if (!checkSecret(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
@@ -141,6 +145,9 @@ export async function GET(req: Request) {
 // ── POST: injetar payload fake no pipeline real ───────────────────────────────
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   if (!checkSecret(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }

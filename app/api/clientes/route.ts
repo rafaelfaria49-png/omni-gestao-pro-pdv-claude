@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientEditorTags } from "@/lib/cadastros/client-privacy"
 import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { prisma } from "@/lib/prisma"
@@ -21,11 +22,17 @@ function badRequest(message: string) {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   if (new URL(req.url).searchParams.has("q")) return json({ error: "Use POST /api/clientes/search para buscas." }, { status: 400 })
   return handleClientList(req)
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   try {
     const gate = await requireCadastrosHubApi(req, "write", "admin")
     if (!gate.ok) return gate.response

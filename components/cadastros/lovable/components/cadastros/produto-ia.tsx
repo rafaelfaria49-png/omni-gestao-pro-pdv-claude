@@ -376,6 +376,8 @@ function humanizeModelKey(key: string): string {
 }
 
 export function ProductAIModal({
+  allowAI = false,
+  allowMarketplace = false,
   open,
   onClose,
   storeId,
@@ -383,6 +385,8 @@ export function ProductAIModal({
   initial,
   productId,
 }: {
+  allowAI?: boolean;
+  allowMarketplace?: boolean;
   open: boolean;
   onClose: () => void;
   storeId: string;
@@ -960,9 +964,10 @@ export function ProductAIModal({
 
   const title = productId ? "Editar produto" : "Novo produto";
   return (
-    <Modal open={open} onClose={onClose} title={title} subtitle="Cadastro real no banco — descreva por texto ou voz; a IA só sugere após revisão. Áudio e transcrição não são salvos." size="xl">
+    <Modal open={open} onClose={onClose} title={title} subtitle={allowAI ? "Cadastro real no banco — revise as sugestões antes de salvar." : "Cadastre os dados do produto para sua loja."} size="xl">
       <div className="space-y-6">
         {/* IA SOURCE */}
+        {allowAI && <>
         <Card className="p-5 border-primary/30 bg-primary/5">
           <div className="mb-3 flex items-center gap-2">
             <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="h-4 w-4" /></div>
@@ -1318,9 +1323,10 @@ export function ProductAIModal({
           )}
         </Card>
 
-        {/* FORM (preenchido pela IA) */}
+        </>}
+        {/* FORM */}
         <div>
-          <SectionTitle title="Ficha do produto" subtitle={filled ? "Campos preenchidos automaticamente — revise se quiser." : "Preenchimento manual ou via IA acima."} />
+          <SectionTitle title="Ficha do produto" subtitle={allowAI ? (filled ? "Campos preenchidos automaticamente — revise antes de salvar." : "Preenchimento manual ou pelas sugestões acima.") : "Preencha os campos e salve o cadastro."} />
           <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
             <Field label="Nome" span={2}>
               <Input
@@ -1494,6 +1500,7 @@ export function ProductAIModal({
         </div>
 
         {/* IMAGEM IA */}
+        {allowAI && <>
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-primary" />
@@ -1534,6 +1541,7 @@ export function ProductAIModal({
           )}
         </Card>
 
+        </>}
         {/* RELACIONAMENTOS */}
         {business.resource("service.technical").operational && <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
@@ -1546,12 +1554,12 @@ export function ProductAIModal({
         </Card>}
 
         {/* MARKETPLACE — apenas rótulo Fase 1; integrações reais ficam no módulo Marketplace */}
-        <Card className="p-5 opacity-80">
+        {allowMarketplace && <Card className="p-5 opacity-80">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Send className="h-4 w-4" />
             <span>Publicação em marketplaces: não disponível nesta fase (cadastro local apenas).</span>
           </div>
-        </Card>
+        </Card>}
 
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm">Cancelar</button>

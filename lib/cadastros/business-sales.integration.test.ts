@@ -9,7 +9,7 @@ import type { SalePayload } from "@/lib/ops-upsert-venda"
 
 const h = vi.hoisted(() => ({ db: undefined as unknown }))
 vi.mock("@/lib/prisma", () => ({ get prisma() { return h.db }, prismaEnsureConnected: async () => {} }))
-vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: "fixture", role: "ADMIN", name: "CI" } }) }))
+vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: "fixture", role: "ADMIN", name: "CI", platformAuthority: true } }) }))
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({ apiGuardEnterpriseOrOps: async () => null }))
 vi.mock("@/lib/automation/automation-engine", () => ({ handleEvent: vi.fn() }))
 vi.mock("@/lib/vendas/sale-numbering-runtime-gate", () => ({ resolveSaleNumberingWriter: () => ({ writer: "v2", reason: "flag" }) }))

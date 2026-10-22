@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
@@ -9,6 +10,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "home")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
   const storeId = storeIdFromAssistecRequestForRead(req)

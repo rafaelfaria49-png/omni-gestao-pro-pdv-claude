@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@/generated/prisma"
@@ -74,6 +75,9 @@ async function requireSubscription() {
  * valida `canAccessStore` — produto de outra loja nunca é retornado.
  */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
   const lojaId = storeIdFromAssistecRequestForRead(req)

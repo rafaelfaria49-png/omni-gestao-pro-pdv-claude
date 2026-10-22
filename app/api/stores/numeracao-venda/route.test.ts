@@ -58,7 +58,7 @@ beforeEach(() => {
 describe("GET /api/stores/numeracao-venda", () => {
   it("exige sessão", async () => {
     h.auth.mockResolvedValue(null)
-    const res = await GET()
+    const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
     expect(res.status).toBe(401)
     expect(h.readStatuses).not.toHaveBeenCalled()
   })
@@ -66,7 +66,7 @@ describe("GET /api/stores/numeracao-venda", () => {
   it("recusa papel sem permissão administrativa, sem devolver códigos", async () => {
     h.auth.mockResolvedValue(sessao({ role: "OPERADOR" }))
 
-    const res = await GET()
+    const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
     const body = (await res.json()) as { stores?: unknown }
 
     expect(res.status).toBe(403)
@@ -78,7 +78,7 @@ describe("GET /api/stores/numeracao-venda", () => {
   it("recusa GERENTE, que alcança a página de unidades mas não é ADMIN", async () => {
     h.auth.mockResolvedValue(sessao({ role: "GERENTE" }))
 
-    const res = await GET()
+    const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
 
     expect(res.status).toBe(403)
     expect(h.readStatuses).not.toHaveBeenCalled()
@@ -87,7 +87,7 @@ describe("GET /api/stores/numeracao-venda", () => {
   it("aceita SUPER_ADMIN", async () => {
     h.auth.mockResolvedValue(sessao({ role: "SUPER_ADMIN" }))
 
-    const res = await GET()
+    const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
 
     expect(res.status).toBe(200)
     expect(h.readStatuses).toHaveBeenCalledWith(["loja-1", "loja-2"])
@@ -98,7 +98,7 @@ describe("GET /api/stores/numeracao-venda", () => {
       sessao({ storeAccess: "restricted", allowedStoreIds: ["loja-2"] }),
     )
 
-    const res = await GET()
+    const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
 
     expect(res.status).toBe(200)
     expect(h.readStatuses).toHaveBeenCalledWith(["loja-2"])
@@ -108,7 +108,7 @@ describe("GET /api/stores/numeracao-venda", () => {
     h.auth.mockResolvedValue(sessao())
     h.storeFindMany.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.1:6543"))
 
-    const res = await GET()
+    const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
     const body = (await res.json()) as { stores: unknown[]; error: string }
 
     expect(res.status).toBe(500)

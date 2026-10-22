@@ -1,5 +1,6 @@
 import type { Session } from "next-auth"
-import { canAccessStore, getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { canAccessStore, getPermissionsFromSession } from "@/lib/auth/enterprise-permissions"
+import { canAccessPage } from "@/lib/auth/page-access"
 
 const DASH = "/dashboard"
 
@@ -12,8 +13,10 @@ function denyHome(origin: string): URL {
 /**
  * Se o utilizador não tem permissão enterprise para o caminho, devolve URL de redirecionamento.
  */
-export function enterpriseDashboardRedirect(origin: string, pathname: string, session: Session): URL | null {
-  const perms = getEnterprisePermissions(session.user?.role)
+export function enterpriseDashboardRedirect(origin: string, pathname: string, session: Session, storeId?: string): URL | null {
+  const perms = getPermissionsFromSession(session, storeId)
+  if (!canAccessPage(perms, pathname)) return perms.modules?.home || perms.platformAuthority
+    ? denyHome(origin) : new URL("/conta/seguranca?access=denied", origin)
 
   const block = (cond: boolean) => cond
 

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
@@ -32,6 +33,9 @@ export const MAX_PREVIEW_CANDIDATES = 500
  * `writerEnabled: false` informa a UI de que a execução está indisponível.
  */
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(

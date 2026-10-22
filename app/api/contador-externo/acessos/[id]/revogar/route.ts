@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/contador-externo/acessos/[id]/revogar — revogação do vínculo
  * (GOAL 014, §B/§13). Terminal: a loja some do escopo do contador na próxima
@@ -21,6 +22,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return respostaChaveProibida()
 

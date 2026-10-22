@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
@@ -31,6 +32,9 @@ function jsonError(error: string, code: string, status: number, extra?: Record<s
  * número server-side via Writer V2 e nunca altera a venda ocupante.
  */
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(

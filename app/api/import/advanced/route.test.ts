@@ -14,7 +14,7 @@ import { NextRequest } from "next/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // ── Bordas mockadas ─────────────────────────────────────────────────────────
-vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: "op-1", email: "op@teste.local", role: "ADMIN" } }) }))
+vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: "op-1", email: "op@teste.local", role: "ADMIN", platformAuthority: true } }) }))
 vi.mock("@/lib/api-auth", () => ({ getVerifiedSubscriptionFromCookies: async () => ({ ok: true, status: "ativa", vencimento: "2099-12-31" }) }))
 vi.mock("@/lib/trusted-time", () => ({ getTrustedTimeMs: async () => Date.now() }))
 vi.mock("@/lib/subscription-seal", () => ({ isVencimentoExpired: () => false }))

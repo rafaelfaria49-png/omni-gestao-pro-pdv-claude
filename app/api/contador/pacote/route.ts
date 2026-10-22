@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/contador/pacote?c=AAAA-MM
  *
@@ -58,6 +59,9 @@ function logEvento(evento: string, campos: Record<string, unknown>): void {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
 
   // Seleção de loja por parâmetro é proibida (o escopo é a única fonte de storeId).

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * WhatsApp IA — F3 · sugestão de catálogo/estoque para uma conversa (ASSISTIDO, leitura).
  *
@@ -19,6 +20,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "whatsapp")
+  if (moduleDenied) return moduleDenied
+
   try {
     const guard = await guardWhatsAppApiRead(req)
     if (!guard.ok) return guard.response

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Contador HUB · status de documento (GOAL 011).
  *
@@ -39,13 +40,16 @@ const RESPOSTA_CHAVE_PROIBIDA = NextResponse.json(
 
 /** Capacidades do papel autenticado + matriz — a UI só oferece o que o servidor aceita. */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
 
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
 
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
 
   return NextResponse.json(
     {
@@ -67,6 +71,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
 
@@ -81,7 +88,7 @@ export async function POST(req: Request) {
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
 
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
 
   try {
     const documento = await alterarStatusDocumento(

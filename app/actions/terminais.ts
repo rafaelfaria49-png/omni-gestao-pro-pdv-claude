@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma, withPrismaSafe } from "@/lib/prisma"
 import { computeLockStatus, type TerminalLockStatus } from "@/lib/pdv-terminal-lock"
@@ -110,6 +111,8 @@ export async function listTerminais(
   storeId: string,
   deviceId?: string,
 ): Promise<PdvTerminalDTO[]> {
+  await requireModuleAction(storeId, "pdv")
+
   const sid = (storeId || "").trim()
   if (!sid) return []
   const myDeviceId = (deviceId || "").trim() || null
@@ -141,6 +144,8 @@ export async function criarTerminal(
   storeId: string,
   input?: { name?: string },
 ): Promise<TerminalMutationResult> {
+  await requireModuleAction(storeId, "settings")
+
   const sid = (storeId || "").trim()
   if (!sid) return { ok: false, error: "Loja inválida." }
   return withPrismaSafe<TerminalMutationResult>(
@@ -171,6 +176,8 @@ export async function setTerminalStatus(
   terminalId: string,
   status: TerminalStatus,
 ): Promise<TerminalMutationResult> {
+  await requireModuleAction(storeId, "settings")
+
   const sid = (storeId || "").trim()
   const tid = (terminalId || "").trim()
   if (!sid || !tid) return { ok: false, error: "Parâmetros inválidos." }

@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAction } from "@/lib/auth/module-access"
 
 // ============================================================================
 // Operações V3 — Fase 2A/2B · PDV de Serviço (recebimento REAL da OS)
@@ -187,6 +188,7 @@ export interface CaixaSessaoV3 {
 }
 
 export async function getCaixaSessaoAbertaV3(storeId: string): Promise<CaixaSessaoV3> {
+  await requireModuleAction(storeId, "service")
   const sid = (storeId ?? "").trim();
   if (!sid) return { aberta: false };
   const sessao = await prisma.sessaoCaixa.findFirst({
@@ -262,6 +264,7 @@ export async function lerPagamentoOSV3(
   osId: string,
   reconhecer?: ProvaConfirmacaoFinanceiraV3,
 ): Promise<PagamentoV3 & { sessao: CaixaSessaoV3; aPrazo: APrazoV3 | null; pendenciaConfirmacao?: PendenciaConfirmacaoFinanceiraV3 | null; confirmacaoBloqueada?: boolean }> {
+  await requireModuleAction(storeId, "service")
   const sid = (storeId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
   if (reconhecer) await reconhecerConfirmacaoFinanceiraV3(sid, osId, reconhecer);

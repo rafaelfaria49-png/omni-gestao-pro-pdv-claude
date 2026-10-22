@@ -20,6 +20,8 @@ import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name"
 import { resolveSeedStoreId } from "@/lib/loja-ativa-seed"
 import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
+import { useSession } from "next-auth/react"
+import { canAccessStore, canUseModule } from "@/lib/auth/enterprise-permissions"
 
 const LOJA_ATIVA_STORAGE = "assistec-pro-loja-ativa-v1"
 
@@ -166,6 +168,7 @@ function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): Loja
 }
 
 export function LojaAtivaProvider({ children }: { children: ReactNode }) {
+  const { data: session, update: refreshSession } = useSession()
   const { config, configHydrated } = useConfigEmpresa()
   const lojasConfig = useMemo(() => config.minhasLojas?.lojas ?? [], [config.minhasLojas?.lojas])
   const [lojasRemote, setLojasRemote] = useState<LojaPerfilRemoto[] | null>(null)
@@ -183,16 +186,22 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       const prev = map.get(l.id)
       map.set(l.id, prev ? { ...prev, ...l, endereco: { ...prev.endereco, ...l.endereco } } : l)
     }
-    const out = Array.from(map.values())
+    const out = Array.from(map.values()).filter((store) => canAccessStore(session, store.id))
     out.sort((a, b) => a.id.localeCompare(b.id))
     return out
-  }, [lojasRemote, lojasConfig])
+  }, [lojasRemote, lojasConfig, session])
   const [lojaAtivaId, setLojaAtivaIdState] = useState<string | null>(null)
   const lojaAtivaIdRef = useRef<string | null>(null)
+  const workspaceActiveRef = useRef(true)
+  const storeSwitchVersionRef = useRef(0)
   useEffect(() => {
-    lojaAtivaIdRef.current = lojaAtivaId
-  }, [lojaAtivaId])
-
+    workspaceActiveRef.current = true
+    const invalidate = () => { workspaceActiveRef.current = false; storeSwitchVersionRef.current += 1 }
+    const resume = () => { workspaceActiveRef.current = true }
+    window.addEventListener("pagehide", invalidate)
+    window.addEventListener("pageshow", resume)
+    return () => { invalidate(); window.removeEventListener("pagehide", invalidate); window.removeEventListener("pageshow", resume) }
+  }, [])
   const refreshStoresList = useCallback(async () => {
     if (typeof window === "undefined") return
     try {
@@ -230,10 +239,16 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(LOJA_ATIVA_STORAGE)
       // Decisão pura: id salvo válido é mantido; sentinela legado (`loja-antiga`) migra para a
       // primeira loja real; sem nada determinável retorna null (NÃO semeia loja-1 — DT-03/ADR-0003).
-      const resolved = resolveSeedStoreId(raw, lojas)
+      // Uma seleção de outra sessão não pode ressuscitar loja sem membership.
+      const saved = raw && canAccessStore(session, raw) ? raw : null
+      const resolved = resolveSeedStoreId(saved, lojas)
       // Sem loja conhecida ainda (ex.: primeira carga antes de /api/stores responder): não semeia.
       // O effect re-roda quando `lojas` carregar e a semente correta é então gravada.
-      if (!resolved) return
+      if (!resolved || !canAccessStore(session, resolved)) return
+      if (lojaAtivaIdRef.current !== resolved) {
+        storeSwitchVersionRef.current += 1
+        lojaAtivaIdRef.current = resolved
+      }
       setLojaAtivaIdState(resolved)
       setActiveStoreCookie(resolved)
       markPdvMountStep("loja", resolved, true)
@@ -244,10 +259,13 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, [configHydrated, lojas])
+  }, [configHydrated, lojas, session])
 
   const executarTrocaLoja = useCallback((next: string) => {
+    if (!canAccessStore(session, next)) return
     const prev = (lojaAtivaIdRef.current || "").trim()
+    const version = ++storeSwitchVersionRef.current
+    lojaAtivaIdRef.current = next
     setLojaAtivaIdState(next)
     try {
       localStorage.setItem(LOJA_ATIVA_STORAGE, next)
@@ -263,20 +281,25 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
         const ac = new AbortController()
         const t = window.setTimeout(() => ac.abort(), 6500)
         try {
-          const [rSettings, rInv] = await Promise.all([
+          const loadInventory = (["catalog", "pdv", "service"] as const).some((accessModule) => canUseModule(session, accessModule, next))
+          const responses = await Promise.all([
             fetch(`/api/stores/${encodeURIComponent(next)}/settings`, {
               credentials: "include",
               cache: "no-store",
               signal: ac.signal,
             }),
-            fetch(`/api/ops/inventory?lojaId=${encodeURIComponent(next)}`, {
+            ...(loadInventory ? [fetch(`/api/ops/inventory?lojaId=${encodeURIComponent(next)}`, {
               credentials: "include",
               cache: "no-store",
               signal: ac.signal,
-            }),
+            })] : []),
           ])
-          if (!rSettings.ok || !rInv.ok) throw new Error("unavailable")
+          if (responses.some((response) => !response.ok)) throw new Error("unavailable")
+          if (workspaceActiveRef.current && version === storeSwitchVersionRef.current) void refreshSession()
         } catch {
+          // Navegação completa ou outra troca tornam esta sondagem obsoleta.
+          // Uma resposta antiga nunca reescreve cookie/storage da unidade atual.
+          if (!workspaceActiveRef.current || version !== storeSwitchVersionRef.current) return
           markPdvMountStep("loja", next, false, { code: "unidade_indisponivel" })
           // P0 PDV-RAFACELL-LOAD-CRASH: NUNCA deletar o ops da unidade aqui — a
           // chave pode conter vendas pending ainda não sincronizadas. Move para
@@ -302,6 +325,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
             /* ignore */
           }
           if (prev) {
+            lojaAtivaIdRef.current = prev
             setLojaAtivaIdState(prev)
             try {
               localStorage.setItem(LOJA_ATIVA_STORAGE, prev)
@@ -316,7 +340,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
         }
       })()
     }
-  }, [lojas])
+  }, [session, refreshSession])
 
   const setLojaAtivaId = useCallback((id: string) => {
     const next = id.trim()
@@ -375,7 +399,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     // Sem unidade resolvida: cai na chave legada global (igual ao hook sem-provider), nunca loja-1.
     const id = (lojaSelecionada?.id || lojaAtivaId || lojas[0]?.id || "").trim()
     return id ? opsKeyForLoja(id) : OPS_KEY_LEGACY
-  }, [lojas, lojaSelecionada])
+  }, [lojas, lojaSelecionada, lojaAtivaId])
 
   const value = useMemo<LojaAtivaContextType>(
     () => ({
@@ -394,7 +418,6 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     }),
     [
       lojas,
-      lojaSelecionada?.id,
       setLojaAtivaId,
       refreshStoresList,
       storesRefreshNonce,

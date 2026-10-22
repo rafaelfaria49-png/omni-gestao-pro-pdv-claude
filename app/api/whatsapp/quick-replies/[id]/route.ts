@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import type { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
@@ -16,6 +17,9 @@ function badRequest(message: string) {
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "whatsapp")
+  if (moduleDenied) return moduleDenied
+
   try {
     const guard = await guardWhatsAppApiWrite(req)
     if (!guard.ok) return guard.response
@@ -65,6 +69,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "whatsapp")
+  if (moduleDenied) return moduleDenied
+
   try {
     const guard = await guardWhatsAppApiWrite(req)
     if (!guard.ok) return guard.response

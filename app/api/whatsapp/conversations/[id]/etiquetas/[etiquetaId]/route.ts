@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
@@ -15,6 +16,9 @@ export async function DELETE(
   req: Request,
   ctx: { params: Promise<{ id: string; etiquetaId: string }> }
 ) {
+  const moduleDenied = await requireModuleApi(req, "whatsapp")
+  if (moduleDenied) return moduleDenied
+
   try {
     const guard = await guardWhatsAppApiWrite(req)
     if (!guard.ok) return guard.response

@@ -3,12 +3,14 @@ import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { businessPresentation, resolveBusinessResource } from "@/lib/store-business-capabilities"
+import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 
 const h = vi.hoisted(() => ({
   capabilities: { version: 1, business: { primaryBranch: "padaria" } } as StoreCapabilitiesV1,
   canConfigure: true,
   permitted: true,
+  deviceCatalog: true,
   ready: true,
   hydrated: true,
   refresh: vi.fn(async () => {}),
@@ -18,9 +20,11 @@ const h = vi.hoisted(() => ({
 vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
   storeId: "loja-a", ready: h.ready, hydrated: h.hydrated, capabilities: h.capabilities, refresh: h.refresh,
   branch: h.capabilities.business?.primaryBranch ?? "assistencia", configured: true,
+  permissions: { ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted && h.deviceCatalog } },
   canConfigure: h.canConfigure, presentation: businessPresentation(h.capabilities), save: h.save,
   resource: (key: Parameters<typeof resolveBusinessResource>[1]) => resolveBusinessResource(h.capabilities, key, undefined, h.permitted),
 }) }))
+vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: "loja-a" }) }))
 vi.mock("@/components/configuracoes-v3/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -55,6 +59,7 @@ import { BusinessResourcesCard } from "@/components/configuracoes-v3/features/se
 beforeEach(() => {
   h.capabilities = { version: 1, business: { primaryBranch: "padaria" } }
   h.permitted = true
+  h.deviceCatalog = true
   h.canConfigure = true
   h.ready = true
   h.hydrated = true
@@ -72,7 +77,7 @@ function product(initial?: React.ComponentProps<typeof ProductAIModal>["initial"
 describe("Cadastros adaptados por recursos e produto", () => {
   it("padaria nova não renderiza aparelhos, exemplos de celulares ou técnicos", async () => {
     product()
-    expect(await screen.findAllByPlaceholderText("Ex.: Pão francês")).toHaveLength(2)
+    expect(await screen.findAllByPlaceholderText("Ex.: Pão francês")).toHaveLength(1)
     expect(document.body.textContent).not.toMatch(/capinhas|películas|equipamentos|compatibilidade com aparelhos/i)
     const placeholders = [...document.querySelectorAll("[placeholder]")].map((el) => el.getAttribute("placeholder")).join(" ")
     expect(placeholders).not.toMatch(/iphone|apple|celular|telas|película/i)
@@ -122,6 +127,21 @@ describe("Cadastros adaptados por recursos e produto", () => {
     fireEvent.click(screen.getByRole("button", { name: "Categorias / Marcas" }))
     expect(await screen.findByText("Categorias de produtos")).toBeTruthy()
     expect(screen.queryByText("Linhas de equipamentos")).toBeNull()
+  })
+  it("compatibilidade para acessórios não abre cadastros de equipamentos de assistência", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "acessorios" } }
+    render(React.createElement(CadastrosHub))
+    await screen.findByText("Cadastros: Acessórios para aparelhos")
+    expect(screen.queryByRole("button", { name: "Equipamentos" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Técnicos" })).toBeNull()
+  })
+  it("assistência sem liberação de catálogo de aparelhos não oferece a aba Equipamentos", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    h.deviceCatalog = false
+    render(React.createElement(CadastrosHub))
+    await screen.findByText("Cadastros: Assistência técnica")
+    expect(screen.getByRole("button", { name: "Técnicos" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Equipamentos" })).toBeNull()
   })
   it("edição com seções ocultas omite configurações e preserva o patch", async () => {
     product({ nome: "Mercadoria", garantia: 60, metadata: {

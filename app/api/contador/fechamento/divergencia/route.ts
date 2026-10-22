@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Contador HUB · alteração operacional após o fechamento (GOAL 012).
  *
@@ -55,6 +56,9 @@ async function avaliar(
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return respostaChaveProibida()
 
@@ -82,6 +86,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return respostaChaveProibida()
 

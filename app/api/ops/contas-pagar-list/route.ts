@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
@@ -89,6 +90,9 @@ function buildContaPagarRowFallback(t: {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardFinanceiroViewOrOps(storeId, { skipOpsInDev: true })

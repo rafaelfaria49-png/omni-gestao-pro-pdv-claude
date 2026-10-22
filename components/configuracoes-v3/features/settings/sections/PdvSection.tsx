@@ -31,6 +31,7 @@ import {
 } from "@/lib/omnigestao-pdv-modo";
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
 import { experimentalPdvEnabled } from "@/lib/feature-flags";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import {
   DEFAULT_PDV_SCAN_UNREGISTERED_ACTION,
   normalizePdvScanUnregisteredAction,
@@ -316,6 +317,7 @@ function PdvMiniPreview({ variant, activeTheme }: { variant: PdvFlowId; activeTh
 }
 
 function PdvSectionContent() {
+  const permissions = useEnterprisePermissions();
   const { toast } = useToast();
   const { navigateToSection } = useConfiguracoesNav();
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
@@ -489,7 +491,13 @@ function PdvSectionContent() {
   // PDV Next é experimental (já persiste vendas reais pelo motor oficial, mas
   // recursos de balcão ainda em desenvolvimento): ocultar o card da galeria em
   // operação real. Liberado em dev via env NEXT_PUBLIC_OG_EXPERIMENTAL=1.
-  const visibleFlows = experimentalPdvEnabled ? FLOWS : FLOWS.filter((f) => f.id !== "next");
+  const visibleFlows = FLOWS.filter((f) => {
+    if (f.id === "next" && !experimentalPdvEnabled) return false;
+    if (permissions?.platformAuthority) return true;
+    if (f.id === "classico") return true;
+    if (f.id === "assistencia") return permissions?.hubs.operacoes === true;
+    return permissions?.modules?.experiments === true;
+  });
 
   const previewMeta =
     previewFlow === null
@@ -985,19 +993,19 @@ function PdvSectionContent() {
         )}
       </div>
 
-      <div className="pt-6 border-t border-border/40 mt-8">
+      {permissions?.platformAuthority && <div className="pt-6 border-t border-border/40 mt-8">
         <ImpressaoPdvSettingsCard />
-      </div>
+      </div>}
 
       {/* Outros Fluxos Integrados — Mini-cards horizontais */}
-      <div className="pt-6 border-t border-border/40 mt-8">
+      {(permissions?.hubs.whatsapp || permissions?.hubs.operacoes) && <div className="pt-6 border-t border-border/40 mt-8">
         <div className="mb-4">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Outros Fluxos Integrados</h3>
         </div>
 
         <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
           {/* PDV WhatsApp */}
-          <div className="flex items-center justify-between rounded-xl border border-border/40 bg-card/30 p-3 hover:bg-accent/5 transition-all duration-200">
+          {permissions?.hubs.whatsapp && <div className="flex items-center justify-between rounded-xl border border-border/40 bg-card/30 p-3 hover:bg-accent/5 transition-all duration-200">
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <MessageCircle className="h-4 w-4" />
@@ -1015,10 +1023,10 @@ function PdvSectionContent() {
             >
               Acessar
             </a>
-          </div>
+          </div>}
 
           {/* OS → Venda */}
-          <div className="flex items-center justify-between rounded-xl border border-border/40 bg-card/30 p-3 hover:bg-accent/5 transition-all duration-200">
+          {permissions?.hubs.operacoes && <div className="flex items-center justify-between rounded-xl border border-border/40 bg-card/30 p-3 hover:bg-accent/5 transition-all duration-200">
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <FileText className="h-4 w-4" />
@@ -1031,14 +1039,14 @@ function PdvSectionContent() {
               </div>
             </div>
             <a
-              href="/dashboard/operacoes-v2"
+              href="/dashboard/operacoes-v3"
               className="shrink-0 text-[11px] font-semibold text-foreground bg-background hover:bg-accent/10 border border-border/50 px-2.5 py-1 rounded-md transition-all duration-200"
             >
               Acessar
             </a>
-          </div>
+          </div>}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

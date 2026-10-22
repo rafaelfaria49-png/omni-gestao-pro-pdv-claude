@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
@@ -40,6 +41,9 @@ function jsonError(error: string, code: string, status: number, extra?: Record<s
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sales")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(
@@ -63,6 +67,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sales")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(

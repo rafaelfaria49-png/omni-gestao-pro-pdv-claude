@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET/POST /api/contador/agenda/obrigacoes
  *
@@ -22,11 +23,14 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const agenda = await listarAgenda(
       { storeId: escopo.storeId, userId: escopo.userId },
@@ -41,6 +45,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
   const escopo = await requireContadorScope()
@@ -52,7 +59,7 @@ export async function POST(req: Request) {
     body = {}
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const obrigacao = await criarObrigacao(
       { storeId: escopo.storeId, userId: escopo.userId },

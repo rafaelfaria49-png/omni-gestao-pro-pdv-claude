@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
@@ -15,6 +16,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "service")
+  if (moduleDenied) return moduleDenied
+
   // Autorização de loja (padrão da rota irmã `/api/ops/inventory`): sessão NextAuth →
   // resolução da loja → ACL da loja. Fecha o caminho legado em que assinatura/cookie sozinhos
   // autorizavam loja arbitrária. `apiGuardOperacoesHubOrLegacy` continua garantindo a permissão
@@ -56,6 +60,9 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "service")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   if (!storeId) {
     return NextResponse.json(

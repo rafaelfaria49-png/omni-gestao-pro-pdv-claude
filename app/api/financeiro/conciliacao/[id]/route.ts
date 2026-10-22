@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * PATCH /api/financeiro/conciliacao/[id]
  *
@@ -23,6 +24,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   await prismaEnsureConnected()
   const { id } = await params
   const storeId = opsLojaIdFromRequest(req)
@@ -53,7 +57,9 @@ export async function PATCH(
 
     return NextResponse.json({ ok: false, error: "Ação não suportada", code: "unsupported_action" }, { status: 400 })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, error: msg, code: "service_error" }, { status: 422 })
+    if (e && typeof e === "object" && "code" in e && e.code === "P2025") {
+      return NextResponse.json({ ok: false, error: "Conciliação não encontrada nesta unidade." }, { status: 404 })
+    }
+    return NextResponse.json({ ok: false, error: "Não foi possível alterar a conciliação.", code: "service_error" }, { status: 422 })
   }
 }

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/automation/handle-event
  *
@@ -27,6 +28,9 @@ const VALID_EVENTS = new Set<SystemEvent>([
 ])
 
 export async function POST(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   try {
     let body: AutomationHandleEventBody
     try {

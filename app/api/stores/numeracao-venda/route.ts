@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
@@ -41,7 +42,10 @@ const INVALID_MESSAGES: Record<StoreSaleNumberingCodeRejectionReason, string> = 
   DUPLICATE: "Este código já está em uso por outra loja.",
 }
 
-export async function GET() {
+export async function GET(accessRequest: Request) {
+  const moduleDenied = await requireModuleApi(accessRequest, "platform")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
 
@@ -59,6 +63,9 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
 

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Rotação do certificado A1 (GOAL-016C · ADR-0014 §2.1).
  *
@@ -55,6 +56,9 @@ function parseIsoDate(iso: string | null): Date | null {
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)

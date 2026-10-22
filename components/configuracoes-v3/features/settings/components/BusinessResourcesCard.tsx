@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useStoreBusiness } from "@/lib/use-store-business"
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import {
   BUSINESS_BRANCHES, BUSINESS_RESOURCES, businessPresentation, resolveBusinessResource,
   type BusinessBranch, type BusinessPresentation, type BusinessResourceKey,
@@ -23,6 +24,7 @@ export function BusinessResourcesCard() {
 }
 
 function BusinessResourcesForm() {
+  const permissions = useEnterprisePermissions()
   const { branch, capabilities, canConfigure, ready, save, legacyProfile } = useStoreBusiness()
   const { toast } = useToast()
   const [selected, setSelected] = useState<BusinessBranch | null>(null)
@@ -87,7 +89,8 @@ function BusinessResourcesForm() {
           {Object.entries(BUSINESS_BRANCHES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <div className="mt-5 divide-y divide-border">
-          {BUSINESS_RESOURCES.map((item) => {
+          {BUSINESS_RESOURCES.filter((item) => item.key === "service.technical" ? permissions?.hubs.operacoes :
+            ["catalog.deviceCompatibility", "pdv.accessoryModelColor"].includes(item.key) ? permissions?.modules?.deviceCatalog : true).map((item) => {
             const state = resolveBusinessResource(draft, item.key, legacyProfile)
             return <label key={item.key} className="flex cursor-pointer items-start gap-3 py-3">
               <input type="checkbox" checked={state.requested} disabled={disabled}

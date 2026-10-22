@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/vendas/[id]
  *
@@ -13,6 +14,8 @@ import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { computeVendaStatusFinanceiro, sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 import { readAccessorySelectionForDisplay } from "@/lib/vendas/accessory-selection-readback"
+import { auth } from "@/auth"
+import { canReadClientRegister, CLIENT_LOOKUP_SELECT } from "@/lib/cadastros/client-privacy"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -70,6 +73,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const moduleDenied = await requireModuleApi(req, "sales")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const { id: rawId } = await params
@@ -175,14 +181,15 @@ export async function GET(
     // financeiras, títulos a receber e o status financeiro derivado da venda.
     let enterprise: Record<string, unknown> = {}
     if (full) {
+      const fullClient = canReadClientRegister(await auth(), storeId)
       const [clienteCompleto, sessao, movimentacoesFinanceiras, titulosRaw] = await Promise.all([
         venda.clienteId
           ? prisma.cliente.findFirst({
               where: { id: venda.clienteId, storeId },
-              select: {
+              select: fullClient ? {
                 id: true, name: true, kind: true, document: true, phone: true,
                 email: true, city: true, totalSpent: true, lastPurchaseAt: true,
-              },
+              } : CLIENT_LOOKUP_SELECT,
             })
           : Promise.resolve(null),
         sessaoIdPayload
@@ -232,7 +239,9 @@ export async function GET(
 
       enterprise = {
         clienteCompleto: clienteCompleto
-          ? { ...clienteCompleto, lastPurchaseAt: clienteCompleto.lastPurchaseAt?.toISOString() ?? null }
+          ? { ...clienteCompleto, ...("lastPurchaseAt" in clienteCompleto ? {
+              lastPurchaseAt: clienteCompleto.lastPurchaseAt instanceof Date ? clienteCompleto.lastPurchaseAt.toISOString() : null,
+            } : {}) }
           : null,
         sessao: sessao
           ? {

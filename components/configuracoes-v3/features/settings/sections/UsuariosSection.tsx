@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { useSession } from "next-auth/react";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
@@ -55,9 +56,10 @@ import {
   TableRow,
 } from "@/components/configuracoes-v3/components/ui/table";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
-import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions";
+import { isPlatformAuthority } from "@/lib/auth/access-policy";
 
 type AdminUserRow = {
+  accessScope: string | null;
   id: string;
   name: string;
   email: string;
@@ -83,7 +85,7 @@ const ROLE_OPTIONS = [
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "Super administrador",
-  ADMIN: "Administrador",
+  ADMIN: "Administrador da loja",
   GERENTE: "Gerente",
   OPERADOR: "Operador",
   CAIXA: "Caixa",
@@ -94,11 +96,11 @@ const ROLE_LABEL: Record<string, string> = {
 const PAPEL_RESUMO = [
   {
     titulo: "Administrador",
-    texto: "Acesso completo ao painel, unidades, configurações e gestão de utilizadores.",
+    texto: "Gestão da própria loja e equipe, dentro dos módulos liberados pela plataforma.",
   },
   {
     titulo: "Gerente",
-    texto: "Gestão operacional e financeira, relatórios e equipa, sem promoção a administradores.",
+    texto: "Gestão operacional e equipe nas unidades atribuídas, conforme liberação da plataforma.",
   },
   {
     titulo: "Caixa",
@@ -123,10 +125,8 @@ function badgeVariantForRole(role: string): "default" | "secondary" | "outline" 
 export function UsuariosSection() {
   const { data: session, status } = useSession();
   const { toast } = useToast();
-  const canManage = useMemo(() => {
-    if (status !== "authenticated" || !session?.user) return false;
-    return getEnterprisePermissions(session.user.role).admin.configuracoes === true;
-  }, [session, status]);
+  const permissions = useEnterprisePermissions();
+  const canManage = status === "authenticated" && permissions?.admin.configuracoes === true;
 
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -217,7 +217,7 @@ export function UsuariosSection() {
     });
   };
 
-  const isAdminLikeRole = formRole === "SUPER_ADMIN" || formRole === "ADMIN";
+  const isAdminLikeRole = false; // ADMIN é administrador de loja; toda conta nova exige membership.
 
   const submit = async () => {
     if (!formName.trim()) {
@@ -232,8 +232,8 @@ export function UsuariosSection() {
       toast({ title: "Unidades", description: "Selecione pelo menos uma unidade com acesso.", variant: "destructive" });
       return;
     }
-    if (!editing && formPassword.trim() && formPassword.trim().length < 6) {
-      toast({ title: "Senha", description: "Mínimo de 6 caracteres.", variant: "destructive" });
+    if (formPassword && (formPassword.length < 12 || !/[a-z]/.test(formPassword) || !/[A-Z]/.test(formPassword) || !/[0-9]/.test(formPassword))) {
+      toast({ title: "Senha", description: "Use ao menos 12 caracteres, com maiúsculas, minúsculas e números.", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -482,7 +482,7 @@ export function UsuariosSection() {
                       <Badge variant={r.active ? "outline" : "secondary"}>{r.active ? "Ativo" : "Inativo"}</Badge>
                     </TableCell>
                     <TableCell className="max-w-[220px]">
-                      {r.role === "SUPER_ADMIN" || r.role === "ADMIN" ? (
+                      {isPlatformAuthority(r) ? (
                         <span className="text-xs text-muted-foreground">Todas as unidades</span>
                       ) : r.storeIds.length === 0 ? (
                         <span className="text-xs text-muted-foreground">{r.lojaId ? storeLabel(r.lojaId) : "—"}</span>
@@ -566,7 +566,7 @@ export function UsuariosSection() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLE_OPTIONS.map((role) => (
+                  {ROLE_OPTIONS.filter((role) => role !== "SUPER_ADMIN" && (session?.user.platformAuthority || !["ADMIN", "GERENTE"].includes(role))).map((role) => (
                     <SelectItem key={role} value={role}>
                       {ROLE_LABEL[role] || role}
                     </SelectItem>

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * PATCH/DELETE /api/contador/agenda/templates/:id
  */
@@ -21,6 +22,9 @@ export const revalidate = 0
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function PATCH(req: Request, ctx: Ctx) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
   const escopo = await requireContadorScope()
@@ -33,7 +37,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
   const { id } = await ctx.params
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const template = await atualizarTemplate(
       { storeId: escopo.storeId, userId: escopo.userId },
@@ -50,12 +54,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
 }
 
 export async function DELETE(req: Request, ctx: Ctx) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
   const { id } = await ctx.params
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const r = await removerTemplate(
       { storeId: escopo.storeId, userId: escopo.userId },

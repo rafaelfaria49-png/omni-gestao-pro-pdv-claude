@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
@@ -14,6 +15,9 @@ export const revalidate = 0
  * Nunca revela existência de venda de outra loja — 404 idêntico.
  */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sales")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequest(req)
   if (!lojaId) {
     return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })

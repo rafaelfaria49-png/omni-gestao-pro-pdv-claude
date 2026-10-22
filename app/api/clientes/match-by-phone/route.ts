@@ -1,11 +1,18 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientPrivateJson as json } from "@/lib/cadastros/client-private-response"
 import { matchClientesByPhone } from "@/lib/cliente-phone-match"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 export const dynamic = "force-dynamic"
-export async function GET() {
+export async function GET(accessRequest: Request) {
+  const moduleDenied = await requireModuleApi(accessRequest, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   return json({ error: "Use POST para buscas por telefone." }, { status: 405 })
 }
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   try {
     const gate = await requireCadastrosHubApi(req, "read", "shared")
     if (!gate.ok) return gate.response

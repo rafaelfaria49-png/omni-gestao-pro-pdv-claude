@@ -38,7 +38,7 @@ const actions: Action[] = [
     hint: "Criar proposta",
     icon: FileText,
     shortcut: "N P",
-    visible: (p) => p.hubs.operacoes || p.hubs.vendas,
+    visible: (p) => p.hubs.operacoes,
   },
   {
     label: "Receber",
@@ -58,7 +58,7 @@ export function QuickActions() {
   const perms = useEnterprisePermissions();
 
   const filtered = useMemo(() => {
-    if (!perms) return actions;
+    if (!perms) return [];
     return actions.filter((a) => (a.visible ? a.visible(perms) : true));
   }, [perms]);
 

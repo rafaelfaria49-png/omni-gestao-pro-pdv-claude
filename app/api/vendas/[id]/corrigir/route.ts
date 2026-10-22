@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/vendas/[id]/corrigir
  *
@@ -95,6 +96,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const moduleDenied = await requireModuleApi(req, "sales")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const { id: rawId } = await params
@@ -579,10 +583,11 @@ export async function POST(
       let nomeClienteFinal = novoClienteNome ?? null
       if (novoClienteId) {
         const cpfPayload = payload.customerCpf
-        const cliente = await prisma.cliente.findUnique({
-          where: { id: novoClienteId },
+        const cliente = await prisma.cliente.findFirst({
+          where: { id: novoClienteId, storeId },
           select: { document: true, name: true },
         })
+        if (!cliente) return NextResponse.json({ ok: false, error: "Cliente não encontrado nesta unidade." }, { status: 404 })
         if (cliente) {
           newPayload.customerCpf = cliente.document ?? cpfPayload ?? null
           newPayload.customerName = cliente.name ?? novoClienteNome ?? null

@@ -7,8 +7,8 @@ export function canUseClientOperations(session: Session | null): boolean {
     .includes(String(session.user.role ?? "").toUpperCase())
 }
 
-export function canReadClientRegister(session: Session | null): boolean {
-  return canUseClientOperations(session) && hasCadastrosHub(session)
+export function canReadClientRegister(session: Session | null, storeId?: string): boolean {
+  return canUseClientOperations(session) && hasCadastrosHub(session, storeId)
 }
 
 export const CLIENT_LOOKUP_SELECT = { id: true, name: true, phone: true, document: true, kind: true, active: true } as const

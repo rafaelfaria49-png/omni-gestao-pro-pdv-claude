@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
@@ -22,6 +23,9 @@ function safeGroupByResult(rows: Array<{ storeId: string; _count: { _all: number
  * NÃO retorna secrets (não imprime DATABASE_URL).
  */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const storeIdResolved = storeIdFromAssistecRequestForRead(req)
   if (!storeIdResolved) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const hasDatabaseUrl = !!process.env.DATABASE_URL

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/vendas/historico
  *
@@ -70,6 +71,9 @@ function paymentMatchesFilter(payload: unknown, filter: string): boolean {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sales")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const url = new URL(req.url)

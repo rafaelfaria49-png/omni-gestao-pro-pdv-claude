@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { extractProductFormFromTranscript } from "@/lib/product-ncm-fiscal-ai"
 
@@ -5,6 +6,9 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "ai")
+  if (moduleDenied) return moduleDenied
+
   try {
     const body = (await req.json()) as { transcript?: string }
     const transcript = typeof body.transcript === "string" ? body.transcript.trim() : ""

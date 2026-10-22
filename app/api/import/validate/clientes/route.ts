@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { validateClientesImport, type MappingRecord } from "@/lib/import-validate"
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write", "admin")
   if (!gate.ok) return gate.response
 

@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
@@ -192,6 +193,7 @@ export async function registrarEntradaEstoque(
   let sid: string;
   let principal: CadastrosAuditPrincipal | null;
   try {
+    await requireModuleAction(storeId, "stock");
     const gate = await requireCadastrosActionAccess(storeId, "shared");
     sid = gate.storeId;
     principal = cadastrosAuditPrincipalFromSession(gate.session);
@@ -268,6 +270,7 @@ export async function registrarAjusteEstoque(
   let sid: string;
   let principal: CadastrosAuditPrincipal | null;
   try {
+    await requireModuleAction(storeId, "stock");
     const gate = await requireCadastrosActionAccess(storeId, "shared");
     sid = gate.storeId;
     principal = cadastrosAuditPrincipalFromSession(gate.session);
@@ -324,6 +327,8 @@ export async function diagnosticarSaldoEstoque(
   storeId: string,
   produtoId: string,
 ): Promise<DiagnosticoSaldoEstoque> {
+  await requireModuleAction(storeId, "stock")
+
   let sid: string;
   try {
     const gate = await requireCadastrosActionAccess(storeId, "shared");
@@ -394,6 +399,8 @@ export type EstoqueResumo = {
 
 /** KPIs de estoque da loja: valor a custo, valor a venda, unidades e cobertura de SKUs. */
 export async function getEstoqueResumo(storeId: string): Promise<EstoqueResumo> {
+  await requireModuleAction(storeId, "stock")
+
   const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
 
   // Produto.stock × precoCusto/price não é expressável em aggregate do Prisma → soma em JS.
@@ -432,6 +439,8 @@ export async function listMovimentacoesEstoque(
   storeId: string,
   opts?: { produtoId?: string; limit?: number }
 ): Promise<MovimentacaoEstoqueDTO[]> {
+  await requireModuleAction(storeId, "stock")
+
   const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
   const limit = Math.min(Math.max(1, opts?.limit ?? 50), 500);
 
@@ -580,6 +589,8 @@ export async function getAuditoriaEstoque(
   storeId: string,
   filtro?: AuditoriaEstoqueFiltro
 ): Promise<AuditoriaEstoqueData> {
+  await requireModuleAction(storeId, "stock")
+
   const sid = (await requireCadastrosActionAccess(storeId, "shared")).storeId;
 
   const limit = Math.min(Math.max(1, filtro?.limit ?? 300), 1000);

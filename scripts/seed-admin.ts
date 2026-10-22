@@ -36,6 +36,7 @@ async function main() {
     where: { email },
     update: { password: hash, role: "SUPER_ADMIN" },
     create: {
+      accessScope: "PLATFORM",
       email,
       name: "Admin RAFACELL",
       password: hash,

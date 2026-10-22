@@ -29,7 +29,7 @@ import { POST as validate } from "../import/validate/clientes/route"
 
 const pii = "PRIVATE_CUSTOMER_MARKER"
 function session(role = "ADMIN") {
-  h.session = { user: { id: "actor-1", name: "Canonical Actor", role, storeAccess: "restricted", allowedStoreIds: ["store-a"] }, expires: "2099-01-01" } as Session
+  h.session = { user: { id: "actor-1", name: "Canonical Actor", lojaId: "store-a", role, storeModules: { "store-a": ["catalog", "pdv", "sales", "service"] }, storeAccess: "restricted", allowedStoreIds: ["store-a"] }, expires: "2099-01-01" } as Session
 }
 function req(body?: unknown, store = "store-a", path = "clientes") {
   return new Request("https://app.local/api/" + path, { method: body === undefined ? "GET" : "POST",
@@ -91,7 +91,7 @@ describe("CAD-R2-020 boundaries", () => {
   })
   it("rejects URL searches and legacy phone GET", async () => {
     expect((await list(req(undefined, "store-a", "clientes?q=private"))).status).toBe(400)
-    expect((await phoneGet()).status).toBe(405); expect(h.findMany).not.toHaveBeenCalled()
+    expect((await phoneGet(req())).status).toBe(405); expect(h.findMany).not.toHaveBeenCalled()
   })
   it.each([list, legacy])("exceptions are absent from response and logs even in development", async fn => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {})
@@ -109,6 +109,7 @@ describe("CAD-R2-020 boundaries", () => {
     expect(await res.text()).not.toContain(pii)
   })
   it("validation errors never echo the invalid document", async () => {
+    h.session!.user.platformAuthority = true // authorized internal import validation
     const res = await validate(req({ rows: [{ Nome: "Name", CPF: pii + "123" }], mapping: { "clientes.nome": "Nome", "clientes.doc": "CPF" } }))
     const body = await res.json(); expect(body.errors).toHaveLength(1); expect(JSON.stringify(body)).not.toContain(pii)
   })

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextRequest, NextResponse } from "next/server"
 import {
   cadastrosAuditLogFields,
@@ -50,6 +51,9 @@ function isProdutoNormalizado(x: unknown): x is ProdutoNormalizado {
 }
 
 export async function POST(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write", "hub")
   if (!gate.ok) return gate.response
   const principal = cadastrosAuditPrincipalFromSession(gate.session)

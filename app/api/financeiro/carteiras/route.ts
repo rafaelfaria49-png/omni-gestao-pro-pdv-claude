@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
@@ -18,6 +19,9 @@ function err(msg: string, code: string, status = 400) {
 // ─── GET /api/financeiro/carteiras ───────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardFinanceiroViewOrOps(storeId)
@@ -48,6 +52,9 @@ const postSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequestForWrite(req)
   if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardEnterpriseOrOps(

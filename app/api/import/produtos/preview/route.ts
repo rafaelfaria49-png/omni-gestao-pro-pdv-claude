@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
@@ -48,6 +49,9 @@ function erro(error: string, status = 400, detalhe?: string): NextResponse<Previ
 }
 
 export async function POST(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const a = await requireAuth()
   if (!a.ok) return a.res
 

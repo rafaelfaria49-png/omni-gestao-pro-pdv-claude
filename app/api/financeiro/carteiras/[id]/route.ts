@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import {
@@ -30,6 +31,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequestForWrite(req)
   if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardEnterpriseOrOps(

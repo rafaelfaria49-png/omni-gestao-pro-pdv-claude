@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
 
@@ -44,6 +45,8 @@ const RETRY_DELAY_MS = 700
 export async function enrichVendaEnterprise(
   input: EnterpriseEnrichInput
 ): Promise<{ ok: boolean }> {
+  await requireModuleAction(input.storeId, "sales")
+
   const { pedidoId, storeId, ...enterpriseData } = input
   if (!pedidoId || !storeId) return { ok: false }
 

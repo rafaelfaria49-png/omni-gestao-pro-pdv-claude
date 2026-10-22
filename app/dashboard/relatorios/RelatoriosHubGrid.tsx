@@ -39,6 +39,9 @@ type ReportCard = {
 }
 
 const reports: ReportCard[] = [
+  { title: "Histórico de Caixa", description: "Consulte aberturas, fechamentos e movimentos de caixa da unidade.",
+    href: "/dashboard/caixa/historico", icon: Wallet, tone: "text-info", bg: "bg-info/10", status: "disponivel",
+    visible: (p) => p.hubs.caixaHistorico },
   {
     title: "Histórico de Vendas",
     description: "Visualize todas as vendas registradas, busque por cliente ou cupom e acompanhe o faturamento real.",
@@ -192,8 +195,8 @@ export function RelatoriosHubGrid() {
   const [selectedRoadmap, setSelectedRoadmap] = useState<ReportCard | null>(null)
 
   const visibleReports = useMemo(() => {
-    if (!perms) return reports
-    return reports.filter((r) => (r.visible ? r.visible(perms) : true))
+    if (!perms) return []
+    return reports.filter((r) => (perms.platformAuthority || r.status === "disponivel") && (r.visible ? r.visible(perms) : true))
   }, [perms])
 
   if (perms && !perms.hubs.relatorios) {

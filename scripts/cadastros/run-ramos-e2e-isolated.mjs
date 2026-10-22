@@ -24,7 +24,7 @@ function run(args, env = process.env) {
   if (result.error || result.status !== 0) throw new Error("RAMOS_E2E_STEP_FAILED")
 }
 
-const { PrismaClient } = await import("../../generated/prisma/index.js")
+const { PrismaClient, Prisma } = await import("../../generated/prisma/index.js")
 const db = new PrismaClient({ datasourceUrl: database })
 const secret = () => randomBytes(18).toString("base64url")
 const passwords = { admin: secret(), operador: secret(), caixa: secret() }
@@ -36,7 +36,7 @@ try {
   if (await db.store.count() || await db.produto.count() || await db.adminUser.count() || await db.storeSettings.count()) {
     throw new Error("RAMOS_E2E_DATABASE_MUST_BE_EMPTY")
   }
-  const store = (id, name, profile) => ({ id, name, profile, cnpj: "00.000.000/0000-00", phone: "(00) 0000-0000" })
+  const store = (id, name, profile) => ({ id, name, profile, moduleAccess: Prisma.DbNull, cnpj: "00.000.000/0000-00", phone: "(00) 0000-0000" })
   await db.store.createMany({ data: [
     store("e2e-a-padaria", "Padaria Sintética A", "ASSISTENCIA"),
     store("e2e-b-variedades", "Variedades Sintética B", "VARIEDADES"),
@@ -65,7 +65,7 @@ try {
       stock: 0, warrantyDays: 30, category: "Sintéticos", metadata: { atributos: { modeloCompativel: "Modelo Sintético Z" }, fiscal: { ncm: "39199090" } } },
   ] })
   const user = async (email, name, password, role, lojaId) => db.adminUser.create({ data: {
-    email, name, role, lojaId, password: await bcrypt.hash(password, 10),
+    email, name, role, lojaId, accessScope: role === "ADMIN" ? "PLATFORM" : "STORE", password: await bcrypt.hash(password, 10),
     ...(lojaId ? { adminUserStores: { create: { storeId: lojaId } } } : {}),
   } })
   await user("admin@e2e-cadastros.invalid", "Admin Sintético", passwords.admin, "ADMIN", null)

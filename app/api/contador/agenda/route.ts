@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/contador/agenda?c=AAAA-MM
  *
@@ -22,13 +23,16 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
 
   const escopo = await requireContadorScope()
   if (!escopo.ok) return respostaFalhaEscopo(escopo)
 
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const agenda = await listarAgenda(
       { storeId: escopo.storeId, userId: escopo.userId },

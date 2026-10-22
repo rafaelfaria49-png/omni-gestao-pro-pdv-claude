@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/contador/agenda/obrigacoes/:id/status
  *
@@ -24,6 +25,9 @@ export const revalidate = 0
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function POST(req: Request, ctx: Ctx) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return RESPOSTA_CHAVE_PROIBIDA
   const escopo = await requireContadorScope()
@@ -36,7 +40,7 @@ export async function POST(req: Request, ctx: Ctx) {
   }
   if (temChaveProibida(body)) return RESPOSTA_CHAVE_PROIBIDA
   const { id } = await ctx.params
-  const capacidades = resolverCapacidadesContador(await auth())
+  const capacidades = resolverCapacidadesContador(await auth(), escopo.storeId)
   try {
     const obrigacao = await alterarStatusObrigacao(
       { storeId: escopo.storeId, userId: escopo.userId },

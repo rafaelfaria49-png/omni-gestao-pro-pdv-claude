@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { stripe } from "@/lib/stripe"
@@ -8,7 +9,10 @@ export const dynamic = "force-dynamic"
 
 const APP_URL = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 
-export async function POST() {
+export async function POST(accessRequest: Request) {
+  const moduleDenied = await requireModuleApi(accessRequest, "billing")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 })

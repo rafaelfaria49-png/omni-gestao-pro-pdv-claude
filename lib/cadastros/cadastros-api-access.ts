@@ -1,6 +1,7 @@
 import type { Session } from "next-auth"
 import { isElevatedRole } from "@/lib/auth/admin-users-policy"
-import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { canAccessStore, getPermissionsFromSession } from "@/lib/auth/enterprise-permissions"
+import { isPlatformSession } from "@/lib/auth/access-policy"
 
 /**
  * Boundary de loja específico de Cadastros REST.
@@ -16,15 +17,12 @@ export function canAuthorizeCadastrosStore(
   if (!session?.user?.id) return false
   const sid = (storeId ?? "").trim()
   if (!sid) return false
-  if (isElevatedRole(String(session.user.role ?? ""))) return true
-  if (session.user.storeAccess !== "restricted") return false
-  const ids = session.user.allowedStoreIds ?? []
-  return ids.includes(sid)
+  return canAccessStore(session, sid)
 }
 
-export function hasCadastrosHub(session: Session | null): boolean {
+export function hasCadastrosHub(session: Session | null, storeId?: string): boolean {
   if (!session?.user?.id) return false
-  return getEnterprisePermissions(session.user.role).hubs.cadastros === true
+  return getPermissionsFromSession(session, storeId).hubs.cadastros === true
 }
 
 export function isCadastrosAdminPrincipal(session: Session | null): boolean {
@@ -35,7 +33,7 @@ export function isCadastrosAdminPrincipal(session: Session | null): boolean {
 /** Lojas visíveis para dumps globais (auditoria / lista de lojas). */
 export function cadastrosStoreScope(session: Session | null): "all" | string[] {
   if (!session?.user?.id) return []
-  if (isCadastrosAdminPrincipal(session)) return "all"
+  if (isPlatformSession(session)) return "all"
   if (session.user.storeAccess !== "restricted") return []
   return (session.user.allowedStoreIds ?? []).map((id) => id.trim()).filter(Boolean)
 }

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { SETTINGS_SECTIONS, SectionId } from "../sections";
 import { cn } from "../../../lib/utils";
 import { Sparkles, CreditCard } from "lucide-react";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
+import { canAccessSettingsSection } from "@/lib/auth/page-access";
 
 interface SettingsSidebarProps {
   active: SectionId;
@@ -9,6 +11,7 @@ interface SettingsSidebarProps {
 }
 
 export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
+  const permissions = useEnterprisePermissions();
   return (
     <aside className="settings-sidebar-aside border-r border-border bg-sidebarBg lg:w-64 lg:shrink-0 select-none">
       <div className="settings-sidebar-header border-border">
@@ -23,7 +26,7 @@ export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
 
       <nav className="settings-sidebar-nav scroll-elegant">
         <ul className="settings-sidebar-list">
-          {SETTINGS_SECTIONS.map((s) => {
+          {SETTINGS_SECTIONS.filter((s) => canAccessSettingsSection(permissions, s.id)).map((s) => {
             const isActive = !s.href && active === s.id;
             const Icon = s.icon;
             const itemClassName = cn(

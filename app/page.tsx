@@ -1,55 +1,19 @@
-"use client"
+import Link from "next/link"
+import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 
-import { useCallback, useState } from "react"
-import "@/components/landing/lovable/landing.css"
-import { Navbar } from "@/components/landing/lovable/Navbar"
-import { Hero } from "@/components/landing/lovable/Hero"
-import { AIMarquee } from "@/components/landing/lovable/AIMarquee"
-import { ValueStack } from "@/components/landing/lovable/ValueStack"
-import { BeforeAfter } from "@/components/landing/lovable/BeforeAfter"
-import { Arsenal } from "@/components/landing/lovable/Arsenal"
-import { Testimonials } from "@/components/landing/lovable/Testimonials"
-import { Academy } from "@/components/landing/lovable/Academy"
-import { Pricing } from "@/components/landing/lovable/Pricing"
-import { CreditsExplainer } from "@/components/landing/lovable/CreditsExplainer"
-import { FAQ } from "@/components/landing/lovable/FAQ"
-import { FinalCTA } from "@/components/landing/lovable/FinalCTA"
-import { Footer } from "@/components/landing/lovable/Footer"
-import { SignupModal } from "@/components/landing/lovable/SignupModal"
-import { ComparisonModal } from "@/components/landing/lovable/ComparisonModal"
-
-export default function Page() {
-  const [signupOpen, setSignupOpen] = useState(false)
-  const [compareOpen, setCompareOpen] = useState(false)
-  const [planName, setPlanName] = useState<string | undefined>(undefined)
-
-  const openSignup = useCallback((plan?: string) => {
-    setPlanName(plan)
-    setSignupOpen(true)
-  }, [])
-
-  return (
-    <div className="landing-page min-h-screen overflow-x-hidden bg-background text-foreground">
-      <Navbar onCta={() => openSignup()} />
-      <Hero onCta={() => openSignup()} />
-      <AIMarquee />
-      <ValueStack onCta={() => openSignup()} />
-      <BeforeAfter />
-      <Arsenal />
-      <Testimonials />
-      <Academy />
-      <Pricing
-        onSelect={(plan) => openSignup(plan)}
-        onCompare={() => setCompareOpen(true)}
-      />
-      <CreditsExplainer />
-      <FAQ />
-      <FinalCTA onCta={() => openSignup()} />
-      <Footer />
-
-      <SignupModal open={signupOpen} onOpenChange={setSignupOpen} planName={planName} />
-      <ComparisonModal open={compareOpen} onOpenChange={setCompareOpen} />
-    </div>
-  )
+export default function PilotEntryPage() {
+  return <main className="flex min-h-screen flex-col bg-background px-6 py-8 text-foreground sm:px-12">
+    <header className="text-sm font-semibold">{APP_DISPLAY_NAME}</header>
+    <section className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-6 py-16">
+      <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Acesso piloto</p>
+      <h1 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">A gestão da sua loja começa por aqui.</h1>
+      <p className="max-w-xl text-base leading-relaxed text-muted-foreground">O acesso ao OmniGestão Pro é liberado pela equipe da plataforma para as lojas participantes do piloto.</p>
+      <div>
+        {/* A entrada de autenticação carrega um novo documento e seu contexto de sessão. */}
+        <a href="/login" className="inline-flex min-h-11 items-center rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">Entrar no sistema</a>
+      </div>
+      <p className="text-sm text-muted-foreground">Já recebeu seu acesso? Use o email e a senha individual fornecidos pelo responsável.</p>
+    </section>
+    <footer className="text-xs text-muted-foreground"><Link href="/privacy" className="underline">Privacidade</Link></footer>
+  </main>
 }
-

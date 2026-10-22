@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/contador/notificacoes/[id]/rascunho?c=AAAA-MM
  *
@@ -24,6 +25,9 @@ export const revalidate = 0
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function GET(req: Request, ctx: Ctx) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (temChaveProibida(url.searchParams)) return respostaChaveProibida()
 

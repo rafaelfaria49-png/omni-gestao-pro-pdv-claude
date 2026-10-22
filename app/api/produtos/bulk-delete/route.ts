@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
@@ -24,6 +25,9 @@ function storeIdFromRequest(req: Request): string | null {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
   let body: unknown

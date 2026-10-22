@@ -18,6 +18,7 @@ export function useStoreBusiness() {
   return {
     ...settings,
     ready,
+    permissions,
     capabilities,
     branch: configuredBusinessBranch(capabilities) ?? legacyBusinessBranch(profile),
     configured: !!configuredBusinessBranch(capabilities),
@@ -25,7 +26,9 @@ export function useStoreBusiness() {
     presentation: businessPresentation(capabilities),
     canConfigure: permissions?.admin.configuracoes === true,
     resource: (key: BusinessResourceKey) => resolveBusinessResource(
-      capabilities, key, profile, ready && (permissions?.hubs.cadastros ?? false),
+      capabilities, key, profile, ready && (permissions?.hubs.cadastros ?? false) &&
+        (key === "service.technical" ? permissions?.hubs.operacoes === true :
+          key === "catalog.deviceCompatibility" || key === "pdv.accessoryModelColor" ? permissions?.modules?.deviceCatalog === true : true),
     ),
   }
 }

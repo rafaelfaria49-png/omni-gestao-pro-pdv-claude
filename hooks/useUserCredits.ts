@@ -5,12 +5,13 @@ import { CREDIT_BALANCE_UPDATED_EVENT } from "@/lib/creditsEvents"
 
 type CreditsResponse = { credits?: number }
 
-export function useUserCredits() {
+export function useUserCredits(enabled = true) {
   const [credits, setCredits] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const refetch = useCallback(async () => {
+    if (!enabled) { setCredits(null); setLoading(false); return }
     setLoading(true)
     setError(null)
     try {
@@ -27,7 +28,7 @@ export function useUserCredits() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [enabled])
 
   useEffect(() => {
     void refetch()

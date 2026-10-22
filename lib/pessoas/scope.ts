@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { prisma } from "@/lib/prisma"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 import { exigirModulo, hojeCivil, PessoasError } from "./domain"
+import { isPlatformSession } from "@/lib/auth/access-policy"
 
 export const CAPACIDADES = [
   "viewCadastro", "editCadastro", "viewRemuneracao", "editContrato", "viewDocumento", "manageAccess",
@@ -19,7 +20,7 @@ export async function exigirAtor(): Promise<AtorPessoas> {
   exigirModulo()
   const sessao = await auth()
   const userId = sessao?.user?.id
-  if (!userId) throw new PessoasError("NAO_AUTENTICADO", 401)
+  if (!userId || sessao.user.mustChangePassword) throw new PessoasError("NAO_AUTENTICADO", 401)
   const storeId = (await cookies()).get(ASSISTEC_ACTIVE_STORE_COOKIE)?.value?.trim()
   if (!storeId || !/^[A-Za-z0-9_-]{1,100}$/.test(storeId)) throw new PessoasError("LOJA_AUSENTE", 403)
   const [usuario, membership, loja] = await Promise.all([
@@ -34,6 +35,7 @@ export async function exigirAtor(): Promise<AtorPessoas> {
 }
 
 export async function exigirBootstrap(): Promise<AtorPessoas> {
+  if (!isPlatformSession(await auth())) throw new PessoasError("BOOTSTRAP_NEGADO", 403)
   const ator = await exigirAtor()
   if (ator.role !== "ADMIN" && ator.role !== "SUPER_ADMIN") {
     throw new PessoasError("BOOTSTRAP_NEGADO", 403)

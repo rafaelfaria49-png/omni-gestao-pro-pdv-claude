@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Gerenciamento do PIN de supervisor do PDV (modelo `User`, role ADMIN/admin).
  *
@@ -64,7 +65,10 @@ async function requireAdminNextAuth(): Promise<
   return { ok: true, userId: session.user.id, userName: session.user.name }
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(accessRequest: Request): Promise<NextResponse> {
+  const moduleDenied = await requireModuleApi(accessRequest, "platform")
+  if (moduleDenied) return moduleDenied
+
   const guard = await requireAdminNextAuth()
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
@@ -93,6 +97,9 @@ export async function GET(): Promise<NextResponse> {
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const guard = await requireAdminNextAuth()
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status })
 

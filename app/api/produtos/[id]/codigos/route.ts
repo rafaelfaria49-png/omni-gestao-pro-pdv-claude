@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
@@ -39,6 +40,9 @@ function normalizeCodeField(v: unknown): string | null | undefined {
  * Autorização preservada: requireAdmin + storeId explícita.
  */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await context.params
   if (!id?.trim()) return badRequest("ID inválido")
 

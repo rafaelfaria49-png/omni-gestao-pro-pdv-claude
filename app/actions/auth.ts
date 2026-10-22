@@ -33,7 +33,7 @@ export async function signInAction(
           return { error: "Erro ao fazer login. Tente novamente." }
       }
     }
-    console.error("[signInAction]", error)
+    console.error("[signInAction] authentication_failed")
     return { error: "Erro inesperado. Tente novamente." }
   }
 }

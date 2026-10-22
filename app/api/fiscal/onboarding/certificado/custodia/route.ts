@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Custódia do certificado A1 (GOAL-016C) — gravação do material no cofre de segredos.
  *
@@ -61,6 +62,9 @@ function parseIsoDate(iso: string | null): Date | null {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)
@@ -326,6 +330,9 @@ export async function POST(req: Request) {
 
 /** Diagnóstico da custódia (sem dados sensíveis) — provider, disponibilidade e capacidades. */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)
