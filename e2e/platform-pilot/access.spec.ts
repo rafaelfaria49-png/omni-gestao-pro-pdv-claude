@@ -67,7 +67,7 @@ test("cliente básico: desktop, busca, cadastros e menu móvel usam o pacote lib
   await expect(page.getByRole("heading", { name: "Padaria Piloto A" })).toBeVisible()
   for (const path of ["ia-mestre", "omni-agent", "marketing-ia", "whatsapp", "master-console", "unidades", "catalogo-aparelhos", "operacoes-v3"]) await expect(page.locator(`a[href="/dashboard/${path}"]`)).toHaveCount(0)
   await expect(page.getByRole("link", { name: "PDV Clássico", exact: true }).first()).toBeVisible()
-  await page.screenshot({ path: "test-results/platform-pilot/basic-desktop.png", fullPage: true })
+  await page.screenshot({ path: "test-results/platform-pilot/basic-desktop.png", fullPage: true, animations: "disabled" })
   await page.keyboard.press("Control+k")
   await expect(page.getByRole("dialog")).toBeVisible()
   await expect(page.getByRole("dialog")).not.toContainText(/Nova OS|WhatsApp|IA Mestre|Financeiro HUB/)
@@ -80,7 +80,7 @@ test("cliente básico: desktop, busca, cadastros e menu móvel usam o pacote lib
   await expect(page.getByRole("button", { name: "Abrir menu de navegação", includeHidden: true })).toHaveAttribute("data-state", "open")
   await expect(page.getByRole("dialog", { name: "Navegação" })).not.toContainText(/IA Mestre|Master Console|WhatsApp HUB|Catálogo de Aparelhos/)
   await expect(page.getByRole("dialog", { name: "Navegação" }).getByRole("link", { name: "PDV Clássico" })).toBeVisible()
-  await page.screenshot({ path: "test-results/platform-pilot/basic-mobile.png", fullPage: true })
+  await page.screenshot({ path: "test-results/platform-pilot/basic-mobile.png", fullPage: true, animations: "disabled" })
 })
 
 test("nega URL, API, payload comercial e promoção adulterados no servidor", async () => {
@@ -280,7 +280,7 @@ test("CAIXA básico abre sessão, vende, registra pagamento, baixa estoque e fec
   await setupPage(page, cashier); await page.goto("/dashboard/vendas")
   await expect(page).toHaveURL(/\/dashboard\/vendas/)
   await expect(page.getByRole("link", { name: "IA Mestre", exact: true })).toHaveCount(0)
-  await page.screenshot({ path: "test-results/platform-pilot/basic-pdv.png", fullPage: true })
+  await page.screenshot({ path: "test-results/platform-pilot/basic-pdv.png", fullPage: true, animations: "disabled" })
 })
 
 test("formulário de login autentica credenciais reais do cliente básico", async ({ page }) => {
