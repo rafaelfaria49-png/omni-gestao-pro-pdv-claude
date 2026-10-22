@@ -31,7 +31,7 @@ aplicar. A câmera nunca abre ao entrar em Clientes nem ao abrir a importação.
 | Câmera | `getUserMedia` só vídeo (sem microfone), câmera traseira preferida. Um quadro a cada 250 ms, sem sobreposição, reduzido para ≤ 960 px. Desliga sozinha 60 s depois de a track ser concedida (mesmo que `play()` não termine). |
 | Decodificador | `jsqr@1.4.0` (Apache-2.0, sem dependências, sem rede/eval; ~250 KB não minificado), carregado sob demanda como chunk do próprio app — sem CDN. Lê os **bytes exatos** do QR. O `BarcodeDetector` nativo só é consultado quando existe, suporta `qr_code` e o jsQR não achou nada no quadro. |
 | Conteúdo | Até 4.096 bytes (um QR comporta 2.953). Bytes → UTF-8 estrito → `parseVcardBytes` (mesmo parser, versões, limites e mensagens da #297). Texto do detector nativo → `parseVcardText`; texto com "Ã©" (UTF-8 lido como Latin-1 pelo sistema) ou U+FFFD é recusado, nunca "corrigido". Modo Kanji ou ECI ≠ UTF-8 com bytes não ASCII: recusa de codificação. |
-| Recusas | Link (http/https, www., mailto:, tel:, javascript:, data: …), PIX (BR Code), Wi-Fi, MECARD, texto comum, conteúdo desconhecido, mais de um QR na imagem (depois do primeiro, a área dele é coberta com a cor do fundo e o restante é lido de novo: a imagem inteira e cada região separada por faixas uniformes — a zona de silêncio que todo QR tem —, por cortes XY com teto de 12 regiões; qualquer outro QR, mesmo cópia idêntica, = recusa, nunca escolha arbitrária), nenhum QR, imagem corrompida — cada um com mensagem própria que **não ecoa** o conteúdo. O link não é aberto nem requisitado. |
+| Recusas | Link (http/https, www., mailto:, tel:, javascript:, data: …), PIX (BR Code), Wi-Fi, MECARD, texto comum, conteúdo desconhecido, mais de um QR na imagem (depois do primeiro, a área dele é coberta com a cor do fundo e o restante é lido de novo: a imagem inteira e cada região separada por faixas uniformes — a zona de silêncio que todo QR tem —, por cortes XY com teto de 16 regiões — passar do teto = recusa pedindo recorte, nunca aceitação sem conferir; qualquer outro QR, mesmo cópia idêntica, inclusive pelo detector nativo, = recusa, nunca escolha arbitrária), nenhum QR, imagem corrompida — cada um com mensagem própria que **não ecoa** o conteúdo. O link não é aberto nem requisitado. |
 
 Por que não só o nativo: `BarcodeDetector` não existe no Chrome desktop do Windows,
 no Firefox nem no Safari, e devolve texto já decodificado pelo sistema (acento pode
@@ -104,7 +104,8 @@ volta para depois do `play()` ou sem a segunda leitura, os testes da R1 falham.
 | --- | --- | --- | --- |
 | R1 | Codex (gpt-6.1-sol, sandbox somente leitura, contexto novo, sem autoria no diff) | `0673b83` | CHANGES_REQUESTED — 1 P1, 2 P2 |
 | R2 | idem, nova sessão | `7126c29` | CHANGES_REQUESTED — 1 P2 (R1 confirmada corrigida) |
-| R3 | idem, nova sessão | head final | registrado na PR #298 |
+| R3 | idem, nova sessão | `6e95821` | CHANGES_REQUESTED — 2 P2 (R2 confirmada corrigida) |
+| R4 | idem, nova sessão | head final | registrado na PR #298 |
 
 Correções da R1, cada uma com regressão:
 
@@ -119,6 +120,13 @@ ser recusado, e a busca lê cada região separada por faixa uniforme, porque o j
 lê nenhum de dois QRs do mesmo tamanho na mesma imagem (sonda: com `A, A, B` ele lia
 primeiro B; coberto B, não achava os dois A). Regressões com três QRs reais (`A, A, B`,
 `A, B, A`, invertido) e sem falso positivo para um QR cercado de blocos de "texto".
+
+Correções da R3: o detector nativo deduplicava os valores antes de contar (duas cópias
+iguais passavam) — agora conta ocorrências; e o teto de regiões descartava em silêncio as
+regiões excedentes (com blocos antes dos QRs restantes, B era aceito) — agora passar do
+teto recusa a imagem pedindo recorte (`CROWDED`; na câmera, encerra pedindo para enquadrar
+só o QR). Regressões: dois resultados nativos iguais; 30 blocos acima de `A, A, B`; quadro
+da câmera "lotado". Mutações das duas correções reprovam os testes.
 
 Na primeira CI, o E2E "nada gravado" também exigia zero Server Actions; o HUB usa
 Server Actions para as próprias leituras (multipart, sem o contato). A asserção passou
@@ -153,6 +161,8 @@ Não foi corrigida aqui (fora do escopo).
   encerra a track em < 1 s localmente, por isso o E2E usa vídeo Y4M.
 - jsQR é síncrono: o tempo por leitura é limitado pelo teto de pixels (≤ 2,6 MP por
   imagem, ≤ 0,9 MP por quadro), não por cancelamento no meio do quadro.
+- Imagem com mais de 16 regiões separadas por faixas uniformes (ex.: print de documento
+  com muito texto ao redor do QR) é recusada pedindo recorte, mesmo com um QR só.
 - Vários QRs encostados, sem faixa uniforme entre eles (ex.: foto com fundo), podem não ser
   detectados como "mais de um"; a prévia mostra o contato lido para a revisão humana.
 - Só vCard. MECARD, contatos em lote, agenda do dispositivo e QR com várias páginas não
