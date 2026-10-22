@@ -102,6 +102,9 @@ sem retry automático. Vale para todos os caminhos do editor (manual, texto, voz
 | Rodada | Revisor | SHA | Parecer |
 | --- | --- | --- | --- |
 | R1 | Codex (gpt-6.1-sol, sandbox somente leitura, contexto novo, sem autoria no diff) | `8e3c17a` | CHANGES_REQUESTED — 3 P2 |
+| R2 | idem, nova sessão | `0382c8e` | APPROVE — 3 P2 confirmados corrigidos (regressões falham sem a correção); 1 P3 no E2E |
+
+P3 da R2 (E2E multiloja passaria mesmo com vazamento, pois A estava vazia): o admin agora cria um cliente sintético em A, e a listagem do operador de B precisa não exibi-lo. A mudança é só de teste.
 
 Correções da R1, cada uma com regressão:
 

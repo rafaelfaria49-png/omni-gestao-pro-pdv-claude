@@ -220,6 +220,7 @@ test("vCard: cancelar não cria registro; duplicidade canônica recusada sem fus
 
 test("vCard: servidor recusa papel sem Cadastros e outra loja; leitura isolada por loja", async ({ page, browser }) => {
   const NAME = "Cliente vCard Sintético Base Ação"
+  const STORE_A_CLIENT = "Cliente Sintético da Loja A"
   const seen = recordRequests(page)
   await login(page, USERS.admin)
   await switchStore(page, "Variedades Sintética B")
@@ -256,6 +257,10 @@ test("vCard: servidor recusa papel sem Cadastros e outra loja; leitura isolada p
     const control = await replay(page, B, "Controle Reenvio Admin Sintético")
     expect(control.text).toMatch(/"ok":true/)
     await expect.poll(async () => (await clientsNamed("Controle Reenvio Admin Sintético", B)).length).toBe(1)
+    // Cliente em A (admin autorizado nas duas lojas): sua ausência na listagem de B é o que prova o isolamento.
+    const inA = await replay(page, A, STORE_A_CLIENT)
+    expect(inA.text).toMatch(/"ok":true/)
+    await expect.poll(async () => (await clientsNamed(STORE_A_CLIENT, A)).length).toBe(1)
   })
 
   await test.step("Caixa (sem Cadastros) é recusado pelo servidor na própria loja", async () => {
@@ -271,9 +276,12 @@ test("vCard: servidor recusa papel sem Cadastros e outra loja; leitura isolada p
     const refused = await replay(operador.page, A, "Tentativa Outra Loja Sintética")
     expect(refused.text).not.toMatch(/"ok":true/)
     expect(await clientsNamed("Tentativa Outra Loja Sintética")).toHaveLength(0)
-    expect(await (await readDb()).cliente.count({ where: { storeId: A } })).toBe(0)
+    expect(await (await readDb()).cliente.findMany({ where: { storeId: A }, select: { name: true } })).toEqual([{ name: STORE_A_CLIENT }])
     await openClientes(operador.page)
     await expect(operador.page.locator("tbody tr").filter({ hasText: NAME })).toHaveCount(1)
+    await expect(operador.page.locator("tbody tr").filter({ hasText: STORE_A_CLIENT })).toHaveCount(0)
+    await operador.page.getByPlaceholder("Buscar em clientes…").fill("Loja A")
+    await expect(operador.page.locator("tbody tr").filter({ hasText: STORE_A_CLIENT })).toHaveCount(0)
     await operador.context.close()
   })
 })
