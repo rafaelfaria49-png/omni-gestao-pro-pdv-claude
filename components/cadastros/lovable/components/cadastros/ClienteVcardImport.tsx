@@ -1,10 +1,12 @@
 "use client"
 
 import React, { useEffect, useId, useRef, useState } from "react"
-import { Contact } from "lucide-react"
+import { Camera, Contact, QrCode } from "lucide-react"
 import type { ClientEditorValues } from "@/lib/cadastros/natural-text/cliente"
 import { CLIENT_TEXT_LABELS } from "@/lib/cadastros/natural-text/cliente-types"
-import { VCARD_ERROR_MESSAGES, VCARD_LIMITS, parseVcardBytes, parseVcardText, type VcardContact, type VcardParseResult } from "@/lib/cadastros/vcard/parser"
+import { VCARD_ERROR_MESSAGES, VCARD_LIMITS, parseVcardBytes, parseVcardText, type VcardContact } from "@/lib/cadastros/vcard/parser"
+import { QR_ERROR_MESSAGES, QR_LIMITS, qrPayloadToVcard, type QrReadResult } from "@/lib/cadastros/vcard/qr"
+import { decodeQrImage, startQrCamera, type QrCameraHandle } from "@/lib/cadastros/vcard/qr-browser"
 import {
   aplicaveisAosVazios, avisoTelefone, divergencias, previewContato, problemasRascunho, rascunhoInicial, rotulosContatos,
   type VcardClientField, type VcardClientPreview, type VcardDraft, type VcardOption,
@@ -18,6 +20,8 @@ type Props = {
   onApply: (patch: Partial<VcardDraft>, mode: "empty" | "replace") => void
 }
 type ChoiceField = "nome" | "telefone" | "email" | "endereco"
+/** Leitura de QR em andamento: câmera abrindo, câmera lendo quadros ou imagem sendo lida. */
+type QrStatus = "idle" | "starting" | "scanning" | "image"
 const button = "min-h-10 rounded-lg border border-border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
 const select = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
 const kib = (bytes: number) => `${Math.max(1, Math.ceil(bytes / 1024))} KiB`
@@ -32,10 +36,11 @@ function readFileBytes(file: File): Promise<ArrayBuffer> {
 }
 
 /**
- * Importação assistida de UM contato (.vcf ou texto colado) para o editor de Clientes.
- * O arquivo é lido e interpretado só neste navegador: nada vai ao servidor, storage,
- * URL ou log. A prévia vive nesta montagem e é descartada ao cancelar, fechar,
- * trocar de loja (o editor remonta), trocar de arquivo ou aplicar.
+ * Importação assistida de UM contato (.vcf, texto colado ou QR Code com vCard) para o
+ * editor de Clientes. Arquivo, imagem e quadros da câmera são lidos e interpretados só
+ * neste navegador: nada vai ao servidor, storage, URL ou log. A prévia vive nesta
+ * montagem e é descartada ao cancelar, fechar, trocar de loja (o editor remonta),
+ * trocar de arquivo ou aplicar. A câmera só abre por clique e desliga em toda saída.
  */
 export function ClienteVcardImport({ values, disabled, onApply }: Props) {
   const id = useId()
@@ -51,17 +56,41 @@ export function ClienteVcardImport({ values, disabled, onApply }: Props) {
   const [choice, setChoice] = useState<Partial<Record<ChoiceField, string>>>({})
   const [edited, setEdited] = useState<Set<VcardClientField>>(new Set())
   const [info, setInfo] = useState("")
+  const [qr, setQr] = useState<QrStatus>("idle")
+  const [qrRetry, setQrRetry] = useState(false)
   const serial = useRef(0)
   const mounted = useRef(false)
+  const video = useRef<HTMLVideoElement>(null)
+  const camera = useRef<QrCameraHandle | null>(null)
   useEffect(() => {
-    const lifecycle = mounted, reads = serial
+    const lifecycle = mounted, reads = serial, capture = camera
     lifecycle.current = true
-    // Fechar o editor, trocar de loja ou sair da tela invalida leituras em andamento.
-    return () => { lifecycle.current = false; reads.current++ }
+    // Fechar o editor, trocar de loja ou sair da tela invalida leituras e desliga a câmera.
+    return () => { lifecycle.current = false; reads.current++; capture.current?.stop(); capture.current = null }
   }, [])
+  useEffect(() => {
+    // Aba oculta ou saída da página nunca mantém a câmera ligada.
+    const onHide = (event: Event) => {
+      if (event.type === "visibilitychange" && document.visibilityState !== "hidden") return
+      const active = camera.current
+      if (!active) return
+      camera.current = null
+      serial.current++
+      active.stop()
+      setQr("idle"); setQrRetry(true); setError(QR_ERROR_MESSAGES.CAMERA_HIDDEN)
+    }
+    document.addEventListener("visibilitychange", onHide)
+    window.addEventListener("pagehide", onHide)
+    return () => { document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", onHide) }
+  }, [])
+  const live = (current: number) => mounted.current && current === serial.current
 
   function clearLoaded() {
     serial.current++
+    const active = camera.current
+    camera.current = null
+    active?.stop()
+    setQr("idle"); setQrRetry(false)
     setReading(false); setError(""); setInfo(""); setLoadedFrom("")
     setContacts(null); setSelected(null); setPreview(null); setDraft(null); setChoice({}); setEdited(new Set())
   }
@@ -72,7 +101,7 @@ export function ClienteVcardImport({ values, disabled, onApply }: Props) {
     const next = previewContato(list[index])
     setSelected(index); setPreview(next); setDraft(rascunhoInicial(next)); setChoice({}); setEdited(new Set()); setInfo("")
   }
-  function load(result: VcardParseResult, from: string) {
+  function load(result: QrReadResult, from: string) {
     if (!result.ok) { setError(result.message); return }
     setContacts(result.contacts)
     setLoadedFrom(from)
@@ -96,6 +125,55 @@ export function ClienteVcardImport({ values, disabled, onApply }: Props) {
       if (!mounted.current || current !== serial.current) return
       setReading(false)
       setError("Não foi possível ler o arquivo. Selecione-o novamente.")
+    })
+  }
+  /** Câmera só por clique; o primeiro QR reconhecido encerra a captura antes de chegar à prévia. */
+  function startCamera() {
+    const element = video.current
+    if (!element || disabled) return
+    clearLoaded()
+    const current = serial.current
+    setQr("starting")
+    // Só a captura corrente fala com a prévia: tentativa antiga, troca de loja ou leitura repetida são ignoradas.
+    const ours = () => live(current) && camera.current === handle
+    const handle: QrCameraHandle = startQrCamera({
+      win: window, video: element,
+      onActive: () => { if (ours()) setQr("scanning") },
+      onPayload: (payload) => {
+        if (!ours()) return
+        camera.current = null
+        setQr("idle")
+        const result = qrPayloadToVcard(payload)
+        setQrRetry(!result.ok)
+        load(result, "QR Code lido pela câmera")
+      },
+      onError: (code) => {
+        if (!ours()) return
+        camera.current = null
+        setQr("idle"); setQrRetry(true); setError(QR_ERROR_MESSAGES[code])
+      },
+    })
+    camera.current = handle
+  }
+  function onQrImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    input.value = ""
+    reset()
+    if (!file) return
+    // Tamanho antes de ler; formato e dimensões vêm do conteúdo, não da extensão ou do MIME.
+    if (file.size > QR_LIMITS.maxImageBytes) { setError(QR_ERROR_MESSAGES.IMAGE_TOO_LARGE); return }
+    const current = ++serial.current
+    setQr("image")
+    readFileBytes(file).then(
+      // Falha ao baixar o decodificador (chunk do app) é diferente de falha ao ler o arquivo.
+      (bytes) => live(current) ? decodeQrImage(new Uint8Array(bytes)).catch(() => ({ ok: false as const, code: "DECODER_UNAVAILABLE" as const })) : null,
+      () => ({ ok: false as const, code: "IMAGE_READ" as const }),
+    ).then((outcome) => {
+      if (!outcome || !live(current)) return
+      setQr("idle")
+      if (!outcome.ok) { setError(QR_ERROR_MESSAGES[outcome.code]); return }
+      load(qrPayloadToVcard(outcome.payload), "QR Code lido da imagem")
     })
   }
   function readPasted() {
@@ -183,9 +261,33 @@ export function ClienteVcardImport({ values, disabled, onApply }: Props) {
       <h3 id={`${id}-title`} className="flex min-w-0 items-center gap-2 text-sm font-semibold"><Contact aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />Importar contato (vCard)</h3>
       {!open && <button type="button" className={button} disabled={disabled} aria-expanded={false} aria-controls={`${id}-panel`} onClick={() => setOpen(true)}>Importar contato</button>}
     </div>
-    <p className="text-xs text-muted-foreground">Preenche este cadastro com os dados de UM contato (.vcf, vCard 3.0 ou 4.0 em UTF-8). Não importa agenda completa, clientes em lote nem backup do sistema.</p>
+    <p className="text-xs text-muted-foreground">Preenche este cadastro com os dados de UM contato (.vcf, texto ou QR Code; vCard 3.0 ou 4.0 em UTF-8). Não importa agenda completa, clientes em lote nem backup do sistema.</p>
     {open && <fieldset id={`${id}-panel`} disabled={disabled} className="min-w-0 space-y-3">
       <p className="text-xs text-muted-foreground">Limites: até {VCARD_LIMITS.maxBytes / 1024} KiB e {VCARD_LIMITS.maxContacts} contatos por arquivo, {VCARD_LIMITS.maxValueChars.toLocaleString("pt-BR")} caracteres por campo. O conteúdo é lido somente neste navegador: não é enviado ao servidor, guardado nem registrado.</p>
+      <div role="group" aria-labelledby={`${id}-qr-title`} className="min-w-0 space-y-2 rounded-md border border-border bg-background p-2 sm:p-3">
+        <p id={`${id}-qr-title`} className="flex min-w-0 items-center gap-2 text-sm font-medium"><QrCode aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />QR Code do contato</p>
+        <p className="text-xs text-muted-foreground">Só QR Code com vCard. Imagem PNG, JPG ou WebP até {QR_LIMITS.maxImageBytes / 1024 / 1024} MiB. Imagem e câmera são lidas só neste navegador: nada é enviado, guardado nem gravado, e links do QR não são abertos.</p>
+        <div className="flex flex-wrap gap-2">
+          {(qr === "idle" || qr === "image") && <button type="button" className={`${button} inline-flex items-center gap-2`} disabled={qr === "image"} onClick={startCamera}>
+            <Camera aria-hidden="true" className="h-4 w-4 shrink-0" />{qrRetry ? "Repetir tentativa" : "Ler QR Code com câmera"}
+          </button>}
+          {qr !== "idle" && <button type="button" className={button} onClick={clearLoaded}>Cancelar leitura</button>}
+        </div>
+        {/* A prévia só aparece enquanto a câmera está ligada; fora disso o elemento fica sem fonte. */}
+        <video ref={video} hidden={qr !== "starting" && qr !== "scanning"} aria-label="Prévia da câmera" muted playsInline
+          className="aspect-video w-full min-w-0 max-w-sm rounded-md border border-border bg-muted object-cover" />
+        {qr === "starting" && <p role="status" className="text-xs text-muted-foreground">Abrindo a câmera… autorize o acesso se o navegador pedir.</p>}
+        {qr === "scanning" && <p role="status" className="flex min-w-0 items-center gap-2 text-xs">
+          <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-destructive" />
+          <span className="min-w-0">Câmera ligada: aponte para o QR Code do contato. Ela desliga sozinha ao reconhecer o QR ou em {QR_LIMITS.maxCameraMs / 1000} s.</span>
+        </p>}
+        <div className="min-w-0 space-y-1">
+          <label htmlFor={`${id}-qr-image`} className="block text-sm">Escolher imagem de QR Code</label>
+          <input id={`${id}-qr-image`} type="file" accept="image/png,image/jpeg,image/webp" onChange={onQrImage}
+            className="block w-full min-w-0 text-sm text-foreground file:mr-3 file:min-h-10 file:rounded-lg file:border file:border-border file:bg-background file:px-3 file:py-2 file:text-sm file:text-foreground" />
+        </div>
+        {qr === "image" && <p role="status" className="text-xs text-muted-foreground">Procurando o QR Code na imagem, neste navegador…</p>}
+      </div>
       <div className="min-w-0 space-y-1">
         <label htmlFor={`${id}-file`} className="block text-sm">Arquivo de contato (.vcf)</label>
         <input id={`${id}-file`} type="file" accept=".vcf,.vcard,text/vcard,text/x-vcard" onChange={onFile}
@@ -257,7 +359,7 @@ export function ClienteVcardImport({ values, disabled, onApply }: Props) {
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
         <button type="button" className={button} onClick={close}>Cancelar importação</button>
       </div>
-      <p className="text-xs text-muted-foreground">Cancelar descarta o arquivo e a prévia sem mudar o formulário; permanece apenas o que você já aplicou ou substituiu.</p>
+      <p className="text-xs text-muted-foreground">Cancelar descarta o arquivo, a imagem e a prévia e desliga a câmera, sem mudar o formulário; permanece apenas o que você já aplicou ou substituiu.</p>
     </fieldset>}
   </section>
 }
