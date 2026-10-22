@@ -28,10 +28,10 @@ aplicar. A câmera nunca abre ao entrar em Clientes nem ao abrir a importação.
 | Etapa | Como |
 | --- | --- |
 | Imagem | Tamanho checado antes de ler (≤ 10 MiB). Formato e dimensões lidos do **cabeçalho** (PNG IHDR, JPEG SOF, WebP VP8/VP8L/VP8X), não do MIME nem da extensão. Limites antes de decodificar pixels: ≤ 10.000 px de lado e ≤ 36 MP; as dimensões reais do bitmap são conferidas de novo. Reduzida para ≤ 1.600 px de lado antes da leitura. |
-| Câmera | `getUserMedia` só vídeo (sem microfone), câmera traseira preferida. Um quadro a cada 250 ms, sem sobreposição, reduzido para ≤ 960 px. Desliga sozinha em 60 s. |
+| Câmera | `getUserMedia` só vídeo (sem microfone), câmera traseira preferida. Um quadro a cada 250 ms, sem sobreposição, reduzido para ≤ 960 px. Desliga sozinha 60 s depois de a track ser concedida (mesmo que `play()` não termine). |
 | Decodificador | `jsqr@1.4.0` (Apache-2.0, sem dependências, sem rede/eval; ~250 KB não minificado), carregado sob demanda como chunk do próprio app — sem CDN. Lê os **bytes exatos** do QR. O `BarcodeDetector` nativo só é consultado quando existe, suporta `qr_code` e o jsQR não achou nada no quadro. |
 | Conteúdo | Até 4.096 bytes (um QR comporta 2.953). Bytes → UTF-8 estrito → `parseVcardBytes` (mesmo parser, versões, limites e mensagens da #297). Texto do detector nativo → `parseVcardText`; texto com "Ã©" (UTF-8 lido como Latin-1 pelo sistema) ou U+FFFD é recusado, nunca "corrigido". Modo Kanji ou ECI ≠ UTF-8 com bytes não ASCII: recusa de codificação. |
-| Recusas | Link (http/https, www., mailto:, tel:, javascript:, data: …), PIX (BR Code), Wi-Fi, MECARD, texto comum, conteúdo desconhecido, mais de um QR na imagem, nenhum QR, imagem corrompida — cada um com mensagem própria que **não ecoa** o conteúdo. O link não é aberto nem requisitado. |
+| Recusas | Link (http/https, www., mailto:, tel:, javascript:, data: …), PIX (BR Code), Wi-Fi, MECARD, texto comum, conteúdo desconhecido, mais de um QR na imagem (depois do primeiro, a área dele é coberta e a imagem é lida mais uma vez: outro conteúdo = recusa, nunca escolha arbitrária), nenhum QR, imagem corrompida — cada um com mensagem própria que **não ecoa** o conteúdo. O link não é aberto nem requisitado. |
 
 Por que não só o nativo: `BarcodeDetector` não existe no Chrome desktop do Windows,
 no Firefox nem no Safari, e devolve texto já decodificado pelo sistema (acento pode
@@ -95,7 +95,28 @@ nova, sem Prisma no fluxo, sem schema/migration, sem provedor de OCR/visão/IA.
 | E2E autenticado | `e2e/cadastros-ramos/06-clientes-qr.spec.ts`, `07-clientes-qr-camera.spec.ts` (job `e2e-authenticated` de `Ramos e Cadastros`) | build de produção + `next start` + PostgreSQL descartável + NextAuth real. Imagem PNG sintética → jsQR real no Chromium (sem `BarcodeDetector`: caminho "sem suporte nativo") → prévia → aplicar → revisar → salvar (duplo clique = 1 Server Action, 1 registro na loja B) → buscar → reabrir → novo login → banco conferido; nenhum byte da imagem, QR bruto, nota, link ou CEP saiu do navegador nem foi para storage. JPEG e WebP reais, link/PIX/texto, imagem sem QR, corrompida e > 10 MiB, cancelar sem gravar, troca de loja, 390/320/1440 px. Câmera com dispositivo sintético do Chromium (vídeo Y4M gerado com o QR): permissão concedida → indicador → QR lido → tracks `ended` → salvar; câmera viva sem QR → cancelar e fechar encerram as tracks; permissão negada → mensagem com alternativas, nenhuma track |
 
 Mutação conferida: sem a guarda de "captura corrente", a leitura repetida reimporta
-(teste falha); sem `stop()` ao limpar, 5 testes de encerramento falham.
+(teste falha); sem `stop()` ao limpar, 5 testes de encerramento falham; com o prazo de
+volta para depois do `play()` ou sem a segunda leitura, os testes da R1 falham.
+
+## Revisão independente
+
+| Rodada | Revisor | SHA | Parecer |
+| --- | --- | --- | --- |
+| R1 | Codex (gpt-6.1-sol, sandbox somente leitura, contexto novo, sem autoria no diff) | `0673b83` | CHANGES_REQUESTED — 1 P1, 2 P2 |
+| R2 | idem, nova sessão | head final | registrado na PR #298 |
+
+Correções da R1, cada uma com regressão:
+
+| Achado | Correção | Regressão |
+| --- | --- | --- |
+| P1 — o prazo de 60 s só começava após `video.play()`; um `play()` pendente mantinha a câmera ligada sem limite | Prazo inicia quando a track é concedida | `qr-browser.test` (`play()` que nunca resolve) |
+| P2 — com dois QRs, o jsQR devolvia um deles arbitrariamente (confirmado: num arranjo vinha o link, noutro o vCard) | Área do primeiro coberta e segunda leitura; conteúdo diferente = "mais de um QR" | `qr.test` e `qr-browser.test` com dois QRs reais; E2E com PNG de dois QRs |
+| P2 — E2E lia o corpo das requisições em Latin-1 e não achava o nome acentuado (a CI confirmou a falha) | Texto em UTF-8; assinaturas de imagem nos bytes crus | o próprio E2E |
+
+Na primeira CI, o E2E "nada gravado" também exigia zero Server Actions; o HUB usa
+Server Actions para as próprias leituras (multipart, sem o contato). A asserção passou
+a exigir que nenhuma Server Action leve o contato; o banco continua conferido (0 registros).
+Os 3 testes de câmera (Chromium completo + Y4M) passaram na primeira CI.
 
 ## Voz (frente preservada) — intermitência sob carga
 
