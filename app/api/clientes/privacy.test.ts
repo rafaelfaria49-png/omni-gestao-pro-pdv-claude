@@ -29,7 +29,7 @@ import { POST as validate } from "../import/validate/clientes/route"
 
 const pii = "PRIVATE_CUSTOMER_MARKER"
 function session(role = "ADMIN") {
-  h.session = { user: { id: "actor-1", name: "Canonical Actor", role, storeModules: { "store-a": ["catalog", "pdv", "sales", "service"] }, storeAccess: "restricted", allowedStoreIds: ["store-a"] }, expires: "2099-01-01" } as Session
+  h.session = { user: { id: "actor-1", name: "Canonical Actor", lojaId: "store-a", role, storeModules: { "store-a": ["catalog", "pdv", "sales", "service"] }, storeAccess: "restricted", allowedStoreIds: ["store-a"] }, expires: "2099-01-01" } as Session
 }
 function req(body?: unknown, store = "store-a", path = "clientes") {
   return new Request("https://app.local/api/" + path, { method: body === undefined ? "GET" : "POST",

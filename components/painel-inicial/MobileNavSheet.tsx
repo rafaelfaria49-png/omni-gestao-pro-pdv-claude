@@ -3,10 +3,10 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import { useSession } from "next-auth/react"
 import { Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
+import { useLojaAtiva } from "@/lib/loja-ativa"
 import {
   administrationNavItems,
   dashboardNavSections,
@@ -52,12 +52,15 @@ function NavLinkRow({ item, path, onNavigate }: { item: DashboardNavItem; path: 
 
 export function MobileNavSheet() {
   const pathname = usePathname()
-  const { data: session, status } = useSession()
+  const { storesLoaded, lojaAtivaId, lojas } = useLojaAtiva()
   const [open, setOpen] = useState(false)
   const [ready, setReady] = useState(false)
   useEffect(() => { setReady(true) }, [])
 
   const perms = useEnterprisePermissions()
+  // A resolução inicial da unidade remonta o workspace de operações. Não aceitar
+  // um clique que seria perdido nessa troca, nem abrir itens do contexto anterior.
+  const contextReady = storesLoaded && (!!lojaAtivaId || (lojas.length === 0 && perms?.platformAuthority === true))
 
   const sections = useMemo(() => {
     const workspace = filterDashboardNav(workspaceNavItems, perms)
@@ -82,7 +85,7 @@ export function MobileNavSheet() {
         type="button"
         className="lg:hidden inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-panel text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
         aria-label="Abrir menu de navegação"
-        disabled={!ready}
+        disabled={!ready || !contextReady}
       >
         <Menu className="h-4 w-4" strokeWidth={2} />
       </SheetTrigger>

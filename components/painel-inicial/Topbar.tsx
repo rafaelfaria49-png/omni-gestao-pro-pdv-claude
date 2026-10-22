@@ -170,7 +170,7 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
             <input
               type="text"
               readOnly
-              placeholder="Pesquisar OS, vendas ou produtos..."
+              placeholder="Buscar atividades e páginas..."
               title="Pesquisa rápida (Alt+K) — Command Menu"
               className="w-full h-8 pl-8 pr-12 rounded-md bg-panel border border-border text-[12.5px] cursor-pointer placeholder:text-muted-foreground outline-none hover:bg-muted/40 hover:border-border-hover transition-all focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
             />

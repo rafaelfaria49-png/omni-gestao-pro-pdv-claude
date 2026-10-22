@@ -239,7 +239,9 @@ export async function GET(
 
       enterprise = {
         clienteCompleto: clienteCompleto
-          ? { ...clienteCompleto, lastPurchaseAt: clienteCompleto.lastPurchaseAt?.toISOString() ?? null }
+          ? { ...clienteCompleto, ...("lastPurchaseAt" in clienteCompleto ? {
+              lastPurchaseAt: clienteCompleto.lastPurchaseAt instanceof Date ? clienteCompleto.lastPurchaseAt.toISOString() : null,
+            } : {}) }
           : null,
         sessao: sessao
           ? {
