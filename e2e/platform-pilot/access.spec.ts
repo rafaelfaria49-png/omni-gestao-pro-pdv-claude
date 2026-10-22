@@ -41,9 +41,11 @@ test("landing e login apresentam acesso operacional sem cadastro/pagamento fict�
   await page.goto("/")
   await expect(page.getByRole("link", { name: "Entrar no sistema" })).toHaveAttribute("href", "/login")
   await expect(page.locator("body")).not.toContainText(/R\$|teste grátis|créditos|Criar conta/i)
-  await page.getByRole("link", { name: "Entrar no sistema" }).click()
+  await page.screenshot({ path: "test-results/platform-pilot/public-entry.png", fullPage: true, animations: "disabled" })
+  await Promise.all([page.waitForURL(/\/login$/), page.getByRole("link", { name: "Entrar no sistema" }).click()])
   await expect(page.getByLabel("Email")).toBeVisible()
   await expect(page.locator("body")).not.toContainText(/teste grátis|Criar conta/i)
+  await page.screenshot({ path: "test-results/platform-pilot/login.png", fullPage: true, animations: "disabled" })
 })
 
 test("responsável legado mantém autoridade, visão interna e configurações", async ({ page }) => {

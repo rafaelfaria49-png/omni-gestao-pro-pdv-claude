@@ -8,7 +8,10 @@ export default function PilotEntryPage() {
       <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Acesso piloto</p>
       <h1 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">A gestão da sua loja começa por aqui.</h1>
       <p className="max-w-xl text-base leading-relaxed text-muted-foreground">O acesso ao OmniGestão Pro é liberado pela equipe da plataforma para as lojas participantes do piloto.</p>
-      <div><Link href="/login" className="inline-flex min-h-11 items-center rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">Entrar no sistema</Link></div>
+      <div>
+        {/* A entrada de autenticação carrega um novo documento e seu contexto de sessão. */}
+        <a href="/login" className="inline-flex min-h-11 items-center rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">Entrar no sistema</a>
+      </div>
       <p className="text-sm text-muted-foreground">Já recebeu seu acesso? Use o email e a senha individual fornecidos pelo responsável.</p>
     </section>
     <footer className="text-xs text-muted-foreground"><Link href="/privacy" className="underline">Privacidade</Link></footer>

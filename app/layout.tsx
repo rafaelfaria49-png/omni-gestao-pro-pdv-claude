@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   applicationName: APP_DISPLAY_NAME,
   title: `${APP_DISPLAY_NAME} — Sistema de Gestão`,
   description:
-    'ERP completo para varejo, supermercados, lojas de variedades e gestão empresarial.',
+    'Acesso operacional às lojas participantes do piloto OmniGestão Pro.',
   generator: 'v0.app',
   icons: {
     icon: [
