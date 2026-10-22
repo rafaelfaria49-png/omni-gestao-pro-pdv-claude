@@ -113,7 +113,9 @@ const securityHeaders = [
     key: "Permissions-Policy",
     // microphone=() bloqueia voz em todo o site (SpeechRecognition / getUserMedia → not-allowed).
     // microphone=(self) permite o microfone na mesma origem (inclui http://localhost).
-    value: "camera=(), microphone=(self), geolocation=(), interest-cohort=()",
+    // camera=(self): leitura de QR Code de contato em Clientes, aberta só por clique e lida no
+    // navegador; iframes de outras origens continuam sem câmera.
+    value: "camera=(self), microphone=(self), geolocation=(), interest-cohort=()",
   },
 ]
 

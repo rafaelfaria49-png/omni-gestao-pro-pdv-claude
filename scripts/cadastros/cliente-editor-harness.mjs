@@ -61,7 +61,7 @@ export async function serveHarness({ js, css }) {
     else {
       res.setHeader("Content-Type", "text/html; charset=utf-8")
       res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'")
-      res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
+      res.setHeader("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()")
       res.end('<!doctype html><html lang="pt-BR"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/style.css"><title>Cliente isolated smoke</title></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>')
     }
   })
