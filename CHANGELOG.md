@@ -7,6 +7,12 @@
 - Orçamento Rápido aceita uma a quatro opções. Uma opção vira serviço sem grupo de escolha; duas a quatro mantêm seleção explícita. Zero opções continua inválido.
 - Duplicação, mensagem e documento preservam a garantia do serviço único. Custos internos e brindes continuam no motor canônico, sem cobrança financeira automática.
 
+### Operações V4 — Seleção e detalhe após aprovação/conversão (OPS-V4-RAFACELL-QA-BLOCKERS-011)
+
+- Salvar o editor preserva a seleção gravada pelo rádio e as edições locais de texto, preço e custo. A aprovação continua nas actions oficiais, com validade, permissões e escolha explícita.
+- Converter relê o detalhe, além da lista, para mostrar o registro convertido e encerrar o painel de conversão. Nenhuma segunda OS é criada pela conversão; entrada física e previsão continuam validadas pelo motor.
+- Regressões de opções, duplicação, aprovação, recarga e PostgreSQL ampliadas. As 16 falhas históricas permanecem separadas; não há publicação ou aceite de Production nesta entrega local.
+
 
 ## 2026-10-20
 

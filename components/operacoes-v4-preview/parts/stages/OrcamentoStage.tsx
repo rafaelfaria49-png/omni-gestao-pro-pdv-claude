@@ -20,6 +20,7 @@ import {
   pecaFromProdutoV4,
   totaisEditorV4,
   validarEditorParaSalvarV4,
+  sincronizarSelecaoEditorV4,
   type OrcamentoEditorV4,
 } from "@/lib/operacoes-v4/orcamento-form";
 import { converterOrcamentoEmOSV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
@@ -246,6 +247,7 @@ function ConverterOrcamentoPanel({ v }: { v: V4Vals }) {
               prioridade: "media",
             });
             v.reloadOrdens();
+            v.reloadDetail();
             v.goOrcamento();
           } catch (e) {
             setErro(e instanceof Error ? e.message : "Não foi possível converter.");
@@ -418,7 +420,8 @@ function OrcamentoReadonly({ v, onReabrir }: { v: V4Vals; onReabrir: () => void 
 // Editor real (orçamento materializado em rascunho/enviado).
 // ---------------------------------------------------------------------------
 function OrcamentoEditor({ v, revisao, onFecharRevisao }: { v: V4Vals; revisao?: boolean; onFecharRevisao?: () => void }) {
-  const [editor, setEditor] = useState<OrcamentoEditorV4>(() => v.orcamentoEditorSeed);
+  const [rascunho, setEditor] = useState<OrcamentoEditorV4>(() => v.orcamentoEditorSeed);
+  const editor = sincronizarSelecaoEditorV4(rascunho, v.orcamentoEditorSeed);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);

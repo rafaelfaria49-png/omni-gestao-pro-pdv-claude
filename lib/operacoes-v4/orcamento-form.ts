@@ -67,6 +67,19 @@ export function seedEditorFromOS(os: OrdemServico | null | undefined): Orcamento
   };
 }
 
+/** O rádio grava separadamente; traz só a seleção persistida, sem apagar o rascunho. */
+export function sincronizarSelecaoEditorV4(editor: OrcamentoEditorV4, persistido: OrcamentoEditorV4): OrcamentoEditorV4 {
+  const linhas = <T extends { id: string; grupoId?: string; selecionadaV3?: boolean }>(rascunho: T[], atuais: T[]): T[] => {
+    const porId = new Map(atuais.map(linha => [linha.id, linha]));
+    return rascunho.map(linha => {
+      if (!linha.grupoId) return linha;
+      const atual = porId.get(linha.id);
+      return { ...linha, selecionadaV3: atual?.grupoId === linha.grupoId && atual.selecionadaV3 === true };
+    });
+  };
+  return { ...editor, servicos: linhas(editor.servicos, persistido.servicos), pecas: linhas(editor.pecas, persistido.pecas) };
+}
+
 /** Cria uma linha de SERVIÇO manual (sempre "cobrado" nesta fase). */
 export function novoServicoManualV4(input: { descricao: string; valor: number; custo?: number; garantiaDias?: number }): ServicoV3 {
   const garantia = Math.max(0, Math.trunc(Number(input.garantiaDias ?? 0) || 0));

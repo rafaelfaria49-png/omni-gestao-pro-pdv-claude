@@ -11,6 +11,7 @@ import {
   novoServicoManualV4,
   pecaFromProdutoV4,
   seedEditorFromOS,
+  sincronizarSelecaoEditorV4,
   totaisEditorV4,
   validarEditorParaSalvarV4,
   type OrcamentoEditorV4,
@@ -28,6 +29,20 @@ const PRODUTO: ProdutoCatalogoV3 = {
   preco: 500,
   garantiaDias: 90,
 };
+
+describe("seleção persistida no rascunho do editor", () => {
+  it("sincroniza peças/serviços por identidade e grupo, preservando edições e sem selecionar linhas novas", () => {
+    const rascunho: OrcamentoEditorV4 = { servicos: [{ id: "s", descricao: "Edição local", valor: 265, custoV3: 66, grupoId: "g", selecionadaV3: false }, { id: "fixo", descricao: "Capinha", valor: 0, kindV3: "brinde", custoV3: 3.5 }], pecas: [{ id: "p", nome: "Peça", quantidade: 1, valorUnitario: 50, grupoId: "h", selecionadaV3: true }], desconto: 7, observacao: "Nota local" };
+    const persistido: OrcamentoEditorV4 = { ...rascunho, servicos: [{ ...rascunho.servicos[0], descricao: "Servidor", custoV3: 65, selecionadaV3: true }], pecas: [{ ...rascunho.pecas[0], grupoId: "outro", selecionadaV3: true }] };
+    const resultado = sincronizarSelecaoEditorV4(rascunho, persistido);
+    expect(resultado.servicos[0]).toMatchObject({ descricao: "Edição local", custoV3: 66, selecionadaV3: true });
+    expect(resultado.servicos[1]).toEqual(rascunho.servicos[1]);
+    expect(resultado.pecas[0].selecionadaV3).toBe(false);
+    expect(resultado.desconto).toBe(7);
+    expect(resultado.observacao).toBe("Nota local");
+    expect(rascunho.servicos[0].selecionadaV3).toBe(false);
+  });
+});
 
 describe("novoServicoManualV4", () => {
   it("cria serviço cobrado com valor clampado e descrição trimada", () => {

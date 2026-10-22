@@ -1857,6 +1857,7 @@ export function buildVals(
     ordensPrimeiraCarga: ctx.ordensPrimeiraCarga,
     ordensError: ctx.ordensError,
     reloadOrdens: ctx.reloadOrdens,
+    reloadDetail: ctx.reloadDetail,
     detailLoading: ctx.detailLoading,
     detailError: ctx.detailError ?? null,
     // T01: carga estabelecida = seleção + detalhe confirmado (storeId+osId),

@@ -204,7 +204,7 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
           <button
             type="button"
             onClick={() => void aprovar()}
-            disabled={busyDecisao || !podeAprovar || formalizacaoDisponivel}
+            disabled={busyDecisao || busySelecao !== null || !podeAprovar || formalizacaoDisponivel}
             title={totalZero ? "Orçamento total R$ 0 — lance um valor antes de aprovar." : vencida ? avisoVencida : !podeAprovar ? "Selecione uma opção em cada grupo antes de aprovar." : formalizacaoDisponivel ? "Há pagamento registrado: use “Formalizar aprovação pendente”." : undefined}
             style={{ height: 34, width: "100%", padding: "0 16px", border: "none", background: C.success, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busyDecisao || !podeAprovar || formalizacaoDisponivel ? "default" : "pointer", opacity: busyDecisao || !podeAprovar || formalizacaoDisponivel ? 0.6 : 1, marginBottom: 8 }}
           >
@@ -214,7 +214,7 @@ export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: Orcam
             <button
               type="button"
               onClick={() => void aprovarEReceber()}
-              disabled={busyDecisao || !podeAprovar}
+              disabled={busyDecisao || busySelecao !== null || !podeAprovar}
               title={!podeAprovar ? "Resolva o orçamento antes de aprovar." : "Conferir o orçamento, aprovar com o consentimento do cliente e receber o pagamento."}
               style={{ ...btnGhost, width: "100%", borderColor: C.success, color: C.successFg, fontWeight: 600, marginBottom: 8, cursor: busyDecisao || !podeAprovar ? "default" : "pointer", opacity: busyDecisao || !podeAprovar ? 0.6 : 1 }}
             >

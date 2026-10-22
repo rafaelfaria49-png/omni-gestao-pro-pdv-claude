@@ -33,6 +33,13 @@ import { resumoEnvioOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-envio-model
 import { aprovarOrcamentoV3, salvarOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-actions";
 import { converterOrcamentoEmOSV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
 import { updateOSPayload } from "@/app/actions/operacoes";
+import { criarOrcamentoRapidoV3 } from "@/lib/operacoes-v3/orcamento-rapido-actions";
+import { buildOrcamentoRapidoInputFromFormV4, definirCortesiaTelaV4, novaVarianteVaziaV4, orcamentoRapidoFormVazioV4 } from "@/lib/operacoes-v4/orcamento-rapido-form";
+import { editorToSalvarInputV4, seedEditorFromOS, sincronizarSelecaoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
+import { marcarSelecaoVarianteV4 } from "@/lib/operacoes-v4/orcamento-selecao";
+import { computeTotaisV3 } from "@/lib/operacoes-v3/orcamento-model";
+import { padroesGarantiaServicosV3 } from "@/lib/operacoes-v3/garantia-servicos-model";
+import type { OrcamentoRapidoFormV4 } from "@/lib/operacoes-v4/orcamento-rapido-form";
 
 const conexaoB = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
 const run = randomUUID().replaceAll("-", "");
@@ -93,11 +100,79 @@ afterEach(async () => { transport.cacheFails = false; transport.permitido = true
 afterAll(async () => {
   await removerFalhas();
   await prisma.ordemServico.deleteMany({ where: { storeId: { in: [sid, outraLoja] } } });
+  await prisma.cliente.deleteMany({ where: { storeId: { in: [sid, outraLoja] } } });
+  await prisma.auditoriaFinanceira.deleteMany({ where: { storeId: { in: [sid, outraLoja] } } });
   await prisma.store.deleteMany({ where: { id: { in: [sid, outraLoja] } } });
   await Promise.all([prisma.$disconnect(), conexaoB.$disconnect()]);
 });
 
 describe("aceite real PostgreSQL — orçamento RafaCell", () => {
+  it.each([1, 2, 3, 4])("GOAL 011: cria, compartilha, aprova e converte %i opções sem duplicar registro ou financeiro", async n => {
+    const cliente = await prisma.cliente.create({ data: { storeId: sid, name: "Cliente fictício QA011", phone: "00000000000" } });
+    let form: OrcamentoRapidoFormV4 = { ...orcamentoRapidoFormVazioV4(), clienteExistente: { id: cliente.id, nome: cliente.name }, aparelhoMarca: "QA011", aparelhoModelo: `Tela ${n}`, defeitoRelatado: "Tela fictícia", grupoRotulo: n > 1 ? "Escolha a tela" : "", variantes: Array.from({ length: n }, (_, i) => ({ ...novaVarianteVaziaV4(), rotulo: `Tela ${i}`, valor: 265 + i * 100, custoV3: 65 + i * 50, garantiaDias: 90 + i })) };
+    form = definirCortesiaTelaV4(definirCortesiaTelaV4(form, "capinha", true), "pelicula", true);
+    const antesCount = await prisma.ordemServico.count({ where: { storeId: sid } });
+    const moneyBefore = [await prisma.contaReceberTitulo.count({ where: { storeId: sid } }), await prisma.venda.count({ where: { storeId: sid } })];
+    const criado = await criarOrcamentoRapidoV3(sid, buildOrcamentoRapidoInputFromFormV4(form));
+    osId = criado.osId;
+    expect(await prisma.ordemServico.count({ where: { storeId: sid } })).toBe(antesCount + 1);
+    const original = await ler();
+    expect(original.orc.status).toBe("rascunho");
+    expect(original.orc.gruposV3).toHaveLength(n > 1 ? 1 : 0);
+    expect(original.orc.servicos.filter(s => s.grupoId)).toHaveLength(n > 1 ? n : 0);
+    const antigo = seedEditorFromOS(original.payload);
+    const preparado = await preparar();
+    expect((await ler()).orc.enviadoEm).toBeUndefined();
+    await confirmar(preparado.tentativaId);
+    expect((await ler()).orc.status).toBe("enviado");
+    if (n > 1) {
+      await expect(aprovarOrcamentoV3(sid, osId)).rejects.toThrow(/Selecione uma opção/);
+      const orc = (await ler()).orc;
+      const grupo = orc.gruposV3![0];
+      const item = orc.servicos.find(s => s.grupoId === grupo.id)!;
+      await salvarOrcamentoV3(sid, osId, { ...marcarSelecaoVarianteV4(orc, grupo.id, item.id), desconto: 0 });
+    }
+    const atual = await ler();
+    const editor = sincronizarSelecaoEditorV4(antigo, seedEditorFromOS(atual.payload));
+    await salvarOrcamentoV3(sid, osId, editorToSalvarInputV4(editor));
+    await aprovarOrcamentoV3(sid, osId);
+    const aprovado = await ler();
+    expect(lerComercialV4(aprovado.payload)?.statusComercial).toBe("aprovado");
+    expect(computeTotaisV3(aprovado.orc)).toMatchObject({ total: 265, custo: 70, lucro: 195 });
+    expect(padroesGarantiaServicosV3(aprovado.payload).find(c => c.descricao === "Tela 0")?.prazoDias).toBe(90);
+    await expect(converterOrcamentoEmOSV3(sid, osId, { previsaoEsperada: "" })).rejects.toThrow(/data de entrada/);
+    const entrada = new Date(Date.now() - 60000).toISOString();
+    const input = { previsaoEsperada: "", dataEntrada: { iso: entrada, meta: { precisao: "data_hora" as const, dia: diaNaLojaV3(entrada) } } };
+    await expect(converterOrcamentoEmOSV3(sid, osId, { ...input, previsaoEsperada: "valor-antigo" })).rejects.toThrow(/previsão de entrega/);
+    const resultados = await Promise.all([converterOrcamentoEmOSV3(sid, osId, input), converterOrcamentoEmOSV3(sid, osId, input)]);
+    expect(resultados.map(r => r.jaConvertido).sort()).toEqual([false, true]);
+    const convertido = await ler();
+    expect(convertido.row.id).toBe(criado.osId);
+    expect(lerComercialV4(convertido.payload)?.statusComercial).toBe("convertido");
+    expect(convertido.orc.status).toBe("aprovado");
+    expect(convertido.orc.compartilhamentosV3).toEqual(aprovado.orc.compartilhamentosV3);
+    expect(convertido.orc.servicos.filter(s => s.kindV3 === "brinde")).toHaveLength(2);
+    expect(await prisma.ordemServico.count({ where: { storeId: sid } })).toBe(antesCount + 1);
+    expect([await prisma.contaReceberTitulo.count({ where: { storeId: sid } }), await prisma.venda.count({ where: { storeId: sid } })]).toEqual(moneyBefore);
+    expect(transport.send).not.toHaveBeenCalled();
+  });
+
+  it("GOAL 011: permissão, loja e validade impedem aprovação/conversão sem escrever", async () => {
+    let antes = await ler();
+    transport.permitido = false;
+    await expect(aprovarOrcamentoV3(sid, osId)).rejects.toThrow(/permissão/);
+    await expect(converterOrcamentoEmOSV3(sid, osId, { previsaoEsperada: "" })).rejects.toThrow(/permissão/);
+    expect((await ler()).row).toEqual(antes.row);
+    transport.permitido = true;
+    await expect(aprovarOrcamentoV3(outraLoja, osId)).rejects.toThrow(/OS não encontrada/);
+    await expect(converterOrcamentoEmOSV3(sid, osId, { previsaoEsperada: "" })).rejects.toThrow(/Aprove o orçamento/);
+    await prisma.ordemServico.update({ where: { id: osId }, data: { payload: { ...antes.payload, orcamento: { ...antes.orc, validoAte: "2020-01-01T12:00:00.000Z" } } as unknown as Prisma.InputJsonValue } });
+    antes = await ler();
+    await expect(aprovarOrcamentoV3(sid, osId)).rejects.toThrow(/venceu/);
+    expect((await ler()).row).toEqual(antes.row);
+    expect(transport.send).not.toHaveBeenCalled();
+  });
+
   it("evento legado sem id não permite confirmação forjada por patch genérico", async () => {
     const antes = await ler();
     const payload = { ...antes.payload, timeline: [{ tipo: "observacao", conteudo: "Legado" }] };
