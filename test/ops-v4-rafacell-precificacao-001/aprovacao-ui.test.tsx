@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { OrdemServico } from "@/types/os";
 import type { V4Vals } from "@/components/operacoes-v4-preview/use-v4-preview";
 import type { OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
@@ -17,10 +17,31 @@ vi.mock("@/components/operacoes-v4-preview/parts/stages/OrcamentoDuplicarButton"
 vi.mock("@/components/operacoes-v4-preview/parts/FormalizarAprovacaoV4", () => ({ FormalizarAprovacaoV4: () => null }));
 import { OrcamentoStage } from "@/components/operacoes-v4-preview/parts/stages/OrcamentoStage";
 import { converterOrcamentoEmOSV3 } from "@/lib/operacoes-v3/comercial-pre-os-actions";
+import { OrcamentoDecisaoCluster } from "@/components/operacoes-v4-preview/parts/stages/OrcamentoDecisaoCluster";
 
 afterEach(cleanup);
 
 describe("RafaCell — decisão após seleção persistida", () => {
+  it("não salva, aprova ou abre recebimento enquanto a nova seleção está pendente", async () => {
+    let finalizar!: () => void;
+    const pendente = new Promise<boolean>(resolve => { finalizar = () => resolve(true); });
+    const os = { id: "qa", orcamento: { id: "o", status: "enviado", total: 265, desconto: 0, criadoEm: new Date().toISOString(), gruposV3: [{ id: "g", rotulo: "Escolha", regra: "escolha_1" }], pecas: [], servicos: [{ id: "a", descricao: "Tela atual", valor: 265, grupoId: "g", selecionadaV3: true }, { id: "b", descricao: "Tela outra", valor: 365, grupoId: "g" }] } } as unknown as OrdemServico;
+    const salvar = vi.fn(async () => true);
+    const v = { realOS: os, orcamento: adaptOrcamento(os), selecionarVarianteOrcamento: vi.fn(() => pendente), aprovarOrcamento: vi.fn(), aprovacaoReceber: { disponivel: true, abrir: vi.fn() } } as unknown as V4Vals;
+    render(<OrcamentoDecisaoCluster v={v} guard={{ total: 265, salvarEditor: salvar }} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Tela outra/ }));
+    const aprovar = screen.getByRole("button", { name: "Salvar e aprovar orçamento" }) as HTMLButtonElement;
+    const receber = screen.getByRole("button", { name: "Aprovar e receber" }) as HTMLButtonElement;
+    expect(aprovar.disabled).toBe(true);
+    expect(receber.disabled).toBe(true);
+    fireEvent.click(aprovar); fireEvent.click(receber);
+    expect(salvar).not.toHaveBeenCalled();
+    expect(v.aprovarOrcamento).not.toHaveBeenCalled();
+    expect(v.aprovacaoReceber?.abrir).not.toHaveBeenCalled();
+    await act(async () => { finalizar(); await pendente; });
+    expect(aprovar.disabled).toBe(false);
+  });
+
   it("converte pela action oficial e relê o detalhe, além da lista, antes de mostrar o mesmo orçamento", async () => {
     vi.mocked(converterOrcamentoEmOSV3).mockResolvedValueOnce({ osId: "qa-os", jaConvertido: false });
     const os = { id: "qa-os", storeId: "qa", status: "aprovado", orcamento: { id: "o", status: "aprovado", total: 265, desconto: 0, criadoEm: new Date().toISOString(), servicos: [{ id: "s", descricao: "Tela", valor: 265, custoV3: 65 }], pecas: [] } } as unknown as OrdemServico;

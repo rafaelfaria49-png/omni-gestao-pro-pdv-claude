@@ -2705,7 +2705,7 @@ describe("GOAL OPS-V4-ORC-APROVACAO-SELECAO-026 — seleção de variante e deci
 
   it("Aprovar fica desabilitado enquanto houver grupo sem seleção (mesma regra que o servidor aplicaria)", () => {
     expect(decisaoCluster).toContain("podeAprovar")
-    expect(decisaoCluster).toMatch(/disabled=\{busyDecisao \|\| !podeAprovar\}/)
+    expect(decisaoCluster).toMatch(/disabled=\{[^}\n]*\|\|\s*!podeAprovar\b/)
   })
 
   it("'Pediu alteração' não chama nenhuma action (nota honesta, sem transição forçada)", () => {
