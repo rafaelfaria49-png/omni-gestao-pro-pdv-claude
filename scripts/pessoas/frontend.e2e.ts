@@ -24,9 +24,14 @@ async function login(page: Page) {
   await page.getByLabel("Senha", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Entrar", exact: true }).click()
   await page.waitForURL("**/dashboard")
+  await selectStore(page, storeId)
+}
+async function selectStore(page: Page, id: string) {
   await page.goto("/dashboard/unidades")
-  await page.getByText(storeId, { exact: true }).click()
-  await expect.poll(async () => (await page.context().cookies()).some(cookie => cookie.name === "assistec-active-store" && cookie.value === storeId)).toBe(true)
+  const card = page.getByRole("button").filter({ has: page.getByText(id, { exact: true }) })
+  await expect(card).toHaveCount(1)
+  await card.press("Enter")
+  await expect.poll(async () => (await page.context().cookies()).some(cookie => cookie.name === "assistec-active-store" && cookie.value === id)).toBe(true)
 }
 async function fill(page: Page, values: Record<string, string>) {
   for (const [name, value] of Object.entries(values)) await page.locator('[name="' + name + '"]').fill(value)
@@ -112,12 +117,10 @@ if (!enabled) {
     await expect(page.getByText("Salário sintético 9876.54")).toHaveCount(0)
     expect(await page.content()).not.toContain("9.876,54")
     const fichaUrl = page.url()
-    await page.goto("/dashboard/unidades")
-    await page.getByText(storeId + "-b", { exact: true }).click()
+    await selectStore(page, storeId + "-b")
     await page.goto(fichaUrl)
     await expect(page.getByText("Você não tem acesso a este cadastro nesta loja.")).toBeVisible()
-    await page.goto("/dashboard/unidades")
-    await page.getByText(storeId, { exact: true }).click()
+    await selectStore(page, storeId)
     await page.goto(fichaUrl)
     await expect(page.getByText("Remuneração restrita").first()).toBeVisible()
     await db.dpAcesso.updateMany({ where: { adminUserId: userId }, data: { revogadoEm: new Date() } })
