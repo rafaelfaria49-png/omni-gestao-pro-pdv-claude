@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@/generated/prisma"
@@ -118,6 +119,9 @@ async function requireSubscription() {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
   const lojaIdRecebido = storeIdFromAssistecRequestForRead(req)
@@ -173,6 +177,9 @@ export async function GET(req: Request) {
  * permanece ativa. Este endpoint de escrita ampla está desativado (410 Gone).
  */
 export async function PUT(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   console.warn(
     "[ops/inventory PUT] bloqueado — sincronização ampla de inventário desativada",

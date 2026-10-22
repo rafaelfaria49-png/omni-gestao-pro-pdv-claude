@@ -20,6 +20,8 @@ import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name"
 import { resolveSeedStoreId } from "@/lib/loja-ativa-seed"
 import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
+import { useSession } from "next-auth/react"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 
 const LOJA_ATIVA_STORAGE = "assistec-pro-loja-ativa-v1"
 
@@ -166,6 +168,7 @@ function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): Loja
 }
 
 export function LojaAtivaProvider({ children }: { children: ReactNode }) {
+  const { data: session, update: refreshSession } = useSession()
   const { config, configHydrated } = useConfigEmpresa()
   const lojasConfig = useMemo(() => config.minhasLojas?.lojas ?? [], [config.minhasLojas?.lojas])
   const [lojasRemote, setLojasRemote] = useState<LojaPerfilRemoto[] | null>(null)
@@ -183,10 +186,10 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       const prev = map.get(l.id)
       map.set(l.id, prev ? { ...prev, ...l, endereco: { ...prev.endereco, ...l.endereco } } : l)
     }
-    const out = Array.from(map.values())
+    const out = Array.from(map.values()).filter((store) => canAccessStore(session, store.id))
     out.sort((a, b) => a.id.localeCompare(b.id))
     return out
-  }, [lojasRemote, lojasConfig])
+  }, [lojasRemote, lojasConfig, session])
   const [lojaAtivaId, setLojaAtivaIdState] = useState<string | null>(null)
   const lojaAtivaIdRef = useRef<string | null>(null)
   useEffect(() => {
@@ -247,6 +250,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
   }, [configHydrated, lojas])
 
   const executarTrocaLoja = useCallback((next: string) => {
+    if (!canAccessStore(session, next)) return
     const prev = (lojaAtivaIdRef.current || "").trim()
     setLojaAtivaIdState(next)
     try {
@@ -255,6 +259,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
     setActiveStoreCookie(next)
+    void refreshSession()
 
     // Hardening: valida carga mínima da unidade (settings/ops) e evita “tela branca/travamento”.
     // Se falhar, volta para a loja anterior, limpa cache da unidade e alerta.
@@ -316,7 +321,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
         }
       })()
     }
-  }, [lojas])
+  }, [lojas, session, refreshSession])
 
   const setLojaAtivaId = useCallback((id: string) => {
     const next = id.trim()

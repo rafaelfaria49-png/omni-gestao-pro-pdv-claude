@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { financeiroV2Enabled, roadmapHubsEnabled } from "@/lib/feature-flags"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { canAccessPage } from "@/lib/auth/page-access"
 
 export type DashboardNavItem = {
   to: string
@@ -56,6 +57,7 @@ export const workspaceNavItems: DashboardNavItem[] = [
 ]
 
 export const hubsNavItems: DashboardNavItem[] = [
+  { to: "/dashboard/vendas", label: "PDV Clássico", icon: ShoppingCart, visible: (p) => p.hubs.vendas },
   {
     to: "/dashboard/operacoes-v3",
     label: "Operações HUB",
@@ -150,6 +152,7 @@ export const hubsNavItems: DashboardNavItem[] = [
 ]
 
 export const administrationNavItems: DashboardNavItem[] = [
+  { to: "/dashboard/plataforma", label: "Clientes piloto", icon: Store, visible: (p) => p.platformAuthority === true },
   {
     to: "/dashboard/master-console",
     label: "Master Console",
@@ -182,7 +185,7 @@ export function filterDashboardNav(
 ): DashboardNavItem[] {
   return items.filter((i) => {
     if (i.experimental && !roadmapHubsEnabled) return false
-    if (!perms) return true
+    if (!perms || !canAccessPage(perms, i.to)) return false
     return i.visible ? i.visible(perms) : true
   })
 }

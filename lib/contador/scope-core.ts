@@ -46,7 +46,7 @@ export function avaliarAcessoContador(
   if (!storeId) return { ok: false, motivo: "loja_ausente" }
   if (!canAccessStore(session, storeId)) return { ok: false, motivo: "sem_acesso_loja" }
   // Permissão DEDICADA do Contador HUB (GOAL 010). Não usa mais `hubs.financeiro`.
-  if (!getPermissionsFromSession(session).hubs.contador) {
+  if (!getPermissionsFromSession(session, storeId).hubs.contador) {
     return { ok: false, motivo: "sem_permissao" }
   }
 

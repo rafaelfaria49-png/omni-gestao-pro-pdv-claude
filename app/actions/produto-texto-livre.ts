@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 /**
  * Interpretação de texto livre de Produto (CAD-R2-016) — Server Action.
@@ -36,6 +37,8 @@ export async function interpretarProdutoTextoLivre(
   texto: string,
   opts?: InterpretarTextoLivreOpts,
 ): Promise<InterpretarTextoLivreResult> {
+  await requireModuleAction(storeId, "catalog")
+
   await requireCadastrosActionAccess(storeId, "hub");
   try {
     const captureSource = opts?.captureSource === "voice" ? "voice" : "text";

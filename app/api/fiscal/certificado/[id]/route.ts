@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Certificado digital por loja — ciclo seguro do A1 (GOAL_002 · GOAL-008).
  *
@@ -68,6 +69,9 @@ async function validarPeloCofre(
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)

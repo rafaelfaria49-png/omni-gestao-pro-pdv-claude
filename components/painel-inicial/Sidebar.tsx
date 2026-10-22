@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { useMemo } from "react";
 import { PanelLeftClose, Pin, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import { CollapsibleHoverRail } from "@/components/ui/collapsible-hover-rail";
 import { WORKSPACE_OVERLAY_PRIORITY } from "@/lib/workspace-overlay-orchestrator";
@@ -25,10 +25,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
   const { data: session, status } = useSession();
   const { collapsed, setCollapsed } = useSidebarCollapsed();
 
-  const perms = useMemo(() => {
-    if (status !== "authenticated" || !session?.user?.role) return null;
-    return getEnterprisePermissions(session.user.role);
-  }, [status, session?.user?.role]);
+  const perms = useEnterprisePermissions();
 
   const workspaceFiltered = useMemo(() => filterDashboardNav(workspaceNavItems, perms), [perms]);
   const hubsFiltered = useMemo(() => filterDashboardNav(hubsNavItems, perms), [perms]);

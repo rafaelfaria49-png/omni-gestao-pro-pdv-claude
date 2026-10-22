@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
@@ -9,6 +10,9 @@ export const runtime = "nodejs"
 
 /** Sincroniza o resumo do dia (PDV) para o servidor usar no webhook / fechamento automático. */
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   const sub = await getVerifiedSubscriptionFromCookies()
   if (!sub.ok) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 })

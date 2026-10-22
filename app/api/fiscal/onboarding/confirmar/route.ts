@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Onboarding fiscal — CONFIRMAÇÃO e gravação (GOAL-016B · item 6).
  *
@@ -111,6 +112,9 @@ function parseIsoDate(iso: string | null | undefined): Date | null {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)

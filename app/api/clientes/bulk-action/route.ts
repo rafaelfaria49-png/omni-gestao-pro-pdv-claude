@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { CLIENT_RETENTION_BLOCK } from "@/lib/cadastros/client-privacy"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
@@ -14,6 +15,9 @@ export const revalidate = 0
 const MAX_IDS = 200
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write", "admin")
   if (!gate.ok) return gate.response
 

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { transferirEntreCarteiras } from "@/lib/financeiro/services/carteiras-service"
@@ -21,6 +22,9 @@ const schema = z.object({
 // ─── POST /api/financeiro/carteiras/transferencia ─────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const storeId = opsLojaIdFromRequestForWrite(req)
   if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardEnterpriseOrOps(

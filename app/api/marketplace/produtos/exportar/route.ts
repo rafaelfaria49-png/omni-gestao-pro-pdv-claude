@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { requireMarketplaceApi } from "@/lib/marketplace/api-gate"
 import { allowMarketplaceSimulateErrors } from "@/lib/marketplace/simulate-flags"
@@ -9,6 +10,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "marketplace")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireMarketplaceApi(req)
   if (!gate.ok) return gate.response
 

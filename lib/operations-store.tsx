@@ -16,6 +16,7 @@ import { saleLineRecordFromFinalizeInput } from "@/lib/operations-sale-line"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import { emitEvent } from "@/lib/events/event-bus"
 import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import { registrarOperacaoCaixaServer } from "@/lib/pdv-caixa-operacao"
 import {
   applyCaixaSessionDecision,
@@ -885,6 +886,8 @@ export function OperationsProvider({
   /** Por unidade (multiloja); padrão único = assistec-pro-ops-v1 */
   storageKey?: string
 }) {
+  const accessPermissions = useEnterprisePermissions()
+  const canReadOperations = accessPermissions?.hubs.operacoes === true
   useEffect(() => {
     // Camada de inteligência (eventos/automações) em modo simulado.
     // Não altera lógica de venda/estoque existente.
@@ -1051,10 +1054,10 @@ export function OperationsProvider({
       try {
         const [rInv, rOs] = await Promise.all([
           fetch(`/api/ops/inventory?lojaId=${encodeURIComponent(lj)}`, { credentials: "include" }),
-          fetch(`/api/ops/ordens?lojaId=${encodeURIComponent(lj)}`, { credentials: "include" }),
+          canReadOperations ? fetch(`/api/ops/ordens?lojaId=${encodeURIComponent(lj)}`, { credentials: "include" }) : null,
         ])
         if (cancelled) return
-        if (!rInv.ok || !rOs.ok) {
+        if (!rInv.ok || (rOs && !rOs.ok)) {
           lastSentOpsRef.current = JSON.stringify({
             inv: stateRef.current.inventory,
             ord: stateRef.current.ordens,
@@ -1062,7 +1065,7 @@ export function OperationsProvider({
           return
         }
         const jInv = (await rInv.json()) as { items?: InventoryItem[] }
-        const jOs = (await rOs.json()) as { ordens?: OrdemServico[] }
+        const jOs = rOs ? (await rOs.json()) as { ordens?: OrdemServico[] } : { ordens: [] }
         // P0 PDV-RAFACELL-LOAD-CRASH: valida ELEMENTOS das respostas (não só o
         // array). Uma linha inválida da loja nunca derruba o mount.
         let items = sanitizeInventoryItems<InventoryItem>(jInv.items)
@@ -1071,7 +1074,7 @@ export function OperationsProvider({
         // Migração legada localStorage → DB: SOMENTE para a loja primária legada.
         // Lojas novas (multiloja) nunca recebem seed/migração automática — server é a
         // fonte da verdade e uma loja vazia deve permanecer 100% vazia (sem resíduo/mock).
-        if (lj === LEGACY_PRIMARY_STORE_ID && items.length === 0 && ordens.length === 0) {
+        if (canReadOperations && lj === LEGACY_PRIMARY_STORE_ID && items.length === 0 && ordens.length === 0) {
           const raw = localStorage.getItem(storageKey)
           const peek = peekLegacyInventoryOrdens(raw)
           const legInv = peek.inventory
@@ -1199,7 +1202,7 @@ export function OperationsProvider({
     return () => {
       cancelled = true
     }
-  }, [storageKey])
+  }, [storageKey, canReadOperations])
 
   /**
    * Reconcilia a sessão de caixa com o servidor — fonte da verdade.
@@ -1280,7 +1283,7 @@ export function OperationsProvider({
   }, [caixaHydrated, refreshCaixaSession])
 
   useEffect(() => {
-    if (!opsDbReady) return
+    if (!opsDbReady || !canReadOperations) return
     const snap = JSON.stringify({ inv: state.inventory, ord: state.ordens })
     if (snap === lastSentOpsRef.current) return
     const t = setTimeout(() => {
@@ -1306,7 +1309,7 @@ export function OperationsProvider({
       }).catch(() => {})
     }, 750)
     return () => clearTimeout(t)
-  }, [opsDbReady, state.inventory, state.ordens, storageKey])
+  }, [opsDbReady, state.inventory, state.ordens, storageKey, canReadOperations])
 
   const ledgerKey = JSON.stringify(state.dailyLedger)
   useEffect(() => {

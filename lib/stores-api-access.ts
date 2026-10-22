@@ -3,6 +3,7 @@ import type { Session } from "next-auth"
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { isElevatedRole } from "@/lib/auth/admin-users-policy"
+import { isPlatformSession } from "@/lib/auth/access-policy"
 import {
   LEGACY_PRIMARY_STORE_ID,
   PROTECTED_STORE_IDS,
@@ -33,7 +34,7 @@ export async function requireStoresSession(): Promise<
 }
 
 export function filterStoresForSession<T extends { id: string }>(session: Session, stores: T[]): T[] {
-  if (session.user.storeAccess !== "restricted") return stores
+  if (isPlatformSession(session)) return stores
   const allowed = new Set(session.user.allowedStoreIds ?? [])
   if (allowed.size === 0) return []
   return stores.filter((s) => allowed.has(s.id))

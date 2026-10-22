@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/contador/notificacoes/avaliar
  *
@@ -23,6 +24,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   const body = await lerCorpoJson(req)
   if (temChaveProibida(url.searchParams) || temChaveProibida(body)) return respostaChaveProibida()

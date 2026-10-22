@@ -31,8 +31,12 @@ export const authConfig = {
       session.user.id = token.sub ?? ""
       session.user.role = (token.role as string) ?? "OPERADOR"
       session.user.lojaId = (token.lojaId as string | null) ?? null
-      const access = (token.storeAccess as "all" | "restricted" | undefined) ?? "all"
-      session.user.storeAccess = access === "restricted" ? "restricted" : "all"
+      session.user.platformAuthority = token.platformAuthority === true
+      session.user.accessScope = token.accessScope
+      session.user.mustChangePassword = token.mustChangePassword === true
+      session.user.sessionVersion = token.sessionVersion ?? 0
+      session.user.storeModules = token.storeModules ?? {}
+      session.user.storeAccess = token.platformAuthority === true ? "all" : "restricted"
       const raw = String(token.allowedStoreIdsJson || "").trim()
       if (session.user.storeAccess === "restricted") {
         if (raw) {
@@ -47,8 +51,7 @@ export const authConfig = {
         } else if (session.user.lojaId?.trim()) {
           session.user.allowedStoreIds = [session.user.lojaId.trim()]
         } else {
-          session.user.storeAccess = "all"
-          session.user.allowedStoreIds = undefined
+          session.user.allowedStoreIds = []
         }
       } else {
         session.user.allowedStoreIds = undefined

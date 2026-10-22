@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
 import {
@@ -16,6 +17,9 @@ function json(data: unknown, init?: ResponseInit) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "whatsapp")
+  if (moduleDenied) return moduleDenied
+
   try {
     const guard = await guardWhatsAppApiWrite(req)
     if (!guard.ok) return guard.response

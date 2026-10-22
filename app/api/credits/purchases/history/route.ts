@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireCreditsUserIdForApi } from "@/lib/credits/api-auth"
@@ -6,7 +7,10 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-export async function GET() {
+export async function GET(accessRequest: Request) {
+  const moduleDenied = await requireModuleApi(accessRequest, "ai")
+  if (moduleDenied) return moduleDenied
+
   const authUser = await requireCreditsUserIdForApi()
   if (!authUser.ok) return authUser.response
   const userId = authUser.userId

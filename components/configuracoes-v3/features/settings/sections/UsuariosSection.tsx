@@ -55,7 +55,7 @@ import {
   TableRow,
 } from "@/components/configuracoes-v3/components/ui/table";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
-import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions";
+import { getPermissionsFromSession } from "@/lib/auth/enterprise-permissions";
 
 type AdminUserRow = {
   id: string;
@@ -83,7 +83,7 @@ const ROLE_OPTIONS = [
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "Super administrador",
-  ADMIN: "Administrador",
+  ADMIN: "Administrador da loja",
   GERENTE: "Gerente",
   OPERADOR: "Operador",
   CAIXA: "Caixa",
@@ -94,11 +94,11 @@ const ROLE_LABEL: Record<string, string> = {
 const PAPEL_RESUMO = [
   {
     titulo: "Administrador",
-    texto: "Acesso completo ao painel, unidades, configurações e gestão de utilizadores.",
+    texto: "Gestão da própria loja e equipe, dentro dos módulos liberados pela plataforma.",
   },
   {
     titulo: "Gerente",
-    texto: "Gestão operacional e financeira, relatórios e equipa, sem promoção a administradores.",
+    texto: "Gestão operacional e equipe nas unidades atribuídas, conforme liberação da plataforma.",
   },
   {
     titulo: "Caixa",
@@ -125,7 +125,7 @@ export function UsuariosSection() {
   const { toast } = useToast();
   const canManage = useMemo(() => {
     if (status !== "authenticated" || !session?.user) return false;
-    return getEnterprisePermissions(session.user.role).admin.configuracoes === true;
+    return getPermissionsFromSession(session).admin.configuracoes === true;
   }, [session, status]);
 
   const [rows, setRows] = useState<AdminUserRow[]>([]);
@@ -217,7 +217,7 @@ export function UsuariosSection() {
     });
   };
 
-  const isAdminLikeRole = formRole === "SUPER_ADMIN" || formRole === "ADMIN";
+  const isAdminLikeRole = false; // ADMIN é administrador de loja; toda conta nova exige membership.
 
   const submit = async () => {
     if (!formName.trim()) {
@@ -232,8 +232,8 @@ export function UsuariosSection() {
       toast({ title: "Unidades", description: "Selecione pelo menos uma unidade com acesso.", variant: "destructive" });
       return;
     }
-    if (!editing && formPassword.trim() && formPassword.trim().length < 6) {
-      toast({ title: "Senha", description: "Mínimo de 6 caracteres.", variant: "destructive" });
+    if (formPassword && (formPassword.length < 12 || !/[a-z]/.test(formPassword) || !/[A-Z]/.test(formPassword) || !/[0-9]/.test(formPassword))) {
+      toast({ title: "Senha", description: "Use ao menos 12 caracteres, com maiúsculas, minúsculas e números.", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -566,7 +566,7 @@ export function UsuariosSection() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLE_OPTIONS.map((role) => (
+                  {ROLE_OPTIONS.filter((role) => role !== "SUPER_ADMIN" && (session?.user.platformAuthority || !["ADMIN", "GERENTE"].includes(role))).map((role) => (
                     <SelectItem key={role} value={role}>
                       {ROLE_LABEL[role] || role}
                     </SelectItem>

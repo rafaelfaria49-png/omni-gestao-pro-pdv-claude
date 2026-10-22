@@ -1,3 +1,6 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
+import { hasModule } from "@/lib/auth/enterprise-permissions"
+import { isPlatformSession } from "@/lib/auth/access-policy"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireEnterpriseWith, requireStoreAccess } from "@/lib/auth/guard-enterprise"
@@ -13,6 +16,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(_, "authenticated")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await ctx.params
   const guard = await requireStoreAccess(id)
   if (!guard.ok) {
@@ -28,6 +34,9 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "settings")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await ctx.params
   const guard = await requireEnterpriseWith(
     id,
@@ -42,6 +51,12 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       mascotCharacterSeed: string
       mascotPromptBase: string
     }>
+    if (!isPlatformSession(guard.session) && ["moduleAccess", "accessScope", "platformAuthority", "subscriptionPlan", "marketingMediaCredits"].some((key) => Object.hasOwn(body, key))) {
+      return NextResponse.json({ ok: false, error: "Liberação controlada pela plataforma." }, { status: 403 })
+    }
+    if (!hasModule(guard.session, "marketing", id) && (body.mascotCharacterSeed !== undefined || body.mascotPromptBase !== undefined)) {
+      return NextResponse.json({ ok: false, error: "Módulo não liberado." }, { status: 403 })
+    }
 
     // A persistência decide o modo por `!!body.backfill`; só booleano evita divergir da validação abaixo.
     if (body.backfill !== undefined && typeof body.backfill !== "boolean") {

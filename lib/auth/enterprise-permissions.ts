@@ -4,6 +4,7 @@
  */
 
 import type { Session } from "next-auth"
+import { isPlatformSession, type AccessModule } from "@/lib/auth/access-policy"
 
 /** Papéis canônicos derivados do enum Prisma `UserRole` + legado. */
 export type EnterpriseRole =
@@ -14,6 +15,8 @@ export type EnterpriseRole =
   | "vendedor"
 
 export type EnterprisePermissions = {
+  modules?: Partial<Record<AccessModule, boolean>>
+  platformAuthority?: boolean
   /** Painel / workspace geral */
   workspace: { iaMestre: boolean; omniAgent: boolean }
   /** Hubs de negócio */
@@ -230,14 +233,60 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
   }
 }
 
-export function getPermissionsFromSession(session: Session | null): EnterprisePermissions {
-  return getEnterprisePermissions(session?.user?.role)
+export function hasModule(session: Session | null, module: AccessModule, storeId?: string | null): boolean {
+  if (!session?.user?.id || session.user.mustChangePassword) return false
+  if (isPlatformSession(session)) return true
+  const ids = storeId?.trim() ? [storeId.trim()] : session.user.allowedStoreIds ?? []
+  // Sem contexto explícito, nunca herdar os módulos da loja principal para outra.
+  return ids.length > 0 && ids.every((sid) => canAccessStore(session, sid) && session.user.storeModules?.[sid]?.includes(module) === true)
+}
+
+export function getPermissionsFromSession(session: Session | null, storeId?: string | null): EnterprisePermissions {
+  const platform = isPlatformSession(session) && !session?.user?.mustChangePassword
+  const base = getEnterprisePermissions(platform ? "ADMIN" : session?.user?.role)
+  const allowed = (m: AccessModule) => hasModule(session, m, storeId)
+  const service = allowed("service")
+  const finance = allowed("finance")
+  const settings = allowed("settings")
+  return {
+    ...base,
+    modules: Object.fromEntries((["home", "pdv", "sales", "cash", "catalog", "stock", "reports", "settings", "service", "deviceCatalog", "ai", "agent", "marketing", "marketplace", "accountant", "whatsapp", "finance", "fiscal", "experiments"] as AccessModule[]).map((m) => [m, allowed(m)])),
+    platformAuthority: platform,
+    workspace: { iaMestre: base.workspace.iaMestre && allowed("ai"), omniAgent: base.workspace.omniAgent && allowed("agent") },
+    hubs: {
+      marketingIa: base.hubs.marketingIa && allowed("marketing"), whatsapp: base.hubs.whatsapp && allowed("whatsapp"),
+      operacoes: base.hubs.operacoes && service, cadastros: base.hubs.cadastros && allowed("catalog"),
+      vendas: base.hubs.vendas && (allowed("sales") || allowed("pdv")), caixaHistorico: base.hubs.caixaHistorico && allowed("cash"),
+      marketplace: base.hubs.marketplace && allowed("marketplace"), financeiro: base.hubs.financeiro && finance,
+      relatorios: base.hubs.relatorios && allowed("reports"), contador: base.hubs.contador && allowed("accountant"),
+    },
+    admin: { masterConsole: platform, unidades: platform, configuracoes: base.admin.configuracoes && settings },
+    contador: { manageExternalAccess: base.contador.manageExternalAccess && allowed("accountant") },
+    pdv: Object.fromEntries(Object.entries(base.pdv).map(([k, v]) => [k, v && allowed("pdv")])) as EnterprisePermissions["pdv"],
+    financeiro: Object.fromEntries(Object.entries(base.financeiro).map(([k, v]) => [k, v && finance])) as EnterprisePermissions["financeiro"],
+    operacoes: Object.fromEntries(Object.entries(base.operacoes).map(([k, v]) => [k, v && service])) as EnterprisePermissions["operacoes"],
+    auditoria: base.auditoria && settings,
+  }
+}
+
+export function canUseModule(session: Session | null, module: AccessModule, storeId?: string | null): boolean {
+  if (!hasModule(session, module, storeId)) return false
+  const p = getPermissionsFromSession(session, storeId)
+  const checks: Partial<Record<AccessModule, boolean>> = {
+    ai: p.workspace.iaMestre, agent: p.workspace.omniAgent, marketing: p.hubs.marketingIa,
+    marketplace: p.hubs.marketplace, accountant: p.hubs.contador, whatsapp: p.hubs.whatsapp,
+    finance: p.hubs.financeiro, catalog: p.hubs.cadastros, stock: p.hubs.cadastros,
+    service: p.hubs.operacoes, deviceCatalog: p.hubs.cadastros, fiscal: p.admin.configuracoes,
+    pdv: p.hubs.vendas, sales: p.hubs.vendas, cash: p.hubs.caixaHistorico,
+    reports: p.hubs.relatorios, settings: p.admin.configuracoes,
+  }
+  return checks[module] !== false
 }
 
 /** Escopo de loja na sessão NextAuth (Fase 1). */
 export function canAccessStore(session: Session | null, storeId: string | null | undefined): boolean {
-  if (!session?.user || !storeId?.trim()) return true
-  if (session.user.storeAccess !== "restricted") return true
+  if (!session?.user?.id || !storeId?.trim() || session.user.mustChangePassword) return false
+  if (isPlatformSession(session)) return true
   const ids = session.user.allowedStoreIds ?? []
   return ids.includes(storeId)
 }

@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAction } from "@/lib/auth/module-access"
 
 // ============================================================================
 // Operações V3 — Atendimento Rápido · write-path REAL (serviço de balcão)
@@ -62,6 +63,7 @@ export async function finalizarAtendimentoRapidoV3(
   storeId: string,
   input: AtendimentoRapidoInputV3,
 ): Promise<FinalizarAtendimentoRapidoResultV3> {
+  await requireModuleAction(storeId, "service")
   const sid = (storeId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
 

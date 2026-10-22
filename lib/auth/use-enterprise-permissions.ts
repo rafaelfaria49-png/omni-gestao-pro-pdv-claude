@@ -2,13 +2,15 @@
 
 import { useMemo } from "react"
 import { useSession } from "next-auth/react"
-import { getEnterprisePermissions, type EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { getPermissionsFromSession, type EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { useLojaAtiva } from "@/lib/loja-ativa"
 
 /** `null` = sessão PIN / não autenticado enterprise — UI mantém comportamento legado (mostrar tudo onde aplicável). */
 export function useEnterprisePermissions(): EnterprisePermissions | null {
   const { data: session, status } = useSession()
+  const { lojaAtivaId } = useLojaAtiva()
   return useMemo(() => {
     if (status !== "authenticated" || !session?.user?.role) return null
-    return getEnterprisePermissions(session.user.role)
-  }, [status, session?.user?.role])
+    return getPermissionsFromSession(session, lojaAtivaId)
+  }, [status, session, lojaAtivaId])
 }

@@ -6,7 +6,7 @@ import { useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
 import { Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import {
   administrationNavItems,
   dashboardNavSections,
@@ -55,10 +55,7 @@ export function MobileNavSheet() {
   const { data: session, status } = useSession()
   const [open, setOpen] = useState(false)
 
-  const perms = useMemo(() => {
-    if (status !== "authenticated" || !session?.user?.role) return null
-    return getEnterprisePermissions(session.user.role)
-  }, [status, session?.user?.role])
+  const perms = useEnterprisePermissions()
 
   const sections = useMemo(() => {
     const workspace = filterDashboardNav(workspaceNavItems, perms)

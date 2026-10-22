@@ -27,6 +27,8 @@ import { ConfiguracoesNavProvider } from "./contexts/ConfiguracoesNavContext";
 import { Toaster } from "./components/ui/toaster";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import "./configuracoes-v3.css";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
+import { canAccessSettingsSection } from "@/lib/auth/page-access";
 
 const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
   geral: GeralSection,
@@ -48,6 +50,7 @@ const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
 const CONFIG_PATH = "/dashboard/configuracoes";
 
 export default function ConfiguracoesV3Page() {
+  const permissions = useEnterprisePermissions();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -94,7 +97,8 @@ export default function ConfiguracoesV3Page() {
     [navigateToSection],
   );
 
-  const Active = SECTION_COMPONENTS[active];
+  const permittedActive = canAccessSettingsSection(permissions, active) ? active : "geral";
+  const Active = SECTION_COMPONENTS[permittedActive];
   const currentLabel = SETTINGS_SECTIONS.find((s) => s.id === active)?.label ?? "";
   const { lojaAtivaId } = useLojaAtiva();
   const storeScopeKey = lojaAtivaId?.trim() || "__sem_unidade__";

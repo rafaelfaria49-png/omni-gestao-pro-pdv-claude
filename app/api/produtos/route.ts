@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
@@ -41,6 +42,9 @@ function parsePrice(body: unknown): number | null {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "read")
   if (!gate.ok) return gate.response
 
@@ -85,6 +89,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write")
   if (!gate.ok) return gate.response
   const storeId = gate.storeId

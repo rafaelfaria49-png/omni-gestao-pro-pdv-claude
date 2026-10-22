@@ -46,7 +46,7 @@ export async function requireCadastrosActionAccess(
   if (!canAuthorizeCadastrosStore(session, sid)) {
     throw new Error(CADASTROS_ACTION_STORE_FORBIDDEN)
   }
-  if (profile === "hub" && !hasCadastrosHub(session)) {
+  if (profile !== "shared" && !hasCadastrosHub(session, sid)) {
     throw new Error(CADASTROS_ACTION_HUB_FORBIDDEN)
   }
   return { storeId: sid, session }
@@ -61,7 +61,7 @@ export async function requireCadastrosActionSession(
   if (profile === "admin" && !isCadastrosAdminPrincipal(session)) {
     throw new Error(CADASTROS_ACTION_ADMIN_FORBIDDEN)
   }
-  if (profile === "hub" && !hasCadastrosHub(session)) {
+  if (profile !== "shared" && !hasCadastrosHub(session)) {
     throw new Error(CADASTROS_ACTION_HUB_FORBIDDEN)
   }
   const storeScope = cadastrosStoreScope(session)

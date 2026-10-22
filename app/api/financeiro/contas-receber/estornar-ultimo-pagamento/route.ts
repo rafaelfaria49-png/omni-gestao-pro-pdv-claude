@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
@@ -25,6 +26,9 @@ function pickTituloRef(input: { tituloId?: string | number; localKey?: string })
 }
 
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "finance")
+  if (moduleDenied) return moduleDenied
+
   let json: unknown
   try {
     json = await request.json()

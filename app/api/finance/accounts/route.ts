@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
@@ -30,6 +31,9 @@ function storeId(req: Request): string | null {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   await prismaEnsureConnected()
   const sid = storeId(req)
   if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
@@ -46,6 +50,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
 
@@ -69,6 +76,9 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
 
@@ -94,6 +104,9 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
 

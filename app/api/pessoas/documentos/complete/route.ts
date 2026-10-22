@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { confirmarUpload } from "@/lib/pessoas/documentos/service"
 import { lerJson, respostaErro, respostaJson } from "@/lib/pessoas/http"
 
@@ -6,6 +7,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   try {
     const body = await lerJson(req)
     const data = await confirmarUpload(body.uploadIntent)

@@ -1,3 +1,4 @@
+import { MODULES } from "./access-policy"
 /**
  * Testes-baseline: ACL canAccessStore + matriz de permissões enterprise.
  *
@@ -29,26 +30,29 @@ function makeSession(opts: {
       email: "u@x.com",
       name: "U",
       role: opts.role ?? "ADMIN",
+      lojaId: "loja-a",
+      platformAuthority: (opts.role ?? "ADMIN") === "ADMIN" && opts.storeAccess !== "restricted",
+      storeModules: { "loja-a": [...MODULES] },
       storeAccess: opts.storeAccess ?? "all",
-      allowedStoreIds: opts.allowedStoreIds,
+      allowedStoreIds: Object.hasOwn(opts, "allowedStoreIds") ? opts.allowedStoreIds : ["loja-a"],
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session
 }
 
 describe("canAccessStore — guard canônico multi-loja", () => {
-  it("permite acesso quando session null (legado/sub legado — não bloqueia)", () => {
+  it("recusa acesso sem sessão autenticada", () => {
     // Convenção atual: sem sessão NextAuth, canAccessStore retorna true porque
     // a camada de assinatura/legacy faz o gate em outra camada. Este é o
     // contrato implícito — documentamos.
-    expect(canAccessStore(null, "loja-a")).toBe(true)
+    expect(canAccessStore(null, "loja-a")).toBe(false)
   })
 
-  it("permite quando storeId null/vazio (deferida ao caller)", () => {
+  it("recusa unidade nula ou vazia", () => {
     const session = makeSession({})
-    expect(canAccessStore(session, null)).toBe(true)
-    expect(canAccessStore(session, "")).toBe(true)
-    expect(canAccessStore(session, "   ")).toBe(true)
+    expect(canAccessStore(session, null)).toBe(false)
+    expect(canAccessStore(session, "")).toBe(false)
+    expect(canAccessStore(session, "   ")).toBe(false)
   })
 
   it("permite qualquer loja para storeAccess='all'", () => {
@@ -208,9 +212,9 @@ describe("getEnterprisePermissions — matriz por papel", () => {
     expect(p.admin.masterConsole).toBe(true)
   })
 
-  it("getPermissionsFromSession sem session cai em vendedor (default)", () => {
+  it("getPermissionsFromSession sem sessão recusa módulos", () => {
     const p = getPermissionsFromSession(null)
     expect(p.workspace.iaMestre).toBe(false)
-    expect(p.hubs.vendas).toBe(true)
+    expect(p.hubs.vendas).toBe(false)
   })
 })

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
@@ -73,9 +74,12 @@ function clienteIdFromPayload(payload: unknown): string | undefined {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequest(req)
   if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
-  const denied = await apiGuardFinanceiroViewOrOps(lojaId, { skipOpsInDev: true })
+  const denied = await apiGuardFinanceiroViewOrOps(lojaId, { pdvShared: true })
   if (denied) return denied
 
   try {

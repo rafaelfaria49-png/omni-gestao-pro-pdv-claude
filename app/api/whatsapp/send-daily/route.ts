@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import type { Session } from "next-auth"
@@ -18,6 +19,9 @@ export const maxDuration = 60
  * Usado pelo painel (credenciais) ou por automações internas.
  */
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "whatsapp")
+  if (moduleDenied) return moduleDenied
+
   let session: Session | null = null
   try {
     session = await auth()

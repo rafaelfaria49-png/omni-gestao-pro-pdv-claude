@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { prisma } from "@/lib/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
@@ -26,6 +27,9 @@ function json(data: unknown, init?: ResponseInit) {
  * Multi-loja: `storeId` SEMPRE do header `x-assistec-loja-id` (sem fallback loja-1).
  */
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   try {
     const gate = await requireCadastrosHubApi(req, "write", "shared")
     if (!gate.ok) return gate.response

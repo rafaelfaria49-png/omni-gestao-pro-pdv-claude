@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
@@ -18,6 +19,9 @@ function monthLabel(d: Date): string {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   await prismaEnsureConnected()
   const sid = opsLojaIdFromRequest(req)
   if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })

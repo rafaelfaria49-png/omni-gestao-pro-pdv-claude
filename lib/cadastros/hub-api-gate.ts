@@ -88,7 +88,7 @@ export async function requireCadastrosApi(
     }
   }
 
-  if (opts.profile === "hub" && !hasCadastrosHub(session)) {
+  if (opts.profile === "hub" && !hasCadastrosHub(session, storeId)) {
     return {
       ok: false as const,
       response: NextResponse.json({ error: CADASTROS_HUB_FORBIDDEN_MESSAGE }, { status: 403 }),

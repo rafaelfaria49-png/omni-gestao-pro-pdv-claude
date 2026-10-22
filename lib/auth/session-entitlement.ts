@@ -63,15 +63,15 @@ export async function getSessionEntitlement(): Promise<SessionEntitlement> {
 
   const user = await prisma.adminUser.findUnique({
     where: { id: userId },
-    select: { active: true, planName: true, role: true },
+    select: { active: true, planName: true, role: true, mustChangePassword: true },
   })
   if (!user) return { ok: false, reason: "user_not_found" }
-  if (user.active === false) return { ok: false, reason: "user_inactive" }
+  if (user.active === false || user.mustChangePassword) return { ok: false, reason: "user_inactive" }
 
   return {
     ok: true,
     userId,
-    role: String(session?.user?.role ?? user.role ?? ""),
+    role: String(user.role ?? ""),
     plano: String(user.planName ?? "").trim().toLowerCase(),
     status: "ativa",
     vencimento: ENTITLEMENT_NAO_VERIFICADO_VENCIMENTO,

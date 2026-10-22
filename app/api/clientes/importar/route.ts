@@ -1,9 +1,13 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientPrivateJson as json } from "@/lib/cadastros/client-private-response"
 import { importClientesItems, listClientesForLoja } from "@/lib/clientes-import-handler"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
 export const dynamic = "force-dynamic"
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   try {
     const gate = await requireCadastrosHubApi(req, "read", "hub")
     if (!gate.ok) return gate.response
@@ -11,6 +15,9 @@ export async function GET(req: Request) {
   } catch { return json({ error: "Falha ao carregar clientes" }, { status: 503 }) }
 }
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   try {
     const gate = await requireCadastrosHubApi(req, "write", "admin")
     if (!gate.ok) return gate.response
@@ -23,4 +30,7 @@ export async function POST(req: Request) {
     return json({ error: "Falha na importação" }, { status: 503 })
   }
 }
-export async function PUT(req: Request) { return POST(req) }
+export async function PUT(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+ return POST(req) }

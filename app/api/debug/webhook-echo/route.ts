@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET/POST /api/debug/webhook-echo
  *
@@ -53,6 +54,9 @@ function safeHeaderDump(headers: Headers): Record<string, string> {
 // ─── GET — Meta handshake (hub.mode + hub.verify_token + hub.challenge) ─────
 
 export async function GET(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "platform")
+  if (moduleDenied) return moduleDenied
+
   const ts = new Date().toISOString()
   const url = new URL(request.url)
 
@@ -119,7 +123,10 @@ export async function GET(request: Request) {
 
 // ─── OPTIONS ─────────────────────────────────────────────────────────────────
 
-export async function OPTIONS() {
+export async function OPTIONS(accessRequest: Request) {
+  const moduleDenied = await requireModuleApi(accessRequest, "platform")
+  if (moduleDenied) return moduleDenied
+
   return new NextResponse(null, {
     status: 204,
     headers: {
@@ -133,6 +140,9 @@ export async function OPTIONS() {
 // ─── POST — echo do payload Meta ─────────────────────────────────────────────
 
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "platform")
+  if (moduleDenied) return moduleDenied
+
   const hitTs = Date.now()
   const ts    = new Date(hitTs).toISOString()
 

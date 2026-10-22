@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { requireMarketplaceApi } from "@/lib/marketplace/api-gate"
 import {
@@ -20,6 +21,9 @@ function parseStatus(v: unknown): MarketplaceConnectionStatus | undefined {
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "marketplace")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireMarketplaceApi(req)
   if (!gate.ok) return gate.response
   const { id } = await ctx.params
@@ -56,6 +60,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(_req, "marketplace")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireMarketplaceApi(_req)
   if (!gate.ok) return gate.response
   const { id } = await ctx.params

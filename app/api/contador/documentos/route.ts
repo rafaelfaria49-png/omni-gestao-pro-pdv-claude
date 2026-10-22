@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/contador/documentos?c=AAAA-MM
  *
@@ -20,6 +21,9 @@ export const revalidate = 0
 const CATEGORIAS = new Set(["fiscal", "financeiro", "folha", "juridico", "outro"])
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (url.searchParams.has("storeId") || url.searchParams.has("lojaId")) {
     return NextResponse.json(

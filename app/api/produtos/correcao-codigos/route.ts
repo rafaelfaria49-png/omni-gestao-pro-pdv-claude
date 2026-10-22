@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
@@ -16,6 +17,9 @@ function json(data: unknown, init?: ResponseInit) {
  * Usado pelo fluxo “Corrigir códigos” no importador — não altera dados.
  */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
 

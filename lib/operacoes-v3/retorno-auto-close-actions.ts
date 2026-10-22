@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 // ============================================================================
 // Auto-finaliza o retorno da OS original quando a OS vinculada é entregue.

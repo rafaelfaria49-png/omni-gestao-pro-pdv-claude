@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
@@ -29,6 +30,9 @@ const ordemInclude = {
 } as const
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "service")
+  if (moduleDenied) return moduleDenied
+
   try {
     const url = new URL(req.url)
     const q = url.searchParams.get("q")?.trim() ?? ""
@@ -74,6 +78,9 @@ export async function GET(req: Request) {
 
 /** Escrita desativada — semântica de estoque legada incompatível com Operações HUB V2. */
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "service")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   if (!storeId) {
     return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId / lojaId.")

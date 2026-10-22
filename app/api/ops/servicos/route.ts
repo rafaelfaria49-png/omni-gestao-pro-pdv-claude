@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
@@ -40,6 +41,9 @@ async function requireSubscription() {
  * o CRUD real de serviços permanece em `app/actions/cadastros.ts` (Cadastros HUB).
  */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "service")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
   const lojaId = storeIdFromAssistecRequestForRead(req)

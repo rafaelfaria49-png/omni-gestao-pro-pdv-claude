@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { processarTextoFinanceiro } from "@/lib/ai/processar-texto-financeiro"
 import { requireAdmin } from "@/lib/require-admin"
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "ai")
+  if (moduleDenied) return moduleDenied
+
   // Segurança: em produção, restringir a admin. Em dev, liberar para testes locais.
   if (process.env.NODE_ENV === "production") {
     const gate = await requireAdmin()

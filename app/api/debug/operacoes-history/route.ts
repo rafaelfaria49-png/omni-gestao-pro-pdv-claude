@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
@@ -43,6 +44,9 @@ function onlyDigits(s: string): string {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   if (!allowOperacoesHistoryDebug(req)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 })
   }

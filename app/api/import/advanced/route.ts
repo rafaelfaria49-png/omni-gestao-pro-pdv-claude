@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { NextRequest } from "next/server"
 import {
@@ -19,7 +20,10 @@ export const maxDuration = 120
 
 // ── GET: capabilities ────────────────────────────────────────────────────────
 
-export async function GET() {
+export async function GET(accessRequest: Request) {
+  const moduleDenied = await requireModuleApi(accessRequest, "platform")
+  if (moduleDenied) return moduleDenied
+
   return clientPrivateJson({
     versao: "1.0",
     formatos: ["xlsx", "xls", "csv", "tsv", "zip"],
@@ -83,6 +87,9 @@ function lerContextoProdutos(raw: string | null): ContextoLoteImport {
 // ── POST: parse → detect → merge → preview | importar ───────────────────────
 
 export async function POST(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write", "hub")
   if (!gate.ok) return gate.response
   const principal = cadastrosAuditPrincipalFromSession(gate.session)

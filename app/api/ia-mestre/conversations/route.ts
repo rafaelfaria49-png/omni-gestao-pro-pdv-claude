@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { guardIaMestreApiRead } from "@/lib/ia-mestre/api-guard"
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "ai")
+  if (moduleDenied) return moduleDenied
+
   const guard = await guardIaMestreApiRead(req)
   if (!guard.ok) return guard.response
 

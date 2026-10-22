@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextRequest, NextResponse } from "next/server"
 import { transcribeAudioBuffer } from "@/lib/transcribe-openai"
 import { extractProductMetadataFromTranscript } from "@/lib/product-voice-metadata-openai"
@@ -18,6 +19,9 @@ function dataUrlToBuffer(dataUrl: string): { buf: Buffer; mime: string; filename
 }
 
 export async function POST(req: NextRequest) {
+  const moduleDenied = await requireModuleApi(req, "ai")
+  if (moduleDenied) return moduleDenied
+
   try {
     const body = (await req.json()) as { audioBase64?: string }
     const raw = body.audioBase64?.trim()

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
@@ -19,6 +20,9 @@ const schema = z.object({
  * Falha de infra → 200 `degraded` (não bloqueia a operação).
  */
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(

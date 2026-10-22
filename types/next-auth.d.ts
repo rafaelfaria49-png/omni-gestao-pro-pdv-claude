@@ -9,6 +9,11 @@ declare module "next-auth" {
       /** "all" = qualquer loja; "restricted" = apenas `allowedStoreIds`. */
       storeAccess: "all" | "restricted"
       allowedStoreIds?: string[]
+      platformAuthority?: boolean
+      accessScope?: string | null
+      mustChangePassword?: boolean
+      sessionVersion?: number
+      storeModules?: Record<string, import("@/lib/auth/access-policy").AccessModule[]>
     } & DefaultSession["user"]
   }
 
@@ -17,6 +22,7 @@ declare module "next-auth" {
     lojaId: string | null
     storeAccess: "all" | "restricted"
     allowedStoreIds?: string[]
+    sessionVersion?: number
   }
 }
 
@@ -27,5 +33,10 @@ declare module "next-auth/jwt" {
     storeAccess?: "all" | "restricted"
     /** JSON array de storeIds quando `storeAccess` === "restricted". */
     allowedStoreIdsJson?: string
+    platformAuthority?: boolean
+    accessScope?: string | null
+    mustChangePassword?: boolean
+    sessionVersion?: number
+    storeModules?: Record<string, import("@/lib/auth/access-policy").AccessModule[]>
   }
 }

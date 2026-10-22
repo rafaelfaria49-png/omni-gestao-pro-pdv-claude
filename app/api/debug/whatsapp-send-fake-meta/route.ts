@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/debug/whatsapp-send-fake-meta?secret=<ASSISTEC_MASTER_PASSWORD>
  *
@@ -79,6 +80,9 @@ function buildRealisticMetaPayload(from: string, text: string, phoneNumberId: st
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   if (!checkSecret(req)) {
     return NextResponse.json({ error: "Unauthorized — inclua ?secret= na URL" }, { status: 401 })
   }

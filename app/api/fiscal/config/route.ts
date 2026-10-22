@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Identidade fiscal por loja — GET/PUT da `ConfiguracaoFiscalLoja` (GOAL_002).
  *
@@ -71,6 +72,9 @@ async function loadConfigRow(storeId: string): Promise<FiscalConfigRow | null> {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForRead(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)
@@ -128,6 +132,9 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(req)
   const acl = await requireFiscalAdmin(storeId)
   if (!acl.ok) return jsonError(acl.error, acl.status)

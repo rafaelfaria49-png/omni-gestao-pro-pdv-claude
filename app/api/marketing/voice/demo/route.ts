@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 
 export const runtime = "nodejs"
@@ -34,7 +35,10 @@ function shortToneWav(): Uint8Array {
   return out
 }
 
-export async function GET() {
+export async function GET(accessRequest: Request) {
+  const moduleDenied = await requireModuleApi(accessRequest, "marketing")
+  if (moduleDenied) return moduleDenied
+
   const bytes = shortToneWav()
   return new NextResponse(bytes, {
     headers: {

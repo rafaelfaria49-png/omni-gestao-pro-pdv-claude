@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/debug/whatsapp-latest?secret=<ASSISTEC_MASTER_PASSWORD>
  *
@@ -43,6 +44,9 @@ function maskId(id: string): string {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   if (!checkSecret(req)) {
     return NextResponse.json({ error: "Unauthorized — inclua ?secret= na URL" }, { status: 401 })
   }

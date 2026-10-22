@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/contador/notificacoes/[id]/tratar
  *
@@ -26,6 +27,9 @@ export const revalidate = 0
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function POST(req: Request, ctx: Ctx) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   const body = await lerCorpoJson(req)
   if (temChaveProibida(url.searchParams) || temChaveProibida(body)) return respostaChaveProibida()

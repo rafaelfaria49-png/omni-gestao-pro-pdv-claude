@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
@@ -9,6 +10,9 @@ export const runtime = "nodejs"
 const MAX_DETAIL = 4000
 
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "authenticated")
+  if (moduleDenied) return moduleDenied
+
   const sub = await getVerifiedSubscriptionFromCookies()
   if (!sub.ok) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 })

@@ -10,7 +10,7 @@ export async function handleClientList(req: Request, q = "", lookupOnly = false)
     if (!gate.ok) return gate.response
     const storeId = gate.storeId
 
-    if (lookupOnly || !canReadClientRegister(gate.session)) {
+    if (lookupOnly || !canReadClientRegister(gate.session, storeId)) {
       const clientes = await prisma.cliente.findMany({
         where: { storeId, ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { phone: { contains: q } }, { document: { contains: q } }] } : {}) },
         select: CLIENT_LOOKUP_SELECT, orderBy: { createdAt: "desc" }, take: 50,

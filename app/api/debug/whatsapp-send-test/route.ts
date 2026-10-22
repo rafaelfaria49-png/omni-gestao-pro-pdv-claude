@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Rota de diagnóstico: envia uma mensagem de texto diretamente via
  * WhatsApp Cloud API (Graph API) e retorna o status bruto da Meta.
@@ -32,6 +33,9 @@ function maskToken(t: string | undefined): string {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "platform")
+  if (moduleDenied) return moduleDenied
+
   if (!checkSecret(req)) {
     return NextResponse.json({ error: "Unauthorized — inclua ?secret= na URL" }, { status: 401 })
   }

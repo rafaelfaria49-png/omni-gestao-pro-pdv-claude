@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Ação administrativa de inutilização NFC-e (GOAL 019).
  *
@@ -33,6 +34,9 @@ const postSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(request)
   const auth = await requireFiscalAdmin(storeId)
   if (!auth.ok) return jsonError(auth.error, auth.status)
@@ -91,6 +95,9 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   const storeId = storeIdFromAssistecRequestForWrite(request)
   const auth = await requireFiscalAdmin(storeId)
   if (!auth.ok) return jsonError(auth.error, auth.status)

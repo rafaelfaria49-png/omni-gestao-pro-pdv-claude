@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma, withPrismaSafe } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -177,6 +178,8 @@ async function auditOS(params: {
 }
 
 export async function listOS(storeId: string): Promise<OperacoesOSPayload[]> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(
     storeId,
     (p) => p.hubs.operacoes,
@@ -190,6 +193,8 @@ export async function createOS(
   storeId: string,
   input: Omit<OperacoesOSPayload, "id" | "codigo" | "criadoEm" | "atualizadoEm">
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.operacoes.criarOs, "Sem permissão para criar OS.");
   const codigo = await nextCodigo(storeId);
   const createdAtIso = nowIso();
@@ -256,6 +261,8 @@ export async function updateOSStatus(
   status: OSStatus,
   options?: OperacaoTransitionOptions & { appendTimeline?: EventoTimeline[] },
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   const effective = normalizeOperacaoStatus(status);
   let statusPerm: (p: EnterprisePermissions) => boolean;
   if (effective === "entregue") statusPerm = (p) => p.operacoes.entregarOs;
@@ -416,6 +423,8 @@ export async function updateOSPayload(
   patch: Partial<OperacoesOSPayload>,
   transitionOpts?: OperacaoTransitionOptions,
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
   validatePatchIdentifiers({ storeId, osId, patch });
   return aplicarPatchOSPayloadSobTrava(storeId, osId, () => ({ patch, transitionOpts }));
@@ -610,6 +619,8 @@ export async function applyOperacaoHubAcao(
   acao: OperacaoHubAcaoInput,
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   const permForAcao = (): ((p: EnterprisePermissions) => boolean) => {
     switch (acao.kind) {
       case "entregar_cliente":
@@ -921,6 +932,8 @@ export async function aplicarIntencaoOrcamentoOS(
   intencao: IntencaoOrcamentoOS,
   autor = "Você",
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
   return aplicarPatchOSPayloadSobTrava(storeId, osId, async (_latest, tx) => {
     const row = await tx.ordemServico.findFirst({ where: { id: osId, storeId }, include: { cliente: true } });
@@ -1030,6 +1043,8 @@ function montarPatchIntencaoOrcamento(atual: OperacoesOSPayload, intencao: Inten
 }
 
 export async function syncOperacaoItensComOrcamento(storeId: string, osId: string): Promise<void> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para sincronizar itens da OS.");
   // Orçamento e `estoqueConsumido` relidos sob a trava da OS, dentro do serviço.
   await syncOrdemServicoDraftItensFromOrcamento({ storeId, osId });
@@ -1046,6 +1061,8 @@ export async function validateOrcamentoEstoqueAction(
   storeId: string,
   osId: string,
 ): Promise<{ ok: boolean; issues: EstoqueOrcamentoIssue[] }> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.hubs.operacoes, "Sem permissão para validar estoque do orçamento.");
   const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
   const current = asOperacoesPayload<OperacoesOSPayload>(row?.payload as unknown);
@@ -1102,6 +1119,8 @@ export async function gerarCobrancaOSAction(
   input: { modo: GerarCobrancaModo; numParcelas?: number },
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.operacoes.gerarCobranca, "Sem permissão para gerar cobrança.");
   // Mesma exigência do `updateOSPayload` que esta action usava para gravar.
   await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
@@ -1217,6 +1236,8 @@ export async function salvarChecklistTecnicoOperacaoAction(
   checklistTecnico: ChecklistTecnicoItem[],
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.operacoes.checklist, "Sem permissão para editar o checklist técnico.");
   const autorCh = await resolveOperador(autor);
   const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
@@ -1244,6 +1265,8 @@ export async function confirmarRetiradaOperacaoAction(
   input: RetiradaCliente,
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.operacoes.retirada, "Sem permissão para registrar retirada.");
   const autorRt = await resolveOperador(autor);
   const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
@@ -1276,6 +1299,8 @@ export async function registrarDocumentoImpressoAction(
   osId: string,
   autor = "Operador",
 ): Promise<void> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(
     storeId,
     (p) => p.operacoes.editarOs,
@@ -1295,6 +1320,8 @@ export async function salvarPreferenciaGarantiaOperacionalAction(
   osId: string,
   input: { modo: GarantiaOperacionalModo; prazoCustom?: number },
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(
     storeId,
     (p) => p.operacoes.garantia,
@@ -1312,6 +1339,8 @@ export async function criarGarantiaOperacionalManualAction(
   input: { prazoDias: number; observacoes?: string },
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
+  await requireModuleAction(storeId, "service")
+
   await requireOperacaoAuth(storeId, (p) => p.operacoes.garantia, "Sem permissão para registrar garantia operacional.");
   const autorG = await resolveOperador(autor);
   const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
@@ -1370,6 +1399,8 @@ function safePayloadObj(v: unknown): Record<string, unknown> | null {
 }
 
 export async function listVendasHub(storeId: string): Promise<Venda[]> {
+  await requireModuleAction(storeId, "sales")
+
   await requireOperacaoAuth(storeId, (p) => p.hubs.vendas, "Sem permissão para listar vendas.");
   const rows = await prisma.venda.findMany({
     where: { storeId },
@@ -1407,6 +1438,8 @@ export async function listVendasHub(storeId: string): Promise<Venda[]> {
 }
 
 export async function criarVendaDeOSAction(os: OrdemServico): Promise<Venda> {
+  await requireModuleAction(os.storeId, "service")
+
   if (!os.orcamento) throw new Error("OS sem orçamento — impossível faturar");
   const orcamento = os.orcamento
   await requireOperacaoAuth(

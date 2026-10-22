@@ -7,6 +7,12 @@ import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 import { APP_DISPLAY_NAME } from '@/lib/app-brand'
 import { SessionProvider } from '@/components/auth/SessionProvider'
+import { auth } from '@/auth'
+import { cookies, headers } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { canAccessPage } from '@/lib/auth/page-access'
+import { getPermissionsFromSession } from '@/lib/auth/enterprise-permissions'
+import { ASSISTEC_ACTIVE_STORE_COOKIE } from '@/lib/store-defaults'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -58,11 +64,21 @@ export const viewport: Viewport = {
   ],
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const session = await auth()
+  const path = (await headers()).get('x-omni-pathname') || '/'
+  const isPublic = path === '/' || path === '/privacy' || path === '/suporte' ||
+    path.startsWith('/login') || path === '/portal' || path.startsWith('/portal/') ||
+    path === '/contador' || path.startsWith('/contador/') || path.startsWith('/contador-externo')
+  if (!isPublic && !path.startsWith('/dashboard') && path !== '/conta/seguranca') {
+    if (!session?.user) redirect('/login')
+    const storeId = (await cookies()).get(ASSISTEC_ACTIVE_STORE_COOKIE)?.value
+    if (!canAccessPage(getPermissionsFromSession(session, storeId), path)) redirect('/dashboard?access=denied')
+  }
   return (
     <html
       lang="pt-BR"
@@ -84,7 +100,7 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <LegibilityProvider>
-            <SessionProvider>
+            <SessionProvider session={session}>
               {children}
             </SessionProvider>
           </LegibilityProvider>

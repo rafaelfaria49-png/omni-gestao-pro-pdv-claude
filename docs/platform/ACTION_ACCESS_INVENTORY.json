@@ -1,0 +1,674 @@
+[
+  {
+    "file": "app/actions/estoque.ts",
+    "action": "registrarEntradaEstoque",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/estoque.ts",
+    "action": "registrarAjusteEstoque",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/estoque.ts",
+    "action": "diagnosticarSaldoEstoque",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/estoque.ts",
+    "action": "getEstoqueResumo",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/estoque.ts",
+    "action": "listMovimentacoesEstoque",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/estoque.ts",
+    "action": "getAuditoriaEstoque",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "iniciarInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "getInventarioAtivo",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "registrarContagemProduto",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "getContextoContagemProduto",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "registrarPendenciaInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "listInventarioContagens",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "encerrarInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "getRelatorioInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "listInventarioSessoes",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "getInventarioHistorico",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "getInventarioDashboard",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "classificarReconciliacao",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "vincularPendenciaInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "aplicarAjusteInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "aplicarZeragemNaoBipado",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "getConciliacaoInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "simularConciliacaoInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "aplicarConciliacaoInventario",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "getInventarioProgresso",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "listProdutosNaoConferidos",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/inventario.ts",
+    "action": "getInventarioSaneamentoTimeline",
+    "module": "stock",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "listOS",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "createOS",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "updateOSStatus",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "updateOSPayload",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "applyOperacaoHubAcao",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "aplicarIntencaoOrcamentoOS",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "syncOperacaoItensComOrcamento",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "validateOrcamentoEstoqueAction",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "gerarCobrancaOSAction",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "salvarChecklistTecnicoOperacaoAction",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "confirmarRetiradaOperacaoAction",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "registrarDocumentoImpressoAction",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "salvarPreferenciaGarantiaOperacionalAction",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "criarGarantiaOperacionalManualAction",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "listVendasHub",
+    "module": "sales",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/operacoes.ts",
+    "action": "criarVendaDeOSAction",
+    "module": "service",
+    "store": "os.storeId"
+  },
+  {
+    "file": "app/actions/ordens.ts",
+    "action": "listOrdens",
+    "module": "service",
+    "store": "lojaId"
+  },
+  {
+    "file": "app/actions/ordens.ts",
+    "action": "getOrdem",
+    "module": "service",
+    "store": "lojaId"
+  },
+  {
+    "file": "app/actions/whatsapp.ts",
+    "action": "sendWhatsAppTextAction",
+    "module": "whatsapp",
+    "store": "input.storeId"
+  },
+  {
+    "file": "app/actions/whatsapp.ts",
+    "action": "sendWhatsAppTextFromRequestContext",
+    "module": "whatsapp",
+    "store": "storeIdFromAssistecRequestForWrite(reqLike as unknown as Request) || \"\""
+  },
+  {
+    "file": "app/actions/whatsapp.ts",
+    "action": "sendWhatsAppTemplateAction",
+    "module": "whatsapp",
+    "store": "input.storeId"
+  },
+  {
+    "file": "app/actions/whatsapp.ts",
+    "action": "sendWhatsAppMediaAction",
+    "module": "whatsapp",
+    "store": "input.storeId"
+  },
+  {
+    "file": "app/actions/vendas-enterprise.ts",
+    "action": "enrichVendaEnterprise",
+    "module": "sales",
+    "store": "input.storeId"
+  },
+  {
+    "file": "app/actions/terminais.ts",
+    "action": "listTerminais",
+    "module": "pdv",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/terminais.ts",
+    "action": "criarTerminal",
+    "module": "settings",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/terminais.ts",
+    "action": "setTerminalStatus",
+    "module": "settings",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/produto-ia.ts",
+    "action": "salvarProdutoIAMetadata",
+    "module": "ai",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/produto-texto-livre.ts",
+    "action": "interpretarProdutoTextoLivre",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cliente-texto-livre.ts",
+    "action": "interpretarClienteTextoLivre",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cliente-texto-livre.ts",
+    "action": "salvarClienteRevisado",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "getCadastrosDashboardStats",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listFornecedores",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "upsertFornecedor",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listCategorias",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "upsertCategoria",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listMarcas",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "upsertMarca",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listCategoriasMarcasUsadasEmProduto",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listTecnicos",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "upsertTecnico",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listEquipamentosModelos",
+    "module": "deviceCatalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "upsertEquipamentoModelo",
+    "module": "deviceCatalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "countProdutoImagens",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "countMarketplaceListings",
+    "module": "marketplace",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listClientes",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "createCliente",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "updateCliente",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listProdutos",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "getUltimoBatchProdutos",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listProdutosPaginado",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "lookupProdutoPorBarcodeLocal",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "upsertProduto",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "getConferenciaLote",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "aplicarConferenciaLote",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "deleteProduto",
+    "module": "catalog",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listServicos",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "upsertServico",
+    "module": "service",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listImportacoesAuditoria",
+    "module": "platform",
+    "store": "platform"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listLogsAuditoriaCadastros",
+    "module": "platform",
+    "store": "platform"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "listLojasCadastros",
+    "module": "platform",
+    "store": "platform"
+  },
+  {
+    "file": "app/actions/cadastros.ts",
+    "action": "resolverCodigoBarras",
+    "module": "catalog",
+    "store": "_storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "getOmniAgentConfig",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "upsertOmniAgentConfig",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "resetOmniAgentConfig",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "listOmniAgentCommands",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "getOmniAgentHubStats",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "submitOmniAgentCommand",
+    "module": "agent",
+    "store": "input.storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "confirmOmniAgentCommand",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "rejectOmniAgentCommand",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "getOmniAgentWhatsAppCloudStatus",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "getOmniAgentReportsSnapshot",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "listOmniAgentAutomations",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "createOmniAgentAutomation",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "updateOmniAgentAutomation",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "setOmniAgentAutomationEnabled",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "deleteOmniAgentAutomation",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent.ts",
+    "action": "listOmniAgentAutomationRuns",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent-memory.ts",
+    "action": "createOmniAgentMemory",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent-memory.ts",
+    "action": "updateOmniAgentMemory",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent-memory.ts",
+    "action": "archiveOmniAgentMemory",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent-memory.ts",
+    "action": "listOmniAgentMemoriesByCliente",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent-memory.ts",
+    "action": "listRecentOmniAgentMemories",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent-memory.ts",
+    "action": "searchOmniAgentMemories",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/omni-agent-timeline.ts",
+    "action": "getOmniAgentTimeline",
+    "module": "agent",
+    "store": "storeId"
+  },
+  {
+    "file": "app/actions/backfill-venda-cliente.ts",
+    "action": "backfillVendaCliente",
+    "module": "platform",
+    "store": "storeId"
+  }
+]

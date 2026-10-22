@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { cadastrosAuditPrincipalFromSession } from "@/lib/cadastros/cadastros-audit-principal"
@@ -18,6 +19,9 @@ function json(data: unknown, init?: ResponseInit) {
  * Não escreve nada. A execução exige o fingerprint deste plano.
  */
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   try {
     const gate = await requireCadastrosHubApi(req, "write", "admin")
     if (!gate.ok) return gate.response

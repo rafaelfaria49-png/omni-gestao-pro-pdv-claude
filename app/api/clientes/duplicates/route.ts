@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import {
@@ -24,6 +25,9 @@ function json(data: unknown, init?: ResponseInit) {
  * Nunca executa merge. Nome sozinho nunca gera candidato.
  */
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   try {
     const gate = await requireCadastrosHubApi(req, "read", "admin")
     if (!gate.ok) return gate.response

@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
@@ -57,6 +58,9 @@ function isStockFailure(e: unknown): e is StockFailure {
 }
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write")
   if (!gate.ok) return gate.response
   const storeId = gate.storeId
@@ -225,6 +229,9 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 }
 
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write")
   if (!gate.ok) return gate.response
   const storeId = gate.storeId

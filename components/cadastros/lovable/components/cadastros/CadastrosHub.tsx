@@ -79,6 +79,17 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+function useCadastrosAvailability() {
+  const business = useStoreBusiness();
+  const p = business.permissions;
+  return (id: string) => {
+    if (["importacao", "auditoria"].includes(id)) return p?.platformAuthority === true;
+    if (["servicos", "tecnicos"].includes(id)) return business.resource("service.technical").operational;
+    if (id === "equipamentos") return business.resource("catalog.deviceCompatibility").operational;
+    return true;
+  };
+}
+
 
 export function CadastrosHub() {
   const [tab, setTab] = useState<TabId>("dashboard");
@@ -88,7 +99,7 @@ export function CadastrosHub() {
   const storeId = (lojaAtivaId ?? "").trim();
   const business = useStoreBusiness();
   const technical = business.resource("service.technical").operational;
-  const visibleTab = (id: string) => technical || (id !== "tecnicos" && id !== "equipamentos");
+  const visibleTab = useCadastrosAvailability();
   const selectedTab = visibleTab(tab) ? tab : "dashboard";
   return (
     <div className="w-full min-w-0 max-w-full bg-background text-foreground transition-smooth">
@@ -116,6 +127,7 @@ export function CadastrosHub() {
                 setAutoOpenNew(null);
               }}
               className="flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted/40 transition-smooth"
+              hidden={!visibleTab("importacao")}
               title="Abrir HUB de Importação"
             >
               <Upload className="h-4 w-4" /> <span className="hidden md:inline">Importar</span>
@@ -170,7 +182,7 @@ export function CadastrosHub() {
             }}
           />
         )}
-        {tab === "clientes" && (
+        {selectedTab === "clientes" && (
           <ClientesPanel
             key={storeId}
             storeId={storeId}
@@ -178,7 +190,7 @@ export function CadastrosHub() {
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {tab === "produtos" && (
+        {selectedTab === "produtos" && (
           <ProdutosPanel
             key={storeId}
             storeId={storeId}
@@ -186,37 +198,37 @@ export function CadastrosHub() {
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {tab === "servicos" && (
+        {selectedTab === "servicos" && (
           <ServicosPanel
             storeId={storeId}
             autoOpen={autoOpenNew === "servicos"}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {tab === "fornecedores" && (
+        {selectedTab === "fornecedores" && (
           <FornecedoresPanel
             storeId={storeId}
             autoOpen={autoOpenNew === "fornecedores"}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {tab === "tecnicos" && technical && (
+        {selectedTab === "tecnicos" && technical && (
           <TecnicosPanel
             storeId={storeId}
             autoOpen={autoOpenNew === "tecnicos"}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {tab === "equipamentos" && technical && (
+        {selectedTab === "equipamentos" && technical && (
           <EquipamentosPanel
             storeId={storeId}
             autoOpen={autoOpenNew === "equipamentos"}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
-        {tab === "categorias" && <CategoriasPanel storeId={storeId} />}
-        {tab === "importacao" && <ImportacaoPanel />}
-        {tab === "auditoria" && <AuditoriaPanel />}
+        {selectedTab === "categorias" && <CategoriasPanel storeId={storeId} />}
+        {selectedTab === "importacao" && <ImportacaoPanel />}
+        {selectedTab === "auditoria" && <AuditoriaPanel />}
       </main>
 
       <Modal open={novo.open} onClose={novo.close} title="Novo cadastro" subtitle="Selecione o tipo de registro que deseja criar.">
@@ -257,6 +269,7 @@ export function CadastrosHub() {
 
 /* ───── DASHBOARD ───── */
 function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: boolean) => void }) {
+  const visibleTab = useCadastrosAvailability();
   const business = useStoreBusiness();
   const technical = business.resource("service.technical").operational;
   const quick = [
@@ -302,7 +315,7 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
       {err && <div className="text-sm text-destructive">{err}</div>}
       {/* KPIs */}
       <div className="grid min-w-0 grid-cols-2 gap-4 md:grid-cols-4">
-        {(stats?.kpis ?? []).filter((k) => technical || !["HardHat", "Smartphone"].includes(k.icon)).map((k) => {
+        {(stats?.kpis ?? []).filter((k) => visibleTab(({ Wrench: "servicos", HardHat: "tecnicos", Smartphone: "equipamentos", RefreshCw: "auditoria" } as Record<string, string>)[k.icon] || "produtos")).map((k) => {
           const Icon = ICONS[k.icon] ?? Package;
           const negative = k.delta.startsWith("-");
           const mapIconToTab = (icon: string): TabId | null => {
@@ -342,7 +355,7 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
       <div>
         <SectionTitle title="Cards rápidos" subtitle="Operações mais usadas em um clique." />
         <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
-          {quick.filter((q) => technical || q.tab !== "tecnicos").map((q) => (
+          {quick.filter((q) => visibleTab(q.tab)).map((q) => (
             <button
               key={q.l}
               onClick={() => onAction(q.tab, q.autoOpen)}
@@ -439,7 +452,7 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
         </Card>
       </div>
 
-      <InteligenciaCadastros stats={stats?.ia} />
+      {business.permissions?.workspace.iaMestre && <InteligenciaCadastros stats={stats?.ia} />}
       <VinculosSistema />
     </div>
   );
@@ -1111,6 +1124,7 @@ function ProdutosPanel({
   autoOpen?: boolean;
   onAutoOpenConsumed?: () => void;
 }) {
+  const business = useStoreBusiness();
   const m = useToggle();
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
   const [deleting, setDeleting] = useState<ProdutoDTO | null>(null);

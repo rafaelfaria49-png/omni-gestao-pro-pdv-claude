@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
 
@@ -32,6 +33,8 @@ type BackfillResult = {
 export async function backfillVendaCliente(
   storeId: string
 ): Promise<BackfillResult> {
+  await requirePlatformAction()
+
   if (!storeId) return { ok: false, totalVendas: 0, vinculadas: 0, porDocumento: 0, porTelefone: 0, semMatch: 0, erros: 0, detalhes: "storeId obrigatório" }
 
   // Pré-carrega todos os clientes da loja para lookup in-memory (sem N+1)

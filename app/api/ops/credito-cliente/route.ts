@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/ops/credito-cliente
  *
@@ -62,6 +63,9 @@ function projetarCredito(r: ClienteCreditoRow) {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequest(req)
   if (!lojaId) {
     return NextResponse.json({ error: "lojaId obrigatório" }, { status: 400 })

@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import type { Prisma } from "@/generated/prisma"
 import type { OrdemServico, OSStatus } from "@/types/os"
@@ -92,6 +93,8 @@ function mapRows(rows: DbOrdemRow[]): PrismaOSRow[] {
  * Não lança: em falha de DB retorna array vazio.
  */
 export async function listOrdens(lojaId: string, filters?: ListOrdensFilters): Promise<OrdemServicoLeitura[]> {
+  await requireModuleAction(lojaId, "service")
+
   const storeId = normalizeLojaId(lojaId)
   if (!storeId) return []
 
@@ -135,6 +138,8 @@ export async function getOrdem(
   osId: string,
   opts?: { readOnly?: boolean },
 ): Promise<OrdemServicoLeitura | null> {
+  await requireModuleAction(lojaId, "service")
+
   const storeId = normalizeLojaId(lojaId)
   const id = (osId ?? "").trim()
   if (!storeId || !id) return null

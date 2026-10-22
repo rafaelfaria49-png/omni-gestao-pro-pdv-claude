@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { clientEditorTags, canReadClientRegister, CLIENT_LOOKUP_SELECT, CLIENT_REGISTER_SELECT, CLIENT_RETENTION_BLOCK } from "@/lib/cadastros/client-privacy"
 import { clientPrivateJson } from "@/lib/cadastros/client-private-response"
 import { Prisma, StatusOrdemServico } from "@/generated/prisma"
@@ -22,6 +23,9 @@ function badRequest(message: string) {
 }
 
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "sharedCatalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "read", "shared")
   if (!gate.ok) return gate.response
   const storeId = gate.storeId
@@ -30,7 +34,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   if (!id?.trim()) return badRequest("ID inválido")
 
   try {
-    if (!canReadClientRegister(gate.session)) {
+    if (!canReadClientRegister(gate.session, gate.storeId)) {
       const cliente = await prisma.cliente.findFirst({ where: { id, storeId }, select: CLIENT_LOOKUP_SELECT })
       return cliente ? json({ ok: true, cliente }) : json({ error: "Cliente não encontrado" }, { status: 404 })
     }
@@ -94,6 +98,9 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 }
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write", "admin")
   if (!gate.ok) return gate.response
   const storeId = gate.storeId
@@ -193,6 +200,9 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 }
 
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "catalog")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireCadastrosHubApi(req, "write", "admin")
   if (!gate.ok) return gate.response
   const { id } = await context.params

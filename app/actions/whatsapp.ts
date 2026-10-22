@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { auth } from "@/auth"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
@@ -18,6 +19,8 @@ type SendTextInput = {
 
 /** Server Action: envia texto via Cloud API e grava outbound (requer sessão). */
 export async function sendWhatsAppTextAction(input: SendTextInput) {
+  await requireModuleAction(input.storeId, "whatsapp")
+
   const session = await auth()
   if (!session?.user) return { ok: false as const, error: "Não autenticado" }
 
@@ -43,6 +46,8 @@ export async function sendWhatsAppTextFromRequestContext(
   conversationId: string,
   text: string
 ) {
+  await requireModuleAction(storeIdFromAssistecRequestForWrite(reqLike as unknown as Request) || "", "whatsapp")
+
   const session = await auth()
   if (!session?.user) return { ok: false as const, error: "Não autenticado" }
 
@@ -65,6 +70,8 @@ export async function sendWhatsAppTemplateAction(input: {
   templateLanguage?: string
   templateComponents?: TemplateComponent[]
 }) {
+  await requireModuleAction(input.storeId, "whatsapp")
+
   const session = await auth()
   if (!session?.user) return { ok: false as const, error: "Não autenticado" }
   const storeId = (input.storeId ?? "").trim()
@@ -91,6 +98,8 @@ export async function sendWhatsAppMediaAction(input: {
   caption?: string
   filename?: string
 }) {
+  await requireModuleAction(input.storeId, "whatsapp")
+
   const session = await auth()
   if (!session?.user) return { ok: false as const, error: "Não autenticado" }
   const storeId = (input.storeId ?? "").trim()

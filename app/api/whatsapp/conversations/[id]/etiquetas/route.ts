@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { guardWhatsAppApiRead, guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
@@ -16,6 +17,9 @@ function badRequest(message: string) {
 
 /** GET — lista etiquetas de uma conversa */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "whatsapp")
+  if (moduleDenied) return moduleDenied
+
   try {
     const guard = await guardWhatsAppApiRead(req)
     if (!guard.ok) return guard.response
@@ -41,6 +45,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 
 /** POST — adiciona etiqueta a uma conversa */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "whatsapp")
+  if (moduleDenied) return moduleDenied
+
   try {
     const guard = await guardWhatsAppApiWrite(req)
     if (!guard.ok) return guard.response

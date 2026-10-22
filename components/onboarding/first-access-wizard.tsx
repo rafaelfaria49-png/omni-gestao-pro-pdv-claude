@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { ASSISTEC_STORES_SYNC_STORAGE_KEY, useLojaAtiva } from "@/lib/loja-ativa"
+import { useStoreBusiness } from "@/lib/use-store-business"
+import { BUSINESS_BRANCHES } from "@/lib/store-business-capabilities"
 
 type WizardStep = 1 | 2 | 3
 type StoreProfile = "ASSISTENCIA" | "SUPERMERCADO" | "VARIEDADES"
@@ -19,6 +21,7 @@ function emptyAddress() {
 
 export function FirstAccessWizard() {
   const { toast } = useToast()
+  const business = useStoreBusiness()
   const { lojaAtivaId, lojaAtivaRaw, cadastroBasicoIncompleto, storesLoaded, refreshStoresList } = useLojaAtiva()
   const storeId = (lojaAtivaId ?? lojaAtivaRaw?.id ?? "").trim()
 
@@ -41,7 +44,7 @@ export function FirstAccessWizard() {
   const title = useMemo(() => {
     if (step === 1) return "Boas-vindas! Vamos configurar sua loja"
     if (step === 2) return "Endereço e contatos"
-    return "Perfil do negócio"
+    return "Ramo e recursos da loja"
   }, [step])
 
   useEffect(() => {
@@ -129,7 +132,6 @@ export function FirstAccessWizard() {
           phone: telefone.trim(),
           logoUrl: "",
           address: { ...emptyAddress(), ...address },
-          profile: perfil,
         }),
       })
       if (!r1.ok) {
@@ -137,7 +139,7 @@ export function FirstAccessWizard() {
         throw new Error(j.error || `Falha ao salvar dados da loja (HTTP ${r1.status})`)
       }
 
-      await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
+      const r2 = await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
         method: "PUT",
         credentials: "include",
         headers: {
@@ -150,6 +152,7 @@ export function FirstAccessWizard() {
           contactWhatsappDono: whatsappDono.trim(),
         }),
       })
+      if (!r2.ok) throw new Error("Não foi possível salvar os contatos da loja.")
 
       await refreshStoresList()
       try {
@@ -300,17 +303,10 @@ export function FirstAccessWizard() {
         {step === 3 ? (
           <div className="grid gap-4">
             <div className="space-y-2">
-              <Label>Escolha o perfil</Label>
-              <Select value={perfil} onValueChange={(v) => setPerfil(v as StoreProfile)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ASSISTENCIA">Assistência</SelectItem>
-                  <SelectItem value="SUPERMERCADO">Supermercado</SelectItem>
-                  <SelectItem value="VARIEDADES">Variedades</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Ramo principal</Label>
+              <p className="text-sm">{business.configured ? BUSINESS_BRANCHES[business.branch] : "Ramo ainda não configurado. Revise em Configurações → Geral → Ramo e recursos."}</p>
+              <p className="text-xs text-muted-foreground">Os recursos disponíveis seguem a liberação da plataforma. A configuração do ramo preserva essa liberação.</p>
+
             </div>
           </div>
         ) : null}

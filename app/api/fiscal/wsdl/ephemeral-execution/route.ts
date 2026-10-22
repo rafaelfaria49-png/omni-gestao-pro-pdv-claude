@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/fiscal/wsdl/ephemeral-execution
  *
@@ -119,6 +120,9 @@ async function requestIsClosed(request: Request, storeId: string): Promise<boole
 }
 
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   // Primeira barreira: constantes null/inválidas/fora do prazo bloqueiam antes de ACL e Prisma.
   if (!configuredWsdlExecutionWindowStatus().active) {
     return response(404, { ok: false, code: "wsdl_execution_unavailable" })

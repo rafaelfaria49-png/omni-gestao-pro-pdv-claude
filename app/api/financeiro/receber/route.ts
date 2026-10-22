@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * /api/financeiro/receber
  *
@@ -149,6 +150,9 @@ const deleteQuerySchema = z.object({
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const storeId = readSid(req)
   if (!storeId) return err("Unidade obrigatória", "store_missing", 400)
   const denied = await apiGuardFinanceiroViewOrOps(storeId, { skipOpsInDev: true })
@@ -221,6 +225,9 @@ export async function GET(req: Request) {
 // ─── POST ─────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   let json: unknown
   try { json = await req.json() } catch {
     return err("JSON inválido", "invalid_json", 400)
@@ -282,6 +289,9 @@ export async function POST(req: Request) {
 // ─── PATCH ────────────────────────────────────────────────────────────────────
 
 export async function PATCH(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   let json: unknown
   try { json = await req.json() } catch {
     return err("JSON inválido", "invalid_json", 400)
@@ -450,6 +460,9 @@ export async function PATCH(req: Request) {
 // Cancelamento seguro — não destrói dados, apenas muda status para "cancelado".
 
 export async function DELETE(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const storeId = readSid(req, true)
   if (!storeId) return err("Unidade obrigatória (x-assistec-loja-id)", "store_missing", 400)
 

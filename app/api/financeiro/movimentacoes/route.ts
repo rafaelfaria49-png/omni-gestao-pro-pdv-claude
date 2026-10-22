@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * /api/financeiro/movimentacoes
  *
@@ -56,6 +57,9 @@ const deleteSchema = z.object({
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const sid = storeIdFromReq(req)
   if (!sid) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardFinanceiroViewOrOps(sid)
@@ -102,6 +106,9 @@ export async function GET(req: Request) {
 // ─── POST ─────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   let json: unknown
   try {
     json = await req.json()
@@ -166,6 +173,9 @@ export async function POST(req: Request) {
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 
 export async function DELETE(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "finance")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   const idParam = url.searchParams.get("id")
 

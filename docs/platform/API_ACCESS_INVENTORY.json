@@ -1,0 +1,1837 @@
+[
+  {
+    "file": "app/api/account/password/route.ts",
+    "method": "POST",
+    "access": "own-server-policy"
+  },
+  {
+    "file": "app/api/admin/supervisor-pin/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/admin/supervisor-pin/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/admin/users/[id]/route.ts",
+    "method": "PATCH",
+    "access": "own-server-policy"
+  },
+  {
+    "file": "app/api/admin/users/route.ts",
+    "method": "GET",
+    "access": "own-server-policy"
+  },
+  {
+    "file": "app/api/admin/users/route.ts",
+    "method": "POST",
+    "access": "own-server-policy"
+  },
+  {
+    "file": "app/api/ai/orchestrate/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/ai/processar-texto-financeiro/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/audit/log/route.ts",
+    "method": "POST",
+    "access": "authenticated"
+  },
+  {
+    "file": "app/api/audit/logs/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/auth/admin/route.ts",
+    "method": "DELETE",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/auth/admin/route.ts",
+    "method": "GET",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/auth/admin/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/auth/contador/route.ts",
+    "method": "DELETE",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/auth/contador/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/auth/contador/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/automation/handle-event/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/billing/checkout/route.ts",
+    "method": "POST",
+    "access": "billing"
+  },
+  {
+    "file": "app/api/billing/portal/route.ts",
+    "method": "POST",
+    "access": "billing"
+  },
+  {
+    "file": "app/api/catalogo/aparelhos/produto/[id]/route.ts",
+    "method": "GET",
+    "access": "deviceCatalog"
+  },
+  {
+    "file": "app/api/catalogo/aparelhos/search/route.ts",
+    "method": "GET",
+    "access": "deviceCatalog"
+  },
+  {
+    "file": "app/api/catalogo/peliculas/search/route.ts",
+    "method": "GET",
+    "access": "deviceCatalog"
+  },
+  {
+    "file": "app/api/clientes/[id]/route.ts",
+    "method": "DELETE",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/[id]/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/clientes/[id]/route.ts",
+    "method": "PATCH",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/bulk-action/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/bulk-check-dependencies/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/bulk-delete/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/duplicates/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/clientes/importar/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/clientes/importar/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/importar/route.ts",
+    "method": "PUT",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/match-by-phone/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/clientes/match-by-phone/route.ts",
+    "method": "POST",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/clientes/merge/execute/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/merge/plan/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/privacy-request/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/quick/route.ts",
+    "method": "POST",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/clientes/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/clientes/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/clientes/search/route.ts",
+    "method": "POST",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/config-audit/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/config-audit/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/contador-externo/acessos/[id]/reativar/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador-externo/acessos/[id]/revogar/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador-externo/acessos/[id]/suspender/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador-externo/acessos/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador-externo/auth/login/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/auth/logout/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/auth/sessao/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/convite/aceitar/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/convite/consultar/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/convites/[id]/revogar/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador-externo/convites/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador-externo/convites/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/comentarios/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/competencias/[c]/checklist/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/competencias/[c]/documentos/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/competencias/[c]/pacotes/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/competencias/[c]/resumo/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/competencias/[c]/timeline/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/competencias/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/documentos/[id]/conferir/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/documentos/[id]/download/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/pacotes/confirmar/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/[loja]/pacotes/download/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/lojas/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/contador-externo/usuarios/[id]/reativar/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/contador-externo/usuarios/[id]/suspender/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/contador/agenda/guias/[id]/pagar/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/guias/[id]/route.ts",
+    "method": "PATCH",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/guias/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/obrigacoes/[id]/route.ts",
+    "method": "PATCH",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/obrigacoes/[id]/status/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/obrigacoes/instanciar/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/obrigacoes/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/obrigacoes/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/templates/[id]/route.ts",
+    "method": "DELETE",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/templates/[id]/route.ts",
+    "method": "PATCH",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/templates/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/agenda/templates/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/comentarios/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/comentarios/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/documentos/[id]/download/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/documentos/[id]/route.ts",
+    "method": "DELETE",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/documentos/complete/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/documentos/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/documentos/upload-intent/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/fechamento/divergencia/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/fechamento/divergencia/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/fechamento/reabrir/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/fechamento/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/fechamento/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/notificacoes/[id]/rascunho/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/notificacoes/[id]/tratar/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/notificacoes/avaliar/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/notificacoes/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/pacote/comparar/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/pacote/download/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/pacote/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/pacote/versoes/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/status/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/status/route.ts",
+    "method": "POST",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/contador/timeline/route.ts",
+    "method": "GET",
+    "access": "accountant"
+  },
+  {
+    "file": "app/api/credits/history/route.ts",
+    "method": "GET",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/credits/purchase/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/credits/purchases/history/route.ts",
+    "method": "GET",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/dashboard/elite/route.ts",
+    "method": "GET",
+    "access": "home"
+  },
+  {
+    "file": "app/api/dashboard/resumo/route.ts",
+    "method": "GET",
+    "access": "home"
+  },
+  {
+    "file": "app/api/debug/build-version/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/debug/operacoes-history/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/pdv-layouts-version/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/debug/prod-health/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/webhook-echo/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/webhook-echo/route.ts",
+    "method": "OPTIONS",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/webhook-echo/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/whatsapp-env-check/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/whatsapp-latest/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/whatsapp-send-fake-meta/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/whatsapp-send-test/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/whatsapp-webhook-ping/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/debug/whatsapp-webhook-ping/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/accounts/route.ts",
+    "method": "DELETE",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/accounts/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/accounts/route.ts",
+    "method": "PATCH",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/accounts/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/categories/route.ts",
+    "method": "DELETE",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/categories/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/categories/route.ts",
+    "method": "PATCH",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/categories/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/dashboard/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/transactions/route.ts",
+    "method": "DELETE",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/transactions/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/transactions/route.ts",
+    "method": "PATCH",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/finance/transactions/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/financeiro/analytics/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/auditoria/[entidade]/[entidadeId]/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/auditoria/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/carteiras/[id]/route.ts",
+    "method": "PATCH",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/carteiras/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/carteiras/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/carteiras/transferencia/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/conciliacao/[id]/route.ts",
+    "method": "PATCH",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/conciliacao/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/conciliacao/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-pagar/estornar-ultimo-pagamento/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-pagar/estornar/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-pagar/liquidar/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-pagar/pagamento-parcial/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-receber/estornar-parcela/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-receber/estornar-ultimo-pagamento/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-receber/estornar/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-receber/liquidar/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/contas-receber/pagamento-parcial/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/dre/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/fechamentos/[id]/reabrir/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/fechamentos/fechar-dia/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/fechamentos/fechar-mes/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/fechamentos/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/fluxo-caixa/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/movimentacoes/route.ts",
+    "method": "DELETE",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/movimentacoes/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/movimentacoes/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/pagar/route.ts",
+    "method": "DELETE",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/pagar/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/pagar/route.ts",
+    "method": "PATCH",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/pagar/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/receber/route.ts",
+    "method": "DELETE",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/receber/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/receber/route.ts",
+    "method": "PATCH",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/receber/route.ts",
+    "method": "POST",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/relatorios/categorias/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/relatorios/exportar/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/relatorios/fluxo/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/relatorios/indicadores/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/relatorios/rankings/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/financeiro/relatorios/resumo/route.ts",
+    "method": "GET",
+    "access": "finance"
+  },
+  {
+    "file": "app/api/fiscal/certificado/[id]/rotacionar/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/certificado/[id]/route.ts",
+    "method": "PATCH",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/certificado/route.ts",
+    "method": "GET",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/certificado/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/certificado/selftest/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/config/route.ts",
+    "method": "GET",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/config/route.ts",
+    "method": "PUT",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/contingencia/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/inutilizacao/route.ts",
+    "method": "GET",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/inutilizacao/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/notas/[id]/cancelar/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/onboarding/certificado/custodia/route.ts",
+    "method": "GET",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/onboarding/certificado/custodia/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/onboarding/certificado/route.ts",
+    "method": "GET",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/onboarding/certificado/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/onboarding/confirmar/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/fiscal/wsdl/ephemeral-execution/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/ia-mestre/conversations/[id]/route.ts",
+    "method": "GET",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/ia-mestre/conversations/route.ts",
+    "method": "GET",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/import/advanced/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/import/advanced/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/import/produtos/lote/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/import/produtos/preview/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/import/validate/clientes/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/import/validate/financeiro/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/import/validate/produtos/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/import/validate/vendas/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/internal/fiscal/contingencia-drill/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/internal/fiscal/observability/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/internal/fiscal/queue/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/internal/fiscal/queue/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/marketing/avatar/route.ts",
+    "method": "GET",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/avatar/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/consultoria/route.ts",
+    "method": "GET",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/consultoria/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/image/route.ts",
+    "method": "GET",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/image/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/media-credits/route.ts",
+    "method": "GET",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/posts/[id]/route.ts",
+    "method": "DELETE",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/posts/[id]/route.ts",
+    "method": "PATCH",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/posts/route.ts",
+    "method": "GET",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/posts/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/schedule/route.ts",
+    "method": "GET",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/schedule/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/studio-ia-posts/route.ts",
+    "method": "GET",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/studio-ia-posts/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/text/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/video/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/voice/demo/route.ts",
+    "method": "GET",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketing/voice/route.ts",
+    "method": "POST",
+    "access": "marketing"
+  },
+  {
+    "file": "app/api/marketplace/anuncios/route.ts",
+    "method": "GET",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/connections/[id]/route.ts",
+    "method": "DELETE",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/connections/[id]/route.ts",
+    "method": "PATCH",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/connections/route.ts",
+    "method": "GET",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/connections/route.ts",
+    "method": "POST",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/links/[id]/route.ts",
+    "method": "PATCH",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/produtos/[id]/route.ts",
+    "method": "PATCH",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/produtos/exportar/route.ts",
+    "method": "POST",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/produtos/route.ts",
+    "method": "GET",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/marketplace/sync-logs/route.ts",
+    "method": "GET",
+    "access": "marketplace"
+  },
+  {
+    "file": "app/api/meta-whatsapp-verify/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/ops/caixa/abrir/route.ts",
+    "method": "POST",
+    "access": "cash"
+  },
+  {
+    "file": "app/api/ops/caixa/fechar/route.ts",
+    "method": "POST",
+    "access": "cash"
+  },
+  {
+    "file": "app/api/ops/caixa/operacao/route.ts",
+    "method": "POST",
+    "access": "cash"
+  },
+  {
+    "file": "app/api/ops/caixa/sessao-detalhe/route.ts",
+    "method": "GET",
+    "access": "cash"
+  },
+  {
+    "file": "app/api/ops/caixa/sessoes/route.ts",
+    "method": "GET",
+    "access": "cash"
+  },
+  {
+    "file": "app/api/ops/categorias-produto/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/ops/contas-pagar-list/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/contas-pagar-persist/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/contas-receber-list/route.ts",
+    "method": "GET",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/ops/contas-receber-persist/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/credito-cliente/route.ts",
+    "method": "GET",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/ops/devolucao/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/ops/devolucoes/route.ts",
+    "method": "GET",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/ops/import/clientes/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/import/clientes/route.ts",
+    "method": "PUT",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/inventory/import/route.ts",
+    "method": "PUT",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/ops/inventory/lookup/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/ops/inventory/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/ops/inventory/route.ts",
+    "method": "PUT",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/ops/ordens/import/route.ts",
+    "method": "PUT",
+    "access": "service"
+  },
+  {
+    "file": "app/api/ops/ordens/route.ts",
+    "method": "GET",
+    "access": "service"
+  },
+  {
+    "file": "app/api/ops/ordens/route.ts",
+    "method": "PUT",
+    "access": "service"
+  },
+  {
+    "file": "app/api/ops/servicos/route.ts",
+    "method": "GET",
+    "access": "service"
+  },
+  {
+    "file": "app/api/ops/sync-ledger/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/ops/sync-legacy-financeiro/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/sync-legacy-vendas/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/terminal/heartbeat/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/ops/terminal/lock/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/ops/terminal/unlock/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/ops/venda-persist/route.ts",
+    "method": "POST",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/ops/venda-persist/v2/route.ts",
+    "method": "GET",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/ops/venda-persist/v2/route.ts",
+    "method": "POST",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/ops/vendas-list/route.ts",
+    "method": "GET",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/ops/vendas/by-client-sale-id/route.ts",
+    "method": "GET",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/ops/vendas/quarantine-recovery/auto/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/vendas/quarantine-recovery/batch/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/vendas/quarantine-recovery/preview/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ops/vendas/recover-quarantined/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/ordens-servico/[id]/route.ts",
+    "method": "DELETE",
+    "access": "service"
+  },
+  {
+    "file": "app/api/ordens-servico/[id]/route.ts",
+    "method": "PATCH",
+    "access": "service"
+  },
+  {
+    "file": "app/api/ordens-servico/route.ts",
+    "method": "GET",
+    "access": "service"
+  },
+  {
+    "file": "app/api/ordens-servico/route.ts",
+    "method": "POST",
+    "access": "service"
+  },
+  {
+    "file": "app/api/pdv/receber-conta-lote/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/pdv/receber-conta/route.ts",
+    "method": "POST",
+    "access": "sharedPayment"
+  },
+  {
+    "file": "app/api/pessoas/documentos/[id]/download/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/pessoas/documentos/complete/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/pessoas/documentos/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/pessoas/documentos/upload-intent/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/platform/provision/route.ts",
+    "method": "POST",
+    "access": "own-server-policy"
+  },
+  {
+    "file": "app/api/platform/stores/[id]/access/route.ts",
+    "method": "PATCH",
+    "access": "own-server-policy"
+  },
+  {
+    "file": "app/api/print/raw/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/product/fiscal-classify/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/product/ncm-suggest/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/product/voice-form-text/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/product/voice-form/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/product/voice-metadata/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/produtos/[id]/codigos/route.ts",
+    "method": "PATCH",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/produtos/[id]/route.ts",
+    "method": "DELETE",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/produtos/[id]/route.ts",
+    "method": "PATCH",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/produtos/bulk-action/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/produtos/bulk-check-dependencies/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/produtos/bulk-delete/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/produtos/correcao-codigos/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/produtos/route.ts",
+    "method": "GET",
+    "access": "sharedCatalog"
+  },
+  {
+    "file": "app/api/produtos/route.ts",
+    "method": "POST",
+    "access": "catalog"
+  },
+  {
+    "file": "app/api/settings/perfil-loja/route.ts",
+    "method": "GET",
+    "access": "authenticated"
+  },
+  {
+    "file": "app/api/settings/perfil-loja/route.ts",
+    "method": "PUT",
+    "access": "settings"
+  },
+  {
+    "file": "app/api/stores/[id]/route.ts",
+    "method": "DELETE",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/stores/[id]/route.ts",
+    "method": "GET",
+    "access": "authenticated"
+  },
+  {
+    "file": "app/api/stores/[id]/route.ts",
+    "method": "PUT",
+    "access": "settings"
+  },
+  {
+    "file": "app/api/stores/[id]/settings/route.ts",
+    "method": "GET",
+    "access": "authenticated"
+  },
+  {
+    "file": "app/api/stores/[id]/settings/route.ts",
+    "method": "PUT",
+    "access": "settings"
+  },
+  {
+    "file": "app/api/stores/[id]/summary/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/stores/import-catalog/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/stores/numeracao-venda/route.ts",
+    "method": "GET",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/stores/numeracao-venda/route.ts",
+    "method": "PUT",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/stores/route.ts",
+    "method": "GET",
+    "access": "authenticated"
+  },
+  {
+    "file": "app/api/stores/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/subscription/seal/route.ts",
+    "method": "POST",
+    "access": "platform"
+  },
+  {
+    "file": "app/api/subscription/verify/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/user/credits/history/route.ts",
+    "method": "GET",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/user/credits/route.ts",
+    "method": "GET",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/vendas/[id]/cancelar/route.ts",
+    "method": "POST",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/vendas/[id]/corrigir-item-meta/route.ts",
+    "method": "POST",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/vendas/[id]/corrigir-itens/route.ts",
+    "method": "POST",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/vendas/[id]/corrigir-parcelas/route.ts",
+    "method": "POST",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/vendas/[id]/corrigir-titulo/route.ts",
+    "method": "POST",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/vendas/[id]/corrigir/route.ts",
+    "method": "POST",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/vendas/[id]/route.ts",
+    "method": "GET",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/vendas/[id]/solicitar-emissao/route.ts",
+    "method": "POST",
+    "access": "fiscal"
+  },
+  {
+    "file": "app/api/vendas/historico/route.ts",
+    "method": "GET",
+    "access": "sales"
+  },
+  {
+    "file": "app/api/version/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/vision/product-scan/route.ts",
+    "method": "POST",
+    "access": "ai"
+  },
+  {
+    "file": "app/api/webhooks/stripe/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/webhooks/whatsapp/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/webhooks/whatsapp/route.ts",
+    "method": "OPTIONS",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/webhooks/whatsapp/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/whatsapp/ai-settings/route.ts",
+    "method": "GET",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/ai-settings/route.ts",
+    "method": "PATCH",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/automations/[id]/route.ts",
+    "method": "PATCH",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/automations/route.ts",
+    "method": "GET",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/automations/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/contacts/route.ts",
+    "method": "GET",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/contacts/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/[id]/ai-analysis/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/[id]/assistance-quote/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/[id]/etiquetas/[etiquetaId]/route.ts",
+    "method": "DELETE",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/[id]/etiquetas/route.ts",
+    "method": "GET",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/[id]/etiquetas/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/[id]/product-suggestion/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/[id]/route.ts",
+    "method": "PATCH",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/route.ts",
+    "method": "GET",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/conversations/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/etiquetas/[id]/route.ts",
+    "method": "DELETE",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/etiquetas/[id]/route.ts",
+    "method": "PATCH",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/etiquetas/route.ts",
+    "method": "GET",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/etiquetas/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/messages/route.ts",
+    "method": "GET",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/messages/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/quick-replies/[id]/route.ts",
+    "method": "DELETE",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/quick-replies/[id]/route.ts",
+    "method": "PATCH",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/quick-replies/route.ts",
+    "method": "GET",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/quick-replies/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/send-daily/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/send/route.ts",
+    "method": "POST",
+    "access": "whatsapp"
+  },
+  {
+    "file": "app/api/whatsapp/webhook/route.ts",
+    "method": "GET",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/whatsapp/webhook/route.ts",
+    "method": "OPTIONS",
+    "access": "external-contract"
+  },
+  {
+    "file": "app/api/whatsapp/webhook/route.ts",
+    "method": "POST",
+    "access": "external-contract"
+  }
+]

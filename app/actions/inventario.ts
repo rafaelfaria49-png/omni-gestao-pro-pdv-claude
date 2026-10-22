@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
@@ -223,6 +224,8 @@ export async function iniciarInventario(
   storeId: string,
   input: { nome?: string; operador?: string; observacao?: string }
 ): Promise<IniciarInventarioResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
 
@@ -264,6 +267,8 @@ export type InventarioAtivoResult =
  * `sessao = null` quando não há contagem em andamento.
  */
 export async function getInventarioAtivo(storeId: string): Promise<InventarioAtivoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
 
@@ -301,6 +306,8 @@ export async function registrarContagemProduto(
   storeId: string,
   input: { sessaoId: string; codigo: string; produtoId: string; quantidade: number; modo: ModoContagem }
 ): Promise<RegistrarContagemProdutoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
 
@@ -413,6 +420,8 @@ export async function getContextoContagemProduto(
   sessaoId: string,
   produtoId: string
 ): Promise<ContextoContagemProdutoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -464,6 +473,8 @@ export async function registrarPendenciaInventario(
   storeId: string,
   input: { sessaoId: string; codigo: string; quantidade: number; nomeRapido?: string | null }
 ): Promise<RegistrarPendenciaResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
 
@@ -539,6 +550,8 @@ export async function listInventarioContagens(
   storeId: string,
   sessaoId: string
 ): Promise<ListContagensResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -562,6 +575,8 @@ export async function encerrarInventario(
   storeId: string,
   sessaoId: string
 ): Promise<EncerrarInventarioResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -689,6 +704,8 @@ export async function getRelatorioInventario(
   storeId: string,
   sessaoId: string
 ): Promise<RelatorioInventarioResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -872,6 +889,8 @@ export type ListInventarioSessoesResult =
 
 /** Sessões da loja (mais recentes primeiro) — para escolher qual analisar nos relatórios. */
 export async function listInventarioSessoes(storeId: string): Promise<ListInventarioSessoesResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   try {
@@ -926,6 +945,8 @@ export type ListInventarioHistoricoResult =
 
 /** Histórico de sessões da loja com agregados (contadas/unidades/reconciliação/divergências). */
 export async function getInventarioHistorico(storeId: string): Promise<ListInventarioHistoricoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   try {
@@ -986,6 +1007,8 @@ export type InventarioDashboardResult =
  * mais relevante (ativa, se houver; senão a última finalizada). SOMENTE LEITURA.
  */
 export async function getInventarioDashboard(storeId: string): Promise<InventarioDashboardResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   try {
@@ -1033,6 +1056,8 @@ export async function classificarReconciliacao(
   contagemId: string,
   classificacao: ClassificacaoReconciliacao
 ): Promise<ClassificarReconciliacaoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -1085,6 +1110,8 @@ export async function vincularPendenciaInventario(
   produtoId: string,
   tipo: TipoVinculoPendencia
 ): Promise<VincularPendenciaResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -1176,6 +1203,8 @@ export async function aplicarAjusteInventario(
   produtoId: string,
   opts?: { motivo?: string }
 ): Promise<AplicarAjusteResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -1256,6 +1285,8 @@ export async function aplicarZeragemNaoBipado(
   produtoId: string,
   opts?: { motivo?: string }
 ): Promise<AplicarAjusteResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -1481,6 +1512,8 @@ export async function getConciliacaoInventario(
   storeId: string,
   sessaoId: string
 ): Promise<ConciliacaoInventarioResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -1529,6 +1562,8 @@ export async function simularConciliacaoInventario(
   sessaoId: string,
   selecao: ConciliacaoSelecao
 ): Promise<SimularConciliacaoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -1578,6 +1613,8 @@ export async function aplicarConciliacaoInventario(
   sessaoId: string,
   selecao: ConciliacaoSelecao
 ): Promise<AplicarConciliacaoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -1755,6 +1792,8 @@ export type InventarioProgressoResult =
  * inventariou. SOMENTE LEITURA.
  */
 export async function getInventarioProgresso(storeId: string): Promise<InventarioProgressoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   try {
@@ -1882,6 +1921,8 @@ export async function listProdutosNaoConferidos(
   },
   paginacao?: { take?: number; skip?: number },
 ): Promise<ListProdutosNaoConferidosResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   const sid = (sessaoId ?? "").trim();
@@ -2009,6 +2050,8 @@ export type InventarioSaneamentoResult =
 export async function getInventarioSaneamentoTimeline(
   storeId: string,
 ): Promise<InventarioSaneamentoResult> {
+  await requireModuleAction(storeId, "stock")
+
   const g = await guard(storeId);
   if (!g.ok) return g;
   try {

@@ -2,212 +2,70 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
 import { auth } from "@/auth"
-import { prisma, prismaEnsureConnected } from "@/lib/prisma"
-import { UserRole } from "@/generated/prisma"
-import {
-  assertActorMayAssignRole,
-  canAccessAdminUsersApi,
-  isElevatedRole,
-  normalizeAllowedStoreIdsForActor,
-} from "@/lib/auth/admin-users-policy"
-import {
-  buildAdminUserCreateChanges,
-  resolveAuditStoreIdForUser,
-} from "@/lib/config-audit/admin-user"
-import { recordConfigAuditFromSession } from "@/lib/config-audit/record"
+import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
+import { isPlatformSession } from "@/lib/auth/access-policy"
+import { assertActorMayAssignRole, canAccessAdminUsersApi, normalizeAllowedStoreIdsForActor } from "@/lib/auth/admin-users-policy"
+import { generateTemporaryPassword, newPasswordSchema } from "@/lib/auth/password-policy"
+import { adminUserSelect as userSelect } from "@/lib/auth/admin-user-select"
+import { canUseModule } from "@/lib/auth/enterprise-permissions"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const revalidate = 0
-
-const roleSchema = z.enum([
-  "SUPER_ADMIN",
-  "ADMIN",
-  "GERENTE",
-  "OPERADOR",
-  "CAIXA",
-  "TECNICO",
-  "VENDEDOR",
-])
-
-const postSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  email: z.string().trim().email().max(254),
-  role: roleSchema,
-  lojaId: z.string().trim().min(1).max(64).optional().nullable(),
-  allowedStoreIds: z.array(z.string().trim().min(1)).optional().default([]),
-  password: z.string().min(6).max(128).optional(),
-})
-
-function jsonError(msg: string, status: number) {
-  return NextResponse.json({ ok: false, error: msg }, { status })
-}
-
-function buildListWhere(filterStoreId: string | undefined): Prisma.AdminUserWhereInput {
-  if (!filterStoreId) return {}
-  return {
-    OR: [
-      { role: { in: ["SUPER_ADMIN", "ADMIN"] } },
-      { lojaId: filterStoreId },
-      { adminUserStores: { some: { storeId: filterStoreId } } },
-    ],
-  }
-}
-
+const schema = z.object({
+  name: z.string().trim().min(1).max(200), email: z.string().trim().email().max(254),
+  role: z.enum(["SUPER_ADMIN", "ADMIN", "GERENTE", "OPERADOR", "CAIXA", "TECNICO", "VENDEDOR"]),
+  lojaId: z.string().trim().min(1).max(64).nullable().optional(),
+  allowedStoreIds: z.array(z.string().trim().min(1)).default([]),
+  password: newPasswordSchema.optional(), accessScope: z.enum(["STORE", "PLATFORM"]).default("STORE"),
+}).strict()
+const error = (message: string, status: number) => NextResponse.json({ ok: false, error: message }, { status })
 export async function GET(req: Request) {
   const session = await auth()
-  if (!canAccessAdminUsersApi(session)) {
-    return jsonError("Não autorizado a consultar usuários.", 403)
+  if (!session || !canAccessAdminUsersApi(session)) return error("Não autorizado a consultar usuários.", 403)
+  const requested = new URL(req.url).searchParams.get("storeId")?.trim()
+  const allowed = (session.user.allowedStoreIds ?? []).filter((sid) => canUseModule(session, "settings", sid))
+  if (requested && !isPlatformSession(session) && !allowed.includes(requested)) return error("Unidade não permitida.", 403)
+  const ids = requested ? [requested] : allowed
+  const scope: Prisma.AdminUserWhereInput = isPlatformSession(session) ? {} : {
+    role: { notIn: ["ADMIN", "GERENTE", "SUPER_ADMIN"] },
+    adminUserStores: { none: { storeId: { notIn: allowed } } },
+    AND: [
+      { OR: [{ accessScope: "STORE" }, { accessScope: null }] },
+      { OR: [{ lojaId: null }, { lojaId: { in: allowed } }] },
+      { OR: [{ lojaId: { in: ids } }, { adminUserStores: { some: { storeId: { in: ids } } } }] },
+    ],
   }
   try {
-    await prismaEnsureConnected()
-    const url = new URL(req.url)
-    const filterStoreId = url.searchParams.get("storeId")?.trim() || undefined
-    const allowed = session!.user.allowedStoreIds ?? []
-    if (
-      filterStoreId &&
-      session!.user.storeAccess === "restricted" &&
-      !allowed.includes(filterStoreId)
-    ) {
-      return NextResponse.json({ ok: true, users: [] })
-    }
-    const where = buildListWhere(filterStoreId)
-    const users = await prisma.adminUser.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        lojaId: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
-        adminUserStores: { select: { storeId: true } },
-      },
-      orderBy: [{ active: "desc" }, { name: "asc" }],
-    })
-    return NextResponse.json({
-      ok: true,
-      users: users.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        lojaId: u.lojaId,
-        active: u.active,
-        createdAt: u.createdAt.toISOString(),
-        updatedAt: u.updatedAt.toISOString(),
-        storeIds: u.adminUserStores.map((s) => s.storeId),
-      })),
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha ao listar usuários"
-    return jsonError(msg, 500)
-  }
-}
-
-function generateTempPassword(): string {
-  const alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"
-  const len = 12
-  const bytes = new Uint8Array(len)
-  crypto.getRandomValues(bytes)
-  let s = ""
-  for (let i = 0; i < len; i++) s += alphabet[bytes[i]! % alphabet.length]
-  return s
+    const users = await prisma.adminUser.findMany({ where: scope, select: userSelect, orderBy: { name: "asc" } })
+    return NextResponse.json({ ok: true, users: users.map(({ adminUserStores, ...u }) => ({ ...u, storeIds: adminUserStores.map((s) => s.storeId) })) })
+  } catch { return error("Falha ao consultar usuários.", 500) }
 }
 
 export async function POST(req: Request) {
   const session = await auth()
-  if (!canAccessAdminUsersApi(session)) {
-    return jsonError("Não autorizado a criar usuários.", 403)
-  }
-  let body: z.infer<typeof postSchema>
+  if (!session || !canAccessAdminUsersApi(session)) return error("Não autorizado a criar usuários.", 403)
+  const parsed = schema.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) return error("Dados inválidos. A senha deve ter ao menos 12 caracteres, maiúsculas, minúsculas e números.", 400)
+  const body = parsed.data
   try {
-    body = postSchema.parse(await req.json())
-  } catch {
-    return jsonError("Dados inválidos.", 400)
-  }
-  try {
-    const isAdminLike = body.role === "SUPER_ADMIN" || body.role === "ADMIN"
-    assertActorMayAssignRole(session!.user.role, body.role)
-    const normalizedStores = isAdminLike ? [] : normalizeAllowedStoreIdsForActor(session!, body.allowedStoreIds)
-
-    let lojaPrincipal = body.lojaId?.trim() || null
-    const storeRows =
-      normalizedStores.length > 0 ? normalizedStores : lojaPrincipal && !isAdminLike ? [lojaPrincipal] : []
-    if (!lojaPrincipal && storeRows.length > 0) lojaPrincipal = storeRows[0]!
-    if (!isAdminLike && storeRows.length === 0) {
-      return jsonError("Informe a loja principal ou ao menos uma unidade com acesso.", 400)
-    }
-
-    const plain = body.password?.trim() || generateTempPassword()
-    const generated = !body.password?.trim()
-    if (plain.length < 6) return jsonError("Senha deve ter pelo menos 6 caracteres.", 400)
-
+    assertActorMayAssignRole(session, body.role)
+    if ((body.accessScope === "PLATFORM" || body.role === "SUPER_ADMIN") && !isPlatformSession(session)) return error("Autoridade da plataforma obrigatória.", 403)
+    if (body.role === "SUPER_ADMIN" && body.accessScope !== "PLATFORM") return error("SUPER_ADMIN exige concessão explícita de plataforma.", 400)
+    const ids = normalizeAllowedStoreIdsForActor(session, [...body.allowedStoreIds, ...(body.lojaId ? [body.lojaId] : [])])
+    if (ids.some((sid) => !canUseModule(session, "settings", sid))) return error("Gestão de equipe não liberada nesta unidade.", 403)
+    if (body.accessScope === "STORE" && !ids.length) return error("Informe ao menos uma unidade autorizada.", 400)
+    if (await prisma.store.count({ where: { id: { in: ids } } }) !== ids.length) return error("Unidade inválida.", 400)
+    const plain = body.password ?? generateTemporaryPassword()
     const hash = await bcrypt.hash(plain, 12)
-
-    await prismaEnsureConnected()
-
-    const created = await prisma.$transaction(async (tx) => {
-      const u = await tx.adminUser.create({
-        data: {
-          name: body.name.trim(),
-          email: body.email.trim().toLowerCase(),
-          password: hash,
-          role: body.role as UserRole,
-          lojaId: lojaPrincipal,
-          active: true,
-        },
-        select: { id: true, name: true, email: true, role: true, lojaId: true, active: true, createdAt: true },
-      })
-      if (!isAdminLike && storeRows.length > 0) {
-        await tx.adminUserStore.createMany({
-          data: storeRows.map((storeId) => ({ adminUserId: u.id, storeId })),
-          skipDuplicates: true,
-        })
-      }
-      return u
-    })
-
-    try {
-      const changes = buildAdminUserCreateChanges({
-        name: created.name,
-        email: created.email,
-        role: String(created.role),
-        active: created.active,
-        lojaId: created.lojaId,
-        storeIds: isAdminLike ? [] : storeRows,
-      })
-      if (changes.length > 0) {
-        await recordConfigAuditFromSession(req, session!, {
-          storeId: resolveAuditStoreIdForUser(created.lojaId, isAdminLike ? [] : storeRows),
-          section: "usuarios",
-          changes,
-        })
-      }
-    } catch {
-      /* auditoria não deve bloquear save */
-    }
-
-    return NextResponse.json({
-      ok: true,
-      user: {
-        ...created,
-        createdAt: created.createdAt.toISOString(),
-        storeIds: isAdminLike ? [] : storeRows,
-      },
-      ...(generated ? { temporaryPassword: plain } : {}),
-    })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    if (String(msg).includes("Unique constraint") || String(msg).includes("unique")) {
-      return jsonError("Este e-mail já está em uso.", 409)
-    }
-    if (msg.includes("permissão") || msg.includes("Unidade")) {
-      return jsonError(msg, 403)
-    }
-    return jsonError(msg, 400)
+    const created = await prisma.adminUser.create({ data: {
+      name: body.name, email: body.email.toLowerCase(), role: body.role, password: hash,
+      accessScope: body.accessScope, lojaId: body.lojaId || ids[0] || null,
+      mustChangePassword: true, adminUserStores: { create: ids.map((storeId) => ({ storeId })) },
+    }, select: userSelect })
+    return NextResponse.json({ ok: true, user: { ...created, storeIds: ids }, temporaryPassword: body.password ? undefined : plain }, { status: 201, headers: { "Cache-Control": "no-store" } })
+  } catch (e) {
+    if (e instanceof Error && /permissão|Unidade/.test(e.message)) return error(e.message, 403)
+    return error("Não foi possível criar o usuário. Confira email e unidades.", 400)
   }
 }

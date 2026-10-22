@@ -1,0 +1,81 @@
+name: Plataforma - acesso piloto
+on:
+  pull_request:
+    paths:
+      - "auth*"
+      - "proxy.ts"
+      - "lib/auth/**"
+      - "lib/cadastros/**"
+      - "lib/loja-ativa.tsx"
+      - "lib/operacoes-v3/**"
+      - "lib/contador/**"
+      - "app/**"
+      - "components/**"
+      - "prisma/**"
+      - "e2e/platform-pilot*"
+      - "e2e/platform-pilot/**"
+      - "scripts/platform/**"
+      - "docs/platform/**"
+      - ".github/workflows/platform-pilot.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - run: node node_modules/vitest/vitest.mjs run lib/auth/pilot-access.test.ts lib/auth/enterprise-permissions.test.ts lib/auth/proxy-enterprise-dashboard.test.ts lib/auth/session-entitlement.test.ts --maxWorkers=1
+      - run: npm run typecheck
+  authenticated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: platform_pilot
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: platform_pilot_isolated
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U platform_pilot -d platform_pilot_isolated"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://platform_pilot:isolated_ci_only@127.0.0.1:5432/platform_pilot_isolated
+      DIRECT_URL: postgresql://platform_pilot:isolated_ci_only@127.0.0.1:5432/platform_pilot_isolated
+      PLATFORM_PILOT_DISPOSABLE_DB: "true"
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      VERCEL: "0"
+      VERCEL_ENV: development
+      NODE_OPTIONS: --max-old-space-size=6144
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - name: Build sem autoridade de migration
+        run: npm run build
+        env:
+          AUTH_SECRET: isolated-platform-build-only
+          AUTH_TRUST_HOST: "true"
+          NEXTAUTH_URL: http://127.0.0.1:3000
+      - run: npx playwright install --with-deps chromium
+      - name: Migration aditiva e E2E autenticado real em banco vazio
+        run: node scripts/platform/run-pilot-e2e.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-pilot-evidence
+          path: test-results/platform-pilot/

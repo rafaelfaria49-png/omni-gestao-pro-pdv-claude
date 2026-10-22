@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import NextAuth from "next-auth"
+import { auth } from "@/auth"
 import type { Session } from "next-auth"
-import { authConfig } from "./auth.config"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 import { enterpriseDashboardRedirect, enterpriseStoreCookieRedirect } from "@/lib/auth/proxy-enterprise-dashboard"
 import {
@@ -16,8 +15,6 @@ import {
 import { isSegmentoContadorExterno } from "@/lib/contador/auth-externa/proxy-publico"
 import { isRotaLegadaContador, PORTAL_V2_LOGIN } from "@/lib/contador/legado/rota-legada"
 import { isPublicPath, resolveProxyEntry } from "@/lib/auth/proxy-session-gate"
-
-const { auth } = NextAuth(authConfig)
 
 const ADMIN_COOKIE = "assistec_admin_session"
 
@@ -36,9 +33,24 @@ const ADMIN_COOKIE = "assistec_admin_session"
 export const proxy = auth(async (req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
+  const nextWithPath = () => {
+    const headers = new Headers(req.headers)
+    headers.set("x-omni-pathname", pathname)
+    headers.set("x-omni-search", req.nextUrl.search)
+    return NextResponse.next({ request: { headers } })
+  }
+
+  if (session?.user?.mustChangePassword && !pathname.startsWith("/api/auth/") &&
+      pathname !== "/api/account/password" && pathname !== "/conta/seguranca" &&
+      !pathname.startsWith("/_next/") && !/\.(png|svg|ico|webp|jpg|css|js)$/.test(pathname)) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Altere sua senha antes de continuar." }, { status: 403 })
+    }
+    return NextResponse.redirect(new URL("/conta/seguranca", req.url))
+  }
 
   if (isPublicPath(pathname)) {
-    return NextResponse.next()
+    return nextWithPath()
   }
 
   // GOAL 014 (ajuste G3 #4): o segmento do portal externo do contador NÃO é ERP —
@@ -50,7 +62,7 @@ export const proxy = auth(async (req) => {
   // `Referrer-Policy: no-referrer`: o token de convite trafega no fragmento
   // (`#token=`) e nunca pode vazar via Referer (R-1).
   if (isSegmentoContadorExterno(pathname)) {
-    const res = NextResponse.next()
+    const res = nextWithPath()
     res.headers.set("Referrer-Policy", "no-referrer")
     return res
   }
@@ -102,11 +114,15 @@ export const proxy = auth(async (req) => {
 
   if (pathname.startsWith("/dashboard") && session?.user) {
     const sess = session as unknown as Session
-    const denied = enterpriseDashboardRedirect(req.nextUrl.origin, pathname, sess)
-    if (denied) return NextResponse.redirect(denied)
     const storeCookie = req.cookies.get(ASSISTEC_ACTIVE_STORE_COOKIE)?.value
+    const denied = enterpriseDashboardRedirect(req.nextUrl.origin, pathname, sess, storeCookie)
+    if (denied) return NextResponse.redirect(denied)
     const storeDeny = enterpriseStoreCookieRedirect(req.nextUrl.origin, sess, storeCookie)
-    if (storeDeny) return NextResponse.redirect(storeDeny)
+    if (storeDeny) {
+      const res = NextResponse.redirect(storeDeny)
+      res.cookies.delete(ASSISTEC_ACTIVE_STORE_COOKIE)
+      return res
+    }
   }
 
   if (pathname === "/logs-sistema" || pathname.startsWith("/logs-sistema/")) {
@@ -141,7 +157,7 @@ export const proxy = auth(async (req) => {
     if (!result.ok) return redirectToLogin()
   }
 
-  return NextResponse.next()
+  return nextWithPath()
 })
 
 export { proxy as default }

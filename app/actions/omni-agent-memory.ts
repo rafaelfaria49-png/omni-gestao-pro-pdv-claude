@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
@@ -90,6 +91,8 @@ export async function createOmniAgentMemory(
   storeId: string,
   input: CreateOmniAgentMemoryInput,
 ): Promise<OmniAgentMemoryDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const { sid, g } = await guard(storeId)
 
   if (!isOmniAgentMemoryType(input.tipo)) throw new Error("Tipo de memória inválido.")
@@ -132,6 +135,8 @@ export async function updateOmniAgentMemory(
   id: string,
   input: UpdateOmniAgentMemoryInput,
 ): Promise<OmniAgentMemoryDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const { sid } = await guard(storeId)
 
   const existing = await prisma.omniAgentMemory.findFirst({ where: { id, storeId: sid } })
@@ -162,6 +167,8 @@ export async function updateOmniAgentMemory(
 }
 
 export async function archiveOmniAgentMemory(storeId: string, id: string): Promise<OmniAgentMemoryDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const { sid } = await guard(storeId)
 
   const existing = await prisma.omniAgentMemory.findFirst({ where: { id, storeId: sid } })
@@ -183,6 +190,8 @@ export async function listOmniAgentMemoriesByCliente(
   clienteId: string,
   opts?: { includeArchived?: boolean; take?: number },
 ): Promise<OmniAgentMemoryDTO[]> {
+  await requireModuleAction(storeId, "agent")
+
   const { sid } = await guard(storeId)
   const cid = clienteId.trim()
   if (!cid) return []
@@ -203,6 +212,8 @@ export async function listRecentOmniAgentMemories(
   storeId: string,
   opts?: { take?: number },
 ): Promise<OmniAgentMemoryDTO[]> {
+  await requireModuleAction(storeId, "agent")
+
   const { sid } = await guard(storeId)
 
   const rows = await prisma.omniAgentMemory.findMany({
@@ -218,6 +229,8 @@ export async function searchOmniAgentMemories(
   term: string,
   opts?: { take?: number },
 ): Promise<OmniAgentMemoryDTO[]> {
+  await requireModuleAction(storeId, "agent")
+
   const { sid } = await guard(storeId)
   const q = term.trim()
   if (!q) return listRecentOmniAgentMemories(sid, opts)

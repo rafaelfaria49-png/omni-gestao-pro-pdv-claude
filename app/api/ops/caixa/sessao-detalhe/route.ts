@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
@@ -98,6 +99,9 @@ function resolveOrigemVenda(itens: Array<{ inventoryId: string | null; lineTotal
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "cash")
+  if (moduleDenied) return moduleDenied
+
   const lojaId = opsLojaIdFromRequest(req)
   if (!lojaId) {
     return NextResponse.json(

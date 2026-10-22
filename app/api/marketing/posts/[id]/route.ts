@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { requireMarketingHubApi } from "@/lib/marketing/hub-api-gate"
 import {
@@ -35,6 +36,9 @@ function parseDate(v: string | null | undefined): Date | null | undefined {
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "marketing")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireMarketingHubApi(req, "write")
   if (!gate.ok) return gate.response
   const { id } = await ctx.params
@@ -84,6 +88,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(_req, "marketing")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireMarketingHubApi(_req, "write")
   if (!gate.ok) return gate.response
   const { id } = await ctx.params

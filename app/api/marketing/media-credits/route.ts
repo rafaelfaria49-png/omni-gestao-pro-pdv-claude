@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/require-admin"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
@@ -14,6 +15,9 @@ function storeIdFrom(req: Request): string | null {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "marketing")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
   const storeId = storeIdFrom(req)

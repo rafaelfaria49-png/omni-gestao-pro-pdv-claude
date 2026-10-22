@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { orchestrateCommand, type PlanoAssinatura } from "@/services/ai-orchestrator"
@@ -290,6 +291,9 @@ async function generateLocalDallEImage(prompt: string): Promise<string> {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "ai")
+  if (moduleDenied) return moduleDenied
+
   if (isLocalDevelopment) {
     console.log("[orchestrate] DEV: bypass de permissão enterprise (teste local).")
   }

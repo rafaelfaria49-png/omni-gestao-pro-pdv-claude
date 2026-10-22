@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Autorização de supervisor do PDV por PIN — GOAL PLAT-AUTH-PIN-CONTAINMENT-001A.
  *
@@ -148,6 +149,9 @@ async function resolveCanonicalStoreId(storeId: string): Promise<string | null> 
  * vetor nenhum.
  */
 export async function GET(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   const session = await auth()
   const userId = session?.user?.id
   if (!userId) return NextResponse.json({ authenticated: false })
@@ -180,6 +184,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const moduleDenied = await requireModuleApi(request, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   const ipHash = await currentIpHash()
 
   // (1) SESSÃO — antes de tudo. Requisição anónima nunca chega a ler o corpo nem a
@@ -396,7 +403,10 @@ export async function POST(request: Request) {
 }
 
 /** Revogação explícita — sempre permitida, mesmo sem sessão (só apaga o cookie). */
-export async function DELETE() {
+export async function DELETE(accessRequest: Request) {
+  const moduleDenied = await requireModuleApi(accessRequest, "sharedPayment")
+  if (moduleDenied) return moduleDenied
+
   logPinAuthorizationEvent("pin_auth_revoked", { ipHash: await currentIpHash() })
   const res = NextResponse.json({ ok: true })
   res.cookies.set(buildPinAuthorizationClearCookieOptions())

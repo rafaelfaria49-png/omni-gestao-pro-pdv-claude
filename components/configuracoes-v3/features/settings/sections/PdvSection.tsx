@@ -31,6 +31,7 @@ import {
 } from "@/lib/omnigestao-pdv-modo";
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
 import { experimentalPdvEnabled } from "@/lib/feature-flags";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import {
   DEFAULT_PDV_SCAN_UNREGISTERED_ACTION,
   normalizePdvScanUnregisteredAction,
@@ -316,6 +317,7 @@ function PdvMiniPreview({ variant, activeTheme }: { variant: PdvFlowId; activeTh
 }
 
 function PdvSectionContent() {
+  const permissions = useEnterprisePermissions();
   const { toast } = useToast();
   const { navigateToSection } = useConfiguracoesNav();
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
@@ -489,7 +491,13 @@ function PdvSectionContent() {
   // PDV Next é experimental (já persiste vendas reais pelo motor oficial, mas
   // recursos de balcão ainda em desenvolvimento): ocultar o card da galeria em
   // operação real. Liberado em dev via env NEXT_PUBLIC_OG_EXPERIMENTAL=1.
-  const visibleFlows = experimentalPdvEnabled ? FLOWS : FLOWS.filter((f) => f.id !== "next");
+  const visibleFlows = FLOWS.filter((f) => {
+    if (f.id === "next" && !experimentalPdvEnabled) return false;
+    if (permissions?.platformAuthority) return true;
+    if (f.id === "classico") return true;
+    if (f.id === "assistencia") return permissions?.hubs.operacoes === true;
+    return permissions?.modules?.experiments === true;
+  });
 
   const previewMeta =
     previewFlow === null

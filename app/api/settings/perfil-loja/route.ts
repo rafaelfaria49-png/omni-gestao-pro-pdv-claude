@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { type PerfilLojaId } from "@/lib/perfil-loja-types"
@@ -16,6 +17,9 @@ function getLojaId(req?: Request): string | null {
 }
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "authenticated")
+  if (moduleDenied) return moduleDenied
+
   try {
     const lojaId = getLojaId(req)
     if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
@@ -35,6 +39,9 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "settings")
+  if (moduleDenied) return moduleDenied
+
   // Adapter read-only; o editor oficial é Configurações gerais.
   // Esta rota fica read-only para evitar criação automática de unidades e efeitos colaterais.
   void req

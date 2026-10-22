@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * Contador HUB · timeline da competência (GOAL 011).
  *
@@ -21,6 +22,9 @@ export const revalidate = 0
 const CHAVES_PROIBIDAS = ["storeId", "lojaId", "competenciaId"] as const
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "accountant")
+  if (moduleDenied) return moduleDenied
+
   const url = new URL(req.url)
   if (CHAVES_PROIBIDAS.some((k) => url.searchParams.has(k))) {
     return NextResponse.json(

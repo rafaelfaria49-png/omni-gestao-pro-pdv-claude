@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { requireMarketingHubApi } from "@/lib/marketing/hub-api-gate"
 import { createMarketingPost, listMarketingPostsForStore } from "@/lib/marketing/services/marketing-posts-service"
@@ -9,6 +10,9 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "marketing")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireMarketingHubApi(req, "read")
   if (!gate.ok) return gate.response
   await prismaEnsureConnected()
@@ -35,6 +39,9 @@ type PostBody = {
 }
 
 export async function POST(req: Request) {
+  const moduleDenied = await requireModuleApi(req, "marketing")
+  if (moduleDenied) return moduleDenied
+
   const gate = await requireMarketingHubApi(req, "write")
   if (!gate.ok) return gate.response
   let body: PostBody

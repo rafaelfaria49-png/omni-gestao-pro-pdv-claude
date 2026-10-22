@@ -1,4 +1,5 @@
 "use server"
+import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
 import type { OmniAgentInterpretacao } from "@/lib/omni-agent/types"
@@ -92,6 +93,8 @@ async function loadOmniAgentConfigInternal(storeId: string): Promise<OmniAgentCo
 }
 
 export async function getOmniAgentConfig(storeId: string): Promise<OmniAgentConfigDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = assertStoreId(storeId)
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -114,6 +117,8 @@ export async function upsertOmniAgentConfig(
   storeId: string,
   input: UpsertOmniAgentConfigInput,
 ): Promise<OmniAgentConfigDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = assertStoreId(storeId)
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -167,6 +172,8 @@ export async function upsertOmniAgentConfig(
 }
 
 export async function resetOmniAgentConfig(storeId: string): Promise<OmniAgentConfigDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = assertStoreId(storeId)
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -220,6 +227,8 @@ function toDto(row: {
 }
 
 export async function listOmniAgentCommands(storeId: string, take = 80): Promise<OmniAgentCommandDTO[]> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = assertStoreId(storeId)
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -245,6 +254,8 @@ export type OmniAgentHubStatsDTO = {
 
 /** Contagens reais para a Visão Geral (sem offsets mock). */
 export async function getOmniAgentHubStats(storeId: string): Promise<OmniAgentHubStatsDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = storeId.trim()
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -285,6 +296,8 @@ export type SubmitOmniAgentCommandInput = {
 }
 
 export async function submitOmniAgentCommand(input: SubmitOmniAgentCommandInput): Promise<OmniAgentCommandDTO> {
+  await requireModuleAction(input.storeId, "agent")
+
   const storeId = assertStoreId(input.storeId)
   const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -368,6 +381,8 @@ export async function confirmOmniAgentCommand(
   storeId: string,
   opts?: { clienteId?: string },
 ): Promise<OmniAgentCommandDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = assertStoreId(storeId)
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -427,6 +442,8 @@ export async function confirmOmniAgentCommand(
 }
 
 export async function rejectOmniAgentCommand(commandId: string, storeId: string): Promise<OmniAgentCommandDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = assertStoreId(storeId)
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -455,6 +472,8 @@ export type OmniAgentWhatsAppCloudStatusDTO = {
 }
 
 export async function getOmniAgentWhatsAppCloudStatus(storeId: string): Promise<OmniAgentWhatsAppCloudStatusDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
@@ -478,6 +497,8 @@ export type OmniAgentReportsSnapshotDTO = {
 }
 
 export async function getOmniAgentReportsSnapshot(storeId: string): Promise<OmniAgentReportsSnapshotDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
@@ -567,6 +588,8 @@ function mapAutomationRow(r: {
 }
 
 export async function listOmniAgentAutomations(storeId: string): Promise<OmniAgentAutomationDTO[]> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = storeId.trim()
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -591,6 +614,8 @@ export async function createOmniAgentAutomation(
     priority?: number
   },
 ): Promise<OmniAgentAutomationDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = storeId.trim()
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -622,6 +647,8 @@ export async function updateOmniAgentAutomation(
   id: string,
   input: { name?: string; commandTemplate?: string; priority?: number },
 ): Promise<OmniAgentAutomationDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = storeId.trim()
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -651,6 +678,8 @@ export async function setOmniAgentAutomationEnabled(
   id: string,
   enabled: boolean,
 ): Promise<OmniAgentAutomationDTO> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = storeId.trim()
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -666,6 +695,8 @@ export async function setOmniAgentAutomationEnabled(
 }
 
 export async function deleteOmniAgentAutomation(storeId: string, id: string): Promise<void> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = storeId.trim()
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
@@ -678,6 +709,8 @@ export async function listOmniAgentAutomationRuns(
   storeId: string,
   opts?: { automationId?: string; take?: number },
 ): Promise<OmniAgentAutomationRunDTO[]> {
+  await requireModuleAction(storeId, "agent")
+
   const sid = storeId.trim()
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)

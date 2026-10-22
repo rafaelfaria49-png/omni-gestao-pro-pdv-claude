@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { apiGuardOperacoesHubOrLegacy } from "@/lib/auth/api-enterprise-guard"
@@ -31,12 +32,18 @@ async function guardLegacyWrite(req: Request, id: string) {
 
 /** Escrita desativada — semântica de estoque legada incompatível com Operações HUB V2. */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "service")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await context.params
   return guardLegacyWrite(req, id)
 }
 
 /** Escrita desativada — semântica de estoque legada incompatível com Operações HUB V2. */
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+  const moduleDenied = await requireModuleApi(req, "service")
+  if (moduleDenied) return moduleDenied
+
   const { id } = await context.params
   return guardLegacyWrite(req, id)
 }

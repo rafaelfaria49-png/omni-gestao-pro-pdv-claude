@@ -1,3 +1,4 @@
+import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/vendas/[id]/solicitar-emissao — GOAL-011 (produtor transacional da outbox)
  *
@@ -31,6 +32,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const moduleDenied = await requireModuleApi(req, "fiscal")
+  if (moduleDenied) return moduleDenied
+
   // 1) Escopo de loja — mutação exige header ou query (sem cookie sozinho).
   const storeId = opsLojaIdFromRequestForWrite(req)
   if (!storeId) {
