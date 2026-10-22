@@ -132,16 +132,16 @@ describe("Cadastros adaptados por recursos e produto", () => {
     h.capabilities = { version: 1, business: { primaryBranch: "acessorios" } }
     render(React.createElement(CadastrosHub))
     await screen.findByText("Cadastros: Acessórios para aparelhos")
-    expect(screen.queryByRole("button", { name: "Equipamentos", exact: true })).toBeNull()
-    expect(screen.queryByRole("button", { name: "Técnicos", exact: true })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Equipamentos" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Técnicos" })).toBeNull()
   })
   it("assistência sem liberação de catálogo de aparelhos não oferece a aba Equipamentos", async () => {
     h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
     h.deviceCatalog = false
     render(React.createElement(CadastrosHub))
     await screen.findByText("Cadastros: Assistência técnica")
-    expect(screen.getByRole("button", { name: "Técnicos", exact: true })).toBeTruthy()
-    expect(screen.queryByRole("button", { name: "Equipamentos", exact: true })).toBeNull()
+    expect(screen.getByRole("button", { name: "Técnicos" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Equipamentos" })).toBeNull()
   })
   it("edição com seções ocultas omite configurações e preserva o patch", async () => {
     product({ nome: "Mercadoria", garantia: 60, metadata: {
