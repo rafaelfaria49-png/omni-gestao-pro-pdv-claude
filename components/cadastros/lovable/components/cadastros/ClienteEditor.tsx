@@ -8,6 +8,8 @@ import { interpretarClienteTextoLivre, salvarClienteRevisado } from "@/app/actio
 import { aplicarSugestaoCliente, validateClientEditor, type ClientEditorValues } from "@/lib/cadastros/natural-text/cliente"
 import { CLIENT_TEXT_FIELDS, CLIENT_TEXT_LABELS, CLIENT_TEXT_LIMIT, type ClientTextField, type ClientTextSuggestion } from "@/lib/cadastros/natural-text/cliente-types"
 import { Input, Select, Textarea } from "./ui-kit"
+import { ClienteVcardImport } from "./ClienteVcardImport"
+import type { VcardDraft } from "@/lib/cadastros/vcard/cliente"
 import {
   CLIENT_VOICE_DIAGNOSTIC_TEXT, CLIENT_VOICE_INITIAL, CLIENT_VOICE_POLICY, CLIENT_VOICE_SUPPORT_MESSAGES, clientVoiceStage, formatarTranscricaoCliente,
   juntarTranscricaoCliente, reduceClientVoiceCapture, type ClientCaptureSource, type ClientVoiceSnapshot,
@@ -284,6 +286,16 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     discard()
     setMessage("Sugestões aplicadas aos campos vazios. Revise e confirme os dados abaixo.")
   }
+  /** Contato importado (vCard): só preenche o formulário; a revisão e o salvar seguem os mesmos. */
+  function applyContact(patch: Partial<VcardDraft>, mode: "empty" | "replace") {
+    const fields = (Object.keys(patch) as (keyof VcardDraft)[]).filter((f) => patch[f] && (mode === "replace" || !values[f].trim()))
+    if (!fields.length) return
+    setValues((v) => ({ ...v, ...Object.fromEntries(fields.map((f) => [f, patch[f]])) }))
+    setOrigins((o) => ({ ...o, ...Object.fromEntries(fields.map((f) => [f, "Importado do contato"])) }))
+    setErrors((e) => ({ ...e, ...Object.fromEntries(fields.map((f) => [f, undefined])) }))
+    setConfirmed(false)
+    setMessage(mode === "empty" ? "Dados do contato aplicados aos campos vazios. Revise e confirme os dados abaixo." : "Campo substituído pelo valor do contato. Revise e confirme os dados abaixo.")
+  }
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (submitting.current || interpreting || voiceActive || !confirmed) return
@@ -307,7 +319,8 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
       }
       discard()
       await onSaved()
-    } catch { if (mounted.current) setMessage("Não foi possível salvar. Verifique o acesso à loja e tente novamente.") }
+    // Sem resposta não há prova do resultado: informar a incerteza, preservar o formulário e não repetir sozinho.
+    } catch { if (mounted.current) { setConfirmed(false); setMessage("Não foi possível confirmar o salvamento: o cadastro pode ter sido gravado. Confira a lista de clientes antes de salvar de novo.") } }
     finally { submitting.current = false; if (mounted.current) setSaving(false) }
   }
 
@@ -398,6 +411,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
         <button type="button" className={button} onClick={apply}>Aplicar aos campos vazios</button>
       </div>}
     </section>}
+    {!editing && <ClienteVcardImport key={storeId} values={values} disabled={saving} onApply={applyContact} />}
     <fieldset disabled={saving} className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
       <legend className="mb-3 text-sm font-semibold">Dados do cliente</legend>
       {CLIENT_TEXT_FIELDS.map((field) => <div key={field} className={`min-w-0 space-y-1.5 ${field === "nome" || field === "endereco" ? "sm:col-span-2" : ""}`}>

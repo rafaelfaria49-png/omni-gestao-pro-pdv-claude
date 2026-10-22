@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-21
+
+### Cadastros — Importar contato (vCard) no cadastro de Clientes
+
+- Em **Clientes → Novo**, "Importar contato" lê um `.vcf` ou vCard colado (3.0/4.0, UTF-8) só no navegador: escolha de um contato, prévia editável, escolha explícita entre vários telefones/emails/endereços e "Aplicar aos campos vazios". Campos já digitados ficam intactos; divergências só mudam com "Substituir … pelo do contato".
+- Nada é salvo ao importar: o cadastro continua exigindo revisão, confirmação e "Salvar cliente" pelo fluxo canônico, com as mesmas regras de duplicidade (sem fusão). Arquivo, nome do arquivo e contatos não escolhidos não saem do navegador nem são guardados.
+- vCard 2.1, QUOTED-PRINTABLE, codificação que não UTF-8 e arquivos acima de 256 KiB ou 50 contatos são recusados com mensagem clara. CPF/CNPJ e tipo PF/PJ nunca vêm do arquivo.
+- Salvar sem resposta do servidor agora informa que o cadastro pode ter sido gravado e pede conferência da lista antes de salvar de novo.
+
 ## 2026-10-20
 
 ### Cadastros — Microfone dentro do campo e diagnóstico da voz de Clientes (CAD-R2-021)
