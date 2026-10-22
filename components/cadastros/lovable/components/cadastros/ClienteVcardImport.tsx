@@ -194,11 +194,12 @@ export function ClienteVcardImport({ values, disabled, onApply }: Props) {
       <div className="min-w-0 space-y-1">
         <label htmlFor={`${id}-paste`} className="block text-sm">Ou cole o conteúdo do vCard</label>
         <Textarea id={`${id}-paste`} value={pasted} rows={4} spellCheck={false} placeholder={"BEGIN:VCARD\nVERSION:3.0\nFN:…\nEND:VCARD"}
-          onChange={(e) => { if (contacts || error) clearLoaded(); setPasted(e.target.value) }} />
+          // Qualquer edição invalida a prévia e leituras de arquivo ainda pendentes.
+          onChange={(e) => { clearLoaded(); setPasted(e.target.value) }} />
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={button} disabled={!pasted.trim() || reading} onClick={readPasted}>Ler conteúdo colado</button>
-        {(pasted || contacts || error || loadedFrom) && <button type="button" className={button} onClick={reset}>Remover arquivo ou conteúdo</button>}
+        {(pasted || contacts || error || loadedFrom || reading) && <button type="button" className={button} onClick={reset}>Remover arquivo ou conteúdo</button>}
       </div>
       {reading && <p role="status" className="text-xs text-muted-foreground">Lendo o arquivo neste navegador…</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

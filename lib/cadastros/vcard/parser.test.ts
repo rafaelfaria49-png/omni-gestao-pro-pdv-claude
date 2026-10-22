@@ -27,7 +27,8 @@ describe("vCard parser — subconjunto 3.0/4.0 UTF-8", () => {
   it("4.0: TEL como URI tel: (sem inventar DDD/país), PREF ordena, ponto-e-vírgula escapado e lista de TYPE entre aspas", () => {
     const [c] = contacts(VCARD_40_URI)
     expect(c.names).toEqual(["João Ação Çedilha"])
-    expect(c.phones.map((p) => p.value)).toEqual(["+55-14-98888-7777", "+55-14-3333-2222"])
+    // Parâmetros da URI ficam visíveis (não são descartados em silêncio).
+    expect(c.phones.map((p) => p.value)).toEqual(["+55-14-98888-7777", "+55-14-3333-2222;ext=12"])
     expect(c.phones[0]).toMatchObject({ types: ["cell", "voice"], pref: 1 })
     expect(c.emails.map((e) => e.value)).toEqual(["joao@exemplo.invalid", "joao.trabalho@exemplo.invalid"])
     expect(c.addresses[0]).toMatchObject({ extended: "Sala 4", street: "Avenida Teste; Bloco B", locality: "Avaré", region: "São Paulo", country: "BR" })
@@ -64,6 +65,16 @@ describe("vCard parser — subconjunto 3.0/4.0 UTF-8", () => {
     const bom = new Uint8Array([0xef, 0xbb, 0xbf, ...utf8(VCARD_40_URI)])
     const result = parseVcardBytes(bom)
     expect(result.ok && result.contacts[0].names).toEqual(["João Ação Çedilha"])
+  })
+
+  it("URI tel: local com phone-context e outro esquema ficam literais (RFC 3966 §5.1.5)", () => {
+    const [c] = contacts("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:X\r\nTEL;VALUE=uri:tel:2125550123;phone-context=+1\r\nTEL;VALUE=uri:sip:x@exemplo.invalid\r\nEND:VCARD\r\n")
+    expect(c.phones.map((p) => p.value)).toEqual(["2125550123;phone-context=+1", "sip:x@exemplo.invalid"])
+  })
+
+  it("nomes de propriedade herdados de Object não confundem a classificação", () => {
+    const [c] = contacts("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:X\r\nCONSTRUCTOR:a\r\nTOSTRING:b\r\nEND:VCARD\r\n")
+    expect(c.ignored).toEqual(["Extensões e propriedades desconhecidas"])
   })
 
   it("contato só com N: nome não é inventado", () => {

@@ -262,7 +262,7 @@ function toContact(lines: ContentLine[]): VcardContact {
     const used = line.name === "FN" || line.name === "TEL" || line.name === "EMAIL" || line.name === "ADR"
     if (!used) {
       if (line.name === "N") { hasN = true; continue }
-      ignored.add(IGNORED[line.name] ?? UNKNOWN)
+      ignored.add(Object.prototype.hasOwnProperty.call(IGNORED, line.name) ? IGNORED[line.name] : UNKNOWN)
       continue
     }
     // Conteúdo binário/base64 numa propriedade de texto não é texto: recusa explícita.
@@ -303,13 +303,16 @@ function toContact(lines: ContentLine[]): VcardContact {
   return contact
 }
 
-/** TEL: texto (3.0) ou URI `tel:` (4.0, VALUE=uri). Remove só o esquema e os parâmetros da URI; não acrescenta DDD nem país. */
+/**
+ * TEL: texto (3.0) ou URI `tel:` (4.0, VALUE=uri). Remove só o esquema. Parâmetros da URI
+ * (`;ext=`, `;phone-context=` — RFC 3966 §5.1.5: parte da identidade de um número local)
+ * ficam visíveis no valor e a prévia bloqueia a aplicação até o operador corrigir.
+ * Outro esquema (ex.: `sip:`) fica literal e também é bloqueado. Nunca acrescenta DDD nem país.
+ */
 function telValue(line: ContentLine): string {
   const isUri = (line.params.get("VALUE") ?? []).some((v) => v.toLowerCase() === "uri") || /^tel:/i.test(line.value.trim())
   if (!isUri) return unescapeText(line.value)
   const uri = line.value.trim()
-  if (!/^tel:/i.test(uri)) return ""
-  let number = uri.slice(4).split(";")[0]
-  try { number = decodeURIComponent(number) } catch { /* mantém literal; a validação da prévia aponta */ }
-  return number
+  if (!/^tel:/i.test(uri)) return uri
+  try { return decodeURIComponent(uri.slice(4)) } catch { return uri.slice(4) }
 }

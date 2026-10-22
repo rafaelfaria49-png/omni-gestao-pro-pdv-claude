@@ -46,7 +46,7 @@ Validação é pelo conteúdo, não pela extensão ou MIME. Sem dependência nov
 | vCard | Editor | Regra |
 | --- | --- | --- |
 | FN | Nome | Nome formatado do arquivo. N não compõe nome; sem FN = "Ausente no contato: preencha o nome" |
-| TEL | Telefone / WhatsApp | Texto como está; URI `tel:` perde só o esquema e parâmetros (`;ext=`). Sem DDD/+55 inventado; não marca WhatsApp; DDI estrangeiro recebe aviso; número que o editor recusaria não é aplicado |
+| TEL | Telefone / WhatsApp | Texto como está; URI `tel:` perde só o esquema. Parâmetros (`;ext=`, `;phone-context=` — parte da identidade de número local, RFC 3966 §5.1.5) e outros esquemas (`sip:`) ficam visíveis e bloqueiam a aplicação até o operador editar. Sem DDD/+55 inventado; não marca WhatsApp; DDI estrangeiro recebe aviso; número que o editor recusaria não é aplicado |
 | EMAIL | Email | Um endereço escolhido; nunca concatenados |
 | ADR | Endereço, Cidade, UF | Rua + complemento → Endereço; localidade → Cidade; região → UF só se for UF ou nome de estado brasileiro e o país for vazio ou Brasil. CEP, país, caixa postal e região estrangeira/desconhecida são listados como **não importados** |
 
@@ -96,6 +96,22 @@ sem retry automático. Vale para todos os caminhos do editor (manual, texto, voz
 | Unitário | `lib/cadastros/vcard/cliente.test.ts` | prévia, escolha explícita, UF brasileira vs estrangeira/desconhecida, aplicar só a vazios e só válidos, divergências, rótulos mínimos |
 | Componente (jsdom) | `ClienteVcardImport.test.ts` | editor real: aplicar e salvar só após confirmação; campos manuais intactos e substituição explícita; escolha de contato sem mistura; contatos não escolhidos fora do salvar; texto colado; cancelar; extensão vs conteúdo; 256 KiB sem leitura; leituras antigas, cancelamento e troca de loja; fechar/reabrir; sem rede/storage/log/URL/HTML ativo; Enter na prévia não submete; resposta incerta + dupla submissão; recusa de duplicidade |
 | E2E autenticado | `05-clientes-vcard.spec.ts` (job `e2e-authenticated` do workflow `Ramos e Cadastros`) | build de produção + `next start` + PostgreSQL descartável + login NextAuth real: arquivo → escolha → prévia → aplicar → revisar → salvar (duplo clique = 1 Server Action e 1 registro) → listagem → reabertura → logout/login → banco conferido; nada sai do navegador além dos campos revisados; storage limpo; cancelar não grava; duplicidade recusada sem fusão; leitura de B não chega a A; Server Action real reenviada: controle do admin grava, CAIXA recusado, operador de B recusado em A; 390/320 px sem overflow |
+
+## Revisão independente
+
+| Rodada | Revisor | SHA | Parecer |
+| --- | --- | --- | --- |
+| R1 | Codex (gpt-6.1-sol, sandbox somente leitura, contexto novo, sem autoria no diff) | `8e3c17a` | CHANGES_REQUESTED — 3 P2 |
+
+Correções da R1, cada uma com regressão:
+
+| Achado | Correção | Regressão |
+| --- | --- | --- |
+| Região `constructor`/`__proto__` achava propriedade herdada e punha função na UF (editor quebrava) | Tabelas de estado e de tipo viram `Map`; classificação de propriedades usa chave própria | `cliente.test` (região e TYPE herdados), `parser.test` |
+| URI `tel:…;phone-context=+1` virava número local "válido" | Parâmetros e esquemas não `tel:` ficam visíveis e bloqueiam a aplicação | `parser.test`, `cliente.test`, `ClienteVcardImport.test` |
+| Editar o texto colado durante a leitura do arquivo não invalidava a leitura | Toda edição do texto invalida prévia e leituras pendentes | `ClienteVcardImport.test` (leitura pendente + colagem) |
+
+E2E: a primeira execução na CI passou 13/15. Os 2 cenários restantes falharam por arranjo do teste: a troca de usuário por `clearCookies` não voltou ao formulário de login, e em 390 px o menu lateral fica recolhido. Agora cada papel usa um contexto próprio e o responsivo segue o padrão do `04-responsivo` (contexto móvel e rota direta).
 
 ## Voz (frente preservada) — intermitência pré-existente registrada
 

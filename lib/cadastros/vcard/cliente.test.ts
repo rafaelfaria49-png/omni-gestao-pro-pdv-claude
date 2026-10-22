@@ -22,8 +22,10 @@ describe("vCard → campos do editor de Clientes", () => {
     const preview = previewContato(parse(VCARD_40_URI)[0])
     expect(preview.phones.map((p) => [p.value, p.label])).toEqual([
       ["+55-14-98888-7777", "celular · voz · preferencial no arquivo"],
-      ["+55-14-3333-2222", "trabalho"],
+      ["+55-14-3333-2222;ext=12", "trabalho"],
     ])
+    // Ramal visível bloqueia a aplicação até o operador editar.
+    expect(problemasRascunho({ ...rascunhoInicial(preview), telefone: "+55-14-3333-2222;ext=12" }).telefone).toMatch(/parâmetros da URI tel:/)
     const draft = rascunhoInicial(preview)
     expect(draft.telefone).toBe("")
     expect(draft.email).toBe("")
@@ -49,6 +51,26 @@ describe("vCard → campos do editor de Clientes", () => {
     const preview = previewContato(c)
     expect(rascunhoInicial(preview).uf).toBe("")
     expect(preview.addresses[0].notImported).toEqual(["Estado/região “Província Z” não corresponde a uma UF brasileira"])
+  })
+
+  it("região/tipo com nome de propriedade herdada (constructor, __proto__) não injeta função na UF nem no rótulo", () => {
+    for (const region of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+      const [c] = parse(`BEGIN:VCARD\r\nVERSION:3.0\r\nFN:X\r\nTEL;TYPE=constructor,__proto__:(14) 99999-8888\r\nADR:;;Rua A;Cidade;${region};;BR\r\nEND:VCARD\r\n`)
+      const preview = previewContato(c)
+      const draft = rascunhoInicial(preview)
+      expect(draft.uf).toBe("")
+      expect(typeof draft.uf).toBe("string")
+      expect(preview.phones[0].label).toBe("")
+      expect(preview.addresses[0].notImported[0]).toMatch(/não corresponde a uma UF brasileira/)
+    }
+  })
+
+  it("telefone local com phone-context: visível e bloqueado, sem inferir prefixo", () => {
+    const [c] = parse("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:X\r\nTEL;VALUE=uri:tel:2125550123;phone-context=+1\r\nEND:VCARD\r\n")
+    const draft = rascunhoInicial(previewContato(c))
+    expect(draft.telefone).toBe("2125550123;phone-context=+1")
+    expect(problemasRascunho(draft).telefone).toMatch(/contexto de discagem/)
+    expect(aplicaveisAosVazios(draft, emptyForm).telefone).toBeUndefined()
   })
 
   it("sem FN: nome ausente para revisão (N não compõe nome); documento e tipo nunca aparecem", () => {

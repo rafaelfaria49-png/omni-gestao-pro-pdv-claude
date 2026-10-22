@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page, type Request } from "@playwright/test"
-import { STORES, USERS, closeDb, login, logoutViaSeguranca, readDb, switchStore } from "./support"
+import { STORES, USERS, closeDb, evidence, login, logoutViaSeguranca, readDb, switchStore } from "./support"
 
 /**
  * Importação assistida de contato vCard no editor real de Clientes.
@@ -72,11 +72,6 @@ async function importChoosing(dialog: Locator, page: Page, text: string, contact
   await expect(dialog.getByText(/2 contatos reconhecidos/)).toBeVisible()
   await dialog.getByRole("radio", { name: contact }).check()
   await expect(dialog.getByLabel("Prévia: Nome")).toHaveValue(contact)
-}
-/** Troca de usuário sem depender de telas que o papel pode não acessar. */
-async function switchUser(page: Page, user: (typeof USERS)[keyof typeof USERS]) {
-  await page.context().clearCookies()
-  await login(page, user)
 }
 const clientsNamed = async (name: string, storeId?: string) => (await readDb()).cliente.findMany({ where: { name, ...(storeId ? { storeId } : {}) } })
 
@@ -223,7 +218,7 @@ test("vCard: cancelar não cria registro; duplicidade canônica recusada sem fus
   })
 })
 
-test("vCard: servidor recusa papel sem Cadastros e outra loja; leitura isolada por loja", async ({ page }) => {
+test("vCard: servidor recusa papel sem Cadastros e outra loja; leitura isolada por loja", async ({ page, browser }) => {
   const NAME = "Cliente vCard Sintético Base Ação"
   const seen = recordRequests(page)
   await login(page, USERS.admin)
@@ -242,44 +237,56 @@ test("vCard: servidor recusa papel sem Cadastros e outra loja; leitura isolada p
   expect(template).toBeTruthy()
   const args = JSON.parse(template!.body) as [string, null, Record<string, unknown>, boolean]
   expect(args[0]).toBe(B)
-  async function replay(storeId: string, nome: string) {
+  async function replay(target: Page, storeId: string, nome: string) {
     const body = JSON.stringify([storeId, null, { ...args[2], nome, telefone: "", email: "" }, true])
-    // Cabeçalhos da requisição original da Server Action (sem cookie: vale a sessão atual do contexto).
+    // Cabeçalhos da requisição original da Server Action (sem cookie: vale a sessão do contexto que reenvia).
     const headers = Object.fromEntries(Object.entries(template!.headers).filter(([k]) => !["cookie", "content-length", "host"].includes(k)))
-    const res = await page.request.post(template!.url, { headers: { ...headers, origin: ORIGIN }, data: body, maxRedirects: 0 })
+    const res = await target.request.post(template!.url, { headers: { ...headers, origin: ORIGIN }, data: body, maxRedirects: 0 })
     return { status: res.status(), text: await res.text().catch(() => "") }
+  }
+  /** Cada papel em um contexto próprio, com login real; nenhuma sessão é reaproveitada. */
+  async function signedIn(user: (typeof USERS)[keyof typeof USERS]) {
+    const context = await browser.newContext({ serviceWorkers: "block", locale: "pt-BR" })
+    const other = await context.newPage()
+    await login(other, user)
+    return { context, page: other }
   }
 
   await test.step("Controle: a mesma ação reenviada pelo admin na loja B grava (o reenvio é válido)", async () => {
-    const control = await replay(B, "Controle Reenvio Admin Sintético")
+    const control = await replay(page, B, "Controle Reenvio Admin Sintético")
     expect(control.text).toMatch(/"ok":true/)
     await expect.poll(async () => (await clientsNamed("Controle Reenvio Admin Sintético", B)).length).toBe(1)
   })
 
   await test.step("Caixa (sem Cadastros) é recusado pelo servidor na própria loja", async () => {
-    await switchUser(page, USERS.caixa)
-    const refused = await replay(B, "Tentativa Caixa Sintética")
+    const caixa = await signedIn(USERS.caixa)
+    const refused = await replay(caixa.page, B, "Tentativa Caixa Sintética")
     expect(refused.text).not.toMatch(/"ok":true/)
     expect(await clientsNamed("Tentativa Caixa Sintética")).toHaveLength(0)
+    await caixa.context.close()
   })
 
   await test.step("Operador da loja B é recusado ao gravar na loja A; na própria loja, não vê clientes de A", async () => {
-    await switchUser(page, USERS.operador)
-    const refused = await replay(A, "Tentativa Outra Loja Sintética")
+    const operador = await signedIn(USERS.operador)
+    const refused = await replay(operador.page, A, "Tentativa Outra Loja Sintética")
     expect(refused.text).not.toMatch(/"ok":true/)
     expect(await clientsNamed("Tentativa Outra Loja Sintética")).toHaveLength(0)
     expect(await (await readDb()).cliente.count({ where: { storeId: A } })).toBe(0)
-    await openClientes(page)
-    await expect(page.locator("tbody tr").filter({ hasText: NAME })).toHaveCount(1)
+    await openClientes(operador.page)
+    await expect(operador.page.locator("tbody tr").filter({ hasText: NAME })).toHaveCount(1)
+    await operador.context.close()
   })
 })
 
-test("vCard: prévia sem overflow horizontal em 390 e 320 px, sem gravar", async ({ page }) => {
+for (const width of [390, 320]) test(`vCard: prévia sem overflow horizontal em ${width} px, sem gravar`, async ({ browser }) => {
+  // Mesmo arranjo do 04-responsivo: contexto móvel próprio; no celular o menu lateral fica recolhido.
+  const context = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block", locale: "pt-BR" })
+  const page = await context.newPage()
   await login(page, USERS.admin)
   await switchStore(page, "Variedades Sintética B")
-  for (const width of [390, 320]) {
-    await page.setViewportSize({ width, height: 800 })
-    await openClientes(page)
+  {
+    await page.goto("/dashboard/cadastros-v2")
+    await page.getByRole("button", { name: "Clientes", exact: true }).click()
     const dialog = await openNewClient(page)
     await importChoosing(dialog, page, vcf("Cliente vCard Responsivo Sintético", "(14) 99000-1111", "resp@e2e-vcard.invalid"), "Cliente vCard Responsivo Sintético")
     // O diálogo é o escopo desta tela: dentro da viewport e sem rolagem horizontal interna.
@@ -292,8 +299,10 @@ test("vCard: prévia sem overflow horizontal em 390 e 320 px, sem gravar", async
       const box = await dialog.getByRole("button", { name }).boundingBox()
       expect(box && box.height >= 40 && box.x >= 0 && box.x + box.width <= width).toBe(true)
     }
+    await page.screenshot({ path: evidence(`clientes-vcard-${width}.png`), fullPage: true })
     await dialog.getByRole("button", { name: "Cancelar importação" }).click()
     await dialog.getByRole("button", { name: "Cancelar", exact: true }).click()
   }
   expect(await clientsNamed("Cliente vCard Responsivo Sintético")).toHaveLength(0)
+  await context.close()
 })

@@ -24,20 +24,21 @@ export type VcardClientPreview = {
 
 const UFS = new Set("AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" "))
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim()
-const STATE_NAMES: Record<string, string> = Object.fromEntries(Object.entries({
+// Map, não objeto: texto do arquivo como "constructor"/"__proto__" não pode achar propriedade herdada.
+const STATE_NAMES = new Map<string, string>(Object.entries({
   AC: "Acre", AL: "Alagoas", AP: "Amapá", AM: "Amazonas", BA: "Bahia", CE: "Ceará", DF: "Distrito Federal",
   ES: "Espírito Santo", GO: "Goiás", MA: "Maranhão", MT: "Mato Grosso", MS: "Mato Grosso do Sul", MG: "Minas Gerais",
   PA: "Pará", PB: "Paraíba", PR: "Paraná", PE: "Pernambuco", PI: "Piauí", RJ: "Rio de Janeiro", RN: "Rio Grande do Norte",
   RS: "Rio Grande do Sul", RO: "Rondônia", RR: "Roraima", SC: "Santa Catarina", SP: "São Paulo", SE: "Sergipe", TO: "Tocantins",
-}).map(([uf, name]) => [fold(name), uf]))
+}).map(([uf, name]) => [fold(name), uf] as [string, string]))
 const BRAZIL = new Set(["brasil", "brazil", "br", "bra", "republica federativa do brasil"])
-const TYPE_LABELS: Record<string, string> = {
+const TYPE_LABELS = new Map(Object.entries({
   cell: "celular", home: "residencial", work: "trabalho", voice: "voz", fax: "fax", pager: "pager",
   text: "mensagem", video: "vídeo", textphone: "texto", main: "principal", other: "outro",
-}
+}))
 
 function optionLabel(item: Pick<VcardValue, "types" | "pref">): string {
-  const parts = item.types.map((t) => TYPE_LABELS[t]).filter(Boolean)
+  const parts = item.types.map((t) => TYPE_LABELS.get(t)).filter((label): label is string => !!label)
   if (item.pref <= 100) parts.push("preferencial no arquivo")
   return parts.join(" · ")
 }
@@ -49,7 +50,7 @@ function resolveUf(address: VcardAddress): { uf: string; note?: string } {
   if (address.country && !BRAZIL.has(fold(address.country))) return { uf: "", note: "Estado/região de endereço fora do Brasil (não convertido em UF)" }
   const upper = region.toUpperCase()
   if (UFS.has(upper)) return { uf: upper }
-  const byName = STATE_NAMES[fold(region)]
+  const byName = STATE_NAMES.get(fold(region))
   if (byName) return { uf: byName }
   return { uf: "", note: `Estado/região “${region}” não corresponde a uma UF brasileira` }
 }
@@ -91,7 +92,8 @@ export function rascunhoInicial(preview: VcardClientPreview): VcardDraft {
 export function problemasRascunho(draft: VcardDraft): Partial<Record<VcardClientField, string>> {
   const issues: Partial<Record<VcardClientField, string>> = {}
   if (draft.nome.length > 160) issues.nome = "Nome com mais de 160 caracteres: encurte antes de aplicar."
-  if (draft.telefone && !validClientPhone(draft.telefone)) issues.telefone = "Confira DDD e número (10 ou 11 dígitos). Nada foi acrescentado ao número do arquivo."
+  if (draft.telefone.includes(";")) issues.telefone = "O número traz parâmetros da URI tel: (ramal ou contexto de discagem). Edite para deixar só DDD e número; nada foi convertido."
+  else if (draft.telefone && !validClientPhone(draft.telefone)) issues.telefone = "Confira DDD e número (10 ou 11 dígitos). Nada foi acrescentado ao número do arquivo."
   if (draft.email && (!validClientEmail(draft.email) || draft.email.length > 254)) issues.email = "Email inválido: corrija antes de aplicar."
   if (draft.endereco.length > 240) issues.endereco = "Endereço com mais de 240 caracteres: encurte antes de aplicar."
   if (draft.cidade.length > 120) issues.cidade = "Cidade com mais de 120 caracteres: encurte antes de aplicar."
