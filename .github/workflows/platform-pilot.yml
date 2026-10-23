@@ -83,7 +83,7 @@ jobs:
         env:
           AUTH_SECRET: isolated-platform-build-only
           AUTH_TRUST_HOST: "true"
-          NEXTAUTH_URL: http://127.0.0.1:3000
+          NEXTAUTH_URL: http://localhost:3000
       - run: npx playwright install --with-deps chromium
       - name: Migration aditiva e E2E autenticado real em banco vazio
         run: node scripts/platform/run-pilot-e2e.mjs

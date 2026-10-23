@@ -81,13 +81,14 @@ test("jornada integral: provisionar → senha obrigatória → assistente → pr
     await secretInput(client.getByLabel("Senha atual", { exact: true }), temporary)
     await secretInput(client.getByLabel("Nova senha", { exact: true }), personal)
     await secretInput(client.getByLabel("Confirme a nova senha", { exact: true }), personal)
-    const signout = client.waitForResponse((response) => response.url().includes("/api/auth/signout") && response.request().method() === "POST")
+    const signout = client.waitForResponse((response) => response.url().includes("/api/auth/signout") && response.request().method() === "POST").catch(() => null)
     const [changed] = await Promise.all([
       client.waitForResponse((response) => response.url().includes("/api/account/password") && response.request().method() === "POST"),
       client.getByRole("button", { name: "Alterar minha senha", exact: true }).click(),
     ])
-    expect(changed.status()).toBe(200)
-    expect((await signout).status()).toBe(200)
+    const changedBody = await changed.json()
+    expect({ status: changed.status(), error: changedBody.error }).toEqual({ status: 200, error: undefined })
+    expect((await signout)?.status()).toBe(200)
     await expect(client).toHaveURL(/\/login(?:\?|$)/)
     expect(!!(await (await client.request.get("/api/auth/session")).json())?.user).toBe(false)
     temporary = ""

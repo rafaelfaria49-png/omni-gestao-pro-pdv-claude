@@ -83,8 +83,10 @@ try {
   await db.sessaoCaixa.create({ data: { id: "pilot-cash-b", storeId: "pilot-b", operador: "Operador Privado B", status: "ABERTA", saldoInicial: 0 } })
 } finally { await db.$disconnect() }
 
-const origin = "http://127.0.0.1:3000"
-const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3000"], {
+// NextURL canonicalizes loopback IPs to localhost. Use the same browser/server
+// origin so the existing password endpoint's same-origin check remains effective.
+const origin = "http://localhost:3000"
+const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "localhost", "-p", "3000"], {
   env: { ...process.env, NODE_ENV: "production", AUTH_SECRET: appSecret, AUTH_TRUST_HOST: "true", NEXTAUTH_URL: origin, NEXT_TELEMETRY_DISABLED: "1" },
   stdio: ["ignore", "inherit", "inherit"],
 })

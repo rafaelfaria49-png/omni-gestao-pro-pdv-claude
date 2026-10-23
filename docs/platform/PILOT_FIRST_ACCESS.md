@@ -75,6 +75,11 @@ O proprietário legado sintético conserva autoridade de plataforma.
 
 O runner existente mantém identidade positiva e vacuidade do PostgreSQL descartável
 antes de DDL/fixtures. Usa build de produção e next start, sem .env produtivo.
+O endereço de loopback é `http://localhost:3000`: o NextURL normaliza IPs de loopback
+para localhost. Browser, servidor, NextAuth e cookies da suíte usam essa mesma
+origem; a proteção de origem do endpoint de senha permanece intacta. A jornada
+real detectou a divergência anterior (POST de senha 403) que chamadas API sem
+Origin não exercitavam. Não há header adulterado ou bypass para passar a prova.
 O teste dedicado desliga traces, vídeos e screenshots automáticos e preenche
 senhas por evento, sem valores em call logs. Capturas manuais só ocorrem depois
 das etapas com credenciais. Nenhum storageState é exportado.
