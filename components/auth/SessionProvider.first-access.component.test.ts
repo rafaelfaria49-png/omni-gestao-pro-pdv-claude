@@ -13,7 +13,7 @@ function Probe() {
     React.createElement("output", null, JSON.stringify({ status, id: data?.user?.id, version: data?.user?.sessionVersion })),
     React.createElement("input", { "aria-label": "Rascunho" }))
 }
-const tree = (session: Session | null) => React.createElement(SessionProvider, { session, children: React.createElement(Probe) })
+const tree = (session: Session | null) => React.createElement(SessionProvider, { session } as React.ComponentProps<typeof SessionProvider>, React.createElement(Probe))
 it("a sessão nula da tela de login dá lugar à identidade autenticada recebida do servidor", async () => {
   let persistedSession: Session | null = null
   vi.stubGlobal("fetch", vi.fn(async () => Response.json(persistedSession)))
