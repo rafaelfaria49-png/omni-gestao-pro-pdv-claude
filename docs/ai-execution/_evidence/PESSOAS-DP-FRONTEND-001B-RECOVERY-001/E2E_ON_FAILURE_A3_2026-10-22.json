@@ -1,0 +1,45 @@
+{
+  "head": "9acf18758f4db32aed2cb7ac79d64baed244dda5",
+  "flag": "on",
+  "stats": {
+    "startTime": "2026-10-22T23:57:29.421Z",
+    "duration": 24438.273,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  },
+  "errors": [],
+  "suites": [
+    {
+      "title": "frontend.e2e.ts",
+      "file": "frontend.e2e.ts",
+      "specs": [
+        {
+          "title": "cadastro real, reload, pendências, contrato, histórico, capacidades e temas",
+          "ok": false,
+          "file": "frontend.e2e.ts",
+          "line": 50,
+          "tests": [
+            {
+              "status": "unexpected",
+              "expectedStatus": "passed",
+              "results": [
+                {
+                  "status": "failed",
+                  "duration": 17422,
+                  "errors": [
+                    {
+                      "message": "Error: Timed out 15000ms waiting for expect(locator).toHaveCount(expected)\n\nLocator: getByRole('button').filter({ has: getByText('frontend-e2e-e83773c1', { exact: true }) })\nExpected: 1\nReceived: 0\nCall log:\n  - expect.toHaveCount with timeout 15000ms\n  - waiting for getByRole('button').filter({ has: getByText('frontend-e2e-e83773c1', { exact: true }) })\n    18 × locator resolved to 0 elements\n       - unexpected value \"0\"\n\n\n  30 |   await page.goto(\"/dashboard/unidades\")\n  31 |   const card = page.getByRole(\"button\").filter({ has: page.getByText(id, { exact: true }) })\n> 32 |   await expect(card).toHaveCount(1)\n     |                      ^\n  33 |   await card.press(\"Enter\")\n  34 |   await expect.poll(async () => (await page.context().cookies()).some(cookie => cookie.name === \"assistec-active-store\" && cookie.value === id)).toBe(true)\n  35 | }\n    at selectStore (C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-SddWIt\\ws\\scripts\\pessoas\\frontend.e2e.ts:32:22)\n    at login (C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-SddWIt\\ws\\scripts\\pessoas\\frontend.e2e.ts:27:3)\n    at C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-SddWIt\\ws\\scripts\\pessoas\\frontend.e2e.ts:52:5"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "suites": []
+    }
+  ]
+}

@@ -6,7 +6,7 @@
  * Nenhum node_modules/.env da worktree é usado. Limpeza verificada em finally.
  */
 import { spawnSync } from "node:child_process"
-import { createHash } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs"
 import net from "node:net"
 import os from "node:os"
@@ -41,9 +41,10 @@ function exigir(r, code, oque) {
   if (r.code !== 0) throw new Falha(code, `${oque} (exit ${r.code}) ${(r.err || r.out).trim().slice(-1500)}`)
   return r
 }
-function binPostgres() {
+function binPostgres({ requireServer = false } = {}) {
   const exe = process.platform === "win32" ? ".exe" : ""
-  const ok = (d) => d && ["initdb", "pg_ctl", "psql"].every((b) => fs.existsSync(path.join(d, b + exe)))
+  const binaries = ["initdb", "pg_ctl", "psql", ...(requireServer ? ["postgres"] : [])]
+  const ok = (d) => d && binaries.every((b) => fs.existsSync(path.join(d, b + exe)))
   const candidatos = [process.env.PESSOAS_PG_BIN, ...(process.env.PATH ?? "").split(path.delimiter)]
   if (process.platform === "win32") {
     const raiz = "C:/Program Files/PostgreSQL"
@@ -128,7 +129,46 @@ function suiteInteira(rel, name) {
   return passed
 }
 
-export async function runOfficialTests({ hardening = false } = {}) {
+function frontendSpace(directories, stage, minimum = 12 * 1024 ** 3) {
+  const volumes = new Map()
+  for (const directory of directories) {
+    let existing = path.resolve(directory)
+    while (!fs.existsSync(existing)) {
+      const parent = path.dirname(existing)
+      if (parent === existing) throw new Falha(5, "volume inacessível: " + directory)
+      existing = parent
+    }
+    const volume = path.parse(existing).root + ":" + fs.statSync(existing).dev
+    if (volumes.has(volume)) continue
+    const stats = fs.statfsSync(existing)
+    const freeBytes = stats.bavail * stats.bsize
+    const entry = { volume, directory: path.resolve(directory), freeBytes, minimumBytes: minimum }
+    volumes.set(volume, entry)
+    log("reserva " + stage + ": " + JSON.stringify(entry))
+    if (!Number.isFinite(freeBytes) || freeBytes < minimum) throw new Falha(5, "reserva insuficiente no volume " + volume + "; não iniciar a próxima etapa")
+  }
+  return { stage, volumes: [...volumes.values()] }
+}
+function chromiumPreflight(ws, env) {
+  const script = `import fs from "node:fs";
+    import { createRequire } from "node:module";
+    import { chromium } from "@playwright/test";
+    const require = createRequire(import.meta.url);
+    const executable = chromium.executablePath();
+    if (!fs.existsSync(executable)) throw new Error("Chromium do lockfile ausente: " + executable);
+    let browser;
+    try {
+      browser = await chromium.launch({ headless: true, timeout: 15000 });
+      const page = await browser.newPage();
+      await page.goto("about:blank");
+      process.stdout.write(JSON.stringify({ playwright: require("@playwright/test/package.json").version,
+        chromium: browser.version(), executable }) + "\\n");
+    } finally { await browser?.close(); }`
+  const result = exigir(run(process.execPath, ["--input-type=module", "-e", script], { cwd: ws, env, timeout: 60_000 }), 5, "preflight Chromium launch/page/close")
+  return JSON.parse(result.out.trim())
+}
+
+export async function runOfficialTests({ hardening = false, frontend = false } = {}) {
   const root = exigir(run("git", ["rev-parse", "--show-toplevel"]), 5, "fora de um repositório git").out.trim()
   const head = exigir(run("git", ["rev-parse", "HEAD"], { cwd: root }), 5, "HEAD inválido").out.trim()
   const protocolo = JSON.parse(fs.readFileSync(path.join(root, "docs/ai-execution/protocol.json"), "utf8"))
@@ -140,14 +180,14 @@ export async function runOfficialTests({ hardening = false } = {}) {
   const novas = migsHead.filter((m) => !migsBase.has(m)).sort()
   log(`migrations novas no HEAD: ${novas.join(", ") || "(nenhuma)"}`)
   if (!(await portaLivre(PORT))) throw new Falha(5, `porta ${PORT} ocupada — o runner não reutiliza servidor existente`)
-  const pg = binPostgres()
+  const pg = binPostgres({ requireServer: frontend })
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "omni-pessoas-test-"))
   const relativo = path.relative(root, tmp)
   if (!(relativo === ".." || relativo.startsWith(".." + path.sep) || path.isAbsolute(relativo))) {
     throw new Falha(5, "workspace temporário cairia dentro da worktree")
   }
   const ws = path.join(tmp, "ws"), dados = path.join(tmp, "pg")
-  let pgLigado = false, summary
+  let pgLigado = false, summary, preflight
   try {
     fs.mkdirSync(ws)
     const tar = path.join(tmp, "head.tar")
@@ -159,11 +199,39 @@ export async function runOfficialTests({ hardening = false } = {}) {
     }
     log(`workspace externo: ${tmp}`)
     const env = envFilho(tmp)
+    if (frontend) {
+      env.AUTH_SECRET = randomBytes(32).toString("base64"); env.AUTH_TRUST_HOST = "true"
+      for (const key of ["PESSOAS_CPF_ENC_KEY", "PESSOAS_CPF_HMAC_KEY", "PESSOAS_DOCUMENT_INTENT_KEY"]) env[key] = randomBytes(32).toString("base64")
+    }
+    if (frontend) {
+      if (Number(process.versions.node.split(".")[0]) !== 24) throw new Falha(5, "frontend exige Node 24")
+      env.NPM_CONFIG_CACHE = path.join(tmp, "npm-cache")
+      fs.mkdirSync(env.NPM_CONFIG_CACHE)
+      const directories = [ws, env.NPM_CONFIG_CACHE, path.join(root, "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001")]
+      preflight = { node: process.version, npm: exigir(run(process.execPath, [npmCli(), "--version"], { cwd: ws, env }), 5, "versão npm").out.trim(),
+        os: { platform: os.platform(), release: os.release(), arch: os.arch() },
+        workspace: ws, cache: env.NPM_CONFIG_CACHE, evidence: directories[2],
+        postgresql: Object.fromEntries(["initdb", "pg_ctl", "psql", "postgres"].map(binary =>
+          [binary, exigir(run(pg(binary), ["--version"], { cwd: ws, env }), 5, "versão " + binary).out.trim()])),
+        space: [frontendSpace(directories, "antes da instalação")] }
+      log("preflight frontend: " + JSON.stringify(preflight))
+    }
     const npm = (args) => run(process.execPath, [npmCli(), ...args], { cwd: ws, env })
     log("npm ci (lockfile) + prisma generate no workspace externo…")
     exigir(npm(["ci", "--no-audit", "--no-fund", "--prefer-offline", "--loglevel=error"]), 5, "npm ci")
     const prisma = (args) => run(process.execPath, [path.join(ws, "node_modules/prisma/build/index.js"), ...args], { cwd: ws, env })
     exigir(prisma(["generate"]), 5, "prisma generate")
+    if (frontend) {
+      const initialFree = new Map(preflight.space[0].volumes.map(volume => [volume.volume, volume.freeBytes]))
+      const installed = frontendSpace([ws, env.NPM_CONFIG_CACHE, preflight.evidence], "após instalação")
+      const measured = Math.max(0, ...installed.volumes.map(volume => (initialFree.get(volume.volume) ?? volume.freeBytes) - volume.freeBytes))
+      preflight.minimumBytes = Math.max(12 * 1024 ** 3, measured)
+      preflight.space.push(frontendSpace([ws, env.NPM_CONFIG_CACHE, preflight.evidence], "reserva medida", preflight.minimumBytes))
+      preflight.chromium = chromiumPreflight(ws, env)
+      log("Chromium: " + JSON.stringify(preflight.chromium))
+      log("npm run typecheck antes das suítes completas/build/E2E…")
+      exigir(npm(["run", "typecheck"]), 1, "npm run typecheck prévio")
+    }
     const versao = JSON.parse(fs.readFileSync(path.join(ws, "node_modules/@ducanh2912/next-pwa/package.json"), "utf8")).version
     const lock = JSON.parse(fs.readFileSync(path.join(ws, "package-lock.json"), "utf8")).packages["node_modules/@ducanh2912/next-pwa"].version
     if (versao !== lock || (hardening && versao !== "10.2.9")) throw new Falha(1, "contrato instalado next-pwa diverge do planejamento/lockfile")
@@ -190,25 +258,33 @@ export async function runOfficialTests({ hardening = false } = {}) {
     if (drift.code !== 0) throw new Falha(1, `drift migration × schema.prisma: ${(drift.out + drift.err).trim().slice(0, 1500)}`)
     log("drift migration × schema.prisma: nenhum")
     const json = path.join(tmp, "vitest.json")
-    const t = run(process.execPath, [path.join(ws, "node_modules/vitest/vitest.mjs"), "run", "lib/pessoas", "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile.json=${json}`], { cwd: ws, env, inherit: true })
+    const t = run(process.execPath, [path.join(ws, "node_modules/vitest/vitest.mjs"), "run", "lib/pessoas", ...(frontend ? ["scripts/pessoas/frontend.contract.test.ts", "scripts/pessoas/frontend.integration.test.ts"] : []), "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile.json=${json}`], { cwd: ws, env, inherit: true })
     if (!fs.existsSync(json)) throw new Falha(1, `vitest não produziu relatório (exit ${t.code})`)
     const rel = JSON.parse(fs.readFileSync(json, "utf8"))
     log(`vitest: ${rel.numPassedTests} passaram · ${rel.numFailedTests} falharam · ${rel.numPendingTests} pulados · ${rel.numTodoTests} todo`)
-    if (t.code !== 0 || !rel.success || rel.numFailedTests > 0) throw new Falha(1, "testes falharam")
+    const localFailures = []
+    if (t.code !== 0 || !rel.success || rel.numFailedTests > 0) {
+      if (!frontend) throw new Falha(1, "testes falharam")
+      localFailures.push("testes falharam")
+    }
     if (rel.numPendingTests > 0 || rel.numTodoTests > 0 || !rel.numTotalTests ||
-        rel.testResults.some((f) => f.assertionResults.some((a) => a.status !== "passed"))) throw new Falha(1, "testes pulados/todo/não executados — PASS oco recusado")
+        rel.testResults.some((f) => f.assertionResults.some((a) => !["passed", ...(frontend ? ["failed"] : [])].includes(a.status)))) throw new Falha(1, "testes pulados/todo/não executados — PASS oco recusado")
+    const suite = (name) => { try { return suiteInteira(rel, name) } catch (error) { if (!frontend) throw error; localFailures.push(error.message); return 0 } }
     summary = { head, base, total: rel.numTotalTests, skipped: rel.numPendingTests, todo: rel.numTodoTests,
-      integration: suiteInteira(rel, INTEGRACAO), invariants }
+      integration: suite(INTEGRACAO), invariants,
+      ...(frontend ? { preflight, typecheck: "PASS", frontendContract: suite("scripts/pessoas/frontend.contract.test.ts"),
+        frontendIntegration: suite("scripts/pessoas/frontend.integration.test.ts"), historicoPrivacidade: suite("lib/pessoas/historico-privacidade.test.ts") } : {}) }
     if (hardening) {
-      summary.hardening = suiteInteira(rel, HARDENING)
+      summary.hardening = suite(HARDENING)
       const { inspectPwaBuild } = await import(pathToFileURL(path.join(ws, "scripts/pessoas/inspect-pwa-build.mjs")).href)
       const build = () => {
+        if (frontend) preflight.space.push(frontendSpace([ws, env.NPM_CONFIG_CACHE, preflight.evidence, preflight.chromium.executable], "antes do build", preflight.minimumBytes))
         log("npm run build (PWA habilitado, sem autoridade de migration)…")
         const b = exigir(npm(["run", "build"]), 1, "npm run build")
         if (!b.out.includes("MIGRATION_SKIPPED") || /MIGRATION_(?:RUN|SUCCEEDED)/.test(b.out)) throw new Falha(1, "build não confirmou MIGRATION_SKIPPED")
         log("npm run build PASS · MIGRATION_SKIPPED")
       }
-      const failures = []
+      const failures = [...localFailures]
       const conferirEtapa = async (name, executar) => {
         try { await executar(); log(name + " PASS") }
         catch (error) { failures.push(name + ": " + error.message); log(name + " FAIL: " + error.message) }
@@ -217,12 +293,12 @@ export async function runOfficialTests({ hardening = false } = {}) {
       await conferirEtapa("build oficial", () => { build(); built = true })
       if (built) await conferirEtapa("aceite PWA", async () => { summary.pwa = await inspectPwaBuild(ws, log) })
       // Diagnósticos independentes continuam mesmo se o aceite PWA falhar.
-      await conferirEtapa("npm run typecheck", () => {
+      if (!frontend) await conferirEtapa("npm run typecheck", () => {
         exigir(npm(["run", "typecheck"]), 1, "npm run typecheck")
         summary.typecheck = "PASS"
       })
       await conferirEtapa("ESLint focado", () => {
-        exigir(run(process.execPath, [path.join(ws, "node_modules/eslint/bin/eslint.js"), "lib/pessoas", "scripts/pessoas", "next.config.mjs", "--max-warnings=0"], { cwd: ws, env }), 1, "ESLint focado")
+        exigir(run(process.execPath, [path.join(ws, "node_modules/eslint/bin/eslint.js"), "lib/pessoas", "scripts/pessoas", "next.config.mjs", ...(frontend ? ["app/dashboard/pessoas", "components/dashboard/pessoas", "app/api/pessoas/disponibilidade", "lib/navigation/dashboard-nav-items.ts", "components/painel-inicial/Sidebar.tsx", "components/painel-inicial/MobileNavSheet.tsx"] : []), "--max-warnings=0"], { cwd: ws, env }), 1, "ESLint focado")
         summary.lint = "PASS"
       })
       if (failures.length) throw new Falha(1, failures.join("\n"))
@@ -231,6 +307,30 @@ export async function runOfficialTests({ hardening = false } = {}) {
       await inspectPwaBuild(ws, log)
       summary.build = "PASS"
       summary.p2034MaxAttempts = 3
+      if (frontend) {
+        const port = await new Promise((resolve, reject) => { const server = net.createServer(); server.once("error", reject); server.listen(0, "127.0.0.1", () => { const port = server.address().port; server.close(() => resolve(port)) }) })
+        summary.globalLintExit = npm(["run", "lint"]).code
+        summary.e2e = {}
+        for (const flag of ["on", "off"]) {
+          const report = path.join(tmp, "playwright-" + flag + ".json")
+          const e2eEnv = { ...env, PESSOAS_E2E_ARTIFACTS: path.join(tmp, "visual-" + flag), PESSOAS_DP_ENABLED: flag, PESSOAS_TEST_PORT: String(port), NEXTAUTH_URL: "http://127.0.0.1:" + port, PESSOAS_E2E_REPORT: report }
+          exigir(run(process.execPath, [path.join(ws, "node_modules/@playwright/test/cli.js"), "test", "--config=scripts/pessoas/playwright.frontend.config.ts"], { cwd: ws, env: e2eEnv, inherit: true }), 1, "E2E " + flag)
+          if (!fs.existsSync(report)) throw new Falha(1, "E2E sem relatório")
+          const result = JSON.parse(fs.readFileSync(report, "utf8"))
+          if (!result.stats.expected || result.stats.unexpected || result.stats.skipped || result.stats.flaky) throw new Falha(1, "E2E incompleto")
+          summary.e2e[flag] = result.stats
+          const visual = path.join(tmp, "visual-" + flag)
+          const destination = path.join(root, "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/visual")
+          if (fs.existsSync(visual)) {
+            fs.mkdirSync(destination, { recursive: true })
+            for (const file of fs.readdirSync(visual, { recursive: true })) if (file.endsWith(".png")) {
+              fs.copyFileSync(path.join(visual, file), path.join(destination, path.basename(file)))
+            }
+          }
+          if (!(await portaLivre(port))) throw new Falha(5, "E2E deixou servidor ativo")
+        }
+        summary.previewR2 = "PENDENTE_NAO_AUTORIZADO"
+      }
     }
   } finally {
     let cleanupError

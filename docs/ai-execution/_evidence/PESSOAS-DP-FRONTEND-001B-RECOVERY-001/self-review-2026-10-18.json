@@ -1,0 +1,93 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-18",
+  "timezone": "America/Sao_Paulo",
+  "pr": 273,
+  "referenceHead": "12022ff41c2046350f4c4ab2aff5681e24b95410",
+  "mainHead": "976ebaa294e09441ce0c5be7bbe5776a568f4013",
+  "base": "1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d",
+  "lastFunctionalCommit": "6cd20313ad7f1404a99d691644c82fc92ae47a55",
+  "independentReview": "WAIVED_BY_HUMAN_DECISION",
+  "selfReview": "CODEX",
+  "independentReviewPerformed": false,
+  "humanDecision": {
+    "source": "DIRECT_USER_MESSAGE_IN_THIS_CHAT",
+    "date": "2026-10-18",
+    "scope": "PR_273_ONLY",
+    "condition": "SELF_REVIEW_WITHOUT_BLOCKING_FINDINGS",
+    "conditionSatisfied": false,
+    "reason": "P2_STORE_ID_DOCUMENTS_OPEN",
+    "externalAiAuthorized": false
+  },
+  "humanMergeAuthorization": "PENDING",
+  "findings": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 1,
+    "items": [
+      {
+        "id": "P2-01",
+        "file": "lib/pessoas/documentos/service.ts",
+        "line": 55,
+        "impact": "DOCUMENTS_REJECT_VALID_SHORT_STORE_IDS",
+        "origin": "PREEXISTING_001A",
+        "withinAllowlist": false,
+        "fixed": false
+      }
+    ]
+  },
+  "validation": {
+    "verifyAll": "PASS_EXIT_0",
+    "check": "FAIL_ITEM_10",
+    "checkHead": "12022ff41c2046350f4c4ab2aff5681e24b95410",
+    "runner": "INFRASTRUCTURE_FAILURE_EXIT_5",
+    "reason": "INSUFFICIENT_DISK_RESERVE",
+    "minimumBytes": 12884901888,
+    "observedInitialFreeBytes": 2058362880,
+    "node": "v24.14.1",
+    "postgresBinaries": "17_PRESENT",
+    "npmCi": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "vitest": "NOT_RUN",
+    "postgresIntegration": "NOT_RUN",
+    "build": "NOT_RUN",
+    "pwa": "NOT_RUN",
+    "lint": "NOT_RUN",
+    "playwright": "NOT_RUN",
+    "fullVisualMatrix": "PENDING"
+  },
+  "integration": {
+    "branchPaths": 58,
+    "mainPaths": 596,
+    "netPathOverlap": [],
+    "checkUpstream": "AVISO_REBASE_NEEDED_9_COMMITS_IN_ALLOWLIST_PATTERNS",
+    "combinedBuild": "NOT_RUN"
+  },
+  "qaEvidence": {
+    "reused": [
+      "QA_BASELINE_PREVIEW_2026-10-15.json",
+      "QA_R2_PREVIEW_2026-10-16.json"
+    ],
+    "repeated": false,
+    "deployedSha": "cdcd29f2463f98e971034932abfd6a3bc739913f",
+    "productEquivalent": true,
+    "shortStoreIdsCovered": false,
+    "fullRuntimeApproval": false
+  },
+  "aep": {
+    "close": "NOT_RUN",
+    "goalMetadataChanged": false,
+    "ledgerChanged": false,
+    "stateChanged": false,
+    "registryChanged": false,
+    "gatesChanged": false,
+    "attempt": 1,
+    "maxAttempts": 3,
+    "ratification": false
+  },
+  "productCodeChanged": false,
+  "mergeReadiness": "BLOCKED",
+  "productionChanged": false,
+  "goal002Started": false,
+  "nextAction": "HUMAN_PLANNING_FOR_SERVICE_ALLOWLIST_AND_AT_LEAST_12_GIB_PER_VOLUME"
+}

@@ -51,7 +51,8 @@ function validarBytes(ext: Extensao, bytes: Buffer) {
 }
 
 function refCanonica(p: Pick<Intent, "empregadorId" | "storeId" | "documentoId">) {
-  for (const value of [p.empregadorId, p.storeId, p.documentoId]) {
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(p.storeId)) throw new PessoasError("INTENT_INVALIDO", 403)
+  for (const value of [p.empregadorId, p.documentoId]) {
     if (!/^[A-Za-z0-9_-]{8,100}$/.test(value)) throw new PessoasError("INTENT_INVALIDO", 403)
   }
   return `pessoas/${p.empregadorId}/${p.storeId}/${p.documentoId}`

@@ -1,0 +1,15 @@
+[pessoas-test] HEAD c16165b1e361684944c81a8d4ff408f7c6fedf33 · base 180a2f2ab450cc2686b5087dc09b1a0ee58b5f72 (merge-base origin/main)
+[pessoas-test] migrations novas no HEAD: (nenhuma)
+[pessoas-test] workspace externo: C:\Users\rafae\AppData\Local\Temp\omni-pessoas-test-Is6eAx
+[pessoas-test] reserva antes da instalação: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-Is6eAx\\ws","freeBytes":14765408256,"minimumBytes":12884901888}
+[pessoas-test] preflight frontend: {"node":"v24.14.1","npm":"11.11.0","os":{"platform":"win32","release":"10.0.26200","arch":"x64"},"workspace":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-Is6eAx\\ws","cache":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-Is6eAx\\npm-cache","evidence":"C:\\Projetos\\omni-gestao-pessoas-001b-recovery-001\\docs\\ai-execution\\_evidence\\PESSOAS-DP-FRONTEND-001B-RECOVERY-001","postgresql":{"initdb":"initdb (PostgreSQL) 17.10","pg_ctl":"pg_ctl (PostgreSQL) 17.10","psql":"psql (PostgreSQL) 17.10","postgres":"postgres (PostgreSQL) 17.10"},"space":[{"stage":"antes da instalação","volumes":[{"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-Is6eAx\\ws","freeBytes":14765408256,"minimumBytes":12884901888}]}]}
+[pessoas-test] npm ci (lockfile) + prisma generate no workspace externo…
+[pessoas-test] reserva após instalação: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-Is6eAx\\ws","freeBytes":13421813760,"minimumBytes":12884901888}
+[pessoas-test] reserva reserva medida: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-Is6eAx\\ws","freeBytes":13421813760,"minimumBytes":12884901888}
+[pessoas-test] Chromium: {"playwright":"1.52.0","chromium":"136.0.7103.25","executable":"C:\\Users\\rafae\\AppData\\Local\\ms-playwright\\chromium-1169\\chrome-win\\chrome.exe"}
+[pessoas-test] npm run typecheck antes das suítes completas/build/E2E…
+[pessoas-test] CLEANUP PASS · cluster/workspace/node_modules/.next/SW/relatórios removidos · porta 55439 livre
+[pessoas-test] FALHA: npm run typecheck prévio (exit 2) > omni-gestao-pro@0.1.0 typecheck
+> node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js --noEmit
+
+scripts/pessoas/frontend.contract.test.ts(655,54): error TS2322: Type '"doc-stage"' is not assignable to type '`${string}-${string}-${string}-${string}-${string}`'.

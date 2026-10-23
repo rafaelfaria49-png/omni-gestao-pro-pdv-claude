@@ -1,0 +1,22 @@
+{
+  "diagnostic": "EXACT_SOURCE_HELPER_ONLY_NO_DB_NETWORK_OR_STORAGE",
+  "outcomes": [
+    {
+      "storeId": "loja-1",
+      "result": "REJECTED",
+      "code": "INTENT_INVALIDO",
+      "status": 403
+    },
+    {
+      "storeId": "loja-2",
+      "result": "REJECTED",
+      "code": "INTENT_INVALIDO",
+      "status": 403
+    },
+    {
+      "storeId": "qa-pessoas-a",
+      "result": "ACCEPTED",
+      "storageRef": "pessoas/employer-synthetic/qa-pessoas-a/00000000-0000-4000-8000-000000000001"
+    }
+  ]
+}

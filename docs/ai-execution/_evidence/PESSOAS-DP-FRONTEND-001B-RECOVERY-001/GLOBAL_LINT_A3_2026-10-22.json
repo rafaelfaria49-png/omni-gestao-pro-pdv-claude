@@ -1,0 +1,6 @@
+{
+  "head": "9acf18758f4db32aed2cb7ac79d64baed244dda5",
+  "command": "npm run lint",
+  "exitCode": 1,
+  "classification": "DIAGNOSTIC_ONLY_PER_GOAL"
+}

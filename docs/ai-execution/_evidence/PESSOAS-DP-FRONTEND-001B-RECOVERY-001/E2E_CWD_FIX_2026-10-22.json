@@ -1,0 +1,50 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-22",
+  "evaluatedHead": "6752c2e525f8d35a830122a0e86c74900ff08f6f",
+  "disk": {
+    "beforeFreeBytes": 49116999680,
+    "operationalTargetGiB": 24,
+    "cachePathsDeleted": [],
+    "cacheCleanupNeeded": false
+  },
+  "runner": {
+    "typecheck": "PASS",
+    "vitest": {
+      "total": 162,
+      "passed": 162,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "frontendContract": 39,
+      "frontendIntegration": 25,
+      "backend": 98
+    },
+    "focusedLint": "PASS",
+    "firstBuild": "PASS_MIGRATION_SKIPPED",
+    "firstPwa": "PASS",
+    "secondBuild": "PASS_MIGRATION_SKIPPED",
+    "secondPwa": "PASS",
+    "globalLint": "EXECUTED_DIAGNOSTIC_RESULT_NOT_PRESERVED",
+    "e2eOn": "FAILED_BEFORE_SERVER_START",
+    "e2eOff": "NOT_RUN",
+    "close": "ABORTED_ITEM_10",
+    "cleanup": "workspace removed; no ratification"
+  },
+  "failure": {
+    "code": "MODULE_NOT_FOUND",
+    "wrongPath": "ws/scripts/pessoas/node_modules/next/dist/bin/next",
+    "cause": "Playwright defaults webServer cwd to config directory"
+  },
+  "fix": {
+    "file": "scripts/pessoas/playwright.frontend.config.ts",
+    "change": "Resolve webServer cwd two levels above config directory, at workspace root",
+    "assertionsWeakened": false,
+    "globalConfigChanged": false
+  },
+  "session": {
+    "transition": "Official attempt --fail: 1 -> 2; original opening and refresh provenance preserved",
+    "manualMarkerEdit": false
+  },
+  "next": "Commit fix and repeat official close on new immutable HEAD; no PASS inferred for new HEAD yet"
+}

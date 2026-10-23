@@ -1,0 +1,35 @@
+AEP/1.0-R2 · check pessoas · GOAL PESSOAS-DP-FRONTEND-001B-RECOVERY-001 (tentativa 2/3)
+
+ 1 [PASS ] branch atual = branch do GOAL
+      evidência: git rev-parse --abbrev-ref HEAD → goal/pessoas-001b-recovery-001 (esperado goal/pessoas-001b-recovery-001)
+ 2 [PASS ] worktree = a registrada no open
+      evidência: git rev-parse --show-toplevel → C:/Projetos/omni-gestao-pessoas-001b-recovery-001 (esperado C:/Projetos/omni-gestao-pessoas-001b-recovery-001)
+ 3 [PASS ] árvore limpa
+      evidência: git status --porcelain → (vazio)
+ 4 [PASS ] HEAD aponta para um commit
+      evidência: git rev-parse --verify HEAD^{commit} → 1b418c804717c4b5da677952ff181e244a911e02
+ 5 [PASS ] base_commit é ancestral da branch
+      evidência: git merge-base --is-ancestor 13700862405a89da3c7d16702318735a88348133 goal/pessoas-001b-recovery-001 → ancestral confirmado
+ 6 [PASS ] caminhos do diff dentro da allowlist
+      evidência: git diff --name-only 13700862405a89da3c7d16702318735a88348133..HEAD → 75 caminho(s), todos dentro
+ 7 [PASS ] nenhum gate de caminho não liberado
+      evidência: git diff --name-only 13700862405a89da3c7d16702318735a88348133..HEAD → nenhum gate tocado
+ 8 [PASS ] docs/execution-tracks/*/goals/** não alterado
+      evidência: git diff --name-only 13700862405a89da3c7d16702318735a88348133..HEAD → caminho quente intocado
+ 9 [PASS ] LEDGER.jsonl sem deleções
+      evidência: git diff --numstat 13700862405a89da3c7d16702318735a88348133..HEAD -- docs/execution-tracks/pessoas/LEDGER.jsonl → 0 linha removida
+10 [FAIL ] teste do GOAL passa
+      evidência: node scripts/pessoas/run-frontend-tests.mjs → exit 1 | [pessoas-test] FALHA: E2E on (exit 1)
+11 [AVISO] upstream origin/main no escopo
+      evidência: git fetch origin && git log 13700862405a89da3c7d16702318735a88348133..origin/main → rebase_needed: 6 commit(s) upstream no escopo: e257393 fix(platform): wait for store context before mobile navigation | 38e29c7 fix(platform): preserve shared flows and verify tenant privacy | 52c01c3 feat(platform): isolate pilot access and controlled provisioning
+12 [AVISO] próximo GOAL elegível (informativo)
+      evidência: ls docs/execution-tracks/pessoas/goals/ → nenhum — fechar o último GOAL da trilha é permitido
+
+check: FALHOU em 10 — nada foi escrito.
+
+close ABORTADO. Nenhum arquivo versionado foi escrito.
+.aep-active PRESERVADO — a sessão continua no mesmo GOAL e na mesma tentativa.
+Corrija os itens FAIL e rode de novo: node scripts/track.mjs close pessoas
+Se a abordagem falhou: node scripts/track.mjs attempt pessoas --fail --reason="..."
+
+CONTEXTO: CONTINUE

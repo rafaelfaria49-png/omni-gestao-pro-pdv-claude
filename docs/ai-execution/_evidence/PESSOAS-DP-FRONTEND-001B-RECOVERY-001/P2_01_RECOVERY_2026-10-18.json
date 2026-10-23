@@ -1,0 +1,133 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-18",
+  "timezone": "America/Sao_Paulo",
+  "branch": "goal/pessoas-001b-recovery-001",
+  "worktree": "C:/Projetos/omni-gestao-pessoas-001b-recovery-001",
+  "mainIntegrated": "180a2f2ab450cc2686b5087dc09b1a0ee58b5f72",
+  "pr284": {
+    "merged": true,
+    "mergedBy": "rafaelfaria49-png",
+    "mergedAt": "2026-10-18T23:16:44Z"
+  },
+  "updateBranch": {
+    "mechanism": "GitHub PUT pulls/273/update-branch",
+    "expectedHead": "5eac8be5820f0d9a9ef0374e52bf1603112f78ca",
+    "mergeCommit": "1c3ce6b57fdc8d3eeeb19fd414d713eb3c524527",
+    "localSynchronization": "FAST_FORWARD_ONLY"
+  },
+  "functionalHead": "d3e19a4aa4ce4f79aa39d57402d361e194b754b6",
+  "aepRefresh": {
+    "dryRun": "PASS",
+    "apply": "PASS",
+    "planRevision": 6,
+    "goalBlob": "9f3ee05b4d920b81ccccbd6c7d431d2cd95d63fa",
+    "goalIdenticalInHeadMainMergeBase": true,
+    "item8": "PRESERVED",
+    "addition": [
+      "lib/pessoas/documentos/service.ts"
+    ],
+    "previousMarkerSha256": "ca76b04e214e25c20ff54fc2fbcaf9bb3f1c8eebc8e2cae4b9d68c65744f077f",
+    "attempt": 1,
+    "maxAttempts": 3,
+    "openedAt": "2026-10-12T23:27:06.181Z",
+    "attemptsLog": [],
+    "allOtherExistingMarkerFields": "UNCHANGED"
+  },
+  "correction": {
+    "status": "IMPLEMENTED_POSTGRES_REGRESSION_PENDING",
+    "helper": "refCanonica",
+    "storeGrammar": "^[A-Za-z0-9_-]{1,100}$",
+    "employerDocumentGrammar": "^[A-Za-z0-9_-]{8,100}$",
+    "namespace": "pessoas/{empregadorId}/{storeId}/{documentoId}",
+    "productFiles": [
+      "lib/pessoas/documentos/service.ts",
+      "scripts/pessoas/frontend.integration.test.ts"
+    ]
+  },
+  "focused": {
+    "status": "PASS",
+    "method": "Node 24 stripTypeScriptTypes + execution of actual refCanonica in VM; no database, storage or network",
+    "assertions": 24,
+    "integrationSyntax": "PASS",
+    "postgresExecuted": false,
+    "plannedNewIntegrationCases": 20,
+    "coverage": [
+      "loja-1",
+      "loja-2",
+      "QA long ID",
+      "1 and 100 character boundaries",
+      "invalid Store/employer/document IDs",
+      "intent/complete/list/download",
+      "cross-Store with valid memberships and grants",
+      "tampered namespace and employer"
+    ]
+  },
+  "runner": {
+    "command": "node scripts/pessoas/run-frontend-tests.mjs",
+    "exitCode": 5,
+    "status": "FAIL_POST_INSTALL_DISK_PREFLIGHT",
+    "node": "v24.14.1",
+    "npm": "11.11.0",
+    "postgresqlBinaries": "17.10",
+    "npmCi": "COMPLETED",
+    "prismaGenerate": "COMPLETED",
+    "minimumFreeBytes": 12884901888,
+    "beforeInstallFreeBytes": 13067345920,
+    "afterInstallFreeBytes": 11607539712,
+    "typecheck": "NOT_RUN",
+    "vitest": "NOT_RUN",
+    "lint": "NOT_RUN",
+    "build": "NOT_RUN",
+    "pwa": "NOT_RUN",
+    "e2e": "NOT_RUN",
+    "cleanup": "PASS",
+    "temporaryWorkspaceAbsent": true,
+    "port55439": "FREE_VERIFIED_BY_OFFICIAL_RUNNER",
+    "logTail": "[pessoas-test] reserva após instalação: {\"volume\":\"C:\\\\:3255495063\",\"directory\":\"C:\\\\Users\\\\rafae\\\\AppData\\\\Local\\\\Temp\\\\omni-pessoas-test-KKkU2j\\\\ws\",\"freeBytes\":11607539712,\"minimumBytes\":12884901888}\n[pessoas-test] CLEANUP PASS · cluster/workspace/node_modules/.next/SW/relatórios removidos · porta 55439 livre\n[pessoas-test] FALHA: reserva insuficiente no volume C:\\:3255495063; não iniciar a próxima etapa\n{\"RunnerExit\":5,\"FreeBytes\":13141671936,\"FreeGiB\":12.239}\r\n"
+  },
+  "selfReview": {
+    "author": "Codex",
+    "family": "openai",
+    "type": "SELF_REVIEW_NOT_INDEPENDENT",
+    "scope": "Correction, new regression and integration of main; previous integral review reused without new general audit",
+    "staticFindings": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0
+    },
+    "technicalAcceptance": "PENDING_DISK_BLOCKED",
+    "independentReview": "WAIVED_BY_HUMAN_DECISION",
+    "waiverConditionSatisfied": false,
+    "humanMergeAuthorization": "PENDING"
+  },
+  "verifyAll": "PASS",
+  "aepClose": "NOT_RUN_REQUIRED_TECHNICAL_GATES_PENDING",
+  "qaSmokes": "REUSED_HISTORICAL_EVIDENCE_2026_10_15_AND_16_NOT_RERUN_OR_PROMOTED_TO_NEW_HEAD",
+  "disk": {
+    "afterCleanupFreeBytes": 13141671936,
+    "afterCleanupFreeGiB": 12.239,
+    "additionalDeletion": "NONE",
+    "cleanupApproval": "PENDING",
+    "candidates": [
+      {
+        "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005/.next",
+        "logicalBytes": 1816226473
+      },
+      {
+        "path": "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007/.next",
+        "logicalBytes": 2526388504
+      }
+    ],
+    "candidateInspection": "No reparse points in ancestors/descendants and no visible process consumers at inspection; recheck required immediately before any authorized deletion",
+    "candidateSizeCaveat": "Logical bytes, not guaranteed physically reclaimable bytes"
+  },
+  "blockers": [
+    "INSUFFICIENT_POST_INSTALL_DISK_RESERVE_CLEANUP_AUTHORIZATION_PENDING"
+  ],
+  "nextAction": "Authorize only the two identified .next directories; then remeasure physical space, rerun required validation and close only after all gates pass",
+  "productPr273": "OPEN_DRAFT",
+  "productionActivation": false,
+  "goal002Started": false,
+  "dockerUsed": false
+}

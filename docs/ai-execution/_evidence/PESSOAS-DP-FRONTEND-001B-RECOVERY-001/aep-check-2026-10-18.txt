@@ -1,0 +1,28 @@
+AEP/1.0-R2 · check pessoas · GOAL PESSOAS-DP-FRONTEND-001B-RECOVERY-001 (tentativa 1/3)
+
+ 1 [PASS ] branch atual = branch do GOAL
+      evidência: git rev-parse --abbrev-ref HEAD → goal/pessoas-001b-recovery-001 (esperado goal/pessoas-001b-recovery-001)
+ 2 [PASS ] worktree = a registrada no open
+      evidência: git rev-parse --show-toplevel → C:/Projetos/omni-gestao-pessoas-001b-recovery-001 (esperado C:/Projetos/omni-gestao-pessoas-001b-recovery-001)
+ 3 [PASS ] árvore limpa
+      evidência: git status --porcelain → (vazio)
+ 4 [PASS ] HEAD aponta para um commit
+      evidência: git rev-parse --verify HEAD^{commit} → 12022ff41c2046350f4c4ab2aff5681e24b95410
+ 5 [PASS ] base_commit é ancestral da branch
+      evidência: git merge-base --is-ancestor 1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d goal/pessoas-001b-recovery-001 → ancestral confirmado
+ 6 [PASS ] caminhos do diff dentro da allowlist
+      evidência: git diff --name-only 1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d..HEAD → 58 caminho(s), todos dentro
+ 7 [PASS ] nenhum gate de caminho não liberado
+      evidência: git diff --name-only 1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d..HEAD → nenhum gate tocado
+ 8 [PASS ] docs/execution-tracks/*/goals/** não alterado
+      evidência: git diff --name-only 1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d..HEAD → caminho quente intocado
+ 9 [PASS ] LEDGER.jsonl sem deleções
+      evidência: git diff --numstat 1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d..HEAD -- docs/execution-tracks/pessoas/LEDGER.jsonl → 0 linha removida
+10 [FAIL ] teste do GOAL passa
+      evidência: node scripts/pessoas/run-frontend-tests.mjs → exit 5 | [pessoas-test] FALHA: reserva insuficiente no volume C:\:3255495063; não iniciar a próxima etapa
+11 [AVISO] upstream origin/main no escopo
+      evidência: git fetch origin && git log 1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d..origin/main → rebase_needed: 9 commit(s) upstream no escopo: 2b0ca49 aep(ops-v4-financeiro-retirada-garantia): close OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-003 | 3b87ee8 aep(ops-v4-datas-ui-promocao): close OPS-V4-DATAS-UI-PROMOCAO-001 | 9dbae6d aep(ops-v4-financeiro-retirada-garantia): close OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002
+12 [AVISO] próximo GOAL elegível (informativo)
+      evidência: ls docs/execution-tracks/pessoas/goals/ → nenhum — fechar o último GOAL da trilha é permitido
+
+check: FALHOU em 10 — nada foi escrito.
