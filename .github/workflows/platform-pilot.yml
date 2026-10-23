@@ -4,6 +4,8 @@ on:
     paths:
       - "auth*"
       - "proxy.ts"
+      - "next.config.mjs"
+      - "scripts/vercel-build*"
       - "lib/auth/**"
       - "lib/cadastros/**"
       - "lib/loja-ativa.tsx"
@@ -35,6 +37,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - run: node --test scripts/platform/verify-proxy-prisma-artifact.test.mjs scripts/vercel-build.test.mjs scripts/migration-authority-guard.test.mjs
       - run: node node_modules/vitest/vitest.mjs run lib/auth/pilot-access.test.ts lib/auth/enterprise-permissions.test.ts lib/auth/proxy-enterprise-dashboard.test.ts lib/auth/session-entitlement.test.ts lib/loja-ativa.pilot-context.test.ts app/actions/operacoes.pilot-access.test.ts --maxWorkers=1
       - run: npm run typecheck
   authenticated:
