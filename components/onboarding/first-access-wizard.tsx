@@ -35,7 +35,7 @@ function FirstAccessForStore({ storeId }: { storeId: string }) {
       <p>Os dados básicos desta unidade ainda estão incompletos.</p>
       <Button variant="outline" onClick={() => setOpen(true)}>Retomar configuração inicial</Button>
     </div>}
-    <WizardEditor storeId={storeId} open={open} onOpenChange={setOpen} onCompletedClose={() => { setStarted(false); setOpen(true) }} />
+    {open && <WizardEditor storeId={storeId} open={open} onOpenChange={setOpen} onCompletedClose={() => { setStarted(false); setOpen(true) }} />}
   </>
 }
 
@@ -106,7 +106,7 @@ function WizardEditor({ storeId, open, onOpenChange, onCompletedClose }: { store
             <Button type="submit" disabled={busy}>{saving ? "Salvando e conferindo…" : step < 3 ? "Continuar" : "Concluir"}</Button>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">Voltar depois mantém os dados já salvos; o preenchimento ainda não salvo fica apenas nesta sessão do assistente.</p>
+        <p className="text-xs text-muted-foreground">Voltar depois mantém os dados já salvos. Ao fechar o assistente, o preenchimento ainda não salvo é descartado.</p>
       </form>}
       {finished && <div className="space-y-4">
         <p role="status">Dados básicos salvos e conferidos.</p>

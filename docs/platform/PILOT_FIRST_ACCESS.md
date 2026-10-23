@@ -48,7 +48,9 @@ a sessão recebida do servidor. Políticas, guards e autenticação não foram a
 
 “Voltar depois” é dispensa local ao componente daquela identidade/unidade,
 com ação de retomada enquanto incompleta. Não é conclusão. Não são persistidos
-rascunhos, dados cadastrais ou senhas em storage/URL/log. Reabrir uma sessão lê o
+rascunhos, dados cadastrais ou senhas em storage/URL/log. Fechar o assistente descarta
+o preenchimento não salvo; retomar relê os dados que Geral ou outra sessão salvou.
+Reabrir uma sessão lê o
 que efetivamente foi salvo. Contatos são opcionais no contrato atual; dados não
 salvos precisam ser preenchidos novamente se o componente/sessão for encerrado.
 
@@ -77,7 +79,7 @@ O teste dedicado desliga traces, vídeos e screenshots automáticos e preenche
 senhas por evento, sem valores em call logs. Capturas manuais só ocorrem depois
 das etapas com credenciais. Nenhum storageState é exportado.
 
-Validação local: 18 testes de dados básicos/hook, assistente e montagem da sessão
+Validação local: 19 testes de dados básicos/hook, assistente e montagem da sessão
 aprovados e lint focado
 sem erros. Os gates de TypeScript, regressões de Plataforma/Cadastros, build e E2E
 integrados estão no CI. O build exige `PROXY_PRISMA_ARTIFACT_VERIFIED` e

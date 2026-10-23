@@ -263,6 +263,11 @@ test("operador sem configuração e payload para outra loja não gravam; A01 sin
   }
   expect(await db.store.findUniqueOrThrow({ where: { id: "pilot-a" } })).toEqual(before)
   await page.context().clearCookies()
+  await login(page, "admina@pilot.invalid", process.env.PILOT_PASSWORD_ADMINA!)
+  for (const suffix of ["", "/settings"]) {
+    expect((await page.request.put(`/api/stores/pilot-b${suffix}`, { headers: { "x-assistec-loja-id": "pilot-a" }, data: suffix ? { contactEmail: "attack@pilot.invalid" } : { name: "Ataque sintético" } })).status()).toBe(403)
+  }
+  await page.context().clearCookies()
   await login(page, "owner@pilot.invalid", process.env.PILOT_PASSWORD_OWNER!)
   const session = await (await page.request.get("/api/auth/session")).json()
   expect({ scope: session.user.accessScope, platform: session.user.platformAuthority, stores: session.user.storeAccess }).toEqual({ scope: null, platform: true, stores: "all" })
