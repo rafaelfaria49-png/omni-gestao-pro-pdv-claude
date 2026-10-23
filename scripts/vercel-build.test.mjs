@@ -13,6 +13,7 @@ import {
   STEP_MIGRATE,
   STEP_GENERATE,
   STEP_BUILD,
+  STEP_VERIFY_PROXY,
 } from './vercel-build.mjs';
 import {
   CANONICAL_VERCEL_PROJECT_ID,
@@ -43,7 +44,7 @@ const INVALID_GUARD_RESULTS = [
 
 test('local, preview e development não chamam baseline nem migrate', () => {
   for (const env of [{}, { VERCEL_ENV: 'preview' }, { VERCEL_ENV: 'development' }]) {
-    assert.deepEqual(buildSteps(env).map(label), [label(STEP_GENERATE), label(STEP_BUILD)]);
+    assert.deepEqual(buildSteps(env).map(label), [label(STEP_GENERATE), label(STEP_BUILD), label(STEP_VERIFY_PROXY)]);
   }
 });
 
@@ -53,6 +54,7 @@ test('production canônico autorizado roda baseline e migrate antes do build', (
     label(STEP_MIGRATE),
     label(STEP_GENERATE),
     label(STEP_BUILD),
+    label(STEP_VERIFY_PROXY),
   ]);
 });
 
@@ -142,7 +144,7 @@ test('todos os estados skipped executam zero baseline/migrate', () => {
   for (const env of skippedEnvironments) {
     const calls = [];
     assert.equal(main({ env, run: (step) => (calls.push(label(step)), 0), log: () => {} }), 0);
-    assert.deepEqual(calls, [label(STEP_GENERATE), label(STEP_BUILD)]);
+    assert.deepEqual(calls, [label(STEP_GENERATE), label(STEP_BUILD), label(STEP_VERIFY_PROXY)]);
   }
 });
 
@@ -159,7 +161,20 @@ test('build continua no legado mesmo com flag configurada', () => {
     log: (message) => logs.push(message),
   });
   assert.equal(code, 0);
-  assert.deepEqual(calls, [label(STEP_GENERATE), label(STEP_BUILD)]);
+  assert.deepEqual(calls, [label(STEP_GENERATE), label(STEP_BUILD), label(STEP_VERIFY_PROXY)]);
+  assert.deepEqual(logs, [MIGRATION_LOG.SKIPPED]);
+});
+
+test('artefato incompleto bloqueia o build depois do Next sem executar migrations', () => {
+  const calls = [];
+  const logs = [];
+  const code = main({
+    env: { VERCEL_ENV: 'production', VERCEL_PROJECT_ID: CANONICAL_VERCEL_PROJECT_ID, MIGRATION_AUTHORITY_ENABLED: 'false' },
+    run: (step) => (calls.push(label(step)), step === STEP_VERIFY_PROXY ? 1 : 0),
+    log: (message) => logs.push(message),
+  });
+  assert.equal(code, 1);
+  assert.deepEqual(calls, [label(STEP_GENERATE), label(STEP_BUILD), label(STEP_VERIFY_PROXY)]);
   assert.deepEqual(logs, [MIGRATION_LOG.SKIPPED]);
 });
 
@@ -231,13 +246,13 @@ test('fronteira do runner aceita somente BLOCK, SKIP e RUN exatos', async (t) =>
     {
       action: MIGRATION_GUARD_ACTION.SKIP,
       code: 0,
-      calls: [STEP_GENERATE, STEP_BUILD],
+      calls: [STEP_GENERATE, STEP_BUILD, STEP_VERIFY_PROXY],
       logs: [MIGRATION_LOG.SKIPPED],
     },
     {
       action: MIGRATION_GUARD_ACTION.RUN,
       code: 0,
-      calls: [STEP_BASELINE, STEP_MIGRATE, STEP_GENERATE, STEP_BUILD],
+      calls: [STEP_BASELINE, STEP_MIGRATE, STEP_GENERATE, STEP_BUILD, STEP_VERIFY_PROXY],
       logs: [MIGRATION_LOG.RUN, MIGRATION_LOG.SUCCEEDED],
     },
   ];

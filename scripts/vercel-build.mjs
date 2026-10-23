@@ -22,6 +22,7 @@ export const STEP_BASELINE = Object.freeze(['node', ['scripts/prisma-baseline.mj
 export const STEP_MIGRATE = Object.freeze(['npx', ['prisma', 'migrate', 'deploy']]);
 export const STEP_GENERATE = Object.freeze(['npx', ['prisma', 'generate']]);
 export const STEP_BUILD = Object.freeze(['npx', ['next', 'build', '--webpack']]);
+export const STEP_VERIFY_PROXY = Object.freeze(['node', ['scripts/platform/verify-proxy-prisma-artifact.mjs']]);
 
 export const MIGRATION_LOG = Object.freeze({
   RUN: 'MIGRATION_RUN',
@@ -55,9 +56,9 @@ function resolveMigrationAction(env, evaluate) {
 export function buildSteps(env = process.env, evaluate = evaluateMigrationAuthority) {
   const action = resolveMigrationAction(env, evaluate);
   if (action === MIGRATION_GUARD_ACTION.RUN) {
-    return [STEP_BASELINE, STEP_MIGRATE, STEP_GENERATE, STEP_BUILD];
+    return [STEP_BASELINE, STEP_MIGRATE, STEP_GENERATE, STEP_BUILD, STEP_VERIFY_PROXY];
   }
-  if (action === MIGRATION_GUARD_ACTION.SKIP) return [STEP_GENERATE, STEP_BUILD];
+  if (action === MIGRATION_GUARD_ACTION.SKIP) return [STEP_GENERATE, STEP_BUILD, STEP_VERIFY_PROXY];
   return [];
 }
 
@@ -107,7 +108,7 @@ export function main({
     log(MIGRATION_LOG.SUCCEEDED);
   }
 
-  for (const step of [STEP_GENERATE, STEP_BUILD]) {
+  for (const step of [STEP_GENERATE, STEP_BUILD, STEP_VERIFY_PROXY]) {
     const code = runSafely(run, step);
     if (code !== 0) return code || 1;
   }

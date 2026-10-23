@@ -48,6 +48,22 @@ test("landing e login apresentam acesso operacional sem cadastro/pagamento fict�
   await page.screenshot({ path: "test-results/platform-pilot/login.png", fullPage: true, animations: "disabled" })
 })
 
+test("formulário real de login estabelece sessão e atravessa o proxy", async ({ page }) => {
+  await page.goto("/login")
+  await page.getByLabel("Email", { exact: true }).fill("owner@pilot.invalid")
+  await page.getByLabel("Senha", { exact: true }).fill(password("owner"))
+  await Promise.all([
+    page.waitForURL(baseURL + "/dashboard"),
+    page.getByRole("button", { name: "Entrar", exact: true }).click(),
+  ])
+  const session = await (await page.request.get("/api/auth/session")).json()
+  expect({ id: session.user.id, platform: session.user.platformAuthority, stores: session.user.storeAccess }).toEqual({
+    id: "pilot-owner", platform: true, stores: "all",
+  })
+  await page.reload()
+  await expect(page).toHaveURL(baseURL + "/dashboard")
+})
+
 test("responsável legado mantém autoridade, visão interna e configurações", async ({ page }) => {
   const actor = await login("owner", "pilot-legacy")
   const s = await (await actor.get("/api/auth/session")).json()

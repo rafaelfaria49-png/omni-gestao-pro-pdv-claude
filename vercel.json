@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "node scripts/vercel-build.mjs",
-  "git": { "deploymentEnabled": { "codex/platform-pilot-access": false } },
+  "git": { "deploymentEnabled": { "codex/platform-pilot-access": false, "codex/fix-a01-login-proxy": false } },
 
   "headers": [
     {

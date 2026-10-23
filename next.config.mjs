@@ -146,6 +146,9 @@ const nextConfig = {
    * de películas). A rota `produto/[id]` lê do Prisma, não dos CSVs — sem include.
    */
   outputFileTracingIncludes: {
+    // Next 16/webpack aplica o include ao entry `proxy` antes de renomeá-lo
+    // para middleware.js. A revalidação da sessão precisa do engine no pacote.
+    proxy: ["./generated/prisma/*query_engine-*.node", "./generated/prisma/schema.prisma"],
     "/api/catalogo/aparelhos/search": ["./docs/catalogo/seeds/*.csv"],
     "/api/catalogo/peliculas/search": ["./docs/catalogo/seeds/*.csv"],
     "/api/fiscal/**": ["./lib/fiscal/provider/sefaz/trust/icp-brasil-v10.pem"],
