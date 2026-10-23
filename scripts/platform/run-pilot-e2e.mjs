@@ -49,7 +49,7 @@ try {
   await writeFile(path.join(out, "migration.json"), JSON.stringify({ applied: true, target: "fresh disposable CI PostgreSQL", legacyAuthorityPreserved: true, accountsReclassified: 0, passwordsChanged: 0, productionWrites: 0 }, null, 2))
   await db.store.createMany({ data: [
     { id: "pilot-a", name: "Padaria Piloto A" }, { id: "pilot-b", name: "Comércio Piloto B" },
-    { id: "pilot-initial-a", name: "Padaria Inicial A", phone: "11999990011", logoUrl: "/synthetic-logo.svg", address: { rua: "Rua Sintética A", complemento: "Fundos A", cadastroExtra: "preservado" } },
+    { id: "pilot-initial-a", name: "Padaria Inicial A", phone: "11999990011", logoUrl: "/synthetic-logo.svg", address: { rua: "Rua Sintética A", numero: 42, complemento: "Fundos A", cadastroExtra: "preservado" } },
     { id: "pilot-initial-b", name: "Padaria Inicial B", phone: "11999990022", logoUrl: "/synthetic-logo-b.svg", address: { rua: "Rua Sintética B" } },
   ] })
   for (const [id, branch] of [["pilot-a", "padaria"], ["pilot-b", "comercio"], ["pilot-legacy", "assistencia"], ["pilot-initial-a", "padaria"], ["pilot-initial-b", "padaria"]]) {

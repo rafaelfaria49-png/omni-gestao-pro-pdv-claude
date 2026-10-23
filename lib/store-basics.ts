@@ -5,17 +5,22 @@ export type AddressField = (typeof ADDRESS_FIELDS)[number]
 export type BasicField = "name" | "cnpj" | "phone" | "contactEmail" | "contactWhatsapp" | "contactWhatsappDono"
 const STORE_FIELDS = ["name", "cnpj", "phone"] as const
 const CONTACT_FIELDS = ["contactEmail", "contactWhatsapp", "contactWhatsappDono"] as const
-export type StoreBasics = Record<BasicField, string> & { address: Record<string, unknown> & Record<AddressField, string> }
+export type StoreBasics = Record<BasicField, string> & {
+  address: Record<string, unknown> & Record<AddressField, string>
+  /** Preserve the JSON reader's exact values/types for fields the operator did not edit. */
+  addressSource: Record<string, unknown>
+}
 export type BasicsIntent = Partial<Record<BasicField, string>> & { address?: Partial<Record<AddressField, string>> }
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const text = (value: unknown) => typeof value === "string" ? value.trim() : ""
 
 export function parseStoreBasics(store: Record<string, unknown>, settings: Record<string, unknown>): StoreBasics {
-  const address = { ...record(store.address) } as StoreBasics["address"]
-  for (const key of ADDRESS_FIELDS) address[key] = text(address[key])
+  const addressSource = { ...record(store.address) }
+  const address = { ...addressSource } as StoreBasics["address"]
+  for (const key of ADDRESS_FIELDS) address[key] = String(addressSource[key] ?? "").trim()
   return {
-    name: text(store.name), cnpj: text(store.cnpj), phone: text(store.phone), address,
+    name: text(store.name), cnpj: text(store.cnpj), phone: text(store.phone), address, addressSource,
     contactEmail: text(settings.contactEmail), contactWhatsapp: text(settings.contactWhatsapp), contactWhatsappDono: text(settings.contactWhatsappDono),
   }
 }
@@ -61,7 +66,7 @@ export async function saveStoreBasics(storeId: string, intent: BasicsIntent, sig
   const contactPatch: Record<string, unknown> = {}
   for (const key of STORE_FIELDS) if (remaining[key] !== undefined) storePatch[key] = remaining[key]
   for (const key of CONTACT_FIELDS) if (remaining[key] !== undefined) contactPatch[key] = remaining[key]
-  if (remaining.address) storePatch.address = { ...current.address, ...remaining.address }
+  if (remaining.address) storePatch.address = { ...current.addressSource, ...remaining.address }
   let failed = false
   const url = `/api/stores/${encodeURIComponent(storeId)}`
   try {

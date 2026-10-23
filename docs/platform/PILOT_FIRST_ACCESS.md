@@ -26,7 +26,9 @@ Assistente e Configurações → Geral compartilham `use-store-basics` e `store-
   Limpar um campo editável significa alterá-lo explicitamente para vazio.
 - Cada tentativa relê os dois readers autorizados antes de escrever. Campos
   persistidos que já correspondem à intenção deixam de ser reenviados. Endereço
-  conserva chaves não expostas a partir da releitura atual.
+  conserva chaves não expostas, ausências e tipos JSON originais a partir da
+  releitura atual. A versão textual para formulário não substitui valores não
+  editados (por exemplo, número legado `42` continua número ao editar a rua).
 - As duas chamadas PUT existentes são sequenciais. Não há transação entre HTTPs,
   writer paralelo ou nova fonte de Store/StoreSettings. Uma falha interrompe o
   despacho seguinte e leva à reconciliação pelos readers.
@@ -84,7 +86,7 @@ O teste dedicado desliga traces, vídeos e screenshots automáticos e preenche
 senhas por evento, sem valores em call logs. Capturas manuais só ocorrem depois
 das etapas com credenciais. Nenhum storageState é exportado.
 
-Validação local: 19 testes de dados básicos/hook, assistente e montagem da sessão
+Validação local: 20 testes de dados básicos/hook, assistente e montagem da sessão
 aprovados e lint focado
 sem erros. Os gates de TypeScript, regressões de Plataforma/Cadastros, build e E2E
 integrados estão no CI. O build exige `PROXY_PRISMA_ARTIFACT_VERIFIED` e

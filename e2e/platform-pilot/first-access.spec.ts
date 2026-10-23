@@ -210,7 +210,8 @@ test("falha de contatos, duplo clique e resposta incerta preservam dados e retom
   await expect(modal.getByLabel("Telefone", { exact: true })).toHaveValue("11999990011")
   await expect(modal.getByLabel("E-mail", { exact: true })).toHaveValue("pilot-initial-a@pilot.invalid")
   await modal.getByLabel("E-mail", { exact: true }).fill("retry@pilot.invalid")
-  await modal.getByLabel("Número", { exact: true }).fill("45")
+  await expect(modal.getByLabel("Número", { exact: true })).toHaveValue("42")
+  await modal.getByLabel("Rua", { exact: true }).fill("Rua Sintética A revisada")
   await modal.getByRole("button", { name: "Continuar", exact: true }).click()
   let fail = true, storePuts = 0, contactPuts = 0
   await page.route("**/api/stores/pilot-initial-a", async (route) => {
@@ -237,7 +238,7 @@ test("falha de contatos, duplo clique e resposta incerta preservam dados e retom
   expect({ storePuts, contactPuts }).toEqual({ storePuts: 1, contactPuts: 2 })
   await page.unrouteAll({ behavior: "wait" })
   const saved = await db.store.findUniqueOrThrow({ where: { id: "pilot-initial-a" } })
-  expect(saved).toMatchObject({ logoUrl: "/synthetic-logo.svg", phone: "11999990011", address: { rua: "Rua Sintética A", numero: "45", complemento: "Fundos A", cadastroExtra: "preservado" } })
+  expect(saved).toMatchObject({ logoUrl: "/synthetic-logo.svg", phone: "11999990011", address: { rua: "Rua Sintética A revisada", numero: 42, complemento: "Fundos A", cadastroExtra: "preservado" } })
   expect(await authority("pilot-initial-a", "onboardingmulti@pilot.invalid")).toEqual(before)
   await modal.getByRole("button", { name: "Fechar", exact: true }).click()
   await page.goto("/dashboard/configuracoes?sec=geral")
