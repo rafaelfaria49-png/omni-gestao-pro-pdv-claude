@@ -1,0 +1,333 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+  "kind": "FUTURE_SELECTIVE_TRANSPORT_PLAN_NOT_EXECUTED",
+  "recorded_date": "2026-10-23",
+  "timezone": "America/Sao_Paulo",
+  "repository": "rafaelfaria49-png/omni-gestao-pro-pdv-claude",
+  "source_ref": "refs/remotes/origin/goal/pessoas-001b-recovery-001",
+  "source_commit": "7a6df145e68bfea7eac14bf057a0904bb985dc02",
+  "source_local_preservation_ref": "refs/tags/preserve/pessoas-001b-recovery-001-2026-10-23",
+  "source_previous_remote_commit": "8648954a4c9d8fddc73b46697d167b1a33f5cf5d",
+  "source_commits_preserved_and_published": [
+    "6752c2e525f8d35a830122a0e86c74900ff08f6f",
+    "1b418c804717c4b5da677952ff181e244a911e02",
+    "9acf18758f4db32aed2cb7ac79d64baed244dda5",
+    "c1e068bfae361380808c1bb6411f29eb63c7e554",
+    "37c5d5880c09d45a22f5ba697f95327be5e66e68",
+    "7a6df145e68bfea7eac14bf057a0904bb985dc02"
+  ],
+  "official_block_commit": "37c5d5880c09d45a22f5ba697f95327be5e66e68",
+  "official_reconciliation_commit": "ca73bdc3d99dac983e9fec5a9bf7ef89cffbec56",
+  "historical_tested_head": "9acf18758f4db32aed2cb7ac79d64baed244dda5",
+  "historical_tested_head_has_same_functional_blobs": true,
+  "transport_base_commit": "13700862405a89da3c7d16702318735a88348133",
+  "observed_main_commit": "0adec2121ed463844f1af325f05f924f6952eddf",
+  "future_execution_base": "CURRENT_ORIGIN_MAIN_CONTAINING_HUMAN_MERGED_PLAN_AND_EXPLICIT_EXECUTION_AUTHORIZATION",
+  "file_count": 32,
+  "additions": 26,
+  "modifications": 6,
+  "main_overlap_count": 3,
+  "files": [
+    {
+      "path": "app/api/pessoas/disponibilidade/route.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "8929e2e1f90f4dba68a95d0f559d5a5cc0161104",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "app/dashboard/pessoas/configuracoes/page.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "a6b96bfa4b5338551edabe375adbb92d6481979c",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "app/dashboard/pessoas/error.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "0811efecc08aaa48b1761bf7683531a08e7159f8",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "app/dashboard/pessoas/funcionarios/[id]/page.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "420c81a2740c2a33fe90b1920675335da43789ab",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "app/dashboard/pessoas/funcionarios/novo/page.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "9fbcda9f28226245440390fe42f51322fded3cc3",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "app/dashboard/pessoas/funcionarios/page.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "29ee88aba4b299957f5a02527a87f185c94a2bb6",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "app/dashboard/pessoas/layout.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "3329e37be54682104aa131fe1900eb4b5931c8e1",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "app/dashboard/pessoas/loading.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "fb401c268cfed981a7ca54346357bb5afa421ba7",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "app/dashboard/pessoas/page.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "93050b6f218c9cfe223b9751485d801891c5e674",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/campos.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "036cf1d7f0a0ffe69e8388e650dac1d264117563",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/configuracoes.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "7e8492e18819d13b6c86773b58e36f415d78cc79",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/contexto.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "ae1da7dc4d91df48ac47c5a759b39eb3313907b1",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/documentos.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "873c7d4e856acd934e0624b79a5850163a47a970",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/ficha.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "de84e9c531c29f69995e13fc33ef3c356551c5ac",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/lista.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "7de99e243293a35df51e753e9f3074eb03f07b6c",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/novo.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "fdd754ccdcd1585e1e678e88bbb0b3de4ab2fc6e",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/ui.tsx",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "47e5c4edbcea4e1fc40c26ebbb2c8151ef093ad1",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/dashboard/pessoas/use-disponibilidade.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "81e23904fc28adb1409af0e6d590fb82e1b51f38",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "components/painel-inicial/MobileNavSheet.tsx",
+      "operation": "M",
+      "base_blob": "e28dfc11a87e33a311c218702e5fc11a19546813",
+      "source_blob": "27df38a046119111985da519c75e16f4f2899f27",
+      "observed_main_blob": "490e25672cd32433bcd2f61325a4c91e480c261b",
+      "main_changed_since_base": true,
+      "future_strategy": "INTEGRATE_PESSOAS_HUNKS_PRESERVING_CURRENT_MAIN"
+    },
+    {
+      "path": "components/painel-inicial/Sidebar.tsx",
+      "operation": "M",
+      "base_blob": "318309bc2a54922480ae314ba611811d11d3bbca",
+      "source_blob": "37b4e8427993998110c99a4d61cbaca84add644d",
+      "observed_main_blob": "2f9618c44ed0fa4a5fd0d7d25af968d129274b51",
+      "main_changed_since_base": true,
+      "future_strategy": "INTEGRATE_PESSOAS_HUNKS_PRESERVING_CURRENT_MAIN"
+    },
+    {
+      "path": "lib/navigation/dashboard-nav-items.ts",
+      "operation": "M",
+      "base_blob": "e99260bcbffcfccb3fbc37767f03716e6a9a37a4",
+      "source_blob": "6ea5a74b8fb41d064c62f6be0e6440febfdd18e5",
+      "observed_main_blob": "8e8107fe4938792ef67613e23ba8da589b59350f",
+      "main_changed_since_base": true,
+      "future_strategy": "INTEGRATE_PESSOAS_HUNKS_PRESERVING_CURRENT_MAIN"
+    },
+    {
+      "path": "lib/pessoas/adapters/cadastro-ui.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "f6725e828901a236f896425b60aeeb18f9e49ff7",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "lib/pessoas/cadastro.ts",
+      "operation": "M",
+      "base_blob": "00f502a1cae9a9408e75c4004b694572ac4c928d",
+      "source_blob": "ec50510fd696d75885288778d64900a865e9c32c",
+      "observed_main_blob": "00f502a1cae9a9408e75c4004b694572ac4c928d",
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "lib/pessoas/documentos/service.ts",
+      "operation": "M",
+      "base_blob": "e1b20c228eaa5c2aebe4259c7d56a21db2c08a91",
+      "source_blob": "ff0aba1efe01493cf7aa4162ccbd75f59b713a79",
+      "observed_main_blob": "e1b20c228eaa5c2aebe4259c7d56a21db2c08a91",
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "lib/pessoas/historico-privacidade.test.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "95047f6ea180d0c647a62368070a611fb616e2ca",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "lib/pessoas/readers/disponibilidade.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "e2b98ef87f0b75b717c2f13a52a87cfc8b53e94d",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "scripts/pessoas/frontend.contract.test.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "82f249e4f1c519861a04cdb0c1e5a9f948df2992",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "scripts/pessoas/frontend.e2e.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "d0ae7ef6f28fc74b55bd3ea2f8a2be281efe9a8f",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "scripts/pessoas/frontend.integration.test.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "9af8f7ce3b4b94101e0dcbfedd52f40b4aeb9803",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "scripts/pessoas/playwright.frontend.config.ts",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "f408636a456a0dbf9808ed2b03cfd85fc60052c0",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "scripts/pessoas/run-frontend-tests.mjs",
+      "operation": "A",
+      "base_blob": null,
+      "source_blob": "01f69eba769bfb468859bfa47d97a8d6fe499f42",
+      "observed_main_blob": null,
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    },
+    {
+      "path": "scripts/pessoas/run-official-tests.mjs",
+      "operation": "M",
+      "base_blob": "d27826e608f68a61a3ddf1cf947cbf78aafc2afe",
+      "source_blob": "93df20b65b62974d7a585d011d5388efd1e0d11b",
+      "observed_main_blob": "d27826e608f68a61a3ddf1cf947cbf78aafc2afe",
+      "main_changed_since_base": false,
+      "future_strategy": "APPLY_SELECTED_SOURCE_DELTA_AFTER_RECHECK"
+    }
+  ],
+  "forbidden_transport": [
+    ".aep-active",
+    "docs/execution-tracks/**",
+    "docs/ai-execution/GATES.md",
+    "docs/ai-execution/_evidence/**",
+    "historical reports",
+    "whole commits or directories"
+  ],
+  "prerequisite_out_of_scope_gate": "HUMAN_AUTHORIZE_AUTH_INTEGRATION_SCOPE / ALLOWLIST_REPLAN_REQUIRED",
+  "historical_e2e_store_root_cause": "HYPOTHESIS",
+  "independent_review_waiver_inherited": false,
+  "successor_execution_started": false,
+  "product_code_changed": false
+}
