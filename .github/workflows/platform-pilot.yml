@@ -42,7 +42,7 @@ jobs:
       - run: node --test scripts/platform/verify-proxy-prisma-artifact.test.mjs scripts/vercel-build.test.mjs scripts/migration-authority-guard.test.mjs
       - run: node node_modules/vitest/vitest.mjs run lib/auth/pilot-access.test.ts lib/auth/enterprise-permissions.test.ts lib/auth/proxy-enterprise-dashboard.test.ts lib/auth/session-entitlement.test.ts lib/loja-ativa.pilot-context.test.ts app/actions/operacoes.pilot-access.test.ts --maxWorkers=1
       - name: Regressões de dados básicos e recuperação
-        run: node node_modules/vitest/vitest.mjs run lib/store-basics.test.ts lib/use-store-basics.component.test.ts --maxWorkers=1
+        run: node node_modules/vitest/vitest.mjs run lib/store-basics.test.ts lib/use-store-basics.component.test.ts components/onboarding/first-access-wizard.component.test.ts components/auth/SessionProvider.first-access.component.test.ts --maxWorkers=1
       - name: Lint do primeiro acesso e configurações
         run: node node_modules/eslint/bin/eslint.js lib/store-basics.ts lib/store-basics.test.ts lib/use-store-basics.ts lib/use-store-basics.component.test.ts components/onboarding/first-access-wizard.tsx components/configuracoes-v3/features/settings/sections/GeralSection.tsx lib/loja-ativa.tsx app/api/stores/\[id\]/route.ts e2e/platform-pilot/first-access.spec.ts scripts/platform/run-pilot-e2e.mjs
       - run: npm run typecheck
@@ -76,6 +76,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Build sem autoridade de migration
         run: |
+          set -o pipefail
           npm run build | tee /tmp/pilot-build.log
           grep -q PROXY_PRISMA_ARTIFACT_VERIFIED /tmp/pilot-build.log
           grep -q MIGRATION_SKIPPED /tmp/pilot-build.log

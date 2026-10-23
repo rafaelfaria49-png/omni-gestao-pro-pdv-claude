@@ -8,12 +8,13 @@ const context = vi.hoisted(() => ({ storeId: "store-a", user: "user-a", version:
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { id: context.user, sessionVersion: context.version } } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: context.storeId }) }))
 
-function Editor({ storeId }: { storeId: string }) {
+function Editor({ storeId, requireCnpj = false }: { storeId: string; requireCnpj?: boolean }) {
   const e = useStoreBasics(storeId)
   return React.createElement("div", null,
     React.createElement("input", { "aria-label": "Nome", disabled: e.loading || e.saving || !e.draft, value: e.draft?.name ?? "", onChange: (event: React.ChangeEvent<HTMLInputElement>) => e.setField("name", event.target.value) }),
     React.createElement("input", { "aria-label": "Contato", disabled: e.loading || e.saving || !e.draft, value: e.draft?.contactEmail ?? "", onChange: (event: React.ChangeEvent<HTMLInputElement>) => e.setField("contactEmail", event.target.value) }),
-    React.createElement("button", { onClick: () => void e.save(), disabled: e.loading }, "Salvar"),
+    React.createElement("input", { "aria-label": "CNPJ", disabled: e.loading || e.saving || !e.draft, value: e.draft?.cnpj ?? "", onChange: (event: React.ChangeEvent<HTMLInputElement>) => e.setField("cnpj", event.target.value) }),
+    React.createElement("button", { onClick: () => void e.save(requireCnpj), disabled: e.loading }, "Salvar"),
     React.createElement("output", null, e.message))
 }
 function Scope() {
@@ -25,6 +26,22 @@ const input = (label: string) => screen.getByRole("textbox", { name: label }) as
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); context.storeId = "store-a"; context.user = "user-a"; context.version = 0 })
 
 describe("Editor de dados básicos — ciclo real do hook", () => {
+  it.each(["name", "cnpj"])("não confirma campo obrigatório %s limpo remotamente enquanto outro campo é editado", async (key) => {
+    const store = { id: context.storeId, name: "Persistido", cnpj: "Identificação persistida" }
+    const settings = { storeId: context.storeId, contactEmail: "old@synthetic.invalid" }
+    vi.stubGlobal("fetch", vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.method === "PUT") { Object.assign(url.endsWith("/settings") ? settings : store, JSON.parse(String(options.body))); return json({ ok: true }) }
+      return json(url.endsWith("/settings") ? { settings } : { store })
+    }))
+    render(React.createElement(Editor, { storeId: context.storeId, requireCnpj: true }))
+    await waitFor(() => expect(input("Nome").disabled).toBe(false))
+    fireEvent.change(input("Contato"), { target: { value: "novo@synthetic.invalid" } })
+    store[key as "name" | "cnpj"] = ""
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }))
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/dados básicos incompletos/))
+    expect(input(key === "name" ? "Nome" : "CNPJ").value).toBe("")
+    expect(input("Contato").value).toBe("novo@synthetic.invalid")
+  })
   it("espera loja e contatos e não reidrata digitação após nova renderização", async () => {
     let release!: (response: Response) => void
     vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/settings") ? new Promise<Response>((resolve) => { release = resolve }) : json({ store: { id: context.storeId, name: "Persistido" } })))

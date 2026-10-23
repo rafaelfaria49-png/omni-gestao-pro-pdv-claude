@@ -74,13 +74,22 @@ test("jornada integral: provisionar → senha obrigatória → assistente → pr
     const client = await clientContext.newPage()
     await login(client, email, temporary)
     await expect(client.getByRole("heading", { name: "Primeiro acesso", exact: true })).toBeVisible()
+    const temporarySession = await (await client.request.get("/api/auth/session")).json()
+    expect({ email: temporarySession?.user?.email, required: temporarySession?.user?.mustChangePassword }).toEqual({ email, required: true })
     expect((await client.request.get("/api/stores")).status()).toBe(403)
     const personal = "aA1!" + randomBytes(18).toString("hex")
     await secretInput(client.getByLabel("Senha atual", { exact: true }), temporary)
     await secretInput(client.getByLabel("Nova senha", { exact: true }), personal)
     await secretInput(client.getByLabel("Confirme a nova senha", { exact: true }), personal)
-    await client.getByRole("button", { name: "Alterar minha senha", exact: true }).click()
-    await expect(client).toHaveURL(/\/login\?passwordChanged=1/)
+    const signout = client.waitForResponse((response) => response.url().includes("/api/auth/signout") && response.request().method() === "POST")
+    const [changed] = await Promise.all([
+      client.waitForResponse((response) => response.url().includes("/api/account/password") && response.request().method() === "POST"),
+      client.getByRole("button", { name: "Alterar minha senha", exact: true }).click(),
+    ])
+    expect(changed.status()).toBe(200)
+    expect((await signout).status()).toBe(200)
+    await expect(client).toHaveURL(/\/login(?:\?|$)/)
+    expect(!!(await (await client.request.get("/api/auth/session")).json())?.user).toBe(false)
     temporary = ""
     await login(client, email, personal)
     const session = await (await client.request.get("/api/auth/session")).json()

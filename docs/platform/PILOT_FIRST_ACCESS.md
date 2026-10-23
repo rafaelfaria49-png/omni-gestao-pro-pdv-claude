@@ -36,6 +36,15 @@ Assistente e Configurações → Geral compartilham `use-store-basics` e `store-
   obriga nova releitura antes de qualquer tentativa posterior.
 - Uma referência síncrona bloqueia submissões concorrentes. Trocar de escopo
   descarta o formulário e impede que uma resposta antiga atualize o novo editor.
+- A releitura também reconfirma os campos obrigatórios que não foram editados.
+  Fechar a confirmação desmonta o editor: tornar o cadastro incompleto novamente
+  em Geral não reutiliza uma tela de sucesso antiga.
+
+O wrapper do SessionProvider usa chave por identidade/versão. O provider NextAuth
+inicializa seu estado apenas na montagem; sem essa chave, login por Server Action
+mantinha a sessão cliente nula e o dashboard mostrava sessão encerrada. A mudança
+é de montagem: mesmas id/versão conservam filhos e rascunhos; troca efetiva monta
+a sessão recebida do servidor. Políticas, guards e autenticação não foram alterados.
 
 “Voltar depois” é dispensa local ao componente daquela identidade/unidade,
 com ação de retomada enquanto incompleta. Não é conclusão. Não são persistidos
@@ -68,7 +77,8 @@ O teste dedicado desliga traces, vídeos e screenshots automáticos e preenche
 senhas por evento, sem valores em call logs. Capturas manuais só ocorrem depois
 das etapas com credenciais. Nenhum storageState é exportado.
 
-Validação local inicial: 13 testes de dados básicos/hook aprovados e lint focado
+Validação local: 18 testes de dados básicos/hook, assistente e montagem da sessão
+aprovados e lint focado
 sem erros. Os gates de TypeScript, regressões de Plataforma/Cadastros, build e E2E
 integrados estão no CI. O build exige `PROXY_PRISMA_ARTIFACT_VERIFIED` e
 `MIGRATION_SKIPPED`, preservando a correção #303. Resultados finais, SHA revisado,

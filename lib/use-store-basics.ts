@@ -50,12 +50,14 @@ export function useStoreBasics(storeId: string) {
     try {
       const result = await saveStoreBasics(storeId, intent, pending.signal)
       if (pending.signal.aborted) return false
+      // Required fields can change in another tab even when they were not edited here.
+      const complete = result.ok && !!result.current?.name.trim() && (!requireCnpj || !!result.current.cnpj.trim())
       if (result.current) {
         setBaseline(result.current)
-        setDraft(result.ok ? result.current : applyBasicsIntent(result.current, intent))
+        setDraft(complete ? result.current : applyBasicsIntent(result.current, intent))
       }
-      setMessage(result.message)
-      return result.ok
+      setMessage(result.ok && !complete ? "A releitura encontrou dados básicos incompletos. Revise os campos obrigatórios antes de concluir." : result.message)
+      return complete
     } catch { return false } finally {
       if (!pending.signal.aborted) { activeAttempt.current = false; setSaving(false) }
     }
