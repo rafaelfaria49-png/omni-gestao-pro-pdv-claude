@@ -21,7 +21,7 @@ function run(args, env = process.env) {
   if (r.error || r.status !== 0) throw new Error("PILOT_STEP_FAILED")
 }
 const secret = () => "aA1!" + randomBytes(24).toString("hex")
-const passwords = Object.fromEntries(["owner", "adminA", "managerA", "adminB", "multi", "cashier", "seller", "temporary", "legacy"].map((k) => [k, secret()]))
+const passwords = Object.fromEntries(["owner", "adminA", "managerA", "adminB", "multi", "cashier", "seller", "temporary", "legacy", "onboardingMulti"].map((k) => [k, secret()]))
 passwords.supervisor = String(randomInt(10_000_000, 100_000_000))
 const appSecret = secret()
 const { PrismaClient } = await import("../../generated/prisma/index.js")
@@ -39,7 +39,7 @@ try {
   await writeFile(oldSchema, before)
   run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"])
   const legacyHash = await bcrypt.hash(passwords.owner, 10)
-  await db.$executeRaw`INSERT INTO stores (id, name, "updatedAt") VALUES ('pilot-legacy', 'Loja Legada Sintética', now())`
+  await db.$executeRaw`INSERT INTO stores (id, name, cnpj, "updatedAt") VALUES ('pilot-legacy', 'Loja Legada Sintética', '00.000.000/0001-00', now())`
   await db.$executeRaw`INSERT INTO admin_users (id, name, email, password, role, "updatedAt") VALUES ('pilot-owner', 'Responsável Interno Sintético', 'owner@pilot.invalid', ${legacyHash}, 'ADMIN'::"UserRole", now())`
   run(["node_modules/prisma/build/index.js", "db", "execute", "--schema", "prisma/schema.prisma", "--file", "prisma/migrations/20261022120000_platform_pilot_access/migration.sql"])
   const oldUser = await db.adminUser.findUniqueOrThrow({ where: { id: "pilot-owner" } })
@@ -49,15 +49,18 @@ try {
   await writeFile(path.join(out, "migration.json"), JSON.stringify({ applied: true, target: "fresh disposable CI PostgreSQL", legacyAuthorityPreserved: true, accountsReclassified: 0, passwordsChanged: 0, productionWrites: 0 }, null, 2))
   await db.store.createMany({ data: [
     { id: "pilot-a", name: "Padaria Piloto A" }, { id: "pilot-b", name: "Comércio Piloto B" },
+    { id: "pilot-initial-a", name: "Padaria Inicial A", phone: "11999990011", logoUrl: "/synthetic-logo.svg", address: { rua: "Rua Sintética A", numero: 42, complemento: "Fundos A", cadastroExtra: "preservado" } },
+    { id: "pilot-initial-b", name: "Padaria Inicial B", phone: "11999990022", logoUrl: "/synthetic-logo-b.svg", address: { rua: "Rua Sintética B" } },
   ] })
-  for (const [id, branch] of [["pilot-a", "padaria"], ["pilot-b", "comercio"], ["pilot-legacy", "assistencia"]]) {
-    await db.storeSettings.create({ data: { storeId: id, printerConfig: { pdvMainLayout: "classic", capabilities: { version: 1, business: { primaryBranch: branch } } } } })
+  for (const [id, branch] of [["pilot-a", "padaria"], ["pilot-b", "comercio"], ["pilot-legacy", "assistencia"], ["pilot-initial-a", "padaria"], ["pilot-initial-b", "padaria"]]) {
+    await db.storeSettings.create({ data: { storeId: id, ...(id.startsWith("pilot-initial-") ? { contactEmail: `${id}@pilot.invalid`, contactWhatsapp: "11999990033", contactWhatsappDono: "11999990044" } : {}), printerConfig: { pdvMainLayout: "classic", untouched: "preservado", capabilities: { version: 1, business: { primaryBranch: branch } } } } })
   }
   const users = [
     ["adminA", "ADMIN", "pilot-a", ["pilot-a"], false], ["managerA", "GERENTE", "pilot-a", ["pilot-a"], false],
     ["adminB", "ADMIN", "pilot-b", ["pilot-b"], false], ["multi", "GERENTE", "pilot-a", ["pilot-a", "pilot-b"], false],
     ["cashier", "CAIXA", "pilot-a", ["pilot-a"], false], ["seller", "VENDEDOR", "pilot-a", ["pilot-a"], false],
     ["temporary", "VENDEDOR", "pilot-a", ["pilot-a"], true], ["legacy", "OPERADOR", "pilot-legacy", ["pilot-legacy"], false],
+    ["onboardingMulti", "ADMIN", "pilot-initial-a", ["pilot-initial-a", "pilot-initial-b"], false],
   ]
   for (const [id, role, lojaId, stores, mustChangePassword] of users) {
     await db.adminUser.create({ data: { id: `pilot-${id}`, email: `${id.toLowerCase()}@pilot.invalid`, name: `Sintético ${id}`, role,
@@ -80,8 +83,10 @@ try {
   await db.sessaoCaixa.create({ data: { id: "pilot-cash-b", storeId: "pilot-b", operador: "Operador Privado B", status: "ABERTA", saldoInicial: 0 } })
 } finally { await db.$disconnect() }
 
-const origin = "http://127.0.0.1:3000"
-const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3000"], {
+// NextURL canonicalizes loopback IPs to localhost. Use the same browser/server
+// origin so the existing password endpoint's same-origin check remains effective.
+const origin = "http://localhost:3000"
+const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "localhost", "-p", "3000"], {
   env: { ...process.env, NODE_ENV: "production", AUTH_SECRET: appSecret, AUTH_TRUST_HOST: "true", NEXTAUTH_URL: origin, NEXT_TELEMETRY_DISABLED: "1" },
   stdio: ["ignore", "inherit", "inherit"],
 })

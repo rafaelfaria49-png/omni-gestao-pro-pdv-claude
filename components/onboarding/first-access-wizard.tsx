@@ -1,355 +1,121 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/hooks/use-toast"
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { ASSISTEC_STORES_SYNC_STORAGE_KEY, useLojaAtiva } from "@/lib/loja-ativa"
 import { useStoreBusiness } from "@/lib/use-store-business"
-import { BUSINESS_BRANCHES } from "@/lib/store-business-capabilities"
-
-type WizardStep = 1 | 2 | 3
-type StoreProfile = "ASSISTENCIA" | "SUPERMERCADO" | "VARIEDADES"
-
-function emptyAddress() {
-  return { rua: "", numero: "", bairro: "", cidade: "", estado: "", cep: "" }
-}
+import { BUSINESS_BRANCHES, BUSINESS_RESOURCES, BUSINESS_SETTINGS_HREF } from "@/lib/store-business-capabilities"
+import { useStoreSettings } from "@/lib/store-settings-provider"
+import { useStoreBasics, useStoreBasicsScope } from "@/lib/use-store-basics"
+import type { AddressField, BasicField } from "@/lib/store-basics"
 
 export function FirstAccessWizard() {
-  const { toast } = useToast()
+  const { storeId, scope } = useStoreBasicsScope()
   const business = useStoreBusiness()
-  const { lojaAtivaId, lojaAtivaRaw, cadastroBasicoIncompleto, storesLoaded, refreshStoresList } = useLojaAtiva()
-  const storeId = (lojaAtivaId ?? lojaAtivaRaw?.id ?? "").trim()
-
-  const [open, setOpen] = useState(false)
-  const [step, setStep] = useState<WizardStep>(1)
-  const [saving, setSaving] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
-
-  const [nomeFantasia, setNomeFantasia] = useState("")
-  const [cnpj, setCnpj] = useState("")
-  const [address, setAddress] = useState(() => emptyAddress())
-  const [telefone, setTelefone] = useState("")
-  const [whatsapp, setWhatsapp] = useState("")
-  const [whatsappDono, setWhatsappDono] = useState("")
-  const [email, setEmail] = useState("")
-  const [perfil, setPerfil] = useState<StoreProfile>("ASSISTENCIA")
-
-  const dismissKey = useMemo(() => `@omnigestao:first-access-wizard:dismissed:${storeId}`, [storeId])
-  const canClose = !cadastroBasicoIncompleto || dismissed
-  const title = useMemo(() => {
-    if (step === 1) return "Boas-vindas! Vamos configurar sua loja"
-    if (step === 2) return "Endereço e contatos"
-    return "Ramo e recursos da loja"
-  }, [step])
-
-  useEffect(() => {
-    try {
-      const raw = String(sessionStorage.getItem(dismissKey) || "")
-      if (raw === "1") setDismissed(true)
-    } catch {
-      /* ignore */
-    }
-
-    // Só avalia o onboarding após a hidratação remota das lojas terminar —
-    // antes disso `cadastroBasicoIncompleto` pode oscilar (true→false) por causa
-    // do delay do fetch /api/stores, causando flicker (modal abre e some).
-    if (!storesLoaded || !business.canConfigure) {
-      setOpen(false)
-      return
-    }
-
-    if (cadastroBasicoIncompleto && !dismissed) {
-      setOpen(true)
-      setStep(1)
-    } else {
-      setOpen(false)
-    }
-  }, [cadastroBasicoIncompleto, storesLoaded, dismissKey, dismissed, business.canConfigure])
-
-  useEffect(() => {
-    // Prefill com dados remotos (se existirem) para evitar “wizard infinito” por falta de hidratação.
-    const raw = lojaAtivaRaw
-    if (!raw) return
-    setNomeFantasia((prev) => prev || (raw.nomeFantasia || "").trim())
-    setCnpj((prev) => prev || (raw.cnpj || "").trim())
-    setAddress((prev) => {
-      const base = { ...prev, ...(raw.endereco || {}) }
-      return { ...emptyAddress(), ...base }
-    })
-    setPerfil((prev) => prev || (raw.storeProfile as StoreProfile) || "ASSISTENCIA")
-  }, [lojaAtivaRaw])
-
-  const validateStep1 = () => {
-    const n = nomeFantasia.trim()
-    const d = cnpj.trim()
-    if (!n) {
-      toast({ variant: "destructive", title: "Nome obrigatório", description: "Informe o nome da loja (nome fantasia)." })
-      return false
-    }
-    if (!d) {
-      toast({ variant: "destructive", title: "CNPJ obrigatório", description: "Informe o CNPJ da loja." })
-      return false
-    }
-    return true
-  }
-
-  const validateStep2 = () => true
-  const validateStep3 = () => true
-
-  const next = () => {
-    if (step === 1 && !validateStep1()) return
-    if (step === 2 && !validateStep2()) return
-    setStep((s) => (s === 1 ? 2 : 3))
-  }
-
-  const back = () => setStep((s) => (s === 3 ? 2 : 1))
-
-  const finish = async () => {
-    if (!validateStep1() || !validateStep2() || !validateStep3()) return
-    if (!storeId) {
-      toast({ title: "Nenhuma unidade ativa", description: "Selecione uma unidade para concluir o cadastro.", variant: "destructive" })
-      return
-    }
-    const nomeTrim = nomeFantasia.trim()
-    const cnpjTrim = cnpj.trim()
-    setSaving(true)
-    try {
-      const r1 = await fetch(`/api/stores/${encodeURIComponent(storeId)}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          [ASSISTEC_LOJA_HEADER]: storeId,
-        },
-        body: JSON.stringify({
-          name: nomeTrim,
-          cnpj: cnpjTrim,
-          phone: telefone.trim(),
-          logoUrl: "",
-          address: { ...emptyAddress(), ...address },
-        }),
-      })
-      if (!r1.ok) {
-        const j = (await r1.json().catch(() => ({}))) as { error?: string }
-        throw new Error(j.error || `Falha ao salvar dados da loja (HTTP ${r1.status})`)
-      }
-
-      const r2 = await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          [ASSISTEC_LOJA_HEADER]: storeId,
-        },
-        body: JSON.stringify({
-          contactEmail: email.trim(),
-          contactWhatsapp: whatsapp.trim(),
-          contactWhatsappDono: whatsappDono.trim(),
-        }),
-      })
-      if (!r2.ok) throw new Error("Não foi possível salvar os contatos da loja.")
-
-      await refreshStoresList()
-      try {
-        localStorage.setItem(ASSISTEC_STORES_SYNC_STORAGE_KEY, String(Date.now()))
-      } catch {
-        /* ignore */
-      }
-
-      toast({ title: "Cadastro concluído", description: "Dados básicos salvos. Você já pode operar o sistema." })
-      setOpen(false)
-      setDismissed(false)
-      try {
-        sessionStorage.removeItem(dismissKey)
-      } catch {
-        /* ignore */
-      }
-    } catch (e) {
-      toast({
-        variant: "destructive",
-        title: "Não foi possível concluir",
-        description: e instanceof Error ? e.message : "Falha ao salvar",
-      })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (!storesLoaded) return null
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v && !canClose) {
-          setDismissed(true)
-          try {
-            sessionStorage.setItem(dismissKey, "1")
-          } catch {
-            /* ignore */
-          }
-          setOpen(false)
-          return
-        }
-        setOpen(v)
-      }}
-    >
-      <DialogContent
-        className="sm:max-w-[720px]"
-        onPointerDownOutside={(e) => {
-          if (!canClose) {
-            e.preventDefault()
-            setDismissed(true)
-            try {
-              sessionStorage.setItem(dismissKey, "1")
-            } catch {
-              /* ignore */
-            }
-            setOpen(false)
-          }
-        }}
-        onEscapeKeyDown={(e) => {
-          if (!canClose) {
-            e.preventDefault()
-            setDismissed(true)
-            try {
-              sessionStorage.setItem(dismissKey, "1")
-            } catch {
-              /* ignore */
-            }
-            setOpen(false)
-          }
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {step === 1
-              ? "Informe os dados mínimos para identificar a unidade no sistema e nos documentos."
-              : step === 2
-                ? "Esses dados ajudam em documentos, automações e mensagens."
-                : "Isso ajusta módulos e telas conforme o tipo do seu negócio."}
-          </DialogDescription>
-        </DialogHeader>
-
-        {step === 1 ? (
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label>Nome da loja (nome fantasia)</Label>
-              <Input value={nomeFantasia} onChange={(e) => setNomeFantasia(e.target.value)} placeholder="Minha Loja" />
-            </div>
-            <div className="space-y-2">
-              <Label>CNPJ</Label>
-              <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
-            </div>
-          </div>
-        ) : null}
-
-        {step === 2 ? (
-          <div className="grid gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Rua</Label>
-                <Input value={address.rua} onChange={(e) => setAddress((p) => ({ ...p, rua: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Número</Label>
-                <Input value={address.numero} onChange={(e) => setAddress((p) => ({ ...p, numero: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Bairro</Label>
-                <Input value={address.bairro} onChange={(e) => setAddress((p) => ({ ...p, bairro: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Cidade</Label>
-                <Input value={address.cidade} onChange={(e) => setAddress((p) => ({ ...p, cidade: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Estado</Label>
-                <Input value={address.estado} onChange={(e) => setAddress((p) => ({ ...p, estado: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>CEP</Label>
-                <Input value={address.cep} onChange={(e) => setAddress((p) => ({ ...p, cep: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Telefone</Label>
-                <Input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="(00) 00000-0000" />
-              </div>
-              <div className="space-y-2">
-                <Label>WhatsApp</Label>
-                <Input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(00) 00000-0000" />
-              </div>
-              <div className="space-y-2">
-                <Label>WhatsApp do dono</Label>
-                <Input value={whatsappDono} onChange={(e) => setWhatsappDono(e.target.value)} placeholder="(00) 00000-0000" />
-              </div>
-              <div className="space-y-2">
-                <Label>E-mail</Label>
-                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contato@seudominio.com.br" />
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {step === 3 ? (
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label>Ramo principal</Label>
-              <p className="text-sm">{business.configured ? BUSINESS_BRANCHES[business.branch] : "Ramo ainda não configurado. Revise em Configurações → Geral → Ramo e recursos."}</p>
-              <p className="text-xs text-muted-foreground">Os recursos disponíveis seguem a liberação da plataforma. A configuração do ramo preserva essa liberação.</p>
-
-            </div>
-          </div>
-        ) : null}
-
-        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center justify-between gap-3 sm:justify-start">
-            <div className="text-xs text-muted-foreground">Passo {step} de 3</div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setDismissed(true)
-                try {
-                  sessionStorage.setItem(dismissKey, "1")
-                } catch {
-                  /* ignore */
-                }
-                setOpen(false)
-              }}
-            >
-              Voltar depois
-            </Button>
-          </div>
-
-          <div className="flex gap-2 sm:justify-end">
-            {step > 1 ? (
-              <Button type="button" variant="outline" onClick={back} disabled={saving}>
-                Voltar
-              </Button>
-            ) : null}
-            {step < 3 ? (
-              <Button type="button" onClick={next} disabled={saving}>
-                Continuar
-              </Button>
-            ) : (
-              <Button type="button" onClick={finish} disabled={saving}>
-                {saving ? "Salvando..." : "Concluir"}
-              </Button>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
+  if (!storeId || !business.canConfigure) return null
+  return <FirstAccessForStore key={scope} storeId={storeId} />
 }
 
+function FirstAccessForStore({ storeId }: { storeId: string }) {
+  const { storesLoaded, cadastroBasicoIncompleto } = useLojaAtiva()
+  const business = useStoreBusiness()
+  const [started, setStarted] = useState(false)
+  const [open, setOpen] = useState(true)
+  // Persisted completeness, never a local "completed" flag. Existing complete stores stay untouched.
+  useEffect(() => {
+    if (storesLoaded && business.ready && cadastroBasicoIncompleto) setStarted(true)
+  }, [storesLoaded, business.ready, cadastroBasicoIncompleto])
+  if (!started) return null
+  return <>
+    {!open && cadastroBasicoIncompleto && <div className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
+      <p>Os dados básicos desta unidade ainda estão incompletos.</p>
+      <Button variant="outline" onClick={() => setOpen(true)}>Retomar configuração inicial</Button>
+    </div>}
+    {open && <WizardEditor storeId={storeId} open={open} onOpenChange={setOpen} onCompletedClose={() => { setStarted(false); setOpen(true) }} />}
+  </>
+}
+
+function WizardEditor({ storeId, open, onOpenChange, onCompletedClose }: { storeId: string; open: boolean; onOpenChange: (open: boolean) => void; onCompletedClose: () => void }) {
+  const business = useStoreBusiness()
+  const { lojaAtivaRaw, refreshStoresList } = useLojaAtiva()
+  const { refresh: refreshSettings } = useStoreSettings()
+  const editor = useStoreBasics(storeId)
+  const { draft, loading, saving, message } = editor
+  const [step, setStep] = useState(1)
+  const [validation, setValidation] = useState("")
+  const [finished, setFinished] = useState(false)
+  const title = finished ? "Dados básicos da loja concluídos" : step === 1 ? "Boas-vindas! Vamos configurar sua loja" : step === 2 ? "Endereço e contatos" : "Ramo e recursos da loja"
+  const busy = loading || saving || !draft
+  const changeOpen = (value: boolean) => {
+    if (saving) return
+    if (!value && finished) onCompletedClose()
+    else onOpenChange(value)
+  }
+  const field = (key: BasicField, label: string, type = "text") => <div className="min-w-0 space-y-2" key={key}>
+    <Label htmlFor={`first-access-${key}`}>{label}</Label>
+    <Input id={`first-access-${key}`} type={type} value={draft?.[key] ?? ""} disabled={busy} onChange={(e) => editor.setField(key, e.target.value)} />
+  </div>
+  const addressField = (key: AddressField, label: string) => <div className="min-w-0 space-y-2" key={key}>
+    <Label htmlFor={`first-access-${key}`}>{label}</Label>
+    <Input id={`first-access-${key}`} value={draft?.address[key] ?? ""} disabled={busy} onChange={(e) => editor.setAddressField(key, e.target.value)} />
+  </div>
+  return <Dialog open={open} onOpenChange={changeOpen}>
+    <DialogContent className="max-h-[90dvh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-[720px]" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => { if (saving) e.preventDefault() }}>
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{finished ? "O cadastro básico foi salvo e relido. Continue pelas funcionalidades disponíveis para sua loja." : "Complete os dados da própria unidade. Você pode corrigi-los depois em Configurações → Geral."}</DialogDescription>
+      </DialogHeader>
+      <p className="break-words text-sm font-medium" data-testid="first-access-store">Unidade: {lojaAtivaRaw?.nomeFantasia || storeId}</p>
+      {loading && <p role="status">Carregando dados salvos…</p>}
+      {!loading && !draft && <div role="alert" className="space-y-3"><p>{message}</p><Button onClick={editor.retryLoad}>Carregar novamente</Button></div>}
+      {draft && !finished && <form className="min-w-0 space-y-5" onSubmit={(e) => {
+        e.preventDefault()
+        if (saving) return
+        if (!draft.name.trim() || !draft.cnpj.trim()) { setValidation("Informe o nome da loja e o CNPJ para continuar."); setStep(1); return }
+        setValidation("")
+        if (step < 3) { setStep((value) => value + 1); return }
+        void (async () => {
+          if (!await editor.save(true)) return
+          setFinished(true)
+          void refreshStoresList()
+          void refreshSettings()
+          try { localStorage.setItem(ASSISTEC_STORES_SYNC_STORAGE_KEY, String(Date.now())) } catch { /* optional cross-tab signal, no registration data */ }
+        })()
+      }}>
+        {step === 1 && <div className="grid gap-4">{field("name", "Nome da loja (nome fantasia)")}{field("cnpj", "CNPJ")}</div>}
+        {step === 2 && <div className="grid gap-3 sm:grid-cols-2">
+          {addressField("rua", "Rua")}{addressField("numero", "Número")}{addressField("bairro", "Bairro")}{addressField("cidade", "Cidade")}{addressField("estado", "Estado")}{addressField("cep", "CEP")}
+          {field("phone", "Telefone", "tel")}{field("contactWhatsapp", "WhatsApp da loja", "tel")}{field("contactWhatsappDono", "WhatsApp do responsável", "tel")}{field("contactEmail", "E-mail", "email")}
+        </div>}
+        {step === 3 && <div className="space-y-3">
+          <p className="text-sm">Ramo principal: <strong>{business.configured ? BUSINESS_BRANCHES[business.branch] : "Ainda não configurado"}</strong></p>
+          <ul className="space-y-2 text-sm">{BUSINESS_RESOURCES.filter(({ key }) => business.resource(key).enabled).map(({ key, label }) => <li key={key}>{label}: {business.resource(key).operational ? "disponível" : "em preparação / homologação"}</li>)}</ul>
+          <p className="text-sm text-muted-foreground">Ramo, liberação de módulos e layout do PDV são configurações separadas. Concluir estes dados não libera novas funcionalidades.</p>
+          <Link href={BUSINESS_SETTINGS_HREF} className="text-sm underline" onClick={() => changeOpen(false)}>Revisar ramo e recursos em Configurações</Link>
+        </div>}
+        {(validation || message) && <p role="alert" className="text-sm">{validation || message}</p>}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <span className="text-xs text-muted-foreground">Passo {step} de 3</span>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={saving} onClick={() => changeOpen(false)}>Voltar depois</Button>
+            {step > 1 && <Button type="button" variant="outline" disabled={saving} onClick={() => setStep((value) => value - 1)}>Voltar</Button>}
+            <Button type="submit" disabled={busy}>{saving ? "Salvando e conferindo…" : step < 3 ? "Continuar" : "Concluir"}</Button>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">Voltar depois mantém os dados já salvos. Ao fechar o assistente, o preenchimento ainda não salvo é descartado.</p>
+      </form>}
+      {finished && <div className="space-y-4">
+        <p role="status">Dados básicos salvos e conferidos.</p>
+        <ul className="space-y-3 text-sm">
+          {business.permissions?.hubs.cadastros && <><li><Link className="underline" href="/dashboard/cadastros-v2" onClick={() => changeOpen(false)}>Acessar Cadastros para incluir produtos</Link></li><li><Link className="underline" href="/dashboard/clientes" onClick={() => changeOpen(false)}>Acessar Clientes</Link></li></>}
+          {business.canConfigure && <li><Link className="underline" href="/dashboard/configuracoes?sec=geral" onClick={() => changeOpen(false)}>Revisar dados e configurações operacionais</Link></li>}
+        </ul>
+        <Button onClick={() => changeOpen(false)}>Fechar</Button>
+      </div>}
+    </DialogContent>
+  </Dialog>
+}
