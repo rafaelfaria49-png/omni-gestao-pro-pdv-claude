@@ -376,10 +376,14 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
 
   const cadastroBasicoIncompleto = useMemo(() => {
     if (!storesLoaded) return false
-    const nome = (lojaSelecionada?.nomeFantasia || "").trim()
-    const cnpj = (lojaSelecionada?.cnpj || "").trim()
+    // Onboarding is decided only from this store's authorized persisted reader,
+    // never from config-empresa/local defaults or an unresolved store switch.
+    const remote = lojasRemote?.find((loja) => loja.id === lojaSelecionada?.id)
+    if (!remote) return false
+    const nome = (remote.nomeFantasia || "").trim()
+    const cnpj = (remote.cnpj || "").trim()
     return !nome || !cnpj
-  }, [lojaSelecionada?.cnpj, lojaSelecionada?.nomeFantasia, storesLoaded])
+  }, [lojasRemote, lojaSelecionada?.id, storesLoaded])
 
   const empresaDocumentos = useMemo(
     () => mergeEmpresaComLoja(config.empresa, lojaSelecionada),

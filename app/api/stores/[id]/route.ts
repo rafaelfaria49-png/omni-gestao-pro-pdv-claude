@@ -48,9 +48,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
       return NextResponse.json({ store: null, error: "Unidade não encontrada." }, { status: 404 })
     }
     return NextResponse.json({ store })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha ao carregar unidade"
-    return NextResponse.json({ store: null, error: msg }, { status: 500 })
+  } catch {
+    return NextResponse.json({ store: null, error: "Falha ao carregar unidade. Tente novamente." }, { status: 500 })
   }
 }
 
@@ -222,7 +221,6 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 
     return NextResponse.json({ ok: true, store })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha ao salvar unidade"
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+    return NextResponse.json({ ok: false, error: "Falha ao salvar unidade. Confira os dados e tente novamente." }, { status: 500 })
   }
 }

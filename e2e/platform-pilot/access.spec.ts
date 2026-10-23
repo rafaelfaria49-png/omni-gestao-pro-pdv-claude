@@ -12,6 +12,14 @@ const contexts = new Set<APIRequestContext>()
 const headers = (storeId = "pilot-a") => ({ "x-assistec-loja-id": storeId })
 const password = (key: string) => process.env[`PILOT_PASSWORD_${key.toUpperCase()}`]!
 
+async function enterLoginPassword(page: Page, value: string) {
+  await page.getByLabel("Senha", { exact: true }).evaluate((node, secret) => {
+    const input = node as HTMLInputElement
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, secret)
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+  }, value)
+}
+
 async function loginCredentials(email: string, value: string, store = "pilot-a") {
   const initial = await request.newContext({ baseURL })
   const csrf = await (await initial.get("/api/auth/csrf")).json()
@@ -51,7 +59,7 @@ test("landing e login apresentam acesso operacional sem cadastro/pagamento fict�
 test("formulário real de login estabelece sessão e atravessa o proxy", async ({ page }) => {
   await page.goto("/login")
   await page.getByLabel("Email", { exact: true }).fill("owner@pilot.invalid")
-  await page.getByLabel("Senha", { exact: true }).fill(password("owner"))
+  await enterLoginPassword(page, password("owner"))
   await Promise.all([
     page.waitForURL(baseURL + "/dashboard"),
     page.getByRole("button", { name: "Entrar", exact: true }).click(),
@@ -302,7 +310,7 @@ test("CAIXA básico abre sessão, vende, registra pagamento, baixa estoque e fec
 test("formulário de login autentica credenciais reais do cliente básico", async ({ page }) => {
   await page.goto("/login")
   await page.getByLabel("Email", { exact: true }).fill("admina@pilot.invalid")
-  await page.getByLabel("Senha", { exact: true }).fill(password("adminA"))
+  await enterLoginPassword(page, password("adminA"))
   await page.getByRole("button", { name: "Entrar", exact: true }).click()
   await expect(page).toHaveURL(/\/dashboard/)
   const session = await (await page.request.get("/api/auth/session")).json()
