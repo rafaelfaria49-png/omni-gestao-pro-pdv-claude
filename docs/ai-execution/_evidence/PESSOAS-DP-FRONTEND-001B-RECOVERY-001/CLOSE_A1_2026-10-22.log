@@ -1,0 +1,35 @@
+AEP/1.0-R2 · check pessoas · GOAL PESSOAS-DP-FRONTEND-001B-RECOVERY-001 (tentativa 1/3)
+
+ 1 [PASS ] branch atual = branch do GOAL
+      evidência: git rev-parse --abbrev-ref HEAD → goal/pessoas-001b-recovery-001 (esperado goal/pessoas-001b-recovery-001)
+ 2 [PASS ] worktree = a registrada no open
+      evidência: git rev-parse --show-toplevel → C:/Projetos/omni-gestao-pessoas-001b-recovery-001 (esperado C:/Projetos/omni-gestao-pessoas-001b-recovery-001)
+ 3 [PASS ] árvore limpa
+      evidência: git status --porcelain → (vazio)
+ 4 [PASS ] HEAD aponta para um commit
+      evidência: git rev-parse --verify HEAD^{commit} → 6752c2e525f8d35a830122a0e86c74900ff08f6f
+ 5 [PASS ] base_commit é ancestral da branch
+      evidência: git merge-base --is-ancestor 13700862405a89da3c7d16702318735a88348133 goal/pessoas-001b-recovery-001 → ancestral confirmado
+ 6 [PASS ] caminhos do diff dentro da allowlist
+      evidência: git diff --name-only 13700862405a89da3c7d16702318735a88348133..HEAD → 74 caminho(s), todos dentro
+ 7 [PASS ] nenhum gate de caminho não liberado
+      evidência: git diff --name-only 13700862405a89da3c7d16702318735a88348133..HEAD → nenhum gate tocado
+ 8 [PASS ] docs/execution-tracks/*/goals/** não alterado
+      evidência: git diff --name-only 13700862405a89da3c7d16702318735a88348133..HEAD → caminho quente intocado
+ 9 [PASS ] LEDGER.jsonl sem deleções
+      evidência: git diff --numstat 13700862405a89da3c7d16702318735a88348133..HEAD -- docs/execution-tracks/pessoas/LEDGER.jsonl → 0 linha removida
+10 [FAIL ] teste do GOAL passa
+      evidência: node scripts/pessoas/run-frontend-tests.mjs → exit 1 | [WebServer] node:internal/modules/cjs/loader:1520 | [WebServer]   throw err; | [WebServer]   ^ | [WebServer]  | [WebServer] Error: Cannot find module 'C:\Users\rafae\AppData\Local\Temp\omni-pessoas-test-ugjetl\ws\scripts\pessoas\node_modules\next\dist\bin\next' | [WebServer]     at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15) | [WebServer]     at wrapResolveFilename (node:internal/modu...
+11 [AVISO] upstream origin/main no escopo
+      evidência: git fetch origin && git log 13700862405a89da3c7d16702318735a88348133..origin/main → rebase_needed: 3 commit(s) upstream no escopo: d53b9ec aep(pdv): plan N5-C rev5 regression closeout | 53df380 aep(pdv): plan rev4 auditoria de retry nas superficies restantes | 0ca9eb1 aep(pdv): block PDV-PARITY-N5-C-E2E-002
+12 [AVISO] próximo GOAL elegível (informativo)
+      evidência: ls docs/execution-tracks/pessoas/goals/ → nenhum — fechar o último GOAL da trilha é permitido
+
+check: FALHOU em 10 — nada foi escrito.
+
+close ABORTADO. Nenhum arquivo versionado foi escrito.
+.aep-active PRESERVADO — a sessão continua no mesmo GOAL e na mesma tentativa.
+Corrija os itens FAIL e rode de novo: node scripts/track.mjs close pessoas
+Se a abordagem falhou: node scripts/track.mjs attempt pessoas --fail --reason="..."
+
+CONTEXTO: CONTINUE

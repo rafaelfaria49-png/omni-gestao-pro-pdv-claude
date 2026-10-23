@@ -627,3 +627,12 @@ PR #273 atualizada pelo GitHub Update Branch com expected_head_sha e merge, segu
 O close oficial executou o runner e abortou exclusivamente no item 10: exit 5 por reserva de disco abaixo de 12 GiB em C:, antes da instalação. Item 8 PASS. Nenhum DONE ratificado, sessão intacta. Typecheck/integração/lint/builds/PWA completo/E2E ON/OFF/visual do HEAD integrado permanecem não executados. Cleanup confirmado e porta 55439 livre. Nenhum workspace temporário próprio remanescente; D: indisponível e G: sem espaço. Resultados antigos permanecem históricos. PR segue draft, sem merge/produção.
 
 Medidas, autorrevisão e próxima ação: [CLOSE_BLOCKED_DISK_2026-10-19.md](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/CLOSE_BLOCKED_DISK_2026-10-19.md) e [JSON](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/CLOSE_BLOCKED_DISK_2026-10-19.json).
+
+
+## Execução de 22/10/2026 — disco suficiente, E2E e teto AEP
+
+C: iniciou com 45,744 GiB; não foi necessária limpeza de caches existentes. No HEAD 9acf18758f4db32aed2cb7ac79d64baed244dda5, TypeScript, 162/162 regressões, lint focado, dois builds/MIGRATION_SKIPPED e duas inspeções PWA passaram. Lint global diagnóstico exit 1. E2E ON falhou no seletor de Store (scripts/pessoas/frontend.e2e.ts:32, esperado 1 cartão, recebido 0); OFF e matriz visual não executaram. O close abortou no item 10, com item 8 PASS.
+
+Os dois corretivos locais tratam cwd do webServer e seleção semântica de Store; o último ainda falha no navegador real. As tentativas foram registradas pela CLI, sem reinício da sessão. Teto 3/3 atingido; registrar a falha final e aguardar decisão humana de retomada, sem quarta tentativa automática, produção, merge, GOAL novo ou GOAL 002. Sem push.
+
+[Evidência e limites](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/FINAL_BLOCKED_2026-10-22.md) · [Resultado estruturado](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/FINAL_BLOCKED_2026-10-22.json).
