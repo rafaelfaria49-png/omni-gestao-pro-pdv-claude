@@ -636,3 +636,6 @@ C: iniciou com 45,744 GiB; não foi necessária limpeza de caches existentes. No
 Os dois corretivos locais tratam cwd do webServer e seleção semântica de Store; o último ainda falha no navegador real. As tentativas foram registradas pela CLI, sem reinício da sessão. Teto 3/3 atingido; registrar a falha final e aguardar decisão humana de retomada, sem quarta tentativa automática, produção, merge, GOAL novo ou GOAL 002. Sem push.
 
 [Evidência e limites](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/FINAL_BLOCKED_2026-10-22.md) · [Resultado estruturado](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/FINAL_BLOCKED_2026-10-22.json).
+
+
+Registro formal concluído pela CLI em 22/10: **BLOCKED (decisao)** no commit 37c5d5880c09d45a22f5ba697f95327be5e66e68, três tentativas preservadas, marcador removido oficialmente e veredito NEW_SESSION. Verify --all PASS. Cleanup do runner e das ferramentas temporárias próprias PASS; C: final 39,374 GiB. Nenhuma quarta tentativa, novo GOAL, push, merge ou produção executados. Retomada exige decisão humana no mesmo GOAL.

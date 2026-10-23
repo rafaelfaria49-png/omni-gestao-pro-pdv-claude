@@ -1,0 +1,24 @@
+{
+  "runtime": "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-node24-runtime-6752c2e-20261022",
+  "runtimeAbsent": true,
+  "beforeBytes": 42167713792,
+  "afterRuntimeBytes": 42277335040,
+  "afterBytes": 42277388288,
+  "freeGiBAfter": 39.37388610839844,
+  "ownTemporaryFilesDeleted": [
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-001b-close-20261022-6752c2e.log",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-001b-close-20261022-node24-6752c2e.log",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-001b-close-20261022-runtime24-6752c2e.log",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-001b-close-20261022-runtime24-1b418c8.log",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-001b-close-20261022-runtime24-9acf187.log",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-aep-block-20261022-a3.log",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-config-list-20261022.json",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-session-before-close-20261022-6752c2e.json",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-session-attempt2-20261022-1b418c8.json",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-session-attempt3-20261022-9acf187.json",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-e2e-on-1b418c8-20261022.json",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-e2e-on-9acf187-20261022.json",
+    "C:\\Users\\rafae\\AppData\\Local\\Temp\\pessoas-global-lint-9acf187-20261022.json"
+  ],
+  "existingCachePathsDeleted": []
+}

@@ -15,7 +15,10 @@
     "cachePathsApproved": [],
     "cachePathsDeleted": [],
     "cacheSpaceRecoveredGiB": 0,
-    "cleanupNotNeeded": true
+    "cleanupNotNeeded": true,
+    "afterBytes": 42277388288,
+    "afterGiB": 39.37388610839844,
+    "ownToolingBytesRecovered": 109674496
   },
   "session": {
     "attempt": 3,
@@ -134,7 +137,9 @@
     ],
     "port55439Free": true,
     "runnerResources": "PASS",
-    "temporaryTooling": "cleanup after formal AEP failure recording"
+    "temporaryTooling": "PASS: own runtime and 13 own temporary files removed; no existing caches touched",
+    "runtimeAbsent": true,
+    "finalStatus": "PASS"
   },
   "publication": {
     "push": false,
@@ -142,10 +147,15 @@
     "prHeadUnchanged": true
   },
   "aepBlock": {
-    "status": "PENDING_OFFICIAL_ATTEMPT_FAIL",
-    "reason": "Third attempt failed; protocol maximum reached"
+    "status": "BLOCKED_LOCAL",
+    "commit": "37c5d5880c09d45a22f5ba697f95327be5e66e68",
+    "blockedBy": "decisao",
+    "previousAttempts": 3,
+    "officialMarkerRemoved": true,
+    "contextVerdict": "NEW_SESSION",
+    "verifyAll": "PASS"
   },
-  "nextAction": "Human AEP resumption decision for the existing GOAL, preserving all attempts and evidence; no fourth attempt or new GOAL authorized",
+  "nextAction": "Human AEP unblock/resumption of the existing GOAL in a new session, preserving ledger and attempts. No fourth attempt or GOAL 002 executed.",
   "limits": {
     "existing6752CommitPreserved": true,
     "mainNotIntegratedAgain": true,
@@ -156,5 +166,26 @@
     "realEmployeeData": false,
     "goal002": false,
     "externalReviewRequested": false
-  }
+  },
+  "deliveryFiles": [
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/CLOSE_A1_2026-10-22.log",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/CLOSE_A2_2026-10-22.log",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/CLOSE_A3_2026-10-22.log",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/E2E_CWD_FIX_2026-10-22.json",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/E2E_ON_FAILURE_A3_2026-10-22.json",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/E2E_STORE_LOCATOR_FAILURE_2026-10-22.json",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/FINAL_BLOCKED_2026-10-22.json",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/FINAL_BLOCKED_2026-10-22.md",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/GLOBAL_LINT_A3_2026-10-22.json",
+    "docs/execution-tracks/REGISTRY.md",
+    "docs/execution-tracks/pessoas/LEDGER.jsonl",
+    "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-001.md",
+    "docs/execution-tracks/pessoas/state.json",
+    "docs/pessoas/VALIDACAO_FRONTEND_001B_RECOVERY_001.md",
+    "scripts/pessoas/frontend.e2e.ts",
+    "scripts/pessoas/playwright.frontend.config.ts",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/AEP_BLOCK_A3_2026-10-22.log",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-001/OWN_TEMP_CLEANUP_2026-10-22.json"
+  ],
+  "docs": "Only scoped validation/evidence and CLI-generated AEP artifacts updated; CURRENT_STATUS/CHANGELOG/global memory untouched."
 }
