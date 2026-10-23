@@ -55,12 +55,24 @@ async function mount(page: Page, surface: Surface) {
   } else {
     // O draft vazio não restaura cliente; selecioná-lo pela busca real da superfície.
     const customerInput = page.getByPlaceholder("Nome, CPF ou telefone… [F2]")
-    const searched = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/clientes/search")
+    const productInput = page.getByPlaceholder("Adicionar: nome, SKU ou código de barras… [F3]")
+    // addItemAvulso agenda foco no produto em 50 ms; modal ausente não esgota esse timer.
+    // Esperar o callback conhecido e conferir seu efeito antes de preencher Cliente.
+    await page.waitForTimeout(50)
+    await expect(productInput).toBeFocused()
+    await expect(customerInput).toBeEnabled()
+    const searched = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/clientes/search")
     await customerInput.fill("Cliente")
-    await searched
+    await expect(customerInput).toHaveValue("Cliente")
+    await expect(productInput).toHaveValue("")
+    const searchResponse = await searched
+    expect(searchResponse.request().postDataJSON()).toEqual({ q: "Cliente" })
+    expect(searchResponse.status()).toBe(200)
     // O autofoco pós-Item Avulso pode ter fechado o dropdown enquanto a busca carregava.
     await customerInput.focus()
     await page.getByRole("button", { name: /Cliente sintético/ }).click()
+    await expect(customerInput).toHaveCount(0)
+    await expect(page.getByText(CUSTOMER.name, { exact: true })).toBeVisible()
   }
 }
 async function open(page: Page, surface: Surface) {
