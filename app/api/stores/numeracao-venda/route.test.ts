@@ -26,7 +26,11 @@ vi.mock("@/lib/vendas/store-sale-numbering-provision", () => ({
 import { GET, PUT } from "./route"
 
 function sessao(over: Record<string, unknown> = {}) {
-  return { user: { id: "usr-1", name: "Admin", email: "admin@omni.test", role: "ADMIN", ...over } }
+  return { user: { id: "usr-1", name: "Admin", email: "admin@omni.test", role: "ADMIN", accessScope: "STORE", platformAuthority: false, ...over } }
+}
+
+function sessaoPlataforma(over: Record<string, unknown> = {}) {
+  return sessao({ accessScope: "PLATFORM", platformAuthority: true, ...over })
 }
 
 function put(body: unknown) {
@@ -84,8 +88,8 @@ describe("GET /api/stores/numeracao-venda", () => {
     expect(h.readStatuses).not.toHaveBeenCalled()
   })
 
-  it("aceita SUPER_ADMIN", async () => {
-    h.auth.mockResolvedValue(sessao({ role: "SUPER_ADMIN" }))
+  it("aceita SUPER_ADMIN com autoridade explícita da plataforma", async () => {
+    h.auth.mockResolvedValue(sessaoPlataforma({ role: "SUPER_ADMIN" }))
 
     const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
 
@@ -93,19 +97,20 @@ describe("GET /api/stores/numeracao-venda", () => {
     expect(h.readStatuses).toHaveBeenCalledWith(["loja-1", "loja-2"])
   })
 
-  it("recorta as lojas pela permissão da sessão administrativa", async () => {
+  it("recusa ADMIN de loja na superfície exclusiva da plataforma", async () => {
     h.auth.mockResolvedValue(
       sessao({ storeAccess: "restricted", allowedStoreIds: ["loja-2"] }),
     )
 
     const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
 
-    expect(res.status).toBe(200)
-    expect(h.readStatuses).toHaveBeenCalledWith(["loja-2"])
+    expect(res.status).toBe(403)
+    expect(h.readStatuses).not.toHaveBeenCalled()
+    expect(h.storeFindMany).not.toHaveBeenCalled()
   })
 
   it("devolve erro de leitura sem vazar detalhe de infraestrutura", async () => {
-    h.auth.mockResolvedValue(sessao())
+    h.auth.mockResolvedValue(sessaoPlataforma())
     h.storeFindMany.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.1:6543"))
 
     const res = await GET(new Request("http://localhost/api/stores/numeracao-venda"))
@@ -132,7 +137,7 @@ describe("PUT /api/stores/numeracao-venda — autorização", () => {
     expect(h.provision).not.toHaveBeenCalled()
   })
 
-  it("recusa alteração de loja fora do escopo do operador", async () => {
+  it("recusa ADMIN STORE antes da escrita da numeração", async () => {
     h.auth.mockResolvedValue(
       sessao({ storeAccess: "restricted", allowedStoreIds: ["loja-2"] }),
     )
@@ -142,7 +147,7 @@ describe("PUT /api/stores/numeracao-venda — autorização", () => {
   })
 
   it("exige storeId explícito, sem loja padrão", async () => {
-    h.auth.mockResolvedValue(sessao())
+    h.auth.mockResolvedValue(sessaoPlataforma())
     const res = await PUT(put({ codigo: "RC01" }))
     expect(res.status).toBe(400)
     expect(h.provision).not.toHaveBeenCalled()
@@ -151,7 +156,7 @@ describe("PUT /api/stores/numeracao-venda — autorização", () => {
 
 describe("PUT /api/stores/numeracao-venda — resultados", () => {
   beforeEach(() => {
-    h.auth.mockResolvedValue(sessao())
+    h.auth.mockResolvedValue(sessaoPlataforma())
   })
 
   it("salva e registra auditoria da alteração", async () => {
@@ -201,7 +206,7 @@ describe("PUT /api/stores/numeracao-venda — resultados", () => {
     expect(body.error).toContain("2 caracteres")
   })
 
-  it("revela a loja ocupante apenas quando o operador tem acesso a ela", async () => {
+  it("STORE não consulta conflito nem descobre a loja ocupante", async () => {
     h.provision.mockResolvedValue({
       status: "CONFLICT",
       codigo: "RC01",
@@ -214,8 +219,10 @@ describe("PUT /api/stores/numeracao-venda — resultados", () => {
     const res = await PUT(put({ storeId: "loja-1", codigo: "RC01" }))
     const body = (await res.json()) as { conflitoStoreId: string | null; error: string }
 
-    expect(res.status).toBe(409)
-    expect(body.conflitoStoreId).toBeNull()
+    expect(res.status).toBe(403)
+    expect(body.conflitoStoreId).toBeUndefined()
+    expect(h.provision).not.toHaveBeenCalled()
+    expect(h.recordAudit).not.toHaveBeenCalled()
     expect(body.error).not.toContain("loja-9")
   })
 
@@ -265,5 +272,24 @@ describe("PUT /api/stores/numeracao-venda — resultados", () => {
 
     expect(res.status).toBe(500)
     expect(body.error).not.toMatch(/5432|senha/)
+  })
+})
+
+describe("numeração — autoridade explícita sem promoção por papel", () => {
+  it.each(["ADMIN", "SUPER_ADMIN"])("STORE %s não alcança leitura ou escrita", async (role) => {
+    h.auth.mockResolvedValue(sessao({ role, lojaId: "loja-1", allowedStoreIds: ["loja-1"] }))
+    expect((await GET(new Request("http://localhost/api/stores/numeracao-venda"))).status).toBe(403)
+    expect((await PUT(put({ storeId: "loja-1", codigo: "RC01" }))).status).toBe(403)
+    expect(h.storeFindMany).not.toHaveBeenCalled()
+    expect(h.readStatuses).not.toHaveBeenCalled()
+    expect(h.provision).not.toHaveBeenCalled()
+    expect(h.recordAudit).not.toHaveBeenCalled()
+  })
+  it("claim ausente não concede autoridade ao ADMIN", async () => {
+    h.auth.mockResolvedValue({ user: { id: "usr-1", role: "ADMIN" } })
+    expect((await GET(new Request("http://localhost/api/stores/numeracao-venda"))).status).toBe(403)
+    expect((await PUT(put({ storeId: "loja-1", codigo: "RC01" }))).status).toBe(403)
+    expect(h.storeFindMany).not.toHaveBeenCalled()
+    expect(h.provision).not.toHaveBeenCalled()
   })
 })
