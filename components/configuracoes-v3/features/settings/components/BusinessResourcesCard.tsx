@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useStoreBusiness } from "@/lib/use-store-business"
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
+import { usesClientExperience } from "@/lib/navigation/client-experience"
 import {
   BUSINESS_BRANCHES, BUSINESS_RESOURCES, businessPresentation, resolveBusinessResource,
   type BusinessBranch, type BusinessPresentation, type BusinessResourceKey,
@@ -41,6 +42,12 @@ function BusinessResourcesForm() {
     overrides: { ...capabilities?.overrides, ...overrides },
   }
   const examples = businessPresentation(draft)
+  // Apresentação do cliente: ramos de assistência/acessórios só com a liberação correspondente.
+  // O ramo atual continua listado para não trocar silenciosamente o valor salvo.
+  const client = usesClientExperience(permissions) !== false
+  const branchOffered = (value: BusinessBranch) => !client || value === branch || value === selected ||
+    (value === "assistencia" ? permissions?.hubs.operacoes === true :
+      value === "acessorios" ? permissions?.modules?.deviceCatalog === true : true)
   const disabled = !ready || !canConfigure || saving
   const dirty = selected !== null || Object.keys(overrides).length > 0 || Object.keys(presentation).length > 0
 
@@ -86,7 +93,7 @@ function BusinessResourcesForm() {
         <select id="business-branch" value={selected ?? branch} disabled={disabled}
           onChange={(event) => setSelected(event.target.value as BusinessBranch)}
           className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
-          {Object.entries(BUSINESS_BRANCHES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          {Object.entries(BUSINESS_BRANCHES).filter(([value]) => branchOffered(value as BusinessBranch)).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <div className="mt-5 divide-y divide-border">
           {BUSINESS_RESOURCES.filter((item) => item.key === "service.technical" ? permissions?.hubs.operacoes :
@@ -105,7 +112,7 @@ function BusinessResourcesForm() {
             </label>
           })}
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">Integração com balança: indisponível, depende de equipamento e homologação por terminal. Cor de acessórios não representa grade comercial.</p>
+        <p className="mt-4 text-xs text-muted-foreground">Integração com balança: indisponível, depende de equipamento e homologação por terminal.{(!client || permissions?.modules?.deviceCatalog) && " Cor de acessórios não representa grade comercial."}</p>
         <p className="mt-2 text-xs text-muted-foreground">Para padaria, recomendamos o PDV Clássico. Salvar o ramo preserva a escolha atual de PDV, preços, produtos e estoque.</p>
         <details className="mt-5 text-sm">
           <summary className="cursor-pointer font-medium">Padrões de apresentação do cadastro</summary>

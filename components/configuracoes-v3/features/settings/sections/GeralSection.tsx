@@ -17,6 +17,7 @@ import { GoLiveChecklistRafaCell } from "../components/GoLiveChecklistRafaCell";
 import { BusinessResourcesCard } from "../components/BusinessResourcesCard";
 import { parseStoreBasics } from "@/lib/store-basics";
 import { useStoreBasics, useStoreBasicsScope } from "@/lib/use-store-basics";
+import { usesClientExperience } from "@/lib/navigation/client-experience";
 
 function GeralSectionContent({ storeId }: { storeId: string }) {
   const permissions = useEnterprisePermissions();
@@ -41,7 +42,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
     <div className="space-y-6">
       <SectionHeader
         icon={<Settings className="h-5 w-5" />}
-        title="Geral"
+        title={usesClientExperience(permissions) ? "Dados da loja" : "Geral"}
         description="Dados da unidade, contatos, ramo e recursos utilizados. Revise e salve cada bloco para a unidade ativa."
       />
 
@@ -60,8 +61,14 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
 
       {noLoja ? (
         <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-          Nenhuma unidade ativa. Abra a seção <span className="font-medium text-foreground">Lojas</span> e selecione
-          uma unidade para editar os dados gerais.
+          {permissions?.platformAuthority ? (
+            <>
+              Nenhuma unidade ativa. Abra a seção <span className="font-medium text-foreground">Lojas</span> e selecione
+              uma unidade para editar os dados gerais.
+            </>
+          ) : (
+            "Nenhuma unidade ativa. Selecione a unidade no topo da tela para editar os dados gerais."
+          )}
         </p>
       ) : null}
 
@@ -183,7 +190,8 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
         </div>
       </SettingsCard>
 
-      <SettingsCard
+      {/* Bloco futuro sem persistência: só a visão interna o mostra. */}
+      {usesClientExperience(permissions) === false && <SettingsCard
         title="Preferências regionais"
         description="Integração futura — moeda e fuso não são persistidos; o sistema usa Real (BRL) e fuso do navegador/servidor."
         headerExtra={<SettingsSoonBadge />}
@@ -215,7 +223,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
         <p className="mt-4 text-xs text-muted-foreground">
           Não altere esperando gravar: os selects estão desabilitados até existir campo em Store/StoreSettings.
         </p>
-      </SettingsCard>
+      </SettingsCard>}
       </>
       ) : null}
     </div>

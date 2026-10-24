@@ -20,7 +20,11 @@ import {
   normalizeFormasPagamento,
   type FormaPagamentoConfig,
 } from "@/lib/pdv-formas-pagamento";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
+import { canAccessPage } from "@/lib/auth/page-access";
+import { usesClientExperience } from "@/lib/navigation/client-experience";
 import { FormasPagamentoSettings } from "./FormasPagamentoSettings";
+import { changedFields } from "./settings-patch";
 
 type VendasForm = {
   garantiaPadraoDias: number;
@@ -30,10 +34,6 @@ type VendasForm = {
   moduloControleConsumo: boolean;
   formasPagamento: FormaPagamentoConfig[];
 };
-
-function safePrinter(raw: unknown): Record<string, unknown> {
-  return raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
-}
 
 function formFromPdvParams(p: StorePdvParams): VendasForm {
   return {
@@ -48,41 +48,40 @@ function formFromPdvParams(p: StorePdvParams): VendasForm {
   };
 }
 
-function formsEqual(a: VendasForm, b: VendasForm): boolean {
-  return (
-    a.garantiaPadraoDias === b.garantiaPadraoDias &&
-    a.validadeOrcamentoDias === b.validadeOrcamentoDias &&
-    a.incluirImpostoEstimadoNoPdv === b.incluirImpostoEstimadoNoPdv &&
-    a.aliquotaImpostoEstimadoPdv === b.aliquotaImpostoEstimadoPdv &&
-    a.moduloControleConsumo === b.moduloControleConsumo &&
-    formasPagamentoEqual(a.formasPagamento, b.formasPagamento)
-  );
-}
+const formEquality = {
+  formasPagamento: (a: FormaPagamentoConfig[], b: FormaPagamentoConfig[]) => formasPagamentoEqual(a, b),
+};
 
 function VendasSectionContent() {
   const { toast } = useToast();
   const { lojaAtivaId } = useLojaAtiva();
-  const { hydrated, settings, pdvParams, refresh, storeId } = useStoreSettings();
+  const { hydrated, pdvParams, refresh } = useStoreSettings();
+  const permissions = useEnterprisePermissions();
+  const internal = usesClientExperience(permissions) === false;
+  // Controles seguem o recurso/rota realmente liberados; valores ocultos continuam gravados.
+  const showOrcamentos = internal || permissions?.hubs.operacoes === true;
+  const showImpostos = internal || permissions?.modules?.fiscal === true;
+  const showMesas = canAccessPage(permissions, "/dashboard/vendas/mesas");
 
-  const [remotePrinterConfig, setRemotePrinterConfig] = useState<Record<string, unknown>>({});
   const [form, setForm] = useState<VendasForm>(() => formFromPdvParams(pdvParams));
   const [snapshot, setSnapshot] = useState<VendasForm>(() => formFromPdvParams(pdvParams));
   const [saving, setSaving] = useState(false);
+  const dirty = useMemo(() => changedFields(snapshot, form, formEquality) !== null, [form, snapshot]);
+
   const syncFromSettings = useCallback(() => {
     const next = formFromPdvParams(pdvParams);
     setForm(next);
     setSnapshot(next);
-    setRemotePrinterConfig(safePrinter(settings?.printerConfig));
-  }, [pdvParams, settings?.printerConfig]);
+  }, [pdvParams]);
 
+  // Revalidação do provider não substitui um rascunho em andamento.
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || dirty) return;
     syncFromSettings();
-  }, [hydrated, syncFromSettings, storeId, settings]);
+  }, [hydrated, syncFromSettings, dirty]);
 
   const noLoja = !lojaAtivaId?.trim();
   const busy = !hydrated || saving;
-  const dirty = useMemo(() => !formsEqual(form, snapshot), [form, snapshot]);
 
   const updateForm = <K extends keyof VendasForm>(key: K, value: VendasForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -97,48 +96,35 @@ function VendasSectionContent() {
     if (!lojaHeader) {
       toast({
         title: "Nenhuma unidade ativa",
-        description: "Defina a unidade ativa na seção Lojas e tente novamente.",
+        description: "Selecione a unidade ativa e tente novamente.",
         variant: "destructive",
       });
       return;
     }
 
+    const saved: VendasForm = {
+      garantiaPadraoDias: Math.max(
+        1,
+        Math.min(365, Math.round(Number(form.garantiaPadraoDias)) || configPadrao.pdv.garantiaPadraoDias),
+      ),
+      validadeOrcamentoDias: Math.max(
+        1,
+        Math.min(365, Math.round(Number(form.validadeOrcamentoDias)) || configPadrao.pdv.validadeOrcamentoDias),
+      ),
+      incluirImpostoEstimadoNoPdv: form.incluirImpostoEstimadoNoPdv,
+      aliquotaImpostoEstimadoPdv: Math.max(0, Math.min(100, Number(form.aliquotaImpostoEstimadoPdv) || 0)),
+      moduloControleConsumo: form.moduloControleConsumo,
+      formasPagamento: normalizeFormasPagamento(form.formasPagamento),
+    };
+    // Somente as preferências alteradas: o servidor funde `pdvParams` com o valor gravado.
+    const patch = changedFields(snapshot, saved, formEquality);
+    if (!patch) {
+      setForm(snapshot);
+      return;
+    }
+
     setSaving(true);
     try {
-      const garantiaPadraoDias = Math.max(
-        1,
-        Math.min(
-          365,
-          Math.round(Number(form.garantiaPadraoDias)) || configPadrao.pdv.garantiaPadraoDias,
-        ),
-      );
-      const validadeOrcamentoDias = Math.max(
-        1,
-        Math.min(
-          365,
-          Math.round(Number(form.validadeOrcamentoDias)) || configPadrao.pdv.validadeOrcamentoDias,
-        ),
-      );
-      const aliquotaImpostoEstimadoPdv = Math.max(
-        0,
-        Math.min(100, Number(form.aliquotaImpostoEstimadoPdv) || 0),
-      );
-
-      const nextPdvParams: StorePdvParams = {
-        ...pdvParams,
-        garantiaPadraoDias,
-        validadeOrcamentoDias,
-        incluirImpostoEstimadoNoPdv: form.incluirImpostoEstimadoNoPdv,
-        aliquotaImpostoEstimadoPdv,
-        moduloControleConsumo: form.moduloControleConsumo,
-        formasPagamento: normalizeFormasPagamento(form.formasPagamento),
-      };
-
-      const nextPrinter: Record<string, unknown> = {
-        ...safePrinter(remotePrinterConfig),
-        pdvParams: nextPdvParams,
-      };
-
       const res = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
         method: "PUT",
         credentials: "include",
@@ -146,7 +132,7 @@ function VendasSectionContent() {
           "Content-Type": "application/json",
           [ASSISTEC_LOJA_HEADER]: lojaHeader,
         },
-        body: JSON.stringify({ printerConfig: nextPrinter }),
+        body: JSON.stringify({ printerConfig: { pdvParams: patch } }),
       });
 
       if (!res.ok) {
@@ -154,18 +140,10 @@ function VendasSectionContent() {
         throw new Error(err.error || `Falha ao salvar (HTTP ${res.status})`);
       }
 
-      const saved: VendasForm = {
-        garantiaPadraoDias,
-        validadeOrcamentoDias,
-        incluirImpostoEstimadoNoPdv: form.incluirImpostoEstimadoNoPdv,
-        aliquotaImpostoEstimadoPdv,
-        moduloControleConsumo: form.moduloControleConsumo,
-        formasPagamento: normalizeFormasPagamento(form.formasPagamento),
-      };
+      // Releitura antes de liberar a sincronização: evita reexibir o valor anterior.
+      await refresh().catch(() => {});
       setForm(saved);
       setSnapshot(saved);
-      setRemotePrinterConfig(nextPrinter);
-      await refresh();
       toast({
         title: "Vendas atualizadas",
         description: "Preferências gravadas na unidade ativa.",
@@ -187,14 +165,15 @@ function VendasSectionContent() {
     <div className="space-y-6">
       <SectionHeader
         icon={<ShoppingCart className="h-5 w-5" />}
-        title="Vendas"
-        description="Formas de pagamento, prazos de orçamento, impostos no PDV e módulo de mesas — gravados em printerConfig.pdvParams por unidade."
+        title={internal ? "Vendas" : "Vendas e pagamentos"}
+        description={internal
+          ? "Formas de pagamento, prazos de orçamento, impostos no PDV e módulo de mesas — gravados em printerConfig.pdvParams por unidade."
+          : "Formas de pagamento exibidas nos PDVs desta unidade."}
       />
 
       {noLoja ? (
         <p className="text-sm text-muted-foreground">
-          Nenhuma unidade ativa. Abra a seção <span className="font-medium text-foreground">Lojas</span> e selecione
-          uma unidade.
+          Nenhuma unidade ativa. Selecione uma unidade para editar as preferências de vendas.
         </p>
       ) : null}
 
@@ -209,84 +188,96 @@ function VendasSectionContent() {
         />
       </SettingsCard>
 
-      <SettingsCard
-        title="Orçamentos"
-        description="Usados em mensagens de orçamento e como padrão ao criar orçamento novo."
-      >
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="vendas-garantia-dias">Garantia padrão (dias)</Label>
-            <Input
-              id="vendas-garantia-dias"
-              type="number"
-              min={1}
-              max={365}
-              value={form.garantiaPadraoDias}
-              onChange={(e) => updateForm("garantiaPadraoDias", parseInt(e.target.value, 10) || 0)}
-              disabled={controlsDisabled}
-            />
-            <p className="text-xs text-muted-foreground">Linha &quot;Garantia: X dias&quot; ao enviar orçamento (ex.: WhatsApp).</p>
+      {showOrcamentos ? (
+        <SettingsCard
+          title="Orçamentos"
+          description="Usados em mensagens de orçamento e como padrão ao criar orçamento novo."
+        >
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="vendas-garantia-dias">Garantia padrão (dias)</Label>
+              <Input
+                id="vendas-garantia-dias"
+                type="number"
+                min={1}
+                max={365}
+                value={form.garantiaPadraoDias}
+                onChange={(e) => updateForm("garantiaPadraoDias", parseInt(e.target.value, 10) || 0)}
+                disabled={controlsDisabled}
+              />
+              <p className="text-xs text-muted-foreground">Linha &quot;Garantia: X dias&quot; ao enviar orçamento (ex.: WhatsApp).</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="vendas-validade-dias">Validade do orçamento (dias)</Label>
+              <Input
+                id="vendas-validade-dias"
+                type="number"
+                min={1}
+                max={365}
+                value={form.validadeOrcamentoDias}
+                onChange={(e) => updateForm("validadeOrcamentoDias", parseInt(e.target.value, 10) || 0)}
+                disabled={controlsDisabled}
+              />
+              <p className="text-xs text-muted-foreground">Prazo sugerido ao abrir novo orçamento (editável no formulário).</p>
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="vendas-validade-dias">Validade do orçamento (dias)</Label>
-            <Input
-              id="vendas-validade-dias"
-              type="number"
-              min={1}
-              max={365}
-              value={form.validadeOrcamentoDias}
-              onChange={(e) => updateForm("validadeOrcamentoDias", parseInt(e.target.value, 10) || 0)}
-              disabled={controlsDisabled}
-            />
-            <p className="text-xs text-muted-foreground">Prazo sugerido ao abrir novo orçamento (editável no formulário).</p>
-          </div>
-        </div>
-      </SettingsCard>
+        </SettingsCard>
+      ) : null}
 
-      <SettingsCard
-        title="Impostos"
-        description="Totais no PDV: por padrão o carrinho não soma impostos ao total. Ative só se quiser exibir estimativa."
-      >
-        <div className="space-y-4">
+      {showImpostos ? (
+        <SettingsCard
+          title="Impostos"
+          description="Totais no PDV: por padrão o carrinho não soma impostos ao total. Ative só se quiser exibir estimativa."
+        >
+          <div className="space-y-4">
+            <ToggleRow
+              label="Incluir imposto estimado no total do PDV"
+              hint="Desligado: total = subtotal − descontos. Ligado: total = subtotal + imposto estimado − descontos."
+              checked={form.incluirImpostoEstimadoNoPdv}
+              onCheckedChange={(v) => updateForm("incluirImpostoEstimadoNoPdv", v)}
+              disabled={controlsDisabled}
+            />
+            <div className="space-y-1.5">
+              <Label htmlFor="vendas-aliquota">Alíquota estimada (% sobre o subtotal)</Label>
+              <Input
+                id="vendas-aliquota"
+                type="number"
+                min={0}
+                max={100}
+                step={0.01}
+                value={form.aliquotaImpostoEstimadoPdv}
+                onChange={(e) => updateForm("aliquotaImpostoEstimadoPdv", parseFloat(e.target.value) || 0)}
+                disabled={controlsDisabled || !form.incluirImpostoEstimadoNoPdv}
+              />
+            </div>
+          </div>
+        </SettingsCard>
+      ) : snapshot.incluirImpostoEstimadoNoPdv ? (
+        // Valor gravado altera o total: informar sem oferecer controle não liberado.
+        <p role="note" className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          O PDV desta unidade soma imposto estimado de {snapshot.aliquotaImpostoEstimadoPdv}% ao total. Essa regra é
+          mantida pela administração do sistema.
+        </p>
+      ) : null}
+
+      {showMesas ? (
+        <SettingsCard
+          title="Mesas e consumo"
+          description="Exibe no menu Vendas a tela de mesas: consumo sem pagamento na hora e envio da conta ao PDV."
+        >
           <ToggleRow
-            label="Incluir imposto estimado no total do PDV"
-            hint="Desligado: total = subtotal − descontos. Ligado: total = subtotal + imposto estimado − descontos."
-            checked={form.incluirImpostoEstimadoNoPdv}
-            onCheckedChange={(v) => updateForm("incluirImpostoEstimadoNoPdv", v)}
+            label="Ativar módulo de mesas / consumo"
+            hint={
+              form.moduloControleConsumo
+                ? "Disponível em /dashboard/vendas/mesas e pelo botão Mesas no PDV."
+                : "Quando ativo, o atalho Mesas aparece no PDV desta unidade."
+            }
+            checked={form.moduloControleConsumo}
+            onCheckedChange={(v) => updateForm("moduloControleConsumo", v)}
             disabled={controlsDisabled}
           />
-          <div className="space-y-1.5">
-            <Label htmlFor="vendas-aliquota">Alíquota estimada (% sobre o subtotal)</Label>
-            <Input
-              id="vendas-aliquota"
-              type="number"
-              min={0}
-              max={100}
-              step={0.01}
-              value={form.aliquotaImpostoEstimadoPdv}
-              onChange={(e) => updateForm("aliquotaImpostoEstimadoPdv", parseFloat(e.target.value) || 0)}
-              disabled={controlsDisabled || !form.incluirImpostoEstimadoNoPdv}
-            />
-          </div>
-        </div>
-      </SettingsCard>
-
-      <SettingsCard
-        title="Mesas e consumo"
-        description="Exibe no menu Vendas a tela de mesas: consumo sem pagamento na hora e envio da conta ao PDV."
-      >
-        <ToggleRow
-          label="Ativar módulo de mesas / consumo"
-          hint={
-            form.moduloControleConsumo
-              ? "Disponível em /dashboard/vendas/mesas e pelo botão Mesas no PDV."
-              : "Quando ativo, o atalho Mesas aparece no PDV desta unidade."
-          }
-          checked={form.moduloControleConsumo}
-          onCheckedChange={(v) => updateForm("moduloControleConsumo", v)}
-          disabled={controlsDisabled}
-        />
-      </SettingsCard>
+        </SettingsCard>
+      ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving || noLoja || !dirty}>

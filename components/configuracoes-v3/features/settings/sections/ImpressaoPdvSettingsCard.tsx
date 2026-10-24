@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Printer } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Eye, Printer } from "lucide-react";
 import { SettingsCard } from "../components/SettingsCard";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { Input } from "@/components/configuracoes-v3/components/ui/input";
@@ -20,45 +20,66 @@ import { useStoreSettings } from "@/lib/store-settings-provider";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import {
   defaultPdvImpressaoConfig,
-  mergeImpressaoIntoPrinterConfig,
   type PdvImpressaoConfig,
 } from "@/lib/pdv-impressao-config";
 import { buildPdvReceiptEscPos } from "@/lib/escpos";
 import { sendEscPosViaProxy } from "@/lib/thermal-print";
+import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime";
 import { configPadrao } from "@/lib/config-empresa";
+import { changedFields, mergeImpressaoPatch } from "./settings-patch";
 
-function safePrinter(raw: unknown): Record<string, unknown> {
-  return raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
+/** Preferências consumidas pela impressão do navegador (`openBrowserFallback`/HTML). */
+const BROWSER_SWITCHES = [
+  ["imprimirAutomatico", "Imprimir cupom automaticamente", "Abre a impressão do navegador após confirmar o pagamento no PDV"],
+  ["logoNoCupom", "Exibir logo no cupom", "Usa a logo da unidade quando disponível"],
+] as const;
+
+const PLATFORM_SWITCHES = [
+  ["abrirGaveta", "Abrir gaveta após impressão", "Pulso ESC/POS na gaveta de dinheiro"],
+  ["imprimirAutomatico", "Imprimir cupom automaticamente", "Após confirmar pagamento no PDV"],
+  ["logoNoCupom", "Exibir logo no cupom (HTML)", "Usa logoUrl da unidade quando disponível"],
+  ["imprimirOs", "Permitir impressão térmica de OS", "Ordens de serviço no módulo Operações"],
+  ["imprimirCrediario", "Permitir recibo de crediário", "Baixas em Contas a Receber"],
+] as const;
+
+function normalizeImpressao(form: PdvImpressaoConfig): PdvImpressaoConfig {
+  return {
+    ...form,
+    impressoraHost: form.impressoraHost.trim(),
+    impressoraPorta: Math.min(65535, Math.max(1, Math.round(form.impressoraPorta) || 9100)),
+    rodapeCupom: form.rodapeCupom.trim(),
+    viasCupom: Math.min(5, Math.max(1, Math.round(form.viasCupom) || 1)),
+  };
 }
 
-function configsEqual(a: PdvImpressaoConfig, b: PdvImpressaoConfig): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-export function ImpressaoPdvSettingsCard() {
+/**
+ * `browserOnly`: experiência do cliente. Mostra só o que o caminho permitido (impressão
+ * pelo navegador) consome. Host/porta, vias ESC/POS, gaveta e testes TCP dependem da
+ * ponte interna `/api/print/raw` e continuam exclusivos da plataforma; seus valores
+ * gravados nunca são reenviados a partir desta tela.
+ */
+export function ImpressaoPdvSettingsCard({ browserOnly = false }: { browserOnly?: boolean }) {
   const { toast } = useToast();
-  const { lojaAtivaId } = useLojaAtiva();
+  const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
   const { hydrated, settings, impressaoConfig, refresh } = useStoreSettings();
 
   const [form, setForm] = useState<PdvImpressaoConfig>(() => defaultPdvImpressaoConfig());
   const [snapshot, setSnapshot] = useState<PdvImpressaoConfig>(() => defaultPdvImpressaoConfig());
-  const [remotePrinter, setRemotePrinter] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const dirty = useMemo(() => changedFields(snapshot, form) !== null, [form, snapshot]);
+  const dirtyRef = useRef(false);
 
-  const sync = useCallback(() => {
-    const next = impressaoConfig;
-    setForm(next);
-    setSnapshot(next);
-    setRemotePrinter(safePrinter(settings?.printerConfig));
-  }, [impressaoConfig, settings?.printerConfig]);
-
+  // Revalidação do provider não substitui um rascunho em andamento.
   useEffect(() => {
-    if (!hydrated) return;
-    sync();
-  }, [hydrated, sync, lojaAtivaId]);
+    if (!hydrated || dirtyRef.current) return;
+    setForm(impressaoConfig);
+    setSnapshot(impressaoConfig);
+  }, [hydrated, impressaoConfig, lojaAtivaId]);
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
 
-  const dirty = useMemo(() => !configsEqual(form, snapshot), [form, snapshot]);
   const noLoja = !lojaAtivaId?.trim();
   const busy = !hydrated || saving;
 
@@ -73,35 +94,41 @@ export function ImpressaoPdvSettingsCard() {
     if (!lojaHeader) {
       toast({
         title: "Nenhuma unidade ativa",
-        description: "Defina a unidade ativa na seção Lojas.",
+        description: "Selecione a unidade ativa e tente novamente.",
         variant: "destructive",
       });
       return;
     }
 
+    const impressao = normalizeImpressao(form);
+    const changes = changedFields(normalizeImpressao(snapshot), impressao);
+    if (!changes) {
+      setForm(snapshot);
+      return;
+    }
+
     setSaving(true);
     try {
-      const impressao: PdvImpressaoConfig = {
-        ...form,
-        impressoraHost: form.impressoraHost.trim(),
-        impressoraPorta: Math.min(65535, Math.max(1, Math.round(form.impressoraPorta) || 9100)),
-        rodapeCupom: form.rodapeCupom.trim(),
-        viasCupom: Math.min(5, Math.max(1, Math.round(form.viasCupom) || 1)),
-      };
+      const headers = { [ASSISTEC_LOJA_HEADER]: lojaHeader };
+      // Releitura imediatamente antes do PUT: o servidor substitui `impressao` inteira.
+      const fresh = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
+        credentials: "include",
+        cache: "no-store",
+        headers,
+      });
+      const freshBody = (await fresh.json().catch(() => null)) as { settings?: { printerConfig?: unknown } | null } | null;
+      if (!fresh.ok || !freshBody || !("settings" in freshBody)) {
+        throw new Error("Não foi possível reler as preferências atuais. Nada foi gravado.");
+      }
 
-      const nextPrinter = mergeImpressaoIntoPrinterConfig(remotePrinter, impressao);
       const res = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
         method: "PUT",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          [ASSISTEC_LOJA_HEADER]: lojaHeader,
-        },
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({
-          printerConfig: nextPrinter,
-          ...(impressao.rodapeCupom
-            ? { receiptFooter: impressao.rodapeCupom }
-            : {}),
+          printerConfig: mergeImpressaoPatch(freshBody.settings?.printerConfig, changes),
+          // Rodapé geral só acompanha uma alteração explícita e não vazia do rodapé do cupom.
+          ...(changes.rodapeCupom ? { receiptFooter: changes.rodapeCupom } : {}),
         }),
       });
 
@@ -110,10 +137,9 @@ export function ImpressaoPdvSettingsCard() {
         throw new Error(err.error || `Falha ao salvar (HTTP ${res.status})`);
       }
 
+      await refresh().catch(() => {});
       setForm(impressao);
       setSnapshot(impressao);
-      setRemotePrinter(nextPrinter);
-      await refresh();
       toast({
         title: "Impressão salva",
         description: "O PDV desta unidade passará a usar estas preferências.",
@@ -165,47 +191,78 @@ export function ImpressaoPdvSettingsCard() {
     }
   };
 
+  /** Prévia explícita pelo mesmo HTML do cupom; não chama a ponte TCP nem grava venda. */
+  const handleBrowserPreview = async () => {
+    const result = await printPdvSaleReceipt({
+      config: normalizeImpressao(form),
+      receiptFooter: settings?.receiptFooter ?? null,
+      logoUrl: lojaAtivaRaw?.logoUrl ?? null,
+      forceBrowserFallback: true,
+      input: {
+        nomeFantasia: lojaAtivaRaw?.nomeFantasia?.trim() || "Sua loja",
+        cnpj: lojaAtivaRaw?.cnpj?.trim() || "—",
+        itens: [{ name: "PRÉVIA — sem valor fiscal", quantity: 1, unitPrice: 0, lineTotal: 0 }],
+        subtotal: 0,
+        taxes: 0,
+        discount: 0,
+        total: 0,
+        dataHora: new Date().toLocaleString("pt-BR"),
+      },
+    });
+    if (!result.ok) {
+      toast({ title: "Prévia indisponível", description: result.error, variant: "destructive" });
+    }
+  };
+
+  const switches = browserOnly ? BROWSER_SWITCHES : PLATFORM_SWITCHES;
+
   return (
     <SettingsCard
-      title="Impressão operacional"
-      description="Preferências da estação/unidade consumidas pelo PDV, OS e crediário. O cupom usa ESC/POS pela API /api/print/raw (TCP 9100 ou bridge HTTP)."
+      title={browserOnly ? "Impressão do cupom" : "Impressão operacional"}
+      description={browserOnly
+        ? "O cupom é impresso pela impressão do navegador do computador do caixa. Estas preferências valem para esta unidade."
+        : "Preferências da estação/unidade consumidas pelo PDV, OS e crediário. O cupom usa ESC/POS pela API /api/print/raw (TCP 9100 ou bridge HTTP)."}
     >
       <div className="grid gap-5 sm:grid-cols-2">
-        <div className="space-y-2 min-w-0 sm:col-span-2">
-          <Label htmlFor="imp-host">Impressora de comprovante (host/IP)</Label>
-          <Input
-            id="imp-host"
-            placeholder="Ex.: 192.168.0.50 ou deixe vazio para THERMAL_PRINT_HOST do servidor"
-            value={form.impressoraHost}
-            onChange={(e) => patch("impressoraHost", e.target.value)}
-            disabled={busy || noLoja}
-          />
-          <p className="text-xs text-muted-foreground">
-            Porta raw padrão 9100. Com host configurado, o caixa envia direto para esta térmica; o navegador só é aberto quando o operador escolhe o fallback.
-          </p>
-        </div>
+        {!browserOnly ? (
+          <>
+            <div className="space-y-2 min-w-0 sm:col-span-2">
+              <Label htmlFor="imp-host">Impressora de comprovante (host/IP)</Label>
+              <Input
+                id="imp-host"
+                placeholder="Ex.: 192.168.0.50 ou deixe vazio para THERMAL_PRINT_HOST do servidor"
+                value={form.impressoraHost}
+                onChange={(e) => patch("impressoraHost", e.target.value)}
+                disabled={busy || noLoja}
+              />
+              <p className="text-xs text-muted-foreground">
+                Porta raw padrão 9100. Com host configurado, o caixa envia direto para esta térmica; o navegador só é aberto quando o operador escolhe o fallback.
+              </p>
+            </div>
+
+            <div className="space-y-2 min-w-0">
+              <Label htmlFor="imp-port">Porta TCP</Label>
+              <Input
+                id="imp-port"
+                type="number"
+                min={1}
+                max={65535}
+                value={form.impressoraPorta}
+                onChange={(e) => patch("impressoraPorta", Number(e.target.value) || 9100)}
+                disabled={busy || noLoja}
+              />
+            </div>
+          </>
+        ) : null}
 
         <div className="space-y-2 min-w-0">
-          <Label htmlFor="imp-port">Porta TCP</Label>
-          <Input
-            id="imp-port"
-            type="number"
-            min={1}
-            max={65535}
-            value={form.impressoraPorta}
-            onChange={(e) => patch("impressoraPorta", Number(e.target.value) || 9100)}
-            disabled={busy || noLoja}
-          />
-        </div>
-
-        <div className="space-y-2 min-w-0">
-          <Label>Bobina</Label>
+          <Label id="imp-bobina-label">Bobina</Label>
           <Select
             value={form.bobinaTamanho}
             onValueChange={(v) => patch("bobinaTamanho", v === "58mm" ? "58mm" : "80mm")}
             disabled={busy || noLoja}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="imp-bobina-label">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -216,7 +273,7 @@ export function ImpressaoPdvSettingsCard() {
         </div>
 
         <div className="space-y-2 min-w-0">
-          <Label>Comprovante</Label>
+          <Label id="imp-modo-label">Comprovante</Label>
           <Select
             value={form.comprovanteModo}
             onValueChange={(v) =>
@@ -224,7 +281,7 @@ export function ImpressaoPdvSettingsCard() {
             }
             disabled={busy || noLoja}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="imp-modo-label">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -234,18 +291,20 @@ export function ImpressaoPdvSettingsCard() {
           </Select>
         </div>
 
-        <div className="space-y-2 min-w-0">
-          <Label htmlFor="imp-vias">Vias do cupom</Label>
-          <Input
-            id="imp-vias"
-            type="number"
-            min={1}
-            max={5}
-            value={form.viasCupom}
-            onChange={(e) => patch("viasCupom", Number(e.target.value) || 1)}
-            disabled={busy || noLoja}
-          />
-        </div>
+        {!browserOnly ? (
+          <div className="space-y-2 min-w-0">
+            <Label htmlFor="imp-vias">Vias do cupom</Label>
+            <Input
+              id="imp-vias"
+              type="number"
+              min={1}
+              max={5}
+              value={form.viasCupom}
+              onChange={(e) => patch("viasCupom", Number(e.target.value) || 1)}
+              disabled={busy || noLoja}
+            />
+          </div>
+        ) : null}
 
         <div className="space-y-2 min-w-0 sm:col-span-2">
           <Label htmlFor="imp-rodape">Rodapé do cupom</Label>
@@ -260,21 +319,14 @@ export function ImpressaoPdvSettingsCard() {
       </div>
 
       <ul className="mt-5 divide-y divide-border rounded-lg border border-border">
-        {(
-          [
-            ["abrirGaveta", "Abrir gaveta após impressão", "Pulso ESC/POS na gaveta de dinheiro"],
-            ["imprimirAutomatico", "Imprimir cupom automaticamente", "Após confirmar pagamento no PDV"],
-            ["logoNoCupom", "Exibir logo no cupom (HTML)", "Usa logoUrl da unidade quando disponível"],
-            ["imprimirOs", "Permitir impressão térmica de OS", "Ordens de serviço no módulo Operações"],
-            ["imprimirCrediario", "Permitir recibo de crediário", "Baixas em Contas a Receber"],
-          ] as const
-        ).map(([key, label, hint]) => (
+        {switches.map(([key, label, hint]) => (
           <li key={key} className="flex items-start justify-between gap-4 px-4 py-3 min-w-0">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">{label}</p>
+              <p id={`imp-${key}-label`} className="text-sm font-medium text-foreground">{label}</p>
               <p className="text-xs text-muted-foreground">{hint}</p>
             </div>
             <Switch
+              aria-labelledby={`imp-${key}-label`}
               checked={form[key]}
               onCheckedChange={(v) => patch(key, v)}
               disabled={busy || noLoja}
@@ -283,6 +335,13 @@ export function ImpressaoPdvSettingsCard() {
         ))}
       </ul>
 
+      {browserOnly ? (
+        <p className="mt-4 text-xs text-muted-foreground">
+          Impressora térmica conectada diretamente (rede ou USB), vias automáticas e gaveta de dinheiro dependem de
+          equipamento homologado e não são configuradas por esta tela.
+        </p>
+      ) : null}
+
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" onClick={handleCancel} disabled={busy || !dirty}>
           Cancelar
@@ -290,15 +349,22 @@ export function ImpressaoPdvSettingsCard() {
         <Button type="button" onClick={() => void handleSave()} disabled={busy || noLoja || !dirty}>
           {saving ? "Salvando…" : "Salvar impressão"}
         </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => void handleTestPrint()}
-          disabled={busy || noLoja || testing}
-        >
-          <Printer className="mr-2 h-4 w-4" />
-          {testing ? "Testando…" : "Testar impressão"}
-        </Button>
+        {browserOnly ? (
+          <Button type="button" variant="secondary" onClick={() => void handleBrowserPreview()} disabled={busy || noLoja}>
+            <Eye className="mr-2 h-4 w-4" />
+            Prévia no navegador
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void handleTestPrint()}
+            disabled={busy || noLoja || testing}
+          >
+            <Printer className="mr-2 h-4 w-4" />
+            {testing ? "Testando…" : "Testar impressão"}
+          </Button>
+        )}
       </div>
     </SettingsCard>
   );
