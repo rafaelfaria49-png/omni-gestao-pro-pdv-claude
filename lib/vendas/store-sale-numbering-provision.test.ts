@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import ts from "typescript"
 
 type StoreRow = {
   id: string
@@ -380,6 +381,48 @@ describe("GOAL 002C-0b — contrato estático da superfície de provisionamento"
     "components/dashboard/configuracoes/numeracao-venda-lojas.tsx",
   ] as const
 
+  function assertAdministrativeGates(source: string) {
+    const ast = ts.createSourceFile("route.ts", source, ts.ScriptTarget.Latest, true)
+    for (const [name, module] of [["requireAdmin", "@/lib/require-admin"], ["requireModuleApi", "@/lib/auth/module-access"]]) {
+      expect(ast.statements.some(node => ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text === module && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings) && node.importClause.namedBindings.elements.some(element => !element.propertyName && element.name.text === name))).toBe(true)
+    }
+    function awaitedBinding(statement: ts.Statement, callee: string) {
+      if (!ts.isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) throw new Error("Guard deve ser declaração aguardada")
+      const declaration = statement.declarationList.declarations[0]
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer || !ts.isAwaitExpression(declaration.initializer) || !ts.isCallExpression(declaration.initializer.expression)) throw new Error("Guard deve ser chamado com await")
+      const call = declaration.initializer.expression
+      if (!ts.isIdentifier(call.expression) || call.expression.text !== callee) throw new Error(`Guard obrigatório: ${callee}`)
+      return { name: declaration.name.text, call }
+    }
+    function returned(statement: ts.Statement) {
+      const result = ts.isBlock(statement) && statement.statements.length === 1 ? statement.statements[0] : statement
+      if (!ts.isReturnStatement(result) || !result.expression) throw new Error("Negativa deve retornar")
+      return result.expression
+    }
+    for (const name of ["GET", "PUT"]) {
+      const handler = ast.statements.find((node): node is ts.FunctionDeclaration => ts.isFunctionDeclaration(node) && node.name?.text === name)
+      if (!handler?.body || !handler.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) throw new Error(`Handler exportado ausente: ${name}`)
+      const request = handler.parameters[0]?.name
+      if (!request || !ts.isIdentifier(request)) throw new Error("Request deve ser encaminhado ao guard")
+      const [moduleStatement, moduleDeny, adminStatement, adminDeny] = handler.body.statements
+      const moduleGate = awaitedBinding(moduleStatement, "requireModuleApi")
+      expect(moduleGate.call.arguments.map(argument => ts.isIdentifier(argument) || ts.isStringLiteral(argument) ? argument.text : null)).toEqual([request.text, "platform"])
+      if (!ts.isIfStatement(moduleDeny) || !ts.isIdentifier(moduleDeny.expression)) throw new Error("Módulo deve ser recusado antes do administrativo")
+      expect(moduleDeny.expression.text).toBe(moduleGate.name)
+      const moduleReturn = returned(moduleDeny.thenStatement)
+      expect(ts.isIdentifier(moduleReturn) && moduleReturn.text).toBe(moduleGate.name)
+      const admin = awaitedBinding(adminStatement, "requireAdmin")
+      expect(admin.call.arguments).toHaveLength(0)
+      if (!ts.isIfStatement(adminDeny) || !ts.isPrefixUnaryExpression(adminDeny.expression) || adminDeny.expression.operator !== ts.SyntaxKind.ExclamationToken) throw new Error("Negativa administrativa deve interromper o handler")
+      const condition = adminDeny.expression.operand
+      if (!ts.isPropertyAccessExpression(condition) || !ts.isIdentifier(condition.expression)) throw new Error("Negativa administrativa não usa o resultado real")
+      expect([condition.expression.text, condition.name.text]).toEqual([admin.name, "ok"])
+      const adminReturn = returned(adminDeny.thenStatement)
+      if (!ts.isPropertyAccessExpression(adminReturn) || !ts.isIdentifier(adminReturn.expression)) throw new Error("Resposta administrativa real não retornada")
+      expect([adminReturn.expression.text, adminReturn.name.text]).toEqual([admin.name, "res"])
+    }
+  }
+
   it("não gera código automaticamente", () => {
     for (const path of SUPERFICIE) {
       const source = read(path)
@@ -438,12 +481,21 @@ describe("GOAL 002C-0b — contrato estático da superfície de provisionamento"
     const route = read("app/api/stores/numeracao-venda/route.ts")
     // Nenhum handler pode cair no gate de sessão simples: ele aceita qualquer papel.
     expect(route).not.toContain("requireStoresSession")
-    for (const handler of ["export async function GET", "export async function PUT"]) {
-      const inicio = route.indexOf(handler)
-      expect(inicio, handler).toBeGreaterThanOrEqual(0)
-      const corpo = route.slice(inicio, inicio + 200)
-      expect(corpo, handler).toContain("await requireAdmin()")
-    }
+    assertAdministrativeGates(route)
+  })
+
+  it("a prova administrativa ignora comentários longos sem depender de um corte textual", () => {
+    const route = read("app/api/stores/numeracao-venda/route.ts")
+    assertAdministrativeGates(route.replaceAll("const gate = await requireAdmin()", `/* ${"contexto ".repeat(100)} */ const gate = await requireAdmin()`))
+  })
+
+  it.each([
+    ["guard convertido em string", (route: string) => route.replace("await requireAdmin()", '"await requireAdmin()"')],
+    ["negativa removida", (route: string) => route.replace("if (!gate.ok) return gate.res", "if (!gate.ok) { /* continua */ }")],
+    ["consulta antes dos guards", (route: string) => route.replace("const moduleDenied = await", "await prisma.store.findMany(); const moduleDenied = await")],
+    ["módulo reduzido a sessão simples", (route: string) => route.replace('"platform"', '"authenticated"')],
+  ] as const)("a prova estrutural rejeita %s", (_name, mutate) => {
+    expect(() => assertAdministrativeGates(mutate(read("app/api/stores/numeracao-venda/route.ts")))).toThrow()
   })
 
   it("a superfície administrativa reusa a gestão de unidades existente", () => {
