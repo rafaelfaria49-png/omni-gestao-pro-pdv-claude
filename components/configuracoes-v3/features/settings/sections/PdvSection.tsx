@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu, Eye, ArrowLeft, ScanBarcode } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
@@ -32,6 +32,7 @@ import {
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
 import { experimentalPdvEnabled } from "@/lib/feature-flags";
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
+import { usesClientExperience } from "@/lib/navigation/client-experience";
 import {
   DEFAULT_PDV_SCAN_UNREGISTERED_ACTION,
   normalizePdvScanUnregisteredAction,
@@ -321,9 +322,8 @@ function PdvSectionContent() {
   const { toast } = useToast();
   const { navigateToSection } = useConfiguracoesNav();
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
-  const { hydrated, settings, pdvParams, refresh, storeId } = useStoreSettings();
+  const { hydrated, settings, refresh, storeId } = useStoreSettings();
 
-  const [remotePrinterConfig, setRemotePrinterConfig] = useState<Record<string, unknown>>({});
   const [draftFlow, setDraftFlow] = useState<PdvFlowId>("classico");
   const [savedFlow, setSavedFlow] = useState<PdvFlowId>("classico");
   const [draftClassicModo, setDraftClassicModo] = useState<ClassicModoInicial>("normal");
@@ -356,7 +356,6 @@ function PdvSectionContent() {
 
   const syncFromServer = useCallback(() => {
     const base = safePrinterRecord(settings?.printerConfig);
-    setRemotePrinterConfig(base);
     const flow = resolveFlowFromPrinterConfig(base, lojaAtivaId);
     const modo = resolveClassicModoInicial(base, flow, lojaAtivaId);
     setDraftFlow(flow);
@@ -368,8 +367,10 @@ function PdvSectionContent() {
     setSavedScanAction(scanAction);
   }, [lojaAtivaId, settings?.printerConfig]);
 
+  // Revalidação do provider não substitui um rascunho em andamento.
+  const dirtyRef = useRef(false);
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || dirtyRef.current) return;
     syncFromServer();
   }, [hydrated, syncFromServer, storeId]);
 
@@ -379,6 +380,9 @@ function PdvSectionContent() {
     if (draftScanAction !== savedScanAction) return true;
     return false;
   }, [draftFlow, savedFlow, draftClassicModo, savedClassicModo, draftScanAction, savedScanAction]);
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
 
   const isLightTheme = useMemo(() => {
     if (!previewFlow) return false;
@@ -411,22 +415,24 @@ function PdvSectionContent() {
     }
     setSaving(true);
     try {
-      const base = safePrinterRecord(remotePrinterConfig);
       const classicLayoutKind: "services" | "lovable" =
         draftFlow === "assistencia" ? "services" : "lovable";
-      const nextPdvParams = {
-        ...pdvParams,
-        pdvClassicLayout: classicLayoutKind,
-      };
 
       const mirrorModo: ClassicModoInicial = draftFlow === "classico" ? draftClassicModo : "normal";
 
+      // Somente as chaves desta tela que mudaram. O servidor preserva o restante de
+      // printerConfig e funde pdvParams; reenviar o snapshot da montagem desfaria
+      // gravações posteriores de outras seções (impressão, vendas, aparência).
+      const flowChanged = draftFlow !== savedFlow || mirrorModo !== savedClassicModo;
       const nextPrinter: Record<string, unknown> = {
-        ...base,
-        pdvParams: nextPdvParams,
-        [V3_PDV_SECTION_CARD_KEY]: draftFlow,
-        [V3_PDV_CLASSIC_MODO_KEY]: mirrorModo,
-        [PDV_SCAN_UNREGISTERED_KEY]: draftScanAction,
+        ...(flowChanged
+          ? {
+              pdvParams: { pdvClassicLayout: classicLayoutKind },
+              [V3_PDV_SECTION_CARD_KEY]: draftFlow,
+              [V3_PDV_CLASSIC_MODO_KEY]: mirrorModo,
+            }
+          : {}),
+        ...(draftScanAction !== savedScanAction ? { [PDV_SCAN_UNREGISTERED_KEY]: draftScanAction } : {}),
       };
 
       const res = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
@@ -466,7 +472,6 @@ function PdvSectionContent() {
         /* ignore */
       }
 
-      setRemotePrinterConfig(nextPrinter);
       setSavedFlow(draftFlow);
       setSavedClassicModo(draftFlow === "classico" ? draftClassicModo : "normal");
       setSavedScanAction(draftScanAction);
@@ -993,9 +998,12 @@ function PdvSectionContent() {
         )}
       </div>
 
-      {permissions?.platformAuthority && <div className="pt-6 border-t border-border/40 mt-8">
+      {permissions?.platformAuthority ? <div className="pt-6 border-t border-border/40 mt-8">
         <ImpressaoPdvSettingsCard />
-      </div>}
+      </div> : usesClientExperience(permissions) && permissions?.modules?.pdv ? <div className="pt-6 border-t border-border/40 mt-8">
+        {/* A ponte TCP (/api/print/raw) é interna; o cliente imprime pelo navegador. */}
+        <ImpressaoPdvSettingsCard browserOnly />
+      </div> : null}
 
       {/* Outros Fluxos Integrados — Mini-cards horizontais */}
       {(permissions?.hubs.whatsapp || permissions?.hubs.operacoes) && <div className="pt-6 border-t border-border/40 mt-8">

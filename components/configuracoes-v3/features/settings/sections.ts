@@ -39,10 +39,12 @@ export interface SectionItem {
   icon: LucideIcon;
   /** Quando definido, o item do menu navega para esta rota em vez de trocar a seção interna. */
   href?: string;
+  /** Nome exibido na experiência do cliente; id e rota não mudam. */
+  clientLabel?: string;
 }
 
 export const SETTINGS_SECTIONS: SectionItem[] = [
-  { id: "geral", label: "Geral", description: "Dados da empresa e preferências", icon: Settings },
+  { id: "geral", label: "Geral", description: "Dados da empresa e preferências", icon: Settings, clientLabel: "Dados da loja" },
   { id: "lojas", label: "Lojas", description: "Gerencie suas unidades", icon: Store },
   {
     id: "plano",
@@ -52,8 +54,8 @@ export const SETTINGS_SECTIONS: SectionItem[] = [
     href: "/dashboard/billing",
   },
   { id: "aparencia", label: "Aparência", description: "Tema visual do sistema", icon: Palette },
-  { id: "pdv", label: "PDV", description: "Layout do ponto de venda", icon: Monitor },
-  { id: "vendas", label: "Vendas", description: "Regras de operação", icon: ShoppingCart },
+  { id: "pdv", label: "PDV", description: "Layout do ponto de venda", icon: Monitor, clientLabel: "PDV e impressão" },
+  { id: "vendas", label: "Vendas", description: "Regras de operação", icon: ShoppingCart, clientLabel: "Vendas e pagamentos" },
   { id: "financeiro", label: "Financeiro", description: "Juros, parcelas e relatórios", icon: Wallet },
   {
     id: "fiscal",
@@ -64,12 +66,17 @@ export const SETTINGS_SECTIONS: SectionItem[] = [
   { id: "ia", label: "IA e Créditos", description: "Saldo e modelos de IA", icon: Sparkles },
   { id: "integracoes", label: "Integrações", description: "Conecte serviços externos", icon: Plug },
   { id: "importacao", label: "Importação", description: "Planilhas e dados externos", icon: Upload },
-  { id: "usuarios", label: "Usuários e Permissões", description: "Equipe e acessos", icon: Users },
+  { id: "usuarios", label: "Usuários e Permissões", description: "Equipe e acessos", icon: Users, clientLabel: "Equipe" },
   {
     id: "auditoria",
     label: "Auditoria",
     description: "Histórico de alterações críticas",
     icon: ClipboardList,
   },
-  { id: "seguranca", label: "Segurança", description: "Senha e sessões", icon: ShieldCheck },
+  { id: "seguranca", label: "Segurança", description: "Senha e sessões", icon: ShieldCheck, clientLabel: "Segurança da conta" },
 ];
+
+export function sectionLabel(section: SectionItem | undefined, client: boolean | null): string {
+  if (!section) return "";
+  return client ? section.clientLabel ?? section.label : section.label;
+}

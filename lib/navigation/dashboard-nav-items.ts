@@ -17,8 +17,10 @@ import {
   ClipboardCheck,
   Calculator,
   ScanSearch,
+  Package,
   type LucideIcon,
 } from "lucide-react"
+import { usesClientExperience } from "@/lib/navigation/client-experience"
 import { financeiroV2Enabled, roadmapHubsEnabled } from "@/lib/feature-flags"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { canAccessPage } from "@/lib/auth/page-access"
@@ -89,6 +91,13 @@ export const hubsNavItems: DashboardNavItem[] = [
   },
   { to: "/dashboard/whatsapp", label: "WhatsApp HUB", icon: MessageCircle, visible: (p) => p.hubs.whatsapp },
   { to: "/dashboard/cadastros-v2", label: "Cadastros HUB", icon: Database, visible: (p) => p.hubs.cadastros },
+  {
+    // Consulta de estoque do cliente; a navegação interna continua sem esta entrada.
+    to: "/dashboard/estoque",
+    label: "Estoque",
+    icon: Package,
+    visible: (p) => usesClientExperience(p) === true,
+  },
   {
     to: "/dashboard/estoque/inventario",
     label: "Inventário Assistido",

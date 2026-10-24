@@ -12,6 +12,8 @@ import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
 import { mergeAppearanceIntoPrinterConfig } from "@/lib/store-appearance";
 import type { StudioThemeMode } from "@/components/theme/ThemeProvider";
 import { UnidadeAtivaRequiredBanner } from "../components/UnidadeAtivaRequiredBanner";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
+import { usesClientExperience } from "@/lib/navigation/client-experience";
 
 const THEMES: ThemeOption[] = [
   { id: "light", name: "Light", description: "Claro e vibrante com toques em vermelho.", emoji: "☀️", swatches: ["0 0% 100%", "0 78% 52%", "240 5% 96%", "240 10% 12%"] },
@@ -26,6 +28,11 @@ const THEMES: ThemeOption[] = [
   { id: "coffee-cream", name: "Coffee Cream", description: "Creme e bronze com ouro suave sofisticado.", emoji: "🧉", swatches: ["45 25% 97%", "38 65% 42%", "45 70% 48%", "35 25% 18%"] },
 ];
 
+/** Textos sem referência a lojas internas; temas e ids são os mesmos. */
+const CLIENT_THEME_DESCRIPTIONS: Partial<Record<string, string>> = {
+  "ruby-black": "Fundo preto profundo com vermelho intenso.",
+};
+
 function toStudioTheme(id: ThemeId): StudioThemeMode {
   return id === "black" ? "black" : id;
 }
@@ -36,6 +43,7 @@ export function AparenciaSection() {
   const { appearance, save, hydrated } = useStoreSettings();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const client = usesClientExperience(useEnterprisePermissions());
 
   const noLoja = !lojaAtivaId?.trim();
   const savedTheme = appearance.studioTheme;
@@ -78,7 +86,9 @@ export function AparenciaSection() {
       <SectionHeader
         icon={<Palette className="h-5 w-5" />}
         title="Aparência"
-        description="Tema visual por unidade — salvo em printerConfig.appearance da loja ativa."
+        description={client === false
+          ? "Tema visual por unidade — salvo em printerConfig.appearance da loja ativa."
+          : "Tema visual desta unidade. Cada loja guarda o próprio tema."}
         actions={
           <Button variant="ghost" onClick={() => void persistTheme("light")} disabled={noLoja || saving}>
             <RotateCcw className="mr-2 h-4 w-4" />
@@ -103,7 +113,7 @@ export function AparenciaSection() {
           {THEMES.map((opt) => (
             <ThemeCard
               key={opt.id}
-              option={opt}
+              option={client === false ? opt : { ...opt, description: CLIENT_THEME_DESCRIPTIONS[opt.id] ?? opt.description }}
               active={activeTheme === opt.id}
               onApply={() => void persistTheme(opt.id)}
             />

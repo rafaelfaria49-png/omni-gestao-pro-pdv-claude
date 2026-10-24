@@ -54,6 +54,8 @@ import {
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
+import { usesClientExperience } from "@/lib/navigation/client-experience"
 import { cn } from "@/lib/utils"
 import {
   getRelatorioInventario,
@@ -348,6 +350,7 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
   const [cadastrarAlvo, setCadastrarAlvo] = useState<RelatorioReconciliacaoDTO | null>(null)
   const [cadastrando, setCadastrando] = useState(false)
 
+  const fullCadastroOffered = usesClientExperience(useEnterprisePermissions()) === false
   // Atalho preservado: cadastro COMPLETO (com fiscal) na tela de Cadastros, levando o contexto
   // da pendência (prefil + vínculo automático ao salvar). Usado como link secundário do modal.
   const abrirCadastrarProduto = useCallback(
@@ -1106,7 +1109,9 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
         salvando={cadastrando}
         onConfirmar={(form) => void handleCadastrarRapido(form)}
         onCancelar={() => setCadastrarAlvo(null)}
-        onAbrirCadastroCompleto={cadastrarAlvo ? () => abrirCadastrarProduto(cadastrarAlvo) : undefined}
+        // O prefill/vínculo da pendência é consumido pela tela histórica de Estoque; o
+        // cliente usa o cadastro rápido in-place, que fecha a pendência sem esse atalho.
+        onAbrirCadastroCompleto={cadastrarAlvo && fullCadastroOffered ? () => abrirCadastrarProduto(cadastrarAlvo) : undefined}
       />
 
       {/* Confirmação de ajuste (divergência) / zeragem por ausência */}

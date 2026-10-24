@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Menu } from "lucide-react";
-import { SETTINGS_SECTIONS, type SectionId } from "./features/settings/sections";
+import { SETTINGS_SECTIONS, sectionLabel, type SectionId } from "./features/settings/sections";
 import { isSectionId, parseSectionFromSearchParam } from "./features/settings/section-routing";
 import { SettingsSidebar } from "./features/settings/components/SettingsSidebar";
 import { GeralSection } from "./features/settings/sections/GeralSection";
@@ -29,6 +29,7 @@ import { useLojaAtiva } from "@/lib/loja-ativa";
 import "./configuracoes-v3.css";
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { canAccessSettingsSection } from "@/lib/auth/page-access";
+import { usesClientExperience } from "@/lib/navigation/client-experience";
 
 const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
   geral: GeralSection,
@@ -99,7 +100,11 @@ export default function ConfiguracoesV3Page() {
 
   const permittedActive = canAccessSettingsSection(permissions, active) ? active : "geral";
   const Active = SECTION_COMPONENTS[permittedActive];
-  const currentLabel = SETTINGS_SECTIONS.find((s) => s.id === active)?.label ?? "";
+  // O título acompanha a seção efetivamente exibida (seção negada cai em Geral).
+  const currentLabel = sectionLabel(
+    SETTINGS_SECTIONS.find((s) => s.id === permittedActive),
+    usesClientExperience(permissions),
+  );
   const { lojaAtivaId } = useLojaAtiva();
   const storeScopeKey = lojaAtivaId?.trim() || "__sem_unidade__";
 
@@ -108,14 +113,14 @@ export default function ConfiguracoesV3Page() {
       <ConfiguracoesNavProvider navigateToSection={navigateToSection}>
         <div className="configuracoes-v3-root configuracoes-v3-app flex h-full w-full bg-surface text-foreground">
           {/* Sidebar — desktop */}
-          <div className={active === "pdv" ? "hidden" : "hidden lg:flex h-full shrink-0"}>
+          <div className={permittedActive === "pdv" ? "hidden" : "hidden lg:flex h-full shrink-0"}>
             <SettingsSidebar active={active} onChange={handleChange} />
           </div>
 
           {/* Conteúdo */}
           <main className="flex-1 min-w-0 flex flex-col h-full">
             {/* Top bar mobile */}
-            {active !== "pdv" && (
+            {permittedActive !== "pdv" && (
               <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
                 <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                   <SheetTrigger asChild>
@@ -139,7 +144,7 @@ export default function ConfiguracoesV3Page() {
             <div className="flex-1 overflow-y-auto scroll-elegant">
               <div
                 key={`${active}-${storeScopeKey}`}
-                className={`mx-auto w-full px-4 py-6 sm:px-8 sm:py-10 animate-fade-in ${active === "pdv" ? "max-w-7xl" : "max-w-5xl"}`}
+                className={`mx-auto w-full px-4 py-6 sm:px-8 sm:py-10 animate-fade-in ${permittedActive === "pdv" ? "max-w-7xl" : "max-w-5xl"}`}
               >
                 <Active />
               </div>

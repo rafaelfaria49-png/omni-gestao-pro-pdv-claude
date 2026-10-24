@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { SETTINGS_SECTIONS, SectionId } from "../sections";
+import { SETTINGS_SECTIONS, SectionId, sectionLabel } from "../sections";
 import { cn } from "../../../lib/utils";
 import { Sparkles, CreditCard } from "lucide-react";
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { canAccessSettingsSection } from "@/lib/auth/page-access";
+import { usesClientExperience } from "@/lib/navigation/client-experience";
 
 interface SettingsSidebarProps {
   active: SectionId;
@@ -12,6 +13,7 @@ interface SettingsSidebarProps {
 
 export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
   const permissions = useEnterprisePermissions();
+  const client = usesClientExperience(permissions);
   return (
     <aside className="settings-sidebar-aside border-r border-border bg-sidebarBg lg:w-64 lg:shrink-0 select-none">
       <div className="settings-sidebar-header border-border">
@@ -41,7 +43,7 @@ export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
                 {s.href ? (
                   <Link href={s.href} className={itemClassName}>
                     <Icon className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
-                    <span className="truncate">{s.label}</span>
+                    <span className="truncate">{sectionLabel(s, client)}</span>
                   </Link>
                 ) : (
                   <button type="button" onClick={() => onChange(s.id)} className={itemClassName}>
@@ -51,7 +53,7 @@ export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
                         isActive ? "text-sidebarActive-foreground" : "text-muted-foreground group-hover:text-foreground",
                       )}
                     />
-                    <span className="truncate">{s.label}</span>
+                    <span className="truncate">{sectionLabel(s, client)}</span>
                   </button>
                 )}
               </li>
