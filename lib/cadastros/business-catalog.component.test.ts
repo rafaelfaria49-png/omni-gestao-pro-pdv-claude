@@ -7,6 +7,8 @@ import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 
 const h = vi.hoisted(() => ({
+  storeId: "loja-a",
+  readProducts: vi.fn(async () => ({ produtos: [], total: 0 })),
   capabilities: { version: 1, business: { primaryBranch: "padaria" } } as StoreCapabilitiesV1,
   canConfigure: true,
   permitted: true,
@@ -18,7 +20,7 @@ const h = vi.hoisted(() => ({
   upsert: vi.fn(async (_id: string, _input: unknown) => ({ ok: true, id: "p-new" })),
 }))
 vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
-  storeId: "loja-a", ready: h.ready, hydrated: h.hydrated, capabilities: h.capabilities, refresh: h.refresh,
+  storeId: h.storeId, ready: h.ready, hydrated: h.hydrated, capabilities: h.capabilities, refresh: h.refresh,
   branch: h.capabilities.business?.primaryBranch ?? "assistencia", configured: true,
   permissions: { ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted && h.deviceCatalog } },
   canConfigure: h.canConfigure, presentation: businessPresentation(h.capabilities), save: h.save,
@@ -37,7 +39,7 @@ vi.mock("@/app/actions/cadastros", () => ({
   lookupProdutoPorBarcodeLocal: vi.fn(), resolverCodigoBarras: vi.fn(),
   getCadastrosDashboardStats: vi.fn(async () => ({ kpis: [], saude: [] })),
   listEquipamentosModelos: vi.fn(), listClientes: vi.fn(), listFornecedores: vi.fn(),
-  listProdutosPaginado: vi.fn(), listServicos: vi.fn(), listTecnicos: vi.fn(), listLogsAuditoriaCadastros: vi.fn(),
+  listProdutosPaginado: h.readProducts, listServicos: vi.fn(), listTecnicos: vi.fn(), listLogsAuditoriaCadastros: vi.fn(),
   upsertEquipamentoModelo: vi.fn(), upsertFornecedor: vi.fn(), upsertTecnico: vi.fn(), updateCliente: vi.fn(),
   upsertServico: vi.fn(), deleteProduto: vi.fn(), getUltimoBatchProdutos: vi.fn(),
 }))
@@ -64,7 +66,9 @@ beforeEach(() => {
   h.ready = true
   h.hydrated = true
   h.refresh.mockClear()
-  h.upsert.mockClear()
+  h.storeId = "loja-a"
+  h.upsert.mockReset().mockResolvedValue({ ok: true, id: "p-new" })
+  h.readProducts.mockClear()
   h.save.mockClear()
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })))
 })
@@ -156,8 +160,8 @@ describe("Cadastros adaptados por recursos e produto", () => {
     expect(payload).not.toHaveProperty("active")
     expect(payload.metadata).not.toHaveProperty("catalogoAparelhos")
     expect(payload.metadata).not.toHaveProperty("comercial")
-    expect(payload.metadata.atributos).not.toHaveProperty("modeloCompativel")
-    expect(payload.garantia).toBe(60)
+    expect(payload.metadata.atributos ?? {}).not.toHaveProperty("modeloCompativel")
+    expect(payload).not.toHaveProperty("garantia")
   })
   it("assistência existente reabre sua configuração pertinente", async () => {
     h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
@@ -189,6 +193,7 @@ describe("Cadastros adaptados por recursos e produto", () => {
   it("variedades prepara peso sem exigir ramo padaria", async () => {
     h.capabilities = { version: 1, business: { primaryBranch: "variedades" }, overrides: { "catalog.weight": true } }
     product()
+    fireEvent.change(screen.getByRole("textbox", { name: "Nome", exact: true }), { target: { value: "Grãos" } })
     fireEvent.change(screen.getByRole("combobox", { name: "Forma de venda" }), { target: { value: "peso" } })
     fireEvent.click(screen.getByRole("button", { name: "Salvar produto" }))
     await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
@@ -246,5 +251,91 @@ describe("Editor oficial de configuração", () => {
     expect((screen.getByRole("combobox", { name: "Ramo principal" }) as HTMLSelectElement).disabled).toBe(true)
     expect(document.body.textContent).toMatch(/Venda fracionada.*indisponíveis/)
     expect(document.body.textContent).toMatch(/Estoque por combinação.*indisponíveis/)
+  })
+})
+
+describe("Cadastro manual: números, patch e confirmação", () => {
+  const input = (name: string | RegExp) => screen.getByLabelText(name) as HTMLInputElement
+  const fill = (name: string | RegExp, value: string) => fireEvent.change(input(name), { target: { value } })
+  const save = () => fireEvent.click(screen.getByRole("button", { name: "Salvar produto", exact: true }))
+  const next = () => fireEvent.click(screen.getByRole("button", { name: "Salvar e cadastrar outro" }))
+
+  it("padaria recolhe complementos e fiscal, identifica UN e foca o nome", () => {
+    product()
+    expect(screen.getByText("Informações complementares").closest("details")?.open).toBe(false)
+    expect(screen.getByText("Dados fiscais do produto").closest("details")?.open).toBe(false)
+    expect(input("Código interno (SKU)").placeholder).toBe("Opcional")
+    expect(screen.queryByText("Margem")).toBeNull()
+    expect(input("Preço venda (R$ / UN)")).toBeTruthy()
+    expect(document.activeElement).toBe(input("Nome"))
+  })
+  it("dinheiro brasileiro chega numérico; códigos e custo vazios são omitidos", async () => {
+    product(); fill("Nome", "Bolo"); fill(/Preço venda/, "1.234,56"); save()
+    await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
+    expect(h.upsert.mock.calls[0][1]).toMatchObject({ nome: "Bolo", preco: 1234.56, estoque: 0 })
+    for (const key of ["custo", "sku", "barras", "garantia"]) expect(h.upsert.mock.calls[0][1]).not.toHaveProperty(key)
+  })
+  it.each([["Preço venda (R$ / UN)", "abc"], ["Custo (R$ / UN)", "NaN"], ["Preço venda (R$ / UN)", "Infinity"], ["Preço venda (R$ / UN)", "-1"], ["Estoque inicial", "1,5"], ["Estoque inicial", "1.5"]])("recusa %s = %s sem perder preenchimento", async (label, raw) => {
+    product(); fill("Nome", "Pão"); fill(label, raw); next()
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/inválido/))
+    expect(input(label).value).toBe(raw); expect(input("Nome").value).toBe("Pão"); expect(h.upsert).not.toHaveBeenCalled()
+  })
+  it("zero explícito é enviado; preço vazio permanece omitido", async () => {
+    product(); fill("Nome", "Pão sem preço"); fill(/Custo/, "0"); save()
+    await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
+    expect(h.upsert.mock.calls[0][1]).toMatchObject({ custo: 0, estoque: 0 })
+    expect(h.upsert.mock.calls[0][1]).not.toHaveProperty("preco")
+  })
+  it("rejeição confirmada mantém a ficha e permite corrigir", async () => {
+    h.upsert.mockResolvedValueOnce({ ok: false, type: "VALIDATION_ERROR", message: "Produto já cadastrado nesta loja." } as never)
+    product(); fill("Nome", "Bolo"); fill(/Preço venda/, "5,20"); next()
+    await screen.findByRole("alert")
+    expect(input("Nome").value).toBe("Bolo"); expect(input(/Preço venda/).value).toBe("5,20")
+    expect((screen.getByRole("button", { name: "Salvar produto", exact: true }) as HTMLButtonElement).disabled).toBe(false)
+  })
+  it("duplo clique só envia uma vez; reset aguarda resposta e descarta id e dados específicos", async () => {
+    let resolve!: (result: { ok: boolean; id: string }) => void
+    h.upsert.mockImplementationOnce(() => new Promise((done) => { resolve = done }))
+    product({ nome: "Primeiro", sku: "SKU-ANTERIOR", barras: "789123", preco: 5, custo: 2, estoque: 8, garantia: 90,
+      metadata: { atributos: { descricao: "Detalhes anteriores" }, fiscal: { ncm: "39269090" } } })
+    next(); next(); expect(h.upsert).toHaveBeenCalledOnce(); expect(input("Nome").value).toBe("Primeiro")
+    resolve({ ok: true, id: "p-existing" })
+    await waitFor(() => expect(input("Nome").value).toBe(""))
+    expect(document.activeElement).toBe(input("Nome"))
+    for (const label of ["Código interno (SKU)", "Código de barras", "Preço venda (R$ / UN)", "Custo (R$ / UN)", "Garantia (dias)", "Descrição", "NCM"]) expect(input(label).value).toBe("")
+    expect(input("Estoque inicial").value).toBe("0"); expect(screen.getByRole("status").textContent).toContain("Primeiro foi salvo")
+    fill("Nome", "Segundo"); save()
+    await waitFor(() => expect(h.upsert).toHaveBeenCalledTimes(2))
+    expect(h.upsert.mock.calls[1][1]).toMatchObject({ nome: "Segundo", estoque: 0, metadata: {} })
+    for (const key of ["id", "barras", "sku", "garantia", "custo", "preco"]) expect(h.upsert.mock.calls[1][1]).not.toHaveProperty(key)
+  })
+  it("resposta perdida exige consulta sem retry e preserva o formulário", async () => {
+    h.upsert.mockRejectedValueOnce(new Error("Resposta perdida"))
+    product(); fill("Nome", "Talvez salvo"); next()
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("pode ter sido gravado"))
+    expect(input("Nome").value).toBe("Talvez salvo"); save(); expect(h.upsert).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole("button", { name: "Verificar cadastro na loja" }))
+    await waitFor(() => expect(h.readProducts).toHaveBeenCalledWith("loja-a", { q: "Talvez salvo", pageSize: 10 }))
+    await screen.findByText(/Isso não confirma que a gravação falhou/); expect(h.upsert).toHaveBeenCalledOnce()
+  })
+  it.each(["loja", "fechar"])("resposta antiga não preenche ou fecha outra ficha (%s)", async (change) => {
+    let resolve!: (result: { ok: boolean; id: string }) => void
+    h.upsert.mockImplementationOnce(() => new Promise((done) => { resolve = done }))
+    const onClose = vi.fn(), onSaved = vi.fn(), props = { open: true, onClose: vi.fn(), storeId: "loja-a" }
+    const actual = { ...props, onClose, onSaved }
+    const ui = render(React.createElement(ProductAIModal, actual))
+    fill("Nome", "Antigo"); next()
+    if (change === "loja") { h.storeId = "loja-b"; ui.rerender(React.createElement(ProductAIModal, { ...actual, storeId: "loja-b" })) }
+    else { ui.rerender(React.createElement(ProductAIModal, { ...actual, open: false })); ui.rerender(React.createElement(ProductAIModal, actual)) }
+    fill("Nome", "Novo rascunho"); resolve({ ok: true, id: "antigo" })
+    await waitFor(() => expect(input("Nome").value).toBe("Novo rascunho"))
+    expect(onClose).not.toHaveBeenCalled(); expect(onSaved).not.toHaveBeenCalled()
+  })
+  it("editar só preço omite campos comuns e metadata não alterados", async () => {
+    product({ nome: "Legado", sku: "S", barras: "789", garantia: 90, preco: 12.345, custo: 3,
+      metadata: { fiscal: { ncm: "39269090", cest: "1700600", cst: "010" }, atributos: { descricao: "Original", tags: ["a"], modeloCompativel: "Modelo" }, desconhecido: true } })
+    fill(/Preço venda/, "20,00"); save()
+    await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
+    expect(h.upsert.mock.calls[0][1]).toEqual({ id: "p-existing", preco: 20, metadata: {} })
   })
 })

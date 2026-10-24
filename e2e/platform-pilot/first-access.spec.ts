@@ -32,7 +32,10 @@ async function logout(page: Page) {
   expect(!!(await (await page.request.get("/api/auth/session")).json())?.user).toBe(false)
 }
 const wizard = (page: Page) => page.getByRole("dialog").filter({ has: page.getByTestId("first-access-store") })
-const field = (scope: Locator, label: string) => scope.locator(`xpath=.//div[label[normalize-space()="${label}"]]`).locator("input, textarea").first()
+const field = (scope: Locator, label: string) => label === "Preço venda (R$)"
+  ? scope.getByLabel(/^Preço venda \(R\$ \/ /)
+  : label === "SKU" ? scope.getByLabel(/^(SKU|Código interno \(SKU\))$/)
+    : scope.locator(`xpath=.//div[label[normalize-space()="${label}"]]`).locator("input, textarea").first()
 const productModal = (page: Page) => page.locator("div.fixed.inset-0").filter({ has: page.locator('[data-omni-ui-kit="modal-header"]') }).filter({ has: page.getByRole("button", { name: "Salvar produto", exact: true }) })
 const row = (page: Page, name: string) => page.locator("tbody tr").filter({ hasText: name })
 async function products(page: Page) {

@@ -66,6 +66,7 @@ jobs:
           lib/store-settings-put.test.ts lib/store-settings-request-epoch.test.ts
           lib/pdv-settings-server-first.test.ts lib/pdv/capability-runtime.test.ts
           lib/cadastros/business-catalog.component.test.ts lib/cadastros/product-write-service.test.ts
+          lib/cadastros/manual-product-input.test.ts lib/cadastros/natural-text lib/cadastros/voice-capture
           lib/cadastros/product-rest-007.test.ts lib/cadastros/product-write-create-tx-014.test.ts
           lib/cadastros/produto-upsert-metadata.test.ts
           lib/ops-upsert-venda.test.ts lib/ops-upsert-venda-fractional.test.ts
@@ -84,10 +85,13 @@ jobs:
           node node_modules/eslint/bin/eslint.js
           lib/store-business-capabilities.ts lib/use-store-business.ts
           lib/cadastros/product-commercial-contract.ts lib/cadastros/product-write-service.ts
+          lib/cadastros/manual-product-input.ts lib/cadastros/manual-product-input.test.ts
+          lib/cadastros/business-catalog.component.test.ts
           lib/capabilities-persistence-v1.ts lib/pdv-settings-server-first.ts
           lib/store-settings-provider.tsx lib/perfil-loja-provider.tsx
           components/configuracoes-v3/features/settings/components/BusinessResourcesCard.tsx
           components/cadastros/lovable/components/cadastros/produto-ia.tsx
+          components/cadastros/lovable/components/cadastros/ui-kit.tsx
           components/cadastros/lovable/components/cadastros/CadastrosHub.tsx
           scripts/cadastros/smoke-ramos.mjs
           app/actions/cadastros.ts app/actions/estoque.ts
@@ -100,7 +104,11 @@ jobs:
       - name: TypeScript completo
         run: npm run typecheck
       - name: Build isolado sem migrations
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/ramos-build.log
+          grep -q PROXY_PRISMA_ARTIFACT_VERIFIED /tmp/ramos-build.log
+          grep -q MIGRATION_SKIPPED /tmp/ramos-build.log
       - run: npx playwright install --with-deps chromium
       - name: Smoke dos componentes reais em desktop e celular
         run: node scripts/cadastros/smoke-ramos.mjs
@@ -178,7 +186,11 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Build de produção sem migrations
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/ramos-e2e-build.log
+          grep -q PROXY_PRISMA_ARTIFACT_VERIFIED /tmp/ramos-e2e-build.log
+          grep -q MIGRATION_SKIPPED /tmp/ramos-e2e-build.log
         env:
           AUTH_SECRET: isolated-ramo-e2e-build-only
           AUTH_TRUST_HOST: "true"
