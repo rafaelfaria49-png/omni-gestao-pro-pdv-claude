@@ -44,7 +44,7 @@ test.beforeAll(async () => {
     [ASSIST, "Assistência Sintética CX", "assistencia", [...BASIC_MODULE_ACCESS.modules, "service", "deviceCatalog"]],
     [NOVA, "Padaria Nova CX", "padaria", BASIC_MODULE_ACCESS.modules],
   ] as const) {
-    await db.store.create({ data: { id, name, cnpj: id === NOVA ? null : "00.000.000/0001-91", moduleAccess: { version: 1, modules: [...modules] } } })
+    await db.store.create({ data: { id, name, cnpj: id === NOVA ? "" : "00.000.000/0001-91", moduleAccess: { version: 1, modules: [...modules] } } })
     await db.storeSettings.create({ data: { storeId: id, printerConfig: printerConfig(branch) } })
   }
   for (const [key, u] of Object.entries(USERS) as Array<[UserKey, (typeof USERS)[UserKey]]>) {
