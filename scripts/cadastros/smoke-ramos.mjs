@@ -41,6 +41,7 @@ const bundle = await build({
       "@/lib/auth/use-enterprise-permissions": `export const useEnterprisePermissions=()=>({platformAuthority:true,hubs:{operacoes:true},modules:{deviceCatalog:true}});`,
       "@/lib/use-store-business": `import React from 'react';export const HarnessContext=React.createContext(null);export const useStoreBusiness=()=>React.useContext(HarnessContext);`,
       "@/app/actions/cadastros": `export const listCategorias=async()=>[];export const listMarcas=async()=>[];
+        export const listProdutosPaginado=async()=>({produtos:[],total:0});
         export const listCategoriasMarcasUsadasEmProduto=async()=>({categorias:[],marcas:[]});
         export const upsertCategoria=async()=>({id:'cat',name:'Categoria'});export const upsertMarca=upsertCategoria;
         export const lookupProdutoPorBarcodeLocal=async()=>({ok:true,produto:null});export const resolverCodigoBarras=lookupProdutoPorBarcodeLocal;
@@ -68,6 +69,15 @@ try {
     assert.equal(await page.getByRole("checkbox", { name: /Assistência técnica/ }).isChecked(), false)
     assert.equal(await page.getByRole("checkbox", { name: /Acessórios para aparelhos/ }).isChecked(), false)
     await page.screenshot({ path: path.join(evidence, `configuracoes-${width}.png`), fullPage: true })
+    await page.getByRole("button", { name: "Novo produto isolado" }).click()
+    const bakery = page.getByRole("dialog", { name: "Novo produto", exact: true })
+    await expect(bakery.getByLabel("Nome", { exact: true })).toBeFocused()
+    await expect(bakery.getByLabel("Preço venda (R$ / UN)", { exact: true })).toBeVisible()
+    await expect(bakery.getByText("Garantia (dias)")).toBeHidden()
+    await expect(bakery.getByLabel("NCM", { exact: true })).toBeHidden()
+    assert.equal(await page.locator('[data-omni-ui-kit="modal-body"]').evaluate((element) => element.scrollWidth <= element.clientWidth + 1), true)
+    await page.screenshot({ path: path.join(evidence, `padaria-manual-${width}.png`), fullPage: true })
+    await bakery.getByRole("button", { name: "Cancelar" }).click()
     await page.getByRole("combobox", { name: "Ramo principal" }).selectOption("variedades")
     await page.getByRole("checkbox", { name: /Produtos por peso/ }).check()
     await page.getByRole("checkbox", { name: /Grade comercial/ }).check()
@@ -92,7 +102,7 @@ try {
     assert.equal(product.store, "loja-sintetica")
     assert.equal(product.input.metadata.comercial.modoVenda, "peso")
     assert.equal(Object.hasOwn(product.input, "accessoryConfig"), false)
-    assert.equal(Object.hasOwn(product.input.metadata.atributos, "modeloCompativel"), false)
+    assert.equal(Object.hasOwn(product.input.metadata.atributos ?? {}, "modeloCompativel"), false)
     assert.deepEqual(errors, []); assert.deepEqual(external, [])
     results.push({ width, settings: "SIMULATED_IO", product: "SIMULATED_IO", operationalWeight: false, overflow: false, pageErrors: 0, externalRequests: 0 })
     await page.close()

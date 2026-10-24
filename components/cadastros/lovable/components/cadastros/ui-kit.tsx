@@ -1,16 +1,17 @@
 import { forwardRef, type ReactNode, useState } from "react";
 import { X } from "lucide-react";
 
-export function Modal({ open, onClose, title, subtitle, children, size = "lg" }: {
+export function Modal({ open, onClose, title, subtitle, children, size = "lg", accessible = false }: {
   open: boolean; onClose: () => void; title: string; subtitle?: string; children: ReactNode;
   size?: "md" | "lg" | "xl";
+  accessible?: boolean;
 }) {
   if (!open) return null;
   const w = size === "xl" ? "max-w-5xl" : size === "lg" ? "max-w-3xl" : "max-w-xl";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${w} max-h-[90vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col`}>
+      <div role={accessible ? "dialog" : undefined} aria-modal={accessible || undefined} aria-label={accessible ? title : undefined} className={`relative w-full ${w} max-h-[90vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col`}>
         <div
           data-omni-ui-kit="modal-header"
           className="flex items-start justify-between gap-3 border-b border-border px-5 py-4 md:px-6"
@@ -19,7 +20,7 @@ export function Modal({ open, onClose, title, subtitle, children, size = "lg" }:
             <h2 className="text-base font-semibold leading-tight text-foreground">{title}</h2>
             {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="rounded-md p-1.5 hover:bg-accent text-muted-foreground">
+          <button onClick={onClose} aria-label={accessible ? "Fechar cadastro" : undefined} className="rounded-md p-1.5 hover:bg-accent text-muted-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>

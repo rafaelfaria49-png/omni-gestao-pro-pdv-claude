@@ -32,7 +32,10 @@ async function logout(page: Page) {
   expect(!!(await (await page.request.get("/api/auth/session")).json())?.user).toBe(false)
 }
 const wizard = (page: Page) => page.getByRole("dialog").filter({ has: page.getByTestId("first-access-store") })
-const field = (scope: Locator, label: string) => scope.locator(`xpath=.//div[label[normalize-space()="${label}"]]`).locator("input, textarea").first()
+const field = (scope: Locator, label: string) => label === "Preço venda (R$)"
+  ? scope.getByLabel(/^Preço venda \(R\$ \/ /)
+  : label === "SKU" ? scope.getByLabel(/^(SKU|Código interno \(SKU\))$/)
+    : scope.locator(`xpath=.//div[label[normalize-space()="${label}"]]`).locator("input, textarea").first()
 const productModal = (page: Page) => page.locator("div.fixed.inset-0").filter({ has: page.locator('[data-omni-ui-kit="modal-header"]') }).filter({ has: page.getByRole("button", { name: "Salvar produto", exact: true }) })
 const row = (page: Page, name: string) => page.locator("tbody tr").filter({ hasText: name })
 async function products(page: Page) {
@@ -255,24 +258,36 @@ test("falha de contatos, duplo clique e resposta incerta preservam dados e retom
   expect((await db.store.findUniqueOrThrow({ where: { id: "pilot-initial-a" } })).logoUrl).toBe("/synthetic-logo.svg")
 })
 
-test("operador sem configuração e payload para outra loja não gravam; A01 sintética conserva autoridade", async ({ page }) => {
-  await login(page, "cashier@pilot.invalid", process.env.PILOT_PASSWORD_CASHIER!)
-  const before = await db.store.findUniqueOrThrow({ where: { id: "pilot-a" } })
-  for (const id of ["pilot-a", "pilot-b"]) {
-    const headers = { "x-assistec-loja-id": id }
-    expect((await page.request.put(`/api/stores/${id}`, { headers, data: { name: "Ataque sintético" } })).status()).toBe(403)
-    expect((await page.request.put(`/api/stores/${id}/settings`, { headers, data: { contactEmail: "attack@pilot.invalid" } })).status()).toBe(403)
+test("operador sem configuração e payload para outra loja não gravam; A01 sintética conserva autoridade", async ({ browser, baseURL }) => {
+  // Separate cookie jars prevent in-flight session responses from restoring the previous identity.
+  const asUser = async (email: string, password: string, verify: (page: Page) => Promise<void>) => {
+    const context = await browser.newContext({ baseURL })
+    try {
+      const page = await context.newPage()
+      await login(page, email, password)
+      await verify(page)
+    } finally {
+      await context.close()
+    }
   }
-  expect(await db.store.findUniqueOrThrow({ where: { id: "pilot-a" } })).toEqual(before)
-  await page.context().clearCookies()
-  await login(page, "admina@pilot.invalid", process.env.PILOT_PASSWORD_ADMINA!)
-  for (const suffix of ["", "/settings"]) {
-    expect((await page.request.put(`/api/stores/pilot-b${suffix}`, { headers: { "x-assistec-loja-id": "pilot-a" }, data: suffix ? { contactEmail: "attack@pilot.invalid" } : { name: "Ataque sintético" } })).status()).toBe(403)
-  }
-  await page.context().clearCookies()
-  await login(page, "owner@pilot.invalid", process.env.PILOT_PASSWORD_OWNER!)
-  const session = await (await page.request.get("/api/auth/session")).json()
-  expect({ scope: session.user.accessScope, platform: session.user.platformAuthority, stores: session.user.storeAccess }).toEqual({ scope: null, platform: true, stores: "all" })
-  expect((await page.request.get("/api/admin/users")).status()).toBe(200)
-  await expect(wizard(page)).toHaveCount(0)
+  await asUser("cashier@pilot.invalid", process.env.PILOT_PASSWORD_CASHIER!, async (page) => {
+    const before = await db.store.findUniqueOrThrow({ where: { id: "pilot-a" } })
+    for (const id of ["pilot-a", "pilot-b"]) {
+      const headers = { "x-assistec-loja-id": id }
+      expect((await page.request.put(`/api/stores/${id}`, { headers, data: { name: "Ataque sintético" } })).status()).toBe(403)
+      expect((await page.request.put(`/api/stores/${id}/settings`, { headers, data: { contactEmail: "attack@pilot.invalid" } })).status()).toBe(403)
+    }
+    expect(await db.store.findUniqueOrThrow({ where: { id: "pilot-a" } })).toEqual(before)
+  })
+  await asUser("admina@pilot.invalid", process.env.PILOT_PASSWORD_ADMINA!, async (page) => {
+    for (const suffix of ["", "/settings"]) {
+      expect((await page.request.put(`/api/stores/pilot-b${suffix}`, { headers: { "x-assistec-loja-id": "pilot-a" }, data: suffix ? { contactEmail: "attack@pilot.invalid" } : { name: "Ataque sintético" } })).status()).toBe(403)
+    }
+  })
+  await asUser("owner@pilot.invalid", process.env.PILOT_PASSWORD_OWNER!, async (page) => {
+    const session = await (await page.request.get("/api/auth/session")).json()
+    expect({ scope: session.user.accessScope, platform: session.user.platformAuthority, stores: session.user.storeAccess }).toEqual({ scope: null, platform: true, stores: "all" })
+    expect((await page.request.get("/api/admin/users")).status()).toBe(200)
+    await expect(wizard(page)).toHaveCount(0)
+  })
 })

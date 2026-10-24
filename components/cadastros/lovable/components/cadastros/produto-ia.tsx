@@ -11,6 +11,7 @@ import {
   listCategorias,
   listCategoriasMarcasUsadasEmProduto,
   listMarcas,
+  listProdutosPaginado,
   lookupProdutoPorBarcodeLocal,
   resolverCodigoBarras,
   upsertCategoria,
@@ -65,6 +66,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useStoreBusiness } from "@/lib/use-store-business";
 import { hasInvalidProductCommercial, productCommercialFromMetadata, productSpecificApplicability, type ProductCommercialV1 } from "@/lib/cadastros/product-commercial-contract";
+import { manualProductNumberText, parseManualProductNumber } from "@/lib/cadastros/manual-product-input";
 
 function metadataRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -190,6 +192,7 @@ function CategoriaMarcaCombobox({
   placeholder,
   loading,
   inputId,
+  inputLabel,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -198,6 +201,7 @@ function CategoriaMarcaCombobox({
   placeholder: string;
   loading?: boolean;
   inputId?: string;
+  inputLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -245,6 +249,7 @@ function CategoriaMarcaCombobox({
     setCreating(true);
     try {
       const canonical = await onCreate(candidate);
+      if (!wrapRef.current?.isConnected) return;
       if (canonical) commit(canonical);
       else commit(candidate);
     } finally {
@@ -258,6 +263,7 @@ function CategoriaMarcaCombobox({
         <input
           ref={inputRef}
           id={inputId}
+          aria-label={inputLabel}
           data-omni-ui-kit="control"
           value={draft}
           onChange={(e) => {
@@ -375,7 +381,38 @@ function humanizeModelKey(key: string): string {
     .join(" ");
 }
 
-export function ProductAIModal({
+type ProductAIModalProps = {
+  allowAI?: boolean;
+  allowMarketplace?: boolean;
+  open: boolean;
+  onClose: () => void;
+  storeId: string;
+  onSaved?: () => void;
+  initial?: Partial<{
+    nome: string; sku: string; barras: string; categoria: string; marca: string;
+    fornecedor: string; estoque: number; custo: number; preco: number; garantia: number;
+    ncm?: string; cest?: string; metadata?: Record<string, unknown> | null;
+  }>;
+  productId?: string;
+};
+
+// Uma montagem por abertura/loja/produto. Respostas antigas não alcançam a ficha seguinte.
+export function ProductAIModal(props: ProductAIModalProps) {
+  if (!props.open) return null;
+  return <ProductAIModalSession key={`${props.storeId}:${props.productId ?? "new"}`} {...props} />;
+}
+
+function ProductAIModalSession(props: ProductAIModalProps) {
+  const [generation, setGeneration] = useState(0);
+  const [lastSaved, setLastSaved] = useState("");
+  return <ProductAIEditor key={generation} {...props}
+    productId={generation ? undefined : props.productId}
+    initial={generation ? undefined : props.initial}
+    lastSaved={lastSaved}
+    onCreateAnother={(name) => { setLastSaved(name); setGeneration((value) => value + 1); }} />;
+}
+
+function ProductAIEditor({
   allowAI = false,
   allowMarketplace = false,
   open,
@@ -384,34 +421,12 @@ export function ProductAIModal({
   onSaved,
   initial,
   productId,
-}: {
-  allowAI?: boolean;
-  allowMarketplace?: boolean;
-  open: boolean;
-  onClose: () => void;
-  storeId: string;
-  onSaved?: () => void;
-  initial?: Partial<{
-    nome: string;
-    sku: string;
-    barras: string;
-    categoria: string;
-    marca: string;
-    fornecedor: string;
-    estoque: number;
-    custo: number;
-    preco: number;
-    garantia: number;
-    /** `Produto.metadata.ncm` (ex.: importador Gestão Clique) */
-    ncm?: string;
-    /** `Produto.metadata.cest` */
-    cest?: string;
-    metadata?: Record<string, unknown> | null;
-  }>;
-  productId?: string;
-}) {
+  onCreateAnother,
+  lastSaved,
+}: ProductAIModalProps & { onCreateAnother: (name: string) => void; lastSaved: string }) {
   const business = useStoreBusiness();
   const storeReady = business.ready && business.storeId === storeId;
+  const bakery = storeReady && business.branch === "padaria";
   const invalidCommercial = hasInvalidProductCommercial(initial?.metadata);
   const allowCompatibility = storeReady && business.resource("catalog.deviceCompatibility").operational;
   const allowAccessories = storeReady && business.resource("pdv.accessoryModelColor").operational;
@@ -421,6 +436,7 @@ export function ProductAIModal({
   const [applicabilityTouched, setApplicabilityTouched] = useState({ compatibilidade: false, acessorios: false });
   const [commercial, setCommercial] = useState<ProductCommercialV1>(() => productCommercialFromMetadata(initial?.metadata));
   const [commercialTouched, setCommercialTouched] = useState(false);
+  const priceBasisLabel = invalidCommercial ? "R$ — base a revisar" : `R$ / ${commercial.basePreco}`;
   const showCompatibility = allowCompatibility && applies.compatibilidade;
   const showAccessories = allowAccessories && applies.acessorios;
   const [source, setSource] = useState<Source>("manual");
@@ -428,6 +444,12 @@ export function ProductAIModal({
   const [step, setStep] = useState(0);
   const [filled, setFilled] = useState(false);
   const [saving, startSaving] = useTransition();
+  const saveLockRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [uncertain, setUncertain] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconciliation, setReconciliation] = useState<string | null>(null);
   const [lookingUpBarcode, startBarcodeLookup] = useTransition();
   const [lookingUpExternalBarcode, startExternalBarcodeLookup] = useTransition();
   const [interpretandoTexto, startInterpretacaoTexto] = useTransition();
@@ -485,9 +507,37 @@ export function ProductAIModal({
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — estado da seção "Compatibilidade com aparelhos".
   const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade());
+  const [catalogoTouched, setCatalogoTouched] = useState(false);
+  const [accessoriesTouched, setAccessoriesTouched] = useState(false);
   const [acessoriosValue, setAcessoriosValue] = useState<ProdutoAcessoriosFormValue>(() =>
     produtoAcessoriosFormFromMetadata(initial?.metadata),
   );
+
+  const requestClose = () => { if (!saveLockRef.current || uncertain) onClose(); };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const previousFocus = document.activeElement;
+    nomeRef.current?.focus();
+    const dialog = nomeRef.current?.closest('[role="dialog"]');
+    const onKey = (event: Event) => {
+      const key = event as KeyboardEvent;
+      if (key.key !== "Tab" || !dialog) return;
+      const controls = [...dialog.querySelectorAll<HTMLElement>('button, input, select, textarea, summary, [tabindex="0"]')]
+        .filter((element) => !element.matches(':disabled') && element.getClientRects().length > 0);
+      const target = key.shiftKey ? controls.at(-1) : controls[0];
+      if ((key.shiftKey && document.activeElement === controls[0]) || (!key.shiftKey && document.activeElement === controls.at(-1))) {
+        key.preventDefault(); target?.focus();
+      }
+    };
+    dialog?.addEventListener("keydown", onKey);
+    return () => {
+      mountedRef.current = false;
+      barcodeLookupRequestRef.current += 1;
+      dialog?.removeEventListener("keydown", onKey);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, []);
 
   // Reseta quando troca de produto em edição (modal reabrindo com outro id).
   useEffect(() => {
@@ -645,10 +695,11 @@ export function ProductAIModal({
   const createCategoria = async (name: string): Promise<string | null> => {
     try {
       const res = await upsertCategoria(storeId, { name, type: "produto", active: true });
+      if (!mountedRef.current) return null;
       setCategoriaOpts((prev) => (prev.includes(res.name) ? prev : [...prev, res.name].sort((a, b) => a.localeCompare(b, "pt-BR"))));
       return res.name;
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Não foi possível criar categoria");
+      if (mountedRef.current) toast.error("Não foi possível criar categoria.");
       return null;
     }
   };
@@ -656,10 +707,11 @@ export function ProductAIModal({
   const createMarca = async (name: string): Promise<string | null> => {
     try {
       const res = await upsertMarca(storeId, { name, type: "", active: true });
+      if (!mountedRef.current) return null;
       setMarcaOpts((prev) => (prev.includes(res.name) ? prev : [...prev, res.name].sort((a, b) => a.localeCompare(b, "pt-BR"))));
       return res.name;
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Não foi possível criar marca");
+      if (mountedRef.current) toast.error("Não foi possível criar marca.");
       return null;
     }
   };
@@ -962,10 +1014,165 @@ export function ProductAIModal({
     }
   };
 
+  const saveProduct = (another: boolean) => {
+    if (saveLockRef.current || !storeReady || uncertain) return;
+    saveLockRef.current = true;
+    setSaveError(null);
+    let dispatched = false;
+    let unconfirmed = false;
+    const report = (message: string, input?: HTMLInputElement | null) => {
+      setSaveError(message); toast.error(message);
+      const details = input?.closest("details");
+      if (details) details.open = true;
+      input?.focus();
+    };
+    startSaving(async () => {
+      try {
+        const name = (nomeRef.current?.value ?? "").trim();
+        if (!name) { report("Informe o nome do produto.", nomeRef.current); return; }
+        const changed = (value: string, previous: string | undefined) => value.trim() !== (previous ?? "").trim();
+        const textPatch: Record<string, string> = {};
+        const texts = [
+          ["nome", name, initial?.nome], ["sku", skuRef.current?.value ?? "", initial?.sku],
+          ["barras", barrasRef.current?.value ?? "", initial?.barras], ["categoria", categoria, initial?.categoria],
+          ["marca", marca, initial?.marca], ["fornecedor", fornecedorRef.current?.value ?? "", initial?.fornecedor],
+        ] as const;
+        for (const [key, value, previous] of texts) if (changed(value, previous)) textPatch[key] = value.trim();
+        const numbers = [
+          { key: "preco", label: "Preço", ref: precoRef, previous: manualProductNumberText(initial?.preco), kind: "money" },
+          { key: "custo", label: "Custo", ref: custoRef, previous: manualProductNumberText(initial?.custo), kind: "money" },
+          { key: "garantia", label: "Garantia", ref: garantiaRef, previous: initial?.garantia === undefined ? "" : String(initial.garantia), kind: "integer" },
+          ...(!productId ? [{ key: "estoque", label: "Estoque inicial", ref: estoqueRef, previous: "", kind: "integer" as const }] : []),
+        ] as const;
+        const numericPatch: Record<string, number> = {};
+        for (const field of numbers) {
+          const raw = field.ref.current?.value ?? "";
+          if (productId && !changed(raw, field.previous)) continue;
+          const parsed = parseManualProductNumber(raw, field.kind);
+          if (parsed.state === "invalid") {
+            report(field.kind === "money" ? field.label + " inválido — use um valor não negativo com até 2 casas decimais (ex.: 1.234,56)." : field.label + " inválido — informe um número inteiro ≥ 0, sem separadores.", field.ref.current);
+            return;
+          }
+          if (parsed.state === "valid") numericPatch[field.key] = parsed.value;
+        }
+        const originalMetadata = metadataRecord(initial?.metadata);
+        const originalAttrs = metadataRecord(originalMetadata?.atributos);
+        const attrs: Record<string, unknown> = {};
+        if (changed(descricao, typeof originalAttrs?.descricao === "string" ? originalAttrs.descricao : "")) attrs.descricao = descricao.trim();
+        const originalTags = Array.isArray(originalAttrs?.tags) ? originalAttrs.tags.filter((tag): tag is string => typeof tag === "string").join(", ") : "";
+        if (changed(tags, originalTags)) attrs.tags = normalizeProdutoTags(tags);
+        if (showCompatibility && changed(modeloCompativel, typeof originalAttrs?.modeloCompativel === "string" ? originalAttrs.modeloCompativel : "")) attrs.modeloCompativel = modeloCompativel.trim();
+        const initialFiscal = getProdutoFiscal({ metadata: originalMetadata });
+        const fiscalPatch: Record<string, string> = {};
+        if (changed(ncmDisplay, initialFiscal.ncm || initial?.ncm)) {
+          if (ncmInvalido) { report("NCM inválido — informe 8 dígitos ou deixe vazio."); return; }
+          fiscalPatch.ncm = ncmDigitos;
+        }
+        if (changed(cestDisplay, initialFiscal.cest || initial?.cest)) {
+          if (cestInvalido) { report("CEST inválido — informe 7 dígitos ou deixe vazio."); return; }
+          fiscalPatch.cest = cestDigitos;
+        }
+        const catalogoModelKeys = catalogoValue.models.map((m) => m.modelKey);
+        const catalogoAparelhos =
+          catalogoModelKeys.length > 0
+            ? sanitizeCatalogoAparelhos({
+                deviceModelKeys: catalogoModelKeys,
+                deviceAliases: catalogoValue.aliases,
+                compatibilityStatus: catalogoValue.status,
+                compatibilityTypes: catalogoValue.types,
+                notes: catalogoValue.notes,
+                source: "manual",
+              })
+            : null;
+        const barcodeLookupMetadata = externalBarcodeLookup
+          ? construirProvenienciaBarcode({
+              gtin: externalBarcodeLookup.gtin,
+              formato: externalBarcodeLookup.formato,
+              consultadoEm: externalBarcodeLookup.consultadoEm,
+              status: externalBarcodeLookup.result.status,
+              ...(externalBarcodeLookup.result.status === "encontrado"
+                ? {
+                    provedor: externalBarcodeLookup.result.provedor,
+                    sugestoes: externalBarcodeLookup.result.dados,
+                  }
+                : {}),
+              tentativas: externalBarcodeLookup.result.tentativas,
+              aplicacao: barcodeSuggestionApplication,
+            })
+          : null;
+        const applicabilityPatch = {
+          ...(allowCompatibility && applicabilityTouched.compatibilidade ? { compatibilidade: applies.compatibilidade } : {}),
+          ...(allowAccessories && applicabilityTouched.acessorios ? { acessorios: applies.acessorios } : {}),
+        };
+        const commercialPatch = { ...commercial };
+        if (!allowVariants) delete commercialPatch.gradePlanejada;
+
+        dispatched = true;
+        const result = await upsertProduto(storeId, {
+          ...(productId ? { id: productId } : { active: true }),
+          ...textPatch, ...numericPatch,
+          nome: name, // O adapter publicado exige nome também nos patches.
+          ...(showAccessories && (accessoriesTouched || (applicabilityTouched.acessorios && applies.acessorios)) ? { accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue) } : {}),
+          metadata: {
+            ...(allowAI ? { cadastroIa: { phase: "fase1-stub", savedAt: new Date().toISOString(), source } } : {}),
+            ...(showCompatibility && catalogoTouched && catalogoAparelhos ? { catalogoAparelhos } : {}),
+            ...(commercialTouched && (!productId || allowVariants) ? { comercial: commercialPatch } : {}),
+            ...(Object.keys(applicabilityPatch).length ? { cadastroRecursos: applicabilityPatch } : {}),
+            ...(Object.keys(attrs).length ? { atributos: attrs } : {}),
+            ...(Object.keys(fiscalPatch).length ? { fiscal: fiscalPatch } : {}),
+            ...(barcodeLookupMetadata ? { barcodeLookup: barcodeLookupMetadata } : {}),
+          },
+        });
+        if (!mountedRef.current) return;
+        if (!result.ok) {
+          if (result.type === "SAVE_ERROR") {
+            unconfirmed = true; setUncertain(true);
+            report("Não foi possível confirmar o salvamento. O produto pode ter sido gravado. Verifique o cadastro antes de iniciar outra tentativa.");
+          } else report(result.message);
+          return;
+        }
+        toast.success("Produto salvo com sucesso.", { description: name });
+        // Atualização da listagem não altera a confirmação já recebida do writer.
+        void Promise.resolve().then(() => onSaved?.()).catch(() => {});
+        if (another) onCreateAnother(name);
+        else onClose();
+      } catch {
+        if (!mountedRef.current) return;
+        unconfirmed = dispatched;
+        if (dispatched) {
+          setUncertain(true);
+          report("Não foi possível confirmar o salvamento. O produto pode ter sido gravado. Verifique o cadastro antes de iniciar outra tentativa.");
+        } else report("Não foi possível preparar o cadastro. Revise os campos preenchidos.");
+      } finally {
+        if (!unconfirmed) saveLockRef.current = false;
+      }
+    });
+  };
+
+  const reconcileSave = async () => {
+    if (reconciling) return;
+    setReconciling(true);
+    try {
+      const q = skuRef.current?.value.trim() || barrasRef.current?.value.trim() || nomeRef.current?.value.trim() || initial?.nome || "";
+      const result = await listProdutosPaginado(storeId, { q, pageSize: 10 });
+      if (!mountedRef.current) return;
+      if (result.erroFiltros) throw new Error("READ_FAILED");
+      const names = result.produtos.map((product) => product.nome).join("; ");
+      setReconciliation(result.total > 0
+        ? "Consulta na loja encontrou: " + names + ". Confira o produto na listagem antes de editar ou cadastrar novamente; esta busca não identifica qual tentativa o gravou."
+        : "Nenhum produto encontrado nesta consulta. Isso não confirma que a gravação falhou. Confira novamente a listagem antes de iniciar outra tentativa.");
+      // Sem chave de idempotência cadastral no backend, a busca não autoriza retry automático.
+      onSaved?.();
+    } catch {
+      if (mountedRef.current) setReconciliation("Não foi possível consultar a loja. Os campos foram preservados; o salvamento continua sem confirmação.");
+    } finally { if (mountedRef.current) setReconciling(false); }
+  };
+
   const title = productId ? "Editar produto" : "Novo produto";
   return (
-    <Modal open={open} onClose={onClose} title={title} subtitle={allowAI ? "Cadastro real no banco — revise as sugestões antes de salvar." : "Cadastre os dados do produto para sua loja."} size="xl">
+    <Modal accessible open={open} onClose={requestClose} title={title} subtitle={allowAI ? "Cadastro real no banco — revise as sugestões antes de salvar." : "Cadastre os dados do produto para sua loja."} size="xl">
       <div className="space-y-6">
+        {lastSaved && <p role="status" className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">{lastSaved} foi salvo. Preencha o próximo produto.</p>}
         {/* IA SOURCE */}
         {allowAI && <>
         <Card className="p-5 border-primary/30 bg-primary/5">
@@ -1327,19 +1534,19 @@ export function ProductAIModal({
         {/* FORM */}
         <div>
           <SectionTitle title="Ficha do produto" subtitle={allowAI ? (filled ? "Campos preenchidos automaticamente — revise antes de salvar." : "Preenchimento manual ou pelas sugestões acima.") : "Preencha os campos e salve o cadastro."} />
-          <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
+          <fieldset disabled={saving || uncertain} className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
             <Field label="Nome" span={2}>
               <Input
-                ref={nomeRef}
+                ref={nomeRef} aria-label="Nome" autoComplete="off"
                 defaultValue={initial?.nome ?? ""}
                 placeholder={business.presentation.productExample}
                 className="font-medium"
               />
             </Field>
-            <Field label="SKU"><Input ref={skuRef} defaultValue={initial?.sku ?? ""} placeholder="SKU-001" /></Field>
-            <Field label="Código de barras"><Input ref={barrasRef} defaultValue={initial?.barras ?? ""} placeholder="7891234500011" /></Field>
-            <Field label="Categoria">
+            <Field label="Categoria" span={2}>
               <CategoriaMarcaCombobox
+                inputId="produto-categoria"
+                inputLabel="Categoria"
                 value={categoria}
                 onChange={setCategoria}
                 options={categoriaOpts}
@@ -1348,32 +1555,55 @@ export function ProductAIModal({
                 loading={optsLoading}
               />
             </Field>
-            <Field label="Marca">
-              <CategoriaMarcaCombobox
-                value={marca}
-                onChange={setMarca}
-                options={marcaOpts}
-                onCreate={createMarca}
-                placeholder={business.presentation.brandExample}
-                loading={optsLoading}
-              />
-            </Field>
-            {showCompatibility && <Field label="Modelo compatível"><Input aria-label="Modelo compatível" value={modeloCompativel} onChange={(event) => setModeloCompativel(event.target.value)} placeholder="Nome ou referência do aparelho" /></Field>}
-            <Field label="Fornecedor"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} placeholder="Nome do fornecedor" /></Field>
+            {invalidCommercial && <p role="alert" className="col-span-full text-sm text-destructive">Declaração comercial inválida. Venda bloqueada. Os dados existentes serão preservados; cadastre outro produto para definir unidade e preço sem reinterpretar saldos.</p>}
+            {!invalidCommercial && (bakery || allowWeight || allowVariants || commercial.modoVenda === "peso") && <div className="col-span-full space-y-3 rounded-lg border border-border p-4">
+              <p className="text-sm font-medium">Unidade e forma de venda</p>
+              <label className="block space-y-1 text-sm">Forma de venda
+                <select aria-label="Forma de venda" value={commercial.modoVenda} disabled={!!productId || !allowWeight}
+                  onChange={(event) => { const weight = event.target.value === "peso"; setCommercial((current) => ({ ...current, modoVenda: weight ? "peso" : "unidade", unidade: weight ? "KG" : "UN", basePreco: weight ? "KG" : "UN" })); setCommercialTouched(true); }}
+                  className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground">
+                  <option value="unidade">Por unidade (UN)</option><option value="peso">Por peso — preparação</option>
+                </select>
+              </label>
+              {commercial.modoVenda === "peso" && <>
+                <label className="block text-sm">Unidade comercial e base do preço
+                  <select aria-label="Unidade comercial e base do preço" value={commercial.unidade} disabled={!!productId || !allowWeight}
+                    onChange={(event) => { const unit = event.target.value as "KG" | "G"; setCommercial((current) => ({ ...current, unidade: unit, basePreco: unit })); setCommercialTouched(true); }} className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground">
+                    <option value="KG">Quilograma (KG)</option><option value="G">Grama (G)</option>
+                  </select>
+                </label>
+                <p role="status" className="text-sm text-amber-700 dark:text-amber-300">Preparação: preço e custo por {commercial.basePreco}. Venda bloqueada até a integração de quantidade e estoque. Saldos existentes não serão convertidos.</p>
+              </>}
+              {allowVariants && <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" checked={commercial.gradePlanejada ?? false} onChange={(event) => { setCommercial((current) => ({ ...current, gradePlanejada: event.target.checked })); setCommercialTouched(true); }} />
+                Planejar grade para este produto — estoque e venda por variação ainda indisponíveis.
+              </label>}
+            </div>}
+            <div className="col-span-full">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{invalidCommercial ? "Precificação · base comercial a revisar" : `Precificação · valores por ${commercial.basePreco}`}</p>
+              <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:grid-cols-2">
+                <Field label={`Preço venda (${priceBasisLabel})`}><Input ref={precoRef} aria-label={`Preço venda (${priceBasisLabel})`} inputMode="decimal" autoComplete="off" defaultValue={manualProductNumberText(initial?.preco)} placeholder="0,00" /></Field>
+                <Field label={`Custo (${priceBasisLabel})`}><Input ref={custoRef} aria-label={`Custo (${priceBasisLabel})`} inputMode="decimal" autoComplete="off" defaultValue={manualProductNumberText(initial?.custo)} placeholder="0,00" /></Field>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">Ex.: 12,50 ou 1.234,56. Preço vazio ou zero deixa o cadastro incompleto; revise antes de vender. {productId ? "Em branco mantém o valor salvo; para zerar, informe 0." : "Custo não informado permanece sem cálculo de margem."}</p>
+            </div>
+            <Field label={bakery ? "Código interno (SKU)" : "SKU"}><Input ref={skuRef} aria-label={bakery ? "Código interno (SKU)" : "SKU"} autoComplete="off" defaultValue={initial?.sku ?? ""} placeholder="Opcional" /><p className="mt-1 text-xs text-muted-foreground">Código interno opcional, quando usado pela loja.</p></Field>
+            <Field label="Código de barras"><Input ref={barrasRef} aria-label="Código de barras" autoComplete="off" defaultValue={initial?.barras ?? ""} placeholder="Opcional — digite ou bipe" onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} /><p className="mt-1 text-xs text-muted-foreground">Pode ficar vazio. Digitar ou bipar não consulta serviços externos.</p></Field>
             {/* Estoque (Parte 13): em EDIÇÃO é somente leitura — saldo só muda por
                 movimentação auditada (MovimentacaoEstoque). Na CRIAÇÃO continua
                 editável, rotulado como saldo inicial. */}
             {productId ? (
               <Field label="Estoque atual">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Input
-                    readOnly
+                    readOnly aria-label="Estoque atual"
                     value={initial?.estoque !== undefined ? String(initial.estoque) : "0"}
-                    className="flex-1 cursor-default bg-muted/40 tabular-nums text-foreground"
+                    className="min-w-0 flex-1 cursor-default bg-muted/40 tabular-nums text-foreground"
                     title="Saldo somente leitura — use Movimentar estoque"
                   />
                   <button
                     type="button"
+                    disabled={commercial.modoVenda === "peso" || invalidCommercial}
                     onClick={() => setMovimentacaoAberta(true)}
                     className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-accent"
                   >
@@ -1387,74 +1617,40 @@ export function ProductAIModal({
               </Field>
             ) : (
               <Field label="Estoque inicial">
-                <Input ref={estoqueRef} type="number" min={0} step={1} defaultValue="0" placeholder="0" />
+                <Input ref={estoqueRef} aria-label="Estoque inicial" inputMode="numeric" autoComplete="off" defaultValue="0" placeholder="0" />
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Saldo inicial do cadastro. Depois de criado, o estoque muda somente por
-                  movimentação.
+                  {commercial.modoVenda === "peso" ? "Peso em preparação: mantenha zero. Estoque fracionado indisponível." : "Quantidade inteira, inclusive zero. Depois do cadastro, use a movimentação de estoque."}
                 </p>
               </Field>
             )}
-            <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} placeholder="90" /></Field>
-            {invalidCommercial && <p role="alert" className="col-span-full text-sm text-destructive">Declaração comercial inválida. Venda bloqueada. Os dados existentes serão preservados; cadastre outro produto para definir unidade e preço sem reinterpretar saldos.</p>}
-            {!invalidCommercial && (allowWeight || allowVariants || commercial.modoVenda === "peso") && <div className="col-span-full space-y-3 rounded-lg border border-border p-4">
-              <p className="text-sm font-medium">Unidade e forma de venda</p>
-              <label className="block space-y-1 text-sm">Forma de venda
-                <select aria-label="Forma de venda" value={commercial.modoVenda} disabled={!!productId || !allowWeight}
-                  onChange={(event) => { const weight = event.target.value === "peso"; setCommercial((current) => ({ ...current, modoVenda: weight ? "peso" : "unidade", unidade: weight ? "KG" : "UN", basePreco: weight ? "KG" : "UN" })); setCommercialTouched(true); }}
-                  className="ml-2 rounded border border-input bg-background px-2 py-2">
-                  <option value="unidade">Por unidade (UN)</option><option value="peso">Por peso — preparação</option>
-                </select>
-              </label>
-              {commercial.modoVenda === "peso" && <>
-                <label className="block text-sm">Unidade comercial e base do preço
-                  <select aria-label="Unidade comercial e base do preço" value={commercial.unidade} disabled={!!productId || !allowWeight}
-                    onChange={(event) => { const unit = event.target.value as "KG" | "G"; setCommercial((current) => ({ ...current, unidade: unit, basePreco: unit })); setCommercialTouched(true); }} className="ml-2 rounded border border-input bg-background px-2 py-2">
-                    <option value="KG">Quilograma (KG)</option><option value="G">Grama (G)</option>
-                  </select>
-                </label>
-                <p role="status" className="text-sm text-amber-700 dark:text-amber-300">Preparação: preço e custo por {commercial.basePreco}. Venda bloqueada até a integração de quantidade e estoque. Saldos existentes não serão convertidos.</p>
-              </>}
-              {allowVariants && <label className="flex items-start gap-2 text-sm">
-                <input type="checkbox" checked={commercial.gradePlanejada ?? false} onChange={(event) => { setCommercial((current) => ({ ...current, gradePlanejada: event.target.checked })); setCommercialTouched(true); }} />
-                Planejar grade para este produto — estoque e venda por variação ainda indisponíveis.
-              </label>}
-            </div>}
-            {(allowCompatibility || allowAccessories) && <fieldset className="col-span-full space-y-3 rounded-lg border border-border p-4">
-              <legend className="px-1 text-sm font-medium">Recursos aplicáveis a este produto</legend>
-              {allowCompatibility && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.compatibilidade} onChange={(event) => { setApplies((current) => ({ ...current, compatibilidade: event.target.checked })); setApplicabilityTouched((current) => ({ ...current, compatibilidade: true })); }} />Possui compatibilidade com aparelhos</label>}
-              {allowAccessories && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.acessorios} onChange={(event) => { setApplies((current) => ({ ...current, acessorios: event.target.checked })); setApplicabilityTouched((current) => ({ ...current, acessorios: true })); }} />É um acessório para aparelhos</label>}
-            </fieldset>}
-            {/* CATALOGO-APARELHOS-UI-CADASTROSV2-002 — compatibilidade de aparelhos (reuso). */}
-            {showCompatibility && <div className="col-span-full">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Compatibilidade com aparelhos</p>
-              <div className="rounded-xl border border-border bg-muted/20 p-4">
-                <p className="mb-4 text-xs text-muted-foreground">
-                  Use para capinhas, películas e acessórios. Não confirma encaixe físico automaticamente.
-                </p>
-                <ProdutoCompatibilidadeAparelhos
-                  value={catalogoValue}
-                  onChange={setCatalogoValue}
-                  lojaHeader={storeId}
-                />
-              </div>
-            </div>}
-            {showAccessories && <div className="col-span-full">
-              <ProdutoAcessoriosConfig value={acessoriosValue} onChange={setAcessoriosValue} />
-            </div>}
-            <div className="col-span-full">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Precificação</p>
-              <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:grid-cols-3">
-                <Field label="Custo (R$)"><Input ref={custoRef} defaultValue={initial?.custo !== undefined ? String(initial.custo) : ""} placeholder="0,00" /></Field>
-                <Field label="Preço venda (R$)"><Input ref={precoRef} defaultValue={initial?.preco !== undefined ? String(initial.preco) : ""} placeholder="0,00" /></Field>
-                <Field label="Margem"><Input readOnly defaultValue="" placeholder="Auto" className="bg-muted/40 text-muted-foreground cursor-default" /></Field>
-              </div>
-            </div>
+            <details open={!bakery} className="col-span-full rounded-lg border border-border p-4"><summary className="cursor-pointer text-sm font-medium text-foreground">Informações complementares</summary><div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Marca">
+              <CategoriaMarcaCombobox
+                inputId="produto-marca"
+                inputLabel="Marca"
+                value={marca}
+                onChange={setMarca}
+                options={marcaOpts}
+                onCreate={createMarca}
+                placeholder={business.presentation.brandExample}
+                loading={optsLoading}
+              />
+            </Field>
+            <Field label="Fornecedor"><Input ref={fornecedorRef} aria-label="Fornecedor" defaultValue={initial?.fornecedor ?? ""} placeholder="Nome do fornecedor" /></Field>
+            <Field label="Garantia (dias)"><Input ref={garantiaRef} aria-label="Garantia (dias)" inputMode="numeric" defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} placeholder="90" /></Field>
+            <Field label="Tags" span={2}><Input aria-label="Tags" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="Separadas por vírgula — Ex.: artesanal, presente, promoção" /></Field>
+            <Field label="Descrição" span={2}>
+              <Textarea aria-label="Descrição" value={descricao} onChange={(event) => setDescricao(event.target.value)} rows={3} placeholder="Descrição comercial (opcional)" />
+            </Field>
+            </div></details>
+            <details open={!bakery} className="col-span-full rounded-lg border border-border p-4"><summary className="cursor-pointer text-sm font-medium text-foreground">Dados fiscais do produto</summary><div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {/* Identidade fiscal do produto — editável e revisável pelo operador.
                 Lê `metadata.fiscal` primeiro (contrato canônico de lib/produto-fiscal.ts),
                 com fallback para o legado `metadata.ncm` / `metadata.cest`. A gravação
                 passa pelo mesmo write path canônico da Server Action. */}
             <Field label="NCM">
               <Input
+                aria-label="NCM"
                 value={ncmDisplay}
                 onChange={(event) => setNcmDisplay(event.target.value)}
                 placeholder="8 dígitos — ex.: 85065010"
@@ -1471,6 +1667,7 @@ export function ProductAIModal({
             </Field>
             <Field label="CEST">
               <Input
+                aria-label="CEST"
                 value={cestDisplay}
                 onChange={(event) => setCestDisplay(event.target.value)}
                 placeholder="7 dígitos — ex.: 1700600"
@@ -1492,11 +1689,31 @@ export function ProductAIModal({
                 </p>
               </div>
             </Field>
-            <Field label="Tags" span={2}><Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="Separadas por vírgula — Ex.: artesanal, presente, promoção" /></Field>
-            <Field label="Descrição" span={2}>
-              <Textarea value={descricao} onChange={(event) => setDescricao(event.target.value)} rows={3} placeholder="Descrição comercial (opcional)" />
-            </Field>
-          </div>
+            </div></details>
+            {showCompatibility && <Field label="Modelo compatível"><Input aria-label="Modelo compatível" value={modeloCompativel} onChange={(event) => setModeloCompativel(event.target.value)} placeholder="Nome ou referência do aparelho" /></Field>}
+            {(allowCompatibility || allowAccessories) && <fieldset className="col-span-full space-y-3 rounded-lg border border-border p-4">
+              <legend className="px-1 text-sm font-medium">Recursos aplicáveis a este produto</legend>
+              {allowCompatibility && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.compatibilidade} onChange={(event) => { setApplies((current) => ({ ...current, compatibilidade: event.target.checked })); setApplicabilityTouched((current) => ({ ...current, compatibilidade: true })); }} />Possui compatibilidade com aparelhos</label>}
+              {allowAccessories && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={applies.acessorios} onChange={(event) => { setApplies((current) => ({ ...current, acessorios: event.target.checked })); setApplicabilityTouched((current) => ({ ...current, acessorios: true })); }} />É um acessório para aparelhos</label>}
+            </fieldset>}
+            {/* CATALOGO-APARELHOS-UI-CADASTROSV2-002 — compatibilidade de aparelhos (reuso). */}
+            {showCompatibility && <div className="col-span-full">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Compatibilidade com aparelhos</p>
+              <div className="rounded-xl border border-border bg-muted/20 p-4">
+                <p className="mb-4 text-xs text-muted-foreground">
+                  Use para capinhas, películas e acessórios. Não confirma encaixe físico automaticamente.
+                </p>
+                <ProdutoCompatibilidadeAparelhos
+                  value={catalogoValue}
+                  onChange={(value) => { setCatalogoValue(value); setCatalogoTouched(true); }}
+                  lojaHeader={storeId}
+                />
+              </div>
+            </div>}
+            {showAccessories && <div className="col-span-full">
+              <ProdutoAcessoriosConfig value={acessoriosValue} onChange={(value) => { setAcessoriosValue(value); setAccessoriesTouched(true); }} />
+            </div>}
+          </fieldset>
         </div>
 
         {/* IMAGEM IA */}
@@ -1561,131 +1778,17 @@ export function ProductAIModal({
           </div>
         </Card>}
 
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm">Cancelar</button>
-          <button disabled title="Rascunho — em breve" className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm opacity-40" type="button">
-            Salvar rascunho
-          </button>
-          <button
-            disabled={saving || !storeReady}
-            onClick={() => {
-              startSaving(async () => {
-                try {
-                  const custo = Number(String(custoRef.current?.value ?? "").replace(/[^\d,.-]/g, "").replace(",", "."));
-                  const preco = Number(String(precoRef.current?.value ?? "").replace(/[^\d,.-]/g, "").replace(",", "."));
-                  const garantia = Number(String(garantiaRef.current?.value ?? "").replace(/[^\d,.-]/g, "").replace(",", "."));
-                  // Estoque: só envia se o usuário digitou algo. Em edição, undefined preserva o valor atual.
-                  const estoqueRaw = estoqueRef.current?.value;
-                  const estoqueStr = typeof estoqueRaw === "string" ? estoqueRaw.trim() : "";
-                  const estoqueNum = estoqueStr ? parseInt(estoqueStr, 10) : NaN;
-                  const estoque = Number.isFinite(estoqueNum) && estoqueNum >= 0 ? estoqueNum : undefined;
-                  if (estoqueStr && estoque === undefined) {
-                    toast.error("Estoque inválido — informe um número inteiro ≥ 0.");
-                    return;
-                  }
-                  // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — vínculo de aparelhos → metadata.catalogoAparelhos.
-                  // Só grava quando há modelo vinculado; vazio = OMITE a chave. upsertProduto faz merge
-                  // aditivo em dois níveis, então omitir preserva catalogoAparelhos/fiscal já salvos
-                  // (nunca apaga por engano). O saneamento reusa o contrato canônico já publicado.
-                  const catalogoModelKeys = catalogoValue.models.map((m) => m.modelKey);
-                  const catalogoAparelhos =
-                    catalogoModelKeys.length > 0
-                      ? sanitizeCatalogoAparelhos({
-                          deviceModelKeys: catalogoModelKeys,
-                          deviceAliases: catalogoValue.aliases,
-                          compatibilityStatus: catalogoValue.status,
-                          compatibilityTypes: catalogoValue.types,
-                          notes: catalogoValue.notes,
-                          source: "manual",
-                        })
-                      : null;
-                  if (ncmInvalido || cestInvalido) {
-                    toast.error(
-                      ncmInvalido
-                        ? "NCM inválido — informe 8 dígitos ou deixe vazio."
-                        : "CEST inválido — informe 7 dígitos ou deixe vazio.",
-                    );
-                    return;
-                  }
-                  const barcodeLookupMetadata = externalBarcodeLookup
-                    ? construirProvenienciaBarcode({
-                        gtin: externalBarcodeLookup.gtin,
-                        formato: externalBarcodeLookup.formato,
-                        consultadoEm: externalBarcodeLookup.consultadoEm,
-                        status: externalBarcodeLookup.result.status,
-                        ...(externalBarcodeLookup.result.status === "encontrado"
-                          ? {
-                              provedor: externalBarcodeLookup.result.provedor,
-                              sugestoes: externalBarcodeLookup.result.dados,
-                            }
-                          : {}),
-                        tentativas: externalBarcodeLookup.result.tentativas,
-                        aplicacao: barcodeSuggestionApplication,
-                      })
-                    : null;
-                  const applicabilityPatch = {
-                    ...(allowCompatibility && applicabilityTouched.compatibilidade ? { compatibilidade: applies.compatibilidade } : {}),
-                    ...(allowAccessories && applicabilityTouched.acessorios ? { acessorios: applies.acessorios } : {}),
-                  };
-                  const commercialPatch = { ...commercial };
-                  if (!allowVariants) delete commercialPatch.gradePlanejada;
-                  const result = await upsertProduto(storeId, {
-                    id: productId,
-                    nome: (nomeRef.current?.value ?? "").trim(),
-                    sku: (skuRef.current?.value ?? "").trim(),
-                    barras: (barrasRef.current?.value ?? "").trim(),
-                    categoria: categoria.trim(),
-                    marca: marca.trim(),
-                    fornecedor: (fornecedorRef.current?.value ?? "").trim(),
-                    estoque,
-                    custo: Number.isFinite(custo) ? custo : 0,
-                    preco: Number.isFinite(preco) ? preco : 0,
-                    garantia: Number.isFinite(garantia) ? garantia : 0,
-                    ...(!productId ? { active: true } : {}),
-                    ...(showAccessories ? { accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue) } : {}),
-                    metadata: {
-                      // CAD-R2-017: nao gravar audio, blob, prompt nem transcricao.
-                      cadastroIa: {
-                        phase: "fase1-stub",
-                        savedAt: new Date().toISOString(),
-                        source,
-                      },
-                      ...(showCompatibility && catalogoAparelhos ? { catalogoAparelhos } : {}),
-                      // Em edição, somente grade é mutável; recurso oculto omite o namespace.
-                      ...(commercialTouched && (!productId || allowVariants) ? { comercial: commercialPatch } : {}),
-                      ...(Object.keys(applicabilityPatch).length ? { cadastroRecursos: applicabilityPatch } : {}),
-                      atributos: {
-                        descricao: descricao.trim(),
-                        tags: normalizeProdutoTags(tags),
-                        ...(showCompatibility ? { modeloCompativel: modeloCompativel.trim() } : {}),
-                      },
-                      // Identidade fiscal canônica: manda NCM/CEST como o operador
-                      // revisou (venham do Cosmos, do importador ou digitados) em
-                      // `metadata.fiscal`; a Server Action sanea e persiste na forma
-                      // canônica. A proveniência da sugestão externa continua auditada
-                      // em `metadata.barcodeLookup`.
-                      fiscal: { ncm: ncmDigitos, cest: cestDigitos },
-                      // `metadata.fiscalRegime` legado NÃO é reenviado: o merge de dois
-                      // níveis preserva o que já estava salvo, sem continuar gravando
-                      // regime tributário no produto.
-                      ...(barcodeLookupMetadata ? { barcodeLookup: barcodeLookupMetadata } : {}),
-                    },
-                  });
-                  if (!result.ok) {
-                    toast.error(result.message);
-                    return;
-                  }
-                  onSaved?.();
-                  onClose();
-                  toast.success("Produto salvo com sucesso.");
-                } catch (e) {
-                  toast.error("Não foi possível salvar o produto. Tente novamente.");
-                }
-              });
-            }}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-          >
-            <Send className="h-4 w-4" /> Salvar produto
+        {saveError && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{saveError}</p>}
+        {uncertain && <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+          <button type="button" onClick={() => void reconcileSave()} disabled={reconciling} className="rounded-lg border border-border px-4 py-2 disabled:opacity-60">{reconciling ? "Consultando…" : "Verificar cadastro na loja"}</button>
+          {reconciliation && <p role="status">{reconciliation}</p>}
+          <p className="text-xs text-muted-foreground">Nenhuma repetição automática foi feita. Feche esta ficha apenas depois de conferir a listagem.</p>
+        </div>}
+        <div aria-busy={saving} className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+          <button type="button" disabled={saving} onClick={requestClose} className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-60">Cancelar</button>
+          <button type="button" disabled={saving || !storeReady || uncertain} onClick={() => saveProduct(true)} className="flex items-center justify-center gap-2 rounded-lg border border-primary px-4 py-2 text-sm font-medium text-primary disabled:opacity-60">Salvar e cadastrar outro</button>
+          <button type="button" disabled={saving || !storeReady || uncertain} onClick={() => saveProduct(false)} className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Salvar produto
           </button>
         </div>
       </div>

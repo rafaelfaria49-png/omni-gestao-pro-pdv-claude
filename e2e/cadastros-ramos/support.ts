@@ -121,6 +121,9 @@ export function productModal(page: Page): Locator {
 
 /** Campo do kit Lovable: `<label>` sem `for`, irmão do controle. */
 export function field(scope: Locator, label: string): Locator {
+  if (label === "Preço venda (R$)") return scope.getByLabel(/^Preço venda \(R\$ \/ /)
+  if (label === "Custo (R$)") return scope.getByLabel(/^Custo \(R\$ \/ /)
+  if (label === "SKU") return scope.getByLabel(/^(SKU|Código interno \(SKU\))$/)
   return scope.locator(`xpath=.//div[label[normalize-space()="${label}"]]`).locator("input, textarea").first()
 }
 

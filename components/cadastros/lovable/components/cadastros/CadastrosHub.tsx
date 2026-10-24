@@ -1861,7 +1861,7 @@ function ProdutosPanel({
                       </span>
                     </td>
                     <td className="px-4 py-3 font-medium text-foreground">{p.preco ? `R$ ${p.preco}` : <span className="text-destructive">—</span>}</td>
-                    <td className="px-4 py-3 text-foreground">{p.margem ? `${p.margem.toFixed(1)}%` : "—"}</td>
+                    <td className="px-4 py-3 text-foreground" title={p.custo > 0 ? undefined : "Informe o custo para calcular a margem"}>{p.custo > 0 && p.preco > 0 ? `${p.margem.toFixed(1)}%` : "—"}</td>
                     <td className="px-4 py-3"><QualityScore value={score} /></td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1">
