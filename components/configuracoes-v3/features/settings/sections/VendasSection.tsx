@@ -61,7 +61,8 @@ function VendasSectionContent() {
   // Controles seguem o recurso/rota realmente liberados; valores ocultos continuam gravados.
   const showOrcamentos = internal || permissions?.hubs.operacoes === true;
   const showImpostos = internal || permissions?.modules?.fiscal === true;
-  const showMesas = canAccessPage(permissions, "/dashboard/vendas/mesas");
+  // Visão interna preservada como estava; o cliente não recebe promessa de rota negada.
+  const showMesas = internal || canAccessPage(permissions, "/dashboard/vendas/mesas");
 
   const [form, setForm] = useState<VendasForm>(() => formFromPdvParams(pdvParams));
   const [snapshot, setSnapshot] = useState<VendasForm>(() => formFromPdvParams(pdvParams));

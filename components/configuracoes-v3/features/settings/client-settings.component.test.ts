@@ -89,18 +89,19 @@ describe("Configurações → Vendas", () => {
     expect(screen.queryByRole("switch")).toBeNull()
   })
 
-  it("proprietário mantém garantia/orçamento e impostos; mesas só aparece com rota permitida", () => {
+  it("proprietário e gestor legado mantêm garantia/orçamento, impostos e mesas como antes", () => {
     h.permissions = perms("owner")
     render(React.createElement(VendasSection))
     expect(screen.getByText("Orçamentos")).toBeTruthy()
     expect(screen.getByText("Impostos")).toBeTruthy()
     expect(screen.getByText("Mesas e consumo")).toBeTruthy()
     cleanup()
-    // Conta interna sem plataforma: rota de mesas é negada pela política, então a tela não promete.
+    // Conta interna legada (GERENTE, escopo NULL): controles anteriores preservados.
     h.permissions = perms("legacySeller")
     render(React.createElement(VendasSection))
     expect(screen.getByText("Impostos")).toBeTruthy()
-    expect(screen.queryByText("Mesas e consumo")).toBeNull()
+    expect(screen.getByText("Orçamentos")).toBeTruthy()
+    expect(screen.getByText("Mesas e consumo")).toBeTruthy()
   })
 
   it("salva somente a preferência alterada, sem snapshot nem normalização de campos ocultos", async () => {

@@ -36,9 +36,9 @@ acompanha a seção efetivamente exibida (seção negada cai em Geral).
 - Aparência: mesmo provider e controles; textos sem menção à RafaCell ou a `printerConfig`.
 - Vendas: formas de pagamento sempre. Garantia/validade de orçamento só com Operações;
   imposto estimado só com Fiscal (visão interna mantém); quando um imposto gravado
-  altera o total, o cliente vê o aviso sem o controle. "Mesas e consumo" só aparece
-  quando `canAccessPage` permite `/dashboard/vendas/mesas` (inclusive para gestores
-  internos sem plataforma, para quem a rota já era negada).
+  altera o total, o cliente vê o aviso sem o controle. Para o cliente, "Mesas e
+  consumo" só aparece quando `canAccessPage` permite `/dashboard/vendas/mesas`; a
+  visão interna (inclusive gestores legados) mantém o controle como antes.
 - PDV e impressão: o cartão técnico (host/porta, vias, gaveta, OS, crediário, "Testar
   impressão" via `/api/print/raw`) continua só na plataforma. O cliente vê "Impressão do
   cupom" com o que a impressão pelo navegador consome (bobina, modo, logo, rodapé) e
