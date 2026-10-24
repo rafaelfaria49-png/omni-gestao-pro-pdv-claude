@@ -26,11 +26,15 @@ import { buildPdvReceiptEscPos } from "@/lib/escpos";
 import { sendEscPosViaProxy } from "@/lib/thermal-print";
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime";
 import { configPadrao } from "@/lib/config-empresa";
-import { changedFields, mergeImpressaoPatch } from "./settings-patch";
+import { changedFields } from "./settings-patch";
 
-/** Preferências consumidas pela impressão do navegador (`openBrowserFallback`/HTML). */
+/**
+ * Preferências consumidas pela impressão do navegador (`openBrowserFallback`/HTML).
+ * "Imprimir automaticamente" fica de fora: o PDV usa a ponte interna sem fallback
+ * (`allowBrowserFallback: false`), então para a loja ele não imprimiria; o valor gravado
+ * é preservado.
+ */
 const BROWSER_SWITCHES = [
-  ["imprimirAutomatico", "Imprimir cupom automaticamente", "Abre a impressão do navegador após confirmar o pagamento no PDV"],
   ["logoNoCupom", "Exibir logo no cupom", "Usa a logo da unidade quando disponível"],
 ] as const;
 
@@ -100,33 +104,27 @@ export function ImpressaoPdvSettingsCard({ browserOnly = false }: { browserOnly?
       return;
     }
 
-    const impressao = normalizeImpressao(form);
-    const changes = changedFields(normalizeImpressao(snapshot), impressao);
-    if (!changes) {
+    // Primeiro o que foi editado; só esses campos são normalizados e enviados.
+    const edited = changedFields(snapshot, form);
+    if (!edited) {
       setForm(snapshot);
       return;
     }
+    const normalized = normalizeImpressao(form);
+    const changes = Object.fromEntries(
+      (Object.keys(edited) as Array<keyof PdvImpressaoConfig>).map((key) => [key, normalized[key]]),
+    ) as Partial<PdvImpressaoConfig>;
+    const impressao: PdvImpressaoConfig = { ...snapshot, ...changes };
 
     setSaving(true);
     try {
-      const headers = { [ASSISTEC_LOJA_HEADER]: lojaHeader };
-      // Releitura imediatamente antes do PUT: o servidor substitui `impressao` inteira.
-      const fresh = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
-        credentials: "include",
-        cache: "no-store",
-        headers,
-      });
-      const freshBody = (await fresh.json().catch(() => null)) as { settings?: { printerConfig?: unknown } | null } | null;
-      if (!fresh.ok || !freshBody || !("settings" in freshBody)) {
-        throw new Error("Não foi possível reler as preferências atuais. Nada foi gravado.");
-      }
-
+      // Só as chaves alteradas: o merge do servidor funde `impressao` sob o lock da loja.
       const res = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
         method: "PUT",
         credentials: "include",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader, "Content-Type": "application/json" },
         body: JSON.stringify({
-          printerConfig: mergeImpressaoPatch(freshBody.settings?.printerConfig, changes),
+          printerConfig: { impressao: changes },
           // Rodapé geral só acompanha uma alteração explícita e não vazia do rodapé do cupom.
           ...(changes.rodapeCupom ? { receiptFooter: changes.rodapeCupom } : {}),
         }),
@@ -337,7 +335,7 @@ export function ImpressaoPdvSettingsCard({ browserOnly = false }: { browserOnly?
 
       {browserOnly ? (
         <p className="mt-4 text-xs text-muted-foreground">
-          Impressora térmica conectada diretamente (rede ou USB), vias automáticas e gaveta de dinheiro dependem de
+          Impressão automática após a venda, impressora térmica conectada diretamente (rede ou USB), vias automáticas e gaveta de dinheiro dependem de
           equipamento homologado e não são configuradas por esta tela.
         </p>
       ) : null}

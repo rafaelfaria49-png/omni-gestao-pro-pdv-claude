@@ -102,7 +102,14 @@ function VendasSectionContent() {
       return;
     }
 
-    const saved: VendasForm = {
+    // Primeiro o que o operador editou; só esses campos são normalizados e enviados.
+    // Campos ocultos ou intocados nunca são reescritos (ex.: garantia gravada fora da faixa da tela).
+    const edited = changedFields(snapshot, form, formEquality);
+    if (!edited) {
+      setForm(snapshot);
+      return;
+    }
+    const normalized: VendasForm = {
       garantiaPadraoDias: Math.max(
         1,
         Math.min(365, Math.round(Number(form.garantiaPadraoDias)) || configPadrao.pdv.garantiaPadraoDias),
@@ -116,12 +123,10 @@ function VendasSectionContent() {
       moduloControleConsumo: form.moduloControleConsumo,
       formasPagamento: normalizeFormasPagamento(form.formasPagamento),
     };
-    // Somente as preferências alteradas: o servidor funde `pdvParams` com o valor gravado.
-    const patch = changedFields(snapshot, saved, formEquality);
-    if (!patch) {
-      setForm(snapshot);
-      return;
-    }
+    const patch = Object.fromEntries(
+      (Object.keys(edited) as Array<keyof VendasForm>).map((key) => [key, normalized[key]]),
+    ) as Partial<VendasForm>;
+    const saved: VendasForm = { ...snapshot, ...patch };
 
     setSaving(true);
     try {

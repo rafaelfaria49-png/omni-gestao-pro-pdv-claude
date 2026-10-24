@@ -182,6 +182,9 @@ export function mergePrinterConfigServerSide(
       if (key === "capabilities" && !isDedicatedCapabilitiesPatch(incoming)) continue
       if (key === "pdvParams" && isRecord(val) && isRecord(existing.pdvParams)) {
         merged.pdvParams = { ...existing.pdvParams, ...val }
+      } else if (key === "impressao" && isRecord(val) && isRecord(existing.impressao)) {
+        // Mesmo contrato de pdvParams: um patch de impressão não apaga host/vias/gaveta não enviados.
+        merged.impressao = { ...existing.impressao, ...val }
       } else if (key === "capabilities" && isRecord(val) && isRecord(existing.capabilities)) {
         const existingOverrides = isRecord(existing.capabilities.overrides) ? existing.capabilities.overrides : {}
         const incomingOverrides = isRecord(val.overrides) ? val.overrides : {}

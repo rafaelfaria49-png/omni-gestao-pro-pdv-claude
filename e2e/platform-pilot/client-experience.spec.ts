@@ -227,7 +227,8 @@ test("cliente padaria: configurações permitidas, patches parciais e campos ocu
   const context: BrowserContext = await browser.newContext({ baseURL, locale: "pt-BR", serviceWorkers: "block", viewport: { width: 1440, height: 1000 } })
   try {
     const vendas = await context.newPage(), pdv = await context.newPage()
-    const forbidden = [...await setupPage(vendas, actor), ...await setupPage(pdv, actor)]
+    // Referências vivas: os listeners continuam preenchendo estas listas até a asserção.
+    const forbiddenLists = [await setupPage(vendas, actor), await setupPage(pdv, actor)]
     await vendas.goto("/dashboard/configuracoes?sec=geral")
     expect(await settingsMenu(vendas)).toEqual(["Dados da loja", "Aparência", "PDV e impressão", "Vendas e pagamentos", "Equipe", "Segurança da conta"])
     await expect(vendas.getByRole("heading", { name: "Dados da loja" }).first()).toBeVisible()
@@ -239,7 +240,7 @@ test("cliente padaria: configurações permitidas, patches parciais e campos ocu
     // Aba PDV: rascunho de impressão aberto enquanto a outra aba grava Vendas.
     await pdv.goto("/dashboard/configuracoes?sec=pdv")
     await expect(pdv.getByText("Impressão do cupom")).toBeVisible()
-    for (const hidden of [/host\/IP/, /Porta TCP/, /Abrir gaveta/, /Testar impressão/, /Vias do cupom/, /impressão térmica de OS/]) await expect(pdv.locator("body")).not.toContainText(hidden)
+    for (const hidden of [/host\/IP/, /Porta TCP/, /Abrir gaveta/, /Testar impressão/, /Vias do cupom/, /impressão térmica de OS/, /Imprimir cupom automaticamente/]) await expect(pdv.locator("body")).not.toContainText(hidden)
     await pdv.getByLabel("Rodapé do cupom").fill("Volte sempre CX")
 
     await vendas.goto("/dashboard/configuracoes?sec=vendas")
@@ -288,7 +289,7 @@ test("cliente padaria: configurações permitidas, patches parciais e campos ocu
     await expect(vendas.getByText("Vendas atualizadas")).toHaveCount(0)
     expect((await settingsOf(A)).pdvParams.formasPagamento.find((f: { id: string }) => f.id === "boleto").ativo).toBe(true)
     await vendas.unroute(`**/api/stores/${A}/settings`)
-    expect(forbidden).toEqual([])
+    expect(forbiddenLists.flat()).toEqual([])
   } finally { await context.close() }
 
   // Nova sessão relê o que foi gravado.

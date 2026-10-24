@@ -103,7 +103,9 @@ describe("Configurações → Vendas", () => {
     expect(screen.queryByText("Mesas e consumo")).toBeNull()
   })
 
-  it("salva somente a preferência alterada, sem snapshot de printerConfig/pdvParams", async () => {
+  it("salva somente a preferência alterada, sem snapshot nem normalização de campos ocultos", async () => {
+    // Garantia gravada fora da faixa da tela (aceita pelo endpoint) não pode ser reescrita.
+    h.pdvParams = { ...h.pdvParams, garantiaPadraoDias: 730, aliquotaImpostoEstimadoPdv: 150 }
     stubFetch(() => Response.json({ ok: true }))
     render(React.createElement(VendasSection))
     fireEvent.click(screen.getByRole("button", { name: "alternar pix" }))
@@ -147,36 +149,39 @@ describe("Configurações → Impressão", () => {
     h.printerConfig = stored
     render(React.createElement(ImpressaoPdvSettingsCard, { browserOnly: true }))
     expect(screen.getByText("Impressão do cupom")).toBeTruthy()
-    for (const hidden of [/host\/IP/, /Porta TCP/, /Vias do cupom/, /gaveta após/, /impressão térmica de OS/, /crediário/, /Testar impressão/, /\/api\/print\/raw/]) {
+    // Impressão automática depende da ponte interna no PDV (sem fallback): não é oferecida.
+    for (const hidden of [/host\/IP/, /Porta TCP/, /Vias do cupom/, /gaveta após/, /impressão térmica de OS/, /crediário/, /Testar impressão/, /\/api\/print\/raw/, /Imprimir cupom automaticamente/]) {
       expect(document.body.textContent).not.toMatch(hidden)
     }
     expect(screen.getByLabelText("Rodapé do cupom")).toBeTruthy()
-    expect(screen.getByRole("switch", { name: "Imprimir cupom automaticamente" })).toBeTruthy()
+    expect(screen.getByRole("switch", { name: "Exibir logo no cupom" })).toBeTruthy()
     expect(calls).toHaveLength(0)
   })
 
-  it("salva a partir da releitura, enviando só o alterado e preservando host/vias/gaveta ocultos", async () => {
-    h.printerConfig = { impressao: defaultPdvImpressaoConfig() }
-    stubFetch((call) => call.method === "GET" ? Response.json({ settings: { printerConfig: stored } }) : Response.json({ ok: true }))
+  it("envia só as chaves alteradas de impressão; host/vias/gaveta/automática ocultos não viajam", async () => {
+    h.printerConfig = { ...stored, impressao: { ...stored.impressao, imprimirAutomatico: true } }
+    stubFetch(() => Response.json({ ok: true }))
     render(React.createElement(ImpressaoPdvSettingsCard, { browserOnly: true }))
     fireEvent.change(screen.getByLabelText("Rodapé do cupom"), { target: { value: "  Volte sempre  " } })
+    fireEvent.click(screen.getByRole("switch", { name: "Exibir logo no cupom" }))
     fireEvent.click(screen.getByRole("button", { name: "Salvar impressão" }))
-    await waitFor(() => expect(calls.map((c) => c.method)).toEqual(["GET", "PUT"]))
-    expect(calls.some((c) => c.url.includes("/api/print/raw"))).toBe(false)
-    expect(calls[1].body).toEqual({
-      printerConfig: { impressao: { ...stored.impressao, rodapeCupom: "Volte sempre" } },
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0].method).toBe("PUT")
+    expect(calls[0].body).toEqual({
+      printerConfig: { impressao: { rodapeCupom: "Volte sempre", logoNoCupom: false } },
       receiptFooter: "Volte sempre",
     })
+    await waitFor(() => expect(h.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Impressão salva" })))
   })
 
-  it("releitura indisponível não grava nada e não anuncia sucesso", async () => {
-    stubFetch(() => Response.json({ error: "x" }, { status: 503 }))
+  it("falha de gravação não anuncia sucesso e mantém o rascunho", async () => {
+    stubFetch(() => Response.json({ ok: false, error: "Falha sintética" }, { status: 500 }))
     render(React.createElement(ImpressaoPdvSettingsCard, { browserOnly: true }))
-    fireEvent.click(screen.getByRole("switch", { name: "Imprimir cupom automaticamente" }))
+    fireEvent.change(screen.getByLabelText("Rodapé do cupom"), { target: { value: "Rascunho" } })
     fireEvent.click(screen.getByRole("button", { name: "Salvar impressão" }))
-    await waitFor(() => expect(h.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" })))
-    expect(calls.map((c) => c.method)).toEqual(["GET"])
+    await waitFor(() => expect(h.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive", description: "Falha sintética" })))
     expect(h.toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Impressão salva" }))
+    expect((screen.getByLabelText("Rodapé do cupom") as HTMLInputElement).value).toBe("Rascunho")
   })
 
   it("prévia usa a impressão do navegador, sem ponte TCP nem gravação", async () => {
@@ -185,7 +190,7 @@ describe("Configurações → Impressão", () => {
     vi.stubGlobal("open", vi.fn(() => ({ document: { open() {}, write(html: string) { written += html }, close() {} } })))
     render(React.createElement(ImpressaoPdvSettingsCard, { browserOnly: true }))
     fireEvent.click(screen.getByRole("button", { name: "Prévia no navegador" }))
-    await waitFor(() => expect(written).toContain("PRÉVIA — sem valor fiscal"))
+    await waitFor(() => expect(written).toContain("PRÉVIA — sem valor fiscal"), { timeout: 5000 })
     expect(written).toContain("Padaria Sintética")
     expect(calls).toHaveLength(0)
   })

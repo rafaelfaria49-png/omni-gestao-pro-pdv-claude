@@ -41,8 +41,8 @@ acompanha a seção efetivamente exibida (seção negada cai em Geral).
   internos sem plataforma, para quem a rota já era negada).
 - PDV e impressão: o cartão técnico (host/porta, vias, gaveta, OS, crediário, "Testar
   impressão" via `/api/print/raw`) continua só na plataforma. O cliente vê "Impressão do
-  cupom" com o que a impressão pelo navegador consome (bobina, modo, logo, rodapé,
-  impressão automática) e "Prévia no navegador", que reutiliza `printPdvSaleReceipt`
+  cupom" com o que a impressão pelo navegador consome (bobina, modo, logo, rodapé) e
+  "Prévia no navegador", que reutiliza `printPdvSaleReceipt`
   com `forceBrowserFallback`: nenhuma venda, pagamento, gravação ou ponte TCP. A API
   `/api/print/raw` e seus guards não mudaram.
 
@@ -52,13 +52,13 @@ Vendas e PDV enviavam o `printerConfig` carregado na montagem inteiro (e todo o
 `pdvParams`); com o merge do servidor por chave de topo, isso desfazia em silêncio o
 que outra aba/seção gravasse depois. Agora cada seção envia só as chaves alteradas
 (`settings-patch.ts`), pelo mesmo `PUT /api/stores/:id/settings` e
-`mergePrinterConfigServerSide` (sem writer novo). `impressao`, que o servidor substitui
-inteira, parte de uma releitura feita imediatamente antes do PUT e sobrepõe só os campos
-alterados: host, vias, gaveta e chaves desconhecidas ficam. `false`/`0` legítimos são
-enviados quando mudam. Revalidação do provider não substitui rascunho em andamento.
-Falha de releitura ou de gravação mostra erro e não confirma sucesso. Limite: entre a
-releitura e o PUT de `impressao` ainda existe uma janela curta sem lock otimista; o
-servidor serializa os PUTs, mas não compara versão.
+`mergePrinterConfigServerSide` (sem writer novo). O merge canônico passou a fundir
+`impressao` por chave, como já fazia com `pdvParams`, dentro da transação com lock da
+loja: um patch de rodapé não apaga host, vias, gaveta, chaves desconhecidas nem um
+ajuste concorrente da plataforma. Só os campos editados são normalizados e enviados
+(valor oculto gravado fora da faixa da tela, como garantia de 730 dias, não é
+reescrito). `false`/`0` legítimos são enviados quando mudam. Revalidação do provider
+não substitui rascunho em andamento. Falha de gravação mostra erro e não confirma sucesso.
 
 ## Estoque
 
@@ -114,8 +114,10 @@ Financeiro, Marketplace, voz/QR/vCard.
   frente Vendas/PDV (registrado, arquivo não disputado).
 - PDV/impressão: loja STORE com `impressao.impressoraHost` preenchido (por exemplo,
   configurado pela plataforma) tenta a ponte interna, recebe 403 e não cai no navegador
-  (`printWithFallback` retorna erro honesto quando há host). Integração de impressora
-  homologada para cliente é da frente PDV.
+  (`printWithFallback` retorna erro honesto quando há host). A impressão automática após
+  a venda (`PdvAutoPrintFeedback`) usa `allowBrowserFallback: false`, então para STORE
+  não imprime; por isso não é oferecida ao cliente (o valor gravado é preservado).
+  Integração de impressora homologada e impressão automática do cliente são da frente PDV.
 - Preferência salva, prévia disponível e equipamento homologado são provas distintas:
   esta missão cobre as duas primeiras; nenhum equipamento foi homologado.
 
