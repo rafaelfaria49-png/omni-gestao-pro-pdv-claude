@@ -1,3 +1,240 @@
+# PDV-PARITY-N5-C-E2E-002 — REV5: parecer R APPROVE no SHA exato
+
+Registro: 21/10/2026 (America/Sao_Paulo), GOAL de fechamento humano
+`CODEX_CLOSE_AEP_N5_C_REV5`. O responsável humano comunicou nesta conversa
+o parecer independente favorável e autorizou seu registro, o fechamento AEP
+condicionado aos gates, push exclusivo da branch e PR contra `main`, sem merge.
+
+```text
+REVIEWED_SHA=8d19a8bea9518c6f865dc69c67b28085bbdde6bb
+R_VERDICT=APPROVE
+R_EXECUTOR=Claude Code / Claude Opus 5.5
+R_FAMILY=anthropic
+IMPLEMENTATION_FAMILY=openai
+INDEPENDENCE_VALID=YES
+R_REPORTED_RESULTS=76/76 PASS
+HERDADOS=45/45 PASS (11 estaticos + 34 comportamentais)
+COMPONENTES=31/31 PASS
+E2E=20/20 PASS
+MATRIX_TESTED=20
+MATRIX_PARTIAL=0
+MATRIX_BLOCKED=0
+N5_B1_CLOSEOUT=BLOCKED
+PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+Proveniência: identidade, família e veredito R acima foram fornecidos pelo
+responsável humano no pedido de fechamento. Codex (`openai`) registra esse
+parecer externo e reexecuta os checks; não é o revisor R e não se declara humano.
+O `INVALID_REVIEW` anterior do Codex permanece inválido como R e não é usado
+como aprovação. O REQUEST_CHANGES Anthropic da rev4 permanece histórico abaixo.
+
+## Reexecução aprovada em Node 24.x — 22/10/2026
+
+Retomada humana do mesmo GOAL, na mesma worktree e tentativa **2/3**,
+sem novo `open`, reinício ou alteração de código. HEAD de entrada:
+`e51c0d4fd8498614cceb331467ce0f0e7369cd18`; SHA técnico revisado preservado:
+`8d19a8bea9518c6f865dc69c67b28085bbdde6bb`. A diferença entre eles contém
+exclusivamente os dois documentos de evidência/matriz do parecer R.
+
+Runtime confirmado: **Node v24.19.0**, executável
+`C:/Users/rafae/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe`.
+Preservado o diretório temporário já aprovado
+`C:/Projetos/omni-gestao/.worktrees/pdv-n5-c-e2e-002/test-results/n5c-vitest-tmp`:
+`TEMP`, `TMP` e `TMPDIR` apontam para ele somente no processo de execução.
+Mantido `NODE_OPTIONS=--no-experimental-webstorage`, com a guarda
+`'localStorage' in globalThis` retornando `false`. PATH do processo prioriza
+o Node 24; nenhuma configuração global, dependência ou asserção foi alterada.
+O diagnóstico EPERM anterior não foi repetido.
+
+Comando executado com esse runtime e ambiente:
+
+```text
+node node_modules/vitest/vitest.mjs run lib/pdv-pending-post-sale-effects.static.test.ts lib/pdv/current-main-correction.component.test.ts lib/pdv/parity-classic-finalize-audit.component.test.ts lib/pdv/parity-assistencia-finalize-audit.component.test.ts lib/pdv/parity-supermercado-finalize-audit.component.test.ts lib/pdv/parity-venda-completa-finalize-audit.component.test.ts --maxWorkers=1 --no-file-parallelism --reporter=json --outputFile C:/Users/rafae/.codex/visualizations/2026/10/21/01a15f8e-23f4-7152-952b-d51fe767512a/n5-c-rev5-close-node24-vitest.json
+```
+
+Resultado: **76/76 PASS**, exit 0, seis arquivos, zero falhas/skips/TODOs.
+Herdados: 11 estáticos + 34 comportamentais = **45 PASS**. Componentes:
+Assistência 10, Classic 7, Supermercado 7, Venda Completa 7 = **31 PASS**,
+incluindo remount, snapshot confirmado, isolamento por loja e deduplicação.
+Relatório JSON acima, SHA-256
+`49bbfc61359a6e2ceedfe0e1868b48f8c22026e91ad6a587cdbc8e25cb40d597`.
+Log bruto adjacente: `n5-c-rev5-close-node24-vitest.log`.
+
+Árvore limpa antes/depois da execução; código revisado integralmente idêntico.
+Ledger mantém oito linhas e os quatro BLOCKED históricos, SHA-256 dos bytes
+locais `1b1c49dafd2ba9df7840e7bee1454ab5ff3a55c55baa5597776830ead23a945b`.
+Main atualizada por fetch: `15cbaac55e0473cc1ca27695c10b2fcf1e4f52a5`,
+sem commits novos na allowlist ou nos caminhos produtivos protegidos do PDV.
+Lint e typecheck aprovados na sessão anterior são preservados, sem repetição
+nem mudança técnica posterior. Próximas ações condicionadas: commit desta
+evidência, `verify --all`, `check pdv` e, somente com gates aprovados,
+`close pdv`; depois verificar DONE e publicar apenas a branch autorizada.
+
+## Reprodução do remount e contratos aprovados
+
+Os casos em `lib/pdv/parity-assistencia-finalize-audit.component.test.ts`
+mantêm o `OperationsProvider` real, iniciam PENDING, desmontam somente a tela
+e confirmam pelo retry real com a mesma `clientSaleId` nos dois POSTs. Antes
+da volta, a venda é `VDA-N5C-1`, total 190, `syncPending=false`, sem auditoria
+definitiva emitida pela tela ausente. Com o cache alterado, expirado ou ausente,
+o remount emite exatamente um `sale_finalized` com loja, identidade, total e
+breakdown do snapshot confirmado. Novos remounts/renders/retries mantêm um
+evento, uma venda e o estado de negócio. Loja alheia e resposta em voo após
+troca de loja preservam os marcadores de origem e destino; FAILED/PENDING
+continuam sem auditoria definitiva. São dez casos da Assistência, incluindo
+os cinco novos de remount/isolamento, dentro dos 31 componentes aprovados.
+
+Os dois herdados preservam os 11 e 34 casos e seus contratos de identidade,
+cache/TTL, loja, hold/resume, snapshots e bloqueio de reconfirmação. A matriz
+rev5 abaixo referenciada contém os cinco F-08 (split, vale, À Prazo,
+PENDING/retry, audit-log) nas quatro superfícies, com 20 TESTED e zero skips
+no conjunto aprovado. Comandos, provas e resultados do candidato estão no
+registro rev5 preservado a seguir e em `docs/pdv/PDV_CORE_N5_FINAL_MATRIX_002.md`.
+
+## Limites preservados e condição de fechamento
+
+I/O sintético fail-closed em loopback, sem servidor Next, `.env`, DB/API ou
+autenticação de produção. As fixtures não homologam persistência/automação
+server-side, hardware, operação física nem acesso autenticado real. A
+deduplicação local permanece limitada às 500 entradas retidas; sem storage,
+a memória cobre apenas aquela montagem. Os oito cenários do smoke B1 e os
+dois estados operacionais BLOCKED acima continuam pendentes.
+
+Nenhum blocker técnico pendente foi comunicado no parecer R APPROVE. Os quatro
+eventos BLOCKED do ledger são históricos append-only e devem permanecer
+literais. Este commit documental não altera implementação nem marca DONE.
+Após ele, reexecutar ESLint focado, typecheck, 76 regressões, 20 E2E,
+`verify --all` e `check pdv`; somente com PASS executar `close pdv` e verificar
+novamente ledger, state, relatório, diff documental e árvore limpa. Apenas
+o script AEP poderá acrescentar o DONE deste GOAL e gerar o commit oficial.
+
+---
+
+## Registro rev5 anterior ao recebimento do parecer, preservado integralmente
+
+# PDV-PARITY-N5-C-E2E-002 — REV5: candidato técnico validado, R pendente
+
+Data: 21/10/2026 (America/Sao_Paulo). Executor: Codex, família `openai`.
+Branch/worktree: `goal/pdv-parity-n5-c-e2e-002`,
+`C:/Projetos/omni-gestao/.worktrees/pdv-n5-c-e2e-002`.
+MAIN_BASE=`8aed9e1d7c7891fd1e6f53b60da53679be0f1117`, PR #293 MERGED.
+INTEGRATION_COMMIT=`fce7ba872a76fd7ae6ce127dfac31e722a701252`.
+O SHA do candidato técnico e o novo parecer serão registrados na seção R.
+
+## Retomada canônica e preservação
+
+HEAD inicial `01b9c0e94dc3867744b54764ee2d36620e10769d`, árvore limpa,
+sem `.aep-active`. Confirmados PR #293 MERGED e origin/main ratificada.
+Merge normal preserva `cdda749`, `a21e9a6`, `01b9c0e` e suas evidências.
+O único conflito textual foi REGISTRY derivado; o merge também carregaria o
+GOAL BLOCKED para `_closed/goals/`. Resolvido pelo GOAL READY/rev5 exato da
+main no caminho quente e por `registry`, sem editar ledger/state à mão.
+Comparação por blobs confirmou os 11 arquivos técnicos históricos intactos
+antes do corretivo, o GOAL idêntico ao publicado e o ledger igual ao BLOCKED.
+Nenhum stash/reset/descarte, nenhuma escrita em outra worktree ou em Cadastros.
+
+`status pdv`/`open pdv` canônicos: mesma GOAL READY/rev5, base acima,
+16 padrões, zero gates liberados. Os quatro eventos BLOCKED continuam
+literais; não se fabricou evento READY. Artefato Prisma já existente e
+ignorado foi preservado; sem geração, dependência, migration ou credencial.
+
+Corretivo registrado por `attempt pdv --fail`, tentativa atual **2/3**.
+Rodada paralela intermediária: 70 PASS/6 FAIL; rodada serial seguinte:
+73 PASS/3 FAIL, estes nos novos casos antes da confirmação. O setup dos
+novos casos foi alinhado ao `mount()` existente, aguardando efeitos do
+provider; nenhum assert/timeout foi relaxado. A rodada final abaixo passou.
+
+O `registry` gerou falsos modificados por LF/CRLF em dez estados de outras
+trilhas. A primeira atualização do índice foi recusada pela revisão automática.
+Conferidos, para cada path, os três hashes working/index/HEAD idênticos; nova
+revisão autorizou recarregar apenas o cache do índice. Zero conteúdo alterado
+nesses paths e zero diff staged. Não integram o commit técnico.
+
+## Corretivo produtivo e duas suites herdadas
+
+Somente `pdv-assistencia-enterprise.tsx` muda em produção nesta rev5:
+
+- Marcador próprio por loja, separado do carrinho/TTL, com restore em state
+  reativo. Guarda apenas identidades retornadas com `result.ok` pelo handler.
+- Observador cruza identidade original com `sales` e `syncPending === false`;
+  usa saleId canônico, total e breakdown do snapshot confirmado. Não usa o
+  carrinho atual nem audita vendas históricas indiscriminadamente.
+- Deduplicação pelo log local retido e remoção do marcador atendido. Retry e
+  remount apenas auditam; não reexecutam finalização, impressão ou efeitos
+  de estoque/caixa/financeiro. FAILED/PENDING mantêm zero eventos definitivos.
+- Resposta após troca de loja grava só o marcador da origem, sem substituir
+  state/marcador/carrinho da loja nova. O marcador alheio permanece intacto.
+
+Preservados os cinco casos anteriores da Assistência, com cinco novas provas:
+confirmação durante desmontagem com carrinho alterado, expirado ou removido;
+loja alheia; e resposta em voo após troca de loja. Provider global real é
+mantido, assim como PaymentModal, motor, retry e audit-log reais. Conferem
+identidade nos POSTs, snapshot, auditoria única, estado de negócio imutável
+após novos remounts e ausência de duplicação em novo retry.
+
+`lib/pdv-pending-post-sale-effects.static.test.ts`: **11 casos preservados**.
+As três incompatibilidades foram corrigidas acompanhando a fiação real até
+o observador: FAILED sai antes do registro; identidade vem do resultado;
+scope da loja, match da identidade e CONFIRMED precedem o emissor único;
+snapshot/deduplicação são verificados no próprio efeito. Todas as negativas
+de gap/PENDING, impressão/cupom e dispatch server-side permanecem. Não basta
+buscar `sale_finalized` em qualquer trecho do arquivo.
+
+`lib/pdv/current-main-correction.component.test.ts`: **34 casos e asserts
+preservados**. Removido mock incompleto de audit-log, usando implementação
+real e fetch sintético. Fixtures PENDING/CONFIRMED têm snapshot completo de
+venda, sem mudar identidade, cache, TTL, loja, hold/resume, snapshot antigo
+ou bloqueio de reconfirmação. Nenhum skip, supressão ou assert removido.
+
+Classic, Supermercado, Venda Completa e E2E/fixtures/config permanecem
+byte a byte nos blobs técnicos históricos. Nenhum motor/backend/helper
+compartilhado, auth, schema, config global ou código Cadastros alterado.
+
+## Validações finais executadas
+
+| Comando/prova | Resultado |
+| --- | --- |
+| `npx vitest run lib/pdv-pending-post-sale-effects.static.test.ts lib/pdv/current-main-correction.component.test.ts lib/pdv/parity-classic-finalize-audit.component.test.ts lib/pdv/parity-assistencia-finalize-audit.component.test.ts lib/pdv/parity-supermercado-finalize-audit.component.test.ts lib/pdv/parity-venda-completa-finalize-audit.component.test.ts --no-file-parallelism --reporter=json --outputFile <artefato-local>` | 76 PASS, 0 FAIL, 0 skip; 21/10 13:12:08 BRT |
+| Herdados | 11 estáticos + 34 comportamentais = 45/45 PASS |
+| Quatro suites de auditoria | Classic 7, Assistência 10, Supermercado 7, Venda Completa 7 = 31/31 PASS |
+| `npx playwright test --config e2e/pdv-core.playwright.config.ts` | 20/20 PASS, 0 skip, 43,1s |
+| `npm run typecheck` | PASS, exit 0, após o último ajuste dos testes |
+| ESLint nos 13 paths TS/TSX da allowlist | PASS, exit 0; 0 erros, 9 warnings preexistentes nas três telas intocadas |
+| `git diff --check` | PASS |
+| `node scripts/track.mjs verify --all` | PASS na integração; repetir após commit e close |
+
+Relatórios brutos locais em
+`C:/Users/rafae/.codex/visualizations/2026/10/21/01a15c55-5be1-7540-bb36-74501126da97/`:
+
+| Artefato | SHA-256 |
+| --- | --- |
+| `pdv-rev5-verified-vitest.json` | `0cb83c7e67a59ab2752361cd2d238f23286a4c485112e17c1f14a9321de0b45f` |
+| `pdv-rev5-playwright.log` | `3837cc9137430b2a796a01bf8d7d2dbdd69b063bf0abbdbe3b82e398f25b2e26` |
+| `pdv-rev5-typecheck.log` | `f8ce3d71d297afb588cb389d6732def9aaf545c05ba8d6c5090fd9668a1dedfe` |
+| `pdv-rev5-eslint.log` | `9d29cb066f40d916f34d4e04afc0481e9f51408f1d67f473dbc91c54eb56bcb1` |
+
+## Limites e aceite
+
+Matriz técnica: **20 TESTED / 0 PARTIAL / 0 BLOCKED** com prova nova. Os
+históricos 19/1 e 20 E2E rev4 permanecem integrais abaixo. I/O sintético
+fail-closed em loopback; sem Next/.env/DB, auth ou writer produtivo, sem
+build/Docker. A fixture não prova persistência/automação definitiva do servidor,
+hardware, uso autenticado produtivo ou operação física. Deduplicação local
+limitada às 500 entradas retidas; falha de storage limita a memória à montagem.
+`N5_B1_CLOSEOUT=BLOCKED` · `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`.
+
+R nova de família `anthropic` ou `humano` obrigatória sobre o SHA técnico
+corrigido. Este registro é candidato, sem aprovação presumida nem DONE.
+`R_VERDICT=PENDING` · `GOAL_STATUS=IN_PROGRESS`.
+`NEXT_STEP=REVISAO_INDEPENDENTE_N5_C`.
+
+---
+
+## Histórico rev4 preservado integralmente
+
 # PDV-PARITY-N5-C-E2E-002 — REV4 BLOCKED após R independente
 
 Data: 20/10/2026. Main/base:

@@ -6,6 +6,7 @@ import { createElement, type ComponentProps } from "react"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { PendingResolutionSource, PendingSaleIdentity } from "./finalize-modal-contract"
+import type { SaleRecord } from "@/lib/operations-sale-types"
 import { PENDING_RETRY_GUIDANCE } from "./finalize-modal-contract"
 import { getHeldSales, saveHeldSale, type HeldSale } from "@/lib/pdv-hold"
 import { buildCapabilitiesSnapshot } from "./resolve-capability"
@@ -53,7 +54,7 @@ vi.mock("@/lib/pdv/use-pdv-capabilities", () => ({ usePdvCapabilities: (surfaceI
   overrides: undefined, isEnabled: () => true,
   snapshot: buildCapabilitiesSnapshot({ storeId: runtime.storeId, surfaceId }),
 }) }))
-vi.mock("@/lib/audit-log", () => ({ appendAuditLog: vi.fn() }))
+// O log e sua leitura/deduplicação são reais; fetch abaixo isola o transporte.
 vi.mock("@/app/actions/vendas-enterprise", () => ({ enrichVendaEnterprise: vi.fn() }))
 vi.mock("@/lib/pdv-append-conta-receber", () => ({ appendContaReceberTituloPdvAprazo: vi.fn() }))
 vi.mock("@/components/dashboard/vendas/payment-modal", () => ({ PaymentModal: (props: PaymentProps) => {
@@ -74,8 +75,13 @@ vi.mock("@/components/dashboard/vendas/pdv-post-sale-dialog", () => ({ PdvPostSa
 vi.mock("@/components/dashboard/vendas/pdv-auto-print-feedback", () => ({ PdvAutoPrintFeedback: () => null }))
 
 const IDENTITY: PendingSaleIdentity = { id: "PEND-original", clientSaleId: "client-original" }
-const pending = (): PendingResolutionSource[] => [{ ...IDENTITY, syncPending: true }]
-const resolved = (): PendingResolutionSource[] => [{ id: "VDA-confirmed", clientSaleId: IDENTITY.clientSaleId, syncPending: false }]
+const saleSnapshot = {
+  at: "2026-10-01T15:00:00.000Z", total: 190, discountTotal: 10,
+  lines: [{ inventoryId: "prod-1", name: "Produto", quantity: 2, unitPrice: 100, lineTotal: 200 }],
+  paymentBreakdown: { dinheiro: 190, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: 0 },
+}
+const pending = (): SaleRecord[] => [{ ...saleSnapshot, ...IDENTITY, syncPending: true }]
+const resolved = (): SaleRecord[] => [{ ...saleSnapshot, id: "VDA-confirmed", clientSaleId: IDENTITY.clientSaleId, syncPending: false }]
 const assistLine = { lineId: "line-1", inventoryId: "prod-1", title: "Produto", price: 100, qty: 2, itemType: "produto" }
 const vcLine = { lineId: "line-1", inventoryId: "prod-1", codigo: "001", name: "Produto", unid: "UN", price: 100, qty: 2, discountPct: 0 }
 function cacheKey(surface: Surface, storeId = runtime.storeId) {
