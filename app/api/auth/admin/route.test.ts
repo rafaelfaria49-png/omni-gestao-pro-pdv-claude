@@ -23,6 +23,7 @@ import {
   PIN_AUTHORIZATION_MAX_AGE_SECONDS,
 } from "@/lib/auth/pin-authorization"
 import { hashSupervisorPin } from "@/lib/auth/pin-hash"
+import type { AccessModule } from "@/lib/auth/access-policy"
 import { __resetContadorRateLimitForTests } from "@/lib/contador/auth/rate-limit"
 
 const LOJA_A = "loja-A"
@@ -50,6 +51,9 @@ type SessionUser = {
   role?: string
   storeAccess?: string
   allowedStoreIds?: string[]
+  accessScope?: "STORE"
+  platformAuthority?: false
+  storeModules?: Record<string, AccessModule[]>
 }
 
 const h = vi.hoisted(() => ({
@@ -95,11 +99,16 @@ import { DELETE, GET, POST } from "./route"
 function sessionOf(user: SessionUser | null): unknown {
   return user ? { user } : null
 }
-function unrestricted(id: string): SessionUser {
-  return { id, role: "ADMIN" }
+/** Operador STORE: membership e módulos explícitos, sem autoridade de plataforma. */
+function storeOperator(id: string, stores = LOJAS_REAIS): SessionUser {
+  return {
+    id, role: "ADMIN", accessScope: "STORE", platformAuthority: false,
+    storeAccess: "restricted", allowedStoreIds: [...stores],
+    storeModules: Object.fromEntries(stores.map(store => [store, ["pdv"]])),
+  }
 }
 function restrictedTo(id: string, ids: string[]): SessionUser {
-  return { id, role: "OPERADOR", storeAccess: "restricted", allowedStoreIds: ids }
+  return { ...storeOperator(id, ids), role: "OPERADOR" }
 }
 
 function postReq(pin: string, store: string | null = LOJA_A): Request {
@@ -141,6 +150,10 @@ function hashedSupervisor() {
 
 function expectPinCandidatesNotLoaded(): void {
   expect(h.userFindMany).not.toHaveBeenCalled()
+}
+
+function expectNoPrisma(): void {
+  for (const query of [h.ensureConnected, h.userFindFirst, h.userFindMany, h.userUpdate, h.storeFindUnique, h.auditCreate]) expect(query).not.toHaveBeenCalled()
 }
 
 beforeAll(async () => {
@@ -212,7 +225,7 @@ describe("POST /api/auth/admin — sessão obrigatória", () => {
   })
 
   it("[3] utilizador desativado → 401, sem consultar PIN", async () => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
     h.entitlement.mockResolvedValue({ ok: false, reason: "user_inactive" })
     const res = await POST(postReq(PIN_CORRETO))
     expect(res.status).toBe(401)
@@ -220,9 +233,34 @@ describe("POST /api/auth/admin — sessão obrigatória", () => {
   })
 
   it("[3b] utilizador inexistente → 401", async () => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
     h.entitlement.mockResolvedValue({ ok: false, reason: "user_not_found" })
     expect((await POST(postReq(PIN_CORRETO))).status).toBe(401)
+  })
+
+  it.each(["GET", "POST"])("%s sem sessão é negado antes de qualquer Prisma", async (method) => {
+    const res = method === "GET" ? await GET(getReq()) : await POST(postReq(PIN_CORRETO))
+    expect(res.status).toBe(401)
+    expectNoPrisma()
+  })
+
+  it.each(["GET", "POST"])("%s sem módulo de pagamento é negado antes de qualquer Prisma", async (method) => {
+    const session = storeOperator(USER_A, [LOJA_A])
+    session.storeModules = { [LOJA_A]: ["catalog"] }
+    h.auth.mockResolvedValue(sessionOf(session))
+    const res = method === "GET" ? await GET(getReq()) : await POST(postReq(PIN_CORRETO))
+    expect(res.status).toBe(403)
+    expect(h.entitlement).not.toHaveBeenCalled()
+    expectNoPrisma()
+  })
+
+  it.each(["GET", "POST"])("%s de outra loja não herda módulo da unidade permitida", async (method) => {
+    const session = storeOperator(USER_A, [LOJA_A, LOJA_B])
+    session.storeModules = { [LOJA_A]: ["pdv"], [LOJA_B]: ["settings"] }
+    h.auth.mockResolvedValue(sessionOf(session))
+    const res = method === "GET" ? await GET(getReq(LOJA_B)) : await POST(postReq(PIN_CORRETO, LOJA_B))
+    expect(res.status).toBe(403)
+    expectNoPrisma()
   })
 })
 
@@ -232,10 +270,11 @@ describe("POST /api/auth/admin — escopo de loja", () => {
     const res = await POST(postReq(PIN_CORRETO, LOJA_A))
     expect(res.status).toBe(403)
     expectPinCandidatesNotLoaded()
+    expectNoPrisma()
   })
 
   it("loja não resolvível (sem header, query nem cookie) → 400, falha fechado", async () => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
     const res = await POST(postReq(PIN_CORRETO, null))
     expect(res.status).toBe(400)
     expectPinCandidatesNotLoaded()
@@ -257,7 +296,7 @@ describe("POST /api/auth/admin — escopo de loja", () => {
 
 describe("POST /api/auth/admin — PIN", () => {
   beforeEach(() => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
   })
 
   it("[5] PIN incorreto → 401", async () => {
@@ -376,7 +415,7 @@ describe("POST /api/auth/admin — PIN", () => {
 
 describe("POST /api/auth/admin — rate limit", () => {
   beforeEach(() => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
   })
 
   it("[13][14][15] 5 falhas bloqueiam; a 6ª tentativa é 429 com Retry-After", async () => {
@@ -430,14 +469,14 @@ describe("POST /api/auth/admin — rate limit", () => {
   it("um utilizador não consome o orçamento de outro", async () => {
     for (let i = 0; i < 5; i++) await POST(postReq(PIN_ERRADO))
     expect((await POST(postReq(PIN_ERRADO))).status).toBe(429)
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_B)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_B)))
     expect((await POST(postReq(PIN_ERRADO))).status).toBe(401)
   })
 })
 
 describe("POST /api/auth/admin — R1: rate limit imune a rotação de x-forwarded-for", () => {
   beforeEach(() => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
   })
 
   it("IP A registra a 1ª falha; IP B, mesmo user/loja, registra a 2ª no MESMO bucket", async () => {
@@ -481,7 +520,7 @@ describe("POST /api/auth/admin — R1: rate limit imune a rotação de x-forward
     h.clientIp = "203.0.113.26"
     expect((await POST(postReq(PIN_ERRADO))).status).toBe(429)
 
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_B)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_B)))
     h.clientIp = "203.0.113.27"
     expect((await POST(postReq(PIN_ERRADO))).status).toBe(401)
   })
@@ -549,7 +588,10 @@ describe("POST /api/auth/admin — R1: rate limit imune a rotação de x-forward
  */
 describe("POST /api/auth/admin — R1-bis: evasão do rate limit por loja (ataque)", () => {
   beforeEach(() => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    // Claims sintéticos obsoletos permitem alcançar o rate limit e a prova de
+    // existência com os guards reais. Não concedem PLATFORM nem criam Store.
+    const staleStores = [LOJA_INVENTADA, ...Array.from({ length: 6 }, (_, i) => `${LOJA_INVENTADA}-${i}`), `${LOJA_INVENTADA}-x`]
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A, [...LOJAS_REAIS, ...staleStores])))
   })
 
   it("ATAQUE: 5 falhas em 5 lojas REAIS distintas esgotam o orçamento global do utilizador", async () => {
@@ -612,19 +654,19 @@ describe("POST /api/auth/admin — R1-bis: evasão do rate limit por loja (ataqu
     }
     expect((await POST(postReq(PIN_ERRADO, LOJA_A))).status).toBe(429)
 
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_B)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_B)))
     expect((await POST(postReq(PIN_ERRADO, LOJA_A))).status).toBe(401)
     expect((await POST(postReq(PIN_ERRADO, LOJA_E))).status).toBe(401)
   })
 
   it("sucesso limpa SÓ o balde do utilizador autenticado", async () => {
     // USER_B queima 5 tentativas e fica bloqueado.
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_B)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_B)))
     for (let i = 0; i < 5; i++) await POST(postReq(PIN_ERRADO, LOJA_A))
     expect((await POST(postReq(PIN_ERRADO, LOJA_A))).status).toBe(429)
 
     // USER_A falha 4 vezes e depois acerta — limpa o SEU balde.
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
     for (let i = 0; i < 4; i++) await POST(postReq(PIN_ERRADO, LOJA_B))
     expect((await POST(postReq(PIN_CORRETO, LOJA_B))).status).toBe(200)
     for (let i = 0; i < 5; i++) {
@@ -632,14 +674,16 @@ describe("POST /api/auth/admin — R1-bis: evasão do rate limit por loja (ataqu
     }
 
     // O bloqueio de USER_B continua intacto.
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_B)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_B)))
     expect((await POST(postReq(PIN_ERRADO, LOJA_A))).status).toBe(429)
   })
 })
 
 describe("POST /api/auth/admin — R1-bis: validação canónica da loja", () => {
   beforeEach(() => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    // Membership afirmada na sessão, mas linha inexistente: a releitura canônica
+    // continua obrigatória mesmo após o guard de módulo e membership permitir.
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A, [...LOJAS_REAIS, LOJA_INVENTADA])))
   })
 
   it("storeId inexistente → 403 ANTES de qualquer consulta de PIN", async () => {
@@ -655,8 +699,8 @@ describe("POST /api/auth/admin — R1-bis: validação canónica da loja", () =>
   })
 
   it("a existência é provada no banco, não deduzida de canAccessStore", async () => {
-    // Sessão não restrita: `canAccessStore` devolve true para QUALQUER string. Só a
-    // consulta canónica distingue a unidade real da inventada.
+    // A sessão afirma membership e módulo para esta unidade. Mesmo assim, só a
+    // consulta canônica prova que a Store ainda existe.
     await POST(postReq(PIN_CORRETO, LOJA_INVENTADA))
     expect(h.storeFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: LOJA_INVENTADA } }),
@@ -664,12 +708,16 @@ describe("POST /api/auth/admin — R1-bis: validação canónica da loja", () =>
   })
 
   it("recusa por inexistência e por falta de permissão são indistinguíveis para o cliente", async () => {
+    // Para um identificador fora das memberships, a negativa não revela se a
+    // Store existe. As duas requisições passam pelo mesmo guard real, sem I/O.
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
     const inexistente = await POST(postReq(PIN_CORRETO, LOJA_INVENTADA))
     h.auth.mockResolvedValue(sessionOf(restrictedTo(USER_A, [LOJA_B])))
     const semPermissao = await POST(postReq(PIN_CORRETO, LOJA_A))
 
     expect(inexistente.status).toBe(semPermissao.status)
     await expect(inexistente.json()).resolves.toEqual(await semPermissao.json())
+    expectNoPrisma()
   })
 
   it("loja sem permissão nem chega a consultar a existência no banco", async () => {
@@ -712,7 +760,7 @@ describe("POST /api/auth/admin — R1-bis: validação canónica da loja", () =>
 
 describe("POST /api/auth/admin — configuração", () => {
   it("sem segredo de assinatura o endpoint falha fechado (503) e não consulta PIN", async () => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
     delete process.env.AUTH_SECRET
     delete process.env.NEXTAUTH_SECRET
     delete process.env.PIN_AUTHORIZATION_SECRET
@@ -724,7 +772,7 @@ describe("POST /api/auth/admin — configuração", () => {
 
 describe("GET /api/auth/admin — consumo da autorização", () => {
   async function autorizar(user = USER_A, store = LOJA_A): Promise<void> {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(user)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(user)))
     const res = await POST(postReq(PIN_CORRETO, store))
     expect(res.status).toBe(200)
     adoptIssuedCookie(res)
@@ -741,7 +789,7 @@ describe("GET /api/auth/admin — consumo da autorização", () => {
 
   it("[9][11] autorização de outro utilizador não vale", async () => {
     await autorizar(USER_A, LOJA_A)
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_B)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_B)))
     await expect((await GET(getReq(LOJA_A))).json()).resolves.toEqual({ authenticated: false })
   })
 
@@ -757,16 +805,18 @@ describe("GET /api/auth/admin — consumo da autorização", () => {
   })
 
   it("cookie forjado com o id do supervisor (formato legado) não autentica", async () => {
-    h.auth.mockResolvedValue(sessionOf(unrestricted(USER_A)))
+    h.auth.mockResolvedValue(sessionOf(storeOperator(USER_A)))
     h.cookieJar.set(ADMIN_AUTHORIZATION_COOKIE, SUPERVISOR_ID)
     await expect((await GET(getReq(LOJA_A))).json()).resolves.toEqual({ authenticated: false })
   })
 
-  it("sem sessão → authenticated:false, sem consultar o banco", async () => {
+  it("sem sessão → 401, sem consultar o banco", async () => {
     h.auth.mockResolvedValue(null)
     h.cookieJar.set(ADMIN_AUTHORIZATION_COOKIE, "qualquer.coisa")
-    await expect((await GET(getReq(LOJA_A))).json()).resolves.toEqual({ authenticated: false })
-    expect(h.userFindFirst).not.toHaveBeenCalled()
+    const res = await GET(getReq(LOJA_A))
+    expect(res.status).toBe(401)
+    await expect(res.json()).resolves.toEqual({ ok: false, error: "Não autenticado" })
+    expectNoPrisma()
   })
 
   it("sem loja resolvível → authenticated:false (falha fechado)", async () => {
