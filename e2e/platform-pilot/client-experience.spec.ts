@@ -44,17 +44,19 @@ test.beforeAll(async () => {
     [ASSIST, "Assistência Sintética CX", "assistencia", [...BASIC_MODULE_ACCESS.modules, "service", "deviceCatalog"]],
     [NOVA, "Padaria Nova CX", "padaria", BASIC_MODULE_ACCESS.modules],
   ] as const) {
-    await db.store.create({ data: { id, name, cnpj: id === NOVA ? "" : "00.000.000/0001-91", moduleAccess: { version: 1, modules: [...modules] } } })
-    await db.storeSettings.create({ data: { storeId: id, printerConfig: printerConfig(branch) } })
+    // Upserts: após uma falha o Playwright reinicia o worker e reexecuta este hook.
+    const store = { name, cnpj: id === NOVA ? "" : "00.000.000/0001-91", moduleAccess: { version: 1, modules: [...modules] } }
+    await db.store.upsert({ where: { id }, create: { id, ...store }, update: store })
+    await db.storeSettings.upsert({ where: { storeId: id }, create: { storeId: id, printerConfig: printerConfig(branch) }, update: { printerConfig: printerConfig(branch) } })
   }
   for (const [key, u] of Object.entries(USERS) as Array<[UserKey, (typeof USERS)[UserKey]]>) {
-    await db.adminUser.create({ data: {
-      id: `cx-${key}`, email: email(key), name: `Sintético CX ${key}`, role: u.role, lojaId: u.store, accessScope: u.scope,
-      password: await bcrypt.hash(passwords[key], 10), mustChangePassword: "mustChange" in u,
-      adminUserStores: { create: [{ storeId: u.store }] },
-    } })
+    const data = { email: email(key), name: `Sintético CX ${key}`, role: u.role, lojaId: u.store, accessScope: u.scope,
+      password: await bcrypt.hash(passwords[key], 10), mustChangePassword: "mustChange" in u }
+    await db.adminUser.upsert({ where: { id: `cx-${key}` }, update: data,
+      create: { id: `cx-${key}`, ...data, adminUserStores: { create: [{ storeId: u.store }] } } })
   }
-  await db.produto.create({ data: { storeId: A, name: "Queijo Sintético por Peso CX", price: 49.9, stock: 0, metadata: { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } } } })
+  const weighed = { storeId: A, name: "Queijo Sintético por Peso CX", price: 49.9, stock: 0, metadata: { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } } }
+  await db.produto.upsert({ where: { id: "cx-queijo-kg" }, create: { id: "cx-queijo-kg", ...weighed }, update: weighed })
 })
 test.afterEach(async () => { for (const ctx of contexts) await ctx.dispose(); contexts.clear() })
 test.afterAll(async () => { await db.$disconnect() })
@@ -77,7 +79,13 @@ const loginOwner = (store: string) => loginWith("owner@pilot.invalid", process.e
 /** Requests de superfícies não liberadas: nada disso pode partir da experiência do cliente. */
 const FORBIDDEN_REQUESTS = /\/api\/(print\/raw|ia-mestre|user\/credits|catalogo\/aparelhos|marketplace|contador|whatsapp|vision|product\/(voice|ncm|fiscal))/
 async function setupPage(page: Page, actor: APIRequestContext) {
-  await page.context().addCookies((await actor.storageState()).cookies)
+  const cookies = (await actor.storageState()).cookies
+  await page.context().addCookies(cookies)
+  // No navegador a unidade ativa vem do storage; semeia a mesma loja do login (sem sobrescrever trocas).
+  const store = cookies.find((c) => c.name === "assistec-active-store")?.value
+  await page.context().addInitScript((id) => {
+    try { if (id && !localStorage.getItem("assistec-pro-loja-ativa-v1")) localStorage.setItem("assistec-pro-loja-ativa-v1", id) } catch { /* storage indisponível */ }
+  }, store)
   // Prévia de impressão: o diálogo do sistema não abre no headless; a janela ainda é criada.
   await page.context().addInitScript(() => { window.print = () => {} })
   await page.addLocatorHandler(page.getByRole("dialog", { name: /Boas-vindas/i }), async (dialog) => { await dialog.getByRole("button", { name: "Voltar depois" }).click() })
