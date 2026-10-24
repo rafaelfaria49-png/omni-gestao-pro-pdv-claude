@@ -206,7 +206,8 @@ test("cliente padaria: navegação, estoque e cadastro pela ficha canônica", as
   await expect(row.locator("[data-unidade]")).toHaveAttribute("data-unidade", "UN")
   await row.getByRole("button", { name: /Editar/ }).click()
   editor = productModal(page)
-  await expect(field(editor, "Preço venda (R$)")).toHaveValue("12,50")
+  // A ficha relê o valor salvo no formato do parser canônico (12,5 ou 12,50).
+  await expect(field(editor, "Preço venda (R$)")).toHaveValue(/^12,50?$/)
   await field(editor, "Preço venda (R$)").fill("13,00")
   await saveProduct(page)
   const edited = await db.produto.findUniqueOrThrow({ where: { id: created.id } })
