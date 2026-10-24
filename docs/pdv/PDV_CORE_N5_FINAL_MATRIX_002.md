@@ -1,3 +1,80 @@
+# PDV Core N5-C — REV5: matriz aprovada por R independente
+
+Parecer comunicado pelo responsável humano em 21/10/2026 no pedido
+`CODEX_CLOSE_AEP_N5_C_REV5`, sobre o SHA exato
+`8d19a8bea9518c6f865dc69c67b28085bbdde6bb`:
+`R_EXECUTOR=Claude Code / Claude Opus 5.5`, `R_FAMILY=anthropic`,
+`IMPLEMENTATION_FAMILY=openai`, `INDEPENDENCE_VALID=YES`, `R_VERDICT=APPROVE`.
+O registro é feito pelo Codex; não constitui uma revisão R feita pelo Codex.
+Proveniência, reprodução do remount e limites:
+`docs/ai-execution/_evidence/PDV-PARITY-N5-C-E2E-002.md`.
+
+A matriz rev5 preservada abaixo mantém **20 TESTED / 0 PARTIAL / 0 BLOCKED**,
+cinco F-08 nas quatro superfícies. Parecer informado: **76/76 PASS**
+(45 herdados + 31 componentes), **20/20 E2E**, sem skips. Nenhum código ou
+asserção é modificado neste fechamento. DONE depende dos gates e do `close`
+canônico; a ratificação oficial deve constar do ledger/relatório AEP.
+Persistência e automação server-side, hardware e operação autenticada real
+continuam fora desta prova sintética. Retenção do log local: 500 entradas;
+sem storage, deduplicação restrita à montagem.
+`N5_B1_CLOSEOUT=BLOCKED` · `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`.
+
+---
+
+## Matriz e provas rev5 anteriores ao parecer, preservadas integralmente
+
+# PDV Core N5-C — REV5: candidato técnico, validação completa e nova R pendente
+
+Execução: 21/10/2026 (America/Sao_Paulo). GOAL `PDV-PARITY-N5-C-E2E-002`.
+MAIN_BASE=`8aed9e1d7c7891fd1e6f53b60da53679be0f1117` (PR #293 MERGED).
+Integração normal: `fce7ba872a76fd7ae6ce127dfac31e722a701252`.
+O SHA técnico exato será vinculado ao parecer R na evidência do GOAL; o
+REQUEST_CHANGES da rev4 é histórico e não constitui aprovação desta revisão.
+
+## Matriz técnica rev5 — cinco F-08 nas quatro superfícies
+
+| Cenário F-08 | classic | assistencia | supermercado | venda-completa |
+| --- | --- | --- | --- | --- |
+| A. Split e múltiplos pagamentos | TESTED — E5-C-A | TESTED — E5-A-A | TESTED — E5-S-A | TESTED — E5-V-A |
+| B. Vale/crédito e saldo | TESTED — E5-C-B | TESTED — E5-A-B | TESTED — E5-S-B | TESTED — E5-V-B |
+| C. À Prazo, entrada e parcelas | TESTED — E5-C-C | TESTED — E5-A-C | TESTED — E5-S-C | TESTED — E5-V-C |
+| D. PENDING/retry com identidade estável | TESTED — E5-C-D, U5-C | TESTED — E5-A-D, U5-A | TESTED — E5-S-D, U5-S | TESTED — E5-V-D, U5-V |
+| E. sale_finalized após CONFIRMED, sem duplicação | TESTED — E5-C-D/E, U5-C | TESTED — E5-A-D/E, U5-A: confirmação desmontada, remount e TTL | TESTED — E5-S-D/E, U5-S | TESTED — E5-V-D/E, U5-V |
+
+`MATRIX_TESTED=20` · `MATRIX_PARTIAL=0` · `MATRIX_BLOCKED=0` ·
+`UNSUPPORTED_BY_DESIGN=0`. São provas técnicas isoladas, não homologação produtiva.
+Aceite/fechamento AEP continua condicionado ao novo R favorável.
+
+- E5: `npx playwright test --config e2e/pdv-core.playwright.config.ts`:
+  **20 PASS / 0 FAIL / 0 skip**, 43,1s. IDs E5 mapeiam superfície e caso A..E
+  do mesmo `e2e/specs/pdv-core-n5.spec.ts`; nenhuma asserção E2E foi alterada.
+- U5: quatro arquivos `lib/pdv/parity-*-finalize-audit.component.test.ts`:
+  **31 PASS / 0 FAIL / 0 skip** (Classic 7, Assistência 10, Supermercado 7,
+  Venda Completa 7). Os cinco casos novos da Assistência usam provider, modal,
+  finalização, retry e log reais; isolam somente I/O e contextos periféricos.
+- Herdados: **45 PASS / 0 FAIL / 0 skip**, preservando os 11 casos estáticos e
+  os 34 comportamentais. O estático segue a ligação identidade/CONFIRMED/emissor
+  no observador; o comportamental usa audit-log real e snapshots completos.
+- `npm run typecheck`: PASS. ESLint focado nos 13 paths TS/TSX do candidato:
+  exit 0, zero erros e nove warnings preexistentes nas três telas intocadas.
+
+Na Assistência, o marcador `omnigestao:pdv-assistencia-finalize-audit:<loja>`
+independe do carrinho e de seu TTL. PENDING confirmado enquanto só a tela está
+desmontada é observado na volta; draft alterado/expirado/removido não altera
+identidade, total ou breakdown auditados. Novo remount/render/retry conserva
+um evento, uma venda e o estado de caixa/estoque. Loja alheia e resposta em voo
+não sobrescrevem o marcador/carrinho da loja nova. FAILED/PENDING não auditam.
+
+I/O sintético fail-closed, origem loopback, sem Next/.env/DB/Auth produtivos.
+Persistência/automação server-side, hardware e operação autenticada real não
+são comprovados por estas fixtures. Deduplicação local limitada ao log retido
+(500 entradas); storage indisponível mantém apenas memória naquela montagem.
+`N5_B1_CLOSEOUT=BLOCKED` · `PRODUCTION_AUTHENTICATED_SMOKE=BLOCKED`.
+
+---
+
+## Histórico rev4 preservado integralmente
+
 # PDV Core N5-C — REV4: BLOCKED após revisão R e regressões herdadas
 
 Atualização: 20/10/2026. SHA técnico revisado e executado:

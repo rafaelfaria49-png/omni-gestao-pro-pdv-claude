@@ -89,7 +89,7 @@ import {
   defaultFormasPagamento,
 } from "@/lib/pdv-formas-pagamento"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { appendAuditLog } from "@/lib/audit-log"
+import { appendAuditLog, getAuditLogs } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { PaymentModal, type PaymentMethod, type PaymentMethodType } from "./payment-modal"
@@ -163,6 +163,25 @@ import {
 
 const CART_STORAGE_KEY = (storeId: string) => `omnigestao:pdv-assistencia-cart:${storeId}`
 const CART_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12h
+const FINALIZE_AUDIT_STORAGE_KEY = (storeId: string) => `omnigestao:pdv-assistencia-finalize-audit:${storeId}`
+type FinalizeAuditScope = { storeId: string; identities: PendingSaleIdentity[] }
+
+function readFinalizeAuditIdentities(storeId: string): PendingSaleIdentity[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(FINALIZE_AUDIT_STORAGE_KEY(storeId)) ?? "[]")
+    if (!Array.isArray(saved)) return []
+    return saved.filter((row): row is PendingSaleIdentity =>
+      !!row && typeof row.id === "string" && row.id.length > 0 &&
+      (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
+    ).map(({ id, clientSaleId }) => ({ id, ...(clientSaleId ? { clientSaleId } : {}) }))
+  } catch { return [] }
+}
+
+function persistFinalizeAuditIdentities(scope: FinalizeAuditScope) {
+  try {
+    localStorage.setItem(FINALIZE_AUDIT_STORAGE_KEY(scope.storeId), JSON.stringify(scope.identities))
+  } catch { /* sem storage, a auditoria continua em memória nesta montagem */ }
+}
 
 type DiscountType = "reais" | "percent"
 
@@ -1159,6 +1178,54 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
   const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
   if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  const [finalizeAuditScope, setFinalizeAuditScope] = useState<FinalizeAuditScope | null>(null)
+  const finalizeAuditScopeRef = useRef<FinalizeAuditScope | null>(null)
+  const finalizeAuditStoreRef = useRef(storeIdKey)
+  finalizeAuditStoreRef.current = storeIdKey
+  // Independente do carrinho/TTL. Restaurar em state agenda o observador mesmo
+  // se o provider global já confirmou a venda enquanto a tela estava desmontada.
+  useEffect(() => {
+    const scope = { storeId: storeIdKey, identities: readFinalizeAuditIdentities(storeIdKey) }
+    finalizeAuditScopeRef.current = scope
+    setFinalizeAuditScope(scope)
+  }, [storeIdKey])
+  const trackFinalizeAudit = (identity: PendingSaleIdentity) => {
+    const previous = finalizeAuditScopeRef.current
+    const identities = previous?.storeId === storeIdKey ? previous.identities : readFinalizeAuditIdentities(storeIdKey)
+    const key = identity.clientSaleId ?? identity.id
+    const scope = { storeId: storeIdKey, identities: identities.some((row) => (row.clientSaleId ?? row.id) === key)
+      ? identities : [...identities, identity] }
+    // Uma resposta em voo pertence à loja capturada antes do await. Nunca
+    // substitui o marcador/state da loja que passou a ocupar a tela.
+    persistFinalizeAuditIdentities(scope)
+    if (finalizeAuditStoreRef.current !== storeIdKey) return
+    finalizeAuditScopeRef.current = scope
+    setFinalizeAuditScope(scope)
+  }
+  useEffect(() => {
+    if (finalizeAuditScope?.storeId !== storeIdKey) return
+    const remaining = finalizeAuditScope.identities.filter((identity) => {
+      const sale = sales.find((row) => row.syncPending === false &&
+        (identity.clientSaleId ? row.clientSaleId === identity.clientSaleId : row.id === identity.id))
+      if (!sale) return true
+      const prefix = `Venda ${sale.id} | Loja ${storeIdKey} | Total `
+      if (!getAuditLogs().some((entry) => entry.action === "sale_finalized" && entry.detail.startsWith(prefix))) {
+        const p = sale.paymentBreakdown
+        appendAuditLog({
+          action: "sale_finalized",
+          userLabel: cashierId.slice(0, 8),
+          detail: `${prefix}${brl(sale.total)} | Din ${brl(p?.dinheiro ?? 0)} Pix ${brl(p?.pix ?? 0)} Déb ${brl(p?.cartaoDebito ?? 0)} Créd ${brl(p?.cartaoCredito ?? 0)} Carnê ${brl(p?.carne ?? 0)} Prazo ${brl(p?.aPrazo ?? 0)} Vale ${brl(p?.creditoVale ?? 0)}`,
+        })
+      }
+      return false
+    })
+    const scope = { storeId: storeIdKey, identities: remaining }
+    persistFinalizeAuditIdentities(scope)
+    if (remaining.length !== finalizeAuditScope.identities.length) {
+      if (finalizeAuditScopeRef.current === finalizeAuditScope) finalizeAuditScopeRef.current = scope
+      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? scope : previous)
+    }
+  }, [sales, finalizeAuditScope, storeIdKey, cashierId])
   // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
   const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
   const [trocasOpen, setTrocasOpen] = useState(false)
@@ -2036,7 +2103,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     const _hadItems = cart.length > 0
 
-    const result = await finalizeSaleTransaction({
+    const finalizeInput: Parameters<typeof finalizeSaleTransaction>[0] = {
       lines: cart.map((l) => ({
         inventoryId: l.inventoryId,
         quantity: l.qty,
@@ -2078,12 +2145,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       aPrazoConfig,
       pixQrKind: meta?.pixQrKind,
       cashTendered: meta?.cashTendered,
-    })
+    }
+    const result = await finalizeSaleTransaction(finalizeInput)
 
     if (!result.ok) {
       toast({ title: "Falha ao finalizar", description: result.reason, variant: "destructive" })
       return false
     }
+    trackFinalizeAudit({ id: result.saleId, clientSaleId: result.clientSaleId })
+    if (finalizeAuditStoreRef.current !== storeIdKey) return true
 
     // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo — sem
     // impressão, sem cupom, sem fila de produtos, sem limpar carrinho nem a

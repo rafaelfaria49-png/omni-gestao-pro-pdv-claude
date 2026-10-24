@@ -62,7 +62,7 @@ import {
   createCapabilityBlockedFeedback,
 } from "@/lib/pdv/capability-blocked-feedback"
 import type { APrazoConfig } from "@/lib/operations-sale-types"
-import { appendAuditLog } from "@/lib/audit-log"
+import { appendAuditLog, getAuditLogs } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { enrichVendaEnterprise } from "@/app/actions/vendas-enterprise"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
@@ -277,6 +277,98 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   // geraria segunda venda). Orientação: Reenviar sync com a MESMA identidade.
   const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
   if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  // A identidade nasce neste handler; o marcador por loja permite observar o
+  // retry após remount sem auditar vendas de outras origens em sales.
+  const [finalizeAuditScope, setFinalizeAuditScope] = useState<{
+    storeId: string
+    identities: PendingSaleIdentity[]
+  } | null>(null)
+  useEffect(() => {
+    const restore = () => {
+      let identities: PendingSaleIdentity[] = []
+      try {
+        const saved: unknown = JSON.parse(localStorage.getItem(`omnigestao:venda-completa-finalize-audit:${storeId}`) ?? "[]")
+        if (Array.isArray(saved)) identities = saved.filter((row): row is PendingSaleIdentity =>
+          row && typeof row.id === "string" && (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
+        )
+      } catch { /* sem marcador local restaurável */ }
+      setFinalizeAuditScope({ storeId, identities })
+    }
+    restore()
+    const eventKey = "omnigestao:venda-completa-finalize-audit:" + storeId
+    window.addEventListener(eventKey, restore)
+    return () => window.removeEventListener(eventKey, restore)
+  }, [storeId])
+  const finalizeAuditStoreRef = useRef(storeId)
+  finalizeAuditStoreRef.current = storeId
+  const trackFinalizeAudit = (identity: PendingSaleIdentity) => {
+    // A continuação pode ocorrer depois do unmount: persistir antes do state.
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:venda-completa-finalize-audit:" + storeId) ?? "[]")
+      const identities: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const identityKey = identity.clientSaleId ?? identity.id
+      if (!identities.some((row) => (row.clientSaleId ?? row.id) === identityKey)) identities.push(identity)
+      localStorage.setItem("omnigestao:venda-completa-finalize-audit:" + storeId, JSON.stringify(identities))
+      // storage não dispara nesta janela; notificar também uma nova montagem.
+      window.dispatchEvent(new Event("omnigestao:venda-completa-finalize-audit:" + storeId))
+    } catch { /* Sem storage, conserva a garantia em memória da montagem atual. */ }
+    if (finalizeAuditStoreRef.current !== storeId) return
+    setFinalizeAuditScope((previous) => {
+      const identities = previous?.storeId === storeId ? previous.identities : []
+      const key = identity.clientSaleId ?? identity.id
+      if (identities.some((row) => (row.clientSaleId ?? row.id) === key)) return previous
+      return { storeId, identities: [...identities, identity] }
+    })
+  }
+  useEffect(() => {
+    if (finalizeAuditScope?.storeId !== storeId) return
+    const remaining = finalizeAuditScope.identities.filter((identity) => {
+      const sale = sales.find((row) => row.syncPending === false &&
+        (identity.clientSaleId ? row.clientSaleId === identity.clientSaleId : row.id === identity.id))
+      if (!sale) return true
+      const prefix = `Venda ${sale.id} | Loja ${storeId} | Total `
+      if (!getAuditLogs().some((entry) => entry.action === "sale_finalized" && entry.detail.startsWith(prefix))) {
+        const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+        const p = sale.paymentBreakdown
+        appendAuditLog({
+          action: "sale_finalized",
+          userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
+          detail: `${prefix}${money(sale.total)} | Din ${money(p.dinheiro)} Pix ${money(p.pix)} Déb ${money(p.cartaoDebito)} Créd ${money(p.cartaoCredito)} Carnê ${money(p.carne)} Prazo ${money(p.aPrazo)} Vale ${money(p.creditoVale)}`,
+        })
+      }
+      return false
+    })
+    // Um efeito antigo só remove identidades que ele próprio observou.
+    const observed = new Set(finalizeAuditScope.identities.map((row) => row.clientSaleId ?? row.id))
+    let persistedRemaining = remaining
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:venda-completa-finalize-audit:" + storeId) ?? "[]")
+      const current: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const remainingKeys = new Set(remaining.map((row) => row.clientSaleId ?? row.id))
+      const unseen = current.filter((row) => {
+        const identityKey = row.clientSaleId ?? row.id
+        if (observed.has(identityKey) || remainingKeys.has(identityKey)) return false
+        remainingKeys.add(identityKey)
+        return true
+      })
+      persistedRemaining = [...remaining, ...unseen]
+      localStorage.setItem("omnigestao:venda-completa-finalize-audit:" + storeId, JSON.stringify(persistedRemaining))
+    } catch { /* Mantém o contrato em memória quando storage está indisponível. */ }
+    if (persistedRemaining.length !== finalizeAuditScope.identities.length ||
+        persistedRemaining.some((row, index) => (row.clientSaleId ?? row.id) !==
+          (finalizeAuditScope.identities[index]?.clientSaleId ?? finalizeAuditScope.identities[index]?.id))) {
+      const scope = { storeId, identities: persistedRemaining }
+      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? scope : previous)
+    }
+  }, [finalizeAuditScope, sales, storeId, empresaDocumentos.nomeFantasia])
   // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
   const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
 
@@ -978,6 +1070,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         toast({ title: "Falha ao registrar venda", description: result.reason, variant: "destructive" })
         return false
       }
+      trackFinalizeAudit({ id: result.saleId, clientSaleId: result.clientSaleId })
 
       // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo — sem
       // cupom, sem impressão, sem audit sale_finalizado, sem fila de produtos,
@@ -1050,13 +1143,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           aPrazoConfig,
         })
       }
-
-      const pagamentosResumo = payments.map((p) => `${pagamentoLabelMethod(p)} ${brl(p.value)}`).join(" + ")
-      appendAuditLog({
-        action: "sale_finalized",
-        userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
-        detail: `${result.pending ? "Venda Completa Enterprise PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda Completa Enterprise "}${displaySaleNumber(result.saleId, result.pending)} | ${clienteVendaNome} | ${pagamentosResumo} | ${brl(total)}`,
-      })
 
       const linhasDetalhe = cart
         .filter((l) => l.detail && Object.values(l.detail).some(Boolean))

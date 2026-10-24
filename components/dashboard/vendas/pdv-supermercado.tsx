@@ -97,7 +97,7 @@ import {
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import { TrocasDevolucao } from "./trocas-devolucao"
-import { appendAuditLog } from "@/lib/audit-log"
+import { appendAuditLog, getAuditLogs } from "@/lib/audit-log"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
 import { buildPagamentosResumo, type PdvReceiptInput } from "@/lib/escpos"
@@ -121,7 +121,7 @@ import {
   findUnresolvedSaleLines,
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
-import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE, type PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
 import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
 import {
   resolveWeightUnitPrice,
@@ -227,6 +227,98 @@ export function PdvSupermercado({
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome(lojaKey)
   const operatorLabel = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
+  // A identidade nasce neste handler; o marcador por loja permite observar o
+  // retry após remount sem auditar vendas de outras origens em sales.
+  const [finalizeAuditScope, setFinalizeAuditScope] = useState<{
+    storeId: string
+    identities: PendingSaleIdentity[]
+  } | null>(null)
+  useEffect(() => {
+    const restore = () => {
+      let identities: PendingSaleIdentity[] = []
+      try {
+        const saved: unknown = JSON.parse(localStorage.getItem(`omnigestao:pdv-supermercado-finalize-audit:${lojaKey}`) ?? "[]")
+        if (Array.isArray(saved)) identities = saved.filter((row): row is PendingSaleIdentity =>
+          row && typeof row.id === "string" && (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
+        )
+      } catch { /* sem marcador local restaurável */ }
+      setFinalizeAuditScope({ storeId: lojaKey, identities })
+    }
+    restore()
+    const eventKey = "omnigestao:pdv-supermercado-finalize-audit:" + lojaKey
+    window.addEventListener(eventKey, restore)
+    return () => window.removeEventListener(eventKey, restore)
+  }, [lojaKey])
+  const finalizeAuditStoreRef = useRef(lojaKey)
+  finalizeAuditStoreRef.current = lojaKey
+  const trackFinalizeAudit = (identity: PendingSaleIdentity) => {
+    // A continuação pode ocorrer depois do unmount: persistir antes do state.
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey) ?? "[]")
+      const identities: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const identityKey = identity.clientSaleId ?? identity.id
+      if (!identities.some((row) => (row.clientSaleId ?? row.id) === identityKey)) identities.push(identity)
+      localStorage.setItem("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey, JSON.stringify(identities))
+      // storage não dispara nesta janela; notificar também uma nova montagem.
+      window.dispatchEvent(new Event("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey))
+    } catch { /* Sem storage, conserva a garantia em memória da montagem atual. */ }
+    if (finalizeAuditStoreRef.current !== lojaKey) return
+    setFinalizeAuditScope((previous) => {
+      const identities = previous?.storeId === lojaKey ? previous.identities : []
+      const key = identity.clientSaleId ?? identity.id
+      if (identities.some((row) => (row.clientSaleId ?? row.id) === key)) return previous
+      return { storeId: lojaKey, identities: [...identities, identity] }
+    })
+  }
+  useEffect(() => {
+    if (finalizeAuditScope?.storeId !== lojaKey) return
+    const remaining = finalizeAuditScope.identities.filter((identity) => {
+      const sale = sales.find((row) => row.syncPending === false &&
+        (identity.clientSaleId ? row.clientSaleId === identity.clientSaleId : row.id === identity.id))
+      if (!sale) return true
+      const prefix = `Venda ${sale.id} | Loja ${lojaKey} | Total `
+      if (!getAuditLogs().some((entry) => entry.action === "sale_finalized" && entry.detail.startsWith(prefix))) {
+        const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+        const p = sale.paymentBreakdown
+        appendAuditLog({
+          action: "sale_finalized",
+          userLabel: (sale.cashierId ?? cashierId).slice(0, 8),
+          detail: `${prefix}${money(sale.total)} | Din ${money(p.dinheiro)} Pix ${money(p.pix)} Déb ${money(p.cartaoDebito)} Créd ${money(p.cartaoCredito)} Carnê ${money(p.carne)} Prazo ${money(p.aPrazo)} Vale ${money(p.creditoVale)}`,
+        })
+      }
+      return false
+    })
+    // Um efeito antigo só remove identidades que ele próprio observou.
+    const observed = new Set(finalizeAuditScope.identities.map((row) => row.clientSaleId ?? row.id))
+    let persistedRemaining = remaining
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey) ?? "[]")
+      const current: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const remainingKeys = new Set(remaining.map((row) => row.clientSaleId ?? row.id))
+      const unseen = current.filter((row) => {
+        const identityKey = row.clientSaleId ?? row.id
+        if (observed.has(identityKey) || remainingKeys.has(identityKey)) return false
+        remainingKeys.add(identityKey)
+        return true
+      })
+      persistedRemaining = [...remaining, ...unseen]
+      localStorage.setItem("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey, JSON.stringify(persistedRemaining))
+    } catch { /* Mantém o contrato em memória quando storage está indisponível. */ }
+    if (persistedRemaining.length !== finalizeAuditScope.identities.length ||
+        persistedRemaining.some((row, index) => (row.clientSaleId ?? row.id) !==
+          (finalizeAuditScope.identities[index]?.clientSaleId ?? finalizeAuditScope.identities[index]?.id))) {
+      const scope = { storeId: lojaKey, identities: persistedRemaining }
+      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? scope : previous)
+    }
+  }, [finalizeAuditScope, sales, lojaKey, cashierId])
 
   const productInputRef = useRef<HTMLInputElement | null>(null)
   const listEndRef = useRef<HTMLDivElement | null>(null)
@@ -1758,6 +1850,7 @@ export function PdvSupermercado({
             toast({ title: "Falha transacional", description: result.reason })
             return false
           }
+          trackFinalizeAudit({ id: result.saleId, clientSaleId: result.clientSaleId })
           // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
           // sem impressão, sem cupom, sem audit sale_finalizado, sem fila de
           // produtos, sem limpar o carrinho. Só informa o estado honesto,
@@ -1820,11 +1913,6 @@ export function PdvSupermercado({
             /* fila é auxiliar — não interrompe o pós-venda */
           }
 
-          appendAuditLog({
-            action: "sale_finalized",
-            userLabel: cashierId.slice(0, 8),
-            detail: `${result.pending ? "Venda PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda "}${displaySaleNumber(result.saleId, result.pending)} Total ${brl(total)} | Din ${brl(dinheiro)} Pix ${brl(pix)} Déb ${brl(cartaoDebito)} Créd ${brl(cartaoCredito)} Carnê ${brl(carne)} Prazo ${brl(aPrazo)} Vale ${brl(creditoVale)}`,
-          })
           if (subtotal > 0 && discountTotal > 0) {
             const pct = (discountTotal / subtotal) * 100
             if (pct >= AUDIT_DISCOUNT_ALERT_PCT) {

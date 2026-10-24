@@ -112,7 +112,7 @@ import {
   waitForStableWeightKg,
   peekLastWeightKg,
 } from "@/services/hardware-bridge"
-import { appendAuditLog } from "@/lib/audit-log"
+import { appendAuditLog, getAuditLogs } from "@/lib/audit-log"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { formatEntradaRapidaResumo, mergeEntradaRapida } from "@/lib/os-entrada-checklist"
 import {
@@ -151,7 +151,7 @@ import {
   findUnresolvedSaleLines,
   unresolvedSaleLinesDescription,
 } from "@/lib/pdv-finalize-integrity"
-import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE } from "@/lib/pdv/finalize-modal-contract"
+import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE, type PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
 import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
 import {
   resolveWeightUnitPrice,
@@ -283,6 +283,98 @@ export function PdvClassic({
   // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
   const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
   if (!pendingSaleIdentityRef.current) pendingSaleIdentityRef.current = createPendingSaleIdentityGuard()
+  // Só identidades originadas aqui podem produzir esta auditoria. O marcador
+  // local permite observar a confirmação por Reenviar também após remount.
+  const [finalizeAuditScope, setFinalizeAuditScope] = useState<{
+    storeId: string
+    identities: PendingSaleIdentity[]
+  } | null>(null)
+  useEffect(() => {
+    const restore = () => {
+      let identities: PendingSaleIdentity[] = []
+      try {
+        const saved: unknown = JSON.parse(localStorage.getItem(`omnigestao:pdv-classic-finalize-audit:${lojaKey}`) ?? "[]")
+        if (Array.isArray(saved)) identities = saved.filter((row): row is PendingSaleIdentity =>
+          row && typeof row.id === "string" && (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
+        )
+      } catch { /* sem marcador local restaurável */ }
+      setFinalizeAuditScope({ storeId: lojaKey, identities })
+    }
+    restore()
+    const eventKey = "omnigestao:pdv-classic-finalize-audit:" + lojaKey
+    window.addEventListener(eventKey, restore)
+    return () => window.removeEventListener(eventKey, restore)
+  }, [lojaKey])
+  const finalizeAuditStoreRef = useRef(lojaKey)
+  finalizeAuditStoreRef.current = lojaKey
+  const trackFinalizeAudit = (identity: PendingSaleIdentity) => {
+    // A continuação pode ocorrer depois do unmount: persistir antes do state.
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:pdv-classic-finalize-audit:" + lojaKey) ?? "[]")
+      const identities: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const identityKey = identity.clientSaleId ?? identity.id
+      if (!identities.some((row) => (row.clientSaleId ?? row.id) === identityKey)) identities.push(identity)
+      localStorage.setItem("omnigestao:pdv-classic-finalize-audit:" + lojaKey, JSON.stringify(identities))
+      // storage não dispara nesta janela; notificar também uma nova montagem.
+      window.dispatchEvent(new Event("omnigestao:pdv-classic-finalize-audit:" + lojaKey))
+    } catch { /* Sem storage, conserva a garantia em memória da montagem atual. */ }
+    if (finalizeAuditStoreRef.current !== lojaKey) return
+    setFinalizeAuditScope((previous) => {
+      const identities = previous?.storeId === lojaKey ? previous.identities : []
+      const key = identity.clientSaleId ?? identity.id
+      if (identities.some((row) => (row.clientSaleId ?? row.id) === key)) return previous
+      return { storeId: lojaKey, identities: [...identities, identity] }
+    })
+  }
+  useEffect(() => {
+    if (finalizeAuditScope?.storeId !== lojaKey) return
+    const remaining = finalizeAuditScope.identities.filter((identity) => {
+      const sale = sales.find((row) => row.syncPending === false &&
+        (identity.clientSaleId ? row.clientSaleId === identity.clientSaleId : row.id === identity.id))
+      if (!sale) return true
+      const prefix = `Venda ${sale.id} | Loja ${lojaKey} | Total `
+      if (!getAuditLogs().some((entry) => entry.action === "sale_finalized" && entry.detail.startsWith(prefix))) {
+        const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+        const p = sale.paymentBreakdown
+        appendAuditLog({
+          action: "sale_finalized",
+          userLabel: `${empresaDocumentos.nomeFantasia?.trim() || "Loja"} (sessão local)`,
+          detail: `${prefix}${money(sale.total)} | Din ${money(p.dinheiro)} Pix ${money(p.pix)} Déb ${money(p.cartaoDebito)} Créd ${money(p.cartaoCredito)} Carnê ${money(p.carne)} Prazo ${money(p.aPrazo)} Vale ${money(p.creditoVale)}`,
+        })
+      }
+      return false
+    })
+    // Um efeito antigo só remove identidades que ele próprio observou.
+    const observed = new Set(finalizeAuditScope.identities.map((row) => row.clientSaleId ?? row.id))
+    let persistedRemaining = remaining
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:pdv-classic-finalize-audit:" + lojaKey) ?? "[]")
+      const current: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const remainingKeys = new Set(remaining.map((row) => row.clientSaleId ?? row.id))
+      const unseen = current.filter((row) => {
+        const identityKey = row.clientSaleId ?? row.id
+        if (observed.has(identityKey) || remainingKeys.has(identityKey)) return false
+        remainingKeys.add(identityKey)
+        return true
+      })
+      persistedRemaining = [...remaining, ...unseen]
+      localStorage.setItem("omnigestao:pdv-classic-finalize-audit:" + lojaKey, JSON.stringify(persistedRemaining))
+    } catch { /* Mantém o contrato em memória quando storage está indisponível. */ }
+    if (persistedRemaining.length !== finalizeAuditScope.identities.length ||
+        persistedRemaining.some((row, index) => (row.clientSaleId ?? row.id) !==
+          (finalizeAuditScope.identities[index]?.clientSaleId ?? finalizeAuditScope.identities[index]?.id))) {
+      const scope = { storeId: lojaKey, identities: persistedRemaining }
+      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? scope : previous)
+    }
+  }, [finalizeAuditScope, sales, lojaKey, empresaDocumentos.nomeFantasia])
   // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
   const paymentBlockedFeedback = useMemo(() => createCapabilityBlockedFeedback(toast), [toast])
   const [searchTerm, setSearchTerm] = useState("")
@@ -2216,6 +2308,7 @@ export function PdvClassic({
             toast({ title: "Falha transacional", description: result.reason })
             return false
           }
+          trackFinalizeAudit({ id: result.saleId, clientSaleId: result.clientSaleId })
           // PENDING (CORREÇÃO-01): sai ANTES de qualquer efeito definitivo —
           // sem impressão, sem cupom, sem auditoria de venda concluída, sem
           // fila de produtos, sem marcar total da última venda, sem limpar o
@@ -2283,11 +2376,6 @@ export function PdvClassic({
               aPrazoConfig,
             })
           }
-          appendAuditLog({
-            action: "sale_finalized",
-            userLabel: auditUser(),
-            detail: `${result.pending ? "Venda PENDENTE — AGUARDANDO CONFIRMAÇÃO " : "Venda "}${displaySaleNumber(result.saleId, result.pending)} Total ${formatBrlAudit(total)} | Din ${formatBrlAudit(dinheiro)} Pix ${formatBrlAudit(pix)} Déb ${formatBrlAudit(cartaoDebito)} Créd ${formatBrlAudit(cartaoCredito)} Carnê ${formatBrlAudit(carne)} Prazo ${formatBrlAudit(aPrazo)} Vale ${formatBrlAudit(creditoVale)}`,
-          })
           if (subtotal > 0 && discountTotal > 0) {
             const pct = (discountTotal / subtotal) * 100
             if (pct >= AUDIT_DISCOUNT_ALERT_PCT) {

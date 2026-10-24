@@ -56,6 +56,38 @@ type Surface = {
   forbiddenInGapAndPending: string[]
   requiredInPending: string[]
   requiredInConfirmed: string[]
+  auditStore?: string
+}
+
+/** A emissão saiu do handler para o observador. Prova a ligação completa,
+ * sem aceitar um token solto em comentário ou em qualquer trecho do arquivo. */
+function expectConfirmedAuditObserver(source: string, gap: string, store: string) {
+  const registration = "trackFinalizeAudit({ id: result.saleId, clientSaleId: result.clientSaleId })"
+  const failedStart = gap.indexOf("if (!result.ok)")
+  expect(failedStart, "FAILED tratado antes de registrar identidade").toBeGreaterThan(-1)
+  const failedBrace = gap.indexOf("{", failedStart)
+  const failedBlock = balancedBlock(gap, failedBrace)
+  expect(failedBlock).toContain("return false")
+  expect(failedBlock).not.toContain("trackFinalizeAudit")
+  expect(gap.indexOf(registration), "só identidade real retornada com ok").toBeGreaterThan(failedBrace + failedBlock.length)
+
+  const anchor = source.indexOf("const remaining = finalizeAuditScope.identities.filter")
+  expect(anchor, "observa apenas identidades próprias").toBeGreaterThan(-1)
+  const effectStart = source.lastIndexOf("useEffect(() => {", anchor)
+  expect(effectStart).toBeGreaterThan(-1)
+  const observer = balancedBlock(source, source.indexOf("{", effectStart))
+  expect(observer).toContain(`if (finalizeAuditScope?.storeId !== ${store}) return`)
+  expect(observer).toContain("row.syncPending === false")
+  expect(observer).toContain("identity.clientSaleId ? row.clientSaleId === identity.clientSaleId : row.id === identity.id")
+  expect(observer).toContain("if (!sale) return true")
+  expect(observer.indexOf("if (!sale) return true")).toBeLessThan(observer.indexOf("appendAuditLog({"))
+  expect(countOf(observer, "appendAuditLog({")).toBe(1)
+  expect(countOf(observer, 'action: "sale_finalized"')).toBe(1)
+  expect(observer).toContain("getAuditLogs().some")
+  expect(observer).toContain("entry.detail.startsWith(prefix)")
+  expect(observer).toContain("sale.id")
+  expect(observer).toContain("sale.total")
+  expect(observer).toContain("sale.paymentBreakdown")
 }
 
 const CLASSIC = "components/dashboard/vendas/pdv-classic.tsx"
@@ -69,6 +101,7 @@ const SURFACES: Surface[] = [
   {
     // 1. PENDING Classic não imprime.
     file: CLASSIC,
+    auditStore: "lojaKey",
     guard: "if (result.pending) {",
     failedCheck: "!result.ok",
     forbiddenInGapAndPending: [
@@ -85,6 +118,7 @@ const SURFACES: Surface[] = [
   {
     // 2. PENDING Supermercado não imprime.
     file: SUPER,
+    auditStore: "lojaKey",
     guard: "if (result.pending) {",
     failedCheck: "!result.ok",
     forbiddenInGapAndPending: [
@@ -100,6 +134,7 @@ const SURFACES: Surface[] = [
   {
     // 3. PENDING Assistência não imprime.
     file: ASSIST,
+    auditStore: "storeIdKey",
     guard: "if (result.pending) {",
     failedCheck: "!result.ok",
     forbiddenInGapAndPending: [
@@ -115,6 +150,7 @@ const SURFACES: Surface[] = [
   {
     // 4. PENDING Venda Completa não abre cupom.
     file: COMPLETA,
+    auditStore: "storeId",
     guard: "if (result.pending) {",
     failedCheck: "!result.ok",
     forbiddenInGapAndPending: [
@@ -177,8 +213,10 @@ describe("CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos", () => {
       // CONFIRMED preservado após o bloco pending.
       const confirmed = source.slice(guardIdx + pendingBlock.length + (openBrace - guardIdx))
       for (const marker of surface.requiredInConfirmed) {
+        if (marker === "sale_finalized" && surface.auditStore) continue
         expect(confirmed, `${surface.file} CONFIRMED preserva ${marker}`).toContain(marker)
       }
+      if (surface.auditStore) expectConfirmedAuditObserver(source, gap, surface.auditStore)
     })
   }
 
