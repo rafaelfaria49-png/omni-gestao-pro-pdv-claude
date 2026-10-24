@@ -284,16 +284,39 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     identities: PendingSaleIdentity[]
   } | null>(null)
   useEffect(() => {
-    let identities: PendingSaleIdentity[] = []
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(`omnigestao:venda-completa-finalize-audit:${storeId}`) ?? "[]")
-      if (Array.isArray(saved)) identities = saved.filter((row): row is PendingSaleIdentity =>
-        row && typeof row.id === "string" && (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
-      )
-    } catch { /* sem marcador local restaurável */ }
-    setFinalizeAuditScope({ storeId, identities })
+    const restore = () => {
+      let identities: PendingSaleIdentity[] = []
+      try {
+        const saved: unknown = JSON.parse(localStorage.getItem(`omnigestao:venda-completa-finalize-audit:${storeId}`) ?? "[]")
+        if (Array.isArray(saved)) identities = saved.filter((row): row is PendingSaleIdentity =>
+          row && typeof row.id === "string" && (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
+        )
+      } catch { /* sem marcador local restaurável */ }
+      setFinalizeAuditScope({ storeId, identities })
+    }
+    restore()
+    const eventKey = "omnigestao:venda-completa-finalize-audit:" + storeId
+    window.addEventListener(eventKey, restore)
+    return () => window.removeEventListener(eventKey, restore)
   }, [storeId])
+  const finalizeAuditStoreRef = useRef(storeId)
+  finalizeAuditStoreRef.current = storeId
   const trackFinalizeAudit = (identity: PendingSaleIdentity) => {
+    // A continuação pode ocorrer depois do unmount: persistir antes do state.
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:venda-completa-finalize-audit:" + storeId) ?? "[]")
+      const identities: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const identityKey = identity.clientSaleId ?? identity.id
+      if (!identities.some((row) => (row.clientSaleId ?? row.id) === identityKey)) identities.push(identity)
+      localStorage.setItem("omnigestao:venda-completa-finalize-audit:" + storeId, JSON.stringify(identities))
+      // storage não dispara nesta janela; notificar também uma nova montagem.
+      window.dispatchEvent(new Event("omnigestao:venda-completa-finalize-audit:" + storeId))
+    } catch { /* Sem storage, conserva a garantia em memória da montagem atual. */ }
+    if (finalizeAuditStoreRef.current !== storeId) return
     setFinalizeAuditScope((previous) => {
       const identities = previous?.storeId === storeId ? previous.identities : []
       const key = identity.clientSaleId ?? identity.id
@@ -319,11 +342,31 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
       return false
     })
+    // Um efeito antigo só remove identidades que ele próprio observou.
+    const observed = new Set(finalizeAuditScope.identities.map((row) => row.clientSaleId ?? row.id))
+    let persistedRemaining = remaining
     try {
-      localStorage.setItem(`omnigestao:venda-completa-finalize-audit:${storeId}`, JSON.stringify(remaining))
-    } catch { /* auditoria local continua em memória nesta montagem */ }
-    if (remaining.length !== finalizeAuditScope.identities.length) {
-      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? { storeId, identities: remaining } : previous)
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:venda-completa-finalize-audit:" + storeId) ?? "[]")
+      const current: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const remainingKeys = new Set(remaining.map((row) => row.clientSaleId ?? row.id))
+      const unseen = current.filter((row) => {
+        const identityKey = row.clientSaleId ?? row.id
+        if (observed.has(identityKey) || remainingKeys.has(identityKey)) return false
+        remainingKeys.add(identityKey)
+        return true
+      })
+      persistedRemaining = [...remaining, ...unseen]
+      localStorage.setItem("omnigestao:venda-completa-finalize-audit:" + storeId, JSON.stringify(persistedRemaining))
+    } catch { /* Mantém o contrato em memória quando storage está indisponível. */ }
+    if (persistedRemaining.length !== finalizeAuditScope.identities.length ||
+        persistedRemaining.some((row, index) => (row.clientSaleId ?? row.id) !==
+          (finalizeAuditScope.identities[index]?.clientSaleId ?? finalizeAuditScope.identities[index]?.id))) {
+      const scope = { storeId, identities: persistedRemaining }
+      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? scope : previous)
     }
   }, [finalizeAuditScope, sales, storeId, empresaDocumentos.nomeFantasia])
   // N5-B1 R2 (P2-03): feedback fail-closed audível com cooldown (sem spam).
