@@ -7,7 +7,7 @@ export default function RelatoriosPage() {
         <p className="text-sm font-medium text-muted-foreground">Central de inteligência</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground">Relatórios</h1>
         <p className="mt-2 text-sm text-muted-foreground max-w-xl">
-          Acompanhe vendas, financeiro, operações e atendimento em um único lugar. Os relatórios disponíveis já
+          Acompanhe em um único lugar os relatórios liberados para sua conta. Os relatórios disponíveis já
           conectam com dados reais do banco.
         </p>
       </div>

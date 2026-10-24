@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { canAccessPage } from "@/lib/auth/page-access"
 import { EnterpriseAccessDenied } from "@/components/enterprise/EnterpriseAccessDenied"
 import { FINANCEIRO_HUB_PATH } from "@/lib/navigation/legacy-routes"
 import { RoadmapPreviewDialog, type RoadmapPhase } from "@/components/ui/roadmap-preview-dialog"
@@ -196,7 +197,9 @@ export function RelatoriosHubGrid() {
 
   const visibleReports = useMemo(() => {
     if (!perms) return []
-    return reports.filter((r) => (perms.platformAuthority || r.status === "disponivel") && (r.visible ? r.visible(perms) : true))
+    // Roadmap só na visão da plataforma; cartão disponível exige também acesso ao destino.
+    return reports.filter((r) => (perms.platformAuthority || r.status === "disponivel") && (r.visible ? r.visible(perms) : true) &&
+      (r.status !== "disponivel" || canAccessPage(perms, r.href)))
   }, [perms])
 
   if (perms && !perms.hubs.relatorios) {

@@ -19,6 +19,7 @@ import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useStoreBusiness } from "@/lib/use-store-business";
 import { BUSINESS_BRANCHES, BUSINESS_SETTINGS_HREF } from "@/lib/store-business-capabilities";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   getCadastrosDashboardStats,
   listCategorias,
@@ -56,6 +57,8 @@ import {
   qualityScoreInputFromProduto,
 } from "@/lib/cadastros/produto-quality-score";
 import { getProdutoFiscal } from "@/lib/produto-fiscal";
+import { hasInvalidProductCommercial, productCommercialFromMetadata } from "@/lib/cadastros/product-commercial-contract";
+import { usesClientExperience } from "@/lib/navigation/client-experience";
 import {
   categoriaCriadaSelecionada,
   categoriasAtivasDeServico,
@@ -92,8 +95,22 @@ function useCadastrosAvailability() {
 
 
 export function CadastrosHub() {
-  const [tab, setTab] = useState<TabId>("dashboard");
+  // `?aba=<tab>&novo=1`: atalhos "Novo …" abrem a aba e o editor pedidos.
+  const searchParams = useSearchParams();
+  const linkTab = TABS.find((t) => t.id === searchParams?.get("aba"))?.id;
+  const linkNew = searchParams?.get("novo") === "1";
+  const [tab, setTab] = useState<TabId>(linkTab ?? "dashboard");
   const [autoOpenNew, setAutoOpenNew] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkTab) return;
+    setTab(linkTab);
+    if (!linkNew || linkTab === "dashboard") return;
+    setAutoOpenNew(linkTab);
+    // Recarregar a página não reabre o editor.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("novo");
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, [linkTab, linkNew]);
   const novo = useToggle();
   const { lojaAtivaId } = useLojaAtiva();
   const storeId = (lojaAtivaId ?? "").trim();
@@ -186,7 +203,7 @@ export function CadastrosHub() {
           <ClientesPanel
             key={storeId}
             storeId={storeId}
-            autoOpen={autoOpenNew === "clientes"}
+            autoOpen={autoOpenNew === "clientes" && !!storeId}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
@@ -194,7 +211,7 @@ export function CadastrosHub() {
           <ProdutosPanel
             key={storeId}
             storeId={storeId}
-            autoOpen={autoOpenNew === "produtos"}
+            autoOpen={autoOpenNew === "produtos" && !!storeId}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
@@ -1115,16 +1132,42 @@ const ALERTA_PRODUTO_HINTS: Record<string, string> = {
   "Prontos p/ Marketplace": "Ativos, com preço, estoque e categoria",
 };
 
-function ProdutosPanel({
+/** Unidade do contrato comercial vigente; o saldo exibido não é convertido. */
+function EstoqueUnidade({ metadata }: { metadata?: Record<string, unknown> | null }) {
+  if (hasInvalidProductCommercial(metadata)) {
+    return <span className="ml-1.5 text-[11px] text-destructive" data-unidade="revisar">unidade a revisar</span>;
+  }
+  const commercial = productCommercialFromMetadata(metadata);
+  return (
+    <span className="ml-1.5 text-[11px] text-muted-foreground" data-unidade={commercial.unidade}>
+      {commercial.unidade}
+      {commercial.modoVenda === "peso" && " · venda por peso em preparação"}
+    </span>
+  );
+}
+
+/**
+ * Lista canônica de produtos (reader `listProdutosPaginado`, editor `ProductAIModal`,
+ * movimentação `MovimentacaoEstoqueModal`). `variant="estoque"` é a mesma tela vista
+ * a partir de /dashboard/estoque na experiência do cliente: acrescenta a unidade
+ * comercial ao saldo, sem converter quantidade nem criar outro formulário.
+ */
+export function ProdutosPanel({
   storeId,
   autoOpen,
   onAutoOpenConsumed,
+  variant = "cadastros",
 }: {
   storeId: string;
   autoOpen?: boolean;
   onAutoOpenConsumed?: () => void;
+  variant?: "cadastros" | "estoque";
 }) {
   const business = useStoreBusiness();
+  const perms = business.permissions;
+  // Recursos não liberados à loja não aparecem como promessa (valores e motores intactos).
+  const marketplaceOffered = perms?.modules?.marketplace === true;
+  const importFiltersOffered = usesClientExperience(perms) === false;
   const m = useToggle();
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
   const [deleting, setDeleting] = useState<ProdutoDTO | null>(null);
@@ -1529,7 +1572,7 @@ function ProdutosPanel({
       </div>
 
       <div className="mb-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {alerts.map((a) => (
+        {alerts.filter((a) => marketplaceOffered || a.l !== "Prontos p/ Marketplace").map((a) => (
           <Card key={a.l} className="p-4">
             <div className="text-xs text-muted-foreground">{a.l}</div>
             <div className="mt-0.5 text-[10px] text-muted-foreground/80">{ALERTA_PRODUTO_HINTS[a.l] ?? ""}</div>
@@ -1609,7 +1652,7 @@ function ProdutosPanel({
             </Field>
             {/* Filtros de importação (Parte 11) — resolvidos no servidor, sobre
                 `metadata.importacao` / `metadata.fiscal`. */}
-            <Field label="Importação">
+            {importFiltersOffered && <Field label="Importação">
               <Select value={importacaoFilter} onChange={(e: any) => setImportacaoFilter(e.target.value)}>
                 <option value="todos">Todos</option>
                 <option value="ultimoLote">Última importação</option>
@@ -1621,7 +1664,7 @@ function ProdutosPanel({
                 <option value="semNcm">NCM ausente</option>
                 <option value="semCest">CEST ausente</option>
               </Select>
-            </Field>
+            </Field>}
           </div>
           <div className="mt-3 flex justify-end gap-2">
             <button
@@ -1675,7 +1718,9 @@ function ProdutosPanel({
           </div>
           <p className="text-base font-semibold text-foreground">Nenhum produto nesta unidade</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cadastre o primeiro item ou importe o catálogo. Os dados vêm do banco (Prisma) e alimentam estoque, PDV e OS.
+            {importFiltersOffered
+              ? "Cadastre o primeiro item ou importe o catálogo. Os dados vêm do banco (Prisma) e alimentam estoque, PDV e OS."
+              : `Cadastre o primeiro item. Os produtos alimentam estoque e PDV${perms?.hubs.operacoes ? " e OS" : ""}.`}
           </p>
           <button
             type="button"
@@ -1859,6 +1904,7 @@ function ProdutosPanel({
                       <span title={est.title}>
                         <Badge tone={est.tone}>{est.label}</Badge>
                       </span>
+                      {variant === "estoque" && <EstoqueUnidade metadata={p.metadata} />}
                     </td>
                     <td className="px-4 py-3 font-medium text-foreground">{p.preco ? `R$ ${p.preco}` : <span className="text-destructive">—</span>}</td>
                     <td className="px-4 py-3 text-foreground" title={p.custo > 0 ? undefined : "Informe o custo para calcular a margem"}>{p.custo > 0 && p.preco > 0 ? `${p.margem.toFixed(1)}%` : "—"}</td>
@@ -1942,14 +1988,14 @@ function ProdutosPanel({
                         >
                           <Trash2 className="h-3 w-3 shrink-0" /> Excluir
                         </button>
-                        <span className="hidden xl:contents">
+                        {marketplaceOffered && <span className="hidden xl:contents">
                           <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground cursor-not-allowed" title="Em breve" type="button" disabled>
                             Anúncio
                           </button>
                           <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground cursor-not-allowed" title="Em breve" type="button" disabled>
                             Publicar
                           </button>
-                        </span>
+                        </span>}
                       </div>
                     </td>
                   </tr>

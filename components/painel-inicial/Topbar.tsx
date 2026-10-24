@@ -59,14 +59,14 @@ const novoItems: NovoItem[] = [
   },
   {
     label: "Novo Cliente",
-    href: "/dashboard/cadastros-v2",
+    href: "/dashboard/cadastros-v2?aba=clientes&novo=1",
     icon: UserPlus,
     kbd: "N C",
     visible: (p) => p.hubs.cadastros,
   },
   {
     label: "Novo Produto",
-    href: "/dashboard/cadastros-v2",
+    href: "/dashboard/cadastros-v2?aba=produtos&novo=1",
     icon: Package,
     kbd: "N P",
     visible: (p) => p.hubs.cadastros,
@@ -115,7 +115,8 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
 
   const novoFiltered = useMemo(() => {
     if (!perms) return [];
-    return novoItems.filter((i) => (i.visible ? i.visible(perms) : true));
+    // O atalho só aparece quando o destino também é permitido (permissão + módulo).
+    return novoItems.filter((i) => (i.visible ? i.visible(perms) : true) && canAccessPage(perms, i.href.split("?")[0]));
   }, [perms]);
 
   const creditsValue = typeof credits === "number" ? credits : null;
@@ -256,8 +257,11 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
           <CommandGroup heading="Rotas e ações disponíveis">
             {[
               ...novoFiltered.map((i) => ({ label: i.label, href: i.href, icon: i.icon, kbd: i.kbd })),
-              ...[...workspaceNavItems, ...hubsNavItems, ...administrationNavItems].map((i) => ({ label: i.label, href: i.to, icon: i.icon, kbd: "" })),
-            ].filter((i) => canAccessPage(perms, i.href)).map((item) => (
+              // Destino permitido e visibilidade do item (a mesma da sidebar).
+              ...[...workspaceNavItems, ...hubsNavItems, ...administrationNavItems]
+                .filter((i) => !i.visible || (perms !== null && i.visible(perms)))
+                .map((i) => ({ label: i.label, href: i.to, icon: i.icon, kbd: "" })),
+            ].filter((i) => canAccessPage(perms, i.href.split("?")[0])).map((item) => (
               <CommandItem key={item.label} onSelect={() => { setSearchOpen(false); router.push(item.href); }} className="cursor-pointer">
                 <item.icon className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span>{item.label}</span>{item.kbd && <CommandShortcut>{item.kbd}</CommandShortcut>}
