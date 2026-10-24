@@ -8,13 +8,13 @@ import { OperationsProvider, useOperationsStore } from "@/lib/operations-store"
 import { PdvClassic } from "@/components/dashboard/vendas/pdv-classic"
 import { defaultFormasPagamento } from "@/lib/pdv-formas-pagamento"
 import { getAuditLogs } from "@/lib/audit-log"
-import { OPS_KEY, STORE, SyntheticBackend, seedStorage } from "../../e2e/fixtures/pdv-core"
+import { OPS_KEY, ORIGIN, STORE, SyntheticBackend, seedStorage } from "../../e2e/fixtures/pdv-core"
 
 type PaymentProps = ComponentProps<typeof import("@/components/dashboard/vendas/payment-modal").PaymentModal>
-const runtime = vi.hoisted(() => ({ payment: undefined as PaymentProps | undefined, ops: undefined as ReturnType<typeof useOperationsStore> | undefined, noop: vi.fn() }))
+const runtime = vi.hoisted(() => ({ storeId: "", payment: undefined as PaymentProps | undefined, ops: undefined as ReturnType<typeof useOperationsStore> | undefined, noop: vi.fn() }))
 const params = { formasPagamento: defaultFormasPagamento(), atalhosRapidos: [], incluirImpostoEstimadoNoPdv: false, aliquotaImpostoEstimadoPdv: 0 }
-vi.mock("@/lib/loja-ativa", () => ({ OPS_KEY_LEGACY: "assistec-pro-ops-v1", useLojaAtiva: () => ({ lojaAtivaId: STORE, opsStorageKey: OPS_KEY, empresaDocumentos: { nomeFantasia: "Loja sintética" }, getEnderecoDocumentos: () => "" }) }))
-vi.mock("@/lib/store-settings-provider", () => ({ useStoreSettings: () => ({ pdvParams: params, blob: { pdvParams: params }, settings: {}, hydrated: true, storeId: STORE, impressaoConfig: { imprimirAutomatico: false, rodapeCupom: "" }, save: runtime.noop }) }))
+vi.mock("@/lib/loja-ativa", () => ({ OPS_KEY_LEGACY: "assistec-pro-ops-v1", useLojaAtiva: () => ({ lojaAtivaId: runtime.storeId, opsStorageKey: OPS_KEY, empresaDocumentos: { nomeFantasia: "Loja sintética" }, getEnderecoDocumentos: () => "" }) }))
+vi.mock("@/lib/store-settings-provider", () => ({ useStoreSettings: () => ({ pdvParams: params, blob: { pdvParams: params }, settings: {}, hydrated: true, storeId: runtime.storeId, impressaoConfig: { imprimirAutomatico: false, rodapeCupom: "" }, save: runtime.noop }) }))
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null }) }))
 vi.mock("@/lib/pdv-operador-nome", () => ({ usePdvOperadorNome: () => "Operador sintético" }))
 vi.mock("@/lib/pdv-operator-id", () => ({ getOrCreatePdvOperatorId: () => "n5-c-operator" }))
@@ -37,13 +37,17 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: runtime.noop, repl
 vi.mock("@/components/theme/ThemeProvider", () => ({ useStudioTheme: () => ({ mode: "classic" }) }))
 
 let backend: SyntheticBackend
-function App() { runtime.ops = useOperationsStore(); return createElement(PdvClassic) }
+function App({ visible = true }: { visible?: boolean }) {
+  runtime.ops = useOperationsStore()
+  return visible ? createElement(PdvClassic) : null
+}
+const tree = (visible = true) => createElement(OperationsProvider, { storageKey: OPS_KEY } as ComponentProps<typeof OperationsProvider>, createElement(App, { visible }))
 function seedComanda(price = 95) {
   sessionStorage.setItem("assistec-pdv-import-comanda", JSON.stringify({ lines: [{ inventoryId: "n5-c-product", name: "Produto sintético", price, quantity: 2 }] }))
 }
 async function mount(price = 95) {
   seedComanda(price)
-  const view = render(createElement(OperationsProvider, { storageKey: OPS_KEY } as ComponentProps<typeof OperationsProvider>, createElement(App)))
+  const view = render(tree())
   await waitFor(() => expect(runtime.payment?.total).toBe(price * 2))
   await act(async () => {})
   return view
@@ -57,7 +61,7 @@ const finalized = () => getAuditLogs().filter((entry) => entry.action === "sale_
 const markerKey = `omnigestao:pdv-classic-finalize-audit:${STORE}`
 beforeEach(() => {
   localStorage.clear(); sessionStorage.clear(); vi.clearAllMocks()
-  runtime.ops = undefined; runtime.payment = undefined
+  runtime.ops = undefined; runtime.payment = undefined; runtime.storeId = STORE
   backend = new SyntheticBackend()
   seedStorage(localStorage, "classic")
   vi.stubGlobal("fetch", vi.fn(backend.fetch))
@@ -167,4 +171,123 @@ describe("N5-C Classic — componente, motor, retry e auditoria reais", () => {
     await run
     expect(finalized()).toHaveLength(1)
   })
+
+  it.each(["antes", "depois"] as const)("R011 remount %s da resposta em voo preserva auditoria e o novo carrinho", async (remount) => {
+    backend.pauseWrites = true
+    const view = await mount()
+    let pending!: Promise<boolean | void>
+    await act(async () => { pending = Promise.resolve(runtime.payment!.onConfirm!([{ id: "pix", type: "pix", value: 190 }])) })
+    await waitFor(() => expect(backend.posts).toHaveLength(1))
+    expect(finalized()).toHaveLength(0)
+    view.rerender(tree(false))
+    const mountFreshDraft = async () => {
+      seedComanda(999)
+    view.rerender(tree())
+    await waitFor(() => expect(runtime.payment?.total).toBe(1998))
+    }
+    if (remount === "antes") await mountFreshDraft()
+    await act(async () => { backend.releaseWrite!(); expect(await pending).toBe(true) })
+    expect(runtime.ops!.sales).toHaveLength(1)
+    expect(runtime.ops!.sales[0]).toMatchObject({ id: "VDA-N5C-1", syncPending: false, total: 190 })
+    if (remount === "depois") await mountFreshDraft()
+    await waitFor(() => expect(finalized()).toHaveLength(1))
+    expect(finalized()[0].detail).toContain("Venda VDA-N5C-1 | Loja " + STORE)
+    expect(finalized()[0].detail.replaceAll("\u00a0", " ")).toContain("Total R$ 190,00")
+    expect(runtime.payment!.total).toBe(1998)
+    expect(backend.posts).toHaveLength(1)
+    view.rerender(tree(false))
+    view.rerender(tree())
+    await act(async () => {})
+    expect(finalized()).toHaveLength(1)
+    expect(backend.audits.filter((entry) => entry.action === "sale_finalized")).toHaveLength(1)
+  })
+  it("R011 resposta tardia preserva a identidade da loja de origem sem auditar a loja atual", async () => {
+    backend.pauseWrites = true
+    const view = await mount()
+    let pending!: Promise<boolean | void>
+    await act(async () => { pending = Promise.resolve(runtime.payment!.onConfirm!([{ id: "pix", type: "pix", value: 190 }])) })
+    await waitFor(() => expect(backend.posts).toHaveLength(1))
+    const transport = backend.fetch
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), ORIGIN)
+      if (url.origin === ORIGIN && (init?.method ?? "GET") === "GET" &&
+          ["/api/stores/n5-c-other-store", "/api/stores/n5-c-other-store/settings"].includes(url.pathname)) {
+        const body = url.pathname.endsWith("/settings") ? { settings: {} } : { store: { id: "n5-c-other-store", name: "Outra loja sintética" } }
+        return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } })
+      }
+      return transport(input, init)
+    }))
+    // O provider mantém a operação capturada na loja A; a superfície já observa B.
+    runtime.storeId = "n5-c-other-store"
+    view.rerender(tree())
+    await act(async () => { backend.releaseWrite!(); expect(await pending).toBe(true) })
+    expect(finalized()).toHaveLength(0)
+    const identity = runtime.ops!.sales[0].clientSaleId!
+    expect(JSON.parse(localStorage.getItem(markerKey)!)).toContainEqual(expect.objectContaining({ clientSaleId: identity }))
+    const otherKey = markerKey.replace(STORE, runtime.storeId)
+    expect(JSON.parse(localStorage.getItem(otherKey) ?? "[]")).toEqual([])
+    runtime.storeId = STORE
+    view.rerender(tree())
+    await waitFor(() => expect(finalized()).toHaveLength(1))
+    expect(finalized()[0].detail).toContain("Loja " + STORE)
+    expect(finalized()[0].detail).not.toContain("n5-c-other-store")
+    expect(backend.posts).toHaveLength(1)
+  })
+  it.each(["read", "write"] as const)("R011 marcador indisponível em %s conserva confirmação e deduplicação na montagem", async (failure) => {
+    const view = await mount()
+    const getItem = Storage.prototype.getItem
+    const setItem = Storage.prototype.setItem
+    if (failure === "read") vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, key: string) {
+      if (key === markerKey) throw new DOMException("Synthetic storage unavailable", "SecurityError")
+      return getItem.call(this, key)
+    })
+    else vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key === markerKey) throw new DOMException("Synthetic quota", "QuotaExceededError")
+      setItem.call(this, key, value)
+    })
+    expect(await confirm()).toBe(true)
+    expect(runtime.ops!.sales).toHaveLength(1)
+    expect(runtime.ops!.sales[0].syncPending).toBe(false)
+    expect(finalized()).toHaveLength(1)
+    view.rerender(tree())
+    await act(async () => {})
+    expect(finalized()).toHaveLength(1)
+    expect(backend.posts).toHaveLength(1)
+    expect(backend.audits.filter((entry) => entry.action === "sale_finalized")).toHaveLength(1)
+  })
+  it("R011 PENDING em voo sobrevive ao unmount e só audita após retry confirmado", async () => {
+    backend.pauseWrites = true
+    let loseResponse = true
+    const transport = backend.fetch
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input, init) => {
+      const response = await transport(input, init)
+      if (loseResponse && init?.method === "POST" && new URL(String(input), ORIGIN).pathname === "/api/ops/venda-persist/v2") {
+        loseResponse = false
+        throw new Error("Synthetic response lost after server confirmation")
+      }
+      return response
+    }))
+    const view = await mount()
+    let pending!: Promise<boolean | void>
+    await act(async () => { pending = Promise.resolve(runtime.payment!.onConfirm!([{ id: "pix", type: "pix", value: 190 }])) })
+    await waitFor(() => expect(backend.posts).toHaveLength(1))
+    view.rerender(tree(false))
+    await act(async () => { backend.releaseWrite!(); expect(await pending).toBe(true) })
+    const identity = runtime.ops!.sales[0].clientSaleId!
+    expect(runtime.ops!.sales[0].syncPending).toBe(true)
+    expect(backend.confirmed.size).toBe(1)
+    expect(finalized()).toHaveLength(0)
+    view.rerender(tree())
+    expect(finalized()).toHaveLength(0)
+    backend.pauseWrites = false
+    backend.failWrites = false
+    await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true }) })
+    await waitFor(() => expect(finalized()).toHaveLength(1))
+    expect(runtime.ops!.sales).toHaveLength(1)
+    expect(runtime.ops!.sales[0]).toMatchObject({ clientSaleId: identity, syncPending: false })
+    expect(backend.posts.map((post) => post.clientSaleId)).toEqual([identity, identity])
+    expect(backend.confirmed.size).toBe(1)
+    expect(backend.audits.filter((entry) => entry.action === "sale_finalized")).toHaveLength(1)
+  })
+
 })
