@@ -193,7 +193,7 @@ describe("Cadastros adaptados por recursos e produto", () => {
   it("variedades prepara peso sem exigir ramo padaria", async () => {
     h.capabilities = { version: 1, business: { primaryBranch: "variedades" }, overrides: { "catalog.weight": true } }
     product()
-    fireEvent.change(screen.getByRole("textbox", { name: "Nome", exact: true }), { target: { value: "Grãos" } })
+    fireEvent.change(screen.getByRole("textbox", { name: "Nome" }), { target: { value: "Grãos" } })
     fireEvent.change(screen.getByRole("combobox", { name: "Forma de venda" }), { target: { value: "peso" } })
     fireEvent.click(screen.getByRole("button", { name: "Salvar produto" }))
     await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
@@ -257,7 +257,7 @@ describe("Editor oficial de configuração", () => {
 describe("Cadastro manual: números, patch e confirmação", () => {
   const input = (name: string | RegExp) => screen.getByLabelText(name) as HTMLInputElement
   const fill = (name: string | RegExp, value: string) => fireEvent.change(input(name), { target: { value } })
-  const save = () => fireEvent.click(screen.getByRole("button", { name: "Salvar produto", exact: true }))
+  const save = () => fireEvent.click(screen.getByRole("button", { name: "Salvar produto" }))
   const next = () => fireEvent.click(screen.getByRole("button", { name: "Salvar e cadastrar outro" }))
 
   it("padaria recolhe complementos e fiscal, identifica UN e foca o nome", () => {
@@ -291,7 +291,7 @@ describe("Cadastro manual: números, patch e confirmação", () => {
     product(); fill("Nome", "Bolo"); fill(/Preço venda/, "5,20"); next()
     await screen.findByRole("alert")
     expect(input("Nome").value).toBe("Bolo"); expect(input(/Preço venda/).value).toBe("5,20")
-    expect((screen.getByRole("button", { name: "Salvar produto", exact: true }) as HTMLButtonElement).disabled).toBe(false)
+    await waitFor(() => expect((screen.getByRole("button", { name: "Salvar produto" }) as HTMLButtonElement).disabled).toBe(false))
   })
   it("duplo clique só envia uma vez; reset aguarda resposta e descarta id e dados específicos", async () => {
     let resolve!: (result: { ok: boolean; id: string }) => void
@@ -331,11 +331,11 @@ describe("Cadastro manual: números, patch e confirmação", () => {
     await waitFor(() => expect(input("Nome").value).toBe("Novo rascunho"))
     expect(onClose).not.toHaveBeenCalled(); expect(onSaved).not.toHaveBeenCalled()
   })
-  it("editar só preço omite campos comuns e metadata não alterados", async () => {
+  it("editar só preço omite complementos e metadata não alterados", async () => {
     product({ nome: "Legado", sku: "S", barras: "789", garantia: 90, preco: 12.345, custo: 3,
       metadata: { fiscal: { ncm: "39269090", cest: "1700600", cst: "010" }, atributos: { descricao: "Original", tags: ["a"], modeloCompativel: "Modelo" }, desconhecido: true } })
     fill(/Preço venda/, "20,00"); save()
     await waitFor(() => expect(h.upsert).toHaveBeenCalledOnce())
-    expect(h.upsert.mock.calls[0][1]).toEqual({ id: "p-existing", preco: 20, metadata: {} })
+    expect(h.upsert.mock.calls[0][1]).toEqual({ id: "p-existing", nome: "Legado", preco: 20, metadata: {} })
   })
 })

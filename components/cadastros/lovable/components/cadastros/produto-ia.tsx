@@ -1110,6 +1110,7 @@ function ProductAIEditor({
         const result = await upsertProduto(storeId, {
           ...(productId ? { id: productId } : { active: true }),
           ...textPatch, ...numericPatch,
+          nome: name, // O adapter publicado exige nome também nos patches.
           ...(showAccessories && (accessoriesTouched || (applicabilityTouched.acessorios && applies.acessorios)) ? { accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue) } : {}),
           metadata: {
             ...(allowAI ? { cadastroIa: { phase: "fase1-stub", savedAt: new Date().toISOString(), source } } : {}),

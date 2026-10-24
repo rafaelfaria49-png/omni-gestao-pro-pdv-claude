@@ -35,7 +35,8 @@ os defaults existentes do writer e a edição preserva o valor salvo. Zero expl�
 global das regras de preço/ativação ou do writer. O input de margem automática
 foi retirado; a listagem não exibe 100% quando falta custo.
 
-Em edição, somente diferenças viram patch. Garantia, fiscal, acessórios,
+Em edição, diferenças viram patch; nome acompanha o envio conforme a assinatura
+obrigatória do adapter publicado. Garantia, fiscal, acessórios,
 descrição/tags, códigos e propriedades não alteradas são omitidos. Fiscal usa os
 helpers de leitura/merge existentes, sem sugestão de classificação ou mudança de
 permissão. Saldo permanece somente leitura e segue a movimentação canônica.
