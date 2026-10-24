@@ -240,7 +240,7 @@ test("cliente padaria: configurações permitidas, patches parciais e campos ocu
 
     // Aba PDV: rascunho de impressão aberto enquanto a outra aba grava Vendas.
     await pdv.goto("/dashboard/configuracoes?sec=pdv")
-    await expect(pdv.getByText("Impressão do cupom")).toBeVisible()
+    await expect(pdv.getByText("Impressão do cupom", { exact: true }).first()).toBeVisible()
     for (const hidden of [/host\/IP/, /Porta TCP/, /Abrir gaveta/, /Testar impressão/, /Vias do cupom/, /impressão térmica de OS/, /Imprimir cupom automaticamente/]) await expect(pdv.locator("body")).not.toContainText(hidden)
     await pdv.getByLabel("Rodapé do cupom").fill("Volte sempre CX")
 
