@@ -436,6 +436,7 @@ function ProductAIEditor({
   const [applicabilityTouched, setApplicabilityTouched] = useState({ compatibilidade: false, acessorios: false });
   const [commercial, setCommercial] = useState<ProductCommercialV1>(() => productCommercialFromMetadata(initial?.metadata));
   const [commercialTouched, setCommercialTouched] = useState(false);
+  const priceBasisLabel = invalidCommercial ? "R$ — base a revisar" : `R$ / ${commercial.basePreco}`;
   const showCompatibility = allowCompatibility && applies.compatibilidade;
   const showAccessories = allowAccessories && applies.acessorios;
   const [source, setSource] = useState<Source>("manual");
@@ -1579,10 +1580,10 @@ function ProductAIEditor({
               </label>}
             </div>}
             <div className="col-span-full">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Precificação · valores por {commercial.basePreco}</p>
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{invalidCommercial ? "Precificação · base comercial a revisar" : `Precificação · valores por ${commercial.basePreco}`}</p>
               <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:grid-cols-2">
-                <Field label={`Preço venda (R$ / ${commercial.basePreco})`}><Input ref={precoRef} aria-label={`Preço venda (R$ / ${commercial.basePreco})`} inputMode="decimal" autoComplete="off" defaultValue={manualProductNumberText(initial?.preco)} placeholder="0,00" /></Field>
-                <Field label={`Custo (R$ / ${commercial.basePreco})`}><Input ref={custoRef} aria-label={`Custo (R$ / ${commercial.basePreco})`} inputMode="decimal" autoComplete="off" defaultValue={manualProductNumberText(initial?.custo)} placeholder="0,00" /></Field>
+                <Field label={`Preço venda (${priceBasisLabel})`}><Input ref={precoRef} aria-label={`Preço venda (${priceBasisLabel})`} inputMode="decimal" autoComplete="off" defaultValue={manualProductNumberText(initial?.preco)} placeholder="0,00" /></Field>
+                <Field label={`Custo (${priceBasisLabel})`}><Input ref={custoRef} aria-label={`Custo (${priceBasisLabel})`} inputMode="decimal" autoComplete="off" defaultValue={manualProductNumberText(initial?.custo)} placeholder="0,00" /></Field>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">Ex.: 12,50 ou 1.234,56. Preço vazio ou zero deixa o cadastro incompleto; revise antes de vender. {productId ? "Em branco mantém o valor salvo; para zerar, informe 0." : "Custo não informado permanece sem cálculo de margem."}</p>
             </div>

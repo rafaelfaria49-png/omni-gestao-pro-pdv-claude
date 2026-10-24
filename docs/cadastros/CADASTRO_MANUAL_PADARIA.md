@@ -20,6 +20,8 @@ dispara gravação ou consulta externa. Duplicidade continua decidida no servido
 por loja, pelo mesmo `upsertProduto` → `ProductWriteService`.
 
 Preço/custo informam a base UN/KG/G. KG/G conservam o valor declarado, sem conversão.
+Declarações comerciais inválidas mostram base a revisar, sem anunciar a unidade
+do fallback como confirmada; os metadados existentes são preservados.
 Peso continua **preparação**: venda bloqueada, saldo inicial zero, sem balança,
 fracionamento ou alteração da unidade histórica. Grade também permanece no
 contrato descritivo anterior. O contrato comercial e os fontes do PDV/pesagem não
