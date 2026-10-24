@@ -234,16 +234,39 @@ export function PdvSupermercado({
     identities: PendingSaleIdentity[]
   } | null>(null)
   useEffect(() => {
-    let identities: PendingSaleIdentity[] = []
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(`omnigestao:pdv-supermercado-finalize-audit:${lojaKey}`) ?? "[]")
-      if (Array.isArray(saved)) identities = saved.filter((row): row is PendingSaleIdentity =>
-        row && typeof row.id === "string" && (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
-      )
-    } catch { /* sem marcador local restaurável */ }
-    setFinalizeAuditScope({ storeId: lojaKey, identities })
+    const restore = () => {
+      let identities: PendingSaleIdentity[] = []
+      try {
+        const saved: unknown = JSON.parse(localStorage.getItem(`omnigestao:pdv-supermercado-finalize-audit:${lojaKey}`) ?? "[]")
+        if (Array.isArray(saved)) identities = saved.filter((row): row is PendingSaleIdentity =>
+          row && typeof row.id === "string" && (row.clientSaleId === undefined || typeof row.clientSaleId === "string"),
+        )
+      } catch { /* sem marcador local restaurável */ }
+      setFinalizeAuditScope({ storeId: lojaKey, identities })
+    }
+    restore()
+    const eventKey = "omnigestao:pdv-supermercado-finalize-audit:" + lojaKey
+    window.addEventListener(eventKey, restore)
+    return () => window.removeEventListener(eventKey, restore)
   }, [lojaKey])
+  const finalizeAuditStoreRef = useRef(lojaKey)
+  finalizeAuditStoreRef.current = lojaKey
   const trackFinalizeAudit = (identity: PendingSaleIdentity) => {
+    // A continuação pode ocorrer depois do unmount: persistir antes do state.
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey) ?? "[]")
+      const identities: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const identityKey = identity.clientSaleId ?? identity.id
+      if (!identities.some((row) => (row.clientSaleId ?? row.id) === identityKey)) identities.push(identity)
+      localStorage.setItem("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey, JSON.stringify(identities))
+      // storage não dispara nesta janela; notificar também uma nova montagem.
+      window.dispatchEvent(new Event("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey))
+    } catch { /* Sem storage, conserva a garantia em memória da montagem atual. */ }
+    if (finalizeAuditStoreRef.current !== lojaKey) return
     setFinalizeAuditScope((previous) => {
       const identities = previous?.storeId === lojaKey ? previous.identities : []
       const key = identity.clientSaleId ?? identity.id
@@ -269,11 +292,31 @@ export function PdvSupermercado({
       }
       return false
     })
+    // Um efeito antigo só remove identidades que ele próprio observou.
+    const observed = new Set(finalizeAuditScope.identities.map((row) => row.clientSaleId ?? row.id))
+    let persistedRemaining = remaining
     try {
-      localStorage.setItem(`omnigestao:pdv-supermercado-finalize-audit:${lojaKey}`, JSON.stringify(remaining))
-    } catch { /* auditoria local continua em memória nesta montagem */ }
-    if (remaining.length !== finalizeAuditScope.identities.length) {
-      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? { storeId: lojaKey, identities: remaining } : previous)
+      const saved: unknown = JSON.parse(localStorage.getItem("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey) ?? "[]")
+      const current: PendingSaleIdentity[] = Array.isArray(saved)
+        ? saved.filter((row): row is PendingSaleIdentity =>
+          !!row && typeof row.id === "string" && row.id.length > 0 &&
+          (row.clientSaleId === undefined || typeof row.clientSaleId === "string"))
+        : []
+      const remainingKeys = new Set(remaining.map((row) => row.clientSaleId ?? row.id))
+      const unseen = current.filter((row) => {
+        const identityKey = row.clientSaleId ?? row.id
+        if (observed.has(identityKey) || remainingKeys.has(identityKey)) return false
+        remainingKeys.add(identityKey)
+        return true
+      })
+      persistedRemaining = [...remaining, ...unseen]
+      localStorage.setItem("omnigestao:pdv-supermercado-finalize-audit:" + lojaKey, JSON.stringify(persistedRemaining))
+    } catch { /* Mantém o contrato em memória quando storage está indisponível. */ }
+    if (persistedRemaining.length !== finalizeAuditScope.identities.length ||
+        persistedRemaining.some((row, index) => (row.clientSaleId ?? row.id) !==
+          (finalizeAuditScope.identities[index]?.clientSaleId ?? finalizeAuditScope.identities[index]?.id))) {
+      const scope = { storeId: lojaKey, identities: persistedRemaining }
+      setFinalizeAuditScope((previous) => previous === finalizeAuditScope ? scope : previous)
     }
   }, [finalizeAuditScope, sales, lojaKey, cashierId])
 
