@@ -1,0 +1,23 @@
+db=omnigestao_prod_candidate user=omnigestao_candidate_audit_ro ro=on pg=17.11 (11592b3)
+database neondb owner=neondb_owner acl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,neon_superuser=CTc/neondb_owner}
+database omnigestao_prod owner=neondb_owner acl=NULL(default: PUBLIC CONNECT)
+database omnigestao_prod_candidate owner=neondb_owner acl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omnigestao_candidate_audit_ro=c/neondb_owner}
+database postgres owner=cloud_admin acl=NULL(default: PUBLIC CONNECT)
+role cloud_admin login=true super=true createrole=true createdb=true bypassrls=true connect_prod=true
+role neon_service login=true super=false createrole=true createdb=true bypassrls=true connect_prod=true
+role neon_superuser login=false super=false createrole=true createdb=true bypassrls=true connect_prod=true
+role neondb_owner login=true super=false createrole=true createdb=true bypassrls=true connect_prod=true
+role omnigestao_candidate_audit_ro login=true super=false createrole=false createdb=false bypassrls=false connect_prod=true
+role token_roles login=false super=false createrole=false createdb=false bypassrls=false connect_prod=true
+member neon_service IN neon_superuser admin=false inherit=true set=true
+member neon_superuser IN pg_create_subscription admin=true inherit=true set=true
+member neon_superuser IN pg_maintain admin=true inherit=true set=false
+member neon_superuser IN pg_monitor admin=true inherit=true set=true
+member neon_superuser IN pg_read_all_data admin=true inherit=true set=true
+member neon_superuser IN pg_signal_backend admin=true inherit=true set=true
+member neon_superuser IN pg_write_all_data admin=true inherit=true set=true
+member neondb_owner IN neon_superuser admin=false inherit=true set=true
+member neondb_owner IN omnigestao_candidate_audit_ro admin=true inherit=false set=false
+member pg_monitor IN pg_read_all_stats admin=false inherit=true set=true
+sessions db=omnigestao_prod_candidate role=omnigestao_candidate_audit_ro n=1
+

@@ -1,0 +1,104 @@
+// P4 — barreira no PRÓPRIO banco, independente de credencial: CHECK "valor finito em milésimos"
+// nas 5 colunas. Mede o que o cliente Prisma da main (Int) grava numa coluna double COM e SEM a
+// barreira, e confirma que o cliente da PR (Float) passa. Banco descartável próprio (kg_check).
+const fs = require("node:fs")
+const path = require("node:path")
+const { spawnSync } = require("node:child_process")
+const { psql, client, errLine, pw, DIR } = require("./lib.cjs")
+
+const DB = "kg_check"
+const APPLY = "C:\\Projetos\\omni-gestao\\.worktrees\\estoque-manual-kg-001\\docs\\padaria\\pesagem\\estoque-kg-migration-apply.sql"
+const log = []
+const out = (s) => { console.log(s); log.push(s) }
+const one = (s) => s.replace(/\s+/g, " ").trim()
+const q = (s) => psql("pgadmin", DB, s).out
+
+async function tryOp(label, fn) {
+  try { const v = await fn(); out(`  ${label}: GRAVOU${v !== undefined ? " (Prisma devolveu " + JSON.stringify(v) + ")" : ""}`); return true }
+  catch (e) { out(`  ${label}: RECUSADO -> ${errLine(e).replace(/^.*(Error occurred|Error in connector|Invalid)/, "$1").slice(0, 200)}`); return false }
+}
+
+async function rodada(nome, db) {
+  out(`\n### ${nome}`)
+  const reset = () => psql("pgadmin", DB, "UPDATE estoque_produtos SET stock = 13 WHERE id='p1'; UPDATE produto_depositos SET quantidade = 13 WHERE id='d1'")
+  reset(); await tryOp("produto.update stock = 12 (absoluto, como o ledger da main)", () => db.produto.update({ where: { id: "p1" }, data: { stock: 12 } }).then((p) => p.stock))
+  out(`    banco: stock=${q("SELECT stock::text FROM estoque_produtos WHERE id='p1'")}`)
+  reset(); await tryOp("produto.update stock decrement 1", () => db.produto.update({ where: { id: "p1" }, data: { stock: { decrement: 1 } } }).then((p) => p.stock))
+  out(`    banco: stock=${q("SELECT stock::text FROM estoque_produtos WHERE id='p1'")} (esperado 12)`)
+  reset(); await tryOp("produto.update stock increment 2", () => db.produto.update({ where: { id: "p1" }, data: { stock: { increment: 2 } } }).then((p) => p.stock))
+  out(`    banco: stock=${q("SELECT stock::text FROM estoque_produtos WHERE id='p1'")} (esperado 15)`)
+  reset(); await tryOp("produto.update stock = -1", () => db.produto.update({ where: { id: "p1" }, data: { stock: -1 } }).then((p) => p.stock))
+  out(`    banco: stock=${q("SELECT stock::text FROM estoque_produtos WHERE id='p1'")}`)
+  reset(); await tryOp("produto.update stock = 0", () => db.produto.update({ where: { id: "p1" }, data: { stock: 0 } }).then((p) => p.stock))
+  out(`    banco: stock=${q("SELECT stock::text FROM estoque_produtos WHERE id='p1'")}`)
+  reset(); await tryOp("produtoDeposito.update quantidade = 5", () => db.produtoDeposito.update({ where: { id: "d1" }, data: { quantidade: 5 } }).then((p) => p.quantidade))
+  out(`    banco: deposito=${q("SELECT quantidade::text FROM produto_depositos WHERE id='d1'")}`)
+  const n0 = q("SELECT count(*) FROM movimentacoes_estoque")
+  await tryOp("movimentacaoEstoque.create quantidade=2 antes=13 depois=11", () => db.movimentacaoEstoque.create({ data: { storeId: "loja-1", produtoId: "p1", produtoNome: "p1", tipo: "saida", quantidade: 2, estoqueAntes: 13, estoqueDepois: 11 } }).then(() => undefined))
+  out(`    banco: livro novas=${Number(q("SELECT count(*) FROM movimentacoes_estoque")) - Number(n0)} ultima=${q("SELECT quantidade::text || '/' || \"estoqueAntes\"::text || '/' || \"estoqueDepois\"::text FROM movimentacoes_estoque ORDER BY \"createdAt\" DESC LIMIT 1")}`)
+  // venda da main = transação (ledger + livro): o livro recusado derruba o saldo junto
+  reset()
+  await tryOp("transação saldo+livro (formato do ledger da main): stock=11 + livro 2/13/11", () => db.$transaction(async (tx) => {
+    await tx.produto.update({ where: { id: "p1" }, data: { stock: 11 } })
+    await tx.movimentacaoEstoque.create({ data: { storeId: "loja-1", produtoId: "p1", produtoNome: "p1", tipo: "saida", quantidade: 2, estoqueAntes: 13, estoqueDepois: 11 } })
+  }).then(() => undefined))
+  out(`    banco: stock=${q("SELECT stock::text FROM estoque_produtos WHERE id='p1'")}`)
+}
+
+async function main() {
+  out(`# ESTOQUE-MANUAL-KG-001 - P4 barreira CHECK no banco - ${new Date().toISOString()}`)
+  psql("pgadmin", "postgres", `DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`)
+  psql("pgadmin", "postgres", `CREATE DATABASE ${DB}`)
+  const ddl = psql("pgadmin", DB, path.join(DIR, "old-ddl.sql"), { file: true })
+  if (!ddl.ok) throw new Error(ddl.err)
+  const seed = client("old", "pgadmin", DB, "seed")
+  await seed.store.create({ data: { id: "loja-1", name: "sim" } })
+  await seed.produto.create({ data: { id: "p1", storeId: "loja-1", name: "p1", stock: 13, price: 1 } })
+  const dep = await seed.deposito.create({ data: { storeId: "loja-1", nome: "Principal", codigo: "PRINCIPAL", principal: true } })
+  await seed.produtoDeposito.create({ data: { id: "d1", storeId: "loja-1", produtoId: "p1", depositoId: dep.id, quantidade: 13 } })
+  await seed.$disconnect()
+  const ap = spawnSync("C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-1", "-h", "127.0.0.1", "-p", "55447", "-U", "pgadmin", "-d", DB, "-f", APPLY],
+    { env: { ...process.env, PGPASSWORD: pw("pgadmin"), PGCLIENTENCODING: "UTF8" }, encoding: "utf8" })
+  out(`migration KG aplicada: exit=${ap.status} ${one(ap.stderr).replace(/^.*NOTICE:/, "NOTICE:").slice(0, 120)}`)
+
+  const velho = client("old", "pgadmin", DB, "main-int")
+  const novo = client("new", "pgadmin", DB, "pr315-float")
+
+  out("\n## A. SEM barreira: cliente da main (Int) sobre colunas double")
+  await rodada("cliente main (Int)", velho)
+
+  out("\n## B. Barreira: CHECK finito-em-milesimos nas 5 colunas (validada contra os dados existentes)")
+  const guard = path.join(DIR, "estoque-kg-guard-check.sql")
+  const cols = [["estoque_produtos", "stock"], ["produto_depositos", "quantidade"], ["movimentacoes_estoque", "quantidade"], ["movimentacoes_estoque", "estoqueAntes"], ["movimentacoes_estoque", "estoqueDepois"]]
+  fs.writeFileSync(guard, [
+    "-- Barreira de banco: so aceita valor finito, |v| <= 999.999.999.999,999 e com no maximo 3 casas.",
+    "-- O cliente Prisma Int sobre coluna double grava os bits do inteiro (13 -> 6e-323, -1 -> NaN): ambos violam.",
+    "SET LOCAL lock_timeout = '5s';",
+    ...cols.map(([t, c]) => `ALTER TABLE "${t}" ADD CONSTRAINT "${t}_${c}_kg_milesimos" CHECK ("${c}" <> 'NaN'::float8 AND abs("${c}") <= 999999999999.999 AND round("${c}"::numeric, 3) = "${c}"::numeric) NOT VALID;`),
+    ...cols.map(([t, c]) => `ALTER TABLE "${t}" VALIDATE CONSTRAINT "${t}_${c}_kg_milesimos";`),
+  ].join("\n") + "\n")
+  // limpa a corrupção da rodada A antes de validar (num banco real: corrigir pelo livro; aqui é sintético)
+  psql("pgadmin", DB, "UPDATE estoque_produtos SET stock = 13; UPDATE produto_depositos SET quantidade = 13; DELETE FROM movimentacoes_estoque")
+  const g = spawnSync("C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-1", "-h", "127.0.0.1", "-p", "55447", "-U", "pgadmin", "-d", DB, "-f", guard],
+    { env: { ...process.env, PGPASSWORD: pw("pgadmin"), PGCLIENTENCODING: "UTF8" }, encoding: "utf8" })
+  out(`  guard aplicado: exit=${g.status} ${one(g.stderr).slice(0, 160)}`)
+  out(`  constraints: ${q("SELECT string_agg(conname || (CASE WHEN convalidated THEN ' (validada)' ELSE '' END), ', ') FROM pg_constraint WHERE conname LIKE '%_kg_milesimos'")}`)
+
+  out("\n## C. COM barreira: cliente da main (Int)")
+  await rodada("cliente main (Int)", velho)
+
+  out("\n## D. COM barreira: cliente da PR #315 (Float) — operação legítima")
+  psql("pgadmin", DB, "UPDATE estoque_produtos SET stock = 13")
+  for (const v of [3.96, 0.001, -2.5, 0, 999999999999.999, 12.345]) {
+    await tryOp(`stock = ${v}`, () => novo.produto.update({ where: { id: "p1" }, data: { stock: v } }).then((p) => p.stock))
+  }
+  await tryOp("stock increment 0.25 (de 12.345)", () => novo.produto.update({ where: { id: "p1" }, data: { stock: { increment: 0.25 } } }).then((p) => p.stock))
+  await tryOp("stock = 0.0005 (4 casas: fora do contrato)", () => novo.produto.update({ where: { id: "p1" }, data: { stock: 0.0005 } }).then((p) => p.stock))
+  await tryOp("stock = 0.1 + 0.2 (aritmetica de float)", () => novo.produto.update({ where: { id: "p1" }, data: { stock: 0.1 + 0.2 } }).then((p) => p.stock))
+  await tryOp("livro quantidade 0.125 antes 3.96 depois 3.835", () => novo.movimentacaoEstoque.create({ data: { storeId: "loja-1", produtoId: "p1", produtoNome: "p1", tipo: "saida", quantidade: 0.125, estoqueAntes: 3.96, estoqueDepois: 3.835 } }).then(() => undefined))
+  out(`  linhas fora do contrato no banco: ${q("SELECT count(*) FROM estoque_produtos WHERE stock = 'NaN' OR round(stock::numeric,3) <> stock::numeric")}`)
+
+  await Promise.allSettled([velho.$disconnect(), novo.$disconnect()])
+  fs.writeFileSync(path.join(DIR, "20-check-barrier.txt"), log.join("\n") + "\n")
+}
+main().catch((e) => { console.error(e); fs.writeFileSync(path.join(DIR, "20-check-barrier.txt"), log.join("\n") + "\nFATAL " + e + "\n"); process.exit(1) })

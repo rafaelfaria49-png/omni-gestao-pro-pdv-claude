@@ -1,0 +1,9 @@
+tabelas public=96 rls_on=0 rls_forced=0 donos=neondb_owner
+rls_on: (nenhuma)
+policies=0
+sequences=0 views=0 funcoes=0 tipos_enum=36
+schemas nao-sistema=public(pg_database_owner)
+default_acl=3
+event_triggers=0
+extensoes=plpgsql
+

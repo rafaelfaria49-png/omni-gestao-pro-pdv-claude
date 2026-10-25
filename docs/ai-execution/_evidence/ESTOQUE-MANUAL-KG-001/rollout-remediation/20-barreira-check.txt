@@ -1,0 +1,59 @@
+# ESTOQUE-MANUAL-KG-001 - P4 barreira CHECK no banco - 2026-10-25T18:44:52.665Z
+migration KG aplicada: exit=0 NOTICE: KG_MIGRATION_OK produtos=1 depositos=1 livro=0 produtos_md5=6f6939ff05f4ea9c41287dbf9efae618
+
+## A. SEM barreira: cliente da main (Int) sobre colunas double
+
+### cliente main (Int)
+  produto.update stock = 12 (absoluto, como o ledger da main): GRAVOU (Prisma devolveu 0)
+    banco: stock=6e-323
+  produto.update stock decrement 1: GRAVOU (Prisma devolveu 13)
+    banco: stock=13 (esperado 12)
+  produto.update stock increment 2: GRAVOU (Prisma devolveu 13)
+    banco: stock=13 (esperado 15)
+  produto.update stock = -1: RECUSADO -> ut(` banco: stock=${q("SELECT stock::text FROM estoque_produtos WHERE id='p1'")} (esperado 15)`) → 30 reset(); await tryOp("produto.update stock = -1", () => db.produto.update( Inconsistent column dat
+    banco: stock=NaN
+  produto.update stock = 0: GRAVOU (Prisma devolveu 0)
+    banco: stock=0
+  produtoDeposito.update quantidade = 5: GRAVOU (Prisma devolveu 0)
+    banco: deposito=2.5e-323
+  movimentacaoEstoque.create quantidade=2 antes=13 depois=11: GRAVOU
+    banco: livro novas=1 ultima=1e-323/6.4e-323/5.4e-323
+  transação saldo+livro (formato do ledger da main): stock=11 + livro 2/13/11: GRAVOU
+    banco: stock=5.4e-323
+
+## B. Barreira: CHECK finito-em-milesimos nas 5 colunas (validada contra os dados existentes)
+  guard aplicado: exit=0 
+  constraints: estoque_produtos_stock_kg_milesimos (validada), produto_depositos_quantidade_kg_milesimos (validada), movimentacoes_estoque_quantidade_kg_milesimos (validada), movimentacoes_estoque_estoqueAntes_kg_milesimos (validada), movimentacoes_estoque_estoqueDepois_kg_milesimos (validada)
+
+## C. COM barreira: cliente da main (Int)
+
+### cliente main (Int)
+  produto.update stock = 12 (absoluto, como o ledger da main): RECUSADO -> lesimos\"", severity: "ERROR", detail: Some("Failing row contains (p1, loja-1, null, null, p1, , , 6e-323, 0, 1, null, 0, Ativo, t, null, 2026-10-25 18:44:56.147, 2026-10-25 18:44:58.535)."), column: 
+    banco: stock=13
+  produto.update stock decrement 1: GRAVOU (Prisma devolveu 13)
+    banco: stock=13 (esperado 12)
+  produto.update stock increment 2: GRAVOU (Prisma devolveu 13)
+    banco: stock=13 (esperado 15)
+  produto.update stock = -1: RECUSADO -> _milesimos\"", severity: "ERROR", detail: Some("Failing row contains (p1, loja-1, null, null, p1, , , NaN, 0, 1, null, 0, Ativo, t, null, 2026-10-25 18:44:56.147, 2026-10-25 18:44:59.044)."), column: 
+    banco: stock=13
+  produto.update stock = 0: GRAVOU (Prisma devolveu 0)
+    banco: stock=0
+  produtoDeposito.update quantidade = 5: RECUSADO -> s_quantidade_kg_milesimos\"", severity: "ERROR", detail: Some("Failing row contains (d1, loja-1, p1, cmvo6ggdf0001h2bwzqul0buh, 2.5e-323, 2026-10-25 18:44:56.169, 2026-10-25 18:44:59.355)."), column: 
+    banco: deposito=13
+  movimentacaoEstoque.create quantidade=2 antes=13 depois=11: RECUSADO -> "Failing row contains (cmvo6giy50007h2bwg2hy17ck, loja-1, p1, null, p1, saida, manual, 1e-323, 6.4e-323, 5.4e-323, 0, 0, 0, 0, null, null, null, null, null, null, 2026-10-25 18:44:59.502)."), column: 
+    banco: livro novas=0 ultima=
+  transação saldo+livro (formato do ledger da main): stock=11 + livro 2/13/11: RECUSADO -> simos\"", severity: "ERROR", detail: Some("Failing row contains (p1, loja-1, null, null, p1, , , 5.4e-323, 0, 1, null, 0, Ativo, t, null, 2026-10-25 18:44:56.147, 2026-10-25 18:44:59.721)."), column: 
+    banco: stock=13
+
+## D. COM barreira: cliente da PR #315 (Float) — operação legítima
+  stock = 3.96: GRAVOU (Prisma devolveu 3.96)
+  stock = 0.001: GRAVOU (Prisma devolveu 0.001)
+  stock = -2.5: GRAVOU (Prisma devolveu -2.5)
+  stock = 0: GRAVOU (Prisma devolveu 0)
+  stock = 999999999999.999: GRAVOU (Prisma devolveu 999999999999.999)
+  stock = 12.345: GRAVOU (Prisma devolveu 12.345)
+  stock increment 0.25 (de 12.345): GRAVOU (Prisma devolveu 12.595)
+  stock = 0.0005 (4 casas: fora do contrato): RECUSADO -> lesimos\"", severity: "ERROR", detail: Some("Failing row contains (p1, loja-1, null, null, p1, , , 0.0005, 0, 1, null, 0, Ativo, t, null, 2026-10-25 18:44:56.147, 2026-10-25 18:45:00.019)."), column: 
+  stock = 0.1 + 0.2 (aritmetica de float): GRAVOU (Prisma devolveu 0.3)
+  livro quantidade 0.125 antes 3.96 depois 3.835: GRAVOU
+  linhas fora do contrato no banco: 0
