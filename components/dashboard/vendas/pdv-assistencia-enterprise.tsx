@@ -1170,8 +1170,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
   // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
-  // Removida uma linha, o pagamento lançado deixa de valer: o modal fecha e zera os lançamentos.
-  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: realCatalog, notify: (n) => toast({ ...n, variant: "destructive" }), onRemoved: () => setPaymentOpen(false) })
+  // Com o pagamento aberto o carrinho fica intacto (pode haver envio em andamento); o servidor recusa a venda.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: realCatalog, notify: (n) => toast({ ...n, variant: "destructive" }), paused: paymentOpen })
   /** Intent passado ao modal compartilhado (forma pré-selecionada) e flag de múltiplo. */
   const [paymentInstantIntent, setPaymentInstantIntent] = useState<PaymentMethodType | null>(null)
   const [paymentMultipay, setPaymentMultipay] = useState(false)

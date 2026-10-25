@@ -32,7 +32,8 @@ fila de vendas, preview de outra branch ou script local continuariam gravando.
      produção, todo preview de outra branch é escritor antigo — trocar o banco do Preview ou
      remover/desabilitar esses previews antes da migration;
    - worktrees/máquinas com `.env` de produção (scripts `db:*`, `node scripts/…` da `main`).
-4. Pré-checagem read-only (`BEGIN; SET TRANSACTION READ ONLY; … ROLLBACK;`) — guardar os números:
+4. Pré-checagem read-only (`BEGIN; SET TRANSACTION READ ONLY; … ROLLBACK;`) — dimensiona o lock e
+   acha dependências (a verificação de valores é feita dentro da transação do passo 7):
    ```sql
    SELECT count(*), sum(stock)::text FROM estoque_produtos;
    SELECT count(*), sum(quantidade)::text FROM produto_depositos;
@@ -48,43 +49,49 @@ fila de vendas, preview de outra branch ou script local continuariam gravando.
 2. **Trava ligada**: `STOCK_WRITES_FROZEN=true` no ambiente Production dos dois projetos.
 3. **Deploy do código desta PR** (merge → Production). Confirmar no log `MIGRATION_SKIPPED` e
    `PROXY_PRISMA_ARTIFACT_VERIFIED`, e que o deployment novo responde com a trava: uma entrada
-   manual de teste retorna "manutenção programada" sem gravar. Vendas de abas abertas passam a
-   receber 5xx e **permanecem na fila local** (reenvio automático).
-4. **Excluir escritores antigos de verdade**: remover (`vercel remove <url> --yes`) todos os
+   manual de teste retorna "manutenção programada" sem gravar. No domínio canônico, vendas de abas
+   abertas passam a receber 5xx e **permanecem na fila local** (reenvio automático).
+4. **Esvaziar as filas das origens antigas antes de removê-las.** A fila de vendas pendentes vive
+   no navegador, por origem: uma aba aberta numa URL de deployment (não no domínio canônico) só
+   reenvia para aquela URL. Enquanto o banco ainda é `integer`, o código antigo grava corretamente,
+   então: identificar caixas em URL de deployment, deixar sincronizar até **Pendências = 0** ou
+   registrar as pendências (pedido, itens, pagamentos, `clientSaleId`) para lançamento posterior
+   com a mesma identidade. Só então seguir.
+5. **Excluir escritores antigos de verdade**: remover (`vercel remove <url> --yes`) todos os
    deployments anteriores dos dois projetos e os previews que alcançam produção; conferir com
-   `vercel ls` que só resta o deployment novo e que as URLs antigas respondem 404. Encerrar
-   scripts locais com `.env` de produção.
-5. **Drenar**: aguardar ≥ 5 min (maior `maxDuration` explícito do app = 180 s) e confirmar no banco
+   `vercel ls` que só resta o deployment novo e que as URLs antigas respondem 404. Encerrar scripts
+   locais com `.env` de produção — inclusive os que escrevem estoque fora do boundary
+   (`scripts/backfill-deposito.mjs`, `scripts/merge-produtos-duplicados.mjs`).
+6. **Drenar**: aguardar ≥ 5 min (maior `maxDuration` explícito do app = 180 s) e confirmar no banco
    que não há transação aberta tocando as 3 tabelas:
    ```sql
    SELECT pid, application_name, state, now() - xact_start AS idade, left(query, 80)
      FROM pg_stat_activity WHERE datname = current_database() AND xact_start IS NOT NULL;
    ```
-6. **Aplicar a migration** pela conexão direta (5432), conferindo o sha256 acima:
-   ```sql
-   SET lock_timeout = '5s';
-   SET statement_timeout = '120s';
-   BEGIN;
-   -- conteúdo exato de migration.sql
-   COMMIT;
-   ```
-   Registrar em `_prisma_migrations` conforme a estratégia de baseline vigente
+7. **Aplicar a migration verificada** pela conexão direta (5432):
+   `psql -v ON_ERROR_STOP=1 -1 -f docs/padaria/pesagem/estoque-kg-migration-apply.sql`.
+   O script trava as 3 tabelas, tira um **retrato por linha** (md5 de `id:valores`), roda o DDL
+   exato da migration e compara o retrato depois; qualquer diferença levanta
+   `KG_MIGRATION_RETRATO_DIVERGENTE` e desfaz tudo. Como o retrato e o DDL acontecem sob o mesmo
+   lock, criação de produto, exclusão ou reenvio não se intercalam — a referência não depende de
+   números colhidos antes da janela. Provado em PG 17 descartável: caminho feliz, reaplicação
+   idempotente e prova negativa (`migration-apply-verificada.txt`, `migration-apply-prova-negativa.txt`).
+   Depois, registrar em `_prisma_migrations` conforme a estratégia de baseline vigente
    (`prisma migrate resolve --applied 20261025120000_estoque_quantidade_fracionada`).
    Falha por `lock_timeout` não altera nada; repetir após nova drenagem.
-7. **Verificar com a trava ainda ligada** (nada grava estoque): tipos `double precision`; contagens
-   e somas **iguais** às da pré-checagem; `count(*) WHERE stock <> trunc(stock)` = 0;
+8. **Conferir com a trava ainda ligada**: `count(*) WHERE stock <> trunc(stock)` = 0 nas 5 colunas;
    `prisma migrate diff --from-url … --to-schema-datamodel prisma/schema.prisma` sem diferença.
-8. **Trava desligada**: remover `STOCK_WRITES_FROZEN` e redeployar (env só vale em deploy novo).
+9. **Trava desligada**: remover `STOCK_WRITES_FROZEN` e redeployar (env só vale em deploy novo).
    As filas locais do PDV reenviam sozinhas; acompanhar até zerar as pendências.
-9. **Smoke** com conta STORE da padaria de homologação (produto KG sintético, nunca o real
+10. **Smoke** com conta STORE da padaria de homologação (produto KG sintético, nunca o real
    "PAO FRANCES"): Entrada 0,001 kg, histórico, ficha reaberta; PDV recusa venda por peso.
-10. Reabrir a operação.
+11. Reabrir a operação.
 
 ## Recuperação e rollback
 
 | Situação | Ação |
 | --- | --- |
-| Migration falhou (lock/timeout) | Transação desfeita, nada alterado. Trava segue ligada; repetir 5–6. Se precisar reabrir antes: desligar a trava **sem** migrar — o código novo falha fechado (`22P03`) em escritas de estoque, que ficam na fila. **Nunca** voltar o deployment anterior. |
+| Migration falhou (lock/timeout) | Transação desfeita, nada alterado. Trava segue ligada; repetir 6–7. Se precisar reabrir antes: desligar a trava **sem** migrar — o código novo falha fechado (`22P03`) em escritas de estoque, que ficam na fila. **Nunca** voltar o deployment anterior. |
 | Migration aplicada, problema no código novo | Corrigir para frente, ou rollback para build com schema `Float` (reverter commits de comportamento mantendo schema e migration). Nunca para o deployment anterior. |
 | Desfazer a migration | Só se **nenhuma** das 5 colunas tiver fração (`count(*) WHERE <col> <> trunc(<col>)` = 0) **e** o app voltar junto para `Int` na mesma janela, com trava e exclusão de escritores repetidas: `ALTER … TYPE integer USING <col>::integer`. Com qualquer fração: proibido (perde gramas); a única volta é o snapshot do passo 1, descartando movimentações posteriores. |
 | Corrupção detectada (`6e-323`, `NaN`, denormais) | Ligar a trava; achar o escritor antigo (URL, preview, script) e removê-lo; restaurar as linhas afetadas pelo snapshot/livro encadeado (`movimentacoes_estoque`); rodar `db:backfill-deposito --exec` **desta** versão, que confere a invariante por produto em milésimos; desligar a trava. |

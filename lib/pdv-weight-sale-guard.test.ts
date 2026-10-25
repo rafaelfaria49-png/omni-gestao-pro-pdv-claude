@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import {
   inventoryWeightSaleProjection,
+  pdvWeightSaleBlockedDuringPaymentNotice,
   pdvWeightSaleBlockedNotice,
   pdvWeightSaleFlag,
   pdvWeightSaleRemovedNotice,
@@ -102,6 +103,9 @@ describe("projeção, separação e aviso de remoção", () => {
     const n = pdvWeightSaleRemovedNotice(["Pão francês", "Queijo"])
     expect(n.description).toMatch(/^Pão francês, Queijo saíram do carrinho/)
     expect(n.description).not.toMatch(/sem saldo|sem estoque|repor/i)
+    const p = pdvWeightSaleBlockedDuringPaymentNotice(["Pão francês"])
+    expect(p.description).toMatch(/esta venda será recusada sem gravar nada. Feche o pagamento/)
+    expect(p.description).not.toMatch(/sem saldo|sem estoque|repor/i)
   })
 })
 

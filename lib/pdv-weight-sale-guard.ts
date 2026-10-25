@@ -64,10 +64,18 @@ export function splitWeightBlockedLines<L extends { inventoryId?: string }>(
   return { kept, blockedNames: [...names] }
 }
 
+/** Pagamento aberto: o carrinho não muda (pode haver envio em andamento); a venda será recusada. */
+export function pdvWeightSaleBlockedDuringPaymentNotice(names: readonly string[]): PdvWeightSaleNotice {
+  return {
+    title: TITULO,
+    description: `${names.join(", ")} é vendido por kg e ainda não pode ser registrado no PDV: esta venda será recusada sem gravar nada. Feche o pagamento; o item sai do carrinho para você revisar o total.`,
+  }
+}
+
 export function pdvWeightSaleRemovedNotice(names: readonly string[]): PdvWeightSaleNotice {
   const quem = names.join(", ")
   return {
     title: TITULO,
-    description: `${quem} ${names.length > 1 ? "saíram" : "saiu"} do carrinho: produto vendido por kg ainda não pode ser registrado no PDV. ${ORIENTACAO} Pagamento em andamento foi cancelado; confira o total e lance de novo.`,
+    description: `${quem} ${names.length > 1 ? "saíram" : "saiu"} do carrinho: produto vendido por kg ainda não pode ser registrado no PDV. ${ORIENTACAO}`,
   }
 }

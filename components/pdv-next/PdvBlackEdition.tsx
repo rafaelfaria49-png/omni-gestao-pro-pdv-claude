@@ -230,8 +230,8 @@ export function PdvBlackEdition() {
   const [cancelSaleOpen, setCancelSaleOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
-  // Removida uma linha, o pagamento lançado deixa de valer: o modal fecha e zera os lançamentos.
-  usePdvWeightBlockedCartGuard({ cart: cartRows, setCart: setCartRows, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), onRemoved: () => setPaymentOpen(false) })
+  // Com o pagamento aberto o carrinho fica intacto (pode haver envio em andamento); o servidor recusa a venda.
+  usePdvWeightBlockedCartGuard({ cart: cartRows, setCart: setCartRows, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), paused: paymentOpen })
   const [trocasOpen, setTrocasOpen] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
 

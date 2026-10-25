@@ -1,0 +1,6 @@
+# prova negativa: saldo alterado entre retrato e conferência
+psql:C:/Users/rafae/AppData/Local/Temp/claude/C--Projetos-omni-gestao/e40bf2bf-b440-4fa0-9e50-65f1d59b9b67/scratchpad/pg/apply-negativo.sql:57: ERROR:  KG_MIGRATION_RETRATO_DIVERGENTE: valores mudaram durante a conversão; DDL desfeito
+exit=0
+# estado depois (tudo desfeito: integer, valor original)
+integer
+10

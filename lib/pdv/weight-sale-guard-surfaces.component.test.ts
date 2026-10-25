@@ -98,28 +98,58 @@ describe("PDV com produto KG de venda bloqueada e saldo 10", () => {
     await expectBlockedWithoutStockAdvice()
   })
 
-  it("Clássico: catálogo marca KG com pagamento aberto — item sai, modal fecha e lançamentos são zerados", async () => {
+  // Carrinho misto (KG ainda liberado no catálogo + unitário) com pagamento aberto.
+  async function mixedClassicWithPaymentOpen() {
     delete PRODUTO.vendaPesoIndisponivel
-    const un2 = { ...PRODUTO, id: "n5-c-un2", name: "Produto unitário sintético", sku: "N5C002" }
-    INVENTORY.push(un2 as (typeof INVENTORY)[number])
+    const un2 = { ...PRODUTO, id: "n5-c-un2", name: "Produto unitário sintético", sku: "N5C002" } as (typeof INVENTORY)[number]
+    INVENTORY.push(un2)
+    seedStorage(localStorage, "classic")
+    sessionStorage.setItem("assistec-pdv-import-comanda", JSON.stringify({ lines: [
+      { inventoryId: PRODUTO.id, name: PRODUTO.name, price: 100, quantity: 1 },
+      { inventoryId: un2.id, name: un2.name, price: 100, quantity: 1 },
+    ] }))
+    mount("classic")
+    await waitFor(() => expect(runtime.payment?.total).toBe(200))
+    await act(async () => { fireEvent.keyDown(window, { key: "F1" }) })
+    await waitFor(() => expect(runtime.payment?.isOpen).toBe(true))
+    const marcarKg = () => act(async () => {
+      runtime.ops!.setInventory((prev) => prev.map((i) => (i.id === PRODUTO.id ? { ...i, vendaPesoIndisponivel: true } : i)))
+    })
+    return { marcarKg, cleanup: () => { INVENTORY.splice(INVENTORY.indexOf(un2), 1) } }
+  }
+
+  it("Clássico: catálogo marca KG com pagamento aberto — carrinho e modal intactos até fechar; aí o item sai", async () => {
+    const { marcarKg, cleanup } = await mixedClassicWithPaymentOpen()
     try {
-      seedStorage(localStorage, "classic")
-      sessionStorage.setItem("assistec-pdv-import-comanda", JSON.stringify({ lines: [
-        { inventoryId: PRODUTO.id, name: PRODUTO.name, price: 100, quantity: 1 },
-        { inventoryId: un2.id, name: un2.name, price: 100, quantity: 1 },
-      ] }))
-      mount("classic")
-      await waitFor(() => expect(runtime.payment?.total).toBe(200))
-      await act(async () => { fireEvent.keyDown(window, { key: "F1" }) })
-      await waitFor(() => expect(runtime.payment?.isOpen).toBe(true))
-      await act(async () => {
-        runtime.ops!.setInventory((prev) => prev.map((i) => (i.id === PRODUTO.id ? { ...i, vendaPesoIndisponivel: true } : i)))
-      })
-      await waitFor(() => expect(runtime.payment?.isOpen).toBe(false))
-      expect(runtime.payment?.total).toBe(100)
-      expect(descriptions().join(" ")).toMatch(/saiu do carrinho.*Pagamento em andamento foi cancelado/)
+      await marcarKg()
+      await waitFor(() => expect(descriptions().join(" ")).toMatch(/esta venda será recusada sem gravar nada. Feche o pagamento/))
+      await act(async () => {})
+      expect(runtime.payment?.isOpen).toBe(true)
+      expect(runtime.payment?.total).toBe(200)
+      expect(descriptions().filter((d) => /será recusada/.test(d))).toHaveLength(1)
+      await act(async () => { runtime.payment!.onClose() })
+      await waitFor(() => expect(runtime.payment?.total).toBe(100))
+      expect(descriptions().join(" ")).toMatch(/saiu do carrinho/)
       expect(backend.posts).toHaveLength(0)
-    } finally { INVENTORY.splice(INVENTORY.indexOf(un2 as (typeof INVENTORY)[number]), 1) }
+    } finally { cleanup() }
+  })
+
+  it("Clássico: catálogo muda durante confirmação suspensa — sem segundo envio nem troca de carrinho", async () => {
+    const { marcarKg, cleanup } = await mixedClassicWithPaymentOpen()
+    try {
+      backend.pauseWrites = true
+      let pending: Promise<unknown> | undefined
+      await act(async () => { pending = Promise.resolve(runtime.payment!.onConfirm!([{ id: "pix", type: "pix", value: 200 }])) })
+      await waitFor(() => expect(backend.posts).toHaveLength(1))
+      await marcarKg()
+      await act(async () => {})
+      expect(runtime.payment?.isOpen).toBe(true)
+      expect(runtime.payment?.total).toBe(200)
+      expect(backend.posts).toHaveLength(1)
+      backend.pauseWrites = false
+      await act(async () => { backend.releaseWrite?.(); await pending })
+      expect(backend.posts).toHaveLength(1)
+    } finally { cleanup() }
   })
 
   it("Supermercado: bipe/busca recusa antes do estoque", async () => {
