@@ -16,6 +16,7 @@ import {
   sendEscPosViaProxy,
   type SendEscPosResult,
 } from "@/lib/thermal-print"
+import { buildPdvNonFiscalNoticeHtml } from "@/lib/pdv-non-fiscal-notice"
 
 export type PrintJobResult = {
   ok: boolean
@@ -172,6 +173,9 @@ export async function printPdvSaleReceipt(params: {
       <div style="text-align:center;font-weight:700;margin-bottom:6px">${escapeHtml(i.nomeFantasia)}</div>
       <div style="text-align:center;font-size:11px;margin-bottom:4px">CNPJ ${escapeHtml(i.cnpj)}</div>
       ${i.enderecoLinha?.trim() ? `<div style="font-size:10px;margin-bottom:8px">${escapeHtml(i.enderecoLinha.trim())}</div>` : ""}
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      ${i.cancelada ? `<div style="text-align:center;font-size:11px;font-weight:700">VENDA CANCELADA</div>` : ""}
+      ${buildPdvNonFiscalNoticeHtml()}
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
       <div style="font-size:11px">${infoHtml}</div>
       <div style="border-top:1px dashed #000;margin:6px 0"></div>

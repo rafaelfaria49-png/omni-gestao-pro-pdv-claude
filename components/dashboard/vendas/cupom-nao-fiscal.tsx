@@ -16,6 +16,11 @@ import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { printPdvSaleReceipt, type PrintJobResult } from "@/lib/pdv-print-runtime"
 import type { PdvReceiptInput } from "@/lib/escpos"
+import {
+  PDV_NON_FISCAL_NOTICE,
+  PDV_NON_FISCAL_EXPLANATION,
+  buildPdvNonFiscalNoticeHtml,
+} from "@/lib/pdv-non-fiscal-notice"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -93,8 +98,9 @@ function buildTexto(d: CupomData): string {
   if (d.lojaCnpj) lines.push(`CNPJ: ${d.lojaCnpj}`)
   if (d.lojaEndereco) lines.push(d.lojaEndereco)
   lines.push("================================")
-  lines.push("    DOCUMENTO NÃO FISCAL")
-  lines.push("  Este comprovante não é DANFC-e / NFC-e.")
+  if (d.status === "cancelada") lines.push("    VENDA CANCELADA")
+  lines.push(`    ${PDV_NON_FISCAL_NOTICE}`)
+  lines.push(`  ${PDV_NON_FISCAL_EXPLANATION}`)
   lines.push("================================")
   lines.push(`Venda:    ${d.numeroPedido}`)
   lines.push(`Data:     ${fmtDate(d.at)}`)
@@ -156,10 +162,8 @@ function buildHtml(d: CupomData): string {
     ${d.lojaCnpj ? `<div style="text-align:center;font-size:10px">CNPJ: ${esc(d.lojaCnpj)}</div>` : ""}
     ${d.lojaEndereco ? `<div style="text-align:center;font-size:10px">${esc(d.lojaEndereco)}</div>` : ""}
     <div style="border-top:1px dashed #000;margin:6px 0"></div>
-    <div style="text-align:center;font-size:11px;font-weight:600;letter-spacing:1px">
-      ${isCancelada ? "⚠ VENDA CANCELADA ⚠" : "DOCUMENTO NÃO FISCAL"}
-    </div>
-    ${isCancelada ? "" : `<div style="text-align:center;font-size:9px">Este comprovante não é DANFC-e / NFC-e.</div>`}
+    ${isCancelada ? `<div style="text-align:center;font-size:11px;font-weight:700">⚠ VENDA CANCELADA ⚠</div>` : ""}
+    ${buildPdvNonFiscalNoticeHtml()}
     <div style="border-top:1px dashed #000;margin:6px 0"></div>
     <div style="font-size:10px">
       <div style="display:flex;justify-content:space-between"><span>Venda:</span><span><b>${esc(d.numeroPedido)}</b></span></div>
@@ -207,6 +211,7 @@ function toPdvReceiptInput(d: CupomData): PdvReceiptInput {
     cnpj: d.lojaCnpj || "",
     enderecoLinha: d.lojaEndereco,
     numeroVenda: d.numeroPedido,
+    cancelada: d.status === "cancelada",
     operador: d.operador || undefined,
     clienteNome: d.clienteNome || undefined,
     clienteCpf: d.clienteCpf || undefined,
@@ -259,13 +264,13 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
       setPrinted(true)
       toast({
         title: result.via === "proxy" ? "Comprovante enviado" : "Impressão do navegador aberta",
-        description: `Venda ${data.numeroPedido} permanece confirmada.`,
+        description: `Venda ${data.numeroPedido} permanece ${isCancelada ? "cancelada" : "confirmada"}.`,
       })
       if (autoPrint && result.via === "proxy") onClose()
     } else {
       setPrintError(result.error || "Não foi possível imprimir o comprovante.")
     }
-  }, [autoPrint, data.numeroPedido, impressaoConfig, onClose, printInput, toast])
+  }, [autoPrint, data.numeroPedido, impressaoConfig, isCancelada, onClose, printInput, toast])
 
   useEffect(() => {
     if (!isOpen || !autoPrint || isCancelada) return
@@ -275,11 +280,13 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
   }, [autoPrint, handleImprimir, isCancelada, isOpen])
 
   const handleBrowserPreview = useCallback(() => {
-    const opened = openThermalHtmlPrint(buildHtml(data), `Cupom ${data.numeroPedido}`)
+    const opened = openThermalHtmlPrint(buildHtml(data), `Cupom ${data.numeroPedido}`, {
+      bobina: impressaoConfig.bobinaTamanho,
+    })
     if (!opened) {
       setPrintError("O navegador bloqueou a janela de impressão. Permita pop-ups para esta tela.")
     }
-  }, [data])
+  }, [data, impressaoConfig.bobinaTamanho])
 
   const handleCopiar = useCallback(async () => {
     try {
@@ -318,14 +325,17 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
 
               <Separator className="border-dashed my-2" />
 
-              <p className={`text-center font-bold text-[11px] tracking-widest mb-2 ${isCancelada ? "text-destructive" : "text-muted-foreground"}`}>
-                {isCancelada ? "⚠ VENDA CANCELADA ⚠" : "DOCUMENTO NÃO FISCAL"}
-              </p>
-              {!isCancelada && (
-                <p className="text-center text-[10px] text-muted-foreground mb-2">
-                  Este comprovante não é DANFC-e / NFC-e.
+              {isCancelada && (
+                <p className="text-center font-bold text-[11px] tracking-widest mb-2 text-destructive">
+                  ⚠ VENDA CANCELADA ⚠
                 </p>
               )}
+              <p className="text-center font-bold text-[11px] text-foreground mb-1">
+                {PDV_NON_FISCAL_NOTICE}
+              </p>
+              <p className="text-center text-[10px] text-muted-foreground mb-2">
+                {PDV_NON_FISCAL_EXPLANATION}
+              </p>
 
               <Separator className="border-dashed my-2" />
 
