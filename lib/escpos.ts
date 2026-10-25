@@ -3,6 +3,8 @@
  * Texto em Windows-1252 via `ESC t 16` (comum em TM-T20/TM-T88).
  */
 
+import { PDV_NON_FISCAL_NOTICE, PDV_NON_FISCAL_EXPLANATION } from "./pdv-non-fiscal-notice"
+
 export const ESC = 0x1b
 export const GS = 0x1d
 export const LF = 0x0a
@@ -93,6 +95,8 @@ export type PdvReceiptInput = {
   receiptFooter?: string
   /** Identificador da venda (ex.: VDA-2026-0001). Opcional — só impresso quando presente. */
   numeroVenda?: string
+  /** Estado de apresentação da venda original; não implica estorno bancário ou fiscal. */
+  cancelada?: boolean
   /** Operador/caixa que registrou a venda. */
   operador?: string
   /** Nome do cliente, quando identificado. */
@@ -163,6 +167,13 @@ export function buildPdvReceiptEscPos(
   if (input.enderecoLinha?.trim()) {
     parts.push(line(truncateField(input.enderecoLinha.trim(), maxChars)))
   }
+  parts.push(line(sep))
+  // Ambas as linhas cabem em 32 colunas (58 mm), sem truncamento ou configuração.
+  parts.push(escposBold(true))
+  if (input.cancelada) parts.push(line("VENDA CANCELADA"))
+  parts.push(line(PDV_NON_FISCAL_NOTICE))
+  parts.push(escposBold(false))
+  parts.push(line(PDV_NON_FISCAL_EXPLANATION))
   parts.push(line(sep))
   parts.push(escposAlign(0))
 
