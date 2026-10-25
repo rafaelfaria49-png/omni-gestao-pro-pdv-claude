@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { PackagePlus, AlertTriangle } from "lucide-react";
 import { Modal } from "./ui-kit";
+import { productStockMovementAvailability } from "@/lib/cadastros/product-commercial-contract";
 import {
   registrarEntradaEstoque,
   registrarAjusteEstoque,
@@ -56,7 +57,8 @@ function EmptyHistorico({ titulo, descricao }: { titulo: string; descricao: stri
   );
 }
 
-type ProdutoLite = { id: string; nome: string; sku?: string; estoque: number; custo?: number };
+/** `metadata` presente ativa a leitura da projeção comercial (unidade e bloqueio); ausente mantém o comportamento anterior. */
+type ProdutoLite = { id: string; nome: string; sku?: string; estoque: number; custo?: number; metadata?: unknown };
 
 /** Parse pt-BR ("5,20" → 5.2). Vazio → 0. */
 function parseNum(s: string): number {
@@ -87,9 +89,13 @@ export function MovimentacaoEstoqueModal({
   onClose: () => void;
   storeId: string;
   produto: ProdutoLite | null;
-  onSaved?: () => void;
+  /** Recebe o saldo devolvido pelo writer canônico na mesma transação da movimentação. */
+  onSaved?: (result: { estoqueDepois: number }) => void;
 }) {
-  const [aba, setAba] = useState<Aba>("entrada");
+  const disponibilidade = produto && produto.metadata !== undefined ? productStockMovementAvailability(produto.metadata) : null;
+  const bloqueio = disponibilidade && !disponibilidade.disponivel ? disponibilidade : null;
+  const [saldoConfirmado, setSaldoConfirmado] = useState<number | null>(null);
+  const [aba, setAba] = useState<Aba>(bloqueio ? "historico" : "entrada");
   const [qtd, setQtd] = useState("");
   const [custo, setCusto] = useState("");
   const [fornecedor, setFornecedor] = useState("");
@@ -109,7 +115,8 @@ export function MovimentacaoEstoqueModal({
   // Reset quando abre ou troca de produto.
   useEffect(() => {
     if (!open) return;
-    setAba("entrada");
+    setAba(bloqueio ? "historico" : "entrada");
+    setSaldoConfirmado(null);
     setQtd("");
     setCusto(produto?.custo ? String(produto.custo).replace(".", ",") : "");
     setFornecedor("");
@@ -160,24 +167,34 @@ export function MovimentacaoEstoqueModal({
       setErro("Quantidade deve ser maior que zero.");
       return;
     }
+    if (bloqueio) return;
     startSaving(async () => {
-      const res = await registrarEntradaEstoque(storeId, {
-        produtoId: produto.id,
-        quantidade: q,
-        custoUnitario: parseNum(custo),
-        fornecedor,
-        documento,
-        observacao: obs,
-      });
+      let res: Awaited<ReturnType<typeof registrarEntradaEstoque>>;
+      try {
+        res = await registrarEntradaEstoque(storeId, {
+          produtoId: produto.id,
+          quantidade: q,
+          custoUnitario: parseNum(custo),
+          fornecedor,
+          documento,
+          observacao: obs,
+        });
+      } catch {
+        // Sem resposta do servidor não há sucesso a mostrar; o histórico diz se gravou.
+        setErro("Não foi possível confirmar a entrada. Confira o Histórico antes de tentar de novo.");
+        carregarDiag();
+        return;
+      }
       if (res.ok) {
         setOkMsg(
           res.reconciliado
             ? `Reconciliação e entrada registradas. Saldo: ${res.estoqueDepois} · custo médio ${fmtMoney(res.custoMedioDepois)}.`
             : `Entrada registrada. Saldo: ${res.estoqueDepois} · custo médio ${fmtMoney(res.custoMedioDepois)}.`,
         );
+        setSaldoConfirmado(res.estoqueDepois);
         setQtd("");
         setObs("");
-        onSaved?.();
+        onSaved?.({ estoqueDepois: res.estoqueDepois });
         carregarDiag();
       } else {
         setErro(res.reason);
@@ -214,17 +231,26 @@ export function MovimentacaoEstoqueModal({
       setErro("Novo saldo não pode ser negativo.");
       return;
     }
+    if (bloqueio) return;
     startSaving(async () => {
-      const res = await registrarAjusteEstoque(storeId, {
-        produtoId: produto.id,
-        novoSaldo: s,
-        motivo,
-        observacao: obs,
-      });
+      let res: Awaited<ReturnType<typeof registrarAjusteEstoque>>;
+      try {
+        res = await registrarAjusteEstoque(storeId, {
+          produtoId: produto.id,
+          novoSaldo: s,
+          motivo,
+          observacao: obs,
+        });
+      } catch {
+        setErro("Não foi possível confirmar o ajuste. Confira o Histórico antes de tentar de novo.");
+        carregarDiag();
+        return;
+      }
       if (res.ok) {
         setOkMsg(`Ajuste registrado. Novo saldo: ${res.estoqueDepois}.`);
+        setSaldoConfirmado(res.estoqueDepois);
         setObs("");
-        onSaved?.();
+        onSaved?.({ estoqueDepois: res.estoqueDepois });
         carregarDiag();
         if (voltarEntradaAposAjuste) {
           setAba("entrada");
@@ -242,7 +268,7 @@ export function MovimentacaoEstoqueModal({
     `rounded-md px-3 py-1.5 text-sm font-medium ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground hover:bg-accent"}`;
 
   // Valores derivados para os previews em tempo real (produto garantido pelo guard acima).
-  const estoqueAtual = produto.estoque;
+  const estoqueAtual = saldoConfirmado ?? produto.estoque;
   const custoMedioAtual = produto.custo ?? 0;
   // Entrada
   const qtdNum = Math.max(0, Math.trunc(parseNum(qtd)));
@@ -273,20 +299,37 @@ export function MovimentacaoEstoqueModal({
             SKU <span className="font-mono text-foreground" title={produto.sku && displaySku(produto.sku) !== produto.sku ? `Código no banco: ${produto.sku}` : undefined}>{displaySku(produto.sku) || "—"}</span>
           </span>
           <span className="min-w-0 text-muted-foreground">
-            Saldo atual <span className="font-semibold text-foreground">{diag && !diag.aligned ? diag.stock : produto.estoque}</span>
+            Saldo atual <span className="font-semibold text-foreground">{diag && !diag.aligned ? diag.stock : estoqueAtual}</span>
+            {disponibilidade && <span className="ml-1 text-xs" data-unidade={disponibilidade.unidade ?? "revisar"}>{disponibilidade.unidade ?? "unidade a revisar"}</span>}
           </span>
           <span className="text-muted-foreground">
             Custo <span className="text-foreground">{produto.custo ? fmtMoney(produto.custo) : "—"}</span>
           </span>
         </div>
 
+        {bloqueio && (
+          <div
+            data-estoque-bloqueio={bloqueio.motivo}
+            className={`flex min-w-0 items-start gap-2 rounded-lg border px-3 py-2 text-xs text-foreground ${bloqueio.motivo === "declaracao_invalida" ? "border-destructive/40 bg-destructive/10" : "border-warning/50 bg-warning/10"}`}
+          >
+            <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${bloqueio.motivo === "declaracao_invalida" ? "text-destructive" : "text-warning"}`} aria-hidden />
+            <p className="min-w-0">
+              <strong className="font-semibold">{bloqueio.titulo}</strong> {bloqueio.orientacao}
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={tabCls(aba === "entrada")} onClick={() => setAba("entrada")} title="Registrar compra ou reposição">
-            Entrada
-          </button>
-          <button type="button" className={tabCls(aba === "ajuste")} onClick={() => setAba("ajuste")} title="Corrigir saldo após contagem ou perda">
-            Ajuste
-          </button>
+          {!bloqueio && (
+            <>
+              <button type="button" className={tabCls(aba === "entrada")} onClick={() => setAba("entrada")} title="Registrar compra ou reposição">
+                Entrada
+              </button>
+              <button type="button" className={tabCls(aba === "ajuste")} onClick={() => setAba("ajuste")} title="Corrigir saldo após contagem ou perda">
+                Ajuste
+              </button>
+            </>
+          )}
           <button type="button" className={tabCls(aba === "historico")} onClick={() => setAba("historico")} title="Ver movimentações deste produto">
             Histórico
           </button>
@@ -294,7 +337,8 @@ export function MovimentacaoEstoqueModal({
 
         {diag && !diag.aligned && (
           <div className="min-w-0 space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-            <p className="font-medium">{diag.operatorMessage || "Estoque precisa de reconciliação."}</p>
+            {/* Produto bloqueado: só informação; a orientação do diagnóstico aponta para Entrada/Ajuste, indisponíveis aqui. */}
+            <p className="font-medium">{bloqueio ? "Saldo do cadastro e dos depósitos divergem." : diag.operatorMessage || "Estoque precisa de reconciliação."}</p>
             <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
               <span className="min-w-0">
                 Saldo do cadastro: <span className="font-semibold tabular-nums text-foreground">{diag.stock}</span>
@@ -303,12 +347,14 @@ export function MovimentacaoEstoqueModal({
                 Saldo nos depósitos: <span className="font-semibold tabular-nums text-foreground">{diag.somaDepositos}</span>
               </span>
             </div>
-            {diag.entradaPodeReconciliar ? (
+            {bloqueio ? (
+              <p>A correção fica disponível quando a movimentação for liberada para este produto. Nada é alterado agora.</p>
+            ) : diag.entradaPodeReconciliar ? (
               <p>Esta divergência pode ser corrigida automaticamente junto com a operação.</p>
             ) : (
               <p>Confirme primeiro o saldo físico na aba Ajuste.</p>
             )}
-            {!diag.entradaPodeReconciliar && aba === "entrada" && (
+            {!bloqueio && !diag.entradaPodeReconciliar && aba === "entrada" && (
               <button
                 type="button"
                 className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-accent"
@@ -341,10 +387,10 @@ export function MovimentacaoEstoqueModal({
         )}
 
         {erro && (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{erro}</div>
+          <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{erro}</div>
         )}
         {okMsg && (
-          <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+          <div role="status" className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
             {okMsg}
           </div>
         )}

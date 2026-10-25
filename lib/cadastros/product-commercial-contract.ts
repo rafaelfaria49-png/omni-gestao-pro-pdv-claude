@@ -59,6 +59,35 @@ export function productCommercialCatalogProjection(metadata: unknown, price: num
   }
 }
 
+export type ProductStockMovementAvailability =
+  | { disponivel: true; unidade: "UN" }
+  | { disponivel: false; motivo: "peso_em_preparacao"; unidade: "KG" | "G"; titulo: string; orientacao: string }
+  | { disponivel: false; motivo: "declaracao_invalida"; unidade: null; titulo: string; orientacao: string }
+
+/**
+ * Leitura da projeção canônica para a tela: diz se Entrada/Ajuste existem para o
+ * produto e, quando não existem, por quê. Os writers continuam com o próprio guard
+ * (`assertProductCommercialSaleSupported`); isto só evita oferecer ação impossível.
+ */
+export function productStockMovementAvailability(metadata: unknown): ProductStockMovementAvailability {
+  const projection = productCommercialCatalogProjection(metadata, 0)
+  if (projection.declaracaoComercialInvalida) {
+    return {
+      disponivel: false, motivo: "declaracao_invalida", unidade: null,
+      titulo: "Movimentação indisponível: declaração comercial inválida.",
+      orientacao: "A unidade deste produto precisa de revisão antes de qualquer entrada ou ajuste. O saldo atual não foi convertido; cadastre outro produto para definir unidade e preço.",
+    }
+  }
+  if (projection.vendaPorPeso && !projection.estoqueFracionadoOperacional) {
+    return {
+      disponivel: false, motivo: "peso_em_preparacao", unidade: projection.unidade === "G" ? "G" : "KG",
+      titulo: "Movimentação indisponível: venda por peso em preparação.",
+      orientacao: `Estoque em ${projection.unidade} ainda não é controlado pelo sistema. O saldo fica como está até a integração de pesagem; nenhuma entrada ou ajuste é registrado agora.`,
+    }
+  }
+  return { disponivel: true, unidade: "UN" }
+}
+
 export function productSpecificApplicability(metadata: unknown) {
   const base = record(metadata)
   const explicit = record(base.cadastroRecursos)

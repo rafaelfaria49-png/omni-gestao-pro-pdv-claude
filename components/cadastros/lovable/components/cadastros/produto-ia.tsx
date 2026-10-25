@@ -65,8 +65,24 @@ import { getProdutoFiscal } from "@/lib/produto-fiscal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useStoreBusiness } from "@/lib/use-store-business";
-import { hasInvalidProductCommercial, productCommercialFromMetadata, productSpecificApplicability, type ProductCommercialV1 } from "@/lib/cadastros/product-commercial-contract";
+import { hasInvalidProductCommercial, productCommercialFromMetadata, productSpecificApplicability, productStockMovementAvailability, type ProductCommercialV1 } from "@/lib/cadastros/product-commercial-contract";
 import { manualProductNumberText, parseManualProductNumber } from "@/lib/cadastros/manual-product-input";
+import { usesClientExperience } from "@/lib/navigation/client-experience";
+import { NovaCategoriaDialog, type NovaCategoriaResult } from "./NovaCategoriaDialog";
+
+/** União case-insensitive: a primeira lista tem precedência para o nome canônico. */
+function mergeCatalogNames(preferred: string[], fallback: string[]): string[] {
+  const seen = new Map<string, string>();
+  for (const n of [...preferred, ...fallback]) {
+    const key = n.trim().toLowerCase();
+    if (key && !seen.has(key)) seen.set(key, n.trim());
+  }
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function productCategoryNames(cats: Awaited<ReturnType<typeof listCategorias>>): string[] {
+  return cats.filter((c) => c.active && (c.type === "produto" || c.type === "geral")).map((c) => c.name);
+}
 
 function metadataRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -183,6 +199,10 @@ function rotuloEstadoVoz(voz: VoiceCaptureSnapshot): string {
 /**
  * Compatível com o legado: trabalha em cima de string (nome).
  * Não força vínculo por id — apenas grava o nome canônico em Produto.category/brand.
+ *
+ * Com `explicitCreate` (experiência do cliente) o campo só busca e seleciona: Enter e
+ * saída do campo nunca gravam nem aceitam texto fora da lista; criar exige a janela
+ * explícita aberta por `explicitCreate.onRequest`.
  */
 function CategoriaMarcaCombobox({
   value,
@@ -193,6 +213,7 @@ function CategoriaMarcaCombobox({
   loading,
   inputId,
   inputLabel,
+  explicitCreate,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -202,16 +223,29 @@ function CategoriaMarcaCombobox({
   loading?: boolean;
   inputId?: string;
   inputLabel?: string;
+  explicitCreate?: {
+    label: string;
+    onRequest: (draft: string) => void;
+    onUnmatched: (draft: string) => void;
+    describedBy?: string;
+  };
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [creating, setCreating] = useState(false);
+  const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setDraft(value);
   }, [value]);
+
+  // Setas: a opção ativa fica visível na lista rolável (max-h-64) antes do Enter.
+  useEffect(() => {
+    if (active < 0) return;
+    wrapRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [active]);
 
   useEffect(() => {
     if (!open) return;
@@ -243,6 +277,12 @@ function CategoriaMarcaCombobox({
     setOpen(false);
   };
 
+  // Seleção estrita: devolve o nome canônico da lista (sem diferenciar caixa/espaços nas pontas).
+  const matchOption = (candidate: string) => {
+    const key = candidate.trim().toLowerCase();
+    return options.find((o) => o.trim().toLowerCase() === key);
+  };
+
   const handleCreate = async () => {
     const candidate = draft.trim();
     if (!candidate || creating) return;
@@ -268,16 +308,53 @@ function CategoriaMarcaCombobox({
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);
+            setActive(-1);
             if (!open) setOpen(true);
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => {
+            if (explicitCreate) {
+              const trimmed = draft.trim();
+              if (trimmed === value.trim()) {
+                setDraft(value);
+                setOpen(false);
+                setActive(-1);
+                return;
+              }
+              const match = trimmed ? matchOption(trimmed) : "";
+              if (match !== undefined) {
+                if (match !== value) onChange(match);
+                setDraft(match);
+              } else {
+                // Texto fora da lista não vira categoria: volta ao valor selecionado.
+                setDraft(value);
+                explicitCreate.onUnmatched(trimmed);
+              }
+              // Fecha a lista: com itens fora da ordem de Tab, o foco segue para o próximo controle.
+              setOpen(false);
+              setActive(-1);
+              return;
+            }
             // Commit do nome digitado (texto livre permitido p/ manter compat com strings legadas)
             onChange(draft.trim());
           }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setOpen(false);
+              return;
+            }
+            if (explicitCreate && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+              e.preventDefault();
+              setOpen(true);
+              setActive((i) => e.key === "ArrowDown" ? Math.min(i + 1, filtered.length - 1) : Math.max(i - 1, 0));
+              return;
+            }
+            if (e.key === "Enter" && explicitCreate) {
+              e.preventDefault();
+              const match = active >= 0 && filtered[active] ? filtered[active] : matchOption(draft);
+              if (match !== undefined) commit(match);
+              else if (filtered.length === 1) commit(filtered[0]);
+              setActive(-1);
               return;
             }
             if (e.key === "Enter") {
@@ -292,6 +369,7 @@ function CategoriaMarcaCombobox({
             if (e.key === "ArrowDown" && !open) setOpen(true);
           }}
           placeholder={placeholder}
+          aria-describedby={explicitCreate?.describedBy}
           className="w-full h-10 px-3 pr-9 rounded-lg border border-input bg-background text-foreground outline-none text-sm transition-colors focus:ring-2 focus:ring-ring"
         />
         <button
@@ -317,24 +395,48 @@ function CategoriaMarcaCombobox({
               {filtered.length === 0 && !draft.trim() ? (
                 <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum cadastro ainda.</div>
               ) : null}
-              {filtered.map((o) => (
+              {explicitCreate && filtered.length === 0 && draft.trim() ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">Nenhuma categoria encontrada.</div>
+              ) : null}
+              {filtered.map((o, index) => (
                 <button
                   key={o}
                   type="button"
+                  // Modo explícito: itens só por mouse/setas; Tab vai direto ao próximo controle.
+                  tabIndex={explicitCreate ? -1 : undefined}
+                  data-active={explicitCreate && index === active ? "true" : undefined}
                   onMouseDown={(e) => {
                     // mousedown para vencer o onBlur do input
                     e.preventDefault();
                     commit(o);
                   }}
                   className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground ${
-                    o.trim().toLowerCase() === normalized ? "bg-accent/60 text-accent-foreground" : "text-foreground"
+                    o.trim().toLowerCase() === normalized || (explicitCreate && index === active) ? "bg-accent/60 text-accent-foreground" : "text-foreground"
                   }`}
                 >
                   <span className="truncate">{o}</span>
                   {o.trim().toLowerCase() === normalized && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
                 </button>
               ))}
-              {draft.trim() && !hasExact && (
+              {explicitCreate && draft.trim() && !hasExact && (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onMouseDown={(e) => {
+                    // Só abre a janela de confirmação; nada é gravado aqui.
+                    e.preventDefault();
+                    const candidate = draft.trim();
+                    setDraft(value);
+                    setOpen(false);
+                    explicitCreate.onRequest(candidate);
+                  }}
+                  className="flex w-full items-center gap-2 border-t border-border bg-primary/5 px-3 py-2 text-left text-sm text-primary hover:bg-primary/10"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="truncate">{explicitCreate.label} &quot;{draft.trim()}&quot;…</span>
+                </button>
+              )}
+              {!explicitCreate && draft.trim() && !hasExact && (
                 <button
                   type="button"
                   disabled={creating}
@@ -437,6 +539,21 @@ function ProductAIEditor({
   const [commercial, setCommercial] = useState<ProductCommercialV1>(() => productCommercialFromMetadata(initial?.metadata));
   const [commercialTouched, setCommercialTouched] = useState(false);
   const priceBasisLabel = invalidCommercial ? "R$ — base a revisar" : `R$ / ${commercial.basePreco}`;
+  // Apresentação: plataforma e lojas legadas mantêm o combobox histórico; o cliente cria só pela janela explícita.
+  const explicitCategoryCreation = usesClientExperience(business.permissions) !== false;
+  const [novaCategoriaOpen, setNovaCategoriaOpen] = useState(false);
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
+  const [categoriaPendente, setCategoriaPendente] = useState("");
+  const categoriaPendenteRef = useRef("");
+  // Ao fechar a janela o foco volta ao botão (também quando aberta pelo item da lista,
+  // para não reabrir a lista do campo por cima da ficha).
+  const novaCategoriaButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [categoriaStatus, setCategoriaStatus] = useState<string | null>(null);
+  const [categoriaLoadError, setCategoriaLoadError] = useState(false);
+  // Leitura da projeção comercial canônica; o writer de estoque mantém o próprio guard.
+  const stockMovement = productStockMovementAvailability(initial?.metadata);
+  const [estoqueAtual, setEstoqueAtual] = useState(initial?.estoque ?? 0);
+  const [estoqueStatus, setEstoqueStatus] = useState<string | null>(null);
   const showCompatibility = allowCompatibility && applies.compatibilidade;
   const showAccessories = allowAccessories && applies.acessorios;
   const [source, setSource] = useState<Source>("manual");
@@ -660,29 +777,16 @@ function ProductAIEditor({
       .then(([cats, brs, usadas]) => {
         if (cancelled) return;
         // União case-insensitive: dicionário tem precedência sobre legado para o nome canônico.
-        const mergeUnique = (preferred: string[], fallback: string[]) => {
-          const seen = new Map<string, string>();
-          for (const n of preferred) {
-            const key = n.trim().toLowerCase();
-            if (key && !seen.has(key)) seen.set(key, n.trim());
-          }
-          for (const n of fallback) {
-            const key = n.trim().toLowerCase();
-            if (key && !seen.has(key)) seen.set(key, n.trim());
-          }
-          return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
-        };
-        const catDic = cats
-          .filter((c) => c.active && (c.type === "produto" || c.type === "geral"))
-          .map((c) => c.name);
         const brandDic = brs.filter((b) => b.active).map((b) => b.name);
-        setCategoriaOpts(mergeUnique(catDic, usadas.categorias));
-        setMarcaOpts(mergeUnique(brandDic, usadas.marcas));
+        setCategoriaOpts(mergeCatalogNames(productCategoryNames(cats), usadas.categorias));
+        setMarcaOpts(mergeCatalogNames(brandDic, usadas.marcas));
+        setCategoriaLoadError(false);
       })
       .catch(() => {
         if (cancelled) return;
         setCategoriaOpts([]);
         setMarcaOpts([]);
+        setCategoriaLoadError(true);
       })
       .finally(() => {
         if (!cancelled) setOptsLoading(false);
@@ -702,6 +806,48 @@ function ProductAIEditor({
       if (mountedRef.current) toast.error("Não foi possível criar categoria.");
       return null;
     }
+  };
+
+  /**
+   * Criação explícita (experiência do cliente) pelo writer canônico `upsertCategoria`,
+   * que normaliza, deduplica sem diferenciar caixa e escopa pela loja. Só seleciona o
+   * nome devolvido depois da confirmação; em seguida relê a lista da loja.
+   */
+  const submitNovaCategoria = async (name: string): Promise<NovaCategoriaResult> => {
+    let canonical: string;
+    try {
+      const res = await upsertCategoria(storeId, { name, type: "produto", active: true });
+      if (!res || typeof res.name !== "string" || !res.name.trim()) throw new Error("Resposta sem categoria");
+      canonical = res.name.trim();
+    } catch {
+      if (mountedRef.current) void reloadCategoriaOpts();
+      return { ok: false, message: "Não foi possível confirmar a criação da categoria. Nenhuma categoria foi selecionada; confira a lista e tente novamente." };
+    }
+    if (!mountedRef.current) return { ok: true, name: canonical };
+    setCategoriaOpts((prev) => mergeCatalogNames([canonical], prev));
+    setCategoria(canonical);
+    categoriaPendenteRef.current = "";
+    setCategoriaPendente("");
+    setCategoriaStatus(`Categoria "${canonical}" salva nesta loja e selecionada.`);
+    void reloadCategoriaOpts(canonical);
+    return { ok: true, name: canonical };
+  };
+
+  const reloadCategoriaOpts = async (ensure?: string) => {
+    try {
+      const [cats, usadas] = await Promise.all([listCategorias(storeId), listCategoriasMarcasUsadasEmProduto(storeId)]);
+      if (!mountedRef.current) return;
+      setCategoriaOpts(mergeCatalogNames([...(ensure ? [ensure] : []), ...productCategoryNames(cats)], usadas.categorias));
+      setCategoriaLoadError(false);
+    } catch {
+      // Lista anterior permanece; a categoria confirmada já foi incluída acima.
+    }
+  };
+
+  const openNovaCategoria = (draft: string) => {
+    const known = categoriaOpts.some((o) => o.trim().toLowerCase() === draft.trim().toLowerCase());
+    setNovaCategoriaNome(known ? "" : draft.trim());
+    setNovaCategoriaOpen(true);
   };
 
   const createMarca = async (name: string): Promise<string | null> => {
@@ -1544,16 +1690,64 @@ function ProductAIEditor({
               />
             </Field>
             <Field label="Categoria" span={2}>
-              <CategoriaMarcaCombobox
-                inputId="produto-categoria"
-                inputLabel="Categoria"
-                value={categoria}
-                onChange={setCategoria}
-                options={categoriaOpts}
-                onCreate={createCategoria}
-                placeholder={business.presentation.categoryExample}
-                loading={optsLoading}
-              />
+              {explicitCategoryCreation ? (
+                <>
+                  <div className="flex min-w-0 flex-wrap items-start gap-2">
+                    <div className="min-w-[12rem] flex-1">
+                      <CategoriaMarcaCombobox
+                        inputId="produto-categoria"
+                        inputLabel="Categoria"
+                        value={categoria}
+                        onChange={(next) => {
+                          setCategoria(next);
+                          categoriaPendenteRef.current = "";
+                          setCategoriaPendente("");
+                          setCategoriaStatus(null);
+                        }}
+                        options={categoriaOpts}
+                        onCreate={async () => null}
+                        placeholder={business.presentation.categoryExample}
+                        loading={optsLoading}
+                        explicitCreate={{
+                          label: "Nova categoria",
+                          onRequest: openNovaCategoria,
+                          onUnmatched: (draft) => { categoriaPendenteRef.current = draft; setCategoriaPendente(draft); setCategoriaStatus(null); },
+                          describedBy: "produto-categoria-ajuda",
+                        }}
+                      />
+                    </div>
+                    <button
+                      ref={novaCategoriaButtonRef}
+                      type="button"
+                      aria-haspopup="dialog"
+                      // Ref: o blur do campo (que registra o texto digitado) roda no mousedown, antes deste clique.
+                      onClick={() => openNovaCategoria(categoriaPendenteRef.current)}
+                      className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-primary/40 bg-background px-3 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Plus className="h-4 w-4" aria-hidden /> Nova categoria
+                    </button>
+                  </div>
+                  <p id="produto-categoria-ajuda" className="mt-1 text-xs text-muted-foreground">
+                    {categoriaPendente
+                      ? `"${categoriaPendente}" não está na lista desta loja. Escolha uma categoria existente ou use Nova categoria para criá-la.`
+                      : categoriaLoadError
+                        ? "Não foi possível carregar as categorias desta loja. Você ainda pode criar uma pela Nova categoria."
+                        : "Busque e escolha uma categoria da loja."}
+                  </p>
+                  {categoriaStatus && <p role="status" className="mt-1 text-xs font-medium text-foreground">{categoriaStatus}</p>}
+                </>
+              ) : (
+                <CategoriaMarcaCombobox
+                  inputId="produto-categoria"
+                  inputLabel="Categoria"
+                  value={categoria}
+                  onChange={setCategoria}
+                  options={categoriaOpts}
+                  onCreate={createCategoria}
+                  placeholder={business.presentation.categoryExample}
+                  loading={optsLoading}
+                />
+              )}
             </Field>
             {invalidCommercial && <p role="alert" className="col-span-full text-sm text-destructive">Declaração comercial inválida. Venda bloqueada. Os dados existentes serão preservados; cadastre outro produto para definir unidade e preço sem reinterpretar saldos.</p>}
             {!invalidCommercial && (bakery || allowWeight || allowVariants || commercial.modoVenda === "peso") && <div className="col-span-full space-y-3 rounded-lg border border-border p-4">
@@ -1595,29 +1789,56 @@ function ProductAIEditor({
             {productId ? (
               <Field label="Estoque atual">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    readOnly aria-label="Estoque atual"
-                    value={initial?.estoque !== undefined ? String(initial.estoque) : "0"}
-                    className="min-w-0 flex-1 cursor-default bg-muted/40 tabular-nums text-foreground"
-                    title="Saldo somente leitura — use Movimentar estoque"
-                  />
+                  <div className="relative min-w-[8rem] flex-1">
+                    <Input
+                      readOnly aria-label="Estoque atual"
+                      aria-describedby={`produto-estoque-unidade${stockMovement.disponivel ? "" : " produto-estoque-bloqueio"}`}
+                      value={String(estoqueAtual)}
+                      className={`cursor-default bg-muted/40 tabular-nums text-foreground ${stockMovement.unidade ? "pr-12" : "pr-32"}`}
+                    />
+                    <span
+                      id="produto-estoque-unidade"
+                      data-unidade={stockMovement.unidade ?? "revisar"}
+                      className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium ${stockMovement.unidade ? "text-muted-foreground" : "text-destructive"}`}
+                    >
+                      {stockMovement.unidade ?? "unidade a revisar"}
+                    </span>
+                  </div>
                   <button
                     type="button"
-                    disabled={commercial.modoVenda === "peso" || invalidCommercial}
-                    onClick={() => setMovimentacaoAberta(true)}
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-accent"
+                    disabled={!stockMovement.disponivel}
+                    aria-describedby={stockMovement.disponivel ? undefined : "produto-estoque-bloqueio"}
+                    onClick={() => { setEstoqueStatus(null); setMovimentacaoAberta(true); }}
+                    className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:border-dashed disabled:bg-muted/40 disabled:text-muted-foreground disabled:hover:bg-muted/40"
                   >
-                    <PackagePlus className="h-3.5 w-3.5" /> Movimentar estoque
+                    <PackagePlus className="h-3.5 w-3.5" aria-hidden /> Movimentar estoque
                   </button>
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Salvar o produto não altera o saldo. Entrada e ajuste ficam registrados no
-                  histórico de movimentações.
-                </p>
+                {stockMovement.disponivel ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Salvar o produto não altera o saldo. Use Movimentar estoque para entrada ou
+                    ajuste; tudo fica registrado no histórico de movimentações.
+                  </p>
+                ) : (
+                  <div
+                    id="produto-estoque-bloqueio"
+                    data-estoque-bloqueio={stockMovement.motivo}
+                    className={`mt-2 flex min-w-0 items-start gap-2 rounded-lg border px-3 py-2 text-xs text-foreground ${stockMovement.motivo === "declaracao_invalida" ? "border-destructive/40 bg-destructive/10" : "border-warning/50 bg-warning/10"}`}
+                  >
+                    <AlertCircle className={`mt-0.5 h-4 w-4 shrink-0 ${stockMovement.motivo === "declaracao_invalida" ? "text-destructive" : "text-warning"}`} aria-hidden />
+                    <p className="min-w-0">
+                      <strong className="font-semibold">{stockMovement.titulo}</strong> {stockMovement.orientacao}
+                    </p>
+                  </div>
+                )}
+                {estoqueStatus && <p role="status" className="mt-1 text-xs font-medium text-foreground">{estoqueStatus}</p>}
               </Field>
             ) : (
               <Field label="Estoque inicial">
-                <Input ref={estoqueRef} aria-label="Estoque inicial" inputMode="numeric" autoComplete="off" defaultValue="0" placeholder="0" />
+                <div className="relative">
+                  <Input ref={estoqueRef} aria-label="Estoque inicial" aria-describedby="produto-estoque-inicial-unidade" inputMode="numeric" autoComplete="off" defaultValue="0" placeholder="0" className="pr-12" />
+                  <span id="produto-estoque-inicial-unidade" data-unidade={commercial.unidade} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">{commercial.unidade}</span>
+                </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   {commercial.modoVenda === "peso" ? "Peso em preparação: mantenha zero. Estoque fracionado indisponível." : "Quantidade inteira, inclusive zero. Depois do cadastro, use a movimentação de estoque."}
                 </p>
@@ -1803,13 +2024,28 @@ function ProductAIEditor({
             id: productId,
             nome: initial?.nome ?? "",
             sku: initial?.sku,
-            estoque: initial?.estoque ?? 0,
+            estoque: estoqueAtual,
             custo: initial?.custo,
+            metadata: initial?.metadata,
           }}
-          onSaved={() => {
+          onSaved={(result) => {
             setMovimentacaoAberta(false);
+            // Saldo devolvido pelo writer canônico na mesma transação; a lista relê do servidor.
+            if (result && mountedRef.current) {
+              setEstoqueAtual(result.estoqueDepois);
+              setEstoqueStatus(`Movimentação registrada. Saldo atual: ${result.estoqueDepois} ${stockMovement.unidade ?? ""}`.trim() + ".");
+            }
             onSaved?.();
           }}
+        />
+      )}
+      {explicitCategoryCreation && (
+        <NovaCategoriaDialog
+          open={novaCategoriaOpen}
+          initialName={novaCategoriaNome}
+          onOpenChange={setNovaCategoriaOpen}
+          onSubmit={submitNovaCategoria}
+          returnFocusTo={() => novaCategoriaButtonRef.current}
         />
       )}
     </Modal>
