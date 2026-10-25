@@ -106,6 +106,11 @@ import {
   confirmCancelarVendaHistorico,
   type SaleIdentityRef,
 } from "@/lib/vendas/cancelar-venda-historico"
+import {
+  coletarVendasHistoricoParaExportacao,
+  HISTORICO_EXPORT_MAX,
+  resolverFimExportacaoHistorico,
+} from "@/lib/vendas/historico-pagamento-export"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1095,40 +1100,46 @@ export function VendasArquivoGeral() {
   // ── Exportação CSV ───────────────────────────────────────────────────────────
   // Exporta as vendas do servidor respeitando os filtros ativos da tela.
   // Formato para Excel pt-BR: separador ';', decimal com vírgula, BOM UTF-8.
-  const EXPORT_MAX = 5000
+  // A coleta (limite de HISTORICO_EXPORT_MAX, fim real, repetições) fica em
+  // `coletarVendasHistoricoParaExportacao`.
   const handleExportar = useCallback(async () => {
     setExportando(true)
     try {
-      const PAGE = 200
-      const linhas: VendaItem[] = []
-      let skip = 0
-      let totalServidor = Infinity
-      while (skip < totalServidor && linhas.length < EXPORT_MAX) {
-        const params = new URLSearchParams({
-          storeId,
-          take: String(PAGE),
-          skip: String(skip),
-          ...(busca ? { q: busca } : {}),
-          ...(statusFiltro !== "todos" ? { status: statusFiltro } : {}),
-          ...(pagamentoFiltro !== "todos" ? { pagamento: pagamentoFiltro } : {}),
-          ...(operadorFiltro.trim() ? { operador: operadorFiltro.trim() } : {}),
-          ...(terminalFiltro !== "todos" ? { terminalId: terminalFiltro } : {}),
-          ...(fromDate ? { from: new Date(fromDate).toISOString() } : {}),
-          ...(toDate ? { to: new Date(toDate + "T23:59:59").toISOString() } : {}),
-        })
-        const res = await fetch(`/api/vendas/historico?${params}`, {
-          credentials: "include",
-          cache: "no-store",
-          headers: { "x-assistec-loja-id": storeId },
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = (await res.json()) as ApiResponse
-        const lote = data.vendas ?? []
-        linhas.push(...lote.map((v) => ({ ...v, operador: sanitizeOperatorLabel(v.operador) || null })))
-        totalServidor = data.total ?? lote.length
-        skip += PAGE
-        if (lote.length === 0) break
-      }
+      const toFiltro = toDate ? new Date(toDate + "T23:59:59").toISOString() : ""
+      // Âncora: venda mais recente da 1ª página (relógio do servidor). As páginas
+      // seguintes terminam nela, então venda nova durante a exportação não desloca o offset.
+      let ancora = ""
+      const { linhas, truncado } = await coletarVendasHistoricoParaExportacao<VendaItem>(
+        async (skip, take) => {
+          const to = resolverFimExportacaoHistorico(toFiltro, ancora)
+          const params = new URLSearchParams({
+            storeId,
+            take: String(take),
+            skip: String(skip),
+            ...(busca ? { q: busca } : {}),
+            ...(statusFiltro !== "todos" ? { status: statusFiltro } : {}),
+            ...(pagamentoFiltro !== "todos" ? { pagamento: pagamentoFiltro } : {}),
+            ...(operadorFiltro.trim() ? { operador: operadorFiltro.trim() } : {}),
+            ...(terminalFiltro !== "todos" ? { terminalId: terminalFiltro } : {}),
+            ...(fromDate ? { from: new Date(fromDate).toISOString() } : {}),
+            ...(to ? { to } : {}),
+          })
+          const res = await fetch(`/api/vendas/historico?${params}`, {
+            credentials: "include",
+            cache: "no-store",
+            headers: { "x-assistec-loja-id": storeId },
+          })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const data = (await res.json()) as ApiResponse
+          const lote = data.vendas ?? []
+          if (skip === 0 && lote[0]?.at) ancora = lote[0].at
+          return {
+            vendas: lote.map((v) => ({ ...v, operador: sanitizeOperatorLabel(v.operador) || null })),
+            total: data.total ?? lote.length,
+          }
+        },
+        { max: HISTORICO_EXPORT_MAX },
+      )
       if (linhas.length === 0) {
         toast({ title: "Nada para exportar", description: "Nenhuma venda encontrada com os filtros atuais." })
         return
@@ -1166,10 +1177,9 @@ export function VendasArquivoGeral() {
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-      const truncado = linhas.length >= EXPORT_MAX && totalServidor > EXPORT_MAX
       toast({
         title: "Exportação concluída",
-        description: `${linhas.length.toLocaleString("pt-BR")} venda(s) no arquivo CSV${truncado ? ` — limite de ${EXPORT_MAX.toLocaleString("pt-BR")} atingido, refine os filtros para exportar o restante` : ""}.`,
+        description: `${linhas.length.toLocaleString("pt-BR")} venda(s) no arquivo CSV${truncado ? ` — limite de ${HISTORICO_EXPORT_MAX.toLocaleString("pt-BR")} atingido, refine os filtros para exportar o restante` : ""}.`,
       })
     } catch {
       toast({ title: "Falha na exportação", description: "Não foi possível gerar o arquivo. Tente novamente.", variant: "destructive" })
@@ -1212,6 +1222,8 @@ export function VendasArquivoGeral() {
   ]
 
   const hasActiveFilters = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || terminalFiltro !== "todos" || busca !== "" || fromDate !== "" || toDate !== "" || operadorFiltro !== ""
+  // KPIs da rota usam só loja, terminal e período (semântica documentada em /api/vendas/historico).
+  const kpisIgnoramFiltros = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || busca !== "" || operadorFiltro !== ""
 
   // Períodos rápidos (padrão de mercado): um clique preenche De/Até; clicar de novo limpa.
   const periodoChips = [
@@ -1328,6 +1340,11 @@ export function VendasArquivoGeral() {
           </Card>
         ))}
       </div>
+      {kpisIgnoramFiltros && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          Os indicadores consideram loja, terminal e período. Busca, status, operador e forma de pagamento filtram só a lista.
+        </p>
+      )}
 
       {/* Toolbar operacional */}
       <Card className="border-border bg-card shadow-sm">

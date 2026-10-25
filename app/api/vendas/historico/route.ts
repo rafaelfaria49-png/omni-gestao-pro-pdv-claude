@@ -9,13 +9,16 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  *  q          — busca por pedidoId / clienteNome / item vendido (nome) / SKU / barcode (EAN)
  *  status     — concluida | cancelada | parcialmente_devolvida | devolvida
  *  pagamento  — dinheiro | pix | cartaoDebito | cartaoCredito | carne | aPrazo | creditoVale
+ *               (aplicado no `where`, antes da paginação — ver `lib/vendas/historico-pagamento.ts`;
+ *               outra chave → 400)
  *  operador   — string parcial no campo operador
  *  terminalId — id do PdvTerminal (ou "sem" p/ vendas legadas/sem terminal selecionado)
  *  from       — ISO date início
  *  to         — ISO date fim
- *  take       — máx 200 (padrão 50)
- *  skip       — paginação
+ *  take       — 1..200 (padrão 50)
+ *  skip       — paginação, 0..1.000.000
  *
+ * `total` conta as vendas que casam com TODOS os filtros de listagem, antes de take/skip.
  * Resposta inclui `terminais` (PDVs da loja, para popular dropdown).
  */
 import { NextResponse } from "next/server"
@@ -25,49 +28,25 @@ import {
   buildHistoricoBuscaOr,
   buildProdutoCodigoWhere,
 } from "@/lib/vendas/historico-busca"
-import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
+import {
+  buildHistoricoPagamentoWhere,
+  historicoFormasPagamentoLabel,
+  parseHistoricoPagamento,
+} from "@/lib/vendas/historico-pagamento"
 import type { Prisma } from "@/generated/prisma"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-const PAYMENT_LABELS: Record<keyof PaymentBreakdownFull, string> = {
-  dinheiro: "Dinheiro",
-  pix: "Pix",
-  cartaoDebito: "Débito",
-  cartaoCredito: "Crédito",
-  carne: "Carnê",
-  aPrazo: "A Prazo",
-  creditoVale: "Vale/Crédito",
-}
+const TAKE_DEFAULT = 50
+const TAKE_MAX = 200
+const SKIP_MAX = 1_000_000
 
-function primaryPaymentLabel(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "—"
-  const pb = (payload as Record<string, unknown>).paymentBreakdown as
-    | Partial<PaymentBreakdownFull>
-    | undefined
-  if (!pb) return "—"
-  let best = ""
-  let bestVal = 0
-  for (const [k, v] of Object.entries(pb)) {
-    const val = Number(v) || 0
-    if (val > bestVal) {
-      bestVal = val
-      best = k
-    }
-  }
-  return best ? (PAYMENT_LABELS[best as keyof PaymentBreakdownFull] ?? best) : "—"
-}
-
-function paymentMatchesFilter(payload: unknown, filter: string): boolean {
-  if (!payload || typeof payload !== "object") return false
-  const pb = (payload as Record<string, unknown>).paymentBreakdown as
-    | Partial<PaymentBreakdownFull>
-    | undefined
-  if (!pb) return false
-  const val = Number(pb[filter as keyof PaymentBreakdownFull]) || 0
-  return val > 0
+function parseIntParam(raw: string | null, fallback: number, min: number, max: number): number {
+  const n = Number.parseInt(raw ?? "", 10)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
 }
 
 export async function GET(req: Request) {
@@ -82,8 +61,10 @@ export async function GET(req: Request) {
   const operadorFilter = url.searchParams.get("operador")?.trim() ?? ""
   const fromStr = url.searchParams.get("from")?.trim() ?? ""
   const toStr = url.searchParams.get("to")?.trim() ?? ""
-  const take = Math.min(parseInt(url.searchParams.get("take") ?? "50", 10), 200)
-  const skip = parseInt(url.searchParams.get("skip") ?? "0", 10)
+  const take = parseIntParam(url.searchParams.get("take"), TAKE_DEFAULT, 1, TAKE_MAX)
+  const skip = parseIntParam(url.searchParams.get("skip"), 0, 0, SKIP_MAX)
+  const pagamento = parseHistoricoPagamento(url.searchParams.get("pagamento"))
+  if (!pagamento.ok) return NextResponse.json({ ok: false, error: pagamento.error }, { status: 400 })
 
   try {
     await prismaEnsureConnected()
@@ -128,15 +109,18 @@ export async function GET(req: Request) {
             },
           }
         : {}),
+      // `AND` porque a busca textual já ocupa a chave `OR` do where.
+      ...(pagamento.key ? { AND: [buildHistoricoPagamentoWhere(pagamento.key)] } : {}),
     }
 
     const [rows, totalCount] = await Promise.all([
       prisma.venda.findMany({
         where,
         include: { itens: { select: { quantidade: true } } },
-        orderBy: { at: "desc" },
-        take: Number.isFinite(take) ? take : 50,
-        skip: Number.isFinite(skip) ? skip : 0,
+        // `id` desempata vendas no mesmo instante: páginas sem repetição nem salto.
+        orderBy: [{ at: "desc" }, { id: "desc" }],
+        take,
+        skip,
       }),
       prisma.venda.count({ where }),
     ])
@@ -176,9 +160,7 @@ export async function GET(req: Request) {
     // Ticket médio (vendas não canceladas)
     const ticketMedio = totalVendas > 0 ? faturamento / totalVendas : 0
 
-    // Apply payment filter in-memory (payload JSON not queryable by SQL)
-    const pagamentoFilter = url.searchParams.get("pagamento")?.trim() ?? ""
-    let vendas = rows.map((r) => ({
+    const vendas = rows.map((r) => ({
       id: r.pedidoId,
       dbId: r.id,
       at: r.at.toISOString(),
@@ -187,21 +169,12 @@ export async function GET(req: Request) {
       status: r.status,
       operador: r.operador || null,
       terminalId: r.terminalId ?? null,
-      formaPagamento: primaryPaymentLabel(r.payload),
+      formaPagamento: historicoFormasPagamentoLabel(r.payload),
       quantidadeItens: r.itens.reduce((acc, it) => acc + it.quantidade, 0),
       cancelada: r.status === "cancelada",
       canceladaEm: r.canceladaEm?.toISOString() ?? null,
       motivoCancelamento: r.motivoCancelamento ?? null,
     }))
-
-    if (pagamentoFilter) {
-      const rowsWithPayload = await prisma.venda.findMany({
-        where,
-        select: { pedidoId: true, payload: true },
-      })
-      const pedidoMap = new Map(rowsWithPayload.map((r) => [r.pedidoId, r.payload]))
-      vendas = vendas.filter((v) => paymentMatchesFilter(pedidoMap.get(v.id), pagamentoFilter))
-    }
 
     // Terminais da loja (para popular dropdown) — gracioso se a tabela não existir.
     const terminais = await withPrismaSafe(
