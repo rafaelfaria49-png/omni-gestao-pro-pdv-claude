@@ -4,7 +4,7 @@
  * Bootstrap idempotente do multi-depósito para LOJAS EXISTENTES:
  *   1) garante 1 "Depósito Principal" (codigo=PRINCIPAL, principal=true) por loja;
  *   2) materializa ProdutoDeposito a partir de Produto.stock no depósito principal;
- *   3) verifica a invariante: Σ ProdutoDeposito.quantidade == Σ Produto.stock por loja.
+ *   3) verifica a invariante por produto, em milésimos exatos (KG tem 3 casas — ver backfill-deposito-core.mjs).
  *
  * NÃO altera Produto.stock (cache permanece a verdade operacional até a Fase 2).
  * Idempotente / re-runnable — re-executar re-sincroniza o principal ao Produto.stock.
@@ -17,6 +17,7 @@
  *   node --env-file=.env scripts/backfill-deposito.mjs --store=loja-2  → restringe a 1 loja
  */
 import { PrismaClient } from "../generated/prisma/index.js";
+import { backfillLoja } from "./backfill-deposito-core.mjs";
 
 const prisma = new PrismaClient();
 const DRY_RUN = !process.argv.includes("--exec");
@@ -51,44 +52,22 @@ async function main() {
   }
 
   console.log(`[${DRY_RUN ? "DRY-RUN" : "EXEC"}] ${stores.length} loja(s).`);
-  let driftTotal = 0;
+  let verde = true;
 
   for (const { id: storeId } of stores) {
     const dep = await ensurePrincipal(storeId);
-    const produtos = await prisma.produto.findMany({ where: { storeId }, select: { id: true, stock: true } });
-    const somaStock = produtos.reduce((acc, p) => acc + (Math.trunc(Number(p.stock)) || 0), 0);
-
-    if (!DRY_RUN && dep.id) {
-      for (const p of produtos) {
-        const quantidade = Math.trunc(Number(p.stock)) || 0;
-        await prisma.produtoDeposito.upsert({
-          where: { produtoId_depositoId: { produtoId: p.id, depositoId: dep.id } },
-          create: { storeId, produtoId: p.id, depositoId: dep.id, quantidade },
-          update: { quantidade },
-        });
-      }
-    }
-
-    // Verificação de invariante (só faz sentido após exec; em dry-run reporta o alvo).
-    let somaDeposito = somaStock;
-    if (!DRY_RUN && dep.id) {
-      const rows = await prisma.produtoDeposito.findMany({ where: { storeId }, select: { quantidade: true } });
-      somaDeposito = rows.reduce((acc, r) => acc + (Math.trunc(Number(r.quantidade)) || 0), 0);
-    }
-    const drift = somaDeposito - somaStock;
-    driftTotal += Math.abs(drift);
-
-    console.log(
-      `  ${storeId}: principal=${dep.created ? (DRY_RUN ? "CRIAR" : "criado") : "ok"} · produtos=${produtos.length} · Σstock=${somaStock} · Σdepósito=${somaDeposito} · drift=${drift}`,
-    );
+    const r = await backfillLoja(prisma, { storeId, depositoId: dep.id, dryRun: DRY_RUN });
+    if (!r.verde) verde = false;
+    console.log(`  principal=${dep.created ? (DRY_RUN ? "CRIAR" : "criado") : "ok"} · ${r.linha}`);
+    if (r.divergentes.length) console.error(`    divergentes: ${r.divergentes.slice(0, 20).join(", ")}${r.divergentes.length > 20 ? " …" : ""}`);
   }
 
   if (DRY_RUN) {
     console.log("\n[DRY-RUN] nada gravado. Rode com --exec para aplicar.");
-  } else if (driftTotal === 0) {
-    console.log("\n[OK] invariante verde: Σ ProdutoDeposito == Σ Produto.stock em todas as lojas (drift total = 0).");
+  } else if (verde) {
+    console.log("\n[OK] invariante verde: depósitos == Produto.stock por produto, em milésimos exatos.");
   } else {
-    console.error(`\n[ALERTA] drift total = ${driftTotal} — investigar antes de prosseguir.`);
+    console.error("\n[ALERTA] invariante divergente ou saldo com precisão inválida — investigar antes de prosseguir.");
     process.exitCode = 1;
   }
 }

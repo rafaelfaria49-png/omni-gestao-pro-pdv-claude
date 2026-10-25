@@ -63,7 +63,8 @@ import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
-import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
+import { pdvWeightSaleBlockedNotice, pdvWeightSaleFlag } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { SelecionarAcessorioDialog } from "./acessorios/selecionar-acessorio-dialog"
 import {
   accessoryConfigRequiresSelection,
@@ -1020,6 +1021,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         precoPorKg: inv.precoPorKg,
         atributos: inv.atributos,
         ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
+        ...pdvWeightSaleFlag(inv),
       }
     })
   }, [inventory])
@@ -1105,6 +1107,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Cart ─────────────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartLine[]>([])
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: realCatalog, notify: (n) => toast({ ...n, variant: "destructive" }) })
   const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [rapidoPickIdx, setRapidoPickIdx] = useState(0)
   const [discountType, setDiscountType] = useState<DiscountType>("reais")

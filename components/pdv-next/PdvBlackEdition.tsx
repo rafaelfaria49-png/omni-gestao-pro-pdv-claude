@@ -48,6 +48,7 @@ import {
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -201,6 +202,8 @@ export function PdvBlackEdition() {
     () => mergePdvCatalogWithInventory([], inventory),
     [inventory]
   )
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  usePdvWeightBlockedCartGuard({ cart: cartRows, setCart: setCartRows, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }) })
 
   // ── Totais canônicos (subtotal, desconto combinado, imposto estimado, total) ─
   const subtotal = useMemo(

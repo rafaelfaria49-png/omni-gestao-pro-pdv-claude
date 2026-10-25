@@ -4,10 +4,17 @@
  * 2. O catálogo do PDV carrega a marca projetada por `/api/ops/inventory`.
  * 3. Estático: todo `addToCart` dos PDVs ativos chama o guard ANTES de olhar o estoque.
  */
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
+import {
+  inventoryWeightSaleProjection,
+  pdvWeightSaleBlockedNotice,
+  pdvWeightSaleFlag,
+  pdvWeightSaleRemovedNotice,
+  splitWeightBlockedLines,
+} from "@/lib/pdv-weight-sale-guard"
+import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { mergePdvCatalogWithInventory } from "@/lib/pdv-catalog"
 import type { InventoryItem } from "@/lib/operations-store"
 
@@ -62,8 +69,53 @@ describe("todo addToCart dos PDVs recusa peso antes de checar estoque", () => {
     expect(guard).toBeLessThan(stock)
   })
 
-  it("a rota de inventário projeta a marca a partir da declaração comercial canônica", () => {
-    const src = readFileSync(join(ROOT, "app/api/ops/inventory/route.ts"), "utf8")
-    expect(src).toMatch(/isProductWeightDeclared\(row\.metadata\) \? \{ vendaPesoIndisponivel: true as const \}/)
+  it.each(["app/api/ops/inventory/route.ts", "app/api/ops/inventory/lookup/route.ts"])("%s projeta a marca pela declaração comercial canônica", (file) => {
+    const src = readFileSync(join(ROOT, file), "utf8")
+    expect(src).toMatch(/\.\.\.inventoryWeightSaleProjection\(row\.metadata\)/)
+  })
+})
+
+describe("projeção, separação e aviso de remoção", () => {
+  const KG = { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } }
+  it("projeção: KG e legado vendaPorPeso marcados; UN e ausência sem marca", () => {
+    expect(inventoryWeightSaleProjection(KG)).toEqual({ vendaPesoIndisponivel: true })
+    expect(inventoryWeightSaleProjection({ vendaPorPeso: true })).toEqual({ vendaPesoIndisponivel: true })
+    expect(inventoryWeightSaleProjection({})).toEqual({})
+    expect(inventoryWeightSaleProjection(null)).toEqual({})
+    expect(pdvWeightSaleFlag({ vendaPesoIndisponivel: true })).toEqual({ vendaPesoIndisponivel: true })
+    expect(pdvWeightSaleFlag({})).toEqual({})
+  })
+
+  it("separa linhas por id operacional ou id do banco; mantém avulso, serviço e desconhecidos", () => {
+    const catalog = [
+      { id: "PAO", dbId: "cuid-pao", name: "Pão francês", vendaPesoIndisponivel: true },
+      { id: "BOLO", name: "Bolo" },
+    ]
+    const lines = [{ inventoryId: "PAO" }, { inventoryId: "cuid-pao" }, { inventoryId: "BOLO" }, { inventoryId: "avulso-1" }, {}]
+    const r = splitWeightBlockedLines(lines, catalog)
+    expect(r.kept).toEqual([{ inventoryId: "BOLO" }, { inventoryId: "avulso-1" }, {}])
+    expect(r.blockedNames).toEqual(["Pão francês"])
+    expect(splitWeightBlockedLines(lines, [{ id: "BOLO", name: "Bolo" }]).kept).toHaveLength(5)
+  })
+
+  it("aviso de remoção também não manda repor estoque", () => {
+    const n = pdvWeightSaleRemovedNotice(["Pão francês", "Queijo"])
+    expect(n.description).toMatch(/^Pão francês, Queijo saíram do carrinho/)
+    expect(n.description).not.toMatch(/sem saldo|sem estoque|repor/i)
+  })
+})
+
+describe("bipe remoto (lookup) preserva a marca até o addToCart", () => {
+  it.each([10, 0])("produto KG fora do snapshot local, saldo %s", async (stock) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [{ id: "PAO", dbId: "cuid-pao", name: "Pão francês", stock, price: 18.9, vendaPesoIndisponivel: true }] }), { status: 200 })))
+    try {
+      let inv: InventoryItem[] = []
+      const r = await lookupPdvScanRemote({ code: "PAO", storeId: "loja-a", setInventory: (u) => { inv = typeof u === "function" ? u(inv) : u } })
+      expect(r.kind).toBe("single")
+      if (r.kind !== "single") return
+      expect(r.product).toMatchObject({ id: "PAO", stock, vendaPesoIndisponivel: true })
+      expect(inv[0]).toMatchObject({ vendaPesoIndisponivel: true })
+      expect(pdvWeightSaleBlockedNotice(r.product)?.title).toBe("Venda por peso ainda não liberada")
+    } finally { vi.unstubAllGlobals() }
   })
 })

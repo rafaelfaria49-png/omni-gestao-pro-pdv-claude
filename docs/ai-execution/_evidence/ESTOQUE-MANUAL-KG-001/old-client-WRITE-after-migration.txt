@@ -1,0 +1,8 @@
+# cliente Prisma da main (Int) GRAVANDO no banco migrado
+ERRO to.update({ where: { id: "kgiso-un-10" }, data: { stock: { decrement: 1 } } })
+  8 out.decrement_1 = (await db.produto.findUnique({ where: { id: "kgiso-un-10" }, select: { stock: true } })).stock
+→ 9 await db.movimentacaoEstoque.create(
+Inconsistent column data: Could not convert from `NaN` to `Int`
+# o que o Postgres guardou
+stock|6e-323
+ledger|NaN|6.4e-323|6e-323

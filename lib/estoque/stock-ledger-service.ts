@@ -54,6 +54,7 @@ import {
 } from "@/lib/estoque/stock-drift-reconcile"
 import {
   fromStockUnits,
+  MAX_STOCK_UNITS,
   stockUnitFromMetadata,
   toStockUnits,
   type StockUnit,
@@ -107,6 +108,11 @@ type DbLike = {
 
 function arredonda2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+}
+
+/** Unidades mínimas que fazem ida e volta exata pelo double (ver `stock-quantity.ts`). */
+function dentroDoLimite(units: number): boolean {
+  return Number.isSafeInteger(units) && Math.abs(units) <= MAX_STOCK_UNITS
 }
 
 function trustedStoreId(ctx: StockLedgerContext | null | undefined): string | null {
@@ -282,6 +288,10 @@ export async function applyStockMutationTx(
       }
       quantidadeUnits = input.quantidade
     }
+  }
+  const comandoUnits = (quantidadeUnits ?? novoSaldoUnits) as number
+  if (!dentroDoLimite(comandoUnits)) {
+    return stockFail("VALIDATION", "Quantidade fora do limite permitido.")
   }
   const cmd: NormalizedStockCommand = { ...input, quantidade: quantidadeUnits, novoSaldo: novoSaldoUnits }
   const stockAtualUnits = toStockUnits(prod.stock, unit)
@@ -504,6 +514,11 @@ export async function applyStockMutationTx(
   }
   if (!cmd.permitirNegativo && estoqueDepois < 0) {
     return stockFail("INSUFFICIENT_STOCK", `Operação deixaria o estoque negativo (${out(estoqueDepois)}).`, { estoqueAntes: out(estoqueAntes) })
+  }
+  // Tudo que será gravado precisa voltar exato na próxima leitura (`toStockUnits`):
+  // um saldo acima do limite seria aceito agora e travaria o produto depois.
+  if (![delta, estoqueDepois, depositoDepois].every(dentroDoLimite)) {
+    return stockFail("VALIDATION", "Saldo resultante fora do limite permitido.", { estoqueAntes: out(estoqueAntes) })
   }
 
   // ── 7. Custo (preserva regra de entrada ponderada; saída/ajuste preservam) ─

@@ -87,6 +87,7 @@ import {
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { isRecord, safeCategoryLower } from "@/lib/pdv-mount-guards"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
@@ -585,6 +586,8 @@ export function PdvClassic({
   }))
 
   const products = mergePdvCatalogWithInventory([], inventory)
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }) })
 
   const searchTrim = searchTerm.trim()
   const hideCategoriesPdv = pdvParams.ocultarCategoriasNoPdv === true

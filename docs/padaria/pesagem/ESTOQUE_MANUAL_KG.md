@@ -39,11 +39,22 @@ Aplicar no Neon de produção, fazer merge ou deploy exige **nova autorização 
 - **Ajuste em KG continua indisponível**: o inventário grava contagem e snapshot `Int`
   (`Math.trunc`), então liberar Ajuste/contagem em KG truncaria 3,250 em 3. A contagem de
   inventário recusa produto por peso com mensagem própria.
-- **PDV**: `/api/ops/inventory` projeta `vendaPesoIndisponivel` e os 7 `addToCart` (Clássico,
+- **PDV**: `/api/ops/inventory` e `/api/ops/inventory/lookup` (bipe remoto) projetam
+  `vendaPesoIndisponivel` pela mesma função (`inventoryWeightSaleProjection`); todos os mapeadores
+  de catálogo repassam a marca (`pdvWeightSaleFlag`); os 7 `addToCart` (Clássico,
   Supermercado, Venda Completa ×2, Controle de Consumo, Assistência, Black) recusam **antes**
   de olhar o estoque: "Venda por peso ainda não liberada … o estoque não precisa de ajuste".
   Antes: com saldo 0 dizia "sem saldo no estoque" (mandando repor por um caminho também
   bloqueado); com saldo, deixava lançar 1 unidade e só recusava no pagamento.
+  `usePdvWeightBlockedCartGuard` mantém o invariante em 6 superfícies: comanda importada, venda
+  em espera, carrinho persistido ou rascunho com produto bloqueado perdem a linha, com aviso,
+  antes do pagamento.
+- **Limite**: comando, delta e saldos resultantes precisam caber em `MAX_STOCK_UNITS`
+  (15 dígitos) antes de gravar — um saldo acima disso seria aceito e travaria o produto depois.
+- **Divergência em KG**: diagnóstico e erro de entrada não citam a aba Ajuste (inexistente em KG).
+- **Backfill de depósitos** (`scripts/backfill-deposito.mjs` + `backfill-deposito-core.mjs`): copia
+  o saldo exato e confere a invariante por produto em milésimos exatos; saldo com mais de 3 casas
+  vira divergência explícita, nunca arredondamento.
 
 ## Provas
 
@@ -52,41 +63,19 @@ Aplicar no Neon de produção, fazer merge ou deploy exige **nova autorização 
 | Migration em PG 17 descartável com schema da `main` e dados legados `Int` | `_evidence/ESTOQUE-MANUAL-KG-001/` (`seed-legado-int.sql`, `migration-apply.log`, `columns-after.txt`) | 13 valores idênticos antes/depois (inclusive `2147483647`); `prisma migrate diff` banco × schema: sem diferença |
 | Boundary no PG real (`lib/estoque/stock-ledger-kg.pg.test.ts`, só roda com `ESTOQUE_KG_PG_URL` local) | `db-after-proof.txt` | 2,500 + 0,750 = 3,250 em produto/depósito/livro; 20 entradas paralelas sob `FOR UPDATE` somam exato; chave idempotente em paralelo aplica 1×; 4 casas e outra loja recusadas; UN intacto |
 | E2E STORE (`e2e/platform-pilot/estoque-manual-kg.spec.ts`) | local contra `next dev` + PG descartável: `local-e2e-*.png/json`; oficial: job `authenticated` da PR | ficha 0,000 → 2,500 → 3,250; banco 3.25/3.25/[2.5, 0.75]; histórico `+0,750 / +2,500`; ficha reaberta após reload = 3,250; PDV recusa com orientação de peso, 0 vendas |
+| Backfill (script real 2× no PG descartável; o da `main` no mesmo banco) | `backfill-pg-real.txt`, `backfill-main-vs-branch.txt` | depósito truncado 3 → 3,96 re-sincronizado, invariante por produto verde, repetição idempotente; o script da `main` com cliente `Int` zerou os depósitos com valores denormais |
+| Superfícies reais do PDV (`lib/pdv/weight-sale-guard-surfaces.component.test.ts`) | harness N5-C | Clássico (comanda), Supermercado (bipe), Assistência (carrinho persistido), Venda Completa (rascunho): nada chega ao pagamento, sem orientação de estoque; mutações do repasse da marca e do hook derrubam o teste |
 | Unitários | `stock-quantity`, `stock-ledger-service` (KG), actions, inventário, contrato, modal, ficha, guard do PDV | verdes; suíte completa sem regressão contra a `main` (534 falhas pré-existentes nas duas árvores) |
 
-## Plano de rollout (exige nova autorização)
+## Rollout (exige nova autorização) — ver [ESTOQUE_MANUAL_KG_RUNBOOK.md](ESTOQUE_MANUAL_KG_RUNBOOK.md)
 
-**Ordem obrigatória: migration antes do código.** Código novo sobre colunas `integer`
-gravaria 2,5 como 2 e 0,75 como 1 (cast de atribuição `float8 → int4` arredonda; conferido
-no PG 17 local) — violação silenciosa.
-`MIGRATION_AUTHORITY_ENABLED` segue `false`; a Vercel não aplica migration.
-
-1. **Pré-checagem read-only no Neon** (`SET TRANSACTION READ ONLY`): contagem das 3 tabelas;
-   nenhuma view/regra dependente das 5 colunas
-   (`pg_depend` × `pg_rewrite` sobre `attnum` das colunas); nenhuma transação longa aberta.
-2. **Ponto de recuperação**: branch/snapshot Neon imediatamente antes.
-3. **Aplicar a migration** em janela com a loja fechada, com `SET lock_timeout = '5s'` e
-   `statement_timeout` curto. `ALTER COLUMN TYPE` reescreve as 3 tabelas sob
-   `ACCESS EXCLUSIVE`: leituras e escritas de estoque esperam até o fim (66 ms no banco
-   local mínimo; em produção, proporcional ao tamanho — medir na pré-checagem). Com
-   `lock_timeout` a migration falha em vez de enfileirar atrás de transação longa.
-4. **Verificar**: tipos `double precision`; `count`, `sum(stock)`, `sum(quantidade)` iguais aos
-   da pré-checagem; `count(*) WHERE stock <> trunc(stock)` = 0.
-5. **Merge + deploy** (projeto Production real `omni-gestao-pro`), smoke read-only.
-
-**Compatibilidade da aplicação anterior com o banco migrado** (provado localmente com o cliente
-Prisma da `main`, `old-client-after-migration.txt`): lê inteiros exatamente; leitura de um saldo
-fracionado vem **truncada** (3,96 → 3), sem erro. Seguro na janela migration → deploy porque
-nenhum valor fracionado existe antes do código novo, e a aplicação anterior não grava produto
-por peso (guards de entrada, ajuste, venda, OS e importação). Depois do deploy, **URLs de
-deployments antigos** continuam acessíveis e mostrariam saldo KG truncado (só leitura).
-
-**Rollback**
-- *App*: reverter o deploy é seguro para UN. Produtos KG passariam a exibir saldo truncado
-  (sem gravação possível). Preferir correção para frente.
-- *Banco*: voltar para `integer` só se `count(*) WHERE <col> <> trunc(<col>)` = 0 nas 5
-  colunas (`ALTER … TYPE integer USING <col>::integer`). Com qualquer valor fracionado o
-  rollback de banco destruiria gramas: **proibido**; manter `double precision`.
+Provado em PG descartável: **cliente antigo (`Int`) gravando em coluna `double` corrompe em
+silêncio** (13 → `6e-323`, −1 → `NaN`), enquanto **cliente novo (`Float`) gravando em coluna
+`integer` falha com erro `22P03` sem gravar nada**. Por isso a ordem segura é: congelar escritas
+de estoque → deploy do código novo → migration logo em seguida → verificar → reabrir. Deployments
+antigos precisam estar bloqueados, e rollback para a versão anterior é proibido depois da
+migration (só para build com schema `Float`). Locks, pré-checagem, verificação e recuperação
+estão no runbook.
 
 ## Pendências conhecidas (fora deste escopo)
 
@@ -98,4 +87,6 @@ deployments antigos** continuam acessíveis e mostrariam saldo KG truncado (só 
 - Sugestão de busca do PDV mostra `Estoque: 3.25` (ponto, sem unidade) — o item é recusado
   ao adicionar.
 - Helpers dormentes sem caller (`agregarQuantidade`, `setEstoqueDeposito`) ainda truncam;
-  `backfillLojaDepositoPrincipal` passou a copiar o saldo exato.
+  `backfillLojaDepositoPrincipal` e o script `scripts/backfill-deposito.mjs`
+  (`db:backfill-deposito`) passaram a copiar o saldo exato e a somar a invariante em milésimos
+  — antes truncariam 3,250 em 3 nos dois lados e reportariam "invariante verde".

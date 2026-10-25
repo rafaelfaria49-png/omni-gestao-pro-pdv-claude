@@ -1272,6 +1272,17 @@ describe("stock-ledger-service — KG fracionado", () => {
     expect(corrompido.produtos.get("p1")!.stock).toBe(2.5)
   })
 
+  it("saldo resultante acima do limite é recusado antes de gravar (não trava o produto depois)", async () => {
+    const f = kgFake({ stock: 999999999999.999 }, { pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 999999999999.999 }] })
+    const r = await applyStockMutationTx(f.tx, ctx(), entrada(0.001))
+    expect(r).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(f.produtos.get("p1")!.stock).toBe(999999999999.999)
+    expect(f.movs.size).toBe(0)
+    const un = makeFake({ produtos: [prod({ stock: 0 })], depositos: [{ id: "d1", storeId: "loja-a" }] })
+    expect(await applyStockMutationTx(un.tx, ctx(), entrada(1e16))).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(un.movs.size).toBe(0)
+  })
+
   it("concorrência serializada pelo lock: N entradas paralelas somam exatamente", async () => {
     const f = kgFake()
     // Simula o FOR UPDATE: cada transação espera a anterior terminar.

@@ -32,6 +32,7 @@ type LookupRow = {
   cost?: unknown
   price?: unknown
   category?: unknown
+  vendaPesoIndisponivel?: unknown
 }
 
 function rowToInventoryItem(raw: LookupRow): InventoryItem | null {
@@ -52,6 +53,7 @@ function rowToInventoryItem(raw: LookupRow): InventoryItem | null {
     cost: num(raw.cost),
     price: num(raw.price),
     category: typeof raw.category === "string" ? raw.category : "",
+    ...(raw.vendaPesoIndisponivel === true ? { vendaPesoIndisponivel: true } : {}),
   }
 }
 

@@ -11,7 +11,7 @@ import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { getProdutoFiscal, isProdutoFiscalVazio, type ProdutoFiscal } from "@/lib/produto-fiscal"
 import { projectProdutoAccessoryConfig, type ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios"
-import { isProductWeightDeclared } from "@/lib/cadastros/product-commercial-contract"
+import { inventoryWeightSaleProjection } from "@/lib/pdv-weight-sale-guard"
 // (sem normalizeNameForMatch — tabela `product` é minimalista)
 
 export const runtime = "nodejs"
@@ -109,7 +109,7 @@ function rowToItem(row: Produto): InvPayload {
     category: typeof (row as unknown as { category?: unknown }).category === "string" ? (row as unknown as { category: string }).category : "",
     ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
     ...(accessoryConfig ? { accessoryConfig } : {}),
-    ...(isProductWeightDeclared(row.metadata) ? { vendaPesoIndisponivel: true as const } : {}),
+    ...inventoryWeightSaleProjection(row.metadata),
   }
 }
 

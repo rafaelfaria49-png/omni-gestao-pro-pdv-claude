@@ -23,7 +23,7 @@ import {
 } from "@/lib/estoque/stock-drift-reconcile";
 import { DEPOSITO_PRINCIPAL_CODIGO } from "@/lib/estoque/deposito-core";
 import { assertProductCommercialSaleSupported, assertProductStockEntrySupported, ProductCommercialInvalidError, ProductStockEntryNotOperationalError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract";
-import { stockUnitFromMetadata, toStockUnits } from "@/lib/estoque/stock-quantity";
+import { formatStockQuantity, stockUnitFromMetadata, toStockUnits } from "@/lib/estoque/stock-quantity";
 
 /**
  * Movimentação de estoque (livro-razão) — CAD-R2-009.
@@ -132,21 +132,28 @@ function boundaryReason(
   }
 }
 
+/** KG não tem Ajuste (inventário ainda é inteiro): a orientação não pode mandar para essa aba. */
+function kgDriftMessage(stock: number, soma: number): string {
+  return `Há divergência no saldo deste produto. Saldo do cadastro: ${formatStockQuantity(stock, "KG")} kg. Saldo nos depósitos: ${formatStockQuantity(soma, "KG")} kg. O ajuste de saldo em KG ainda não está disponível; nada foi alterado.`;
+}
+
 function failFromBoundary(
   code: string,
   message: string,
   fallback: string,
-  extra?: { drift?: NonNullable<import("@/lib/estoque/stock-ledger-contract").StockLedgerFailure["drift"]> },
+  extra?: { drift?: NonNullable<import("@/lib/estoque/stock-ledger-contract").StockLedgerFailure["drift"]>; kg?: boolean },
 ): Extract<EntradaEstoqueResult, { ok: false }> {
   const drift = extra?.drift;
   if (code === "STOCK_INVARIANT_DRIFT" && drift) {
     return {
       ok: false,
-      reason: stockDriftBlockedEntradaMessage({
-        reason: drift.driftReason,
-        stock: drift.stock,
-        soma: drift.somaDepositos,
-      }),
+      reason: extra?.kg
+        ? kgDriftMessage(drift.stock, drift.somaDepositos)
+        : stockDriftBlockedEntradaMessage({
+            reason: drift.driftReason,
+            stock: drift.stock,
+            soma: drift.somaDepositos,
+          }),
       detalhe: message,
       code,
       drift: {
@@ -162,7 +169,7 @@ function failFromBoundary(
         depositCount: drift.depositCount,
         entradaPodeReconciliar: false,
       },
-      acaoSugerida: "ajuste",
+      ...(extra?.kg ? {} : { acaoSugerida: "ajuste" as const }),
     };
   }
   return { ok: false, reason: boundaryReason(code, message, fallback), code };
@@ -214,6 +221,7 @@ export async function registrarEntradaEstoque(
   try {
     const out = await prisma.$transaction(async (tx) => {
       const product = await tx.produto.findFirst({ where: { id: input.produtoId, storeId: sid }, select: { metadata: true } });
+      const kg = product ? stockUnitFromMetadata(product.metadata) === "KG" : false;
       if (product) {
         assertProductStockEntrySupported(product.metadata);
         const unidade = stockUnitFromMetadata(product.metadata);
@@ -243,7 +251,7 @@ export async function registrarEntradaEstoque(
           realinharDepositoAoStock: true,
         },
       );
-      if (!r.ok) return failFromBoundary(r.code, r.message, "Falha ao registrar entrada", { drift: r.drift });
+      if (!r.ok) return failFromBoundary(r.code, r.message, "Falha ao registrar entrada", { drift: r.drift, kg });
       return {
         ok: true as const,
         movimentacaoId: r.movimentacaoId,
@@ -377,8 +385,9 @@ export async function diagnosticarSaldoEstoque(
 
   const targetDepositoId = principal?.id ?? depRows[0]?.depositoId ?? "";
   // Mesma escala do boundary: KG compara milésimos inteiros, sem truncar gramas.
+  const unit = stockUnitFromMetadata(prod.metadata);
   const scaled = classifyStockDriftForUnit({
-    unit: stockUnitFromMetadata(prod.metadata),
+    unit,
     stock: prod.stock,
     deposits: depRows,
     targetDepositoId,
@@ -400,7 +409,11 @@ export async function diagnosticarSaldoEstoque(
     depositCount: classification.depositCount,
     positiveDepositCount: classification.positiveDepositCount,
     entradaPodeReconciliar,
-    operatorMessage: aligned ? "" : stockDriftOperatorMessage(display),
+    operatorMessage: aligned
+      ? ""
+      : unit === "KG" && !entradaPodeReconciliar
+        ? kgDriftMessage(display.stock, display.soma)
+        : stockDriftOperatorMessage(display),
     detalhe: aligned ? "" : stockDriftFailMessage(display),
   };
 }

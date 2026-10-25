@@ -56,7 +56,8 @@ import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
-import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
+import { pdvWeightSaleBlockedNotice, pdvWeightSaleFlag } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
 import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
@@ -166,6 +167,7 @@ function inventoryItemToPdvProduct(inv: InventoryItem): PdvCatalogProduct {
     precoPorKg: inv.precoPorKg,
     atributos: inv.atributos,
     ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
+    ...pdvWeightSaleFlag(inv),
   }
 }
 
@@ -459,6 +461,8 @@ export function PdvSupermercado({
     () => sanitizeInventoryItems<InventoryItem>(inventory).map(inventoryItemToPdvProduct),
     [inventory]
   )
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }) })
 
   const quickItems = useMemo(() => {
     const safeInventory = sanitizeInventoryItems<InventoryItem>(inventory)

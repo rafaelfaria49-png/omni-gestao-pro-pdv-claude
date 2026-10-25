@@ -1,0 +1,33 @@
+# antes (depósito do pão truncado para 3 de propósito)
+kgiso-b-un|5|5
+kgiso-kg-legado|4.25|4.25
+kgiso-pao-kg|3.96|3
+kgiso-un-0|0|-
+kgiso-un-10|12|12
+kgiso-un-max|2147483647|2147483647
+# backfill --exec (1)
+[EXEC] 2 loja(s).
+  principal=ok · kgiso-a: produtos=5 · Σstock=2147483667.21 · Σdepósito=2147483667.21 · drift=0 · divergentes=0
+  principal=ok · kgiso-b: produtos=1 · Σstock=5 · Σdepósito=5 · drift=0 · divergentes=0
+
+[OK] invariante verde: depósitos == Produto.stock por produto, em milésimos exatos.
+exit=0
+kgiso-b-un|5|5
+kgiso-kg-legado|4.25|4.25
+kgiso-pao-kg|3.96|3.96
+kgiso-un-0|0|0
+kgiso-un-10|12|12
+kgiso-un-max|2147483647|2147483647
+# backfill --exec (2, repetição)
+[EXEC] 2 loja(s).
+  principal=ok · kgiso-a: produtos=5 · Σstock=2147483667.21 · Σdepósito=2147483667.21 · drift=0 · divergentes=0
+  principal=ok · kgiso-b: produtos=1 · Σstock=5 · Σdepósito=5 · drift=0 · divergentes=0
+
+[OK] invariante verde: depósitos == Produto.stock por produto, em milésimos exatos.
+exit=0
+kgiso-b-un|5|5
+kgiso-kg-legado|4.25|4.25
+kgiso-pao-kg|3.96|3.96
+kgiso-un-0|0|0
+kgiso-un-10|12|12
+kgiso-un-max|2147483647|2147483647

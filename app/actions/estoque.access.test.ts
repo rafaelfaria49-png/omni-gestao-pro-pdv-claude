@@ -258,3 +258,43 @@ describe("estoque actions — só boundary", () => {
     expect(h.movimentacaoCreate).not.toHaveBeenCalled()
   })
 })
+
+describe("KG com saldo divergente: orientação não aponta para o Ajuste inexistente", () => {
+  // stock 3,250; depósitos 1,500 + 2,000 (dois positivos) e livro 3,250 ⇒ multi_deposit_ambiguous.
+  const divergente = () => {
+    sessionAtiva("VENDEDOR", ["loja-a"])
+    h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "Pão francês", sku: "PAO", stock: 3.25, precoCusto: 0, metadata: KG })
+    h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 1.5 }, { depositoId: "d2", quantidade: 2 }])
+    h.movimentacaoFindFirst.mockResolvedValue({ estoqueDepois: 3.25 })
+  }
+
+  it("diagnóstico em kg, sem 'aba Ajuste'", async () => {
+    divergente()
+    const r = await diagnosticarSaldoEstoque("loja-a", "p1")
+    expect(r).toMatchObject({ ok: true, aligned: false, stock: 3.25, somaDepositos: 3.5, driftReason: "multi_deposit_ambiguous" })
+    if (!r.ok) return
+    expect(r.operatorMessage).toMatch(/Saldo do cadastro: 3,250 kg\. Saldo nos depósitos: 3,500 kg\. O ajuste de saldo em KG ainda não está disponível/)
+    expect(r.operatorMessage).not.toMatch(/aba Ajuste/)
+  })
+
+  it("entrada recusada pelo drift em kg não sugere ajuste", async () => {
+    divergente()
+    const r = await registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 0.5 })
+    expect(r).toMatchObject({ ok: false, code: "STOCK_INVARIANT_DRIFT" })
+    if (r.ok) return
+    expect(r.reason).toMatch(/ajuste de saldo em KG ainda não está disponível/)
+    expect(r.reason).not.toMatch(/aba Ajuste/)
+    expect(r).not.toHaveProperty("acaoSugerida")
+    expectNoWrite()
+  })
+
+  it("produto UN mantém a orientação existente para a aba Ajuste", async () => {
+    divergente()
+    h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "Bolo", sku: "B", stock: 3, precoCusto: 0, metadata: {} })
+    h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 1 }, { depositoId: "d2", quantidade: 3 }])
+    h.movimentacaoFindFirst.mockResolvedValue({ estoqueDepois: 3 })
+    const r = await registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 1 })
+    expect(r).toMatchObject({ ok: false, code: "STOCK_INVARIANT_DRIFT", acaoSugerida: "ajuste" })
+    if (!r.ok) expect(r.reason).toMatch(/aba Ajuste/)
+  })
+})
