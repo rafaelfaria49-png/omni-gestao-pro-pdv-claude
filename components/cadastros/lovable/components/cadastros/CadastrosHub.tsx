@@ -2218,6 +2218,7 @@ export function ProdutosPanel({
                 sku: estoqueProduto.sku,
                 estoque: estoqueProduto.estoque,
                 custo: estoqueProduto.custo,
+                metadata: estoqueProduto.metadata,
               }
             : null
         }
