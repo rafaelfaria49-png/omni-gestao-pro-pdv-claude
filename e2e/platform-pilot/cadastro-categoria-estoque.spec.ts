@@ -84,8 +84,15 @@ async function openProdutos(page: Page) {
   await page.goto("/dashboard/cadastros-v2?aba=produtos")
   await expect(page.getByPlaceholder("Buscar em produtos…")).toBeVisible()
 }
+/**
+ * Raiz da ficha por estrutura/texto (CSS), não por papel acessível: com a janela
+ * "Nova categoria" aberta o Radix marca a ficha como aria-hidden e `getByRole` não a vê.
+ */
 function productModal(page: Page): Locator {
-  return page.locator("div.fixed.inset-0").filter({ has: page.locator('[data-omni-ui-kit="modal-header"]') }).filter({ has: page.getByRole("button", { name: "Salvar produto", exact: true }) })
+  return page.locator("div.fixed.inset-0")
+    .filter({ has: page.locator('[data-omni-ui-kit="modal-header"]') })
+    .filter({ has: page.locator("button", { hasText: /^\s*Salvar produto\s*$/ }) })
+    .filter({ has: page.locator("#produto-categoria") })
 }
 const field = (scope: Locator, label: string) => label === "Preço venda (R$)"
   ? scope.getByLabel(/^Preço venda \(R\$ \/ /)
@@ -138,7 +145,9 @@ test("cliente: Nova categoria explícita, sem duplicar, selecionada e disponíve
   await field(editor, "Preço venda (R$)").fill("2,50")
 
   // Texto digitado + Enter/saída do campo não grava nem vira categoria.
-  const categoria = editor.getByRole("textbox", { name: "Categoria", exact: true })
+  // Por id: com a janela aberta o Radix marca a ficha como aria-hidden e o papel some da árvore.
+  const categoria = editor.locator("#produto-categoria")
+  await expect(categoria).toHaveAccessibleName("Categoria")
   await categoria.fill(name)
   await categoria.press("Enter")
   await categoria.press("Tab")

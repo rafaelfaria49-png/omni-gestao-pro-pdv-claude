@@ -337,7 +337,8 @@ export function MovimentacaoEstoqueModal({
 
         {diag && !diag.aligned && (
           <div className="min-w-0 space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-            <p className="font-medium">{diag.operatorMessage || "Estoque precisa de reconciliação."}</p>
+            {/* Produto bloqueado: só informação; a orientação do diagnóstico aponta para Entrada/Ajuste, indisponíveis aqui. */}
+            <p className="font-medium">{bloqueio ? "Saldo do cadastro e dos depósitos divergem." : diag.operatorMessage || "Estoque precisa de reconciliação."}</p>
             <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
               <span className="min-w-0">
                 Saldo do cadastro: <span className="font-semibold tabular-nums text-foreground">{diag.stock}</span>
@@ -346,12 +347,14 @@ export function MovimentacaoEstoqueModal({
                 Saldo nos depósitos: <span className="font-semibold tabular-nums text-foreground">{diag.somaDepositos}</span>
               </span>
             </div>
-            {diag.entradaPodeReconciliar ? (
+            {bloqueio ? (
+              <p>A correção fica disponível quando a movimentação for liberada para este produto. Nada é alterado agora.</p>
+            ) : diag.entradaPodeReconciliar ? (
               <p>Esta divergência pode ser corrigida automaticamente junto com a operação.</p>
             ) : (
               <p>Confirme primeiro o saldo físico na aba Ajuste.</p>
             )}
-            {!diag.entradaPodeReconciliar && aba === "entrada" && (
+            {!bloqueio && !diag.entradaPodeReconciliar && aba === "entrada" && (
               <button
                 type="button"
                 className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-accent"

@@ -233,6 +233,7 @@ function CategoriaMarcaCombobox({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [creating, setCreating] = useState(false);
+  const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -301,6 +302,7 @@ function CategoriaMarcaCombobox({
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);
+            setActive(-1);
             if (!open) setOpen(true);
           }}
           onFocus={() => setOpen(true)}
@@ -309,6 +311,8 @@ function CategoriaMarcaCombobox({
               const trimmed = draft.trim();
               if (trimmed === value.trim()) {
                 setDraft(value);
+                setOpen(false);
+                setActive(-1);
                 return;
               }
               const match = trimmed ? matchOption(trimmed) : "";
@@ -320,6 +324,9 @@ function CategoriaMarcaCombobox({
                 setDraft(value);
                 explicitCreate.onUnmatched(trimmed);
               }
+              // Fecha a lista: com itens fora da ordem de Tab, o foco segue para o próximo controle.
+              setOpen(false);
+              setActive(-1);
               return;
             }
             // Commit do nome digitado (texto livre permitido p/ manter compat com strings legadas)
@@ -330,11 +337,18 @@ function CategoriaMarcaCombobox({
               setOpen(false);
               return;
             }
+            if (explicitCreate && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+              e.preventDefault();
+              setOpen(true);
+              setActive((i) => e.key === "ArrowDown" ? Math.min(i + 1, filtered.length - 1) : Math.max(i - 1, 0));
+              return;
+            }
             if (e.key === "Enter" && explicitCreate) {
               e.preventDefault();
-              const match = matchOption(draft);
+              const match = active >= 0 && filtered[active] ? filtered[active] : matchOption(draft);
               if (match !== undefined) commit(match);
               else if (filtered.length === 1) commit(filtered[0]);
+              setActive(-1);
               return;
             }
             if (e.key === "Enter") {
@@ -378,17 +392,20 @@ function CategoriaMarcaCombobox({
               {explicitCreate && filtered.length === 0 && draft.trim() ? (
                 <div className="px-3 py-2 text-xs text-muted-foreground">Nenhuma categoria encontrada.</div>
               ) : null}
-              {filtered.map((o) => (
+              {filtered.map((o, index) => (
                 <button
                   key={o}
                   type="button"
+                  // Modo explícito: itens só por mouse/setas; Tab vai direto ao próximo controle.
+                  tabIndex={explicitCreate ? -1 : undefined}
+                  data-active={explicitCreate && index === active ? "true" : undefined}
                   onMouseDown={(e) => {
                     // mousedown para vencer o onBlur do input
                     e.preventDefault();
                     commit(o);
                   }}
                   className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground ${
-                    o.trim().toLowerCase() === normalized ? "bg-accent/60 text-accent-foreground" : "text-foreground"
+                    o.trim().toLowerCase() === normalized || (explicitCreate && index === active) ? "bg-accent/60 text-accent-foreground" : "text-foreground"
                   }`}
                 >
                   <span className="truncate">{o}</span>
@@ -398,6 +415,7 @@ function CategoriaMarcaCombobox({
               {explicitCreate && draft.trim() && !hasExact && (
                 <button
                   type="button"
+                  tabIndex={-1}
                   onMouseDown={(e) => {
                     // Só abre a janela de confirmação; nada é gravado aqui.
                     e.preventDefault();

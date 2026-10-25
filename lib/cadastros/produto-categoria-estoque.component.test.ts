@@ -2,6 +2,7 @@
 import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { businessPresentation, resolveBusinessResource } from "@/lib/store-business-capabilities"
 import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { MODULES } from "@/lib/auth/access-policy"
@@ -92,6 +93,41 @@ describe("Categoria explícita na experiência do cliente", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvar produto" }))
     await waitFor(() => expect(h.upsertProduto).toHaveBeenCalledOnce())
     expect(h.upsertProduto.mock.calls[0][1]).not.toHaveProperty("categoria")
+  })
+
+  it("teclado real: Enter não cria, Tab chega ao botão e Enter nele abre a janela com o texto pendente", async () => {
+    const user = userEvent.setup()
+    editor()
+    await loaded()
+    await user.click(categoria())
+    await user.keyboard("Salgados")
+    await user.keyboard("{Enter}")
+    await user.tab()
+    const button = screen.getByRole("button", { name: "Nova categoria" })
+    expect(document.activeElement).toBe(button)
+    expect(categoria().value).toBe("")
+    expect(h.upsertCategoria).not.toHaveBeenCalled()
+    await user.keyboard("{Enter}")
+    const dialog = await screen.findByRole("dialog", { name: "Nova categoria" })
+    const input = within(dialog).getByRole("textbox", { name: "Nome da categoria" }) as HTMLInputElement
+    expect(input.value).toBe("Salgados")
+    expect(document.activeElement).toBe(input)
+  })
+
+  it("teclado real: setas + Enter selecionam uma categoria existente sem gravar", async () => {
+    h.dictionary = [
+      { id: "c1", name: "Bolos", type: "produto", active: true },
+      { id: "c3", name: "Bolachas", type: "produto", active: true },
+    ]
+    const user = userEvent.setup()
+    editor()
+    await loaded()
+    await waitFor(() => expect(h.listCategorias).toHaveBeenCalled())
+    await user.click(categoria())
+    await user.keyboard("bol")
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}")
+    expect(categoria().value).toBe("Bolos")
+    expect(h.upsertCategoria).not.toHaveBeenCalled()
   })
 
   it("busca seleciona o nome canônico existente, sem criar", async () => {

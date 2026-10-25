@@ -70,6 +70,7 @@ jobs:
           lib/cadastros/product-rest-007.test.ts lib/cadastros/product-write-create-tx-014.test.ts
           lib/cadastros/produto-upsert-metadata.test.ts
           lib/cadastros/produto-categoria-estoque.component.test.ts lib/cadastros/product-stock-movement-availability.test.ts
+          lib/cadastros/movimentacao-estoque-bloqueio.component.test.ts
           components/cadastros/lovable/components/cadastros/MovimentacaoEstoqueModal.static.test.ts
           lib/ops-upsert-venda.test.ts lib/ops-upsert-venda-fractional.test.ts
           lib/vendas/sale-quantity-contract.test.ts
@@ -96,6 +97,7 @@ jobs:
           components/cadastros/lovable/components/cadastros/NovaCategoriaDialog.tsx
           components/cadastros/lovable/components/cadastros/MovimentacaoEstoqueModal.tsx
           lib/cadastros/produto-categoria-estoque.component.test.ts lib/cadastros/product-stock-movement-availability.test.ts
+          lib/cadastros/movimentacao-estoque-bloqueio.component.test.ts
           components/cadastros/lovable/components/cadastros/ui-kit.tsx
           components/cadastros/lovable/components/cadastros/CadastrosHub.tsx
           scripts/cadastros/smoke-ramos.mjs
