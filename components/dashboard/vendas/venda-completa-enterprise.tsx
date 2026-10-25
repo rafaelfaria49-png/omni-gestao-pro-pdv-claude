@@ -39,6 +39,7 @@ import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
@@ -601,6 +602,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   // ── Cart helpers ──────────────────────────────────────────────────────────
   const addToCart = useCallback(
     (product: PdvCatalogProduct) => {
+      const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+      if (pesoBloqueado) {
+        toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
       const isService = product.category === "Servicos"
       if (!isService && product.stock <= 0) {
         toast({ title: "Sem estoque", description: `${product.name} está sem estoque.`, variant: "destructive" })

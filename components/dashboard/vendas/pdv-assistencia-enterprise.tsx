@@ -63,6 +63,7 @@ import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
 import { SelecionarAcessorioDialog } from "./acessorios/selecionar-acessorio-dialog"
 import {
   accessoryConfigRequiresSelection,
@@ -1754,6 +1755,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct, priceOverride?: number, qtyToAdd: number = 1) => {
+    const pesoBloqueado = pdvWeightSaleBlockedNotice(item)
+    if (pesoBloqueado) {
+      toast({ ...pesoBloqueado, variant: "destructive" })
+      return
+    }
     const svcMeta = servicoMetaById.get(item.id)
     // Atalhos entram com o preço atual do catálogo; override só existe ao editar a linha.
     const effectivePrice = priceOverride !== undefined ? priceOverride : item.price

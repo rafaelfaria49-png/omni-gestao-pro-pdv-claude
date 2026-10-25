@@ -14,7 +14,7 @@ import {
   type StockLedgerTx,
 } from "@/lib/estoque/stock-ledger-service";
 import {
-  classifyStockDrift,
+  classifyStockDriftForUnit,
   isProvenEntradaBaselineRepair,
   stockDriftBlockedEntradaMessage,
   stockDriftFailMessage,
@@ -22,7 +22,8 @@ import {
   STOCK_DRIFT_REASON,
 } from "@/lib/estoque/stock-drift-reconcile";
 import { DEPOSITO_PRINCIPAL_CODIGO } from "@/lib/estoque/deposito-core";
-import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract";
+import { assertProductCommercialSaleSupported, assertProductStockEntrySupported, ProductCommercialInvalidError, ProductStockEntryNotOperationalError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract";
+import { stockUnitFromMetadata, toStockUnits } from "@/lib/estoque/stock-quantity";
 
 /**
  * Movimentação de estoque (livro-razão) — CAD-R2-009.
@@ -202,9 +203,10 @@ export async function registrarEntradaEstoque(
   }
   if (!input.produtoId?.trim()) return { ok: false, reason: "Produto inválido" };
 
-  const qtd = Math.trunc(Number(input.quantidade));
+  // Sem truncar: a precisão aceita depende da unidade do produto (UN inteiro, KG 3 casas).
+  const qtd = Number(input.quantidade);
   if (!Number.isFinite(qtd) || qtd <= 0) {
-    return { ok: false, reason: "Quantidade deve ser um inteiro maior que zero" };
+    return { ok: false, reason: "Quantidade deve ser maior que zero" };
   }
   const custoUnit = Math.max(0, Number(input.custoUnitario ?? 0));
   if (!Number.isFinite(custoUnit)) return { ok: false, reason: "Custo unitário inválido" };
@@ -212,7 +214,19 @@ export async function registrarEntradaEstoque(
   try {
     const out = await prisma.$transaction(async (tx) => {
       const product = await tx.produto.findFirst({ where: { id: input.produtoId, storeId: sid }, select: { metadata: true } });
-      if (product) assertProductCommercialSaleSupported(product.metadata);
+      if (product) {
+        assertProductStockEntrySupported(product.metadata);
+        const unidade = stockUnitFromMetadata(product.metadata);
+        if (toStockUnits(qtd, unidade) === null) {
+          return {
+            ok: false as const,
+            reason: unidade === "KG"
+              ? "Quantidade em kg aceita no máximo 3 casas decimais (ex.: 2,500)"
+              : "Quantidade deve ser um inteiro maior que zero",
+            code: "VALIDATION",
+          };
+        }
+      }
       const r = await applyStockMutationTx(
         tx as unknown as StockLedgerTx,
         { storeId: sid, principal, source: "estoque-actions" },
@@ -242,7 +256,7 @@ export async function registrarEntradaEstoque(
     if (out.ok) revalidatePath("/dashboard/cadastros-v2");
     return out;
   } catch (e) {
-    if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) return { ok: false, reason: e.message, code: e.code };
+    if (e instanceof ProductStockEntryNotOperationalError || e instanceof ProductCommercialInvalidError) return { ok: false, reason: e.message, code: e.code };
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar entrada" };
   }
 }
@@ -341,7 +355,7 @@ export async function diagnosticarSaldoEstoque(
 
   const prod = await prisma.produto.findFirst({
     where: { id: pid, storeId: sid },
-    select: { id: true, name: true, sku: true, stock: true },
+    select: { id: true, name: true, sku: true, stock: true, metadata: true },
   });
   if (!prod) return { ok: false, reason: "Produto não encontrado nesta loja" };
 
@@ -362,28 +376,32 @@ export async function diagnosticarSaldoEstoque(
   ]);
 
   const targetDepositoId = principal?.id ?? depRows[0]?.depositoId ?? "";
-  const classification = classifyStockDrift({
+  // Mesma escala do boundary: KG compara milésimos inteiros, sem truncar gramas.
+  const scaled = classifyStockDriftForUnit({
+    unit: stockUnitFromMetadata(prod.metadata),
     stock: prod.stock,
     deposits: depRows,
     targetDepositoId,
     lastLedgerEstoqueDepois: lastLedger?.estoqueDepois ?? null,
   });
+  if (!scaled) return { ok: false, reason: "Saldo gravado com precisão incompatível com a unidade do produto" };
+  const { classification, display } = scaled;
   const aligned = classification.reason === STOCK_DRIFT_REASON.ALIGNED;
   const entradaPodeReconciliar = isProvenEntradaBaselineRepair(classification);
   return {
     ok: true,
     aligned,
-    stock: classification.stock,
-    somaDepositos: classification.soma,
-    gap: classification.gap,
+    stock: display.stock,
+    somaDepositos: display.soma,
+    gap: display.gap,
     driftReason: classification.reason,
     authority: classification.authority,
-    lastLedgerEstoqueDepois: classification.lastLedgerEstoqueDepois,
+    lastLedgerEstoqueDepois: display.lastLedgerEstoqueDepois,
     depositCount: classification.depositCount,
     positiveDepositCount: classification.positiveDepositCount,
     entradaPodeReconciliar,
-    operatorMessage: aligned ? "" : stockDriftOperatorMessage(classification),
-    detalhe: aligned ? "" : stockDriftFailMessage(classification),
+    operatorMessage: aligned ? "" : stockDriftOperatorMessage(display),
+    detalhe: aligned ? "" : stockDriftFailMessage(display),
   };
 }
 

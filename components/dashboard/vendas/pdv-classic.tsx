@@ -86,6 +86,7 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
 import { isRecord, safeCategoryLower } from "@/lib/pdv-mount-guards"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
@@ -875,6 +876,12 @@ export function PdvClassic({
   }
 
   const addToCart = (product: Product, presetQty?: number) => {
+    // Peso antes do estoque: "sem saldo" mandaria repor um produto que não pode ser vendido.
+    const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+    if (pesoBloqueado) {
+      toast({ ...pesoBloqueado, variant: "destructive" })
+      return false
+    }
     const baseQty = presetQty ?? 1
     const controlledStock = hasControlledPdvStock(product.stock, product.category)
     if (controlledStock && product.stock <= 0) {

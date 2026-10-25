@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea } from "./ui-kit";
 import { MovimentacaoEstoqueModal } from "./MovimentacaoEstoqueModal";
+import { formatStockQuantity } from "@/lib/estoque/stock-quantity";
 import {
   listCategorias,
   listCategoriasMarcasUsadasEmProduto,
@@ -1793,7 +1794,7 @@ function ProductAIEditor({
                     <Input
                       readOnly aria-label="Estoque atual"
                       aria-describedby={`produto-estoque-unidade${stockMovement.disponivel ? "" : " produto-estoque-bloqueio"}`}
-                      value={String(estoqueAtual)}
+                      value={formatStockQuantity(estoqueAtual, stockMovement.unidade === "KG" ? "KG" : "UN")}
                       className={`cursor-default bg-muted/40 tabular-nums text-foreground ${stockMovement.unidade ? "pr-12" : "pr-32"}`}
                     />
                     <span
@@ -1816,8 +1817,8 @@ function ProductAIEditor({
                 </div>
                 {stockMovement.disponivel ? (
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Salvar o produto não altera o saldo. Use Movimentar estoque para entrada ou
-                    ajuste; tudo fica registrado no histórico de movimentações.
+                    Salvar o produto não altera o saldo. Use Movimentar estoque para entrada
+                    {stockMovement.ajusteDisponivel ? " ou ajuste" : " em kg (até 3 casas)"}; tudo fica registrado no histórico de movimentações.
                   </p>
                 ) : (
                   <div
@@ -2033,7 +2034,7 @@ function ProductAIEditor({
             // Saldo devolvido pelo writer canônico na mesma transação; a lista relê do servidor.
             if (result && mountedRef.current) {
               setEstoqueAtual(result.estoqueDepois);
-              setEstoqueStatus(`Movimentação registrada. Saldo atual: ${result.estoqueDepois} ${stockMovement.unidade ?? ""}`.trim() + ".");
+              setEstoqueStatus(`Movimentação registrada. Saldo atual: ${formatStockQuantity(result.estoqueDepois, stockMovement.unidade === "KG" ? "KG" : "UN")} ${stockMovement.unidade ?? ""}`.trim() + ".");
             }
             onSaved?.();
           }}

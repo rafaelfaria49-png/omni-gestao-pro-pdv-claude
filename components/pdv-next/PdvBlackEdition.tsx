@@ -47,6 +47,7 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -341,6 +342,11 @@ export function PdvBlackEdition() {
   // ── Adicionar produto ──────────────────────────────────────────────────────
   const addProduct = useCallback(
     (product: PdvCatalogProduct, qty?: number) => {
+      const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+      if (pesoBloqueado) {
+        toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
       const effectiveQty = qty ?? 1
       const code = String(product.barcode || product.codigo || product.sku || product.id)
       const unit = product.vendaPorPeso ? "KG" : "UN"
@@ -366,7 +372,7 @@ export function PdvBlackEdition() {
       setBipeCode("")
       bipeRef.current?.focus()
     },
-    []
+    [toast]
   )
 
   // ── Bipe: Enter (prefixo canônico parsePdvScanPrefix) ───────────────────────

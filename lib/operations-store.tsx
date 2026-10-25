@@ -139,6 +139,8 @@ export interface InventoryItem {
   atributos?: ProdutoAtributoDef[]
   /** Configuração saneada e opcional projetada por `/api/ops/inventory`. */
   accessoryConfig?: ProdutoAcessoriosMetadataV1
+  /** Projetado por `/api/ops/inventory`: produto declarado por peso, venda ainda bloqueada. */
+  vendaPesoIndisponivel?: boolean
 }
 
 export interface CaixaState {

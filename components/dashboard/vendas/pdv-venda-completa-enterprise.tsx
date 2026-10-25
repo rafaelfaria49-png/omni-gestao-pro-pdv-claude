@@ -68,6 +68,7 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
@@ -378,6 +379,11 @@ export function PdvVendaCompletaEnterprise({
   // ── Cart helpers ──────────────────────────────────────────────────────────
   const addToCart = useCallback(
     (product: PdvCatalogProduct) => {
+      const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+      if (pesoBloqueado) {
+        toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
       const isService = product.category === "Servicos"
       if (!isService && product.stock <= 0) {
         toast({

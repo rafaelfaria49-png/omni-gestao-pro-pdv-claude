@@ -58,6 +58,7 @@ import {
 } from "@/lib/cadastros/produto-quality-score";
 import { getProdutoFiscal } from "@/lib/produto-fiscal";
 import { hasInvalidProductCommercial, productCommercialFromMetadata } from "@/lib/cadastros/product-commercial-contract";
+import { formatStockQuantity } from "@/lib/estoque/stock-quantity";
 import { usesClientExperience } from "@/lib/navigation/client-experience";
 import {
   categoriaCriadaSelecionada,
@@ -1108,14 +1109,16 @@ function displaySku(sku: string | undefined | null): string {
   return s.replace(SKU_DISPLAY_PREFIX_RE, "") || s;
 }
 
-function estoqueBadge(estoque: number): { tone: "danger" | "warning" | "success"; label: string; title: string } {
+function estoqueBadge(estoque: number, metadata?: unknown): { tone: "danger" | "warning" | "success"; label: string; title: string } {
+  const kg = productCommercialFromMetadata(metadata).unidade === "KG";
+  const qtd = kg ? `${formatStockQuantity(estoque, "KG")} kg` : String(estoque);
   if (estoque <= 0) {
     return { tone: "danger", label: "Sem saldo", title: "Produto sem unidades disponíveis" };
   }
   if (estoque < ESTOQUE_BAIXO_LIMITE) {
-    return { tone: "warning", label: `${estoque} · baixo`, title: "Saldo entre 1 e 5 unidades — considere repor" };
+    return { tone: "warning", label: `${qtd} · baixo`, title: kg ? "Saldo abaixo de 6 kg — considere repor" : "Saldo entre 1 e 5 unidades — considere repor" };
   }
-  return { tone: "success", label: String(estoque), title: "Saldo adequado" };
+  return { tone: "success", label: qtd, title: "Saldo adequado" };
 }
 
 function produtoStatusBadge(status: ProdutoDTO["status"]): { tone: "success" | "warning" | "default"; label: string } {
@@ -1813,7 +1816,7 @@ export function ProdutosPanel({
                 // sem isso, produto com fiscal preenchido perdia pontos indevidamente.
                 const score = catalogQualityScore(qualityScoreInputFromProduto(p));
                 const iaStub = p.metadata && typeof p.metadata.cadastroIa === "object";
-                const est = estoqueBadge(p.estoque);
+                const est = estoqueBadge(p.estoque, p.metadata);
                 const st = produtoStatusBadge(p.status);
                 const inativo = p.status === "Inativo";
                 // Destaque discreto do último lote importado (Parte 11): âmbar suave.

@@ -71,7 +71,7 @@ type StockLedgerCommandBase = {
 export type StockLedgerCommand =
   | (StockLedgerCommandBase & {
       kind: "entrada"
-      /** Inteiro > 0. */
+      /** > 0 na unidade do produto: inteiro em UN/G, até 3 casas em KG. */
       quantidade: number
       /** Custo unitário da entrada real; ausente/0 preserva o custo médio. */
       custoUnitario?: number
@@ -188,12 +188,28 @@ function truncInt(value: unknown): number | null {
   return null
 }
 
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value.trim())
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
 export type NormalizedStockCommand = {
   kind: "entrada" | "saida" | "ajuste"
   produtoId: string
   depositoId: string | null
+  /** Truncado (contrato legado de UN). */
   quantidade: number | null
   novoSaldo: number | null
+  /**
+   * Valor recebido, sem truncar. O boundary usa este campo para KG, onde
+   * truncar perderia gramas; UN segue com o contrato legado acima.
+   */
+  quantidadeExata: number | null
+  novoSaldoExato: number | null
   custoUnitario: number
   permitirNegativo: boolean
   realinharDepositoAoStock: boolean
@@ -221,6 +237,8 @@ export function normalizeStockCommand(cmd: StockLedgerCommand): NormalizedStockC
     depositoId: cleanId(cmd.depositoId ?? null) || null,
     quantidade,
     novoSaldo,
+    quantidadeExata: cmd.kind === "ajuste" ? null : finiteNumber((cmd as { quantidade?: unknown }).quantidade),
+    novoSaldoExato: cmd.kind === "ajuste" ? finiteNumber((cmd as { novoSaldo?: unknown }).novoSaldo) : null,
     custoUnitario: Number.isFinite(custoRaw) ? Math.max(0, custoRaw) : 0,
     permitirNegativo: cmd.kind === "saida" ? (cmd.permitirNegativo === true) : false,
     realinharDepositoAoStock:

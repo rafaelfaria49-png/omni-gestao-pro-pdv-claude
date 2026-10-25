@@ -56,6 +56,7 @@ import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
 import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
@@ -558,6 +559,11 @@ export function PdvSupermercado({
 
   const addToCart = useCallback(
     (product: Product, qtyOverride?: number) => {
+      const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+      if (pesoBloqueado) {
+        toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
       const nq = normalizeQtyForProduct(product, qtyOverride)
       if (product.stock <= 0) {
         toast({ title: "Sem estoque", description: `${product.name} está sem saldo no estoque.` })
