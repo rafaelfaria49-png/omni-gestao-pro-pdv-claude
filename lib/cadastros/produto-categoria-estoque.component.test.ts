@@ -130,6 +130,26 @@ describe("Categoria explícita na experiência do cliente", () => {
     expect(h.upsertCategoria).not.toHaveBeenCalled()
   })
 
+  it("lista longa: a opção ativa pelas setas é rolada para a área visível antes do Enter", async () => {
+    h.dictionary = Array.from({ length: 30 }, (_, i) => ({ id: `c${i}`, name: `Categoria ${String(i).padStart(2, "0")}`, type: "produto", active: true }))
+    const scrolled: string[] = []
+    const original = HTMLElement.prototype.scrollIntoView
+    HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this.textContent ?? "") }
+    try {
+      const user = userEvent.setup()
+      editor()
+      await loaded()
+      await user.click(categoria())
+      await user.keyboard("categoria")
+      for (let i = 0; i < 25; i += 1) await user.keyboard("{ArrowDown}")
+      expect(scrolled.at(-1)).toBe("Categoria 24")
+      await user.keyboard("{Enter}")
+      expect(categoria().value).toBe("Categoria 24")
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original
+    }
+  })
+
   it("busca seleciona o nome canônico existente, sem criar", async () => {
     editor()
     await loaded()

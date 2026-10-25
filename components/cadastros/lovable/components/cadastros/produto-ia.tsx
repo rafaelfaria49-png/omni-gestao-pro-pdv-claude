@@ -241,6 +241,12 @@ function CategoriaMarcaCombobox({
     setDraft(value);
   }, [value]);
 
+  // Setas: a opção ativa fica visível na lista rolável (max-h-64) antes do Enter.
+  useEffect(() => {
+    if (active < 0) return;
+    wrapRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [active]);
+
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
