@@ -1,18 +1,18 @@
 {
   "aep": "1.0-R2",
   "track": "pessoas",
-  "status": "RUNNING",
+  "status": "BLOCKED",
   "risk_tier": "ALTO",
-  "current_goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "current_goal": null,
   "next_goal": null,
   "bootstrap_commit": null,
   "counters": {
     "goals_done": 2,
-    "goals_blocked": 1,
+    "goals_blocked": 2,
     "goals_imported": 0,
-    "ledger_lines": 4
+    "ledger_lines": 5
   },
-  "last_goal": "PESSOAS-DP-FRONTEND-CADASTRO-001B",
+  "last_goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
   "last_result": "BLOCKED",
-  "last_ratified_at": "2026-10-11T17:26:59.867Z"
+  "last_ratified_at": "2026-10-23T00:03:23.229Z"
 }

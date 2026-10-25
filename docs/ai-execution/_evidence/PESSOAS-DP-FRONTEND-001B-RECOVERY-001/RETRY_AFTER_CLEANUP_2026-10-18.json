@@ -1,0 +1,52 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-18",
+  "headTested": "c16165b1e361684944c81a8d4ff408f7c6fedf33",
+  "main": "180a2f2ab450cc2686b5087dc09b1a0ee58b5f72",
+  "authorizedCleanupReceipt": "DISK_CLEANUP_AUTHORIZED_2026-10-18.json",
+  "runnerLog": "runner-after-cleanup-2026-10-18.log",
+  "runnerExit": 1,
+  "npmCi": "PASS",
+  "prismaGenerate": "PASS",
+  "spacePreflight": {
+    "beforeInstallBytes": 14765408256,
+    "afterInstallBytes": 13421813760,
+    "minimumBytes": 12884901888,
+    "status": "PASS"
+  },
+  "chromium": {
+    "status": "PASS",
+    "playwright": "1.52.0",
+    "version": "136.0.7103.25",
+    "launchPageClose": "PASS"
+  },
+  "typecheck": {
+    "status": "FAIL",
+    "exit": 2,
+    "diagnostic": "scripts/pessoas/frontend.contract.test.ts(655,54): TS2322: Type \"doc-stage\" is not assignable to type `${string}-${string}-${string}-${string}-${string}`.",
+    "cause": "Fixture documentoId in simulated upload-intent response does not satisfy the inferred randomUUID template type",
+    "correction": "Replace the two occurrences of doc-stage with the same valid synthetic UUID; keep assertions and cancellation/retry scenario unchanged",
+    "rerunRequired": true
+  },
+  "vitest": "NOT_RUN_TYPECHECK_GATE",
+  "build": "NOT_RUN_TYPECHECK_GATE",
+  "lint": "NOT_RUN_TYPECHECK_GATE",
+  "e2e": "NOT_RUN_TYPECHECK_GATE",
+  "cleanup": {
+    "status": "PASS",
+    "temporaryWorkspace": "C:/Users/rafae/AppData/Local/Temp/omni-pessoas-test-Is6eAx",
+    "workspaceAbsent": true,
+    "port55439": "FREE"
+  },
+  "afterCleanupFreeBytes": 14992912384,
+  "afterCleanupFreeGiB": 13.963,
+  "aep": {
+    "attempt": 1,
+    "maxAttempts": 3,
+    "openedAt": "2026-10-12T23:27:06.181Z",
+    "attemptsLog": [],
+    "close": "NOT_RUN"
+  },
+  "independentReview": "WAIVED_BY_HUMAN_DECISION",
+  "technicalAcceptance": "PENDING_RETRY_AFTER_FIXTURE_CORRECTION"
+}

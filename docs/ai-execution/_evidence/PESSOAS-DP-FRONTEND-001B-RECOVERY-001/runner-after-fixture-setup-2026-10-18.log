@@ -1,0 +1,69 @@
+[pessoas-test] HEAD dab8ce719142f334250c69afe5ed6b6a8cd76e10 · base 180a2f2ab450cc2686b5087dc09b1a0ee58b5f72 (merge-base origin/main)
+[pessoas-test] migrations novas no HEAD: (nenhuma)
+[pessoas-test] workspace externo: C:\Users\rafae\AppData\Local\Temp\omni-pessoas-test-bM5hfD
+[pessoas-test] reserva antes da instalação: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-bM5hfD\\ws","freeBytes":14809632768,"minimumBytes":12884901888}
+[pessoas-test] preflight frontend: {"node":"v24.14.1","npm":"11.11.0","os":{"platform":"win32","release":"10.0.26200","arch":"x64"},"workspace":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-bM5hfD\\ws","cache":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-bM5hfD\\npm-cache","evidence":"C:\\Projetos\\omni-gestao-pessoas-001b-recovery-001\\docs\\ai-execution\\_evidence\\PESSOAS-DP-FRONTEND-001B-RECOVERY-001","postgresql":{"initdb":"initdb (PostgreSQL) 17.10","pg_ctl":"pg_ctl (PostgreSQL) 17.10","psql":"psql (PostgreSQL) 17.10","postgres":"postgres (PostgreSQL) 17.10"},"space":[{"stage":"antes da instalação","volumes":[{"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-bM5hfD\\ws","freeBytes":14809632768,"minimumBytes":12884901888}]}]}
+[pessoas-test] npm ci (lockfile) + prisma generate no workspace externo…
+[pessoas-test] reserva após instalação: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-bM5hfD\\ws","freeBytes":13431844864,"minimumBytes":12884901888}
+[pessoas-test] reserva reserva medida: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-bM5hfD\\ws","freeBytes":13431930880,"minimumBytes":12884901888}
+[pessoas-test] Chromium: {"playwright":"1.52.0","chromium":"136.0.7103.25","executable":"C:\\Users\\rafae\\AppData\\Local\\ms-playwright\\chromium-1169\\chrome-win\\chrome.exe"}
+[pessoas-test] npm run typecheck antes das suítes completas/build/E2E…
+[pessoas-test] next-pwa instalado pelo npm ci: 10.2.9
+[pessoas-test] invariantes 001A conferidos: {"check":10,"index":7,"trigger":10,"function":4}
+[pessoas-test] drift migration × schema.prisma: nenhum
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.4 [39m[90mC:/Users/rafae/AppData/Local/Temp/omni-pessoas-test-bM5hfD/ws[39m
+
+ [32m✓[39m scripts/pessoas/frontend.contract.test.ts [2m([22m[2m39 tests[22m[2m)[22m[33m 29186[2mms[22m[39m
+     [33m[2m✓[22m[39m aplica o mesmo estado DP nos três modos e desabilita prefetch [33m 1210[2mms[22m[39m
+     [33m[2m✓[22m[39m bloqueia salvar durante upload/complete pendente e mantém Documentos montado ao reler a ficha [33m 314[2mms[22m[39m
+     [33m[2m✓[22m[39m preserva o intent na árvore oculta/inert após REDE e só retoma depois de validar a mesma identidade [33m 477[2mms[22m[39m
+     [33m[2m✓[22m[39m confere o mesmo intent após resposta PUT desconhecida e PUT 412 [33m 317[2mms[22m[39m
+     [33m[2m✓[22m[39m não repete URL vencida e conserva intent válido para confirmação/listagem [33m 395[2mms[22m[39m
+     [33m[2m✓[22m[39m exige descarte explícito após INTENT_INVALIDO, sem novo intent automático [33m 22238[2mms[22m[39m
+     [33m[2m✓[22m[39m exige descarte explícito após INTENT_EXPIRADO, sem novo intent automático [33m 427[2mms[22m[39m
+ [32m✓[39m lib/pessoas/integration.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 3102[2mms[22m[39m
+     [33m[2m✓[22m[39m cria dois empregadores/lojas com mesma inscrição sem agrupamento [33m 761[2mms[22m[39m
+ [32m✓[39m lib/pessoas/hardening.integration.test.ts [2m([22m[2m46 tests[22m[2m)[22m[33m 1306[2mms[22m[39m
+ [32m✓[39m scripts/pessoas/frontend.integration.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 1070[2mms[22m[39m
+ [32m✓[39m lib/pessoas/flag-off.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m lib/pessoas/domain.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m lib/pessoas/historico-privacidade.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m lib/pessoas/documentos/download-url.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m lib/pessoas/documentos/intent.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m lib/pessoas/runner-safety.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m10 passed[39m[22m[90m (10)[39m
+[2m      Tests [22m [1m[32m162 passed[39m[22m[90m (162)[39m
+[2m   Start at [22m 23:56:02
+[2m   Duration [22m 105.58s[2m (transform 27.03s, setup 0ms, import 40.25s, tests 34.73s, environment 21.38s)[22m
+
+JSON report written to C:/Users/rafae/AppData/Local/Temp/omni-pessoas-test-bM5hfD/vitest.json
+[pessoas-test] vitest: 162 passaram · 0 falharam · 0 pulados · 0 todo
+[pessoas-test] reserva antes do build: {"volume":"C:\\:3255495063","directory":"C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-test-bM5hfD\\ws","freeBytes":13135884288,"minimumBytes":12884901888}
+[pessoas-test] npm run build (PWA habilitado, sem autoridade de migration)…
+[pessoas-test] npm run build PASS · MIGRATION_SKIPPED
+[pessoas-test] build oficial PASS
+[pessoas-test] aceite PWA FAIL: SW importa script inesperado
+
+1 !== 0
+
+[pessoas-test] ESLint focado FAIL: ESLint focado (exit 1) C:\Users\rafae\AppData\Local\Temp\omni-pessoas-test-bM5hfD\ws\components\dashboard\pessoas\documentos.tsx
+  80:6  warning  React Hook useEffect has a missing dependency: 'resource'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\rafae\AppData\Local\Temp\omni-pessoas-test-bM5hfD\ws\scripts\pessoas\frontend.contract.test.ts
+  323:25  error  Do not pass children as props. Instead, pass them as additional arguments to React.createElement  react/no-children-prop
+
+✖ 2 problems (1 error, 1 warning)
+[pessoas-test] CLEANUP PASS · cluster/workspace/node_modules/.next/SW/relatórios removidos · porta 55439 livre
+[pessoas-test] FALHA: aceite PWA: SW importa script inesperado
+
+1 !== 0
+
+ESLint focado: ESLint focado (exit 1) C:\Users\rafae\AppData\Local\Temp\omni-pessoas-test-bM5hfD\ws\components\dashboard\pessoas\documentos.tsx
+  80:6  warning  React Hook useEffect has a missing dependency: 'resource'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\rafae\AppData\Local\Temp\omni-pessoas-test-bM5hfD\ws\scripts\pessoas\frontend.contract.test.ts
+  323:25  error  Do not pass children as props. Instead, pass them as additional arguments to React.createElement  react/no-children-prop
+
+✖ 2 problems (1 error, 1 warning)

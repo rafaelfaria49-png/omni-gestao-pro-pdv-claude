@@ -1,0 +1,14 @@
+AEP/1.0-R2 · attempt pessoas · GOAL PESSOAS-DP-FRONTEND-001B-RECOVERY-001
+tentativa 3/3 falhou — TETO DE TENTATIVAS ESGOTADO.
+Convertendo para BLOCKED (by=externo se não houver causa melhor).
+
+BLOQUEADO · AEP/1.0-R2 · trilha pessoas · GOAL PESSOAS-DP-FRONTEND-001B-RECOVERY-001 → BLOCKED (decisao)
+motivo: Tentativa 3/3 falhou: E2E ON nao localiza o cartao da Store, esperado 1 recebido 0 em frontend.e2e.ts:32. Teto AEP esgotado; nenhuma quarta tentativa autorizada.
+tentativas anteriores: 3
+commit de estado: 37c5d5880c09d45a22f5ba697f95327be5e66e68
+state.json: status BLOCKED
+.aep-active REMOVIDO.
+Desbloqueio é ato HUMANO: mover o arquivo de _closed/goals/ de volta para goals/
+com status READY, ou planejar um GOAL sucessor.
+
+CONTEXTO: NEW_SESSION

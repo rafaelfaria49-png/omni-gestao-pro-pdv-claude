@@ -1,0 +1,222 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "recordedOn": "2026-10-12",
+  "mode": "IMPLEMENTACAO_DIRETA_SEM_TESTES",
+  "status": "RECOVERED_COMMITTED_AWAITING_VALIDATION",
+  "branch": "goal/pessoas-001b-recovery-001",
+  "worktree": "C:/Projetos/omni-gestao-pessoas-001b-recovery-001",
+  "base": "1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d",
+  "functionalCommit": "9e890b35160497531f395d8e2a934576b23af4a2",
+  "validationTarget": "HEAD_EXATO_DA_FUTURA_RODADA_AUTORIZADA",
+  "newHeadValidated": false,
+  "source": {
+    "ref": "origin/goal/pessoas-001b-frontend",
+    "historicalHead": "25b5fda2612b35b6daccd2103fb69060f5107f73",
+    "snapshot": "fde0794c4f11712034e60d785904cec14ce99216",
+    "historicalBase": "9f1b511a21ab98a924513428d465725e6839fdc2",
+    "ancestryInspected": true,
+    "mainManifestChangesSinceHistoricalBase": 0
+  },
+  "recovery": {
+    "filesRecovered": 31,
+    "identicalToSnapshot": 28,
+    "typescriptFixApplied": true,
+    "frontendCompleteInCode": true,
+    "privacyFixPreserved": true,
+    "surfacesRedesigned": false,
+    "mainPreserved": true,
+    "gitDiffScope": "ALLOWLIST_ONLY",
+    "aepHistoryTransported": false
+  },
+  "inspection": {
+    "method": "LEITURA_DE_CODIGO_E_DIFF_GIT",
+    "stagedDiffWhitespaceErrors": 0,
+    "independentReview": false
+  },
+  "validation": {
+    "status": "PENDING",
+    "tests": "NOT_RUN_BY_USER_REQUEST",
+    "typecheck": "NOT_RUN_BY_USER_REQUEST",
+    "lint": "NOT_RUN_BY_USER_REQUEST",
+    "build": "NOT_RUN_BY_USER_REQUEST",
+    "e2e": "NOT_RUN_BY_USER_REQUEST",
+    "officialRunner": "NOT_RUN_BY_USER_REQUEST",
+    "visual": "PENDING",
+    "testCounts": null,
+    "inheritedPass": false,
+    "independentReview": {
+      "status": "PENDING",
+      "requiredModel": "GLM 5.3",
+      "requiredFamily": "zai/GLM-5.3"
+    },
+    "previewR2": {
+      "status": "PENDING",
+      "separateAuthorization": "PENDING"
+    }
+  },
+  "aep": {
+    "close": "NOT_RUN",
+    "goalDone": false,
+    "attempt": 1,
+    "attemptsConsumedByValidation": 0,
+    "derivedFilesManuallyEdited": false
+  },
+  "nextGate": "AUTORIZACAO_DA_VALIDACAO_ISOLADA",
+  "files": [
+    {
+      "path": "app/api/pessoas/disponibilidade/route.ts",
+      "snapshotBlob": "8929e2e1f90f4dba68a95d0f559d5a5cc0161104",
+      "functionalBlob": "8929e2e1f90f4dba68a95d0f559d5a5cc0161104"
+    },
+    {
+      "path": "app/dashboard/pessoas/configuracoes/page.tsx",
+      "snapshotBlob": "1cf097294efe4eb3efec31f32c486de2d6b3a712",
+      "functionalBlob": "1cf097294efe4eb3efec31f32c486de2d6b3a712"
+    },
+    {
+      "path": "app/dashboard/pessoas/error.tsx",
+      "snapshotBlob": "0811efecc08aaa48b1761bf7683531a08e7159f8",
+      "functionalBlob": "0811efecc08aaa48b1761bf7683531a08e7159f8"
+    },
+    {
+      "path": "app/dashboard/pessoas/funcionarios/[id]/page.tsx",
+      "snapshotBlob": "581028376d8505511f71b6c73e0a66ae4597d13f",
+      "functionalBlob": "581028376d8505511f71b6c73e0a66ae4597d13f"
+    },
+    {
+      "path": "app/dashboard/pessoas/funcionarios/novo/page.tsx",
+      "snapshotBlob": "b08c85ace5a9dba82329ef327eb3fec8fcbd6570",
+      "functionalBlob": "b08c85ace5a9dba82329ef327eb3fec8fcbd6570"
+    },
+    {
+      "path": "app/dashboard/pessoas/funcionarios/page.tsx",
+      "snapshotBlob": "29ee88aba4b299957f5a02527a87f185c94a2bb6",
+      "functionalBlob": "29ee88aba4b299957f5a02527a87f185c94a2bb6"
+    },
+    {
+      "path": "app/dashboard/pessoas/layout.tsx",
+      "snapshotBlob": "8073cca13b2dbdfa0d8ad651fe377b5a71d2dadd",
+      "functionalBlob": "8073cca13b2dbdfa0d8ad651fe377b5a71d2dadd"
+    },
+    {
+      "path": "app/dashboard/pessoas/loading.tsx",
+      "snapshotBlob": "fb401c268cfed981a7ca54346357bb5afa421ba7",
+      "functionalBlob": "fb401c268cfed981a7ca54346357bb5afa421ba7"
+    },
+    {
+      "path": "app/dashboard/pessoas/page.tsx",
+      "snapshotBlob": "93050b6f218c9cfe223b9751485d801891c5e674",
+      "functionalBlob": "93050b6f218c9cfe223b9751485d801891c5e674"
+    },
+    {
+      "path": "components/dashboard/pessoas/campos.ts",
+      "snapshotBlob": "036cf1d7f0a0ffe69e8388e650dac1d264117563",
+      "functionalBlob": "036cf1d7f0a0ffe69e8388e650dac1d264117563"
+    },
+    {
+      "path": "components/dashboard/pessoas/configuracoes.tsx",
+      "snapshotBlob": "f6040ffae71a54cb0e2270202826851a89903129",
+      "functionalBlob": "f6040ffae71a54cb0e2270202826851a89903129"
+    },
+    {
+      "path": "components/dashboard/pessoas/contexto.tsx",
+      "snapshotBlob": "93deec435b9984108a3166a6079dd7c3101edcc6",
+      "functionalBlob": "93deec435b9984108a3166a6079dd7c3101edcc6"
+    },
+    {
+      "path": "components/dashboard/pessoas/documentos.tsx",
+      "snapshotBlob": "df1dd74e4e948598e27ba0b51af5582feff6a71c",
+      "functionalBlob": "df1dd74e4e948598e27ba0b51af5582feff6a71c"
+    },
+    {
+      "path": "components/dashboard/pessoas/ficha.tsx",
+      "snapshotBlob": "b3b5199a5cd0cb6a40da9ef057a902cc8f358acc",
+      "functionalBlob": "b3b5199a5cd0cb6a40da9ef057a902cc8f358acc"
+    },
+    {
+      "path": "components/dashboard/pessoas/lista.tsx",
+      "snapshotBlob": "0cfda50bcaa8ac24dd921f8d50c9dbdb367fce4c",
+      "functionalBlob": "0cfda50bcaa8ac24dd921f8d50c9dbdb367fce4c"
+    },
+    {
+      "path": "components/dashboard/pessoas/novo.tsx",
+      "snapshotBlob": "033596716755dc0956376272fb66aeb36237036d",
+      "functionalBlob": "033596716755dc0956376272fb66aeb36237036d"
+    },
+    {
+      "path": "components/dashboard/pessoas/ui.tsx",
+      "snapshotBlob": "7b6b9870c2b4641a9ba9f8fce11a251b750fc072",
+      "functionalBlob": "7b6b9870c2b4641a9ba9f8fce11a251b750fc072"
+    },
+    {
+      "path": "components/dashboard/pessoas/use-disponibilidade.ts",
+      "snapshotBlob": "be28dad339ca0676e18c329f4f2fdce4cfa0e9a4",
+      "functionalBlob": "be28dad339ca0676e18c329f4f2fdce4cfa0e9a4"
+    },
+    {
+      "path": "components/painel-inicial/MobileNavSheet.tsx",
+      "snapshotBlob": "27df38a046119111985da519c75e16f4f2899f27",
+      "functionalBlob": "27df38a046119111985da519c75e16f4f2899f27"
+    },
+    {
+      "path": "components/painel-inicial/Sidebar.tsx",
+      "snapshotBlob": "37b4e8427993998110c99a4d61cbaca84add644d",
+      "functionalBlob": "37b4e8427993998110c99a4d61cbaca84add644d"
+    },
+    {
+      "path": "lib/navigation/dashboard-nav-items.ts",
+      "snapshotBlob": "6ea5a74b8fb41d064c62f6be0e6440febfdd18e5",
+      "functionalBlob": "6ea5a74b8fb41d064c62f6be0e6440febfdd18e5"
+    },
+    {
+      "path": "lib/pessoas/adapters/cadastro-ui.ts",
+      "snapshotBlob": "36a10615fd1bda9c8b67136fac4051f7e2ec106d",
+      "functionalBlob": "36a10615fd1bda9c8b67136fac4051f7e2ec106d"
+    },
+    {
+      "path": "lib/pessoas/cadastro.ts",
+      "snapshotBlob": "ec50510fd696d75885288778d64900a865e9c32c",
+      "functionalBlob": "ec50510fd696d75885288778d64900a865e9c32c"
+    },
+    {
+      "path": "lib/pessoas/historico-privacidade.test.ts",
+      "snapshotBlob": "95047f6ea180d0c647a62368070a611fb616e2ca",
+      "functionalBlob": "95047f6ea180d0c647a62368070a611fb616e2ca"
+    },
+    {
+      "path": "lib/pessoas/readers/disponibilidade.ts",
+      "snapshotBlob": "1d7d1c56aa04c1b859726cf48025111526b9a5f5",
+      "functionalBlob": "1d7d1c56aa04c1b859726cf48025111526b9a5f5"
+    },
+    {
+      "path": "scripts/pessoas/frontend.contract.test.ts",
+      "snapshotBlob": "3833553b79d7c1306ea7b4aa641892622dda7345",
+      "functionalBlob": "e548500146e1cb6aeb82b4535f079c5bf2fdd5f2"
+    },
+    {
+      "path": "scripts/pessoas/frontend.e2e.ts",
+      "snapshotBlob": "3c99a7aac82b55088dd07cb162dd3d818ecbe3c2",
+      "functionalBlob": "3c99a7aac82b55088dd07cb162dd3d818ecbe3c2"
+    },
+    {
+      "path": "scripts/pessoas/frontend.integration.test.ts",
+      "snapshotBlob": "442c075521f1a6489d1decf059ad07704e11e044",
+      "functionalBlob": "442c075521f1a6489d1decf059ad07704e11e044"
+    },
+    {
+      "path": "scripts/pessoas/playwright.frontend.config.ts",
+      "snapshotBlob": "7fd3c66d101fcf71ced110451c17e75221cde487",
+      "functionalBlob": "7fd3c66d101fcf71ced110451c17e75221cde487"
+    },
+    {
+      "path": "scripts/pessoas/run-frontend-tests.mjs",
+      "snapshotBlob": "cb0afad2a25c96d132c4e4aa21eaf96d0927f9bc",
+      "functionalBlob": "01f69eba769bfb468859bfa47d97a8d6fe499f42"
+    },
+    {
+      "path": "scripts/pessoas/run-official-tests.mjs",
+      "snapshotBlob": "5dff3f8dcf4e27d5afd51a88e5afdf5d6dbea431",
+      "functionalBlob": "93df20b65b62974d7a585d011d5388efd1e0d11b"
+    }
+  ]
+}

@@ -1,0 +1,195 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-001",
+  "date": "2026-10-19",
+  "timezone": "America/Sao_Paulo",
+  "validatedHead": "dab8ce719142f334250c69afe5ed6b6a8cd76e10",
+  "mainIntegrated": "180a2f2ab450cc2686b5087dc09b1a0ee58b5f72",
+  "officialRunner": {
+    "command": "node scripts/pessoas/run-frontend-tests.mjs",
+    "exit": 1,
+    "status": "FAIL_PWA_AND_FOCUSED_LINT",
+    "log": "runner-after-fixture-setup-2026-10-18.log",
+    "typecheck": "PASS",
+    "vitest": {
+      "total": 162,
+      "passed": 162,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "frontendContract": 39,
+      "frontendIntegration": 25,
+      "newP201Cases": 20,
+      "backend": 98
+    },
+    "database": {
+      "invariants": {
+        "check": 10,
+        "index": 7,
+        "trigger": 10,
+        "function": 4
+      },
+      "drift": "ZERO"
+    },
+    "chromium": {
+      "status": "PASS",
+      "playwright": "1.52.0",
+      "version": "136.0.7103.25"
+    },
+    "space": {
+      "minimumBytes": 12884901888,
+      "beforeInstallBytes": 14809632768,
+      "afterInstallBytes": 13431844864,
+      "beforeBuildBytes": 13135884288
+    },
+    "build": {
+      "first": "PASS",
+      "migration": "MIGRATION_SKIPPED",
+      "requiredSecondBuild": "NOT_RUN_PRECEDING_GATE_FAILED"
+    },
+    "pwa": {
+      "status": "FAIL",
+      "message": "SW importa script inesperado: 1 !== 0",
+      "observedGeneratedImport": "importScripts(\"/client-privacy-cache.js\")",
+      "inspector": "scripts/pessoas/inspect-pwa-build.mjs",
+      "line": 35,
+      "inspectorInAllowlist": false
+    },
+    "lint": {
+      "status": "FAIL",
+      "errors": 1,
+      "warnings": 1,
+      "findings": [
+        {
+          "file": "components/dashboard/pessoas/documentos.tsx",
+          "line": 80,
+          "rule": "react-hooks/exhaustive-deps"
+        },
+        {
+          "file": "scripts/pessoas/frontend.contract.test.ts",
+          "line": 323,
+          "rule": "react/no-children-prop"
+        }
+      ]
+    },
+    "globalLint": "NOT_RUN",
+    "e2e": "NOT_RUN_PRECEDING_GATES_FAILED",
+    "cleanup": {
+      "status": "PASS",
+      "workspace": "C:/Users/rafae/AppData/Local/Temp/omni-pessoas-test-bM5hfD",
+      "workspaceAbsent": true,
+      "port55439": "FREE",
+      "formerBuildProcessesEnded": true
+    }
+  },
+  "p201": {
+    "status": "FIXED_AND_POSTGRES_REGRESSION_PASS",
+    "storeGrammar": "1-100 ASCII letters/digits/underscore/hyphen",
+    "employerAndDocumentGrammar": "8-100 unchanged",
+    "namespace": "UNCHANGED",
+    "proof": "All 20 new P2-01 cases passed in the 25-case frontend integration suite"
+  },
+  "lintSourceCorrectionsAfterValidatedHead": {
+    "applied": true,
+    "retested": false,
+    "files": [
+      "components/dashboard/pessoas/documentos.tsx",
+      "scripts/pessoas/frontend.contract.test.ts"
+    ],
+    "details": [
+      "Effect captures resource and now lists resource in dependencies; useResource already returns a new object and reload function each render, preserving the existing trigger pattern and pending-upload guards",
+      "React test builds child with createElement's child argument and injects required action props using cloneElement; no assertions removed"
+    ]
+  },
+  "pwaProvenance": {
+    "introducedByMainCommit": "ae8793259df48b1cfa27d3e87bd5cfa74da95c13",
+    "ancestorOfMainAndExecutionHead": true,
+    "nextConfigBlobHeadAndMain": "6c1831768ad19758b5d52f7b2b9a3152e4a71f30",
+    "privacyScriptBlobHeadAndMain": "67059e749e559ce570e2db4fa02c3feff46f2940",
+    "nextConfigImportLine": 58,
+    "configurationModifiedByThisTask": false,
+    "privacyScriptModifiedByThisTask": false,
+    "inspectorModifiedByThisTask": false,
+    "inspection": "Required PWA verification stops before its route/offline/worker assertions; no PWA PASS claimed"
+  },
+  "aepRefresh": "PASS_PREVIOUSLY_VERIFIED",
+  "verifyAll": "PASS",
+  "aepClose": "NOT_RUN_REQUIRED_GATES_UNSATISFIED",
+  "selfReview": {
+    "author": "Codex",
+    "family": "openai",
+    "type": "SELF_REVIEW_NOT_INDEPENDENT",
+    "staticProductFindings": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0
+    },
+    "technicalAcceptance": "BLOCKED",
+    "latestLintChangesRequireRetest": true,
+    "independentReview": "WAIVED_BY_HUMAN_DECISION",
+    "waiverConditionSatisfied": false,
+    "humanMergeAuthorization": "PENDING"
+  },
+  "qaSmokes": "Historical 15-16 October evidence reused with original SHAs/limits; not rerun or promoted to exact-head automated proof",
+  "humanGate": {
+    "reason": "Required PWA inspector is outside the exact allowlist",
+    "requiredPath": "scripts/pessoas/inspect-pwa-build.mjs",
+    "rule": "ENTRYPOINT: Escreva só dentro da allowlist. Gate não liberado no GOAL = pare e peça autorização humana.",
+    "proposal": "PWA_SCOPE_GATE_2026-10-19.md",
+    "requiredProcess": "Formal human replanning and compatible official session-scope update, preserving attempt/opening/history; no manual marker or GOAL edits in this execution"
+  },
+  "diskCleanup": {
+    "authorizedOnly": [
+      "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-005/.next",
+      "C:/Projetos/omni-gestao-ops-v4-fluxo-curto-007/.next"
+    ],
+    "completed": true,
+    "observedNetPhysicalBytesRecovered": 4334067712,
+    "additionalDeletion": false
+  },
+  "pr273": "OPEN_DRAFT",
+  "mergeReadiness": "BLOCKED",
+  "blockers": [
+    "PWA_INSPECTOR_OUTSIDE_ALLOWLIST",
+    "REVALIDATION_REQUIRED_AFTER_LINT_SOURCE_CORRECTIONS"
+  ],
+  "nextAction": "Human decision on the narrow PWA-inspector replanning; preserve session; remeasure disk before any new isolated installation; rerun required checks and close only after complete acceptance",
+  "productionActivated": false,
+  "goal002Started": false,
+  "dockerUsed": false,
+  "aepSession": {
+    "attempt": 1,
+    "maxAttempts": 3,
+    "openedAt": "2026-10-12T23:27:06.181Z",
+    "attemptsLog": [],
+    "base": "180a2f2ab450cc2686b5087dc09b1a0ee58b5f72",
+    "scopeRefreshLog": [
+      {
+        "at": "2026-10-19T00:05:58.251Z",
+        "from_base_commit": "1a80f2c51671c9f8a23d64ea2f3c1f096fd78b8d",
+        "base_commit": "180a2f2ab450cc2686b5087dc09b1a0ee58b5f72",
+        "attempt": 1,
+        "attempts_log": [],
+        "opened_at": "2026-10-12T23:27:06.181Z",
+        "plan_ref": "OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15",
+        "from_plan_rev": 5,
+        "plan_rev": 6,
+        "goal_blob_before": "eeec220e44d58f637a0e9dfa16e80e19e52499cf",
+        "goal_blob_after": "9f3ee05b4d920b81ccccbd6c7d431d2cd95d63fa",
+        "added_paths": [
+          "lib/pessoas/documentos/service.ts"
+        ],
+        "previous_active_sha256": "ca76b04e214e25c20ff54fc2fbcaf9bb3f1c8eebc8e2cae4b9d68c65744f077f"
+      }
+    ]
+  },
+  "diskLatest": {
+    "freeBytes": 13538349056,
+    "freeGiB": 12.609,
+    "measuredAtUtc": "2026-10-19T03:30:37.557Z"
+  },
+  "latestLintSourceSha256": {
+    "components/dashboard/pessoas/documentos.tsx": "173e24dc240ccd0b44c914c07088890608fa8892c836893135e153025076a5dd",
+    "scripts/pessoas/frontend.contract.test.ts": "99d960de74e7af8d02c23f59c1d1b9a1bc2f8379d0cce8e0a1cb499f8272a18f"
+  },
+  "lintTestSyntax": "PASS_NATIVE_TYPESCRIPT_PARSE_ONLY_NOT_TYPECHECK_OR_ESLINT"
+}
