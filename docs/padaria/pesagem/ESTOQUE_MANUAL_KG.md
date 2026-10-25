@@ -71,11 +71,11 @@ Aplicar no Neon de produção, fazer merge ou deploy exige **nova autorização 
 
 Provado em PG descartável: **cliente antigo (`Int`) gravando em coluna `double` corrompe em
 silêncio** (13 → `6e-323`, −1 → `NaN`), enquanto **cliente novo (`Float`) gravando em coluna
-`integer` falha com erro `22P03` sem gravar nada**. Por isso a ordem segura é: congelar escritas
-de estoque → deploy do código novo → migration logo em seguida → verificar → reabrir. Deployments
-antigos precisam estar bloqueados, e rollback para a versão anterior é proibido depois da
-migration (só para build com schema `Float`). Locks, pré-checagem, verificação e recuperação
-estão no runbook.
+`integer` falha com erro `22P03` sem gravar nada**. Ordem segura: trava `STOCK_WRITES_FROZEN=true`
+(o boundary lança; a venda responde 5xx e fica na fila do PDV) → deploy do código novo → **remover**
+deployments antigos e previews que alcançam produção → drenar → migration → verificar com a trava
+ligada → desligar a trava. Rollback para a versão anterior é proibido depois da migration (só para
+build com schema `Float`). Detalhes, locks e recuperação no runbook.
 
 ## Pendências conhecidas (fora deste escopo)
 

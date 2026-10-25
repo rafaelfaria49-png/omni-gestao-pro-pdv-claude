@@ -68,6 +68,6 @@ export function pdvWeightSaleRemovedNotice(names: readonly string[]): PdvWeightS
   const quem = names.join(", ")
   return {
     title: TITULO,
-    description: `${quem} ${names.length > 1 ? "saíram" : "saiu"} do carrinho: produto vendido por kg ainda não pode ser registrado no PDV. ${ORIENTACAO}`,
+    description: `${quem} ${names.length > 1 ? "saíram" : "saiu"} do carrinho: produto vendido por kg ainda não pode ser registrado no PDV. ${ORIENTACAO} Pagamento em andamento foi cancelado; confira o total e lance de novo.`,
   }
 }

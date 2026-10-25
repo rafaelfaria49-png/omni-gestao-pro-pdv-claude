@@ -110,6 +110,24 @@ function arredonda2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
 }
 
+/**
+ * Trava operacional do rollout da migration de estoque (runbook ESTOQUE-MANUAL-KG-001):
+ * com `STOCK_WRITES_FROZEN=true` toda mutação de saldo LANÇA antes do lock. A transação do
+ * caller desfaz tudo; as rotas de venda respondem 5xx e o PDV mantém a venda na fila com
+ * reenvio automático (não vira "ação necessária" como um 409). Nada é gravado.
+ */
+export class StockWritesFrozenError extends Error {
+  readonly code = "STOCK_WRITES_FROZEN"
+  constructor() {
+    super("Movimentação de estoque em manutenção programada. Nada foi gravado; tente novamente em alguns minutos.")
+    this.name = "StockWritesFrozenError"
+  }
+}
+
+export function isStockWritesFrozen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.STOCK_WRITES_FROZEN === "true"
+}
+
 /** Unidades mínimas que fazem ida e volta exata pelo double (ver `stock-quantity.ts`). */
 function dentroDoLimite(units: number): boolean {
   return Number.isSafeInteger(units) && Math.abs(units) <= MAX_STOCK_UNITS
@@ -206,6 +224,7 @@ export async function applyStockMutationTx(
   context: StockLedgerContext,
   command: StockLedgerCommand,
 ): Promise<StockLedgerResult> {
+  if (isStockWritesFrozen()) throw new StockWritesFrozenError()
   const sid = trustedStoreId(context)
   if (!sid || !trustedPrincipalOk(context)) {
     return stockFail("UNTRUSTED_CONTEXT", "Contexto de estoque não confiável: loja precisa ser provada pelo servidor.")

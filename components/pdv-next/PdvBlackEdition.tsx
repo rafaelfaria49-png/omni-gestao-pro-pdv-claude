@@ -202,8 +202,6 @@ export function PdvBlackEdition() {
     () => mergePdvCatalogWithInventory([], inventory),
     [inventory]
   )
-  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
-  usePdvWeightBlockedCartGuard({ cart: cartRows, setCart: setCartRows, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }) })
 
   // ── Totais canônicos (subtotal, desconto combinado, imposto estimado, total) ─
   const subtotal = useMemo(
@@ -231,6 +229,9 @@ export function PdvBlackEdition() {
   const [qtyEditOpen, setQtyEditOpen] = useState(false)
   const [cancelSaleOpen, setCancelSaleOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  // Removida uma linha, o pagamento lançado deixa de valer: o modal fecha e zera os lançamentos.
+  usePdvWeightBlockedCartGuard({ cart: cartRows, setCart: setCartRows, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), onRemoved: () => setPaymentOpen(false) })
   const [trocasOpen, setTrocasOpen] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
 

@@ -1107,8 +1107,6 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Cart ─────────────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartLine[]>([])
-  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
-  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: realCatalog, notify: (n) => toast({ ...n, variant: "destructive" }) })
   const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [rapidoPickIdx, setRapidoPickIdx] = useState(0)
   const [discountType, setDiscountType] = useState<DiscountType>("reais")
@@ -1171,6 +1169,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  // Removida uma linha, o pagamento lançado deixa de valer: o modal fecha e zera os lançamentos.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: realCatalog, notify: (n) => toast({ ...n, variant: "destructive" }), onRemoved: () => setPaymentOpen(false) })
   /** Intent passado ao modal compartilhado (forma pré-selecionada) e flag de múltiplo. */
   const [paymentInstantIntent, setPaymentInstantIntent] = useState<PaymentMethodType | null>(null)
   const [paymentMultipay, setPaymentMultipay] = useState(false)

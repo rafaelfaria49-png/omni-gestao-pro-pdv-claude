@@ -587,7 +587,8 @@ export function PdvClassic({
 
   const products = mergePdvCatalogWithInventory([], inventory)
   // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
-  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }) })
+  // Removida uma linha, o pagamento lançado deixa de valer: o modal fecha e zera os lançamentos.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), onRemoved: () => setIsPaymentModalOpen(false) })
 
   const searchTrim = searchTerm.trim()
   const hideCategoriesPdv = pdvParams.ocultarCategoriasNoPdv === true

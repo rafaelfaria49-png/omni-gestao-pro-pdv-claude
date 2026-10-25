@@ -98,6 +98,30 @@ describe("PDV com produto KG de venda bloqueada e saldo 10", () => {
     await expectBlockedWithoutStockAdvice()
   })
 
+  it("Clássico: catálogo marca KG com pagamento aberto — item sai, modal fecha e lançamentos são zerados", async () => {
+    delete PRODUTO.vendaPesoIndisponivel
+    const un2 = { ...PRODUTO, id: "n5-c-un2", name: "Produto unitário sintético", sku: "N5C002" }
+    INVENTORY.push(un2 as (typeof INVENTORY)[number])
+    try {
+      seedStorage(localStorage, "classic")
+      sessionStorage.setItem("assistec-pdv-import-comanda", JSON.stringify({ lines: [
+        { inventoryId: PRODUTO.id, name: PRODUTO.name, price: 100, quantity: 1 },
+        { inventoryId: un2.id, name: un2.name, price: 100, quantity: 1 },
+      ] }))
+      mount("classic")
+      await waitFor(() => expect(runtime.payment?.total).toBe(200))
+      await act(async () => { fireEvent.keyDown(window, { key: "F1" }) })
+      await waitFor(() => expect(runtime.payment?.isOpen).toBe(true))
+      await act(async () => {
+        runtime.ops!.setInventory((prev) => prev.map((i) => (i.id === PRODUTO.id ? { ...i, vendaPesoIndisponivel: true } : i)))
+      })
+      await waitFor(() => expect(runtime.payment?.isOpen).toBe(false))
+      expect(runtime.payment?.total).toBe(100)
+      expect(descriptions().join(" ")).toMatch(/saiu do carrinho.*Pagamento em andamento foi cancelado/)
+      expect(backend.posts).toHaveLength(0)
+    } finally { INVENTORY.splice(INVENTORY.indexOf(un2 as (typeof INVENTORY)[number]), 1) }
+  })
+
   it("Supermercado: bipe/busca recusa antes do estoque", async () => {
     seedStorage(localStorage, "supermercado")
     const view = mount("supermercado")

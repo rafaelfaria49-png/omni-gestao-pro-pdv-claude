@@ -10,8 +10,10 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }))
 import {
   applyStockMutation,
   applyStockMutationTx,
+  StockWritesFrozenError,
   type StockLedgerTx,
 } from "@/lib/estoque/stock-ledger-service"
+import { classifyPendingSyncFailure, PENDING_SYNC_CLASS } from "@/lib/vendas/pending-sync-classification"
 import type { StockLedgerContext } from "@/lib/estoque/stock-ledger-contract"
 
 // ─── Fake ────────────────────────────────────────────────────────────────────
@@ -1298,5 +1300,22 @@ describe("stock-ledger-service — KG fracionado", () => {
     expect(f.produtos.get("p1")!.stock).toBe(4.501)
     expect([...f.pds.values()][0].quantidade).toBe(4.501)
     expect(f.movs.size).toBe(qs.length)
+  })
+})
+
+describe("STOCK_WRITES_FROZEN — congelamento do rollout", () => {
+  it("lança antes do lock, sem gravar; a fila do PDV trata o 500 como reenvio automático", async () => {
+    const f = makeFake({ produtos: [prod({ stock: 10 })], depositos: [{ id: "d1", storeId: "loja-a" }] })
+    vi.stubEnv("STOCK_WRITES_FROZEN", "true")
+    try {
+      await expect(applyStockMutation(ctx(), { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv", idempotencyKey: "pdv:v1:p1" }, { db: f.db }))
+        .rejects.toBeInstanceOf(StockWritesFrozenError)
+      expect(f.lockCalls).toHaveLength(0)
+      expect(f.produtos.get("p1")!.stock).toBe(10)
+      expect(f.movs.size).toBe(0)
+    } finally { vi.unstubAllEnvs() }
+    expect(classifyPendingSyncFailure({ httpStatus: 500, code: "STOCK_WRITES_FROZEN", message: "manutenção" })).toBe(PENDING_SYNC_CLASS.AUTO_RETRY)
+    // Sem a trava, a mesma baixa passa normalmente.
+    expect(await applyStockMutation(ctx(), { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv", idempotencyKey: "pdv:v1:p1" }, { db: f.db })).toMatchObject({ ok: true, estoqueDepois: 9 })
   })
 })
