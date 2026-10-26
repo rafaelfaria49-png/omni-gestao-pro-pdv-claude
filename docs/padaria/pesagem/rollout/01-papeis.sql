@@ -34,10 +34,21 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolname IN ('omni_owner', 'omni_migrator', 'omni_runtime_v2')
                AND (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb))
-     OR pg_has_role('omni_runtime_v2', 'pg_write_all_data', 'USAGE')
-     OR pg_has_role('omni_migrator', 'pg_write_all_data', 'USAGE')
-     OR EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'neon_superuser'
-                  AND (pg_has_role('omni_runtime_v2', oid, 'USAGE') OR pg_has_role('omni_migrator', oid, 'USAGE'))) THEN
+  THEN
+    RAISE EXCEPTION 'KG_PAPEIS_COM_ATRIBUTO_INDEVIDO';
+  END IF;
+  -- grafo inteiro (R1 #5): nem herança (USAGE) nem SET ROLE (SET) para papéis privilegiados ou o antigo
+  IF EXISTS (
+    SELECT 1
+      FROM (VALUES ('omni_owner'), ('omni_migrator'), ('omni_runtime_v2')) novo(nome)
+      CROSS JOIN pg_roles alvo
+     WHERE (alvo.rolname IN ('pg_write_all_data', 'pg_read_all_data', 'pg_signal_backend', 'pg_maintain',
+                             'pg_create_subscription', 'pg_execute_server_program', 'pg_write_server_files',
+                             'pg_read_server_files', 'neon_superuser')
+            OR alvo.rolsuper OR alvo.rolbypassrls OR alvo.rolcreaterole)
+       AND alvo.rolname <> novo.nome
+       AND (pg_has_role(novo.nome, alvo.oid, 'USAGE') OR pg_has_role(novo.nome, alvo.oid, 'SET'))
+  ) OR pg_has_role('omni_runtime_v2', 'omni_owner', 'USAGE') OR pg_has_role('omni_runtime_v2', 'omni_owner', 'SET') THEN
     RAISE EXCEPTION 'KG_PAPEIS_COM_PRIVILEGIO_INDEVIDO';
   END IF;
   RAISE NOTICE 'KG_PAPEIS_OK';

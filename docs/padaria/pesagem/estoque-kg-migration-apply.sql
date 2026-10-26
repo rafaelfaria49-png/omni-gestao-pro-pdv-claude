@@ -9,6 +9,8 @@
 
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '120s';
+-- texto do double estável para o retrato (R1 #6): com extra_float_digits < 1 um inteiro grande sairia arredondado
+SET LOCAL extra_float_digits = 1;
 
 LOCK TABLE estoque_produtos, produto_depositos, movimentacoes_estoque IN ACCESS EXCLUSIVE MODE;
 

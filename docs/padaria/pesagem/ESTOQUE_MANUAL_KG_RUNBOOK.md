@@ -40,7 +40,8 @@ topologia: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediatio
 4. **Pré-janela da estratégia B** cumprida, cada item conferido pela saída do script:
    - Preview em banco/papel próprios (fora do cluster de produção);
    - `rollout/01-papeis.sql` e `rollout/02-grants-runtime.sql` aplicados (`KG_PAPEIS_OK`, `KG_RUNTIME_GRANTS_OK`);
-   - Production da Vercel com `DATABASE_URL`/`DIRECT_URL` de `omni_runtime_v2`, redeploy do commit atual e smoke ok;
+   - a credencial de `omni_runtime_v2` **ainda não** está em env nenhuma da Vercel: ela só entra junto com o
+     deploy da PR (passo 3 da janela) — um build `Int` com ela sobreviveria ao corte (revisão R1, P1);
    - **ensaio completo num branch Neon** (01→05, suspender/retomar o compute, `06` de novo, cliente antigo
      pela URL do pooler recusado).
 5. Checklist das duas lojas devolvido (`ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md`). `SALE_SERVER_NUMBERING_ENABLED`
@@ -60,7 +61,9 @@ topologia: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediatio
 
 1. **Ponto de recuperação**: branch/snapshot Neon (PITR).
 2. **Trava ligada**: `STOCK_WRITES_FROZEN=true` no ambiente Production dos dois projetos.
-3. **Deploy do código desta PR** (merge → Production). Confirmar no log `MIGRATION_SKIPPED` e
+3. **Deploy do código desta PR** (merge → Production), **na mesma sequência** em que `DATABASE_URL`/`DIRECT_URL`
+   de Production passam a `omni_runtime_v2`. Conferir que todo deployment criado depois da troca da env é do
+   commit da PR (ou posterior); qualquer outro é removido antes do passo 5. Confirmar no log `MIGRATION_SKIPPED` e
    `PROXY_PRISMA_ARTIFACT_VERIFIED`, e que o deployment novo responde com a trava: uma entrada
    manual de teste retorna "manutenção programada" sem gravar. No domínio canônico, vendas de abas
    abertas passam a receber 5xx e **permanecem na fila local** (reenvio automático).
@@ -76,6 +79,8 @@ topologia: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediatio
      ainda gravam no regime `integer`; `lock_timeout` estourado não altera nada, repetir;
    - `rollout/04-corte-conexao.sql` (`omni_migrator`, `-1`) → `KG_CORTE_CONEXAO_OK`;
    - `rollout/05-encerrar-sessoes.sql` (papel antigo, database `neondb`) → `KG_SESSOES_ANTIGAS_ZERO`;
+     **logo depois do 04**: entre os dois, um cold start pelo pooler ainda entra, porque reaproveita
+     uma conexão de servidor já aberta (ensaio Neon 002);
    - `rollout/06-verificacao.sql` → papel antigo `connect=false`, nenhuma sessão dele, CONNECT só para
      `omni_runtime_v2` e `omni_migrator`.
    Deployments, previews e scripts antigos continuam existindo, mas recebem

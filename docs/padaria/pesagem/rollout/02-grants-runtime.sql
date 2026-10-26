@@ -16,7 +16,9 @@ BEGIN
   SELECT string_agg(c.relname, ', ') INTO faltando
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
-     AND NOT has_table_privilege('omni_runtime_v2', c.oid, 'SELECT, INSERT, UPDATE, DELETE');
+     -- um por vez: com a lista, has_table_privilege é verdadeiro se QUALQUER um existir (R1 #3)
+     AND NOT (has_table_privilege('omni_runtime_v2', c.oid, 'SELECT') AND has_table_privilege('omni_runtime_v2', c.oid, 'INSERT')
+          AND has_table_privilege('omni_runtime_v2', c.oid, 'UPDATE') AND has_table_privilege('omni_runtime_v2', c.oid, 'DELETE'));
   IF faltando IS NOT NULL THEN RAISE EXCEPTION 'KG_RUNTIME_SEM_DML: %', faltando; END IF;
   IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
               WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relrowsecurity) THEN

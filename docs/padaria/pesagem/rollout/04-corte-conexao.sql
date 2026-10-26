@@ -9,6 +9,11 @@
 -- Vale para cold start de deployment antigo, reconexão do Prisma e reconexão do pooler (PgBouncer
 -- abre conexão nova no servidor, que passa pela checagem de CONNECT).
 
+SET LOCAL kg.prod_db = :'prod_db';
+DO $$ BEGIN
+  IF current_database() <> current_setting('kg.prod_db') THEN RAISE EXCEPTION 'KG_DATABASE_ERRADO: conectado em %', current_database(); END IF;
+END $$;
+
 REVOKE CONNECT, TEMPORARY ON DATABASE :"prod_db" FROM PUBLIC;
 REVOKE ALL ON DATABASE :"prod_db" FROM :"old_role";
 

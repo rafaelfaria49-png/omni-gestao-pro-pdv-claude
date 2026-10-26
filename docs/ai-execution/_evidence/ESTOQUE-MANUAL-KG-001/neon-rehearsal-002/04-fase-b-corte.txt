@@ -1,0 +1,94 @@
+# fase B — corte (03 -> 04 -> 05) com escritores antigos direto e pooler — 2026-10-26T12:19:22.959Z
+  antigo direct conectado e lendo: SUCESSO (36ms) -> 3
+  antigo pooler conectado e lendo: SUCESSO (63ms) -> 3
+  antigo idle conectado e lendo: SUCESSO (26ms) -> 3
+  antigo idle-pooler conectado e lendo: SUCESSO (59ms) -> 3
+
+## 03 com transações em voo (direto e pooler)
+  03-corte-posse.sql [neondb_owner@omnigestao_prod] corte 1/3 posse (espera as transações em voo): exit=0 7491ms KG_CORTE_POSSE_OK (papel antigo ainda escreve se herdar pg_write_all_data: t; residuos aceitos: nenhum)
+  voo direto: commit
+  voo pooler: commit
+  antigo direto grava após 03 (esperado: AINDA grava — pg_write_all_data): SUCESSO (26ms) -> 5
+  antigo pooler grava após 03 (esperado: AINDA grava): SUCESSO (63ms) -> 5
+  04-corte-conexao.sql [omni_migrator@omnigestao_prod] corte 2/3 CONNECT: exit=0 308ms KG_CORTE_CONEXAO_OK
+
+## entre 04 e 05 (meio corte)
+  antigo cold start direto (esperado: recusado): FALHOU (398ms) -> old", OLD, { pooler, app: `old-cold-${k}` }) → 133 await tryOp(`antigo cold start ${k} (esperado: recusado)`, () => cold.produto.count( Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+  antigo cold start pooler (esperado: recusado): SUCESSO (177ms) -> 14112
+  antigo idle direto, sessão aberta (esperado: ainda grava — meio corte): SUCESSO (28ms) -> 4
+  antigo idle pooler, conexão de servidor aberta: SUCESSO (75ms) -> 4
+  sessões do papel antigo no database de produção antes do 05: exit=0 -> 3 old-deploy-direct,old-idle,old-idle-pooler
+  05-encerrar-sessoes.sql [neondb_owner@neondb] corte 3/3 sessoes: exit=0 6254ms KG_SESSOES_ENCERRADAS rodada=1 n=3 | KG_SESSOES_ENCERRADAS rodada=2 n=0 | KG_SESSOES_ENCERRADAS rodada=3 n=0 | KG_SESSOES_ANTIGAS_ZERO
+
+## depois do 05
+  antigo direto tentativa 1 (esperado: recusado): FALHOU (487ms) -> for (let i = 1; i <= 2; i++) await tryOp(`antigo ${k} tentativa ${i} (esperado: recusado)`, () => c.produto.update( Error in connector: Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+  antigo direto tentativa 2 (esperado: recusado): FALHOU (355ms) -> for (let i = 1; i <= 2; i++) await tryOp(`antigo ${k} tentativa ${i} (esperado: recusado)`, () => c.produto.update( Error in connector: Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+  antigo pooler tentativa 1 (esperado: recusado): FALHOU (142ms) -> i} (esperado: recusado)`, () => c.produto.update( Error in connector: Error querying the database: FATAL: server login has been failing, cached error: permission denied for database "omnigestao_prod" (server_login_retry)
+  antigo pooler tentativa 2 (esperado: recusado): FALHOU (2ms) -> ["pooler", oldP], ["idle", oldIdle], ["idle-pooler", oldIdleP]]) → 142 for (let i = 1; i <= 2; i++) await tryOp(`antigo ${k} tentativa ${i} (esperado: recusado)`, () => c.produto.update( Server has closed the connection. [P1017]
+  antigo idle tentativa 1 (esperado: recusado): FALHOU (350ms) -> for (let i = 1; i <= 2; i++) await tryOp(`antigo ${k} tentativa ${i} (esperado: recusado)`, () => c.produto.update( Error in connector: Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+  antigo idle tentativa 2 (esperado: recusado): FALHOU (354ms) -> for (let i = 1; i <= 2; i++) await tryOp(`antigo ${k} tentativa ${i} (esperado: recusado)`, () => c.produto.update( Error in connector: Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+  antigo idle-pooler tentativa 1 (esperado: recusado): FALHOU (119ms) -> i} (esperado: recusado)`, () => c.produto.update( Error in connector: Error querying the database: FATAL: server login has been failing, cached error: permission denied for database "omnigestao_prod" (server_login_retry)
+  antigo idle-pooler tentativa 2 (esperado: recusado): FALHOU (2ms) -> ["pooler", oldP], ["idle", oldIdle], ["idle-pooler", oldIdleP]]) → 142 for (let i = 1; i <= 2; i++) await tryOp(`antigo ${k} tentativa ${i} (esperado: recusado)`, () => c.produto.update( Server has closed the connection. [P1017]
+  antigo reconexão nova direto (esperado: recusado): FALHOU (353ms) -> LD, { pooler, app: `old-reconnect-${k}` }) → 145 await tryOp(`antigo reconexão nova ${k} (esperado: recusado)`, () => re.produto.count( Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+  antigo reconexão nova pooler (esperado: recusado): FALHOU (122ms) -> k} (esperado: recusado)`, () => re.produto.count( Error in connector: Error querying the database: FATAL: server login has been failing, cached error: permission denied for database "omnigestao_prod" (server_login_retry)
+  sessões do papel antigo depois do 05: exit=0 -> 0
+
+## runtime_v2 DML e migrator DDL
+  runtime_v2 direto UPDATE un13 -> 11: SUCESSO (27ms) -> 11
+  runtime_v2 direto INSERT+DELETE produto sintético: SUCESSO (106ms) -> "ok"
+  runtime_v2 pooler UPDATE un13 -> 11: SUCESSO (56ms) -> 11
+  runtime_v2 pooler INSERT+DELETE produto sintético: SUCESSO (114ms) -> "ok"
+  runtime_v2 tenta DDL (esperado: recusado): exit=1 | ERROR: permission denied for schema public
+  runtime_v2 tenta ALTER em tabela existente (esperado: recusado): exit=1 | ERROR: must be owner of table estoque_produtos
+  migrator DDL (SET ROLE omni_owner; CREATE/ALTER/DROP em transação): exit=0 -> ddl_ok
+  migrator DDL sem SET ROLE (herança): exit=0 -> ddl_heranca_ok
+
+## caminhos de reabertura pelo papel antigo (de outro database; tudo em transação desfeita)
+  GRANT CONNECT a si mesmo: exit=1 | ERROR: permission denied for database omnigestao_prod
+  ALTER DATABASE OWNER de volta: exit=1 | ERROR: must be owner of database omnigestao_prod
+  GRANT omni_owner a si mesmo (ADMIN OPTION herdada do CREATE ROLE): exit=0 -> reabriu=true
+  ALTER ROLE omni_migrator PASSWORD (CREATEROLE + ADMIN): exit=0 -> trocou_senha
+  admin option do papel antigo sobre os papéis novos: exit=0 -> omnigestao_candidate_audit_ro admin=true grantor=cloud_admin ; omni_owner admin=true grantor=cloud_admin ; omni_migrator admin=true grantor=cloud_admin ; omni_runtime_v2 admin=true grantor=cloud_admin
+  conferência: CONNECT do papel antigo continua revogado: exit=0 -> f
+  06-verificacao.sql [omni_migrator@omnigestao_prod] verificacao pos-corte: exit=0 293ms 
+    
+    database=omnigestao_prod dono=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}
+    papel neon_service connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel neondb_owner connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel omni_migrator connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=true
+    papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+    papel omnigestao_candidate_audit_ro connect=false escreve_estoque=false pg_write_all_data=false dono_por_heranca=false
+    sessoes papel=omni_migrator app=kg-rehearsal-002 n=1
+    sessoes papel=omni_runtime_v2 app=runtime-v2-pooler n=1
+    objetos do papel antigo=0
+    colunas estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer
+  acl-dump pós-corte gravado:
+    
+    db neondb owner=neondb_owner acl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,neon_superuser=CTc/neondb_owner}
+    db omnigestao_prod owner=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}
+    db omnigestao_prod_candidate owner=neondb_owner acl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omnigestao_candidate_audit_ro=c/neondb_owner}
+    db postgres owner=cloud_admin acl=NULL
+    role neon_superuser super=false login=false createrole=true createdb=true bypassrls=true inherit=true
+    role neondb_owner super=false login=true createrole=true createdb=true bypassrls=true inherit=true
+    role omni_migrator super=false login=true createrole=false createdb=false bypassrls=false inherit=true
+    role omni_owner super=false login=false createrole=false createdb=false bypassrls=false inherit=true
+    role omni_runtime_v2 super=false login=true createrole=false createdb=false bypassrls=false inherit=true
+    member neon_superuser > neondb_owner admin=false inherit=true set=true grantor=cloud_admin
+    member omni_migrator > neondb_owner admin=true inherit=false set=false grantor=cloud_admin
+    member omni_owner > neondb_owner admin=true inherit=false set=false grantor=cloud_admin
+    member omni_owner > omni_migrator admin=false inherit=true set=true grantor=neondb_owner
+    member omni_runtime_v2 > neondb_owner admin=true inherit=false set=false grantor=cloud_admin
+    member omnigestao_candidate_audit_ro > neondb_owner admin=true inherit=false set=false grantor=cloud_admin
+    schema public owner=pg_database_owner acl={pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,omni_runtime_v2=U/pg_database_owner}
+    owners omni_owner/i:394 omni_owner/proc:4 omni_owner/r:110 omni_owner/typee:36
+    table_acl_md5 b0735540a985bdeeabb83f1f9ffce5c8
+    runtime_v2_dml_tables 110/110
+    default_acl cloud_admin ns=public type=S acl={neon_superuser=r*w*U*/cloud_admin}
+    default_acl cloud_admin ns=public type=r acl={neon_superuser=a*r*w*d*D*x*t*m*/cloud_admin}
+    default_acl omni_owner ns=public type=S acl={omni_runtime_v2=rwU/omni_owner}
+    default_acl omni_owner ns=public type=r acl={omni_runtime_v2=arwd/omni_owner}
+    connect neondb_owner=false
+    connect omni_migrator=true
+    connect omni_runtime_v2=true
+  sintéticos: 
+kg-ensaio-002-pao=4 kg-ensaio-002-un13=11 kg-ensaio-002-un7=4

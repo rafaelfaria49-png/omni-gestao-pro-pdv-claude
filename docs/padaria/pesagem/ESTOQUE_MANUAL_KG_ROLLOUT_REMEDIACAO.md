@@ -1,6 +1,7 @@
 # Estoque manual KG — remediação dos bloqueadores de rollout (PR #315)
 
-**Status: NO-GO operacional.** Nada aqui foi executado fora de PostgreSQL descartável. Nenhum merge,
+**Status: NO-GO operacional (aguarda autorizações do §7).** Executado só em PostgreSQL descartável e num
+branch Neon temporário (ensaio 002, §5); produção conferida só por leitura, idêntica antes e depois. Nenhum merge,
 deploy, migration, segredo, papel, sessão ou deployment real foi tocado. `MIGRATION_AUTHORITY_ENABLED=false`
 permanece. O head funcional da PR (`cdb1d19`, R4 APPROVE) não mudou: esta entrega só acrescenta
 documentos, scripts SQL de operação (`rollout/`) e evidências.
@@ -50,7 +51,7 @@ A barreira para ele tem de estar no banco: corte de CONNECT (B) e, opcionalmente
 | Cobre scripts locais, `.env` de candidate, `neon-production.env`, previews com a mesma senha | não | **sim** (mesma credencial, mesmo corte) |
 | Cobre sessão já aberta / pooler / transação em voo | não diretamente (função removida para de receber requisição; conexão do pooler fica) | sim: `05` encerra e exige zero; transação em voo é desfeita ou termina antes (provado) |
 | Reversível | **não** (deployment removido não volta; perde evidência e alvo de rollback) | **sim antes da migration** (`99`, provado); depois, proibido por construção (o script recusa) |
-| Custo | ~66 remoções manuais + conferência 404 de cada URL; repetir para cada push durante a janela | 3 papéis + 2 envs + 1 redeploy **antes** da janela; na janela, 3 scripts (~10 s) + conferência |
+| Custo | ~66 remoções manuais + conferência 404 de cada URL; repetir para cada push durante a janela | 3 papéis + grants **antes** da janela (sem efeito); **na janela**, troca das 2 envs junto com o deploy Float da PR, conferência dos deployments criados depois da troca, 3 scripts (~10 s) + conferência |
 | Dependências | CLI Vercel; ninguém fazer push na janela | Neon PG ≥ 16 (é 17.11); comportamento do Neon ao reiniciar compute (ver §5) |
 | Efeito colateral | nenhum no banco | papel antigo segue dono de Preview/candidate; deployments antigos ficam no ar mas sem banco (toda tela que lê dá erro) |
 | Riscos | escritor esquecido (máquina local, preview, script) corrompe em silêncio; sem como provar ausência | papel novo sem algum privilégio que o app use (mitigado: app só usa DML, sem RLS, sem DDL/TEMP/TRUNCATE em runtime — inventariado; `02` confere DML em todas as tabelas); reconciliação do Neon (§5) |
@@ -79,15 +80,20 @@ Int ativos (`11-arquivos-do-runbook.txt`). Senhas só por variável de ambiente;
    `neon_superuser`. O script recusa se algum herdar `pg_write_all_data`.
 3. `02-grants-runtime.sql` (papel antigo, `omnigestao_prod`): DML em todas as tabelas; recusa se faltar
    alguma ou se houver RLS.
-4. Production da Vercel (`omni-gestao-pro`): `DATABASE_URL` (pooler) e `DIRECT_URL` (direta) passam a
-   `omni_runtime_v2`; redeploy do **mesmo commit** em produção; smoke de leitura e uma venda de teste em
-   loja de homologação. O deployment novo convive com os antigos (provado: ambos gravam antes do corte).
+4. **A credencial de `omni_runtime_v2` nunca vai para um build `Int`** (revisão R1, P1): o 04 mantém o
+   runtime com CONNECT e o 05 só encerra o papel antigo, então um deployment do código atual com essa
+   credencial sobreviveria ao corte e corromperia as colunas double. Por isso **não** há redeploy do commit
+   atual com o papel novo. Os privilégios do runtime são provados no ensaio do branch Neon (§5), não em
+   Production.
 5. Ensaio completo num **branch Neon** de produção (§5), incluindo reiniciar o compute.
 
 **Janela (loja fechada, checklist de lojas cumprido — `ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md`)**
 
-6. Ponto de recuperação (branch/PITR) → `STOCK_WRITES_FROZEN=true` → deploy da PR #315 (já com
-   `omni_runtime_v2`). Não alterar `SALE_SERVER_NUMBERING_ENABLED`.
+6. Ponto de recuperação (branch/PITR) → `STOCK_WRITES_FROZEN=true` → **na mesma sequência**, trocar
+   `DATABASE_URL`/`DIRECT_URL` de Production para `omni_runtime_v2` e fazer o merge/deploy da PR #315.
+   Conferir em `vercel ls`/API que **todo** deployment criado depois da troca da env é do commit da PR (ou
+   posterior a ela); qualquer outro (push paralelo, redeploy manual) é removido antes do 03 — ele teria a
+   credencial nova com código `Int`. Não alterar `SALE_SERVER_NUMBERING_ENABLED`.
 7. Corte, nesta ordem, conferindo a saída de cada script:
    - `03-corte-posse.sql` (papel antigo, `-1`): posse de tudo → `omni_owner`; espera vendas em voo (ainda
      `integer`, gravam certo); `lock_timeout` estourado não muda nada.
@@ -107,9 +113,11 @@ Int ativos (`11-arquivos-do-runbook.txt`). Senhas só por variável de ambiente;
 
 | Ponto | Por que importa | Como fechar |
 | --- | --- | --- |
-| Reconciliação do Neon ao reiniciar compute (`compute_ctl`): pode reaplicar dono/ACL de databases que ele gerencia | desfaria o corte em silêncio no próximo cold start do endpoint | ensaio num branch Neon: rodar 01–05, suspender/retomar o compute, rodar `06` de novo. `neondb` tem `neon_superuser=CTc` no ACL e `omnigestao_prod` tem ACL `NULL` — indício (não prova) de que os databases do app não são gerenciados |
-| Pooler do Neon (PgBouncer) | servidor reabre conexão com as credenciais do cliente | no ensaio: cliente antigo pela URL `-pooler` deve receber `FATAL: permission denied for database` após 04+05 |
-| Papel criado por SQL aparece/é gerenciável no Console | operação humana futura | no ensaio |
+| Reconciliação do Neon ao reiniciar compute (`compute_ctl`): pode reaplicar dono/ACL de databases que ele gerencia | desfaria o corte em silêncio no próximo cold start do endpoint | **FECHADO no ensaio 002** (2026-10-26, branch `br-wispy-mountain-accw2a7p`): suspend/start **e** restart completo do compute; posse, ACL e pertencimentos idênticos (26 linhas), papel antigo recusado direto e pooler. O control plane **absorve** o corte feito por SQL: depois dele a API passa a listar `omnigestao_prod` com dono `omni_owner` |
+| Pooler do Neon (PgBouncer) | servidor reabre conexão com as credenciais do cliente | **FECHADO no ensaio 002**: após 04+05, `permission denied` / `server login has been failing` (cacheado). **Entre 04 e 05 um cold start pelo pooler ainda entra** (reaproveita conexão de servidor aberta) — o 04 sozinho não corta; 05 logo em seguida é obrigatório |
+| Papel criado por SQL aparece/é gerenciável no Console | operação humana futura | ensaio 002: os 3 papéis criados por SQL **aparecem** na API/Console do branch e ficam gerenciáveis por lá (reset de senha, exclusão, dono do database). Caminho humano, como o do §6: na janela e depois dela, não mexer em papéis nem databases de produção pelo Console. `neondb_owner` recebe `ADMIN OPTION` sobre eles com `grantor=cloud_admin` |
+
+Evidências do ensaio: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/neon-rehearsal-002/` (índice no `README.md`).
 
 ## 6. Riscos residuais aceitos em B
 
@@ -123,13 +131,15 @@ Int ativos (`11-arquivos-do-runbook.txt`). Senhas só por variável de ambiente;
 
 ## 7. GO/NO-GO e autorizações ainda necessárias
 
-**NO-GO.** Prova isolada concluída; faltam o ensaio no Neon e as autorizações abaixo, cada uma específica:
+**NO-GO até as autorizações abaixo.** Prova isolada e ensaio no Neon (002) concluídos; cada item segue
+exigindo autorização específica:
 
-1. Criar um branch Neon de produção para o ensaio do §5 (inclui criar papéis **no branch** e
-   suspender/retomar o compute dele).
+1. ~~Criar um branch Neon de produção para o ensaio do §5~~ — feito no ensaio 002; o branch
+   `br-wispy-mountain-accw2a7p` ficou com o compute suspenso e **excluí-lo exige autorização separada**.
 2. Criar `omni_owner`, `omni_migrator`, `omni_runtime_v2` no cluster de produção (`01`) e conceder DML (`02`).
 3. Banco isolado para Preview e troca das envs de Preview na Vercel.
-4. Trocar `DATABASE_URL`/`DIRECT_URL` de Production para `omni_runtime_v2` e redeployar o commit atual.
+4. Trocar `DATABASE_URL`/`DIRECT_URL` de Production para `omni_runtime_v2` **dentro da janela, junto com o deploy
+   da PR** (nunca com um build `Int`).
 5. Execução do checklist nas duas lojas (terminais reais).
 6. Janela: trava, merge/deploy da #315, scripts 03–05, migration; e, à parte, decidir sobre o `07`
    (exige revisão independente por ser DDL fora da migration aprovada).
