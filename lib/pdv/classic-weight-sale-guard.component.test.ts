@@ -69,6 +69,17 @@ async function scan(value: string) {
   await act(async () => { r.shell!.onBipeChange(value) })
   await act(async () => { await r.shell!.onBipeKeyDown({ key: "Enter", preventDefault: vi.fn() } as unknown as KeyboardEvent<HTMLInputElement>) })
 }
+async function mountRemote(unit: "UN" | "KG" | "G", stock: number) {
+  r.inventory = []
+  const remoteItem = inventory(unit, stock)
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => new Response(JSON.stringify(
+    input.includes("/api/ops/inventory/lookup")
+      ? { items: [remoteItem] }
+      : { store: { id: r.store, name: "Loja sintética" }, settings: {} },
+  ), { headers: { "Content-Type": "application/json" } })))
+  render(createElement(PdvClassic))
+  await waitFor(() => expect(r.shell).toBeDefined())
+}
 function expectBlocked() {
   expect(r.toast).toHaveBeenLastCalledWith(expect.objectContaining({
     title: "Venda por peso ainda não disponível", description: expect.stringContaining("Cadastro ou saldo em KG/G"),
@@ -118,6 +129,27 @@ describe("PDV Clássico: guard comercial antes do saldo e das mutações", () =>
     await scan("7890000000001")
     expect(r.toast).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Sem estoque" }))
     expect(r.shell!.cartRows).toEqual([])
+  })
+
+  it.each([["KG", 0], ["KG", 5], ["G", 0], ["G", 500]] as const)("fallback remoto %s com saldo %s bloqueia SKU/EAN antes do carrinho", async (unit, stock) => {
+    await mountRemote(unit, stock)
+    for (const query of ["1*PAD-SYNTH-001", "2*7890000000001"]) {
+      await scan(query)
+      expectBlocked()
+      expect(r.shell!.cartRows).toEqual([])
+      expect(r.avulso!.open).toBe(false)
+    }
+    expect(r.setInventory).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("lojaId=synthetic-weight-store"), expect.objectContaining({
+      headers: { "x-assistec-loja-id": "synthetic-weight-store" },
+    }))
+  })
+
+  it("UN disponível encontrado no fallback remoto entra normalmente", async () => {
+    await mountRemote("UN", 5)
+    await scan("1*7890000000001")
+    expect(r.shell!.cartRows).toMatchObject([{ unit: "UN", qty: 1, unitPrice: 20 }])
+    expect(r.toast).not.toHaveBeenCalled()
   })
 
   it("catálogo atual impede que seleção antiga sem flag trate KG como UN", async () => {
