@@ -167,15 +167,20 @@ function sale(quantity: number, over: Partial<SalePayload> = {}): SalePayload {
 describe("Produto por peso — proteção independente da configuração da loja", () => {
   it.each([
     { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } },
+    { comercial: { version: 1, modoVenda: "peso", unidade: "G", basePreco: "G" } },
     { vendaPorPeso: true },
   ])("rejeita quantidade inteira para produto declarado por peso: %j", async (metadata) => {
-    const db = makeDb(metadata)
-    // A proteção usa metadata do produto resolvido pela loja e SKU, não o payload.
-    await expect(upsertVendaInTransaction(db.makeTx(), STORE, sale(2), undefined, LIVE)).rejects.toBeInstanceOf(ProductWeightNotOperationalError)
-    expect(db.items).toHaveLength(0)
-    expect(db.stock.value).toBe(10)
-    expect(db.estoque).toHaveLength(0)
-    expect(db.financeiro).toHaveLength(0)
+    for (const quantity of [1, 2]) {
+      const db = makeDb(metadata)
+      // A proteção usa metadata do produto resolvido pela loja e SKU, não o payload.
+      await expect(upsertVendaInTransaction(db.makeTx(), STORE, sale(quantity), undefined, LIVE)).rejects.toBeInstanceOf(ProductWeightNotOperationalError)
+      // Este fake não implementa o rollback de $transaction do chamador.
+      // A rejeição abaixo preserva itens, saldo, ledger e financeiro.
+      expect(db.items).toHaveLength(0)
+      expect(db.stock).toEqual({ value: 10, updates: 0 })
+      expect(db.estoque).toHaveLength(0)
+      expect(db.financeiro).toHaveLength(0)
+    }
   })
 })
 
