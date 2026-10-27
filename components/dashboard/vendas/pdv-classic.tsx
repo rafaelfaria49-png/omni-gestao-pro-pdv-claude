@@ -279,6 +279,20 @@ export function PdvClassic({
   const operadorNomeAbertura = usePdvOperadorNome(lojaKey)
   const operatorLabel = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
   const { toast } = useToast()
+  // `vendaPorPeso` vem da projeção comercial canônica do servidor. Saldo e
+  // quantidade inteira não tornam um produto KG/G operacional no PDV.
+  const blockWeightSale = useCallback(
+    (...sources: ({ vendaPorPeso?: boolean } | null | undefined)[]) => {
+      if (!sources.some((source) => source?.vendaPorPeso === true)) return false
+      toast({
+        title: "Venda por peso ainda não disponível",
+        description: "Cadastro ou saldo em KG/G não libera a venda por peso. Não venda este produto como UN nem como Item Avulso.",
+        variant: "destructive",
+      })
+      return true
+    },
+    [toast]
+  )
   // N5-B1 R2 (P2-06): identidade PENDING já criada — reconfirmar pelo modal
   // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
   const pendingSaleIdentityRef = useRef<ReturnType<typeof createPendingSaleIdentityGuard> | null>(null)
@@ -552,6 +566,7 @@ export function PdvClassic({
         (line) => typeof line.inventoryId === "string" && line.inventoryId.trim() !== "",
       )
       if (cleanLines.length === 0) return
+      if (cleanLines.some((line) => blockWeightSale(line, inventory.find((p) => p.id === line.inventoryId)))) return
       setCart(
         cleanLines.map((line) => ({
           lineId: newPdvLineId(line.inventoryId),
@@ -573,7 +588,7 @@ export function PdvClassic({
     } catch {
       sessionStorage.removeItem(PDV_IMPORT_COMANDA_KEY)
     }
-  }, [toast])
+  }, [toast, inventory, blockWeightSale])
 
   const quickItems = (pdvParams.atalhosRapidos || []).map((a) => ({
     id: a.id,
@@ -673,6 +688,7 @@ export function PdvClassic({
 
   const validateAggregatedStockForProduct = useCallback(
     (product: Product, quantityForLine: number, excludeLineId?: string) => {
+      if (blockWeightSale(product)) return false
       if (!hasControlledPdvStock(product.stock, product.category)) return true
 
       const alreadyInCart = cart.reduce((sum, item) => {
@@ -686,13 +702,14 @@ export function PdvClassic({
       }
       return true
     },
-    [cart, showAggregatedStockToast]
+    [cart, showAggregatedStockToast, blockWeightSale]
   )
 
   const validateCartAggregatedStock = useCallback(() => {
     const totals = new Map<string, { product: Product; quantity: number }>()
     for (const item of cart) {
       const product = getCartStockProduct(item)
+      if (blockWeightSale(item, product)) return false
       if (!product || !hasControlledPdvStock(product.stock, product.category)) continue
       const prev = totals.get(product.id)
       totals.set(product.id, {
@@ -708,7 +725,7 @@ export function PdvClassic({
       }
     }
     return true
-  }, [cart, getCartStockProduct, showAggregatedStockToast])
+  }, [cart, getCartStockProduct, showAggregatedStockToast, blockWeightSale])
 
   const autoSelectCustomerByPhone = useCallback(
     async (tel: string) => {
@@ -833,6 +850,7 @@ export function PdvClassic({
     accessorySelection?: AccessorySelectionV1
     cartLineKey?: string
   }) => {
+    if (blockWeightSale(params, products.find((p) => p.id === params.inventoryId))) return
     const lineId = newPdvLineId(params.inventoryId)
     setCart((prev) => [
       ...prev,
@@ -875,6 +893,7 @@ export function PdvClassic({
   }
 
   const addToCart = (product: Product, presetQty?: number) => {
+    if (blockWeightSale(product, products.find((p) => p.id === product.id))) return false
     const baseQty = presetQty ?? 1
     const controlledStock = hasControlledPdvStock(product.stock, product.category)
     if (controlledStock && product.stock <= 0) {
@@ -991,6 +1010,8 @@ export function PdvClassic({
    * estoque automaticamente. Descrição, valor, qtd e custo opcional vêm do modal.
    */
   const addItemAvulso = (payload: ItemAvulsoPayload) => {
+    // Avulso continua unitário; um SKU/EAN de produto KG/G não vira atalho de venda.
+    if (payload.codigo && blockWeightSale(findPdvProductByScan(payload.codigo, products))) return
     const lineId = newPdvLineId("avulso")
     const inventoryId = avulsoInventoryId(lineId)
     const quantity = Math.max(1, Math.round(payload.quantity))
@@ -1009,6 +1030,7 @@ export function PdvClassic({
         quantity,
         complementos: [],
         isAvulso: true,
+        vendaPorPeso: false,
         custoUnitario,
         codigoAvulso: payload.codigo,
       },
@@ -1158,6 +1180,7 @@ export function PdvClassic({
   const updateQuantity = (lineId: string, delta: number) => {
     const current = cart.find((item) => item.lineId === lineId)
     if (!current) return
+    if (blockWeightSale(current, getCartStockProduct(current))) return
     const step = current.vendaPorPeso ? 0.05 : 1
     const newQty = current.quantity + delta * step
     if (newQty > 0) {
@@ -1180,6 +1203,7 @@ export function PdvClassic({
 
   const confirmAttrDialog = () => {
     if (!attrProduct) return
+    if (blockWeightSale(attrProduct, products.find((p) => p.id === attrProduct.id))) return
     const parts = attrProduct.atributos?.map((a) => attrSelections[a.id]).filter(Boolean) ?? []
     const label = parts.length ? `${attrProduct.name} (${parts.join(" · ")})` : attrProduct.name
     if (attrProduct.vendaPorPeso) {
@@ -1204,6 +1228,7 @@ export function PdvClassic({
 
   const confirmWeightDialog = () => {
     if (!weightProduct) return
+    if (blockWeightSale(weightProduct)) return
     const kg = parseFloat(weightKgInput.replace(",", "."))
     if (!Number.isFinite(kg) || kg <= 0) {
       toast({ title: "Peso inválido", description: "Informe o peso em kg.", variant: "destructive" })
@@ -1245,6 +1270,7 @@ export function PdvClassic({
   }
 
   const handleLerBalança = async () => {
+    if (!weightProduct || blockWeightSale(weightProduct)) return
     if (!isWebSerialSupported()) {
       toast({
         title: "Web Serial",
@@ -1535,14 +1561,17 @@ export function PdvClassic({
         case "F3":
           setShellProductSearchOpen(true)
           break
-        case "F4":
+        case "F4": {
           if (!selectedCartLineId) {
             toast({ title: "Selecione um item", description: "Clique na lista para alterar a quantidade." })
             goBipe()
             return
           }
+          const item = cart.find((line) => line.lineId === selectedCartLineId)
+          if (item && blockWeightSale(item, getCartStockProduct(item))) return
           setShellQtyEditOpen(true)
           break
+        }
         case "F5": {
           // Mesma recuperação da finalização: reconsulta antes de recusar.
           if (!caixa.isOpen || !sessaoId?.trim()) {
@@ -1588,7 +1617,7 @@ export function PdvClassic({
           break
       }
     },
-    [cart.length, focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow, customerSearchEnabled, heldSalesEnabled]
+    [cart, blockWeightSale, getCartStockProduct, focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow, customerSearchEnabled, heldSalesEnabled]
   )
 
   useEffect(() => {
@@ -1786,6 +1815,7 @@ export function PdvClassic({
 
   function handleResumeSale(sale: HeldSale) {
     if (!heldSalesEnabled) return false
+    if (sale.items.some((item) => blockWeightSale(item, products.find((p) => p.id === item.inventoryId)))) return false
     const resumeCaps = combineHoldSnapshotWithRuntime({
       surfaceId: "classic",
       overrides: pdvCapabilities.overrides,
@@ -2017,6 +2047,7 @@ export function PdvClassic({
                 const item = cart.find((i) => i.lineId === id)
                 if (!item) return false
                 const product = getCartStockProduct(item)
+                if (blockWeightSale(item, product)) return false
                 if (product && !validateAggregatedStockForProduct(product, v, id)) return false
                 setCart((prev) => prev.map((i) => (i.lineId === id ? { ...i, quantity: v } : i)))
                 setShellQtyEditOpen(false)
@@ -2171,6 +2202,8 @@ export function PdvClassic({
         requireExplicitResult
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
+          // Carrinhos importados/retomados também respeitam a classificação atual.
+          if (cart.some((item) => blockWeightSale(item, getCartStockProduct(item)))) return false
           // N5-B1 R2 (P2-06) / GOAL 002: defesa em profundidade — venda PENDING
           // de identidade própria e ainda não resolvida não pode gerar nova
           // confirmação.
