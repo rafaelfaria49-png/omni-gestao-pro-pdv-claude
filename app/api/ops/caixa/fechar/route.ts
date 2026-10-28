@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { storeAdminCashApprovalDenied } from "@/lib/auth/store-admin-cash-guard"
 import type { Prisma } from "@/generated/prisma"
 import { z } from "zod"
 import {
@@ -56,6 +57,11 @@ export async function POST(req: Request) {
   if (denied) return denied
 
   const { sessaoId, saldoFinal, saldoContado, observacao, payload } = parsed.data
+
+  // Experiência STORE: só a administradora, com a própria senha confirmada para ESTA
+  // sessão. Contas internas legadas passam direto (comportamento inalterado).
+  const approvalDenied = await storeAdminCashApprovalDenied({ storeId: lojaId, sessaoId })
+  if (approvalDenied) return approvalDenied
 
   try {
     const existing = await prisma.sessaoCaixa.findFirst({
