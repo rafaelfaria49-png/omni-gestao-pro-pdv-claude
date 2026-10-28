@@ -4,7 +4,7 @@
   "id": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
   "track": "pessoas",
   "title": "Concluir o frontend Pessoas 001B preservado e validar a recuperação",
-  "status": "READY",
+  "status": "BLOCKED",
   "class": "C3",
   "risk_tier": "ALTO",
   "branch": "goal/pessoas-001b-recovery-002",
