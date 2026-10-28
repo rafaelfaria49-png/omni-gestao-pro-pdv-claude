@@ -8,6 +8,8 @@ export function canAccessPage(p: EnterprisePermissions | null, pathname: string)
   if (p.platformAuthority) return true
   if (path === "/dashboard") return p.modules?.home === true
   const at = (base: string) => path === base || path.startsWith(base + "/")
+  // Passagem externa: os guards DP continuam decidindo flag, Store, grants e dados.
+  if (at("/dashboard/pessoas")) return true
   if (at("/meu-plano") || at("/dashboard/billing")) return p.billingAccess === true
   if (at("/dashboard/plataforma") || at("/dashboard/master-console") || at("/dashboard/unidades")) return false
   if (at("/dashboard/catalogo-aparelhos")) return p.hubs.cadastros && p.modules?.deviceCatalog === true

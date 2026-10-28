@@ -1,0 +1,43 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+  "source": "7a6df145e68bfea7eac14bf057a0904bb985dc02",
+  "base_execution": "34b70a15583db7608437f04b3ba7779582f4eeb9",
+  "selected_direct": [
+    "app/api/pessoas/disponibilidade/route.ts",
+    "app/dashboard/pessoas/configuracoes/page.tsx",
+    "app/dashboard/pessoas/error.tsx",
+    "app/dashboard/pessoas/funcionarios/[id]/page.tsx",
+    "app/dashboard/pessoas/funcionarios/novo/page.tsx",
+    "app/dashboard/pessoas/funcionarios/page.tsx",
+    "app/dashboard/pessoas/layout.tsx",
+    "app/dashboard/pessoas/loading.tsx",
+    "app/dashboard/pessoas/page.tsx",
+    "components/dashboard/pessoas/campos.ts",
+    "components/dashboard/pessoas/configuracoes.tsx",
+    "components/dashboard/pessoas/contexto.tsx",
+    "components/dashboard/pessoas/documentos.tsx",
+    "components/dashboard/pessoas/ficha.tsx",
+    "components/dashboard/pessoas/lista.tsx",
+    "components/dashboard/pessoas/novo.tsx",
+    "components/dashboard/pessoas/ui.tsx",
+    "components/dashboard/pessoas/use-disponibilidade.ts",
+    "lib/pessoas/adapters/cadastro-ui.ts",
+    "lib/pessoas/cadastro.ts",
+    "lib/pessoas/documentos/service.ts",
+    "lib/pessoas/historico-privacidade.test.ts",
+    "lib/pessoas/readers/disponibilidade.ts",
+    "scripts/pessoas/frontend.contract.test.ts",
+    "scripts/pessoas/frontend.e2e.ts",
+    "scripts/pessoas/frontend.integration.test.ts",
+    "scripts/pessoas/playwright.frontend.config.ts",
+    "scripts/pessoas/run-frontend-tests.mjs",
+    "scripts/pessoas/run-official-tests.mjs"
+  ],
+  "original_aep_state_transported": false,
+  "shared_hunk_integration_completed": [
+    "components/painel-inicial/MobileNavSheet.tsx",
+    "components/painel-inicial/Sidebar.tsx",
+    "lib/navigation/dashboard-nav-items.ts"
+  ],
+  "transport_count": 32
+}

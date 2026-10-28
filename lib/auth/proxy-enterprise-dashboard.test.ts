@@ -4,17 +4,17 @@ import { MODULES } from "./access-policy"
  *
  * Cobertura: F-03 da AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md
  *
- * A função enterpriseStoreCookieRedirect é correta isoladamente — ela bloqueia
- * cookie de loja que o usuário não tem acesso. O bug está em proxy.ts:132 que lê o
+ * A funÃ§Ã£o enterpriseStoreCookieRedirect Ã© correta isoladamente â€” ela bloqueia
+ * cookie de loja que o usuÃ¡rio nÃ£o tem acesso. O bug estÃ¡ em proxy.ts:132 que lÃª o
  * cookie usando string literal errada (`"assistec_active_store"` com underscores) em vez
- * de importar `ASSISTEC_ACTIVE_STORE_COOKIE`. Resultado: a função abaixo sempre recebe
- * `undefined` em produção e retorna `null` → redirect nunca dispara.
+ * de importar `ASSISTEC_ACTIVE_STORE_COOKIE`. Resultado: a funÃ§Ã£o abaixo sempre recebe
+ * `undefined` em produÃ§Ã£o e retorna `null` â†’ redirect nunca dispara.
  *
- * Estes testes garantem o **contrato isolado** da função. Um teste de integração futuro
- * deverá cobrir proxy.ts diretamente (precisa de mock de NextRequest — fora do escopo
- * desta sprint de baseline, área protegida).
+ * Estes testes garantem o **contrato isolado** da funÃ§Ã£o. Um teste de integraÃ§Ã£o futuro
+ * deverÃ¡ cobrir proxy.ts diretamente (precisa de mock de NextRequest â€” fora do escopo
+ * desta sprint de baseline, Ã¡rea protegida).
  *
- * Também testamos `enterpriseDashboardRedirect` (matriz de permissões por rota).
+ * TambÃ©m testamos `enterpriseDashboardRedirect` (matriz de permissÃµes por rota).
  */
 import { describe, expect, it } from "vitest"
 import type { Session } from "next-auth"
@@ -46,7 +46,7 @@ function makeSession(opts: {
   } as unknown as Session
 }
 
-describe("enterpriseStoreCookieRedirect — bloqueio por cookie de loja ativa", () => {
+describe("enterpriseStoreCookieRedirect â€” bloqueio por cookie de loja ativa", () => {
   it("retorna null quando cookie ausente (undefined)", () => {
     const session = makeSession({
       storeAccess: "restricted",
@@ -65,7 +65,7 @@ describe("enterpriseStoreCookieRedirect — bloqueio por cookie de loja ativa", 
     expect(enterpriseStoreCookieRedirect(ORIGIN, session, "   ")).toBeNull()
   })
 
-  it("retorna null quando usuário tem acesso 'all' (independente do cookie)", () => {
+  it("retorna null quando usuÃ¡rio tem acesso 'all' (independente do cookie)", () => {
     const session = makeSession({ storeAccess: "all" })
     expect(enterpriseStoreCookieRedirect(ORIGIN, session, "qualquer-loja")).toBeNull()
   })
@@ -91,8 +91,8 @@ describe("enterpriseStoreCookieRedirect — bloqueio por cookie de loja ativa", 
   })
 })
 
-describe("enterpriseDashboardRedirect — matriz de permissões por rota", () => {
-  it("bloqueia /dashboard/ia-mestre para CAIXA (sem permissão workspace.iaMestre)", () => {
+describe("enterpriseDashboardRedirect â€” matriz de permissÃµes por rota", () => {
+  it("bloqueia /dashboard/ia-mestre para CAIXA (sem permissÃ£o workspace.iaMestre)", () => {
     const session = makeSession({ role: "CAIXA" })
     const r = enterpriseDashboardRedirect(ORIGIN, "/dashboard/ia-mestre", session)
     expect(r).not.toBeNull()
@@ -128,5 +128,17 @@ describe("enterpriseDashboardRedirect — matriz de permissões por rota", () =>
     const session = makeSession({ role: "CAIXA" })
     const r = enterpriseDashboardRedirect(ORIGIN, "/dashboard/marketplace", session)
     expect(r).not.toBeNull()
+  })
+})
+
+
+describe("Pessoas: consumidor real da passagem externa para STORE", () => {
+  it.each(["/dashboard/pessoas", "/dashboard/pessoas/funcionarios", "/dashboard/pessoas/funcionarios/qa-vinculo", "/dashboard/pessoas/configuracoes"])("nao substitui guards DP por permissoes Enterprise em %s", pathname => {
+    const session = makeSession({ role: "OPERADOR", storeAccess: "restricted", allowedStoreIds: ["loja-a", "loja-b"] })
+    expect(enterpriseDashboardRedirect(ORIGIN, pathname, session, "loja-a")).toBeNull()
+  })
+  it.each(["/dashboard/unidades", "/dashboard/plataforma", "/dashboard/master-console", "/dashboard/financeiro", "/dashboard/pessoas-extra"])("preserva negacao de %s para STORE", pathname => {
+    const session = makeSession({ role: "OPERADOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+    expect(enterpriseDashboardRedirect(ORIGIN, pathname, session, "loja-a")).not.toBeNull()
   })
 })

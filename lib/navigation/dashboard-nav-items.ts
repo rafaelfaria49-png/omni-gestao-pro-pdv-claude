@@ -16,6 +16,7 @@ import {
   BarChart3,
   ClipboardCheck,
   Calculator,
+  UsersRound,
   ScanSearch,
   Package,
   type LucideIcon,
@@ -142,6 +143,7 @@ export const hubsNavItems: DashboardNavItem[] = [
           visible: (p: EnterprisePermissions) => p.hubs.financeiro,
         } satisfies DashboardNavItem,
       ]),
+  { to: "/dashboard/pessoas", label: "Pessoas", icon: UsersRound },
   {
     to: "/dashboard/contador",
     label: "Contador HUB",
@@ -191,8 +193,10 @@ export const dashboardNavSections: DashboardNavSection[] = [
 export function filterDashboardNav(
   items: DashboardNavItem[],
   perms: EnterprisePermissions | null,
+  pessoasDisponivel = false,
 ): DashboardNavItem[] {
   return items.filter((i) => {
+    if (i.to === "/dashboard/pessoas") return pessoasDisponivel
     if (i.experimental && !roadmapHubsEnabled) return false
     if (!perms || !canAccessPage(perms, i.to)) return false
     return i.visible ? i.visible(perms) : true

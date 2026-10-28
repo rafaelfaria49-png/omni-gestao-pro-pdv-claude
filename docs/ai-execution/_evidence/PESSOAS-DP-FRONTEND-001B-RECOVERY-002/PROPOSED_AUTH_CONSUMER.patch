@@ -1,0 +1,6 @@
+--- a/lib/auth/proxy-enterprise-dashboard.ts
++++ b/lib/auth/proxy-enterprise-dashboard.ts
+@@ -19,0 +20,3 @@
++
++  // Pessoas delega dados e operacoes aos guards DP, sem ACL Enterprise adicional.
++  if (pathname === `${DASH}/pessoas` || pathname.startsWith(`${DASH}/pessoas/`)) return null

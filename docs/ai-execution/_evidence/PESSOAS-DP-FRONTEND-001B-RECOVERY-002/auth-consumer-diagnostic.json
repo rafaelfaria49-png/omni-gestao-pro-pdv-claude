@@ -1,0 +1,55 @@
+{
+  "kind": "ACTUAL_PURE_AUTH_CONSUMER_DIAGNOSTIC_NOT_E2E",
+  "node": "v24.19.0",
+  "role": "OPERADOR",
+  "accessScope": "STORE",
+  "platformAuthority": false,
+  "globalSettingsPermission": false,
+  "results": [
+    {
+      "pathname": "/dashboard/pessoas",
+      "pageAccess": true,
+      "consumerRedirect": null
+    },
+    {
+      "pathname": "/dashboard/pessoas/funcionarios",
+      "pageAccess": true,
+      "consumerRedirect": null
+    },
+    {
+      "pathname": "/dashboard/pessoas/configuracoes",
+      "pageAccess": true,
+      "consumerRedirect": "/dashboard?access=denied"
+    },
+    {
+      "pathname": "/dashboard/unidades",
+      "pageAccess": false,
+      "consumerRedirect": "/dashboard?access=denied"
+    },
+    {
+      "pathname": "/dashboard/plataforma",
+      "pageAccess": false,
+      "consumerRedirect": "/dashboard?access=denied"
+    },
+    {
+      "pathname": "/dashboard/financeiro",
+      "pageAccess": false,
+      "consumerRedirect": "/dashboard?access=denied"
+    },
+    {
+      "pathname": "/dashboard/pessoas-extra",
+      "pageAccess": false,
+      "consumerRedirect": "/dashboard?access=denied"
+    }
+  ],
+  "blockedByOutOfAllowlistConsumer": [
+    {
+      "pathname": "/dashboard/pessoas/configuracoes",
+      "pageAccess": true,
+      "consumerRedirect": "/dashboard?access=denied"
+    }
+  ],
+  "gate": "OUT_OF_ALLOWLIST_AUTH_CONSUMER",
+  "historicalE2eCause": "HYPOTHESIS",
+  "networkOrDatabaseUsed": false
+}
