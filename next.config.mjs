@@ -64,7 +64,9 @@ const withPWA = withPWAInit({
         url.pathname === "/api/ops/import/clientes" ||
         url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
-        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
+        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/") ||
+        // Relatório de produtos vendidos: dado por loja/sessão; cache é por URL (sem a loja).
+        url.pathname === "/api/vendas/produtos-vendidos" || url.pathname.startsWith("/api/vendas/produtos-vendidos/")
       ),
       handler: "NetworkOnly",
       method: "GET",

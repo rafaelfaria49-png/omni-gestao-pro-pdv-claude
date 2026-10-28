@@ -1,0 +1,12 @@
+✔ sw.js de produção: relatório de produtos vendidos é NetworkOnly antes da regra genérica (25.6109ms)
+✔ sw.js de produção: offline não devolve relatório guardado de outra loja/sessão (16.2957ms)
+✔ ativação do SW remove relatórios guardados antes da correção e preserva o resto (1.3792ms)
+✔ proteções Clientes/Pessoas do build continuam aceitas pelo inspetor oficial (1131.3585ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1275.4132

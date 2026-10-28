@@ -59,9 +59,49 @@ pagamento, PDV ou fiscal. Base: `origin/main` @ `34b70a1`.
 6. **Performance:** `vendas` não tem índice `(storeId, at)`; as consultas filtram por `storeId`
    (indexado) e depois por data. Medido: 50 006 vendas em ~0,6–0,7 s (PG local). Criar o índice
    exige alteração de schema — fora do escopo, recomendado como follow-up.
-7. **Cache do Service Worker:** como as demais `GET /api/*` (ex.: `/api/vendas/historico`), a
-   resposta pode ser servida pelo cache NetworkFirst do PWA quando offline, apesar do
-   `Cache-Control: no-store`. Pré-existente em `next.config.mjs` (área protegida, não alterada).
+7. **Cache do Service Worker — corrigido em PWA-SAFETY-002 (abaixo).** Outras `GET /api/*`
+   (ex.: `/api/vendas/historico`) continuam na regra genérica `apis` (NetworkFirst 24 h); fora do escopo.
+
+## PWA-SAFETY-002 — cache do Service Worker
+
+**Confirmado no `public/sw.js` gerado pelo build do head `2d2066e`:** as duas APIs caíam na regra
+genérica `apis` (`NetworkFirst`, `networkTimeoutSeconds: 10`, `ExpirationPlugin` 16 itens/24 h). A
+chave do cache é só a URL — o header `x-assistec-loja-id` não entra —, e o Workbox não respeita
+`Cache-Control: no-store`. Offline (ou com rede acima de 10 s) o SW devolveria o relatório guardado de
+outra loja/sessão com os mesmos filtros. Prova com o runtime Workbox real: `pwa-sw-antes-da-correcao.log`
+(“Missing expected rejection”: o relatório guardado foi servido offline).
+
+**Correção mínima:**
+- `next.config.mjs`: `/api/vendas/produtos-vendidos` e `/api/vendas/produtos-vendidos/*` entram na
+  regra `NetworkOnly` **já existente** (Clientes/Pessoas), que o Workbox avalia antes da genérica `apis`.
+  Nenhuma regra nova; as genéricas do next-pwa ficam intactas.
+- `public/client-privacy-cache.js`: a limpeza na ativação do SW (mecanismo CAD-R2-020) também apaga
+  respostas antigas dessas rotas em qualquer cache.
+
+**Prova no SW de produção** (`scripts/relatorios/inspect-pwa-produtos-vendidos.test.mjs`, após `npm run build`;
+`pwa-sw-depois-da-correcao.log`): 4/4 PASS.
+- Rota: 4 URLs × 3 variações de loja → `NetworkOnly`, posicionada antes de `apis`. Também confere as
+  fronteiras (`/api/vendas/historico`, `…-extra`, `/api/version` continuam em `apis`) e que a regra é só GET.
+- Offline, com o cache `apis` contendo relatório de outra loja: rejeita `no-response`, 1 fetch e
+  0 leituras de cache. Online: rede, `no-store` preservado e 0 gravações em cache. Contraprova: a regra
+  genérica serve o guardado offline.
+- Ativação: remove as entradas do relatório nos caches `apis`, `pages` e histórico, e preserva Pessoas,
+  histórico de vendas, a página `/dashboard/relatorios/produtos` e outras origens.
+- O inspetor oficial do Pessoas (`inspectPwaBuild`) segue aceitando o build: uma única regra
+  `NetworkOnly`, genéricas idênticas ao next-pwa 10.2.9, Clientes limpo, Pessoas preservado e worker de
+  navegação inalterado.
+
+Troca de loja ou usuário: com `NetworkOnly`, cada consulta vai ao servidor, que reaplica sessão, ACL e
+módulos. A tela também descarta o resultado anterior ao trocar de loja.
+
+Notas da revisão independente do delta (nenhum P0/P1/P2; mutações provaram que os testes falham sem a correção):
+- O log "antes" foi gerado com o `sw.js` do build anterior e o `client-privacy-cache.js` já corrigido.
+  Por isso só as provas de rota e offline (1 e 2) reprovam; a de ativação (3) já passa.
+- A janela residual de um SW antigo vale só para quem já tinha essas URLs no cache `apis`. As APIs
+  nunca chegaram a Production (PR #318 sem merge), então isso afeta apenas Previews da própria PR.
+  Lá, a limpeza na ativação do SW novo remove o que estiver guardado.
+- Na CI roda a guarda de fonte (`lib/relatorios/pwa-cache-privacy.test.ts`). A prova semântica contra o
+  SW gerado exige build e é executada localmente.
 
 ## Segurança e isolamento
 

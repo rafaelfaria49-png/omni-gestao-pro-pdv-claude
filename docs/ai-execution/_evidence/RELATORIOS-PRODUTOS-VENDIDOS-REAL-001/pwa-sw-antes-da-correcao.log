@@ -1,0 +1,60 @@
+✖ sw.js de produção: relatório de produtos vendidos é NetworkOnly antes da regra genérica (23.6411ms)
+✖ sw.js de produção: offline não devolve relatório guardado de outra loja/sessão (7.9929ms)
+✔ ativação do SW remove relatórios guardados antes da correção e preserva o resto (2.0428ms)
+✔ proteções Clientes/Pessoas do build continuam aceitas pelo inspetor oficial (701.7215ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 2
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 833.6623
+
+✖ failing tests:
+
+test at scripts\relatorios\inspect-pwa-produtos-vendidos.test.mjs:107:1
+✖ sw.js de produção: relatório de produtos vendidos é NetworkOnly antes da regra genérica (23.6411ms)
+  AssertionError [ERR_ASSERTION]: relatório caiu em cache: /api/vendas/produtos-vendidos
+  + actual - expected
+  
+    {
+      handler: {
+  +     kind: 'NetworkFirst',
+  +     options: {
+  +       cacheName: 'apis',
+  +       networkTimeoutSeconds: 10,
+  +       plugins: [
+  +         {
+  +           kind: 'ExpirationPlugin',
+  +           options: {
+  +             maxAgeSeconds: 86400,
+  +             maxEntries: 16
+  +           }
+  +         }
+  +       ]
+  +     }
+  -     kind: 'NetworkOnly',
+  -     options: {}
+      },
+      match: [Function (anonymous)],
+      method: 'GET'
+    }
+  
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Object],
+    expected: [Object],
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at scripts\relatorios\inspect-pwa-produtos-vendidos.test.mjs:126:1
+✖ sw.js de produção: offline não devolve relatório guardado de outra loja/sessão (7.9929ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection: offline deve falhar (sem fallback) em /api/vendas/produtos-vendidos
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
