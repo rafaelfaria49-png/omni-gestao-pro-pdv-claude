@@ -1,0 +1,5 @@
+OpenAI Codex v0.164.0-alpha.11.1
+model: gpt-6.1-sol
+sandbox: read-only
+reasoning effort: max
+session id: 01a18039-e7e8-7c70-b3a9-6e0f0e365749
