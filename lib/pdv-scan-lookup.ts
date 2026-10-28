@@ -33,6 +33,8 @@ type LookupRow = {
   price?: unknown
   category?: unknown
   vendaPesoIndisponivel?: unknown
+  vendaPorPeso?: unknown
+  precoPorKg?: unknown
 }
 
 function rowToInventoryItem(raw: LookupRow): InventoryItem | null {
@@ -54,6 +56,8 @@ function rowToInventoryItem(raw: LookupRow): InventoryItem | null {
     price: num(raw.price),
     category: typeof raw.category === "string" ? raw.category : "",
     ...(raw.vendaPesoIndisponivel === true ? { vendaPesoIndisponivel: true } : {}),
+    vendaPorPeso: raw.vendaPorPeso === true,
+    ...(typeof raw.precoPorKg === "number" && Number.isFinite(raw.precoPorKg) ? { precoPorKg: raw.precoPorKg } : {}),
   }
 }
 

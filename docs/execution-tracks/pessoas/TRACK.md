@@ -8,11 +8,11 @@
 
 ## Objetivo
 
-Entregar o domínio Pessoas de forma incremental, com identidade do empregador separada da Store, dados trabalhistas versionados, autorização própria e isolamento entre empregadores. 001A e hardening P2 estão DONE; o frontend 001B original permanece BLOCKED. O sucessor atual recupera e conclui o frontend existente, sem reconstruir telas. Folha/holerites e GOAL 002 continuam fora do recorte.
+Entregar o domínio Pessoas de forma incremental, com identidade do empregador separada da Store, dados trabalhistas versionados, autorização própria e isolamento entre empregadores. 001A e hardening P2 estão DONE; o frontend 001B original e o Recovery 001 permanecem BLOCKED. O sucessor Recovery 002 conclui o frontend existente, sem reconstruir telas. Folha/holerites e GOAL funcional 002 continuam fora do recorte.
 
 ## Escopo histórico 001A — paths_base
 
-Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucessor atual, enumerada exclusivamente no META do GOAL de recuperação da revisão 6.
+Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucessor atual, enumerada exclusivamente no META do GOAL Recovery 002 da revisão 8.
 
 - lib/pessoas/**
 - app/actions/pessoas/**
@@ -29,7 +29,7 @@ Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucesso
 
 ## Fora de escopo
 
-Motor/fechamento de folha, holerites próprios, pagamentos, integração com Financeiro/Contador, autenticação global, CI, produção e dados reais. Frontend/navegação ficam limitados ao recorte de recuperação, com a única ampliação P2-01 da revisão 6.
+Motor/fechamento de folha, holerites próprios, pagamentos, integração com Financeiro/Contador, autenticação global, CI, produção e dados reais. A revisão 8 autoriza somente a integração externa das rotas Pessoas em `lib/auth/page-access.ts` e dois testes específicos, sem liberar Unidades nem elevar STORE a PLATFORM. Frontend/navegação ficam limitados ao recorte de recuperação; preservar as correções estreitas de privacidade e P2-01 já implementadas.
 
 ## Comando de teste da trilha
 
@@ -37,7 +37,7 @@ Motor/fechamento de folha, holerites próprios, pagamentos, integração com Fin
 node scripts/pessoas/run-frontend-tests.mjs
 ```
 
-Runner atual a recuperar do snapshot funcional na execução futura: HEAD commitado, workspace temporário externo, PostgreSQL descartável, sem teste pulado. Reutiliza o runner oficial 001A e hardening P2; não é criado nem executado nesta missão de planejamento. Typecheck antecipado e preflight de disco/navegador/PostgreSQL são obrigatórios antes da bateria completa.
+Runner atual a recuperar da origem preservada na execução futura: HEAD commitado, workspace temporário externo, PostgreSQL descartável, sem teste pulado. Reutiliza o runner oficial 001A e hardening P2; não é criado nem executado nesta missão de planejamento. Typecheck antecipado e preflight de disco/navegador/PostgreSQL são obrigatórios antes da bateria completa. Saídas frontend futuras pertencem somente ao Recovery 002.
 
 ## Gates históricos 001A — não herdados pelo sucessor
 
@@ -57,14 +57,14 @@ Gates liberados para a recuperação: nenhum. As autorizações abaixo pertencem
 ## Plano de origem
 
 - plan_ref: OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15
-- plan_rev: 6 (ampliação exclusiva P2-01; recuperação da revisão 5 e demais revisões preservadas abaixo)
+- plan_rev: 8 (mesmo Recovery 002; integração STORE restrita e autorização humana de 25/10/2026; revisões anteriores preservadas abaixo)
 - recorte: PESSOAS-000 incorporado ao pre-flight; PESSOAS-001A backend; 001B frontend posterior.
 
 ## Estado
 
 O estado ratificado vive em `state.json` e `LEDGER.jsonl`. Gerar derivados somente pela CLI AEP.
 
-Base desta revisão: dois DONE, 001B original BLOCKED, quatro eventos e nenhum READY. A revisão 5 acrescenta somente PESSOAS-DP-FRONTEND-001B-RECOVERY-001 como READY, sem evento novo no ledger. RUNNING no derivado significa sucessor elegível; a contagem BLOCKED e last_result do original permanecem visíveis.
+Estado preservado na revisão 8: dois DONE, dois BLOCKED, cinco eventos e somente PESSOAS-DP-FRONTEND-001B-RECOVERY-002 como READY. RUNNING no derivado identifica o sucessor planejado; execução depende do merge humano da revisão documental 8. last_goal/last_result preservam o Recovery 001 BLOCKED. Reconciliação e revisão 7 já integram a main pelo merge da PR #305, `57cab7cd2935ce040be6b0342aab686e46d9d91e`. As seções de revisões 2–7 abaixo são históricas; suas referências a READY/atual não reabrem GOALs fechados nem substituem a decisão específica da revisão 8.
 
 ## Histórico — hardening obrigatório antes do frontend 001B — revisão 2
 
@@ -157,3 +157,33 @@ O bloco abaixo registra a PR #264, já mergeada em main no commit 857e24d. Refer
 - Retomada AEP: incorporar o plano futuramente por fluxo Git autorizado deve satisfazer o item 8 (GOAL igual ao da base comum). Isso não basta: cmdOpen mantém allowlist do marcador existente e só atualiza base_commit. Não há refresh oficial de snapshot preservando tentativa/log/data de abertura; não editar/remover/recriar .aep-active nem reiniciar tentativas. Impedimento específico documentado, CLI e G-AEP-CORE intocados.
 - Relatório e diagnóstico: docs/ai-execution/_evidence/PESSOAS-001B-SCOPE-006/PLAN_AND_DISK_2026-10-18.md. Registry/verify --all oficiais, sem manipular ledger/state.
 - Próximo gate: HUMAN_MERGE_PLAN_AND_DISK_DECISION; a execução continua dependente também da resolução formal da retomada AEP. Sem merge pelo agente, produto, testes/build/Docker, produção ou GOAL 002.
+
+## Histórico — revisão 7 — BLOCKED ratificado e Recovery 002 planejado — 23/10/2026
+
+- Missão humana específica: preservar/publicar os seis commits originais, reconciliar o Recovery 001 BLOCKED e planejar um único sucessor; commit/push/PR documental autorizados, merge humano. Nenhum open/attempt/check/close ou teste de produto nesta missão.
+- Base atual conferida por fetch: origin/main `0adec2121ed463844f1af325f05f924f6952eddf`. Branch/worktree documental: `plan/pessoas-001b-recovery-002` / `C:/Projetos/omni-gestao/.worktrees/pessoas-001b-recovery-002-plan`.
+- Origem limpa e preservada: `goal/pessoas-001b-recovery-001` em `7a6df145e68bfea7eac14bf057a0904bb985dc02`; tag local `preserve/pessoas-001b-recovery-001-2026-10-23`. Publicados seis commits por fast-forward desde `8648954a4c9d8fddc73b46697d167b1a33f5cf5d`; sem force/rebase/reset/amend. PR #273 permanece aberta/draft, sem merge.
+- BLOCKED oficial 3/3: commit `37c5d5880c09d45a22f5ba697f95327be5e66e68`, no HEAD da origem. `reconcile-blocked` com source-ref/SHA exatos, dry-run PASS e aplicação em `ca73bdc3d99dac983e9fec5a9bf7ef89cffbec56`: um evento anexado literalmente, previous_attempts 1/2/3 e GOAL fechado integralmente preservados. Não reabrir o predecessor nem executar tentativa 4.
+- Único GOAL READY: `PESSOAS-DP-FRONTEND-001B-RECOVERY-002`, classe C3/ALTO, plan_rev 7, openai, revisão independente padrão preservada, gates de caminho vazios. Fonte completa de escopo/allowlist/aceite: `goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002.md`.
+- Branch/worktree futuras: `goal/pessoas-001b-recovery-002` / `C:/Projetos/omni-gestao-pessoas-001b-recovery-002`. Criar somente após merge humano do plano e autorização da execução em nova sessão.
+- Transporte futuro de 32 arquivos funcionais/testes do HEAD preservado, sem estado AEP da origem. Base histórica `13700862405a89da3c7d16702318735a88348133`; integrar por trechos os três arquivos de navegação alterados na main. Manifesto com blobs e evidência: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/`.
+- Causa E2E Store permanece HYPOTHESIS: fixture tem ADMIN/lojaId A/membership B, mas auth preservado não restringe ADMIN; A2 observou A no DOM. Main atual usa accessScope STORE por padrão e prioriza memberships: adaptar fixture sintética A/B e confirmar sessão/API/DOM, sem alterar auth/schema/componentes globais. Ajustes locais anteriores foram cwd/seletor/cookie.
+- Dependência estática na main: page-access.ts nega Unidades a ator sem autoridade de plataforma e nega Pessoas por rota desconhecida; proxy-enterprise-dashboard.ts e dashboard/layout.tsx consomem a decisão. Gate HUMAN_AUTHORIZE_AUTH_INTEGRATION_SCOPE / ALLOWLIST_REPLAN_REQUIRED pendente; G-AUTH também se a solução tocar auth/auth.config/proxy. Não ampliar allowlist nem promover fixture a PLATFORM para contornar. Esse achado não confirma a causa histórica de A3.
+- Reutilizar 162 testes/correções concluídas como referência histórica; nenhum PASS novo. Prioridades: login/API Stores/cookie, E2E ON/OFF completos, matriz visual/acessibilidade, regressões concretas e fechamento oficial do sucessor, mantendo runner/gates.
+- Preferência humana pela autorrevisão Codex registrada como SELF_REVIEW_NOT_INDEPENDENT. Dispensa da PR #273 não herdada; decisão formal de revisão do sucessor PENDING, sem R fictícia ou solicitação autônoma de outra IA. Preview/R2 depende de autorização específica e prova de bytes/isolamento no HEAD aplicável.
+- registry/verify --all/diff check oficiais; ledger/derivados não editados manualmente. Código produtivo, CURRENT_STATUS/CHANGELOG/memória global e relatórios/arquivos fechados anteriores não alterados por este planejamento.
+- Próximo gate: **HUMAN_MERGE_SUCCESSOR_PLAN**. Não executar sucessor, mergear PR #273, habilitar produção ou iniciar folha/GOAL funcional 002. Ponto de parada: histórico BLOCKED preservado e um único sucessor 001B pronto para autorização.
+
+## Revisão atual 8 — autorização Recovery 002 e integração STORE restrita — 25/10/2026
+
+- Mesmo GOAL `PESSOAS-DP-FRONTEND-001B-RECOVERY-002`, classe C3, risco ALTO, família openai e runner `node scripts/pessoas/run-frontend-tests.mjs`. Não reabrir predecessores nem reiniciar tentativas. Manter gates técnicos e três tentativas oficiais do sucessor.
+- Missão humana de 25/10/2026 autoriza Recovery 002 completo, commit/push normais e PR funcional exclusiva para main. Exige antes uma PR documental separada e seu **merge humano**; execução somente a partir da main contendo o plano aprovado, sem divergência do GOAL em relação à base.
+- Branch documental `codex/pessoas-001b-recovery-002-auth-plan`, reutilizando a worktree de planejamento limpa. Base conferida por fetch: `57cab7cd2935ce040be6b0342aab686e46d9d91e`, merge da PR #305. Nenhum `open`, `attempt`, `check`, `close` ou teste de produto na fase documental.
+- Únicas adições à allowlist: `lib/auth/page-access.ts`, `lib/auth/page-access.test.ts`, `lib/auth/proxy-enterprise-dashboard.test.ts`. Passagem externa limitada a Pessoas/subrotas; guards reais DP decidem dados/operações. Preservar Unidades, Plataforma, Financeiro e demais módulos. Sem auth.ts/auth.config.ts/proxy.ts, schema/migrations ou política global de módulos. G-AUTH mecânico e demais gates de caminho continuam fechados.
+- Verificar `lib/auth/proxy-enterprise-dashboard.ts` e `app/dashboard/layout.tsx` sem edição. Se outro path protegido for indispensável, apresentar evidência e parar no gate. Não elevar conta STORE a PLATFORM ou ADMIN legado, mockar autorização ou enfraquecer asserts.
+- Fixture E2E STORE sintética, memberships explícitos A/B, grants DP independentes, login real e evidência saneada/correlacionada de sessão, `/api/stores`, URL e DOM. Seleção canônica de loja ativa por fluxo permitido a STORE, com seletor local Pessoas se necessário nos componentes já autorizados. Provar A→B→A, cookie, releitura e isolamento. Causa histórica A3 permanece HYPOTHESIS até evidência suficiente; a autorização não confirma causa.
+- Transporte continua **32 paths da revisão 7**, origem `7a6df145e68bfea7eac14bf057a0904bb985dc02`, manifesto inalterado, três arquivos de navegação integrados por trechos. Não transportar estado AEP ou evidência antiga. Preservar cadastro/ficha/contratos/histórico/documentos privados/P2-01 e as 20 regressões documentais.
+- Dispensa externa específica deste sucessor: **INDEPENDENT_REVIEW=WAIVED_BY_HUMAN_DECISION**, condicionada à autorrevisão Codex final sem bloqueadores, testes completos e regularização AEP. `revisao_independente=true` conserva o requisito padrão; a exceção formal está no META. **SELF_REVIEW_NOT_INDEPENDENT**; não declarar R executada, herdar dispensa da PR #273 ou alterar governança global. Cumprimento futuro nas evidências, sem editar GOAL durante execução. Merge funcional permanece humano.
+- QA autorizado somente nos recursos existentes: Neon `pessoas_001b_qa` / projeto `orange-voice-83394974`; bucket R2 privado e projeto Vercel `omni-gestao-pessoas-001b-qa`. Verificar token R2 com expiração informada em 23/10/2026 e renovar/rotacionar credencial limitada ao bucket QA somente se necessário. Preview privado do novo HEAD, flag ON só QA, bytes reais/integridade/isolamento e URL privada saneada. Sem serviço adicional pago, bucket Contador produtivo, DNS, produção, segredos/cookies/URLs assinadas em evidências.
+- Registro da autorização e verificações documentais: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/AUTHORIZATION_2026-10-25.md`. Gerar derivados por `registry`, `verify --all` e diff check; ledger/arquivos fechados/manifesto preservados. Histórico não vira PASS novo.
+- **NEXT_GATE=HUMAN_MERGE_SCOPE_PLAN_REV_8**. Depois do merge humano, continuar a missão já autorizada até PR funcional pronta para decisão humana ou gate real. PR #273 permanece draft; sem merge automático, Pessoas em produção ou folha neste GOAL. Próximo GOAL funcional: PESSOAS-002 — FOLHA MENSAL CALCULÁVEL.

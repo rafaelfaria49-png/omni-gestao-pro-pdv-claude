@@ -10,6 +10,7 @@ import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { inventoryWeightSaleProjection } from "@/lib/pdv-weight-sale-guard"
+import { productCommercialCatalogProjection } from "@/lib/cadastros/product-commercial-contract"
 
 export const runtime = "nodejs"
 /** Sem cache de rota / fetch no Next — sempre dados frescos do Prisma. */
@@ -34,6 +35,7 @@ function rowToItem(row: Produto) {
   const skuTrim = sku.trim()
   const bcTrim = barcode.trim()
   const opId = skuTrim || row.id
+  const commercial = productCommercialCatalogProjection(row.metadata, row.price)
   return {
     id: opId,
     name: row.name,
@@ -45,6 +47,8 @@ function rowToItem(row: Produto) {
     stock: row.stock,
     cost: row.precoCusto,
     price: row.price,
+    vendaPorPeso: commercial.vendaPorPeso,
+    ...(commercial.unidade === "KG" ? { precoPorKg: commercial.precoNaBase } : {}),
     category:
       typeof (row as unknown as { category?: unknown }).category === "string"
         ? (row as unknown as { category: string }).category

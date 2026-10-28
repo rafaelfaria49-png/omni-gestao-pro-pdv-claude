@@ -12,6 +12,7 @@ import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { getProdutoFiscal, isProdutoFiscalVazio, type ProdutoFiscal } from "@/lib/produto-fiscal"
 import { projectProdutoAccessoryConfig, type ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios"
 import { inventoryWeightSaleProjection } from "@/lib/pdv-weight-sale-guard"
+import { productCommercialCatalogProjection } from "@/lib/cadastros/product-commercial-contract"
 // (sem normalizeNameForMatch — tabela `product` é minimalista)
 
 export const runtime = "nodejs"
@@ -95,6 +96,7 @@ function rowToItem(row: Produto): InvPayload {
   const opId = skuTrim || row.id
   const fiscal = getProdutoFiscal(row)
   const accessoryConfig = projectProdutoAccessoryConfig(row)
+  const commercial = productCommercialCatalogProjection(row.metadata, row.price)
   return {
     id: opId,
     name: row.name,
@@ -106,6 +108,8 @@ function rowToItem(row: Produto): InvPayload {
     stock: row.stock,
     cost: row.precoCusto,
     price: row.price,
+    vendaPorPeso: commercial.vendaPorPeso,
+    ...(commercial.unidade === "KG" ? { precoPorKg: commercial.precoNaBase } : {}),
     category: typeof (row as unknown as { category?: unknown }).category === "string" ? (row as unknown as { category: string }).category : "",
     ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
     ...(accessoryConfig ? { accessoryConfig } : {}),
