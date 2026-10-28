@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { storeAdminCashApprovalDenied } from "@/lib/auth/store-admin-cash-guard"
 import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
@@ -61,6 +62,13 @@ export async function POST(req: Request) {
 
   const denied = await apiGuardEnterpriseOrOps(lojaId, permCheck, forbidden)
   if (denied) return denied
+
+  // Sangria/suprimento saem do Caixa Seguro: na experiência STORE exigem a aprovação da
+  // administradora para esta sessão. Devolução segue o fluxo próprio do PDV.
+  if (tipo === "sangria" || tipo === "suprimento") {
+    const approvalDenied = await storeAdminCashApprovalDenied({ storeId: lojaId, sessaoId })
+    if (approvalDenied) return approvalDenied
+  }
 
   const session = await auth()
   const operadorLabel =
