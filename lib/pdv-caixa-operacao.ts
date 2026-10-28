@@ -4,7 +4,10 @@ export type CaixaOperacaoTipo = "sangria" | "suprimento"
 
 export type RegistrarOperacaoResult =
   | { ok: true; deduped: boolean }
-  | { ok: false; reason: "client_error" | "network" }
+  | { ok: false; reason: "client_error" | "network" | "approval_required" }
+
+/** Recusas do Caixa Seguro STORE (`store-admin-cash-guard`): falta a aprovação da ADMIN da loja. */
+const STORE_APPROVAL_CODES = new Set(["store_admin_reauth_required", "store_admin_required"])
 
 /**
  * Registra sangria/suprimento no servidor com **retry exponencial** + **idempotência
@@ -43,6 +46,10 @@ export async function registrarOperacaoCaixaServer(params: {
       // 4xx (período fechado, sessão inválida, permissão): não adianta retentar.
       if (res.status >= 400 && res.status < 500) {
         console.error("[caixa/operacao] HTTP", res.status, tipo, valor)
+        if (res.status === 403) {
+          const data = (await res.json().catch(() => null)) as { code?: string } | null
+          if (data?.code && STORE_APPROVAL_CODES.has(data.code)) return { ok: false, reason: "approval_required" }
+        }
         return { ok: false, reason: "client_error" }
       }
       console.warn("[caixa/operacao] HTTP", res.status, "tentativa", attempt)
