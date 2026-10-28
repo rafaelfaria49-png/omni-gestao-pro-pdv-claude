@@ -16,6 +16,7 @@ Plano: `docs/padaria/pesagem/ESTOQUE_MANUAL_KG_PREVIEW_ISOLAMENTO.md`.
 | `09-p2-3-kg.md` · `harness/p2-kg-prova.ts` · `04b-prova-local-p2-kg-estendida.txt` | P2.3 PASS (2026-10-27) no `pr315-kg`: checksum, 5 colunas double, histórico 24, 2,500+0,750=3,250 pelo boundary real em rollback, main intacto |
 | `10-p3-0-preflight.md` · `10-p3-0-inventario.json` · `harness/p3-vercel-env.cjs` | P3.0 preflight PASS (2026-10-27, só leitura): mudanças exatas por id (plan), validação, risco dos 55 previews antigos |
 | `11-p3-apply.md` | P3 APLICADA (2026-10-27): 12/12 operações por id, conferência pós-apply contra o inventário (não-preview idêntico, 0 deployments novos, aliases inalterados) |
+| `12-p4-merge-r5-push.md` · `harness/p4-conexoes.cjs` | P4 (2026-10-28): merge da main (união dos guards de peso), R5 APPROVE, push `b00b230..2731097`, preview READY; conexões por branch (só leitura) |
 | `06-p2-0-check.md` | P2.0 PASS (2026-10-27) pelo conector Neon do ChatGPT, não pelo roteiro; dono `omnigestao_preview_owner`, endpoint `ep-purple-morning-b6ajdsfk` |
 
 Leituras adicionais, registradas no plano: estado da PR #315 (`gh pr view`), `/v6/deployments` (14 Production
