@@ -8,11 +8,11 @@
 
 ## Objetivo
 
-Entregar o domínio Pessoas de forma incremental, com identidade do empregador separada da Store, dados trabalhistas versionados, autorização própria e isolamento entre empregadores. 001A e hardening P2 estão DONE; o frontend 001B original e o Recovery 001 permanecem BLOCKED. O sucessor Recovery 002 conclui o frontend existente, sem reconstruir telas. Folha/holerites e GOAL funcional 002 continuam fora do recorte.
+Entregar o domínio Pessoas de forma incremental, com identidade do empregador separada da Store, dados trabalhistas versionados, autorização própria e isolamento entre empregadores. 001A e hardening P2 estão DONE; o frontend 001B original, Recovery 001 e Recovery 002 permanecem BLOCKED. O mesmo Recovery 002 prepara a continuação do frontend existente, sem reconstruir telas, após rito oficial de retomada cumulativa. Folha/holerites e GOAL funcional 002 continuam fora do recorte.
 
 ## Escopo histórico 001A — paths_base
 
-Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucessor atual, enumerada exclusivamente no META do GOAL Recovery 002 da revisão 8.
+Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucessor atual, enumerada exclusivamente no META da proposta Recovery 002 revisão 9, que permanece BLOCKED até regularização formal.
 
 - lib/pessoas/**
 - app/actions/pessoas/**
@@ -29,7 +29,7 @@ Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucesso
 
 ## Fora de escopo
 
-Motor/fechamento de folha, holerites próprios, pagamentos, integração com Financeiro/Contador, autenticação global, CI, produção e dados reais. A revisão 8 autoriza somente a integração externa das rotas Pessoas em `lib/auth/page-access.ts` e dois testes específicos, sem liberar Unidades nem elevar STORE a PLATFORM. Frontend/navegação ficam limitados ao recorte de recuperação; preservar as correções estreitas de privacidade e P2-01 já implementadas.
+Motor/fechamento de folha, holerites próprios, pagamentos, integração com Financeiro/Contador, autenticação global, CI, produção e dados reais. A revisão 8 autorizou a integração externa das rotas Pessoas em `lib/auth/page-access.ts` e dois testes; a revisão 9 acrescenta exclusivamente `lib/auth/proxy-enterprise-dashboard.ts`, após aprovação de canAccessPage, sem liberar Unidades nem elevar STORE a PLATFORM. Frontend/navegação ficam limitados ao recorte de recuperação; preservar as correções estreitas de privacidade e P2-01 já implementadas.
 
 ## Comando de teste da trilha
 
@@ -57,14 +57,14 @@ Gates liberados para a recuperação: nenhum. As autorizações abaixo pertencem
 ## Plano de origem
 
 - plan_ref: OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15
-- plan_rev: 8 (mesmo Recovery 002; integração STORE restrita e autorização humana de 25/10/2026; revisões anteriores preservadas abaixo)
+- plan_rev: 9 (mesmo Recovery 002 BLOCKED 1/3; consumidor auth autorizado em 28/10/2026; retomada cumulativa depende de rito oficial e G-AEP-CORE ainda não autorizado)
 - recorte: PESSOAS-000 incorporado ao pre-flight; PESSOAS-001A backend; 001B frontend posterior.
 
 ## Estado
 
 O estado ratificado vive em `state.json` e `LEDGER.jsonl`. Gerar derivados somente pela CLI AEP.
 
-Estado preservado na revisão 8: dois DONE, dois BLOCKED, cinco eventos e somente PESSOAS-DP-FRONTEND-001B-RECOVERY-002 como READY. RUNNING no derivado identifica o sucessor planejado; execução depende do merge humano da revisão documental 8. last_goal/last_result preservam o Recovery 001 BLOCKED. Reconciliação e revisão 7 já integram a main pelo merge da PR #305, `57cab7cd2935ce040be6b0342aab686e46d9d91e`. As seções de revisões 2–7 abaixo são históricas; suas referências a READY/atual não reabrem GOALs fechados nem substituem a decisão específica da revisão 8.
+Estado após reconciliação oficial e proposta revisão 9: dois DONE, três BLOCKED, seis eventos, current_goal=null e next_goal=null. Recovery 002 ratificado por gate em 1/3, previous_attempts=[]; proposta no caminho goals/ também BLOCKED, sem READY, marcador ou tentativa nova. last_goal/last_result permanecem Recovery 002 BLOCKED. Origem publicada `8bb2cb9019df2620d7ee7edfbf268b6ae2982be3`; reconciliação `bc9275307fff9df390c0ef02b1fb6e8d4ff55057`. Revisões 7/8 já integram a main pelas PRs #305/#316. As seções 2–8 abaixo são históricas; referências a READY/atual não reabrem arquivos fechados nem substituem os gates da revisão 9.
 
 ## Histórico — hardening obrigatório antes do frontend 001B — revisão 2
 
@@ -174,7 +174,7 @@ O bloco abaixo registra a PR #264, já mergeada em main no commit 857e24d. Refer
 - registry/verify --all/diff check oficiais; ledger/derivados não editados manualmente. Código produtivo, CURRENT_STATUS/CHANGELOG/memória global e relatórios/arquivos fechados anteriores não alterados por este planejamento.
 - Próximo gate: **HUMAN_MERGE_SUCCESSOR_PLAN**. Não executar sucessor, mergear PR #273, habilitar produção ou iniciar folha/GOAL funcional 002. Ponto de parada: histórico BLOCKED preservado e um único sucessor 001B pronto para autorização.
 
-## Revisão atual 8 — autorização Recovery 002 e integração STORE restrita — 25/10/2026
+## Histórico — revisão 8 — autorização Recovery 002 e integração STORE restrita — 25/10/2026
 
 - Mesmo GOAL `PESSOAS-DP-FRONTEND-001B-RECOVERY-002`, classe C3, risco ALTO, família openai e runner `node scripts/pessoas/run-frontend-tests.mjs`. Não reabrir predecessores nem reiniciar tentativas. Manter gates técnicos e três tentativas oficiais do sucessor.
 - Missão humana de 25/10/2026 autoriza Recovery 002 completo, commit/push normais e PR funcional exclusiva para main. Exige antes uma PR documental separada e seu **merge humano**; execução somente a partir da main contendo o plano aprovado, sem divergência do GOAL em relação à base.
@@ -187,3 +187,17 @@ O bloco abaixo registra a PR #264, já mergeada em main no commit 857e24d. Refer
 - QA autorizado somente nos recursos existentes: Neon `pessoas_001b_qa` / projeto `orange-voice-83394974`; bucket R2 privado e projeto Vercel `omni-gestao-pessoas-001b-qa`. Verificar token R2 com expiração informada em 23/10/2026 e renovar/rotacionar credencial limitada ao bucket QA somente se necessário. Preview privado do novo HEAD, flag ON só QA, bytes reais/integridade/isolamento e URL privada saneada. Sem serviço adicional pago, bucket Contador produtivo, DNS, produção, segredos/cookies/URLs assinadas em evidências.
 - Registro da autorização e verificações documentais: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/AUTHORIZATION_2026-10-25.md`. Gerar derivados por `registry`, `verify --all` e diff check; ledger/arquivos fechados/manifesto preservados. Histórico não vira PASS novo.
 - **NEXT_GATE=HUMAN_MERGE_SCOPE_PLAN_REV_8**. Depois do merge humano, continuar a missão já autorizada até PR funcional pronta para decisão humana ou gate real. PR #273 permanece draft; sem merge automático, Pessoas em produção ou folha neste GOAL. Próximo GOAL funcional: PESSOAS-002 — FOLHA MENSAL CALCULÁVEL.
+
+## Revisão atual 9 — auth consumer e retomada cumulativa — 28/10/2026
+
+- Mesmo GOAL `PESSOAS-DP-FRONTEND-001B-RECOVERY-002`, C3/ALTO, openai, read_budget 85 e runner inalterado. Todos os demais paths, testes, contratos 001A/P2, QA e dispensa externa condicional de 25/10 são preservados. Nenhum sucessor novo, tentativa zero ou nova execução.
+- Main atual conferida por fetch: `34b70a15583db7608437f04b3ba7779582f4eeb9`. Branch/worktree documental limpa: `codex/pessoas-001b-recovery-002-rev9` / `C:/Projetos/omni-gestao/.worktrees/pessoas-001b-recovery-002-rev9`. WIPs externos e worktree documental anterior preservados; PR #273 aberta/draft.
+- Origem `goal/pessoas-001b-recovery-002` limpa e sem .aep-active, três commits locais; HEAD `8bb2cb9019df2620d7ee7edfbf268b6ae2982be3`. Branch antes ausente no remoto, publicada por push normal e SHA conferido. BLOCKED oficial `437abb4d4dc523865710cabf8a281f43dfda1fd9` por gate em 1/3. Nenhum merge da implementação na main.
+- `reconcile-blocked` oficial com ref/SHA exatos: dry-run PASS, aplicação `bc9275307fff9df390c0ef02b1fb6e8d4ff55057`; um evento literal anexado, previous_attempts=[] e GOAL revisão 8 fechado integralmente preservado. Relatório `_closed/reports/RECONCILE-BLOCKED-8bb2cb9019df.json`. Dois DONE/três BLOCKED/seis eventos; nenhum histórico reescrito.
+- Autorização humana de 28/10 acrescenta exclusivamente `lib/auth/proxy-enterprise-dashboard.ts` à allowlist. Patch futuro: raiz /dashboard/pessoas ou prefixo /dashboard/pessoas/, somente depois de canAccessPage aprovar. Preservar cookie/Store guard e guards reais DP; negar Unidades, Plataforma, Financeiro, Configurações globais e pessoas-extra no cenário sem permissões. Cobertura no teste do consumidor já autorizado. Sem auth.ts/auth.config.ts/proxy.ts, schema/migrations ou outro consumidor.
+- Gate real AUTH-CONSUMER-01 preservado no SOURCE_SHA: canAccessPage aceita /dashboard/pessoas/configuracoes, mas consumidor nega por pathname.includes(configuracoes). Diagnóstico de funções reais, sem prova E2E ou confirmação da causa A3 histórica. Os 32 arquivos já transportados permanecem na branch de origem; nenhum retransporte nesta PR.
+- AEP_RESUMPTION_SUPPORTED=false: cmdOpen sem marcador inicializa attempt=1/attempts_log=[] sem consultar ledger; refresh-active requer sessão e está fixado ao Recovery 001 rev5→6. reconcile-blocked só preserva histórico. Não inventar comando, fabricar attempt --fail ou manipular marcador/ledger para simular retomada.
+- Proposta revisão 9 no caminho goals/ com status BLOCKED, sem elegibilidade. Tentativa 1/3 já ratificada; próxima corretiva requerida 2/3, teto 3. Metadados retomada_aep são documentais e não implementam essa garantia. Merge do plano sozinho não resolve o gate nem autoriza open.
+- G-AEP-CORE solicitado e NÃO AUTORIZADO: rito oficial mínimo em scripts/track.mjs e regressões em scripts/track.test.mjs, com documentação, sem alterar hooks/protocol.json ou produto. Exigir contagem cumulativa/proveniência e teto, dry-run inerte, plano integrado na main/base comum, histórico fechado preservado, rejeições seguras e idempotência; implementação e integração somente após autorização específica e ratificação humana. Não adicionar G-AEP-CORE a gates_liberados deste GOAL de produto.
+- Registros: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/AUTHORIZATION_2026-10-28.md` e `RECONCILIATION_AND_RESUMPTION_2026-10-28.md`. Registry/verify --all/diff check oficiais; commit/push normais e uma PR documental. Sem runner/QA/close de produto; nenhuma alteração de estado de entrega em CURRENT_STATUS/CHANGELOG/memória global.
+- **NEXT_GATE=HUMAN_MERGE_SCOPE_PLAN_REV_9_AND_AUTHORIZE_G_AEP_CORE_OFFICIAL_RESUMPTION**. Ponto de parada: revisão 9 documental pronta para merge humano com gate AEP objetivo documentado. Aplicar patch somente após plano e rito ratificados e abertura legítima; sem merge automático, produção ou folha/GOAL funcional 002.
