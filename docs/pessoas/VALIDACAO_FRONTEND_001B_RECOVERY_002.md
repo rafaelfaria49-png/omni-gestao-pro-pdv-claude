@@ -5,3 +5,5 @@
 **Entrega funcional não concluída.** O consumidor global continua negando `/dashboard/pessoas/configuracoes` a ator STORE sem Configurações Enterprise, depois de canAccessPage retornar true. Reprodução com funções reais e proposta não aplicada em [GATE_AUTH_CONSUMER_2026-10-28.md](../ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/GATE_AUTH_CONSUMER_2026-10-28.md).
 
 A correção exige `lib/auth/proxy-enterprise-dashboard.ts`, fora da allowlist. Implementação interrompida no gate humano, sem editar GOAL/META/marcador. Runner completo/TypeScript/lint/build/PWA/E2E/visual/QA não executados; nenhuma evidência histórica virou PASS do novo HEAD. Autorrevisão tem achado bloqueante; sem close DONE, PR funcional ou produção. Fixture e validações restantes ficam pendentes da retomada formal.
+
+AEP final: BLOCKED por gate na tentativa 1/3, commit `437abb4d4dc523865710cabf8a281f43dfda1fd9`. Transporte preservado em `acd4362eb93bc36cbf2f8bbd2bf8586fba78319a`; sem publicação como entrega validada.

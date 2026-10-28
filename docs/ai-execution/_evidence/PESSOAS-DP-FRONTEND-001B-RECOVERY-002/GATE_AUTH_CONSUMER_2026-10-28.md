@@ -43,7 +43,13 @@ Gate solicitado: autorização humana específica e regularização formal da al
 - Typecheck, Vitest/001A/P2/PostgreSQL, lint, dois builds/PWA, E2E ON/OFF, matriz visual/acessibilidade e Preview/R2: NOT_RUN_GATE. Não foi criada evidência PASS fictícia nem consumida tentativa com runner incompleto.
 - Autorrevisão Codex: achado bloqueante AUTH-CONSUMER-01; SELF_REVIEW_NOT_INDEPENDENT. Condição de entrega ainda não satisfeita; nenhuma revisão externa solicitada.
 - QA Neon/R2/Vercel e credenciais não foram acessados ou alterados; sem deploy, bucket, banco ou produção.
-- Sem fechamento DONE ou PR funcional; o trabalho é preservado em commits locais, e o bloqueio será ratificado pelo comando AEP oficial por gate.
+- Sem fechamento DONE ou PR funcional; o trabalho é preservado em commits locais, e o bloqueio foi ratificado pelo comando AEP oficial por gate.
 - CURRENT_STATUS/changelog/memória global não alterados: produto não entregue e esses paths não pertencem à allowlist. PR #273 deve continuar aberta/draft.
 
 NEXT_ACTION=HUMAN_AUTHORIZE_AUTH_CONSUMER_SCOPE_AND_FORMAL_AEP_RESUMPTION.
+
+## Ratificação final do gate
+
+O comando oficial `block pessoas --by=gate` ratificou BLOCKED na tentativa **1/3**, commit `437abb4d4dc523865710cabf8a281f43dfda1fd9`. Exit **3** é o resultado previsto de bloqueio na CLI, não falha da ratificação; não foi repetido. Marcador removido oficialmente, veredito NEW_SESSION. Estado: dois DONE, três BLOCKED, seis eventos; nenhum DONE do Recovery 002. Tentativas anteriores: zero; nenhum runner ou tentativa corretiva artificial foi consumido.
+
+Implementação parcial preservada em `acd4362eb93bc36cbf2f8bbd2bf8586fba78319a`; nenhuma edição no consumidor protegido. PR #273 reconfirmada aberta/draft e no SHA original. Sem push da execução incompleta ou PR funcional. O diagnóstico/proposta pode ser revisado localmente antes da autorização específica de escopo e do rito formal de retomada.
