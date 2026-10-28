@@ -1,0 +1,84 @@
+
+## simula o projeto novo: dono padrão, neon_superuser, database e GUCs neon.*
+ok
+
+## negativo: arquivo de segredos dentro do repo
+ABORTADO: arquivo de segredo dentro de um repositório git: C:\Projetos\omni-gestao\.worktrees\estoque-manual-kg-001\docs\ai-execution\_evidence\ESTOQUE-MANUAL-KG-001\preview-isolation-003\harness
+
+## negativo: URL apontando para o endpoint de produção (modo real, sem conectar)
+ABORTADO: PREVIEW_MAIN_OWNER_URL: RECUSADO, endpoint de produção
+
+## negativo: URL pooler (modo real, sem conectar)
+ABORTADO: PREVIEW_MAIN_OWNER_URL: use a URL direta (sem -pooler) para DDL/migrations
+
+## negativo: main com endpoint diferente do confirmado na P2.0 (modo real, sem conectar)
+ABORTADO: PREVIEW_MAIN_OWNER_URL: endpoint ≠ ep-purple-morning-b6ajdsfk (main confirmado na P2.0)
+
+## negativo: usuário diferente do dono confirmado (modo real, sem conectar)
+ABORTADO: PREVIEW_MAIN_OWNER_URL: usuário ≠ omnigestao_preview_owner
+
+## check (só leitura)
+alvo: endpoint=ep-local-55451 usuário_dono=omnigestao_preview_owner
+neon project=nameless-frost-19035275 branch=br-lively-feather-b6esh64a endpoint=ep-local-55451
+pg=17.10 db=omnigestao_preview current_user=omnigestao_preview_owner dono_do_banco=omnigestao_preview_owner ro=on
+dono createrole=true super=false membro_neon_superuser=true
+papeis_nao_sistema=omnigestao_preview_owner,pgadmin
+tabelas_public=0
+check: OK (nenhuma escrita)
+
+## main
+main=34b70a1 migrations=23
+preview_runtime criado
+base aplicada (3355 linhas)
+resolvidas=23
+status: Database schema is up to date!
+drift main (0=vazio): 0
+tabelas=110 sem_dml_runtime=0 rls=0
+runtime create_public=false create_db=false super=false bypassrls=false createrole=false membros=-
+colunas KG (esperado integer): estoque_produtos.stock:integer movimentacoes_estoque.quantidade:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer produto_depositos.quantidade:integer
+seed: lojas=1 admins=1 bcrypt_confere=true
+runtime_login=preview_runtime · ddl_recusado=42501
+main: OK · senhas e URLs do runtime gravadas só em P2_GENERATED_FILE
+
+## main de novo (deve recusar: banco não vazio)
+ABORTADO: public não está vazio; a fase main só roda em banco vazio
+
+## simula o branch pr315-kg: cópia física do main (papéis e senhas vêm junto), endpoint e branch_id próprios
+ok
+
+## negativo: trava (URL do main apontando para o filho → branch_id não confere)
+ABORTADO: trava: ERRO:  22012
+
+## kg
+branch=br-local-kg-test endpoint=ep-local-55452 prisma da PR @ 5e1feb9
+servidor: project=nameless-frost-19035275 branch=br-local-kg-test endpoint=ep-local-55452 db=omnigestao_preview user=omnigestao_preview_owner
+checksum arquivo=f07242c4…a06a47e esperado=f07242c4…a06a47e
+antes: historico total=23 finalizadas=23 kg=0 kg_checksum=-
+antes: saldos produtos=0 depositos=0 movs=0 md5=7d010443693eec253a121e2aa2ba177c
+pendentes: 20261025120000_estoque_quantidade_fracionada
+deploy: All migrations have been successfully applied.
+status: Database schema is up to date!
+drift kg (0=vazio): 0
+depois: historico total=24 finalizadas=24 kg=1 kg_checksum=f07242c4604660008b645004d3dfafde4da1656e728f803d9009f2f02a06a47e
+depois: saldos produtos=0 depositos=0 movs=0 md5=7d010443693eec253a121e2aa2ba177c
+colunas KG (esperado double precision): estoque_produtos.stock:double precision movimentacoes_estoque.quantidade:double precision movimentacoes_estoque.estoqueAntes:double precision movimentacoes_estoque.estoqueDepois:double precision produto_depositos.quantidade:double precision
+tabelas=110 sem_dml_runtime=0 rls=0
+runtime_login=preview_runtime · ddl_recusado=42501
+prova KG (rollback): {"r1":[0,2.5],"r2":[2.5,3.25],"kg_4_casas":"VALIDATION","un_inteiro":[0,3],"un_fracionado":"VALIDATION","saldos_texto_pg":[{"id":"p2kg-pao","stock":"3.25","dep":"3.25"},{"id":"p2kg-un","stock":"3","dep":"3"}],"livro_texto_pg":[{"id":"p2kg-pao","q":"2.5","a":"0","d":"2.5"},{"id":"p2kg-pao","q":"0.75","a":"2.5","d":"3.25"},{"id":"p2kg-un","q":"3","a":"0","d":"3"}],"linhas_restantes_apos_rollback":0}
+main segue integer: estoque_produtos.stock:integer movimentacoes_estoque.quantidade:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer produto_depositos.quantidade:integer
+main historico total=23 finalizadas=23 kg=0 kg_checksum=-
+kg: OK
+
+## kg de novo (deve recusar: nada pendente)
+ABORTADO: esperado só a migration KG pendente
+
+## arquivo gerado: só nomes das chaves
+PREVIEW_RUNTIME_PASSWORD
+PREVIEW_ADMIN_EMAIL
+PREVIEW_ADMIN_PASSWORD
+PREVIEW_MAIN_RUNTIME_DATABASE_URL
+PREVIEW_MAIN_RUNTIME_DIRECT_URL
+PREVIEW_KG_RUNTIME_DATABASE_URL
+PREVIEW_KG_RUNTIME_DIRECT_URL
+
+FIM
