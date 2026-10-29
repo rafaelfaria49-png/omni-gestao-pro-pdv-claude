@@ -34,6 +34,9 @@ import { appendAuditLog } from "@/lib/audit-log"
 import { useOperationsStore } from "@/lib/operations-store"
 import { PdvPendingSyncBadge } from "@/components/dashboard/vendas/pdv-pending-sync-badge"
 import { SupervisorGateDialog } from "./supervisor-gate-dialog"
+import { StoreAdminReauthDialog } from "./store-admin-reauth-dialog"
+import { useSession } from "next-auth/react"
+import { isStoreAdminSession, isStoreExperienceSession } from "@/lib/auth/store-admin-reauth"
 
 /** Janela de "resumo revelado" após autorização do supervisor (Caixa Seguro). */
 const REVEAL_MS = 5 * 60 * 1000
@@ -86,6 +89,15 @@ export function CaixaStatusBar({
   // SEMPRE pede o PIN de novo (não reaproveita o cookie admin) — protegido por padrão.
   const [revealed, setRevealed] = useState(false)
   const [gateOpen, setGateOpen] = useState(false)
+  // Experiência STORE: a aprovação é a senha da própria ADMIN da loja, validada e
+  // exigida no servidor; o PIN global nunca é oferecido. Contas internas legadas
+  // seguem no SupervisorGateDialog. Enquanto a sessão carrega, nenhum gate abre.
+  const { data: authSession, status: authStatus } = useSession()
+  const storeGate: "admin" | "employee" | null = isStoreExperienceSession(authSession)
+    ? isStoreAdminSession(authSession)
+      ? "admin"
+      : "employee"
+    : null
   const revealTimerRef = useRef<number | null>(null)
   const pendingActionRef = useRef<(() => void) | null>(null)
   const revealedRef = useRef(false)
@@ -105,19 +117,43 @@ export function CaixaStatusBar({
     setRevealed(false)
   }, [clearRevealTimer])
 
+  // A aprovação STORE dura 15 min no servidor; a tela revela por 5. Quando o resumo se
+  // esconde sozinho (sem fechamento nem sangria/suprimento em curso) ou a barra sai da
+  // tela, a aprovação é revogada para não sobrar janela invisível no computador.
+  const storeAdminRef = useRef(false)
+  const acaoSensivelAbertaRef = useRef(false)
+  useEffect(() => {
+    storeAdminRef.current = storeGate === "admin"
+    acaoSensivelAbertaRef.current = showFechamento || operationType !== null
+  }, [storeGate, showFechamento, operationType])
+  const revogarAprovacaoLoja = useCallback(() => {
+    void fetch("/api/auth/store-admin-reauth", { method: "DELETE", credentials: "include" }).catch(() => {})
+  }, [])
+  useEffect(() => () => {
+    if (storeAdminRef.current) revogarAprovacaoLoja()
+  }, [revogarAprovacaoLoja])
+
   const grantReveal = useCallback(() => {
     clearRevealTimer()
     setRevealed(true)
     revealTimerRef.current = window.setTimeout(() => {
       revealTimerRef.current = null
       setRevealed(false)
+      if (storeAdminRef.current && !acaoSensivelAbertaRef.current) revogarAprovacaoLoja()
     }, REVEAL_MS)
-  }, [clearRevealTimer])
+  }, [clearRevealTimer, revogarAprovacaoLoja])
 
   const requestGate = useCallback((action: (() => void) | null) => {
     pendingActionRef.current = action
     setGateOpen(true)
   }, [])
+
+  // "Ocultar" na experiência STORE também revoga a autorização no servidor: o resumo
+  // escondido deixa de liberar sangria/suprimento/fechamento por esta sessão.
+  const ocultarResumo = useCallback(() => {
+    hideResumo()
+    if (storeGate === "admin") revogarAprovacaoLoja()
+  }, [hideResumo, storeGate, revogarAprovacaoLoja])
 
   const onGateAuthorized = useCallback(() => {
     grantReveal()
@@ -132,7 +168,14 @@ export function CaixaStatusBar({
     if (!caixa.isOpen) hideResumo()
   }, [caixa.isOpen, hideResumo])
 
+  // Ação sensível encerrada com o resumo já escondido pelo timer: a aprovação STORE não
+  // fica viva no servidor sem nada na tela que a use.
+  const revogarSeResumoOculto = () => {
+    if (storeAdminRef.current && !revealedRef.current) revogarAprovacaoLoja()
+  }
+
   const closeOp = () => {
+    revogarSeResumoOculto()
     setOperationType(null)
     setOpValor("")
     setOpMotivo("")
@@ -173,6 +216,17 @@ export function CaixaStatusBar({
           toast({
             title: tipo === "sangria" ? "Sangria registrada" : "Suprimento registrado",
             description: `R$ ${valor.toFixed(2)} — ${motivo}`,
+          })
+        } else if (r.reason === "approval_required" || r.reason === "not_recorded") {
+          // Experiência STORE: a operação foi desfeita no caixa local e não será reenviada.
+          if (r.reason === "approval_required") hideResumo()
+          toast({
+            variant: "destructive",
+            title: `${label} não registrada`,
+            description:
+              r.reason === "approval_required"
+                ? "A liberação da administradora expirou. Abra o Resumo do Caixa, confirme a senha e repita."
+                : "Não foi possível confirmar no servidor. Confira o resumo do caixa antes de repetir.",
           })
         } else {
           toast({
@@ -412,7 +466,7 @@ export function CaixaStatusBar({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={hideResumo}
+                  onClick={ocultarResumo}
                   className="h-8 rounded-lg text-muted-foreground hover:text-foreground"
                 >
                   <EyeOff className="mr-1.5 h-4 w-4" />
@@ -493,18 +547,39 @@ export function CaixaStatusBar({
         )}
       </div>
 
-      <SupervisorGateDialog
-        open={gateOpen}
-        onOpenChange={(o) => {
-          setGateOpen(o)
-          if (!o) pendingActionRef.current = null
-        }}
-        onAuthorized={onGateAuthorized}
-        title="Resumo do Caixa protegido"
-        description="Informe a senha do supervisor para ver valores, vendas e ações do caixa."
-      />
+      {authStatus === "loading" ? null : storeGate ? (
+        <StoreAdminReauthDialog
+          open={gateOpen}
+          onOpenChange={(o) => {
+            setGateOpen(o)
+            if (!o) pendingActionRef.current = null
+          }}
+          onAuthorized={onGateAuthorized}
+          mode={storeGate}
+          storeId={lojaAtivaId}
+          sessaoId={sessaoId}
+          terminalId={terminal?.id ?? null}
+        />
+      ) : (
+        <SupervisorGateDialog
+          open={gateOpen}
+          onOpenChange={(o) => {
+            setGateOpen(o)
+            if (!o) pendingActionRef.current = null
+          }}
+          onAuthorized={onGateAuthorized}
+          title="Resumo do Caixa protegido"
+          description="Informe a senha do supervisor para ver valores, vendas e ações do caixa."
+        />
+      )}
 
-      <FechamentoCaixaModal isOpen={showFechamento} onClose={() => setShowFechamento(false)} />
+      <FechamentoCaixaModal
+        isOpen={showFechamento}
+        onClose={() => {
+          revogarSeResumoOculto()
+          setShowFechamento(false)
+        }}
+      />
 
       {/* Sangria / Suprimento — disponível em todos os PDVs via barra compartilhada */}
       <Dialog open={operationType !== null} onOpenChange={(open) => { if (!open) closeOp() }}>

@@ -17,6 +17,8 @@ import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import { emitEvent } from "@/lib/events/event-bus"
 import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
+import { useSession } from "next-auth/react"
+import { isStoreExperienceSession } from "@/lib/auth/store-admin-reauth"
 import { registrarOperacaoCaixaServer } from "@/lib/pdv-caixa-operacao"
 import {
   applyCaixaSessionDecision,
@@ -888,6 +890,18 @@ export function OperationsProvider({
 }) {
   const accessPermissions = useEnterprisePermissions()
   const canReadOperations = accessPermissions?.hubs.operacoes === true
+  // Caixa Seguro STORE (PADARIA-STORE-ADMIN-CASH-AUTH-001): sangria/suprimento só valem
+  // com a aprovação da ADMIN no momento do envio. A fila local é por loja, não por
+  // usuário — reenviá-la depois faria uma operação enfileirada (inclusive forjada no
+  // localStorage) pegar carona na aprovação seguinte. Na experiência STORE a operação é
+  // online-only: falhou, é desfeita no caixa local e nunca é reenviada sozinha.
+  // Sessão ainda carregando conta como STORE: nada é reenviado antes de saber quem é.
+  const { data: authSession, status: authStatus } = useSession()
+  const storeCaixaOnline = authStatus === "loading" || isStoreExperienceSession(authSession)
+  const storeCaixaOnlineOnlyRef = useRef(storeCaixaOnline)
+  useEffect(() => {
+    storeCaixaOnlineOnlyRef.current = storeCaixaOnline
+  }, [storeCaixaOnline])
   useEffect(() => {
     // Camada de inteligência (eventos/automações) em modo simulado.
     // Não altera lógica de venda/estoque existente.
@@ -2297,6 +2311,7 @@ export function OperationsProvider({
   }, [storageKey])
 
   const flushPendingCaixaOperations = useCallback(() => {
+    if (storeCaixaOnlineOnlyRef.current) return
     const pending = stateRef.current.pendingCaixaOperations?.filter((op) => op.syncPending === true) ?? []
     if (pending.length === 0) return
     const lj = opsLojaIdFromStorageKey(storageKey)
@@ -2328,6 +2343,25 @@ export function OperationsProvider({
         })
     }
   }, [storageKey])
+
+  // Sessão STORE confirmada: sangria/suprimento que ficaram na fila (versão anterior,
+  // aba fechada no meio do envio ou valor forjado no storage) nunca chegaram ao servidor.
+  // Saem da fila e do total local, para não pegarem carona em outra conta depois.
+  const storeCaixaConfirmada = authStatus !== "loading" && isStoreExperienceSession(authSession)
+  useEffect(() => {
+    if (!opsDbReady || !storeCaixaConfirmada) return
+    setState((prev) => {
+      const presas = (prev.pendingCaixaOperations ?? []).filter((o) => o.syncPending === true)
+      if (presas.length === 0) return prev
+      const saidas = presas.filter((o) => o.tipo === "sangria").reduce((t, o) => t + o.valor, 0)
+      const entradas = presas.filter((o) => o.tipo === "suprimento").reduce((t, o) => t + o.valor, 0)
+      return {
+        ...prev,
+        caixa: { ...prev.caixa, totalSaidas: prev.caixa.totalSaidas - saidas, totalEntradas: prev.caixa.totalEntradas - entradas },
+        pendingCaixaOperations: prev.pendingCaixaOperations.filter((o) => o.syncPending !== true),
+      }
+    })
+  }, [opsDbReady, storeCaixaConfirmada])
 
   // Recupera pendências ao montar/abrir o PDV (bootstrap).
   useEffect(() => {
@@ -2920,6 +2954,19 @@ export function OperationsProvider({
 
       setState(next)
 
+      // STORE: desfaz o lançamento local e tira da fila — sem reenvio automático.
+      const descartarOperacaoLocal = () =>
+        setState((prev) => ({
+          ...prev,
+          caixa: {
+            ...prev.caixa,
+            ...(tipo === "sangria"
+              ? { totalSaidas: prev.caixa.totalSaidas - valor }
+              : { totalEntradas: prev.caixa.totalEntradas - valor }),
+          },
+          pendingCaixaOperations: prev.pendingCaixaOperations.filter((o) => o.id !== localId),
+        }))
+
       const lj = opsLojaIdFromStorageKey(storageKey)
       try {
         const r = await registrarOperacaoCaixaServer({
@@ -2940,10 +2987,17 @@ export function OperationsProvider({
             ),
           }))
           return { ok: true, deduped: r.deduped }
-        } else {
-          return { ok: false, reason: r.reason }
         }
+        if (storeCaixaOnlineOnlyRef.current) {
+          descartarOperacaoLocal()
+          return { ok: false, reason: r.reason === "approval_required" ? r.reason : "not_recorded" }
+        }
+        return { ok: false, reason: r.reason }
       } catch (err) {
+        if (storeCaixaOnlineOnlyRef.current) {
+          descartarOperacaoLocal()
+          return { ok: false, reason: "not_recorded" }
+        }
         return { ok: false, reason: "network" }
       }
     },

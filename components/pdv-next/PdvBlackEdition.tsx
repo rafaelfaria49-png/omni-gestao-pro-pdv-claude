@@ -42,6 +42,8 @@ import { AberturaCaixaModal } from "@/components/dashboard/caixa/abertura-caixa-
 import { FechamentoCaixaModal } from "@/components/dashboard/caixa/fechamento-caixa-modal"
 import { CaixaStatusBar } from "@/components/dashboard/caixa/caixa-status-bar"
 import { SupervisorGateDialog } from "@/components/dashboard/caixa/supervisor-gate-dialog"
+import { StoreAdminReauthDialog } from "@/components/dashboard/caixa/store-admin-reauth-dialog"
+import { isStoreAdminSession, isStoreExperienceSession } from "@/lib/auth/store-admin-reauth"
 import {
   mergePdvCatalogWithInventory,
   newPdvLineId,
@@ -85,7 +87,7 @@ export function PdvBlackEdition() {
     getSaldoCreditoCliente,
     sincronizarCreditoLocal,
   } = useOperationsStore()
-  const { caixa, abrirCaixa, fecharCaixa } = useCaixa()
+  const { caixa, abrirCaixa, fecharCaixa, sessaoId: caixaSessaoId } = useCaixa()
   const { toast } = useToast()
 
   // ── Terminal e escopo de storage (reativo via useTerminalAtivo) ────────────
@@ -131,7 +133,7 @@ export function PdvBlackEdition() {
     return config?.empresa.nomeFantasia || config?.empresa.razaoSocial || "OmniGestão PDV"
   }, [lojaAtivaRaw, config])
 
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome((lojaAtivaId ?? "").trim())
   const operadorNome = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
 
@@ -741,13 +743,26 @@ export function PdvBlackEdition() {
 
       {/* Modais do caixa */}
       <AberturaCaixaModal isOpen={showAbertura} onClose={() => setShowAbertura(false)} />
-      <SupervisorGateDialog
-        open={fecharGateOpen}
-        onOpenChange={setFecharGateOpen}
-        onAuthorized={() => setShowFechamento(true)}
-        title="Fechar caixa"
-        description="Fechar o caixa exige a senha de um supervisor/gerente."
-      />
+      {/* Experiência STORE: senha da própria ADMIN da loja (exigida no servidor); nunca o PIN global. */}
+      {sessionStatus === "loading" ? null : isStoreExperienceSession(session) ? (
+        <StoreAdminReauthDialog
+          open={fecharGateOpen}
+          onOpenChange={setFecharGateOpen}
+          onAuthorized={() => setShowFechamento(true)}
+          mode={isStoreAdminSession(session) ? "admin" : "employee"}
+          storeId={lojaAtivaId}
+          sessaoId={caixaSessaoId}
+          terminalId={terminal?.id ?? null}
+        />
+      ) : (
+        <SupervisorGateDialog
+          open={fecharGateOpen}
+          onOpenChange={setFecharGateOpen}
+          onAuthorized={() => setShowFechamento(true)}
+          title="Fechar caixa"
+          description="Fechar o caixa exige a senha de um supervisor/gerente."
+        />
+      )}
       <FechamentoCaixaModal isOpen={showFechamento} onClose={() => setShowFechamento(false)} />
 
       {/* Seletor de cliente para venda à prazo */}

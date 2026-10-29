@@ -79,8 +79,11 @@ DRAFT ──(planejamento humano)──▶ READY ──(open)──▶ IN_PROGRE
 ```
 
 - `IN_PROGRESS` **não é persistido em arquivo versionado** — existe só no `.aep-active`.
-- Desbloquear é ato humano: mover o arquivo de `_closed/goals/` de volta para `goals/`
-  com `status: "READY"`, ou planejar um GOAL sucessor.
+- Desbloquear um BLOCKED executado por gate humano exige plano revisado integrado
+  e `resume-blocked` (§ 8). O arquivo histórico permanece fechado. `open` recusa
+  reinicializar um BLOCKED executado, mesmo que um arquivo seja marcado READY.
+  A guarda consulta todo o histórico; classificação importada posterior não apaga
+  um bloqueio executado nem seu teto cumulativo.
 
 ## 4. Máquina de estado da trilha
 
@@ -115,6 +118,13 @@ Teto de **3 tentativas** por GOAL. `attempt --fail --reason="..."` escreve **som
 
 **Um corretivo é tentativa, não GOAL novo.** Criar um GOAL para consertar o GOAL anterior
 mascara o custo real e quebra a contagem.
+
+Na retomada oficial de BLOCKED 1/3, a corretiva começa em **2/3**. O bloqueio
+ratificado ocupa a tentativa 1, mas não se transforma em falha: `attempts_log`
+começa com cópia literal de `previous_attempts` histórico (pode ser `[]`). Uma
+falha real em 2 adiciona somente `n: 2` e avança para 3; falha real em 3 adiciona
+`n: 3` e bloqueia. A origem e o número consumido vivem em `resumption`, separados
+do log de falhas. Não preencher lacunas nem inventar falhas retroativas.
 
 ## 7. plan_rev e SUPERSEDED
 
@@ -175,6 +185,103 @@ item 8. Refresh não executa teste/close nem aprova preview, produção ou merge
 Não rode `open` antes para renovar a base: o marcador legado não contém `plan_rev`,
 e a âncora histórica precisa continuar comprovável. Em divergência, preserve a sessão
 e resolva pelo rito humano; não a regenere nem reinicie tentativas.
+
+### Retomada oficial cumulativa de BLOCKED por gate humano
+
+```bash
+node scripts/track.mjs resume-blocked <trilha> --goal=<ID> --authorization=<ID-humano> [--dry-run]
+```
+
+É um rito de abertura do **mesmo GOAL, branch e worktree**, autorizado pelo humano,
+depois de replanejamento integrado na default. Não criar Recovery novo para
+ocultar tentativas. A manutenção do núcleo ocorre em branch/worktree separadas,
+sem `.aep-active` de produto, com G-AEP-CORE específico, escopo fechado e PR própria.
+Merge do plano sozinho não basta: o mecanismo também deve estar integrado.
+
+Na integração Git, confira separadamente o GOAL quente revisado e o arquivo
+histórico. O detector de renames pode aplicar alterações novas ao arquivo fechado,
+mesmo sem conflito textual. A CLI exige ambos os blobs corretos e recusa esse
+resultado; a resolução pertence à integração humana autorizada, antes da retomada.
+
+Contrato do plano revisado, ratificado na main:
+
+- `status=BLOCKED`, mesmo `id`, `track`, `branch`, `worktree` e `plan_ref` do
+  arquivo fechado; `plan_rev` inteiro maior que a revisão histórica.
+- `autorizacao_humana_execucao.aprovado=true` e `authorization_id` igual à flag.
+  O ID é referência auditável da decisão humana, não segredo ou autenticação.
+  O executor precisa de autorização real para aplicar; uma flag não a substitui.
+- `retomada_aep.status=BLOCKED_PENDING_OFFICIAL_RITE`, SHAs completos em
+  `source_commit`, `blocked_commit` e `reconciliation_commit`; `historical_attempt`,
+  `historical_previous_attempts`, `max_attempts=3` e
+  `next_corrective_attempt_required=historical_attempt+1`, todos explícitos e
+  compatíveis com os eventos. Campos documentais antigos `current_cli_supported`
+  e `G_AEP_CORE` continuam como evidência da época do plano, sem serem reescritos.
+- Allowlist e contrato de execução vêm integralmente do plano incorporado.
+  O mecanismo não altera autorizações de revisão, preview, QA ou merge e não
+  modifica `gates_liberados` nem gates globais. Condições de entrega continuam
+  exigíveis antes do fechamento.
+
+Verificações realizadas também no dry-run:
+
+- Árvore e índice limpos; branch/worktree declaradas; base comum única. GOAL,
+  script e protocolo idênticos na base, HEAD, árvore e `origin/<default>`.
+  Source ancestral do HEAD e da ref remota da branch original; BLOCKED ancestral
+  da source; reconciliação ancestral da base. Fetch/integração são atos separados.
+- O commit BLOCKED tem pai único e acrescenta exatamente um evento executado
+  por `gate`/`decisao`, sem reescrever prefixo. Ledger da source e reconciliação
+  iguais ao desse commit. Históricos do mesmo GOAL continuam literais na main e
+  HEAD; eventos adicionais de outros GOALs não alteram essa proveniência.
+- Arquivo fechado histórico com revisão anterior e blob idêntico em todos os
+  commits, incluindo o BLOCKED. Relatório oficial `RECONCILE-BLOCKED-<SHA12>.json`
+  com origem, contagens e resultado correspondentes, preservado integralmente.
+  Comparações locais toleram apenas a conversão CRLF do Git; nada é regravado.
+- Contagem cumulativa abaixo de 3, logs existentes válidos e contagem declarada
+  exata. Nenhum evento anterior do mesmo GOAL pode ter esgotado 3/3. Sem inferência
+  a partir de mensagens de commit, nomes de arquivos ou ausência de eventos.
+- Diff da execução dentro da allowlist e gates; item 8 integral (nenhum GOAL
+  quente no delta). Histórico fechado intocado, derivados coerentes e nenhum
+  marcador de outra sessão local ou da mesma trilha/GOAL em outra worktree.
+
+Aplicação escreve somente um arquivo irmão temporário sincronizado e publica
+`.aep-active` por hard link exclusivo. Falha anterior à publicação remove o
+temporário e preserva histórico e sessão concorrente; a ausência de suporte ao
+link é uma recusa segura. As pré-condições são reconferidas antes de publicar.
+Um marcador que surja na corrida final faz a criação falhar sem sobrescrita.
+Dry-run não cria temporário, não faz fetch nem atualiza índice/refs/metadados.
+
+O marcador guarda `resumption`: autorização, commits, base, revisão/blob do plano,
+hash literal do evento BLOCKED, arquivo/blob/hash histórico e primeira corretiva.
+Repetir valida a mesma proveniência, snapshot e falhas posteriores e retorna NO-OP
+sem renovar base, abertura ou tentativa. Sessão incompatível é recusada, nunca
+substituída. `state.json` e a projeção continuam BLOCKED até ratificação real.
+
+Interrupção do processo entre publicação e remoção do temporário pode deixar um
+irmão `.aep-active.resume-*.tmp`. A sessão publicada está completa; preserve-a.
+Confira a origem e remova somente o temporário próprio antes de repetir. Falha
+de cleanup informa explicitamente se a sessão já foi publicada. Não remover ou
+editar `.aep-active` para destravar o rito.
+
+Novo `close` executa os mesmos 12 itens; um FAIL preserva sessão e tentativa.
+`attempt --fail` continua sendo a única fonte de falhas corretivas. `block` e
+`close` retomados recusam colisões e guardam a revisão nova em
+`_closed/goals/<ID>-r<plan_rev>-a<tentativa>.md`, com status final, sem sobrescrever
+`_closed/goals/<ID>.md`. O evento real acrescentado conserva o vocabulário
+DONE/BLOCKED e ganha `plan_rev`, `resumed_from` e `goal_archive`; o relatório DONE
+explicita a origem e o novo arquivo. `previous_attempts` contém somente as falhas
+realmente registradas. Não há linha de ledger para abrir a retomada, nem alteração
+de evento ratificado; a projeção continua last-wins e conta o GOAL uma única vez.
+
+O arquivo versionado de fechamento é uma saída interna da CLI, sem ampliar a
+allowlist de edição do agente. A movimentação legada continua por rename. No
+fechamento retomado, os novos arquivos são criados exclusivamente, sem depender
+de hard link. Falha de arquivo/commit antes da ratificação restaura bytes do GOAL,
+ledger, derivados e índice e remove somente saídas criadas nesta operação; a
+sessão é preservada. Índice com mudanças prévias é recusado. Se HEAD mudar durante
+a operação, não há reset: a CLI exige conferência humana do estado ratificado.
+
+Para Pessoas Recovery 002 revisão 9, o BLOCKED original 1/3 e seu arquivo revisão 8
+permanecem integrais; corretivas 2/3–3/3, teto 3. A implementação deste mecanismo
+não executa sua retomada. Gate final da manutenção: **HUMAN_MERGE_AEP_CORE**.
 
 ## 9. O ciclo de DOIS COMMITS
 
