@@ -34,6 +34,8 @@ import type { PdvScanInlineFeedbackState } from "@/lib/pdv-scan-input"
 import { cn } from "@/lib/utils"
 import type { PdvCatalogProduct } from "@/lib/pdv-catalog"
 
+import { saleLineTotalCents } from "@/lib/vendas/manual-kg-contract"
+import { formatStockQuantity } from "@/lib/estoque/stock-quantity"
 import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
 
 const fmt = (n: number) =>
@@ -184,7 +186,7 @@ function ItemsTable({
             </div>
           ) : (
             rows.map((item, idx) => {
-              const lineTotal = item.qty * item.unitPrice
+              const lineTotal = (saleLineTotalCents(item.qty, item.unitPrice) ?? Math.round(item.qty * item.unitPrice * 100)) / 100
               const isHighlight = item.lineId === highlightLineId
               const isFlash = flashLineId != null && item.lineId === flashLineId
               const isSelected = item.lineId === selectedLineId
@@ -214,7 +216,7 @@ function ItemsTable({
                   </div>
                   <div className="text-muted-foreground/50">{item.unit}</div>
                   <div className="text-right text-foreground/80">R$ {fmt(item.unitPrice)}</div>
-                  <div className="text-right font-medium">{fmt(item.qty)}</div>
+                  <div className="text-right font-medium">{item.unit === "KG" ? formatStockQuantity(item.qty, "KG") : String(item.qty)}</div>
                   <div className="text-right font-semibold text-[hsl(var(--pos-action))]">R$ {fmt(lineTotal)}</div>
                 </button>
               )
@@ -273,6 +275,7 @@ export type PdvOmniClassicShellProps = {
   qtyEditOpen: boolean
   onQtyEditOpenChange: (open: boolean) => void
   qtyEditDefault: string
+  qtyEditUnit?: "KG" | "UN"
   onQtyEditConfirm: (raw: string) => boolean | void
   cancelSaleOpen: boolean
   onCancelSaleOpenChange: (open: boolean) => void
@@ -939,10 +942,11 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       <Dialog open={props.qtyEditOpen} onOpenChange={props.onQtyEditOpenChange}>
         <DialogContent className="max-w-sm border-border bg-card text-foreground" onKeyDown={handleQtyEditKeyDown}>
           <DialogHeader>
-            <DialogTitle>Alterar Quantidade (F4)</DialogTitle>
+            <DialogTitle>{props.qtyEditUnit === "KG" ? "Alterar peso (kg)" : "Alterar Quantidade (F4)"}</DialogTitle>
             <DialogDescription className="text-muted-foreground/75">Defina a nova quantidade para o item selecionado.</DialogDescription>
           </DialogHeader>
           <input
+            aria-label={props.qtyEditUnit === "KG" ? "Peso (kg)" : "Quantidade"}
             key={props.qtyEditDefault}
             ref={qtyEditRef}
             defaultValue={props.qtyEditDefault}

@@ -1,3 +1,4 @@
+import { toStockUnits } from "@/lib/estoque/stock-quantity"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/vendas/[id]/cancelar
@@ -343,7 +344,8 @@ export async function POST(
       for (const it of venda.itens) {
         const raw = (it.inventoryId ?? "").trim()
         if (!raw || isVirtualSaleLine(raw)) continue
-        const q = Math.max(0, Math.round(it.quantidade))
+        const q = toStockUnits(it.quantidade, "KG")
+        if (q === null) throw new Error("Quantidade persistida incompatível: cancelamento bloqueado sem reposição.")
         if (q <= 0) continue
         const pid = await resolveProdutoId(raw)
         if (!pid) continue
@@ -354,7 +356,8 @@ export async function POST(
         for (const it of dev.itens) {
           const raw = (it.inventoryId ?? "").trim()
           if (!raw || isVirtualSaleLine(raw)) continue
-          const q = Math.max(0, Math.round(it.quantidade))
+          const q = toStockUnits(it.quantidade, "KG")
+          if (q === null) throw new Error("Quantidade persistida incompatível: cancelamento bloqueado sem reposição.")
           if (q <= 0) continue
           const pid = await resolveProdutoId(raw)
           if (!pid) continue
@@ -362,7 +365,9 @@ export async function POST(
         }
       }
       for (const [produtoId, sold] of soldByProdutoId) {
-        const net = sold - (returnedByProdutoId.get(produtoId) ?? 0)
+        const netUnits = sold - (returnedByProdutoId.get(produtoId) ?? 0)
+        if (!Number.isSafeInteger(netUnits)) throw new Error("Quantidade fora do limite no cancelamento.")
+        const net = netUnits / 1000
         if (net <= 0) continue
         // Idempotência era dupla (CAD-R2-009): guarda legado por
         // (documento, produto, origem) cobre reposições pré-009 sem chave;

@@ -126,6 +126,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const payload = (venda.payload && typeof venda.payload === "object" ? venda.payload : {}) as Record<string, unknown>
+    if (payload.manualKgSale === "classic-manual-kg-v1" || venda.itens.some((item) => !Number.isInteger(item.quantidade))) {
+      return NextResponse.json({ ok: false, error: "Correção de itens de venda em KG indisponível. Use cancelamento integral autorizado.", code: "MANUAL_KG_CORRECTION_BLOCKED" }, { status: 409 })
+    }
     const oldPb = (payload.paymentBreakdown ?? {}) as Partial<PaymentBreakdownFull>
 
     // Linhas antigas: fonte única = ItemVenda (mesma base que o GET expõe e o draft do

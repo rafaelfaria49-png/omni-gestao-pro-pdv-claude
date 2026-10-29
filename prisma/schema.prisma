@@ -1544,7 +1544,7 @@ model ItemVenda {
   venda         Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
   inventoryId   String? @map("inventoryId")
   nome          String  @default("") @map("nome")
-  quantidade    Int     @default(1) @map("quantidade")
+  quantidade    Float     @default(1) @map("quantidade")
   precoUnitario Float   @default(0) @map("precoUnitario")
   lineTotal     Float   @default(0) @map("lineTotal")
 

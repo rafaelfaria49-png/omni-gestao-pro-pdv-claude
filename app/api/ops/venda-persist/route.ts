@@ -1,3 +1,4 @@
+import { ManualKgSaleError } from "@/lib/vendas/manual-kg-contract"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
@@ -134,6 +135,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, replayed: result.replayed, venda: result.venda })
   } catch (e) {
+    if (e instanceof ManualKgSaleError) return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
     let error: unknown = e
 
     // A transação que perdeu a unique de `pedidoId` já foi revertida integralmente.

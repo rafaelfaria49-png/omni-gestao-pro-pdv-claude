@@ -1,5 +1,7 @@
 "use client"
 
+import { MANUAL_KG_SALE, saleQuantityGrams } from "@/lib/vendas/manual-kg-contract"
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
 import type { Orcamento } from "@/lib/orcamento-types"
@@ -143,6 +145,7 @@ export interface InventoryItem {
   accessoryConfig?: ProdutoAcessoriosMetadataV1
   /** Projetado por `/api/ops/inventory`: produto declarado por peso, venda ainda bloqueada. */
   vendaPesoIndisponivel?: boolean
+  manualKgSaleAvailable?: boolean
 }
 
 export interface CaixaState {
@@ -546,6 +549,8 @@ interface OperationsContextType {
    * definitivo). Retry/sync confirma com a MESMA identidade (`clientSaleId`).
    */
   finalizeSaleTransaction: (input: {
+    manualKgSale?: typeof MANUAL_KG_SALE
+    discountTotal?: number
     lines: Array<
       SaleLine & {
         name?: string
@@ -2521,6 +2526,8 @@ export function OperationsProvider({
 
   const finalizeSaleTransaction = useCallback<OperationsContextType["finalizeSaleTransaction"]>(
     async ({
+      manualKgSale,
+      discountTotal,
       lines,
       total,
       linkedOsId,
@@ -2544,6 +2551,11 @@ export function OperationsProvider({
         const q = line?.quantity
         if (typeof q !== "number" || !Number.isFinite(q)) {
           return { ok: false, reason: "Quantidade inválida." }
+        }
+        const item = stateRef.current.inventory.find((p) => p.id === line.inventoryId)
+        if (manualKgSale === MANUAL_KG_SALE && item?.manualKgSaleAvailable === true && !line.isAvulso) {
+          if (saleQuantityGrams(q) === null) return { ok: false, reason: "Peso inválido: use até 3 casas decimais." }
+          continue
         }
         if (!isIntegerSaleQuantity(q)) {
           return { ok: false, reason: FRACTIONAL_QUANTITY_MESSAGE }
@@ -2692,6 +2704,7 @@ export function OperationsProvider({
       if (already) return reusePending(already)
 
       const saleRow: SaleRecord = {
+        ...(manualKgSale === MANUAL_KG_SALE ? { manualKgSale, discountTotal } : {}),
         id: saleId,
         ...(clientSaleId ? { clientSaleId } : {}),
         at: new Date().toISOString(),
@@ -2793,6 +2806,7 @@ export function OperationsProvider({
     const prev = stateRef.current
     const sale = prev.sales.find((s) => s.id === saleId)
     if (!sale) return { ok: false, reason: "Venda/cupom não encontrado." }
+    if (sale.manualKgSale === MANUAL_KG_SALE || sale.lines.some((line) => !Number.isInteger(line.quantity))) return { ok: false, reason: "Devolução de venda em KG indisponível. Solicite cancelamento integral autorizado." }
 
     const next: OpsState = {
       ...prev,
