@@ -1238,16 +1238,23 @@ export function ProdutosPanel({
     }
   }, [autoOpen, onAutoOpenConsumed, m]);
 
-  // Um pedido por id; a resposta só abre a ficha se este painel (loja) ainda for o dono do pedido.
-  const fichaLinkRef = useRef<string | null>(null);
+  // Cada pedido é um token próprio: a resposta só abre a ficha se este painel (loja) ainda for
+  // o dono daquele pedido — não um pedido igual reexecutado (StrictMode) nem um já superado.
+  const fichaLinkRef = useRef<{ id: string } | null>(null);
   useEffect(() => () => { fichaLinkRef.current = null; }, []);
   useEffect(() => {
-    if (!openProductId || fichaLinkRef.current === openProductId) return;
-    const pedido = openProductId;
+    if (!openProductId || fichaLinkRef.current?.id === openProductId) return;
+    const pedido = { id: openProductId };
     fichaLinkRef.current = pedido;
-    obterProdutoFicha(storeId, pedido)
+    const encerrar = () => {
+      if (fichaLinkRef.current !== pedido) return false;
+      fichaLinkRef.current = null;
+      onOpenProductConsumed?.();
+      return true;
+    };
+    obterProdutoFicha(storeId, pedido.id)
       .then((produto) => {
-        if (fichaLinkRef.current !== pedido) return;
+        if (!encerrar()) return;
         if (!produto) {
           toast.error("Produto não encontrado nesta loja.");
           return;
@@ -1256,14 +1263,16 @@ export function ProdutosPanel({
         m.openIt();
       })
       .catch(() => {
-        if (fichaLinkRef.current === pedido) toast.error("Não foi possível abrir a ficha do produto. Tente novamente.");
-      })
-      .finally(() => {
-        if (fichaLinkRef.current !== pedido) return;
-        fichaLinkRef.current = null;
-        onOpenProductConsumed?.();
+        if (encerrar()) toast.error("Não foi possível abrir a ficha do produto. Tente novamente.");
       });
   }, [openProductId, onOpenProductConsumed, storeId, m]);
+  // Editor aberto por outro caminho (Novo, Editar) enquanto o link carrega: o pedido perde a vez
+  // e a resposta não troca o formulário que o operador já está preenchendo.
+  useEffect(() => {
+    if (!m.open || !fichaLinkRef.current) return;
+    fichaLinkRef.current = null;
+    onOpenProductConsumed?.();
+  }, [m.open, onOpenProductConsumed]);
 
   // Carrega categorias e marcas para os filtros
   useEffect(() => {
