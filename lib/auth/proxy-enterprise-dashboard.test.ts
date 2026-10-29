@@ -1,3 +1,5 @@
+import { getPermissionsFromSession } from "./enterprise-permissions"
+import { canAccessPage } from "./page-access"
 import { MODULES } from "./access-policy"
 /**
  * Testes-baseline para o gate de loja ativa do proxy.
@@ -133,12 +135,35 @@ describe("enterpriseDashboardRedirect â€” matriz de permissÃµes por rota"
 
 
 describe("Pessoas: consumidor real da passagem externa para STORE", () => {
-  it.each(["/dashboard/pessoas", "/dashboard/pessoas/funcionarios", "/dashboard/pessoas/funcionarios/qa-vinculo", "/dashboard/pessoas/configuracoes"])("nao substitui guards DP por permissoes Enterprise em %s", pathname => {
+  it.each([
+    "/dashboard/pessoas", "/dashboard/pessoas/", "/dashboard/pessoas/funcionarios",
+    "/dashboard/pessoas/funcionarios/qa-vinculo", "/dashboard/pessoas/configuracoes",
+    "/dashboard/pessoas/configuracoes/unidades/financeiro",
+  ])("nao substitui guards DP por permissoes Enterprise em %s", pathname => {
     const session = makeSession({ role: "OPERADOR", storeAccess: "restricted", allowedStoreIds: ["loja-a", "loja-b"] })
+    const perms = getPermissionsFromSession(session, "loja-a")
+    expect(perms.platformAuthority).toBe(false)
+    expect(perms.admin.configuracoes).toBe(false)
+    expect(perms.admin.unidades).toBe(false)
+    expect(perms.hubs.financeiro).toBe(false)
+    expect(canAccessPage(perms, pathname)).toBe(true)
     expect(enterpriseDashboardRedirect(ORIGIN, pathname, session, "loja-a")).toBeNull()
   })
-  it.each(["/dashboard/unidades", "/dashboard/plataforma", "/dashboard/master-console", "/dashboard/financeiro", "/dashboard/pessoas-extra"])("preserva negacao de %s para STORE", pathname => {
+  it.each([
+    "/dashboard/unidades", "/dashboard/plataforma", "/dashboard/master-console",
+    "/dashboard/financeiro", "/dashboard/configuracoes", "/dashboard/pessoas-extra",
+    "/dashboard/pessoas-extra/configuracoes", "/dashboard/pessoas2",
+  ])("preserva a negacao real de canAccessPage em %s para STORE", pathname => {
     const session = makeSession({ role: "OPERADOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+    expect(canAccessPage(getPermissionsFromSession(session, "loja-a"), pathname)).toBe(false)
     expect(enterpriseDashboardRedirect(ORIGIN, pathname, session, "loja-a")).not.toBeNull()
+  })
+  it("mantem o guard de cookie e a revogacao de Store separados da passagem Pessoas", () => {
+    const session = makeSession({ role: "OPERADOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+    expect(enterpriseDashboardRedirect(ORIGIN, "/dashboard/pessoas/configuracoes", session, "loja-a")).toBeNull()
+    expect(enterpriseStoreCookieRedirect(ORIGIN, session, "loja-a")).toBeNull()
+    expect(enterpriseStoreCookieRedirect(ORIGIN, session, "loja-b")?.searchParams.get("storeAccess")).toBe("denied")
+    session.user.allowedStoreIds = []
+    expect(enterpriseStoreCookieRedirect(ORIGIN, session, "loja-a")?.searchParams.get("storeAccess")).toBe("denied")
   })
 })

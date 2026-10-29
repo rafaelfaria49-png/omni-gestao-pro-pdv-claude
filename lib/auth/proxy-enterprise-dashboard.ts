@@ -18,6 +18,9 @@ export function enterpriseDashboardRedirect(origin: string, pathname: string, se
   if (!canAccessPage(perms, pathname)) return perms.modules?.home || perms.platformAuthority
     ? denyHome(origin) : new URL("/conta/seguranca?access=denied", origin)
 
+  // Passagem externa aprovada; os guards DP continuam decidindo dados e operacoes.
+  if (pathname === `${DASH}/pessoas` || pathname.startsWith(`${DASH}/pessoas/`)) return null
+
   const block = (cond: boolean) => cond
 
   if (block(pathname === `${DASH}/ia-mestre` || pathname.startsWith(`${DASH}/ia-mestre/`))) {
