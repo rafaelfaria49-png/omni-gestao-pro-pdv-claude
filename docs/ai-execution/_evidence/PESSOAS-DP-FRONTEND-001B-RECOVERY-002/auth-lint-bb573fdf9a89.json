@@ -1,0 +1,54 @@
+{
+  "head": "bb573fdf9a892c870cdc5d238c1cc8395b4cb9b5",
+  "node": "v26.12.1",
+  "existingDependencies": "C:/Projetos/omni-gestao",
+  "configIdentical": true,
+  "exitCode": 0,
+  "complete": true,
+  "results": [
+    {
+      "filePath": "C:\\Projetos\\omni-gestao-pessoas-001b-recovery-002\\lib\\auth\\page-access.test.ts",
+      "messages": [],
+      "suppressedMessages": [],
+      "errorCount": 0,
+      "fatalErrorCount": 0,
+      "warningCount": 0,
+      "fixableErrorCount": 0,
+      "fixableWarningCount": 0,
+      "usedDeprecatedRules": []
+    },
+    {
+      "filePath": "C:\\Projetos\\omni-gestao-pessoas-001b-recovery-002\\lib\\auth\\page-access.ts",
+      "messages": [],
+      "suppressedMessages": [],
+      "errorCount": 0,
+      "fatalErrorCount": 0,
+      "warningCount": 0,
+      "fixableErrorCount": 0,
+      "fixableWarningCount": 0,
+      "usedDeprecatedRules": []
+    },
+    {
+      "filePath": "C:\\Projetos\\omni-gestao-pessoas-001b-recovery-002\\lib\\auth\\proxy-enterprise-dashboard.test.ts",
+      "messages": [],
+      "suppressedMessages": [],
+      "errorCount": 0,
+      "fatalErrorCount": 0,
+      "warningCount": 0,
+      "fixableErrorCount": 0,
+      "fixableWarningCount": 0,
+      "usedDeprecatedRules": []
+    },
+    {
+      "filePath": "C:\\Projetos\\omni-gestao-pessoas-001b-recovery-002\\lib\\auth\\proxy-enterprise-dashboard.ts",
+      "messages": [],
+      "suppressedMessages": [],
+      "errorCount": 0,
+      "fatalErrorCount": 0,
+      "warningCount": 0,
+      "fixableErrorCount": 0,
+      "fixableWarningCount": 0,
+      "usedDeprecatedRules": []
+    }
+  ]
+}

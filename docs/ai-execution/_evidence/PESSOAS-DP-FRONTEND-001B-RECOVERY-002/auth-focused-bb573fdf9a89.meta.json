@@ -1,0 +1,31 @@
+{
+  "head": "bb573fdf9a892c870cdc5d238c1cc8395b4cb9b5",
+  "base": "aaab27505a03903d9fb8333baef5b52424821093",
+  "node": "v26.12.1",
+  "vitest": "4.1.4",
+  "existingDependencies": "C:/Projetos/omni-gestao/node_modules",
+  "cleanInstall": false,
+  "officialRunner": false,
+  "accessMocks": false,
+  "exitCode": 0,
+  "error": null,
+  "config": {
+    "root": "C:\\Projetos\\omni-gestao-pessoas-001b-recovery-002",
+    "cacheDir": "C:\\Users\\rafae\\AppData\\Local\\Temp\\omni-pessoas-auth-focus-NGkaHl\\vite-cache",
+    "resolve": {
+      "alias": {
+        "@": "C:\\Projetos\\omni-gestao-pessoas-001b-recovery-002",
+        "vitest": "C:\\Projetos\\omni-gestao\\node_modules\\vitest\\dist\\index.js"
+      }
+    },
+    "test": {
+      "environment": "node",
+      "include": [
+        "lib/auth/page-access.test.ts",
+        "lib/auth/proxy-enterprise-dashboard.test.ts"
+      ],
+      "fileParallelism": false,
+      "maxWorkers": 1
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+  "head": "bb573fdf9a892c870cdc5d238c1cc8395b4cb9b5",
+  "base": "aaab27505a03903d9fb8333baef5b52424821093",
+  "measuredAt": "2026-10-29T12:56:16.670Z",
+  "gate": "PREFLIGHT_DISK_12_GIB",
+  "result": "BLOCKED",
+  "measurements": [
+    {
+      "directory": "C:\\Projetos\\omni-gestao-pessoas-001b-recovery-002",
+      "volume": "C:\\",
+      "freeBytes": 12569120768,
+      "freeGiB": 11.70590591430664,
+      "minimumBytes": 12884901888,
+      "shortfallBytes": 315781120,
+      "pass": false
+    },
+    {
+      "directory": "C:\\Users\\rafae\\AppData\\Local\\Temp",
+      "volume": "C:\\",
+      "freeBytes": 12569120768,
+      "freeGiB": 11.70590591430664,
+      "minimumBytes": 12884901888,
+      "shortfallBytes": 315781120,
+      "pass": false
+    },
+    {
+      "directory": "C:\\Projetos\\omni-gestao-pessoas-001b-recovery-002\\docs\\ai-execution\\_evidence\\PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+      "volume": "C:\\",
+      "freeBytes": 12569120768,
+      "freeGiB": 11.70590591430664,
+      "minimumBytes": 12884901888,
+      "shortfallBytes": 315781120,
+      "pass": false
+    }
+  ],
+  "runtime": {
+    "defaultNode": "v26.12.1",
+    "execPath": "C:\\Program Files\\nodejs\\node.exe",
+    "requiredNodeMajor": 24,
+    "alternateNode24Availability": "NOT_AUDITED"
+  },
+  "resumption": {
+    "dryRun": "PASS",
+    "applied": "PASS",
+    "attempt": 2,
+    "historicalAttempt": 1,
+    "authorization": "HUMAN-RECOVERY-002-2026-10-25"
+  },
+  "historical": {
+    "archive": {
+      "path": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002.md",
+      "source": "95807306788d58ec842dd992edf2df2ab9932622",
+      "main": "95807306788d58ec842dd992edf2df2ab9932622",
+      "head": "95807306788d58ec842dd992edf2df2ab9932622"
+    },
+    "ledger": {
+      "source": "f4512591a4e8b3c38f1d7c277f719852e9155660",
+      "head": "f4512591a4e8b3c38f1d7c277f719852e9155660"
+    },
+    "plan": {
+      "main": "b86c8a26afcf4be481f74fb5c0c088696877db5f",
+      "head": "b86c8a26afcf4be481f74fb5c0c088696877db5f"
+    }
+  },
+  "scope": {
+    "paths": 43,
+    "outside": []
+  },
+  "focusedAuth": {
+    "total": 39,
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cleanInstall": false,
+    "officialRunner": false,
+    "accessMocks": false,
+    "dependencies": "C:/Projetos/omni-gestao/node_modules"
+  },
+  "pending": [
+    "E2E fixture A/B and permitted Store selector",
+    "real login/session/GET /api/stores/URL/DOM correlation",
+    "canonical full typecheck",
+    "full backend/frontend and disposable PostgreSQL integration",
+    "20 documentary regressions",
+    "two builds and PWA inspections",
+    "E2E ON and OFF",
+    "four themes and three viewports/accessibility",
+    "private QA Preview and real R2 bytes",
+    "full Codex self-review",
+    "official close/DONE and functional PR"
+  ],
+  "runnerInvoked": false,
+  "installationPerformed": false,
+  "qaResourcesTouched": false,
+  "productionTouched": false,
+  "cleanup": {
+    "focusedTemporaryDirectoryRemoved": true,
+    "unrelatedCleanupPerformed": false
+  },
+  "nextAction": "Human frees disk space with margin so at least 12 GiB remain after clean installation/build; select Node 24; official integrated revised plan required for any later resumption after block."
+}
