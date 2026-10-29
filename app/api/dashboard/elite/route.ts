@@ -1,3 +1,4 @@
+import { itemCommercialQuantity } from "@/lib/vendas/item-quantity"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -159,6 +160,7 @@ export async function GET(req: Request) {
         select: {
           lineTotal: true,
           quantidade: true,
+          quantidadeKg: true,
           precoUnitario: true,
           inventoryId: true,
         },
@@ -181,7 +183,7 @@ export async function GET(req: Request) {
     const categoryByProductId = new Map(
       produtosCategoria.map((p) => [p.id, p.category?.trim() || ""]),
     )
-    const vendasPorCategoria = buildVendasPorCategoria(vendaItens7d, categoryByProductId)
+    const vendasPorCategoria = buildVendasPorCategoria(vendaItens7d.map((item) => ({ ...item, quantidade: itemCommercialQuantity(item) })), categoryByProductId)
 
     const faturamentoHoje = faturamentoHojeAgg._sum.total ?? 0
     const contasReceberHoje = contasReceberHojeAgg._sum.valor ?? 0

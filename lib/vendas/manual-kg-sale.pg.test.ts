@@ -1,3 +1,7 @@
+import { readManualKgConfirmation } from "./manual-kg-confirmation-server"
+import { correctManualKgWeight } from "./manual-kg-correction-service"
+import { enterManualKgTransaction } from "./manual-kg-server"
+import { itemCommercialQuantity } from "./item-quantity"
 import { randomUUID } from "node:crypto"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -44,7 +48,9 @@ suite("real PostgreSQL manual KG sales", () => {
     const s = await state(p.id)
     expect(s.stock).toBe((10000 - q * 1000) / 1000)
     expect(s.deposits).toEqual([s.stock])
-    expect(s.items[0]).toMatchObject({ quantidade: q, precoUnitario: 20, lineTotal: q * 20 })
+    expect(itemCommercialQuantity(s.items[0])).toBe(q)
+    expect(s.items[0].quantidade).toBeNull()
+    expect(s.items[0]).toMatchObject({ precoUnitario: 20, lineTotal: q * 20 })
     expect(s.ledger).toHaveLength(1)
     expect(s.ledger[0]).toMatchObject({ quantidade: -q, estoqueAntes: 10, estoqueDepois: s.stock })
     const row = await prisma.venda.findUniqueOrThrow({ where: { pedidoId: sale.id } })
@@ -149,4 +155,97 @@ suite("real PostgreSQL manual KG sales", () => {
     await expect(prisma.$transaction((tx) => upsertVendaInTransaction(tx, "kg-sale-a", sale, "Operador", { ...LIVE, historicalRecovery: true }))).rejects.toMatchObject({ code: "MANUAL_KG_SALE_BLOCKED" })
     expect((await state(p.id)).stock).toBe(10)
   })
+  async function correction(sale: SalePayload, nextWeight = .3, revision = 0) {
+    const row = await prisma.venda.findUniqueOrThrow({ where: { pedidoId: sale.id! }, include: { itens: true } })
+    const item = row.itens[0]
+    return { storeId: "kg-sale-a", pedidoId: row.pedidoId, commandId: randomUUID(), expectedRevision: revision, motivo: "Peso sintético confirmado", operador: "Operador", supervisorNome: "Supervisor", itens: [{ id: item.id, inventoryId: item.inventoryId!, nome: item.nome, quantidade: nextWeight, precoUnitario: item.precoUnitario }] }
+  }
+  it("server tax snapshot is authoritative and remains frozen when store configuration changes", async () => {
+    const p = await product(), sale = payload(p.id)
+    await prisma.storeSettings.create({ data: { storeId: "kg-sale-a", printerConfig: { pdvParams: { incluirImpostoEstimadoNoPdv: true, aliquotaImpostoEstimadoPdv: 20 } } } })
+    try {
+      await expect(persist(sale)).rejects.toMatchObject({ code: "MANUAL_KG_SALE_BLOCKED" })
+      expect((await state(p.id)).stock).toBe(10)
+      sale.total = 8.4; sale.paymentBreakdown = { dinheiro: 8.4 }
+      await persist(sale)
+      const row = await prisma.venda.findUniqueOrThrow({ where: { pedidoId: sale.id! } })
+      expect((row.payload as Record<string, unknown>).manualKgTax).toMatchObject({ ratePercent: 20, baseCents: 700, taxCents: 140 })
+      await prisma.storeSettings.update({ where: { storeId: "kg-sale-a" }, data: { printerConfig: { pdvParams: { incluirImpostoEstimadoNoPdv: true, aliquotaImpostoEstimadoPdv: 30 } } } })
+      const result = await correctManualKgWeight(await correction(sale))
+      expect(result).toMatchObject({ totalNovo: 7.2, revision: 1 })
+      expect((await state(p.id)).stock).toBe(9.7)
+      const replay = await persist(sale)
+      expect(replay.replayed).toBe(true)
+    } finally { await prisma.storeSettings.delete({ where: { storeId: "kg-sale-a" } }) }
+  })
+  it("weight correction keeps line identity and retries once after a lost acknowledgement", async () => {
+    const p = await product(), sale = payload(p.id); await persist(sale)
+    const command = await correction(sale)
+    const first = await correctManualKgWeight(command), retry = await correctManualKgWeight(structuredClone(command))
+    expect(first).toMatchObject({ ok: true, replayed: false, totalNovo: 6, revision: 1 })
+    expect(retry).toMatchObject({ ok: true, replayed: true, totalNovo: 6, revision: 1 })
+    const current = await state(p.id)
+    expect(current.stock).toBe(9.7); expect(current.ledger).toHaveLength(2); expect(current.items[0].id).toBe(command.itens[0].id)
+    expect(await prisma.movimentacaoFinanceira.findMany({ where: { referenciaId: sale.id } })).toMatchObject([{ valor: 6 }])
+    await expect(correctManualKgWeight({ ...command, itens: [{ ...command.itens[0], quantidade: .4 }] })).rejects.toMatchObject({ code: "MANUAL_KG_CORRECTION_BLOCKED" })
+    expect((await persist(sale)).replayed).toBe(true)
+  })
+  it("revision prevents stale commands even if the monetary total did not change", async () => {
+    const p = await product(KG, 10, 1), sale = payload(p.id, .35, 1); await persist(sale)
+    await correctManualKgWeight(await correction(sale, .351))
+    await expect(correctManualKgWeight(await correction(sale, .352))).rejects.toMatchObject({ code: "MANUAL_KG_CORRECTION_BLOCKED" })
+    expect((await state(p.id)).stock).toBe(9.649)
+  })
+  it("concurrent corrections cannot both apply the same revision", async () => {
+    const p = await product(), sale = payload(p.id); await persist(sale)
+    const a = await correction(sale, .3), b = await correction(sale, .4)
+    const outcomes = await Promise.allSettled([correctManualKgWeight(a), correctManualKgWeight(b)])
+    expect(outcomes.filter((r) => r.status === "fulfilled")).toHaveLength(1)
+    expect((await state(p.id)).ledger).toHaveLength(2)
+  })
+  it("financial failure after stock delta rolls the correction back completely", async () => {
+    const p = await product(), sale = payload(p.id); await persist(sale)
+    await prisma.$executeRawUnsafe('ALTER TABLE public.movimentacoes_financeiras ADD CONSTRAINT kg_probe_money_failure CHECK (valor <= 7) NOT VALID')
+    try { await expect(correctManualKgWeight(await correction(sale, .4))).rejects.toBeInstanceOf(Error) }
+    finally { await prisma.$executeRawUnsafe('ALTER TABLE public.movimentacoes_financeiras DROP CONSTRAINT kg_probe_money_failure') }
+    const current = await state(p.id)
+    expect(current.stock).toBe(9.65); expect(current.ledger).toHaveLength(1); expect(itemCommercialQuantity(current.items[0])).toBe(.35)
+    expect((await prisma.venda.findUniqueOrThrow({ where: { pedidoId: sale.id! } })).total).toBe(7)
+  })
+  it("correction refuses insufficient stock, closed session, noncash and cross-store requests", async () => {
+    const p = await product(KG, .4), sale = payload(p.id); await persist(sale)
+    const command = await correction(sale, 1)
+    await expect(correctManualKgWeight(command)).rejects.toMatchObject({ code: "MANUAL_KG_CORRECTION_BLOCKED" })
+    await expect(correctManualKgWeight({ ...command, storeId: "kg-sale-b" })).rejects.toMatchObject({ code: "MANUAL_KG_CORRECTION_BLOCKED" })
+    await prisma.sessaoCaixa.update({ where: { id: "kg-sale-cash-a" }, data: { status: "FECHADA" } })
+    try { await expect(correctManualKgWeight(await correction(sale, .3))).rejects.toMatchObject({ code: "MANUAL_KG_CORRECTION_BLOCKED" }) }
+    finally { await prisma.sessaoCaixa.update({ where: { id: "kg-sale-cash-a" }, data: { status: "ABERTA" } }) }
+    const pix = payload((await product()).id); pix.paymentBreakdown = { pix: 7 }; await persist(pix)
+    await expect(correctManualKgWeight(await correction(pix))).rejects.toMatchObject({ code: "MANUAL_KG_CORRECTION_BLOCKED" })
+  })
+  it("capability refuses disabled triggers and drifted check constraints", async () => {
+    expect(await manualKgAvailable(prisma, "kg-sale-a")).toBe(true)
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('ALTER TABLE public.venda_itens DISABLE TRIGGER manual_kg_guard_item')
+      expect(await manualKgAvailable(tx, "kg-sale-a")).toBe(false)
+      await tx.$executeRawUnsafe('ALTER TABLE public.venda_itens ENABLE TRIGGER manual_kg_guard_item')
+    })
+    await expect(prisma.$transaction(async (tx) => {
+      await enterManualKgTransaction(tx)
+      await tx.$executeRawUnsafe('ALTER TABLE public.venda_itens DROP CONSTRAINT venda_itens_quantity_contract')
+      await tx.$executeRawUnsafe('ALTER TABLE public.venda_itens ADD CONSTRAINT venda_itens_quantity_contract CHECK (true) NOT VALID')
+      expect(await manualKgAvailable(tx, "kg-sale-a")).toBe(false)
+      throw Error("ROLLBACK_PROBE_ONLY")
+    })).rejects.toThrow("ROLLBACK_PROBE_ONLY")
+    expect(await manualKgAvailable(prisma, "kg-sale-a")).toBe(true)
+  })
+
+  it("confirmation snapshots use corrected facts and authoritative stock", async () => {
+    const p = await product(), sale = payload(p.id); await persist(sale)
+    await correctManualKgWeight(await correction(sale, .3))
+    const snapshot = await readManualKgConfirmation("kg-sale-a", sale.id!)
+    expect(snapshot).toMatchObject({ storeId: "kg-sale-a", sale: { manualKgRevision: 1, total: 6, lines: [{ quantity: .3 }], paymentBreakdown: { dinheiro: 6, creditoVale: 0 } }, stocks: [{ id: p.id, stock: 9.7 }] })
+    expect(await readManualKgConfirmation("kg-sale-b", sale.id!)).toBeNull()
+  })
+
 })

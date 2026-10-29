@@ -20,7 +20,7 @@ try {
   const [{ count }] = await db.$queryRawUnsafe("SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'")
   if (count !== 0) throw Error("FRESH_DATABASE_REQUIRED")
   let schema = await readFile("prisma/schema.prisma", "utf8")
-  for (const [model, fields] of [["Produto", ["stock"]], ["ProdutoDeposito", ["quantidade"]], ["MovimentacaoEstoque", ["quantidade", "estoqueAntes", "estoqueDepois"]], ["ItemVenda", ["quantidade"]]]) {
+  for (const [model, fields] of [["Produto", ["stock"]], ["ProdutoDeposito", ["quantidade"]], ["MovimentacaoEstoque", ["quantidade", "estoqueAntes", "estoqueDepois"]]]) {
     const regex = new RegExp("model " + model + " \\{[\\s\\S]*?\\n\\}")
     const match = schema.match(regex)
     if (!match) throw Error("MODEL_NOT_FOUND: " + model)
@@ -32,6 +32,7 @@ try {
     }
     schema = schema.replace(match[0], block)
   }
+  schema = schema.replace(/(quantidade\s+)Int\?/, "$1Int").replace(/^.*quantidadeKg\s+Decimal.*\r?\n/m, "")
   const baseline = out + "/schema-before.prisma"
   await writeFile(baseline, schema)
   run(["node_modules/prisma/build/index.js", "db", "push", "--schema", baseline, "--skip-generate"])
@@ -48,6 +49,7 @@ try {
   if (JSON.stringify(before) !== JSON.stringify(after)) throw Error("HISTORICAL_INTEGER_VALUES_CHANGED")
   await writeFile(out + "/migration.json", JSON.stringify({ identity, before, after, historicalUnPreserved: true, newMigration: "20261029120000_manual_kg_sale_quantity", productionWrites: 0 }, null, 2))
 } finally { await db.$disconnect() }
-run(["node_modules/vitest/vitest.mjs", "run", "lib/vendas/manual-kg-contract.test.ts", "lib/vendas/manual-kg-sale.pg.test.ts", "--maxWorkers=1", "--reporter=json", "--outputFile=test-results/manual-kg/integration.json"], {
-  MANUAL_KG_TEST_DATABASE_URL: url, PDV_MANUAL_KG_RELEASE: "PDV-PADARIA-VENDA-MANUAL-KG-MVP-001", PDV_MANUAL_KG_STORES: "kg-sale-a,kg-sale-b",
+run(["scripts/pdv/verify-manual-kg-migration.mjs"])
+run(["node_modules/vitest/vitest.mjs", "run", "lib/vendas/manual-kg-contract.test.ts", "lib/vendas/manual-kg-hardening.test.ts", "lib/vendas/manual-kg-sale.pg.test.ts", "--maxWorkers=1", "--reporter=json", "--outputFile=test-results/manual-kg/integration.json"], {
+  MANUAL_KG_TEST_DATABASE_URL: url, PDV_MANUAL_KG_RELEASE: "PDV-PADARIA-KG-RELEASE-HARDENING-002", PDV_MANUAL_KG_STORES: "kg-sale-a,kg-sale-b",
 })

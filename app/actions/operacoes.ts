@@ -1,4 +1,5 @@
 "use server";
+import { itemCommercialQuantity } from "@/lib/vendas/item-quantity"
 import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma, withPrismaSafe } from "@/lib/prisma";
@@ -1421,7 +1422,7 @@ export async function listVendasHub(storeId: string): Promise<Venda[]> {
       : r.itens.map((i) => ({
           id: i.inventoryId ?? i.id,
           nome: i.nome,
-          quantidade: i.quantidade,
+          quantidade: itemCommercialQuantity(i),
           valorUnitario: i.precoUnitario,
         }))
     const servicos: Servico[] = Array.isArray(pl?.servicos) ? (pl!.servicos as Servico[]) : []

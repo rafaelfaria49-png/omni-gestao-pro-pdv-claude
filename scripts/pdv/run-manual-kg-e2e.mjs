@@ -28,7 +28,7 @@ try {
 await mkdir("test-results/manual-kg", { recursive: true })
 const log = await open("test-results/manual-kg/next-server.log", "w")
 const env = { ...process.env, NODE_ENV: "production", AUTH_SECRET: appSecret, AUTH_TRUST_HOST: "true", NEXTAUTH_URL: origin,
- NEXT_TELEMETRY_DISABLED: "1", PDV_MANUAL_KG_RELEASE: "PDV-PADARIA-VENDA-MANUAL-KG-MVP-001", PDV_MANUAL_KG_STORES: store }
+ NEXT_TELEMETRY_DISABLED: "1", PDV_MANUAL_KG_RELEASE: "PDV-PADARIA-KG-RELEASE-HARDENING-002", PDV_MANUAL_KG_STORES: store }
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "localhost", "-p", "31479"], { env, stdio: ["ignore", log.fd, log.fd], windowsHide: true })
 try {
  const deadline = Date.now() + 90000

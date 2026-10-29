@@ -25,6 +25,7 @@ export interface PaymentBreakdownFull {
 }
 
 export interface SaleLineRecord {
+  itemId?: string
   inventoryId: string
   name: string
   quantity: number
@@ -62,6 +63,8 @@ export interface SaleLineRecord {
 }
 
 export interface SaleRecord {
+  manualKgRevision?: number
+  manualKgTax?: import("@/lib/vendas/manual-kg-tax").ManualKgTaxSnapshot
   manualKgSale?: "classic-manual-kg-v1"
   /**
    * Número comercial exibido (`pedidoId` / VDA) depois da reconciliação.

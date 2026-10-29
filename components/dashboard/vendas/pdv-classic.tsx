@@ -49,6 +49,7 @@ import { useGarantirSessaoCaixa } from "../caixa/use-atualizar-caixa"
 // useCaixa removido no Lote 4 — sangria/suprimento vivem no CaixaStatusBar.
 import { configPadrao, useConfigEmpresa } from "@/lib/config-empresa"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { manualKgTaxSnapshot } from "@/lib/vendas/manual-kg-tax"
 import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import {
   getActiveFormasPagamento,
@@ -1342,9 +1343,15 @@ export function PdvClassic({
   const discountTotal = cart.some((item) => item.vendaPorPeso)
     ? (manualKgDiscountCents(moneyCents(subtotal) ?? 0, pctRaw, Math.max(0, discountReais || 0)) ?? 0) / 100
     : Math.min(+(subtotal * (pctRaw / 100)).toFixed(2) + Math.max(0, discountReais || 0), subtotal)
-  const { impostoEstimado, total } = useMemo(
-    () => computePdvCartTotals(subtotal, discountTotal, pdvParams),
-    [subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
+  const { impostoEstimado, total, kgTaxError } = useMemo(
+    () => {
+      if (!cart.some((item) => item.vendaPorPeso)) return { ...computePdvCartTotals(subtotal, discountTotal, pdvParams), kgTaxError: false }
+      try {
+        const tax = manualKgTaxSnapshot(moneyCents(subtotal) ?? 0, pdvParams)
+        return { impostoEstimado: tax.taxCents / 100, total: ((moneyCents(subtotal) ?? 0) + tax.taxCents - (moneyCents(discountTotal) ?? 0)) / 100, kgTaxError: false }
+      } catch { return { impostoEstimado: 0, total: Math.max(0, subtotal - discountTotal), kgTaxError: true } }
+    },
+    [cart, subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
   )
 
   const formasPagamentoClassic = useMemo(() => {
@@ -2199,6 +2206,7 @@ export function PdvClassic({
         }}
       />
 
+      {kgTaxError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">Venda KG bloqueada: revise a alíquota do imposto estimado nas configurações da loja.</p>}
       <PaymentModal
         isOpen={isPaymentModalOpen}
         twoColumn
@@ -2235,14 +2243,12 @@ export function PdvClassic({
         requireExplicitResult
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
+          if (kgTaxError) { toast({ title: "Imposto estimado inválido", description: "Revise a alíquota nas configurações da loja antes de vender KG.", variant: "destructive" }); return false }
           if (cart.some((item) => item.vendaPorPeso) && manualKgDiscountCents(moneyCents(subtotal) ?? 0, pctRaw, Math.max(0, discountReais || 0)) === null) {
             toast({ title: "Desconto inválido", description: "Informe centavos exatos e percentual com até 4 casas decimais.", variant: "destructive" })
             return false
           }
-          if (cart.some((item) => item.vendaPorPeso) && impostoEstimado > 0) {
-            toast({ title: "Configuração não suportada para KG", description: "Acréscimo de imposto estimado exige adaptação antes da venda por KG.", variant: "destructive" })
-            return false
-          }
+
           // Carrinhos importados/retomados também respeitam a classificação atual.
           if (cart.some((item) => blockWeightSale(item, getCartStockProduct(item)))) return false
           // N5-B1 R2 (P2-06) / GOAL 002: defesa em profundidade — venda PENDING

@@ -1,3 +1,6 @@
+import { cancelManualKgReceivables } from "@/lib/vendas/manual-kg-cancellation"
+import { itemCommercialQuantity, isKgItem } from "@/lib/vendas/item-quantity"
+import { enterManualKgTransaction } from "@/lib/vendas/manual-kg-server"
 import { toStockUnits } from "@/lib/estoque/stock-quantity"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
@@ -123,7 +126,7 @@ export async function POST(
   try {
     await prismaEnsureConnected()
 
-    const venda = await prisma.venda.findFirst({
+    let venda = await prisma.venda.findFirst({
       where: { pedidoId, storeId },
       include: {
         itens: true,
@@ -247,6 +250,9 @@ export async function POST(
         ? ((venda.payload as Record<string, unknown>).sessaoId as string | undefined)
         : undefined
 
+    const kgSale = venda.itens.some(isKgItem)
+    let estornoReceber = false
+    let titulosCancelados = 0
     let estoqueRepostoCount = 0
     let estornoVendaRealizado = false
     /** Trilha do estorno de Crédito/Vale (lida na resposta e persistida no payload). */
@@ -259,6 +265,24 @@ export async function POST(
     }> = []
 
     await prisma.$transaction(async (tx) => {
+      // Serialize cancellation with weight corrections and other cancellation requests.
+      await tx.$queryRaw`SELECT id FROM vendas WHERE id = ${venda!.id} AND "storeId" = ${storeId} FOR UPDATE`
+      const current = await tx.venda.findFirst({ where: { id: venda!.id, storeId }, include: { itens: true } })
+      if (!current || current.status === "cancelada") throw new Error("MANUAL_KG_CANCELLATION_STALE")
+      venda = current
+      if (current.itens.some(isKgItem)) {
+        if (await tx.devolucaoVenda.count({ where: { storeId, vendaLocalId: pedidoId } })) throw new Error("MANUAL_KG_CANCELLATION_STALE")
+        await enterManualKgTransaction(tx)
+        const fiscal = assertVendaFiscalCancelavel(current)
+        if (!fiscal.ok) throw new Error("MANUAL_KG_CANCELLATION_STALE")
+        await tx.$queryRaw`SELECT id FROM sessoes_caixa WHERE id = ${sessaoIdDaVenda ?? ""} AND "storeId" = ${storeId} FOR UPDATE`
+        const cash = await tx.sessaoCaixa.findFirst({ where: { id: sessaoIdDaVenda ?? "", storeId }, select: { status: true } })
+        if (cash?.status !== "ABERTA") throw new Error("MANUAL_KG_CANCELLATION_STALE")
+        for (const date of [current.at, new Date()]) {
+          const day = date.toISOString().slice(0, 10), month = day.slice(0, 7) + "-01"
+          if (await tx.fechamentoFinanceiro.count({ where: { storeId, status: "fechado", OR: [{ tipo: "diario", dataReferencia: day }, { tipo: "mensal", dataReferencia: month }] } })) throw new Error("MANUAL_KG_CANCELLATION_STALE")
+        }
+      }
       // 0. Estorno do Crédito/Vale consumido (PDV-TROCAS-VALE-HARDENING-PRE-PUBLISH-002).
       // Restaura EXATAMENTE a soma dos `UsoCreditoCliente` desta venda — numa compra
       // mista, somente a parcela de crédito/vale. Nada entra nem sai do caixa: vale
@@ -310,10 +334,12 @@ export async function POST(
           canceladaEm: now,
           canceladaPor: operadorCancelamento,
           motivoCancelamento: motivo.trim(),
+          ...(kgSale && estornoCreditoTrail.length === 0 ? { payload: { ...payloadAtual, manualKgRevision: Number(payloadAtual.manualKgRevision ?? 0) + 1 } as import("@/generated/prisma").Prisma.InputJsonValue } : {}),
           ...(estornoCreditoTrail.length > 0
             ? {
                 payload: {
                   ...payloadAtual,
+                  ...(kgSale ? { manualKgRevision: Number(payloadAtual.manualKgRevision ?? 0) + 1 } : {}),
                   estornoCreditoVale: {
                     at: now.toISOString(),
                     operador: operadorLedger,
@@ -344,11 +370,11 @@ export async function POST(
       for (const it of venda.itens) {
         const raw = (it.inventoryId ?? "").trim()
         if (!raw || isVirtualSaleLine(raw)) continue
-        const q = toStockUnits(it.quantidade, "KG")
+        const q = toStockUnits(itemCommercialQuantity(it), "KG")
         if (q === null) throw new Error("Quantidade persistida incompatível: cancelamento bloqueado sem reposição.")
         if (q <= 0) continue
         const pid = await resolveProdutoId(raw)
-        if (!pid) continue
+        if (!pid) { if (kgSale) throw new Error("MANUAL_KG_CANCELLATION_STALE"); continue }
         soldByProdutoId.set(pid, (soldByProdutoId.get(pid) ?? 0) + q)
       }
       const returnedByProdutoId = new Map<string, number>()
@@ -440,19 +466,22 @@ export async function POST(
           estornoVendaRealizado = true
         }
       }
-    })
+      if (kgSale) {
+        const reversed = await cancelManualKgReceivables(tx, { storeId, pedidoId, motivo: motivo.trim(), operador: operadorLedger })
+        estornoReceber = reversed.estornoReceber
+        titulosCancelados = reversed.titulosCancelados
+      }
+    }, { timeout: 20000, maxWait: 20000 })
 
     // 4. Estorno do(s) título(s) à prazo (Contas a Receber) — N parcelas suportadas.
     // Varre TODOS os títulos via `localKey LIKE 'pdv-aprazo-${pedidoId}%'` em vez de
     // depender só da FK singular `Venda.contaReceberTituloId` (que aponta para o
     // primeiro título). Cobre venda 1 parcela e N parcelas com o mesmo código.
     // Mantido fora da transação por reaproveitar o recálculo de saldo de carteira.
-    let estornoReceber = false
-    let titulosCancelados = 0
     /** Títulos que o serviço financeiro recusou cancelar — reportados, nunca silenciados. */
     const titulosRecusados: Array<{ localKey: string; reason: string }> = []
     try {
-      const titulosAprazo = await prisma.contaReceberTitulo.findMany({
+      const titulosAprazo = kgSale ? [] : await prisma.contaReceberTitulo.findMany({
         where: {
           storeId,
           localKey: { startsWith: `pdv-aprazo-${pedidoId}` },
@@ -519,6 +548,7 @@ export async function POST(
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
+    if (msg === "MANUAL_KG_CANCELLATION_STALE") return NextResponse.json({ ok: false, error: "Venda, caixa ou recebíveis alterados. Recarregue antes de cancelar.", code: "MANUAL_KG_CANCELLATION_STALE" }, { status: 409 })
     console.error("[vendas/cancelar]", msg)
     return NextResponse.json(
       { ok: false, error: "Falha ao cancelar venda", detail: process.env.NODE_ENV === "development" ? msg : undefined },

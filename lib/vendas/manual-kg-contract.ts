@@ -55,3 +55,8 @@ export class ManualKgSaleError extends Error {
     this.name = "ManualKgSaleError"
   }
 }
+
+/** Early return guard, including legacy integer KG snapshots and inventory aliases. */
+export function kgReturnBlocked(sale: { manualKgSale?: unknown; lines: Array<{ quantity: number; quantityUnit?: unknown; inventoryId: string }> }, inventory: Array<{ id: string; dbId?: string; sku?: string; barcode?: string; codigo?: string; codigoBarras?: string; vendaPorPeso?: boolean; vendaPesoIndisponivel?: boolean }>): boolean {
+  return sale.manualKgSale === MANUAL_KG_SALE || sale.lines.some((line) => line.quantityUnit === "KG" || !Number.isInteger(line.quantity) || inventory.some((p) => (p.vendaPorPeso || p.vendaPesoIndisponivel) && [p.id, p.dbId, p.sku, p.barcode, p.codigo, p.codigoBarras].includes(line.inventoryId)))
+}

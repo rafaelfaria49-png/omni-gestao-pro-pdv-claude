@@ -71,6 +71,7 @@ export const QUARANTINE_RECOVERY_CLASS = Object.freeze({
   INSUFFICIENT_STOCK_RISK: "INSUFFICIENT_STOCK_RISK",
   /** Bloqueio sem causa mapeada. Nunca vira `READY`. */
   BLOCKED_UNKNOWN: "BLOCKED_UNKNOWN",
+  MANUAL_KG_HISTORICAL_BLOCKED: "MANUAL_KG_HISTORICAL_BLOCKED",
 } as const)
 
 export type QuarantineRecoveryClass =
@@ -171,6 +172,7 @@ export function historicalRecoveryPersistOptions(input: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type QuarantineCandidateLine = {
+  readonly quantityUnit?: unknown
   readonly inventoryId?: unknown
   readonly name?: unknown
   readonly quantity?: unknown
@@ -183,6 +185,7 @@ export type QuarantineCandidateLine = {
  */
 export type QuarantineCandidate = {
   /** Número comercial antigo, em conflito (`VDA-…`). Vira só trilha de auditoria. */
+  readonly manualKgSale?: unknown
   readonly id?: unknown
   readonly clientSaleId?: unknown
   readonly syncBlockedCode?: unknown
@@ -367,6 +370,10 @@ export function classifyQuarantineCandidate(input: {
       QUARANTINE_RECOVERY_CLASS.ALREADY_RECOVERED,
       "Esta venda já existe no servidor. Nada será criado — só a cópia local é reconciliada.",
     )
+  }
+
+  if (isManualKgCandidate(candidate)) {
+    return decide(QUARANTINE_RECOVERY_CLASS.MANUAL_KG_HISTORICAL_BLOCKED, "Recuperação histórica KG bloqueada: requer política própria de estoque e caixa. A cópia local foi preservada.")
   }
 
   // 2. É mesmo quarentena de identidade?
@@ -581,4 +588,9 @@ export function planQuarantineRecovery(
 ): QuarantineRecoveryPlan {
   const items = entries.map((entry) => classifyQuarantineCandidate({ ...entry, mode }))
   return { items, summary: summarizeQuarantinePlan(items) }
+}
+
+/** Detect before legacy quantity rounding. Confirmed identity reconciliation precedes this guard. */
+export function isManualKgCandidate(candidate: QuarantineCandidate): boolean {
+  return candidate.manualKgSale === "classic-manual-kg-v1" || (Array.isArray(candidate.lines) && candidate.lines.some((line) => line?.quantityUnit === "KG" || (typeof line?.quantity === "number" && !Number.isInteger(line.quantity))))
 }

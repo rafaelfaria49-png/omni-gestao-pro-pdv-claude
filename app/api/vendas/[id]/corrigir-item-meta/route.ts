@@ -107,6 +107,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const operador = session?.user ? getOperatorLabelFromSession(session) : "Operador"
     const now = new Date()
 
+    if (venda.payload && typeof venda.payload === "object" && (venda.payload as Record<string, unknown>).manualKgSale === "classic-manual-kg-v1") return NextResponse.json({ ok: false, error: "Detalhes de venda KG não podem ser alterados neste rollout.", code: "MANUAL_KG_CORRECTION_BLOCKED" }, { status: 409 })
     const payload = (venda.payload && typeof venda.payload === "object" ? venda.payload : {}) as Record<string, unknown>
 
     // Garante payload.lines alinhado com ItemVenda (ordem = ordem de criação).

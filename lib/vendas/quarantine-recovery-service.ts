@@ -47,6 +47,7 @@ import {
   QUARANTINE_CLASSIFY_MODE,
   QUARANTINE_RECOVERY_CLASS,
   classifyQuarantineCandidate,
+  isManualKgCandidate,
   historicalRecoveryCaixaPolicy,
   historicalRecoveryPersistOptions,
   isExecutableClass,
@@ -277,6 +278,10 @@ export async function readQuarantineServerFacts(input: {
       unresolvedInventoryIds: [],
       stockShortfalls: [],
     }
+  }
+
+  if (isManualKgCandidate(candidate)) {
+    return { occupantExists: Boolean(occupant), occupantStoreId: occupant?.storeId ?? null, originalSessionStatus: "NO_SESSION_ID", sameInstantConflict: sameInstant?.conflict === true }
   }
 
   const [session, productFacts] = await Promise.all([

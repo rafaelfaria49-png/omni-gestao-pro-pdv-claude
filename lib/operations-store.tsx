@@ -1,6 +1,6 @@
 "use client"
 
-import { MANUAL_KG_SALE, saleQuantityGrams } from "@/lib/vendas/manual-kg-contract"
+import { kgReturnBlocked, MANUAL_KG_SALE, saleQuantityGrams } from "@/lib/vendas/manual-kg-contract"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
@@ -11,7 +11,7 @@ import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
-import { mergeSalesById } from "@/lib/operations-sales-merge"
+import { mergeSalesById, kgCashProjectionDelta, selectManualKgSnapshot } from "@/lib/operations-sales-merge"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { resolveSaleLineItemType, type SaleLineItemType } from "@/lib/sale-line-classification"
 import { saleLineRecordFromFinalizeInput } from "@/lib/operations-sale-line"
@@ -309,28 +309,39 @@ function applyConfirmedFlags(
   }
 }
 
+type ManualKgConfirmation = { storeId: string; sale: SaleRecord; stocks: Array<{ id: string; stock: number }>; credit?: { cpf: string; nome: string; saldo: number } }
+
 function applyLocalConfirmationToState(
   prev: OpsState,
   token: { id: string; clientSaleId?: string },
   confirmed?: { pedidoId: string; id: string; clientSaleId?: string | null },
+  kg?: ManualKgConfirmation,
 ): OpsState {
   const current = prev.sales.find((s) => saleMatches(s, token))
   if (!current) return prev
-  let inventory = prev.inventory
+  if (kg && selectManualKgSnapshot(current, kg.sale) === current) return prev
+  const effective = kg ? { ...kg.sale, localEffectsApplied: current.localEffectsApplied } : current
+  let inventory = kg ? prev.inventory.map((item) => { const stock = kg.stocks.find((p) => p.id === item.dbId || p.id === item.id); return stock ? { ...item, stock: stock.stock } : item }) : prev.inventory
   let caixa = prev.caixa
   let dailyLedger = prev.dailyLedger
   let customerCredits = prev.customerCredits
   let ordens = prev.ordens
-  if (current.localEffectsApplied === false) {
+  if (kg && current.localEffectsApplied === true) {
+    const cash = kgCashProjectionDelta([current], [kg.sale], { sessaoId: prev.caixaSessaoId })
+    const daily = kgCashProjectionDelta([current], [kg.sale], { ledgerDate: prev.dailyLedger.date })
+    caixa = { ...caixa, totalEntradas: Math.round((caixa.totalEntradas + cash) * 100) / 100 }
+    dailyLedger = { ...dailyLedger, totalVendas: Math.round((dailyLedger.totalVendas + daily) * 100) / 100, vendasDinheiro: Math.round((dailyLedger.vendasDinheiro + daily) * 100) / 100 }
+  }
+  if (current.localEffectsApplied === false && effective.status !== "cancelada") {
     const applied = applyConfirmedLocalEffects(
       { inventory, caixa: { totalEntradas: caixa.totalEntradas }, dailyLedger, customerCredits },
-      current,
-      { applyStock: true },
+      effective,
+      { applyStock: !kg },
     )
     inventory = applied.state.inventory
-    caixa = { ...caixa, totalEntradas: applied.state.caixa.totalEntradas }
-    dailyLedger = applied.state.dailyLedger
-    customerCredits = applied.state.customerCredits
+    caixa = kg ? { ...caixa, totalEntradas: effective.sessaoId === prev.caixaSessaoId ? Math.round((caixa.totalEntradas + effective.total - effective.paymentBreakdown.aPrazo - effective.paymentBreakdown.creditoVale) * 100) / 100 : caixa.totalEntradas } : { ...caixa, totalEntradas: applied.state.caixa.totalEntradas }
+    dailyLedger = !kg || effective.at.slice(0, 10) === dailyLedger.date ? applied.state.dailyLedger : dailyLedger
+    customerCredits = kg ? customerCredits : applied.state.customerCredits
     if (current.linkedOsId) {
       const now = new Date()
       const linkedOsId = current.linkedOsId
@@ -346,6 +357,7 @@ function applyLocalConfirmationToState(
       )
     }
   }
+  if (kg?.credit) customerCredits = { ...customerCredits, [kg.credit.cpf]: { nome: kg.credit.nome, saldo: kg.credit.saldo } }
   return {
     ...prev,
     inventory,
@@ -353,7 +365,7 @@ function applyLocalConfirmationToState(
     dailyLedger,
     customerCredits,
     ordens,
-    sales: prev.sales.map((s) => (saleMatches(s, token) ? applyConfirmedFlags(s, confirmed) : s)),
+    sales: prev.sales.map((s) => (saleMatches(s, token) ? applyConfirmedFlags(kg ? { ...kg.sale, localEffectsApplied: s.localEffectsApplied } : s, confirmed) : s)),
   }
 }
 
@@ -1161,10 +1173,14 @@ export function OperationsProvider({
                 }
               }
             }
+            const cashDelta = kgCashProjectionDelta(prev.sales, remoteSales, { sessaoId: prev.caixaSessaoId })
+            const dailyDelta = kgCashProjectionDelta(prev.sales, remoteSales, { ledgerDate: prev.dailyLedger.date })
             const sales = mergeSalesById(prev.sales, remoteSales)
             reconcilePersistedSaleAttempts(lj, sales)
             return {
               ...prev,
+              caixa: cashDelta ? { ...prev.caixa, totalEntradas: Math.round((prev.caixa.totalEntradas + cashDelta) * 100) / 100 } : prev.caixa,
+              dailyLedger: dailyDelta ? { ...prev.dailyLedger, totalVendas: Math.round((prev.dailyLedger.totalVendas + dailyDelta) * 100) / 100, vendasDinheiro: Math.round((prev.dailyLedger.vendasDinheiro + dailyDelta) * 100) / 100 } : prev.dailyLedger,
               inventory: adjustedItems,
               ordens,
               sales,
@@ -1440,21 +1456,35 @@ export function OperationsProvider({
   )
 
   const markSaleConfirmed = useCallback(
-    (token: { id: string; clientSaleId?: string }, confirmed?: { pedidoId: string; id: string; clientSaleId?: string | null }) => {
+    async (token: { id: string; clientSaleId?: string }, confirmed?: { pedidoId: string; id: string; clientSaleId?: string | null }) => {
+      if (storageKeyRef.current !== storageKey) throw new Error("STORE_CHANGED")
+      const local = stateRef.current.sales.find((item) => saleMatches(item, token))
+      let kg: ManualKgConfirmation | undefined
+      if (local?.manualKgSale === MANUAL_KG_SALE) {
+        const response = await fetch(`/api/vendas/${encodeURIComponent(confirmed?.pedidoId ?? token.id)}?confirmation=manual-kg`, { credentials: "include", cache: "no-store", headers: persistHeaders(opsLojaIdFromStorageKey(storageKey)) })
+        const body = await response.json() as { confirmation?: ManualKgConfirmation }
+        kg = body.confirmation
+        if (storageKeyRef.current !== storageKey) throw new Error("STORE_CHANGED")
+        if (!response.ok || kg?.storeId !== opsLojaIdFromStorageKey(storageKey) || kg?.sale.manualKgSale !== MANUAL_KG_SALE || !Array.isArray(kg.stocks) || kg.sale.id !== (confirmed?.pedidoId ?? token.id)) throw new Error("Snapshot confirmado KG indisponível; a tentativa foi preservada para reenvio.")
+      }
+      if (storageKeyRef.current !== storageKey) throw new Error("STORE_CHANGED")
       vendaAutoRetryHoldRef.current.delete(token.id)
       if (token.clientSaleId) vendaAutoRetryHoldRef.current.delete(token.clientSaleId)
       closePersistedSaleAttemptIfIdentity(opsLojaIdFromStorageKey(storageKey), {
         clientSaleId: confirmed?.clientSaleId ?? token.clientSaleId,
         saleId: token.id,
       })
-      setState((prev) => applyLocalConfirmationToState(prev, token, confirmed))
+      setState((prev) => storageKeyRef.current === storageKey ? applyLocalConfirmationToState(prev, token, confirmed, kg) : prev)
+      const latest = stateRef.current.sales.find((item) => saleMatches(item, token))
+      return kg ? selectManualKgSnapshot(latest ?? kg.sale, kg.sale) : undefined
     },
     [storageKey],
   )
 
   const markSaleBlocked = useCallback((token: { id: string; clientSaleId?: string }, patch?: string | SaleSyncFailurePatch) => {
+    if (storageKeyRef.current !== storageKey) return
     const next: SaleSyncFailurePatch = typeof patch === "string" ? { code: patch } : patch ?? {}
-    setState((prev) => ({
+    setState((prev) => storageKeyRef.current !== storageKey ? prev : ({
       ...prev,
       sales: prev.sales.map((s) =>
         saleMatches(s, token)
@@ -1471,7 +1501,7 @@ export function OperationsProvider({
           : s,
       ),
     }))
-  }, [])
+  }, [storageKey])
 
   const postV1Sale = useCallback(
     async (lojaId: string, sale: SaleRecord, retroactive: boolean) => {
@@ -1532,6 +1562,7 @@ export function OperationsProvider({
       try {
         const res = useV2 ? await postV2Sale(lojaId, sale, retroactive) : await postV1Sale(lojaId, sale, retroactive)
         const body = await res.text().catch(() => "")
+        if (storageKeyRef.current !== storageKey) return { ok: false, reason: "Loja alterada durante a sincronização. A tentativa foi preservada na loja original.", code: "STORE_CHANGED" }
         if (res.ok) {
           let confirmed: ReturnType<typeof extractConfirmedVenda> = null
           try {
@@ -1539,13 +1570,13 @@ export function OperationsProvider({
           } catch {
             confirmed = null
           }
-          markSaleConfirmed(token, confirmed ?? undefined)
-          emitVendaFinalizadaOnce(
+          const snapshot = await markSaleConfirmed(token, confirmed ?? undefined)
+          if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(
             lojaId,
             { id: confirmed?.pedidoId ?? sale.id, clientSaleId: sale.clientSaleId ?? confirmed?.clientSaleId },
-            confirmed
+            snapshot ?? (confirmed
               ? { ...sale, id: confirmed.pedidoId, serverId: confirmed.id, syncPending: false }
-              : { ...sale, syncPending: false },
+              : { ...sale, syncPending: false }),
           )
           return {
             ok: true,
@@ -1563,12 +1594,13 @@ export function OperationsProvider({
           const converted = convertPendingV2ToV1(sale)
           const v1 = await postV1Sale(lojaId, converted, retroactive)
           const v1Body = await v1.text().catch(() => "")
+          if (storageKeyRef.current !== storageKey) return { ok: false, reason: "Loja alterada durante a sincronização. A tentativa foi preservada na loja original.", code: "STORE_CHANGED" }
           if (v1.ok) {
-            markSaleConfirmed({ id: converted.id, clientSaleId: converted.clientSaleId })
-            emitVendaFinalizadaOnce(
+            const snapshot = await markSaleConfirmed({ id: converted.id, clientSaleId: converted.clientSaleId })
+            if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(
               lojaId,
               { id: converted.id, clientSaleId: converted.clientSaleId },
-              { ...converted, syncPending: false },
+              snapshot ?? { ...converted, syncPending: false },
             )
             return { ok: true, pedidoId: converted.id, clientSaleId: converted.clientSaleId }
           }
@@ -1598,6 +1630,7 @@ export function OperationsProvider({
           ...(parsed.drift ? { drift: parsed.drift } : {}),
         }
       } catch (err) {
+        if (storageKeyRef.current !== storageKey) return { ok: false, reason: "Loja alterada durante a sincronização. A tentativa foi preservada na loja original.", code: "STORE_CHANGED" }
         const msg = err instanceof Error ? err.message : String(err)
         markSaleBlocked(token, { networkError: true, message: msg })
         return { ok: false, reason: `Falha de rede: ${msg}`, networkError: true }
@@ -1610,7 +1643,7 @@ export function OperationsProvider({
         persistInFlightRef.current.delete(flightKey)
       }
     },
-    [convertPendingV2ToV1, emitVendaFinalizadaOnce, markSaleBlocked, markSaleConfirmed, postV1Sale, postV2Sale],
+    [convertPendingV2ToV1, emitVendaFinalizadaOnce, markSaleBlocked, markSaleConfirmed, postV1Sale, postV2Sale, storageKey],
   )
 
   const flushPendingSales = useCallback(() => {
@@ -1657,10 +1690,14 @@ export function OperationsProvider({
         if (!rV.ok) return
         const jV = (await rV.json()) as { sales?: SaleRecord[] }
         const remoteSales = jV.sales ?? []
+        if (storageKeyRef.current !== storageKey) return
         setState((prev) => {
+          if (storageKeyRef.current !== storageKey) return prev
+          const cashDelta = kgCashProjectionDelta(prev.sales, remoteSales, { sessaoId: prev.caixaSessaoId })
+            const dailyDelta = kgCashProjectionDelta(prev.sales, remoteSales, { ledgerDate: prev.dailyLedger.date })
           const merged = mergeSalesById(prev.sales, remoteSales)
           reconcilePersistedSaleAttempts(lj, merged)
-          return merged === prev.sales ? prev : { ...prev, sales: merged }
+          return merged === prev.sales ? prev : { ...prev, sales: merged, caixa: cashDelta ? { ...prev.caixa, totalEntradas: Math.round((prev.caixa.totalEntradas + cashDelta) * 100) / 100 } : prev.caixa, dailyLedger: dailyDelta ? { ...prev.dailyLedger, totalVendas: Math.round((prev.dailyLedger.totalVendas + dailyDelta) * 100) / 100, vendasDinheiro: Math.round((prev.dailyLedger.vendasDinheiro + dailyDelta) * 100) / 100 } : prev.dailyLedger }
         })
       } catch {
         /* best-effort — reconciliação não bloqueia o caixa */
@@ -1779,6 +1816,11 @@ export function OperationsProvider({
             reason: "Servidor não devolveu evidência da venda recuperada. A quarentena foi preservada.",
           }
         }
+        if (sale.manualKgSale === MANUAL_KG_SALE && confirmed) {
+          const snapshot = await markSaleConfirmed({ id: sale.id, clientSaleId }, { pedidoId: confirmed.pedidoId, id: confirmed.id, clientSaleId })
+          if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(lj, { id: confirmed.pedidoId, clientSaleId }, snapshot ?? { ...sale, syncPending: false })
+          return { ok: true, saleId: confirmed.pedidoId }
+        }
         for (const confirmation of confirmations) {
           vendaAutoRetryHoldRef.current.delete(confirmation.clientSaleId)
           vendaAutoRetryHoldRef.current.delete(confirmation.pedidoId)
@@ -1798,7 +1840,7 @@ export function OperationsProvider({
         return { ok: false, reason: `Falha de rede: ${msg}` }
       }
     },
-    [emitVendaFinalizadaOnce, storageKey],
+    [emitVendaFinalizadaOnce, markSaleConfirmed, storageKey],
   )
 
   /**
@@ -1856,8 +1898,20 @@ export function OperationsProvider({
    * persistida.
    */
   const reconcileRecoveredSales = useCallback(
-    (confirmations: readonly RecoveryConfirmation[]): number => {
-      if (confirmations.length === 0) return 0
+    async (confirmations: readonly RecoveryConfirmation[]): Promise<number> => {
+      let kgReconciled = 0
+      const ordinary: RecoveryConfirmation[] = []
+      for (const confirmation of confirmations) {
+        const local = stateRef.current.sales.find((sale) => sale.clientSaleId === confirmation.clientSaleId)
+        if (local?.manualKgSale !== MANUAL_KG_SALE) { ordinary.push(confirmation); continue }
+        try {
+          const snapshot = await markSaleConfirmed({ id: local.id, clientSaleId: local.clientSaleId }, { id: confirmation.serverId, pedidoId: confirmation.pedidoId, clientSaleId: confirmation.clientSaleId })
+          if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(opsLojaIdFromStorageKey(storageKey), { id: confirmation.pedidoId, clientSaleId: confirmation.clientSaleId }, snapshot ?? { ...local, syncPending: false })
+          kgReconciled++
+        } catch { /* A missing current snapshot keeps KG pending, without local effects. */ }
+      }
+      confirmations = ordinary
+      if (confirmations.length === 0) return kgReconciled
       const lj = opsLojaIdFromStorageKey(storageKey)
       for (const confirmation of confirmations) {
         vendaAutoRetryHoldRef.current.delete(confirmation.clientSaleId)
@@ -1874,9 +1928,9 @@ export function OperationsProvider({
         ...prev,
         sales: applyRecoveryConfirmations(prev.sales, confirmations).sales,
       }))
-      return applyRecoveryConfirmations(stateRef.current.sales, confirmations).reconciled
+      return kgReconciled + applyRecoveryConfirmations(stateRef.current.sales, confirmations).reconciled
     },
-    [emitVendaFinalizadaOnce, storageKey],
+    [emitVendaFinalizadaOnce, markSaleConfirmed, storageKey],
   )
 
   const previewQuarantineRecovery = useCallback<
@@ -1959,7 +2013,7 @@ export function OperationsProvider({
           const body = await res.text().catch(() => "")
           if (!res.ok) {
             // Reconcilia o que já foi confirmado antes de relatar a falha.
-            reconcileRecoveredSales(buildRecoveryConfirmations(results))
+            await reconcileRecoveredSales(buildRecoveryConfirmations(results))
             const parsed = parseSalePersistError(body)
             return { ok: false, reason: parsed.message, code: parsed.code }
           }
@@ -1969,10 +2023,10 @@ export function OperationsProvider({
 
         // Só sai da quarentena o que tem venda real no servidor. `REQUIRES_CONFIRMATION`,
         // `BLOCKED` e `FAILED` preservam a cópia local intacta.
-        const reconciled = reconcileRecoveredSales(buildRecoveryConfirmations(results))
+        const reconciled = await reconcileRecoveredSales(buildRecoveryConfirmations(results))
         return { ok: true, results, summary: summarizeRecoveryResults(results), reconciled }
       } catch (err) {
-        reconcileRecoveredSales(buildRecoveryConfirmations(results))
+        await reconcileRecoveredSales(buildRecoveryConfirmations(results))
         const msg = err instanceof Error ? err.message : String(err)
         return { ok: false, reason: `Falha de rede: ${msg}` }
       }
@@ -2060,7 +2114,7 @@ export function OperationsProvider({
 
     // 3. Só sai da preservação o que tem venda real no servidor.
     const confirmations = buildRecoveryConfirmations(results)
-    reconcileRecoveredSales(confirmations)
+    await reconcileRecoveredSales(confirmations)
 
     const now = Date.now()
     const confirmed = new Set(confirmations.map((confirmation) => confirmation.clientSaleId))
@@ -2147,11 +2201,11 @@ export function OperationsProvider({
           if (res.ok) {
             const body: unknown = await res.json().catch(() => null)
             const confirmed = extractConfirmedVenda(body)
-            markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId }, confirmed ?? undefined)
-            emitVendaFinalizadaOnce(
+            const snapshot = await markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId }, confirmed ?? undefined)
+            if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(
               lj,
               { id: confirmed?.pedidoId ?? sale.id, clientSaleId: sale.clientSaleId },
-              { ...sale, syncPending: false },
+              snapshot ?? { ...sale, syncPending: false },
             )
             return {
               ok: true,
@@ -2175,8 +2229,8 @@ export function OperationsProvider({
           headers: { [ASSISTEC_LOJA_HEADER]: lj },
         })
         if (res.ok) {
-          markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId })
-          emitVendaFinalizadaOnce(lj, { id: saleId }, { ...sale, syncPending: false })
+          const snapshot = await markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId })
+          if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(lj, { id: saleId }, snapshot ?? { ...sale, syncPending: false })
           return {
             ok: true,
             mode: "reconciled",
@@ -2806,7 +2860,7 @@ export function OperationsProvider({
     const prev = stateRef.current
     const sale = prev.sales.find((s) => s.id === saleId)
     if (!sale) return { ok: false, reason: "Venda/cupom não encontrado." }
-    if (sale.manualKgSale === MANUAL_KG_SALE || sale.lines.some((line) => !Number.isInteger(line.quantity))) return { ok: false, reason: "Devolução de venda em KG indisponível. Solicite cancelamento integral autorizado." }
+    if (kgReturnBlocked(sale, prev.inventory)) return { ok: false, reason: "Devolução de venda em KG indisponível. Solicite cancelamento integral autorizado." }
 
     const next: OpsState = {
       ...prev,

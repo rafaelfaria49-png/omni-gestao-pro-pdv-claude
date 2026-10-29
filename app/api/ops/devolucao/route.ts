@@ -143,7 +143,7 @@ export async function POST(req: Request) {
           let todasResolvidas = true
           for (const it of data.itens) {
             const orig = vendaOrigem.itens.find((iv) => iv.inventoryId === it.inventoryId)
-            if (!orig || orig.quantidade <= 0) {
+            if (!orig || orig.quantidade === null || orig.quantidade <= 0) {
               todasResolvidas = false
               break
             }

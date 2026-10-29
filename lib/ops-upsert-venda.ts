@@ -1,5 +1,7 @@
+import { manualKgTaxSnapshot, taxParamsFromPrinterConfig } from "@/lib/vendas/manual-kg-tax"
+import { itemQuantityWrite } from "@/lib/vendas/item-quantity"
 import { MANUAL_KG_SALE, ManualKgSaleError, moneyCents, saleQuantityGrams, saleLineTotalCents, manualKgDiscountCents } from "@/lib/vendas/manual-kg-contract"
-import { assertManualKgAvailable, isManualKgProduct } from "@/lib/vendas/manual-kg-server"
+import { assertManualKgAvailable, isManualKgProduct, enterManualKgTransaction } from "@/lib/vendas/manual-kg-server"
 import { toStockUnits, fromStockUnits, type StockUnit } from "@/lib/estoque/stock-quantity"
 import type { Prisma } from "@/generated/prisma"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
@@ -367,6 +369,10 @@ export type UpsertVendaOptions = {
 }
 
 export type SalePayload = {
+  manualKgTax?: import("@/lib/vendas/manual-kg-tax").ManualKgTaxSnapshot
+  manualKgRevision?: number
+  manualKgCorrections?: unknown[]
+  manualKgOriginalFingerprint?: string
   manualKgSale?: typeof MANUAL_KG_SALE
   discountTotal?: number
   discountReais?: number
@@ -431,6 +437,7 @@ export type SalePayload = {
     observacao?: string
   }
   lines?: Array<{
+    itemId?: string
     inventoryId?: string
     name?: string
     quantity?: number
@@ -552,7 +559,8 @@ export function classifyExistingVendaReplayByClientSaleId(
 
   const incomingFingerprint = buildLegacySaleFingerprint(sale)
   const existingFacts = factsFromExistingVenda(existing)
-  const existingFingerprint = buildLegacySaleFingerprint(existingFacts)
+  const originalFingerprint = asRecord(existing.payload).manualKgOriginalFingerprint
+  const existingFingerprint = existingFacts.manualKgSale === MANUAL_KG_SALE && typeof originalFingerprint === "string" ? originalFingerprint : buildLegacySaleFingerprint(existingFacts)
   if (
     !isLegacySaleFactsComparable(sale) ||
     !isLegacySaleFactsComparable(existingFacts) ||
@@ -583,7 +591,8 @@ export function classifyExistingVendaReplay(
 
   const incomingFingerprint = buildLegacySaleFingerprint(sale)
   const existingFacts = factsFromExistingVenda(existing)
-  const existingFingerprint = buildLegacySaleFingerprint(existingFacts)
+  const originalFingerprint = asRecord(existing.payload).manualKgOriginalFingerprint
+  const existingFingerprint = existingFacts.manualKgSale === MANUAL_KG_SALE && typeof originalFingerprint === "string" ? originalFingerprint : buildLegacySaleFingerprint(existingFacts)
   if (
     !isLegacySaleFactsComparable(sale) ||
     !isLegacySaleFactsComparable(existingFacts) ||
@@ -721,6 +730,7 @@ export async function upsertVendaInTransaction(
 
   if (manualKg) {
     await assertManualKgAvailable(tx, lojaId)
+    await enterManualKgTransaction(tx)
     const physicalIds = [...new Set((sale.lines ?? []).map((line) => line.inventoryId).filter((id): id is string => typeof id === "string" && !isVirtualSaleLine(id)))].sort()
     // Lock all products in a stable order before reading unit/price; alias resolution is store-scoped.
     await tx.$queryRaw`SELECT id FROM estoque_produtos WHERE "storeId" = ${lojaId} AND
@@ -1056,22 +1066,25 @@ export async function upsertVendaInTransaction(
       }
     }
 
-    await tx.itemVenda.create({
+    const itemRow = await tx.itemVenda.create({
       data: {
         vendaId: v.id,
         inventoryId,
         nome,
-        quantidade,
+        ...itemQuantityWrite(quantidade, resolvedProduct?.unit === "KG"),
         precoUnitario,
         lineTotal,
       },
     })
+    if (manualKg) line.itemId = itemRow.id
   }
 
   if (manualKg) {
     const discount = manualKgDiscountCents(manualKgSubtotalCents, sale.discountPercent ?? 0, sale.discountReais ?? 0)
-    // Manual KG MVP accepts the existing discount, but never unexplained surcharges.
-    if (discount === null || (sale.discountTotal !== undefined && moneyCents(sale.discountTotal) !== discount) || discount > manualKgSubtotalCents || moneyCents(total) !== manualKgSubtotalCents - discount) {
+    const settings = await tx.storeSettings.findUnique({ where: { storeId: lojaId }, select: { printerConfig: true } })
+    const tax = manualKgTaxSnapshot(manualKgSubtotalCents, taxParamsFromPrinterConfig(settings?.printerConfig))
+    // Configuration is authoritative; never trust a browser supplied surcharge.
+    if (discount === null || (sale.discountTotal !== undefined && moneyCents(sale.discountTotal) !== discount) || discount > manualKgSubtotalCents || moneyCents(total) !== manualKgSubtotalCents + tax.taxCents - discount) {
       throw new ManualKgSaleError("Total da venda divergente dos itens e desconto. Revise o pagamento.")
     }
     const payments = [pb?.dinheiro, pb?.pix, pb?.cartaoDebito, pb?.cartaoCredito, pb?.carne, pb?.aPrazo, pb?.creditoVale]
@@ -1080,7 +1093,7 @@ export async function upsertVendaInTransaction(
       throw new SalePaymentsMismatchError(total, somaPagamentosParaKg(pb))
     }
     // Store the server-derived unit snapshot, independent of browser line flags.
-    await tx.venda.update({ where: { id: v.id }, data: { payload: asJsonPayload({ ...salePayloadForStorage, lines }) } })
+    await tx.venda.update({ where: { id: v.id }, data: { payload: asJsonPayload({ ...salePayloadForStorage, lines, manualKgTax: tax, manualKgRevision: 0, manualKgCorrections: [], manualKgOriginalFingerprint: buildLegacySaleFingerprint(sale) }) } })
   }
 
   // ── 3. MovimentacaoEstoque (saída PDV) ──────────────────────────────────────
