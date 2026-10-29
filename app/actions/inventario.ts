@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { canAccessStore } from "@/lib/auth/enterprise-permissions";
 import { registrarAjusteEstoque } from "@/app/actions/estoque";
 import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract";
+import { isProductWeightDeclared } from "@/lib/cadastros/product-commercial-contract";
 import {
   aplicarBipe,
   aplicarModoContagem,
@@ -329,9 +330,13 @@ export async function registrarContagemProduto(
     // Snapshot autoritativo: re-busca o produto por id NA LOJA (ignora dados do cliente).
     const row = await prisma.produto.findFirst({
       where: { id: pid, storeId: g.sid },
-      select: { id: true, name: true, sku: true, stock: true },
+      select: { id: true, name: true, sku: true, stock: true, metadata: true },
     });
     if (!row) return { ok: false, reason: "Produto não encontrado nesta loja" };
+    // A contagem e o snapshot são inteiros: contar produto por peso truncaria gramas.
+    if (isProductWeightDeclared(row.metadata)) {
+      return { ok: false, reason: "Produto vendido por peso: a contagem de inventário em kg ainda não está disponível. Use Entrada de estoque na ficha do produto." };
+    }
 
     // Consolidação por PRODUTO: o MESMO produto bipado por barcode, SKU ou alias diferente deve
     // cair na MESMA linha — nunca criar linha concorrente que depois fragmentaria o ajuste final.
@@ -2009,7 +2014,8 @@ export async function listProdutosNaoConferidos(
     ]);
 
     const itens: ProdutoNaoConferidoDTO[] = rows.map((p) => {
-      const estoqueQt = Math.trunc(Number(p.stock)) || 0;
+      // Sem truncar: produto em KG mantém as gramas (UN já é inteiro).
+      const estoqueQt = Number(p.stock) || 0;
       const custo = Number(p.precoCusto) || 0;
       return {
         produtoId: p.id,

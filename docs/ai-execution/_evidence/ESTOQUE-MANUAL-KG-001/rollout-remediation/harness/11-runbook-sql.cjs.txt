@@ -1,0 +1,107 @@
+// Executa os ARQUIVOS VERSIONADOS docs/padaria/pesagem/rollout/*.sql na ordem do runbook, contra o
+// PG descartável com a topologia do Neon (neondb_owner_sim ∈ neon_superuser_sim ⊃ pg_write_all_data),
+// com escritores antigos (Prisma Int) ativos. Rodar depois de 00-setup.cjs.
+const fs = require("node:fs")
+const path = require("node:path")
+const { spawn } = require("node:child_process")
+const { pw, client, errLine, psql, DIR } = require("./lib.cjs")
+
+const R = "C:\\Projetos\\omni-gestao\\.worktrees\\estoque-manual-kg-001\\docs\\padaria\\pesagem\\rollout"
+const APPLY = "C:\\Projetos\\omni-gestao\\.worktrees\\estoque-manual-kg-001\\docs\\padaria\\pesagem\\estoque-kg-migration-apply.sql"
+const OLD = "neondb_owner_sim", PROD = "omnigestao_prod", CAND = "omnigestao_prod_candidate"
+const log = []
+const out = (s) => { console.log(s); log.push(s) }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const one = (s) => String(s || "").replace(/\s+/g, " ").trim()
+
+function runFile(role, db, file, { single = true, extraEnv = {} } = {}) {
+  const args = ["-X", "-q", "-v", "ON_ERROR_STOP=1", ...(single ? ["-1"] : []), "-v", `old_role=${OLD}`, "-v", `prod_db=${PROD}`,
+    "-h", "127.0.0.1", "-p", "55447", "-U", role, "-d", db, "-f", file]
+  return new Promise((resolve) => {
+    const ch = spawn("C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe", args, { env: { ...process.env, PGPASSWORD: pw(role), PGCLIENTENCODING: "UTF8", ...extraEnv } })
+    let o = "", e = ""
+    ch.stdout.on("data", (d) => { o += d }); ch.stderr.on("data", (d) => { e += d })
+    ch.on("close", (status) => resolve({ status, out: o.trim(), err: e.trim() }))
+  })
+}
+async function step(label, role, db, file, opts) {
+  const t0 = Date.now()
+  const r = await runFile(role, db, path.join(R, file), opts)
+  const notices = (r.err.match(/(NOTICE|ERRO[R]?|WARNING|AVISO):[^\n]*/g) || []).map((s) => s.replace(/^.*?(KG_)/, "$1")).join(" | ")
+  out(`  ${file} [${role}@${db}] ${label}: exit=${r.status} ${Date.now() - t0}ms ${one(notices).slice(0, 260)}`)
+  if (r.out) out(r.out.split("\n").map((l) => "    " + l).join("\n"))
+  return r
+}
+async function tryOp(label, fn) {
+  try { const v = await fn(); out(`  ${label}: SUCESSO${v !== undefined ? " -> " + JSON.stringify(v) : ""}`); return true }
+  catch (e) { out(`  ${label}: FALHOU -> ${errLine(e).replace(/^.*?(FATAL|Server has|ERROR|Error occurred|new row|violates)/, "$1").slice(0, 200)}`); return false }
+}
+const stock = () => psql("pgadmin", PROD, "SELECT string_agg(id || '=' || stock::text, ' ' ORDER BY id) FROM estoque_produtos").out
+
+async function main() {
+  out(`# ESTOQUE-MANUAL-KG-001 - arquivos do runbook (rollout/*.sql) executados no PG descartavel - ${new Date().toISOString()}`)
+  out(`# topologia Neon: ${OLD} ∈ neon_superuser_sim (pg_write_all_data, pg_signal_backend); schema public de pg_database_owner`)
+  const oldA = client("old", OLD, PROD, "old-deploy-A")
+  const oldScript = client("old", OLD, PROD, "old-script")
+  await tryOp("old-deploy-A le (pool aberto)", () => oldA.produto.count())
+  await tryOp("old-script le (pool aberto)", () => oldScript.produto.count())
+
+  out("\n## PRE-JANELA")
+  for (const r of ["omni_runtime_v2", "omni_migrator", "omni_owner"]) psql("pgadmin", "postgres", `DROP ROLE IF EXISTS ${r}`)
+  await step("sem senha no ambiente (deve recusar)", OLD, CAND, "01-papeis.sql")
+  await step("papeis", OLD, CAND, "01-papeis.sql", { extraEnv: { KG_MIGRATOR_PASSWORD: pw("omni_migrator"), KG_RUNTIME_V2_PASSWORD: pw("omni_runtime_v2") } })
+  await step("grants do runtime", OLD, PROD, "02-grants-runtime.sql")
+  await step("verificacao", OLD, PROD, "06-verificacao.sql", { single: false })
+  const novo = client("old", "omni_runtime_v2", PROD, "new-deploy-runtime-v2")
+  await tryOp("deployment novo (runtime v2) grava p-un-13 -> 12", () => novo.produto.update({ where: { id: "p-un-13" }, data: { stock: 12 } }).then((p) => p.stock))
+
+  out("\n## JANELA (trava ligada; loja fechada)")
+  const emVoo = oldScript.$transaction(async (tx) => {
+    await tx.produto.update({ where: { id: "p-pao" }, data: { stock: 2 } })
+    await sleep(3000)
+    await tx.produto.update({ where: { id: "p-un-7" }, data: { stock: 6 } })
+    return "commit"
+  }, { timeout: 20000 }).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e }))
+  await sleep(300)
+  await step("corte 1/3 posse (espera a venda em voo)", OLD, PROD, "03-corte-posse.sql")
+  const v = await emVoo
+  out(`  venda em voo aberta antes do corte: ${v.ok ? "COMMITOU (regime integer, valor correto)" : "ABORTADA " + errLine(v.e)}`)
+  await tryOp("old-deploy-A grava com sessao aberta apos 03 (esperado: ainda grava, pg_write_all_data)", () => oldA.produto.update({ where: { id: "p-un-7" }, data: { stock: 5 } }).then((p) => p.stock))
+  await step("corte 2/3 CONNECT", "omni_migrator", PROD, "04-corte-conexao.sql")
+  const cold = client("old", OLD, PROD, "old-cold-start")
+  await tryOp("deployment antigo em cold start", () => cold.produto.count())
+  await cold.$disconnect().catch(() => {})
+  await step("corte 3/3 sessoes", OLD, CAND, "05-encerrar-sessoes.sql", { single: false })
+  for (let i = 1; i <= 2; i++) await tryOp(`old-deploy-A tentativa ${i}`, () => oldA.produto.update({ where: { id: "p-un-7" }, data: { stock: 4 } }).then((p) => p.stock))
+  await tryOp("old-script tentativa", () => oldScript.produto.update({ where: { id: "p-un-7" }, data: { stock: 4 } }).then((p) => p.stock))
+  await step("verificacao pos-corte", "omni_migrator", PROD, "06-verificacao.sql", { single: false })
+  out(`  estoque: ${stock()}`)
+
+  out("\n## RECUPERACAO antes da migration (99) e corte refeito")
+  await step("desfazer corte", "omni_migrator", PROD, "99-desfazer-corte.sql")
+  const back = client("old", OLD, PROD, "old-after-undo")
+  await tryOp("cold start antigo depois do 99 grava p-un-7 -> 7", () => back.produto.update({ where: { id: "p-un-7" }, data: { stock: 7 } }).then((p) => p.stock))
+  await step("corte 2/3 refeito", "omni_migrator", PROD, "04-corte-conexao.sql")
+  await step("corte 3/3 refeito", OLD, CAND, "05-encerrar-sessoes.sql", { single: false })
+  await tryOp("o mesmo cliente depois do corte refeito", () => back.produto.count())
+  await back.$disconnect().catch(() => {})
+
+  out("\n## MIGRATION + barreira opcional")
+  const ap = await runFile("omni_migrator", PROD, APPLY)
+  out(`  estoque-kg-migration-apply.sql [omni_migrator]: exit=${ap.status} ${one((ap.err.match(/NOTICE:[^\n]*/) || [""])[0])}`)
+  await step("desfazer DEPOIS da migration (deve recusar)", "omni_migrator", PROD, "99-desfazer-corte.sql")
+  await step("guard CHECK", "omni_migrator", PROD, "07-guard-check-opcional.sql")
+  await novo.$disconnect()
+  const novoF = client("new", "omni_runtime_v2", PROD, "new-deploy-float")
+  await tryOp("runtime v2 (Float) grava 3,96 kg", () => novoF.produto.update({ where: { id: "p-pao" }, data: { stock: 3.96 } }).then((p) => p.stock))
+  const adminMain = client("old", "omni_migrator", PROD, "admin-script-da-main")
+  await tryOp("script da main (Int) com a credencial de admin grava p-un-7 -> 13 (barreira deve recusar)", () => adminMain.produto.update({ where: { id: "p-un-7" }, data: { stock: 13 } }).then((p) => p.stock))
+  await tryOp("old-deploy-A (Int) tenta gravar", () => oldA.produto.update({ where: { id: "p-un-7" }, data: { stock: 13 } }).then((p) => p.stock))
+  await step("verificacao final", "omni_migrator", PROD, "06-verificacao.sql", { single: false })
+  out(`  estoque: ${stock()}`)
+  out(`  linhas fora do contrato: ${psql("pgadmin", PROD, "SELECT count(*) FROM estoque_produtos WHERE stock = 'NaN' OR round(stock::numeric,3) <> stock::numeric").out}`)
+
+  await Promise.allSettled([oldA.$disconnect(), oldScript.$disconnect(), novoF.$disconnect(), adminMain.$disconnect()])
+  fs.writeFileSync(path.join(DIR, "11-runbook-sql.txt"), log.join("\n") + "\n")
+}
+main().catch((e) => { console.error(e); fs.writeFileSync(path.join(DIR, "11-runbook-sql.txt"), log.join("\n") + "\nFATAL " + e + "\n"); process.exit(1) })

@@ -14,6 +14,8 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "prisma/migrations/**",
+      /** Roteiros de evidência (.cjs/.sh) não são código da app; o bloco de regras abaixo não cobre .cjs. */
+      "docs/ai-execution/_evidence/**",
     ],
   },
   ...nextCoreWebVitals,

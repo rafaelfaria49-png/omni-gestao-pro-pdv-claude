@@ -39,6 +39,8 @@ import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice, pdvWeightSaleFlag } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { parsePdvScanPrefix } from "@/lib/pdv-scan-prefix"
@@ -427,9 +429,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         // Mesmo contrato das demais superfícies (PDV-MOTOR-INTEGRITY-N1): sem
         // isto, o acessório nunca chega à seleção nem à persistência.
         ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
+        ...pdvWeightSaleFlag(inv),
       }
     })
   }, [inventory])
+
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  // Com o pagamento aberto o carrinho fica intacto (pode haver envio em andamento); o servidor recusa a venda.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), paused: isPaymentOpen })
 
   const filteredProducts = useMemo(() => {
     const q = productQuery.trim()
@@ -601,6 +608,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   // ── Cart helpers ──────────────────────────────────────────────────────────
   const addToCart = useCallback(
     (product: PdvCatalogProduct) => {
+      const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+      if (pesoBloqueado) {
+        toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
       const isService = product.category === "Servicos"
       if (!isService && product.stock <= 0) {
         toast({ title: "Sem estoque", description: `${product.name} está sem estoque.`, variant: "destructive" })

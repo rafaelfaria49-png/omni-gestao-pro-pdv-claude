@@ -1,0 +1,7 @@
+VEREDITO: REQUEST_CHANGES
+
+1. **P2 — [CadastrosHub.tsx:1250](/C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001/components/cadastros/lovable/components/cadastros/CadastrosHub.tsx:1250)** — Com a leitura do deep link pendente, selecionar **Novo cadastro → Produto** abre um formulário novo, mas não invalida o pedido anterior. Quando a resposta chega, `setEditing(produto)` substitui o formulário e descarta o rascunho. Reproduzido em memória com os hooks atuais. **Correção:** invalidar e consumir o pedido pendente quando uma abertura manual assumir o editor; aceitar respostas somente enquanto o pedido ainda controlar aquela abertura.
+
+2. **P3 — [CadastrosHub.tsx:1243](/C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001/components/cadastros/lovable/components/cadastros/CadastrosHub.tsx:1243)** — Em StrictMode, montar o painel com `openProductId` preenchido dispara duas leituras: o cleanup limpa a ref e a reexecução registra novamente o mesmo ID. Se a primeira falhar, seu `finally` consome o pedido; o sucesso da segunda é ignorado e a ficha permanece fechada. Reproduzido em memória. **Correção:** identificar cada execução com token único e invalidar especificamente a execução encerrada.
+
+O merge dos dois arquivos coincide exatamente com a fusão automática e preserva ambos os lados. Revisão somente leitura, sem rede ou banco; E2E não executado.

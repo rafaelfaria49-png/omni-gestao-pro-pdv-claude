@@ -1,0 +1,51 @@
+// Contraprovas: cada metade do corte, sozinha, NÃO basta; e REVOKE de quem não é dono é no-op silencioso.
+// PG descartável com a topologia do Neon. Rodar depois de 00-setup.cjs.
+const fs = require("node:fs")
+const path = require("node:path")
+const { psql, pw, client, errLine, DIR } = require("./lib.cjs")
+const OLD = "neondb_owner_sim", PROD = "omnigestao_prod", CAND = "omnigestao_prod_candidate"
+const log = []
+const out = (s) => { console.log(s); log.push(s) }
+const one = (s) => String(s || "").replace(/\s+/g, " ").trim()
+async function tryOp(label, fn) {
+  try { const v = await fn(); out(`  ${label}: SUCESSO${v !== undefined ? " -> " + JSON.stringify(v) : ""}`) }
+  catch (e) { out(`  ${label}: FALHOU -> ${errLine(e).replace(/^.*?(FATAL|Server has|ERROR)/, "$1").slice(0, 160)}`) }
+}
+const connect = () => psql("pgadmin", PROD, `SELECT has_database_privilege('${OLD}', '${PROD}', 'CONNECT')`).out
+const sessoes = () => psql("pgadmin", "postgres", `SELECT count(*) FROM pg_stat_activity WHERE datname='${PROD}' AND usename='${OLD}'`).out
+
+async function main() {
+  out(`# ESTOQUE-MANUAL-KG-001 - contraprovas dos cortes parciais - ${new Date().toISOString()}`)
+  for (const r of ["omni_runtime_v2", "omni_migrator", "omni_owner"]) psql("pgadmin", "postgres", `DROP ROLE IF EXISTS ${r}`)
+  psql(OLD, CAND, "CREATE ROLE omni_owner NOLOGIN")
+  psql(OLD, CAND, `CREATE ROLE omni_migrator LOGIN PASSWORD '${pw("omni_migrator")}'`)
+  psql(OLD, CAND, "GRANT omni_owner TO omni_migrator WITH INHERIT TRUE, SET TRUE")
+  psql(OLD, PROD, `GRANT CONNECT ON DATABASE ${PROD} TO omni_migrator`)
+  const a = client("old", OLD, PROD, "old-deploy-A")
+  await tryOp("old-deploy-A grava (pool aberto)", () => a.produto.update({ where: { id: "p-un-7" }, data: { stock: 8 } }).then((p) => p.stock))
+
+  out("\n## 1. REVOKE CONNECT executado por quem NAO e dono (omni_migrator antes da troca de posse)")
+  const r = psql("omni_migrator", PROD, `REVOKE CONNECT, TEMPORARY ON DATABASE ${PROD} FROM PUBLIC`)
+  out(`  psql ok=${r.ok} stderr="${one(r.err)}"`)
+  out(`  papel antigo ainda tem CONNECT: ${connect()}  <- nada foi revogado, exit 0`)
+
+  out("\n## 2. So pg_terminate_backend, sem tirar CONNECT")
+  out(`  sessoes antigas antes: ${sessoes()}`)
+  out(`  encerradas: ${psql(OLD, CAND, `SELECT count(*) FILTER (WHERE pg_terminate_backend(pid)) FROM pg_stat_activity WHERE datname='${PROD}' AND usename='${OLD}'`).out}`)
+  await tryOp("old-deploy-A tentativa 1", () => a.produto.update({ where: { id: "p-un-7" }, data: { stock: 7 } }).then((p) => p.stock))
+  await tryOp("old-deploy-A tentativa 2 (Prisma reconectou)", () => a.produto.update({ where: { id: "p-un-7" }, data: { stock: 7 } }).then((p) => p.stock))
+  out(`  sessoes antigas depois: ${sessoes()}  <- voltou`)
+
+  out("\n## 3. So REVOKE CONNECT pelo dono, sem encerrar sessoes")
+  const r2 = psql(OLD, PROD, `REVOKE CONNECT, TEMPORARY ON DATABASE ${PROD} FROM PUBLIC; REVOKE ALL ON DATABASE ${PROD} FROM ${OLD}`)
+  out(`  psql ok=${r2.ok} stderr="${one(r2.err)}"  papel antigo tem CONNECT: ${connect()}`)
+  await tryOp("old-deploy-A com a sessao aberta grava", () => a.produto.update({ where: { id: "p-un-7" }, data: { stock: 6 } }).then((p) => p.stock))
+  const c = client("old", OLD, PROD, "old-cold-start")
+  await tryOp("cold start antigo", () => c.produto.count())
+  await c.$disconnect().catch(() => {})
+  out(`  sessoes antigas: ${sessoes()}  <- a aberta segue gravando ate ser encerrada`)
+
+  await a.$disconnect().catch(() => {})
+  fs.writeFileSync(path.join(DIR, "12-cortes-parciais.txt"), log.join("\n") + "\n")
+}
+main().catch((e) => { console.error(e); process.exit(1) })

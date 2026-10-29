@@ -1,0 +1,1981 @@
+{
+ "lido_em": "2026-10-27T20:48:55.199Z",
+ "projetos": {
+  "omni-gestao-pro": {
+   "id": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+   "framework": "nextjs",
+   "ignoredBuild": false,
+   "nodeVersion": "20.x",
+   "autoExposeSystemEnvs": true,
+   "gitForkProtection": true,
+   "ssoProtection": null,
+   "passwordProtection": false,
+   "customEnvironments": [],
+   "total_env": 100,
+   "env": [
+    {
+     "key": "ADMIN_DEFAULT_PASSWORD",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_WEBHOOK_STORE_ID",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_VERIFY_TOKEN",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_APP_SECRET",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_PHONE_NUMBER_ID",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_ACCESS_TOKEN",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "MIGRATION_AUTHORITY_ENABLED",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "NEXT_PUBLIC_APP_URL",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "AUTH_URL",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "NEXTAUTH_URL",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_LEGACY_PORTAL",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_PIN",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_SESSION_SECRET",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "AUTH_SECRET",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "DIRECT_URL",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "DATABASE_URL",
+     "target": "preview",
+     "branch": "codex/ops-v4-goal003-family-regularization",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "ADMIN_DEFAULT_PASSWORD",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_WEBHOOK_STORE_ID",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_VERIFY_TOKEN",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_APP_SECRET",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_PHONE_NUMBER_ID",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_ACCESS_TOKEN",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "MIGRATION_AUTHORITY_ENABLED",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "NEXT_PUBLIC_APP_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "AUTH_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "NEXTAUTH_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_LEGACY_PORTAL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_PIN",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_SESSION_SECRET",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "AUTH_SECRET",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "DIRECT_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "DATABASE_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-datas",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "ADMIN_DEFAULT_PASSWORD",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_WEBHOOK_STORE_ID",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_VERIFY_TOKEN",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_APP_SECRET",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_PHONE_NUMBER_ID",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "WHATSAPP_ACCESS_TOKEN",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "MIGRATION_AUTHORITY_ENABLED",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "NEXT_PUBLIC_APP_URL",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "AUTH_URL",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "NEXTAUTH_URL",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_LEGACY_PORTAL",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_PIN",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "CONTADOR_SESSION_SECRET",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "AUTH_SECRET",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15"
+    },
+    {
+     "key": "DIRECT_URL",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "DATABASE_URL",
+     "target": "preview",
+     "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-15",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "ADMIN_DEFAULT_PASSWORD",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "WHATSAPP_WEBHOOK_STORE_ID",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "WHATSAPP_VERIFY_TOKEN",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "WHATSAPP_APP_SECRET",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "WHATSAPP_PHONE_NUMBER_ID",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "WHATSAPP_ACCESS_TOKEN",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "NEXT_PUBLIC_APP_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "AUTH_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "NEXTAUTH_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "CONTADOR_LEGACY_PORTAL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "CONTADOR_PIN",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "CONTADOR_SESSION_SECRET",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "AUTH_SECRET",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "DIRECT_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-14",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "DATABASE_URL",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-14",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "MIGRATION_AUTHORITY_ENABLED",
+     "target": "preview",
+     "branch": "codex/release-ops-v4-vercel",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-10-14"
+    },
+    {
+     "key": "CONTADOR_LEGACY_PORTAL",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-21"
+    },
+    {
+     "key": "CONTADOR_LEGACY_PORTAL",
+     "target": "preview",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-21"
+    },
+    {
+     "key": "CONTADOR_PORTAL_V2",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-21"
+    },
+    {
+     "key": "R2_SECRET_ACCESS_KEY",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-21"
+    },
+    {
+     "key": "R2_ACCESS_KEY_ID",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-21"
+    },
+    {
+     "key": "R2_BUCKET",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-21"
+    },
+    {
+     "key": "R2_ACCOUNT_ID",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-21"
+    },
+    {
+     "key": "CONTADOR_STORAGE_PROVIDER",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-21"
+    },
+    {
+     "key": "SALE_SERVER_NUMBERING_ENABLED",
+     "target": "production",
+     "branch": "-",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-08-18"
+    },
+    {
+     "key": "FISCAL_A1_SENHA_LOJA_1",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-11"
+    },
+    {
+     "key": "FISCAL_A1_PFX_B64_LOJA_1",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-11"
+    },
+    {
+     "key": "MIGRATION_AUTHORITY_ENABLED",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-10-16"
+    },
+    {
+     "key": "ASSISTEC_SUBSCRIPTION_SECRET",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-04"
+    },
+    {
+     "key": "CONTADOR_EXTERNO_SESSION_SECRET",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-08-01"
+    },
+    {
+     "key": "DIRECT_URL",
+     "target": "development",
+     "branch": "-",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-07-27",
+     "destino": "ep=ep-summer-tooth-acltc6wi(PROD) pooler=false user=neondb_owner db=omnigestao_prod_candidate"
+    },
+    {
+     "key": "DIRECT_URL",
+     "target": "preview",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-07-27",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "DIRECT_URL",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-07-27",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "DATABASE_URL",
+     "target": "preview",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-07-27",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "DATABASE_URL",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-07-27",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "CONTADOR_SESSION_SECRET",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-07-14"
+    },
+    {
+     "key": "CONTADOR_PIN",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-07-14"
+    },
+    {
+     "key": "BARCODE_LOOKUP_PROVIDERS",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-07-10"
+    },
+    {
+     "key": "WHATSAPP_WEBHOOK_STORE_ID",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-11"
+    },
+    {
+     "key": "WHATSAPP_APP_SECRET",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-11"
+    },
+    {
+     "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-11"
+    },
+    {
+     "key": "WHATSAPP_PHONE_NUMBER_ID",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-11"
+    },
+    {
+     "key": "WHATSAPP_ACCESS_TOKEN",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-12"
+    },
+    {
+     "key": "WHATSAPP_VERIFY_TOKEN",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "plain",
+     "custom": 0,
+     "updated": "2026-05-11"
+    },
+    {
+     "key": "ADMIN_DEFAULT_PASSWORD",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-09"
+    },
+    {
+     "key": "NEXTAUTH_URL",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-09"
+    },
+    {
+     "key": "AUTH_SECRET",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-09"
+    },
+    {
+     "key": "COSMOS_API_KEY",
+     "target": "production",
+     "branch": "-",
+     "type": "encrypted",
+     "custom": 0,
+     "updated": "2026-07-10"
+    }
+   ],
+   "deployments": [
+    {
+     "uid": "dpl_2sT3Em9K5vfdmvPawKxSDnHHRmEw",
+     "target": "production",
+     "created": "2026-10-27T01:14:24.365Z",
+     "ref": "main",
+     "sha": "34b70a1",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_4Rvgv8GKYpkwTxEV7inuorvLLQmF",
+     "target": "preview",
+     "created": "2026-10-26T21:58:00.589Z",
+     "ref": "codex/pdv-padaria-kg-guard-ux-003",
+     "sha": "13982aa",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_DjeJzgYtSfuDC4TX7ZEiqnQZ96nT",
+     "target": "preview",
+     "created": "2026-10-26T21:51:14.557Z",
+     "ref": "codex/pdv-padaria-kg-guard-ux-003",
+     "sha": "171c666",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EqN2N8sJQddu5JxAAfpSRjV1nTsF",
+     "target": "preview",
+     "created": "2026-10-26T01:15:37.434Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "b00b230",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2RR2R7vs6SD17EHvoi3EU9GagQF2",
+     "target": "production",
+     "created": "2026-10-25T15:21:39.062Z",
+     "ref": "main",
+     "sha": "745fb55",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FCLNUFAQ5o4jAYn5PSRr4Qa1MQPf",
+     "target": "preview",
+     "created": "2026-10-25T14:27:22.935Z",
+     "ref": "codex/pessoas-001b-recovery-002-auth-plan",
+     "sha": "a5dc774",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FTi98M1U1k15MFiizSjigkQJWLL5",
+     "target": "preview",
+     "created": "2026-10-25T14:17:47.042Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "cdb1d19",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_BEfUu35RTNFSz4czb1g7JfVD2PdC",
+     "target": "production",
+     "created": "2026-10-25T13:59:24.203Z",
+     "ref": "main",
+     "sha": "57cab7c",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_zE3WgejgQTEvyJ6pLhJyFxS1k1d4",
+     "target": "preview",
+     "created": "2026-10-25T13:55:18.379Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "1581313",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_G2qDz87wkk7NmRxzJamoNzdqTsx7",
+     "target": "preview",
+     "created": "2026-10-25T13:48:24.211Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "47d72ac",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2whNHjci8BPV9t9yxWoXfvJzuAiB",
+     "target": "preview",
+     "created": "2026-10-25T13:37:43.246Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "ad8176b",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_3GeJzbVP4HtmC5XgqAcBZdqBRu7Z",
+     "target": "preview",
+     "created": "2026-10-25T13:21:33.306Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "a064c57",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_3ncQsD9LqAEX9h8XXM9R2uDnDLHR",
+     "target": "production",
+     "created": "2026-10-25T11:38:58.195Z",
+     "ref": "main",
+     "sha": "a288ea2",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EogbyQEV3pk8ot5ti8qFP4PzkQxh",
+     "target": "preview",
+     "created": "2026-10-25T03:49:23.747Z",
+     "ref": "codex/pdv-padaria-comprovante-nao-fiscal-g2-001",
+     "sha": "8a4f2fa",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_5CAqX4BuM7vs5kemoGBXWp2nmUnQ",
+     "target": "production",
+     "created": "2026-10-25T02:43:00.780Z",
+     "ref": "main",
+     "sha": "913864f",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_84rWswFTjxnqzh9rG36UskuvUy1z",
+     "target": "preview",
+     "created": "2026-10-25T02:35:45.904Z",
+     "ref": "codex/cadastro-categoria-estoque-feedback",
+     "sha": "9458764",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_JBjBiiwXSuQ5361VdWHDGRBD2tRN",
+     "target": "preview",
+     "created": "2026-10-25T02:26:27.067Z",
+     "ref": "codex/cadastro-categoria-estoque-feedback",
+     "sha": "e3611ce",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_y2Wo677UZcrfgtb2VVYutvQDcSEH",
+     "target": "production",
+     "created": "2026-10-25T02:21:52.674Z",
+     "ref": "main",
+     "sha": "b3712e1",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_HhXTh4yUQhnwCA3HyPyVCKJxyBNt",
+     "target": "preview",
+     "created": "2026-10-25T02:12:41.415Z",
+     "ref": "codex/cadastro-categoria-estoque-feedback",
+     "sha": "af18fcd",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_3rJvK8zRDdzrJ1bfJn5mW4wDZoQ6",
+     "target": "preview",
+     "created": "2026-10-25T01:34:24.920Z",
+     "ref": "codex/pdv-padaria-historico-pagamento-g1-001",
+     "sha": "8ccb4df",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_CWpFHetaY5EYhMGnNHDaniiQM8q8",
+     "target": "production",
+     "created": "2026-10-24T22:21:08.816Z",
+     "ref": "main",
+     "sha": "0f5f563",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_8Wc68W3VJJmMiaHnQHVYnGnyNgND",
+     "target": "preview",
+     "created": "2026-10-24T20:17:17.452Z",
+     "ref": "goal/pdv-parity-n5-c-e2e-002",
+     "sha": "0fc078e",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_Y3uvhFurxg6vCuw9TvoB3J9Siq3z",
+     "target": "production",
+     "created": "2026-10-24T20:16:39.641Z",
+     "ref": "main",
+     "sha": "460d294",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_Gh6DziSwwwYFCwKmwz94gtf9KcJm",
+     "target": "preview",
+     "created": "2026-10-24T18:24:04.130Z",
+     "ref": "codex/pdv-n5c-numbering-tests-011-01a16e07",
+     "sha": "bb18cbc",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FQetAgSXN17ehjQbfSCL5KAk4REK",
+     "target": "preview",
+     "created": "2026-10-24T18:23:58.398Z",
+     "ref": "codex/pdv-n5c-pr299-audit-fix-011-01a16e07",
+     "sha": "8405c67",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_8gDzReFWBoAc4QpCVUpxRGjme6Sj",
+     "target": "production",
+     "created": "2026-10-24T15:36:38.793Z",
+     "ref": "main",
+     "sha": "f44cb8d",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_6nMQmPBbo2Cj1RaqHvaJhJXdTNDV",
+     "target": "preview",
+     "created": "2026-10-24T14:52:31.314Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "7371ae0",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_BvhwJynw4qSuhpyAB9xkHR4i6Gur",
+     "target": "preview",
+     "created": "2026-10-24T14:45:51.681Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "71e106a",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2zDRYxQv5xDCrwq7kkd5EnGpyQEQ",
+     "target": "preview",
+     "created": "2026-10-24T14:36:34.503Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "21f2780",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2usmJEjzWpdJHWyrgGK5YngCTjSF",
+     "target": "preview",
+     "created": "2026-10-24T14:34:12.830Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "30a5956",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_6ntziKxPhys9Abng551dcBNp3Wu5",
+     "target": "preview",
+     "created": "2026-10-24T14:20:15.260Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "c36ed4d",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_9PjQKw36zpr1fkfnJTMtp1Dfw2Zg",
+     "target": "preview",
+     "created": "2026-10-24T14:11:26.458Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "ee4d93e",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_DY6ctKgCTK73dH7qMcYLQmPTfaFC",
+     "target": "preview",
+     "created": "2026-10-24T14:03:31.647Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "1b9ddb1",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_7TGENtxG784Dk5xwgX3XmtUPqy3T",
+     "target": "production",
+     "created": "2026-10-24T12:09:29.414Z",
+     "ref": "main",
+     "sha": "9dd6311",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FSq8qDzdcbhJ1GtoHtyB6DYHZtAu",
+     "target": "preview",
+     "created": "2026-10-24T11:42:27.574Z",
+     "ref": "codex/pdv-n5c-legacy-regressions-triage-010",
+     "sha": "2fff61a",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_DKrADbFu8K1Afy6as1zyQHf622ce",
+     "target": "production",
+     "created": "2026-10-24T11:28:24.857Z",
+     "ref": "main",
+     "sha": "7ee1566",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_9Cu7rxHoAoidFiU8KFYiPcmtWXJE",
+     "target": "preview",
+     "created": "2026-10-24T04:21:09.097Z",
+     "ref": "codex/cadastro-manual-padaria",
+     "sha": "bd51e74",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_BgKAK8SSZaXFHW8JcsK1b9gHB3sa",
+     "target": "preview",
+     "created": "2026-10-24T03:01:37.634Z",
+     "ref": "codex/cadastro-manual-padaria",
+     "sha": "912fae9",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_4Vz7F7UHP6whFYZQEYkV5U9TSvpN",
+     "target": "preview",
+     "created": "2026-10-24T02:31:44.900Z",
+     "ref": "codex/cadastro-manual-padaria",
+     "sha": "7971e33",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_4nZnN5Z5V7MFqdFqUqyKTvFPgcyp",
+     "target": "preview",
+     "created": "2026-10-24T02:28:09.311Z",
+     "ref": "codex/cadastro-manual-padaria",
+     "sha": "8acb989",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_G4YqX5Wa5YhZ9s18q4TndNR9Jqwx",
+     "target": "production",
+     "created": "2026-10-23T11:37:07.085Z",
+     "ref": "main",
+     "sha": "40bf623",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_7TTv5yYcgnY6zpnq93HA7CwX2G4G",
+     "target": "preview",
+     "created": "2026-10-23T11:22:32.313Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "ac46873",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_BzCYEZ2rK4sCiAniirNuG4hWTZkd",
+     "target": "preview",
+     "created": "2026-10-23T11:12:16.237Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "91c928a",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_AvCu6cX5MgUr4emBCGRJqGNy2C2f",
+     "target": "preview",
+     "created": "2026-10-23T11:08:35.145Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "351905c",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_5hbCekftQTma4gwMt78EqtFPRRUU",
+     "target": "preview",
+     "created": "2026-10-23T11:06:07.040Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "3827555",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_9BgjzEzbgaDmFHCkvcK8rhgNi2US",
+     "target": "preview",
+     "created": "2026-10-23T11:00:22.271Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "334eec6",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_HVm85aX7uJQbWjuai9n8YBFVkWaL",
+     "target": "preview",
+     "created": "2026-10-23T10:48:16.789Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "c712e37",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_DFA7Hc5z86etCEdgpF7ndkvr2Krr",
+     "target": "preview",
+     "created": "2026-10-23T10:20:38.145Z",
+     "ref": "goal/pdv-parity-n5-c-e2e-002",
+     "sha": "3d19c31",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FCWj8HtmCPdrzsk4mpPvvqVHDFax",
+     "target": "preview",
+     "created": "2026-10-23T03:43:05.215Z",
+     "ref": "plan/pessoas-001b-recovery-002",
+     "sha": "b4a3d26",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EkZuFngNamei5cGdj1LvgAAnrGLt",
+     "target": "preview",
+     "created": "2026-10-23T03:41:47.335Z",
+     "ref": "codex/pdv-n5-c-e2e-driver-focus-007",
+     "sha": "c1bc62c",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_4FRuaQ4GxfuXyXcyqtUy7MzogDsB",
+     "target": "preview",
+     "created": "2026-10-23T03:24:07.549Z",
+     "ref": "goal/pessoas-001b-recovery-001",
+     "sha": "7a6df14",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_64emsQfA6ghc6W7TH7Av1DJ2LFys",
+     "target": "production",
+     "created": "2026-10-23T03:15:07.090Z",
+     "ref": "main",
+     "sha": "0adec21",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_6TcTA1Yxzi7nPdmW1Xc9yrfDVcMw",
+     "target": "production",
+     "created": "2026-10-23T03:08:42.239Z",
+     "ref": "main",
+     "sha": "4f2c245",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2ActxTrSuXByXZv9u19KYZ1itQs9",
+     "target": "production",
+     "created": "2026-10-23T00:21:49.706Z",
+     "ref": "main",
+     "sha": "040fcc7",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_AesuV67RZyX9CmNwwAeS1UXtNYXd",
+     "target": "preview",
+     "created": "2026-10-22T13:01:06.939Z",
+     "ref": "goal/pdv-parity-n5-c-e2e-002",
+     "sha": "b906afd",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_Cyrid36PccfsQA6WphYcii7CHopf",
+     "target": "preview",
+     "created": "2026-10-15T10:26:08.915Z",
+     "ref": "goal/fiscal-025b-archive-foundation-001",
+     "sha": "5bd39a9",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_ACcdzwNcowbhBz1kBh1QKsNoi2R7",
+     "target": "preview",
+     "created": "2026-10-12T19:46:47.478Z",
+     "ref": "codex/aep-pessoas-001b-blocked-reconciliation",
+     "sha": "7f505c2",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_6JoJDdU5WpTRTq591JVK6eDmBEnc",
+     "target": "preview",
+     "created": "2026-09-17T04:09:20.000Z",
+     "ref": "goal/fiscal-022-pilot-homologation-activation",
+     "sha": "a004c3b",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2mREeZ5u1fY1WfSkHdmzM9ov2MDb",
+     "target": "preview",
+     "created": "2026-08-24T21:24:57.683Z",
+     "ref": "cursor/fiscal-017-h9-h10-expired-window-recovery-84f7",
+     "sha": "2884007",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_Ffzdz7V3tKsRB4VdWrnEtmX5MjWS",
+     "target": "preview",
+     "created": "2026-08-24T18:47:08.781Z",
+     "ref": "cursor/ops-v4-checklist-rajada-fix-08c0",
+     "sha": "a366524",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EVdSdc6vf1tHuzmwqWKg7rF9xRBY",
+     "target": "preview",
+     "created": "2026-08-20T02:53:08.359Z",
+     "ref": "cursor/setup-dev-environment-b543",
+     "sha": "a7be1be",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_DJF7CuLMha6MjpUUmgY9xCBur1f4",
+     "target": "preview",
+     "created": "2026-08-18T13:30:20.324Z",
+     "ref": "cursor/fiscal-017-h9-h10-new-window-materialization-a58c",
+     "sha": "8b528a9",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_HDAd36wr1N96NkGcJhPGdH5d7uik",
+     "target": "preview",
+     "created": "2026-08-18T13:04:35.453Z",
+     "ref": "cursor/pdv-vendas-writer-v2-006f-d-audit-ef3b",
+     "sha": "2ca4404",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2NNiPbTKQpaFAX4npcfF2ey1Y11F",
+     "target": "preview",
+     "created": "2026-08-18T03:00:48.302Z",
+     "ref": "cursor/vendas-polling-bounded-003b-8dd3",
+     "sha": "99e1c5a",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FPrxHqDVS2tkEimLWNqnQSF1TedR",
+     "target": "preview",
+     "created": "2026-08-17T03:19:38.867Z",
+     "ref": "cursor/fiscal-021-danfce-qr-regulatory-audit-b491",
+     "sha": "51f9d5b",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_5tNAnKuACq9be2XNMmS6z8DFUsUU",
+     "target": "preview",
+     "created": "2026-08-17T00:00:40.736Z",
+     "ref": "cursor/fiscal-020a-contingencia-nfce-policy-contracts-5be7",
+     "sha": "9efd676",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_875hpi9dDbNzBRyRiUUnkDkmk9mJ",
+     "target": "preview",
+     "created": "2026-08-16T18:05:19.815Z",
+     "ref": "cursor/fiscal-020-contingencia-nfce-audit-plan-4646",
+     "sha": "4296c22",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_Bv6pbJW8eYPhBfrAvgpDy37Nb61q",
+     "target": "preview",
+     "created": "2026-08-16T16:27:26.931Z",
+     "ref": "cursor/fiscal-019-inutilizacao-nfce-offline-foundation-493f",
+     "sha": "e225f77",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FsxnqLEHfZBMt95XQ31dVQFeLBfd",
+     "target": "preview",
+     "created": "2026-08-16T15:46:16.025Z",
+     "ref": "cursor/fiscal-018-cancelamento-regulatory-package-39c6",
+     "sha": "c702677",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_7D453xvWN1PEHLY4vcQmSks9FXY8",
+     "target": "preview",
+     "created": "2026-08-16T14:24:40.201Z",
+     "ref": "cursor/fiscal-018-cancelamento-offline-foundation-39c6",
+     "sha": "a44ffe4",
+     "source": "git"
+    }
+   ]
+  },
+  "omni-gestao": {
+   "id": "prj_IbJi32rh4TsQwWFYYVVjs133fw3H",
+   "framework": "nextjs",
+   "ignoredBuild": true,
+   "nodeVersion": "24.x",
+   "autoExposeSystemEnvs": true,
+   "gitForkProtection": true,
+   "ssoProtection": "all_except_custom_domains",
+   "passwordProtection": false,
+   "customEnvironments": [],
+   "total_env": 15,
+   "env": [
+    {
+     "key": "WHATSAPP_VERIFY_TOKEN",
+     "target": "preview",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-10"
+    },
+    {
+     "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-09"
+    },
+    {
+     "key": "WHATSAPP_ACCESS_TOKEN",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-10"
+    },
+    {
+     "key": "WHATSAPP_PHONE_NUMBER_ID",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-09"
+    },
+    {
+     "key": "STRIPE_WEBHOOK_SECRET",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-09"
+    },
+    {
+     "key": "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-09"
+    },
+    {
+     "key": "STRIPE_SECRET_KEY",
+     "target": "preview+production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-09"
+    },
+    {
+     "key": "DIRECT_URL",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-08",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "DATABASE_URL",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-08",
+     "destino": "ilegível (sensitive)"
+    },
+    {
+     "key": "ASSISTEC_MASTER_PASSWORD",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-08"
+    },
+    {
+     "key": "NEXT_PUBLIC_APP_URL",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-08"
+    },
+    {
+     "key": "OPENAI_MODEL",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-08"
+    },
+    {
+     "key": "OPENAI_API_BASE",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-08"
+    },
+    {
+     "key": "OPENAI_API_KEY",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-08"
+    },
+    {
+     "key": "OPENROUTER_API_KEY",
+     "target": "production",
+     "branch": "-",
+     "type": "sensitive",
+     "custom": 0,
+     "updated": "2026-05-08"
+    }
+   ],
+   "deployments": [
+    {
+     "uid": "dpl_3tsrdw3HWgHFTAAMU8ycbcsfhZQF",
+     "target": "preview",
+     "created": "2026-10-26T21:58:00.626Z",
+     "ref": "codex/pdv-padaria-kg-guard-ux-003",
+     "sha": "13982aa",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2uhTRgFhz9yEnW9Yd4sJQL2AMSF4",
+     "target": "preview",
+     "created": "2026-10-26T21:51:14.565Z",
+     "ref": "codex/pdv-padaria-kg-guard-ux-003",
+     "sha": "171c666",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EpkKNvXn3f1KsiJPVkMau8VQsou5",
+     "target": "preview",
+     "created": "2026-10-26T01:15:37.565Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "b00b230",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_M1LFYGP65pe4JFYnUvjcsMzqf5NL",
+     "target": "preview",
+     "created": "2026-10-25T14:27:22.956Z",
+     "ref": "codex/pessoas-001b-recovery-002-auth-plan",
+     "sha": "a5dc774",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_3oZABmp343oPMyUaJHqUdyV56ZkJ",
+     "target": "preview",
+     "created": "2026-10-25T14:17:47.128Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "cdb1d19",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_28JambNEtV4Sh8sjrteyrKMtt7g5",
+     "target": "preview",
+     "created": "2026-10-25T13:55:18.458Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "1581313",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_7iVCW8mofcUchiLWYR5RrgcFxThQ",
+     "target": "preview",
+     "created": "2026-10-25T13:48:24.319Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "47d72ac",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_BU9MNgjwLcqqoadEqjzXvZCSURb1",
+     "target": "preview",
+     "created": "2026-10-25T13:37:43.335Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "ad8176b",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_9jcdssQXf8DnaW8KRCcqvnQn88Ct",
+     "target": "preview",
+     "created": "2026-10-25T13:21:33.309Z",
+     "ref": "claude/estoque-manual-kg-001",
+     "sha": "a064c57",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_H1k4ZtpdVZHuYNtvUEAeKkfbeXcc",
+     "target": "preview",
+     "created": "2026-10-25T03:49:23.759Z",
+     "ref": "codex/pdv-padaria-comprovante-nao-fiscal-g2-001",
+     "sha": "8a4f2fa",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_8Ns6NzYYvwjfyStyJdJ2gaZhsZCR",
+     "target": "preview",
+     "created": "2026-10-25T02:35:46.079Z",
+     "ref": "codex/cadastro-categoria-estoque-feedback",
+     "sha": "9458764",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_CG9F6unWTADDgtwFsWg6pMi9pjeP",
+     "target": "preview",
+     "created": "2026-10-25T02:26:27.042Z",
+     "ref": "codex/cadastro-categoria-estoque-feedback",
+     "sha": "e3611ce",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_F96zKqPcLQBcSmUvEua8Lscat9Wu",
+     "target": "preview",
+     "created": "2026-10-25T02:12:41.422Z",
+     "ref": "codex/cadastro-categoria-estoque-feedback",
+     "sha": "af18fcd",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_CtufFaPss3Mh9AQk76zHo3dzHHMP",
+     "target": "preview",
+     "created": "2026-10-25T01:34:24.962Z",
+     "ref": "codex/pdv-padaria-historico-pagamento-g1-001",
+     "sha": "8ccb4df",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EMJ17mQGwovtWuhTBkdqtvyq95Bi",
+     "target": "preview",
+     "created": "2026-10-24T20:17:17.618Z",
+     "ref": "goal/pdv-parity-n5-c-e2e-002",
+     "sha": "0fc078e",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_9ia9fKTRBSJNfkmCvmmvnE2tZ3iT",
+     "target": "preview",
+     "created": "2026-10-24T18:24:04.126Z",
+     "ref": "codex/pdv-n5c-numbering-tests-011-01a16e07",
+     "sha": "bb18cbc",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_DzW8E2WQqJRvFo4UqRxJUpJAuR3r",
+     "target": "preview",
+     "created": "2026-10-24T18:23:58.410Z",
+     "ref": "codex/pdv-n5c-pr299-audit-fix-011-01a16e07",
+     "sha": "8405c67",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_53jtx7YU1BJhPz9MzeaVSE3zmWem",
+     "target": "preview",
+     "created": "2026-10-24T14:52:31.358Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "7371ae0",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_AY5CgyaUhjWkSgQfdbxwsZgGhBT1",
+     "target": "preview",
+     "created": "2026-10-24T14:45:51.773Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "71e106a",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_8thgxgoknsk1jEeQZP2GrZTSkSas",
+     "target": "preview",
+     "created": "2026-10-24T14:36:34.681Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "21f2780",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_x2B7s7wfKoPxf1r7f1hX4RPxnWP7",
+     "target": "preview",
+     "created": "2026-10-24T14:20:15.394Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "c36ed4d",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EPV7ZwuybPny8XxjRwTomGg4Juxe",
+     "target": "preview",
+     "created": "2026-10-24T14:11:26.560Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "ee4d93e",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_9YtW5rdDxmqHVSwJC9vBAn44QB2K",
+     "target": "preview",
+     "created": "2026-10-24T14:03:31.692Z",
+     "ref": "codex/cliente-basico-configuracoes-estoque",
+     "sha": "1b9ddb1",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_41c36KG9qnLdhHWqM4CCFBN2DVsZ",
+     "target": "preview",
+     "created": "2026-10-24T11:42:27.538Z",
+     "ref": "codex/pdv-n5c-legacy-regressions-triage-010",
+     "sha": "2fff61a",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_3Wq3wxU2A9aLoSRKaAGc9zvQrUfe",
+     "target": "preview",
+     "created": "2026-10-24T04:21:09.163Z",
+     "ref": "codex/cadastro-manual-padaria",
+     "sha": "bd51e74",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_8bSk9rgE1K1NGw7tdvRXPqYd57rg",
+     "target": "preview",
+     "created": "2026-10-24T03:01:37.754Z",
+     "ref": "codex/cadastro-manual-padaria",
+     "sha": "912fae9",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_3FS9FJg6ohuk2yx2sMzF1amXdquG",
+     "target": "preview",
+     "created": "2026-10-24T02:31:44.909Z",
+     "ref": "codex/cadastro-manual-padaria",
+     "sha": "7971e33",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FJYpwUH49YeQ9BeW91ETubjp7KMA",
+     "target": "preview",
+     "created": "2026-10-24T02:28:09.357Z",
+     "ref": "codex/cadastro-manual-padaria",
+     "sha": "8acb989",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_9fSqWBSCi1YkA2Rcx5U9PpyW9tUg",
+     "target": "preview",
+     "created": "2026-10-23T11:22:32.340Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "ac46873",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_A3rZAmLHgJ29enQuYX2gkutYU2NK",
+     "target": "preview",
+     "created": "2026-10-23T11:12:16.331Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "91c928a",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_BDrWTPF39Ytt4P4suZrkiRmQJm7W",
+     "target": "preview",
+     "created": "2026-10-23T11:08:35.327Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "351905c",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_D4MZ7aF1KXWWxZdxM5K7NhdZuBLK",
+     "target": "preview",
+     "created": "2026-10-23T11:00:22.356Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "334eec6",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2QRSrcUDy7th8R8W5gwi6TY94wj1",
+     "target": "preview",
+     "created": "2026-10-23T10:48:16.925Z",
+     "ref": "codex/piloto-primeiro-acesso-padaria",
+     "sha": "c712e37",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EkozYBTgVTXNKoZAEa9uHrfN6qHC",
+     "target": "preview",
+     "created": "2026-10-23T10:20:38.322Z",
+     "ref": "goal/pdv-parity-n5-c-e2e-002",
+     "sha": "3d19c31",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_CqTTbox8aK4SY3CAxb7GGHk3SsdT",
+     "target": "preview",
+     "created": "2026-10-23T03:43:05.272Z",
+     "ref": "plan/pessoas-001b-recovery-002",
+     "sha": "b4a3d26",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_5qBXD1yM5BcM6S2SHntTR9PzZNXY",
+     "target": "preview",
+     "created": "2026-10-23T03:41:47.327Z",
+     "ref": "codex/pdv-n5-c-e2e-driver-focus-007",
+     "sha": "c1bc62c",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FpVDTdNPM18pKWVoFH3LZ7EDpECo",
+     "target": "preview",
+     "created": "2026-10-23T03:24:07.857Z",
+     "ref": "goal/pessoas-001b-recovery-001",
+     "sha": "7a6df14",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_AkoDobojyJ57ZyNkfP2vnzzQDiKk",
+     "target": "preview",
+     "created": "2026-10-22T13:01:06.988Z",
+     "ref": "goal/pdv-parity-n5-c-e2e-002",
+     "sha": "b906afd",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_H9sR4GHi2zrnspBHZVSWVCVP1hUM",
+     "target": "production",
+     "created": "2026-10-15T21:29:13.842Z",
+     "ref": "main",
+     "sha": "e9eb984",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_Ar1XfZ3U7GJrKrR5GobCbyTFvzJ5",
+     "target": "production",
+     "created": "2026-10-15T14:39:21.972Z",
+     "ref": "main",
+     "sha": "466c397",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FbhvXkDVL9fmvmjtuze3mGX7shdZ",
+     "target": "preview",
+     "created": "2026-10-15T10:26:08.928Z",
+     "ref": "goal/fiscal-025b-archive-foundation-001",
+     "sha": "5bd39a9",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_D2xKQ3v7BiSw3wN9wJHpJFeP1vRQ",
+     "target": "production",
+     "created": "2026-10-15T02:56:32.517Z",
+     "ref": "main",
+     "sha": "4a85dd9",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_8SQi8a1wRA2R5a7bjLKUgLC4vgAE",
+     "target": "preview",
+     "created": "2026-10-12T19:46:47.428Z",
+     "ref": "codex/aep-pessoas-001b-blocked-reconciliation",
+     "sha": "7f505c2",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_EarEmTa2rbVGTMjG2jLbf1i3mC6V",
+     "target": "preview",
+     "created": "2026-09-17T04:09:20.195Z",
+     "ref": "goal/fiscal-022-pilot-homologation-activation",
+     "sha": "a004c3b",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_9mjbygncvkBT4D8wN4ZUnhDkpmD3",
+     "target": "preview",
+     "created": "2026-08-24T21:24:58.065Z",
+     "ref": "cursor/fiscal-017-h9-h10-expired-window-recovery-84f7",
+     "sha": "2884007",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_FHVCr54BxEbCfc5YCdKqX31JsAup",
+     "target": "preview",
+     "created": "2026-08-24T18:47:08.759Z",
+     "ref": "cursor/ops-v4-checklist-rajada-fix-08c0",
+     "sha": "a366524",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_8mZquaGE5bkJ3NUREc77uGGhaSnV",
+     "target": "preview",
+     "created": "2026-08-20T02:53:08.344Z",
+     "ref": "cursor/setup-dev-environment-b543",
+     "sha": "a7be1be",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_4tji2uZkuPKB4b3rKazoWxJTRM1B",
+     "target": "preview",
+     "created": "2026-08-18T13:30:20.409Z",
+     "ref": "cursor/fiscal-017-h9-h10-new-window-materialization-a58c",
+     "sha": "8b528a9",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_F6wyRvRCtG1XM58Gvma7CYSyE91Q",
+     "target": "preview",
+     "created": "2026-08-18T13:04:35.448Z",
+     "ref": "cursor/pdv-vendas-writer-v2-006f-d-audit-ef3b",
+     "sha": "2ca4404",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_2RuzLGYRHvytLUGQ2qDTFp41C3dc",
+     "target": "preview",
+     "created": "2026-08-18T03:00:48.331Z",
+     "ref": "cursor/vendas-polling-bounded-003b-8dd3",
+     "sha": "99e1c5a",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_4Du5E4nJWdxdqr4HQtn4hnLhbYEp",
+     "target": "preview",
+     "created": "2026-08-17T03:19:38.865Z",
+     "ref": "cursor/fiscal-021-danfce-qr-regulatory-audit-b491",
+     "sha": "51f9d5b",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_3fh3h7DvTs3m2XfUvm2maoYiWdAY",
+     "target": "preview",
+     "created": "2026-08-17T00:00:40.682Z",
+     "ref": "cursor/fiscal-020a-contingencia-nfce-policy-contracts-5be7",
+     "sha": "9efd676",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_i8EDiUrUihSuCXjqVCXYUJi5Pz8U",
+     "target": "preview",
+     "created": "2026-08-16T18:05:19.844Z",
+     "ref": "cursor/fiscal-020-contingencia-nfce-audit-plan-4646",
+     "sha": "4296c22",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_w8wPU9tvhymSrDV6sPnQR4ibxqpX",
+     "target": "preview",
+     "created": "2026-08-16T16:27:26.848Z",
+     "ref": "cursor/fiscal-019-inutilizacao-nfce-offline-foundation-493f",
+     "sha": "e225f77",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_Br2SMHzjSMe4KACn91UbdaqZV34J",
+     "target": "preview",
+     "created": "2026-08-16T15:46:16.116Z",
+     "ref": "cursor/fiscal-018-cancelamento-regulatory-package-39c6",
+     "sha": "c702677",
+     "source": "git"
+    },
+    {
+     "uid": "dpl_CD2qTogk564CY1KJtRFHSfWMLLnq",
+     "target": "preview",
+     "created": "2026-08-16T14:24:40.308Z",
+     "ref": "cursor/fiscal-018-cancelamento-offline-foundation-39c6",
+     "sha": "a44ffe4",
+     "source": "git"
+    }
+   ]
+  }
+ },
+ "compartilhadas": []
+}

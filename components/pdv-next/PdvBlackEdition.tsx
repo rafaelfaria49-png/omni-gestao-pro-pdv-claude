@@ -49,6 +49,8 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -229,6 +231,9 @@ export function PdvBlackEdition() {
   const [qtyEditOpen, setQtyEditOpen] = useState(false)
   const [cancelSaleOpen, setCancelSaleOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  // Com o pagamento aberto o carrinho fica intacto (pode haver envio em andamento); o servidor recusa a venda.
+  usePdvWeightBlockedCartGuard({ cart: cartRows, setCart: setCartRows, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), paused: paymentOpen })
   const [trocasOpen, setTrocasOpen] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
 
@@ -343,6 +348,11 @@ export function PdvBlackEdition() {
   // ── Adicionar produto ──────────────────────────────────────────────────────
   const addProduct = useCallback(
     (product: PdvCatalogProduct, qty?: number) => {
+      const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+      if (pesoBloqueado) {
+        toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
       const effectiveQty = qty ?? 1
       const code = String(product.barcode || product.codigo || product.sku || product.id)
       const unit = product.vendaPorPeso ? "KG" : "UN"
@@ -368,7 +378,7 @@ export function PdvBlackEdition() {
       setBipeCode("")
       bipeRef.current?.focus()
     },
-    []
+    [toast]
   )
 
   // ── Bipe: Enter (prefixo canônico parsePdvScanPrefix) ───────────────────────

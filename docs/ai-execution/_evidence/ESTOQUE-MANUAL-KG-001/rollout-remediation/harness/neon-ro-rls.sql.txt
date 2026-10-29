@@ -1,0 +1,10 @@
+BEGIN READ ONLY;
+SELECT 'tabelas public=' || count(*) || ' rls_on=' || count(*) FILTER (WHERE relrowsecurity) || ' rls_forced=' || count(*) FILTER (WHERE relforcerowsecurity) || ' donos=' || string_agg(DISTINCT pg_get_userbyid(relowner), ',') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind IN ('r','p');
+SELECT 'rls_on: ' || coalesce(string_agg(relname, ', ' ORDER BY relname), '(nenhuma)') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind IN ('r','p') AND relrowsecurity;
+SELECT 'policies=' || count(*) FROM pg_policies WHERE schemaname='public';
+SELECT 'sequences=' || count(*) || ' views=' || (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind IN ('v','m')) || ' funcoes=' || (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public') || ' tipos_enum=' || (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='public' AND t.typtype='e') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind='S';
+SELECT 'schemas nao-sistema=' || string_agg(nspname || '(' || pg_get_userbyid(nspowner) || ')', ', ') FROM pg_namespace WHERE nspname !~ '^(pg_|information_schema)';
+SELECT 'default_acl=' || count(*) FROM pg_default_acl;
+SELECT 'event_triggers=' || count(*) FROM pg_event_trigger;
+SELECT 'extensoes=' || string_agg(extname, ',') FROM pg_extension;
+ROLLBACK;

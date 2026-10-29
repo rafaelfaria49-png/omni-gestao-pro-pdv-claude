@@ -791,7 +791,11 @@ model Produto {
   name         String   @map("name")
   brand        String   @default("") @map("brand")
   supplierName String   @default("") @map("supplierName")
-  stock        Int      @default(0) @map("stock")
+  /**
+   * Saldo na unidade comercial do produto. UN: inteiro. KG: até 3 casas, sempre
+   * quantizado em milésimos pelo boundary canônico (`lib/estoque/stock-quantity.ts`).
+   */
+  stock        Float    @default(0) @map("stock")
   /**
    * Custo unitário (planilhas/backup): coluna `price_cost` no Supabase.
    */
@@ -845,10 +849,10 @@ model MovimentacaoEstoque {
   /** "manual" | "importacao" | "os" | "pdv" | "cancelamento_pdv" | "correcao_pdv" | "devolucao" | "inventario" | "cadastro" */
   origem String @default("manual") @map("origem")
 
-  /** Delta assinado aplicado ao saldo (+ entrada, +/- ajuste). */
-  quantidade    Int @map("quantidade")
-  estoqueAntes  Int @map("estoqueAntes")
-  estoqueDepois Int @map("estoqueDepois")
+  /** Delta assinado aplicado ao saldo (+ entrada, +/- ajuste). Unidade e precisão de `Produto.stock`. */
+  quantidade    Float @map("quantidade")
+  estoqueAntes  Float @map("estoqueAntes")
+  estoqueDepois Float @map("estoqueDepois")
 
   custoUnitario    Float @default(0) @map("custoUnitario")
   custoMedioAntes  Float @default(0) @map("custoMedioAntes")
@@ -921,7 +925,8 @@ model ProdutoDeposito {
   produto    Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
   depositoId String   @map("depositoId")
   deposito   Deposito @relation(fields: [depositoId], references: [id], onDelete: Cascade)
-  quantidade Int      @default(0) @map("quantidade")
+  /** Unidade e precisão de `Produto.stock`. */
+  quantidade Float    @default(0) @map("quantidade")
   createdAt  DateTime @default(now()) @map("createdAt")
   updatedAt  DateTime @default(now()) @updatedAt @map("updatedAt")
 

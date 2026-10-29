@@ -11,6 +11,7 @@ import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { getProdutoFiscal, isProdutoFiscalVazio, type ProdutoFiscal } from "@/lib/produto-fiscal"
 import { projectProdutoAccessoryConfig, type ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios"
+import { inventoryWeightSaleProjection } from "@/lib/pdv-weight-sale-guard"
 import { productCommercialCatalogProjection } from "@/lib/cadastros/product-commercial-contract"
 // (sem normalizeNameForMatch — tabela `product` é minimalista)
 
@@ -77,6 +78,11 @@ type InvPayload = {
   fiscal?: ProdutoFiscal
   /** Configuração saneada de acessórios; metadata bruto nunca é exposto ao PDV. */
   accessoryConfig?: ProdutoAcessoriosMetadataV1
+  /**
+   * Produto declarado por peso: o PDV recusa no ato de adicionar, antes do
+   * pagamento (o servidor já recusa a venda com `PRODUTO_POR_PESO_NAO_OPERACIONAL`).
+   */
+  vendaPesoIndisponivel?: true
 }
 
 function rowToItem(row: Produto): InvPayload {
@@ -107,6 +113,7 @@ function rowToItem(row: Produto): InvPayload {
     category: typeof (row as unknown as { category?: unknown }).category === "string" ? (row as unknown as { category: string }).category : "",
     ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
     ...(accessoryConfig ? { accessoryConfig } : {}),
+    ...inventoryWeightSaleProjection(row.metadata),
   }
 }
 

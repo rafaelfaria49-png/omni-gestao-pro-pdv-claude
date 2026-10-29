@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 
 /**
  * Modal real de movimentação com produto bloqueado (peso em preparação / declaração
@@ -36,19 +36,20 @@ beforeEach(() => {
 afterEach(cleanup)
 
 const KG = { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } }
+const G = { comercial: { version: 1, modoVenda: "peso", unidade: "G", basePreco: "G" } }
 const INVALIDA = { comercial: { version: 2, modoVenda: "unidade", unidade: "UN", basePreco: "UN" } }
 
-function modal(metadata: unknown) {
+function modal(metadata: unknown, estoque = 4) {
   return render(React.createElement(MovimentacaoEstoqueModal, {
     open: true, onClose: vi.fn(), storeId: "loja-a",
-    produto: { id: "p-1", nome: "Produto", estoque: 4, metadata },
+    produto: { id: "p-1", nome: "Produto", estoque, metadata },
   }))
 }
 
 describe("Modal de movimentação com produto bloqueado e saldo divergente", () => {
   it.each([
-    ["peso em preparação, reconciliação automática possível", KG, true, /venda por peso em preparação/],
-    ["peso em preparação, exige ajuste", KG, false, /venda por peso em preparação/],
+    ["peso em G, reconciliação automática possível", G, true, /venda por peso em preparação/],
+    ["peso em G, exige ajuste", G, false, /venda por peso em preparação/],
     ["declaração inválida, reconciliação automática possível", INVALIDA, true, /declaração comercial inválida/],
     ["declaração inválida, exige ajuste", INVALIDA, false, /declaração comercial inválida/],
   ])("%s: só informação compatível com as ações disponíveis", async (_label, metadata, reconcile, reason) => {
@@ -74,5 +75,60 @@ describe("Modal de movimentação com produto bloqueado e saldo divergente", () 
     expect(document.body.textContent).toMatch(/Confirme primeiro o saldo físico na aba Ajuste/)
     expect(screen.getByRole("button", { name: "Resolver saldo" })).toBeTruthy()
     expect(document.querySelector("[data-estoque-bloqueio]")).toBeNull()
+  })
+
+  it("KG divergente sem reconciliação: Entrada travada e nenhuma orientação para o Ajuste inexistente", async () => {
+    h.entradaPodeReconciliar = false
+    modal(KG)
+    await waitFor(() => expect(document.body.textContent).toMatch(/O ajuste de saldo em KG ainda não está disponível/))
+    expect(screen.queryByRole("button", { name: "Ajuste" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Resolver saldo" })).toBeNull()
+    expect(document.body.textContent).not.toMatch(/aba Ajuste/)
+    expect((screen.getByRole("button", { name: "Registrar entrada" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe("Entrada manual em KG", () => {
+  beforeEach(() => {
+    h.diagnosticar.mockReset().mockImplementation(async () => ({ ok: true, aligned: true }))
+  })
+
+  it("aceita 2,500 kg, mostra a prévia em milésimos e envia o valor exato", async () => {
+    h.entrada.mockResolvedValue({ ok: true, movimentacaoId: "m1", estoqueDepois: 2.5, custoMedioDepois: 0 })
+    const onSaved = vi.fn()
+    render(React.createElement(MovimentacaoEstoqueModal, {
+      open: true, onClose: vi.fn(), storeId: "loja-a", onSaved,
+      produto: { id: "p-1", nome: "PAO FRANCES", estoque: 0, metadata: KG },
+    }))
+    expect(screen.queryByRole("button", { name: "Ajuste" })).toBeNull()
+    expect(document.querySelector("[data-estoque-ajuste-kg]")?.textContent).toMatch(/Ajuste de saldo em KG ainda não está disponível/)
+    const input = screen.getByLabelText("Quantidade a entrar (kg) *")
+    fireEvent.change(input, { target: { value: "2,500" } })
+    expect(document.body.textContent).toMatch(/Novo saldo2,500 kg/)
+    fireEvent.click(screen.getByRole("button", { name: "Registrar entrada" }))
+    await waitFor(() => expect(h.entrada).toHaveBeenCalledTimes(1))
+    expect(h.entrada.mock.calls[0][1]).toMatchObject({ produtoId: "p-1", quantidade: 2.5 })
+    await screen.findByText(/Entrada registrada\. Saldo: 2,500 kg/)
+    expect(onSaved).toHaveBeenCalledWith({ estoqueDepois: 2.5 })
+  })
+
+  it("prévia de 2,500 + 0,750 soma em milésimos: 3,250 kg", () => {
+    modal(KG, 2.5)
+    expect(document.querySelector("[data-saldo-atual]")?.textContent).toBe("2,500")
+    fireEvent.change(screen.getByLabelText("Quantidade a entrar (kg) *"), { target: { value: "0,750" } })
+    expect(document.body.textContent).toMatch(/Novo saldo3,250 kg/)
+  })
+
+  it.each([
+    ["2.500", /Use vírgula para os decimais/],
+    ["0,7505", /no máximo 3 casas decimais/],
+    ["1/2", /Quantidade inválida/],
+    ["0,000", /maior que zero/],
+  ])("recusa %s sem chamar o servidor", async (valor, erro) => {
+    modal(KG, 0)
+    fireEvent.change(screen.getByLabelText("Quantidade a entrar (kg) *"), { target: { value: valor } })
+    fireEvent.click(screen.getByRole("button", { name: "Registrar entrada" }))
+    expect((await screen.findByRole("alert")).textContent).toMatch(erro)
+    expect(h.entrada).not.toHaveBeenCalled()
   })
 })

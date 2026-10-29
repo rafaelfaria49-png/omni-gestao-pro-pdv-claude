@@ -15,6 +15,7 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { PDV_IMPORT_COMANDA_KEY } from "@/lib/pdv-comanda-bridge"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
@@ -133,6 +134,11 @@ export function ControleConsumo({ onNavigateToPdv }: ControleConsumoProps) {
   )
 
   const addProduct = (product: PdvCatalogProduct) => {
+    const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+    if (pesoBloqueado) {
+      toast({ ...pesoBloqueado, variant: "destructive" })
+      return
+    }
     if (product.stock <= 0) {
       toast({ title: "Sem estoque", description: `${product.name} está sem saldo.` })
       return

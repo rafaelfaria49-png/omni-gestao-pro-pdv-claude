@@ -89,7 +89,9 @@ describe.skipIf(!url)("PR #295 — roundtrip, concorrência e rollback reais", (
     }
   }
 
-  it.each(["cadastro", "REST-stock", "REST-misto", "entrada", "ajuste"])("%s: peso não recebe saldo unitário, sem escrita cadastral parcial", async (kind) => {
+  // ESTOQUE-MANUAL-KG-001: a ENTRADA manual em KG passou a ser operacional (teste abaixo);
+  // cadastro, REST e ajuste continuam sem mover saldo de produto por peso.
+  it.each(["cadastro", "REST-stock", "REST-misto", "ajuste"])("%s: peso não recebe saldo unitário, sem escrita cadastral parcial", async (kind) => {
     const product = await db.produto.findFirstOrThrow({ where: { storeId, sku: "WEIGHT" } })
     const before = await snapshot()
     if (kind.startsWith("REST")) {
@@ -100,12 +102,31 @@ describe.skipIf(!url)("PR #295 — roundtrip, concorrência e rollback reais", (
     } else if (kind === "cadastro") {
       expect(await upsertProduto(storeId, { id: product.id, nome: "Não salvar", estoque: 5 })).toMatchObject({ ok: false, type: "VALIDATION_ERROR" })
     } else {
-      const result = kind === "entrada" ? await registrarEntradaEstoque(storeId, { produtoId: product.id, quantidade: 5 })
-        : await registrarAjusteEstoque(storeId, { produtoId: product.id, novoSaldo: 5, motivo: "CI" })
+      const result = await registrarAjusteEstoque(storeId, { produtoId: product.id, novoSaldo: 5, motivo: "CI" })
       expect(result).toMatchObject({ ok: false, code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
     }
     expect(await snapshot()).toEqual(before)
   })
+  it("entrada KG: 2,500 + 0,750 = 3,250 em produto, depósito e livro, sem escrita cadastral nem venda", async () => {
+    const product = await db.produto.findFirstOrThrow({ where: { storeId, sku: "WEIGHT" } })
+    const before = await snapshot()
+    expect(await registrarEntradaEstoque(storeId, { produtoId: product.id, quantidade: 2.5 })).toMatchObject({ ok: true, estoqueDepois: 2.5 })
+    expect(await registrarEntradaEstoque(storeId, { produtoId: product.id, quantidade: 0.75 })).toMatchObject({ ok: true, estoqueDepois: 3.25 })
+    expect(await registrarEntradaEstoque(storeId, { produtoId: product.id, quantidade: 0.0005 })).toMatchObject({ ok: false, code: "VALIDATION" })
+    const after = await snapshot()
+    const atual = await db.produto.findUniqueOrThrow({ where: { id: product.id }, select: { stock: true, price: true, precoCusto: true, metadata: true } })
+    const original = before.produtos.find((p) => p.id === product.id)!
+    expect(atual).toEqual({ stock: 3.25, price: original.price, precoCusto: original.precoCusto, metadata: original.metadata })
+    expect((await db.produtoDeposito.findMany({ where: { produtoId: product.id }, select: { quantidade: true } })).map((d) => d.quantidade)).toEqual([3.25])
+    expect(await db.movimentacaoEstoque.findMany({ where: { produtoId: product.id }, orderBy: { createdAt: "asc" }, select: { quantidade: true, estoqueAntes: true, estoqueDepois: true } }))
+      .toEqual([{ quantidade: 2.5, estoqueAntes: 0, estoqueDepois: 2.5 }, { quantidade: 0.75, estoqueAntes: 2.5, estoqueDepois: 3.25 }])
+    expect({ vendas: after.vendas, itens: after.itens, financeiro: after.financeiro, titulos: after.titulos, ledger: after.ledger })
+      .toEqual({ vendas: before.vendas, itens: before.itens, financeiro: before.financeiro, titulos: before.titulos, ledger: before.ledger + 2 })
+    // Venda por peso segue bloqueada mesmo com saldo.
+    expect(await post("v1", sale())).toMatchObject({ status: 409, body: { code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" } })
+    expect((await snapshot()).vendas).toBe(before.vendas)
+  })
+
   async function correct(payload: SalePayload, lines: unknown[]) {
     const req = new Request("http://localhost/api/vendas/fixture/corrigir-itens", { method: "POST", headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId }, body: JSON.stringify({ motivo: "CI", supervisorPin: "fixture", expectedTotal: payload.total, itens: lines }) })
     return correctItems(req, { params: Promise.resolve({ id: payload.id! }) })

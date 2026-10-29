@@ -28,6 +28,7 @@ import {
   listFornecedores,
   listMarcas,
   listProdutosPaginado,
+  obterProdutoFicha,
   listServicos,
   listTecnicos,
   listLogsAuditoriaCadastros,
@@ -58,6 +59,7 @@ import {
 } from "@/lib/cadastros/produto-quality-score";
 import { getProdutoFiscal } from "@/lib/produto-fiscal";
 import { hasInvalidProductCommercial, productCommercialFromMetadata } from "@/lib/cadastros/product-commercial-contract";
+import { formatStockQuantity } from "@/lib/estoque/stock-quantity";
 import { usesClientExperience } from "@/lib/navigation/client-experience";
 import {
   categoriaCriadaSelecionada,
@@ -99,18 +101,28 @@ export function CadastrosHub() {
   const searchParams = useSearchParams();
   const linkTab = TABS.find((t) => t.id === searchParams?.get("aba"))?.id;
   const linkNew = searchParams?.get("novo") === "1";
+  // `?aba=produtos&produto=<id>`: abre a ficha canônica do produto (vinda da Gestão de Produtos histórica).
+  const linkProduto = linkTab === "produtos" ? (searchParams?.get("produto") ?? "").trim() : "";
   const [tab, setTab] = useState<TabId>(linkTab ?? "dashboard");
   const [autoOpenNew, setAutoOpenNew] = useState<string | null>(null);
+  const [autoOpenProduto, setAutoOpenProduto] = useState<string | null>(null);
   useEffect(() => {
     if (!linkTab) return;
     setTab(linkTab);
+    if (linkProduto) {
+      setAutoOpenProduto(linkProduto);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("produto");
+      window.history.replaceState(window.history.state, "", url.toString());
+      return;
+    }
     if (!linkNew || linkTab === "dashboard") return;
     setAutoOpenNew(linkTab);
     // Recarregar a página não reabre o editor.
     const url = new URL(window.location.href);
     url.searchParams.delete("novo");
     window.history.replaceState(window.history.state, "", url.toString());
-  }, [linkTab, linkNew]);
+  }, [linkTab, linkNew, linkProduto]);
   const novo = useToggle();
   const { lojaAtivaId } = useLojaAtiva();
   const storeId = (lojaAtivaId ?? "").trim();
@@ -213,6 +225,8 @@ export function CadastrosHub() {
             storeId={storeId}
             autoOpen={autoOpenNew === "produtos" && !!storeId}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
+            openProductId={storeId ? autoOpenProduto : null}
+            onOpenProductConsumed={() => setAutoOpenProduto(null)}
           />
         )}
         {selectedTab === "servicos" && (
@@ -1108,14 +1122,16 @@ function displaySku(sku: string | undefined | null): string {
   return s.replace(SKU_DISPLAY_PREFIX_RE, "") || s;
 }
 
-function estoqueBadge(estoque: number): { tone: "danger" | "warning" | "success"; label: string; title: string } {
+function estoqueBadge(estoque: number, metadata?: unknown): { tone: "danger" | "warning" | "success"; label: string; title: string } {
+  const kg = productCommercialFromMetadata(metadata).unidade === "KG";
+  const qtd = kg ? `${formatStockQuantity(estoque, "KG")} kg` : String(estoque);
   if (estoque <= 0) {
     return { tone: "danger", label: "Sem saldo", title: "Produto sem unidades disponíveis" };
   }
   if (estoque < ESTOQUE_BAIXO_LIMITE) {
-    return { tone: "warning", label: `${estoque} · baixo`, title: "Saldo entre 1 e 5 unidades — considere repor" };
+    return { tone: "warning", label: `${qtd} · baixo`, title: kg ? "Saldo abaixo de 6 kg — considere repor" : "Saldo entre 1 e 5 unidades — considere repor" };
   }
-  return { tone: "success", label: String(estoque), title: "Saldo adequado" };
+  return { tone: "success", label: qtd, title: "Saldo adequado" };
 }
 
 function produtoStatusBadge(status: ProdutoDTO["status"]): { tone: "success" | "warning" | "default"; label: string } {
@@ -1156,11 +1172,16 @@ export function ProdutosPanel({
   storeId,
   autoOpen,
   onAutoOpenConsumed,
+  openProductId,
+  onOpenProductConsumed,
   variant = "cadastros",
 }: {
   storeId: string;
   autoOpen?: boolean;
   onAutoOpenConsumed?: () => void;
+  /** Abre a ficha deste produto (link direto); relida do servidor, nunca da página visível. */
+  openProductId?: string | null;
+  onOpenProductConsumed?: () => void;
   variant?: "cadastros" | "estoque";
 }) {
   const business = useStoreBusiness();
@@ -1216,6 +1237,42 @@ export function ProdutosPanel({
       onAutoOpenConsumed?.();
     }
   }, [autoOpen, onAutoOpenConsumed, m]);
+
+  // Cada pedido é um token próprio: a resposta só abre a ficha se este painel (loja) ainda for
+  // o dono daquele pedido — não um pedido igual reexecutado (StrictMode) nem um já superado.
+  const fichaLinkRef = useRef<{ id: string } | null>(null);
+  useEffect(() => () => { fichaLinkRef.current = null; }, []);
+  useEffect(() => {
+    if (!openProductId || fichaLinkRef.current?.id === openProductId) return;
+    const pedido = { id: openProductId };
+    fichaLinkRef.current = pedido;
+    const encerrar = () => {
+      if (fichaLinkRef.current !== pedido) return false;
+      fichaLinkRef.current = null;
+      onOpenProductConsumed?.();
+      return true;
+    };
+    obterProdutoFicha(storeId, pedido.id)
+      .then((produto) => {
+        if (!encerrar()) return;
+        if (!produto) {
+          toast.error("Produto não encontrado nesta loja.");
+          return;
+        }
+        setEditing(produto);
+        m.openIt();
+      })
+      .catch(() => {
+        if (encerrar()) toast.error("Não foi possível abrir a ficha do produto. Tente novamente.");
+      });
+  }, [openProductId, onOpenProductConsumed, storeId, m]);
+  // Editor aberto por outro caminho (Novo, Editar) enquanto o link carrega: o pedido perde a vez
+  // e a resposta não troca o formulário que o operador já está preenchendo.
+  useEffect(() => {
+    if (!m.open || !fichaLinkRef.current) return;
+    fichaLinkRef.current = null;
+    onOpenProductConsumed?.();
+  }, [m.open, onOpenProductConsumed]);
 
   // Carrega categorias e marcas para os filtros
   useEffect(() => {
@@ -1813,7 +1870,7 @@ export function ProdutosPanel({
                 // sem isso, produto com fiscal preenchido perdia pontos indevidamente.
                 const score = catalogQualityScore(qualityScoreInputFromProduto(p));
                 const iaStub = p.metadata && typeof p.metadata.cadastroIa === "object";
-                const est = estoqueBadge(p.estoque);
+                const est = estoqueBadge(p.estoque, p.metadata);
                 const st = produtoStatusBadge(p.status);
                 const inativo = p.status === "Inativo";
                 // Destaque discreto do último lote importado (Parte 11): âmbar suave.

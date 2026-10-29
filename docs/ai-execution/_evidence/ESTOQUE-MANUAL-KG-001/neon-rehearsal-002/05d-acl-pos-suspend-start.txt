@@ -1,0 +1,27 @@
+
+db neondb owner=neondb_owner acl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,neon_superuser=CTc/neondb_owner}
+db omnigestao_prod owner=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}
+db omnigestao_prod_candidate owner=neondb_owner acl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omnigestao_candidate_audit_ro=c/neondb_owner}
+db postgres owner=cloud_admin acl=NULL
+role neon_superuser super=false login=false createrole=true createdb=true bypassrls=true inherit=true
+role neondb_owner super=false login=true createrole=true createdb=true bypassrls=true inherit=true
+role omni_migrator super=false login=true createrole=false createdb=false bypassrls=false inherit=true
+role omni_owner super=false login=false createrole=false createdb=false bypassrls=false inherit=true
+role omni_runtime_v2 super=false login=true createrole=false createdb=false bypassrls=false inherit=true
+member neon_superuser > neondb_owner admin=false inherit=true set=true grantor=cloud_admin
+member omni_migrator > neondb_owner admin=true inherit=false set=false grantor=cloud_admin
+member omni_owner > neondb_owner admin=true inherit=false set=false grantor=cloud_admin
+member omni_owner > omni_migrator admin=false inherit=true set=true grantor=neondb_owner
+member omni_runtime_v2 > neondb_owner admin=true inherit=false set=false grantor=cloud_admin
+member omnigestao_candidate_audit_ro > neondb_owner admin=true inherit=false set=false grantor=cloud_admin
+schema public owner=pg_database_owner acl={pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,omni_runtime_v2=U/pg_database_owner}
+owners omni_owner/i:394 omni_owner/proc:4 omni_owner/r:110 omni_owner/typee:36
+table_acl_md5 b0735540a985bdeeabb83f1f9ffce5c8
+runtime_v2_dml_tables 110/110
+default_acl cloud_admin ns=public type=S acl={neon_superuser=r*w*U*/cloud_admin}
+default_acl cloud_admin ns=public type=r acl={neon_superuser=a*r*w*d*D*x*t*m*/cloud_admin}
+default_acl omni_owner ns=public type=S acl={omni_runtime_v2=rwU/omni_owner}
+default_acl omni_owner ns=public type=r acl={omni_runtime_v2=arwd/omni_owner}
+connect neondb_owner=false
+connect omni_migrator=true
+connect omni_runtime_v2=true

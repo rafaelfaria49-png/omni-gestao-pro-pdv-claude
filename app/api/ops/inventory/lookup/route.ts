@@ -9,6 +9,7 @@ import type { Produto } from "@/generated/prisma"
 import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
+import { inventoryWeightSaleProjection } from "@/lib/pdv-weight-sale-guard"
 import { productCommercialCatalogProjection } from "@/lib/cadastros/product-commercial-contract"
 
 export const runtime = "nodejs"
@@ -52,6 +53,8 @@ function rowToItem(row: Produto) {
       typeof (row as unknown as { category?: unknown }).category === "string"
         ? (row as unknown as { category: string }).category
         : "",
+    // Mesma marca de `/api/ops/inventory`: o bipe remoto não pode contornar o bloqueio de peso.
+    ...inventoryWeightSaleProjection(row.metadata),
   }
 }
 
