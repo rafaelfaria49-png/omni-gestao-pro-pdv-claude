@@ -218,7 +218,7 @@ test("Produto por peso: somente preparação, preservado ao reabrir e editar", a
     await modal.getByRole("button", { name: "Salvar produto", exact: true }).click()
     expect((await save).ok()).toBe(true)
     // Recusa de domínio do ProductWriteService, não falha genérica nem requisição pendente.
-    await expect(page.getByText("Produto por peso em preparação deve iniciar sem saldo; não há estoque fracionado operacional.").first()).toBeVisible()
+    await expect(page.getByText("Produto por peso começa sem saldo. Depois de salvar, registre a entrada em kg (até 3 casas) em Movimentar estoque.").first()).toBeVisible()
     await expect(field(modal, "Nome")).toHaveValue("Granola sintética com saldo")
     await expect(page.getByText("Produto salvo com sucesso.")).toHaveCount(0)
     expect(await (await readDb()).produto.count({ where: { storeId: A, name: "Granola sintética com saldo" } })).toBe(0)

@@ -1841,7 +1841,11 @@ function ProductAIEditor({
                   <span id="produto-estoque-inicial-unidade" data-unidade={commercial.unidade} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">{commercial.unidade}</span>
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  {commercial.modoVenda === "peso" ? "Peso em preparação: mantenha zero. Estoque fracionado indisponível." : "Quantidade inteira, inclusive zero. Depois do cadastro, use a movimentação de estoque."}
+                  {commercial.modoVenda === "peso"
+                    ? commercial.unidade === "KG"
+                      ? "Produto por peso começa sem saldo. Depois de salvar, registre a entrada em kg (até 3 casas) em Movimentar estoque."
+                      : "Peso em gramas: mantenha zero. Estoque em G ainda indisponível."
+                    : "Quantidade inteira, inclusive zero. Depois do cadastro, use a movimentação de estoque."}
                 </p>
               </Field>
             )}

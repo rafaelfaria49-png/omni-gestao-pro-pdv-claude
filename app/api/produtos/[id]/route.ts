@@ -28,15 +28,19 @@ function json(data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, init)
 }
 
+const STOCK_WEIGHT_ADJUST_MESSAGE =
+  "Produto por peso: o saldo não é ajustado por aqui. Registre a entrada em kg pela ficha de Cadastros (Movimentar estoque). Nada foi alterado."
+
 function badRequest(message: string) {
   return json({ error: message }, { status: 400 })
 }
 
+/** Saldo do ajuste REST é inteiro: fração é recusada, nunca truncada (2,5 virava 2). */
 function parseStockValue(v: unknown): number | null {
-  if (typeof v === "number" && Number.isFinite(v)) return Math.floor(v)
-  if (typeof v === "string" && v.trim() !== "") {
-    const n = parseInt(v, 10)
-    return Number.isFinite(n) ? n : null
+  if (typeof v === "number") return Number.isSafeInteger(v) ? v : null
+  if (typeof v === "string" && /^-?\d+$/.test(v.trim())) {
+    const n = Number(v.trim())
+    return Number.isSafeInteger(n) ? n : null
   }
   return null
 }
@@ -68,6 +72,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   const { id } = await context.params
   if (!id?.trim()) return badRequest("ID inválido")
   const productId = id.trim()
+  let stockRequested = false
 
   try {
     const raw = (await req.json()) as Record<string, unknown>
@@ -75,6 +80,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     // Contrato REST preservado: `stock` continua válido e significa AJUSTE
     // ABSOLUTO via StockLedger (nunca `produto.update({ stock })`).
     const hasStock = raw.stock !== undefined
+    stockRequested = hasStock
     let targetStock: number | undefined
     if (hasStock) {
       const parsed = parseStockValue(raw.stock)
@@ -218,6 +224,10 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     if (!mixed) return json({ error: "Produto não encontrado" }, { status: 404 })
     return json({ ok: true, produto: mixed })
   } catch (e) {
+    // Ajuste absoluto de produto por peso não existe (inventário é inteiro); a entrada em kg é da ficha.
+    if (e instanceof ProductWeightNotOperationalError && stockRequested) {
+      return json({ ok: false, error: STOCK_WEIGHT_ADJUST_MESSAGE, code: e.code }, { status: 409 })
+    }
     if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) return json({ ok: false, error: e.message, code: e.code }, { status: 409 })
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[api/produtos PATCH]", msg)

@@ -8,7 +8,7 @@ Aplicar no Neon de produção, fazer merge ou deploy exige **nova autorização 
 
 | Frente | Estado nesta branch |
 | --- | --- |
-| `ESTOQUE_MANUAL_KG` | **Implementado e provado em ambiente isolado.** Entrada manual pela ficha, até 3 casas, conta STORE. Não publicado. |
+| `ESTOQUE_MANUAL_KG` | **Implementado e provado em ambiente isolado.** Entrada manual pela ficha, até 3 casas, nas contas STORE e A01 (plataforma). Não publicado. |
 | `VENDA_POR_PESO` | **Continua bloqueada.** Servidor recusa (`PRODUTO_POR_PESO_NAO_OPERACIONAL`). O PDV agora recusa já ao adicionar, com orientação correta. |
 | `BALANÇA_FÍSICA_HOMOLOGADA` | **Não homologada.** Nenhum equipamento conectado; núcleo `lib/pesagem` intocado. |
 
@@ -56,12 +56,38 @@ Aplicar no Neon de produção, fazer merge ou deploy exige **nova autorização 
   o saldo exato e confere a invariante por produto em milésimos exatos; saldo com mais de 3 casas
   vira divergência explícita, nunca arredondamento.
 
+## Paridade A01 × STORE (PADARIA-ESTOQUE-KG-A01-STORE-RELEASE-001)
+
+Um só writer e uma só ficha (`ProductAIModal` + `MovimentacaoEstoqueModal` → `registrarEntradaEstoque`)
+para as duas experiências:
+
+- **STORE** já chegava à ficha pelo Estoque do cliente (`EstoqueCliente`) e pelo Cadastros HUB.
+- **A01** usa a Gestão de Produtos histórica (`gestao-produtos.tsx`). O formulário dela só conhece saldo
+  inteiro: `Math.floor(estoqueAtual)` + `stock` no PATCH, que o servidor trata como **ajuste absoluto**. Com
+  KG, isso truncaria 3,250 em 3; o servidor já recusava (409), mas a tela mostrava "3.25" e a edição de um
+  produto por peso falhava com uma mensagem de venda.
+- Agora, produto declarado por peso (`vendaPorPeso`/`vendaPesoIndisponivel` de `/api/ops/inventory`):
+  - aparece na lista histórica com o saldo em kg (`12,750 kg`);
+  - o botão de edição abre a **ficha canônica** por link (`/dashboard/cadastros-v2?aba=produtos&produto=<id>`);
+    o formulário histórico não abre e não envia nada para ele;
+  - `obterProdutoFicha` relê o produto no servidor com o mesmo gate e o mesmo DTO da listagem; produto de
+    outra loja devolve `null` ("Produto não encontrado nesta loja.").
+- O cadastro novo histórico aponta para a ficha quando o produto é vendido por peso.
+- Produto UN segue no formulário histórico como antes.
+- **REST sem truncar**: `stock` fracionado ou com texto em `POST`/`PATCH /api/produtos` vira 400. Antes,
+  `2.5` virava `2` e `"2.5"` virava `2`. Ajuste REST em produto por peso devolve 409, orientando a entrada
+  pela ficha.
+- **Modal UN sem truncar**: Entrada e Ajuste em UN recusam `2,5`. Antes, mandavam `2` sem aviso.
+- A cópia que dizia "não há estoque fracionado operacional" foi corrigida no writer de produto e na ficha.
+  Agora diz que o produto por peso começa sem saldo e recebe a entrada em kg depois de salvo.
+
 ## Provas
 
 | Prova | Onde | Resultado |
 | --- | --- | --- |
 | Migration em PG 17 descartável com schema da `main` e dados legados `Int` | `_evidence/ESTOQUE-MANUAL-KG-001/` (`seed-legado-int.sql`, `migration-apply.log`, `columns-after.txt`) | 13 valores idênticos antes/depois (inclusive `2147483647`); `prisma migrate diff` banco × schema: sem diferença |
 | Boundary no PG real (`lib/estoque/stock-ledger-kg.pg.test.ts`, só roda com `ESTOQUE_KG_PG_URL` local) | `db-after-proof.txt` | 2,500 + 0,750 = 3,250 em produto/depósito/livro; 20 entradas paralelas sob `FOR UPDATE` somam exato; chave idempotente em paralelo aplica 1×; 4 casas e outra loja recusadas; UN intacto |
+| E2E A01 × STORE (`e2e/platform-pilot/estoque-manual-kg.spec.ts`, GOAL A01-STORE) | local, PG 17 descartável + `next start`; `_evidence/PADARIA-ESTOQUE-KG-A01-STORE-RELEASE-001/` | STORE e A01: 0,000 → 10,500 → 12,750 kg em produto/depósito/livro, edição cadastral sem mexer no saldo, recarga; A01 entra pela lista histórica e chega à ficha sem PATCH; REST KG 409 e fração 400; outra loja não abre; UN histórico preservado; PDV recusa |
 | E2E STORE (`e2e/platform-pilot/estoque-manual-kg.spec.ts`) | local contra `next dev` + PG descartável: `local-e2e-*.png/json`; oficial: job `authenticated` da PR | ficha 0,000 → 2,500 → 3,250; banco 3.25/3.25/[2.5, 0.75]; histórico `+0,750 / +2,500`; ficha reaberta após reload = 3,250; PDV recusa com orientação de peso, 0 vendas |
 | Backfill (script real 2× no PG descartável; o da `main` no mesmo banco) | `backfill-pg-real.txt`, `backfill-main-vs-branch.txt` | depósito truncado 3 → 3,96 re-sincronizado, invariante por produto verde, repetição idempotente; o script da `main` com cliente `Int` zerou os depósitos com valores denormais |
 | Superfícies reais do PDV (`lib/pdv/weight-sale-guard-surfaces.component.test.ts`) | harness N5-C | Clássico (comanda), Supermercado (bipe), Assistência (carrinho persistido), Venda Completa (rascunho): nada chega ao pagamento, sem orientação de estoque; mutações do repasse da marca e do hook derrubam o teste |

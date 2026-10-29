@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { 
   Plus, 
   Search, 
@@ -78,6 +80,7 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { resolveLojaIdParaConsultaClientes } from "@/lib/clientes-loja-resolve"
 import { pickCostPrice, pickSalePrice } from "@/lib/inventory-item-from-api"
+import { formatStockQuantity } from "@/lib/estoque/stock-quantity"
 import { TypeToConfirmDialog } from "@/components/dashboard/safety/type-to-confirm-dialog"
 import { cn } from "@/lib/utils"
 import { EmptyState, LoadingState } from "@/components/ui/states"
@@ -134,6 +137,23 @@ interface Product {
   /** Texto de vitrine / anúncio (ex.: preenchido pela IA Vision). */
   descricaoVenda?: string
   accessoryConfig?: ProdutoAcessoriosMetadataV1
+  /**
+   * Declarado por peso (`/api/ops/inventory`). Este formulário só conhece saldo inteiro
+   * (`Math.floor` + `stock` como ajuste absoluto): o produto é editado e recebe entrada
+   * em kg na ficha canônica do Cadastros, nunca aqui.
+   */
+  porPeso?: boolean
+  /** Saldo em KG (3 casas) — só exibição. */
+  estoqueKg?: boolean
+}
+
+/** Ficha canônica (ProductAIModal) do produto, aberta pelo Cadastros HUB. */
+function fichaCanonicaHref(product: Pick<Product, "id" | "dbId">): string {
+  return `/dashboard/cadastros-v2?aba=produtos&produto=${encodeURIComponent(product.dbId || product.id)}`
+}
+
+function estoqueExibido(product: Pick<Product, "estoqueAtual" | "estoqueKg">): string {
+  return product.estoqueKg ? `${formatStockQuantity(product.estoqueAtual, "KG")} kg` : String(product.estoqueAtual)
 }
 
 type NFeItem = {
@@ -245,6 +265,7 @@ export function GestaoProdutos({
   onVoiceStockHintConsumed,
 }: GestaoProdutosProps) {
   const { toast } = useToast()
+  const router = useRouter()
   const { config } = useConfigEmpresa()
   const { lojaAtivaId } = useLojaAtiva()
   const lojaHeader = useMemo(() => resolveLojaIdParaConsultaClientes(lojaAtivaId), [lojaAtivaId])
@@ -412,6 +433,8 @@ export function GestaoProdutos({
             cfop: fiscalStr("cfop"),
             origemMercadoria: fiscalStr("origemMercadoria"),
             ...(accessoryConfig ? { accessoryConfig } : {}),
+            ...(row.vendaPorPeso === true || row.vendaPesoIndisponivel === true ? { porPeso: true } : {}),
+            ...(typeof row.precoPorKg === "number" ? { estoqueKg: true } : {}),
           }
         })
       )
@@ -589,6 +612,11 @@ export function GestaoProdutos({
   )
 
   const handleOpenModal = (product?: Product) => {
+    if (product?.porPeso) {
+      // Sem segundo writer: o formulário abaixo truncaria 3,250 kg para 3 e reenviaria como ajuste.
+      router.push(fichaCanonicaHref(product))
+      return
+    }
     setCatalogoValue(emptyCompatibilidade())
     catalogoLoadedRef.current = false
     if (product) {
@@ -686,6 +714,10 @@ export function GestaoProdutos({
   }, [voiceStockHint, onVoiceStockHintConsumed])
 
   const handleSave = async (opts?: { force?: boolean }) => {
+    if (editingProduct?.porPeso) {
+      toast({ title: "Produto por peso", description: "Edite este produto pela ficha de Cadastros. Nada foi alterado.", variant: "destructive" })
+      return
+    }
     const nome = formData.nome.trim()
     if (!nome) {
       toast({ title: "Nome obrigatório", description: "Informe o nome do item.", variant: "destructive" })
@@ -1771,8 +1803,8 @@ export function GestaoProdutos({
                       {product.categoria === "servico" ? (
                         <span className="text-muted-foreground">-</span>
                       ) : (
-                        <span className={`font-bold ${isLowStock(product) ? "text-primary" : "text-foreground"}`}>
-                          {product.estoqueAtual}
+                        <span className={`font-bold tabular-nums ${isLowStock(product) ? "text-primary" : "text-foreground"}`}>
+                          {estoqueExibido(product)}
                           {isLowStock(product) && (
                             <AlertTriangle className="w-4 h-4 inline ml-1 text-primary" />
                           )}
@@ -1786,6 +1818,8 @@ export function GestaoProdutos({
                         <Button 
                           variant="ghost" 
                           size="icon"
+                          aria-label={product.porPeso ? `Abrir ficha de ${product.nome} no Cadastros (produto por peso)` : `Editar ${product.nome}`}
+                          title={product.porPeso ? "Produto por peso: edição e entrada em kg pela ficha de Cadastros" : "Editar"}
                           onClick={() => handleOpenModal(product)}
                         >
                           <Edit className="w-4 h-4" />
@@ -1836,6 +1870,15 @@ export function GestaoProdutos({
             <DialogTitle className="text-xl">
               {editingProduct ? "Editar Item" : "Novo Produto ou Serviço"}
             </DialogTitle>
+            {!editingProduct && (
+              <p className="text-xs text-muted-foreground">
+                Produto vendido por peso (kg)?{" "}
+                <Link href="/dashboard/cadastros-v2?aba=produtos&novo=1" className="font-medium text-primary underline underline-offset-2">
+                  Cadastre pela ficha de Cadastros
+                </Link>
+                , que define a unidade e registra o estoque em kg.
+              </p>
+            )}
           </DialogHeader>
 
           {/* CADASTROS-PRODUTOS-DUPLICIDADE-001 — aviso claro de produto já cadastrado. */}

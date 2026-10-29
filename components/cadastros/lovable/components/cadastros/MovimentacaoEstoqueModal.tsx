@@ -175,7 +175,12 @@ export function MovimentacaoEstoqueModal({
       }
       q = lido.value;
     } else {
-      q = Math.trunc(parseNum(qtd));
+      // UN é inteiro: 2,5 é recusado, nunca truncado para 2.
+      q = parseNum(qtd);
+      if (!Number.isInteger(q)) {
+        setErro("Quantidade em unidades deve ser um número inteiro.");
+        return;
+      }
     }
     if (q <= 0) {
       setErro("Quantidade deve ser maior que zero.");
@@ -240,7 +245,11 @@ export function MovimentacaoEstoqueModal({
       setErro("Informe o motivo do ajuste.");
       return;
     }
-    const s = Math.trunc(parseNum(novoSaldo));
+    const s = parseNum(novoSaldo);
+    if (!Number.isInteger(s)) {
+      setErro("Novo saldo em unidades deve ser um número inteiro.");
+      return;
+    }
     if (s < 0) {
       setErro("Novo saldo não pode ser negativo.");
       return;

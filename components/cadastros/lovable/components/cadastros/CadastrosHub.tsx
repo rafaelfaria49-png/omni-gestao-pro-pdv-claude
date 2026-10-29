@@ -28,6 +28,7 @@ import {
   listFornecedores,
   listMarcas,
   listProdutosPaginado,
+  obterProdutoFicha,
   listServicos,
   listTecnicos,
   listLogsAuditoriaCadastros,
@@ -100,18 +101,28 @@ export function CadastrosHub() {
   const searchParams = useSearchParams();
   const linkTab = TABS.find((t) => t.id === searchParams?.get("aba"))?.id;
   const linkNew = searchParams?.get("novo") === "1";
+  // `?aba=produtos&produto=<id>`: abre a ficha canônica do produto (vinda da Gestão de Produtos histórica).
+  const linkProduto = linkTab === "produtos" ? (searchParams?.get("produto") ?? "").trim() : "";
   const [tab, setTab] = useState<TabId>(linkTab ?? "dashboard");
   const [autoOpenNew, setAutoOpenNew] = useState<string | null>(null);
+  const [autoOpenProduto, setAutoOpenProduto] = useState<string | null>(null);
   useEffect(() => {
     if (!linkTab) return;
     setTab(linkTab);
+    if (linkProduto) {
+      setAutoOpenProduto(linkProduto);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("produto");
+      window.history.replaceState(window.history.state, "", url.toString());
+      return;
+    }
     if (!linkNew || linkTab === "dashboard") return;
     setAutoOpenNew(linkTab);
     // Recarregar a página não reabre o editor.
     const url = new URL(window.location.href);
     url.searchParams.delete("novo");
     window.history.replaceState(window.history.state, "", url.toString());
-  }, [linkTab, linkNew]);
+  }, [linkTab, linkNew, linkProduto]);
   const novo = useToggle();
   const { lojaAtivaId } = useLojaAtiva();
   const storeId = (lojaAtivaId ?? "").trim();
@@ -214,6 +225,8 @@ export function CadastrosHub() {
             storeId={storeId}
             autoOpen={autoOpenNew === "produtos" && !!storeId}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
+            openProductId={storeId ? autoOpenProduto : null}
+            onOpenProductConsumed={() => setAutoOpenProduto(null)}
           />
         )}
         {selectedTab === "servicos" && (
@@ -1159,11 +1172,16 @@ export function ProdutosPanel({
   storeId,
   autoOpen,
   onAutoOpenConsumed,
+  openProductId,
+  onOpenProductConsumed,
   variant = "cadastros",
 }: {
   storeId: string;
   autoOpen?: boolean;
   onAutoOpenConsumed?: () => void;
+  /** Abre a ficha deste produto (link direto); relida do servidor, nunca da página visível. */
+  openProductId?: string | null;
+  onOpenProductConsumed?: () => void;
   variant?: "cadastros" | "estoque";
 }) {
   const business = useStoreBusiness();
@@ -1219,6 +1237,33 @@ export function ProdutosPanel({
       onAutoOpenConsumed?.();
     }
   }, [autoOpen, onAutoOpenConsumed, m]);
+
+  // Um pedido por id; a resposta só abre a ficha se este painel (loja) ainda for o dono do pedido.
+  const fichaLinkRef = useRef<string | null>(null);
+  useEffect(() => () => { fichaLinkRef.current = null; }, []);
+  useEffect(() => {
+    if (!openProductId || fichaLinkRef.current === openProductId) return;
+    const pedido = openProductId;
+    fichaLinkRef.current = pedido;
+    obterProdutoFicha(storeId, pedido)
+      .then((produto) => {
+        if (fichaLinkRef.current !== pedido) return;
+        if (!produto) {
+          toast.error("Produto não encontrado nesta loja.");
+          return;
+        }
+        setEditing(produto);
+        m.openIt();
+      })
+      .catch(() => {
+        if (fichaLinkRef.current === pedido) toast.error("Não foi possível abrir a ficha do produto. Tente novamente.");
+      })
+      .finally(() => {
+        if (fichaLinkRef.current !== pedido) return;
+        fichaLinkRef.current = null;
+        onOpenProductConsumed?.();
+      });
+  }, [openProductId, onOpenProductConsumed, storeId, m]);
 
   // Carrega categorias e marcas para os filtros
   useEffect(() => {
