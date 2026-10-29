@@ -1,0 +1,13 @@
+{
+  "aep": "1.0-R2",
+  "track": "pessoas",
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+  "source_ref": "refs/remotes/origin/goal/pessoas-001b-recovery-002",
+  "source_commit": "8bb2cb9019df2620d7ee7edfbf268b6ae2982be3",
+  "events_appended": 1,
+  "previous_ledger_lines": 5,
+  "final_ledger_lines": 6,
+  "result": "BLOCKED",
+  "attempt": 1,
+  "product_code_changed": false
+}

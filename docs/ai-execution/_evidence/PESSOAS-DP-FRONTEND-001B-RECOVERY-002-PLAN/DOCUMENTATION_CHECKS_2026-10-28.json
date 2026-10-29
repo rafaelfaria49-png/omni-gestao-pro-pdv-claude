@@ -1,0 +1,44 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+  "plan_rev": 9,
+  "source_commit": "8bb2cb9019df2620d7ee7edfbf268b6ae2982be3",
+  "blocked_commit": "437abb4d4dc523865710cabf8a281f43dfda1fd9",
+  "reconciliation_commit": "bc9275307fff9df390c0ef02b1fb6e8d4ff55057",
+  "checks": {
+    "allowlist_only_addition": "lib/auth/proxy-enterprise-dashboard.ts",
+    "old_allowlist_count": 44,
+    "new_allowlist_count": 45,
+    "other_metadata_and_technical_criteria": "PRESERVED",
+    "ledger_blob_identical_to_source": true,
+    "ledger_prefix_from_main_literal": true,
+    "closed_goal_bytes_identical_to_source": true,
+    "ledger_lines": 6,
+    "done_goals": 2,
+    "blocked_goals": 3,
+    "ready_goals": 0,
+    "current_goal": null,
+    "next_goal": null,
+    "active_session": false,
+    "historical_attempt": 1,
+    "historical_previous_attempts": [],
+    "next_corrective_attempt_required": 2,
+    "aep_resumption_supported": false,
+    "g_aep_core": "REQUESTED_NOT_AUTHORIZED",
+    "product_core_manifest_unchanged": true
+  },
+  "validation": {
+    "registry": {
+      "exit_code": 0
+    },
+    "verify_all": {
+      "exit_code": 0,
+      "tracks": 11,
+      "divergences": 0
+    },
+    "diff_check": {
+      "exit_code": 0
+    },
+    "typecheck_build_e2e_qa": "NOT_APPLICABLE_DOCUMENTATION_ONLY_NOT_RUN"
+  },
+  "result": "PASS_DOCUMENTARY_INVARIANTS_NOT_PRODUCT_ACCEPTANCE"
+}
