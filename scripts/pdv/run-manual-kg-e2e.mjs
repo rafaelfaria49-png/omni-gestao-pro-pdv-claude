@@ -15,6 +15,7 @@ const db = new PrismaClient({ datasourceUrl: database })
 try {
  const [identity] = await db.$queryRawUnsafe("SELECT current_database() AS db, current_user AS role, host(inet_server_addr()) AS host, inet_server_port() AS port")
  if (identity.db !== "manual_kg_sale_isolated" || identity.role !== "manual_kg" || identity.host !== "127.0.0.1" || identity.port !== 55479) throw Error("DATABASE_IDENTITY_MISMATCH")
+ if (await db.store.count({ where: { id: { startsWith: "kg-e2e-" } } })) throw Error("FRESH_MANUAL_KG_E2E_DATABASE_REQUIRED: repeat the fresh integration setup before another E2E run")
  await db.store.create({ data: { id: store, name: "Padaria sintética KG E2E", codigoNumeracaoVenda: "K" + run.slice(0, 6).toUpperCase(), moduleAccess: { version: 1, modules: ["home", "pdv", "sales", "cash", "catalog", "stock", "reports", "settings"] } } })
  await db.storeSettings.create({ data: { storeId: store, printerConfig: { pdvMainLayout: "classic", pdvParams: { pdvClassicLayout: "lovable" }, capabilities: { version: 1, business: { primaryBranch: "padaria" } }, impressao: { autoImprimirAposVenda: false } } } })
  for (const [actor, role, scope] of [["a01", "ADMIN", null], ["admin", "ADMIN", "STORE"], ["cashier", "CAIXA", "STORE"]]) {
@@ -36,6 +37,6 @@ try {
   if (Date.now() > deadline || server.exitCode !== null) throw Error("MANUAL_KG_APP_NOT_READY")
   await new Promise((resolve) => setTimeout(resolve, 500))
  }
- const result = spawnSync(process.execPath, ["node_modules/@playwright/test/cli.js", "test", "--config", "e2e/manual-kg.playwright.config.ts"], { env: { ...env, MANUAL_KG_E2E_ORIGIN: origin, MANUAL_KG_E2E_STORE: store, MANUAL_KG_E2E_RUN: run, MANUAL_KG_E2E_PASSWORD: password, MANUAL_KG_E2E_PIN: pin }, stdio: "inherit", windowsHide: true })
+ const result = spawnSync(process.execPath, ["node_modules/@playwright/test/cli.js", "test", "--config", "e2e/manual-kg.playwright.config.ts", ...process.argv.slice(2)], { env: { ...env, MANUAL_KG_E2E_ORIGIN: origin, MANUAL_KG_E2E_STORE: store, MANUAL_KG_E2E_RUN: run, MANUAL_KG_E2E_PASSWORD: password, MANUAL_KG_E2E_PIN: pin }, stdio: "inherit", windowsHide: true })
  if (result.error || result.status !== 0) process.exitCode = 1
 } finally { server.kill(); await log.close() }

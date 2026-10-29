@@ -61,5 +61,6 @@ Use Node 24 do projeto e PostgreSQL descartável próprio. Nunca carregar .env d
 - node scripts/pdv/run-manual-kg-tests.mjs (banco fresco obrigatório)
 - npm run build (confirmar MIGRATION_SKIPPED e PROXY_PRISMA_ARTIFACT_VERIFIED)
 - node scripts/pdv/run-manual-kg-e2e.mjs (contas, senhas e PIN sintéticos em memória; localhost:31479)
+- Cada repetição do E2E exige repetir a preparação em banco fresco: o writer V1 legado usa números globais VDA, e lojas sintéticas de rodadas anteriores podem ocupar esses números. O runner recusa a repetição com dados kg-e2e já existentes; não apaga históricos automaticamente.
 
 Relatórios brutos ficam em test-results/manual-kg (gitignored); o relatório resumido desta missão fica em docs/ai-execution/_evidence/PDV-PADARIA-VENDA-MANUAL-KG-MVP-001. Não publicar senhas, cookies, tokens ou logs de sessão.

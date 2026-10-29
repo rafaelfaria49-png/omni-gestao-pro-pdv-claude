@@ -1,0 +1,196 @@
+{
+  "mission": "PDV-PADARIA-VENDA-MANUAL-KG-MVP-001",
+  "base": "104d768d7b7497fe34e2872f4253c4fd97feb5bb",
+  "branch": "codex/pdv-padaria-venda-manual-kg-mvp-001",
+  "isolation": {
+    "postgres": "17 disposable",
+    "host": "127.0.0.1",
+    "port": 55479,
+    "database": "manual_kg_sale_isolated",
+    "productionWrites": 0,
+    "push": false,
+    "merge": false,
+    "deploy": false
+  },
+  "migration": {
+    "identity": {
+      "db": "manual_kg_sale_isolated",
+      "role": "manual_kg",
+      "host": "127.0.0.1",
+      "port": 55479
+    },
+    "before": [
+      {
+        "stock": "2147483647",
+        "quantity": "2147483647"
+      }
+    ],
+    "after": [
+      {
+        "stock": "2147483647",
+        "quantity": "2147483647"
+      }
+    ],
+    "historicalUnPreserved": true,
+    "newMigration": "20261029120000_manual_kg_sale_quantity",
+    "productionWrites": 0
+  },
+  "migrationSha256": "977efada6da808c169f4cc91e9ba0f16c8ad9d03b3ec895b013e8f3fda3a4e0e",
+  "integration": {
+    "tests": 37,
+    "passed": 37,
+    "failed": 0
+  },
+  "regression": {
+    "tests": 281,
+    "passed": 246,
+    "failed": 35,
+    "newFailures": [],
+    "baselineFailures": [
+      "POST /api/ops/devolucao — vale-troca real gera ClienteCredito uma única vez, vinculado à devolução e à venda de origem",
+      "POST /api/ops/devolucao — vale-troca real replay do mesmo localId é idempotente: sem segundo crédito nem estoque duplicado",
+      "POST /api/ops/devolucao — vale-troca real devolução parcial: valor e crédito recalculados da venda original (proporcional)",
+      "POST /api/ops/devolucao — vale-troca real somente_estoque: devolve estoque, sem crédito e sem saída financeira",
+      "POST /api/ops/devolucao — vale-troca real Vale-Troca NÃO é dinheiro novo: nada entra no caixa (só saída da devolução real)",
+      "POST /api/ops/devolucao — vale-troca real estoque volta com ledger auditável dedupe por documento (origem devolução)",
+      "POST /api/ops/devolucao — vale-troca real venda de outra loja não é usada como origem (storeId isola o recompute)",
+      "POST /api/ops/devolucao — vale-troca real venda original sai do banco como parcialmente_devolvida",
+      "POST /api/vendas/[id]/cancelar — estorno do crédito/vale vale 40 usado integralmente → cancelar devolve o saldo a 40 e reativa o vale, sem caixa",
+      "POST /api/vendas/[id]/cancelar — estorno do crédito/vale vale 40 com uso de 30 → cancelar restaura o estado anterior (saldo 40)",
+      "POST /api/vendas/[id]/cancelar — estorno do crédito/vale pagamento misto: restaura só a parcela vale; saída de caixa estorna só o dinheiro",
+      "POST /api/vendas/[id]/cancelar — estorno do crédito/vale cancelamento repetido (replay) → 409 e nenhuma segunda devolução de crédito",
+      "POST /api/vendas/[id]/cancelar — estorno do crédito/vale storeId isola: crédito de outra loja nunca é restaurado",
+      "POST /api/vendas/[id]/cancelar — estorno do crédito/vale venda sem uso de crédito → nenhum efeito sobre créditos",
+      "POST /api/vendas/[id]/cancelar — reposição de estoque (CAD-R2-009) cancela com entrada compensatória: stock + depósito + ledger, sem PATCH direto",
+      "POST /api/vendas/[id]/cancelar — reposição de estoque (CAD-R2-009) retry de cancelamento não duplica o retorno (409 + estoque/ledger intactos)",
+      "007A · BLOCKER-1 — step-up é exigido pelo SERVIDOR §6F chamada direta SEM autorização de supervisor → 403 e venda intacta",
+      "007A · BLOCKER-1 — step-up é exigido pelo SERVIDOR sem sessão (PDV legado) não estorna mais por esta rota — não há a quem vincular",
+      "007A · BLOCKER-1 — step-up é exigido pelo SERVIDOR §6D com as DUAS camadas válidas o estorno prossegue",
+      "007A · BLOCKER-1 — step-up é exigido pelo SERVIDOR §5 o autorizador da resposta vem do TOKEN, não do corpo enviado",
+      "007A · BLOCKER-2 — recebível quitado bloqueia ANTES de qualquer mutação §13 título PAGO → 409, venda ativa, sem estoque, sem ledger, título intacto",
+      "007A · BLOCKER-2 — recebível quitado bloqueia ANTES de qualquer mutação §11 título PENDENTE segue estornável — comportamento preservado",
+      "007A · BLOCKER-2 — recebível quitado bloqueia ANTES de qualquer mutação §12 título PARCIALMENTE pago segue estornável — não bloquear sem revalidar",
+      "007A · BLOCKER-2 — recebível quitado bloqueia ANTES de qualquer mutação mistura pendente + pago bloqueia pelo título quitado",
+      "007A · BLOCKER-2 — recebível quitado bloqueia ANTES de qualquer mutação venda sem título nenhum passa normalmente",
+      "007B · AUTH A → SALE A permitido / AUTH A → SALE B negado autorização emitida para a Venda A estorna a Venda A",
+      "007B · AUTH A → SALE A permitido / AUTH A → SALE B negado a MESMA autorização NÃO estorna a Venda B — e a B fica intacta",
+      "007B · AUTH A → SALE A permitido / AUTH A → SALE B negado o reuso em lote morre: estornar A não abre caminho para B na mesma janela",
+      "007B · INVARIANTE 3 — sessão de caixa SESSÃO FECHADA: chamada direta bloqueada com ZERO mutação",
+      "007B · INVARIANTE 3 — sessão de caixa SESSÃO ABERTA: estorno segue funcionando",
+      "007B · INVARIANTE 3 — sessão de caixa venda SEM vínculo de sessão: política documentada — segue permitida",
+      "007B · INVARIANTE 3 — sessão de caixa vínculo para sessão de OUTRA loja não é lido como aberta nem bloqueia por invenção",
+      "007B · INVARIANTE 3 — sessão de caixa a guarda de sessão corre ANTES do guard de recebíveis (ordem dos blocos)",
+      "007B · INVARIANTE 3 — sessão de caixa VENDA JÁ CANCELADA continua terminal (409), sem regressão",
+      "007B · INVARIANTE 3 — sessão de caixa VENDA DE OUTRA LOJA continua 404"
+    ]
+  },
+  "lintFull": {
+    "errors": 105,
+    "warnings": 108,
+    "errorFiles": [
+      "/components/pdv-github-original/claude-export/app.jsx",
+      "/components/pdv-github-original/claude-export/modals.jsx",
+      "/components/pdv-github-original/claude-export/modals2.jsx",
+      "/components/pdv-github-original/claude-export/pdv.jsx",
+      "/components/pdv-github-original/components/studio/components/bom-dia-modal.tsx"
+    ],
+    "sourceFilesUnchangedFromBase": true
+  },
+  "independentReview": {
+    "verdict": "APPROVE",
+    "p0": 0,
+    "p1": 0,
+    "discountP2": "resolved with shared BigInt cents calculation",
+    "reviewRounds": 3
+  },
+  "pendingValidation": [],
+  "commercialBlockers": [
+    "Release and additional migration approval; dependency PR315; server-only per-store enablement after authorization",
+    "KG partial returns/exchange/return-credit, post-sale item correction, historical quarantine creation remain blocked",
+    "Estimated-tax surcharge on KG cart remains blocked"
+  ],
+  "implementationCommit": "26dbb19c652dcf3a321e470ad326672a826971f5",
+  "e2e": {
+    "tests": 8,
+    "passed": 8,
+    "failed": 0,
+    "authentication": "real NextAuth Credentials",
+    "runtime": "Next production build, local server, Node 24",
+    "cases": [
+      {
+        "name": "admin authenticated Classic normal manual KG with weight edit and reload",
+        "status": "passed"
+      },
+      {
+        "name": "a01 authenticated Classic normal manual KG with weight edit and reload",
+        "status": "passed"
+      },
+      {
+        "name": "cashier authenticated Classic quick manual KG with weight edit and reload",
+        "status": "passed"
+      },
+      {
+        "name": "authenticated cancel restores exact KG once; returns blocked; cross-store and Caixa Seguro remain protected",
+        "status": "passed"
+      },
+      {
+        "name": "lost response keeps stable sale identity and reload safely reconciles exactly once",
+        "status": "passed"
+      },
+      {
+        "name": "Caixa Seguro retains STORE password reauthentication and A01 supervisor PIN",
+        "status": "passed"
+      },
+      {
+        "name": "mobile manual KG dialog preserves labels, precision, total and visible actions",
+        "status": "passed"
+      },
+      {
+        "name": "mixed KG and UN cart keeps UN integer and persists both with exact payment",
+        "status": "passed"
+      }
+    ]
+  },
+  "build": {
+    "status": "PASS",
+    "migrationAuthority": "MIGRATION_SKIPPED",
+    "proxyArtifact": "PROXY_PRISMA_ARTIFACT_VERIFIED"
+  },
+  "typecheck": {
+    "status": "PASS",
+    "fullRun": ".local-kg/typecheck-final.log",
+    "additionalHarnessCheck": ".local-kg/typecheck-confirmed.log",
+    "additionalHarnessCheckStatus": "PASS"
+  },
+  "lintChanged": {
+    "status": "PASS",
+    "errors": 0,
+    "warnings": 4
+  },
+  "pdvClassicKg": "PASS",
+  "manualKgSale": "PASS",
+  "a01": "PASS",
+  "storeAdminAndCashier": "PASS",
+  "cancellation": {
+    "full": "PASS",
+    "partialReturns": "BLOCKED"
+  },
+  "writerV2": {
+    "status": "PASS",
+    "proof": "real PostgreSQL with stable clientSaleId and three concurrent replays"
+  },
+  "baselinePr315Rechecked": {
+    "state": "open",
+    "head": "104d768d7b7497fe34e2872f4253c4fd97feb5bb"
+  },
+  "schemaDiff": {
+    "status": "PASS",
+    "result": "empty migration",
+    "against": "prisma/schema.prisma"
+  },
+  "cleanup": {
+    "localNextServer": "stopped by E2E runner",
+    "disposablePostgres": "stopped",
+    "productionServicesTouched": false
+  }
+}
