@@ -1,5 +1,7 @@
 # Venda manual em KG — MVP local, liberação produtiva pendente
 
+> Registro histórico do MVP. O desenho Float e o plano abaixo foram superados, antes da publicação, pelo [hardening 002](VENDA_MANUAL_KG_RELEASE_HARDENING.md). Use o novo runbook para qualquer proposta de release; os commits e as evidências originais permanecem preservados.
+
 Missão: PDV-PADARIA-VENDA-MANUAL-KG-MVP-001. Base isolada: PR #315, 104d768d7b7497fe34e2872f4253c4fd97feb5bb. Sem merge de main, push, Preview, deploy ou conexão produtiva. Este documento é independente do runbook A5 da frente de estoque.
 
 ## Contrato e arquitetura
