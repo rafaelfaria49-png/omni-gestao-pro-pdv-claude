@@ -198,7 +198,8 @@ export class ReadonlyScaleSession {
           const sample: ScaleSample = { ...frame, receivedAt: attempt.validAt, sequence: ++attempt.sequence }
           this.publish({ status: frame.stable ? "stable" : "unstable", sample })
         }
-        if (decoder.hasPending) this.publish({ status: "waiting", sample: null })
+        // Fragmentos ficam no decoder sem alterar a última amostra ou sua idade.
+        // O timer expira a leitura a partir do último frame completo válido.
       }
     } catch {
       if (this.attempt === attempt) this.end(attempt, "error", "Erro de comunicação com a balança. Desconecte e tente novamente.")

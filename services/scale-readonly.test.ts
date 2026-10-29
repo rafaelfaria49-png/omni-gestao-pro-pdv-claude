@@ -168,3 +168,137 @@ describe("Sessão serial somente leitura", () => {
     expect(session.getSnapshot()).toMatchObject({ status: "error", sample: null, message: expect.stringContaining("Web Serial") })
   })
 })
+
+describe("Continuidade serial com frames parciais", () => {
+  it("preserva o frame válido seguido do início do próximo e atualiza somente ao completar", async () => {
+    vi.useFakeTimers()
+    const device = simulatedScale(), session = new ReadonlyScaleSession(device.serial)
+    await session.connect()
+    try {
+      device.send("ST,+0001.234 kg\r\nST,+0002.")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({ status: "stable", sample: { kg: 1.234, stable: true, sequence: 1 } })
+      const first = session.getSnapshot().sample!
+      await vi.advanceTimersByTimeAsync(100)
+      device.send("000 kg\r\n")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({
+        status: "stable", sample: { kg: 2, stable: true, sequence: 2, receivedAt: first.receivedAt + 100 },
+      })
+    } finally { await session.disconnect() }
+  })
+
+  it("publica cada frame do mesmo chunk e conserva o último zero estável diante de uma cauda parcial", async () => {
+    vi.useFakeTimers()
+    const device = simulatedScale(), session = new ReadonlyScaleSession(device.serial)
+    await session.connect()
+    const observed: ReturnType<ReadonlyScaleSession["getSnapshot"]>[] = []
+    const unsubscribe = session.subscribe((snapshot) => observed.push(snapshot))
+    observed.length = 0
+    try {
+      device.send("ST,+0001.234 kg\r\nUS,+0002.500 kg\r\nST,+0000.000 kg\r\nST,+0003.")
+      await flush()
+      expect(observed.map(({ status, sample }) => ({ status, kg: sample?.kg, sequence: sample?.sequence }))).toEqual([
+        { status: "stable", kg: 1.234, sequence: 1 },
+        { status: "unstable", kg: 2.5, sequence: 2 },
+        { status: "stable", kg: 0, sequence: 3 },
+      ])
+      const last = session.getSnapshot().sample!
+      expect(last).toMatchObject({ kg: 0, stable: true, sequence: 3 })
+      await vi.advanceTimersByTimeAsync(50)
+      device.send("250 kg\r\n")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({
+        status: "stable", sample: { kg: 3.25, stable: true, sequence: 4, receivedAt: last.receivedAt + 50 },
+      })
+    } finally { unsubscribe(); await session.disconnect() }
+  })
+
+  it("frame dividido entre vários chunks não promove US a ST nem altera sequência ou timestamp antes do LF", async () => {
+    vi.useFakeTimers()
+    const device = simulatedScale(), session = new ReadonlyScaleSession(device.serial)
+    await session.connect()
+    try {
+      device.send("US,+0001.")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({ status: "waiting", sample: null })
+      device.send("234 kg\r\n")
+      await flush()
+      const first = session.getSnapshot()
+      expect(first).toMatchObject({ status: "unstable", sample: { kg: 1.234, stable: false, sequence: 1 } })
+      device.send("ST,+000")
+      await flush()
+      expect(session.getSnapshot()).toEqual(first)
+      await vi.advanceTimersByTimeAsync(200)
+      device.send("0.000 kg\r")
+      await flush()
+      expect(session.getSnapshot()).toEqual(first)
+      device.send("\n")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({
+        status: "stable", sample: { kg: 0, stable: true, sequence: 2, receivedAt: first.sample!.receivedAt + 200 },
+      })
+    } finally { await session.disconnect() }
+  })
+
+  it("tráfego parcial não renova frescor e o sufixo de fragmento vencido não vira leitura nova", async () => {
+    vi.useFakeTimers()
+    const device = simulatedScale(), session = new ReadonlyScaleSession(device.serial)
+    await session.connect()
+    try {
+      device.send("ST,+0001.234 kg\r\nST,+0002.")
+      await flush()
+      const first = session.getSnapshot()
+      expect(first).toMatchObject({ status: "stable", sample: { kg: 1.234, sequence: 1 } })
+      await vi.advanceTimersByTimeAsync(1000)
+      device.send("0")
+      await flush()
+      await vi.advanceTimersByTimeAsync(SCALE_STALE_MS - 1001)
+      expect(session.getSnapshot()).toEqual(first)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(session.getSnapshot()).toMatchObject({ status: "stale", sample: null })
+      device.send("00 kg\r\n")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({ status: "waiting", sample: null })
+      device.send("ST,+0000.000 kg\r\n")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({
+        status: "stable", sample: { kg: 0, stable: true, sequence: 2, receivedAt: first.sample!.receivedAt + SCALE_STALE_MS },
+      })
+    } finally { await session.disconnect() }
+  })
+
+  it("frame completo inválido ainda apaga a leitura anterior, mesmo com outro fragmento pendente", async () => {
+    const device = simulatedScale(), session = new ReadonlyScaleSession(device.serial)
+    await session.connect()
+    try {
+      device.send("ST,+0001.234 kg\r\nOL,+99999.99 kg\r\nUS,+0002.")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({ status: "waiting", sample: null })
+      device.send("500 kg\r\n")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({ status: "unstable", sample: { kg: 2.5, stable: false, sequence: 2 } })
+    } finally { await session.disconnect() }
+  })
+
+  it.each(["disconnect", "eof", "unplug"] as const)("%s durante a espera pelo próximo fragmento apaga o peso e libera a porta", async (kind) => {
+    vi.useFakeTimers()
+    const device = simulatedScale(), session = new ReadonlyScaleSession(device.serial)
+    await session.connect()
+    try {
+      device.send("ST,+0001.234 kg\r\nST,+0002.")
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({ status: "stable", sample: { kg: 1.234 } })
+      if (kind === "disconnect") await session.disconnect()
+      else device[kind]()
+      await flush()
+      expect(session.getSnapshot()).toMatchObject({ status: "disconnected", sample: null })
+      // EOF já encerrou a fonte; cancelar o reader não chama seu callback novamente.
+      expect(device.cancel).toHaveBeenCalledTimes(kind === "eof" ? 0 : 1)
+      expect(device.port.close).toHaveBeenCalledTimes(1)
+      expect(device.port.readable).toBeNull()
+      expect(device.serial.removeEventListener).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { await session.disconnect() }
+  })
+})
