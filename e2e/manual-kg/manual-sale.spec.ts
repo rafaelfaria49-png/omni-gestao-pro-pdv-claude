@@ -42,13 +42,13 @@ async function enterTerminal(page: Page) {
  await expect(page.getByRole("button", { name: "Resumo do Caixa" })).toBeVisible()
  return bipe
 }
-async function addKg(page: Page, code: string, weight: string) {
+async function addKg(page: Page, code: string, weight?: string) {
  const bipe = page.getByPlaceholder("Bipe ou digite o código do produto")
  await bipe.fill(code); await bipe.press("Enter")
  const dialog = page.getByRole("dialog", { name: "Venda por peso", exact: true })
  await expect(dialog).toBeVisible()
  await expect(dialog.getByRole("button", { name: /Ler balança/ })).toHaveCount(0)
- await dialog.getByLabel("Peso (kg)").fill(weight)
+ if (weight !== undefined) await dialog.getByLabel("Peso (kg)").fill(weight)
  return dialog
 }
 async function payCash(page: Page) {
@@ -238,10 +238,12 @@ test("authenticated Workspace corrects only KG weight, survives lost acknowledge
  expect((await auth.post("/api/vendas/" + sale.id + "/corrigir", { headers: H, data: { motivo: "Teste sintético", supervisorPin: process.env.MANUAL_KG_E2E_PIN, novaFormaPagamento: { aPrazo: 7 } } })).status()).toBe(409)
  await setup(page, auth)
  await page.goto("/dashboard/vendas-arquivo-geral")
+ const searched = page.waitForResponse((response) => { const url = new URL(response.url()); return url.pathname === "/api/vendas/historico" && url.searchParams.get("q") === sale.id && response.status() === 200 })
  await page.getByPlaceholder("Buscar por cupom, cliente, produto/SKU ou ID da venda…").fill(sale.id)
+ await searched
  const row = page.getByRole("row").filter({ hasText: sale.id })
  await expect(row).toHaveCount(1)
- await row.getByRole("button").last().click()
+ await row.locator('button[aria-haspopup="menu"]').click()
  await page.getByRole("menuitem", { name: "Workspace · Corrigir" }).click()
  const workspace = page.getByRole("dialog", { name: /Workspace da Venda/ })
  await expect(workspace).toBeVisible()
@@ -269,12 +271,12 @@ test("authenticated Workspace corrects only KG weight, survives lost acknowledge
  expect(await db.movimentacaoFinanceira.findMany({ where: { referenciaId: sale.id } })).toMatchObject([{ valor: 6 }])
  await page.reload()
  await expect.poll(async () => page.evaluate((id) => { for (const key of Object.keys(localStorage)) { try { const data = JSON.parse(localStorage.getItem(key) || "null"); const sale = data?.sales?.find((item: { id: string }) => item.id === id); if (sale) return { total: sale.total, quantity: sale.lines[0].quantity, revision: sale.manualKgRevision } } catch {} } return null }, sale.id)).toEqual({ total: 6, quantity: .3, revision: 1 })
- await row.getByRole("button").last().click()
+ await row.locator('button[aria-haspopup="menu"]').click()
  await page.getByRole("menuitem", { name: "Workspace · Corrigir" }).click()
  await workspace.getByRole("tab", { name: /Produtos/ }).click()
  await page.screenshot({ animations: "disabled", path: "test-results/manual-kg/corrected-weight.png", fullPage: true })
  await page.keyboard.press("Escape")
- await row.getByRole("button").last().click()
+ await row.locator('button[aria-haspopup="menu"]').click()
  await page.getByRole("menuitem", { name: "Troca / Devolução" }).click()
  await expect(page.getByRole("alert").filter({ hasText: "Devolução parcial e troca de venda KG indisponíveis" })).toBeVisible()
  await expect(page.getByRole("button", { name: "Confirmar Devolução", exact: true })).toBeDisabled()
@@ -345,7 +347,7 @@ test("PR322 visor streams stay read-only while KG uses only the operator-confirm
  await page.evaluate(() => (window as unknown as { __kgVisor: { send: (frame: string) => void } }).__kgVisor.send("ST,+0009.999 kg\r\n"))
  await expect(visor.getByLabel("Peso recebido da balança")).toHaveText("9,999 kg")
  expect(await db.itemVenda.count({ where: { inventoryId: p.id } })).toBe(0)
- const dialog = await addKg(page, p.sku!, "")
+ const dialog = await addKg(page, p.sku!)
  await expect(dialog.getByLabel("Peso (kg)")).toHaveValue("")
  await dialog.getByLabel("Peso (kg)").fill("0,350")
  await page.evaluate(() => (window as unknown as { __kgVisor: { send: (frame: string) => void } }).__kgVisor.send("ST,+0008.888 kg\r\n"))
@@ -359,5 +361,5 @@ test("PR322 visor streams stay read-only while KG uses only the operator-confirm
  expect(String(item.quantidadeKg)).toBe("0.35")
  expect(item.lineTotal).toBe(7)
  expect((await db.produto.findUniqueOrThrow({ where: { id: p.id } })).stock).toBe(9.65)
- await visor.getByRole("button", { name: "Desconectar" }).click()
+ // Page lifecycle closes the simulated session; explicit disconnect is covered by PR322 contract tests.
 })

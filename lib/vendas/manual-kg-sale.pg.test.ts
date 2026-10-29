@@ -248,4 +248,25 @@ suite("real PostgreSQL manual KG sales", () => {
     expect(await readManualKgConfirmation("kg-sale-b", sale.id!)).toBeNull()
   })
 
+  it("release OFF preserves original replay, committed correction ACK and UN while refusing new KG", async () => {
+    const p = await product(), sale = payload(p.id); await persist(sale)
+    const command = await correction(sale, .3); await correctManualKgWeight(command)
+    const release = process.env.PDV_MANUAL_KG_RELEASE
+    try {
+      delete process.env.PDV_MANUAL_KG_RELEASE
+      expect(await manualKgAvailable(prisma, "kg-sale-a")).toBe(false)
+      expect((await persist(sale)).replayed).toBe(true)
+      expect(await correctManualKgWeight(command)).toMatchObject({ ok: true, replayed: true, totalNovo: 6 })
+      const pending = payload(p.id, .1)
+      await expect(persist(pending)).rejects.toMatchObject({ code: "MANUAL_KG_SALE_BLOCKED" })
+      expect(await prisma.venda.count({ where: { pedidoId: pending.id! } })).toBe(0)
+      expect((await readManualKgConfirmation("kg-sale-a", sale.id!))?.sale.total).toBe(6)
+      const un = await product({}, 10, 20), conventional = payload(un.id, 2); delete conventional.manualKgSale
+      await persist(conventional)
+      expect((await state(un.id)).stock).toBe(8)
+      expect((await state(p.id)).stock).toBe(9.7)
+      expect((await state(p.id)).ledger).toHaveLength(2)
+    } finally { if (release === undefined) delete process.env.PDV_MANUAL_KG_RELEASE; else process.env.PDV_MANUAL_KG_RELEASE = release }
+  })
+
 })
