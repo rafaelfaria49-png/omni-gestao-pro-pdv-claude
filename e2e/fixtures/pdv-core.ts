@@ -86,9 +86,10 @@ export class SyntheticBackend {
 async function serve() {
   const { build } = await import("esbuild")
   const root = process.cwd()
+  const scaleVisor = process.argv.includes("--scale-visor")
   const stubs: Record<string, string> = {
     "lib/loja-ativa.tsx": `export const OPS_KEY_LEGACY='assistec-pro-ops-v1'; export function useLojaAtiva(){return {lojaAtivaId:'${STORE}',opsStorageKey:'${OPS_KEY}',empresaDocumentos:{nomeFantasia:'Loja sintética'},getEnderecoDocumentos:()=>''}}`,
-    "lib/store-settings-provider.tsx": `import {defaultFormasPagamento} from '@/lib/pdv-formas-pagamento'; const params={formasPagamento:defaultFormasPagamento(),atalhosRapidos:[],incluirImpostoEstimadoNoPdv:false,aliquotaImpostoEstimadoPdv:0}; export function useStoreSettings(){return {pdvParams:params,blob:{pdvParams:params},settings:{},hydrated:true,storeId:'${STORE}',impressaoConfig:{imprimirAutomatico:false,rodapeCupom:''},save:()=>{}}}`,
+    "lib/store-settings-provider.tsx": `import {defaultFormasPagamento} from '@/lib/pdv-formas-pagamento'; const params={formasPagamento:defaultFormasPagamento(),atalhosRapidos:[],incluirImpostoEstimadoNoPdv:false,aliquotaImpostoEstimadoPdv:0}; export function useStoreSettings(){return {pdvParams:params,blob:{pdvParams:params},settings:{},hydrated:true,loaded:true,pdvScaleVisorVisible:${scaleVisor},storeId:'${STORE}',impressaoConfig:{imprimirAutomatico:false,rodapeCupom:''},save:()=>{}}}`,
     "lib/config-empresa.tsx": `import {configPadrao} from '${resolve(root, "lib/config-empresa.tsx").replaceAll("\\", "/")}?actual';export function useConfigEmpresa(){return {config:configPadrao}};export {configPadrao}`,
     "components/theme/ThemeProvider.tsx": `export const useStudioTheme=()=>({mode:'classic'})`,
     "lib/pdv-operador-nome.ts": `export const usePdvOperadorNome=()=> 'Operador sintético'`,
@@ -120,8 +121,8 @@ async function serve() {
     window.__n5={events:[]};subscribeAllEvents((event,payload)=>window.__n5.events.push({event,payload}));
     function App(){const ops=useOperationsStore();window.__n5.ops=ops;
       const surface=new URLSearchParams(location.search).get('surface');
-      return <><aside aria-label="Driver sintético" style={{position:'fixed',right:0,top:0,zIndex:2147483647,pointerEvents:'auto'}}><button onClick={()=>ops.retrySyncSale(ops.sales[0]?.clientSaleId||ops.sales[0]?.id)}>Reenviar mesma venda</button></aside>
-      {surface==='classic'?<PdvClassic/>:surface==='assistencia'?<PdvAssistenciaEnterprise/>:surface==='supermercado'?<PdvSupermercado/>:<VendaCompletaEnterprise onBack={()=>{}}/>}</>}
+      return <>{!${scaleVisor}&&<aside aria-label="Driver sintético" style={{position:'fixed',right:0,top:0,zIndex:2147483647,pointerEvents:'auto'}}><button onClick={()=>ops.retrySyncSale(ops.sales[0]?.clientSaleId||ops.sales[0]?.id)}>Reenviar mesma venda</button></aside>}
+      {surface==='classic'?<PdvClassic isModoRapido={new URLSearchParams(location.search).get('modo')==='rapido'}/>:surface==='assistencia'?<PdvAssistenciaEnterprise/>:surface==='supermercado'?<PdvSupermercado/>:<VendaCompletaEnterprise onBack={()=>{}}/>}</>}
     createRoot(document.getElementById('root')).render(<OperationsProvider storageKey='${OPS_KEY}'><App/></OperationsProvider>);
   `
   const bundle = await build({ absWorkingDir: root, stdin: { contents: entry, resolveDir: root, loader: "tsx" }, bundle: true, write: false,
@@ -143,12 +144,30 @@ async function serve() {
     } }],
   })
   const script = bundle.outputFiles[0].contents
+  // O smoke do visor usa CSS real, com fontes de classes restritas a esta UI.
+  // O harness N5-C original mantém seu HTML/CSS e suas quatro superfícies.
+  let scaleCss = ""
+  if (scaleVisor) {
+    const { readFile } = await import("node:fs/promises")
+    const { default: postcss } = await import("postcss")
+    const { default: tailwind } = await import("@tailwindcss/postcss")
+    const from = resolve(root, "app/globals.css")
+    const css = (await readFile(from, "utf8")).replace("@import 'tailwindcss';", `@import 'tailwindcss' source(none);
+      @source '../components/dashboard/vendas/pdv-classic.tsx';
+      @source '../components/dashboard/vendas/pdv-omni-classic-shell.tsx';
+      @source '../components/dashboard/vendas/pdv-scale-visor.tsx';
+      @source '../components/ui';`)
+    scaleCss = (await postcss([tailwind()]).process(css, { from })).css
+  }
   const server = createServer((req, res) => {
     if (req.headers.host !== new URL(ORIGIN).host) { res.writeHead(403).end(); return }
     if (req.url === "/fixture.js") { res.writeHead(200, { "Content-Type": "text/javascript" }).end(script); return }
+    if (scaleVisor && req.url === "/fixture.css") { res.writeHead(200, { "Content-Type": "text/css" }).end(scaleCss); return }
     if (req.url?.startsWith("/?surface=")) {
       res.writeHead(200, { "Content-Type": "text/html", "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:" })
-      res.end('<!doctype html><html><head><style>svg{width:20px;height:20px}button,input{padding:6px;margin:3px}[role=dialog],[role=alertdialog]{position:fixed;inset:20px;overflow:auto;background:white;z-index:5;padding:12px;border:1px solid black}[role=alertdialog]{z-index:10;inset:30%}aside{position:fixed;right:0;top:0;z-index:2147483647}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>'); return
+      res.end(scaleVisor
+        ? '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"><style>html,body,#root{height:100%;margin:0}#root{display:flex;flex-direction:column}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>'
+        : '<!doctype html><html><head><style>svg{width:20px;height:20px}button,input{padding:6px;margin:3px}[role=dialog],[role=alertdialog]{position:fixed;inset:20px;overflow:auto;background:white;z-index:5;padding:12px;border:1px solid black}[role=alertdialog]{z-index:10;inset:30%}aside{position:fixed;right:0;top:0;z-index:2147483647}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>'); return
     }
     if (req.url === "/health") { res.writeHead(200).end("synthetic-n5-c"); return }
     // There is deliberately no network proxy or writer on this server.
