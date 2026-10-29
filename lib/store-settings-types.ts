@@ -73,6 +73,8 @@ export type StoreSettingsBlob = {
   v3PdvClassicModoInicial?: "normal" | "rapido"
   /** Ação ao bipar produto não cadastrado (GOAL 007): warn_continue | warn_offer_avulso | open_avulso. */
   pdvScanUnregisteredAction?: PdvScanUnregisteredAction
+  /** Somente apresentação: visor informativo da balança no PDV Clássico. */
+  pdvScaleVisorVisible?: boolean
 }
 
 export type StoreSettingsApi = {

@@ -1,0 +1,59 @@
+name: PDV - visor de peso read-only
+on:
+  pull_request:
+    paths:
+      - "services/scale-readonly*"
+      - "services/hardware-bridge.ts"
+      - "components/dashboard/vendas/pdv-scale-visor.tsx"
+      - "components/dashboard/vendas/pdv-omni-classic-shell.tsx"
+      - "components/configuracoes-v3/features/settings/sections/PdvScaleVisorSettingsCard.tsx"
+      - "components/configuracoes-v3/features/settings/sections/PdvSection.tsx"
+      - "lib/pdv-scale-visor*"
+      - "lib/store-settings*"
+      - "test/scale-device.ts"
+      - "e2e/pdv-scale-visor.playwright.config.ts"
+      - "e2e/specs/pdv-scale-visor.spec.ts"
+      - "e2e/fixtures/pdv-core.ts"
+      - ".github/workflows/pdv-scale-visor.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - name: Serial, preferências, isolamento, persistência e guards N5-C
+        run: node node_modules/vitest/vitest.mjs run services/scale-readonly.test.ts lib/pdv-scale-visor-settings.test.ts lib/pdv-scale-visor.component.test.ts lib/store-settings-put.test.ts lib/store-settings-business.component.test.ts lib/store-settings-request-epoch.test.ts lib/pdv-settings-server-first.test.ts lib/pdv lib/store-business-capabilities.test.ts lib/ops-upsert-venda-fractional.test.ts --maxWorkers=1
+      - name: ESLint
+        run: node node_modules/eslint/bin/eslint.js services/scale-readonly.ts services/scale-readonly.test.ts test/scale-device.ts lib/pdv-scale-visor-settings.ts lib/pdv-scale-visor-settings.test.ts lib/pdv-scale-visor.component.test.ts lib/store-settings-put.test.ts lib/store-settings-provider.tsx lib/store-settings-types.ts components/dashboard/vendas/pdv-scale-visor.tsx components/dashboard/vendas/pdv-omni-classic-shell.tsx components/configuracoes-v3/features/settings/sections/PdvScaleVisorSettingsCard.tsx components/configuracoes-v3/features/settings/sections/PdvSection.tsx e2e/pdv-scale-visor.playwright.config.ts e2e/specs/pdv-scale-visor.spec.ts e2e/fixtures/pdv-core.ts
+      - run: npm run typecheck
+      - run: git diff --check
+      - run: node scripts/track.mjs verify --all
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated
+      MIGRATION_AUTHORITY_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Clássico normal/rápido, desktop/mobile, CSS real e serial simulado
+        run: node node_modules/@playwright/test/cli.js test --config=e2e/pdv-scale-visor.playwright.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdv-scale-visor-browser
+          path: test-results/pdv-scale-visor/

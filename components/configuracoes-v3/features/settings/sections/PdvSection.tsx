@@ -25,6 +25,7 @@ import { readPdvMainLayout, writePdvMainLayout } from "@/lib/pdv-layout-storage"
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name";
 import { UnidadeAtivaRequiredBanner } from "../components/UnidadeAtivaRequiredBanner";
 import { ImpressaoPdvSettingsCard } from "./ImpressaoPdvSettingsCard";
+import { PdvScaleVisorSettingsCard } from "./PdvScaleVisorSettingsCard";
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
@@ -997,6 +998,8 @@ function PdvSectionContent() {
           </div>
         )}
       </div>
+
+      <PdvScaleVisorSettingsCard />
 
       {permissions?.platformAuthority ? <div className="pt-6 border-t border-border/40 mt-8">
         <ImpressaoPdvSettingsCard />

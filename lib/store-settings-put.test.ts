@@ -145,6 +145,19 @@ function createConcurrentHarness(initial: StoreSettingsRow | null) {
 }
 
 describe("persistStoreSettingsPut — lock + re-read na mesma transação", () => {
+  it("visor false e impressão concorrentes preservam as duas preferências sob o lock existente", async () => {
+    const capabilities = { version: 1, business: { primaryBranch: "padaria" }, overrides: { "catalog.weight": false } }
+    const h = createConcurrentHarness({ storeId: "loja-a", printerConfig: {
+      capabilities, appearance: { studioTheme: "black" }, impressao: { viasCupom: 2, rodapeCupom: "Conservar" },
+    } })
+    await Promise.all([
+      persistStoreSettingsPut(h.db, "loja-a", { printerConfig: { pdvScaleVisorVisible: false } }),
+      persistStoreSettingsPut(h.db, "loja-a", { printerConfig: { impressao: { viasCupom: 3 } } }),
+    ])
+    expect(h.row?.printerConfig).toEqual({ pdvScaleVisorVisible: false, capabilities,
+      appearance: { studioTheme: "black" }, impressao: { viasCupom: 3, rodapeCupom: "Conservar" } })
+    expect(h.lockKeys).toEqual([storeSettingsAdvisoryLockKey("loja-a"), storeSettingsAdvisoryLockKey("loja-a")])
+  })
   it.each(["appearance", "pdvParams", "impressao"])("snapshot antigo de %s preserva ramo, apresentação e overrides atuais", async (namespace) => {
     const stale = { version: 1, business: { primaryBranch: "assistencia", presentation: { productExample: "Antigo" } }, overrides: { "catalog.weight": true } }
     const current = { version: 1, business: { primaryBranch: "padaria", presentation: { productExample: "Atual" } }, overrides: { "catalog.weight": false } }
