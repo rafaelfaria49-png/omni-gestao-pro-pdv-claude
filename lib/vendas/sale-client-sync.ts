@@ -22,12 +22,28 @@ export type SalePersistErrorBody = {
   produtoId?: string
   produtoNome?: string
   driftReason?: string
+  /** `PRODUTO_NAO_RESOLVIDO`: referências das linhas sem `Produto` na loja. */
+  inventoryIds?: unknown
+}
+
+/** Teto defensivo: o corpo vem da rede e só serve para apontar a linha ao operador. */
+const MAX_UNRESOLVED_REFS = 20
+const MAX_UNRESOLVED_REF_LEN = 128
+
+function parseUnresolvedInventoryIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const refs = value
+    .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+    .map((v) => v.trim().slice(0, MAX_UNRESOLVED_REF_LEN))
+    .slice(0, MAX_UNRESOLVED_REFS)
+  return refs.length > 0 ? refs : undefined
 }
 
 export function parseSalePersistError(body: string): {
   message: string
   code?: string
   drift?: StockDriftDetails
+  unresolvedInventoryIds?: string[]
 } {
   try {
     const j = JSON.parse(body) as SalePersistErrorBody
@@ -40,7 +56,13 @@ export function parseSalePersistError(body: string): {
           extractStockInvariantDriftCode(j.detail) ??
           extractStockInvariantDriftCode(body)
     const drift = parseStockDriftDetails(j)
-    return { message, ...(code ? { code } : {}), ...(drift ? { drift } : {}) }
+    const unresolvedInventoryIds = parseUnresolvedInventoryIds(j.inventoryIds)
+    return {
+      message,
+      ...(code ? { code } : {}),
+      ...(drift ? { drift } : {}),
+      ...(unresolvedInventoryIds ? { unresolvedInventoryIds } : {}),
+    }
   } catch {
     const message = body.trim() || "erro"
     const code = extractStockInvariantDriftCode(body)

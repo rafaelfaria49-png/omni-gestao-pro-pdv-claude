@@ -26,6 +26,12 @@ export interface PaymentBreakdownFull {
 
 export interface SaleLineRecord {
   inventoryId: string
+  /**
+   * Cuid do `Produto` (`InventoryItem.dbId`) no catálogo da loja no momento da venda.
+   * Só em linhas `produto`. O servidor resolve por ele em vez do SKU (mutável).
+   * Ausente em vendas antigas — elas seguem a resolução legada id|sku|barcode.
+   */
+  produtoId?: string
   name: string
   quantity: number
   unitPrice: number
@@ -134,6 +140,11 @@ export interface SaleRecord {
   syncFailureMessage?: string
   /** Diagnóstico estruturado de drift de estoque (quando o 409 trouxer). */
   syncDrift?: StockDriftDetails
+  /**
+   * `PRODUTO_NAO_RESOLVIDO`: referências (`inventoryId`) das linhas DESTA venda que o
+   * servidor não casou com `Produto` da loja — aponta a linha exata ao operador.
+   */
+  syncUnresolvedInventoryIds?: string[]
   /** true = a última falha foi de rede/abort, não corpo HTTP. */
   syncNetworkError?: boolean
 }

@@ -19,6 +19,9 @@ export type PendingSyncClass = (typeof PENDING_SYNC_CLASS)[keyof typeof PENDING_
 
 export const STOCK_INVARIANT_DRIFT = "STOCK_INVARIANT_DRIFT"
 
+/** 409 do writer: linha de produto sem `Produto` na loja — nada foi gravado. */
+export const UNRESOLVED_PRODUCT_CODE = "PRODUTO_NAO_RESOLVIDO"
+
 const QUARANTINE_CODES = new Set(["PEDIDO_ID_DE_OUTRA_LOJA", "PEDIDO_ID_CONFLITO_MESMA_LOJA"])
 
 const ACTION_REQUIRED_CODES = new Set([
@@ -50,6 +53,13 @@ export type PendingSyncFailureInput = {
   networkError?: boolean
   message?: string | null
   drift?: StockDriftDetails | null
+  /** Rótulos das linhas não resolvidas DESTA venda (ver `unresolvedSaleLineLabels`). */
+  unresolvedLabels?: readonly string[] | null
+  /**
+   * A linha não resolvida carrega `produtoId` (identidade estável): o servidor só a casa
+   * pelo cuid, então o produto foi EXCLUÍDO — recadastrar o código não recupera a venda.
+   */
+  unresolvedProductRemoved?: boolean
 }
 
 export function extractStockInvariantDriftCode(message: string | null | undefined): string | undefined {
@@ -171,13 +181,30 @@ export function pendingReasonView(input: PendingSyncFailureInput & { pending?: b
         description: "Não há caixa aberto válido para gravar esta venda.",
         recommendedAction: "Abra o caixa deste terminal e use Reenviar da mesma venda.",
       }
-    case "PRODUTO_NAO_RESOLVIDO":
+    case UNRESOLVED_PRODUCT_CODE: {
+      // A pendência tem payload congelado: "revisar o item" nela é impossível. O que o
+      // operador consegue fazer é regularizar o cadastro do código e reenviar.
+      const labels = input.unresolvedLabels?.filter((l) => l.trim()) ?? []
+      const itemLabel = labels.length > 0 ? `Item: ${labels.join(", ")}. ` : ""
+      if (input.unresolvedProductRemoved === true) {
+        return {
+          class: classified,
+          title: "Produto não resolvido",
+          description: `${itemLabel}O produto desta venda pendente foi excluído do cadastro da loja. A venda não foi gravada no servidor.`,
+          recommendedAction:
+            "Recadastrar o código não recupera esta venda. Peça ao administrador para revisá-la em Vendas. Não finalize de novo.",
+        }
+      }
       return {
         class: classified,
         title: "Produto não resolvido",
-        description: "Um item do carrinho não casou com o cadastro da loja.",
-        recommendedAction: "Revise o item e reenvie a mesma venda.",
+        description: `${itemLabel}Um item desta venda pendente não casou com o cadastro da loja. A venda não foi gravada no servidor.`,
+        recommendedAction:
+          labels.length > 0
+            ? "Regularize em Cadastros o produto com esse código e use Reenviar desta mesma venda. Não finalize de novo."
+            : "Use Reenviar desta mesma venda para identificar o item; depois regularize o cadastro. Não finalize de novo.",
       }
+    }
     case "CREDITO_VALE_INSUFICIENTE":
       return {
         class: classified,
@@ -210,4 +237,50 @@ export function pendingReasonView(input: PendingSyncFailureInput & { pending?: b
     description: "A venda está registrada neste terminal e ainda não foi confirmada pelo servidor.",
     recommendedAction: "Aguarde a sincronização ou use Reenviar da mesma venda. Não finalize de novo.",
   }
+}
+
+/**
+ * Rótulos das linhas da PRÓPRIA venda cujo `inventoryId` o servidor não resolveu.
+ * Nunca olha o carrinho atual: a referência vem da venda que falhou. Referência
+ * devolvida pelo servidor sem linha correspondente aparece só como código.
+ */
+export function unresolvedSaleLineLabels(
+  lines: ReadonlyArray<{ inventoryId?: string | null; name?: string | null }> | null | undefined,
+  refs: readonly string[] | null | undefined,
+): string[] {
+  if (!refs || refs.length === 0) return []
+  const wanted = new Set(refs.map((r) => r.trim()).filter(Boolean))
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const line of lines ?? []) {
+    const ref = typeof line?.inventoryId === "string" ? line.inventoryId.trim() : ""
+    if (!ref || !wanted.has(ref) || seen.has(ref)) continue
+    seen.add(ref)
+    const name = typeof line?.name === "string" ? line.name.trim() : ""
+    out.push(name ? `${name} (código ${ref})` : `código ${ref}`)
+  }
+  for (const ref of wanted) if (!seen.has(ref)) out.push(`código ${ref}`)
+  return out
+}
+
+/** Alguma linha não resolvida da venda carrega `produtoId` (⇒ produto excluído). */
+export function unresolvedLinesCarryStableId(
+  lines: ReadonlyArray<{ inventoryId?: string | null; produtoId?: string | null }> | null | undefined,
+  refs: readonly string[] | null | undefined,
+): boolean {
+  if (!refs || refs.length === 0) return false
+  const wanted = new Set(refs.map((r) => r.trim()))
+  return (lines ?? []).some(
+    (line) =>
+      typeof line?.produtoId === "string" &&
+      line.produtoId.trim() !== "" &&
+      typeof line.inventoryId === "string" &&
+      wanted.has(line.inventoryId.trim()),
+  )
+}
+
+/** Desfecho FAILED da finalização: nada gravado, carrinho preservado para correção. */
+export function unresolvedProductFinalizeReason(labels: readonly string[]): string {
+  const alvo = labels.length > 0 ? labels.join(", ") : "um item do carrinho"
+  return `Venda NÃO registrada — nada foi gravado no servidor. Sem cadastro válido nesta loja: ${alvo}. O catálogo foi recarregado: remova o item e adicione-o de novo pela busca (ou cadastre-o) e finalize novamente.`
 }
