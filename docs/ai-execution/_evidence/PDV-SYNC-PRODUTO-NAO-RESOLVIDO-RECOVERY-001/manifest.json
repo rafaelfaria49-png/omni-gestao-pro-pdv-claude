@@ -1,0 +1,19 @@
+{
+  "goal": "PDV-SYNC-PRODUTO-NAO-RESOLVIDO-RECOVERY-001",
+  "date": "2026-11-01",
+  "baseSha": "35a3971c31f62e6e802b7dd8763be81475334780",
+  "codeCommit": "b2c82846025000ac0c9a3c908b5d2aa82a554627",
+  "branch": "claude/pdv-sync-produto-nao-resolvido-recovery-001",
+  "productionDeployment": "dpl_Atqrf9hWMh5adQtjd5JRARmcYG2m",
+  "productionWrites": 0,
+  "aep": "inactive",
+  "files": [
+    "PREFLIGHT_E_DEPLOY.md",
+    "CAUSA_RAIZ.md",
+    "VENDA_PENDENTE_ESTADO.md",
+    "FIX_E_CONTRATOS.md",
+    "MATRIZ_REGRESSAO.md",
+    "REVISAO_INDEPENDENTE.md",
+    "RELATORIO_FINAL.md"
+  ]
+}
